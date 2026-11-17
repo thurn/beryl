@@ -224,9 +224,12 @@ fn the_live_session_saves_a_pasted_decklist_and_lists_it() {
         },
         Inbox::new(sender, || true),
     );
+    // The session sends the saved tables unasked when it begins, before any command's reply.
     let reply = |inbox: &Receiver<Input>| loop {
-        if let Input::Reply(reply) = inbox.recv().expect("the session thread answers") {
-            break reply;
+        match inbox.recv().expect("the session thread answers") {
+            Input::Reply(Reply::TableSaved(_)) => {}
+            Input::Reply(reply) => break reply,
+            _ => {}
         }
     };
     commands.send(SessionCommand::DeckImport(DeckImportRequest {

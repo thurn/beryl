@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use beryl_protocol::ipc::decks::{CardSearchHit, DeckImportReply, DeckImportRequest, SavedDeck};
 use beryl_protocol::ipc::{
-    ChooseRequest, LobbyChange, LobbyUpdate, TableActReply, TableRefused, TableSoloRequest,
+    ChooseRequest, LobbyChange, LobbyUpdate, SavedTable, TableActReply, TableRefused,
+    TableSoloRequest,
 };
 use beryl_protocol::prompt::{ClickReply, ClickRequest};
 use beryl_protocol::protocol::{Answer, Side, TableAction};
@@ -40,6 +41,22 @@ pub enum SessionCommand {
     TableAnswer(Answer),
     /// Close the manual table (`TableConnections::leave`).
     TableLeave,
+    /// Host a linked table on this computer's network under the host's name
+    /// (`TableConnections::host` with `TableLink::Local`), as the web's browser build hosts
+    /// one. Beryl 3D's session is built without internet play.
+    TableHost {
+        name: String,
+    },
+    /// Join the table that `invite` names, sitting under `name` (`TableConnections::join`).
+    TableJoin {
+        invite: String,
+        name: String,
+    },
+    /// Open the saved table with this id again: a hosted table, or the last table this
+    /// profile joined (`TableConnections::resume`).
+    TableResume(String),
+    /// List the tables that can be resumed (`TableConnections::saved`).
+    TableSaved,
     /// Open a solo table's lobby, or change the lobby of the table open now
     /// (`TableConnections::lobby`).
     TableLobby(LobbyChange),
@@ -66,6 +83,10 @@ pub enum Reply {
     TableAct(TableActReply),
     /// Whether the table closed, or the reason it gave for not closing.
     TableLeave(Result<(), String>),
+    /// Whether a hosted, joined or resumed table opened, or why it did not.
+    TableOpen(Result<(), String>),
+    /// The tables that can be resumed, the joined table first, or why they could not be read.
+    TableSaved(Result<Vec<SavedTable>, String>),
     /// The lobby asked for, which only `LobbyChange::View` answers with, or why the table
     /// refused the change. A change's new lobby comes back as `Input::Lobby`. Boxed because a
     /// lobby is far larger than every other reply.

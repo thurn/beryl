@@ -11,6 +11,7 @@ pub(crate) mod opening;
 mod settings;
 mod start;
 mod table;
+mod table_entries;
 mod table_opening;
 mod testing;
 
@@ -19,6 +20,7 @@ pub(crate) use gallery::faces as gallery_faces;
 pub use gallery::{GalleryMenu, GalleryQuery, GalleryState};
 pub use start::{SEED, StartForm, in_progress, seed};
 pub(crate) use start::{checkbox, small};
+pub use table_entries::{COULD_NOT_OPEN, EntryMode, INVITE, NAME, TableEntries};
 
 pub use settings::{Concede, GEAR_INSET, corner};
 pub use table::sheet_face;
@@ -119,6 +121,9 @@ pub struct ScreenIn<'a> {
     pub agents: &'a [AgentView],
     /// What the person has chosen on the start screen.
     pub start: &'a StartForm,
+    /// The start screen's ways onto a manual table: the open form, the saved tables and why
+    /// the last table did not open.
+    pub entries: &'a TableEntries,
     /// Which samples are open in the gallery.
     pub gallery: GalleryState,
     /// The names of the recordings the testing screen lists, as the host listed them: none

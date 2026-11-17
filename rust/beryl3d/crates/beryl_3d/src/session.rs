@@ -22,7 +22,10 @@ use std::thread::JoinHandle;
 
 use beryl_host::{Class, Inbox};
 use beryl_protocol::AgentView;
-use beryl_protocol::ipc::TableLobbyRequest;
+use beryl_protocol::ipc::{
+    Platform, TableHostRequest, TableHostSettings, TableJoinRequest, TableLink, TableLobbyRequest,
+    TableResumeRequest,
+};
 use beryl_scene::command::{Reply, SessionCommand};
 use beryl_scene::input::Input;
 use beryl_scene::manual::tokens;
@@ -182,19 +185,23 @@ impl Live {
             None => Sessions::new(None, emit),
         };
         let table_views = inbox.clone();
-        let lobbies = inbox.clone();
-        // Of the table's events only its lobby's reach the client: its link's belong to hosted
-        // and joined tables, which Beryl 3D does not open yet.
+        let events = inbox.clone();
+        // The table's link state is not sent on its own: each of the table's views carries it,
+        // and the client reads it there (`manual::link`).
         let tables = TableConnections::new(
             sessions.session_ids(),
             data,
             move |update| {
                 table_views.send(Input::Update(Box::new(update)));
             },
-            move |event| {
-                if let TableEvent::Lobby(update) = event {
-                    lobbies.send(Input::Lobby(Box::new(update)));
+            move |event| match event {
+                TableEvent::Lobby(update) => {
+                    events.send(Input::Lobby(Box::new(update)));
                 }
+                TableEvent::Error(reason) => {
+                    events.send(Input::TableError(reason));
+                }
+                TableEvent::Link(_) => {}
             },
         );
         Self {
@@ -348,8 +355,8 @@ pub fn search_report(searches: &[Searched]) -> Option<String> {
 impl Session for Live {
     /// Starts the game `played_by` asked for, or resumes the replay file `resuming` named, or
     /// otherwise resumes the newest unfinished game, as the web app does on launch. Then it
-    /// sends the agents a person may play, which put the client on the start screen when no
-    /// game has sent a view.
+    /// sends the saved tables and the agents a person may play, which put the client on the
+    /// start screen when no game has sent a view.
     fn begin(&mut self) {
         if let Some((start, agent)) = &self.played_by {
             if let Err(error) = self.sessions.start_game(start, Some(agent)) {
@@ -363,6 +370,12 @@ impl Session for Live {
             beryl_shell::resume_latest(&self.sessions);
         }
         self.give_cards();
+        // Before the agents, which open the start screen, so that its first frame lists the
+        // saved tables rather than moving everything once they arrive.
+        let saved = self.tables.saved(Platform::current());
+        (self.inbox).send(Input::Reply(Reply::TableSaved(
+            saved.map_err(|error| error.reason),
+        )));
         let mut agents = beryl_session::agents();
         agents.extend(self.offered.iter().cloned());
         self.inbox.send(Input::Agents(agents));
@@ -396,6 +409,31 @@ impl Session for Live {
             SessionCommand::TableLeave => {
                 Reply::TableLeave(self.tables.leave().map_err(|error| error.reason))
             }
+            SessionCommand::TableHost { name } => {
+                let request = TableHostRequest {
+                    link: TableLink::Local,
+                    settings: TableHostSettings {
+                        name,
+                        starting_life: None,
+                        starting_hand_size: None,
+                    },
+                };
+                let hosted = self.tables.host(Platform::current(), request);
+                Reply::TableOpen(hosted.map(|_| ()).map_err(|error| error.reason))
+            }
+            SessionCommand::TableJoin { invite, name } => {
+                let joined = self.tables.join(TableJoinRequest { invite, name });
+                Reply::TableOpen(joined.map(|_| ()).map_err(|error| error.reason))
+            }
+            SessionCommand::TableResume(id) => {
+                let resumed = self
+                    .tables
+                    .resume(Platform::current(), &TableResumeRequest { id });
+                Reply::TableOpen(resumed.map(|_| ()).map_err(|error| error.reason))
+            }
+            SessionCommand::TableSaved => Reply::TableSaved(
+                (self.tables.saved(Platform::current())).map_err(|error| error.reason),
+            ),
             SessionCommand::TableLobby(change) => {
                 let lobby = self.tables.lobby(TableLobbyRequest { change });
                 Reply::TableLobby(lobby.map(|lobby| lobby.map(Box::new)))

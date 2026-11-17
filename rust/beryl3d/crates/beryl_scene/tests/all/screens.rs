@@ -5,7 +5,7 @@ use beryl_protocol::ipc::{CONCEDE, ConcedeRequest, FixtureMessage, LIST_AGENTS, 
 use beryl_protocol::protocol::{Side, Status};
 use beryl_protocol::{AgentView, SessionId, StartRequest};
 use beryl_scene::agent::{self, Layout, TreeOptions};
-use beryl_scene::command::Request;
+use beryl_scene::command::{Reply, Request};
 use beryl_scene::driver::{OPEN, Page, Recording};
 use beryl_scene::frame::StateBits;
 use beryl_scene::input::{Input, Insets, Size};
@@ -51,8 +51,11 @@ fn page_at(messages: Vec<FixtureMessage>, size: Size) -> Page {
 
 /// How many answers to commands the client has been given so far.
 fn replies(page: &Page) -> usize {
+    // The start screen asks for the saved tables itself whenever it opens.
     (page.inputs().iter())
-        .filter(|input| matches!(input, Input::Reply(_)))
+        .filter(
+            |input| matches!(input, Input::Reply(reply) if !matches!(reply, Reply::TableSaved(_))),
+        )
         .count()
 }
 

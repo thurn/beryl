@@ -14,10 +14,14 @@
 //! the viewer can search their library (`search`): their library's cards are named, as the
 //! table shows them to a player who looks, the table takes the look the viewer asks for, and
 //! the opponent is looking at the top three cards of their own library.
+//! `screen/start-tables` is the start screen with a saved hosted table and the last table the
+//! viewer joined, whose recorded answer to joining a table is the version mismatch a guest
+//! with another version of Beryl is refused with.
 
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{
-    CARD_RECORDS, FixtureMessage, LIST_AGENTS, TABLE_ACT, TABLE_LOBBY, TableActReply,
+    CARD_RECORDS, FixtureMessage, LIST_AGENTS, SavedTable, TABLE_ACT, TABLE_JOIN, TABLE_LOBBY,
+    TABLE_SAVED, TableActReply, TableConnectionError,
 };
 use beryl_protocol::protocol::{
     AssistsView, CardHandling, CardType, Facing, LabelView, LinkState, LogLine, PlayerState,
@@ -33,8 +37,9 @@ use beryl_scene::testing;
 pub const PREFIX: &str = "screen/";
 
 /// The name of every screen recording.
-pub const NAMES: [&str; 12] = [
+pub const NAMES: [&str; 13] = [
     "screen/start",
+    "screen/start-tables",
     "screen/lobby",
     "screen/table",
     "screen/table-assists",
@@ -88,6 +93,7 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
     let opened = name.strip_prefix(PREFIX)?;
     let opens = match opened {
         "settings" | "bug-report" => vec!["start", opened],
+        "start-tables" => vec!["start"],
         // A table's view opens the table screen; the start screen's press would start a table.
         _ if table_screen(opened) => Vec::new(),
         _ => vec![opened],
@@ -164,6 +170,9 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
             &TableActReply::Ok { ok: true },
         ));
     }
+    if opened == "start-tables" {
+        messages.extend(saved_tables());
+    }
     if opened == "lobby" {
         messages.push(FixtureMessage::Event {
             event: TABLE_LOBBY.to_owned(),
@@ -182,6 +191,29 @@ pub fn messages(name: &str) -> Option<Vec<FixtureMessage>> {
         })
     }));
     Some(messages)
+}
+
+/// The recorded answers of `screen/start-tables`: two saved tables, a hosted one and the last
+/// table the viewer joined (listed first, as `TableConnections::saved` lists it), and a join
+/// refused because the host has another version of Beryl.
+fn saved_tables() -> [FixtureMessage; 2] {
+    let saved =
+        [("joined", "Sam", Some("Alex")), ("5f3a9c", "Alex", None)].map(|(id, host, guest)| {
+            SavedTable {
+                id: id.to_owned(),
+                host: host.to_owned(),
+                guest: guest.map(str::to_owned),
+            }
+        });
+    // The words `beryl_link`'s handshake refuses a guest of another version with
+    // (`wire::VERSION_MISMATCH`), which this crate does not link.
+    let mismatch = TableConnectionError {
+        reason: "Both players need the same version of Beryl.".to_owned(),
+    };
+    [
+        FixtureMessage::response(TABLE_SAVED, &saved),
+        FixtureMessage::response(TABLE_JOIN, &mismatch),
+    ]
 }
 
 /// Turns every assist of `table`, a table of `view`, on, with what each shows: a turn upkeep

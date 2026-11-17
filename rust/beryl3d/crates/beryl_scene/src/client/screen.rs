@@ -1,8 +1,8 @@
 //! Showing the flat layer's screen or sheet, and the corner's buttons, a float at the game
 //! screen's top right: the gear that opens the settings sheet, the bug button and undo.
 
-use beryl_protocol::DecisionId;
 use beryl_protocol::protocol::{Side, ZoneName};
+use beryl_protocol::{AgentView, DecisionId};
 use glam::Vec2;
 
 use super::Client;
@@ -14,12 +14,13 @@ use crate::hud::phone::Occupied;
 use crate::input::Rect;
 use crate::input::{AssetReady, FaceSize};
 use crate::layout::FloatLook;
-use crate::screens::{self, Screen, ScreenIn, Sheet};
+use crate::screens::{self, Screen, ScreenIn, Sheet, StartForm};
 
 impl Client {
     /// Rebuilds the flat layer's screen, or the sheet open over it, from what the client holds
     /// now, and asks the host for the music it calls for if that has changed.
     pub(super) fn show_screen(&mut self) {
+        self.ask_saved_tables();
         // The element a gesture began on is gone with the screen or sheet it was on.
         if self.shown != (self.screen, self.sheet) {
             self.shown = (self.screen, self.sheet);
@@ -73,6 +74,19 @@ impl Client {
         }
     }
 
+    /// Keeps the agents a person may play and chooses the first to offer. The live app sends
+    /// them once it has resumed a game or found none to resume, so agents that arrive before
+    /// any view mean there is no game yet: the person starts one on the start screen.
+    pub(super) fn take_agents(&mut self, agents: Vec<AgentView>) {
+        if self.views == 0 {
+            self.screen = Screen::Start;
+            self.first_view_opens = Some(Screen::Game);
+        }
+        self.start.agent = StartForm::first_agent(&agents);
+        self.agents = agents;
+        self.show_screen();
+    }
+
     /// Everything the screen functions read, from what the client holds now. The inspector sets
     /// `inspected` on it; nothing else differs between the screen and the inspector.
     pub(super) fn screen_in(&self) -> ScreenIn<'_> {
@@ -85,6 +99,7 @@ impl Client {
             sheet: self.sheet,
             agents: &self.agents,
             start: &self.start,
+            entries: &self.manual.entries,
             gallery: self.gallery,
             recordings: &self.recordings,
             seat: self.seat,

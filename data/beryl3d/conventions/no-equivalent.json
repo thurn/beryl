@@ -96,7 +96,15 @@
       "shows": "button \"Done\""
     },
     "Manual table connection": {
-      "open": "A dropped connection freezes the table under a banner and a table the other player left offers Lobby (screen/table-left), but Beryl 3D cannot host, join or resume a table, so it shows no Resume table, join failure or version mismatch (needs bead by-q44s.9.41)"
+      "recording": "screen/start-tables",
+      "at": "end",
+      "do": [
+        "press button \"Join a table\"",
+        "type field \"table name\" \"Sam\"",
+        "type field \"invite code\" \"beryl-local:127.0.0.1:4000:secret\"",
+        "press button \"Join\""
+      ],
+      "shows": "text \"Both players need the same version of Beryl.\""
     },
     "Manual table prompts": {
       "recording": "screen/table",

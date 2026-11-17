@@ -42,6 +42,9 @@ pub const ASSISTS: [(Assist, &str); 5] = [
 pub struct Lobby {
     pub view: Option<LobbyView>,
     pub error: Option<&'static str>,
+    /// The failure the linked table last reported (`TableEvent::Error`), such as a guest with
+    /// another version of Beryl, until the connection is up again.
+    pub link_error: Option<String>,
     pub deck_name: Option<String>,
     pub picker: Option<DeckPanel>,
     /// The saved decks the picker lists, once the session has sent them.
@@ -60,6 +63,7 @@ impl Lobby {
         Self {
             view: None,
             error: None,
+            link_error: None,
             deck_name: None,
             picker: None,
             saved: Vec::new(),

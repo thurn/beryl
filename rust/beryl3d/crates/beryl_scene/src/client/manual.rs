@@ -19,7 +19,7 @@ use crate::manual::{self, Context, Sent, TablePress, TableState, Target, command
 use crate::screens::Screen;
 use crate::widgets::BACK;
 use beryl_protocol::ipc::TableActReply;
-use beryl_protocol::protocol::{Answer, ObjectId, Side, TableAction, ZoneName};
+use beryl_protocol::protocol::{Answer, LinkState, ObjectId, Side, TableAction, ZoneName};
 
 /// The most table actions the client remembers sending without an answer.
 const PENDING: usize = 64;
@@ -33,6 +33,9 @@ pub(super) struct Manual {
     /// makes a click on a card add it to the selection or take it out.
     pub(super) meta: bool,
     pub(super) lobby: Lobby,
+    /// The start screen's ways onto a table: its open form, the saved tables and the last
+    /// table's failure to open (`client::entries`).
+    pub(super) entries: crate::screens::TableEntries,
     /// Whether the table refused an action, or the open decision a click on a card, since the
     /// last frame, which then plays the refusal sound, as the web's `shakeRefusal` plays it for
     /// every refused table action and `useRefusal` for every refused click.
@@ -76,6 +79,13 @@ impl Client {
         self.session = Some(update.session);
         if update.view.table.is_none() {
             return;
+        }
+        // A connection that is up again ends the failure it reported, as the web's
+        // `useTableLink` clears its error on a connected link.
+        if (update.view.table.as_ref())
+            .is_some_and(|table| matches!(table.link, LinkState::Connected { .. }))
+        {
+            self.manual.lobby.link_error = None;
         }
         crate::manual::selection::keep(&mut self.manual.state.selection, &update.view);
         if (self.manual.picking)

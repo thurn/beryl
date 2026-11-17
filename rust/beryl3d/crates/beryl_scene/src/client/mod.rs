@@ -6,6 +6,7 @@
 mod bug;
 mod carry;
 mod editing;
+mod entries;
 mod gesture;
 
 use std::collections::VecDeque;
@@ -332,7 +333,11 @@ impl Client {
                 self.inputs.push(input);
             }
             Input::Lobby(update) => self.take_lobby(*update),
-            Input::Reply(Reply::TableLobby(Err(refused))) => self.lobby_refused(&refused),
+            Input::Reply(Reply::TableLobby(lobby)) => self.take_lobby_reply(lobby),
+            Input::Reply(reply @ (Reply::TableOpen(_) | Reply::TableSaved(_))) => {
+                self.take_entry_reply(reply);
+            }
+            Input::TableError(reason) => self.table_error(reason),
             Input::Reply(Reply::DeckList(saved)) => self.take_saved_decks(saved),
             Input::Reply(Reply::DeckImport(imported)) => self.take_imported_deck(imported),
             Input::Settings(settings) => {
@@ -377,19 +382,6 @@ impl Client {
         }
         self.follow_entry();
         self.wake = Wake::Now;
-    }
-
-    /// Keeps the agents a person may play and chooses the first to offer. The live app sends
-    /// them once it has resumed a game or found none to resume, so agents that arrive before
-    /// any view mean there is no game yet: the person starts one on the start screen.
-    fn take_agents(&mut self, agents: Vec<AgentView>) {
-        if self.views == 0 {
-            self.screen = Screen::Start;
-            self.first_view_opens = Some(Screen::Game);
-        }
-        self.start.agent = StartForm::first_agent(&agents);
-        self.agents = agents;
-        self.show_screen();
     }
 
     /// Takes the tier the host's rate rule chose, unless memory has run low, after which the

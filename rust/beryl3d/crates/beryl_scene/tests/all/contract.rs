@@ -189,6 +189,7 @@ mod milestone_three {
 
     static TABLE: beryl_scene::manual::TableState = beryl_scene::manual::TableState::new();
     static BUG: BugForm = BugForm::new();
+    static ENTRIES: screens::TableEntries = screens::TableEntries::new();
     static LOBBY: beryl_scene::manual::lobby::Lobby = beryl_scene::manual::lobby::Lobby::new();
 
     use super::super::flat_layer::{client, deciding, decision, prompt};
@@ -206,8 +207,8 @@ mod milestone_three {
                 agent: None,
                 fair: false,
                 confirming: false,
-                solo_failed: false,
             },
+            entries: &ENTRIES,
             gallery: screens::GalleryState::default(),
             recordings: &[],
             seat: Side::You,

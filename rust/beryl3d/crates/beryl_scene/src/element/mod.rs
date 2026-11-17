@@ -97,6 +97,16 @@ pub enum Press {
 pub enum LobbyPress {
     /// Open a solo table's lobby, from the start screen.
     Solo,
+    /// Open the start screen's form for hosting a table.
+    Host,
+    /// Open the start screen's form for joining a table.
+    Join,
+    /// Close the start screen's host or join form.
+    CancelEntry,
+    /// Host or join a table with what the open form holds.
+    OpenTable,
+    /// Resume the saved table at this index of the start screen's list.
+    Resume(u16),
     /// Open the deck picker on the saved decks ('Change').
     Change,
     /// Open the deck picker on the field a decklist is pasted into ('Paste decklist').

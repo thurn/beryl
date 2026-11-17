@@ -119,7 +119,7 @@ pub fn table(input: &ScreenIn) -> Element {
     let window = input.window;
     let connection = input.view.and_then(|view| {
         let top = link::top(window.size, window.phone(), window.safe_area.top);
-        link::banner(view, window.size, top)
+        link::banner(view, window.size, top, input.lobby.link_error.as_deref())
     });
     screen
         .children(controls(state, input, frozen))

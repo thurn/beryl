@@ -5,6 +5,12 @@
 //! used up unless it is the last, and a response recorded with its request answers that
 //! request alone. A `choose`, or a `click` whose reply says it answered, plays the recording
 //! on to its next views.
+//!
+//! The start screen asks for the saved tables each time it opens. A recording that holds no
+//! `table_saved` response answers with none, as a profile that never hosted or joined a table
+//! does, so that every recording that reaches the start screen need not record one. A
+//! recorded `table_host`, `table_join` or `table_resume` response whose value is a
+//! `TableConnectionError` (`{"reason": ...}`) is that command failing.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
@@ -13,7 +19,7 @@ use beryl_protocol::GameUpdate;
 use beryl_protocol::card_records::CardRecords;
 use beryl_protocol::ipc::{
     self, CancelRequest, ChooseRequest, ConcedeRequest, FixtureMessage, LobbyUpdate, PassOnRequest,
-    SetStopsRequest, UndoRequest,
+    SavedTable, SetStopsRequest, TableConnectionError, UndoRequest,
 };
 use beryl_protocol::prompt::{Click, ClickReply};
 use beryl_protocol::protocol::Status;
@@ -235,6 +241,12 @@ impl Responses {
                 plays_on: true,
             });
         }
+        if name == ipc::TABLE_SAVED && !self.queues.contains_key(name) {
+            return Ok(Answer {
+                reply: Reply::TableSaved(Ok(Vec::new())),
+                plays_on: false,
+            });
+        }
         let queue = self
             .queues
             .get_mut(name)
@@ -289,8 +301,18 @@ impl Responses {
                 plays_on: false,
             });
         }
+        let reply = match name {
+            ipc::TABLE_SAVED => Reply::TableSaved(Ok(Vec::<SavedTable>::deserialize(value)
+                .map_err(|error| {
+                    format!("the recorded `table_saved` answer is not one: {error}")
+                })?)),
+            ipc::TABLE_HOST | ipc::TABLE_JOIN | ipc::TABLE_RESUME => Reply::TableOpen(
+                TableConnectionError::deserialize(value).map_or(Ok(()), |error| Err(error.reason)),
+            ),
+            _ => Reply::Done(Ok(())),
+        };
         Ok(Answer {
-            reply: Reply::Done(Ok(())),
+            reply,
             plays_on: name == ipc::CHOOSE,
         })
     }
@@ -339,6 +361,29 @@ fn wire(command: &SessionCommand) -> (&'static str, Option<Value>) {
             }),
         ),
         SessionCommand::TableLeave => (ipc::TABLE_LEAVE, None),
+        SessionCommand::TableHost { name } => (
+            ipc::TABLE_HOST,
+            value(&ipc::TableHostRequest {
+                link: ipc::TableLink::Local,
+                settings: ipc::TableHostSettings {
+                    name: name.clone(),
+                    starting_life: None,
+                    starting_hand_size: None,
+                },
+            }),
+        ),
+        SessionCommand::TableJoin { invite, name } => (
+            ipc::TABLE_JOIN,
+            value(&ipc::TableJoinRequest {
+                invite: invite.clone(),
+                name: name.clone(),
+            }),
+        ),
+        SessionCommand::TableResume(id) => (
+            ipc::TABLE_RESUME,
+            value(&ipc::TableResumeRequest { id: id.clone() }),
+        ),
+        SessionCommand::TableSaved => (ipc::TABLE_SAVED, None),
         SessionCommand::TableLobby(change) => (
             ipc::TABLE_LOBBY_COMMAND,
             value(&ipc::TableLobbyRequest {

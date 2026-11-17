@@ -57,7 +57,7 @@ pub struct TableResumeRequest {
     pub id: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct SavedTable {
     pub id: String,
     pub host: String,

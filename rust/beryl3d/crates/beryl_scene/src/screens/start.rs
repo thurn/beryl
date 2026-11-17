@@ -1,13 +1,14 @@
 //! The start screen, where a person picks an opponent and starts a game, as the web interface's
 //! `StartScreen` (`ui/src/screens/StartScreen.tsx`, `start-panel.css`) shows it: one panel in
 //! the middle of the window with the opponents, the seed, the fair-deal box and the buttons, the
-//! solo table's entry and the export of bug reports, and the sound button in the corner.
+//! manual tables' entries (`table_entries`) and the export of bug reports, and the sound button in
+//! the corner.
 
 use beryl_protocol::AgentView;
 use beryl_protocol::protocol::Status;
 
 use super::{Screen, ScreenIn, Sheet};
-use crate::element::{Align, Element, Justify, LobbyPress, Position, Press, column, row, text};
+use crate::element::{Align, Element, Justify, Position, Press, column, row, text};
 use crate::frame::Role;
 use crate::text::TypeStyle;
 use crate::tokens::{color, ratio, size, space, type_style};
@@ -56,9 +57,6 @@ const CHECKBOX: f32 = size::CHECKBOX;
 pub(super) const TITLE: TypeStyle = type_style::START_TITLE;
 
 /// `.start-subtitle`: 19-point serif.
-/// Body text: 15-point sans, for what the screen says when the solo table did not open.
-const BODY: TypeStyle = type_style::SCREEN_BODY;
-
 const SUBTITLE: TypeStyle = type_style::START_SUBTITLE;
 
 /// `.start-agents legend`, `.start-seed` and `.start-fair`: semibold 15-point sans.
@@ -85,8 +83,6 @@ pub struct StartForm {
     /// Whether a new game was asked for with one in progress, so that the next press of the
     /// start button concedes that game and starts the new one.
     pub confirming: bool,
-    /// Whether the last 'Solo table' press failed to open a table, which the screen says.
-    pub solo_failed: bool,
 }
 
 impl StartForm {
@@ -176,7 +172,6 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(list("Opponent", rows).gap(space::S).max_height(room));
     let seed_row = seed_row(&seed_state, seed_ok);
     let buttons = buttons(going_on, form.confirming, startable);
-    let solo = button("Solo table").on_press(Press::Lobby(LobbyPress::Solo));
     let export = small(button("Export Bug Reports")).on_press(Press::ExportBugs);
     let export_tip = tooltip(
         "Includes screenshots, replays, and logs",
@@ -196,12 +191,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .child(seed_row)
         .child(fair_box(form.fair))
         .child(buttons)
-        .child(solo)
-        .children(form.solo_failed.then(|| {
-            text("Could not open the table.")
-                .style(BODY)
-                .color(color::EMBER)
-        }))
+        .children(super::table_entries::entries(input, false))
         .child(export)
         .child(export_tip);
     let mut panel = panel;
@@ -219,7 +209,7 @@ pub fn start(input: &ScreenIn) -> Element {
         .justify_content(Justify::Center)
         .child(panel)
         .child(corner());
-    with_keys(screen, input, going_on)
+    super::table_entries::with_host_key(with_keys(screen, input, going_on))
 }
 
 /// What the screen's fields and choices allow, which both layouts read the same way.
@@ -322,7 +312,6 @@ fn start_phone(input: &ScreenIn) -> Element {
     }
     let fair = fair_box(form.fair).min_height(metrics::FIELD).shrink(0.0);
     let (start, back) = start_buttons(going_on, form.confirming, startable);
-    let solo = button("Solo table").on_press(Press::Lobby(LobbyPress::Solo));
     let export = button("Export Bug Reports").on_press(Press::ExportBugs);
     let content = column()
         .name("start column")
@@ -336,13 +325,7 @@ fn start_phone(input: &ScreenIn) -> Element {
         .child(fair)
         .child(super::phone_action(start))
         .children(back.map(super::phone_action))
-        .child(super::phone_action(solo))
-        .children(form.solo_failed.then(|| {
-            text("Could not open the table.")
-                .style(BODY)
-                .color(color::EMBER)
-                .shrink(0.0)
-        }))
+        .children(super::table_entries::entries(input, true))
         .child(super::phone_action(export));
     with_keys(
         super::phone_screen("start", input, content),

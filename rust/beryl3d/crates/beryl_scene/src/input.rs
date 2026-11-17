@@ -52,6 +52,9 @@ pub enum Input {
     /// The manual table's lobby changed (`TableEvent::Lobby`): its new state, or no lobby once
     /// the table's game has started. Boxed because it is far larger than most inputs.
     Lobby(Box<LobbyUpdate>),
+    /// The linked table reported a failure (`TableEvent::Error`): the other player has a
+    /// different version of Beryl, or the connection ended with a reason.
+    TableError(String),
     /// The player's saved settings, which the host hands over at startup.
     Settings(Settings),
     /// The agents a person may play, in the order they are offered (`beryl_session::agents`).

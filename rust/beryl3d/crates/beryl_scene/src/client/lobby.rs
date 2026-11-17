@@ -24,8 +24,13 @@ impl Client {
         let view = lobby.view.as_ref();
         let loaded = lobby.own().is_some_and(|own| own.loaded);
         let change = match press {
+            LobbyPress::Host
+            | LobbyPress::Join
+            | LobbyPress::CancelEntry
+            | LobbyPress::OpenTable
+            | LobbyPress::Resume(_) => return self.press_entry(press),
             LobbyPress::Solo => {
-                self.start.solo_failed = false;
+                self.manual.entries.error = None;
                 self.open_lobby();
                 LobbyChange::Solo
             }
@@ -180,7 +185,7 @@ impl Client {
     }
 
     /// Shows the lobby screen with no lobby yet, which arrives as `Input::Lobby`.
-    fn open_lobby(&mut self) {
+    pub(super) fn open_lobby(&mut self) {
         self.first_view_opens = None;
         self.manual.lobby = lobby::Lobby::new();
         self.screen = Screen::Lobby;
@@ -193,6 +198,11 @@ impl Client {
     pub(super) fn take_lobby(&mut self, update: LobbyUpdate) {
         match update.view {
             Some(view) => {
+                // Both players at the table means the guest's connection is up, which ends the
+                // failure the table last reported, as the web's `useTableLink` clears it.
+                if view.seats.len() > 1 && view.seats.iter().all(|seat| seat.name.is_some()) {
+                    self.manual.lobby.link_error = None;
+                }
                 self.manual.lobby.view = Some(view);
                 if self.screen == Screen::Table {
                     self.manual.menu = None;
@@ -207,14 +217,12 @@ impl Client {
 
     /// The table refused a change of its lobby: the lobby says so, as the web's does. A refusal
     /// of the 'Solo table' press, before any lobby has arrived, is a table that did not open:
-    /// the start screen says so and stays, as the web's `TableEntries` does.
+    /// the start screen comes back and says so, as the web's `TableEntries` does.
     pub(super) fn lobby_refused(&mut self, _: &TableRefused) {
         if self.screen == Screen::Lobby && self.manual.lobby.view.is_none() {
-            self.start.solo_failed = true;
-            self.screen = Screen::Start;
-        } else {
-            self.manual.lobby.error = Some("Could not update the lobby.");
+            return self.table_failed(crate::screens::COULD_NOT_OPEN.to_owned());
         }
+        self.manual.lobby.error = Some("Could not update the lobby.");
         self.show_screen();
     }
 }

@@ -12,10 +12,10 @@ use glam::Vec2;
 
 use super::TablePress;
 use crate::data::space::flat::table::link::{PHONE_TOP, TOP, TOP_SHARE, WIDTH};
-use crate::element::{Align, Anchor, Element, Press, column};
+use crate::element::{Align, Anchor, Element, Press, column, text};
 use crate::hud::notices::step_banner;
 use crate::input::Size;
-use crate::tokens::{color, size, space};
+use crate::tokens::{color, size, space, type_style};
 use crate::widgets::button;
 
 /// Whether `link` freezes the table's input.
@@ -31,11 +31,12 @@ pub fn frozen(view: &PlayerView) -> bool {
     view.table.as_ref().is_some_and(|table| blocks(table.link))
 }
 
-/// The banner the table shows while its input is frozen, with Lobby under it once the other
-/// player has left, standing `top` points below the top of a window of `window`'s size; none
-/// while the connection is up.
+/// The banner the table shows while its input is frozen, with the failure the table reported
+/// (`error`, as the web's table toast shows it) and Lobby under it once the other player has
+/// left, standing `top` points below the top of a window of `window`'s size; none while the
+/// connection is up.
 #[must_use]
-pub fn banner(view: &PlayerView, window: Size, top: f32) -> Option<Element> {
+pub fn banner(view: &PlayerView, window: Size, top: f32, error: Option<&str>) -> Option<Element> {
     let table = view.table.as_ref()?;
     let peer = table.peer_name.as_deref().unwrap_or("Opponent");
     let title = match table.link {
@@ -56,6 +57,11 @@ pub fn banner(view: &PlayerView, window: Size, top: f32) -> Option<Element> {
         .align_items(Align::Center)
         .gap(space::S)
         .child(notice)
+        .children(error.map(|error| {
+            text(error)
+                .style(type_style::SCREEN_BODY)
+                .color(color::EMBER)
+        }))
         .children(lobby);
     shown.anchor = Some(Anchor::Point(
         Vec2::new(window.width / 2.0, top),

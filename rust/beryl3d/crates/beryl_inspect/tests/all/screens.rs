@@ -83,6 +83,23 @@ fn the_screens_file_names_a_fixture_for_every_prompt_shape() {
 /// Each screen the screens file marks built shows in its recording: at the moment its `at`
 /// names, the tree printout has the line its `shows` names. A screen marked built that its
 /// recording does not show would count in the parity list without being there.
+/// The start screen lists each saved table, the joined table by both players' names, with
+/// Resume table beside it, on the desktop and on the phone, which also lists the joined table.
+#[test]
+fn the_start_screen_offers_resume_table_for_saved_tables() {
+    for layout in ["desktop", "phone"] {
+        for shows in ["text \"Sam · Alex\"", "button \"Resume table\""] {
+            let entry = serde_json::json!({
+                "recording": "screen/start-tables",
+                "at": "end",
+                "layout": layout,
+                "shows": shows,
+            });
+            assert_shows(&format!("screen/start-tables ({layout})"), &entry);
+        }
+    }
+}
+
 #[test]
 fn every_built_screen_shows_in_its_recording() {
     let path = recordings::root().join("data/beryl3d/screens.json");

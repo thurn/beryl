@@ -37,6 +37,7 @@ pub use recording::{Answer, OPEN, RECORDINGS, Recording, Responses, plays_on};
 use self::cues::Cues;
 use self::moment::{moment_distance, offset_from};
 use crate::agent::{self, Context, Fault, Layout, TreeOptions, locate, uncovered};
+use crate::command::SessionCommand;
 use crate::faces::FaceList;
 use crate::frame::{Frame, Sound, StateBits, Wake};
 use crate::input::{
@@ -595,8 +596,13 @@ impl Page {
         self.release();
         // After the first views, as the live app sends them once it has resumed a game, so
         // that a recording of a game stays on the game screen and one with no views shows the
-        // start screen. Every recording the web's fixtures share answers `list_agents`.
+        // start screen. Every recording the web's fixtures share answers `list_agents`. The
+        // saved tables come first, as the live app sends them, so that the start screen's
+        // first frame lists them.
         if let Ok(Some(agents)) = self.recording.agents() {
+            if let Ok(saved) = self.responses.answer(&SessionCommand::TableSaved) {
+                self.give(Input::Reply(saved.reply));
+            }
             self.give(Input::Agents(agents));
         }
         self.render();

@@ -150,6 +150,9 @@ fn sections(holder: Element, input: &ScreenIn, fit: Fit) -> Element {
     if let Some(error) = lobby.error {
         holder = holder.child(text(error).style(BODY).color(color::EMBER));
     }
+    if let Some(error) = &lobby.link_error {
+        holder = holder.child(text(error).style(BODY).color(color::EMBER));
+    }
     holder
 }
 
