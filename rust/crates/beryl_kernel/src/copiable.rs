@@ -1,11 +1,14 @@
 //! Copiable values: a definition, the face of it that is up, and the copy exceptions that
-//! made them ([`crate::additions`]). [`crate::query`] asks them of an object.
+//! made them ([`crate::copiable::additions`]). [`crate::query`] asks them of an object.
+//! Implements: CR 707.2, CR 707.9a, CR 707.9b, CR 708.2a
+//!
 
 use beryl_card::{
     Ability, AbilityKind, Colors, CopyChange, Face, FaceIx, GrantIx, Supertypes, Words,
 };
 
-use crate::additions::{Addition, AdditionList};
+pub mod additions;
+
 use crate::event::{Listens, Replaces};
 use crate::fit::{Misfit, room};
 use crate::fixed::Full;
@@ -16,6 +19,7 @@ use crate::rule_changes::Rules;
 use crate::static_ability::Inputs;
 use crate::subtypes::GameSubtypes;
 use crate::table::{FaceFacts, GameTable};
+use additions::{Addition, AdditionList};
 
 /// An object's copiable values: what a copy of it would have, and what it has itself before any
 /// other effect applies ([CR 707.2]): "The copiable values are the values derived from the text
@@ -29,8 +33,8 @@ use crate::table::{FaceFacts, GameTable};
 /// It is a definition, the face of it that is up, and the exceptions of the copy effects that
 /// made it ([`Addition`]), which a copy of it takes with the rest ([CR 707.9b]): "The final set
 /// of values for that characteristic becomes part of the copiable values of the copy." A token's are
-/// those its creation defined ([CR 111.3]), a token copy's those of what it copied. A face-down
-/// permanent's are the blank ones, whichever card it is ([CR 708.2]): "Any listed characteristics
+/// those its creation defined (see [CR 111.3]), a token copy's those of what it copied. A face-down
+/// permanent's are the blank ones, whichever card it is (see [CR 708.2]): "Any listed characteristics
 /// are the copiable values of that object's characteristics." Nothing here gives its hidden card
 /// away: [`Copiable::face`] reads [`beryl_card::FACE_DOWN`], and [`Copiable::record`] names
 /// [`beryl_card::FACE_DOWN_COPY`].
@@ -53,9 +57,9 @@ pub struct Copiable<L: Layout = Small> {
 }
 
 /// The colors one of a copy's exceptions sets ([`CopyChange::Colors`]), read through the text
-/// changes of the spell or ability that made the copy as it made it ([CR 612.1]), as Fork whose
+/// changes of the spell or ability that made the copy as it made it (see [CR 612.1]), as Fork whose
 /// "red" reads "blue" makes a blue copy. The read is made once, as the copy is made
-/// ([CR 608.2h]): "If an effect requires information from the game (such as the number of
+/// (see [CR 608.2h]): "If an effect requires information from the game (such as the number of
 /// creatures on the battlefield), the answer is determined only once, when the effect is
 /// applied." Kept only where the text changes changed the colors: every other exception's
 /// color words read as printed. Only the last exception that sets colors counts (CR 707.9b),
@@ -143,11 +147,11 @@ fn read_colors<C: CardId>(addition: Addition<C>, t: &GameTable, words: &Words) -
 }
 
 /// Whether an object with two instances of `ability` can do nothing that it could not do
-/// with one. By [CR 113.2c], "If an object has multiple instances of the same ability, each
+/// with one (see [CR 113.2c]): "If an object has multiple instances of the same ability, each
 /// instance functions independently. This may or may not produce more effects than a single
 /// instance". Two instances of a triggered ability trigger twice, and two of a static ability
 /// may apply twice, so they are not interchangeable. An activated ability (mana ability
-/// included) only offers its controller a choice ([CR 113.3b]): "A player may activate such an
+/// included) only offers its controller a choice (see [CR 113.3b]): "A player may activate such an
 /// ability whenever they have priority." Each instance offers the same activation, for the
 /// same cost, at the same times, so a second instance adds no new choice. That stops being
 /// true for an ability with a limit on how often each instance may be activated, such as
@@ -162,7 +166,7 @@ fn interchangeable(ability: &Ability) -> bool {
 
 impl<L: Layout> Copiable<L> {
     /// The copiable values of the card or token at a game index, its front face up: what a card has
-    /// wherever it is not a permanent or a spell with another face up ([CR 712.6a]), and what a
+    /// wherever it is not a permanent or a spell with another face up (see [CR 712.6a]), and what a
     /// record names that kept only the index, such as last-known information.
     ///
     /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
@@ -246,7 +250,7 @@ impl<L: Layout> Copiable<L> {
     /// in it must allow that:
     ///
     /// - [`CopyChange::Has`] gives an ability, which the values then have twice
-    ///   ([CR 113.2c]): "If an object has multiple instances of the same ability, each instance
+    ///   (see [CR 113.2c]): "If an object has multiple instances of the same ability, each instance
     ///   functions independently." That is only the same as one instance for an ability whose
     ///   instances can't be told apart ([`interchangeable`]),
     ///   wherever the first one is among the exceptions.
@@ -323,8 +327,8 @@ impl<L: Layout> Copiable<L> {
     }
 
     /// These values with the face at `face` up instead: the spell a card becomes cast with that
-    /// face ([CR 712.8b]), or the permanent it becomes entering with it up or down ([CR 712.11a],
-    /// CR 708.2).
+    /// face (see [CR 712.8b]), or the permanent it becomes entering with it up or down (see [CR 712.11a],
+    /// see CR 708.2).
     ///
     /// [CR 712.8b]: https://yawgatog.com/resources/magic-rules/#R7128b
     /// [CR 712.11a]: https://yawgatog.com/resources/magic-rules/#R71211a
@@ -451,10 +455,10 @@ impl<L: Layout> Copiable<L> {
     }
 
     /// The values a merged permanent has once the card `card`, cast with its face `face` up,
-    /// merges with a permanent whose values these are ([CR 731.2a]): "A merged permanent has
+    /// merges with a permanent whose values these are (see [CR 731.2a]): "A merged permanent has
     /// only the characteristics of its topmost component, unless otherwise specified by the
     /// effect that caused them to merge. This is a copiable effect whose timestamp is the time
-    /// the objects merged." Mutate specifies its abilities ([CR 702.140e]): "A mutated
+    /// the objects merged." Mutate specifies its abilities (see [CR 702.140e]): "A mutated
     /// permanent has all abilities of each card and token that represents it." Under (`top` false), these values stay as they are, a copy
     /// effect's exceptions among them, and the card's face is added below the others. Over,
     /// that card's face is the values, with every ability of the face these values had up and
@@ -554,7 +558,7 @@ impl<L: Layout> Copiable<L> {
         }
     }
 
-    /// The name of the face that is up ([CR 712.6a], [CR 712.6d]); none, the empty string, for a
+    /// The name of the face that is up (see [CR 712.6a], see [CR 712.6d]); none, the empty string, for a
     /// face-down permanent (CR 708.2a).
     ///
     /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
@@ -564,7 +568,7 @@ impl<L: Layout> Copiable<L> {
         t.def(self.card).face_name(self.face)
     }
 
-    /// Power, 0 where the face has none ([CR 208.1]): "A creature card has two numbers separated by
+    /// Power, 0 where the face has none (see [CR 208.1]): "A creature card has two numbers separated by
     /// a slash printed in its lower right corner. The first number is its power".
     ///
     /// [CR 208.1]: https://yawgatog.com/resources/magic-rules/#R2081
@@ -576,7 +580,7 @@ impl<L: Layout> Copiable<L> {
         }
     }
 
-    /// Colors ([CR 105.2]): "An object can be one or more of the five colors, or it can be no
+    /// Colors (see [CR 105.2]): "An object can be one or more of the five colors, or it can be no
     /// color at all." The face's, or those the last exception that sets colors sets (CR
     /// 707.9b), as Fork's copy is red whatever its mana cost says.
     ///
@@ -612,7 +616,7 @@ impl<L: Layout> Copiable<L> {
         )
     }
 
-    /// Toughness, 0 where the face has none (CR 208.1): "the second is its toughness".
+    /// Toughness, 0 where the face has none (see CR 208.1): "the second is its toughness".
     #[inline]
     pub fn toughness(self, t: &GameTable) -> i8 {
         match self.excepted_pt(t) {
@@ -652,8 +656,8 @@ impl<L: Layout> Copiable<L> {
     /// The game index and face a record keeps for these values: a stack entry's, a pending
     /// trigger's, last-known information's, and what a token copy is made of. A face-down
     /// permanent's are the one face of [`beryl_card::FACE_DOWN_COPY`], never its hidden card: being
-    /// face down is a status, which a copy does not have ([CR 110.5], CR 707.2), and the blank
-    /// values are what it copies (CR 708.2).
+    /// face down is a status, which a copy does not have (see [CR 110.5], CR 707.2), and the blank
+    /// values are what it copies (see CR 708.2).
     ///
     /// [CR 110.5]: https://yawgatog.com/resources/magic-rules/#R1105
     #[inline]

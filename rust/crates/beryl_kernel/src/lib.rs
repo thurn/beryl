@@ -1,15 +1,6 @@
-// Name every enum case so new vocabulary cannot silently use an old fallback. Check
-// numeric conversions so changing layouts cannot silently discard bits or change a sign.
-#![deny(
-    clippy::wildcard_enum_match_arm,
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss
-)]
-
 //! Beryl's kernel: the game state and the only code that writes it.
 //!
+//! Implements: none. Documents the kernel contract.
 //! The kernel owns [`State`] and its storage [`Layout`]s, the slots and references that name
 //! objects, the bitboards and fixed queues it is built from, the per-game card table, the
 //! zone-move and chance chokepoints, the invariants, and the records, decisions and events
@@ -58,10 +49,10 @@
 //!
 //! | The rules | Mutators | What each leaves consistent |
 //! | --- | --- | --- |
-//! | move an object between zones (CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`, for a graveyard while a permanent reads the graveyards; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
+//! | move an object between zones (see CR 400.7), draw, order or shuffle a library, end a token | [`State::move_object`], [`State::draw`], [`State::reorder_library`], [`State::shuffle_library`], [`State::rebind_at_random`], [`State::cease_to_exist`] | the new incarnation and its reset fields; both zones' membership bitboards; the ordered library, graveyard and stack; the battlefield queue and every permanent's index into it; `derived_dirty`, for a graveyard while a permanent reads the graveyards; the attachments, combat references and exile links that named it; what the stores held about it, which ends ("Stores"); its identity, settled before anyone sees it ([`chance`]); both players' knowledge |
 //! | change a permanent's status, damage or counters | [`State::set_tapped`], [`State::set_summoning_sick`], [`State::reset_permanents_for_turn`], [`State::turn_face_up`], [`State::mark_damage`], [`State::clear_damage`], [`State::add_counters`], [`State::remove_counters`], [`State::order_timestamps`] | a face with its timestamp and who knows it; permanents reordered keep the timestamps they had among them; `derived_dirty` where the kernel can tell the layers read the field |
-//! | phase permanents out and in (CR 702.26) | [`State::phase_out`], [`State::phase_in`] ([`phasing`]) | the zone, incarnation and stores untouched; the battlefield queue, the owner's battlefield bitboard and the set of phased-out permanents; what is attached phases with its permanent, and what phased out alone phases in unattached once its permanent left; combat references to it end; who it phases in for, where that is not its base controller ([`memos::Memo::PhasedOutUnder`]); `derived_dirty` |
-//! | put a spell on the stack, make a token, have a permanent enter, merge a mutating spell with a permanent (CR 731) | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`], [`State::merge`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it; a merged permanent stays the object it was, its other cards in [`beryl_card::Zone::Merged`] with a [`memos::Memo::PartOf`], its values a copy effect's: the top card's face and every ability of each other card ([`additions::Addition::every_ability`]); its cards leave with it ([`State::move_object`], CR 731.3) |
+//! | phase permanents out and in (see CR 702.26) | [`State::phase_out`], [`State::phase_in`] ([`phasing`]) | the zone, incarnation and stores untouched; the battlefield queue, the owner's battlefield bitboard and the set of phased-out permanents; what is attached phases with its permanent, and what phased out alone phases in unattached once its permanent left; combat references to it end; who it phases in for, where that is not its base controller ([`memos::Memo::PhasedOutUnder`]); `derived_dirty` |
+//! | put a spell on the stack, make a token, have a permanent enter, merge a mutating spell with a permanent (see CR 731) | [`State::become_spell`], [`State::make_token`], [`State::arrive`] with a [`mutate::Arrival`], [`State::remember`], [`State::merge`] | what a permanent enters with (tapped, attacking, its face, controller, counters and what it is attached to) is set as one change, before anything reads it; a merged permanent stays the object it was, its other cards in [`beryl_card::Zone::Merged`] with a [`memos::Memo::PartOf`], its values a copy effect's: the top card's face and every ability of each other card ([`copiable::additions::Addition::every_ability`]); its cards leave with it ([`State::move_object`], see CR 731.3) |
 //! | declare and end combat | [`State::declare_attacker`], [`State::choose_attacked`], [`State::forget_attacked`], [`State::declare_blocker`], [`State::block`], [`State::mark_struck_first`], [`State::remove_from_combat`], [`State::end_combat`] | the combat flags and the combat reference change together; nothing stays related to a permanent removed from combat |
 //! | show or hide a card | [`State::reveal`], [`State::look`], [`State::forget`], and for a paused resolution [`State::keep_seen`] | each player's knowledge; the identity is settled first |
 //! | store the layers' results | [`State::rederive`], which lends the cache to the one function that fills it ([`derive::Rederive`]) | the derived table by battlefield index, the listening and replacing masks, the rules the static abilities change for each player, the layer inputs the static abilities read ([`static_ability::Inputs`]), whether an effect removed abilities (for [`State::has_ability`]) or changed land types (for [`State::makes_card_mana`] and [`State::intrinsic_mana`]), what each face-down permanent's controller sees, `derived_dirty` cleared |
@@ -69,7 +60,7 @@
 //! | move the turn, count toward a budget, end the game | [`State::set_starting_player`], [`State::begin_turn`], [`State::begin_step`], [`State::give_priority`], [`State::pass_priority`], [`State::reset_passes`], [`State::declare_attack`], [`State::set_cleanup_check`], [`State::count_decision`], [`State::count_state_based_check`], [`State::reset_state_based_checks`], [`State::end_game`] | passes reset with priority; the lands played and the decisions offered begin again with the turn; that attackers were declared ends with the combat ([`State::end_combat`]) |
 //! | use the stack | [`State::put_on_stack`], [`State::take_top_of_stack`], [`State::take_off_stack`] and [`State::take_ability_off_stack`], which return the entry, [`State::announce_x`], [`State::announce_target`] | a spell's entry goes on once its card is in the stack zone and comes off before the card leaves, so the zone move keeps the stack's set of objects and these keep its order; an entry taken from below the top repairs the ability targets above it, which name abilities by their place ([`state::Target`]); a spell's entry taken off without resolving is kept while an ability of the spell's own names it, in a game whose cards copy their own spells ([`State::departed_spell`]) |
 //! | queue triggers | [`State::queue_trigger`], [`State::take_trigger`], [`State::delay_trigger`], [`State::fire_delayed`] | a delayed trigger that fires waits with the others, once |
-//! | keep and forget last-known information (CR 603.10a) | [`State::record_last_known`], [`State::forget_last_known`] | one row for each object that left, copied from its current layer results before it moves; a row no waiting trigger, stack entry or delayed trigger names is forgotten |
+//! | keep and forget last-known information (see CR 603.10a) | [`State::record_last_known`], [`State::forget_last_known`] | one row for each object that left, copied from its current layer results before it moves; a row no waiting trigger, stack entry or delayed trigger names is forgotten |
 //! | open and settle a question | [`State::ask`], [`State::settle_question`], [`State::pause_resolution`], [`State::resume_resolution`], [`State::record_answer`] | a question is open or priority is; a paused resolution keeps what each player knew as it began, and only resuming it gives that back |
 //! | start and end what a card creates | [`State::start_effect`], [`State::start_effects`], [`State::start_effect_on_set`], [`State::expire`] | an effect's timestamp; the kinds live in its store; the slots a store has entries about; a locked-in set's place in the store's table; `derived_dirty` where the entry is a layer input |
 //!
@@ -93,14 +84,14 @@
 //! sees as an event (passes, budgets, the open question, the derived cache) returns nothing,
 //! and neither does a change the rules announce as part of a larger one: what a permanent
 //! enters with is part of its zone change, and each pick of a combat declaration is part of
-//! the declaration, announced once it is whole (CR 508.1, 509.1): [`State::declare_attack`]
+//! the declaration, announced once it is whole (see CR 508.1, 509.1): [`State::declare_attack`]
 //! returns that event. Spending mana and the steps of a mulligan are no event today.
 //! [`State::end_game`] returns none either: the rules announce a win or a loss to each
 //! player with its cause, and a stall, which is no rules outcome, to no one. It may replace
 //! an outcome already there, because a state that ran out of a capacity is abandoned. The
 //! zone move itself returns nothing: its event carries the reason the pipeline moved it for,
 //! and the deal and a mulligan move cards before the game's first turn with no event at all
-//! (CR 103.5).
+//! (see CR 103.5).
 //!
 //! ## Entities and records
 //!
@@ -109,7 +100,7 @@
 //! base controllers are read through queries. Rules code builds records such as
 //! [`state::StackEntry`], [`state::PendingTrigger`], [`state::Target`] and [`state::Casting`].
 //! [`state::Derived`] carries layer results into the kernel. [`State::decider`] sets a
-//! [`decision::Decision`]'s answerer for player control (CR 724). [`state::Resolving`] holds the
+//! [`decision::Decision`]'s answerer for player control (see CR 724). [`state::Resolving`] holds the
 //! kernel's record of what each player knew at the start of the resolution. [`beryl_card::SpecIx`],
 //! [`beryl_card::AbilityIx`] and [`beryl_card::GrantIx`] identify entries in separate lists.
 //!
@@ -165,14 +156,14 @@
 //! | the `Rule` mask (`rule_bit`, a `u8`) | [`rule_changes::Rules`], a set of the rule changes a game numbered; a static ability's rule changes for players are found with the layers ("Static rule changes") | by-w8gv.7.3, built; numbered by-w8gv.9.7 |
 //! | the `permissions` queue, `CastPermission`; its `this_turn` | Effects: an entry on the card, payload [`effects::Payload::Cast`] of an [`effects::Permission`] naming the player and the terms the spell is cast on; `this_turn` is [`store::Duration::EndOfTurn`], and either way it ends with the card's object. [`State::cast_permissions`] reads them | by-w8gv.7.4, built |
 //! | `CastPermission::extra`, `Casting::extra` | Effects: an [`effects::Payload::Cost`] on the spell, started as it is cast from the permission's terms. Before the cast the cost is read of the permission; from then on of the cost changes on the spell ([`State::cost_increase`]) | by-w8gv.7.4, built |
-//! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (CR 702.34a). Every move of the spell applies it where it applies any replacement (`beryl_engine`'s `replace::moving`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
+//! | `CastPermission::exile` and `flashback`, `StackEntry::exile` and `flashback` | the permission's terms carry them to the cast, which starts an [`effects::Payload::Move`] on the spell: exile instead of a graveyard, or [`effects::MoveReplacement::Flashback`], exile instead of anywhere else (see CR 702.34a). Every move of the spell applies it where it applies any replacement (`beryl_engine`'s `replace::moving`), and "was a flashback cost paid" is whether that replacement is on the spell | by-w8gv.7.4, built |
 //! | `State::entered_x` | Memos: the permanent's `X` ([`memos::Memo::X`]) | by-w8gv.7.6, built |
 //! | `ObjectFlags` `KICKED`, `OFFSPRING`, `IMPENDING`, `EVOKED` | Memos: the costs paid as the object was cast ([`memos::Memo::Paid`]), one entry holding the set of them, with a kind in the store's index for each kind of casting option of the vocabulary's list | by-w8gv.7.6, built |
 //! | `EXILED_UNTIL`, `EXILED_WITH`, `Object::linked`, `State::link`, `State::forget_links_to` | Memos: a memo of the exiled card naming the slot of what exiled it ([`memos::Memo::ExiledWith`], [`memos::Memo::ExiledUntil`]; "Duration and expiry" says how the first outlives that object), read by [`State::exiled_with`] and [`State::exiled_until`] | by-w8gv.7.7, built |
 //! | a field naming the creature an Aura put onto the battlefield | Memos: a memo of the creature naming the slot of the Aura ([`memos::Memo::PutOntoBattlefieldWith`]), which outlives the Aura as [`memos::Memo::ExiledWith`] does, read by [`State::put_onto_battlefield_with`] | by-bajq.8.2, built |
 //! | `LOYALTY_ACTIVATED`, `ENTERED_THIS_TURN` | Trackers, keyed by permanent: a kind of [`trackers::Tracker`] each, noted with [`State::track`] and read with [`State::tracked`] | by-w8gv.7.8, built |
 //! | [`state::Counters`]' long-tail pair (`other_kind`, `other`) | the counters table ([`counters::CounterTable`]), a row for each kind on each object, beside the three kinds the rules themselves read, which stay fields of the object. The kinds are the vocabulary's list (`beryl_card::counter_kinds`), and [`State::add_counters`], [`State::remove_counters`] and [`State::counters_of`] take any of them | by-w8gv.7.9, built |
-//! | `Flag::OneOne` | Effects: a copy effect on the token ([`effects::Payload::Copy`]) holding its copiable values with their exceptions ([`additions::Addition`], CR 707.9b), behind [`state::Flag::Copy`] so that [`State::copiable`] of any other object is one bit test. The zone move carries a token's copy effect to its next incarnation ([`effects::copy`]). A card under a copy effect, such as one that entered as a copy ([`State::enter_as_copy`]) or became one ([`State::become_copy`]), remembers the card it really is ([`memos::Memo::Really`]), which [`State::card_really_is`] and [`State::definition_name`] read and the zone move makes it again | by-bajq.6.1 to 6.3, built |
+//! | `Flag::OneOne` | Effects: a copy effect on the token ([`effects::Payload::Copy`]) holding its copiable values with their exceptions ([`copiable::additions::Addition`], see CR 707.9b), behind [`state::Flag::Copy`] so that [`State::copiable`] of any other object is one bit test. The zone move carries a token's copy effect to its next incarnation ([`effects::copy`]). A card under a copy effect, such as one that entered as a copy ([`State::enter_as_copy`]) or became one ([`State::become_copy`]), remembers the card it really is ([`memos::Memo::Really`]), which [`State::card_really_is`] and [`State::definition_name`] read and the zone move makes it again | by-bajq.6.1 to 6.3, built |
 //!
 //! A fact about a permanent that ends with the turn (a loyalty ability was activated, it
 //! entered this turn) is a tracker keyed by object, not a memo with an expiry. A memo is
@@ -233,7 +224,7 @@
 //! abilities its permanent lost, packed to two-byte alignment, and 20,344 since a value chosen as a
 //! permanent enters. It is 19,840 since [`state::Object`] is aligned to two bytes and 22 bytes
 //! long, where it was 24: 504 fewer, the 510 of the 255 slots less 6 of padding. It is 19,856 since
-//! the list of effects that reach other zones ([`elsewhere`]): four entries of 3 bytes and the
+//! the list of effects that reach other zones ([`query::zone_characteristics`]): four entries of 3 bytes and the
 //! list's length, 16 with padding. It is 19,888 since a [`query::Copiable`] holds two copy
 //! exceptions: each of the 16 last-known rows is 60 bytes, 2 more. It is 19,920 since each player's
 //! pool holds up to four entries of mana that remembers ([`mana_memory`]), four bytes each with the
@@ -297,10 +288,10 @@
 //! the game, which joins with its first user, since no card yet changes a rule for
 //! everyone. The fields are the variant's own, so every side fits four bytes.
 //!
-//! A locked-in set is the objects one effect affects when it affects several ([CR 611.2c], "the set
+//! A locked-in set is the objects one effect affects when it affects several (see [CR 611.2c], "the set
 //! of objects it affects is determined when that continuous effect begins. After that point, the
 //! set won't change."): [`State::start_effect_on_set`] starts one entry for each part of the
-//! effect, all with one timestamp (CR 613.6, 613.7), for the permanents it is given, and the
+//! effect, all with one timestamp (see CR 613.6, 613.7), for the permanents it is given, and the
 //! layers apply it to each member
 //! ([`State::locked_in`]). A set holds slots, not incarnations: a member that ends leaves its set
 //! where every stored thing about it ends ("Duration and expiry"), so whatever a set holds is still
@@ -336,10 +327,10 @@
 //!   the [`store::Duration`] it is given. The rules call it as that moment comes, since the
 //!   kernel moves the turn and holds none of its rules: with `UntilYourNextTurn` of the
 //!   active player as a turn begins and `EndOfTurn` in the cleanup step. A
-//!   player-controlling effect or extra turn is `Indefinite`: its turn takes it (CR 724.1b).
+//!   player-controlling effect or extra turn is `Indefinite`: its turn takes it (see CR 724.1b).
 //! - **An object ends.** "While the card stays in its zone" is no duration: whatever is
 //!   stored about an object ends with it
-//!   ([CR 400.7]), inside the three
+//!   (see [CR 400.7]), inside the three
 //!   chokepoints that bump an incarnation ([`State::move_object`],
 //!   [`State::cease_to_exist`], a shuffle's rebind). `State` keeps the set of slots any
 //!   store has an entry about, the members of the locked-in sets among them, so the move
@@ -352,13 +343,13 @@
 //! Memos clear the same way, as their object ends. A memo that names another object (the
 //! cards "exiled with" a permanent) names its slot, not its incarnation: the cards stay
 //! exiled with that object after it has left its zone, for an ability of it still on the
-//! stack, until a new object arrives in the slot (CR 607.2a). So the move also ends the
+//! stack, until a new object arrives in the slot (see CR 607.2a). So the move also ends the
 //! memos naming the slot an object arrives in, on the battlefield or back in the pool
 //! (`State::forget_links_to`), behind one AND of the Memos store's kinds. A card exiled
 //! "until" a permanent leaves needs no such end: the rules return it as the permanent
-//! leaves (CR 610.3), and the store's invariant holds that permanent to the battlefield.
+//! leaves (see CR 610.3), and the store's invariant holds that permanent to the battlefield.
 //!
-//! Counters end the same way ([CR 122.2]: "Counters on an object are not retained if that object
+//! Counters end the same way (see [CR 122.2]: "Counters on an object are not retained if that object
 //! moves from one zone to another."): the move resets the object's fields and ends its rows of the
 //! table with everything else stored about it. A row also ends with its last counter, so the table
 //! holds no row of none.
@@ -396,14 +387,14 @@
 //! | "is a rule change of this kind in force" ([`State::rules_for`], [`GameTable::rules_of`]) | for a player, their two sets of rules joined and one AND with the table's set of the kind, which is the whole answer; for a permanent, one AND of the table's rules of its card and one of the store's kinds | for a permanent, a second AND of the rules of the face that is up, or one pass over the store's entries |
 //! | an event's match against triggered abilities (the rules' `trigger::match_event`) | one AND of the kinds any card of the game listens to ([`GameTable::listens_any`]) | one AND of the battlefield's listener mask; then, for each permanent whose card listens to the kind, the listeners of that kind on the face that is up ([`GameTable::listeners`]), and no other ability of it |
 //! | the same match against abilities that work outside the battlefield ([`listener::AWAY`]) | one AND of the kinds they listen to ([`GameTable::listens_away`]) | the membership of the zones some card works in ([`GameTable::zones_away`]), each slot's card's zones read once ([`GameTable::works_away`]), then its listeners of the kind ([`GameTable::away_listeners`]): the state keeps no set of these objects, which the zone move would have to keep with no table to ask |
-//! | a zone move's match against abilities that look back (the rules' `trigger::match_look_back`, CR 603.10a) | one AND of the kinds any card listens to with [`event::EventKind::Dies`] and [`event::EventKind::Leaves`]; the permanents leaving are read from the move's own list, so nothing else is written | for each permanent leaving, the battlefield's listeners of those kinds, then those that work away; a row of last-known information for each permanent some ability triggered on |
+//! | a zone move's match against abilities that look back (the rules' `trigger::match_look_back`, see CR 603.10a) | one AND of the kinds any card listens to with [`event::EventKind::Dies`] and [`event::EventKind::Leaves`]; the permanents leaving are read from the move's own list, so nothing else is written | for each permanent leaving, the battlefield's listeners of those kinds, then those that work away; a row of last-known information for each permanent some ability triggered on |
 //! | forgetting last-known information as a player would receive priority ([`State::forget_last_known`]) | one test of the length of each of its two tables | out of line, a pass over the waiting triggers, delayed triggers and stack for each row |
 //! | state triggers (the rules' `trigger::match_states`, at each state-based check) | one AND of [`event::EventKind::State`] with the kinds any card listens to | as the match of an event, then for each such ability a pass over the waiting triggers and the stack for the same source and ability, so nothing is stored to say it triggered |
 //! | the layers' search for the rules static abilities change for players | one AND of the replacement mask the pass has just folded from the permanents ([`event::Replaces::PLAYER_RULE_CHANGE`]): no read of its own | a second pass over the permanents, out of line, in a recompute with such a permanent on the battlefield |
-//! | the characteristics of an object off the battlefield ([`State::colors`], [`State::types`] and the rest) | one test of the length of the list of effects that reach other zones ([`elsewhere`]) | out of line, the copiable values and then each effect in the list whose filter accepts the object |
+//! | the characteristics of an object off the battlefield ([`State::colors`], [`State::types`] and the rest) | one test of the length of the list of effects that reach other zones ([`query::zone_characteristics`]) | out of line, the copiable values and then each effect in the list whose filter accepts the object |
 //! | whether a card in a graveyard has escape ([`State::escapes`]), which casting asks of the caster's graveyard at each priority | one test of the length of the same list, before the graveyard is read | out of line, for each card, each escape the list holds whose filter accepts the card |
 //! | a mana ability activated only as an instant, which priority offers on its own ([`table::is_instant_mana`]) | one AND of the table's capabilities ([`table::Capability::InstantMana`]) | out of line, a pass over the player's permanents |
-//! | the power and toughness of an object off the battlefield ([`State::power`], [`State::toughness`]) | one AND of the table's capabilities ([`table::Capability::DefinesPt`]) | out of line, the copiable values and then each characteristic-defining ability of the object's face, its amount evaluated ([`defined`]) |
+//! | the power and toughness of an object off the battlefield ([`State::power`], [`State::toughness`]) | one AND of the table's capabilities ([`table::Capability::DefinesPt`]) | out of line, the copiable values and then each characteristic-defining ability of the object's face, its amount evaluated ([`query::defined_power`]) |
 //! | a permanent's protection, read by damage, targets, blocks and attachments ([`State::protection`]) | one AND of the state's replacement mask ([`event::Replaces::PROTECTION`]), which the layers set when an effect that gives protection applied | the permanent's layer result read, and the source's colors |
 //! | a tracker or a count ([`State::track`], [`State::tracked`], [`State::count`], [`State::counted`]) | one AND of the table's capabilities where the rules would write it; a read finds an empty set or zero | a bit set or tested, or a byte written or read |
 //! | a count of counters ([`State::counters_of`]) | of a kind the object keeps in a field, one read; of any other, one bit test of the keyed slots | one pass over the table's rows, at most 32 of 3 bytes |
@@ -460,7 +451,7 @@
 //! ### Static rule changes
 //!
 //! Whether a rule change applies to a player or a permanent now is asked the same way whether a
-//! static ability or a resolved effect makes it ([CR 613.11]: "Some continuous effects affect game
+//! static ability or a resolved effect makes it (see [CR 613.11]: "Some continuous effects affect game
 //! rules rather than objects."):
 //!
 //! - A rule change is the vocabulary's data (`beryl_card`'s `RuleChange`: who may or may
@@ -512,7 +503,7 @@
 //!   ability's and the layers read none. In a game whose cards make none, the total cost
 //!   asks one test of the table's set; in one whose cards do, it walks the battlefield
 //!   for the makers. Only a static ability may make one.
-//! - "Can't" beats "can" ([CR 101.2])
+//! - "Can't" beats "can" (see [CR 101.2])
 //!   in the rules that read two changes together, not here: each rule is its own bit.
 //! - Which permanent makes a change, to tell a player why, is asked only once it is known
 //!   to apply (`beryl_engine`'s `rule_change::maker`).
@@ -572,8 +563,8 @@
 //! | the battlefield, as permanents entered it | [`State::battlefield`] |
 //! | a library, top first | [`State::library_from_top`] |
 //! | the stack, from the top or bottom | [`State::stack`] |
-//! | a graveyard, as cards were put there (CR 404.2) | [`State::graveyard`] |
-//! | players in turn order (CR 101.4) | [`State::players_in_turn_order`] and the others under "Players" |
+//! | a graveyard, as cards were put there (see CR 404.2) | [`State::graveyard`] |
+//! | players in turn order (see CR 101.4) | [`State::players_in_turn_order`] and the others under "Players" |
 //! | a batch, in an order no seed decides: permanents as they entered, then library cards top first, then the rest by name | [`State::in_game_order`] |
 //! | a hand, by card definition | [`State::hand_by_definition`] |
 //!
@@ -587,7 +578,7 @@
 //! A stack entry's targets are named the same way: a [`state::TargetPlace`] is a target's
 //! place in the entry's list, a [`state::TargetPlaces`] is a set of them with `insert`,
 //! `contains` and `is_empty`, and [`state::placed`] gives the targets with their places in
-//! the order they were chosen (CR 601.2c).
+//! the order they were chosen (see CR 601.2c).
 //!
 //! ## Queries
 //!
@@ -598,20 +589,20 @@
 //!
 //! | The rules ask | Query |
 //! | --- | --- |
-//! | the card that represents an object: nothing for a token (CR 111.1, 111.6) | [`State::card_behind`] |
-//! | what it is before any other effect, and what a copy of it would be (CR 707.2); for a merged permanent, its top card's face and every ability of its other cards (CR 731.2a, [`Copiable::merged_faces`]), whose other cards are [`State::pile`] | [`State::copiable`], a [`Copiable`] |
+//! | the card that represents an object: nothing for a token (see CR 111.1, 111.6) | [`State::card_behind`] |
+//! | what it is before any other effect, and what a copy of it would be (see CR 707.2); for a merged permanent, its top card's face and every ability of its other cards (see CR 731.2a, [`Copiable::merged_faces`]), whose other cards are [`State::pile`] | [`State::copiable`], a [`Copiable`] |
 //! | the definition and face it has the values of, for what the card table keeps per definition and no copy exception changes | [`State::definition`], a [`definition::Definition`]; its power and toughness before the other layers, [`State::copiable_pt`] |
-//! | its mana value: a spell's with its X (CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (CR 712.6d) | [`State::mana_value`] |
-//! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (CR 108.4a) | [`State::controller`] |
-//! | its power and toughness: the layer results on the battlefield, elsewhere the copiable values and then its characteristic-defining abilities, which work in every zone (CR 604.3, [`defined`]) | [`State::power`], [`State::toughness`] |
-//! | its colors, card types, supertypes and subtypes: the layer results on the battlefield, elsewhere the copiable values and then the continuous effects that reach other zones ([`elsewhere`]) | [`State::colors`], [`State::types`], [`State::supertypes`], [`State::has_subtype`] |
+//! | its mana value: a spell's with its X (see CR 202.3e), a transformed permanent's front face's and a copied back face's 0 (see CR 712.6d) | [`State::mana_value`] |
+//! | who controls it: a permanent's layer result, a spell's caster, elsewhere the owner (see CR 108.4a) | [`State::controller`] |
+//! | its power and toughness: the layer results on the battlefield, elsewhere the copiable values and then its characteristic-defining abilities, which work in every zone (see CR 604.3, [`query::defined_power`]) | [`State::power`], [`State::toughness`] |
+//! | its colors, card types, supertypes and subtypes: the layer results on the battlefield, elsewhere the copiable values and then the continuous effects that reach other zones ([`query::zone_characteristics`]) | [`State::colors`], [`State::types`], [`State::supertypes`], [`State::has_subtype`] |
 //! | its keywords: the layer results on the battlefield, the copiable values elsewhere | [`State::keywords`] |
-//! | whether it has an ability of its face: a permanent may have lost it (CR 613.1f); elsewhere it has them all | [`State::has_ability`], [`State::has_every_ability`] |
-//! | whether a card off the battlefield has escape from an effect that reaches it (CR 702.138a) | [`State::escapes`] |
-//! | the mana its basic land types make (CR 305.6, 305.7) | [`State::intrinsic_mana`] |
+//! | whether it has an ability of its face: a permanent may have lost it (see CR 613.1f); elsewhere it has them all | [`State::has_ability`], [`State::has_every_ability`] |
+//! | whether a card off the battlefield has escape from an effect that reaches it (see CR 702.138a) | [`State::escapes`] |
+//! | the mana its basic land types make (see CR 305.6, 305.7) | [`State::intrinsic_mana`] |
 //! | the colors a permanent has protection from | [`State::protection`] |
-//! | what an object that left was as it last existed (CR 603.10a) | [`State::last_known`] |
-//! | what the color words and subtypes its text names read as after text changes (CR 612.1); every reader of such a word ([`beryl_card::words`]) takes them | [`State::words_of`] |
+//! | what an object that left was as it last existed (see CR 603.10a) | [`State::last_known`] |
+//! | what the color words and subtypes its text names read as after text changes (see CR 612.1); every reader of such a word ([`beryl_card::words`]) takes them | [`State::words_of`] |
 //!
 //! The kernel's filter evaluation and every reader of an object that may be off the
 //! battlefield ask these. A reader that holds a permanent in a walk of the battlefield (the
@@ -621,14 +612,14 @@
 //! [`state::Derived`] `granted` entry that [`State::has_ability`] does not answer for, and
 //! trigger matching reads no granted ability.
 //! | the objects another record of the state names, which no twin stands in for (architecture §7.2) | [`State::named`] |
-//! | every ability it has now: its face's own it has not lost, then those granted to it (CR 613.1f) | [`State::abilities`], [`State::has`] |
+//! | every ability it has now: its face's own it has not lost, then those granted to it (see CR 613.1f) | [`State::abilities`], [`State::has`] |
 //!
 //! A [`Copiable`] is a definition, the face of it that is up and the exceptions of the copy
-//! effects that made it ([`additions::Addition`], CR 707.9b): two in `Small`, a third
+//! effects that made it ([`copiable::additions::Addition`], see CR 707.9b): two in `Small`, a third
 //! [`fixed::Full`]. An addition names an exception by the card whose face lists it and its
 //! place in that list ([`beryl_card::Face::excepts`]), so copying takes the exceptions with
 //! the rest and appends the copier's own, and no reader walks a chain of copies. It answers with the face's characteristics ([`Copiable::face`], the blank
-//! ones of CR 708.2 for a face-down permanent), the table's facts about that face, its name,
+//! ones for a face-down permanent, see CR 708.2), the table's facts about that face, its name,
 //! and its power and toughness. It never hands out the index it holds:
 //!
 //! - [`Copiable::record`] is the index and face a record keeps and a token copy is made of,
@@ -658,16 +649,16 @@
 //!
 //! | The rules ask | Query |
 //! | --- | --- |
-//! | every player (CR 102.1) | [`State::players`] |
-//! | a player's opponents (CR 102.2, 102.3) | [`State::opponents_of`] |
-//! | the defending players of this turn's combat (CR 506.2, 802.2) | [`State::defending_players`] |
-//! | the defending player an attacker attacks (CR 508.5) | [`State::defending_player`] |
-//! | the next player in turn order: who takes the next turn, who gets priority on a pass (CR 103.1, 117.3d) | [`State::next_player`] |
-//! | players in the order they act, from the active player (CR 101.4) | [`State::players_in_turn_order`] |
-//! | the same from a named player, as from the starting player (CR 103.5) | [`State::players_in_turn_order_from`] |
+//! | every player (see CR 102.1) | [`State::players`] |
+//! | a player's opponents (see CR 102.2, 102.3) | [`State::opponents_of`] |
+//! | the defending players of this turn's combat (see CR 506.2, 802.2) | [`State::defending_players`] |
+//! | the defending player an attacker attacks (see CR 508.5) | [`State::defending_player`] |
+//! | the next player in turn order: who takes the next turn, who gets priority on a pass (see CR 103.1, 117.3d) | [`State::next_player`] |
+//! | players in the order they act, from the active player (see CR 101.4) | [`State::players_in_turn_order`] |
+//! | the same from a named player, as from the starting player (see CR 103.5) | [`State::players_in_turn_order_from`] |
 //! | players by seat: a decision's candidates, the events of one simultaneous happening | [`State::players_in_seat_order`] |
 //! | who knows an object's identity | [`State::who_knows`] |
-//! | every object in a zone, whoever owns it (CR 400.1) | [`State::in_zone`] |
+//! | every object in a zone, whoever owns it (see CR 400.1) | [`State::in_zone`] |
 //!
 //! Seat order is to players what candidate order is to objects: no order of the rules, and
 //! what saves and `rollouts_never_change` see. A walk in it lists players or says in a
@@ -706,7 +697,7 @@
 //!
 //! The numbering of slots belongs to the slot type, not to the layout beside it, so a
 //! conversion between two numberings needs only their types and a slot number of one cannot
-//! pass for a number of the other. A slot keeps its [`ids::Place`] in every numbering (the
+//! pass for a number of the other. A slot keeps its [`ids::SlotPlace`] in every numbering (the
 //! `i`th card of a player's deck, the `k`th slot of the pool) and its order among the
 //! others, so [`relayout::Relayout`] takes a game to another layout place by place and a
 //! `Choice` over objects names the same object in each. The UI's protocol names an object
@@ -728,22 +719,29 @@
 //! [CR 613.11]: https://yawgatog.com/resources/magic-rules/#R61311
 //! [CR 101.2]: https://yawgatog.com/resources/magic-rules/#R1012
 
+// Name every enum case so new vocabulary cannot silently use an old fallback. Check
+// numeric conversions so changing layouts cannot silently discard bits or change a sign.
+#![deny(
+    clippy::wildcard_enum_match_arm,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+
 pub mod abilities;
-pub mod additions;
 pub mod asking;
 pub mod bitboard;
 pub mod board;
 pub mod cause;
 pub mod chance;
 pub mod chosen;
-mod copiable;
+pub mod copiable;
 pub mod counters;
 pub mod decision;
-pub mod defined;
 pub mod definition;
 pub mod derive;
 pub mod effects;
-pub mod elsewhere;
 pub mod event;
 pub mod filter;
 mod fit;
@@ -789,7 +787,7 @@ pub mod zone;
 
 pub use bitboard::Bitboard;
 pub use fit::Misfit;
-pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Place, Seat, Slot, SlotId};
+pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId, SlotPlace};
 pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
 pub use player_set::PlayerSet;

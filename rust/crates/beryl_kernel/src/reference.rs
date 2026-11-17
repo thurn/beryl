@@ -1,4 +1,6 @@
 //! Checked object references and sets for rules functions. See the crate's contract.
+//! Implements: none. Validates and names objects of a particular kind.
+//!
 
 use core::marker::PhantomData;
 
@@ -9,7 +11,7 @@ use crate::object::Flag;
 use crate::relayout::{Relayout, bits};
 use crate::state::{ObjectRef, State, Zone, ZoneKey};
 
-/// A card or token on the battlefield (CR 110.1).
+/// A card or token on the battlefield (see CR 110.1).
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Permanent<L: Layout = Small>(ObjectRef<L>);
@@ -22,7 +24,7 @@ impl<L: Layout> Permanent<L> {
     }
 }
 
-/// A spell's object (CR 112.1). Abilities have no object slot and are named by stack place.
+/// A spell's object (see CR 112.1). Abilities have no object slot and are named by stack place.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Spell<L: Layout = Small>(ObjectRef<L>);
@@ -182,7 +184,7 @@ impl<Z: ZoneMark, L: Layout> Relayout for Cards<Z, L> {
 
 impl<L: Layout> State<L> {
     /// Checks an incarnation immediately before using the reference. A zone move ends the
-    /// previous object ([CR 400.7]): "An object that moves from one zone to another becomes
+    /// previous object (see [CR 400.7]): "An object that moves from one zone to another becomes
     /// a new object with no memory of, or relation to, its previous existence."
     ///
     /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
@@ -192,7 +194,7 @@ impl<L: Layout> State<L> {
             .then_some(Current(reference))
     }
 
-    /// Checks that the reference still names a phased-in permanent ([CR 110.1]): "A permanent
+    /// Checks that the reference still names a phased-in permanent (see [CR 110.1]): "A permanent
     /// is a card or token on the battlefield." See [CR 702.26b] for phasing.
     ///
     /// [CR 110.1]: https://yawgatog.com/resources/magic-rules/#R1101
@@ -251,7 +253,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Cards in a player's part of a zone. Tokens that will cease to exist at the next
-    /// state-based check are excluded ([CR 111.6]): "A token isn't a card"
+    /// state-based check are excluded (see [CR 111.6]): "A token isn't a card"
     ///
     /// [CR 111.6]: https://yawgatog.com/resources/magic-rules/#R1116
     #[inline]

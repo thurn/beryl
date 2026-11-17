@@ -1,5 +1,7 @@
 //! Queries: what the rules ask about an object, answered once.
 //!
+//! Implements: CR 108.4a, CR 202.3, CR 712.6d
+//!
 //! A slot holds the game index of a definition and the face that is up. Neither is an answer:
 //! a token's definition is no card, a face-down permanent's says nothing of what it is, a
 //! copy of a back face has mana value 0, and a controller is a layer result on the
@@ -18,12 +20,15 @@ use crate::object::{AbilityMask, CombatRole, Flag};
 use crate::state::State;
 use crate::table::GameTable;
 
+pub(crate) mod defined_power;
+pub mod zone_characteristics;
+
 pub use crate::copiable::{Copiable, DefinitionKey};
 
 impl<L: Layout> State<L> {
-    /// The card that represents the object in `slot`: nothing for a token ([CR 111.1]): "a marker
+    /// The card that represents the object in `slot`: nothing for a token (see [CR 111.1]): "a marker
     /// used to represent any permanent that isn't represented by a card", which stays one wherever
-    /// it goes ([CR 111.7]) and is never a card ([CR 111.6]), whatever it copies. Ask this for what
+    /// it goes (see [CR 111.7]) and is never a card (see [CR 111.6]), whatever it copies. Ask this for what
     /// only a card has: the other faces it could be cast or played with, what turning a face-down
     /// permanent face up shows, a place in a decklist.
     ///
@@ -57,7 +62,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The definition of the card that represents the object in `slot`, with every face it may be
-    /// cast or played with ([CR 712.6a]); nothing for a token ([`State::card_behind`]).
+    /// cast or played with (see [CR 712.6a]); nothing for a token ([`State::card_behind`]).
     ///
     /// [CR 712.6a]: https://yawgatog.com/resources/magic-rules/#R7126a
     #[inline]
@@ -76,7 +81,7 @@ impl<L: Layout> State<L> {
         t.def(self.card_really_is(slot)).name
     }
 
-    /// The copiable values of the object in `slot` (CR 707.2): what it is before any other
+    /// The copiable values of the object in `slot` (see CR 707.2): what it is before any other
     /// effect, and what a copy of it would be. Its definition and face are fields of the
     /// object; the exceptions of a copy effect on it are read behind [`Flag::Copy`], so for
     /// every other object this reads what it always read and tests one bit.
@@ -108,8 +113,8 @@ impl<L: Layout> State<L> {
     /// of its front face. If a permanent is copying the back face of a nonmodal double-faced
     /// permanent (even if the object representing that copy is itself a double-faced permanent),
     /// the mana value of that permanent is 0." A token with a double-faced card's faces also
-    /// copies the back face when it has it up ([CR 707.8a]). A face-down permanent has no mana
-    /// cost (CR 708.2a), so 0.
+    /// copies the back face when it has it up (see [CR 707.8a]). A face-down permanent has no mana
+    /// cost (see CR 708.2a), so 0.
     ///
     /// [CR 202.3]: https://yawgatog.com/resources/magic-rules/#R2023
     /// [CR 202.3e]: https://yawgatog.com/resources/magic-rules/#R2023e
@@ -142,7 +147,7 @@ impl<L: Layout> State<L> {
     /// Whether the object in `slot` has the ability at `ability` of its face up: the one
     /// question every reader of an ability asks, whatever kind it is (triggered, activated,
     /// static or mana). A permanent may have lost it to an ability-removing effect
-    /// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
+    /// (see [CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
     /// effects, and effects that say an object can't have an ability are applied." An object
     /// in any other zone has no layer results, and the cards' effects change only
     /// permanents, so it has every ability of its face.
@@ -164,7 +169,7 @@ impl<L: Layout> State<L> {
     /// Whether some continuous effect in force removes abilities, whether or not it removes
     /// any from a permanent now: the flag the layers store for [`State::has_ability`]. A
     /// reader that asks what an object would have on entering the battlefield
-    /// ([CR 614.12]) need look no further when it is false: "check the characteristics of
+    /// (see [CR 614.12]) need look no further when it is false: "check the characteristics of
     /// the permanent as it would exist on the battlefield, taking into account ...
     /// continuous effects that already exist and would apply to the permanent."
     ///
@@ -184,7 +189,7 @@ impl<L: Layout> State<L> {
 
     /// Whether the permanent in `slot` makes the mana its card table's facts say
     /// ([`crate::table::FaceFacts::mana`]): it has every ability of its face and no intrinsic
-    /// mana ability of a basic land type but its face's ([CR 305.7]), and it is no merged
+    /// mana ability of a basic land type but its face's (see [CR 305.7]), and it is no merged
     /// permanent with the abilities of cards under its top card
     /// ([`crate::query::Copiable::merged_faces`]). With no effect on the battlefield removing
     /// abilities or changing land types and no merged permanent, as most games go, one test
@@ -211,13 +216,13 @@ impl<L: Layout> State<L> {
     }
 
     /// The kinds of mana the intrinsic mana abilities of the basic land types of the object
-    /// in `slot` make, a bit per [`beryl_card::ManaColor`] ([CR 305.6]): "An object with the
+    /// in `slot` make, a bit per [`beryl_card::ManaColor`] (see [CR 305.6]): "An object with the
     /// land card type and a basic land type has the intrinsic ability “{T}: Add [mana
     /// symbol],” even if the text box doesn't actually contain that text or the object has no
     /// text box." Those of its face it does not write out ([`crate::table::land_mana`]),
     /// unless it has lost all its abilities, with those its effects gave it in layer 4
     /// ([`beryl_card::Keywords::PLAINS_MANA`]). A land whose land types an effect set has
-    /// lost all of its face's ([CR 305.7]): "It loses all abilities generated from its rules
+    /// lost all of its face's (see [CR 305.7]): "It loses all abilities generated from its rules
     /// text, its old land types".
     ///
     /// With no effect removing abilities or changing land types, as most games go, those of
@@ -245,7 +250,7 @@ impl<L: Layout> State<L> {
         slot: L::Slot,
         printed: u8,
     ) -> u8 {
-        // CR 612.1: a text change may make its type line name other basic land types.
+        // see CR 612.1: a text change may make its type line name other basic land types.
         let words = self.words_of(slot);
         let printed = if words.changes_subtypes() {
             crate::table::land_mana(self.definition(slot).face(t), &words)
@@ -280,7 +285,7 @@ impl<L: Layout> State<L> {
 
     /// Whether the merged permanent in `slot` has the abilities of the cards under its top
     /// card ([`crate::query::Copiable::merged_faces`]): it has, unless an effect removed all
-    /// its abilities ([CR 613.1f]). An effect that removes one ability names it on the top
+    /// its abilities (see [CR 613.1f]). An effect that removes one ability names it on the top
     /// card's face, so it removes none of these.
     ///
     /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
@@ -306,7 +311,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Who controls the object in `slot`: a permanent's controller after continuous effects
-    /// ([CR 110.2]), a spell's, who is the player who cast it ([CR 601.2a]: "that player becomes
+    /// (see [CR 110.2]), a spell's, who is the player who cast it (see [CR 601.2a]: "that player becomes
     /// its controller"), and anywhere else its owner ([CR 108.4a]): "If anything asks for the
     /// controller of a card that doesn't have one (because it's not a permanent or spell), use its
     /// owner instead."
@@ -332,9 +337,9 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The power of the object in `slot`: a permanent's after continuous effects ([CR 613.4]), and
+    /// The power of the object in `slot`: a permanent's after continuous effects (see [CR 613.4]), and
     /// elsewhere its copiable value ([`Copiable::power`]) or what a characteristic-defining
-    /// ability defines, which works in every zone ([`crate::defined`]).
+    /// ability defines, which works in every zone ([`crate::query::defined_power`]).
     ///
     /// [CR 613.4]: https://yawgatog.com/resources/magic-rules/#R6134
     #[inline]
@@ -347,10 +352,10 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The colors of the object in `slot` ([CR 105.2]): "An object can be one or more of the
+    /// The colors of the object in `slot` (see [CR 105.2]): "An object can be one or more of the
     /// five colors, or it can be no color at all." A permanent's are its layer results.
     /// Elsewhere they are those of the face it has there, then the continuous effects that
-    /// reach other zones ([`crate::elsewhere`]), read with one test while there are none.
+    /// reach other zones ([`crate::query::zone_characteristics`]), read with one test while there are none.
     ///
     /// [CR 105.2]: https://yawgatog.com/resources/magic-rules/#R1052
     #[inline]
@@ -367,7 +372,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The card types of the object in `slot` ([CR 205.2a]): "The card types are artifact,
+    /// The card types of the object in `slot` (see [CR 205.2a]): "The card types are artifact,
     /// battle, conspiracy, creature, dungeon, enchantment, instant, kindred, land, phenomenon,
     /// plane, planeswalker, scheme, sorcery, and vanguard." Read as [`State::colors`] is.
     ///
@@ -384,7 +389,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The supertypes of the object in `slot` ([CR 205.4a]): "An object can have one or more
+    /// The supertypes of the object in `slot` (see [CR 205.4a]): "An object can have one or more
     /// supertypes." Read as [`State::colors`] is.
     ///
     /// [CR 205.4a]: https://yawgatog.com/resources/magic-rules/#R2054a
@@ -400,7 +405,7 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// Whether the object in `slot` has the subtype `subtype` ([CR 205.3a]): "A card can have
+    /// Whether the object in `slot` has the subtype `subtype` (see [CR 205.3a]): "A card can have
     /// one or more subtypes printed on its type line." Read as [`State::colors`] is.
     ///
     /// [CR 205.3a]: https://yawgatog.com/resources/magic-rules/#R2053a
@@ -418,7 +423,7 @@ impl<L: Layout> State<L> {
     }
 
     /// The keyword abilities of the object in `slot` that [`Keywords`] names: a permanent's
-    /// after continuous effects ([CR 613.1f]), and elsewhere those of the face it has there,
+    /// after continuous effects (see [CR 613.1f]), and elsewhere those of the face it has there,
     /// which no effect of the cards changes off the battlefield.
     ///
     /// [CR 613.1f]: https://yawgatog.com/resources/magic-rules/#R6131f
@@ -441,7 +446,7 @@ impl<L: Layout> State<L> {
         self.replacing.protects()
     }
 
-    /// The colors the permanent in `slot` has protection from ([CR 702.16a]), none for an
+    /// The colors the permanent in `slot` has protection from (see [CR 702.16a]), none for an
     /// object that is no permanent, and none without a look at the permanent while no effect
     /// gives protection ([`crate::event::Replaces::PROTECTION`]).
     ///
@@ -471,27 +476,27 @@ impl<L: Layout> State<L> {
     /// the object, so that two objects alike in themselves lead to different games:
     ///
     /// - a stack entry names its spell's card or its ability's source, its targets
-    ///   ([CR 601.2c]: "The player
+    ///   (see [CR 601.2c]: "The player
     ///   announces their choice of an appropriate object or player for each target the
     ///   spell requires."), and the object a triggered ability triggered on. An
     ///   ability's source is named though the ability exists apart from it: it can be its
     ///   own target, chosen before its costs are paid
-    ///   ([CR 602.2b]: "The remainder
+    ///   (see [CR 602.2b]: "The remainder
     ///   of the process for activating an ability is identical to the process for casting
     ///   a spell listed in rules 601.2b-i"), so a land sacrificed to destroy target land
     ///   does nothing aimed at itself and destroys its twin aimed at that;
     /// - an ability that has triggered and waits to be put on the stack, or a delayed one,
     ///   names its source and that object
-    ///   ([CR 603.7c]: "A delayed
+    ///   (see [CR 603.7c]: "A delayed
     ///   triggered ability that refers to a particular object still affects it even if the
     ///   object changes characteristics.");
     /// - a permanent names what it is attached to
-    ///   ([CR 701.3]), the planeswalker
+    ///   (see [CR 701.3]), the planeswalker
     ///   it attacks and the attacker it blocks
-    ///   ([CR 509.1g]);
+    ///   (see [CR 509.1g]);
     /// - an entry of a store about one object names another, as a card in exile remembers
-    ///   what exiled it ([CR 610.3],
-    ///   [CR 607.2a]): the store says
+    ///   what exiled it (see [CR 610.3],
+    ///   see [CR 607.2a]): the store says
     ///   which itself (`Store::names`).
     ///
     /// Every field and store that holds a slot is either about that slot's object, and

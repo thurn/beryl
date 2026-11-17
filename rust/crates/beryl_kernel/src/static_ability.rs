@@ -282,7 +282,7 @@ fn found_by_the_layers(affected: Objects) -> bool {
     match affected {
         Objects::This | Objects::AttachedTo => true,
         // Everywhere: every permanent the filter accepts. The objects off the battlefield
-        // it reaches are the kernel's to read (`crate::elsewhere`).
+        // it reaches are the kernel's to read (`crate::query::zone_characteristics`).
         Objects::All {
             zone: Zone::Battlefield,
             filter,

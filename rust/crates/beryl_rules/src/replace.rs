@@ -37,7 +37,7 @@ use crate::profile::Stops;
 use crate::state::{AbilityMask, CounterKind, MoveReplacement, ObjectRef, State, Zone};
 use crate::table::{Capability, GameTable};
 use crate::{chosen, interpret};
-use beryl_kernel::additions::Addition;
+use beryl_kernel::copiable::additions::Addition;
 use beryl_kernel::query::Copiable;
 
 mod damage;

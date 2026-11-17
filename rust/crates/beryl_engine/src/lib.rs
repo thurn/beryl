@@ -12,9 +12,10 @@
 //!.
 
 // The game state and everything that writes it are the kernel's.
+pub use beryl_kernel::copiable::additions;
 pub use beryl_kernel::{
-    additions, bitboard, chance, chosen, decision, definition, filter, fixed, ids, observation,
-    query, relayout, rng, state, table, two_player, zone,
+    bitboard, chance, chosen, decision, definition, filter, fixed, ids, observation, query,
+    relayout, rng, state, table, two_player, zone,
 };
 // The rules' modules, among them `layout` and `profile`: the kernel's layouts and restriction
 // profiles, with the rules' stops beside the profiles. A card file with a Rust body takes the
@@ -34,7 +35,7 @@ pub use decision::{
     Answers, Candidates, Choice, Decision, DecisionKind, OPTIONS, Opt, Outcome, Refusal, Replay,
     StallReason, Step,
 };
-pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Place, Seat, Slot, SlotId};
+pub use ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId, SlotPlace};
 pub use layout::{Large, Layout, Small};
 pub use observation::Observation;
 pub use profile::{

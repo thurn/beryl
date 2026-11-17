@@ -9,7 +9,7 @@
 
 use beryl_card::FaceIx;
 
-use crate::additions::Addition;
+use crate::copiable::additions::Addition;
 use crate::event::Sink;
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardIx, Seat, Slot, SlotId};

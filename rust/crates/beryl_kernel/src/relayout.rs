@@ -595,7 +595,10 @@ impl<L: Layout> Relayout for State<L> {
             budgets: *budgets,
             flags: *flags,
             outcome: *outcome,
-            elsewhere: queue(elsewhere.as_slice(), crate::elsewhere::Reach::relayout),
+            elsewhere: queue(
+                elsewhere.as_slice(),
+                crate::query::zone_characteristics::Reach::relayout,
+            ),
         }
     }
 }

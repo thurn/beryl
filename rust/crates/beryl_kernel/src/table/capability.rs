@@ -64,7 +64,7 @@ pub enum Capability {
     ChoosesAsEnters,
     /// A card's static ability affects objects in every zone
     /// ([`beryl_card::Objects::Everywhere`]), so the recompute lists such effects for the
-    /// reads of characteristics off the battlefield ([`crate::elsewhere`]).
+    /// reads of characteristics off the battlefield ([`crate::query::zone_characteristics`]).
     ReachesElsewhere,
     /// A card has a mana ability whose mana is restricted ([`beryl_card::Ability::spend`]),
     /// so pools may hold mana that remembers ([`crate::mana_memory`]) and the mana solver
@@ -73,7 +73,7 @@ pub enum Capability {
     /// A card has a characteristic-defining ability that defines its power or toughness
     /// ([`beryl_card::Modification::SetPower`], [`beryl_card::Modification::SetPt`]), which
     /// works in every zone, so a read of the power of an object off the battlefield looks for
-    /// one ([`crate::defined`]).
+    /// one ([`crate::query::defined_power`]).
     DefinesPt,
     /// A card has delve ([`beryl_card::Keywords::DELVE`]), so paying a spell's mana looks
     /// for cards in its caster's graveyard to pay generic mana with, and whether a spell is

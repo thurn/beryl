@@ -3,6 +3,8 @@
 //! applied before an effect with a later timestamp." A permanent takes one as it enters, turns
 //! face up or becomes attached, and a resolved continuous effect as it begins.
 //!
+//! Implements: CR 613.7
+//!
 //! [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
 
 use crate::layout::{Layout, Queue};

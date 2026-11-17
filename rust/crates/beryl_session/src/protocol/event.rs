@@ -7,7 +7,7 @@ use super::{
 use crate::script::{Copied, Heard, Move, Said, Subject};
 use beryl_engine::event::{Event, Recipient};
 use beryl_engine::state::{self, StackEntry};
-use beryl_engine::{GameTable, Layout, Observation, Place, SlotId};
+use beryl_engine::{GameTable, Layout, Observation, SlotId, SlotPlace};
 
 /// What damage was dealt to, as the viewer names it.
 pub(super) fn recipient<L: Layout>(obs: Observation<'_, L>, to: Recipient<L>) -> TargetRef {
@@ -255,7 +255,7 @@ pub fn heard<L: Layout>(
             (Event::StackArrival { entry }, Some(Subject::Object { .. }))
                 if entry
                     .spell()
-                    .is_some_and(|spell| matches!(spell.slot.place(), Place::Pool(_))) =>
+                    .is_some_and(|spell| matches!(spell.slot.place(), SlotPlace::Pool(_))) =>
             {
                 heard.copies.push((before, copied(t, obs, entry)));
             }

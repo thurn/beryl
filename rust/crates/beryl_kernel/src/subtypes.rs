@@ -1,6 +1,8 @@
 //! The subtypes of a game, numbered by its table, and the set of them a permanent has.
 //!
-//! [CR 205.3](https://yawgatog.com/resources/magic-rules/#R2053): the catalogs list over 500
+//! Implements: CR 205.3c, CR 205.3e, CR 205.3m, CR 702.73a
+//!
+//! see [CR 205.3](https://yawgatog.com/resources/magic-rules/#R2053): the catalogs list over 500
 //! subtypes (`beryl_card::Subtype`), too many for a bit each in every permanent's layer
 //! results. A game can only ever meet the few its cards print, ask about or give, so the
 //! [`crate::GameTable`] numbers those ([`SubtypeNumbers`]), as it numbers the game's cards,

@@ -1,6 +1,8 @@
 //! Objects: the base data of each slot, a reference to one incarnation of it, and the layer
 //! results of a permanent (architecture §4.2, §5, §9).
 //!
+//! Implements: none. Holds the fields of an object and exposes their stored values.
+//!
 //! Only the kernel writes an object: through [`State`](crate::State)'s mutators, the zone and
 //! chance chokepoints and the board door. No `&mut Object` leaves the
 //! crate. Other crates read an object through the getters below.
@@ -22,30 +24,30 @@ pub(crate) const OFF_BATTLEFIELD: u16 = u16::MAX;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Flag {
-    /// [CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105): "A permanent's status is its
+    /// see [CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105): "A permanent's status is its
     /// physical state. There are four status categories, each of which has two possible values:
     /// tapped/untapped, flipped/unflipped, face up/face down, and phased in/phased out."
     Tapped = 1 << 0,
     /// Not under its controller's control continuously since their most recent turn began
-    /// ([CR 302.6]).
+    /// (see [CR 302.6]).
     ///
     /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     SummoningSick = 1 << 1,
-    /// Phased out ([CR 702.26b]): "If a permanent phases out, its status changes to “phased
+    /// Phased out (see [CR 702.26b]): "If a permanent phases out, its status changes to “phased
     /// out.” Except for rules and effects that specifically mention phased-out permanents, a
     /// phased-out permanent is treated as though it does not exist." Its slot is in the state's
     /// set of phased-out permanents ([`crate::phasing`]) and in no battlefield list.
     ///
     /// [CR 702.26b]: https://yawgatog.com/resources/magic-rules/#R70226b
     PhasedOut = 1 << 2,
-    /// A token ([CR 111.1]): "a marker used to represent any permanent that isn't
+    /// A token (see [CR 111.1]): "a marker used to represent any permanent that isn't
     /// represented by a card."
     ///
     /// [CR 111.1]: https://yawgatog.com/resources/magic-rules/#R1111
     Token = 1 << 3,
     /// A copy effect is on the object, an entry of the Effects store
     /// ([`crate::effects::Continuous::Copy`]): the object's definition and face are the values
-    /// it copied, and the entry holds the exceptions it was made with ([CR 707.9b]): "Some copy
+    /// it copied, and the entry holds the exceptions it was made with (see [CR 707.9b]): "Some copy
     /// effects modify a characteristic as part of the copying process. The final set of values
     /// for that characteristic becomes part of the copiable values of the copy." An object
     /// without it has no copy effect to look for, so reading its copiable values is one bit
@@ -85,7 +87,7 @@ impl ObjectFlags {
 
     /// The flags an object keeps as it changes zones: being a token, and a token's copy
     /// effect, which the zone move carries over ([`State::move_object`]). A token stays a token
-    /// wherever it goes, until it ceases to exist ([CR 111.7]).
+    /// wherever it goes, until it ceases to exist (see [CR 111.7]).
     ///
     /// [CR 111.7]: https://yawgatog.com/resources/magic-rules/#R1117
     /// [`State::move_object`]: crate::State::move_object
@@ -95,7 +97,7 @@ impl ObjectFlags {
     }
 }
 
-/// What an attacking creature attacks ([CR 506.2]): "that player, planeswalkers they
+/// What an attacking creature attacks (see [CR 506.2]): "that player, planeswalkers they
 /// control, and battles they protect may be attacked."
 ///
 /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
@@ -103,7 +105,7 @@ impl ObjectFlags {
 pub enum AttackTarget<L: Layout = Small> {
     Player(Seat),
     Planeswalker(L::Slot),
-    /// The planeswalker it attacked was removed from combat ([CR 506.4c]): "It continues
+    /// The planeswalker it attacked was removed from combat (see [CR 506.4c]): "It continues
     /// to be an attacking creature, although it is not attacking any player, planeswalker,
     /// or battle."
     ///
@@ -112,7 +114,7 @@ pub enum AttackTarget<L: Layout = Small> {
 }
 
 /// The attackers a blocking creature blocks, in the order it was declared to block them.
-/// A creature blocks one attacker unless an effect lets it block more ([CR 509.1a]), and
+/// A creature blocks one attacker unless an effect lets it block more (see [CR 509.1a]), and
 /// this holds up to [`SlotSet::CAPACITY`].
 ///
 /// [CR 509.1a]: https://yawgatog.com/resources/magic-rules/#R5091a
@@ -171,7 +173,7 @@ impl<L: Layout> SlotSet<L> {
     }
 }
 
-/// What a permanent is doing in combat ([CR 506.3]): "Only a creature can attack or
+/// What a permanent is doing in combat (see [CR 506.3]): "Only a creature can attack or
 /// block." A creature is attacking, blocking or neither, never both.
 ///
 /// [CR 506.3]: https://yawgatog.com/resources/magic-rules/#R5063
@@ -179,33 +181,33 @@ impl<L: Layout> SlotSet<L> {
 pub enum CombatRole<L: Layout = Small> {
     #[default]
     None,
-    /// An attacking creature ([CR 508.1k]): "Each chosen creature still controlled by the
+    /// An attacking creature (see [CR 508.1k]): "Each chosen creature still controlled by the
     /// active player becomes an attacking creature."
     ///
     /// [CR 508.1k]: https://yawgatog.com/resources/magic-rules/#R5081k
     Attacking {
         target: AttackTarget<L>,
-        /// Blocked ([CR 509.1h]): "An attacking creature with one or more creatures
+        /// Blocked (see [CR 509.1h]): "An attacking creature with one or more creatures
         /// declared as blockers for it becomes a blocked creature ... A creature remains
         /// blocked even if all the creatures blocking it are removed from combat."
         ///
         /// [CR 509.1h]: https://yawgatog.com/resources/magic-rules/#R5091h
         blocked: bool,
-        /// Assigned its combat damage in the first-strike step ([CR 510.4]).
+        /// Assigned its combat damage in the first-strike step (see [CR 510.4]).
         ///
         /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
         struck_first: bool,
     },
-    /// A blocking creature ([CR 509.1g]): "Each chosen creature still controlled by the
+    /// A blocking creature (see [CR 509.1g]): "Each chosen creature still controlled by the
     /// defending player becomes a blocking creature." It blocks no attacker between its
     /// declaration and the choice of what it blocks, and none once those attackers have
-    /// left combat ([CR 506.4]).
+    /// left combat (see [CR 506.4]).
     ///
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
     /// [CR 506.4]: https://yawgatog.com/resources/magic-rules/#R5064
     Blocking {
         attackers: SlotSet<L>,
-        /// Assigned its combat damage in the first-strike step ([CR 510.4]).
+        /// Assigned its combat damage in the first-strike step (see [CR 510.4]).
         ///
         /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
         struck_first: bool,
@@ -237,7 +239,7 @@ impl<L: Layout> CombatRole<L> {
         walker.into_iter().chain(attackers.into_iter().flatten())
     }
 
-    /// Stops naming `slot`, which has left combat ([CR 506.4]): "A planeswalker or battle
+    /// Stops naming `slot`, which has left combat (see [CR 506.4]): "A planeswalker or battle
     /// that's removed from combat stops being attacked." What attacked it or blocked it
     /// stays in combat, related to nothing.
     ///
@@ -331,7 +333,7 @@ pub struct Object<L: Layout = Small> {
     /// Index into the game table: the definition its values are read from. The kernel's
     /// own: others ask a query ([`crate::query`]) or [`crate::Observation::card`].
     pub(crate) card: L::Card,
-    /// Bumped on every zone change (CR 400.7), so stale references are detectable.
+    /// Bumped on every zone change (see CR 400.7), so stale references are detectable.
     pub(crate) incarnation: u16,
     pub(crate) zone: Zone,
     pub(crate) owner: Seat,
@@ -380,7 +382,7 @@ impl<L: Layout> Object<L> {
 /// each, but its definition's index and its base controller: those are answered by
 /// [`State`](crate::State)'s queries ([`crate::query`]).
 impl<L: Layout> Object<L> {
-    /// Bumped on every zone change ([CR 400.7]): "An object that moves from one zone to another
+    /// Bumped on every zone change (see [CR 400.7]): "An object that moves from one zone to another
     /// becomes a new object".
     ///
     /// [CR 400.7]: https://yawgatog.com/resources/magic-rules/#R4007
@@ -395,8 +397,8 @@ impl<L: Layout> Object<L> {
     }
 
     /// On the battlefield and phased in: a permanent the game treats as existing, with layer
-    /// results ([CR 702.26b]): "a phased-out permanent is treated as though it does not exist."
-    /// A phased-out permanent's [`Object::zone`] is still the battlefield ([CR 702.26d]): "The
+    /// results (see [CR 702.26b]): "a phased-out permanent is treated as though it does not exist."
+    /// A phased-out permanent's [`Object::zone`] is still the battlefield (see [CR 702.26d]): "The
     /// phasing event doesn't actually cause a permanent to change zones". As cheap as a test of
     /// the zone: one read of the battlefield index.
     ///
@@ -407,7 +409,7 @@ impl<L: Layout> Object<L> {
         self.battlefield_index != OFF_BATTLEFIELD
     }
 
-    /// [CR 108.3](https://yawgatog.com/resources/magic-rules/#R1083): "The owner of a card in the
+    /// see [CR 108.3](https://yawgatog.com/resources/magic-rules/#R1083): "The owner of a card in the
     /// game is the player who started the game with it in their deck."
     #[inline]
     pub fn owner(&self) -> Seat {
@@ -420,7 +422,7 @@ impl<L: Layout> Object<L> {
         self.flags
     }
 
-    /// [CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105): "A permanent's status is its
+    /// see [CR 110.5](https://yawgatog.com/resources/magic-rules/#R1105): "A permanent's status is its
     /// physical state. There are four status categories, each of which has two possible values:
     /// tapped/untapped, flipped/unflipped, face up/face down, and phased in/phased out."
     #[inline]
@@ -429,7 +431,7 @@ impl<L: Layout> Object<L> {
     }
 
     /// Not under its controller's control continuously since their most recent turn began
-    /// ([CR 302.6]).
+    /// (see [CR 302.6]).
     ///
     /// [CR 302.6]: https://yawgatog.com/resources/magic-rules/#R3026
     #[inline]
@@ -444,7 +446,7 @@ impl<L: Layout> Object<L> {
         self.flags.has(Flag::PhasedOut)
     }
 
-    /// [CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111): "a marker used to represent
+    /// see [CR 111.1](https://yawgatog.com/resources/magic-rules/#R1111): "a marker used to represent
     /// any permanent that isn't represented by a card."
     #[inline]
     pub fn is_token(&self) -> bool {
@@ -457,7 +459,7 @@ impl<L: Layout> Object<L> {
         &self.combat
     }
 
-    /// An attacking creature ([CR 506.3]).
+    /// An attacking creature (see [CR 506.3]).
     ///
     /// [CR 506.3]: https://yawgatog.com/resources/magic-rules/#R5063
     #[inline]
@@ -465,7 +467,7 @@ impl<L: Layout> Object<L> {
         matches!(self.combat, CombatRole::Attacking { .. })
     }
 
-    /// A blocking creature ([CR 509.1g]).
+    /// A blocking creature (see [CR 509.1g]).
     ///
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
     #[inline]
@@ -473,7 +475,7 @@ impl<L: Layout> Object<L> {
         matches!(self.combat, CombatRole::Blocking { .. })
     }
 
-    /// An attacking creature that has been blocked ([CR 509.1h]).
+    /// An attacking creature that has been blocked (see [CR 509.1h]).
     ///
     /// [CR 509.1h]: https://yawgatog.com/resources/magic-rules/#R5091h
     #[inline]
@@ -481,7 +483,7 @@ impl<L: Layout> Object<L> {
         matches!(self.combat, CombatRole::Attacking { blocked: true, .. })
     }
 
-    /// What an attacking creature attacks ([CR 506.2]); `None` if it is not attacking.
+    /// What an attacking creature attacks (see [CR 506.2]); `None` if it is not attacking.
     ///
     /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
     #[inline]
@@ -492,7 +494,7 @@ impl<L: Layout> Object<L> {
         }
     }
 
-    /// The planeswalker an attacking creature attacks ([CR 506.2]).
+    /// The planeswalker an attacking creature attacks (see [CR 506.2]).
     ///
     /// [CR 506.2]: https://yawgatog.com/resources/magic-rules/#R5062
     #[inline]
@@ -506,7 +508,7 @@ impl<L: Layout> Object<L> {
         }
     }
 
-    /// Whether it is a blocking creature that blocks `attacker` ([CR 509.1g]).
+    /// Whether it is a blocking creature that blocks `attacker` (see [CR 509.1g]).
     ///
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
     #[inline]
@@ -514,7 +516,7 @@ impl<L: Layout> Object<L> {
         matches!(self.combat, CombatRole::Blocking { attackers, .. } if attackers.contains(attacker))
     }
 
-    /// The attackers a blocking creature blocks, none for any other object ([CR 509.1g]).
+    /// The attackers a blocking creature blocks, none for any other object (see [CR 509.1g]).
     ///
     /// [CR 509.1g]: https://yawgatog.com/resources/magic-rules/#R5091g
     #[inline]
@@ -525,7 +527,7 @@ impl<L: Layout> Object<L> {
         }
     }
 
-    /// Dealt its combat damage in the first-strike step ([CR 510.4]).
+    /// Dealt its combat damage in the first-strike step (see [CR 510.4]).
     ///
     /// [CR 510.4]: https://yawgatog.com/resources/magic-rules/#R5104
     #[inline]
@@ -542,7 +544,7 @@ impl<L: Layout> Object<L> {
         )
     }
 
-    /// Damage marked this turn ([CR 120.6]): "Damage marked on a creature remains until the cleanup
+    /// Damage marked this turn (see [CR 120.6]): "Damage marked on a creature remains until the cleanup
     /// step".
     ///
     /// [CR 120.6]: https://yawgatog.com/resources/magic-rules/#R1206
@@ -558,7 +560,7 @@ impl<L: Layout> Object<L> {
         self.counters
     }
 
-    /// The object an Aura or Equipment is attached to ([CR 701.3]).
+    /// The object an Aura or Equipment is attached to (see [CR 701.3]).
     ///
     /// [CR 701.3]: https://yawgatog.com/resources/magic-rules/#R7013
     #[inline]
@@ -567,7 +569,7 @@ impl<L: Layout> Object<L> {
     }
 
     /// When it entered the battlefield or last turned face up, among the layers' timestamps
-    /// ([CR 613.7]).
+    /// (see [CR 613.7]).
     ///
     /// [CR 613.7]: https://yawgatog.com/resources/magic-rules/#R6137
     #[inline]
@@ -575,7 +577,7 @@ impl<L: Layout> Object<L> {
         self.timestamp
     }
 
-    /// Which face is up ([CR 712.6]), or [`FaceIx::DOWN`] ([CR 708.2]).
+    /// Which face is up (see [CR 712.6]), or [`FaceIx::DOWN`] (see [CR 708.2]).
     ///
     /// [CR 712.6]: https://yawgatog.com/resources/magic-rules/#R7126
     /// [CR 708.2]: https://yawgatog.com/resources/magic-rules/#R7082
@@ -673,7 +675,7 @@ pub struct Derived<L: Layout = Small> {
     /// The abilities other objects grant this permanent (§9), in the order granted.
     pub granted: [Option<GrantRef<L>>; 4],
     /// The abilities of its face it has lost, by their index on the face
-    /// ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
+    /// (see [CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing
     /// effects, and effects that say an object can't have an ability are applied." Read it
     /// through [`crate::state::State::has_ability`], which every reader asks.
     ///

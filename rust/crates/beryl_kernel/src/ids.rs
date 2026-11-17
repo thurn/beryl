@@ -2,6 +2,8 @@
 //! type, so one cannot pass for another, and "no object" is `Option`, never a reserved value.
 //! `Option<Slot>` and `Option<CardIx>` are one byte, like the `u8`s they replace. A layout
 //! names its own slot and game-index types ([`SlotId`], [`CardId`]).
+//! Implements: none. Names seats, slots and card definitions across layouts.
+//!
 
 use std::fmt;
 use std::hash::Hash;
@@ -12,7 +14,7 @@ pub use beryl_card::Seat;
 /// Where a slot sits among its game's, which is what it keeps in every numbering
 /// ([`SlotId::place`]): its number is one numbering's name for the place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Place {
+pub enum SlotPlace {
     /// The `usize`th slot of a player's deck.
     Deck(Seat, usize),
     /// The `usize`th slot of the shared pool for tokens and spell copies.
@@ -25,7 +27,7 @@ pub enum Place {
 /// Every numbering deals its slots out the same way: `DECK_SLOTS` in a row for each of
 /// `PLAYERS` players' decks, by seat, then the shared pool for tokens and spell copies. How
 /// many of each is the numbering's own, so a slot's number differs from one to another and
-/// its [`Place`] does not: a game is taken to another layout place by place
+/// its [`SlotPlace`] does not: a game is taken to another layout place by place
 /// ([`SlotId::to`]). Two layouts that deal their slots differently have different slot types,
 /// so the number of one is never read as the number of another.
 pub trait SlotId:
@@ -74,23 +76,23 @@ pub trait SlotId:
 
     /// Where the slot sits among its game's.
     #[inline]
-    fn place(self) -> Place {
+    fn place(self) -> SlotPlace {
         let i = self.index();
         if i >= Self::POOL {
-            Place::Pool(i - Self::POOL)
+            SlotPlace::Pool(i - Self::POOL)
         } else {
             let player = Seat::BOTH[i / Self::DECK_SLOTS];
-            Place::Deck(player, i % Self::DECK_SLOTS)
+            SlotPlace::Deck(player, i % Self::DECK_SLOTS)
         }
     }
 
     /// The slot at `place`, if this numbering has one there.
     #[inline]
-    fn at(place: Place) -> Option<Self> {
+    fn at(place: SlotPlace) -> Option<Self> {
         match place {
-            Place::Deck(player, i) => (player.index() < Self::PLAYERS && i < Self::DECK_SLOTS)
+            SlotPlace::Deck(player, i) => (player.index() < Self::PLAYERS && i < Self::DECK_SLOTS)
                 .then(|| Self::deck(player, i)),
-            Place::Pool(i) => Self::try_from_index(Self::POOL + i),
+            SlotPlace::Pool(i) => Self::try_from_index(Self::POOL + i),
         }
     }
 
@@ -451,7 +453,7 @@ const _: () = assert!(size_of::<Seat>() == 1);
 
 #[cfg(test)]
 mod tests {
-    use super::{CardId, CardIx, LargeCardIx, LargeSlot, Place, Seat, Slot, SlotId};
+    use super::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId, SlotPlace};
 
     #[test]
     fn slots_round_trip_and_255_is_none() {
@@ -471,8 +473,8 @@ mod tests {
     #[test]
     fn a_slot_keeps_its_place_in_every_numbering() {
         // The last card of the second deck, and the first slot of the pool.
-        assert_eq!(Slot::new(119).place(), Place::Deck(Seat::P1, 59));
-        assert_eq!(Slot::new(120).place(), Place::Pool(0));
+        assert_eq!(Slot::new(119).place(), SlotPlace::Deck(Seat::P1, 59));
+        assert_eq!(Slot::new(120).place(), SlotPlace::Pool(0));
         assert_eq!(Slot::deck(Seat::P1, 0), Slot::new(60));
         assert_eq!(Slot::pool().count(), 135);
         let mut last = None;
@@ -494,12 +496,12 @@ mod tests {
         let card_61 = LargeSlot::deck(Seat::P0, 60);
         assert_eq!(card_61.index(), 60);
         assert_eq!(card_61.to::<Slot>(), None);
-        assert_eq!(Slot::at(Place::Deck(Seat::P1, 60)), None);
-        let token_136 = LargeSlot::at(Place::Pool(135)).unwrap();
+        assert_eq!(Slot::at(SlotPlace::Deck(Seat::P1, 60)), None);
+        let token_136 = LargeSlot::at(SlotPlace::Pool(135)).unwrap();
         assert_eq!(token_136.index(), 512 + 135);
         assert_eq!(token_136.to::<Slot>(), None);
         assert_eq!(Slot::from_num(token_136.num()), None);
-        assert_eq!(LargeSlot::at(Place::Pool(512)), None);
+        assert_eq!(LargeSlot::at(SlotPlace::Pool(512)), None);
         assert_eq!(LargeSlot::pool().count(), 512);
     }
 

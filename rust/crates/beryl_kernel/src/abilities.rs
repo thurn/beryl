@@ -1,10 +1,12 @@
 //! The abilities an object has now: the one query every rules decision that reads an
 //! object's abilities asks ([`State::abilities`]).
 //!
+//! Implements: none. Reads the abilities supplied by copiable values and layer results.
+//!
 //! An object's abilities come from three places. Its face up has its own, which a permanent
 //! may have lost to an ability-removing effect, a merged permanent has those of the cards
-//! under its top card ([CR 702.140e]), and another object's effect may grant it more
-//! ([CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing effects,
+//! under its top card (see [CR 702.140e]), and another object's effect may grant it more
+//! (see [CR 613.1f]): "Layer 6: Ability-adding effects, keyword counters, ability-removing effects,
 //! and effects that say an object can't have an ability are applied." A reader that walked the
 //! face itself would miss the granted ones and must remember the lost ones, so no reader does:
 //! each asks this query and gets them all, in one fixed order.

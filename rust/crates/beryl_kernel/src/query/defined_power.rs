@@ -1,5 +1,7 @@
 //! Characteristic-defining abilities off the battlefield.
 //!
+//! Implements: CR 604.3
+//!
 //! A characteristic-defining ability works in every zone ([CR 604.3]): "Characteristic-defining
 //! abilities function in all zones. They also function outside the game and before the game
 //! begins." On the battlefield the layers apply it in layer 7a (`beryl_rules`' `layers`). A
@@ -25,9 +27,9 @@ use crate::table::{Capability, GameTable};
 impl<L: Layout> State<L> {
     /// The power and toughness of the object in `slot`, which is not a permanent: its
     /// copiable values ([`State::copiable_pt`]), then what its characteristic-defining
-    /// abilities define ([CR 613.4a]): "Layer 7a: Effects from characteristic-defining
+    /// abilities define (see [CR 613.4a]): "Layer 7a: Effects from characteristic-defining
     /// abilities that define power and/or toughness are applied." The effects that reach other
-    /// zones change no power ([`crate::elsewhere`]), so nothing else applies. One test while
+    /// zones change no power ([`crate::query::zone_characteristics`]), so nothing else applies. One test while
     /// no card of the game has such an ability.
     ///
     /// [CR 613.4a]: https://yawgatog.com/resources/magic-rules/#R6134a
@@ -46,7 +48,7 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     fn defined_pt(&self, t: &GameTable, slot: L::Slot) -> (i8, i8) {
         let (mut power, mut toughness) = self.copiable_pt(t, slot);
-        // CR 108.4a: "If anything asks for the controller of a card that doesn't have one
+        // see CR 108.4a: "If anything asks for the controller of a card that doesn't have one
         // (because it's not a permanent or spell), use its owner instead." The query answers
         // that, and a count of "creatures you control" counts its owner's.
         let you = self.controller(slot);
@@ -127,12 +129,12 @@ impl<L: Layout> State<L> {
         }
     }
 
-    /// The number of card types among the cards in all graveyards ([CR 300.1]): "The card
+    /// The number of card types among the cards in all graveyards (see [CR 300.1]): "The card
     /// types are artifact, battle, conspiracy, creature, dungeon, enchantment, instant,
     /// kindred, land, phenomenon, plane, planeswalker, scheme, sorcery, and vanguard." Each type
     /// counts once, however many cards have it. A token in a graveyard is not a card
-    /// ([CR 108.2]) and counts for nothing in the moment before it ceases to exist
-    /// ([CR 111.7]): "A token that's in a zone other than the battlefield ceases to exist." The
+    /// (see [CR 108.2]) and counts for nothing in the moment before it ceases to exist
+    /// (see [CR 111.7]): "A token that's in a zone other than the battlefield ceases to exist." The
     /// player each graveyard belongs to is nothing to the count, so they are read in seat
     /// order. The layers read it too, for a permanent's characteristic-defining ability.
     ///

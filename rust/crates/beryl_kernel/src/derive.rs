@@ -1,6 +1,8 @@
 //! The derived cache: the layers' results, which the rules compute and the kernel stores
 //! (architecture §9; the crate's contract, "Mutators").
 //!
+//! Implements: none. Stores the results calculated by the layers.
+//!
 //! A mutator that changes a layer input marks the cache stale. [`State::rederive`] then
 //! lends it to the one function that fills it, `beryl_engine`'s `layers::refresh`, and the
 //! cache is current again once that function finishes. Nothing else writes the cache or
@@ -69,14 +71,14 @@ impl<L: Layout> Rederive<'_, L> {
         !{ self.rows()[i].lost }.contains(ability)
     }
 
-    /// Sets the effects that reach objects off the battlefield ([`crate::elsewhere`]) to
-    /// `reaching`, in the order they apply. [`Full`] past [`crate::elsewhere::ELSEWHERE`] in
+    /// Sets the effects that reach objects off the battlefield ([`crate::query::zone_characteristics`]) to
+    /// `reaching`, in the order they apply. [`Full`] past [`crate::query::zone_characteristics::ELSEWHERE`] in
     /// a fixed layout, with the list holding those that fit.
     ///
     /// [`Full`]: crate::fixed::Full
     pub fn reach(
         &mut self,
-        reaching: impl IntoIterator<Item = crate::elsewhere::Reach<L>>,
+        reaching: impl IntoIterator<Item = crate::query::zone_characteristics::Reach<L>>,
     ) -> Result<(), crate::fixed::Full> {
         self.0.elsewhere.clear();
         reaching
@@ -99,7 +101,7 @@ impl<L: Layout> Rederive<'_, L> {
     /// removes abilities applied, for [`State::has_ability`], and `land_types`, whether an
     /// effect that changes a land's land types applied, for [`State::makes_card_mana`].
     /// Control is settled now, so each face-down
-    /// permanent's controller sees it from here on ([CR 708.5]): "At any time, you may look at ...
+    /// permanent's controller sees it from here on (see [CR 708.5]): "At any time, you may look at ...
     /// a face-down permanent you control".
     ///
     /// [CR 708.5]: https://yawgatog.com/resources/magic-rules/#R7085

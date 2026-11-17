@@ -11,7 +11,7 @@ mod merge;
 
 use beryl_card::{CounterKind, FaceIx, Types, Zone};
 
-use crate::additions::Addition;
+use crate::copiable::additions::Addition;
 use crate::effects::Continuous;
 use crate::event::{Event, Recipient};
 use crate::fixed::Full;

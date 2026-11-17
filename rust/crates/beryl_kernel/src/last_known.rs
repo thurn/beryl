@@ -1,12 +1,14 @@
 //! Last-known information: what a permanent that left the battlefield was as it last existed
-//! there, kept for the abilities that look back in time at it ([CR 603.10a]): "Some
+//! there, kept for the abilities that look back in time at it (see [CR 603.10a]): "Some
 //! zone-change triggers look back in time. These are leaves-the-battlefield abilities". For
-//! those, [CR 603.10] says, "the game “looks back in time” to determine if those abilities
+//! those, see [CR 603.10] says, "the game “looks back in time” to determine if those abilities
 //! trigger, using the existence of those abilities and the appearance of objects immediately
 //! prior to the event."
 //!
+//! Implements: none. Stores snapshots requested by the rules.
+//!
 //! The rows are a table of the state, keyed by the [`ObjectRef`] of the object that left,
-//! which is no longer current: the object's new incarnation is a new object ([CR 400.7]).
+//! which is no longer current: the object's new incarnation is a new object (see [CR 400.7]).
 //! A row is written only when an ability that looks back matched the object
 //! ([`State::record_last_known`]), so a game whose permanents never die with such an ability
 //! never writes one. A waiting trigger, a stack entry or a delayed trigger reads its row by
@@ -66,15 +68,15 @@ pub const DEPARTED_SPELLS: usize = 2;
 /// What a spell was as it last existed on the stack, kept as it left without resolving
 /// (countered, bounced, exiled) while an ability of its own that copies it waits or is on the
 /// stack, as a storm trigger is. That ability copies it from this
-/// ([CR 113.7a]): "Once activated or triggered, an ability exists on the stack
-/// independently of its source." [CR 608.2h]: "If an effect requires information from the
+/// (see [CR 113.7a]): "Once activated or triggered, an ability exists on the stack
+/// independently of its source." see [CR 608.2h]: "If an effect requires information from the
 /// game (such as the number of creatures on the battlefield), the answer is determined only
 /// once, when the effect is applied. If the effect requires information from a specific
 /// object, including the source of the ability itself, the effect uses the current
 /// information of that object if it's in the public zone it was expected to be in; if it's
 /// no longer in that zone, or if the effect has moved it from a public zone to a hidden zone,
 /// the effect uses the object's last known information." The entry holds what a copy takes
-/// besides the copiable values ([CR 707.10]): its card, face, targets, X and casting options
+/// besides the copiable values (see [CR 707.10]): its card, face, targets, X and casting options
 /// paid. Its object is no longer current.
 ///
 /// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a

@@ -5,9 +5,9 @@ pub use beryl_card::Filter;
 use beryl_card::{CardDef, Players, Words};
 
 use crate::bitboard::Bitboard;
-use crate::elsewhere::SoFar;
 use crate::ids::Seat;
 use crate::layout::Layout;
+use crate::query::zone_characteristics::SoFar;
 use crate::state::{Flag, State};
 use crate::table::GameTable;
 
@@ -90,7 +90,7 @@ impl Evaluate for Filter {
         let derived = || o.on_battlefield().then(|| s.derived(slot));
         // A permanent's characteristics are the layers' results. Anything else's are its
         // face's while no effect reaches other zones, and the kernel's reads of them
-        // otherwise ([`crate::elsewhere`]), out of line.
+        // otherwise ([`crate::query::zone_characteristics`]), out of line.
         let elsewhere = || s.reaches_elsewhere().then(|| s.elsewhere(t, slot));
         match *self {
             Filter::Any => true,
@@ -173,7 +173,7 @@ fn combined<L: Layout>(
 
 /// Whether the object in `slot`, which is not a permanent, passes `filter` read for `you`
 /// through `words`, its characteristics being `so_far`: what the effects that reach other
-/// zones applied before the one whose filter this is made of it ([`crate::elsewhere`]). A
+/// zones applied before the one whose filter this is made of it ([`crate::query::zone_characteristics`]). A
 /// filter that reads a characteristic an earlier effect changed sees the change, as the
 /// layers find a static ability's set against the layers before it (CR 613.1). Out of line,
 /// apart from [`Evaluate::matches_x`]: only a game with such an effect comes here.

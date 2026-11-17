@@ -1,14 +1,16 @@
 //! Additions: the copy exceptions an object's copiable values carry beside the face they are
 //! read from ([`crate::query::Copiable`]).
 //!
-//! A copy keeps its exceptions ([CR 707.9b]): "Some copy effects modify a characteristic as
+//! Implements: none. Stores exceptions to copiable values by their definition and index.
+//!
+//! A copy keeps its exceptions (see [CR 707.9b]): "Some copy effects modify a characteristic as
 //! part of the copying process. The final set of values for that characteristic becomes part of the copiable values of the
 //! copy." So an exception is copied with the values it changed, and a copy of a copy has the
 //! exceptions of both. An addition names an exception by the card whose face lists it
 //! ([`beryl_card::Face::excepts`]) and its place in that list, never by its values, so a
 //! [`Small`](crate::Small) game keeps one in two bytes and the values stay the vocabulary's.
 //!
-//! A merged permanent's values are made the same way ([CR 702.140e]): "A mutated permanent has
+//! A merged permanent's values are made the same way (see [CR 702.140e]): "A mutated permanent has
 //! all abilities of each card and token that represents it. Its other characteristics are
 //! derived from the topmost card or token." Its values are its top card's
 //! face, and an addition for each card under it says the permanent has every ability of that
@@ -62,7 +64,7 @@ impl<C: CardId> Addition<C> {
     }
 
     /// Every ability of the face `face` of the card at `card`: what a card under a merged
-    /// permanent adds to its values ([CR 702.140e]): "A mutated permanent has all abilities of
+    /// permanent adds to its values (see [CR 702.140e]): "A mutated permanent has all abilities of
     /// each card and token that represents it." It changes nothing else, so
     /// [`Addition::changes`] has none.
     ///

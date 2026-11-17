@@ -1,10 +1,12 @@
 //! Characteristics off the battlefield: the continuous effects that reach objects in every
 //! zone, and the reads that apply them.
 //!
+//! Implements: none. Applies the layer changes selected for zones outside the battlefield.
+//!
 //! Layer results exist only for permanents ([`crate::state::Derived`], one row for each
 //! battlefield position). Anywhere else an object's characteristics are computed when they
 //! are read: its copiable values, then the continuous effects that reach other zones, in the
-//! order they apply ([CR 613.1]): "The values of an object's characteristics are determined
+//! order they apply (see [CR 613.1]): "The values of an object's characteristics are determined
 //! by starting with the actual object. ... Then all applicable continuous effects are
 //! applied in a series of layers in the following order". Such effects are rare, so the
 //! recompute of the layers lists them, at most [`ELSEWHERE`], beside the layer results, and a
@@ -39,7 +41,7 @@ pub const ELSEWHERE: usize = 4;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Reach<L: Layout> {
     /// The permanent with the static ability, whose controller reads its filter
-    /// ([CR 109.5]): "For a static ability, this is the current controller of the object
+    /// (see [CR 109.5]): "For a static ability, this is the current controller of the object
     /// it's on."
     ///
     /// [CR 109.5]: https://yawgatog.com/resources/magic-rules/#R1095
@@ -92,7 +94,7 @@ impl<L: Layout> State<L> {
 
     /// The characteristics of the object in `slot`, which is not a permanent, after the
     /// effects that reach other zones: its copiable values, then each effect whose filter
-    /// accepts it as the effects before left it, in the order they apply ([CR 613.7]): "An
+    /// accepts it as the effects before left it, in the order they apply (see [CR 613.7]): "An
     /// effect with an earlier timestamp is applied before an effect with a later timestamp."
     ///
     /// Out of line: a game comes here only while a card such as one that colors every card
@@ -130,7 +132,7 @@ impl<L: Layout> State<L> {
 impl<L: Layout> State<L> {
     /// Whether the card in `slot`, which is not a permanent, has escape from an effect that
     /// reaches it ([`beryl_card::Modification::GrantEscape`]), as Underworld Breach's "Each
-    /// nonland card in your graveyard has escape" ([CR 702.138a]): "Escape represents a
+    /// nonland card in your graveyard has escape" (see [CR 702.138a]): "Escape represents a
     /// static ability that functions while the card with escape is in a player's
     /// graveyard." One test of the list's length while no effect reaches other zones.
     ///
@@ -184,7 +186,7 @@ impl<L: Layout> State<L> {
         (filter, change)
     }
 
-    /// The color chosen as the permanent in `slot` entered ([CR 105.4]): "If a player is
+    /// The color chosen as the permanent in `slot` entered (see [CR 105.4]): "If a player is
     /// asked to choose a color, they must choose one of the five colors." None if no color
     /// was chosen for it, as for a permanent that entered without the replacement that asks.
     ///
@@ -202,10 +204,10 @@ impl<L: Layout> State<L> {
 /// layers apply it to a permanent.
 fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
     match change {
-        // CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
+        // see CR 613.1d: "Layer 4: Type-changing effects are applied. These include effects that
         // change an object's card type, subtype, and/or supertype."
         LayerChange::AddTypes(types) => so_far.types = so_far.types.union(types),
-        // CR 205.1a: "If an object's card type is removed, the subtypes correlated with that
+        // see CR 205.1a: "If an object's card type is removed, the subtypes correlated with that
         // card type will remain if they are also the subtypes of a card type the object
         // currently has; otherwise, they are also removed".
         LayerChange::RemoveTypes(types) => {
@@ -219,13 +221,13 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
         LayerChange::AddSubtype(subtype) => {
             so_far.subtypes = so_far.subtypes.with(t.subtypes(), subtype);
         }
-        // CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
+        // see CR 205.1a: "when an effect sets one or more of an object's subtypes, the new
         // subtype(s) replaces any existing subtypes from the appropriate set".
         LayerChange::SetSubtype(subtype) => {
             let kept = (so_far.subtypes).without_types(t.subtypes(), subtype.card_type());
             so_far.subtypes = kept.with(t.subtypes(), subtype);
         }
-        // CR 613.1e: "Layer 5: Color-changing effects are applied."
+        // see CR 613.1e: "Layer 5: Color-changing effects are applied."
         LayerChange::SetColors(colors) => so_far.colors = colors,
         LayerChange::AddColors(colors) => so_far.colors = so_far.colors.union(colors),
         LayerChange::Control(_)
@@ -249,7 +251,7 @@ fn apply(t: &GameTable, so_far: &mut SoFar, change: LayerChange) {
 
 /// Whether the effects that reach other zones could hold `change`: a change of card types,
 /// subtypes or colors, which [`State::elsewhere`] applies, or escape, which
-/// [`State::escapes`] reads. A land type's mana abilities (CR 305.7) are none of these.
+/// [`State::escapes`] reads. A land type's mana abilities (see CR 305.7) are none of these.
 pub fn reaches(change: LayerChange) -> bool {
     matches!(
         change,

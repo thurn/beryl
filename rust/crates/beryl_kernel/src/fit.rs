@@ -6,7 +6,7 @@
 use std::fmt;
 
 use crate::decision::{Candidates, Opt};
-use crate::ids::{CardId, Place, Seat, SlotId};
+use crate::ids::{CardId, Seat, SlotId, SlotPlace};
 use crate::layout::{Item, Layout, Queue, Table};
 use crate::object::Object;
 use crate::pending::{Pending, Resolving};
@@ -228,14 +228,14 @@ impl<L: Layout> State<L> {
         });
         match lost.map(SlotId::place) {
             None => Ok(()),
-            Some(Place::Deck(player, _)) => Err(Misfit::DeckTooLarge {
+            Some(SlotPlace::Deck(player, _)) => Err(Misfit::DeckTooLarge {
                 player,
                 cards: (0..L::Slot::DECK_SLOTS)
                     .filter(|&i| self.objects[L::Slot::deck(player, i).index()] != Object::EMPTY)
                     .count(),
                 slots: M::Slot::DECK_SLOTS,
             }),
-            Some(Place::Pool(_)) => Err(Misfit::PoolTooSmall {
+            Some(SlotPlace::Pool(_)) => Err(Misfit::PoolTooSmall {
                 slots: M::Slot::COUNT - M::Slot::POOL,
             }),
         }

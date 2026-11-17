@@ -5,7 +5,7 @@ use beryl_card::{
     CardDef, Castings, CopyException, ExceptIx, FACE_DOWN, Face, FaceIx, ManaCost, Types,
     Zone::{self, Battlefield, Graveyard, Hand, Nowhere, Stack},
 };
-use beryl_kernel::additions::Addition;
+use beryl_kernel::copiable::additions::Addition;
 use beryl_kernel::event::Sink;
 use beryl_kernel::mutate::Arrival;
 use beryl_kernel::profile::Profile;

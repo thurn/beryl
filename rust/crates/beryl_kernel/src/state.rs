@@ -241,9 +241,9 @@ pub struct State<L: Layout = Small> {
     /// ends an object's rows.
     pub(crate) counters: CounterTable<L>,
     /// The continuous effects that reach objects off the battlefield, in the order they
-    /// apply, as the layers last applied ([`crate::elsewhere`]): stored with the layer
+    /// apply, as the layers last applied ([`crate::query::zone_characteristics`]): stored with the layer
     /// results, and empty in most games.
-    pub(crate) elsewhere: crate::elsewhere::Reaching<L>,
+    pub(crate) elsewhere: crate::query::zone_characteristics::Reaching<L>,
 }
 
 const _: () = assert!(size_of::<State<Small>>() <= 20 * 1024);

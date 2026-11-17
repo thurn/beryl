@@ -12,7 +12,7 @@
 //! [CR 611.3b]: https://yawgatog.com/resources/magic-rules/#R6113b
 
 use beryl_kernel::derive::Rederive;
-use beryl_kernel::elsewhere::{ELSEWHERE, Reach};
+use beryl_kernel::query::zone_characteristics::{ELSEWHERE, Reach};
 
 use super::{Apply, GRANTED, Target, position, static_ability_of};
 use crate::card::{Modification, Objects, Words};
@@ -68,7 +68,7 @@ fn list_reaching<L: Layout>(
         ) {
             continue;
         }
-        debug_assert!(beryl_kernel::elsewhere::reaches(a.change));
+        debug_assert!(beryl_kernel::query::zone_characteristics::reaches(a.change));
         listed = listed.and(reaching.push(Reach {
             source: s.battlefield()[position::<L>(from)],
             ability: a.order,

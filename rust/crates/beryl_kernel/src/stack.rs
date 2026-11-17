@@ -2,6 +2,8 @@
 //! plain data the rules build and the state stores, with the mutators that file them (the
 //! crate's contract, "Mutators").
 //!
+//! Implements: none. Stores stack entries, their targets and pending abilities.
+//!
 //! A spell is on the stack twice: its object is in the stack zone, which the zone move keeps
 //! ([`State::move_object`]), and its [`StackEntry`] is in the stack's queue, which these
 //! mutators keep. The entry goes on once the object is there and comes off before the object
@@ -68,7 +70,7 @@ impl<L: Layout> std::hash::Hash for Target<L> {
 pub enum AbilityTarget {
     At(usize),
     /// The ability has left the stack, which makes it an illegal target
-    /// ([CR 608.2b]): "A target that's no longer in the zone it was in when it was targeted
+    /// (see [CR 608.2b]): "A target that's no longer in the zone it was in when it was targeted
     /// is illegal."
     ///
     /// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
@@ -180,7 +182,7 @@ impl<L: Layout> Target<L> {
 
 /// The place of a chosen target in a stack entry's list of them
 /// ([`StackEntry::targets`]), counting from 0 in the order they were chosen
-/// ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): "The player announces
+/// (see [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): "The player announces
 /// their choice of an appropriate object or player for each target the spell requires."
 ///
 /// It is not the target's [`SpecIx`]: one instance of the word "target" may choose several
@@ -218,7 +220,7 @@ impl TargetPlace {
 }
 
 /// Each of `targets`, a stack entry's, with its place, in the order they were chosen
-/// (CR 601.2c).
+/// (see CR 601.2c).
 #[inline]
 pub fn placed<L: Layout>(
     targets: &[Target<L>],
@@ -268,7 +270,7 @@ pub struct AbilityRef<L: Layout = Small, A = FaceAbility> {
     /// The object with the ability; an emblem's ability has none.
     pub source: Option<ObjectRef<L>>,
     /// The game index and face of the card that has the ability, which outlast the source
-    /// ([CR 113.7a]): "Once activated or triggered, an ability exists on the stack
+    /// (see [CR 113.7a]): "Once activated or triggered, an ability exists on the stack
     /// independently of its source."
     ///
     /// [CR 113.7a]: https://yawgatog.com/resources/magic-rules/#R1137a
@@ -276,7 +278,7 @@ pub struct AbilityRef<L: Layout = Small, A = FaceAbility> {
     pub face: FaceIx,
     pub ability: A,
     /// The player who activated the ability, or who controlled its source when it triggered
-    /// ([CR 603.3a]).
+    /// (see [CR 603.3a]).
     ///
     /// [CR 603.3a]: https://yawgatog.com/resources/magic-rules/#R6033a
     pub controller: Seat,
@@ -335,9 +337,9 @@ pub enum StackItem<L: Layout = Small> {
         face: FaceIx,
         costs: Castings,
     },
-    /// An activated ability (CR 602.2a).
+    /// An activated ability (see CR 602.2a).
     Activated { of: AbilityRef<L> },
-    /// A triggered ability, and what it triggered on (CR 603.3).
+    /// A triggered ability, and what it triggered on (see CR 603.3).
     Triggered {
         of: AbilityRef<L, TriggeredAbility>,
         info: TriggerInfo<L>,
@@ -359,7 +361,7 @@ impl<L: Layout> Default for StackItem<L> {
     }
 }
 
-/// A spell or ability on the stack ([CR 405.1]): "When a spell is cast, the physical card is
+/// A spell or ability on the stack (see [CR 405.1]): "When a spell is cast, the physical card is
 /// put on the stack (see rule 601.2a). When an ability is activated or triggers, it goes on
 /// top of the stack without any card associated with it".
 ///
@@ -368,8 +370,8 @@ impl<L: Layout> Default for StackItem<L> {
 pub struct StackEntry<L: Layout = Small> {
     pub item: StackItem<L>,
     pub targets: L::Queue<Target<L>, TARGETS>,
-    /// The announced value of X ([CR 107.3a]), or for an enters ability the X of its spell
-    /// ([CR 107.3m]). Spells and abilities both have one.
+    /// The announced value of X (see [CR 107.3a]), or for an enters ability the X of its spell
+    /// (see [CR 107.3m]). Spells and abilities both have one.
     ///
     /// [CR 107.3a]: https://yawgatog.com/resources/magic-rules/#R1073a
     /// [CR 107.3m]: https://yawgatog.com/resources/magic-rules/#R1073m
@@ -584,16 +586,16 @@ impl<L: Layout> State<L> {
     }
 
     /// The delayed triggered abilities waiting for their moment
-    /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
+    /// (see [CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)).
     #[inline]
     pub fn delayed(&self) -> &[PendingTrigger<L>] {
         self.delayed.as_slice()
     }
 
     /// Puts a spell or ability on top of the stack
-    /// ([CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052)): "Each time an object
+    /// (see [CR 405.2](https://yawgatog.com/resources/magic-rules/#R4052)): "Each time an object
     /// is put on the stack, it's put on top of all objects already there." A spell's card is
-    /// in the stack zone already ([CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)).
+    /// in the stack zone already (see [CR 601.2a](https://yawgatog.com/resources/magic-rules/#R6012a)).
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub fn put_on_stack(
@@ -622,10 +624,10 @@ impl<L: Layout> State<L> {
     }
 
     /// Takes the top of the stack, to resolve it
-    /// ([CR 608.1](https://yawgatog.com/resources/magic-rules/#R6081): "the spell or ability
+    /// (see [CR 608.1](https://yawgatog.com/resources/magic-rules/#R6081): "the spell or ability
     /// on top of the stack resolves") or because nothing legal can be chosen for a triggered
     /// ability going on it
-    /// ([CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "the ability is
+    /// (see [CR 603.3d](https://yawgatog.com/resources/magic-rules/#R6033d): "the ability is
     /// simply removed from the stack"). A spell's card stays in the stack zone until the
     /// rules move it. The caller tells the sink which it was ([`Sink::enter_resolution`],
     /// [`Sink::departed`]).
@@ -662,7 +664,7 @@ impl<L: Layout> State<L> {
     }
 
     /// Takes the activated or triggered ability at `place` off the stack, counted from the
-    /// bottom, for an effect that counters it ([CR 701.6a]): "To counter a spell or ability
+    /// bottom, for an effect that counters it (see [CR 701.6a]): "To counter a spell or ability
     /// means to cancel it, removing it from the stack." Nothing if no ability is there. The
     /// sink is told it left.
     ///
@@ -683,7 +685,7 @@ impl<L: Layout> State<L> {
     /// Removes the entry at `i`, wherever in the stack it is, and repairs the ability targets
     /// of the entries above it, the only ones that can name it or a place above it
     /// ([`Target::after_removal`]). A target that named the removed entry is gone, which the
-    /// rules read as illegal ([CR 608.2b]): "A target that's no longer in the zone it was in
+    /// rules read as illegal (see [CR 608.2b]): "A target that's no longer in the zone it was in
     /// when it was targeted is illegal." Removing the top entry repairs nothing.
     ///
     /// [CR 608.2b]: https://yawgatog.com/resources/magic-rules/#R6082b
@@ -703,14 +705,14 @@ impl<L: Layout> State<L> {
     }
 
     /// Announces the value of X for the spell or ability being cast, the top of the stack
-    /// (CR 601.2b).
+    /// (see CR 601.2b).
     #[inline]
     pub fn announce_x(&mut self, x: u8) {
         self.casting_mut().x = x;
     }
 
     /// Announces a target of the spell or ability being cast, the top of the stack
-    /// ([CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): "The player
+    /// (see [CR 601.2c](https://yawgatog.com/resources/magic-rules/#R6012c)): "The player
     /// announces their choice of an appropriate object or player for each target the spell
     /// requires."
     #[inline]
@@ -726,7 +728,7 @@ impl<L: Layout> State<L> {
     }
 
     /// An ability has triggered and waits to be put on the stack
-    /// ([CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)): "Once an ability has
+    /// (see [CR 603.3](https://yawgatog.com/resources/magic-rules/#R6033)): "Once an ability has
     /// triggered, its controller puts it on the stack as an object that's not a card the
     /// next time a player would receive priority."
     #[inline]
@@ -735,14 +737,14 @@ impl<L: Layout> State<L> {
     }
 
     /// Takes the waiting trigger at `index` among [`State::triggers`], for its controller to
-    /// put it on the stack (CR 603.3b).
+    /// put it on the stack (see CR 603.3b).
     #[inline]
     pub fn take_trigger(&mut self, index: usize) -> PendingTrigger<L> {
         self.triggers.remove(index)
     }
 
     /// Creates a delayed triggered ability
-    /// ([CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)): "An effect may create
+    /// (see [CR 603.7](https://yawgatog.com/resources/magic-rules/#R6037)): "An effect may create
     /// a delayed triggered ability that can do something at a later time."
     #[inline]
     pub fn delay_trigger(&mut self, trigger: PendingTrigger<L>) -> Result<(), Full> {
@@ -751,7 +753,7 @@ impl<L: Layout> State<L> {
 
     /// The delayed triggered abilities that `due` says trigger now do, each once, in the
     /// order they were created: they wait with the other triggers to be put on the stack
-    /// ([CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)).
+    /// (see [CR 603.7b](https://yawgatog.com/resources/magic-rules/#R6037b)).
     #[inline]
     pub fn fire_delayed(
         &mut self,

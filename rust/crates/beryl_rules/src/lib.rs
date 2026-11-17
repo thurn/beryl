@@ -262,9 +262,10 @@ pub mod zones;
 // The rules name its modules as their own and export none of them whole: a caller reads the
 // kernel from the kernel, or from the facade. What the rules do export of it stands beside
 // items of their own, in `layout`, `profile` and `event`.
+pub(crate) use beryl_kernel::copiable::additions;
 pub(crate) use beryl_kernel::{
-    PlayerSet, additions, bitboard, chance, decision, definition, filter, fixed, ids, invariants,
-    observation, query, replacement, state, static_ability, table, zone,
+    PlayerSet, bitboard, chance, decision, definition, filter, fixed, ids, invariants, observation,
+    query, replacement, state, static_ability, table, zone,
 };
 
 /// The kernel's storage layouts.

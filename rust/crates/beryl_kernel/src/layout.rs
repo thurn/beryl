@@ -9,8 +9,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::{Index, IndexMut};
 
-use crate::additions::{Addition, AdditionList};
 use crate::bitboard::Bitboard;
+use crate::copiable::additions::{Addition, AdditionList};
 use crate::fixed::{Fixed, Full};
 use crate::ids::{CardId, CardIx, LargeCardIx, LargeSlot, Seat, Slot, SlotId};
 use crate::relayout::Relayout;

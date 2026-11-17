@@ -214,7 +214,7 @@ pub fn read_when_granted(ability: &Ability) -> bool {
     match ability.kind() {
         AbilityKind::Activated => true,
         // A granted effect on objects in every zone would leave the battlefield's layers for
-        // reads the kernel makes from the face of the permanent with it (`crate::elsewhere`),
+        // reads the kernel makes from the face of the permanent with it (`crate::query::zone_characteristics`),
         // and the granted one is on no face.
         AbilityKind::Static => {
             ability

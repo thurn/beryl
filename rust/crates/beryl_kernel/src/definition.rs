@@ -1,12 +1,14 @@
 //! The definition an object has the values of, read without its copy exceptions: what the
 //! readers ask that only the definition's face answers.
 //!
+//! Implements: none. Gives the layers the printed inputs and copy exceptions.
+//!
 //! [`State::copiable`] gives an object's whole copiable values, the exceptions of a copy
-//! effect on it among them ([`crate::additions`]), which it reads behind a flag of the object.
+//! effect on it among them ([`crate::copiable::additions`]), which it reads behind a flag of the object.
 //! Most readers want only what the card table keeps for each definition and face: the face's
 //! printed characteristics and abilities, the facts the scans read, the masks of what it may
 //! listen to or replace, its name, its key. None of those is changed by an exception, which
-//! sets values the layers apply ([CR 707.9b]): "Some copy effects modify a characteristic as
+//! sets values the layers apply (see [CR 707.9b]): "Some copy effects modify a characteristic as
 //! part of the copying process. The final set of values for that characteristic becomes part
 //! of the copiable values of the copy." So those readers ask [`State::definition`], which is
 //! the object's fields and nothing else, and pay nothing for copies: asking
@@ -149,7 +151,7 @@ impl<L: Layout> State<L> {
     #[inline(never)]
     pub fn copy_layer_one(&self, t: &GameTable, slot: L::Slot, printed: Derived<L>) -> Derived<L> {
         let (power, toughness) = self.excepted_pt(t, slot);
-        // CR 702.140e: "A mutated permanent has all abilities of each card and token that
+        // see CR 702.140e: "A mutated permanent has all abilities of each card and token that
         // represents it", its keywords among them.
         let keywords = (self.copiable(slot).merged_faces(t))
             .fold(printed.keywords, |k, (card, face)| {
@@ -206,7 +208,7 @@ impl<L: Layout> State<L> {
 
     /// The abilities layer 1 gives the object in `slot`, a copy ([`Flag::Copy`]), that its
     /// exceptions give and that are activated, such as Thespian's Stage's "except it has
-    /// this ability" ([CR 707.9a]): "This ability becomes part of the copiable values for the
+    /// this ability" (see [CR 707.9a]): "This ability becomes part of the copiable values for the
     /// copy, along with any other abilities that were copied." They are kept with the
     /// abilities granted to it ([`crate::object::Derived::granted`]), which every reader of
     /// its abilities asks ([`State::abilities`]), as they would be had it been granted them
