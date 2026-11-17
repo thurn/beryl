@@ -2,10 +2,11 @@
 //! `Thinking` and `Incoming` (`ui/src/components/Player.tsx`, `ui/src/game/Life.tsx`) as the
 //! web's `Hud` places them (`ui/src/stage/Chrome.tsx`).
 //!
-//! - The orb is a dark core with a grey bezel, centred on the point where the table's layout
-//!   puts the player's life total (`Layout::players`), which on a phone follows the table as
-//!   it raises the viewer's total over a hand of several rows. The active player's bezel is
-//!   gold.
+//! - The orb is the web's art (`art::orb`): a dark cushion in a bevelled grey bezel, a gold
+//!   ring under it toward its player's edge, and the active player's flare. Its art's middle
+//!   is the point where the table's layout puts the player's life total (`Layout::players`),
+//!   which on a phone follows the table as it raises the viewer's total over a hand of several
+//!   rows.
 //! - The total itself is not part of the orb. It is the float `floats::LIFE`, drawn over the
 //!   orb's middle (`hud::counts`), because a total changes as its `count` step begins, in the
 //!   middle of a script, and a float can show a total laid out ahead without a frame laying
@@ -20,13 +21,13 @@ use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
+use crate::art::orb;
 use crate::data::space::hud::INCOMING_GAP;
-use crate::data::space::hud::phone::ORB_SCALE;
-use crate::element::{Align, Anchor, Element, Justify, Position, holder, text};
+use crate::element::{Align, Anchor, Element, Justify, Position, Shown, holder, text};
 use crate::screens::ScreenIn;
 use crate::table::phone::strip;
 use crate::table::{DESKTOP, Window};
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, type_style};
 
 use super::counts::{index, points};
 
@@ -53,38 +54,36 @@ pub fn orb_centre(side: Side, window: Window) -> Vec2 {
     points(DESKTOP.players[index(side)].life, window.size)
 }
 
-/// `side`'s orb as `view` shows it.
+/// `side`'s orb as `view` shows it: one element the size of the web's orb art, showing the art
+/// (`Shown::Orb`).
 fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
     let active = view.turn.active == side;
-    let rim = if active {
-        color::ORB_ACTIVE
-    } else {
-        color::ORB_RIM
-    };
     let life = match side {
         Side::You => view.players.you.life,
         Side::Opponent => view.players.opponent.life,
     };
     // The phone's strips are lower than the desktop's orb, so it draws the orb smaller, as the
     // web's `.phone-orb .life-orb` scales it.
-    let scale = if window.phone() { ORB_SCALE } else { 1.0 };
-    let (width, height) = (
-        (size::ORB_WIDTH + 2.0 * size::ORB_BEZEL) * scale,
-        (size::ORB_HEIGHT + 2.0 * size::ORB_BEZEL) * scale,
-    );
+    let scale = u8::from(window.phone());
+    let units = orb::SCALES[usize::from(scale)];
+    let [left, _, width, height] = orb::ART;
+    // Where the core's bezel ends on the right, from the art's left edge.
+    let core_right = (orb::CORE_RX + orb::BEZEL / 2.0 - left) * units;
     let mut element = Element::new(crate::frame::Role::Region)
         .name(match side {
             Side::You => "your orb",
             Side::Opponent => "opponent's orb",
         })
-        .width(width)
-        .height(height)
-        .background(color::ORB_CORE)
-        .border((rim, size::ORB_BEZEL * scale))
-        .radius(height / 2.0)
+        .width(width * units)
+        .height(height * units)
         .selected(active)
         .passes(true)
-        .children(incoming(view, side).map(|damage| incoming_text(damage, life, width)));
+        .children(incoming(view, side).map(|damage| incoming_text(damage, life, core_right)));
+    element.shows = Some(Shown::Orb {
+        side,
+        active,
+        scale,
+    });
     // On a phone the table raises the viewer's total over a hand of several rows
     // (`table::phone::your_life`), so the orb follows the player's anchor on every frame.
     let middle = Vec2::new(0.5, 0.5);
@@ -96,9 +95,17 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
     element
 }
 
+/// The middle of `side`'s core in a window, in logical points: where the life total and the
+/// step stops centre on the orb, a few points off the middle of its art (`orb::face_offset`).
+#[must_use]
+pub fn face_centre(side: Side, window: Window) -> Vec2 {
+    let units = orb::SCALES[usize::from(window.phone())];
+    orb_centre(side, window) + Vec2::new(0.0, orb::face_offset(side) * units)
+}
+
 /// The combat damage `damage` a player at `life` stands to take, beside their orb as the web's
 /// `Incoming` writes it: "−3", or "0", red when it is lethal.
-fn incoming_text(damage: i32, life: i32, orb_width: f32) -> Element {
+fn incoming_text(damage: i32, life: i32, core_right: f32) -> Element {
     let lethal = damage > 0 && damage >= life;
     let words = if damage > 0 {
         format!("\u{2212}{damage}")
@@ -112,7 +119,7 @@ fn incoming_text(damage: i32, life: i32, orb_width: f32) -> Element {
         ))
         .style(type_style::TITLE)
         .position(Position::Absolute)
-        .inset([Some(0.0), None, Some(0.0), Some(orb_width + INCOMING_GAP)])
+        .inset([Some(0.0), None, Some(0.0), Some(core_right + INCOMING_GAP)])
         .align_items(Align::Center)
         .justify_content(Justify::Center);
     if lethal {

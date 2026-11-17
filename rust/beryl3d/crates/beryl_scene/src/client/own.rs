@@ -359,11 +359,19 @@ impl Client {
         }
     }
 
+    /// Lays out again, for a window of a new size, the counts each row of cards shows and the
+    /// life totals, whose type depends on the layout.
+    pub(super) fn prepare_resized(&mut self) {
+        (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+        self.prepare_counts();
+    }
+
     /// Lays out every life total and pool the scripts to come will show, so that a frame lays
     /// out none of them, each total of a player the open prompt marks as a target too.
     pub(super) fn prepare_counts(&mut self) {
         let targets = self.targets(true);
         self.counts.passes = self.screen == crate::screens::Screen::Game;
+        self.counts.phone = self.window.phone();
         (self.counts).prepare(
             &mut self.layer,
             self.show.counts(),

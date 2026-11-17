@@ -2,6 +2,7 @@
 //! thread.
 
 pub mod agent;
+pub mod art;
 pub mod beat;
 mod client;
 pub mod command;

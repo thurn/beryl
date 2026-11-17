@@ -527,7 +527,7 @@ impl Client {
         self.show.resize(window);
         self.layer.resize(window);
         self.show_gear();
-        (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
+        self.prepare_resized();
         if self.show.badges_mut().shaped() {
             let glyphs = self.layer.glyphs_mut();
             (self.show.badges_mut()).rescale(window.scale, glyphs);

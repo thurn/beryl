@@ -300,6 +300,27 @@
       }
     },
     "type_style": {
+      "LIFE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 45.93,
+        "line_height": 1,
+        "note": "A life total on its orb: `.life-orb-total`, 48 mockup pixels at weight 700 and line height 1, at the stage's `--orb` of 1/1.045 points."
+      },
+      "POOL": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 30,
+        "line_height": 1,
+        "note": "A mana pool's symbols: `.mana-pool`'s `font-size`, of which a symbol's disc is one em."
+      },
+      "POOL_COUNT": {
+        "font": "OpenSans",
+        "weight": 700,
+        "size": 15,
+        "line_height": 1,
+        "note": "How much of a kind of mana a pool holds, after its symbol: `.mana-pool-entry b`."
+      },
       "TITLE": {
         "font": "CrimsonPro",
         "weight": 600,
@@ -753,6 +774,14 @@
         "value": 22,
         "note": "The side of a step stop's icon: `.step-stops`' `--step-size` in `ui/src/design/components/phase-tracker.css`."
       },
+      "POOL_GAP": {
+        "value": 6,
+        "note": "Between the kinds of mana in a pool: `.mana-pool`'s `gap`."
+      },
+      "STEPS_WIDTH": {
+        "value": 308,
+        "note": "The width of each player's grid of step stops about their orb: `.turn-controls .step-stops` in `ui/src/screens/styles/controls.css`."
+      },
       "STEP_GAP": {
         "value": 9,
         "note": "The gap between two columns of step stops: `--step-gap`."
@@ -1141,17 +1170,13 @@
         "value": "rgb(14 13 12 / 40%)",
         "note": "What darkens the table under an overlay: `.overlay-backdrop`'s `background`."
       },
+      "LIFE": {
+        "value": "#fdfcfa",
+        "note": "A life total on its orb: the `color` of `.life-orb-total`."
+      },
       "ORB_CORE": {
         "value": "#2c2926",
         "note": "A life orb's dark core: the `fill` of `.life-orb-core`."
-      },
-      "ORB_RIM": {
-        "value": "#8e8984",
-        "note": "A life orb's grey bezel: the middle stop of the rim gradient in `LifeOrb`."
-      },
-      "ORB_ACTIVE": {
-        "value": "#ffb444",
-        "note": "The active player's bezel, for the gold ring and flare `LifeOrb` draws while `active`: the stroke of `.life-orb-ring`."
       },
       "STEP": {
         "value": "#f0e2c4",

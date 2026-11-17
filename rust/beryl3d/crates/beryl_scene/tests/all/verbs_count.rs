@@ -135,12 +135,12 @@ fn a_pool_is_shown_only_while_it_holds_mana() {
     let (mut client, steps) = counting(vec![pool(), life(Side::You, 17)]);
     let frame = at(&mut client, steps[0].0 - 1);
     assert!(
-        element(&frame, Role::Text, "2{U} {G}").is_none(),
+        element(&frame, Role::Region, "{U}2 {G}").is_none(),
         "no mana, no pool"
     );
     let frame = at(&mut client, steps[0].0);
     assert!(
-        element(&frame, Role::Text, "2{U} {G}").is_some(),
+        element(&frame, Role::Region, "{U}2 {G}").is_some(),
         "the pool as it fills"
     );
 }

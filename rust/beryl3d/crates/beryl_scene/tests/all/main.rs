@@ -33,6 +33,7 @@ mod manual_start;
 mod motion;
 mod notices;
 mod object_states;
+mod orb;
 mod own;
 mod particles;
 mod piles;

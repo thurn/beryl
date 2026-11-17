@@ -21,6 +21,7 @@ mod frame;
 pub mod glyphs;
 pub mod icons;
 pub mod light;
+pub mod orb;
 pub mod packer;
 mod prepare;
 mod svg;

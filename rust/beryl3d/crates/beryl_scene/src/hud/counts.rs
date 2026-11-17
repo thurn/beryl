@@ -19,9 +19,10 @@ use beryl_protocol::protocol::{ManaPool, PlayerView, Side};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
+use crate::art::orb;
 use crate::data::space::verbs::count::DRIFT;
 use crate::effects::{Effect, EffectRun};
-use crate::element::{Element, FloatId, Press, TextAlign, floats, text};
+use crate::element::{Align, Element, FloatId, Press, Span, TextAlign, floats, holder, text};
 use crate::frame::Role;
 use crate::input::Size;
 use crate::layout::{FloatLook, Layer};
@@ -123,6 +124,8 @@ pub struct CountFloats {
     /// on the game screen, where the phone's hand stands behind it, but not on the manual
     /// table, whose commands act on the total under the pointer.
     pub passes: bool,
+    /// Whether the window has the phone layout, where a total is drawn smaller, on a smaller orb.
+    pub phone: bool,
 }
 
 impl CountFloats {
@@ -170,7 +173,7 @@ impl CountFloats {
             layer.forget_prepared(id, |key| {
                 (lives[at].iter()).any(|&life| {
                     [false, true]
-                        .map(|t| total_key(life, t, self.passes))
+                        .map(|t| total_key(life, t, self.passes, self.phone))
                         .contains(&key)
                 })
             });
@@ -179,9 +182,10 @@ impl CountFloats {
                     if target && !targets[at] {
                         continue;
                     }
-                    let passes = self.passes;
-                    layer.prepare(id, total_key(life, target, passes), || {
-                        life_total((side, name), Some(life), (target, passes)).expect("a total")
+                    let (passes, phone) = (self.passes, self.phone);
+                    layer.prepare(id, total_key(life, target, passes, phone), || {
+                        life_total((side, name), Some(life), (target, passes, phone))
+                            .expect("a total")
                     });
                 }
             }
@@ -221,7 +225,7 @@ impl CountFloats {
         size: Size,
         (visible, targets): (bool, [bool; 2]),
     ) {
-        let passes = self.passes;
+        let (passes, phone) = (self.passes, self.phone);
         for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
             let at = index(side);
             let target = targets[at];
@@ -245,10 +249,11 @@ impl CountFloats {
                 show(
                     layer,
                     id,
-                    want.life.map(|(life, t, p)| total_key(life, t, p)),
+                    want.life.map(|(life, t, p)| total_key(life, t, p, phone)),
                     || {
-                        want.life
-                            .and_then(|(life, t, p)| life_total((side, name), Some(life), (t, p)))
+                        want.life.and_then(|(life, t, p)| {
+                            life_total((side, name), Some(life), (t, p, phone))
+                        })
                     },
                 );
             }
@@ -266,7 +271,9 @@ impl CountFloats {
             }
             *shown = want;
             let anchor = &layout.players[at];
-            let life = points(anchor.life, size);
+            // The web centres the total on the orb's core, a few points off its art's middle.
+            let units = orb::SCALES[usize::from(phone)];
+            let life = points(anchor.life, size) + Vec2::new(0.0, orb::face_offset(side) * units);
             let tint = run.map(|run| match run.effect {
                 Effect::Gain => color::GAIN,
                 _ => color::LOSS,
@@ -288,20 +295,30 @@ impl CountFloats {
                 },
             );
             if let Some(run) = run {
-                layer.set_float_look(floats::LIFE_CHANGE[at], change_look(run, now, life, tint));
+                layer.set_float_look(
+                    floats::LIFE_CHANGE[at],
+                    change_look(run, now, life, tint, phone),
+                );
             }
         }
     }
 }
 
-/// How far a life total's text reaches above and below its middle, in logical points, with a
-/// small gap: where the amount it changed by starts.
+/// How far a line of the title type reaches above and below its middle, in logical points: the
+/// phone's life total, from which the amount it changed by starts, and the space the desktop's
+/// notices leave above a total.
 pub(crate) const HALF_LIFE: f32 = type_style::TITLE.size * type_style::TITLE.line_height / 2.0;
 
 /// The look of the amount a life total at `life` changed by, as the `loss` or `gain` `run`
 /// stands at `now`: from beside the total, it sinks below it for a loss, or rises above it for
 /// a gain, `DRIFT` points over the run, while its opacity falls from 1 to 0.
-fn change_look(run: &EffectRun, now: u64, life: Vec2, tint: Option<[u8; 4]>) -> FloatLook {
+fn change_look(
+    run: &EffectRun,
+    now: u64,
+    life: Vec2,
+    tint: Option<[u8; 4]>,
+    phone: bool,
+) -> FloatLook {
     #[expect(
         clippy::cast_precision_loss,
         reason = "an effect lasts seconds at most"
@@ -311,7 +328,13 @@ fn change_look(run: &EffectRun, now: u64, life: Vec2, tint: Option<[u8; 4]>) -> 
     } else {
         (now - run.start) as f32 / run.duration as f32
     };
-    let away = HALF_LIFE + DRIFT * through;
+    // The desktop's total is the larger `LIFE` type.
+    let half = if phone {
+        HALF_LIFE
+    } else {
+        type_style::LIFE.size * type_style::LIFE.line_height / 2.0
+    };
+    let away = half + DRIFT * through;
     let (offset, anchor) = if run.effect == Effect::Gain {
         (-away, Vec2::new(0.5, 1.0))
     } else {
@@ -340,9 +363,10 @@ fn show(
     }
 }
 
-/// The key a life total is prepared under, as a target of a prompt's or not.
-fn total_key(life: i32, target: bool, passes: bool) -> u64 {
-    life_key(life) | u64::from(target) << 32 | u64::from(passes) << 33
+/// The key a life total is prepared under, as a target of a prompt's or not, and on the phone
+/// layout or not.
+fn total_key(life: i32, target: bool, passes: bool, phone: bool) -> u64 {
+    life_key(life) | u64::from(target) << 32 | u64::from(passes) << 33 | u64::from(phone) << 34
 }
 
 /// The key a life total or a change of one is prepared under.
@@ -369,15 +393,26 @@ fn pool_key(pool: ManaPool) -> u64 {
 /// is and the number, as "You 20", so that the tree's line for it says both. As a `target`, a
 /// press on it clicks the open prompt on the player, as the web interface's `PlayerTarget`
 /// (`ui/src/stage/PromptBar.tsx`) does.
+///
+/// On the desktop it is the web's `.life-orb-total`, large and bold in the cream of
+/// `color::LIFE`; the phone's smaller orb keeps the prompt's title size. A float's top element
+/// is drawn on a panel unless it says otherwise, and the total stands on its orb with none.
 fn life_total(
     (side, name): (Side, &str),
     life: Option<i32>,
-    (target, passes): (bool, bool),
+    (target, passes, phone): (bool, bool, bool),
 ) -> Option<Element> {
     let life = life?;
     let mut element = Element::new(Role::Player)
         .name(&format!("{name} {life}"))
-        .style(type_style::TITLE);
+        .style(if phone {
+            type_style::TITLE
+        } else {
+            type_style::LIFE
+        })
+        .color(color::LIFE)
+        .background([0; 4])
+        .border(([0; 4], 0.0));
     // A total the prompt can pick is a touch target as large as an icon button, the phone's
     // least, centred on the orb as the total is, so the orb around it still takes no press.
     // Any other total on the game screen lets the pointer through, as the orb does, to a card
@@ -397,9 +432,51 @@ fn life_total(
     Some(element)
 }
 
-/// A pool of unspent mana, as text.
+/// A pool of unspent mana, as the web interface's `ManaPool` (`ui/src/components/Player.tsx`)
+/// shows it: large mana symbols 6 points apart, each followed by its count in small bold type
+/// when there is more than one (`.mana-pool` in
+/// `ui/src/design/components/mana-pool-and-coin.css`), in the order W, U, B, R, G and then
+/// colorless. The flat layer draws each `{U}` as an inline mana symbol, a disc the size of the
+/// type's em.
 fn pool_text(pool: ManaPool) -> Element {
-    text(&mana(pool)).passes(true)
+    holder()
+        .name(&mana(pool))
+        .gap(size::POOL_GAP)
+        .align_items(Align::Center)
+        .passes(true)
+        .children(entries(pool).map(|(count, symbol)| {
+            let mut words = format!("{{{symbol}}}");
+            let symbol_end = words.len();
+            if count > 1 {
+                let _ = write!(words, "{count}");
+            }
+            let mut entry = text(&words).style(type_style::POOL);
+            #[expect(clippy::cast_possible_truncation, reason = "a short text")]
+            let range = symbol_end as u32..words.len() as u32;
+            if !range.is_empty() {
+                entry.spans.push(Span {
+                    range,
+                    style: type_style::POOL_COUNT,
+                    color: None,
+                });
+            }
+            entry
+        }))
+}
+
+/// Each kind of mana in `pool`, with how much of it there is, in the order W, U, B, R, G and
+/// then colorless, leaving out the kinds there is none of.
+fn entries(pool: ManaPool) -> impl Iterator<Item = (u32, char)> {
+    [
+        (pool.white, 'W'),
+        (pool.blue, 'U'),
+        (pool.black, 'B'),
+        (pool.red, 'R'),
+        (pool.green, 'G'),
+        (pool.colorless, 'C'),
+    ]
+    .into_iter()
+    .filter(|&(count, _)| count > 0)
 }
 
 /// By how much a life total changed, with its sign.
@@ -409,28 +486,18 @@ fn life_change(by: i32) -> Element {
         .passes(true)
 }
 
-/// Unspent mana as text, as the web interface's `ManaPool` (`ui/src/components/Player.tsx`)
-/// shows it: one mana symbol for each kind there is, after its count when that is more than
-/// one, in the order W, U, B, R, G and then colorless, as "2{U} {G}". The flat layer draws
-/// each `{U}` as an inline mana symbol.
+/// Unspent mana as text, the pool's name in the tree: one mana symbol for each kind there is,
+/// followed by its count when that is more than one, as the web's `ManaPool` shows it, as
+/// "{U}2 {G}".
 fn mana(pool: ManaPool) -> String {
     let mut out = String::new();
-    for (count, symbol) in [
-        (pool.white, 'W'),
-        (pool.blue, 'U'),
-        (pool.black, 'B'),
-        (pool.red, 'R'),
-        (pool.green, 'G'),
-        (pool.colorless, 'C'),
-    ] {
-        if count > 0 {
-            if !out.is_empty() {
-                out.push(' ');
-            }
-            if count > 1 {
-                let _ = write!(out, "{count}");
-            }
-            let _ = write!(out, "{{{symbol}}}");
+    for (count, symbol) in entries(pool) {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        let _ = write!(out, "{{{symbol}}}");
+        if count > 1 {
+            let _ = write!(out, "{count}");
         }
     }
     out

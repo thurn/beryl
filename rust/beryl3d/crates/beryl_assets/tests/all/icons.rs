@@ -8,9 +8,10 @@ use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::icons::{ALL, icons_rasterized_on_this_thread};
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_assets::{Prepared, Upload};
+use beryl_scene::art::orb;
 use beryl_scene::input::{AssetReady, IconCell};
 use beryl_scene::widgets::IconId;
-use beryl_scene::widgets::icons::{COUNT, GEAR};
+use beryl_scene::widgets::icons::{COUNT, GEAR, ORB};
 
 /// Only catches a hung worker; a page normally arrives in milliseconds.
 const HANG: Duration = Duration::from_mins(1);
@@ -54,8 +55,10 @@ fn texels(pixels: &[u8], cell: &IconCell) -> Vec<u8> {
 
 #[test]
 fn every_icon_id_has_artwork_in_the_order_of_the_ids() {
-    assert_eq!(ALL.len(), usize::from(COUNT));
-    for (id, artwork) in (0..COUNT).zip(&ALL) {
+    // The ids from `ORB` on are the layers of the life orbs' art (`beryl_assets::orb`).
+    assert_eq!(ALL.len(), usize::from(ORB));
+    assert_eq!(COUNT, ORB + orb::ICONS);
+    for (id, artwork) in (0..ORB).zip(&ALL) {
         assert_eq!(artwork.icon, IconId(id), "the artwork at index {id}");
     }
 }
@@ -73,7 +76,9 @@ fn every_icon_rasterizes_to_a_cell_partly_inked_on_another_thread() {
         .flat_map(|(pixels, cells)| cells.iter().map(move |cell| (pixels.as_slice(), cell)))
         .collect();
     let icons: Vec<IconId> = cells.iter().map(|(_, cell)| cell.icon).collect();
-    assert_eq!(icons, (0..COUNT).map(IconId).collect::<Vec<_>>());
+    // Every icon, and then the orbs' layers at each scale they are drawn at.
+    let orbs = beryl_assets::orb::cells().map(|cell| orb::icon(orb::SIDES[cell.seat], cell.at));
+    assert_eq!(icons, (0..ORB).map(IconId).chain(orbs).collect::<Vec<_>>());
     for (pixels, cell) in cells {
         let texels = texels(pixels, cell);
         let inked = texels.iter().filter(|&&texel| texel > 0).count();

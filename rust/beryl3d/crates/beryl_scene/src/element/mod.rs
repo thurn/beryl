@@ -198,6 +198,9 @@ pub enum Shown {
     /// An icon `size` logical points on a side, centred in the element's content box and
     /// tinted with its text color.
     Icon(IconId, u16),
+    /// `side`'s life orb (`art::orb`), lit as the active player's if `active`, its art filling
+    /// the element's content box at `art::orb::SCALES[scale]` points to a unit.
+    Orb { side: Side, active: bool, scale: u8 },
 }
 
 /// A styled run of an element's text.

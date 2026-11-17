@@ -18,9 +18,9 @@ use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;
 
-use crate::icons;
 use crate::packer::{ATLAS_PAGES, Full, PAGE_SIZE, Shelves};
 use crate::{Prepared, Upload};
+use crate::{icons, orb};
 
 /// The atlas page the worker fills first. Page 0 holds the shapes of light ([`crate::light`]).
 pub const FIRST_PAGE: u16 = 1;
@@ -327,6 +327,24 @@ impl Atlas {
             };
             self.blit(&bitmap, corner);
             cells.push(icons::cell(artwork, [corner[0], corner[1], side, side]));
+        }
+        // The layers of the life orbs' art, each a cell of its own size.
+        for cell in orb::cells() {
+            let bitmap = orb::rasterize(cell, scale);
+            let (width, height) = (bitmap.width, bitmap.height);
+            let placed = self.shelves.insert(width, height).or_else(|Full| {
+                if self.page == LAST_PAGE {
+                    return Err(Full);
+                }
+                let cells = std::mem::take(&mut cells);
+                prepared.push(self.finish_page(|page| AssetReady::Icons { page, cells }));
+                self.shelves.insert(width, height)
+            });
+            let Ok(corner) = placed else {
+                continue;
+            };
+            self.blit(&bitmap, corner);
+            cells.push(orb::icon_cell(cell, [corner[0], corner[1], width, height]));
         }
         if !cells.is_empty() {
             let page = self.page;

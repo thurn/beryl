@@ -3,10 +3,12 @@
 //! button, a glyph record for each glyph a page holds (`text::write_block`), and the boxes of
 //! the text's lines. It reads only what `Client::handle` laid out, and allocates nothing.
 
+use beryl_protocol::protocol::Side;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
 use super::{Layer, Node, has_panel, text_top};
+use crate::art::orb;
 use crate::element::{Display, Overflow, Shown, TextAlign};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, FrameBuilder, NameRef, Place, Resolved, Role, StateBits};
@@ -248,10 +250,65 @@ impl Layer {
                 draw.tint = faded(tint, look.opacity);
                 draw
             }
+            Some(Shown::Orb {
+                side,
+                active,
+                scale,
+            }) => {
+                self.write_orb((side, active, scale), content, look, clip, builder, camera);
+                return;
+            }
             Some(Shown::Object(_)) | None => return,
         };
         let draw = if clip > 0 { draw.with_clip(clip) } else { draw };
         builder.draw(Band::Layer, draw);
+    }
+
+    /// Writes the layers of `side`'s life orb (`art::orb::LAYERS`) in order, its art's box
+    /// filling `content`. Each layer's cell is centred where its box lies in the art, so that a
+    /// cell a whole number of points wide is off by under half a point at its edges.
+    fn write_orb(
+        &self,
+        (side, active, scale): (Side, bool, u8),
+        content: Rect,
+        look: Look<'_>,
+        clip: u8,
+        builder: &mut FrameBuilder,
+        camera: &Camera,
+    ) {
+        let units = orb::SCALES[usize::from(scale)];
+        let [left, top, ..] = orb::ART;
+        for (at, layer) in orb::LAYERS.iter().enumerate() {
+            if layer.active && !active {
+                continue;
+            }
+            let [x, y, w, h] = layer.views[orb::seat(side)];
+            let width = orb::cell_width(w, units);
+            let Some(sprite) = self.icons.get(orb::icon(side, at), width) else {
+                continue;
+            };
+            let width = f32::from(width);
+            let height = width * h / w;
+            let centre = Vec2::new(
+                content.x + (x + w / 2.0 - left) * units,
+                content.y + (y + h / 2.0 - top) * units,
+            );
+            let at = Rect {
+                x: centre.x - width / 2.0,
+                y: centre.y - height / 2.0,
+                width,
+                height,
+            };
+            let draw = Draw::icon(
+                camera.layer_transform(at),
+                faded(layer.color, look.opacity),
+                sprite,
+            );
+            builder.draw(
+                Band::Layer,
+                if clip > 0 { draw.with_clip(clip) } else { draw },
+            );
+        }
     }
 
     /// Writes the lines and glyphs of `node`'s text, which the resolved element at `index`

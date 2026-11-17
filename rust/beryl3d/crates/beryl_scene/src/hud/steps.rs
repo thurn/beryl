@@ -13,6 +13,8 @@
 //!   be activated or resolved." [CR 514.3]: "Normally, no player receives priority during the
 //!   cleanup step, so no spells can be cast and no abilities can be activated."
 //! - Combat's two damage steps share one icon, and its stop stops in both.
+//! - The rows centre on the orb's core, each side's inner edge 70 points from it, as
+//!   `.turn-controls .step-stops` places them (`ui/src/screens/styles/controls.css`).
 //! - The current step burns gold in the active player's rows.
 //! - On the phone layout the icons are too small to touch, so they are not shown, and they are
 //!   hidden while a pile's viewer is open over the table.
@@ -23,7 +25,7 @@
 use beryl_protocol::protocol::{PlayerView, Side, Step, StepSet};
 use glam::Vec2;
 
-use super::players::orb_centre;
+use super::players::face_centre;
 use crate::data::space::hud::{STEP_FIXED, STEP_OFF};
 use crate::element::{Anchor, Display, Element, Press, Shown, Track, holder};
 use crate::frame::Role;
@@ -121,7 +123,13 @@ fn rows(view: &PlayerView, side: Side, set: StepSet, window: Window) -> Element 
     // for both, so each column is wider by the difference and its icon stands in its middle.
     let margin = (size::STEP_GAP - size::STEP_ROW_GAP) / 2.0;
     let column = Track::Points(size::STEP + 2.0 * margin);
-    let orb = Track::Points(size::ORB_WIDTH + 2.0 * size::ORB_BEZEL);
+    // The orb's column takes what the web's grid, `STEPS_WIDTH` wide, leaves after its six
+    // icons and six gaps, widened by the two margins its neighbours lost.
+    #[expect(clippy::cast_precision_loss, reason = "twelve icons")]
+    let icons = STEP_STOPS.len() as f32;
+    let orb = Track::Points(
+        size::STEPS_WIDTH - icons / 2.0 * (size::STEP + size::STEP_GAP) + 2.0 * margin,
+    );
     let row = Track::Points(size::STEP);
     let mut element = Element::new(Role::Region)
         .name(&format!("{whose} steps"))
@@ -129,7 +137,10 @@ fn rows(view: &PlayerView, side: Side, set: StepSet, window: Window) -> Element 
         .gap(size::STEP_ROW_GAP)
         .grid_template_columns(vec![column, column, column, orb, column, column, column])
         .grid_template_rows(vec![row, row]);
-    element.anchor = Some(Anchor::Point(orb_centre(side, window), Vec2::new(0.5, 0.5)));
+    element.anchor = Some(Anchor::Point(
+        face_centre(side, window),
+        Vec2::new(0.5, 0.5),
+    ));
     element.children((0..STEP_STOPS.len()).map(|at| {
         icon(at, whose, side, set, current)
             .grid_column(column_of(at))

@@ -23,17 +23,23 @@ fn pay_default(width: f32, height: f32) -> Page {
 
 #[test]
 fn both_orbs_hold_the_life_totals_of_the_view() {
+    use beryl_scene::art::orb::{DESKTOP_SCALE, face_offset};
     let mut page = pay_default(1600.0, 900.0);
-    for (orb, total) in [
-        ("region \"your orb\"", "player \"You 20\""),
-        ("region \"opponent's orb\"", "player \"Opponent 20\""),
+    for (side, orb, total) in [
+        (Side::You, "region \"your orb\"", "player \"You 20\""),
+        (
+            Side::Opponent,
+            "region \"opponent's orb\"",
+            "player \"Opponent 20\"",
+        ),
     ] {
         let orb = page.find(orb).rect();
         let total = page.find(total).rect();
         let (x, y) = (total.x + total.width / 2.0, total.y + total.height / 2.0);
+        // The total stands in the middle of the orb's core, a few points off its art's middle.
+        let core = orb.y + orb.height / 2.0 + face_offset(side) * DESKTOP_SCALE;
         assert!(
-            (x - (orb.x + orb.width / 2.0)).abs() < 1.0
-                && (y - (orb.y + orb.height / 2.0)).abs() < 1.0,
+            (x - (orb.x + orb.width / 2.0)).abs() < 1.0 && (y - core).abs() < 1.0,
             "{total:?} is not in the middle of {orb:?}"
         );
     }

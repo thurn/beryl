@@ -43,8 +43,12 @@ pub const PHASES: [IconId; 5] = [IconId(35), IconId(36), IconId(37), IconId(38),
 /// The atlas size of a phase tracker icon, in logical points.
 pub const PHASE_SIDE: u16 = 32;
 
+/// The first of the icons that hold the layers of the life orbs' art, one for each layer of
+/// each seat's orb (`art::orb::icon`).
+pub const ORB: u16 = 42;
+
 /// How many icons there are: every id is below this.
-pub const COUNT: u16 = 42;
+pub const COUNT: u16 = ORB + crate::art::orb::ICONS;
 
 /// The step icons from id 11, filled and outlined in turn, offset by `outlined`.
 const fn steps(outlined: u16) -> [IconId; 12] {

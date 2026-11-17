@@ -263,6 +263,7 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_engine",
+ "beryl_kernel",
  "beryl_scenario",
  "beryl_scenario_types",
  "cards_1993",
@@ -309,6 +310,7 @@ dependencies = [
  "cards_2026_q2",
  "cards_2026_q3",
  "cards_2026_q4",
+ "serde_json",
 ]
 
 [[package]]
