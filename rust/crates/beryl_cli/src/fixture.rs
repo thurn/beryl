@@ -68,9 +68,9 @@ pub struct Definition {
     #[serde(default)]
     after: usize,
     /// The clicks made on the human's prompts from the stop on, each as [`Written::parse`]
-    /// reads it, in place of the stand-in's answers: a board's alone, whose scripts are done
-    /// by its stop, where the seat is handed over as a spec's moment hands it to its player.
-    /// The stand-in answers what the human is asked between the scripts' end and the stop.
+    /// reads it, in place of the stand-in's answers: a seeded game's, or a board's whose
+    /// scripts are done by its stop, where the seat is handed over as a spec's moment hands it
+    /// to its player. The stand-in answers what the human is asked before the stop.
     #[serde(default)]
     clicks: Vec<String>,
     /// A prompt no card asks yet, stood on the board in place of what its first player is
@@ -226,8 +226,8 @@ fn record_game(def: &Definition, across: bool) -> Result<Vec<FixtureMessage>, St
     let clicks = (def.clicks.iter())
         .map(|c| Written::parse(c))
         .collect::<Result<Vec<_>, _>>()?;
-    if !clicks.is_empty() && (def.board.is_none() || def.after > 0) {
-        return Err("clicks are a board's, with nothing recorded `after` its stop".to_owned());
+    if !clicks.is_empty() && def.after > 0 {
+        return Err("clicks begin at the stop, with nothing recorded `after` it".to_owned());
     }
     let prop = standing(def)?;
     let human = stop.until.seat();
@@ -284,7 +284,7 @@ fn record_game(def: &Definition, across: bool) -> Result<Vec<FixtureMessage>, St
             // a decision handed over anywhere else would wait for an answer nobody gives.
             if reached != handed {
                 return Err(format!(
-                    "the board's scripts must end at {until:?}, where its clicks begin"
+                    "the scripts must end at {until:?}, where its clicks begin"
                 ));
             }
             if reached {
@@ -479,7 +479,7 @@ fn first_view(
 
 /// Starts the fixture's game in `sessions`: its seeded deal, or its board, whose scripts
 /// report to `progress` and whose thread owns `guard`; the guard back if nothing owns it. A
-/// board with clicks hands its human seat over once `at_stop` says the view last sent was
+/// fixture with clicks hands its human seat over once `at_stop` says the view last sent was
 /// its stop.
 fn start(
     def: &Definition,
@@ -493,16 +493,24 @@ fn start(
     let stops = def.stops.unwrap_or(StopsSetting::SMART);
     let started: Result<SessionId, SessionError> =
         match (&def.board, def.seed, &def.decks, &def.agents) {
-            (None, Some(seed), Some(decks), Some(agents)) => sessions.start_game(
-                &StartGame {
+            (None, Some(seed), Some(decks), Some(agents)) => {
+                let start = StartGame {
                     seed,
                     decks: [deck(&decks[0])?, deck(&decks[1])?],
                     human,
                     opponent: agents[human.opponent().index()].clone(),
                     stops,
-                },
-                Some(&agents[human.index()]),
-            ),
+                };
+                let stand_in = &agents[human.index()];
+                if def.clicks.is_empty() {
+                    sessions.start_game(&start, Some(stand_in))
+                } else {
+                    // Its clicks are the human's answers from the stop on.
+                    let stopped = Arc::clone(at_stop);
+                    let hand_over = Box::new(move || stopped.load(Ordering::SeqCst)) as HandOver;
+                    sessions.start_game_handing_over(&start, stand_in, hand_over)
+                }
+            }
             (Some(name), None, None, None) => {
                 let board = boards::named(name)?;
                 let (table, state) =

@@ -358,6 +358,12 @@ impl Game {
         game
     }
 
+    /// Hands the human's decisions back to them from the stand-in once `hand_over` says so
+    /// ([`Prepared::hand_over`](crate::Prepared::hand_over)).
+    pub(crate) fn hand_over_when(&mut self, hand_over: HandOver) {
+        self.hand_over = Some(hand_over);
+    }
+
     /// After setup, let either seat answer its own decisions and publish both views.
     pub(crate) fn review(&mut self, emit: crate::ReviewViews) {
         self.review = Some(emit);

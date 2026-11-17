@@ -21,7 +21,8 @@ use crate::protocol::{CandidateIndex, DecisionId, PlayerView, SessionId, Status,
 use crate::replay::ReplayFile;
 use crate::session::GameSession;
 use crate::{
-    GameUpdate, Prepared, Seat, SessionError, SessionIds, StartGame, StartRequest, bugs, journal,
+    GameUpdate, HandOver, Prepared, Seat, SessionError, SessionIds, StartGame, StartRequest, bugs,
+    journal,
 };
 
 /// The game the UI's request starts: the default deck's mirror against the agent it names,
@@ -134,6 +135,27 @@ impl Sessions {
         start: &StartGame,
         stand_in: Option<&str>,
     ) -> Result<SessionId, SessionError> {
+        self.start_seeded(start, stand_in, None)
+    }
+
+    /// Starts `start` as [`Sessions::start_game`] does, with a `stand_in` agent answering the
+    /// human's decisions until `hand_over` says so, after which the human answers their own (a
+    /// UI fixture's clicks on a seeded game, made from its stop on).
+    pub fn start_game_handing_over(
+        &self,
+        start: &StartGame,
+        stand_in: &str,
+        hand_over: HandOver,
+    ) -> Result<SessionId, SessionError> {
+        self.start_seeded(start, Some(stand_in), Some(hand_over))
+    }
+
+    fn start_seeded(
+        &self,
+        start: &StartGame,
+        stand_in: Option<&str>,
+        hand_over: Option<HandOver>,
+    ) -> Result<SessionId, SessionError> {
         let replay = self.replay_path(start.seed);
         let about = json!({
             "seed": start.seed,
@@ -144,10 +166,11 @@ impl Sessions {
         });
         self.launch(
             |session| {
-                Ok((
-                    Game::with_budget(&CARDS, start, session, self.budget)?,
-                    None,
-                ))
+                let mut game = Game::with_budget(&CARDS, start, session, self.budget)?;
+                if let Some(hand_over) = hand_over {
+                    game.hand_over_when(hand_over);
+                }
+                Ok((game, None))
             },
             stand_in,
             replay,

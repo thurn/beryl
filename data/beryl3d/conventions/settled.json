@@ -7,10 +7,20 @@
       "shows": "card \"Map Token\" #512 battlefield.yours.others 832,572"
     },
     "Cards put on the bottom after a mulligan": {
-      "open": "needs bead by-q44s.9.28: opening-bottom's recording has no response to a click on a hand card, so no recording shows a card gliding into its slot under the hand."
+      "recording": "opening-bottom",
+      "at": "prompt:3",
+      "still": false,
+      "do": [
+        "press card \"Stock Up\" #8",
+        "step 120ms"
+      ],
+      "shows": "card \"Stock Up\" #8 hand.yours 682,491 126x175 interactive moving selected"
     },
     "The kept opening hand": {
-      "open": "needs bead by-q44s.9.28: the kept hand drops from the opening screen into the hand, but in about 0.3 s (opening-keep, 2166ms to 2450ms), where the rule and the web's KEPT take 0.13 s."
+      "recording": "opening-keep",
+      "at": "2300ms",
+      "still": false,
+      "shows": "card \"Plains\" #33 hand.yours 405,735 209x273 interactive covered"
     },
     "Permanents that leave": {
       "recording": "tokens",

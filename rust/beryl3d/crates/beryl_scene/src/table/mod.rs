@@ -38,7 +38,7 @@ pub use rows::RowWindow;
 pub(crate) use rows::{NameIds, RowChange, reposed};
 pub use scene::{ABILITY_IDS, Motion, Table, Turn};
 pub(crate) use scene::{Objects, PileCount, ability_track};
-pub use shown::Moves;
+pub use shown::{Moves, Relaid};
 pub(crate) use stack::{OnStack, on_stack, row_area};
 pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,

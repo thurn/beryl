@@ -7,7 +7,7 @@ mod gallery;
 mod game;
 mod game_over;
 mod lobby;
-mod opening;
+pub(crate) mod opening;
 mod settings;
 mod start;
 mod table;

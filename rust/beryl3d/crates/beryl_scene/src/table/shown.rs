@@ -89,20 +89,32 @@ impl Shown {
 }
 
 /// How a card moves into its box and back out of it: each move's length in nanoseconds and its
-/// easing.
+/// easing. `relaid` says how a card glides when its box moves because the screen laid it out
+/// again, as the opening moves a card between its hand and its slots; with none, a card whose box
+/// moved stands at once in its new place, as one does when its box scrolls.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Moves {
     pub into: (u64, Curve),
     pub back: (u64, Curve),
+    pub relaid: Option<Relaid>,
+}
+
+/// How a card glides to its box's new place: `cross` for a card whose box changed rows, by more
+/// than half the box's height, and `shift` for one that moved along its row.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Relaid {
+    pub cross: (u64, Curve),
+    pub shift: (u64, Curve),
 }
 
 impl Table {
     /// Shows each card `boxes` names in its box, a rectangle of the window in logical points
     /// that is drawn if its flag says so, and no other card. A card new to a box moves into it
     /// from where it is drawn now, and a card no box shows any more moves back to where it
-    /// rests, each as `moves` says, from the next frame. A card whose box moved, as a scroll
-    /// moves it, stands at once in its new place. `covered` says whether the flat layer covers
-    /// the table, so that no card takes a press.
+    /// rests, each as `moves` says, from the next frame. A card whose box moved glides there
+    /// from where it is drawn now as `moves.relaid` says, or, with none, as a scroll moves it,
+    /// stands at once in its new place. `covered` says whether the flat layer covers the table,
+    /// so that no card takes a press.
     pub fn show_in(&mut self, boxes: &[(ObjectId, Rect, bool)], moves: Moves, covered: bool) {
         self.shown.covered = covered;
         let now = self.shown.now;
@@ -122,8 +134,19 @@ impl Table {
                 pose: box_pose(self.camera(), rect),
                 visible,
             };
-            if let Some(kept) = (self.shown.boxes.iter_mut()).find(|(shown, _)| *shown == slot) {
-                kept.1 = in_box;
+            if let Some(index) = (self.shown.boxes.iter()).position(|(shown, _)| *shown == slot) {
+                let was = self.shown.boxes[index].1;
+                let glide = moves.relaid.filter(|_| was.pose != in_box.pose);
+                let drawn = glide.map(|_| self.drawn_in_box(slot, now));
+                self.shown.boxes[index].1 = in_box;
+                if let (Some(relaid), Some(drawn)) = (glide, drawn) {
+                    let camera = self.camera();
+                    let rise = camera.to_screen(was.pose.position).y
+                        - camera.to_screen(in_box.pose.position).y;
+                    let crossing = rise.abs() > rect.height / 2.0;
+                    let timing = if crossing { relaid.cross } else { relaid.shift };
+                    self.start_move(slot, drawn, timing);
+                }
                 continue;
             }
             if let Some(drawn) = self.drawn_out_of_box(slot, now) {

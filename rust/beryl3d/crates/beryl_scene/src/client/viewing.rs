@@ -8,6 +8,7 @@ use beryl_protocol::protocol::{ObjectId, ZoneName};
 use beryl_protocol::script::{Act, OwnStep};
 
 use super::Client;
+use crate::data::space::shown::opening;
 use crate::element::{Viewed, floats};
 use crate::frame::Place;
 use crate::input::Rect;
@@ -16,7 +17,7 @@ use crate::layout::FloatLook;
 use crate::light::Span;
 use crate::pose::Curve;
 use crate::screens::Screen;
-use crate::table::Moves;
+use crate::table::{Moves, Relaid, Window};
 use crate::verbs::Interval;
 
 /// Nanoseconds in a millisecond, as the session's step timings are written in milliseconds.
@@ -38,6 +39,31 @@ pub(super) struct Viewing {
     boxes: Vec<(ObjectId, Rect, bool)>,
     /// Which of the pill's keys is shown, if any.
     pill: Option<u64>,
+    /// Whether the screen shows the opening hand (`screens::opening`), as it was laid out last
+    /// and as it was before that, and the window it was laid out in last.
+    pub(super) opening: bool,
+    was_opening: bool,
+    laid_in: Option<Window>,
+}
+
+/// How the opening's cards glide between its hand and its slots: the web interface's
+/// `cubic-bezier(0.2, 0.7, 0.3, 1)` (`ui/src/screens/glide.ts`), quick and slowing as it
+/// arrives.
+const GLIDE: Curve = Curve {
+    x1: 0.2,
+    y1: 0.7,
+    x2: 0.3,
+    y2: 1.0,
+};
+
+/// A length in milliseconds from `space.json`, in nanoseconds.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a move lasts well under a second"
+)]
+fn ns(ms: f32) -> u64 {
+    (f64::from(ms) * NS_PER_MS) as u64
 }
 
 impl Client {
@@ -109,9 +135,28 @@ impl Client {
                     (length, Curve::named(entry.timing.curve))
                 })
         };
+        // The kept opening hand drops from the opening screen into the hand in about an eighth
+        // of a second, slowing as it lands (the web's `KEPT` in `ui/src/stage/arrive.ts`), and
+        // while the opening is shown a card clicked into a slot under the hand, or back, glides
+        // there as the web's `useGlide` moves it. A new window lays the opening out again, and
+        // its cards stand at once in their new places.
+        let closed = self.viewing.was_opening && !self.viewing.opening;
+        let resized = self.viewing.laid_in.is_some_and(|laid| laid != self.window);
+        self.viewing.was_opening = self.viewing.opening;
+        self.viewing.laid_in = Some(self.window);
+        let back = if closed {
+            (ns(opening::KEPT_MS), Curve::EASE_OUT)
+        } else {
+            timing(OwnStep::TrayLetGo)
+        };
+        let relaid = (self.viewing.opening && !resized).then_some(Relaid {
+            cross: (ns(opening::CROSS_MS), GLIDE),
+            shift: (ns(opening::SHIFT_MS), GLIDE),
+        });
         let moves = Moves {
             into: timing(OwnStep::TrayLifts { sorted: false }),
-            back: timing(OwnStep::TrayLetGo),
+            back,
+            relaid,
         };
         let covered =
             self.viewing.open.is_some() && matches!(self.screen, Screen::Game | Screen::Table);

@@ -49,11 +49,16 @@ impl Client {
             }
             _ => Some(screens::screen(self.screen, &input)),
         };
+        let opening = under.is_some()
+            && self.sheet.is_none()
+            && self.screen == Screen::Game
+            && screens::opening::shown(&input);
         let shown = match self.sheet {
             Some(sheet) => Some(screens::sheet(sheet, under, &input)),
             None => under,
         };
         let music = screens::music(self.screen, view);
+        self.viewing.opening = opening;
         self.layer.show(shown);
         self.layer.scroll_to_end(crate::hud::log::LIST);
         self.place_shown();

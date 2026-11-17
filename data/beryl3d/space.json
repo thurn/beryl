@@ -901,7 +901,12 @@
     }
   },
   "shown": {
-    "depth": 280
+    "depth": 280,
+    "opening": {
+      "kept_ms": 130,
+      "cross_ms": 250,
+      "shift_ms": 170
+    }
   },
   "hud": {
     "step_off": 0.6,
