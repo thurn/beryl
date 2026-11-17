@@ -27,18 +27,18 @@ pub mod scenarios {
         Scenario::new("Clever Impersonator can enter as a noncreature artifact")
             .hand(P0, &[IMPERSONATOR])
             .battlefield(P0, &[Card::Island; 4])
-            .battlefield(P1, &[Prop::Artifact, Prop::Vanilla])
+            .battlefield(P1, &[Prop::Equipment, Prop::Vanilla])
             .actions(&[
                 ME.casts(IMPERSONATOR),
                 Resolve,
-                ME.picks_up_to(Prop::Artifact),
-                ME.controls(Prop::Artifact, 1),
+                ME.picks_up_to(Prop::Equipment),
+                ME.controls(Prop::Equipment, 1),
             ]),
         // The copy is optional, and the unmodified 0/0 goes to the graveyard.
         Scenario::new("Clever Impersonator can enter without copying")
             .hand(P0, &[IMPERSONATOR])
             .battlefield(P0, &[Card::Island; 4])
-            .battlefield(P1, &[Prop::Artifact])
+            .battlefield(P1, &[Prop::Equipment])
             .actions(&[
                 ME.casts(IMPERSONATOR),
                 Resolve,

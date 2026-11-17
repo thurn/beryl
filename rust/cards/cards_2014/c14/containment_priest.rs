@@ -161,5 +161,34 @@ pub mod scenarios {
                 ME.has(Zone::Exile, Prop::Vanilla, 0),
                 ME.has(Zone::Exile, Card::Plains, 3),
             ]),
+        // A creature cast from exile also enters. Spellbinder gives the opponent a way
+        // to cast it from there while Priest is on the battlefield.
+        Scenario::new("a creature cast from exile enters through Containment Priest")
+            .interaction(&[Card::EliteSpellbinder])
+            .permanents(
+                P0,
+                &[
+                    Permanent::new(PRIEST).tapped(),
+                    Permanent::new(Card::Plains),
+                    Permanent::new(Card::Plains),
+                    Permanent::new(Card::Plains),
+                ],
+            )
+            .hand(P0, &[Card::EliteSpellbinder])
+            .battlefield(P1, &[Card::Island; 4])
+            .hand(P1, &[Prop::Vanilla, Card::Island])
+            .library(P1, &[Card::Island])
+            .actions(&[
+                ME.casts(Card::EliteSpellbinder),
+                Resolve,
+                Resolve,
+                ME.yes(),
+                THEM.has(Zone::Exile, Prop::Vanilla, 1),
+                advance_to(2, TurnStep::PrecombatMain),
+                THEM.casts(Prop::Vanilla),
+                Resolve,
+                THEM.controls(Prop::Vanilla, 1),
+                THEM.has(Zone::Exile, Prop::Vanilla, 0),
+            ]),
     ];
 }
