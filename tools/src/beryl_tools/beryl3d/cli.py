@@ -25,6 +25,7 @@ from . import (
     app,
     bug,
     camera,
+    clear_save,
     gate,
     lane,
     live,
@@ -387,6 +388,7 @@ MODULES: tuple[ModuleType, ...] = (
     spec,
     motion_film,
     bug,
+    clear_save,
 )
 
 OWN_COMMANDS: tuple[Command, ...] = (
