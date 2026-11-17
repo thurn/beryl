@@ -33,21 +33,27 @@ pub struct Test {
     pub recording: String,
     pub seat: Side,
     pub size: Size,
+    /// Physical pixels to a logical point (`Page::with_scale`).
+    pub scale: f32,
 }
 
 impl Test {
-    /// `b3d:<recording>/<seat>/<width>x<height>`, which every other `just b3d` command takes in
-    /// place of a recording's name.
+    /// `b3d:<recording>/<seat>/<width>x<height>`, with `@<scale>` after the size when the scale
+    /// is not 1, which every other `just b3d` command takes in place of a recording's name.
     #[must_use]
     pub fn name(&self) -> String {
         let seat = match self.seat {
             Side::You => "you",
             Side::Opponent => "opponent",
         };
-        format!(
+        let mut name = format!(
             "{PREFIX}{}/{seat}/{}x{}",
             self.recording, self.size.width, self.size.height
-        )
+        );
+        if (self.scale - 1.0).abs() > f32::EPSILON {
+            let _ = write!(name, "@{}", self.scale);
+        }
+        name
     }
 
     /// The layout its window is shown in: the phone layout below `Layout::PHONE_BELOW_POINTS`
@@ -64,7 +70,8 @@ impl Test {
     ///
     /// When the recording cannot be read or the client cannot open it.
     pub fn page(&self) -> Result<Page, String> {
-        pages::page(&self.recording, self.seat, self.layout(), self.size)
+        let page = pages::page(&self.recording, self.seat, self.layout(), self.size)?;
+        Ok(page.with_scale(self.scale))
     }
 }
 
@@ -101,14 +108,15 @@ impl Outcome {
 /// When the pack cannot be built or read.
 pub fn tests(filter: &str, windows: Windows) -> Result<Vec<Test>, String> {
     let filter = full_name(filter);
-    let sizes = windows.sizes();
+    let windows = windows.windows();
     let mut tests = Vec::new();
     for (recording, seat) in recordings::names()? {
-        for &size in &sizes {
+        for window in &windows {
             let test = Test {
                 recording: recording.clone(),
                 seat: side_of(seat),
-                size,
+                size: window.size,
+                scale: window.scale,
             };
             if test.name().starts_with(&filter) {
                 tests.push(test);
@@ -470,6 +478,7 @@ mod tests {
                 recording: format!("no-such-recording-{n}"),
                 seat: Side::You,
                 size: DESKTOP_WINDOWS[0],
+                scale: 1.0,
             })
             .collect();
         assert!(run_until(&tests, Mode::AtCheckTimes, Some(Instant::now())).is_empty());

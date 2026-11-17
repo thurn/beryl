@@ -373,10 +373,11 @@ fn help(command: &Command) -> String {
     out
 }
 
-/// The recording `options` names, in the window and seat they give, at its start.
+/// The recording `options` names, in the window, seat and scale they give, at its start.
 pub fn open(options: &Options) -> Result<Page, Usage> {
     options::known(options.name(), options.seat)?;
-    pages::page(options.name(), options.seat, options.layout, options.size).map_err(Usage)
+    let page = pages::page(options.name(), options.seat, options.layout, options.size);
+    Ok(page.map_err(Usage)?.with_scale(options.scale))
 }
 
 /// The time of `moment` in `page`'s recording, in nanoseconds since its start.

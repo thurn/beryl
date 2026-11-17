@@ -2,10 +2,10 @@
 //! interface"), read by one parser that the text commands and the picture program share.
 //!
 //! A recording is named as `just b3d list` prints it, or by a test's name,
-//! `b3d:<recording>/<seat>/<width>x<height>`, which also sets the seat and the window. The
-//! options common to every such command are `--seat`, `--layout`, `--size`, `--scale`, `--tier`,
-//! `--at`, `--do` (repeatable) and `--json`. A command adds options of its own through
-//! [`Spec`], and reads them back with [`Options::value`] and [`Options::switch`].
+//! `b3d:<recording>/<seat>/<width>x<height>[@<scale>]`, which also sets the seat, the window and
+//! the scale. The options common to every such command are `--seat`, `--layout`, `--size`,
+//! `--scale`, `--tier`, `--at`, `--do` (repeatable) and `--json`. A command adds options of its
+//! own through [`Spec`], and reads them back with [`Options::value`] and [`Options::switch`].
 
 use std::fmt::Write;
 
@@ -321,11 +321,27 @@ impl Options {
                 "'{name}': '{seat}' is not a seat; expected you or opponent"
             ))
         })?;
+        let (size, scale) = match size.split_once('@') {
+            Some((size, scale)) => (size, Some(scale)),
+            None => (size, None),
+        };
         self.size = parse_size(size).ok_or_else(|| {
             Usage(format!(
                 "'{name}': '{size}' is not a size; expected <width>x<height>, as in 1600x900"
             ))
         })?;
+        if let Some(scale) = scale {
+            self.scale = scale
+                .parse()
+                .ok()
+                .filter(|scale: &f32| scale.is_finite() && *scale > 0.0)
+                .ok_or_else(|| {
+                    Usage(format!(
+                        "'{name}': '{scale}' is not a scale; expected a positive number, as in \
+                         1600x900@2"
+                    ))
+                })?;
+        }
         self.sized = true;
         // The layout and its safe area follow the window, as they do in `just b3d test`.
         self.layout = Layout::for_size(self.size);

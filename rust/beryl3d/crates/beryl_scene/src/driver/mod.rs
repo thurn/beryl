@@ -115,6 +115,8 @@ pub struct Page {
     seat: Side,
     layout: Layout,
     size: Size,
+    /// Physical pixels to a logical point, as the client is told ([`Page::with_scale`]).
+    scale: f32,
     /// The window's safe area, for the client and the checks alike ([`Page::with_safe_area`]).
     safe_area: Insets,
     /// The visual tier the client is told of whenever it is made anew ([`Page::with_tier`]).
@@ -170,6 +172,7 @@ impl Page {
             seat,
             layout,
             size,
+            scale: 1.0,
             safe_area: Insets::default(),
             tier: Tier::Baseline,
             tick: TICK,
@@ -206,6 +209,26 @@ impl Page {
         self.safe_area = safe_area;
         self.restart();
         self
+    }
+
+    /// The same page at its start, in a window of `scale` physical pixels to a logical point, as
+    /// a Retina display is at 2. The client lays out in logical points still, so where every
+    /// element is stays the same, but it asks for its glyphs at that scale and gives its clips
+    /// in physical pixels, as it does in the desktop app.
+    #[must_use]
+    pub fn with_scale(mut self, scale: f32) -> Self {
+        assert!(scale.is_finite() && scale > 0.0, "a scale is positive");
+        if (scale - self.scale).abs() > f32::EPSILON {
+            self.scale = scale;
+            self.restart();
+        }
+        self
+    }
+
+    /// Physical pixels to a logical point ([`Page::with_scale`]).
+    #[must_use]
+    pub fn scale(&self) -> f32 {
+        self.scale
     }
 
     /// The same page at its start, drawn in `tier`: the client leaves out the records that tier
@@ -574,7 +597,7 @@ impl Page {
         }
         self.give(Input::Surface {
             size: self.size,
-            scale: 1.0,
+            scale: self.scale,
             safe_area: self.safe_area,
         });
         if let Some(cards) = &self.cards {
@@ -725,6 +748,7 @@ impl Page {
             seat: self.seat,
             layout: self.layout,
             size: self.size,
+            scale: self.scale,
             safe_area: self.safe_area,
             tier: self.tier,
             tick: self.tick,

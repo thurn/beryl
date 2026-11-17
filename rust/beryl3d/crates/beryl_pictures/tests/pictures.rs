@@ -53,7 +53,7 @@ fn written(output: &Output) -> (PathBuf, (u32, u32)) {
 fn the_picture_shows_the_card_the_tree_says_is_in_flight() {
     let page = pages::page("verbs-zones", Side::You, Layout::Desktop, WINDOW).expect("a page");
     let mut head =
-        Headless::new(page, WINDOW.width, WINDOW.height, 1.0, &Scans::app()).expect("a GPU");
+        Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
     head.seek(&"1500ms".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
     let frame = head.frame();
@@ -135,7 +135,7 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
         std::fs::create_dir_all(file.parent().expect("a directory")).expect("a directory");
         std::fs::copy(&scan, &file).expect("a scan in the cache");
     }
-    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, 1.0, &scans).expect("a GPU");
+    let mut head = Headless::new(page, WINDOW.width, WINDOW.height, &scans).expect("a GPU");
     assert_eq!(
         faces_built_on_this_thread(),
         0,
@@ -167,7 +167,7 @@ fn cards_show_the_scans_in_the_cache_prepared_on_other_threads() {
 fn the_prompt_bar_draws_text_rasterized_on_another_thread() {
     let page = pages::page("pay-default", Side::You, Layout::Desktop, WINDOW).expect("a page");
     let mut head =
-        Headless::new(page, WINDOW.width, WINDOW.height, 1.0, &Scans::app()).expect("a GPU");
+        Headless::new(page, WINDOW.width, WINDOW.height, &Scans::app()).expect("a GPU");
     head.seek(&"prompt:1".parse::<Moment>().expect("a moment"))
         .expect("a moment of the recording");
     let button = head.page().find(r#"button "Next""#).rect();

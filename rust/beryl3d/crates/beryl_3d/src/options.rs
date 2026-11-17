@@ -59,6 +59,10 @@ pub struct Options {
     /// How long the run lasts before the app ends it.
     pub run_for: Option<Duration>,
     pub window: Window,
+    /// Physical pixels to a logical point in a run with no window (`--scale`): 2 on macOS, the
+    /// scale of a Retina display, so that an agent's run draws text as the desktop app does
+    /// there, and 1 elsewhere. A window takes its display's scale instead.
+    pub scale: u8,
     /// The drive script to play: a name in `rust/beryl3d/drive`, or a path.
     pub drive: Option<String>,
     /// Busy threads to start, and their class (`--load`).
@@ -93,6 +97,9 @@ pub const OPPONENT: &str = "mcts-hidden";
 /// The seed of a game `--agent` starts, unless `--seed` gives another: the prototype's.
 pub const SEED: u64 = 20_261_114;
 
+/// The scale of a run with no window unless `--scale` gives another.
+pub const WINDOWLESS_SCALE: u8 = if cfg!(target_os = "macos") { 2 } else { 1 };
+
 /// Whether this build has the options only a debug build has (`--fixture`, `--replay`,
 /// `--pause-at`, `--drive`, `--load`, `--slow-gpu`, `--agent`, `--opponent`, `--seed`,
 /// `--search-class`, `--offer`, `--tier` and `--probe`).
@@ -112,6 +119,7 @@ impl Options {
             pause_at: None,
             run_for: None,
             window: Window::Fullscreen,
+            scale: WINDOWLESS_SCALE,
             drive: None,
             load: None,
             slow_gpu: None,
@@ -180,6 +188,12 @@ impl Options {
                     });
                 }
                 "--for" => options.run_for = Some(duration(&value()?)?),
+                "--scale" => {
+                    let text = value()?;
+                    options.scale = text.parse().ok().filter(|scale| (1..=4).contains(scale)).ok_or_else(
+                        || format!("--scale {text}: a scale is a whole number from 1 to 4"),
+                    )?;
+                }
                 "--window" => {
                     let word = value()?;
                     options.window = Window::from_word(&word).ok_or_else(|| {
@@ -206,6 +220,7 @@ pub fn usage(tools: bool) -> String {
         "usage: beryl3d [options]",
         "  --window none|background|foreground|fullscreen   what to open (fullscreen)",
         "  --for <duration>                                 end the run after this long",
+        "  --scale <1-4>                                    pixels per point with no window",
     ];
     if tools {
         lines.push("  --fixture <recording>                            replay a recording");

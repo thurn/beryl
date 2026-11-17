@@ -15,6 +15,7 @@ fn outcome(recording: &str, rules: &[Rule]) -> Outcome {
                 width: 1600.0,
                 height: 900.0,
             },
+            scale: 1.0,
         },
         faults: rules
             .iter()

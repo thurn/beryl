@@ -117,6 +117,7 @@ fn a_phone_tests_name_opens_the_same_layout_and_insets_in_test_tree_and_check() 
         recording: "pay-default".to_owned(),
         seat: Side::You,
         size,
+        scale: 1.0,
     };
     assert_eq!(test.name(), name);
     assert_eq!(test.layout(), Layout::Phone);
@@ -236,6 +237,7 @@ fn outcome(recording: &str, frames: usize) -> Outcome {
                 width: 1600.0,
                 height: 900.0,
             },
+            scale: 1.0,
         },
         faults: Vec::new(),
         frames,

@@ -37,6 +37,33 @@ pub const DESKTOP_WINDOWS: [Size; 4] = [
     },
 ];
 
+/// The scale of a Retina display, physical pixels to a logical point, at which the desktop app
+/// runs on the owner's Mac.
+pub const RETINA_SCALE: f32 = 2.0;
+
+/// The desktop windows of [`DESKTOP_WINDOWS`] that `just b3d test` plays at [`RETINA_SCALE`]
+/// instead of 1: the client asks for its glyphs at that scale and gives its clips in physical
+/// pixels, as in the desktop app on a Retina Mac, where faults appeared that no window at scale
+/// 1 showed. Playing a window at scale 2 in place of 1, rather than beside it, keeps the number
+/// of tests, and so the share of them a fast check has time to start, the same.
+pub const RETINA_WINDOWS: [Size; 1] = [DESKTOP_WINDOWS[1]];
+
+/// A window of the test matrix: its size in logical points and its scale.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Window {
+    pub size: Size,
+    /// Physical pixels to a logical point.
+    pub scale: f32,
+}
+
+impl Window {
+    /// A window of `size` at scale 1.
+    #[must_use]
+    pub const fn at_one(size: Size) -> Self {
+        Self { size, scale: 1.0 }
+    }
+}
+
 /// The phone windows every recording is checked in, in portrait: the two sizes the web
 /// interface's phone shots use and a large phone's.
 pub const PHONE_WINDOWS: [Size; 3] = [
@@ -78,7 +105,8 @@ pub fn safe_area(layout: Layout) -> Insets {
 /// Which windows of the matrix a run of the interface tests plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Windows {
-    /// [`DESKTOP_WINDOWS`] only, as `just b3d test` runs while the phone layout is built.
+    /// [`DESKTOP_WINDOWS`], each at scale 1 but [`RETINA_WINDOWS`] at [`RETINA_SCALE`], as
+    /// `just b3d test` runs while the phone layout is built.
     Desktop,
     /// [`PHONE_WINDOWS`] only (`just b3d test --phone-only`).
     Phone,
@@ -87,13 +115,24 @@ pub enum Windows {
 }
 
 impl Windows {
-    /// The window sizes, in the order tests are named in.
+    /// The windows, in the order tests are named in.
     #[must_use]
-    pub fn sizes(self) -> Vec<Size> {
+    pub fn windows(self) -> Vec<Window> {
+        let desktop = || {
+            DESKTOP_WINDOWS.iter().map(|&size| Window {
+                size,
+                scale: if RETINA_WINDOWS.contains(&size) {
+                    RETINA_SCALE
+                } else {
+                    1.0
+                },
+            })
+        };
+        let phone = || PHONE_WINDOWS.iter().copied().map(Window::at_one);
         match self {
-            Self::Desktop => DESKTOP_WINDOWS.to_vec(),
-            Self::Phone => PHONE_WINDOWS.to_vec(),
-            Self::All => [DESKTOP_WINDOWS.as_slice(), PHONE_WINDOWS.as_slice()].concat(),
+            Self::Desktop => desktop().collect(),
+            Self::Phone => phone().collect(),
+            Self::All => desktop().chain(phone()).collect(),
         }
     }
 }
@@ -238,6 +277,7 @@ pub fn check_recording(name: &str) -> Checked {
                 recording: name.to_owned(),
                 seat,
                 size,
+                scale: 1.0,
             };
             let allowed = listed.tests.get(&test.name()).cloned().unwrap_or_default();
             let mut page = page(name, seat, Layout::Desktop, size).unwrap_or_else(|why| {

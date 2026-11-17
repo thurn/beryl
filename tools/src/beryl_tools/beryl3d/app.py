@@ -84,6 +84,10 @@ def app_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--pause-at", help="stop the clock at this moment (1500ms)")
     parser.add_argument("--for", dest="run_for", help="end the run after this long")
     parser.add_argument(
+        "--scale",
+        help="pixels per point with no window (2 on macOS, as on a Retina display)",
+    )
+    parser.add_argument(
         "--drive",
         help="play this script of actions (a name in rust/beryl3d/drive), then end",
     )
@@ -143,6 +147,7 @@ def run_app(args: argparse.Namespace) -> int:
         ("--replay", args.replay),
         ("--pause-at", args.pause_at),
         ("--for", args.run_for),
+        ("--scale", args.scale),
         ("--drive", args.drive),
         ("--load", args.load),
         ("--slow-gpu", args.slow_gpu),

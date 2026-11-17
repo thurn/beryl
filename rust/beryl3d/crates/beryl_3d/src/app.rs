@@ -539,7 +539,7 @@ pub fn run(options: &Options) -> Result<Finished, String> {
         Window::None => {
             let host = Windowless::new(WindowlessOptions {
                 size: SIZE,
-                scale: 1.0,
+                scale: f32::from(options.scale),
                 hz: WINDOWLESS_HZ,
                 pause_at,
                 end_after: options.run_for,

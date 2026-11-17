@@ -225,7 +225,6 @@ pub(crate) fn open(options: &Options) -> Result<Headless, Error> {
         page,
         options.size.width,
         options.size.height,
-        options.scale,
         &Scans::app(),
     )
     .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))

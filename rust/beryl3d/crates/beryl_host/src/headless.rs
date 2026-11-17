@@ -45,8 +45,10 @@ pub struct Headless {
 }
 
 impl Headless {
-    /// Draws `page`, whose window is `width` by `height` logical points, at `scale` physical
-    /// pixels to a point, with its card faces read from `scans`.
+    /// Draws `page`, whose window is `width` by `height` logical points, at the page's scale
+    /// ([`Page::with_scale`]), with its card faces read from `scans`. Its glyphs and icons are
+    /// rasterized at that scale, as the desktop host's are, so a picture at scale 2 shows what a
+    /// Retina display does.
     ///
     /// # Errors
     ///
@@ -55,9 +57,9 @@ impl Headless {
         page: Page,
         width: f32,
         height: f32,
-        scale: f32,
         scans: &Scans,
     ) -> Result<Self, String> {
+        let scale = page.scale();
         let mut renderer = Renderer::headless(Limits::Default)?;
         renderer.upload_page(&light::prepared());
         load_faces(&mut renderer, page.faces(), scans);
@@ -65,9 +67,8 @@ impl Headless {
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
         let (out, pages) = mpsc::channel();
         let glyphs = GlyphWorker::spawn(out, || {}, crate::threads::asset_thread);
-        // The test driver lays the page out at one physical pixel to a point.
-        glyphs.prepare(prepare_latin(1.0));
-        glyphs.icons(1.0);
+        glyphs.prepare(prepare_latin(scale));
+        glyphs.icons(scale);
         let mut head = Self {
             page,
             renderer,
