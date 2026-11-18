@@ -21,6 +21,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 # Parses `ignite.toml` and the check manifests; replaces a hand-written TOML reader.
 toml = "1.2.0"
+# Collects the keys `ignite.toml` and the manifests have that Ignite does not know, so that
+# they warn instead of failing; replaces `deny_unknown_fields`, which stopped older daemons.
+serde_ignored = "0.1.14"
 # SHA-256 for input hashes; replaces shelling out to `shasum`.
 sha2 = "0.10.9"
 # The operating system's random numbers for write tokens and ticket IDs; replaces reading

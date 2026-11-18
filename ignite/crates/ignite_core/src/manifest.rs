@@ -96,7 +96,6 @@ impl From<InputPattern> for String {
 
 /// A `[family.<name>]` table.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Family {
     pub kind: Kind,
     pub adapter: Adapter,
@@ -130,7 +129,6 @@ pub struct Family {
 
 /// A `[product.<name>]` table.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Product {
     /// The build command; `{packages}` stands for the packages the caller needs.
     pub build: String,
@@ -147,7 +145,6 @@ pub struct Product {
 
 /// An `[[rebuild]]` entry of `ignite.toml`: an edit whose rebuild cost is measured.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct RebuildEdit {
     pub name: String,
     /// What the edit does, in words, for people reading the counts.
@@ -196,7 +193,6 @@ impl fmt::Display for ManifestError {
 impl std::error::Error for ManifestError {}
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ManifestFile {
     #[serde(default)]
     family: BTreeMap<String, Family>,
@@ -207,6 +203,17 @@ struct ManifestFile {
 impl Manifest {
     /// Parses every manifest file, given as (path, text), and checks them against each other.
     pub fn from_files(files: &[(PathBuf, String)]) -> Result<Manifest, ManifestError> {
+        Self::from_files_with_unknown(files).map(|(manifest, _)| manifest)
+    }
+
+    /// Parses like [`Manifest::from_files`] and also returns each key no family or product
+    /// declares, as `file: key`, so that the caller can warn about it. As in `ignite.toml`,
+    /// an unknown key is not an error, so that a key added to a manifest never stops a
+    /// daemon built before it.
+    pub fn from_files_with_unknown(
+        files: &[(PathBuf, String)],
+    ) -> Result<(Manifest, Vec<String>), ManifestError> {
+        let mut unknown = Vec::new();
         let mut manifest = Manifest::default();
         let mut origin: BTreeMap<String, &Path> = BTreeMap::new();
         for (path, text) in files {
@@ -215,8 +222,13 @@ impl Manifest {
                 key,
                 message,
             };
-            let parsed: ManifestFile = toml::from_str(text)
-                .map_err(|e| error(String::new(), e.to_string().trim_end().to_owned()))?;
+            let (parsed, ignored): (ManifestFile, _) =
+                crate::config::parse_lenient(text).map_err(|e| error(String::new(), e))?;
+            unknown.extend(
+                ignored
+                    .into_iter()
+                    .map(|key| format!("{}: {key}", path.display())),
+            );
             let group = path
                 .file_stem()
                 .and_then(|s| s.to_str())
@@ -282,7 +294,7 @@ impl Manifest {
                 }
             }
         }
-        Ok(manifest)
+        Ok((manifest, unknown))
     }
 }
 
@@ -431,6 +443,18 @@ outputs = ["ui/node_modules"]
         assert!(error.message.contains("platforms"), "{error}");
         let text = RUST.replace("kind = ", "knid = ");
         assert!(Manifest::from_files(&files(&[("checks/rust.toml", &text)])).is_err());
+    }
+
+    #[test]
+    fn unknown_manifest_keys_are_reported_but_not_refused() {
+        let text = RUST.replace("platforms = \"any\"", "platforms = \"any\"\nfuture = 1");
+        let (manifest, unknown) =
+            Manifest::from_files_with_unknown(&files(&[("checks/rust.toml", &text)])).unwrap();
+        assert_eq!(
+            manifest,
+            Manifest::from_files(&files(&[("checks/rust.toml", RUST)])).unwrap()
+        );
+        assert_eq!(unknown, ["checks/rust.toml: family.rust.future"]);
     }
 
     #[test]

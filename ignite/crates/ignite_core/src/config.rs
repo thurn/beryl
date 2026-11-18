@@ -49,7 +49,6 @@ impl fmt::Display for Os {
 
 /// The whole of `ignite.toml`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Config {
     pub repository: Repository,
     pub hub: HubConfig,
@@ -71,7 +70,6 @@ pub struct Config {
 /// The efficiency dashboard's commands, which each daemon runs for its own machine when the
 /// session transcripts it reads have grown (see `ignite_daemon::metrics`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Metrics {
     /// Directories whose files growing means there is something new to ingest. A leading `~`
     /// is the user's home directory.
@@ -90,7 +88,6 @@ pub struct Metrics {
 
 /// The repository Ignite delivers to.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Repository {
     /// The git remote that holds both branches, such as `origin`.
     pub remote: String,
@@ -122,7 +119,6 @@ impl Repository {
 
 /// Where the hub is.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct HubConfig {
     /// The hub's base address, such as `https://hub.example.ts.net:8443`.
     pub url: String,
@@ -136,7 +132,6 @@ pub struct HubConfig {
 
 /// The landing gate's values. Only a commit changes them.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Gate {
     /// Expected failures per billion instructions above which a check runs at the gate.
     pub threshold: f64,
@@ -146,7 +141,6 @@ pub struct Gate {
 
 /// The share of hand-offs that improvement tickets get.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Improvement {
     /// The share when the backlog is small.
     pub min_share: f64,
@@ -175,7 +169,6 @@ impl Default for Improvement {
 
 /// How the improvement rules file tickets.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Rules {
     /// Rules whose findings show on the dashboard and file no ticket, such as one that
     /// compares model tiers, because that choice stays with people.
@@ -208,7 +201,6 @@ impl Rules {
 
 /// One machine's declared capacity.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Machine {
     /// The operating system, when the declaration states it.
     pub os: Option<Os>,
@@ -228,7 +220,6 @@ pub struct Machine {
 
 /// Cores reserved for the `batch` and `tip` classes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Floor {
     #[serde(default)]
     pub batch: u32,
@@ -259,17 +250,32 @@ impl std::error::Error for ConfigError {}
 impl Config {
     /// Parses and validates the text of `ignite.toml`; `file` names it in errors.
     pub fn parse(file: &str, text: &str) -> Result<Config, ConfigError> {
-        let config: Config = toml::from_str(text).map_err(|error| ConfigError {
-            file: file.to_owned(),
-            key: String::new(),
-            message: error.to_string().trim_end().to_owned(),
-        })?;
+        Self::parse_with_unknown(file, text).map(|(config, _)| config)
+    }
+
+    /// Parses like [`Config::parse`] and also returns the keys it did not know, such as
+    /// `repository.release`, so that the caller can warn about them.
+    ///
+    /// An unknown key is not an error. A key added to `ignite.toml` reaches every machine
+    /// with the commit that adds it, often before that machine's daemon has been rebuilt from
+    /// a commit that knows the key. Refusing the file would stop that daemon, and with it
+    /// the self-update that would have taught it the key.
+    pub fn parse_with_unknown(
+        file: &str,
+        text: &str,
+    ) -> Result<(Config, Vec<String>), ConfigError> {
+        let (config, unknown): (Config, _) =
+            parse_lenient(text).map_err(|message| ConfigError {
+                file: file.to_owned(),
+                key: String::new(),
+                message,
+            })?;
         config.validate().map_err(|(key, message)| ConfigError {
             file: file.to_owned(),
             key,
             message,
         })?;
-        Ok(config)
+        Ok((config, unknown))
     }
 
     /// The declaration of the machine with this hostname. Hostnames are compared without regard
@@ -379,6 +385,19 @@ fn positive(value: f64) -> bool {
     value > 0.0
 }
 
+/// Deserializes TOML, collecting the dotted path of every key the type does not declare
+/// instead of refusing it. The message of an error is the parser's, trimmed.
+pub(crate) fn parse_lenient<T: serde::de::DeserializeOwned>(
+    text: &str,
+) -> Result<(T, Vec<String>), String> {
+    let deserializer =
+        toml::Deserializer::parse(text).map_err(|e| e.to_string().trim_end().to_owned())?;
+    let mut unknown = Vec::new();
+    let value = serde_ignored::deserialize(deserializer, |path| unknown.push(path.to_string()))
+        .map_err(|e: toml::de::Error| e.to_string().trim_end().to_owned())?;
+    Ok((value, unknown))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -457,11 +476,30 @@ products = ["clippy", "rust-tests"]
     }
 
     #[test]
-    fn unknown_keys_are_errors_that_name_the_file() {
-        let text = DOCUMENT_EXAMPLES.replace("cap = 400", "cap = 400\ncapp = 1");
+    fn unknown_keys_are_reported_but_not_refused() {
+        let text = DOCUMENT_EXAMPLES
+            .replace("cap = 400", "cap = 400\ncapp = 1")
+            .replace("[repository]", "[repository]\nfuture_key = \"x\"");
+        let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
+        assert_eq!(
+            config,
+            Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap()
+        );
+        assert_eq!(unknown.len(), 2, "{unknown:?}");
+        assert!(unknown.iter().any(|k| k.ends_with("capp")), "{unknown:?}");
+        assert!(
+            unknown.contains(&"repository.future_key".to_owned()),
+            "{unknown:?}"
+        );
+        let (_, none) = Config::parse_with_unknown("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
+        assert!(none.is_empty(), "{none:?}");
+    }
+
+    #[test]
+    fn syntax_errors_still_name_the_file() {
+        let text = DOCUMENT_EXAMPLES.replace("cap = 400", "cap = = 400");
         let error = Config::parse("ignite.toml", &text).unwrap_err();
         assert_eq!(error.file, "ignite.toml");
-        assert!(error.message.contains("capp"), "{error}");
     }
 
     #[test]

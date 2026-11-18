@@ -238,7 +238,15 @@ fn read_config(repo: &Path) -> Result<Config> {
     let path = repo.join("ignite.toml");
     let text = std::fs::read_to_string(&path)
         .map_err(|e| Error::Invalid(format!("{}: {e}", path.display())))?;
-    Config::parse(&path.to_string_lossy(), &text).map_err(|e| Error::Invalid(e.to_string()))
+    let (config, unknown) = Config::parse_with_unknown(&path.to_string_lossy(), &text)
+        .map_err(|e| Error::Invalid(e.to_string()))?;
+    for key in unknown {
+        eprintln!(
+            "ignite: {}: ignoring the unknown key {key}; a newer Ignite may know it",
+            path.display()
+        );
+    }
+    Ok(config)
 }
 
 /// Every `*.toml` in the repository's manifest directory, parsed together.
@@ -255,5 +263,10 @@ fn read_manifest(repo: &Path, config: &Config) -> std::result::Result<Manifest, 
         }
     }
     files.sort();
-    Manifest::from_files(&files).map_err(|e| e.to_string())
+    let (manifest, unknown) =
+        Manifest::from_files_with_unknown(&files).map_err(|e| e.to_string())?;
+    for key in unknown {
+        eprintln!("ignite: ignoring the unknown manifest key {key}; a newer Ignite may know it");
+    }
+    Ok(manifest)
 }
