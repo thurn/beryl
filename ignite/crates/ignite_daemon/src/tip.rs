@@ -326,6 +326,7 @@ impl TipVerifier {
     /// Verifies one tip: runs what its set still needs, then moves `master`, reports failures
     /// or waits. A round that ran sends the hub a record of where its time went.
     pub fn verify(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
+        crate::steps::step(format!("verifying tip {tip}"));
         let last = ctx.git.tip(&ctx.config.repository.master)?;
         if last == *tip {
             // `master` already holds the tip: another machine verified it, or someone pushed it

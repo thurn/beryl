@@ -115,10 +115,15 @@ impl TipVerifier {
             ended: Mutex::new(None),
             runs: Mutex::new(Vec::new()),
         };
+        // Each family's thread works for the round's activity, so its builds run in the `tip`
+        // class and `ignite status` shows which family it is on.
+        let activity = crate::steps::current();
         thread::scope(|scope| {
             for _ in 0..self.work.parallel().max(1) {
                 scope.spawn(|| {
+                    let _entered = activity.as_ref().map(crate::steps::Activity::enter);
                     while let Some((family, batches)) = round.next() {
+                        crate::steps::step(format!("verifying family {family}"));
                         let claim = |batch: u32| round.claim(&family, batch);
                         let (runs, _) = self.work.run_batches(ctx, tip, &family, &batches, &claim);
                         lock(&round.runs).extend(runs);

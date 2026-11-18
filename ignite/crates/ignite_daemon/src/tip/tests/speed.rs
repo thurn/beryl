@@ -121,3 +121,35 @@ fn a_tip_master_already_holds_is_recorded_as_verified() {
     assert_eq!(states[0].commit, tip);
     assert_eq!(states[0].state, TipState::Verified);
 }
+
+/// The builds of a tip round's families ran as `agent` work, because the threads that run the
+/// families did not carry the round's activity. Each family's thread now works for the round.
+#[test]
+fn families_run_in_the_rounds_class() {
+    use crate::steps::{Kind, Steps, Work};
+    use ignite_core::protocol::Class;
+
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    *world.work.parallel.lock().unwrap() = 2;
+    world.work.set_checks(
+        &tip,
+        vec![in_family("a", 'a', "alpha"), in_family("b", 'b', "beta")],
+    );
+    let steps = Steps::new(world.clock.clone());
+    let round = steps.begin(
+        Kind::Loop("ignite-tip".to_owned()),
+        Work {
+            class: Some(Class::Tip),
+            ..Work::default()
+        },
+    );
+    let _entered = round.enter();
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    let classes = world.work.classes.lock().unwrap().clone();
+    assert_eq!(classes, vec![Some(Class::Tip), Some(Class::Tip)]);
+}

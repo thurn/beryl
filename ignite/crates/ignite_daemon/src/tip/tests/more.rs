@@ -285,3 +285,69 @@ fn a_failed_culprit_search_still_reports_the_range_and_records_the_tip() {
         TipState::Failed
     );
 }
+
+/// Checks held back by one cause went to the hub one report per check, and the hub filed a
+/// ticket for each. They now go in one report that lists and counts them.
+#[test]
+fn checks_of_one_family_that_stay_incomplete_are_reported_together() {
+    let (world, tip) = world_at(vec![check("a", 'a'), check("b", 'b'), check("c", 'c')]);
+    let ctx = world.ctx("m-1");
+    for c in ["unit:a", "unit:b"] {
+        world.work.set_outcome(&tip, &name(c), Outcome::Incomplete);
+    }
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    let reports = world.hub.incomplete_reports();
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    assert_eq!(reports[0].reason, IncompleteReason::Unreported);
+    assert_eq!(reports[0].count, 2);
+    assert_eq!(reports[0].checks, vec![name("unit:a"), name("unit:b")]);
+}
+
+#[test]
+fn checks_with_one_invalid_manifest_entry_are_reported_together() {
+    let (world, tip) = world_at(vec![check("a", 'a')]);
+    let ctx = world.ctx("m-1");
+    let invalid = |check: &str, why: &str| Unlisted {
+        name: name(check),
+        family: "allocations".to_owned(),
+        message: format!("the inputs of {check} cannot be resolved: invalid: {why}"),
+        reportable: true,
+        platforms: Vec::new(),
+    };
+    world.work.unlisted.lock().unwrap().insert(
+        tip.clone(),
+        vec![
+            invalid(
+                "allocations:bench",
+                "crate-closure: the check belongs to no package",
+            ),
+            invalid(
+                "allocations:search",
+                "crate-closure: the check belongs to no package",
+            ),
+            invalid("allocations:other", "x/*.rs: matches no tracked file"),
+        ],
+    );
+    let mut verifier = world.verifier();
+
+    verifier.verify(&ctx, &tip).unwrap();
+    verifier.verify(&ctx, &tip).unwrap();
+
+    let reports = world.hub.incomplete_reports();
+    assert_eq!(reports.len(), 2, "one per message, told once: {reports:?}");
+    assert!(
+        reports
+            .iter()
+            .all(|r| r.reason == IncompleteReason::InvalidEntry)
+    );
+    assert_eq!(
+        reports[0].checks,
+        vec![name("allocations:bench"), name("allocations:search")]
+    );
+    assert_eq!(
+        reports[0].output,
+        "invalid: crate-closure: the check belongs to no package"
+    );
+}

@@ -50,6 +50,8 @@ pub(super) struct FakeWork {
     pub(super) covered_by: Mutex<BTreeMap<String, String>>,
     /// The clock that each command the work launches moves on by the time it took.
     pub(super) clock: Mutex<Option<Arc<FakeClock>>>,
+    /// The class each run saw from the thread's current activity.
+    pub(super) classes: Mutex<Vec<Option<ignite_core::protocol::Class>>>,
 }
 
 impl FakeWork {
@@ -149,6 +151,7 @@ impl TipWork for FakeWork {
     }
 
     fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {
+        self.classes.lock().unwrap().push(crate::steps::class());
         let wanted = *self.parallel.lock().unwrap();
         if wanted > 1 {
             let mut active = self.active.lock().unwrap();

@@ -263,6 +263,7 @@ impl Checks {
                 },
             });
         }
+        let _listing = crate::steps::during(format!("listing family {name} in {}", tree.id));
         // `list` may read what a product builds, so it waits for the products it needs.
         let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
         let who = execute::build_for(options);

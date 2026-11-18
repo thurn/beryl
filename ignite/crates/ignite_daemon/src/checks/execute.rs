@@ -392,6 +392,7 @@ impl Checks {
         checks: &[Keyed],
         options: &RunOptions,
     ) -> (Vec<Reported>, RunResult, Option<RecordId>) {
+        let _running = crate::steps::during(format!("running {} checks of {name}", checks.len()));
         match family.adapter {
             Adapter::Jsonl => {
                 let file = self.settings.outputs.join(format!(
