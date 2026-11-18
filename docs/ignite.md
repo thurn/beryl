@@ -2199,6 +2199,12 @@ release branch when Ignite blocks its own landing.
 - The one fault nothing automatic repairs is a missing dispatcher: only a turn a
   person started can start sessions. The daemon posts a notification when the
   dispatcher stops answering.
+- A person can also declare an emergency by invoking the `/ignite-justiciar`
+  skill in any session. That session files or claims the justiciar ticket,
+  pauses the pool on every machine (`ignite pool pause --all`), orders every
+  session holding a ticket to stop where it is (`ignite tell --all`), fixes the
+  fault first and validates afterwards, and sends the all-clear. Only it or the
+  person ends the emergency.
 
 ### Planning
 

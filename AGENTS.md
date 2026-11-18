@@ -106,7 +106,9 @@ situation, and a command names the topic when it applies.
 - Every change, whoever makes it, starts with `ignite start <ticket>` (or
   `ignite start "<summary>"` for a task with no ticket) and lands with
   `ignite land`. Work only in the build tree it prints. Never edit or commit in
-  the main checkout, and never push to `master` or `staging` yourself.
+  the main checkout, and never push to `master` or `staging` yourself. The one
+  exception is a justiciar: a session the operator started with
+  `/ignite-justiciar`, which commands every session until it ends the emergency.
 - **Session titles show status**: `⚒️ [<ticket>] <short summary>` while working,
   `🚒` instead while working a regression ticket (a check that tip verification
   found failing, which holds `master` back), `🔍` while waiting on the person's
