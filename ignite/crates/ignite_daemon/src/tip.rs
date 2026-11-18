@@ -40,6 +40,7 @@
 
 mod cache;
 mod covered;
+mod culprit;
 mod families;
 mod meter;
 mod report;
@@ -56,10 +57,9 @@ use std::sync::Arc;
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Seq, TicketId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{
-    IncompleteReason, RegressionReport, ResultKey, TipState, TipVerified, TipWaiting,
-};
+use ignite_core::protocol::hub::{IncompleteReason, ResultKey, TipState, TipVerified, TipWaiting};
 use ignite_core::time::Timestamp;
+use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::{Push, Result};
 
 use crate::checks::Scoring;
@@ -133,6 +133,21 @@ pub struct Unlisted {
 pub struct TipSet {
     pub checks: Vec<TipCheck>,
     pub unlisted: Vec<Unlisted>,
+    /// The checks this machine could run that the hub has switched off as flaky. The tip
+    /// needs none of them, but batches are cut over them too: the hub can switch a check off
+    /// partway through a round, and a machine that listed the family after that must still
+    /// cut the same batches as one that listed it before.
+    pub off: Vec<TipCheck>,
+}
+
+/// A check that batches are cut over: every check this machine can run that the family
+/// listed at the tip, whether the tip needs it or not.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Listed {
+    family: String,
+    check: CheckName,
+    /// The check passes on any platform, so its family is not one only this platform runs.
+    portable: bool,
 }
 
 /// One landing: one ticket's commits, oldest first, and the paths they changed.
@@ -232,6 +247,8 @@ pub struct Culprit {
     pub last_good: Commit,
     /// How many times the check ran during the search.
     pub runs: u32,
+    /// How the search ended, which the regression ticket states.
+    pub search: CulpritSearch,
 }
 
 /// Verifies tips one round at a time. The daemon keeps one and calls [`TipVerifier::round`] in
@@ -258,6 +275,8 @@ pub struct TipVerifier {
     /// The output references that runs on this machine returned in this round. Only these are
     /// opened to quote a failure's last lines.
     own_outputs: HashSet<String>,
+    /// The checks this round cuts its batches over (see [`Listed`]).
+    listed: Vec<Listed>,
     /// When this machine may run a check that gave up again, by its key: an hour after the first
     /// time, then twice as long each time, up to a day.
     held_off: HashMap<ResultKey, Timestamp>,
@@ -286,6 +305,7 @@ impl TipVerifier {
             waiting_since: BTreeMap::new(),
             flagged: HashSet::new(),
             own_outputs: HashSet::new(),
+            listed: Vec::new(),
             held_off: HashMap::new(),
             incomplete_runs: HashMap::new(),
             reported_incomplete: HashSet::new(),
@@ -371,7 +391,23 @@ impl TipVerifier {
         tally: &mut meter::Tally,
     ) -> Result<TipOutcome> {
         self.own_outputs.clear();
-        let TipSet { checks, unlisted } = self.work.checks(ctx, tip)?;
+        let TipSet {
+            checks,
+            unlisted,
+            off,
+        } = self.work.checks(ctx, tip)?;
+        // Batches are cut over the listing alone, before checks switched off as flaky or
+        // covered by another family are left out, so that every machine cuts them alike.
+        self.listed = checks
+            .iter()
+            .chain(&off)
+            .filter(|c| c.runnable)
+            .map(|c| Listed {
+                family: c.family.clone(),
+                check: c.check.clone(),
+                portable: c.key.platform.is_none(),
+            })
+            .collect();
         let checks = covered::drop_covered(checks, &self.work.covered_by());
         let now = ctx.clock.now();
         let keys: Vec<ResultKey> = checks.iter().map(|c| c.key.clone()).collect();
@@ -412,7 +448,7 @@ impl TipVerifier {
         // The tip budget: the best-scored checks run before `master` moves, the rest after.
         let split = self.split(ctx, last, tip, &to_run, &recheck);
         tally.budget.clone_from(&split.budget);
-        let (superseded, runs) = self.run_families(ctx, tip, &checks, &split.within)?;
+        let (superseded, runs) = self.run_families(ctx, tip, &split.within)?;
         if let Some(by) = superseded {
             return Ok(TipOutcome::Superseded { by });
         }
@@ -539,145 +575,6 @@ impl TipVerifier {
             })?;
             self.flagged.insert((tip.clone(), platform));
         }
-        Ok(())
-    }
-
-    /// The landing between `good` and `bad` that made `check` fail, or the range of landings a
-    /// search that ran out of runs ended with. `None` when no commit lies between them.
-    pub fn find_culprit(
-        &self,
-        ctx: &Context,
-        check: &TipCheck,
-        good: &Commit,
-        bad: &Commit,
-    ) -> Result<Option<Culprit>> {
-        let landings = self.work.landings(ctx, good, bad)?;
-        if landings.is_empty() {
-            return Ok(None);
-        }
-        let touching: Vec<usize> = (0..landings.len())
-            .filter(|&i| touches(&landings[i].paths, &check.inputs))
-            .collect();
-        // A failure that no landing explains (a changed toolchain, say) blames every landing.
-        let candidates: Vec<usize> = if touching.is_empty() {
-            (0..landings.len()).collect()
-        } else {
-            touching
-        };
-        // Only candidates change what the check reads, so its result can change only at a
-        // candidate's last commit. Position `i` is "after the i-th candidate": 0 passes, as
-        // `good` did, and `candidates.len()` fails, as `bad` did.
-        let after = |i: usize| -> Option<Commit> { landings[candidates[i - 1]].last().cloned() };
-        let (mut low, mut high, mut runs) = (0, candidates.len(), 0);
-        while high - low > 1 && runs < MAX_RUNS {
-            let middle = usize::midpoint(low, high);
-            let Some(at) = after(middle) else { break };
-            let outcome = self
-                .work
-                .run(ctx, &at, std::slice::from_ref(&check.check), false)
-                .into_iter()
-                .find(|r| r.check == check.check)
-                .map(|r| r.outcome);
-            runs += 1;
-            match outcome {
-                Some(Outcome::Pass | Outcome::Flaky) => low = middle,
-                Some(Outcome::Fail) => high = middle,
-                // A run that says nothing cannot narrow the range.
-                Some(Outcome::Incomplete) | None => break,
-            }
-        }
-        let first_suspect = candidates[low];
-        let last_good = match first_suspect.checked_sub(1) {
-            Some(previous) => landings[previous].last().cloned(),
-            None => Some(good.clone()),
-        };
-        let (Some(first_bad), Some(last_good)) = (after(high), last_good) else {
-            return Ok(None);
-        };
-        let suspects = candidates[low..high]
-            .iter()
-            .map(|&i| landings[i].clone())
-            .collect();
-        Ok(Some(Culprit {
-            suspects,
-            first_bad,
-            last_good,
-            runs,
-        }))
-    }
-
-    /// Finds the culprit of a check that failed at `tip` and reports the regression, unless a
-    /// newer tip changed the check's inputs (its next round runs the check there first) or this
-    /// failure was reported already.
-    ///
-    /// A check only another platform can run is left to that platform's machines: a search here
-    /// would run this platform's version of the check, which passes at every commit, and blame
-    /// the newest candidate whatever the real culprit.
-    fn blame(
-        &mut self,
-        ctx: &Context,
-        last: &Commit,
-        tip: &Commit,
-        check: &TipCheck,
-        output: Option<&str>,
-    ) -> Result<()> {
-        if !check.runnable || self.reported.contains(&check.key) {
-            return Ok(());
-        }
-        // Where git cannot say, the failure is reported, which at worst repeats a report.
-        let newest = ctx
-            .git
-            .tip(&ctx.config.repository.staging)
-            .unwrap_or_else(|_| tip.clone());
-        if newest != *tip
-            && ctx
-                .git
-                .changed(tip, &newest)
-                .is_ok_and(|changed| touches(&changed, &check.inputs))
-        {
-            return Ok(());
-        }
-        // A failing check at a tip is always reported. With no landing to blame (the hub
-        // recorded none between the commits), the report names the whole range since the last
-        // verified commit and no ticket.
-        let culprit = self
-            .find_culprit(ctx, check, last, tip)
-            .unwrap_or_else(|error| {
-                eprintln!("ignite: no culprit found for {}: {error}", check.check);
-                None
-            });
-        let (first_bad, last_good, caused_by, suspects) = match culprit {
-            Some(culprit) => {
-                let tickets: Vec<TicketId> = culprit
-                    .suspects
-                    .iter()
-                    .filter_map(|l| l.ticket.clone())
-                    .collect();
-                if culprit.suspects.len() == 1 {
-                    (
-                        culprit.first_bad,
-                        culprit.last_good,
-                        tickets.into_iter().next(),
-                        Vec::new(),
-                    )
-                } else {
-                    (culprit.first_bad, culprit.last_good, None, tickets)
-                }
-            }
-            None => (tip.clone(), last.clone(), None, Vec::new()),
-        };
-        ctx.hub.regression(&RegressionReport {
-            check: check.check.clone(),
-            first_bad,
-            last_good,
-            caused_by,
-            output: output
-                .map(|o| tail(o, &self.own_outputs))
-                .unwrap_or_default(),
-            suspects,
-            platform: check.key.platform,
-        })?;
-        self.reported.insert(check.key.clone());
         Ok(())
     }
 }

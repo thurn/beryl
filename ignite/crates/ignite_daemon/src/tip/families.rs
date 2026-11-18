@@ -1,11 +1,13 @@
 //! Running a round's checks: each family's batches from one listing, several families at once.
 //!
-//! A family's batches are cut from every check of the family the tip needs on this platform,
+//! A family's batches are cut from every check of the family this platform lists at the tip,
 //! not only those this machine still has to run, with the costs the hub fixed for the tip
-//! ([`ignite_core::tipround`]). So every machine cuts the same batches, and a batch number
-//! names the same checks on each, however many of them another machine has run meanwhile. A
-//! batch is then run for the checks in it that still need a run here, and one with none is not
-//! claimed.
+//! ([`ignite_core::tipround`]). Checks the hub switched off as flaky and checks another family
+//! covers are cut over too, so a check switched off partway through a round does not shift
+//! the batches of a machine that listed the family after it. So every machine cuts the same
+//! batches, and a batch number names the same checks on each, however many of them another
+//! machine has run meanwhile. A batch is then run for the checks in it that still need a run
+//! here, and one with none is not claimed.
 //!
 //! The batches are claimed from the hub one at a time, right before each runs, so two machines
 //! never run the same batch and a claim never lapses while its batch waits. Families run on up
@@ -22,7 +24,7 @@ use ignite_core::protocol::hub::TipClaim;
 use ignite_core::tipround::{self, TipCosts, TipCostsRequest};
 use ignite_core::traits::Result;
 
-use super::{TipCheck, TipRun, TipVerifier};
+use super::{Listed, TipCheck, TipRun, TipVerifier};
 use crate::server::Context;
 
 /// One family's batches, in the order every machine cuts them.
@@ -94,22 +96,22 @@ impl Round<'_> {
 }
 
 impl TipVerifier {
-    /// Runs `to_run`, some of the tip's `checks`, at `tip` and returns the runs. While no batch has run yet (another machine
-    /// holds them all, say), a newer `staging` tip ends the round and is returned instead, so
-    /// the next round verifies it. A round that has run a batch finishes, so a shared input
-    /// that every landing changes cannot keep any tip from being verified.
+    /// Runs `to_run`, some of the tip's checks, at `tip` and returns the runs, in batches cut
+    /// over the round's listing. While no batch has run yet (another machine holds them all,
+    /// say), a newer `staging` tip ends the round and is returned instead, so the next round
+    /// verifies it. A round that has run a batch finishes, so a shared input that every
+    /// landing changes cannot keep any tip from being verified.
     pub(super) fn run_families(
         &self,
         ctx: &Context,
         tip: &Commit,
-        checks: &[TipCheck],
         to_run: &[&TipCheck],
     ) -> Result<(Option<Commit>, Vec<TipRun>)> {
         let costs = |family: &str| family_costs(ctx, tip, family);
         let round = Round {
             ctx,
             tip,
-            queue: Mutex::new(by_family(batches(checks, to_run, &costs)).into()),
+            queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
             started: Mutex::new(0),
             ran_a_batch: AtomicBool::new(false),
             ended: Mutex::new(None),
@@ -173,25 +175,24 @@ fn family_costs(ctx: &Context, tip: &Commit, family: &str) -> TipCosts {
 }
 
 /// The checks to run, in claimable batches. Each family that has a check to run is cut from
-/// all its runnable checks in `checks`, sorted by name, with the costs `costs` gives for it, so
-/// every machine cuts the same batches; each batch keeps only the checks in `to_run`, and a
-/// batch left empty is dropped with its number. Families with checks only this machine's
-/// platform can run come first.
+/// all its checks in `listed`, sorted by name, with the costs `costs` gives for it, so every
+/// machine cuts the same batches; each batch keeps only the checks in `to_run`, and a batch
+/// left empty is dropped with its number. Families with checks only this machine's platform
+/// can run come first.
 fn batches(
-    checks: &[TipCheck],
+    listed: &[Listed],
     to_run: &[&TipCheck],
     costs: &dyn Fn(&str) -> TipCosts,
 ) -> Vec<(String, u32, Vec<CheckName>)> {
     let wanted: HashSet<&CheckName> = to_run.iter().map(|c| &c.check).collect();
     let working: HashSet<&str> = to_run.iter().map(|c| c.family.as_str()).collect();
     let mut families: BTreeMap<(bool, &str), Vec<CheckName>> = BTreeMap::new();
-    for check in checks {
-        if !check.runnable || !working.contains(check.family.as_str()) {
+    for check in listed {
+        if !working.contains(check.family.as_str()) {
             continue;
         }
-        let portable = check.key.platform.is_none();
         families
-            .entry((portable, check.family.as_str()))
+            .entry((check.portable, check.family.as_str()))
             .or_default()
             .push(check.check.clone());
     }

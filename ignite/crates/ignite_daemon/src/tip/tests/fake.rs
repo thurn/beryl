@@ -57,6 +57,8 @@ pub(super) struct FakeWork {
     pub(super) scoring: Mutex<Option<crate::checks::Scoring>>,
     /// Where `master` was when each run started, with the checks it ran.
     pub(super) masters: Mutex<Vec<(Vec<CheckName>, Commit)>>,
+    /// The checks each commit's listing finds switched off.
+    pub(super) off: Mutex<HashMap<Commit, Vec<TipCheck>>>,
 }
 
 impl FakeWork {
@@ -71,6 +73,20 @@ impl FakeWork {
 
     pub(super) fn set_checks(&self, at: &Commit, checks: Vec<TipCheck>) {
         self.checks.lock().unwrap().insert(at.clone(), checks);
+    }
+
+    /// Switches `check` off in the listing at `at`, as the hub's flaky switch does.
+    pub(super) fn switch_off(&self, at: &Commit, check: &CheckName) {
+        let mut checks = self.checks.lock().unwrap();
+        let listed = checks.entry(at.clone()).or_default();
+        let index = listed.iter().position(|c| c.check == *check).unwrap();
+        let off = listed.remove(index);
+        self.off
+            .lock()
+            .unwrap()
+            .entry(at.clone())
+            .or_default()
+            .push(off);
     }
 
     pub(super) fn set_outcome(&self, at: &Commit, check: &CheckName, outcome: Outcome) {
@@ -139,6 +155,13 @@ impl TipWork for FakeWork {
             checks: self.listed(at),
             unlisted: self
                 .unlisted
+                .lock()
+                .unwrap()
+                .get(at)
+                .cloned()
+                .unwrap_or_default(),
+            off: self
+                .off
                 .lock()
                 .unwrap()
                 .get(at)

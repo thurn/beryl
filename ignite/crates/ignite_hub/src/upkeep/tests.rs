@@ -14,6 +14,7 @@ use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, Operation, Status, Ticket, TicketFields, TicketQuery, TicketType,
 };
 use ignite_core::time::Timestamp;
+use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::Clock;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{self, checks, fleet, results, rows, tickets, tips};
@@ -94,6 +95,7 @@ fn regression(first_bad: &str, output: &str) -> RegressionReport {
         output: output.to_owned(),
         suspects: Vec::new(),
         platform: None,
+        search: None,
     }
 }
 
@@ -168,10 +170,24 @@ fn a_range_links_every_suspect_and_a_platform_check_needs_its_system() {
         .map(|id| TicketId::new(id).unwrap())
         .collect();
     report.platform = Some(Os::Macos);
+    report.search = Some(CulpritSearch::EndedEarly {
+        runs: 1,
+        candidates: 2,
+        why: "a run at 0000aaa was incomplete".to_owned(),
+    });
     let (id, _) = regressions::file(&mut conn, UPKEEP, &report, clock.now()).unwrap();
     let filed = ticket(&conn, &id);
     assert!(filed.labels.contains(&"needs:macos".to_owned()));
     assert!(filed.body.contains("failed on macos"));
+    // The ticket says the range is a range, so its first bad commit is not read as the culprit.
+    assert!(
+        filed.body.contains(
+            "culprit: the search ended early after 1 run, with 2 candidate landings, because a \
+             run at 0000aaa was incomplete"
+        ),
+        "{}",
+        filed.body
+    );
     let linked: Vec<String> = conn
         .prepare("SELECT dst FROM edges WHERE src = ?1 ORDER BY dst")
         .unwrap()

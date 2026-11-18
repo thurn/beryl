@@ -507,6 +507,9 @@ pub struct RegressionReport {
     /// The operating system the check failed on, for a check that is not portable.
     #[serde(default)]
     pub platform: Option<Os>,
+    /// How the culprit search ended; `None` from a daemon built before it said.
+    #[serde(default)]
+    pub search: Option<crate::tipround::CulpritSearch>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

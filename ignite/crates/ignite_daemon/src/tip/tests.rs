@@ -289,6 +289,7 @@ fn the_one_landing_that_touched_a_failed_checks_inputs_is_blamed_without_a_run()
     assert_eq!(report.first_bad, commit("cccc000"));
     assert_eq!(report.last_good, commit("bbbb111"));
     assert!(report.suspects.is_empty());
+    assert_eq!(report.search, Some(CulpritSearch::OneCandidate));
     assert_eq!(report.output, "unit:a failed");
     assert_eq!(
         world.hub.tip_states().last().unwrap().state,
@@ -350,6 +351,14 @@ fn a_search_that_cannot_narrow_reports_the_range() {
     assert_eq!(
         report.suspects,
         vec![ticket("tk.1"), ticket("tk.2"), ticket("tk.3")]
+    );
+    assert_eq!(
+        report.search,
+        Some(CulpritSearch::EndedEarly {
+            runs: 1,
+            candidates: 3,
+            why: "the run at bbbb000 was incomplete".to_owned()
+        })
     );
     assert_eq!(report.first_bad, commit("dddd000"));
     assert_eq!(report.last_good, commit("aaaa000"));
@@ -590,6 +599,10 @@ fn a_failure_with_no_landing_between_the_commits_still_reports_the_range() {
     assert_eq!(reports[0].last_good, commit("aaaa000"));
     assert_eq!(reports[0].caused_by, None);
     assert!(reports[0].suspects.is_empty());
+    assert!(matches!(
+        reports[0].search,
+        Some(CulpritSearch::NotRun { .. })
+    ));
 }
 
 fn scratch_file(text: &str) -> PathBuf {
@@ -656,6 +669,7 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
 }
 
 mod budget;
+mod culprit;
 mod more;
 mod rounds;
 mod speed;

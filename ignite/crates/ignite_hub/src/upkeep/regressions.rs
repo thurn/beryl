@@ -166,6 +166,10 @@ pub fn details(report: &RegressionReport) -> String {
             suspects.join(", ")
         );
     }
+    // Without this line a range read as if its newest commit were the culprit.
+    if let Some(search) = &report.search {
+        let _ = writeln!(text, "culprit: {}", search.words());
+    }
     let _ = writeln!(
         text,
         "first bad {}, last good {}",

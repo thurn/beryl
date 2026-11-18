@@ -119,7 +119,13 @@ impl TipWork for CheckTipWork {
 }
 
 /// Groups `commits`, oldest first, into landings by the ticket the hub says landed each one.
-/// A run of commits no landing recorded, such as a push by hand, is a landing with no ticket.
+/// Each commit no landing recorded, such as a push by hand, is a landing of its own with no
+/// ticket.
+///
+/// Grouping a run of unrecorded commits into one landing made a culprit search see one
+/// candidate where there were dozens: the commits pushed before the hub recorded landings were
+/// all blamed at once, with nothing run, and the regression ticket named the tip as the first
+/// bad commit.
 pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec<TipLanding>> {
     let shas: Vec<Commit> = commits.iter().map(|c| c.commit.clone()).collect();
     let owners: HashMap<Commit, TicketId> = ctx
@@ -130,7 +136,7 @@ pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec
         .collect();
     let owner = |i: usize| owners.get(&shas[i]);
     let ends: Vec<Commit> = (0..shas.len())
-        .filter(|&i| i + 1 == shas.len() || owner(i) != owner(i + 1))
+        .filter(|&i| i + 1 == shas.len() || owner(i).is_none() || owner(i) != owner(i + 1))
         .map(|i| shas[i].clone())
         .collect();
     Ok(ignite_git::changed::group(commits, &ends)

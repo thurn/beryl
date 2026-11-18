@@ -11,7 +11,9 @@
 //!   build joined while another command runs it counts too.
 //!
 //! When the round ends it sends one [`TipRound`] to the hub, which files an improvement ticket
-//! when too much of the round went to anything but checks and builds.
+//! when too much of the round went to listing and to Ignite's own work between commands. Time
+//! spent waiting for cores is counted and shown but files nothing (see
+//! [`TipRound::overhead`]).
 
 use std::sync::{Arc, Mutex, PoisonError};
 

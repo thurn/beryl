@@ -237,6 +237,7 @@ mod tests {
             output: "boom".to_owned(),
             suspects: Vec::new(),
             platform: None,
+            search: None,
         }
     }
 

@@ -188,6 +188,38 @@ fn two_daemons_given_the_same_tip_cut_identical_batches() {
     );
 }
 
+/// A check switched off as flaky after one machine cut its batches must not shift the
+/// batches of a machine that lists the family afterwards: its batch 0 would then take in a
+/// check of the first machine's batch 1, which would run on both machines at once.
+#[test]
+fn a_check_switched_off_mid_round_leaves_the_batches_alone() {
+    let world = World::new();
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    let checks = costed(&world, 6, 30.0);
+    let names: Vec<CheckName> = checks.iter().map(|c| c.check.clone()).collect();
+    world.work.set_checks(&tip, checks);
+    // m-1 cut the family into three batches of two and holds batches 1 and 2, which it has
+    // not run yet.
+    for batch in [1, 2] {
+        let claim = TipClaim {
+            commit: tip.clone(),
+            family: "unit".to_owned(),
+            batch,
+            machine: MachineId::new("m-1").unwrap(),
+        };
+        assert!(world.hub.tip_claim(&claim).unwrap().granted);
+    }
+    // The hub switches the second check off before m-2 lists the family.
+    world.work.switch_off(&tip, &names[1]);
+
+    let outcome = world.verifier().verify(&world.ctx("m-2"), &tip).unwrap();
+
+    assert!(matches!(outcome, TipOutcome::Waiting { .. }), "{outcome:?}");
+    let runs: Vec<Vec<CheckName>> = world.work.runs().into_iter().map(|r| r.2).collect();
+    assert_eq!(runs, [names[0..1].to_vec()]);
+}
+
 fn took(wall_s: f64, queued_s: f64) -> RunResult {
     RunResult {
         exit: Some(0),

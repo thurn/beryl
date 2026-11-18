@@ -107,7 +107,7 @@ impl TipVerifier {
             "ignite: master is at {tip}; running the {} checks past the tip budget",
             split.after.len()
         );
-        let (superseded, runs) = self.run_families(ctx, tip, checks, &split.after)?;
+        let (superseded, runs) = self.run_families(ctx, tip, &split.after)?;
         tally.ran = tally
             .ran
             .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));

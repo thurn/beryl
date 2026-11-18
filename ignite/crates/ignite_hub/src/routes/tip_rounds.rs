@@ -2,9 +2,10 @@
 //!
 //! - `POST /tips/costs` answers the check costs and claim length a round at one tip cuts one
 //!   family's batches by, frozen at the first request, so every machine cuts the same batches.
-//! - `POST /tips/rounds` stores one finished round. When too much of the round went to anything
-//!   but checks and builds ([`TipRound::overhead`]), it files one improvement ticket naming the
-//!   largest part, or reuses the open one.
+//! - `POST /tips/rounds` stores one finished round. When too much of the round went to listing
+//!   and Ignite's own work ([`TipRound::overhead`]), it files one improvement ticket naming the
+//!   larger part, or reuses the open one. Waiting for cores never files: the `tip` class yields
+//!   to landings by design.
 //! - `GET /tips/rounds/last` answers the newest round, for `ignite status`.
 //! - `GET /rates` answers each class's rate of check commands for today, which converts the
 //!   gate's and the tip's budgets from seconds to instructions. It is computed on the first
@@ -91,7 +92,8 @@ fn record(
     let percent = (share * 100.0).round();
     let body = format!(
         "Tip verification round at {commit} on {machine} spent {percent:.0}% of its time \
-         {part}, and more than {limit:.0}% on work other than running checks and building. \
+         {part}, and more than {limit:.0}% on listing families and Ignite's own work between \
+         commands (waiting for cores is reported apart and counts for neither). \
          Find what makes that part slow and cut it, as \"How long a round takes\" in \
          docs/ignite.md describes.\n\nThe round: {summary}.",
         commit = round.commit,

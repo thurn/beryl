@@ -114,19 +114,24 @@ impl Checks {
                     .as_ref()
                     .and_then(|s| s.checks.iter().find(|c| c.check == keyed.listed.check))
                     .map_or(CheckState::On, |c| c.state);
-                if state == CheckState::Off {
-                    continue;
-                }
+                // A check switched off is not needed, but the one this machine would run is
+                // kept apart: tip verification cuts its batches over it too.
+                let off = state == CheckState::Off;
                 let inputs: Vec<String> = keyed.inputs.iter().map(|(p, _)| p.clone()).collect();
                 let mut push = |key: ResultKey, runnable: bool| {
-                    set.checks.push(TipCheck {
+                    let check = TipCheck {
                         check: keyed.listed.check.clone(),
                         family: prepared.family.clone(),
                         key,
                         inputs: inputs.clone(),
                         runnable,
                         reuse: state == CheckState::On,
-                    });
+                    };
+                    match (off, runnable) {
+                        (false, _) => set.checks.push(check),
+                        (true, true) => set.off.push(check),
+                        (true, false) => {}
+                    }
                 };
                 let mut mine = false;
                 for platform in &platforms {

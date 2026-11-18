@@ -13,9 +13,15 @@
 //!   checks first, and moves `master` once they pass; the rest run afterwards
 //!   ([`RoundBudget`]). See "Tip verification" in `docs/ignite.md`.
 //! - **Where a round's time went.** Each round sends one [`TipRound`] when it ends. A round in
-//!   which more than [`OVERHEAD_SHARE`] of the time went to anything but checks and builds, and
-//!   that took at least [`SMALLEST_ROUND_S`], asks the hub for an improvement ticket naming the
-//!   largest part ([`TipRound::overhead`]).
+//!   which more than [`OVERHEAD_SHARE`] of the time went to listing families and Ignite's own
+//!   work between commands, and that took at least [`SMALLEST_ROUND_S`], asks the hub for an
+//!   improvement ticket naming the larger part ([`TipRound::overhead`]). Time spent waiting for
+//!   cores is reported apart and never files a ticket: the round runs in the `tip` class, so it
+//!   waits by design whenever landings or agents hold the cores, and nothing in the round can
+//!   cut that wait.
+//! - **How a culprit search ended.** A regression report says whether the search found one
+//!   landing, ran out of runs, or never ran ([`CulpritSearch`]), so its ticket never presents a
+//!   range as if it were the culprit.
 
 use std::collections::BTreeMap;
 
@@ -28,8 +34,8 @@ use crate::time::Timestamp;
 /// of that family holds twice as many as the one before.
 pub const UNMEASURED_BATCH: usize = 50;
 
-/// The share of a round's time that may go to anything but checks and builds before the
-/// round asks for an improvement ticket.
+/// The share of a round's time that may go to listing and to Ignite's own work between
+/// commands before the round asks for an improvement ticket.
 pub const OVERHEAD_SHARE: f64 = 0.10;
 
 /// A round shorter than this files nothing, whatever its shares.
@@ -202,11 +208,11 @@ impl RoundBudget {
     }
 }
 
-/// A part of a round's time that is neither running checks nor building.
+/// A part of a round's time that Ignite could cut: neither running checks, nor building, nor
+/// waiting for cores.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Overhead {
     Listing,
-    Waiting,
     /// Everything else: keying checks, asking the hub, claiming batches.
     Other,
 }
@@ -216,7 +222,6 @@ impl Overhead {
     pub fn words(self) -> &'static str {
         match self {
             Overhead::Listing => "listing families",
-            Overhead::Waiting => "waiting for cores",
             Overhead::Other => "Ignite's own work between commands",
         }
     }
@@ -234,9 +239,13 @@ impl TipRound {
         self.checks_s + self.listing_s + self.building_s + self.waiting_s + self.other_s()
     }
 
-    /// The largest part of the round's time that is neither checks nor builds, and its share
-    /// of the whole, when the parts that are neither come to more than [`OVERHEAD_SHARE`] of a
-    /// round of at least [`SMALLEST_ROUND_S`]. `None` otherwise.
+    /// The larger of listing and Ignite's own work, and its share of the whole round, when the
+    /// two come to more than [`OVERHEAD_SHARE`] of a round of at least [`SMALLEST_ROUND_S`].
+    /// `None` otherwise.
+    ///
+    /// Waiting for cores is left out. The round's commands ask for cores in the `tip` class,
+    /// which yields to `land` and `agent` by design, so a round that runs beside landings
+    /// waits whatever the round does. The wait still shows in [`TipRound::summary`].
     pub fn overhead(&self) -> Option<(Overhead, f64)> {
         let total = self.total_s();
         if self.wall_s < SMALLEST_ROUND_S || total <= 0.0 {
@@ -244,7 +253,6 @@ impl TipRound {
         }
         let parts = [
             (Overhead::Listing, self.listing_s),
-            (Overhead::Waiting, self.waiting_s),
             (Overhead::Other, self.other_s()),
         ];
         let overhead: f64 = parts.iter().map(|(_, s)| s).sum();
@@ -295,6 +303,67 @@ pub struct TipRoundFiled {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct LastTipRound {
     pub round: Option<TipRound>,
+}
+
+/// How a culprit search ended, as a regression report carries it (see "Finding the culprit"
+/// in `docs/ignite.md`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CulpritSearch {
+    /// Only one landing between the commits could have changed the result, so it is the
+    /// culprit, and nothing was run.
+    OneCandidate,
+    /// Running the check at commits between the candidates narrowed them to one landing.
+    Bisected { runs: u32 },
+    /// The search ended with several landings: `candidates` of them could have changed the
+    /// result, and `why` says what stopped it.
+    EndedEarly {
+        runs: u32,
+        candidates: u32,
+        why: String,
+    },
+    /// No search ran, for the reason given; the report names the whole range since the last
+    /// verified commit.
+    NotRun { why: String },
+}
+
+impl CulpritSearch {
+    /// The search in one sentence, as the regression ticket says it.
+    pub fn words(&self) -> String {
+        let runs = |runs: u32| {
+            if runs == 1 {
+                "1 run".to_owned()
+            } else {
+                format!("{runs} runs")
+            }
+        };
+        match self {
+            CulpritSearch::OneCandidate => {
+                "the only landing in the range that could change the check's result; nothing \
+                 was run"
+                    .to_owned()
+            }
+            CulpritSearch::Bisected { runs: count } => {
+                format!(
+                    "found by running the check at earlier commits ({})",
+                    runs(*count)
+                )
+            }
+            CulpritSearch::EndedEarly {
+                runs: count,
+                candidates,
+                why,
+            } => format!(
+                "the search ended early after {}, with {candidates} candidate landings, \
+                 because {why}; the culprit is one of the landings between the commits below",
+                runs(*count)
+            ),
+            CulpritSearch::NotRun { why } => format!(
+                "no search ran, because {why}; the culprit is one of the commits between the \
+                 commits below"
+            ),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -377,6 +446,44 @@ mod tests {
         // Ten percent or less files nothing, nor does a short round.
         assert_eq!(round(600.0, 60.0).overhead(), None);
         assert_eq!(round(100.0, 90.0).overhead(), None);
+    }
+
+    /// A round at 08c542cb6 waited 26% of its time for cores while three landings held them
+    /// in the higher `land` class, and filed a ticket asking to cut that wait.
+    #[test]
+    fn waiting_for_cores_never_files_a_ticket() {
+        let mut waited = round(600.0, 10.0);
+        waited.waiting_s = 300.0;
+        waited.checks_s = 290.0;
+        assert_eq!(waited.overhead(), None);
+        assert!(waited.summary().contains("5.0 waiting for cores"));
+        // That round's own figures: its listing and Ignite's own work still come to 26%.
+        let observed = TipRound {
+            checks_s: 36.0,
+            listing_s: 24.0,
+            building_s: 42.0,
+            waiting_s: 42.0,
+            ..round(162.0, 0.0)
+        };
+        let (part, share) = observed.overhead().unwrap();
+        assert_eq!(part, Overhead::Listing);
+        assert!((share - 24.0 / 162.0).abs() < 1e-9, "{share}");
+    }
+
+    #[test]
+    fn a_culprit_search_says_how_it_ended() {
+        assert_eq!(
+            CulpritSearch::Bisected { runs: 1 }.words(),
+            "found by running the check at earlier commits (1 run)"
+        );
+        let ended = CulpritSearch::EndedEarly {
+            runs: 10,
+            candidates: 40,
+            why: "it reached its limit of 10 runs".to_owned(),
+        };
+        let json = serde_json::to_string(&ended).unwrap();
+        assert!(json.contains(r#""kind":"ended_early""#), "{json}");
+        assert_eq!(serde_json::from_str::<CulpritSearch>(&json).unwrap(), ended);
     }
 
     #[test]
