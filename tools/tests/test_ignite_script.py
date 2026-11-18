@@ -14,11 +14,14 @@ from beryl_tools import paths
 from beryl_tools.ignite import script as adapter
 
 MANIFEST: Path = paths.REPO / "ignite" / "checks" / "script.toml"
-FORBIDDEN: list[str] = (
-    "tokens lanes step_runner selection rust_fit python_fit runlog runstore verdicts budget "
-    "hang flaky bisect slow_ci sweep nightly warm caches incidents deadline clock "
-    "check_value checks"
-).split()
+FORBIDDEN: list[str] = [
+    name
+    for name in (
+        "tokens lanes step_runner selection rust_fit python_fit runlog runstore verdicts budget "
+        "hang flaky bisect slow_ci sweep nightly warm caches incidents deadline clock "
+        "check_value checks"
+    ).split()
+]
 
 
 def test_the_manifest_declares_the_three_families_and_their_product() -> None:
