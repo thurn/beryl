@@ -263,3 +263,42 @@ fn a_closed_create_and_a_claim_by_the_holder_behave_as_before() {
     );
     assert_eq!(again.claimed_at, Some(hub.now.plus_seconds(-60.0)));
 }
+
+#[test]
+fn closing_a_ticket_through_a_batch_closes_its_finding() {
+    let mut hub = Hub::new();
+    let reply = hub.batch(json!([
+        create("Improve", None, json!({})),
+        create("Other", None, json!({}))
+    ]));
+    let (improve, other) = (
+        reply.results[0].id.to_string(),
+        reply.results[1].id.to_string(),
+    );
+    for ticket in [&improve, &other] {
+        hub::findings::upsert(
+            &hub.conn,
+            &hub::rows::Finding {
+                rule: "slow-verb".to_owned(),
+                subject: format!("subject-{ticket}"),
+                unit: "seconds".to_owned(),
+                cost: 10.0,
+                saving: 5.0,
+                ticket: Some(ticket.clone()),
+                closed_at: None,
+            },
+        )
+        .unwrap();
+    }
+    hub.batch(json!([{"op": "close", "id": improve, "reason": "done"}]));
+    let closed: Vec<(String, bool)> = hub
+        .conn
+        .prepare("SELECT ticket, closed_at IS NOT NULL FROM findings ORDER BY subject")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(closed.contains(&(improve, true)));
+    assert!(closed.contains(&(other, false)));
+}

@@ -34,6 +34,8 @@ pub mod stuck;
 #[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
+mod stuck_tests;
+#[cfg(test)]
 mod tests;
 
 use std::path::{Path, PathBuf};

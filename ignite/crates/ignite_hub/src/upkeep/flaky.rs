@@ -81,8 +81,12 @@ pub fn switch_off_repeated(conn: &mut Connection, now: Timestamp) -> Result<Flak
             mark_filed(conn, &[first, second], &filed.ticket)?;
             outcome.filed.push(filed);
         } else {
-            checks::set_state(conn, &check, CheckState::Off)?;
+            // The ticket comes first. If filing fails the check stays on and the next pass tries
+            // again; if the process stops between the two, the next pass finds the same records
+            // unmarked, files nothing new (the ticket already holds the evidence) and then
+            // switches the check off.
             let filed = filing::file(conn, UPKEEP, &off_filing(&check, first, second), now)?;
+            checks::set_state(conn, &check, CheckState::Off)?;
             mark_filed(conn, &[first, second], &filed.ticket)?;
             outcome.switched_off.push((check, filed));
         }
