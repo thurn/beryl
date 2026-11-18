@@ -34,11 +34,15 @@ struct Parts {
     waiting_s: f64,
 }
 
-/// How many checks a round ran and how many the cache answered.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// How many checks a round ran and how many the cache answered, and how it split its checks by
+/// the tip budget.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(super) struct Tally {
     pub ran: u32,
     pub cached: u32,
+    pub budget: Option<ignite_core::tipround::RoundBudget>,
+    /// When `master` moved to the tip, if it did.
+    pub master_at: Option<Timestamp>,
 }
 
 /// Counts one round's time. See the module documentation.
@@ -87,7 +91,7 @@ impl Meter {
     }
 
     /// The round's record, ended now.
-    pub(super) fn finish(&self, ctx: &Context, tip: &Commit, tally: Tally) -> TipRound {
+    pub(super) fn finish(&self, ctx: &Context, tip: &Commit, tally: &Tally) -> TipRound {
         let now = ctx.clock.now();
         let parts = *self.parts.lock().unwrap_or_else(PoisonError::into_inner);
         TipRound {
@@ -101,6 +105,12 @@ impl Meter {
             listing_s: parts.listing_s,
             building_s: parts.building_s,
             waiting_s: parts.waiting_s,
+            budget: tally.budget.clone().map(|mut budget| {
+                budget.master_s = tally
+                    .master_at
+                    .map(|moved| moved.seconds_since(self.start).max(0.0));
+                budget
+            }),
         }
     }
 }
@@ -169,5 +179,9 @@ impl Builds for MeteredBuilds {
         who: &BuildFor,
     ) -> BuildResult {
         self.timed(|| self.inner.ensure_for(tree, product, packages, who))
+    }
+
+    fn has_built(&self, tree: &TreeId, product: &str) -> bool {
+        self.inner.has_built(tree, product)
     }
 }

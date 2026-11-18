@@ -647,6 +647,7 @@ impl Landing {
             format!("✅ [{ticket}] and the summary that ignite start gave"),
         ));
         lines.push(line("next", "nothing; wait for your next ticket"));
+        let budget = summary.and_then(|s| s.gated.budget.as_ref());
         Reply {
             exit: Exit::Success,
             text: render(&lines),
@@ -658,6 +659,10 @@ impl Landing {
                 "from_cache": summary.map(|s| s.gated.run.from_cache),
                 "ran": summary.map(|s| s.gated.run.ran),
                 "left_to_tip": summary.map(|s| s.gated.left),
+                "checks_s": summary.map(|s| s.gated.run.wall_s),
+                "build_s": summary.map(|s| s.gated.run.builds.iter().map(|b| b.wall_s).sum::<f64>()),
+                "budget_billions": budget.map(crate::checks::GateBudget::billions),
+                "rate": budget.map(|b| b.rate),
                 "closed": closed == "ticket closed",
             })),
             handle: None,

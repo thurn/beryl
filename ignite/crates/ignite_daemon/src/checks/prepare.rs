@@ -5,6 +5,9 @@ use ignite_core::manifest::Family;
 use ignite_core::protocol::hub::ListingKey;
 
 use super::listings::{Kept, Listing, Origin};
+
+/// The landing gate's test for a family it leaves unlisted, given its name and declaration.
+pub(crate) type Cold<'a> = &'a dyn Fn(&str, &Family) -> bool;
 use super::{CheckRun, Checks, ListError, OpenTree, Prepared, RunOptions};
 use crate::server::Context;
 
@@ -37,7 +40,7 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Prepared> {
-        self.prepare_families(ctx, tree, among, options, run, false)
+        self.prepare_families(ctx, tree, among, options, run, None)
     }
 
     /// [`Checks::prepare_among`] for the landing gate, which stops at the first fault it knows
@@ -45,6 +48,9 @@ impl Checks {
     /// failed. The families that can be listed without building anything (a kept listing, or a
     /// `list` that needs no product) are listed first, so such a fault refuses the landing
     /// before anything is built. The families not listed are named in `run.unlisted`.
+    ///
+    /// A family for which `cold` holds (its listing needs a product the tree has never built)
+    /// and of which no listing is kept is not listed, and is named in `run.cold_families`.
     pub(crate) fn prepare_gate(
         &self,
         ctx: &Context,
@@ -52,10 +58,13 @@ impl Checks {
         among: &[(&str, &Family)],
         options: &RunOptions,
         run: &mut CheckRun,
+        cold: Cold<'_>,
     ) -> Vec<Prepared> {
-        self.prepare_families(ctx, tree, among, options, run, true)
+        self.prepare_families(ctx, tree, among, options, run, Some(cold))
     }
 
+    /// `gate` is the landing gate's test for a family it leaves unlisted; `None` for every
+    /// other caller, which lists every family and does not stop at the first fault.
     fn prepare_families(
         &self,
         ctx: &Context,
@@ -63,14 +72,24 @@ impl Checks {
         among: &[(&str, &Family)],
         options: &RunOptions,
         run: &mut CheckRun,
-        fail_fast: bool,
+        gate: Option<Cold<'_>>,
     ) -> Vec<Prepared> {
+        let fail_fast = gate.is_some();
         // Every family's listing hash from one reading of the tree, and one request for every
         // kept listing, so a hub that cannot be reached costs its timeout once, not once per
         // family.
         let hashes = self.listing_hashes(ctx, tree, among);
         let mut kept = self.kept_for(hashes.clone());
         let mut among = among.to_vec();
+        if let Some(cold) = gate {
+            among.retain(|&(name, family)| {
+                let unlisted = !kept.contains_key(name) && cold(name, family);
+                if unlisted {
+                    run.cold_families.push(name.to_owned());
+                }
+                !unlisted
+            });
+        }
         if fail_fast {
             // A stable sort: the families that build nothing to be listed come first.
             among.sort_by_key(|&(name, family)| {

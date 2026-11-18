@@ -1,6 +1,7 @@
 //! The check runner against the fakes: a launcher that answers from a script, a fake hub, fake
 //! builds and git, and a tree in a temporary directory.
 
+mod budget;
 mod costs;
 mod fail_fast;
 mod hardening;
@@ -274,7 +275,7 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
         project = "test"
         [gate]
         threshold = 0.004
-        cap = 400
+        seconds = 60
         [machine.local]
         ticket_trees = 1
         landing_trees = 1

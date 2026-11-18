@@ -11,6 +11,7 @@ pub mod findings;
 pub mod fleet;
 pub mod leases;
 pub mod listings;
+pub mod rates;
 pub mod records;
 pub mod rejected;
 pub mod results;
@@ -68,6 +69,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 10,
         sql: include_str!("tip_rounds.sql"),
+    },
+    Migration {
+        version: 11,
+        sql: include_str!("two_budgets.sql"),
     },
 ];
 

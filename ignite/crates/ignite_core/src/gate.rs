@@ -4,23 +4,31 @@
 //! it affects to a [`GatePlan`]. See "Where regression checks run" in `docs/ignite.md`.
 //!
 //! - The always set (checks in a family marked `always = true`) is looked up or run on every
-//!   landing, outside the threshold and the cap.
-//! - A check whose own file the change edits always runs, also outside the cap.
+//!   landing, outside the threshold and the budget.
+//! - A check whose own file the change edits always runs, also outside the budget.
 //! - A check with an open regression ticket is left out and reported as known to fail, unless
-//!   the ticket being landed is that regression's, in which case it must run, outside the cap.
+//!   the ticket being landed is that regression's, in which case it must run, outside the
+//!   budget.
+//! - A check that needs a build product the tree has never built is left to tip verification
+//!   unless it must run anyway: the gate runs checks on what the tree has already compiled, and
+//!   a cold build belongs to the tip. An incremental rebuild of a product the tree has built
+//!   before is simply done. Builds are outside the budget either way. A product a check that
+//!   must run needs is built for it, so it is not cold for the scored checks.
 //! - Every other check is chosen greedily by [`crate::score`]: the highest score first, until the
 //!   best score left is below the threshold or the next check would take the spending past the
-//!   cap. A build the tree lacks is charged to the first chosen check that needs it, and the
-//!   checks after it are scored again without that build.
+//!   budget ([`Budget`]).
 //! - Checks in one group (checks that failed in exactly the same runs) are scored as one check
 //!   with their summed cost, and are chosen or left together.
 //!   A member that must run anyway (always, edited or being fixed) leaves its group first.
 //! - A chosen check whose result is cached is answered from the cache and costs nothing against
-//!   the cap.
+//!   the budget.
+//!
+//! Tip verification splits a round's checks with the same function, with a threshold of zero
+//! and its own budget.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::config::Gate;
+use crate::budget::Budget;
 use crate::ids::{CheckName, TicketId};
 use crate::score::{AreaRecord, Cost, per_cost, probability_over_areas};
 
@@ -64,9 +72,9 @@ pub struct GateInput<'a> {
     /// workspaces.
     pub areas: &'a [String],
     pub checks: &'a [GateCheck],
-    /// Build products the tree does not hold, with each one's estimated cost in billions of
-    /// instructions. A product not listed is current.
-    pub missing_builds: &'a BTreeMap<String, f64>,
+    /// Build products the tree has never built. A check that needs one is left to tip
+    /// verification unless it must run.
+    pub unbuilt: &'a BTreeSet<String>,
     /// The ticket being landed.
     pub landing: Option<&'a TicketId>,
     /// The rate at which a cost known only in CPU seconds converts to billions of instructions
@@ -83,7 +91,7 @@ pub enum Why {
     Edited,
     /// The ticket being landed is this check's regression ticket.
     Fixes,
-    /// Its score is at or above the threshold and it fit under the cap.
+    /// Its score is at or above the threshold and it fit within the budget.
     Scored,
 }
 
@@ -94,8 +102,9 @@ pub struct Planned {
     pub why: Why,
     /// The score when it was chosen; `None` for the always set.
     pub score: Option<f64>,
-    /// Missing build products charged to this check, which must be built before it runs.
-    pub builds: Vec<String>,
+    /// What one run of it costs, in billions of instructions; for a cached check, what the
+    /// cache saved.
+    pub cost: f64,
 }
 
 /// An affected check the gate does not run, with its score when the selection stopped.
@@ -103,6 +112,8 @@ pub struct Planned {
 pub struct Left {
     pub check: CheckName,
     pub score: f64,
+    /// What one run of it costs, in billions of instructions.
+    pub cost: f64,
 }
 
 /// Where each affected check is answered.
@@ -113,18 +124,24 @@ pub struct GatePlan {
     pub run: Vec<Planned>,
     /// Chosen checks whose outcome comes from the result cache, in the same order.
     pub cached: Vec<Planned>,
-    /// Checks at or above the threshold that the cap left to tip verification, by score.
-    pub past_cap: Vec<Left>,
+    /// Checks at or above the threshold that the budget left to tip verification, by score.
+    pub past_budget: Vec<Left>,
+    /// Checks at or above the threshold that need a product the tree has never built, left to
+    /// tip verification, by score.
+    pub cold: Vec<Left>,
     /// Checks below the threshold, left to tip verification, by score.
     pub tip: Vec<Left>,
     /// Checks left out because a regression ticket for them is open, with that ticket.
     pub known_failing: Vec<(CheckName, TicketId)>,
-    /// Billions of instructions the scored checks spend, builds included: what counts against
-    /// the cap.
+    /// Billions of instructions the scored checks spend: what counts against the budget.
     pub scored_cost: f64,
-    /// Billions of instructions the always set and the other checks that must run spend, builds
-    /// included.
+    /// Billions of instructions the always set and the other checks that must run spend.
     pub forced_cost: f64,
+}
+
+/// The summed cost of `left`, in billions of instructions.
+pub fn cost_of(left: &[Left]) -> f64 {
+    left.iter().map(|left| left.cost).sum()
 }
 
 /// One check, or one group of checks, as the greedy selection sees it.
@@ -132,7 +149,7 @@ struct Unit<'a> {
     /// Sorted by name.
     members: Vec<&'a GateCheck>,
     probability: f64,
-    /// The members' summed cost, cached members included: the score's denominator before builds.
+    /// The members' summed cost, cached members included: the score's denominator.
     cost: f64,
     /// The summed cost of the members that would run.
     run_cost: f64,
@@ -141,31 +158,27 @@ struct Unit<'a> {
 }
 
 impl Unit<'_> {
-    fn unpaid(&self, missing: &BTreeMap<String, f64>, paid: &BTreeSet<&str>) -> f64 {
-        self.needs
-            .iter()
-            .filter(|need| !paid.contains(*need))
-            .filter_map(|need| missing.get(*need))
-            .sum()
-    }
-
-    fn score(&self, missing: &BTreeMap<String, f64>, paid: &BTreeSet<&str>) -> f64 {
-        per_cost(self.probability, self.cost + self.unpaid(missing, paid))
+    fn score(&self) -> f64 {
+        per_cost(self.probability, self.cost)
     }
 
     fn name(&self) -> &CheckName {
         &self.members[0].check
     }
+
+    /// A member that would run needs a product the tree has never built.
+    fn cold(&self, unbuilt: &BTreeSet<String>) -> bool {
+        self.needs.iter().any(|need| unbuilt.contains(*need))
+    }
 }
 
 /// Decides where each affected check runs. The same input gives the same plan, whatever the
 /// order of `input.checks`.
-pub fn plan(input: &GateInput<'_>, gate: &Gate) -> GatePlan {
+pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
     let mut checks: Vec<&GateCheck> = input.checks.iter().collect();
     checks.sort_by(|a, b| a.check.cmp(&b.check));
 
     let mut plan = GatePlan::default();
-    let mut paid: BTreeSet<&str> = BTreeSet::new();
     let mut scored: Vec<&GateCheck> = Vec::new();
     let mut must_run: Vec<(&GateCheck, Why)> = Vec::new();
     let mut always: Vec<&GateCheck> = Vec::new();
@@ -186,129 +199,114 @@ pub fn plan(input: &GateInput<'_>, gate: &Gate) -> GatePlan {
         }
     }
 
-    let forced = always
+    let forced: Vec<(&GateCheck, Why)> = always
         .into_iter()
         .map(|check| (check, Why::Always))
-        .chain(must_run);
+        .chain(must_run)
+        .collect();
+    // A product that a check which must run needs is built for it, so it is no longer cold for
+    // the checks chosen by score.
+    let mut unbuilt = input.unbuilt.clone();
+    for (check, _) in forced.iter().filter(|(check, _)| !check.cached) {
+        for need in &check.needs {
+            unbuilt.remove(need);
+        }
+    }
     for (check, why) in forced {
-        let score = (why != Why::Always).then(|| {
-            let unit = unit(input, vec![check]);
-            unit.score(input.missing_builds, &paid)
-        });
-        let mut planned = Planned {
+        let score = (why != Why::Always).then(|| unit(input, vec![check]).score());
+        let planned = Planned {
             check: check.check.clone(),
             why,
             score,
-            builds: Vec::new(),
+            cost: cost(input, check),
         };
         if check.cached {
             plan.cached.push(planned);
             continue;
         }
-        let needs = check.needs.iter().map(String::as_str).collect();
-        plan.forced_cost += cost(input, check) + charge(input, &needs, &mut paid, &mut planned);
+        plan.forced_cost += planned.cost;
         plan.run.push(planned);
     }
 
-    choose(input, gate, units(input, scored), &mut paid, &mut plan);
+    choose(input, budget, &unbuilt, units(input, scored), &mut plan);
     plan
 }
 
 /// Chooses among `units` greedily by score until the best score left is below the threshold or
-/// the next unit would take the spending past the cap, then leaves the rest to the tip.
+/// the next unit would take the spending past the budget, then leaves the rest to the tip.
 fn choose<'a>(
     input: &GateInput<'a>,
-    gate: &Gate,
-    mut units: Vec<Unit<'a>>,
-    paid: &mut BTreeSet<&'a str>,
+    budget: &Budget,
+    unbuilt: &BTreeSet<String>,
+    units: Vec<Unit<'a>>,
     plan: &mut GatePlan,
 ) {
-    // Once the cap would be passed, only units that cost nothing remain eligible: a unit whose
-    // members are all cached spends no instructions, so the cap has no reason to leave it out.
-    let mut capped = false;
+    let limit = budget.billions();
+    let (cold, mut units): (Vec<Unit<'a>>, Vec<Unit<'a>>) =
+        units.into_iter().partition(|unit| unit.cold(unbuilt));
+    // Once the budget would be passed, only units that cost nothing remain eligible: a unit whose
+    // members are all cached spends no instructions, so the budget has no reason to leave it out.
+    let mut spent_out = false;
     loop {
         let best = units
             .iter()
             .enumerate()
-            .filter(|(_, unit)| {
-                !capped || unit.run_cost + unit.unpaid(input.missing_builds, paid) <= 0.0
-            })
-            .map(|(index, unit)| (index, unit.score(input.missing_builds, paid)))
+            .filter(|(_, unit)| !spent_out || unit.run_cost <= 0.0)
+            .map(|(index, unit)| (index, unit.score()))
             .max_by(|(a, a_score), (b, b_score)| {
                 a_score
                     .total_cmp(b_score)
                     .then_with(|| units[*b].name().cmp(units[*a].name()))
             });
         let Some((index, score)) = best else { break };
-        if score < gate.threshold {
+        if score < budget.threshold {
             break;
         }
-        let unit = &units[index];
-        let spend = unit.run_cost + unit.unpaid(input.missing_builds, paid);
-        if plan.scored_cost + spend > gate.cap {
-            capped = true;
+        if plan.scored_cost + units[index].run_cost > limit {
+            spent_out = true;
             continue;
         }
         let unit = units.swap_remove(index);
-        plan.scored_cost += spend;
-        let mut charged = false;
+        plan.scored_cost += unit.run_cost;
         for member in unit.members {
-            let mut planned = Planned {
+            let planned = Planned {
                 check: member.check.clone(),
                 why: Why::Scored,
                 score: Some(score),
-                builds: Vec::new(),
+                cost: cost(input, member),
             };
             if member.cached {
                 plan.cached.push(planned);
             } else {
-                if !charged {
-                    charge(input, &unit.needs, paid, &mut planned);
-                    charged = true;
-                }
                 plan.run.push(planned);
             }
         }
     }
 
-    let mut left: Vec<(f64, &Unit<'_>)> = units
+    let mut left: Vec<(bool, f64, &Unit<'_>)> = units
         .iter()
-        .map(|unit| (unit.score(input.missing_builds, paid), unit))
+        .map(|unit| (false, unit.score(), unit))
+        .chain(cold.iter().map(|unit| (true, unit.score(), unit)))
         .collect();
-    left.sort_by(|(a_score, a), (b_score, b)| {
+    left.sort_by(|(_, a_score, a), (_, b_score, b)| {
         b_score
             .total_cmp(a_score)
             .then_with(|| a.name().cmp(b.name()))
     });
-    for (score, unit) in left {
-        let target = if score >= gate.threshold {
-            &mut plan.past_cap
-        } else {
+    for (cold, score, unit) in left {
+        let target = if score < budget.threshold {
             &mut plan.tip
+        } else if cold {
+            &mut plan.cold
+        } else {
+            &mut plan.past_budget
         };
         target.extend(unit.members.iter().map(|member| Left {
             check: member.check.clone(),
             score,
+            cost: cost(input, member),
         }));
     }
-}
-
-/// Marks each missing build in `needs` that nothing has paid for as paid by `planned`, and
-/// returns what those builds cost.
-fn charge<'a>(
-    input: &GateInput<'a>,
-    needs: &BTreeSet<&str>,
-    paid: &mut BTreeSet<&'a str>,
-    planned: &mut Planned,
-) -> f64 {
-    let mut spent = 0.0;
-    for (product, estimate) in input.missing_builds {
-        if needs.contains(product.as_str()) && paid.insert(product.as_str()) {
-            planned.builds.push(product.clone());
-            spent += estimate;
-        }
-    }
-    spent
 }
 
 /// The cost of one run of `check`, in billions of instructions.

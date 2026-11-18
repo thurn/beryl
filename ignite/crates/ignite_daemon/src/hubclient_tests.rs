@@ -311,7 +311,7 @@ fn listings_are_looked_up_and_stored_by_family_and_hash() {
 }
 
 #[test]
-fn tip_costs_rounds_and_the_last_round_use_their_routes() {
+fn tip_costs_rounds_the_last_round_and_rates_use_their_routes() {
     use ignite_core::tipround::{TipCostsRequest, TipRound};
     let hub = FakeHttpHub::start(|_, url, _| {
         if url.ends_with("/tips/costs") {
@@ -321,6 +321,11 @@ fn tip_costs_rounds_and_the_last_round_use_their_routes() {
             )
         } else if url.ends_with("/tips/rounds") {
             (200, r#"{"ticket": "t.1", "created": true}"#.to_owned())
+        } else if url.ends_with("/rates") {
+            (
+                200,
+                r#"{"day": "2026-11-19", "land": 18.0, "tip": null}"#.to_owned(),
+            )
         } else {
             (200, r#"{"round": null}"#.to_owned())
         }
@@ -343,12 +348,15 @@ fn tip_costs_rounds_and_the_last_round_use_their_routes() {
         listing_s: 0.0,
         building_s: 0.0,
         waiting_s: 0.0,
+        budget: None,
     };
     assert_eq!(
         hub.client().tip_round(&round).unwrap().ticket.as_deref(),
         Some("t.1")
     );
     assert_eq!(hub.client().last_tip_round().unwrap(), None);
+    let rates = hub.client().rates().unwrap();
+    assert_eq!((rates.land, rates.tip), (Some(18.0), None));
     let urls: Vec<String> = hub
         .seen()
         .into_iter()
@@ -359,7 +367,8 @@ fn tip_costs_rounds_and_the_last_round_use_their_routes() {
         [
             "POST /test/api/tips/costs",
             "POST /test/api/tips/rounds",
-            "GET /test/api/tips/rounds/last"
+            "GET /test/api/tips/rounds/last",
+            "GET /test/api/rates"
         ]
     );
 }

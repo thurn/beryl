@@ -299,5 +299,15 @@
     "label": "Tip claims sized by measured cost instead of 50 checks, and a covered family (b3d-interface) not run beside the family that covers it",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Two budgets: the gate runs 60 s of checks at the landing rate on what its tree has already built, leaving checks that need a cold build to tip verification",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
+  },
+  {
+    "label": "Two budgets: master moves after 300 s of the best-scored tip checks, the rest running after it moves",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

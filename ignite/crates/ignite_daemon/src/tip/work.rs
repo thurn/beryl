@@ -10,8 +10,8 @@ use ignite_core::traits::{Error, Result};
 
 use ignite_git::changed::CommitPaths;
 
-use super::{TipLanding, TipRun, TipSet, TipWork};
-use crate::checks::{BUILD_FAILED, CheckRun, Checks, RunOptions};
+use super::{TipCheck, TipLanding, TipRun, TipSet, TipWork};
+use crate::checks::{BUILD_FAILED, CheckRun, Checks, RunOptions, Scoring};
 use crate::server::Context;
 use crate::trees::Trees;
 
@@ -83,6 +83,32 @@ impl TipWork for CheckTipWork {
     /// One fewer than the landing trees, so that a landing always finds a tree free.
     fn parallel(&self) -> usize {
         self.trees.landing_count().saturating_sub(1).max(1)
+    }
+
+    /// The paths the commits after `from` changed, read with git, and the hub's record of each
+    /// check, in a landing tree at `to`. A failure is logged and leaves the round unbudgeted.
+    fn scoring(
+        &self,
+        ctx: &Context,
+        from: &Commit,
+        to: &Commit,
+        checks: &[&TipCheck],
+    ) -> Option<Scoring> {
+        let scored = ignite_git::changed::commits(&ctx.repo, from, to).and_then(|commits| {
+            let mut changed: Vec<String> = commits.into_iter().flat_map(|c| c.paths).collect();
+            changed.sort();
+            changed.dedup();
+            let named: Vec<(CheckName, String)> = checks
+                .iter()
+                .map(|c| (c.check.clone(), c.family.clone()))
+                .collect();
+            self.at(to, |tree| self.checks.scoring(ctx, tree, &changed, &named))?
+        });
+        scored
+            .inspect_err(|error| {
+                eprintln!("ignite: tip {to}: checks not scored, all run before master: {error}");
+            })
+            .ok()
     }
 
     /// The first-parent commits between the two, grouped by the ticket whose landing the hub

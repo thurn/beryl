@@ -592,6 +592,32 @@ impl Builds for BuildManager {
             Err(failed) => failed,
         }
     }
+
+    /// The tree has built the product when this daemon has built it there, for any packages and
+    /// inputs, or when every directory the product writes is in the tree and not empty: those
+    /// directories survive a daemon restart and are kept between tickets, and deleting a tree's
+    /// builds deletes them. Products that write the same directory (the Rust workspace's test
+    /// binaries and its command-line programs share `rust/target`) count as built together; the
+    /// dependencies they share are compiled already, so building the other is incremental too.
+    fn has_built(&self, tree: &TreeId, product: &str) -> bool {
+        if lock(&self.state)
+            .held
+            .keys()
+            .any(|request| request.tree == *tree && request.product == product)
+        {
+            return true;
+        }
+        let (Some(declared), Some(root)) = (
+            self.settings.manifest.products.get(product),
+            self.trees.path(tree),
+        ) else {
+            return false;
+        };
+        !declared.outputs.is_empty()
+            && declared.outputs.iter().all(|output| {
+                fs::read_dir(root.join(output)).is_ok_and(|mut entries| entries.next().is_some())
+            })
+    }
 }
 
 /// The input hash of a build: its inputs' object IDs and its command.

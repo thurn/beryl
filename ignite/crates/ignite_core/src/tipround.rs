@@ -9,6 +9,9 @@
 //!   [`TipCosts::claim_seconds`] of recorded cost. A check with no recorded cost counts as the
 //!   family's median; a family with none starts at [`UNMEASURED_BATCH`] checks a claim and
 //!   doubles with each claim.
+//! - **The tip budget.** A round runs the best-scored checks within `[tip] seconds` of running
+//!   checks first, and moves `master` once they pass; the rest run afterwards
+//!   ([`RoundBudget`]). See "Tip verification" in `docs/ignite.md`.
 //! - **Where a round's time went.** Each round sends one [`TipRound`] when it ends. A round in
 //!   which more than [`OVERHEAD_SHARE`] of the time went to anything but checks and builds, and
 //!   that took at least [`SMALLEST_ROUND_S`], asks the hub for an improvement ticket naming the
@@ -140,6 +143,63 @@ pub struct TipRound {
     pub building_s: f64,
     /// Time commands waited for cores before they started.
     pub waiting_s: f64,
+    /// How the round split its checks by the tip budget; `None` from a daemon built before the
+    /// budget.
+    #[serde(default)]
+    pub budget: Option<RoundBudget>,
+}
+
+/// How a round split its checks by the tip budget. Costs are in billions of instructions, from
+/// each check's recorded median cost.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RoundBudget {
+    /// `[tip] seconds`.
+    pub seconds: f64,
+    /// Billions of instructions per second of wall time that seconds converted at: the hub's
+    /// rate for `tip`-class check commands.
+    pub rate: f64,
+    /// Checks that ran before `master` moved whatever the budget: cached failures run again,
+    /// and checks with an open regression ticket.
+    pub forced: u32,
+    pub forced_billions: f64,
+    /// Checks chosen by score within the budget, which ran before `master` moved.
+    pub within: u32,
+    pub within_billions: f64,
+    /// Checks past the budget, which ran after `master` moved, or wait for a later round when
+    /// it did not move.
+    pub after: u32,
+    pub after_billions: f64,
+    /// Seconds from the start of the round until `master` moved; `None` when it did not.
+    pub master_s: Option<f64>,
+}
+
+impl RoundBudget {
+    /// The budget in billions of instructions.
+    pub fn billions(&self) -> f64 {
+        self.seconds * self.rate
+    }
+
+    /// The split in one line, as the round's log line and `ignite status` show it.
+    pub fn summary(&self) -> String {
+        use crate::budget::billions_text as b;
+        let master = self.master_s.map_or_else(
+            || "master did not move".to_owned(),
+            |s| format!("master moved after {:.1} minutes", s / 60.0),
+        );
+        format!(
+            "budget {:.0} s at {:.1} billion/s = {} billion: {} checks within ({} billion), {} \
+             forced ({} billion), {} after ({} billion); {master}",
+            self.seconds,
+            self.rate,
+            b(self.billions()),
+            self.within,
+            b(self.within_billions),
+            self.forced,
+            b(self.forced_billions),
+            self.after,
+            b(self.after_billions),
+        )
+    }
 }
 
 /// A part of a round's time that is neither running checks nor building.
@@ -213,7 +273,11 @@ impl TipRound {
             minutes(self.waiting_s),
             minutes(self.other_s()),
             minutes(self.wall_s),
-        )
+        ) + &self
+            .budget
+            .as_ref()
+            .map(|budget| format!("; {}", budget.summary()))
+            .unwrap_or_default()
     }
 }
 
@@ -301,6 +365,7 @@ mod tests {
             listing_s,
             building_s: 0.0,
             waiting_s: 0.0,
+            budget: None,
         }
     }
 
@@ -312,5 +377,39 @@ mod tests {
         // Ten percent or less files nothing, nor does a short round.
         assert_eq!(round(600.0, 60.0).overhead(), None);
         assert_eq!(round(100.0, 90.0).overhead(), None);
+    }
+
+    #[test]
+    fn the_summary_names_the_budget_and_when_master_moved() {
+        let mut round = round(600.0, 60.0);
+        assert!(!round.summary().contains("budget"));
+        round.budget = Some(RoundBudget {
+            seconds: 300.0,
+            rate: 39.5,
+            forced: 1,
+            forced_billions: 2.0,
+            within: 40,
+            within_billions: 9_000.0,
+            after: 1_200,
+            after_billions: 200_000.0,
+            master_s: Some(270.0),
+        });
+        let summary = round.summary();
+        assert!(
+            summary.ends_with(
+                "budget 300 s at 39.5 billion/s = 11,850 billion: 40 checks within (9,000 \
+                 billion), 1 forced (2 billion), 1200 after (200,000 billion); master moved \
+                 after 4.5 minutes"
+            ),
+            "{summary}"
+        );
+        // A record from before the budget still reads.
+        let old: TipRound = serde_json::from_str(
+            r#"{"commit":"abcd","machine":"m-1","at":"1970-01-01T00:00:00Z","wall_s":1.0,
+                "ran":0,"cached":0,"checks_s":0.0,"listing_s":0.0,"building_s":0.0,
+                "waiting_s":0.0}"#,
+        )
+        .unwrap();
+        assert_eq!(old.budget, None);
     }
 }

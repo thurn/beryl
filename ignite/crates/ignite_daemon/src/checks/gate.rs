@@ -1,12 +1,23 @@
 //! The landing gate: which checks a change can affect, listed and run from the cache where
 //! they can be, stopping at the first fault (see "Landing" in `docs/ignite.md`).
+//!
+//! The gate spends the first budget, `[gate] seconds` of running checks (see "Where regression
+//! checks run"). It builds no product its tree has never built for a check chosen by score: a
+//! family whose listing needs such a product, and that has no kept listing, is not listed at
+//! all unless it is in the always set or holds the check of the regression being landed, and
+//! its checks are left to tip verification. The output prints the seconds spent building and
+//! the seconds spent running checks on lines of their own.
 
+use std::collections::BTreeSet;
+
+use ignite_core::budget::billions_text;
+use ignite_core::gate::cost_of;
 use ignite_core::ids::{CheckName, TreeId};
 use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::hub::CachedResult;
 
 use super::plan;
-use super::verbs::{changed_paths, counts, failure_lines, gate_view_of};
+use super::verbs::{changed_paths, counts, failure_lines, gate_view_of, open_regressions, unbuilt};
 use super::{CheckRun, Checks, Keyed, OpenTree, RunOptions};
 use crate::server::Context;
 
@@ -17,8 +28,41 @@ type Item = (Keyed, Option<CachedResult>);
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GateRun {
     pub run: CheckRun,
-    /// Checks past the cap or below the threshold, which tip verification runs.
+    /// Checks past the budget, needing a product the tree has never built, or below the
+    /// threshold, which tip verification runs.
     pub left: usize,
+    /// How the gate spent its budget; `None` when it stopped before choosing.
+    pub budget: Option<GateBudget>,
+}
+
+/// How the gate spent its budget, in billions of instructions from each check's recorded cost.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GateBudget {
+    /// `[gate] seconds`.
+    pub seconds: f64,
+    /// Billions of instructions per second of wall time that seconds converted at.
+    pub rate: f64,
+    /// Chosen by score and run.
+    pub scored: (usize, f64),
+    /// Run whatever the budget: the always set, edited checks and the regression being fixed.
+    pub forced: (usize, f64),
+    /// Answered from the cache, with what running them would have cost.
+    pub cached: (usize, f64),
+    /// Left to tip verification because the budget was spent.
+    pub past_budget: (usize, f64),
+    /// Left to tip verification because they need a product the tree has never built.
+    pub cold: (usize, f64),
+    /// Left to tip verification because their score is below the threshold.
+    pub below: (usize, f64),
+    /// The products the tree had never built when the gate started.
+    pub unbuilt: BTreeSet<String>,
+}
+
+impl GateBudget {
+    /// The budget in billions of instructions.
+    pub fn billions(&self) -> f64 {
+        self.seconds * self.rate
+    }
 }
 
 impl Checks {
@@ -49,7 +93,10 @@ impl Checks {
                     format!("the changed files of the tree cannot be read: {error}"),
                     std::path::PathBuf::new(),
                 ));
-                return GateRun { run, left: 0 };
+                return GateRun {
+                    run,
+                    ..GateRun::default()
+                };
             }
         };
         // Which families the change can affect is decided first, so a family it cannot affect
@@ -60,19 +107,39 @@ impl Checks {
             .collect();
         let (among, left_out) = self.scope(ctx, tree, &regression, &changed);
         run.out_of_scope = left_out;
-        let mut prepared = self.prepare_gate(ctx, tree, &among, options, &mut run);
+        // A family that must be listed even though listing it builds a product the tree has
+        // never built: one in the always set, or one that holds the check whose regression this
+        // landing fixes.
+        let fixing: BTreeSet<String> = open_regressions(ctx)
+            .into_iter()
+            .filter(|(_, ticket)| options.ticket.as_ref() == Some(ticket))
+            .map(|(check, _)| check.family().to_owned())
+            .collect();
+        let unbuilt = unbuilt(ctx, tree, among.iter().map(|(_, family)| *family));
+        let listed_anyway = |name: &str, family: &Family| family.always || fixing.contains(name);
+        let mut prepared =
+            self.prepare_gate(ctx, tree, &among, options, &mut run, &|name, family| {
+                let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
+                needs.iter().any(|need| unbuilt.contains(need)) && !listed_anyway(name, family)
+            });
         for family in &mut prepared {
             family.keep(|_| true, &mut run);
         }
         // A fault found while listing, such as an invalid manifest entry, refuses the landing
         // before anything is looked up, built or run.
         if !run.passed() {
-            return GateRun { run, left: 0 };
+            return GateRun {
+                run,
+                ..GateRun::default()
+            };
         }
         let hits = self.lookup(&prepared, options);
         let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
         view.landing.clone_from(&options.ticket);
         let gate_plan = view.plan(&ctx.config.gate);
+        // The products never built before the gate started, so the `build` line can name a
+        // cold build even when listing a family made the product.
+        let budget = gate_budget(&view.budget(&ctx.config.gate), &gate_plan, unbuilt.clone());
         let to_run: Vec<&CheckName> = gate_plan.run.iter().map(|p| &p.check).collect();
         let cached: Vec<&CheckName> = gate_plan.cached.iter().map(|p| &p.check).collect();
         let mut hits = hits.into_iter();
@@ -108,12 +175,39 @@ impl Checks {
         }
         GateRun {
             run,
-            left: gate_plan.past_cap.len() + gate_plan.tip.len(),
+            left: gate_plan.past_budget.len() + gate_plan.cold.len() + gate_plan.tip.len(),
+            budget: Some(budget),
         }
     }
 }
 
-/// The `gate` line, the failures and the `tip` line of a gate's output.
+/// The counts and costs of each part of `plan`.
+fn gate_budget(
+    budget: &ignite_core::budget::Budget,
+    plan: &ignite_core::gate::GatePlan,
+    unbuilt: BTreeSet<String>,
+) -> GateBudget {
+    use ignite_core::gate::{Planned, Why};
+    let part = |planned: &[&Planned]| (planned.len(), planned.iter().map(|p| p.cost).sum::<f64>());
+    let (scored, forced): (Vec<&Planned>, Vec<&Planned>) =
+        plan.run.iter().partition(|p| p.why == Why::Scored);
+    let cached: Vec<&Planned> = plan.cached.iter().collect();
+    GateBudget {
+        seconds: budget.seconds,
+        rate: budget.rate,
+        scored: part(&scored),
+        forced: part(&forced),
+        cached: part(&cached),
+        past_budget: (plan.past_budget.len(), cost_of(&plan.past_budget)),
+        cold: (plan.cold.len(), cost_of(&plan.cold)),
+        below: (plan.tip.len(), cost_of(&plan.tip)),
+        unbuilt,
+    }
+}
+
+/// The `gate`, `budget` and `build` lines, the failures and the `tip` line of a gate's output.
+/// Check seconds and build seconds are on lines of their own, so a landing that was slow
+/// because it compiled shows as that.
 pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
     let run = &gated.run;
     let total = run.outcomes.len();
@@ -125,23 +219,107 @@ pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
     let mut lines = vec![(
         "gate".to_owned(),
         format!(
-            "{total} checks: {} from cache, {} run, {verdict} in {:.0} s",
+            "{total} checks: {} from cache, {} run, {verdict} in {:.0} s of running checks",
             run.from_cache, run.ran, run.wall_s
         ),
     )];
+    if let Some(budget) = &gated.budget {
+        lines.push(budget_line(budget));
+    }
+    lines.push(build_line(run, gated.budget.as_ref()));
     lines.extend(failure_lines(run));
     lines.extend(stopped_line(run));
     lines.extend(scope_line(run));
-    if gated.left > 0 {
-        lines.push((
-            "tip".to_owned(),
-            format!(
-                "{} checks left to tip verification",
-                plan::thousands(gated.left)
-            ),
+    lines.extend(tip_line(gated));
+    lines
+}
+
+/// `(3, 1204.4)` as `3 checks (1,204 billion)`.
+fn part_text((count, billions): (usize, f64)) -> String {
+    let word = if count == 1 { "check" } else { "checks" };
+    format!(
+        "{} {word} ({} billion)",
+        plan::thousands(count),
+        billions_text(billions)
+    )
+}
+
+/// The `budget` line: the budget, the rate it converted at, and what was spent within it.
+fn budget_line(budget: &GateBudget) -> (String, String) {
+    (
+        "budget".to_owned(),
+        format!(
+            "{:.0} s at {:.1} billion/s = {} billion: {} within it, {} outside it, {} cached",
+            budget.seconds,
+            budget.rate,
+            billions_text(budget.billions()),
+            part_text(budget.scored),
+            part_text(budget.forced),
+            part_text(budget.cached),
+        ),
+    )
+}
+
+/// The `build` line: the seconds spent making products current, apart from running checks,
+/// and the products the tree had never built.
+fn build_line(run: &CheckRun, budget: Option<&GateBudget>) -> (String, String) {
+    if run.builds.is_empty() {
+        return ("build".to_owned(), "nothing built".to_owned());
+    }
+    let seconds: f64 = run.builds.iter().map(|b| b.wall_s).sum();
+    let count = run.builds.len();
+    let word = if count == 1 { "product" } else { "products" };
+    let cold: Vec<&str> = run
+        .builds
+        .iter()
+        .map(|b| b.product.as_str())
+        .filter(|product| budget.is_some_and(|b| b.unbuilt.contains(*product)))
+        .collect();
+    let cold = if cold.is_empty() {
+        String::new()
+    } else {
+        format!("; never built here before: {}", cold.join(", "))
+    };
+    (
+        "build".to_owned(),
+        format!("{seconds:.0} s building {count} {word}{cold}"),
+    )
+}
+
+/// The `tip` line: what the gate left to tip verification, and why.
+fn tip_line(gated: &GateRun) -> Option<(String, String)> {
+    let families = gated.run.cold_families.len();
+    if gated.left == 0 && families == 0 {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if let Some(budget) = &gated.budget {
+        for (part, why) in [
+            (budget.past_budget, "past the budget"),
+            (budget.cold, "needing a product this tree has never built"),
+            (budget.below, "below the threshold"),
+        ] {
+            if part.0 > 0 {
+                parts.push(format!("{} {why}", part_text(part)));
+            }
+        }
+    }
+    if families > 0 {
+        let word = if families == 1 { "family" } else { "families" };
+        parts.push(format!(
+            "{families} {word} not listed, as listing needs a product this tree has never \
+             built ({})",
+            gated.run.cold_families.join(", ")
         ));
     }
-    lines
+    Some((
+        "tip".to_owned(),
+        format!(
+            "{} checks left to tip verification: {}",
+            plan::thousands(gated.left),
+            parts.join("; ")
+        ),
+    ))
 }
 
 /// The `stopped` line: what the gate did not list or run because it stopped at the first fault.

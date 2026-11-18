@@ -27,13 +27,16 @@ project = "by"
 # answered at /beryl/, and page addresses under /by/ and /beryl/ redirect to the root.
 aliases = ["beryl"]
 
-# From `ignite gate replay` over the 14 days of history before 2026-11-18 (docs/ignite.md, "The
-# threshold and the cap"): this threshold keeps 6066 of the 6383 catches in that history. Each
-# catch is scored without its own failure, and the cap counts only checks its change could
-# affect. Only a commit changes them.
+# The landing gate (docs/ignite.md, "Where regression checks run"). The threshold is from
+# `ignite gate replay` over the 14 days of history before 2026-11-18: it kept 6066 of the 6383
+# catches in that history. `seconds` is the first budget: seconds of running checks chosen by
+# score, at the rate the hub measures for `land`-class check commands, builds not counted.
+# `cap` is read only by daemons built before the budgets, which refuse a [gate] without it;
+# delete it once every machine runs a daemon that knows `seconds`.
 [gate]
 threshold = 2.85e-4 # expected failures per billion instructions
-cap = 8890          # billions of instructions per landing
+seconds = 60        # of running checks per landing
+cap = 8890          # billions of instructions; unused since the budgets
 
 [improvement]
 min_share = 0.15
@@ -50,9 +53,12 @@ protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 
 # Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
 # seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
-# instead of one command per 50 checks.
+# instead of one command per 50 checks. `seconds` is the second budget: seconds of running the
+# best-scored checks, at the rate the hub measures for `tip`-class check commands, before
+# `master` moves to the tip; the rest run afterwards.
 [tip]
 claim_seconds = 60
+seconds = 300
 
 # The Mac Studio that runs the hub.
 [machine.jarvis]

@@ -247,6 +247,7 @@ fn tips_show_where_the_last_rounds_time_went() {
         listing_s: 180.0,
         building_s: 0.0,
         waiting_s: 20.0,
+        budget: None,
     };
     hub::tip_rounds::record(&conn, &round).unwrap();
     let body = page(&conn, "/tips");

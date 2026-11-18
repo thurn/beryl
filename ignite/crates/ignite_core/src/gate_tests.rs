@@ -1,12 +1,17 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::*;
 use crate::score::BILLIONS_PER_CPU_SECOND;
 
 const AREA: &str = "rules";
 
-fn gate(threshold: f64, cap: f64) -> Gate {
-    Gate { threshold, cap }
+/// A budget of `billions` billion instructions: that many seconds at one billion a second.
+fn gate(threshold: f64, billions: f64) -> Budget {
+    Budget {
+        threshold,
+        seconds: billions,
+        rate: 1.0,
+    }
 }
 
 fn name(check: &str) -> CheckName {
@@ -37,21 +42,29 @@ fn likely(check_name: &str, cost: f64) -> GateCheck {
     check(check_name, 50, 80, 0.5, cost)
 }
 
-fn plan_for(checks: &[GateCheck], missing: &BTreeMap<String, f64>, gate: &Gate) -> GatePlan {
-    plan_landing(checks, missing, None, gate)
+fn none() -> BTreeSet<String> {
+    BTreeSet::new()
+}
+
+fn unbuilt(product: &str) -> BTreeSet<String> {
+    BTreeSet::from([product.to_owned()])
+}
+
+fn plan_for(checks: &[GateCheck], unbuilt: &BTreeSet<String>, gate: &Budget) -> GatePlan {
+    plan_landing(checks, unbuilt, None, gate)
 }
 
 fn plan_landing(
     checks: &[GateCheck],
-    missing: &BTreeMap<String, f64>,
+    unbuilt: &BTreeSet<String>,
     landing: Option<&TicketId>,
-    gate: &Gate,
+    gate: &Budget,
 ) -> GatePlan {
     let areas = [AREA.to_owned()];
     let input = GateInput {
         areas: &areas,
         checks,
-        missing_builds: missing,
+        unbuilt,
         landing,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };
@@ -73,21 +86,20 @@ fn left_names(left: &[Left]) -> Vec<&str> {
 #[test]
 fn worked_example() {
     let aura = check("script:aura/enters-attached/you", 9, 74, 0.02, 0.8);
-    let mut replay = check("rust:session::replay::all", 1, 310, 0.01, 5.0);
-    replay.needs = vec!["rust-tests".to_owned()];
-    let missing = BTreeMap::from([("rust-tests".to_owned(), 90.0)]);
+    let replay = check("rust:session::replay::all", 1, 310, 0.01, 5.0);
 
-    let plan = plan_for(&[replay, aura], &missing, &gate(0.004, 400.0));
+    let plan = plan_for(&[replay, aura], &none(), &gate(0.004, 400.0));
 
     assert_eq!(names(&plan.run), ["script:aura/enters-attached/you"]);
     assert!((plan.run[0].score.unwrap() - 0.125).abs() < 1e-12);
+    // A chance of 0.0036 over 5 billion, with no build charged: still below the threshold.
     assert_eq!(left_names(&plan.tip), ["rust:session::replay::all"]);
-    assert!(((plan.tip[0].score * 100_000.0).round() - 4.0).abs() < 1e-9);
-    assert!(plan.past_cap.is_empty());
+    assert!(((plan.tip[0].score * 10_000.0).round() - 7.0).abs() < 1e-9);
+    assert!(plan.past_budget.is_empty());
 }
 
 #[test]
-fn the_cap_defers_scored_checks_but_never_the_always_set_or_edited_checks() {
+fn the_budget_defers_scored_checks_but_never_the_always_set_or_edited_checks() {
     let mut clippy = likely("clippy:workspace", 1000.0);
     clippy.always = true;
     let mut edited = check("rust:rules::tests::new", 0, 500, 0.0, 600.0);
@@ -100,7 +112,7 @@ fn the_cap_defers_scored_checks_but_never_the_always_set_or_edited_checks() {
         likely("script:c", 150.0),
     ];
 
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.0001, 400.0));
+    let plan = plan_for(&checks, &none(), &gate(0.0001, 400.0));
 
     assert_eq!(
         names(&plan.run),
@@ -113,43 +125,80 @@ fn the_cap_defers_scored_checks_but_never_the_always_set_or_edited_checks() {
     );
     assert_eq!(plan.run[0].why, Why::Always);
     assert_eq!(plan.run[1].why, Why::Edited);
-    assert_eq!(left_names(&plan.past_cap), ["script:c"]);
+    assert_eq!(left_names(&plan.past_budget), ["script:c"]);
     assert!((plan.scored_cost - 300.0).abs() < 1e-9);
     assert!((plan.forced_cost - 1600.0).abs() < 1e-9);
 }
 
+/// A gate whose candidates cost three budgets runs the best-scored third.
 #[test]
-fn a_shared_build_is_charged_once_and_the_rest_are_scored_again_without_it() {
-    let mut first = likely("rust:a", 1.0);
-    first.needs = vec!["rust-tests".to_owned()];
-    // With the build its score is 0.04 / 101, below the threshold; without it, 0.04.
-    let mut second = check("rust:b", 0, 0, 0.04, 1.0);
-    second.needs = vec!["rust-tests".to_owned()];
-    let missing = BTreeMap::from([("rust-tests".to_owned(), 100.0)]);
+fn candidates_costing_three_budgets_run_the_best_third() {
+    // Nine checks of 100 billion each; the earlier in the alphabet, the likelier to fail.
+    let checks: Vec<GateCheck> = (0..9)
+        .map(|i| check(&format!("script:c{i}"), 9 - i, 20, 0.01, 100.0))
+        .collect();
 
-    let plan = plan_for(&[second, first], &missing, &gate(0.004, 400.0));
+    let plan = plan_for(&checks, &none(), &gate(0.0001, 300.0));
 
-    assert_eq!(names(&plan.run), ["rust:a", "rust:b"]);
-    assert_eq!(plan.run[0].builds, ["rust-tests"]);
-    assert!(plan.run[1].builds.is_empty());
-    assert!((plan.scored_cost - 102.0).abs() < 1e-9);
+    assert_eq!(names(&plan.run), ["script:c0", "script:c1", "script:c2"]);
+    assert_eq!(plan.past_budget.len(), 6);
+    assert_eq!(plan.past_budget[0].check.as_str(), "script:c3");
+    assert!((plan.scored_cost - 300.0).abs() < 1e-9);
+    assert!((cost_of(&plan.past_budget) - 600.0).abs() < 1e-9);
 }
 
 #[test]
-fn a_build_an_always_check_needs_is_paid_before_scoring() {
+fn a_check_needing_a_product_the_tree_never_built_is_left_to_the_tip() {
+    let mut cold = likely("rust:a", 1.0);
+    cold.needs = vec!["rust-tests".to_owned()];
+    let warm = likely("script:b", 1.0);
+
+    let plan = plan_for(
+        &[cold.clone(), warm],
+        &unbuilt("rust-tests"),
+        &gate(0.004, 400.0),
+    );
+
+    assert_eq!(names(&plan.run), ["script:b"]);
+    assert_eq!(left_names(&plan.cold), ["rust:a"]);
+    assert!((plan.scored_cost - 1.0).abs() < 1e-9);
+
+    // Once the tree has built it, an incremental rebuild is simply done, and nothing is charged
+    // for it.
+    let plan = plan_for(&[cold], &none(), &gate(0.004, 400.0));
+    assert_eq!(names(&plan.run), ["rust:a"]);
+    assert!((plan.scored_cost - 1.0).abs() < 1e-9);
+}
+
+#[test]
+fn a_product_an_always_check_needs_is_built_for_it_and_warm_for_the_rest() {
     let mut clippy = likely("clippy:workspace", 1.0);
     clippy.always = true;
     clippy.needs = vec!["rust-tests".to_owned()];
     let mut test = check("rust:b", 0, 0, 0.04, 1.0);
     test.needs = vec!["rust-tests".to_owned()];
-    let missing = BTreeMap::from([("rust-tests".to_owned(), 100.0)]);
 
-    let plan = plan_for(&[test, clippy], &missing, &gate(0.004, 400.0));
-
+    let plan = plan_for(
+        &[test.clone(), clippy],
+        &unbuilt("rust-tests"),
+        &gate(0.004, 400.0),
+    );
     assert_eq!(names(&plan.run), ["clippy:workspace", "rust:b"]);
-    assert_eq!(plan.run[0].builds, ["rust-tests"]);
-    assert!((plan.forced_cost - 101.0).abs() < 1e-9);
+    assert!((plan.forced_cost - 1.0).abs() < 1e-9);
     assert!((plan.scored_cost - 1.0).abs() < 1e-9);
+
+    // An edited check that needs it is built too; without one, the product stays cold.
+    let mut edited = check("rust:edited", 0, 10, 0.0, 1.0);
+    edited.edited = true;
+    edited.needs = vec!["rust-tests".to_owned()];
+    let plan = plan_for(
+        &[test.clone(), edited],
+        &unbuilt("rust-tests"),
+        &gate(0.004, 400.0),
+    );
+    assert_eq!(names(&plan.run), ["rust:edited", "rust:b"]);
+    let plan = plan_for(&[test], &unbuilt("rust-tests"), &gate(0.004, 400.0));
+    assert_eq!(left_names(&plan.cold), ["rust:b"]);
 }
 
 #[test]
@@ -161,17 +210,17 @@ fn grouped_checks_are_scored_on_their_summed_cost_and_kept_together() {
     };
     // Alone each scores 0.04 / 6, above the threshold; together 0.04 / 12, below it.
     let checks = [grouped("shots:a"), grouped("shots:b")];
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.005, 400.0));
+    let plan = plan_for(&checks, &none(), &gate(0.005, 400.0));
     assert!(plan.run.is_empty());
     assert_eq!(left_names(&plan.tip), ["shots:a", "shots:b"]);
 
     // Above the threshold, they are chosen together, or deferred together when the pair does
-    // not fit under the cap.
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.001, 400.0));
+    // not fit within the budget.
+    let plan = plan_for(&checks, &none(), &gate(0.001, 400.0));
     assert_eq!(names(&plan.run), ["shots:a", "shots:b"]);
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.001, 10.0));
+    let plan = plan_for(&checks, &none(), &gate(0.001, 10.0));
     assert!(plan.run.is_empty());
-    assert_eq!(left_names(&plan.past_cap), ["shots:a", "shots:b"]);
+    assert_eq!(left_names(&plan.past_budget), ["shots:a", "shots:b"]);
 }
 
 #[test]
@@ -185,7 +234,7 @@ fn the_same_inputs_give_the_same_plan_in_any_order() {
     ];
     checks[3].needs = vec!["rust-tests".to_owned()];
     checks[4].group = Some("g".to_owned());
-    let missing = BTreeMap::from([("rust-tests".to_owned(), 30.0)]);
+    let missing = unbuilt("rust-tests");
     let gate = gate(0.001, 100.0);
 
     let forward = plan_for(&checks, &missing, &gate);
@@ -204,29 +253,29 @@ fn a_check_never_run_is_certain_to_fail_at_its_family_median_cost() {
     new.family_median_cost = Cost::Billions(4.0);
     let checks = [likely("rust:old", 1.0), new];
 
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.004, 400.0));
+    let plan = plan_for(&checks, &none(), &gate(0.004, 400.0));
 
     assert_eq!(names(&plan.run), ["rust:old", "rust:new"]);
     assert!((plan.run[1].score.unwrap() - 0.25).abs() < 1e-12);
 }
 
 #[test]
-fn a_cost_in_cpu_seconds_converts_for_the_cap() {
+fn a_cost_in_cpu_seconds_converts_for_the_budget() {
     let mut windows = likely("rust:measured-on-windows", 0.0);
     windows.history.as_mut().unwrap().median_cost = Cost::CpuSeconds(10.0);
-    let plan = plan_for(&[windows.clone()], &BTreeMap::new(), &gate(0.0001, 400.0));
+    let plan = plan_for(&[windows.clone()], &none(), &gate(0.0001, 400.0));
     assert!((plan.scored_cost - 170.0).abs() < 1e-9);
-    let plan = plan_for(&[windows], &BTreeMap::new(), &gate(0.0001, 100.0));
-    assert_eq!(left_names(&plan.past_cap), ["rust:measured-on-windows"]);
+    let plan = plan_for(&[windows], &none(), &gate(0.0001, 100.0));
+    assert_eq!(left_names(&plan.past_budget), ["rust:measured-on-windows"]);
 }
 
 #[test]
-fn a_cached_check_is_answered_from_the_cache_without_spending_the_cap() {
+fn a_cached_check_is_answered_from_the_cache_without_spending_the_budget() {
     let mut cached = likely("script:cached", 300.0);
     cached.cached = true;
     let checks = [cached, likely("script:fresh", 200.0)];
 
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.0001, 250.0));
+    let plan = plan_for(&checks, &none(), &gate(0.0001, 250.0));
 
     assert_eq!(names(&plan.cached), ["script:cached"]);
     assert_eq!(names(&plan.run), ["script:fresh"]);
@@ -234,16 +283,16 @@ fn a_cached_check_is_answered_from_the_cache_without_spending_the_cap() {
 }
 
 #[test]
-fn a_cached_result_is_used_after_the_cap_is_reached() {
+fn a_cached_result_is_used_after_the_budget_is_spent() {
     let mut cached = likely("script:cached", 900.0);
     cached.cached = true;
     let checks = [likely("script:a", 100.0), likely("script:b", 400.0), cached];
 
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.0001, 150.0));
+    let plan = plan_for(&checks, &none(), &gate(0.0001, 150.0));
 
     assert_eq!(names(&plan.run), ["script:a"]);
     assert_eq!(names(&plan.cached), ["script:cached"]);
-    assert_eq!(left_names(&plan.past_cap), ["script:b"]);
+    assert_eq!(left_names(&plan.past_budget), ["script:b"]);
 }
 
 #[test]
@@ -253,14 +302,14 @@ fn a_check_with_an_open_regression_is_left_out_unless_its_fix_is_landing() {
     broken.regression = Some(ticket.clone());
     let checks = [broken];
 
-    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.004, 400.0));
+    let plan = plan_for(&checks, &none(), &gate(0.004, 400.0));
     assert!(plan.run.is_empty() && plan.tip.is_empty());
     assert_eq!(
         plan.known_failing,
         [(name("script:broken"), ticket.clone())]
     );
 
-    let plan = plan_landing(&checks, &BTreeMap::new(), Some(&ticket), &gate(0.004, 0.0));
+    let plan = plan_landing(&checks, &none(), Some(&ticket), &gate(0.004, 0.0));
     assert_eq!(names(&plan.run), ["script:broken"]);
     assert_eq!(plan.run[0].why, Why::Fixes);
     assert!(plan.known_failing.is_empty());

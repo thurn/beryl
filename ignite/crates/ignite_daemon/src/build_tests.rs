@@ -456,6 +456,31 @@ fn forgetting_a_tree_builds_again() {
     ));
 }
 
+/// The landing gate leaves a check to tip verification when its product would be a cold build
+/// in the gate's tree, so the manager must know which products a tree has built before, also
+/// after a restart of the daemon.
+#[test]
+fn a_tree_has_built_a_product_it_built_or_whose_outputs_it_holds() {
+    let f = fixture("has-built", false);
+    assert!(!f.manager.has_built(&tree(), "tests"));
+    f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(f.manager.has_built(&tree(), "tests"));
+    assert!(
+        !f.manager
+            .has_built(&TreeId::new("tree-02").unwrap(), "tests")
+    );
+
+    // A new manager, as after a restart, knows only what the tree's directories hold: an empty
+    // output directory is not a build, one with files is.
+    let fresh = fixture("has-built-fresh", false);
+    assert!(!fresh.manager.has_built(&tree(), "lint"));
+    fs::create_dir_all(fresh.dir.join("target")).unwrap();
+    assert!(!fresh.manager.has_built(&tree(), "lint"));
+    fs::write(fresh.dir.join("target").join("CACHEDIR.TAG"), "x").unwrap();
+    assert!(fresh.manager.has_built(&tree(), "lint"));
+    assert!(!fresh.manager.has_built(&tree(), "no-such-product"));
+}
+
 #[test]
 fn feature_differences_ignore_feature_nodes_and_repeats() {
     let whole = "x v1|a,b\nx feature \"a\"\nx v1|a,b (*)\ny v2|\n";

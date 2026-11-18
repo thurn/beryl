@@ -272,7 +272,12 @@ crate::tables! {
         listing_s: f64,
         building_s: f64,
         waiting_s: f64,
+        /// JSON `RoundBudget`, NULL from a daemon built before the tip budget.
+        budget: Option<String>,
     }
+
+    /// Each class's rate of check commands for one day, in billions of instructions per second.
+    ClassRate = "class_rates" { day: String, class: String, rate: Option<f64> }
 
     Metric = "metrics" { machine: String, source: String, data: String, at: String }
 

@@ -1,5 +1,5 @@
-//! `ignite gate replay`: the gate's settings worked out from history. See "The threshold and the
-//! cap" in `docs/ignite.md`.
+//! `ignite gate replay`: the gate's threshold worked out from history. See "Where regression
+//! checks run" in `docs/ignite.md`.
 //!
 //! - A **catch** is a failure of a regression check that a later change made pass again, read
 //!   from Ignite's own records in the hub's database ([`ignite_store::hub::catches`]): failures
@@ -15,22 +15,25 @@
 //!   same change, which the log does not link to this one. The threshold is the largest of those scores at
 //!   which the gate still keeps [`KEEP`] of the catches: a catch is kept when its check's score
 //!   is at or above the threshold.
-//! - The cap is the [`KEEP`] quantile (nearest rank) of what the gate would have spent on the
-//!   checks chosen by score, at that threshold and with no cap, for the changes that were caught.
+//! - The spend is the [`KEEP`] quantile (nearest rank) of what the gate would have spent on the
+//!   checks chosen by score, at that threshold and with no budget, for the changes that were
+//!   caught. It is printed to compare with the gate's budget, `[gate] seconds` at the `land`
+//!   class's rate, which is set in seconds and not from history.
 //!   Only the checks the change could affect are costed: the catch's own check and the checks
 //!   with a record after changes to one of the catch's areas. The others' inputs were not
 //!   touched, so on a real landing the result cache answers them for nothing.
 //! - The replay knows neither which builds each tree held nor what the result cache held beyond
-//!   that, so it charges no builds and counts every affected chosen check as run.
+//!   that, so it counts every affected chosen check as run. Builds are outside the budget.
 //!
-//! It prints the two values, the share of catches each nearby threshold keeps, and the `[gate]`
-//! lines for `ignite.toml`. It writes nothing.
+//! It prints the threshold and the spend, the share of catches each nearby threshold keeps, and
+//! the `[gate]` threshold line for `ignite.toml`. It writes nothing.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use ignite_core::admission::median;
-use ignite_core::config::{Config, Gate};
+use ignite_core::budget::Budget;
+use ignite_core::config::Config;
 use ignite_core::gate::{GateCheck, GateInput, GatePlan, History, Why, plan};
 use ignite_core::manifest::Kind;
 use ignite_core::protocol::client::{Exit, Reply};
@@ -43,7 +46,7 @@ use ignite_store::import::runlog::Catch;
 use crate::args::GateCommand;
 use crate::manifest::{CONFIG_FILE, crate_graph, read_manifest};
 
-/// The share of catches the threshold keeps, and the quantile of gate costs the cap covers.
+/// The share of catches the threshold keeps, and the quantile of gate costs the spend covers.
 pub const KEEP: f64 = 0.95;
 /// How many candidate thresholds on each side of the chosen one the output lists.
 const NEARBY: usize = 2;
@@ -55,7 +58,7 @@ pub struct Row {
     /// Catches whose check scored at or above the threshold.
     pub kept: usize,
     /// The [`KEEP`] quantile of the gates' scored cost at this threshold, in billions.
-    pub cap: f64,
+    pub spent: f64,
 }
 
 /// What the replay found.
@@ -76,13 +79,10 @@ impl Replay {
         &self.nearby[self.chosen]
     }
 
-    /// The values as they go in `ignite.toml`: the threshold rounded down and the cap rounded
-    /// up, so the written values keep at least what the replay found.
-    pub fn gate(&self) -> Gate {
-        Gate {
-            threshold: round_down(self.chosen().threshold),
-            cap: self.chosen().cap.ceil(),
-        }
+    /// The threshold as it goes in `ignite.toml`: rounded down, so the written value keeps at
+    /// least what the replay found.
+    pub fn threshold(&self) -> f64 {
+        round_down(self.chosen().threshold)
     }
 }
 
@@ -117,7 +117,7 @@ pub fn replay(catches: &[Catch], checks: &[GateCheck]) -> Option<Replay> {
     let start = at.saturating_sub(NEARBY);
     let row = |threshold: f64| {
         let kept = scored.iter().filter(|(s, _)| *s >= threshold).count();
-        // With no cap, no builds to charge and nothing cached, the gate runs every check
+        // With no budget and nothing cached, the gate runs every check
         // scoring at or above the threshold, so its scored cost is the sum of their costs.
         let costs: Vec<f64> = scored
             .iter()
@@ -131,7 +131,7 @@ pub fn replay(catches: &[Catch], checks: &[GateCheck]) -> Option<Replay> {
         Row {
             threshold,
             kept,
-            cap: quantile(costs, KEEP),
+            spent: quantile(costs, KEEP),
         }
     };
     let nearby: Vec<Row> = candidates[start..(at + NEARBY + 1).min(candidates.len())]
@@ -152,9 +152,10 @@ pub fn replay(catches: &[Catch], checks: &[GateCheck]) -> Option<Replay> {
 /// builds to charge and no groups (see [`gate_checks`]) a check's score does not depend on
 /// the others. A check the gate would not score gets a score of negative infinity.
 fn solo_scores(catches: &[Catch], checks: &[GateCheck]) -> Vec<Vec<(f64, f64)>> {
-    let everything = Gate {
+    let everything = Budget {
         threshold: f64::NEG_INFINITY,
-        cap: f64::INFINITY,
+        seconds: f64::INFINITY,
+        rate: 1.0,
     };
     let score_one = |catch: &Catch| -> Vec<(f64, f64)> {
         checks
@@ -221,12 +222,12 @@ pub fn without_catch(check: &GateCheck, catch: &Catch) -> GateCheck {
 }
 
 /// The gate's plan for a change to `areas`, with every build current and nothing cached.
-fn plan_for(areas: &[String], checks: &[GateCheck], gate: &Gate) -> GatePlan {
-    let no_builds = BTreeMap::new();
+fn plan_for(areas: &[String], checks: &[GateCheck], gate: &Budget) -> GatePlan {
+    let no_builds = BTreeSet::new();
     let input = GateInput {
         areas,
         checks,
-        missing_builds: &no_builds,
+        unbuilt: &no_builds,
         landing: None,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };
@@ -317,7 +318,7 @@ pub fn gate_checks(replies: &[CheckStatsReply], left_out: &BTreeSet<String>) -> 
 pub fn report(found: &Replay, days: u32) -> Reply {
     use std::fmt::Write as _;
     let percent = |kept: usize| 100.0 * kept as f64 / found.catches as f64;
-    let gate = found.gate();
+    let threshold = found.threshold();
     let chosen = found.chosen();
     let mut text = format!("{} catches in the last {days} days", found.catches);
     if found.unscored > 0 {
@@ -330,13 +331,13 @@ pub fn report(found: &Replay, days: u32) -> Reply {
     let _ = write!(
         text,
         "\nthreshold {:.5e}: keeps {} of {} ({:.1}%)\n\
-         cap {:.0} billion: covers {:.0}% of those gates\n\n\
-         threshold      keeps            cap\n",
+         spent {:.0} billion: covers {:.0}% of those gates\n\n\
+         threshold      keeps          spent\n",
         chosen.threshold,
         chosen.kept,
         found.catches,
         percent(chosen.kept),
-        gate.cap,
+        chosen.spent.ceil(),
         KEEP * 100.0,
     );
     for (index, row) in found.nearby.iter().enumerate() {
@@ -351,23 +352,22 @@ pub fn report(found: &Replay, days: u32) -> Reply {
             row.threshold,
             row.kept,
             percent(row.kept),
-            row.cap.ceil(),
+            row.spent.ceil(),
         );
     }
     let _ = write!(
         text,
-        "\nfor ignite.toml:\n[gate]\nthreshold = {:.2e}\ncap = {}\n",
-        gate.threshold, gate.cap
+        "\nfor ignite.toml:\n[gate]\nthreshold = {threshold:.2e}\n"
     );
     let row_json =
-        |r: &Row| serde_json::json!({"threshold": r.threshold, "kept": r.kept, "cap": r.cap});
+        |r: &Row| serde_json::json!({"threshold": r.threshold, "kept": r.kept, "spent": r.spent});
     let mut reply = Reply::text(Exit::Success, text);
     reply.json = Some(serde_json::json!({
         "days": days,
         "catches": found.catches,
         "unscored": found.unscored,
-        "threshold": gate.threshold,
-        "cap": gate.cap,
+        "threshold": threshold,
+        "spent": chosen.spent,
         "chosen": row_json(chosen),
         "nearby": found.nearby.iter().map(row_json).collect::<Vec<_>>(),
     }));

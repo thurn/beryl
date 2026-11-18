@@ -108,10 +108,16 @@ fn recorded(conn: &Connection, family: &str) -> Result<BTreeMap<String, f64>> {
 
 /// Stores one finished round.
 pub fn record(conn: &Connection, round: &TipRound) -> Result<()> {
+    let budget = round
+        .budget
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|e| StoreError::Invalid(e.to_string()))?;
     conn.execute(
         "INSERT INTO tip_rounds (commit_sha, machine, at, wall_s, ran, cached, checks_s,
-                                 listing_s, building_s, waiting_s)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                                 listing_s, building_s, waiting_s, budget)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             round.commit.as_str(),
             round.machine.as_str(),
@@ -122,7 +128,8 @@ pub fn record(conn: &Connection, round: &TipRound) -> Result<()> {
             round.checks_s,
             round.listing_s,
             round.building_s,
-            round.waiting_s
+            round.waiting_s,
+            budget
         ],
     )?;
     Ok(())
@@ -132,7 +139,7 @@ pub fn record(conn: &Connection, round: &TipRound) -> Result<()> {
 pub fn recent(conn: &Connection, limit: u32) -> Result<Vec<TipRound>> {
     let mut select = conn.prepare(
         "SELECT commit_sha, machine, at, wall_s, ran, cached, checks_s, listing_s, building_s,
-                waiting_s
+                waiting_s, budget
          FROM tip_rounds ORDER BY at DESC, id DESC LIMIT ?1",
     )?;
     let rows = select
@@ -149,12 +156,17 @@ pub fn recent(conn: &Connection, limit: u32) -> Result<Vec<TipRound>> {
                     row.get(9)?,
                 ],
                 (row.get::<_, u32>(4)?, row.get::<_, u32>(5)?),
+                row.get::<_, Option<String>>(10)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(commit, machine, at, seconds, (ran, cached))| {
+        .map(|(commit, machine, at, seconds, (ran, cached), budget)| {
             let [wall_s, checks_s, listing_s, building_s, waiting_s] = seconds;
+            let budget = budget
+                .map(|json| serde_json::from_str(&json))
+                .transpose()
+                .map_err(|e| StoreError::Invalid(format!("a round's budget: {e}")))?;
             Ok(TipRound {
                 commit: parse("commit", &commit)?,
                 machine: parse("machine", &machine)?,
@@ -166,6 +178,7 @@ pub fn recent(conn: &Connection, limit: u32) -> Result<Vec<TipRound>> {
                 listing_s,
                 building_s,
                 waiting_s,
+                budget,
             })
         })
         .collect()
@@ -243,10 +256,22 @@ mod tests {
             listing_s: 180.0,
             building_s: 10.0,
             waiting_s: 5.0,
+            budget: None,
         };
         record(&conn, &round("abcd", 10.0)).unwrap();
-        record(&conn, &round("ef01", 20.0)).unwrap();
-        assert_eq!(last(&conn).unwrap(), Some(round("ef01", 20.0)));
+        let mut newest = round("ef01", 20.0);
+        newest.budget = Some(ignite_core::tipround::RoundBudget {
+            seconds: 300.0,
+            rate: 39.5,
+            within: 4,
+            within_billions: 900.0,
+            after: 12,
+            after_billions: 30_000.0,
+            master_s: Some(200.0),
+            ..Default::default()
+        });
+        record(&conn, &newest).unwrap();
+        assert_eq!(last(&conn).unwrap(), Some(newest));
         assert_eq!(recent(&conn, 5).unwrap().len(), 2);
     }
 }

@@ -38,28 +38,31 @@
 //!   only another platform's machines can run, the hub is told once per tip and platform, and
 //!   files a P1 ticket naming those machines. `master` keeps waiting.
 
+mod cache;
 mod covered;
 mod families;
 mod meter;
 mod report;
+mod split;
 mod work;
 
 #[cfg(test)]
 mod tests;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::sync::Arc;
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Seq, TicketId};
+use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    IncompleteReason, Record, RegressionReport, ResultKey, TipState, TipVerified, TipWaiting,
+    IncompleteReason, RegressionReport, ResultKey, TipState, TipVerified, TipWaiting,
 };
-use ignite_core::protocol::{Class, Outcome};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Push, Result};
 
+use crate::checks::Scoring;
 use crate::server::Context;
 
 pub use work::{CheckTipWork, ticketed_landings};
@@ -189,6 +192,18 @@ pub trait TipWork: Send + Sync {
     }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;
+    /// What `checks` at `to` are scored by for the tip budget, with the landings since `from`;
+    /// `None` when it cannot be known, and then every check runs before `master` moves.
+    fn scoring(
+        &self,
+        ctx: &Context,
+        from: &Commit,
+        to: &Commit,
+        checks: &[&TipCheck],
+    ) -> Option<Scoring> {
+        let _ = (ctx, from, to, checks);
+        None
+    }
 }
 
 /// How one tip's verification ended.
@@ -341,7 +356,7 @@ impl TipVerifier {
         let (meter, metered) = meter::Meter::start(ctx);
         let mut tally = meter::Tally::default();
         let outcome = self.verify_round(&metered, &last, tip, &mut tally);
-        meter::send(ctx, &meter.finish(ctx, tip, tally));
+        meter::send(ctx, &meter.finish(ctx, tip, &tally));
         outcome
     }
 
@@ -394,7 +409,10 @@ impl TipVerifier {
         self.record_cached(ctx, tip, &checks, &to_run, &recheck);
         tally.cached = u32::try_from(verdicts.len()).unwrap_or(u32::MAX);
 
-        let (superseded, runs) = self.run_families(ctx, tip, &checks, &to_run)?;
+        // The tip budget: the best-scored checks run before `master` moves, the rest after.
+        let split = self.split(ctx, last, tip, &to_run, &recheck);
+        tally.budget.clone_from(&split.budget);
+        let (superseded, runs) = self.run_families(ctx, tip, &checks, &split.within)?;
         if let Some(by) = superseded {
             return Ok(TipOutcome::Superseded { by });
         }
@@ -415,7 +433,7 @@ impl TipVerifier {
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting: Vec<CheckName> = Vec::new();
         let mut elsewhere: BTreeMap<Os, Vec<CheckName>> = BTreeMap::new();
-        for check in &checks {
+        for check in checks.iter().filter(|c| !split.is_after(c)) {
             match verdicts.get(&check.key).map(|v| v.outcome) {
                 Some(Outcome::Pass | Outcome::Flaky) => {}
                 Some(Outcome::Fail) => failed.push(check),
@@ -460,7 +478,11 @@ impl TipVerifier {
             waiting.dedup();
             return Ok(TipOutcome::Waiting { checks: waiting });
         }
-        self.move_master(ctx, tip)
+        let outcome = self.move_master(ctx, tip)?;
+        if outcome == TipOutcome::Verified {
+            self.run_after(ctx, last, tip, &checks, &split, &mut verdicts, tally)?;
+        }
+        Ok(outcome)
     }
 
     /// Moves `master` to a tip whose every check passed and records it as verified.
@@ -657,80 +679,6 @@ impl TipVerifier {
         })?;
         self.reported.insert(check.key.clone());
         Ok(())
-    }
-
-    /// Looks up the checks still without a verdict, which other machines may have passed by
-    /// now. A failure from another machine that this one can run is left for the next round to
-    /// run here.
-    fn fill_from_cache(
-        ctx: &Context,
-        checks: &[TipCheck],
-        verdicts: &mut HashMap<ResultKey, TipRun>,
-    ) -> Result<()> {
-        let missing: Vec<&TipCheck> = checks
-            .iter()
-            .filter(|c| c.reuse && !verdicts.contains_key(&c.key))
-            .collect();
-        if missing.is_empty() {
-            return Ok(());
-        }
-        let keys: Vec<ResultKey> = missing.iter().map(|c| c.key.clone()).collect();
-        for (check, hit) in missing.into_iter().zip(ctx.hub.lookup(&keys)?) {
-            let Some(hit) = hit else { continue };
-            let foreign_failure =
-                hit.outcome == Outcome::Fail && check.runnable && hit.machine != ctx.machine;
-            if !foreign_failure {
-                verdicts.insert(check.key.clone(), verdict(check, hit.outcome, hit.output));
-            }
-        }
-        Ok(())
-    }
-
-    /// Sends one record with the verb `cached` and no cost for each family whose checks were
-    /// all answered by the result cache, so the hub can count cache hits.
-    fn record_cached(
-        &self,
-        ctx: &Context,
-        tip: &Commit,
-        checks: &[TipCheck],
-        to_run: &[&TipCheck],
-        recheck: &[&TipCheck],
-    ) {
-        let families: BTreeSet<&str> = checks
-            .iter()
-            .filter(|c| c.runnable)
-            .map(|c| c.family.as_str())
-            .collect();
-        let records: Vec<Record> = families
-            .into_iter()
-            .filter(|family| !to_run.iter().chain(recheck).any(|c| c.family == *family))
-            .map(|family| Record {
-                machine: ctx.machine.clone(),
-                ticket: None,
-                session: None,
-                tree: None,
-                verb: "cached".to_owned(),
-                class: Class::Tip,
-                family: Some(family.to_owned()),
-                queued_s: 0.0,
-                wall_s: 0.0,
-                cpu_s: 0.0,
-                instructions: None,
-                peak_mb: 0,
-                outcome: Some(Outcome::Pass),
-                commit: Some(tip.clone()),
-                ignite: self.ignite.clone(),
-                at: ctx.clock.now(),
-                compile_units: Vec::new(),
-            })
-            .collect();
-        if records.is_empty() {
-            return;
-        }
-        // Telemetry never decides a tip: a hub that refuses it is logged and the round goes on.
-        if let Err(error) = ctx.hub.records(&records) {
-            eprintln!("ignite: cache-hit records not sent: {error}");
-        }
     }
 }
 

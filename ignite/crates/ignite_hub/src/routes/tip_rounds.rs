@@ -6,6 +6,9 @@
 //!   but checks and builds ([`TipRound::overhead`]), it files one improvement ticket naming the
 //!   largest part, or reuses the open one.
 //! - `GET /tips/rounds/last` answers the newest round, for `ignite status`.
+//! - `GET /rates` answers each class's rate of check commands for today, which converts the
+//!   gate's and the tip's budgets from seconds to instructions. It is computed on the first
+//!   request of a day and kept for the rest of it ([`ignite_store::hub::rates`]).
 //!
 //! The two `POST` routes write, so they need an authorized writer (HTTP 401 otherwise).
 
@@ -18,7 +21,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::tipround::{
     LastTipRound, OVERHEAD_SHARE, TipCostsRequest, TipRound, TipRoundFiled,
 };
-use ignite_store::hub::tip_rounds;
+use ignite_store::hub::{rates, tip_rounds};
 
 use super::{Request, Response};
 use crate::upkeep::filing::{self, Author, Filing};
@@ -32,7 +35,7 @@ const CATEGORY: &str = "slow-tip-round";
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let method = match request.path.as_str() {
         "/tips/costs" | "/tips/rounds" => "POST",
-        "/tips/rounds/last" => "GET",
+        "/tips/rounds/last" | "/rates" => "GET",
         _ => return None,
     };
     if request.method != method {
@@ -57,6 +60,9 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
                 .map(|filed| Response::json(200, &json!(filed)))
                 .map_err(|e| failure(500, &e.to_string()))
         }),
+        "/rates" => rates::rates(conn, now)
+            .map(|rates| Response::json(200, &json!(rates)))
+            .map_err(|e| failure(500, &e.to_string())),
         _ => tip_rounds::last(conn)
             .map(|round| Response::json(200, &json!(LastTipRound { round })))
             .map_err(|e| failure(500, &e.to_string())),
@@ -174,6 +180,7 @@ mod tests {
             listing_s,
             building_s: 0.0,
             waiting_s: 0.0,
+            budget: None,
         }
     }
 
@@ -257,5 +264,23 @@ mod tests {
         anonymous.writer = None;
         let refused = handle(&mut conn, &anonymous, Timestamp::EPOCH).unwrap();
         assert_eq!(refused.status, 401);
+    }
+
+    /// The gate and tip verification convert their budgets with the rates the hub answers. With
+    /// no record of a class's check commands it has none, and the daemon uses its default.
+    #[test]
+    fn rates_answer_for_the_day_to_any_reader() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let mut asked = request("GET", "/rates", &());
+        asked.writer = None;
+        let now: Timestamp = "2026-11-19T08:00:00Z".parse().unwrap();
+        let reply = handle(&mut conn, &asked, now).unwrap();
+        assert_eq!(reply.status, 200);
+        let rates: ignite_core::budget::ClassRates = serde_json::from_slice(&reply.body).unwrap();
+        assert_eq!(rates.day, "2026-11-19");
+        assert_eq!(rates.land, None);
+        assert!((rates.land() - ignite_core::budget::DEFAULT_LAND_RATE).abs() < f64::EPSILON);
+        let posted = handle(&mut conn, &request("POST", "/rates", &()), now).unwrap();
+        assert_eq!(posted.status, 405);
     }
 }

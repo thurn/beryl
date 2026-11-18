@@ -137,8 +137,18 @@ pub struct HubConfig {
 pub struct Gate {
     /// Expected failures per billion instructions above which a check runs at the gate.
     pub threshold: f64,
-    /// Billions of instructions per landing that checks chosen by score may spend.
-    pub cap: f64,
+    /// Seconds of running checks that the checks chosen by score may spend per landing, at the
+    /// rate `land`-class check commands achieve (see [`crate::budget`]). Builds are not counted.
+    #[serde(default = "default_gate_seconds")]
+    pub seconds: f64,
+}
+
+fn default_gate_seconds() -> f64 {
+    60.0
+}
+
+fn default_tip_seconds() -> f64 {
+    300.0
 }
 
 /// The share of hand-offs that improvement tickets get.
@@ -176,12 +186,17 @@ pub struct Tip {
     /// The measured work one claim holds, in CPU seconds: a family's checks are cut into
     /// batches whose recorded costs add up to about this much.
     pub claim_seconds: f64,
+    /// Seconds of running checks, at the rate `tip`-class check commands achieve, that a round
+    /// spends on the best-scored checks before `master` moves. The rest run afterwards.
+    #[serde(default = "default_tip_seconds")]
+    pub seconds: f64,
 }
 
 impl Default for Tip {
     fn default() -> Self {
         Self {
             claim_seconds: 60.0,
+            seconds: default_tip_seconds(),
         }
     }
 }
@@ -327,8 +342,11 @@ impl Config {
         if !positive(self.gate.threshold) {
             return fail("gate.threshold", "must be above zero");
         }
-        if !positive(self.gate.cap) {
-            return fail("gate.cap", "must be above zero");
+        if !positive(self.gate.seconds) {
+            return fail("gate.seconds", "must be above zero");
+        }
+        if !positive(self.tip.seconds) {
+            return fail("tip.seconds", "must be above zero");
         }
         let share = self.improvement;
         if !(0.0..=1.0).contains(&share.min_share) || !(0.0..=1.0).contains(&share.max_share) {
@@ -439,7 +457,7 @@ project = "demo"
 
 [gate]                 # example values
 threshold = 0.004      # expected failures per billion instructions
-cap = 400              # billions of instructions per landing
+seconds = 60           # of running checks per landing, builds not counted
 
 [machine.jarvis]
 ticket_trees = 24
@@ -500,7 +518,7 @@ products = ["clippy", "rust-tests"]
     #[test]
     fn unknown_keys_are_reported_but_not_refused() {
         let text = DOCUMENT_EXAMPLES
-            .replace("cap = 400", "cap = 400\ncapp = 1")
+            .replace("seconds = 60", "seconds = 60\nsecondz = 1")
             .replace("[repository]", "[repository]\nfuture_key = \"x\"");
         let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
         assert_eq!(
@@ -508,7 +526,10 @@ products = ["clippy", "rust-tests"]
             Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap()
         );
         assert_eq!(unknown.len(), 2, "{unknown:?}");
-        assert!(unknown.iter().any(|k| k.ends_with("capp")), "{unknown:?}");
+        assert!(
+            unknown.iter().any(|k| k.ends_with("secondz")),
+            "{unknown:?}"
+        );
         assert!(
             unknown.contains(&"repository.future_key".to_owned()),
             "{unknown:?}"
@@ -529,9 +550,25 @@ products = ["clippy", "rust-tests"]
         assert_eq!(error.key, "tip.claim_seconds");
     }
 
+    /// A file written before the two budgets has `cap` and no `seconds`: it still parses, with
+    /// the default budgets, and `cap` is reported as a key this build does not know.
+    #[test]
+    fn a_file_from_before_the_budgets_parses_with_the_default_seconds() {
+        let text = DOCUMENT_EXAMPLES.replace("seconds = 60", "cap = 8890");
+        let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
+        assert!((config.gate.seconds - 60.0).abs() < f64::EPSILON);
+        assert!((config.tip.seconds - 300.0).abs() < f64::EPSILON);
+        assert_eq!(unknown, ["gate.cap"]);
+        let text = format!("{DOCUMENT_EXAMPLES}\n[tip]\nclaim_seconds = 60\nseconds = 0\n");
+        assert_eq!(
+            Config::parse("ignite.toml", &text).unwrap_err().key,
+            "tip.seconds"
+        );
+    }
+
     #[test]
     fn syntax_errors_still_name_the_file() {
-        let text = DOCUMENT_EXAMPLES.replace("cap = 400", "cap = = 400");
+        let text = DOCUMENT_EXAMPLES.replace("seconds = 60", "seconds = = 60");
         let error = Config::parse("ignite.toml", &text).unwrap_err();
         assert_eq!(error.file, "ignite.toml");
     }

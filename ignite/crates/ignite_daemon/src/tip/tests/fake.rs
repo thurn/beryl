@@ -52,6 +52,11 @@ pub(super) struct FakeWork {
     pub(super) clock: Mutex<Option<Arc<FakeClock>>>,
     /// The class each run saw from the thread's current activity.
     pub(super) classes: Mutex<Vec<Option<ignite_core::protocol::Class>>>,
+    /// What the round scores its checks by, for the tip budget; `None` runs every check before
+    /// `master` moves.
+    pub(super) scoring: Mutex<Option<crate::checks::Scoring>>,
+    /// Where `master` was when each run started, with the checks it ran.
+    pub(super) masters: Mutex<Vec<(Vec<CheckName>, Commit)>>,
 }
 
 impl FakeWork {
@@ -146,6 +151,16 @@ impl TipWork for FakeWork {
         (*self.parallel.lock().unwrap()).max(1)
     }
 
+    fn scoring(
+        &self,
+        _ctx: &Context,
+        _from: &Commit,
+        _to: &Commit,
+        _checks: &[&TipCheck],
+    ) -> Option<crate::checks::Scoring> {
+        self.scoring.lock().unwrap().clone()
+    }
+
     fn covered_by(&self) -> BTreeMap<String, String> {
         self.covered_by.lock().unwrap().clone()
     }
@@ -165,6 +180,9 @@ impl TipWork for FakeWork {
             active.0 -= 1;
         }
         self.launch(ctx, "run");
+        if let Ok(master) = ctx.git.tip(&ctx.config.repository.master) {
+            self.masters.lock().unwrap().push((checks.to_vec(), master));
+        }
         self.runs
             .lock()
             .unwrap()

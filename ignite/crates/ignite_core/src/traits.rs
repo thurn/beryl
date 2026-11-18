@@ -143,6 +143,14 @@ pub trait Builds: Send + Sync {
         let _ = who;
         self.ensure(tree, product, packages)
     }
+
+    /// Whether `tree` has built `product` before, so that making it current is an incremental
+    /// rebuild rather than a cold build. The landing gate builds no product a tree has never
+    /// built for checks chosen by score. An implementation that cannot tell says it has.
+    fn has_built(&self, tree: &TreeId, product: &str) -> bool {
+        let _ = (tree, product);
+        true
+    }
 }
 
 /// The command a build is made for: its class, ticket and session.
@@ -274,6 +282,12 @@ pub trait Hub: Send + Sync {
     /// The newest tip verification round any machine recorded (`GET /tips/rounds/last`).
     fn last_tip_round(&self) -> Result<Option<TipRound>> {
         Err(not_supported("give the last tip round"))
+    }
+
+    /// Each class's rate of check commands for today, which converts the two budgets from
+    /// seconds to instructions (`GET /rates`).
+    fn rates(&self) -> Result<crate::budget::ClassRates> {
+        Err(not_supported("give the class rates"))
     }
 
     /// Reports an emergency; the hub files or comments on a justiciar ticket

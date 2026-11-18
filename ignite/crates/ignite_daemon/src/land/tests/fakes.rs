@@ -514,7 +514,10 @@ impl LandGate for CacheGate {
             }
         }
         self.passes.lock().unwrap().push(ran);
-        GateRun { run, left: 0 }
+        GateRun {
+            run,
+            ..GateRun::default()
+        }
     }
 }
 

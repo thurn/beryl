@@ -2,6 +2,7 @@
 //! [`time::SystemClock`]: every other crate brings the files, processes and network.
 
 pub mod admission;
+pub mod budget;
 pub mod config;
 pub mod dispatch;
 pub mod explore;

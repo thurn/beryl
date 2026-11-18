@@ -59,11 +59,11 @@ fn twenty_catches_keep_nineteen_and_the_cap_covers_their_gates() {
     assert!((found.chosen().threshold - 1.0 / 119.0).abs() < 1e-12);
     assert_eq!(found.chosen().kept, 19);
     // Every catch touched the same area, so each gate runs the same 19 one-billion checks.
-    assert!((found.chosen().cap - 19.0).abs() < 1e-9);
+    assert!((found.chosen().spent - 19.0).abs() < 1e-9);
     let kept: Vec<usize> = found.nearby.iter().map(|r| r.kept).collect();
     assert_eq!(kept, vec![17, 18, 19, 20]);
-    assert!((found.gate().cap - 19.0).abs() < f64::EPSILON);
-    assert!(found.gate().threshold <= found.chosen().threshold);
+    assert!((found.chosen().spent.ceil() - 19.0).abs() < f64::EPSILON);
+    assert!(found.threshold() <= found.chosen().threshold);
 }
 
 #[test]
@@ -102,7 +102,7 @@ fn on_a_seeded_history_the_threshold_keeps_95_percent_and_the_next_larger_keeps_
     assert!(!enough(larger.kept, found.catches), "{larger:?}");
     // A lower threshold runs at least as much.
     for pair in found.nearby.windows(2) {
-        assert!(pair[0].cap <= pair[1].cap && pair[0].kept <= pair[1].kept);
+        assert!(pair[0].spent <= pair[1].spent && pair[0].kept <= pair[1].kept);
     }
     let text = report(&found, 14).text;
     assert!(text.contains("[gate]\nthreshold = "), "{text}");
@@ -183,7 +183,7 @@ fn the_cap_costs_only_checks_the_change_could_affect() {
     ];
     let found = replay(&[catch("rust:near", &["a"])], &checks).unwrap();
     assert!(
-        (found.chosen().cap - 2.0).abs() < 1e-9,
+        (found.chosen().spent - 2.0).abs() < 1e-9,
         "{:?}",
         found.chosen()
     );

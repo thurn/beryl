@@ -43,7 +43,7 @@ mod batches;
 mod execute;
 mod gate;
 pub(crate) mod listings;
-mod plan;
+pub(crate) mod plan;
 mod prepare;
 mod regression;
 mod scope;
@@ -74,7 +74,8 @@ use crate::server::Context;
 use listings::{Kept, Listing};
 
 pub use adapters::{Listed, Reported, Target};
-pub use gate::GateRun;
+pub use gate::{GateBudget, GateRun};
+pub use plan::Scoring;
 pub use sources::{CheckHistory, HubHistory, TreeSource};
 pub use verbs::{CheckVerb, TestVerb, WhyVerb};
 
@@ -168,6 +169,10 @@ pub struct CheckRun {
     /// Families in the landing gate's scope that it did not list, because it stopped at the
     /// first fault it knew of.
     pub unlisted: Vec<String>,
+    /// Families in the landing gate's scope that it left to tip verification without listing
+    /// them, because listing them needs a product the tree has never built and no listing of
+    /// them is kept.
+    pub cold_families: Vec<String>,
     /// Seconds the check commands ran, builds excluded.
     pub wall_s: f64,
     /// For each check a run gave a verdict, the hub's ID for that run's record, when the hub

@@ -388,6 +388,10 @@ impl Hub for HubClient {
         Ok(reply.round)
     }
 
+    fn rates(&self) -> Result<ignite_core::budget::ClassRates> {
+        self.get("/rates", &[])
+    }
+
     /// `GET /tickets/<id>` with its comments and history.
     fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
         let query = [("comments", "1".to_owned()), ("history", "1".to_owned())];

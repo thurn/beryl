@@ -3,7 +3,7 @@
 
 use super::*;
 
-/// A history in which the gate's plan reads as the example under "The threshold and the cap"
+/// A history in which the gate's plan reads as the example under "Where regression checks run"
 /// in `docs/ignite.md`, with neutral names.
 fn seeded() -> World {
     let area = "game_rules/tests/";
@@ -143,6 +143,7 @@ fn check_plan_prints_the_documented_example() {
         reply.text,
         "\
 always   4 checks (card-names, clippy, file-length, fmt)
+budget   60 s of checks at 17.5 billion/s = 1,050 billion
 gate     61 checks above 0.004; 44 cached, 17 to run, about 96 billion
 tip      1,204 affected checks below the threshold
 top      rust:game_rules/tests/entering.rs::*      0.91  edited by this change
@@ -180,10 +181,18 @@ fn check_runs_the_gate_and_answers_the_rest_from_the_cache() {
         "{}",
         reply.text
     );
-    assert!(
-        reply
-            .text
-            .ends_with("tip      1,204 checks left to tip verification\n")
+    let lines: Vec<&str> = reply.text.lines().skip(1).collect();
+    assert_eq!(
+        lines,
+        [
+            "budget   60 s at 17.5 billion/s = 1,050 billion: 15 checks (94 billion) within it, \
+             2 checks (2 billion) outside it, 48 checks (48 billion) cached",
+            "build    nothing built",
+            "tip      1,204 checks left to tip verification: 1,204 checks (1,204 billion) below \
+             the threshold",
+        ],
+        "{}",
+        reply.text
     );
 }
 

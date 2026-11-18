@@ -5,8 +5,11 @@
 //! P     = (failures after changes to these areas + 20 x family rate)
 //!         / (runs after changes to these areas + 20)
 //! cost  = median instructions of its last 20 runs, in billions
-//!         + the builds it needs that nothing chosen so far has paid for
 //! ```
+//!
+//! The cost is what running the check takes. Builds are not part of it: the gate runs checks on
+//! what its tree has already compiled and leaves a check that needs a cold build to tip
+//! verification ([`crate::gate`]).
 //!
 //! The family rate stands in for 20 runs, so a check with few runs of its own starts from its
 //! family's record. A change that touches several areas takes the largest P among them. See

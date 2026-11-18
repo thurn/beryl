@@ -25,7 +25,7 @@ url = "http://localhost:1"
 project = "test"
 [gate]
 threshold = 0.004
-cap = 400
+seconds = 60
 [machine.local]
 ticket_trees = 1
 landing_trees = 1
@@ -655,6 +655,7 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
     let _ = std::fs::remove_file(private);
 }
 
+mod budget;
 mod more;
 mod rounds;
 mod speed;

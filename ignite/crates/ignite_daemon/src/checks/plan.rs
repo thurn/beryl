@@ -1,11 +1,12 @@
 //! From listed checks and the hub's record of them to the inputs of [`gate::plan`], and from a
-//! [`GatePlan`] to the text of `ignite check --plan` (see "The threshold and the cap" in
+//! [`GatePlan`] to the text of `ignite check --plan` (see "Where regression checks run" in
 //! `docs/ignite.md`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use ignite_core::budget::{Budget, ClassRates, billions_text};
 use ignite_core::config::Gate;
-use ignite_core::gate::{self, GateCheck, GateInput, GatePlan, History, Planned, Why};
+use ignite_core::gate::{self, GateCheck, GateInput, GatePlan, History, Planned, Why, cost_of};
 use ignite_core::ids::{CheckName, TicketId};
 use ignite_core::inputs::{self, CrateGraph};
 use ignite_core::manifest::{Family, Kind};
@@ -13,6 +14,7 @@ use ignite_core::protocol::hub::{CachedResult, CheckState, CheckStats, CheckStat
 use ignite_core::score::{self, AreaRecord, Cost};
 
 use super::Prepared;
+use crate::server::Context;
 
 /// How many entries `ignite check --plan` lists under `top`.
 const TOP: usize = 2;
@@ -37,6 +39,45 @@ pub(crate) struct GateView {
     pub stats: BTreeMap<CheckName, CheckStats>,
     /// The ticket being landed, whose own regression's check must run in this gate.
     pub landing: Option<TicketId>,
+    /// Build products the tree has never built.
+    pub unbuilt: BTreeSet<String>,
+    /// Billions of instructions per second of wall time that `land`-class check commands
+    /// achieve, which converts `[gate] seconds` to instructions.
+    pub rate: f64,
+}
+
+/// Each class's rate for today from the hub, or the defaults when the hub cannot answer.
+pub(crate) fn class_rates(ctx: &Context) -> ClassRates {
+    ctx.hub.rates().unwrap_or_else(|error| {
+        eprintln!("ignite: no class rates from the hub, using the defaults: {error}");
+        ClassRates::default()
+    })
+}
+
+/// What the hub knows of `check`, a check of the regression family `declared`, for scoring, or
+/// `None` when the hub has switched it off. `reply` is the family's record at the hub.
+pub(crate) fn scored_check(
+    check: &CheckName,
+    declared: &Family,
+    reply: Option<&CheckStatsReply>,
+    regression: Option<TicketId>,
+) -> Option<GateCheck> {
+    let record = reply.and_then(|r| r.checks.iter().find(|s| s.check == *check));
+    if record.is_some_and(|s| s.state == CheckState::Off) {
+        return None;
+    }
+    Some(GateCheck {
+        check: check.clone(),
+        always: declared.always,
+        edited: false,
+        cached: false,
+        history: record.and_then(history),
+        family_rate: reply.map_or(0.0, |r| r.family_rate),
+        family_median_cost: reply.map_or(UNKNOWN_COST, family_median_cost),
+        needs: declared.needs.clone(),
+        group: None,
+        regression,
+    })
 }
 
 impl GateView {
@@ -58,35 +99,28 @@ impl GateView {
             checks: Vec::new(),
             stats: BTreeMap::new(),
             landing: None,
+            unbuilt: BTreeSet::new(),
+            rate: ClassRates::default().land(),
         };
         let mut hits = hits.iter();
         for prepared in prepared {
             let declared = family(&prepared.family);
             let reply = stats.get(&prepared.family);
-            let family_median = reply.map_or(UNKNOWN_COST, family_median_cost);
             for keyed in &prepared.keyed {
                 let hit = hits.next().and_then(Option::as_ref);
                 let Some(declared) = declared.filter(|f| f.kind == Kind::Regression) else {
                     continue;
                 };
                 let check = &keyed.listed.check;
+                let regression = regressions.get(check).cloned();
+                let Some(mut scored) = scored_check(check, declared, reply, regression) else {
+                    continue;
+                };
                 let record = reply.and_then(|r| r.checks.iter().find(|s| s.check == *check));
                 let check_state = record.map_or(CheckState::On, |s| s.state);
-                if check_state == CheckState::Off {
-                    continue;
-                }
-                view.checks.push(GateCheck {
-                    check: check.clone(),
-                    always: declared.always,
-                    edited: edited(check, changed),
-                    cached: hit.is_some() && check_state == CheckState::On,
-                    history: record.and_then(history),
-                    family_rate: reply.map_or(0.0, |r| r.family_rate),
-                    family_median_cost: family_median,
-                    needs: declared.needs.clone(),
-                    group: None,
-                    regression: regressions.get(check).cloned(),
-                });
+                scored.edited = edited(check, changed);
+                scored.cached = hit.is_some() && check_state == CheckState::On;
+                view.checks.push(scored);
                 if let Some(record) = record {
                     view.stats.insert(check.clone(), record.clone());
                 }
@@ -95,17 +129,25 @@ impl GateView {
         view
     }
 
+    /// The gate's budget: `[gate] seconds` at the `land` class's rate.
+    pub(crate) fn budget(&self, gate: &Gate) -> Budget {
+        Budget {
+            threshold: gate.threshold,
+            seconds: gate.seconds,
+            rate: self.rate,
+        }
+    }
+
     pub(crate) fn plan(&self, gate: &Gate) -> GatePlan {
-        let missing = BTreeMap::new();
         gate::plan(
             &GateInput {
                 areas: &self.areas,
                 checks: &self.checks,
-                missing_builds: &missing,
+                unbuilt: &self.unbuilt,
                 landing: self.landing.as_ref(),
                 billions_per_cpu_second: score::BILLIONS_PER_CPU_SECOND,
             },
-            gate,
+            &self.budget(gate),
         )
     }
 
@@ -146,6 +188,47 @@ impl GateView {
                 }
             }
         }
+    }
+}
+
+/// What tip verification scores a round's checks by: the areas the landings since the last
+/// promoted tip touched, and the hub's record of each check.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Scoring {
+    pub areas: Vec<String>,
+    /// One per check the hub has not switched off, with its open regression ticket.
+    pub checks: Vec<GateCheck>,
+}
+
+impl super::Checks {
+    /// The [`Scoring`] of `checks`, named with their families, in `tree`, for a round whose
+    /// landings changed `changed`.
+    pub(crate) fn scoring(
+        &self,
+        ctx: &Context,
+        tree: &ignite_core::ids::TreeId,
+        changed: &[String],
+        checks: &[(CheckName, String)],
+    ) -> ignite_core::traits::Result<Scoring> {
+        let tree = self.open(tree)?;
+        let families: BTreeSet<&str> = checks.iter().map(|(_, f)| f.as_str()).collect();
+        let stats: BTreeMap<&str, CheckStatsReply> = families
+            .into_iter()
+            .filter_map(|family| Some((family, self.history.stats(family).ok()?)))
+            .collect();
+        let regressions = super::verbs::open_regressions(ctx);
+        let scored = checks
+            .iter()
+            .filter_map(|(check, family)| {
+                let declared = &self.settings.manifest.families.get(family)?.family;
+                let reply = stats.get(family.as_str());
+                scored_check(check, declared, reply, regressions.get(check).cloned())
+            })
+            .collect();
+        Ok(Scoring {
+            areas: areas(changed, &tree.graph),
+            checks: scored,
+        })
     }
 }
 
@@ -262,22 +345,35 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
             format!("{} checks ({})", always.len(), names.join(", ")),
         ));
     }
+    lines.push(budget_line(&view.budget(gate)));
     lines.push((
         "gate".to_owned(),
         format!(
-            "{} checks above {}; {cached} cached, {} to run, about {:.0} billion",
+            "{} checks above {}; {cached} cached, {} to run, about {} billion",
             gated.len(),
             gate.threshold,
             gated.len() - cached,
-            plan.scored_cost + plan.forced_cost
+            billions_text(plan.scored_cost + plan.forced_cost)
         ),
     ));
-    if !plan.past_cap.is_empty() {
+    if !plan.past_budget.is_empty() {
         lines.push((
-            "past cap".to_owned(),
+            "past budget".to_owned(),
             format!(
-                "{} checks above the threshold left to the tip",
-                thousands(plan.past_cap.len())
+                "{} checks above the threshold left to the tip ({} billion)",
+                thousands(plan.past_budget.len()),
+                billions_text(cost_of(&plan.past_budget))
+            ),
+        ));
+    }
+    if !plan.cold.is_empty() {
+        lines.push((
+            "cold".to_owned(),
+            format!(
+                "{} checks need a product this tree has never built, left to the tip ({} \
+                 billion)",
+                thousands(plan.cold.len()),
+                billions_text(cost_of(&plan.cold))
             ),
         ));
     }
@@ -307,6 +403,19 @@ pub(crate) fn plan_lines(view: &GateView, plan: &GatePlan, gate: &Gate) -> Vec<(
     }
     lines.extend(top_lines(view, &gated));
     lines
+}
+
+/// The `budget` line: the gate's budget in seconds, the rate it converts at, and the result.
+pub(crate) fn budget_line(budget: &Budget) -> (String, String) {
+    (
+        "budget".to_owned(),
+        format!(
+            "{:.0} s of checks at {:.1} billion/s = {} billion",
+            budget.seconds,
+            budget.rate,
+            billions_text(budget.billions())
+        ),
+    )
 }
 
 /// The best-scored chosen checks, a run of checks in one module with the same reason and score

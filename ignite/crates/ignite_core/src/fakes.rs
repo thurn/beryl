@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::ids::{Commit, RecordId, Seq, TicketId, TreeId};
+use crate::ids::{Commit, RecordId, Seq, TicketId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
@@ -23,12 +23,12 @@ use crate::protocol::tickets::{
 };
 use crate::time::Timestamp;
 use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
-use crate::traits::{
-    BuildFor, BuildResult, Builds, Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult,
-};
+use crate::traits::{Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult};
 
+mod builds;
 mod git;
 mod tips;
+pub use builds::FakeBuilds;
 pub use git::FakeGit;
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -102,63 +102,6 @@ impl Launcher for FakeLauncher {
                 },
                 |(_, result)| result.clone(),
             )
-    }
-}
-
-/// Builds that succeed the first time a (tree, product) is asked for and are current after.
-#[derive(Debug, Default)]
-pub struct FakeBuilds {
-    scripted: Mutex<HashMap<(TreeId, String), BuildResult>>,
-    built: Mutex<Vec<(TreeId, String, Vec<String>)>>,
-    whom: Mutex<Vec<(String, BuildFor)>>,
-}
-
-impl FakeBuilds {
-    /// Answers every later request for `product` in `tree` with `result`.
-    pub fn script(&self, tree: &TreeId, product: &str, result: BuildResult) {
-        lock(&self.scripted).insert((tree.clone(), product.to_owned()), result);
-    }
-
-    /// Every request so far: tree, product and packages.
-    pub fn requests(&self) -> Vec<(TreeId, String, Vec<String>)> {
-        lock(&self.built).clone()
-    }
-
-    /// Every request made through `ensure_for`: the product and whom it was built for.
-    pub fn requests_for(&self) -> Vec<(String, BuildFor)> {
-        lock(&self.whom).clone()
-    }
-}
-
-impl Builds for FakeBuilds {
-    fn ensure_for(
-        &self,
-        tree: &TreeId,
-        product: &str,
-        pkgs: &[String],
-        who: &BuildFor,
-    ) -> BuildResult {
-        lock(&self.whom).push((product.to_owned(), who.clone()));
-        self.ensure(tree, product, pkgs)
-    }
-
-    fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {
-        let mut built = lock(&self.built);
-        let key = (tree.clone(), product.to_owned());
-        if let Some(result) = lock(&self.scripted).get(&key) {
-            built.push((key.0, key.1, packages.to_vec()));
-            return result.clone();
-        }
-        let seen = built.iter().any(|(t, p, _)| *t == key.0 && *p == key.1);
-        built.push((key.0, key.1, packages.to_vec()));
-        if seen {
-            BuildResult::Current
-        } else {
-            BuildResult::Built {
-                usage: Usage::default(),
-                units: Vec::new(),
-            }
-        }
     }
 }
 
@@ -665,9 +608,10 @@ impl Hub for FakeHub {
 mod tests {
     use super::*;
     use crate::config::Os;
+    use crate::ids::TreeId;
     use crate::ids::{CheckName, InputHash, MachineId, RecordId};
     use crate::protocol::Outcome;
-    use crate::traits::Git;
+    use crate::traits::{BuildResult, Builds, Git};
     use std::path::Path;
 
     fn key() -> ResultKey {

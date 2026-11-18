@@ -1,6 +1,6 @@
 //! The verbs that run and explain checks: `ignite test`, `ignite check` and `ignite why`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
 
@@ -156,8 +156,11 @@ impl Verb for CheckVerb {
             json: Some(json!({
                 "run": gate_plan.run.iter().map(|p| p.check.as_str()).collect::<Vec<_>>(),
                 "cached": gate_plan.cached.iter().map(|p| p.check.as_str()).collect::<Vec<_>>(),
-                "past_cap": gate_plan.past_cap.len(),
+                "past_budget": gate_plan.past_budget.len(),
+                "cold": gate_plan.cold.len(),
                 "tip": gate_plan.tip.len(),
+                "budget_billions": view.budget(&ctx.config.gate).billions(),
+                "rate": view.rate,
                 "scored_cost": gate_plan.scored_cost,
                 "forced_cost": gate_plan.forced_cost,
                 "out_of_scope": run.out_of_scope,
@@ -338,7 +341,26 @@ pub(super) fn gate_view_of(
     let manifest = &checks.settings.manifest;
     let family = |name: &str| manifest.families.get(name).map(|d| &d.family);
     let regressions = open_regressions(ctx);
-    GateView::new(prepared, hits, family, &stats, &regressions, changed, areas)
+    let mut view = GateView::new(prepared, hits, family, &stats, &regressions, changed, areas);
+    view.unbuilt = unbuilt(ctx, tree, prepared.iter().filter_map(|p| family(&p.family)));
+    view.rate = plan::class_rates(ctx).land();
+    view
+}
+
+/// The build products that `families` need, to be listed or to run, which `tree` has never
+/// built.
+pub(super) fn unbuilt<'a>(
+    ctx: &Context,
+    tree: &OpenTree,
+    families: impl Iterator<Item = &'a Family>,
+) -> BTreeSet<String> {
+    let mut products = BTreeSet::new();
+    for family in families {
+        products.extend(family.needs.iter().cloned());
+        products.extend(family.list_needs.iter().flatten().cloned());
+    }
+    products.retain(|product| !ctx.builds.has_built(&tree.id, product));
+    products
 }
 
 /// The open regression ticket of each check the hub has one for. The hub files each as
@@ -579,8 +601,13 @@ fn record_lines(
             None => "in every landing its inputs touch (the always set)".to_owned(),
             Some(score) => format!("in the gate: score {score:.4}, threshold {threshold}"),
         }
-    } else if let Some(left) = gate_plan.past_cap.first() {
-        format!("at the tip: score {:.4} is past the cap", left.score)
+    } else if let Some(left) = gate_plan.past_budget.first() {
+        format!("at the tip: score {:.4} is past the budget", left.score)
+    } else if let Some(left) = gate_plan.cold.first() {
+        format!(
+            "at the tip: score {:.4}, but it needs a product this tree has never built",
+            left.score
+        )
     } else if let Some(left) = gate_plan.tip.first() {
         format!(
             "at the tip: score {:.4} is below the threshold {threshold}",
