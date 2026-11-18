@@ -142,3 +142,57 @@ fn each_stored_result_names_the_record_of_the_run_that_gave_it() {
     assert_eq!(lookup("unit:b").record, run_records[1]);
     assert!(run.records.contains(&(name("unit:a"), run_records[1])));
 }
+
+/// The target runner counts each test process, but only a run launched with its variables
+/// records anything. Before check runs got them, a family's `cargo nextest run` recorded one
+/// cost for the whole command and no test process of its own.
+#[test]
+fn a_nextest_run_records_its_test_processes_one_by_one() {
+    let world = world(MANIFEST, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = NEXTEST_LISTING.to_owned();
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$a\"}\n".to_owned();
+    assert!(run(&world, &["rs:core::a"]).passed());
+
+    let runs = world.launcher.runs.lock().unwrap();
+    let nextest = runs
+        .iter()
+        .find(|spec| spec.args[0] == "cargo" && spec.args.iter().any(|a| a == "run"))
+        .expect("the family's run command");
+    let env = |name: &str| nextest.env.iter().find(|(k, _)| k == name).map(|(_, v)| v);
+    assert!(
+        nextest
+            .env
+            .iter()
+            .any(|(k, v)| k.ends_with("_RUNNER") && v.ends_with("test-runner")),
+        "the target runner is set: {:?}",
+        nextest.env
+    );
+    assert!(env("RUSTC_WRAPPER").is_some_and(|v| v.ends_with("rustc-wrap")));
+    let units_file = env(crate::wrap::UNITS_ENV).expect("the units file");
+    assert!(
+        !Path::new(units_file).exists(),
+        "read and deleted after the run"
+    );
+    assert!(
+        world
+            .dir
+            .join("shims")
+            .join(crate::wrap::RUNNER_SCRIPT)
+            .exists(),
+        "the scripts were written"
+    );
+    drop(runs);
+
+    let records = world.hub.stored_records();
+    let recorded: Vec<_> = records
+        .iter()
+        .filter(|r| !r.compile_units.is_empty())
+        .collect();
+    assert_eq!(recorded.len(), 1, "{records:?}");
+    let unit = &recorded[0].compile_units[0];
+    assert_eq!(
+        (unit.crate_name.as_str(), unit.mode.as_str()),
+        ("core", "run")
+    );
+}

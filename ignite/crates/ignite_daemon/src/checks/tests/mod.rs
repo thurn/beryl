@@ -127,7 +127,15 @@ impl Launcher for ScriptLauncher {
                 String::new()
             }
             "cargo" if spec.args[2] == "list" => self.listing.lock().unwrap().clone(),
-            "cargo" => self.nextest_run.lock().unwrap().clone(),
+            "cargo" => {
+                // A real run's test runner appends one unit per test process to the file.
+                if let Some((_, file)) = spec.env.iter().find(|(k, _)| k == crate::wrap::UNITS_ENV)
+                {
+                    let unit = "{\"crate\":\"core\",\"mode\":\"run\",\"instructions\":5.0e8,\"cpu_s\":0.25,\"rebuilt\":false}\n";
+                    fs::write(file, unit).unwrap();
+                }
+                self.nextest_run.lock().unwrap().clone()
+            }
             _ => String::new(),
         };
         let n = self.files.fetch_add(1, Ordering::Relaxed);
@@ -317,6 +325,8 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
         outputs: dir.join("results"),
         cores: 1,
         ignite: "test".to_owned(),
+        ignite_exe: PathBuf::from("/bin/ignite"),
+        shims: dir.join("shims"),
     };
     let cache = ResultCache::new(
         ignite_store::local::open_in_memory().unwrap(),

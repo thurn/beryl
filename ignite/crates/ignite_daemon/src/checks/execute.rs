@@ -11,7 +11,7 @@ use ignite_core::ids::{CheckName, Commit, RecordId};
 use ignite_core::inputs;
 use ignite_core::manifest::{Adapter, Family};
 use ignite_core::protocol::hub::{
-    CachedResult, FlakyReport, IncompleteReason, NewResult, Record, ResultCost,
+    CachedResult, CompileUnit, FlakyReport, IncompleteReason, NewResult, Record, ResultCost,
 };
 use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::traits::{BuildFor, BuildResult, CommandSpec, Error, RunResult};
@@ -100,7 +100,16 @@ impl Checks {
         }
         if pending.is_empty() {
             if listed > 0 {
-                self.record(ctx, tree, name, options, &Usage::default(), "cached", None);
+                self.record(
+                    ctx,
+                    tree,
+                    name,
+                    options,
+                    &Usage::default(),
+                    "cached",
+                    None,
+                    Vec::new(),
+                );
             }
             return;
         }
@@ -435,10 +444,11 @@ impl Checks {
                     .filter_map(|k| k.listed.target.as_ref())
                     .collect();
                 let args = adapters::nextest_run_command(family.run.as_deref(), &targets);
-                let env = vec![(
+                let mut env = vec![(
                     adapters::NEXTEST_JSON_ENV.0.to_owned(),
                     adapters::NEXTEST_JSON_ENV.1.to_owned(),
                 )];
+                env.extend(self.unit_recording_env());
                 let cwd = self.nextest_dir(tree, family);
                 let (result, record) =
                     self.launch_recorded(ctx, tree, name, family, RUN, args, &cwd, env, options);
@@ -447,6 +457,35 @@ impl Checks {
                 (adapters::nextest_results(&text, &listed), result, record)
             }
         }
+    }
+
+    /// The variables that make Cargo's target runner (and the compiler wrapper) record each test
+    /// process (and compile) of a `cargo nextest run` into a new units file, as the daemon's own
+    /// builds do (`crate::wrap::cargo_env`). [`Checks::launch_recorded`] reads the file back and
+    /// attaches its units to the command's record. Empty when this daemon has no `ignite`
+    /// executable to point the scripts at, or cannot write them: the run then goes unrecorded
+    /// one by one but is otherwise unchanged.
+    fn unit_recording_env(&self) -> Vec<(String, String)> {
+        if self.settings.ignite_exe.as_os_str().is_empty() {
+            return Vec::new();
+        }
+        if let Err(error) =
+            crate::wrap::write_shims(&self.settings.shims, &self.settings.ignite_exe)
+                .and_then(|()| fs::create_dir_all(&self.settings.outputs))
+        {
+            eprintln!(
+                "ignite: cannot write the test runner to {}: {error}",
+                self.settings.shims.display()
+            );
+            return Vec::new();
+        }
+        let units = self.settings.outputs.join(format!(
+            "units-{}-{}.jsonl",
+            std::process::id(),
+            self.next_file.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = fs::remove_file(&units);
+        crate::wrap::cargo_env(&self.settings.shims, &units)
     }
 
     /// Where cargo-nextest runs: the directory of the first product the family needs.
@@ -494,6 +533,7 @@ impl Checks {
         options: &RunOptions,
     ) -> (RunResult, Option<RecordId>) {
         env.push((CLASS_ENV.to_owned(), options.class.as_str().to_owned()));
+        let spec_env = env.clone();
         let slowest = self.cache.slowest_pass(name, command);
         let result = ctx.launcher.run(&CommandSpec {
             args,
@@ -507,6 +547,14 @@ impl Checks {
             ticket: options.ticket.clone(),
             hang_limit_s: Some(hang_limit_s(slowest)),
         });
+        // The units the command's test processes and compiles recorded, if it was set up to.
+        let units = env_units_file(&spec_env)
+            .map(|file| {
+                let units = crate::build::read_units(&file);
+                let _ = fs::remove_file(&file);
+                units
+            })
+            .unwrap_or_default();
         let outcome = (result.exit == Some(0) && !result.hung).then_some(Outcome::Pass);
         if outcome.is_some() {
             self.cache.note_pass(name, command, result.usage.wall_s);
@@ -519,6 +567,7 @@ impl Checks {
             &result.usage,
             &options.verb,
             outcome,
+            units,
         );
         (result, record)
     }
@@ -535,6 +584,7 @@ impl Checks {
         usage: &Usage,
         verb: &str,
         outcome: Option<Outcome>,
+        compile_units: Vec<CompileUnit>,
     ) -> Option<RecordId> {
         #[allow(clippy::cast_precision_loss)]
         let record = Record {
@@ -554,10 +604,17 @@ impl Checks {
             commit: None,
             ignite: self.settings.ignite.clone(),
             at: ctx.clock.now(),
-            compile_units: Vec::new(),
+            compile_units,
         };
         self.cache.record(&record)
     }
+}
+
+/// The units file a command's environment names, if it names one.
+fn env_units_file(env: &[(String, String)]) -> Option<PathBuf> {
+    env.iter()
+        .find(|(name, _)| name == crate::wrap::UNITS_ENV)
+        .map(|(_, file)| PathBuf::from(file))
 }
 
 /// The input paths of `finals` whose git object IDs differ from the ones their hashes were

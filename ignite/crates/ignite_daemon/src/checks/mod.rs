@@ -111,6 +111,11 @@ pub struct CheckSettings {
     pub cores: u32,
     /// The Ignite commit that records name.
     pub ignite: String,
+    /// The `ignite` executable that the compiler wrapper and test runner scripts call. Empty
+    /// when this daemon cannot name one: Rust test runs then record no per-process units.
+    pub ignite_exe: PathBuf,
+    /// The directory of the compiler wrapper and test runner scripts (`crate::wrap`).
+    pub shims: PathBuf,
 }
 
 /// Who runs the checks and how.

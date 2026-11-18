@@ -228,6 +228,8 @@ pub fn checking(base: &Base, trees: &Trees) -> Result<(Arc<Checks>, Arc<Landing>
             outputs: base.home("outputs"),
             cores: per_command,
             ignite: base.options.version.clone(),
+            ignite_exe: base.options.ignite.clone(),
+            shims: base.home("shims"),
         },
         ResultCache::new(
             base.open()?,
