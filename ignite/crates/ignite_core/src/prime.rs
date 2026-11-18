@@ -64,6 +64,9 @@ Claim with `ignite start <ticket>`, edit in the tree it prints, land to `{stagin
 - Make the smallest change that meets the acceptance criteria. Run the focused tests,
   exercise the change by hand, and read the whole diff as a reviewer before landing. A
   check that could not run is not a pass.
+- Run every build, test suite and other heavy command through Ignite: `ignite test <names>`
+  for checks and `ignite run -- <cmd>` for anything else. A command run directly competes
+  for the cores that Ignite has already granted to other sessions.
 - Tests go through public behavior and never depend on the machine's speed.
 - Ordinary difficulty is the job: failing tests, confusing code, conflicts. Never wait for
   a person, for another ticket, for another machine or for verification. When the ticket
@@ -119,6 +122,7 @@ mod tests {
             "may be days old",
             "files the ticket names",
             "smallest change",
+            "Run every build, test suite and other heavy command through Ignite",
             "never depend on the machine's speed",
             "Ordinary difficulty is the job",
             "Never wait for a person, for another ticket, for another machine or for verification",
