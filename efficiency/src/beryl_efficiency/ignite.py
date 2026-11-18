@@ -56,9 +56,17 @@ MERGES: dict[str, Merge] = {
 
 
 def hub_path(cache: Path) -> Path:
-    """The hub's database: `$IGNITE_HUB_DB`, else `<cache>/ignite/hub.sqlite`."""
+    """The hub's database: `$IGNITE_HUB_DB`, else where the hub's daemon keeps it,
+    `hub/hub.db` in the Ignite home (`$IGNITE_HOME`, else `~/.config/ignite`). `cache` is
+    unused; the hub never lived in Beryl's cache, and an old default there made every
+    Ignite table come out empty."""
+    del cache
     found = os.environ.get("IGNITE_HUB_DB")
-    return Path(found) if found else cache / "ignite" / "hub.sqlite"
+    if found:
+        return Path(found)
+    home = os.environ.get("IGNITE_HOME")
+    root = Path(home) if home else Path.home() / ".config" / "ignite"
+    return root / "hub" / "hub.db"
 
 
 def open_hub(path: Path) -> sqlite3.Connection:

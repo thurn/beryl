@@ -345,3 +345,13 @@ def test_hub_tickets_become_beads_labels_and_aliases(tmp_path: Path) -> None:
         "SELECT json_extract(enact, '$.enact_commits') FROM beads WHERE id = 'by-old.2'"
     ).fetchone()
     assert commits == ("abc def",)
+
+
+def test_the_hub_defaults_to_the_ignite_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("IGNITE_HUB_DB", raising=False)
+    monkeypatch.setenv("IGNITE_HOME", str(tmp_path / "home"))
+    assert ignite.hub_path(tmp_path / "cache") == tmp_path / "home" / "hub" / "hub.db"
+    monkeypatch.setenv("IGNITE_HUB_DB", str(tmp_path / "x.db"))
+    assert ignite.hub_path(tmp_path / "cache") == tmp_path / "x.db"

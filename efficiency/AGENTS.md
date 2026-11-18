@@ -81,28 +81,28 @@ store" and "Isolation" before changing anything here.
   `failures.py` is the `failures` query: per Steward ticket (`enact_ci_range`)
   its sessions' cost, bisection's CPU and the minutes `master` stayed behind.
 - `ignite.py`: Ignite's hub as a source, read only on the machine whose cache
-  holds the hub's database (`$IGNITE_HUB_DB`, else `<cache>/ignite/hub.sqlite`).
-  Its records, one per command on any machine, replaced the run log, the token
-  pool's leases and the CPU sampler: each becomes an `ignite_records` row, a
-  `leases` row, `cpu` and `cpu_minutes` rows over the minutes it ran and, for a
-  check family, `checks` and `lane_runs` rows (the gate as script `check`, tip
-  verification as `ci`); compile units become `compile_timings`. The efficiency
-  rows other machines' daemons posted (`metrics`, one export line per row) are
-  imported as `import` imports a file. Tickets, tips, hand-offs and workers are
-  copied into the `ignite_*` tables, and `HubTickets` also writes the tickets as
-  `beads`, `labels` and `ticket_aliases` rows, which replaced `tk export` (the
-  hub supplies no verdict comments or session events, so those tables stop
-  growing). The `ignite` source comes first in `cli.sources()`, ahead of the
-  transcripts, because windows read the tickets; on a machine with no hub
-  database none of these sources exist and ingest keeps what the store has. A
-  machine is named by the first host seen for its ID (`ignite_machines`), so a
-  rename does not split it, and hub ticket IDs are resolved with
-  `ticket_ids.stored`. `ignite_metrics.py` registers the `ignite.*` series:
-  cycle time, waiting for a worker, repair share, `master` lag, dispatch
-  dollars, escapes per 100 landings, cache hits and the gate's instructions,
-  seconds and wait. Enact's lock-wait log has no Ignite counterpart:
-  `lock_waits` rows are history that `timing.py` still reads, and no query shows
-  them.
+  holds the hub's database (`$IGNITE_HUB_DB`, else `hub/hub.db` in the Ignite
+  home, `$IGNITE_HOME` or `~/.config/ignite`). Its records, one per command on
+  any machine, replaced the run log, the token pool's leases and the CPU
+  sampler: each becomes an `ignite_records` row, a `leases` row, `cpu` and
+  `cpu_minutes` rows over the minutes it ran and, for a check family, `checks`
+  and `lane_runs` rows (the gate as script `check`, tip verification as `ci`);
+  compile units become `compile_timings`. The efficiency rows other machines'
+  daemons posted (`metrics`, one export line per row) are imported as `import`
+  imports a file. Tickets, tips, hand-offs and workers are copied into the
+  `ignite_*` tables, and `HubTickets` also writes the tickets as `beads`,
+  `labels` and `ticket_aliases` rows, which replaced `tk export` (the hub
+  supplies no verdict comments or session events, so those tables stop growing).
+  The `ignite` source comes first in `cli.sources()`, ahead of the transcripts,
+  because windows read the tickets; on a machine with no hub database none of
+  these sources exist and ingest keeps what the store has. A machine is named by
+  the first host seen for its ID (`ignite_machines`), so a rename does not split
+  it, and hub ticket IDs are resolved with `ticket_ids.stored`.
+  `ignite_metrics.py` registers the `ignite.*` series: cycle time, waiting for a
+  worker, repair share, `master` lag, dispatch dollars, escapes per 100
+  landings, cache hits and the gate's instructions, seconds and wait. Enact's
+  lock-wait log has no Ignite counterpart: `lock_waits` rows are history that
+  `timing.py` still reads, and no query shows them.
 - `commits.py`: the commits source, `git log` of `staging` and `master` run in
   the main checkout, with `master`'s reflog in `ref_moves` (kept after git
   expires it), which says when each commit reached `master`. `History` gives
