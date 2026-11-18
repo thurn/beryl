@@ -2,7 +2,8 @@
 //!
 //! A landing writes its record before it pushes, in the state `pushing`. A push the remote
 //! accepts moves it to `pushed`; a push the remote refuses deletes it. A push that fails with no
-//! answer leaves it `pushing`, because the remote may have taken the commit before the failure.
+//! answer leaves it `pushing`, because the remote may have taken the commit before the failure;
+//! the daemon's sender settles such a record once it is old enough (see `resolve`).
 //! A `pushed` record is sent to the hub (`POST /landed`, which closes the ticket) and deleted
 //! once the hub accepts it. While the hub cannot be reached, the record stays and is sent by a
 //! later landing or by the daemon's sender, so a landing is told to the hub exactly once and
@@ -16,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::hub::Landed;
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Hub, Result};
 
 /// Where a landing's push stands.
@@ -35,6 +37,10 @@ pub struct LandingRecord {
     /// The commit pushed to the integration branch.
     pub commit: Commit,
     pub state: RecordState,
+    /// When the landing wrote the record in the state `pushing`. A record from before this
+    /// field existed has none and counts as old.
+    #[serde(default)]
+    pub written_at: Option<Timestamp>,
 }
 
 /// The records of one daemon, one JSON file per ticket in one directory.
@@ -86,6 +92,17 @@ impl Records {
         match fs::remove_file(self.path(ticket)) {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
             _ => Ok(()),
+        }
+    }
+
+    /// Deletes the ticket's record only if it is for `commit`. A landing that is refused removes
+    /// the record it wrote, never one that another landing of the same ticket wrote since.
+    pub fn remove_if(&self, ticket: &TicketId, commit: &Commit) -> Result<()> {
+        match self.get(ticket) {
+            Ok(Some(record)) if record.commit == *commit => self.remove(ticket),
+            // A record that cannot be read is not this landing's; `all` sets it aside.
+            Ok(_) | Err(Error::Invalid(_)) => Ok(()),
+            Err(error) => Err(error),
         }
     }
 

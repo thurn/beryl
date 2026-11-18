@@ -45,6 +45,8 @@ pub struct Repo {
     pub edits: HashMap<PathBuf, BTreeMap<String, Oid>>,
     pub conflicts: HashMap<PathBuf, Vec<String>>,
     pub pushes: Vec<(PathBuf, Commit)>,
+    /// Commits pushed to a branch other than the integration branch, by branch.
+    pub branch_pushes: Vec<(String, Commit)>,
 }
 
 #[derive(Default)]
@@ -58,6 +60,8 @@ pub struct TestGit {
     pub push_always_rejected: AtomicBool,
     /// Makes every push fail as a hook or a protected branch would refuse it.
     pub push_refused: AtomicBool,
+    /// Makes a push to any branch but the integration branch answer that the tip moved.
+    pub other_branch_rejected: AtomicBool,
 }
 
 impl Repo {
@@ -180,7 +184,19 @@ impl Git for TestGit {
         })
     }
 
-    fn push(&self, tree: &Path, commit: &Commit, _branch: &str) -> Result<Push> {
+    fn push(&self, tree: &Path, commit: &Commit, branch: &str) -> Result<Push> {
+        if branch != "staging" {
+            if self.other_branch_rejected.load(Ordering::SeqCst) {
+                return Ok(Push::Rejected {
+                    reason: "[rejected] (non-fast-forward)".to_owned(),
+                });
+            }
+            let mut repo = self.repo.lock().unwrap();
+            repo.branch_pushes.push((branch.to_owned(), commit.clone()));
+            return Ok(Push::Pushed {
+                commit: commit.clone(),
+            });
+        }
         if self.push_unreachable.load(Ordering::SeqCst) {
             return Err(Error::Unreachable("remote down".to_owned()));
         }
@@ -220,6 +236,9 @@ pub struct LeaseHub {
     pub clock: Arc<FakeClock>,
     pub leases: Mutex<HashMap<String, (String, Timestamp)>>,
     pub landed_down: AtomicBool,
+    /// Makes the next acquisition succeed and then, at once, hands the lease to another holder,
+    /// as if it had expired and been taken over before the landing used it.
+    pub steal_after_acquire: AtomicBool,
 }
 
 impl LeaseHub {
@@ -272,7 +291,13 @@ impl Hub for LeaseHub {
             .filter(|(_, expires)| *expires > now)
             .cloned();
         match op {
-            LeaseOp::Acquire { holder, ttl_s, .. } | LeaseOp::Renew { holder, ttl_s, .. } => {
+            ref op @ (LeaseOp::Acquire {
+                ref holder, ttl_s, ..
+            }
+            | LeaseOp::Renew {
+                ref holder, ttl_s, ..
+            }) => {
+                let holder = holder.clone();
                 if let Some((other, expires)) = live.filter(|(h, _)| *h != holder) {
                     return Ok(LeaseReply::Busy(LeaseBusy {
                         holder: Some(other),
@@ -284,6 +309,11 @@ impl Hub for LeaseHub {
                 #[allow(clippy::cast_precision_loss)]
                 let expires_at = now.plus_seconds(ttl_s as f64);
                 leases.insert(name.to_owned(), (holder.clone(), expires_at));
+                if matches!(op, LeaseOp::Acquire { .. })
+                    && self.steal_after_acquire.swap(false, Ordering::SeqCst)
+                {
+                    leases.insert("staging".to_owned(), ("thief".to_owned(), expires_at));
+                }
                 Ok(LeaseReply::Held(Lease {
                     name: name.to_owned(),
                     holder,
@@ -402,9 +432,23 @@ pub struct CacheGate {
     pub passes: Mutex<Vec<Vec<String>>>,
     /// Run at the start of each pass, first queued first: what other landings do meanwhile.
     pub hooks: Mutex<VecDeque<Hook>>,
+    /// Checks that only `run_family` knows: the gate's own run does not include them.
+    pub family_only: Vec<&'static str>,
+    /// The families `run_family` was asked to run.
+    pub family_runs: Mutex<Vec<String>>,
 }
 
 impl LandGate for CacheGate {
+    fn run_family(
+        &self,
+        _ctx: &Context,
+        _tree: &GateTree,
+        family: &str,
+        _options: &RunOptions,
+    ) -> CheckRun {
+        self.family_run(family)
+    }
+
     fn run(&self, ctx: &Context, tree: &GateTree, _options: &RunOptions) -> GateRun {
         let hook = self.hooks.lock().unwrap().pop_front();
         if let Some(hook) = hook {
@@ -461,5 +505,39 @@ impl LandGate for CacheGate {
         }
         self.passes.lock().unwrap().push(ran);
         GateRun { run, left: 0 }
+    }
+}
+
+impl CacheGate {
+    /// A pass of one family's checks, which fails the ones in `failing`.
+    fn family_run(&self, family: &str) -> CheckRun {
+        self.family_runs.lock().unwrap().push(family.to_owned());
+        let mut run = CheckRun::default();
+        let names = self
+            .checks
+            .iter()
+            .map(|(name, _)| name)
+            .chain(&self.family_only);
+        for name in names {
+            let check = CheckName::new(*name).unwrap();
+            if check.family() != family {
+                continue;
+            }
+            run.ran += 1;
+            if self.failing.lock().unwrap().contains(*name) {
+                run.failures.push(Failure {
+                    check: check.clone(),
+                    outcome: Outcome::Fail,
+                    at: None,
+                    message: None,
+                    output: None,
+                    reason: None,
+                });
+                run.outcomes.push((check, Outcome::Fail));
+            } else {
+                run.outcomes.push((check, Outcome::Pass));
+            }
+        }
+        run
     }
 }

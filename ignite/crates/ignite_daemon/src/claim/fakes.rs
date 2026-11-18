@@ -228,6 +228,8 @@ pub struct FakeTrees {
     /// Saved branches by ticket: the uncommitted files they took in.
     pub saved: Mutex<BTreeMap<TicketId, Vec<String>>>,
     pub save_fails: Mutex<bool>,
+    /// Makes every reset fail, as a tree that cannot be cleaned would.
+    pub reset_fails: Mutex<bool>,
     pub leases: Mutex<Vec<(TicketId, bool)>>,
     pub resets: Mutex<Vec<TreeId>>,
 }
@@ -298,6 +300,9 @@ impl TreeDesk for FakeTrees {
     }
 
     fn reset(&self, tree: &TreeId, _caller: Option<u32>) -> Result<()> {
+        if *lock(&self.reset_fails) {
+            return Err(Error::Io("the tree would not reset".to_owned()));
+        }
         lock(&self.files).remove(tree);
         lock(&self.resets).push(tree.clone());
         lock(&self.free).push(tree.clone());

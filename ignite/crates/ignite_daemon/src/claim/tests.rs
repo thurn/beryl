@@ -300,3 +300,60 @@ fn a_regression_ticket_is_titled_with_the_fire_engine() {
         reply.text
     );
 }
+
+#[test]
+fn a_tree_whose_reset_failed_after_a_refused_claim_is_reset_by_a_later_tick() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.48", "Counter names", ""));
+    lock(&world.desk.reservations).insert(id("Tq.48"), "7f3a".to_owned());
+    *lock(&world.trees.reset_fails) = true;
+    let reply = start(&world, &["Tq.48", "--reservation", "0000"], WORKER);
+    assert_eq!(reply.exit, Exit::Conflict, "{}", reply.text);
+    assert!(reply.text.contains("reset"), "{}", reply.text);
+    assert_eq!(lock(&world.trees.free).len(), 1);
+
+    // The reset still fails on the tick, and is tried again.
+    world.claims.tick(&world.ctx);
+    assert_eq!(lock(&world.trees.free).len(), 1);
+    *lock(&world.trees.reset_fails) = false;
+    world.claims.tick(&world.ctx);
+    assert_eq!(lock(&world.trees.free).len(), 2);
+    // Once it worked, it is not reset again.
+    world.claims.tick(&world.ctx);
+    assert_eq!(lock(&world.trees.resets).len(), 1);
+}
+
+#[test]
+fn a_ticket_whose_tree_was_freed_by_a_landing_is_no_longer_held() {
+    use ignite_store::local::{rows, trees as tree_rows};
+    let path = std::env::temp_dir().join(format!("ignite-claim-landed-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let world = World::with_db(ignite_store::local::open(&path).unwrap());
+    world.desk.add(ticket("Tq.48", "Counter names", ""));
+    assert_eq!(start(&world, &["Tq.48"], WORKER).exit, Exit::Success);
+    let conn = ignite_store::local::open(&path).unwrap();
+    tree_rows::upsert(
+        &conn,
+        &rows::Tree {
+            id: "tree-01".to_owned(),
+            path: "/trees/tree-01".to_owned(),
+            kind: "ticket".to_owned(),
+            ticket: Some("Tq.48".to_owned()),
+            session: Some(WORKER.to_owned()),
+            branch: Some("ignite/Tq.48".to_owned()),
+            built_commit: None,
+            leased_at: None,
+            last_used: None,
+            state: tree_rows::State::Leased.as_str().to_owned(),
+        },
+    )
+    .unwrap();
+    assert!(world.claims.holder("/trees/tree-01".as_ref()).is_some());
+
+    // The landing frees the tree through the build trees, not through the claims.
+    tree_rows::release(&conn, "tree-01", None, "t").unwrap();
+
+    assert!(world.claims.holder("/trees/tree-01".as_ref()).is_none());
+    drop(conn);
+    let _ = std::fs::remove_file(&path);
+}

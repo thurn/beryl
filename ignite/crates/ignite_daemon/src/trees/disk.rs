@@ -144,8 +144,22 @@ impl Trees {
         Ok(taken.then_some(row))
     }
 
+    /// Writes a swept tree's row back, which frees it. If that write fails, tries once more to
+    /// free the tree by changing only its state, so a store error cannot leave it `resetting`
+    /// (nothing but a daemon restart would move it).
     fn put_back(&self, row: &rows::Tree) -> Result<()> {
-        store::upsert(&self.lock().db, row).map_err(|e| store_error(&e))
+        let locked = self.lock();
+        if let Err(error) = store::upsert(&locked.db, row) {
+            let _ = store::transition(
+                &locked.db,
+                &row.id,
+                store::State::Resetting,
+                store::State::Free,
+                &self.now(),
+            );
+            return Err(store_error(&error));
+        }
+        Ok(())
     }
 }
 

@@ -23,13 +23,21 @@ impl Trees {
         let config = &self.inner.config;
         let path = config.path(tree);
         let head = refs::head(&path)?;
-        store::set_state(
+        // Moving from `leased` is a compare-and-set, so of two overlapping releases of one tree
+        // only the first proceeds.
+        let claimed = store::transition(
             &self.lock().db,
             tree.as_str(),
+            store::State::Leased,
             store::State::Resetting,
             &self.now(),
         )
         .map_err(|e| store_error(&e))?;
+        if !claimed {
+            return Err(Error::Conflict(format!(
+                "tree {tree} is no longer leased; another release has it"
+            )));
+        }
         // A release that fails after the tree is marked `resetting` goes back to `leased`, so
         // the caller can retry it; nothing else would move a `resetting` tree until the daemon
         // restarts.
@@ -40,25 +48,35 @@ impl Trees {
         let ended = match reset {
             Ok(ended) => ended,
             Err(error) => {
-                let _ = store::set_state(
-                    &self.lock().db,
-                    tree.as_str(),
-                    store::State::Leased,
-                    &self.now(),
-                );
+                self.back_to_leased(tree);
                 return Err(error);
             }
         };
         let built = row.built_commit.is_some().then(|| head.to_string());
-        store::release(
+        let freed = store::release(
             &self.lock().db,
             tree.as_str(),
             built.as_deref(),
             &self.now(),
-        )
-        .map_err(|e| store_error(&e))?;
+        );
+        if let Err(error) = freed {
+            // The tree is clean but the store would not say so; leave it where a retry finds it.
+            self.back_to_leased(tree);
+            return Err(store_error(&error));
+        }
         self.serve_waiters();
         Ok(ended)
+    }
+
+    /// Puts a tree that a failed release left `resetting` back to `leased`.
+    fn back_to_leased(&self, tree: &TreeId) {
+        let _ = store::transition(
+            &self.lock().db,
+            tree.as_str(),
+            store::State::Resetting,
+            store::State::Leased,
+            &self.now(),
+        );
     }
 
     pub(super) fn row(&self, tree: &TreeId) -> Result<rows::Tree> {

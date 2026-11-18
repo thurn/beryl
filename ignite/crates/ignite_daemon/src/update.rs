@@ -47,6 +47,10 @@ pub use starts::{StartRecord, forget_start, guard_start, spawn_health_marks, sta
 /// The argument the monitor's login service entry starts the executable with.
 pub const MONITOR_VERB: &str = "monitor";
 
+/// The directory of Ignite's own source in the repository; a change under it means a new build,
+/// and a landing that touches it may move the release branch.
+pub const SOURCE: &str = "ignite";
+
 /// The arguments the login service starts the executable with.
 pub const DAEMON_ARGS: &[&str] = &["daemon"];
 

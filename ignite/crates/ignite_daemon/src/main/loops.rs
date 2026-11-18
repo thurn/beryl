@@ -106,7 +106,7 @@ impl Parts {
             };
             loop {
                 crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
-                landing.deliver_pending(ctx.hub.as_ref());
+                landing.deliver_pending(&ctx);
                 if let Err(error) = update.poll_release() {
                     eprintln!("ignite: the release branch was not checked: {error}");
                 }

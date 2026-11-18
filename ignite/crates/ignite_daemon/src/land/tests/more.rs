@@ -1,0 +1,243 @@
+//! More landing tests: refused pushes, a lost lease, settling `pushing` records and moving the
+//! release branch.
+
+use std::sync::atomic::Ordering;
+
+use ignite_core::ids::{Commit, TreeId};
+use ignite_core::protocol::client::Exit;
+use ignite_core::protocol::hub::Landed;
+use ignite_core::protocol::tickets::LandedWork;
+use ignite_core::time::Timestamp;
+use ignite_core::traits::Clock;
+
+use super::fakes::TestGit;
+use super::{World, world, world_with, world_with_checks};
+use crate::land::records::{LandingRecord, RecordState};
+
+/// Writes a `pushing` record of the held ticket's, for `commit`, written at `at`.
+fn write_pushing(world: &World, commit: &Commit, at: Option<Timestamp>) -> LandingRecord {
+    let held = world.trees.tickets.lock().unwrap()[&TreeId::new("tree-01").unwrap()].clone();
+    let record = LandingRecord {
+        landed: Landed {
+            ticket: held.ticket.clone(),
+            machine: world.ctx.machine.clone(),
+            session: held.session.clone().unwrap(),
+            work: LandedWork {
+                commits: vec![commit.clone()],
+                files: Vec::new(),
+                note: "the note".to_owned(),
+            },
+            fresh: false,
+        },
+        commit: commit.clone(),
+        state: RecordState::Pushing,
+        written_at: at,
+    };
+    world.landing.records.write(&record).unwrap();
+    record
+}
+
+#[test]
+fn a_refused_push_leaves_no_record_and_releases_the_lease() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.git.push_refused.store(true, Ordering::SeqCst);
+    let reply = world.land_as("tree-01", "local_a");
+    assert_eq!(reply.exit, Exit::Conflict, "{}", reply.text);
+    assert!(world.landing.records.all().unwrap().is_empty());
+    assert_eq!(world.hub.holder("staging"), None);
+}
+
+#[test]
+fn removing_a_record_for_another_commit_leaves_it_alone() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    let record = write_pushing(&world, &Commit::new("a".repeat(40)).unwrap(), None);
+    let other = Commit::new("b".repeat(40)).unwrap();
+
+    world
+        .landing
+        .records
+        .remove_if(&record.landed.ticket, &other)
+        .unwrap();
+    assert_eq!(world.landing.records.all().unwrap().len(), 1);
+    world
+        .landing
+        .records
+        .remove_if(&record.landed.ticket, &record.commit)
+        .unwrap();
+    assert!(world.landing.records.all().unwrap().is_empty());
+}
+
+#[test]
+fn a_lease_taken_over_before_the_push_makes_the_landing_start_again() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.hub.steal_after_acquire.store(true, Ordering::SeqCst);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    // It pushed once, and only with a lease of its own; the thief's lease was left alone.
+    assert_eq!(world.git.pushes().len(), 1);
+    assert_eq!(world.hub.holder("staging"), None);
+}
+
+#[test]
+fn the_sender_closes_a_ticket_whose_push_landed_but_whose_landing_never_ran_again() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world
+        .git
+        .push_lands_then_fails
+        .store(true, Ordering::SeqCst);
+    let reply = world.land_as("tree-01", "local_a");
+    assert_eq!(reply.exit, Exit::Unreachable, "{}", reply.text);
+
+    // A record that is still young is left to its landing.
+    world.landing.deliver_pending(&world.ctx);
+    assert!(world.landings().is_empty());
+
+    world.clock.advance(120.0);
+    world.landing.deliver_pending(&world.ctx);
+
+    assert_eq!(world.landings().len(), 1);
+    assert!(world.landing.records.all().unwrap().is_empty());
+    assert_eq!(world.git.pushes().len(), 1);
+}
+
+#[test]
+fn the_sender_drops_an_old_record_whose_commit_never_reached_the_remote() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    let never = Commit::new("f".repeat(40)).unwrap();
+    write_pushing(&world, &never, Some(world.clock.now()));
+
+    world.clock.advance(120.0);
+    world.landing.deliver_pending(&world.ctx);
+    // Not on the remote, but not old enough to be sure the push is not still in flight.
+    assert_eq!(world.landing.records.all().unwrap().len(), 1);
+
+    world.clock.advance(600.0);
+    world.landing.deliver_pending(&world.ctx);
+    assert!(world.landing.records.all().unwrap().is_empty());
+    assert!(world.landings().is_empty());
+}
+
+fn with_release(world: &mut World) {
+    let repository = &mut world.ctx.config.repository;
+    repository.release = Some("release".to_owned());
+    repository.release_family = Some("rel".to_owned());
+}
+
+fn source_world() -> World {
+    let mut world = world_with_checks(vec![
+        ("unit:a", vec!["a.txt"]),
+        ("rel:smoke", vec!["ignite/lib.rs"]),
+    ]);
+    with_release(&mut world);
+    world
+}
+
+fn released(git: &TestGit) -> Vec<String> {
+    git.repo
+        .lock()
+        .unwrap()
+        .branch_pushes
+        .iter()
+        .map(|(branch, _)| branch.clone())
+        .collect()
+}
+
+#[test]
+fn a_landing_that_changed_ignite_moves_the_release_branch_after_the_gate_ran_its_family() {
+    let world = source_world();
+    world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply.text.contains("release  release moved to"),
+        "{}",
+        reply.text
+    );
+    assert_eq!(released(&world.git), ["release"]);
+    // The gate's own run counted, so the family was not run a second time.
+    assert!(world.gate.family_runs.lock().unwrap().is_empty());
+}
+
+#[test]
+fn the_release_family_is_run_when_the_gate_did_not_include_it() {
+    // The gate has no `rel` checks, so the landing must run them itself.
+    let mut world = world_with(vec![("unit:a", vec!["a.txt"])], vec!["rel:smoke"]);
+    with_release(&mut world);
+    world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(*world.gate.family_runs.lock().unwrap(), ["rel"]);
+    assert_eq!(released(&world.git), ["release"]);
+}
+
+#[test]
+fn a_failing_release_family_leaves_the_branch_and_does_not_fail_the_landing() {
+    let mut world = world_with(vec![("unit:a", vec!["a.txt"])], vec!["rel:smoke"]);
+    with_release(&mut world);
+    world
+        .gate
+        .failing
+        .lock()
+        .unwrap()
+        .insert("rel:smoke".to_owned());
+    world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply.text.contains("release  release not moved"),
+        "{}",
+        reply.text
+    );
+    assert!(released(&world.git).is_empty());
+    assert_eq!(world.landings().len(), 1);
+}
+
+#[test]
+fn a_rejected_release_push_is_reported_and_the_landing_stands() {
+    let world = source_world();
+    world
+        .git
+        .other_branch_rejected
+        .store(true, Ordering::SeqCst);
+    world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply.text.contains("release  release not moved"),
+        "{}",
+        reply.text
+    );
+    assert_eq!(world.landings().len(), 1);
+}
+
+#[test]
+fn a_landing_outside_ignites_source_or_without_a_release_branch_leaves_it_alone() {
+    let world = source_world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    let reply = world.land_as("tree-01", "local_a");
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(!reply.text.contains("release  "), "{}", reply.text);
+    assert!(released(&world.git).is_empty());
+
+    let plain = world_with_checks(vec![("rel:smoke", vec!["ignite/lib.rs"])]);
+    plain.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+    let reply = plain.land_as("tree-01", "local_a");
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(released(&plain.git).is_empty());
+}

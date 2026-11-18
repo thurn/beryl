@@ -28,12 +28,9 @@ use ignite_core::ids::Commit;
 use ignite_core::traits::{Git, Result};
 
 use crate::update::{
-    Builder, ExecutableStore, Restart, UpdateCheck, Updater, VersionAction, restart_into,
+    Builder, ExecutableStore, Restart, SOURCE, UpdateCheck, Updater, VersionAction, restart_into,
     version_action,
 };
-
-/// The directory of Ignite's own source in the repository; a change under it means a new build.
-pub const SOURCE: &str = "ignite";
 
 /// The sender loop runs every 10 seconds, so this many of its rounds are 5 minutes.
 pub const POLL_EVERY_ROUNDS: u32 = 30;

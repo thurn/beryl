@@ -21,6 +21,7 @@
 //! them.
 
 mod brief;
+mod parse;
 mod watch;
 
 #[cfg(test)]
@@ -49,6 +50,8 @@ use ignite_store::local::{rows, shown, trees as tree_rows};
 use crate::server::{Context, Verb};
 
 pub use watch::ClaimHook;
+
+use parse::{failure, parse_close, parse_release, parse_start};
 
 /// A ticket expected to use fewer cores than this is not expected to compile Rust, so its tree
 /// is not prebuilt and it takes the free tree with the oldest build.
@@ -242,6 +245,9 @@ struct State {
     cursor: Option<Seq>,
     /// Held tickets the feed says changed since their session's last command.
     dirty: BTreeSet<TicketId>,
+    /// Trees whose reset failed after their ticket was given up. Nobody holds them, so
+    /// [`Claims::tick`] keeps retrying the reset until it works.
+    reset_failed: BTreeSet<TreeId>,
 }
 
 /// The tickets held on this machine, shared by the verbs, the request hooks and the stall check.
@@ -297,6 +303,7 @@ impl Claims {
 
     /// The tree a working directory is inside, with the ticket and session holding it.
     pub fn holder(&self, cwd: &Path) -> Option<(TreeId, TicketId, SessionId)> {
+        self.forget_released();
         let state = lock(&self.state);
         held_at(&state, cwd).map(|h| (h.tree.clone(), h.ticket.clone(), h.session.clone()))
     }
@@ -366,7 +373,9 @@ impl Claims {
         let brief = match self.desk.claim(&claim) {
             Ok(brief) => brief,
             Err(error) => {
-                let reset = self.trees.reset(&leased.tree, req.pid);
+                // The tree is freed without the hub or the network: only a local failure of the
+                // reset leaves it leased, and then the tick retries it.
+                let reset = self.reset_tree(&leased.tree, req.pid);
                 let mut reply = failure(&error, "claim refused");
                 if let Err(reset) = reset {
                     let _ = write!(reply.text, "\nreset    {} failed: {reset}", leased.tree);
@@ -394,6 +403,7 @@ impl Claims {
     /// The reply for a ticket this machine already holds: the brief again for its own session,
     /// a lost claim for any other.
     fn already_held(&self, id: &TicketId, session: &SessionId, staging: &str) -> Option<Reply> {
+        self.forget_released();
         let held = {
             let state = lock(&self.state);
             state.held.values().find(|h| &h.ticket == id).cloned()?
@@ -462,6 +472,7 @@ impl Claims {
 
     /// The held ticket of the request's tree, or the reply that refuses the request.
     fn held_for(&self, req: &Request) -> std::result::Result<Held, Reply> {
+        self.forget_released();
         let state = lock(&self.state);
         let Some(held) = held_at(&state, &req.cwd) else {
             return Err(Reply::text(
@@ -584,7 +595,61 @@ impl Claims {
             state.dirty.remove(&held.ticket);
         }
         let _ = shown::clear(&lock(&self.db), held.tree.as_str());
-        self.trees.reset(&held.tree, caller).err()
+        self.reset_tree(&held.tree, caller).err()
+    }
+
+    /// Resets and frees a tree. A failure is remembered so that [`Claims::tick`] retries it:
+    /// the tree is then leased to a ticket that nothing on this machine holds any more.
+    fn reset_tree(&self, tree: &TreeId, caller: Option<u32>) -> Result<()> {
+        let result = self.trees.reset(tree, caller);
+        let mut state = lock(&self.state);
+        if result.is_err() {
+            state.reset_failed.insert(tree.clone());
+        } else {
+            state.reset_failed.remove(tree);
+        }
+        result
+    }
+
+    /// Retries the reset of every tree whose reset failed earlier.
+    fn retry_failed_resets(&self) {
+        let failed: Vec<TreeId> = lock(&self.state).reset_failed.iter().cloned().collect();
+        for tree in failed {
+            let still_held = lock(&self.state).held.contains_key(&tree);
+            if still_held {
+                lock(&self.state).reset_failed.remove(&tree);
+            } else if let Err(error) = self.reset_tree(&tree, None) {
+                eprintln!("ignite: tree {tree} is still not reset: {error}");
+            }
+        }
+    }
+
+    /// Drops the held tickets whose tree is no longer leased to the same session. A landing
+    /// frees its ticket's tree through the build trees, not through this module, so the entry
+    /// would otherwise outlive the lease: it would still answer for the tree's path, and the
+    /// stall check would try to release a ticket that is already closed.
+    fn forget_released(&self) {
+        let trees: Vec<(TreeId, SessionId)> = lock(&self.state)
+            .held
+            .values()
+            .map(|h| (h.tree.clone(), h.session.clone()))
+            .collect();
+        for (tree, session) in trees {
+            let row = tree_rows::get(&lock(&self.db), tree.as_str());
+            // A row that cannot be read, or that does not exist, proves nothing, so the entry
+            // stays.
+            let Ok(Some(row)) = row else { continue };
+            let leased = row.state == tree_rows::State::Leased.as_str()
+                && row.session.as_deref() == Some(session.as_str());
+            if !leased {
+                let mut state = lock(&self.state);
+                if let Some(held) = state.held.remove(&tree) {
+                    state.dirty.remove(&held.ticket);
+                }
+                drop(state);
+                let _ = shown::clear(&lock(&self.db), tree.as_str());
+            }
+        }
     }
 }
 
@@ -619,106 +684,6 @@ fn adhoc_branch_name(now: Timestamp) -> TicketId {
         .filter(char::is_ascii_digit)
         .collect();
     TicketId::new(format!("adhoc{digits}")).unwrap_or_else(|_| unreachable!("letters and digits"))
-}
-
-/// The reply for a failure behind one of the traits, with the exit code its kind calls for.
-fn failure(error: &Error, what: &str) -> Reply {
-    let exit = match error {
-        Error::Unreachable(_) => Exit::Unreachable,
-        Error::Conflict(_) => Exit::Conflict,
-        Error::NotFound(_) | Error::Invalid(_) | Error::Io(_) => Exit::Usage,
-    };
-    Reply::text(exit, format!("failed   {what}: {error}"))
-}
-
-fn usage(text: &str) -> Reply {
-    Reply::text(Exit::Usage, format!("usage    {text}"))
-}
-
-fn session_of(req: &Request) -> std::result::Result<SessionId, Reply> {
-    req.session.clone().ok_or_else(|| {
-        usage("no session: run this from a desktop-app session, or set IGNITE_SESSION")
-    })
-}
-
-/// Reads `--name value` and `--name=value` options (and `-m value` for `--message`) and the
-/// positional words, rejecting any other option.
-fn options(
-    args: &[String],
-    known: &[(&str, Option<&str>)],
-) -> std::result::Result<(BTreeMap<String, String>, Vec<String>), Reply> {
-    let mut values = BTreeMap::new();
-    let mut words = Vec::new();
-    let mut iter = args.iter();
-    while let Some(arg) = iter.next() {
-        if !arg.starts_with('-') || arg == "-" {
-            words.push(arg.clone());
-            continue;
-        }
-        let (flag, inline) = match arg.split_once('=') {
-            Some((flag, value)) => (flag, Some(value.to_owned())),
-            None => (arg.as_str(), None),
-        };
-        let Some((name, _)) = known
-            .iter()
-            .find(|(long, short)| flag == format!("--{long}") || Some(flag) == *short)
-        else {
-            return Err(usage(&format!("unknown option {flag}")));
-        };
-        let Some(value) = inline.or_else(|| iter.next().cloned()) else {
-            return Err(usage(&format!("{flag} needs a value")));
-        };
-        values.insert((*name).to_owned(), value);
-    }
-    Ok((values, words))
-}
-
-fn parse_start(req: &Request) -> std::result::Result<(Target, SessionId), Reply> {
-    let (mut values, words) = options(&req.args, &[("reservation", None)])?;
-    let session = session_of(req)?;
-    let text = words.join(" ");
-    let code = values.remove("reservation");
-    if text.trim().is_empty() {
-        return Err(usage(
-            "ignite start <ticket> [--reservation <code>] | ignite start \"<summary>\"",
-        ));
-    }
-    // A summary is several words; a ticket ID is one.
-    if text.contains(char::is_whitespace) {
-        if code.is_some() {
-            return Err(usage("--reservation goes with a ticket ID, not a summary"));
-        }
-        return Ok((Target::Adhoc(text.trim().to_owned()), session));
-    }
-    match TicketId::new(text.clone()) {
-        Ok(id) => Ok((Target::Ticket { id, code }, session)),
-        Err(error) => Err(usage(&format!(
-            "{error}; quote a summary of several words to file a ticket"
-        ))),
-    }
-}
-
-fn parse_release(req: &Request) -> std::result::Result<(String, Option<String>), Reply> {
-    let (mut values, words) = options(&req.args, &[("message", Some("-m")), ("needs", None)])?;
-    if !words.is_empty() {
-        return Err(usage("ignite release -m \"<note>\" [--needs <what>]"));
-    }
-    let note = values.remove("message").unwrap_or_default();
-    let needs = values.remove("needs");
-    if needs.as_deref() == Some(NEEDS_PERSON) && note.trim().is_empty() {
-        return Err(usage(
-            "--needs person needs a note (-m) stating the exact need and what was tried",
-        ));
-    }
-    Ok((note, needs))
-}
-
-fn parse_close(req: &Request) -> std::result::Result<String, Reply> {
-    let (mut values, words) = options(&req.args, &[("message", Some("-m"))])?;
-    match values.remove("message") {
-        Some(reason) if words.is_empty() && !reason.trim().is_empty() => Ok(reason),
-        _ => Err(usage("ignite close -m \"<reason>\"")),
-    }
 }
 
 /// `ignite start`: claims a ticket, leases a build tree at the tip and prints the ticket.

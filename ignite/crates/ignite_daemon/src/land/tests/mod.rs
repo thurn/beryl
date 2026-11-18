@@ -1,6 +1,7 @@
 //! Landings against the fakes in [`fakes`], with no real time.
 
 mod fakes;
+mod more;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -42,6 +43,23 @@ impl Drop for World {
 }
 
 fn world() -> World {
+    world_with_checks(vec![
+        ("unit:a", vec!["a.txt"]),
+        ("unit:b", vec!["b.txt"]),
+        ("unit:both", vec!["a.txt", "b.txt"]),
+        ("unit:c", vec!["c.txt"]),
+    ])
+}
+
+fn world_with_checks(checks: Vec<(&'static str, Vec<&'static str>)>) -> World {
+    world_with(checks, Vec::new())
+}
+
+/// A world whose gate runs `checks`, and whose `run_family` also knows `family_only`.
+fn world_with(
+    checks: Vec<(&'static str, Vec<&'static str>)>,
+    family_only: Vec<&'static str>,
+) -> World {
     let config = Config::parse(
         "ignite.toml",
         r#"
@@ -69,6 +87,7 @@ fn world() -> World {
         clock: clock.clone(),
         leases: Mutex::new(HashMap::new()),
         landed_down: AtomicBool::new(false),
+        steal_after_acquire: AtomicBool::new(false),
     });
     let git = Arc::new(TestGit::new(&[
         ("a.txt", "a"),
@@ -88,12 +107,8 @@ fn world() -> World {
         deleted: Mutex::new(Vec::new()),
     });
     let gate = Arc::new(CacheGate {
-        checks: vec![
-            ("unit:a", vec!["a.txt"]),
-            ("unit:b", vec!["b.txt"]),
-            ("unit:both", vec!["a.txt", "b.txt"]),
-            ("unit:c", vec!["c.txt"]),
-        ],
+        checks,
+        family_only,
         ..CacheGate::default()
     });
     let n = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
@@ -331,7 +346,7 @@ fn a_push_while_the_hub_is_down_closes_the_ticket_when_it_returns_with_one_push(
     assert!(world.landings().is_empty());
 
     world.hub.landed_down.store(false, Ordering::SeqCst);
-    world.landing.deliver_pending(world.hub.as_ref());
+    world.landing.deliver_pending(&world.ctx);
     let landed: Vec<String> = world
         .landings()
         .iter()
@@ -535,6 +550,7 @@ fn an_empty_rebase_does_not_close_a_ticket_whose_push_never_reached_the_remote()
         },
         commit: never_pushed,
         state: RecordState::Pushing,
+        written_at: None,
     };
     world.landing.records.write(&record).unwrap();
 
@@ -566,6 +582,7 @@ fn a_malformed_record_is_moved_aside_and_the_others_are_still_delivered() {
         },
         commit,
         state: RecordState::Pushed,
+        written_at: None,
     };
     world.landing.records.write(&record).unwrap();
     // "a.1" sorts before "t.1", so the bad file is read first.
