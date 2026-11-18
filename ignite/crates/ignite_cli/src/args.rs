@@ -359,9 +359,10 @@ pub enum TicketCommand {
         #[arg(long, value_delimiter = ',')]
         deps: Vec<String>,
     },
-    /// Show a ticket.
+    /// Show one or more tickets.
     Show {
-        id: String,
+        #[arg(required = true)]
+        ids: Vec<String>,
         #[arg(long)]
         comments: bool,
         #[arg(long)]
@@ -426,7 +427,7 @@ pub enum TicketCommand {
     },
     /// Comment on a ticket.
     Comment { id: String, text: String },
-    /// Add or remove a dependency.
+    /// Add, remove or list dependencies.
     Dep {
         #[command(subcommand)]
         command: DepCommand,
@@ -441,7 +442,13 @@ pub enum TicketCommand {
         timeout: u32,
     },
     /// List a ticket's children, closed ones included.
-    Children { id: String },
+    Children {
+        id: String,
+        /// Only the children that are not closed, each with its assignee, what it waits on and
+        /// the first line of its last comment.
+        #[arg(long)]
+        open: bool,
+    },
     /// Find tickets by words in their title or text.
     Search {
         #[arg(required = true)]
@@ -477,6 +484,11 @@ pub enum DepCommand {
     Remove {
         id: String,
         on: String,
+    },
+    /// What `id` waits on and what waits on it, with each one's status and title.
+    #[command(visible_alias = "ls")]
+    List {
+        id: String,
     },
 }
 

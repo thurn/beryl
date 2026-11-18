@@ -293,3 +293,58 @@ fn failures_use_the_shared_exit_codes() {
     let unreachable = execute(&down, &parse("ignite ticket list")).unwrap_err();
     assert_eq!(unreachable.exit, Exit::Unreachable);
 }
+
+#[test]
+fn dep_list_multi_show_and_open_children_gather_related_tickets() {
+    let hub = Fixture::new("related");
+    let id = |reply: Value| reply["results"][0]["id"].as_str().unwrap().to_owned();
+    let epic = id(hub.json("create Epic --type epic"));
+    let first = id(hub.json(&format!("create First --parent {epic}")));
+    let second = id(hub.json(&format!("create Second --parent {epic}")));
+    let done = id(hub.json(&format!("create Done --parent {epic}")));
+    hub.json(&format!("dep add {second} {first}"));
+    hub.json(&format!("close {done} --reason obsolete"));
+    hub.json(&format!("claim {first}"));
+    hub.json(&format!("comment {first} Halfway"));
+
+    let deps = hub.json(&format!("dep list {second}"));
+    assert_eq!(deps["waits_on"][0]["id"], first.as_str());
+    assert_eq!(deps["waits_on"][0]["status"], "in_progress");
+    let text = hub.run(&format!("dep ls {first}")).text;
+    assert!(
+        text.contains(&format!("waited on by  {second}  open  Second  (blocks)")),
+        "{text}"
+    );
+    assert!(
+        hub.run(&format!("dep list {done}"))
+            .text
+            .ends_with("no dependencies")
+    );
+
+    let shown = hub.json(&format!("show {first} {second}"));
+    assert_eq!(shown.as_array().unwrap().len(), 2);
+    assert!(
+        hub.json(&format!("show {first}")).is_object(),
+        "one ID keeps one object"
+    );
+    let text = hub.run(&format!("show {second}")).text;
+    assert!(
+        text.contains(&format!("waits on: {first} (blocks)")),
+        "{text}"
+    );
+
+    let open = hub.json(&format!("children {epic} --open"));
+    let ids: Vec<&str> = open
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, [first.as_str(), second.as_str()]);
+    assert_eq!(open[0]["last_comment"], "Halfway");
+    assert_eq!(open[1]["blocked_by"][0]["id"], first.as_str());
+    let text = hub.run(&format!("children {epic} --open")).text;
+    assert!(text.contains("    assignee: tester"), "{text}");
+    assert!(text.contains(&format!("    blocked by: {first}")), "{text}");
+    assert!(!text.contains("Done"), "{text}");
+}

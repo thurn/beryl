@@ -8,6 +8,7 @@
 mod build;
 pub mod http;
 mod ids;
+mod related;
 mod render;
 mod wait;
 
@@ -137,6 +138,7 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
                 "unlinked",
                 build::single(build::edge("dep_remove", id, on, None)),
             ),
+            DepCommand::List { .. } => unreachable!("a read verb reached the write arms"),
         },
         TicketCommand::Batch { file } => write(hub, "batch applied to", build::batch_file(file)?),
         TicketCommand::Wait {
@@ -154,15 +156,13 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
 fn lookup(hub: &Hub, command: &TicketCommand) -> Result<Option<Reply>> {
     Ok(Some(match command {
         TicketCommand::Show {
-            id,
+            ids,
             comments,
             history,
-        } => {
-            let mut query = vec![];
-            flag(&mut query, "comments", *comments);
-            flag(&mut query, "history", *history);
-            reply(read(hub, &["tickets", id], &query)?, render::detail)
-        }
+        } => related::show(hub, ids, *comments, *history)?,
+        TicketCommand::Dep {
+            command: DepCommand::List { id },
+        } => related::dependencies(hub, id)?,
         TicketCommand::List {
             status,
             parent,
@@ -194,7 +194,8 @@ fn lookup(hub: &Hub, command: &TicketCommand) -> Result<Option<Reply>> {
             query.extend(limit.filter(|&n| n != 0).map(|n| ("limit", n.to_string())));
             brief_reply(read(hub, &["tickets"], &query)?, render::list)
         }
-        TicketCommand::Children { id } => {
+        TicketCommand::Children { id, open: true } => related::open_children(hub, id)?,
+        TicketCommand::Children { id, open: false } => {
             let query = [("parent", id.clone()), ("all", "1".to_owned())];
             brief_reply(read(hub, &["tickets"], &query)?, render::list)
         }

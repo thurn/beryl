@@ -59,16 +59,7 @@ pub fn detail(ticket: &Value) -> String {
         let ids: Vec<&str> = blockers.iter().map(|b| text(b, "id")).collect();
         out.push(format!("blocked by: {}", ids.join(", ")));
     }
-    if let Some(edges) = ticket["edges"].as_array() {
-        for edge in edges {
-            out.push(format!(
-                "edge: {} -> {} ({})",
-                text(edge, "src"),
-                text(edge, "dst"),
-                text(edge, "kind")
-            ));
-        }
-    }
+    out.extend(edges(ticket));
     for key in ["body", "acceptance", "design", "notes"] {
         let value = text(ticket, key);
         if !value.is_empty() {
@@ -95,6 +86,84 @@ pub fn detail(ticket: &Value) -> String {
                 text(change, "actor"),
                 change["change"]
             ));
+        }
+    }
+    out.join("\n")
+}
+
+/// `waits on: Ta (blocks), Tb (related)` and `waited on by: Tc (blocks)`, from the ticket's
+/// edges in both directions. `ticket dep list` prints each one's status and title as well.
+fn edges(ticket: &Value) -> Vec<String> {
+    let own = text(ticket, "id");
+    let mut waits_on = vec![];
+    let mut waited_on_by = vec![];
+    for edge in ticket["edges"].as_array().into_iter().flatten() {
+        let (src, dst, kind) = (text(edge, "src"), text(edge, "dst"), text(edge, "kind"));
+        if src == own {
+            waits_on.push(format!("{dst} ({kind})"));
+        } else {
+            waited_on_by.push(format!("{src} ({kind})"));
+        }
+    }
+    [("waits on", waits_on), ("waited on by", waited_on_by)]
+        .into_iter()
+        .filter(|(_, ids)| !ids.is_empty())
+        .map(|(label, ids)| format!("{label}: {}", ids.join(", ")))
+        .collect()
+}
+
+/// `ticket dep list`: the ticket, then one line per ticket it waits on or that waits on it.
+pub fn dependencies(value: &Value) -> String {
+    let mut out = vec![format!(
+        "{}  {}  {}",
+        text(value, "id"),
+        text(value, "status"),
+        text(value, "title")
+    )];
+    for (label, key) in [
+        ("waits on    ", "waits_on"),
+        ("waited on by", "waited_on_by"),
+    ] {
+        for other in value[key].as_array().into_iter().flatten() {
+            out.push(format!(
+                "{label}  {}  {}  {}  ({})",
+                text(other, "id"),
+                text(other, "status"),
+                text(other, "title"),
+                text(other, "kind")
+            ));
+        }
+    }
+    if out.len() == 1 {
+        out.push("no dependencies".to_owned());
+    }
+    out.join("\n")
+}
+
+/// `ticket children --open`: one line per child, then its assignee, blockers and last comment
+/// indented under it.
+pub fn open_children(children: &Value) -> String {
+    let rows = children.as_array().map(Vec::as_slice).unwrap_or_default();
+    if rows.is_empty() {
+        return "no open children".to_owned();
+    }
+    let mut out = vec![];
+    for child in rows {
+        out.push(line(child));
+        if let Some(assignee) = child["assignee"].as_str() {
+            out.push(format!("    assignee: {assignee}"));
+        }
+        let blockers: Vec<&str> = child["blocked_by"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|blocker| text(blocker, "id"))
+            .collect();
+        if !blockers.is_empty() {
+            out.push(format!("    blocked by: {}", blockers.join(", ")));
+        }
+        if let Some(comment) = child["last_comment"].as_str() {
+            out.push(format!("    last comment: {comment}"));
         }
     }
     out.join("\n")

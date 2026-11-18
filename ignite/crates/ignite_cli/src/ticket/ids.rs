@@ -66,6 +66,8 @@ pub fn display(value: &mut Value) {
                 "comments",
                 "results",
                 "history",
+                "waits_on",
+                "waited_on_by",
             ] {
                 if let Some(nested) = row.get_mut(key) {
                     display(nested);
