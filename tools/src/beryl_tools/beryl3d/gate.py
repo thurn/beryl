@@ -39,8 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from .. import paths as repo_paths
-from .. import tokens
-from . import gpu, paths
+from . import paths
 
 GATES: Path = repo_paths.REPO / "data" / "beryl3d" / "gates.json"
 # The client core's work counters (`beryl_scene::frame::Work`).
@@ -297,6 +296,8 @@ def summary(board: Board) -> str:
 def play(names: list[str]) -> tuple[list[Board], list[Tiered]]:
     """Plays the boards called `names` (every gated board for none) with the `gate` binary, in
     Baseline and in Enhanced."""
+    # Not at the top: Ignite's adapter imports this module without it.
+    from .. import tokens
     from .cli import program, record  # cli imports this module.
 
     # The gated recorded boards are read from the pack, which only `record` builds. It builds
@@ -322,6 +323,8 @@ def play(names: list[str]) -> tuple[list[Board], list[Tiered]]:
 def run_gate(args: argparse.Namespace) -> int:
     data = json.loads(GATES.read_text())
     if args.gpu:
+        from . import gpu  # It imports `bench`, which Ignite's adapter must not load.
+
         return gpu.run_gpu(list(args.board), args.update, data)
     boards, enhanced = play(list(args.board))
     if args.counts:

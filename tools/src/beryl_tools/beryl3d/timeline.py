@@ -53,7 +53,6 @@ from pathlib import Path
 from typing import Any
 
 from .. import paths as repo_paths
-from .. import warm
 from . import paths
 
 ALLOWLIST: Path = paths.DATA / "timeline-parity.json"
@@ -433,6 +432,9 @@ def web_lines(pack: str, directory: Path) -> list[str]:
     cached = paths.cache() / f"web-timelines-{web_hash(pack, ui, directory)}.jsonl"
     if cached.exists():
         return cached.read_text().splitlines()
+    # Not at the top: Ignite's adapter imports this module without it.
+    from .. import warm
+
     warm.ensure_node_modules(repo_paths.REPO)
     done = subprocess.run(
         ["node", "scripts/timeline.mjs", str(directory)],

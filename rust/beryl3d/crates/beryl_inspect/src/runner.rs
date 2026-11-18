@@ -220,35 +220,57 @@ pub fn caught<T>(f: impl FnOnce() -> T) -> Result<T, String> {
     })
 }
 
-/// How many threads a command spreads its work over: the CPU tokens the `by` command that
-/// started it leased from the machine's pool (`BERYL_CPU_TOKENS`, set by
-/// `tools/src/beryl_tools/tokens.py`), or the machine's cores when it runs outside a lease. With
-/// many sessions on one machine, each command taking every core made them all slower at once.
+/// How many threads a command spreads its work over: the cores Ignite granted the command that
+/// started it (`IGNITE_CORES`), or the CPU tokens the `by` command that started it leased from
+/// the machine's pool (`BERYL_CPU_TOKENS`, set by `tools/src/beryl_tools/tokens.py`), or the
+/// machine's cores when it runs outside both. With many sessions on one machine, each command
+/// taking every core made them all slower at once.
 #[must_use]
 pub fn threads() -> usize {
-    std::env::var("BERYL_CPU_TOKENS")
-        .ok()
-        .and_then(|n| n.parse::<usize>().ok())
-        .filter(|&n| n > 0)
+    LEASE_SIZES
+        .iter()
+        .find_map(|name| {
+            std::env::var(name)
+                .ok()
+                .and_then(|n| n.parse::<usize>().ok())
+                .filter(|&n| n > 0)
+        })
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get))
 }
 
-/// The file in which a growing lease keeps how many tokens it holds now (`run_program` with
-/// `grow` in `tools/src/beryl_tools/tokens.py`).
-const GRANT_FILE: &str = "BERYL_CPU_TOKENS_FILE";
+/// The variables that give a command's grant when it starts, Ignite's first.
+const LEASE_SIZES: [&str; 2] = ["IGNITE_CORES", "BERYL_CPU_TOKENS"];
+
+/// The variables naming the file in which a grant that changes while its command runs keeps its
+/// size now: the one Ignite's scheduler writes, then the one a growing lease of
+/// `tools/src/beryl_tools/tokens.py` writes (`run_program` with `grow`).
+const GRANT_FILES: [&str; 2] = ["IGNITE_CORES_FILE", "BERYL_CPU_TOKENS_FILE"];
+
+/// The file that [`GRANT_FILES`] names, the first one set.
+fn grant_file() -> Option<std::ffi::OsString> {
+    grant_file_in(|name| std::env::var_os(name))
+}
+
+/// The file that the first of [`GRANT_FILES`] set in `var` names.
+fn grant_file_in(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<std::ffi::OsString> {
+    GRANT_FILES.iter().find_map(|name| var(name))
+}
+
+/// The grant written in the file at `path`, when it holds a number above zero.
+fn read_grant(path: Option<std::ffi::OsString>) -> Option<usize> {
+    path.and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| text.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+}
 
 /// How often [`spread`] reads the lease's size again while items remain.
 const GROW_POLL: std::time::Duration = std::time::Duration::from_millis(250);
 
-/// How many threads a command may run now: the size its lease last wrote to the file
-/// `BERYL_CPU_TOKENS_FILE` names, when its lease grows while it runs, or else [`threads`].
+/// How many threads a command may run now: the size its grant last wrote to the file one of
+/// [`GRANT_FILES`] names, when its grant changes while it runs, or else [`threads`].
 #[must_use]
 pub fn granted() -> usize {
-    std::env::var_os(GRANT_FILE)
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|text| text.trim().parse::<usize>().ok())
-        .filter(|&n| n > 0)
-        .unwrap_or_else(threads)
+    read_grant(grant_file()).unwrap_or_else(threads)
 }
 
 /// Runs `work` on as many threads as [`granted`] allows, at most one per job, where each `work`
@@ -257,13 +279,7 @@ pub fn granted() -> usize {
 /// starts, so a program that started while the machine was busy ran on one or two threads
 /// after the cores freed up: `b3d test` took 150 s instead of 11-13 s.
 pub fn spread(jobs: usize, next: &AtomicUsize, work: impl Fn() + Sync) {
-    spread_by(
-        jobs,
-        next,
-        std::env::var_os(GRANT_FILE).is_some(),
-        granted,
-        work,
-    );
+    spread_by(jobs, next, grant_file().is_some(), granted, work);
 }
 
 /// [`spread`], reading the threads allowed from `granted`, and again while jobs remain only
@@ -448,9 +464,32 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
-    use super::{Side, Test, run_until, spread_by};
+    use super::{Side, Test, grant_file_in, read_grant, run_until, spread_by};
     use crate::pages::DESKTOP_WINDOWS;
     use beryl_scene::driver::Mode;
+
+    /// Under Ignite a command reads its grant from the file `IGNITE_CORES_FILE` names, which
+    /// wins over the token pool's file when both are set.
+    #[test]
+    fn the_grant_comes_from_ignites_file_first() {
+        let dir = std::env::temp_dir().join(format!("b3d-grant-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let ignite = dir.join("ignite");
+        let pool = dir.join("pool");
+        std::fs::write(&ignite, "5\n").unwrap();
+        std::fs::write(&pool, "2\n").unwrap();
+        let both = |name: &str| match name {
+            "IGNITE_CORES_FILE" => Some(ignite.clone().into_os_string()),
+            "BERYL_CPU_TOKENS_FILE" => Some(pool.clone().into_os_string()),
+            _ => None,
+        };
+        let pool_only =
+            |name: &str| (name == "BERYL_CPU_TOKENS_FILE").then(|| pool.clone().into_os_string());
+        assert_eq!(read_grant(grant_file_in(both)), Some(5));
+        assert_eq!(read_grant(grant_file_in(pool_only)), Some(2));
+        assert_eq!(read_grant(grant_file_in(|_| None)), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     /// The first job raises the grant from one thread to four and waits until four threads have
     /// taken jobs, which only happens if `spread_by` starts more threads while it runs. Without

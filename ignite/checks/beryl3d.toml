@@ -1,0 +1,419 @@
+# Beryl 3D, the native client in its own Cargo workspace, rust/beryl3d: its formatting, clippy,
+# source rules, tests, interface tests, frame gates and timeline parity, with the build product
+# they share. See docs/ignite.md, "Declaring a family" and "Builds".
+#
+# Commands run from the checkout's root. The `python-env` product is in python.toml and
+# `ui-deps` in ui.toml. The adapter for every `jsonl` family here is
+# tools/src/beryl_tools/ignite/beryl3d.py, which runs the programs the `b3d` product built
+# rather than `just b3d`, whose commands build again. A `jsonl` family's `list` prints one JSON
+# object per check, with the inputs of its own, and its `run` appends one JSON line per check to
+# $IGNITE_RESULTS.
+#
+# Beryl 3D is built and tested on macOS only, so every family that builds it needs a pass there.
+# The pure source checks are `any`.
+#
+# Programs that spread their work over threads (`record`, `b3d test`) size them by the grant:
+# `IGNITE_CORES` when they start, and the file `IGNITE_CORES_FILE` names while they run
+# (`runner::threads` and `runner::granted` in rust/beryl3d/crates/beryl_inspect/src/runner.rs).
+# A grant fixed when such a program started made it run on one or two threads after the cores
+# freed up: `b3d test` took 150 s instead of 11-13 s.
+#
+# Inputs outside Beryl 3D's own crates. Beryl 3D's crates depend on main-workspace crates by
+# path, which `crate:` does not follow out of its own workspace, so the families name those
+# crates' directories. The recordings are played by `beryl_cli`, so the families that read the
+# recordings pack name every crate `record`, `b3d` and `gate` are built from
+# (tools/tests/test_ignite_beryl3d.py holds the list to the crates' manifests), the files
+# those crates embed or read (the fixture definitions, the sample decks, UI conventions, the
+# card store and set groups, the table commands, the save breaks) and Beryl 3D's data
+# (data/beryl3d, and the design tokens `beryl_scene`'s build reads). The card crates' own
+# files are named too, but no card file: each check lists the card files its recording plays.
+
+# The build that the tests, `record` and `gate` share, then the recordings pack. Every
+# `just b3d` command starts with one today. The shared build is every target that
+# `cargo nextest run --workspace` builds, in cargo's `test` profile, with each program built as
+# a program: building `record` or `b3d` alone resolved other features and compiled the engine
+# and `beryl_scene` three times after an edit to `beryl_scene`. The pack goes to
+# $BERYL_CACHE/b3d, named for a hash of what a recording reads, and is built only when missing.
+[product.b3d]
+build = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d build"
+inputs = [
+  "rust/beryl3d/**",
+  "rust/crates/**",
+  "rust/cards/**",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+outputs = ["rust/beryl3d/target"]
+
+# rustfmt over each package of the workspace, one check per package, hashed over its directory.
+[family.b3d-format]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-format list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-format run {checks}"
+inputs = [
+  "rust/rustfmt.toml",
+  "rust/beryl3d/Cargo.toml",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+
+# Clippy over the workspace, one check per package. It builds in its own target directory,
+# rust/beryl3d/target/clippy: its check units are not the ones a build makes, so in the shared
+# directory it would share no work with the `b3d` build, only Cargo's lock on it, and wait for
+# it. Lints are capped at warnings so that cargo keeps every unit's result and a later run
+# replays them (`CLIPPY` in tools/src/beryl_tools/ignite/beryl3d.py).
+[family.b3d-clippy]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-clippy list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-clippy run {checks}"
+inputs = [
+  "rust/crates/**",
+  "rust/cards/**",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+
+# The source rules of tools/src/beryl_tools/beryl3d/purity.py: `scene-purity` (no GPU, window,
+# clock or thread in `beryl_scene`), `lints-match` (Beryl 3D's lints equal the main
+# workspace's), `data-names` (the verbs of data/beryl3d/space.json are UI Conventions' names)
+# and `scene-literals`. One check per rule.
+[family.b3d-source]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-source list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-source run {checks}"
+inputs = [
+  "rust/beryl3d/**",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/ui-conventions.json",
+  "tools/src/beryl_tools/beryl3d/purity.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+
+# Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
+# it and the Beryl 3D packages it depends on, and over the main workspace, which `crate-closure`
+# does not follow into. The tests read the recordings, so they need the `b3d` product, whose
+# shared build is the one nextest would make. Results are nextest's JUnit report,
+# rust/beryl3d/target/nextest/ignite/junit.xml (rust/beryl3d/.config/nextest.toml).
+[family.b3d-test]
+kind = "regression"
+adapter = "nextest"
+platforms = ["macos"]
+needs = ["b3d"]
+list = "cargo nextest list --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --message-format json"
+run = "cargo nextest run --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail -E {checks}"
+inputs = [
+  "crate-closure",
+  "rust/beryl3d/.config/nextest.toml",
+  "rust/crates/**",
+  "rust/cards/**",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+]
+
+# Every interface test (`just b3d test`): each recording from each seat in each desktop window,
+# `b3d-interface:<recording>/<seat>/<window>`, with the checks applied at the check times
+# (docs/beryl-3d.md, "Test speed"), held to data/beryl3d/test-faults.json. Each check reads the
+# card files its recording plays. `b3d-interface:frame-limits` holds the frames drawn to the
+# limits under `tests` in data/beryl3d/gates.json, whose median is over every test, so it runs
+# them all.
+[family.b3d-interface]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+
+# The interface tests with the checks applied on every tick (`just b3d test --every-tick`): the
+# exhaustive form of `b3d-interface`, held to the same list of allowed faults. The every-tick
+# run finds every fault the check times find, which a differential test requires.
+[family.b3d-every-tick]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-every-tick list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-every-tick run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+
+# The native frame gate (`just b3d gate`): one check per gated board, holding its work counters,
+# draw load and allocations to the limits under `frames.<board>` in data/beryl3d/gates.json, in
+# Baseline and Enhanced. Every count is exact, so a count one over or under its limit fails.
+[family.b3d-gate]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-gate list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-gate run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/beryl3d/gate.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+
+# Timeline parity of the recorded fixtures (`just b3d timeline-parity --fixtures`): one check
+# per fixture of ui/fixtures.json, failing when one of its seats differs from the web
+# interface's timeline (`ui/scripts/timeline.mjs`) by more steps than
+# data/beryl3d/timeline-parity.json allows. Each check reads the web timeline's sources and the
+# card files its recording plays. The card spec moments are compared by no family: Beryl 3D's
+# own timeline of every recording takes minutes.
+[family.b3d-timeline]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d", "ui-deps"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "ui/package.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/beryl3d/timeline.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
+
+# Instructions per frame of every gated board, counted under Callgrind in `beryl3d-bench`, an
+# arm64 Linux machine only Apple silicon runs, and held to `worst_frame_instructions` and
+# `total_instructions` in data/beryl3d/gates.json, with the scaling check between `stress-255`
+# and `stress-1024` (tools/src/beryl_tools/beryl3d/counts.py). One check: Callgrind counts every
+# board in one run. Only this Mac's machine has been shown to count repeatably, so the check
+# takes the `bench-vm` resource, which ignite.toml gives jarvis alone. The run builds in the
+# machine, so it needs only the pack, which `b3d` makes.
+[family.b3d-frame-counts]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d"]
+resources = ["bench-vm"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-counts list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-counts run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/beryl3d/**",
+  "tools/src/beryl_tools/bench.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]

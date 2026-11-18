@@ -2,3 +2,8 @@
 # outcome and time as JUnit XML, which the run log reads, as the main workspace's profile does.
 [profile.check.junit]
 path = "junit.xml"
+
+# Ignite's `b3d-test` family (ignite/checks/beryl3d.toml): the same JUnit report in its own
+# directory, target/nextest/ignite/junit.xml, so that a run of it never overwrites the step's.
+[profile.ignite.junit]
+path = "junit.xml"

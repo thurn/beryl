@@ -13,7 +13,8 @@
 //! which the gate holds to the tier's particle limit and to the Baseline playback's count.
 //!
 //! Usage: `gate [--board <name>]...`, every board of `beryl_inspect::gate::BOARDS` when none is
-//! named.
+//! named. `gate --list` prints the boards' names, one a line, and plays none: Ignite's `b3d-gate`
+//! family has one check per board (`tools/src/beryl_tools/ignite/beryl3d.py`).
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::backtrace::Backtrace;
@@ -165,10 +166,16 @@ fn enhanced(name: &str) -> Option<Value> {
 
 fn main() -> ExitCode {
     let mut names = Vec::new();
-    let mut arguments = std::env::args().skip(1);
+    let mut arguments = std::env::args().skip(1).peekable();
+    if arguments.peek().is_some_and(|a| a == "--list") {
+        for name in BOARDS {
+            println!("{name}");
+        }
+        return ExitCode::SUCCESS;
+    }
     while let Some(argument) = arguments.next() {
         let ("--board", Some(name)) = (argument.as_str(), arguments.next()) else {
-            eprintln!("usage: gate [--board <name>]...; the boards are {BOARDS:?}");
+            eprintln!("usage: gate [--board <name>]... | --list; the boards are {BOARDS:?}");
             return ExitCode::from(2);
         };
         names.push(name);
