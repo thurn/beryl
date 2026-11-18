@@ -461,13 +461,16 @@ impl Checks {
             // reading of the tree. Reading per check ran two git commands per check, which
             // for the thousands of checks in a round took most of an hour under load.
             let mut resolved = Vec::new();
+            // Checks of one package usually share every pattern, and matching patterns against
+            // every tracked file is the costly part, so each distinct set is matched once.
+            let mut memo: HashMap<String, Vec<String>> = HashMap::new();
             for listed in listed {
                 if let Some(why) = &listed.refused {
                     eprintln!("ignite: {why}");
                     broken.push(incomplete(&listed.check, &Error::Invalid(why.clone())));
                     continue;
                 }
-                match self.key_paths(tree, family, &listed) {
+                match self.key_paths(tree, family, &listed, &mut memo) {
                     Ok(paths) => resolved.push((listed, paths)),
                     Err(error) => broken.push(incomplete(&listed.check, &error)),
                 }
@@ -480,7 +483,7 @@ impl Checks {
             every.dedup();
             match inputs::object_ids(ctx.git.as_ref(), &tree.path, &every) {
                 Ok(ids) => {
-                    let ids: std::collections::HashMap<String, Oid> = ids.into_iter().collect();
+                    let ids: HashMap<String, Oid> = ids.into_iter().collect();
                     for (listed, paths) in resolved {
                         let mut own: Vec<(String, Oid)> = paths
                             .iter()
@@ -697,17 +700,30 @@ impl Checks {
 
     /// The paths a check's input hash covers: its family's inputs, the family's
     /// `package_inputs` for the check's package, and the check's own inputs.
-    fn key_paths(&self, tree: &OpenTree, family: &Family, listed: &Listed) -> Result<Vec<String>> {
+    /// `memo` holds the paths already resolved for a set of patterns and a package.
+    fn key_paths(
+        &self,
+        tree: &OpenTree,
+        family: &Family,
+        listed: &Listed,
+        memo: &mut HashMap<String, Vec<String>>,
+    ) -> Result<Vec<String>> {
         let mut patterns = hash::input_patterns(family, &self.settings.manifest);
         patterns.extend_from_slice(family.package_patterns(listed.package.as_deref()));
         patterns.extend(listed.inputs.iter().cloned().map(InputPattern::from));
-        inputs::resolve(
+        let memo_key = format!("{:?}\0{patterns:?}", listed.package);
+        if let Some(paths) = memo.get(&memo_key) {
+            return Ok(paths.clone());
+        }
+        let paths = inputs::resolve(
             &patterns,
             listed.package.as_deref(),
             &tree.graph,
             &tree.tracked,
         )
-        .map_err(|e| Error::Invalid(e.to_string()))
+        .map_err(|e| Error::Invalid(e.to_string()))?;
+        memo.insert(memo_key, paths.clone());
+        Ok(paths)
     }
 
     /// The check's key from the object IDs of its paths, sorted by path.
