@@ -216,3 +216,81 @@ fn a_release_tip_that_does_not_contain_the_running_commit_is_not_an_update() {
     assert_eq!(updater.check(&running).unwrap(), UpdateCheck::Ahead { tip });
     assert!(builder.built.borrow().is_empty());
 }
+
+#[test]
+fn planning_a_release_builds_nothing_and_installing_a_finished_build_activates_it() {
+    let home = tempdir("plan");
+    let store = ExecutableStore::new(home.join("bin"));
+    let (old, new) = (commit("aaaaaaa"), commit("bbbbbbb"));
+    let git = FakeGit::default();
+    git.set_tip("master", new.clone());
+    git.set_changed(&old, &new, &["ignite/crates/x.rs"]);
+    let builder = FakeBuilder {
+        out: home.join("build"),
+        built: RefCell::default(),
+    };
+    let updater = Updater {
+        git: &git,
+        builder: &builder,
+        store: &store,
+        master: "master",
+        source: "ignite",
+    };
+    assert_eq!(updater.plan(&old).unwrap(), Plan::Build(new.clone()));
+    assert!(builder.built.borrow().is_empty());
+    assert!(!store.has(&new));
+
+    // A build made elsewhere is stored under its commit and becomes the current release.
+    script(&home.join("elsewhere"), "# built elsewhere");
+    let UpdateCheck::Ready { executable, .. } = updater
+        .install(&old, &new, &home.join("elsewhere"))
+        .unwrap()
+    else {
+        panic!("a finished build must be ready");
+    };
+    assert_eq!(executable, store.path(&new));
+    assert_eq!(
+        ExecutableStore::version_of(&store.current_link()),
+        Some(new)
+    );
+    assert!(builder.built.borrow().is_empty());
+}
+
+#[test]
+fn the_release_build_is_an_agent_command_with_a_hang_limit() {
+    let spec = ReleaseBuilder::command(Path::new("/tmp/update-tree"), &commit("bbbbbbb"));
+    assert_eq!(spec.class, Class::Agent);
+    assert_eq!(spec.hang_limit_s, Some(RELEASE_BUILD_HANG_LIMIT_S));
+    assert_eq!(spec.cwd, Path::new("/tmp/update-tree/ignite"));
+    assert!(spec.args.iter().any(|a| a == "--release"));
+    assert!(spec.args.iter().any(|a| a == "ignite_cli"));
+}
+
+#[test]
+fn a_failed_release_build_reports_the_end_of_its_output() {
+    let home = tempdir("outcome");
+    let output = home.join("output.log");
+    std::fs::write(&output, "Compiling x\nerror: boom\n").unwrap();
+    let result = |exit, hung| RunResult {
+        exit,
+        output: output.clone(),
+        usage: ignite_core::protocol::Usage::default(),
+        hung,
+    };
+    let executable = home.join("ignite");
+    assert_eq!(
+        ReleaseBuilder::outcome(&result(Some(0), false), executable.clone()).unwrap(),
+        executable
+    );
+    let failed = ReleaseBuilder::outcome(&result(Some(101), false), executable.clone())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        failed.contains("exit 101") && failed.contains("error: boom"),
+        "{failed}"
+    );
+    let hung = ReleaseBuilder::outcome(&result(None, true), executable)
+        .unwrap_err()
+        .to_string();
+    assert!(hung.contains("was ended"), "{hung}");
+}

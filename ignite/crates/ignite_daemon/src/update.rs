@@ -22,10 +22,12 @@ use std::hash::{BuildHasher, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use ignite_core::ids::{Commit, MachineId};
+use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::{MachineRegister, MachineRegistered};
-use ignite_core::traits::{Error, Git, Result};
+use ignite_core::traits::{CommandSpec, Error, Git, Launcher, Result, RunResult};
 #[cfg(windows)]
 use ignite_os::Native;
 use serde::{Deserialize, Serialize};
@@ -234,43 +236,62 @@ pub trait Builder {
     fn build(&self, commit: &Commit) -> Result<PathBuf>;
 }
 
-/// The directory that `cargo` is found in when the service's minimal `PATH` lacks it.
-fn cargo_command() -> Command {
+/// The `cargo` to run: the one in `~/.cargo/bin` when the service's minimal `PATH` lacks it.
+fn cargo_program() -> PathBuf {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let cargo = home
         .map(|h| h.join(".cargo").join("bin").join("cargo"))
         .filter(|p| p.is_file());
-    Command::new(cargo.unwrap_or_else(|| PathBuf::from("cargo")))
+    cargo.unwrap_or_else(|| PathBuf::from("cargo"))
 }
 
-/// Runs `cargo build --release` for the `ignite` executable in the workspace at `tree/ignite`.
+/// The arguments of the release build of the `ignite` executable in the workspace at `workspace`
+/// (`tree/ignite`), without the program.
+fn cargo_arguments(workspace: &Path) -> Vec<String> {
+    let manifest = workspace.join("Cargo.toml");
+    let target = workspace.join("target");
+    vec![
+        "build".to_owned(),
+        "--release".to_owned(),
+        "--package".to_owned(),
+        "ignite_cli".to_owned(),
+        "--manifest-path".to_owned(),
+        manifest.display().to_string(),
+        "--target-dir".to_owned(),
+        target.display().to_string(),
+    ]
+}
+
+/// Where `cargo build --release` leaves the executable, for the workspace at `tree/ignite`.
+fn built_executable(workspace: &Path) -> PathBuf {
+    workspace
+        .join("target")
+        .join("release")
+        .join(format!("ignite{}", std::env::consts::EXE_SUFFIX))
+}
+
+/// The last lines of `text`, for an error message.
+fn tail(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().rev().take(15).collect();
+    lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+}
+
+/// Runs `cargo build --release` for the `ignite` executable in the workspace at `tree/ignite`,
+/// and waits for it on the calling thread.
 fn cargo_build(tree: &Path) -> Result<PathBuf> {
     let workspace = tree.join("ignite");
-    let target = workspace.join("target");
-    let output = cargo_command()
-        .args([
-            "build",
-            "--release",
-            "--package",
-            "ignite_cli",
-            "--manifest-path",
-        ])
-        .arg(workspace.join("Cargo.toml"))
-        .arg("--target-dir")
-        .arg(&target)
+    let output = Command::new(cargo_program())
+        .args(cargo_arguments(&workspace))
         .output()
         .map_err(|e| Error::Io(format!("cannot run cargo: {e}")))?;
     if !output.status.success() {
-        let text = String::from_utf8_lossy(&output.stderr);
-        let tail: Vec<&str> = text.lines().rev().take(15).collect();
-        let tail: Vec<&str> = tail.into_iter().rev().collect();
         return Err(Error::Io(format!(
             "cargo build failed in {}:\n{}",
             workspace.display(),
-            tail.join("\n")
+            tail(&String::from_utf8_lossy(&output.stderr))
         )));
     }
-    Ok(target.join("release").join("ignite"))
+    Ok(built_executable(&workspace))
 }
 
 /// Builds in the checkout that `ignite install` runs from.
@@ -284,8 +305,11 @@ impl Builder for CheckoutBuilder {
     }
 }
 
-/// Builds each release in one tree of its own, reset to the commit being built, so that
-/// the next update starts from the last one's compiled output and never touches a build tree.
+/// Seconds after which the supervisor ends a release build that has not finished.
+pub const RELEASE_BUILD_HANG_LIMIT_S: u64 = 60 * 60;
+
+/// The update tree: one tree of its own, reset to the commit being built, so that the next
+/// update starts from the last one's compiled output and never touches a build tree.
 pub struct TreeBuilder {
     pub repo: PathBuf,
     /// The directory that holds the update tree.
@@ -299,19 +323,110 @@ impl TreeBuilder {
     fn tree(&self) -> PathBuf {
         self.work.join("update-tree")
     }
-}
 
-impl Builder for TreeBuilder {
-    fn build(&self, commit: &Commit) -> Result<PathBuf> {
+    /// The file that names the commit whose build was started and has not been seen to end. A
+    /// daemon that restarts while a release builds finds it, because the build's supervisor
+    /// keeps running.
+    fn marker(&self) -> PathBuf {
+        self.work.join("release-build")
+    }
+
+    /// Makes the update tree a clean checkout of `commit` and notes that a build starts.
+    ///
+    /// When the file from [`Self::marker`] exists, the previous daemon's build may still run in
+    /// the tree, so this first waits until Cargo has released its lock on the target directory.
+    /// Resetting the tree under a running build would corrupt it.
+    fn prepare(&self, commit: &Commit) -> Result<PathBuf> {
         let tree = self.tree();
+        if self.marker().exists() {
+            wait_for_running_build(&tree.join("ignite"));
+        }
+        std::fs::create_dir_all(&self.work)?;
         if tree.join(".git").exists() {
             let keep: Vec<String> = Self::KEEP.iter().map(|s| (*s).to_owned()).collect();
             ignite_git::worktree::reset(&tree, Self::BRANCH, commit, &keep)?;
         } else {
-            std::fs::create_dir_all(&self.work)?;
             ignite_git::worktree::add(&self.repo, &tree, Self::BRANCH, commit)?;
         }
-        cargo_build(&tree)
+        std::fs::write(self.marker(), commit.as_str())?;
+        Ok(tree)
+    }
+
+    /// Notes that the build ended, whatever its result.
+    fn finished(&self) {
+        let _ = std::fs::remove_file(self.marker());
+    }
+}
+
+/// Blocks until no Cargo holds the lock on `workspace`'s release target directory.
+fn wait_for_running_build(workspace: &Path) {
+    let lock = workspace.join("target").join("release").join(".cargo-lock");
+    if let Ok(file) = std::fs::File::open(lock) {
+        let _ = file.lock_shared();
+    }
+}
+
+/// Builds each release in the update tree as a command run by the daemon's launcher, in the
+/// `agent` class with a hang limit, so that the scheduler accounts for its cores and its
+/// supervisor, not a thread of the daemon, owns the Cargo process. [`Builder::build`] blocks
+/// until Cargo ends, so the caller runs it on a thread of its own (see `SelfUpdate`).
+pub struct ReleaseBuilder {
+    pub tree: TreeBuilder,
+    pub launcher: Arc<dyn Launcher>,
+}
+
+impl ReleaseBuilder {
+    /// The command that builds the release in the workspace `tree/ignite`.
+    fn command(tree: &Path, commit: &Commit) -> CommandSpec {
+        let workspace = tree.join("ignite");
+        let mut args = vec![cargo_program().display().to_string()];
+        args.extend(cargo_arguments(&workspace));
+        CommandSpec {
+            args,
+            cwd: workspace,
+            env: vec![("IGNITE_RELEASE_BUILD".to_owned(), commit.to_string())],
+            class: Class::Agent,
+            // The scheduler grants what it can, at most two thirds of the machine.
+            cores: std::thread::available_parallelism()
+                .map_or(4, |n| u32::try_from(n.get()).unwrap_or(u32::MAX)),
+            resources: Vec::new(),
+            grows: true,
+            tree: None,
+            ticket: None,
+            hang_limit_s: Some(RELEASE_BUILD_HANG_LIMIT_S),
+        }
+    }
+
+    /// The executable the build left at `executable`, or why it failed.
+    fn outcome(result: &RunResult, executable: PathBuf) -> Result<PathBuf> {
+        if result.hung {
+            return Err(Error::Io(format!(
+                "the release build ran longer than {RELEASE_BUILD_HANG_LIMIT_S} seconds and was \
+                 ended; its output is in {}",
+                result.output.display()
+            )));
+        }
+        if result.exit != Some(0) {
+            let text = std::fs::read_to_string(&result.output).unwrap_or_default();
+            return Err(Error::Io(format!(
+                "the release build failed ({}); its output is in {}:\n{}",
+                result
+                    .exit
+                    .map_or_else(|| "ended by a signal".to_owned(), |c| format!("exit {c}")),
+                result.output.display(),
+                tail(&text)
+            )));
+        }
+        Ok(executable)
+    }
+}
+
+impl Builder for ReleaseBuilder {
+    fn build(&self, commit: &Commit) -> Result<PathBuf> {
+        let tree = self.tree.prepare(commit)?;
+        let result = self.launcher.run(&Self::command(&tree, commit));
+        self.tree.finished();
+        Self::outcome(&result, built_executable(&tree.join("ignite")))
     }
 }
 
@@ -530,22 +645,40 @@ pub struct Updater<'a> {
     pub source: &'a str,
 }
 
+/// What a check for a newer release decided, before anything is built.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Plan {
+    /// Nothing to build: the check's answer is final (never [`UpdateCheck::Ready`]).
+    Done(UpdateCheck),
+    /// The executable of this commit should run; it may be stored already.
+    Build(Commit),
+}
+
 impl Updater<'_> {
-    /// Builds the new executable if `master` moved and files under the source directory changed.
-    pub fn check(&self, current: &Commit) -> Result<UpdateCheck> {
+    /// Decides whether `master` moved and files under the source directory changed, without
+    /// building anything.
+    pub fn plan(&self, current: &Commit) -> Result<Plan> {
         let tip = self.git.tip(self.master)?;
         if &tip == current || self.store.is_rejected(&tip) {
-            return Ok(UpdateCheck::UpToDate);
+            return Ok(Plan::Done(UpdateCheck::UpToDate));
         }
         if !self.git.is_ancestor(current, &tip)? {
-            return Ok(UpdateCheck::Ahead { tip });
+            return Ok(Plan::Done(UpdateCheck::Ahead { tip }));
         }
         let prefix = format!("{}/", self.source.trim_end_matches('/'));
         let changed = self.git.changed(current, &tip)?;
         if !changed.iter().any(|path| path.starts_with(&prefix)) {
-            return Ok(UpdateCheck::NotNeeded { tip });
+            return Ok(Plan::Done(UpdateCheck::NotNeeded { tip }));
         }
-        self.prepare(current, &tip)
+        Ok(Plan::Build(tip))
+    }
+
+    /// Builds the new executable if `master` moved and files under the source directory changed.
+    pub fn check(&self, current: &Commit) -> Result<UpdateCheck> {
+        match self.plan(current)? {
+            Plan::Done(check) => Ok(check),
+            Plan::Build(tip) => self.prepare(current, &tip),
+        }
     }
 
     /// Builds and stores `target`, the version the hub runs, unless it is stored already.
@@ -558,6 +691,22 @@ impl Updater<'_> {
             let built = self.builder.build(target)?;
             self.store.store(target, &built)?;
         }
+        self.activate(current, target)
+    }
+
+    /// Stores the executable `built` for `target`, which a build run elsewhere made, and
+    /// activates it.
+    pub fn install(&self, current: &Commit, target: &Commit, built: &Path) -> Result<UpdateCheck> {
+        if self.store.is_rejected(target) {
+            return Ok(UpdateCheck::UpToDate);
+        }
+        self.store.store(target, built)?;
+        self.activate(current, target)
+    }
+
+    /// Points `bin/current` at the stored build of `target`, which a restart starts, and prunes
+    /// the builds that are no longer needed.
+    pub fn activate(&self, current: &Commit, target: &Commit) -> Result<UpdateCheck> {
         self.store.point_current_at(target)?;
         self.store.prune(&[target, current]);
         Ok(UpdateCheck::Ready {

@@ -1,6 +1,8 @@
 use std::io;
 use std::path::Path;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::sync::{Condvar, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use ignite_core::fakes::FakeGit;
 
@@ -66,13 +68,15 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
     let update = SelfUpdate {
         own: Some(commit(OLD)),
         git: git.clone(),
-        builder: Box::new(FakeBuilder { out: dir.clone() }),
+        builder: Arc::new(FakeBuilder { out: dir.clone() }),
         store: ExecutableStore::new(dir.join("bin")),
         master: "master".to_owned(),
         restart: Box::new(restart.clone()),
         ready: Mutex::new(None),
         rounds: AtomicU32::new(0),
         ahead_of: Mutex::default(),
+        building: Mutex::default(),
+        failed: Mutex::default(),
     };
     (update, git, restart)
 }
@@ -81,7 +85,10 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
 fn a_daemon_on_another_version_than_the_hub_restarts_into_the_hubs_at_once() {
     let (update, _git, restart) = daemon(NEW);
 
-    // Commands may run; the restart does not wait for them.
+    // Commands may run; the restart does not wait for them. The hub's version is built on a
+    // thread of its own, and the heartbeat after it ends restarts into it.
+    update.after_heartbeat(Some(NEW), false);
+    settle(&update);
     update.after_heartbeat(Some(NEW), false);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
@@ -101,6 +108,7 @@ fn master_moving_with_changed_ignite_source_builds_and_restarts_at_once() {
     git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
 
     update.after_master_moved().unwrap();
+    settle(&update);
     assert!(update.store.has(&commit(NEW)));
 
     // The hub is still on this daemon's version; the new build is restarted into at the next
@@ -114,6 +122,7 @@ fn a_ready_build_waits_only_for_a_push_in_progress() {
     let (update, git, restart) = daemon(NEW);
     git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
     update.after_master_moved().unwrap();
+    settle(&update);
 
     update.after_heartbeat(Some(OLD), true);
     assert!(restart.started().is_empty());
@@ -127,6 +136,7 @@ fn master_moving_without_ignite_changes_keeps_the_executable() {
     git.set_changed(&commit(OLD), &commit(NEW), &["docs/readme.md"]);
 
     update.after_master_moved().unwrap();
+    settle(&update);
     update.after_heartbeat(Some(OLD), false);
     assert!(restart.started().is_empty());
     assert!(!update.store.has(&commit(NEW)));
@@ -149,10 +159,25 @@ fn an_unstored_daemon_never_updates() {
     assert!(restart.started().is_empty());
 }
 
+/// Waits for the release build thread to end and takes its result, as the sender's next rounds
+/// do. Fails the test if the build does not end.
+fn settle(update: &SelfUpdate) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        update.collect_build();
+        if update.building().is_none() {
+            return;
+        }
+        assert!(Instant::now() < deadline, "the release build never ended");
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
 /// Calls `poll_release` until it does its check, which is every `POLL_EVERY_ROUNDS`th call.
 fn poll(update: &SelfUpdate) {
     update.rounds.store(0, Ordering::Relaxed);
     update.poll_release().unwrap();
+    settle(update);
 }
 
 #[test]
@@ -220,6 +245,7 @@ fn the_release_branch_is_fetched_at_most_every_thirty_rounds() {
     }
     assert!(!update.store.has(&commit(NEW)));
     update.poll_release().unwrap();
+    settle(&update);
     assert!(update.store.has(&commit(NEW)));
 }
 
@@ -237,4 +263,133 @@ fn a_daemon_installed_ahead_of_the_release_branch_stays_on_its_build() {
     // The daemon serves the hub, so the hub reports the daemon's own version.
     update.after_heartbeat(Some(OLD), false);
     assert!(restart.started().is_empty());
+}
+
+/// A builder that does not finish until the test opens its gate, and counts its builds. Each
+/// build ends as the test says: with a stored executable, or with an error.
+/// The gate a [`SlowBuilder`] waits at: open once the flag is true.
+type Gate = Arc<(StdMutex<bool>, Condvar)>;
+
+struct SlowBuilder {
+    out: PathBuf,
+    open: Gate,
+    started: Arc<AtomicUsize>,
+    fails: bool,
+}
+
+impl SlowBuilder {
+    fn new(out: PathBuf, fails: bool) -> (Self, Gate, Arc<AtomicUsize>) {
+        let open = Arc::new((StdMutex::new(false), Condvar::new()));
+        let started = Arc::new(AtomicUsize::new(0));
+        let builder = SlowBuilder {
+            out,
+            open: open.clone(),
+            started: started.clone(),
+            fails,
+        };
+        (builder, open, started)
+    }
+}
+
+impl Builder for SlowBuilder {
+    fn build(&self, commit: &Commit) -> Result<PathBuf> {
+        self.started.fetch_add(1, Ordering::SeqCst);
+        let (lock, wake) = &*self.open;
+        let mut open = lock.lock().unwrap();
+        while !*open {
+            open = wake.wait(open).unwrap();
+        }
+        if self.fails {
+            return Err(Error::Io(format!("cargo build failed for {commit}")));
+        }
+        let path = self.out.join(format!("built-{commit}"));
+        std::fs::write(&path, commit.as_str())?;
+        Ok(path)
+    }
+}
+
+fn open_gate(gate: &(StdMutex<bool>, Condvar)) {
+    *gate.0.lock().unwrap() = true;
+    gate.1.notify_all();
+}
+
+/// A daemon, as [`daemon`] makes it, whose builds are `builder`.
+fn daemon_building_with(builder: SlowBuilder) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
+    let (mut update, git, restart) = daemon(NEW);
+    update.builder = Arc::new(builder);
+    (update, git, restart)
+}
+
+#[test]
+fn heartbeats_go_on_while_a_slow_release_builds_and_the_build_starts_once() {
+    let (builder, gate, started) = SlowBuilder::new(tempdir(), false);
+    let (update, git, restart) = daemon_building_with(builder);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
+
+    // One round of the sender loop, as `spawn_sender` runs it: the check, then the heartbeat.
+    // Each round counts as a heartbeat sent. The tip loop asks for the same build as well, and
+    // the hub reports the new version, which is a third request.
+    let heartbeats = std::cell::Cell::new(0);
+    let round = |update: &SelfUpdate| {
+        update.rounds.store(0, Ordering::Relaxed);
+        update.poll_release().unwrap();
+        update.after_heartbeat(Some(NEW), false);
+        heartbeats.set(heartbeats.get() + 1);
+    };
+    let began = Instant::now();
+    for _ in 0..5 {
+        round(&update);
+        update.after_master_moved().unwrap();
+    }
+    // The rounds returned while the build was still gated: nothing blocked on it.
+    assert_eq!(heartbeats.get(), 5);
+    assert!(began.elapsed() < Duration::from_secs(20));
+    assert!(restart.started().is_empty());
+    assert_eq!(
+        update.building().as_ref().map(|b| b.commit.clone()),
+        Some(commit(NEW))
+    );
+    assert!(!update.store.has(&commit(NEW)));
+
+    open_gate(&gate);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while restart.started().is_empty() {
+        assert!(
+            Instant::now() < deadline,
+            "no restart after the build ended"
+        );
+        round(&update);
+        thread::sleep(Duration::from_millis(2));
+    }
+    // The build ran once however many rounds and loops asked, and the first heartbeat after
+    // it ended restarted the daemon into it.
+    assert_eq!(started.load(Ordering::SeqCst), 1);
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+}
+
+#[test]
+fn a_failed_release_build_is_not_started_again_for_the_same_commit() {
+    let (builder, gate, started) = SlowBuilder::new(tempdir(), true);
+    let (update, git, restart) = daemon_building_with(builder);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/a.rs"]);
+    open_gate(&gate);
+
+    poll(&update);
+    assert_eq!(started.load(Ordering::SeqCst), 1);
+    assert_eq!(update.failed().as_ref(), Some(&commit(NEW)));
+
+    // Neither the sender's poll, the tip loop nor the hub's version tries the same commit again.
+    poll(&update);
+    update.after_master_moved().unwrap();
+    update.after_heartbeat(Some(NEW), false);
+    settle(&update);
+    assert_eq!(started.load(Ordering::SeqCst), 1);
+    assert!(restart.started().is_empty());
+
+    // The release branch moving to another commit builds that one.
+    let newer = "f00dfee";
+    git.set_tip("master", commit(newer));
+    git.set_changed(&commit(OLD), &commit(newer), &["ignite/a.rs"]);
+    poll(&update);
+    assert_eq!(started.load(Ordering::SeqCst), 2);
 }

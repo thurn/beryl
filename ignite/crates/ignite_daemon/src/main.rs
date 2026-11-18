@@ -28,7 +28,7 @@ use ignite_core::traits::{Clock, Error, Result};
 use crate::doctor::NativeHost;
 use crate::loop_health::LoopHealth;
 use crate::server::{Context, Server};
-use crate::update::{ExecRestart, Home, Startup, TreeBuilder};
+use crate::update::{ExecRestart, Home, ReleaseBuilder, Startup, TreeBuilder};
 use ignite_core::time::SystemClock;
 
 /// What one daemon is started with.
@@ -93,7 +93,7 @@ impl Daemon {
             version: base.options.version.clone(),
             hostname: base.options.hostname.clone(),
             feed_wait_s: base.options.feed_wait_s,
-            update: Arc::new(self_update(&base)),
+            update: Arc::new(self_update(&base, machinery.launcher.clone())),
             health: health.clone(),
             reporter: Arc::new(crate::justiciar::Reporter::new(
                 base.options.home.root.clone(),
@@ -136,15 +136,22 @@ impl Daemon {
 }
 
 /// Updates this daemon to new releases: builds them in `update/update-tree` in the home
-/// folder, apart from the build trees, and restarts with [`ExecRestart`].
-fn self_update(base: &assemble::Base) -> selfupdate::SelfUpdate {
+/// folder, apart from the build trees, as supervised commands run through `launcher`, and
+/// restarts with [`ExecRestart`].
+fn self_update(
+    base: &assemble::Base,
+    launcher: Arc<dyn ignite_core::traits::Launcher>,
+) -> selfupdate::SelfUpdate {
     let options = &base.options;
     selfupdate::SelfUpdate {
         own: Commit::new(&options.version).ok(),
         git: base.git.clone(),
-        builder: Box::new(TreeBuilder {
-            repo: options.repo.clone(),
-            work: options.home.root.join("update"),
+        builder: Arc::new(ReleaseBuilder {
+            tree: TreeBuilder {
+                repo: options.repo.clone(),
+                work: options.home.root.join("update"),
+            },
+            launcher,
         }),
         store: options.home.store(),
         master: base.config.repository.release_branch().to_owned(),
@@ -152,6 +159,8 @@ fn self_update(base: &assemble::Base) -> selfupdate::SelfUpdate {
         ready: Mutex::new(None),
         rounds: std::sync::atomic::AtomicU32::new(0),
         ahead_of: Mutex::default(),
+        building: Mutex::default(),
+        failed: Mutex::default(),
     }
 }
 

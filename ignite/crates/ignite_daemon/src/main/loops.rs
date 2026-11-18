@@ -100,6 +100,8 @@ impl Parts {
     /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each
     /// heartbeat it compares the daemon's version with the hub's and restarts into a new
     /// executable as soon as one is ready, whatever runs (see [`SelfUpdate::after_heartbeat`]).
+    /// A release build runs on a thread of its own, so a round never waits for Cargo; the round
+    /// only looks whether the build has finished and names it in the loop's step.
     fn spawn_sender(&self, db: Connection, server: Arc<Server>) {
         let (ctx, client, landing, dispatcher, version) = (
             self.ctx.clone(),

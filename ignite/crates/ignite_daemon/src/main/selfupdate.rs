@@ -4,8 +4,8 @@
 //!
 //! - The release branch (`master`, unless the repository names a `release` branch) moves and
 //!   files under Ignite's own source directory changed. The tip loop calls
-//!   [`SelfUpdate::after_master_moved`], which builds the new executable in the update tree and
-//!   stores it under its commit. The daemon restarts into it within one round of the sender loop
+//!   [`SelfUpdate::after_master_moved`], which starts building the new executable in the update
+//!   tree; the build is stored under its commit when it has finished. The daemon restarts into it within one round of the sender loop
 //!   (10 seconds), whatever runs. A daemon
 //!   whose own commit the branch does not contain, such as one installed by hand from
 //!   `staging`, stays where it is: going to the branch's tip would be a downgrade.
@@ -20,6 +20,14 @@
 //! daemon that already runs `master`'s tip therefore waits for the hub instead of going back to
 //! the hub's older version.
 //!
+//! The release is built by a thread of its own, through the daemon's launcher (see
+//! [`crate::update::ReleaseBuilder`]), so the sender loop goes on sending heartbeats and the outbox
+//! while Cargo runs, which takes minutes on a loaded machine. Whichever loop asks for a build
+//! starts it unless one runs already. The sender looks each round whether it has finished
+//! ([`SelfUpdate::collect_build`]) and says in its step that a release is building. A build that
+//! failed is reported once and not tried again for the same commit; the next move of the release
+//! branch tries the new commit.
+//!
 //! A restart does not wait for commands. Supervisors are other processes, started from the old
 //! executable's own path, so a restart leaves them running until their commands finish. The new
 //! daemon runs the verbs that were cut off again under their handles, taking their commands over
@@ -30,17 +38,24 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::thread::{self, JoinHandle};
 
 use ignite_core::ids::Commit;
-use ignite_core::traits::{Git, Result};
+use ignite_core::traits::{Error, Git, Result};
 
 use crate::update::{
-    Builder, ExecutableStore, Restart, SOURCE, UpdateCheck, Updater, restart_into,
+    Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, restart_into,
 };
 
 /// The sender loop runs every 10 seconds, so this many of its rounds are 5 minutes.
 pub const POLL_EVERY_ROUNDS: u32 = 30;
+
+/// A release build running on its own thread.
+pub struct Building {
+    pub commit: Commit,
+    handle: JoinHandle<Result<PathBuf>>,
+}
 
 /// The daemon's view of its own version and the release it should run.
 pub struct SelfUpdate {
@@ -48,7 +63,7 @@ pub struct SelfUpdate {
     /// store (one run straight from a Cargo target directory), which never updates itself.
     pub own: Option<Commit>,
     pub git: Arc<dyn Git>,
-    pub builder: Box<dyn Builder + Send + Sync>,
+    pub builder: Arc<dyn Builder + Send + Sync>,
     pub store: ExecutableStore,
     /// The branch releases come from: the repository's release branch, `master` by default.
     pub master: String,
@@ -59,6 +74,12 @@ pub struct SelfUpdate {
     pub rounds: AtomicU32,
     /// The release tip last reported as not containing this daemon's commit.
     pub ahead_of: Mutex<Option<Commit>>,
+    /// The release build that is running, if any. At most one runs, so a second request for the
+    /// same commit (the tip loop and the sender can both ask) starts nothing.
+    pub building: Mutex<Option<Building>>,
+    /// The commit whose build last failed, which is not built again until another commit is
+    /// wanted.
+    pub failed: Mutex<Option<Commit>>,
 }
 
 impl SelfUpdate {
@@ -87,9 +108,13 @@ impl SelfUpdate {
             // from there.
             return Ok(());
         }
-        match self.updater().check(own)? {
-            UpdateCheck::Ready { executable, .. } => *self.ready() = Some(executable),
-            UpdateCheck::Ahead { tip } => {
+        match self.updater().plan(own)? {
+            Plan::Build(tip) => {
+                if let Some(executable) = self.stage(own, &tip)? {
+                    *self.ready() = Some(executable);
+                }
+            }
+            Plan::Done(UpdateCheck::Ahead { tip }) => {
                 // Said once per tip, not on every poll.
                 let mut seen = self.ahead_of.lock().unwrap_or_else(PoisonError::into_inner);
                 if seen.as_ref() != Some(&tip) {
@@ -101,9 +126,95 @@ impl SelfUpdate {
                     *seen = Some(tip);
                 }
             }
-            UpdateCheck::UpToDate | UpdateCheck::NotNeeded { .. } => {}
+            Plan::Done(_) => {}
         }
         Ok(())
+    }
+
+    /// The stored executable of `target`, activated, or `None` when it is not stored: a build is
+    /// then started on a thread of its own, unless one runs already or this commit's build
+    /// failed, and [`SelfUpdate::collect_build`] picks up its result.
+    fn stage(&self, own: &Commit, target: &Commit) -> Result<Option<PathBuf>> {
+        if self.store.is_rejected(target) {
+            return Ok(None);
+        }
+        if self.store.has(target) {
+            return match self.updater().activate(own, target)? {
+                UpdateCheck::Ready { executable, .. } => Ok(Some(executable)),
+                _ => Ok(None),
+            };
+        }
+        self.start_build(target);
+        Ok(None)
+    }
+
+    fn building(&self) -> MutexGuard<'_, Option<Building>> {
+        self.building.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn failed(&self) -> MutexGuard<'_, Option<Commit>> {
+        self.failed.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Starts building `target` unless a build runs (of this commit or another, which finishes
+    /// first) or the last build of `target` failed.
+    fn start_build(&self, target: &Commit) {
+        let mut building = self.building();
+        if building.is_some() || self.failed().as_ref() == Some(target) {
+            return;
+        }
+        let (builder, commit) = (self.builder.clone(), target.clone());
+        let spawned = thread::Builder::new()
+            .name("ignite-release-build".to_owned())
+            .spawn(move || builder.build(&commit));
+        match spawned {
+            Ok(handle) => {
+                eprintln!("ignite: building release {target}");
+                *building = Some(Building {
+                    commit: target.clone(),
+                    handle,
+                });
+            }
+            Err(error) => {
+                eprintln!("ignite: cannot start the build of release {target}: {error}");
+                *self.failed() = Some(target.clone());
+            }
+        }
+    }
+
+    /// Looks, without waiting, whether the release build has finished. While it runs, records
+    /// "building release <commit>" as the calling loop's step. A finished build is stored and
+    /// becomes the ready build; a failed one is reported once and its commit is not built again.
+    pub fn collect_build(&self) {
+        let Some(own) = &self.own else {
+            return;
+        };
+        let mut slot = self.building();
+        let Some(building) = slot.take() else {
+            return;
+        };
+        if !building.handle.is_finished() {
+            crate::steps::step(format!("building release {}", building.commit));
+            *slot = Some(building);
+            return;
+        }
+        drop(slot);
+        let Building { commit, handle } = building;
+        let built = handle
+            .join()
+            .unwrap_or_else(|_| Err(Error::Io("the build thread panicked".to_owned())))
+            .and_then(|built| self.updater().install(own, &commit, &built));
+        match built {
+            Ok(UpdateCheck::Ready { executable, .. }) => {
+                eprintln!("ignite: built release {commit}");
+                *self.ready() = Some(executable);
+            }
+            Ok(_) => {}
+            Err(error) => {
+                eprintln!("ignite: the release {commit} was not built: {error}");
+                *self.failed() = Some(commit);
+            }
+        }
     }
 
     /// Called once per round of the sender loop. Every [`POLL_EVERY_ROUNDS`]th call (the first
@@ -130,6 +241,7 @@ impl SelfUpdate {
         let Some(own) = &self.own else {
             return;
         };
+        self.collect_build();
         // A hub that reports no commit, such as one run from an unstored executable, asks for
         // no update.
         // A release that was rolled back for failing to start is not updated to again.
@@ -172,12 +284,7 @@ impl SelfUpdate {
         if self.git.tip(&self.master)? == *own {
             return Ok(None);
         }
-        match self.updater().prepare(own, hub)? {
-            UpdateCheck::Ready { executable, .. } => Ok(Some(executable)),
-            UpdateCheck::UpToDate | UpdateCheck::NotNeeded { .. } | UpdateCheck::Ahead { .. } => {
-                Ok(None)
-            }
-        }
+        self.stage(own, hub)
     }
 }
 
