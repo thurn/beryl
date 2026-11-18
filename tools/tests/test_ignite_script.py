@@ -191,7 +191,7 @@ def test_a_card_whose_scenarios_use_another_card_lists_that_cards_file_too(
 ) -> None:
     alpha = repo / "rust/cards/cards_1/set/alpha.rs"
     alpha.write_text(
-        alpha.read_text() + "Scenario::new(\"steals\").hand(P1, &[Card::Beta]);\n"
+        alpha.read_text() + 'Scenario::new("steals").hand(P1, &[Card::Beta]);\n'
     )
     listed = adapter.list_checks("script", repo, ["Alpha"])
     assert listed[0]["inputs"] == [
@@ -204,8 +204,37 @@ def test_a_card_whose_scenarios_use_another_card_lists_that_cards_file_too(
     ]
 
 
+def test_a_card_named_by_its_spelled_out_name_or_through_another_card_is_read(
+    repo: Path,
+) -> None:
+    folder = repo / "rust/cards/cards_1/set"
+    (folder / "gamma.rs").write_text(
+        card("Gamma") + "const FOUND: &str = names::DELTA;\n"
+    )
+    (folder / "delta.rs").write_text(card("Delta"))
+    (folder / "omega.rs").write_text(card("Omega"))
+    # Beta's scenarios name Omega, which Alpha's scenarios never play.
+    beta = folder / "beta.rs"
+    beta.write_text(
+        beta.read_text()
+        + 'pub mod scenarios {\n  Scenario::new("x").hand(P0, &[Card::Omega]);\n}\n'
+    )
+    alpha = folder / "alpha.rs"
+    alpha.write_text(
+        alpha.read_text()
+        + 'Scenario::new("Alpha meets Beta").hand(P1, &["Beta", Token::Gamma]);\n'
+    )
+    listed = adapter.list_checks("script", repo, ["Alpha"])
+    assert listed[0]["inputs"] == [
+        f"rust/cards/cards_1/set/{name}.rs"
+        for name in ("alpha", "beta", "delta", "gamma")
+    ]
+
+
 def test_card_references_match_names_variants_and_constants() -> None:
-    assert adapter.letters("Jace, Vryn's Prodigy") == adapter.letters("JaceVrynsProdigy")
+    assert adapter.letters("Jace, Vryn's Prodigy") == adapter.letters(
+        "JaceVrynsProdigy"
+    )
     assert adapter.letters("MANA_CRYPT") == adapter.letters("Mana Crypt")
 
 

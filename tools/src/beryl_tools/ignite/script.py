@@ -17,9 +17,10 @@ The families:
 - `script`: `beryl_cli script-check`, in a debug build (the `script-cli` product), where every
   script the session builds is held to the replay check and the rule invariants. One check per
   card, moment and seat, and one per UI fixture. The moments of a card are what `beryl_cli
-  specs-check <card>` lists, which plays them. A check's own inputs are its card's file and
-  the file of every card that file names, so that editing a card leaves the checks of cards that
-  do not use it as they were.
+  specs-check <card>` lists, which plays them. A check's own inputs are its card's file, the
+  file of every card that file names (`used_files`), and the file of every card their
+  definitions name, so that editing a card leaves the checks of cards that do not use it as
+  they were.
 - `app`: `just smoke`, one check, `app:smoke`.
 - `mobile`: `cargo check` of the app for the iOS Simulator and for Android, one check per target.
 """
@@ -88,11 +89,19 @@ def card_files(root: Path) -> dict[str, str]:
     return files
 
 
-# How a card's file names another card: an enum variant of the table's `Card` or of `Printed`
-# (`Card::ManaCrypt`), or a constant of `beryl_cards::names` (`names::MANA_CRYPT`).
+# How a card's file names another card: a constant of a generated type, `Card`, `Printed` or
+# `Token` (`Card::ManaCrypt`); a constant of a names module, `beryl_cards::names` or
+# `printed::token` (`names::MANA_CRYPT`); or a string literal that is a card's whole name
+# (`"Mana Crypt"`), since a card name is a `&str` a scenario may spell out.
 CARD_REFERENCE: re.Pattern[str] = re.compile(
-    r"\b(?:Card|Printed)::([A-Z][A-Za-z0-9]*)\b|\bnames::([A-Z][A-Z0-9_]*)\b"
+    r"\b(?:Card|Printed|Token)::([A-Z][A-Za-z0-9]*)\b"
+    r"|\b(?:names|token)::([A-Z][A-Z0-9_]*)\b"
+    r'|"([^"\\\n]{1,80})"'
 )
+
+# Where a card file's scenarios start: the generated card list reads them from
+# `pub mod scenarios {` (`has_scenarios` in rust/crates/beryl_card_build/src/generate.rs).
+SCENARIOS: re.Pattern[str] = re.compile(r"^\s*pub\s+mod\s+scenarios\s*\{", re.MULTILINE)
 
 
 def letters(name: str) -> str:
@@ -101,16 +110,32 @@ def letters(name: str) -> str:
     return "".join(c.lower() for c in name if c.isascii() and c.isalnum())
 
 
+def references(text: str) -> set[str]:
+    """Every spelling in `text` that may name a card, as `letters` writes it."""
+    return {letters("".join(groups)) for groups in CARD_REFERENCE.findall(text)} - {""}
+
+
+def definition(text: str) -> str:
+    """A card file without its scenarios: the part a scenario of another card plays."""
+    found = SCENARIOS.search(text)
+    return text[: found.start()] if found else text
+
+
 def used_files(root: Path, own: str, files: dict[str, str]) -> list[str]:
-    """The card files a card's scenarios read: its own, and the file of every other card its file
-    names (a card it steals, a spell that targets it, a permanent on the battlefield). The
-    scenarios sit in the card's file, so its references are the cards they use."""
+    """The card files a card's scenarios read: its own, the file of every other card its file
+    names (a card it steals, a spell that targets it, a permanent on the battlefield), and, so
+    that a card those cards' definitions name is read too, every card their definitions name in
+    turn. The scenarios of the cards it uses are not followed, because they are not played.
+    """
     by_letters = {letters(slug_): path for slug_, path in files.items()}
     used = {files[own]}
-    for variant, constant in CARD_REFERENCE.findall((root / files[own]).read_text()):
-        path = by_letters.get(letters(variant or constant))
-        if path:
-            used.add(path)
+    texts = [(root / files[own]).read_text()]
+    while texts:
+        for reference in references(texts.pop()):
+            path = by_letters.get(reference)
+            if path and path not in used:
+                used.add(path)
+                texts.append(definition((root / path).read_text()))
     return sorted(used)
 
 
@@ -152,7 +177,10 @@ def fixture_checks(root: Path) -> list[dict[str, Any]]:
         seat = re.search(r"seat (\d+)", fixture.get("until") or "")
         view = SEATS[1] if seat and seat[1] != "0" else SEATS[0]
         out.append(
-            {"check": f"script:fixtures/{fixture['name']}/{view}", "inputs": [FIXTURES, CARDS]}
+            {
+                "check": f"script:fixtures/{fixture['name']}/{view}",
+                "inputs": [FIXTURES, CARDS],
+            }
         )
     return out
 
