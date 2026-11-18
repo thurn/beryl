@@ -82,6 +82,28 @@ fn list_waits_for_its_products_and_a_failed_build_is_not_an_incomplete_family() 
 }
 
 #[test]
+fn a_product_that_fails_for_two_families_is_reported_once() {
+    let world = jsonl_world();
+    let tree_id = TreeId::new("tree-01").unwrap();
+    world.builds.script(
+        &tree_id,
+        "deps",
+        BuildResult::Failed {
+            output: world.dir.join("build.txt"),
+            usage: Usage::default(),
+        },
+    );
+    let tree = world.checks.open(&tree_id).unwrap();
+    let mut run = CheckRun::default();
+    let deps = vec!["deps".to_owned()];
+    for _ in 0..2 {
+        let built = Checks::build_products(&world.ctx, &tree, &deps, &[], &mut run);
+        assert!(built.is_err());
+    }
+    assert_eq!(run.build_failures.len(), 1);
+}
+
+#[test]
 fn list_builds_what_it_needs_before_it_runs() {
     let world = jsonl_world();
     let run = run(&world, &["unit:a"]);

@@ -327,7 +327,11 @@ impl Checks {
                     rebuilt: units.iter().filter(|u| u.rebuilt).count(),
                 }),
                 BuildResult::Failed { output, .. } => {
-                    run.build_failures.push((product.clone(), output.clone()));
+                    // Every family that needs a product gets its remembered failure, which
+                    // the run reports once.
+                    if !run.build_failures.iter().any(|(p, _)| p == product) {
+                        run.build_failures.push((product.clone(), output.clone()));
+                    }
                     return Err(output);
                 }
             }

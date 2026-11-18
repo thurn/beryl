@@ -32,6 +32,9 @@ struct Launched {
     subset_tree: String,
     /// Makes the next build command panic.
     panic_next: bool,
+    /// While set, every build command fails with this exit code (`None` for a signal) and
+    /// whether its supervisor ended it as hung, writing its output to a file.
+    failing: Option<(Option<i32>, bool)>,
 }
 
 impl TestLauncher {
@@ -123,6 +126,15 @@ impl Launcher for TestLauncher {
         fs::write(units, state.units.join("\n")).unwrap();
         state.active -= 1;
         self.changed.notify_all();
+        if let Some((exit, hung)) = state.failing {
+            let output = self.dir.join(format!("build-{n}.txt"));
+            fs::write(&output, "error: the build failed\n").unwrap();
+            return RunResult {
+                exit,
+                hung,
+                ..done(output)
+            };
+        }
         done(PathBuf::new())
     }
 }
@@ -441,4 +453,63 @@ fn builds_and_feature_checks_run_with_a_hang_limit() {
         limits.iter().all(|l| *l == Some(BUILD_HANG_LIMIT_S)),
         "{limits:?}"
     );
+}
+
+#[test]
+fn a_build_that_exits_failing_is_not_run_again_until_an_input_changes() {
+    let f = fixture("failed", false);
+    f.launcher.with(|s| s.failing = Some((Some(1), false)));
+    let first = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    let BuildResult::Failed { output, .. } = &first else {
+        panic!("expected a failure, got {first:?}");
+    };
+    // The same inputs get the same failure, and its output, without a second launch.
+    let again = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert_eq!(
+        again,
+        BuildResult::Failed {
+            output: output.clone(),
+            usage: Usage::default()
+        }
+    );
+    assert_eq!(f.launcher.builds().len(), 1);
+    // An edit to an input builds again.
+    f.git.set_object("a", oid('2'));
+    let edited = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(edited, BuildResult::Failed { .. }), "{edited:?}");
+    assert_eq!(f.launcher.builds().len(), 2);
+    // Re-leasing the tree builds again too, and a success replaces the remembered failure.
+    f.launcher.with(|s| s.failing = None);
+    f.manager.forget(&tree());
+    let fixed = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(fixed, BuildResult::Built { .. }), "{fixed:?}");
+    assert_eq!(f.launcher.builds().len(), 3);
+}
+
+#[test]
+fn a_build_ended_by_a_signal_or_a_hang_is_tried_again() {
+    for (name, exit, hung) in [("signal", None, false), ("hung", Some(1), true)] {
+        let f = fixture(name, false);
+        f.launcher.with(|s| s.failing = Some((exit, hung)));
+        for _ in 0..2 {
+            let result = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+            assert!(matches!(result, BuildResult::Failed { .. }), "{result:?}");
+        }
+        assert_eq!(f.launcher.builds().len(), 2, "{name}");
+    }
+}
+
+#[test]
+fn a_failed_build_leaves_the_tree_holding_no_built_state() {
+    let f = fixture("failed-held", false);
+    f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    f.git.set_object("a", oid('2'));
+    f.launcher.with(|s| s.failing = Some((Some(1), false)));
+    f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    // Back at the state built first: the failed build may have overwritten it, so it builds.
+    f.launcher.with(|s| s.failing = None);
+    f.git.set_object("a", oid('1'));
+    let back = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(back, BuildResult::Built { .. }), "{back:?}");
+    assert_eq!(f.launcher.builds().len(), 3);
 }

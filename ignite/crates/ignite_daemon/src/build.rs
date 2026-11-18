@@ -10,6 +10,10 @@
 //!   answers [`BuildResult::Current`] without starting anything.
 //! - A build of the same product, packages and input hash is running in the tree: it waits for
 //!   that build and returns its result.
+//! - The last build of the same product, packages and input hash in the tree exited with a
+//!   failing code: it returns that failure again without starting anything, since the same
+//!   inputs fail the same way. A build that a signal ended, or that hung, is not remembered,
+//!   so the next request tries it again.
 //! - Otherwise it waits until no build is writing any of the product's output directories in
 //!   that tree, then runs the build command through the [`Launcher`].
 //!
@@ -156,6 +160,8 @@ struct Request {
 struct State {
     /// The input hash each request was last built at.
     held: HashMap<Request, InputHash>,
+    /// The input hash each request last failed at with an exit code, and that build's output.
+    failed: HashMap<Request, (InputHash, PathBuf)>,
     /// Builds running now, by request and input hash.
     flights: HashMap<(Request, InputHash), Arc<Flight>>,
     /// The (tree, output directory) pairs a running build writes.
@@ -222,17 +228,31 @@ impl FlightGuard<'_> {
         state.flights.remove(&self.flight_key);
     }
 
-    fn finish(mut self, result: &BuildResult) {
+    /// Ends the build with `result`. `remember` says whether a failure is one the same inputs
+    /// would repeat, so that later requests get it without building.
+    fn finish(mut self, result: &BuildResult, remember: bool) {
         self.finished = true;
         let mut state = lock(&self.manager.state);
         for dir in &self.dirs {
             state.busy.remove(dir);
         }
         state.flights.remove(&self.flight_key);
-        if matches!(result, BuildResult::Built { .. }) {
-            state
-                .held
-                .insert(self.plan.request.clone(), self.plan.hash.clone());
+        let request = &self.plan.request;
+        match result {
+            BuildResult::Built { .. } => {
+                state.failed.remove(request);
+                state.held.insert(request.clone(), self.plan.hash.clone());
+            }
+            BuildResult::Failed { output, .. } => {
+                // A failed build may have rewritten part of its outputs, so the tree no longer
+                // holds the last state that was built.
+                state.held.remove(request);
+                if remember {
+                    let failure = (self.plan.hash.clone(), output.clone());
+                    state.failed.insert(request.clone(), failure);
+                }
+            }
+            BuildResult::Current => {}
         }
         drop(state);
         self.flight.finish(result.clone());
@@ -294,12 +314,12 @@ impl BuildManager {
         }
     }
 
-    /// Drops what the manager believes `tree` holds, for when its build directories are
-    /// deleted, so the next request builds.
+    /// Drops what the manager believes `tree` holds and the failures it remembers there, for
+    /// when its build directories are deleted, so the next request builds.
     pub fn forget(&self, tree: &TreeId) {
-        lock(&self.state)
-            .held
-            .retain(|request, _| request.tree != *tree);
+        let mut state = lock(&self.state);
+        state.held.retain(|request, _| request.tree != *tree);
+        state.failed.retain(|request, _| request.tree != *tree);
     }
 
     /// Requests waiting now: those joined to a running build, and those queued behind another
@@ -521,6 +541,15 @@ impl BuildManager {
             if state.held.get(&plan.request) == Some(&plan.hash) {
                 return BuildResult::Current;
             }
+            if let Some((hash, output)) = state.failed.get(&plan.request)
+                && *hash == plan.hash
+            {
+                // Nothing ran for this request, so it reports no usage.
+                return BuildResult::Failed {
+                    output: output.clone(),
+                    usage: Usage::default(),
+                };
+            }
             if let Some(flight) = state.flights.get(&flight_key).cloned() {
                 state.joined += 1;
                 drop(state);
@@ -554,20 +583,21 @@ impl BuildManager {
             flight,
             finished: false,
         };
-        let result = self.run(plan);
-        guard.finish(&result);
+        let (result, remember) = self.run(plan);
+        guard.finish(&result, remember);
         result
     }
 
-    fn run(&self, plan: &Plan) -> BuildResult {
+    /// Runs the build command. The flag says whether a failure came from the command exiting
+    /// with a code, which the same inputs would repeat, rather than from a signal, a hang or
+    /// the daemon's own files.
+    fn run(&self, plan: &Plan) -> (BuildResult, bool) {
         let units_file = self.record_file(&plan.request.product, "units");
         let prepared =
             fs::create_dir_all(&self.settings.records).and_then(|()| fs::write(&units_file, ""));
         if let Err(error) = prepared {
-            return self.failure(
-                &plan.request.product,
-                &format!("cannot create {}: {error}", units_file.display()),
-            );
+            let message = format!("cannot create {}: {error}", units_file.display());
+            return (self.failure(&plan.request.product, &message), false);
         }
         let env = vec![(
             UNITS_ENV.to_owned(),
@@ -578,14 +608,17 @@ impl BuildManager {
             exit,
             output,
             usage,
-            ..
+            hung,
         } = self.launcher.run(&spec);
         let units = read_units(&units_file);
         let _ = fs::remove_file(&units_file);
         if exit == Some(0) {
-            BuildResult::Built { usage, units }
+            (BuildResult::Built { usage, units }, false)
         } else {
-            BuildResult::Failed { output, usage }
+            (
+                BuildResult::Failed { output, usage },
+                exit.is_some() && !hung,
+            )
         }
     }
 }

@@ -632,6 +632,10 @@ The daemon runs builds so that sessions do not compete inside one tree:
   running build.
 - A request for a product the tree already holds is answered at once, without
   starting Cargo. This covers the 4,982 runs in 3 days that compiled nothing.
+- A build that exited with a failing code is not run again for the same inputs:
+  later requests get the same failure and its output until an input changes or
+  the tree is leased again. A build that a signal ended, or that hung, is tried
+  again on the next request.
 - Checks waiting for a build hold no cores.
 - The gate builds test binaries only for the packages whose tests it will run. A
   `beryl_rules` change does not build `beryl_session`'s tests before landing
