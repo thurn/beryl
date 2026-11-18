@@ -1211,6 +1211,26 @@ The steps, in order:
 7. Record the commits and the files they touch on the ticket with the agent's
    note, close the ticket and release the ticket tree.
 
+The gate stops at the first fault it knows of:
+
+- After scoping, it lists first the families that need no build to be listed
+  (those with a kept listing, or whose `list` needs no product). If any listed
+  check's manifest entry is invalid, a listing fails, or a build fails, the
+  landing is refused at once, before anything is built or run, and the reply
+  names the faulty entries and the families it did not list.
+- It runs the families in order of cost per expected failure, cheapest first,
+  with families answered wholly from the cache first.
+- Once a check's failure is confirmed by its rerun, it starts no further
+  command. What already passed stays in the result cache, and the `stopped` line
+  says how many checks it did not run.
+- When judging scope, `crate-closure` stands for the packages the family's
+  listed checks belong to. In a listing hash it stands for the packages of the
+  workspaces the family's other inputs reach into, so a change to Ignite's own
+  workspace leaves the repository's Rust families out.
+- While a landing runs in a tree, `ignite land` and every other verb that acts
+  on that tree are refused there with exit code 3, naming the running handle to
+  `ignite wait` or `ignite stop`.
+
 The machine's daemon carries out these steps for the client. The `staging` lease
 lasts 180 seconds and is renewed while it is held, so a daemon that dies holding
 it blocks other landings for three minutes at most. A push that the remote
