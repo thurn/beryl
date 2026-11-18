@@ -614,6 +614,30 @@ pub struct RejectedCommand {
     pub session: Option<SessionId>,
 }
 
+/// `POST /justiciar`: an emergency that stops work and that no ordinary ticket will fix, such
+/// as a crash of Ignite itself, a daemon loop that keeps failing, or a session that asked for
+/// one. The hub files a P0 ticket labelled `justiciar`, which is offered before any other
+/// ticket. A report whose subject matches an open justiciar ticket adds a comment instead.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JusticiarReport {
+    /// What the emergency is about, such as `crash:ignite-tip` or `loop:sender`. Reports with
+    /// the same subject (and machine, when `on_machine` is set) share one ticket.
+    pub subject: String,
+    /// The ticket's title.
+    pub title: String,
+    /// The ticket's body, or the comment on the open ticket: what was seen and where.
+    pub details: String,
+    /// Names this sighting, such as a crash record's time, so a report sent twice adds nothing.
+    pub evidence: String,
+    pub machine: MachineId,
+    /// The reporting machine's hostname.
+    pub host: String,
+    /// Whether only that machine can work the ticket, such as for a crash of its daemon. The
+    /// ticket is then labelled `needs:<host>`.
+    #[serde(default)]
+    pub on_machine: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -25,6 +25,7 @@ pub mod backup;
 pub mod explore;
 pub mod filing;
 pub mod flaky;
+pub mod justiciar;
 pub mod machines;
 pub mod offline;
 pub mod regressions;

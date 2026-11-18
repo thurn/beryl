@@ -11,8 +11,8 @@ use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, Landed,
-    LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
+    AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, JusticiarReport,
+    Landed, LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
     RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply,
     TipVerified, TipWaiting, TipWaitingFiled,
 };
@@ -195,6 +195,13 @@ pub trait Hub: Send + Sync {
     fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {
         let _ = waiting;
         Err(not_supported("report a waiting tip"))
+    }
+
+    /// Reports an emergency; the hub files or comments on a justiciar ticket
+    /// (`POST /justiciar`).
+    fn justiciar(&self, report: &JusticiarReport) -> Result<ReportFiled> {
+        let _ = report;
+        Err(not_supported("report an emergency"))
     }
 
     /// One ticket with its comments (`GET /tickets/<id>`).
