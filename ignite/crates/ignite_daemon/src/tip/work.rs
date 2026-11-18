@@ -1,13 +1,16 @@
 //! The real [`TipWork`]: the check runner in a leased landing tree, and the landings from git.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use ignite_core::ids::{CheckName, Commit, TreeId};
+use ignite_core::ids::{CheckName, Commit, TicketId, TreeId};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::traits::{Error, Result};
 
-use super::{TipLanding, TipRun, TipSet, TipWork, ticketed_landings};
+use ignite_git::changed::CommitPaths;
+
+use super::{TipLanding, TipRun, TipSet, TipWork};
 use crate::checks::{BUILD_FAILED, CheckRun, Checks, RunOptions};
 use crate::server::Context;
 use crate::trees::Trees;
@@ -73,6 +76,10 @@ impl TipWork for CheckTipWork {
         }
     }
 
+    fn covered_by(&self) -> std::collections::BTreeMap<String, String> {
+        self.checks.covered_by().clone()
+    }
+
     /// One fewer than the landing trees, so that a landing always finds a tree free.
     fn parallel(&self) -> usize {
         self.trees.landing_count().saturating_sub(1).max(1)
@@ -83,6 +90,31 @@ impl TipWork for CheckTipWork {
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
         ticketed_landings(ctx, ignite_git::changed::commits(&ctx.repo, from, to)?)
     }
+}
+
+/// Groups `commits`, oldest first, into landings by the ticket the hub says landed each one.
+/// A run of commits no landing recorded, such as a push by hand, is a landing with no ticket.
+pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec<TipLanding>> {
+    let shas: Vec<Commit> = commits.iter().map(|c| c.commit.clone()).collect();
+    let owners: HashMap<Commit, TicketId> = ctx
+        .hub
+        .landed_commits(&shas)?
+        .into_iter()
+        .map(|landed| (landed.commit, landed.ticket))
+        .collect();
+    let owner = |i: usize| owners.get(&shas[i]);
+    let ends: Vec<Commit> = (0..shas.len())
+        .filter(|&i| i + 1 == shas.len() || owner(i) != owner(i + 1))
+        .map(|i| shas[i].clone())
+        .collect();
+    Ok(ignite_git::changed::group(commits, &ends)
+        .into_iter()
+        .map(|landing| TipLanding {
+            ticket: landing.commits.last().and_then(|c| owners.get(c)).cloned(),
+            commits: landing.commits,
+            paths: landing.paths,
+        })
+        .collect())
 }
 
 fn options(rerun: bool) -> RunOptions {

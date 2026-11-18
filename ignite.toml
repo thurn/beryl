@@ -47,6 +47,12 @@ window = 20
 report_only = ["tier-gap"]
 protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 
+# Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
+# seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
+# instead of one command per 50 checks.
+[tip]
+claim_seconds = 60
+
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"

@@ -186,6 +186,13 @@ pub struct DeclaredFamily {
 pub struct Manifest {
     pub families: BTreeMap<String, DeclaredFamily>,
     pub products: BTreeMap<String, Product>,
+    /// `covered_by` of each family that has one: the family whose checks find every fault this
+    /// family's checks find, so tip verification runs the covering family only (see "How long
+    /// a round takes" in `docs/ignite.md`). The landing gate ignores it.
+    ///
+    /// It is kept here rather than on [`Family`] because the field is read only by tip
+    /// verification, and every place that builds a `Family` by hand would otherwise name it.
+    pub covered_by: BTreeMap<String, String>,
 }
 
 /// A manifest that cannot be used.
@@ -207,6 +214,21 @@ impl fmt::Display for ManifestError {
 }
 
 impl std::error::Error for ManifestError {}
+
+/// The `covered_by` field of each family table, read in a second pass over the same text.
+#[derive(Deserialize)]
+struct CoverFile {
+    #[serde(default)]
+    family: BTreeMap<String, CoverTable>,
+}
+
+#[derive(Deserialize)]
+struct CoverTable {
+    covered_by: Option<String>,
+}
+
+/// The field name of [`Manifest::covered_by`] in a family table.
+const COVERED_BY: &str = "covered_by";
 
 #[derive(Deserialize)]
 struct ManifestFile {
@@ -243,8 +265,16 @@ impl Manifest {
             unknown.extend(
                 ignored
                     .into_iter()
+                    .filter(|key| !is_cover_key(key))
                     .map(|key| format!("{}: {key}", path.display())),
             );
+            let covers: CoverFile =
+                toml::from_str(text).map_err(|e| error(String::new(), e.to_string()))?;
+            for (name, table) in covers.family {
+                if let Some(covering) = table.covered_by {
+                    manifest.covered_by.insert(name, covering);
+                }
+            }
             let group = path
                 .file_stem()
                 .and_then(|s| s.to_str())
@@ -309,8 +339,45 @@ impl Manifest {
                 }
             }
         }
+        check_covers(&manifest).map_err(|(name, message)| ManifestError {
+            file: origin[&format!("family.{name}")].to_path_buf(),
+            key: format!("family.{name}.{COVERED_BY}"),
+            message,
+        })?;
         Ok((manifest, unknown))
     }
+}
+
+/// Whether `key`, a dotted path the family tables did not declare, is a family's `covered_by`,
+/// which the second pass reads.
+fn is_cover_key(key: &str) -> bool {
+    key.strip_prefix("family.")
+        .and_then(|rest| rest.rsplit_once('.'))
+        .is_some_and(|(_, field)| field == COVERED_BY)
+}
+
+/// Every `covered_by` names a declared family, and no family covers itself, directly or
+/// through a chain. Returns the family at fault and what is wrong.
+fn check_covers(manifest: &Manifest) -> Result<(), (String, String)> {
+    for (name, covering) in &manifest.covered_by {
+        if !manifest.families.contains_key(covering) {
+            return Err((
+                name.clone(),
+                format!("no family named {covering:?} is declared"),
+            ));
+        }
+        let mut at = covering;
+        for _ in 0..=manifest.covered_by.len() {
+            if at == name {
+                return Err((name.clone(), "the family covers itself".to_owned()));
+            }
+            match manifest.covered_by.get(at) {
+                Some(next) => at = next,
+                None => break,
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The field at fault, after `family.<name>.`, and what is wrong with it.
@@ -551,5 +618,45 @@ outputs = ["ui/node_modules"]
             let pattern = InputPattern::from(text.to_owned());
             assert_eq!(String::from(pattern), text);
         }
+    }
+
+    /// `RUST` with one more family, `rust-slow`, that may name a covering family.
+    fn covered(covered_by: &str) -> Vec<(PathBuf, String)> {
+        let slow = RUST
+            .split("\n[product.rust-tests]")
+            .next()
+            .unwrap()
+            .replace("[family.rust]", "[family.rust-slow]");
+        let text = format!("{RUST}\n{slow}{covered_by}\n");
+        files(&[("checks/rust.toml", &text)])
+    }
+
+    #[test]
+    fn covered_by_names_the_family_that_covers_another() {
+        let (manifest, unknown) =
+            Manifest::from_files_with_unknown(&covered("covered_by = \"rust\"")).unwrap();
+        assert_eq!(manifest.covered_by["rust-slow"], "rust");
+        assert_eq!(manifest.covered_by.len(), 1);
+        assert!(unknown.is_empty(), "{unknown:?}");
+    }
+
+    #[test]
+    fn covered_by_refuses_an_unknown_family_and_a_cycle() {
+        let error = Manifest::from_files(&covered("covered_by = \"nothing\"")).unwrap_err();
+        assert_eq!(error.key, "family.rust-slow.covered_by");
+        assert!(error.message.contains("no family named"), "{error}");
+
+        let error = Manifest::from_files(&covered("covered_by = \"rust-slow\"")).unwrap_err();
+        assert!(error.message.contains("covers itself"), "{error}");
+
+        // A chain back to the start is refused too: rust covered by rust-slow, covered by rust.
+        let mut cycle = covered("covered_by = \"rust\"");
+        cycle[0].1 = cycle[0].1.replacen(
+            "[family.rust]\n",
+            "[family.rust]\ncovered_by = \"rust-slow\"\n",
+            1,
+        );
+        let error = Manifest::from_files(&cycle).unwrap_err();
+        assert!(error.message.contains("covers itself"), "{error}");
     }
 }

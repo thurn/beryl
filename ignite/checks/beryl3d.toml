@@ -245,12 +245,19 @@ inputs = [
 # card files its recording plays. `b3d-interface:frame-limits` holds the frames drawn to the
 # limits under `tests` in data/beryl3d/gates.json, whose median is over every test, so it runs
 # them all.
+#
+# Tip verification runs `b3d-every-tick` in its place (`covered_by`): the every-tick run applies
+# the checks on every tick, so it finds every fault the check times find, and both families list
+# the same tests with the same inputs. Only `b3d-interface:frame-limits`, which `b3d-every-tick`
+# does not list, still runs here at the tip. The landing gate may still choose this cheaper
+# family.
 [family.b3d-interface]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
 grows = true
+covered_by = "b3d-every-tick"
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface run {checks}"
 inputs = [

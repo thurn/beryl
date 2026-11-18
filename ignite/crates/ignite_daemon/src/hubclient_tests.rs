@@ -309,3 +309,57 @@ fn listings_are_looked_up_and_stored_by_family_and_hash() {
         Err(Error::Unreachable(_))
     ));
 }
+
+#[test]
+fn tip_costs_rounds_and_the_last_round_use_their_routes() {
+    use ignite_core::tipround::{TipCostsRequest, TipRound};
+    let hub = FakeHttpHub::start(|_, url, _| {
+        if url.ends_with("/tips/costs") {
+            (
+                200,
+                r#"{"claim_seconds": 60.0, "costs": {"unit:a": 0.5}}"#.to_owned(),
+            )
+        } else if url.ends_with("/tips/rounds") {
+            (200, r#"{"ticket": "t.1", "created": true}"#.to_owned())
+        } else {
+            (200, r#"{"round": null}"#.to_owned())
+        }
+    });
+    let request = TipCostsRequest {
+        commit: ignite_core::ids::Commit::new("abcd").unwrap(),
+        family: "unit".to_owned(),
+        claim_seconds: 60.0,
+    };
+    let costs = hub.client().tip_costs(&request).unwrap();
+    assert!((costs.costs["unit:a"] - 0.5).abs() < f64::EPSILON);
+    let round = TipRound {
+        commit: request.commit.clone(),
+        machine: ignite_core::ids::MachineId::new("m-1").unwrap(),
+        at: ignite_core::time::Timestamp::EPOCH,
+        wall_s: 1.0,
+        ran: 1,
+        cached: 0,
+        checks_s: 1.0,
+        listing_s: 0.0,
+        building_s: 0.0,
+        waiting_s: 0.0,
+    };
+    assert_eq!(
+        hub.client().tip_round(&round).unwrap().ticket.as_deref(),
+        Some("t.1")
+    );
+    assert_eq!(hub.client().last_tip_round().unwrap(), None);
+    let urls: Vec<String> = hub
+        .seen()
+        .into_iter()
+        .map(|s| s.method + " " + &s.url)
+        .collect();
+    assert_eq!(
+        urls,
+        [
+            "POST /test/api/tips/costs",
+            "POST /test/api/tips/rounds",
+            "GET /test/api/tips/rounds/last"
+        ]
+    );
+}

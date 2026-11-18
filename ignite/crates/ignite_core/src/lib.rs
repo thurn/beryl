@@ -19,5 +19,6 @@ pub mod ready;
 pub mod score;
 pub mod shares;
 pub mod time;
+pub mod tipround;
 pub mod traits;
 pub mod verdict;

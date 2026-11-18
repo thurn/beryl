@@ -20,6 +20,7 @@ use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
 };
 use crate::time::Timestamp;
+use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
 
 /// Why an operation behind one of these traits failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -253,6 +254,26 @@ pub trait Hub: Send + Sync {
     fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {
         let _ = waiting;
         Err(not_supported("report a waiting tip"))
+    }
+
+    /// The check costs and claim length that a round at `request.commit` cuts one family's
+    /// batches by, frozen by the hub the first time any machine asks, so every machine cuts the
+    /// same batches (`POST /tips/costs`).
+    fn tip_costs(&self, request: &TipCostsRequest) -> Result<TipCosts> {
+        let _ = request;
+        Err(not_supported("give tip costs"))
+    }
+
+    /// Records one finished tip verification round. When the round asks for an improvement
+    /// ticket, the hub files one or reuses the open one (`POST /tips/rounds`).
+    fn tip_round(&self, round: &TipRound) -> Result<TipRoundFiled> {
+        let _ = round;
+        Err(not_supported("record tip rounds"))
+    }
+
+    /// The newest tip verification round any machine recorded (`GET /tips/rounds/last`).
+    fn last_tip_round(&self) -> Result<Option<TipRound>> {
+        Err(not_supported("give the last tip round"))
     }
 
     /// Reports an emergency; the hub files or comments on a justiciar ticket

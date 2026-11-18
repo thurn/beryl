@@ -16,6 +16,7 @@ pub mod rejected;
 pub mod results;
 pub mod rows;
 pub mod tickets;
+pub mod tip_rounds;
 pub mod tips;
 pub mod tokens;
 
@@ -63,6 +64,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 9,
         sql: include_str!("listings.sql"),
+    },
+    Migration {
+        version: 10,
+        sql: include_str!("tip_rounds.sql"),
     },
 ];
 

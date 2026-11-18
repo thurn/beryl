@@ -1,13 +1,15 @@
 //! The scripted [`TipWork`] the tip tests verify with.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::{Condvar, Mutex};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
+use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{CheckName, Commit, MachineId, RecordId};
-use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{IncompleteReason, NewResult};
-use ignite_core::traits::Result;
+use ignite_core::protocol::{Class, Outcome};
+use ignite_core::traits::{CommandSpec, Result};
 use ignite_git::changed::CommitPaths;
 
 use super::{commit, ticket};
@@ -44,6 +46,10 @@ pub(super) struct FakeWork {
     /// run waits up to two seconds for the others to start.
     pub(super) active: Mutex<(usize, usize)>,
     pub(super) wake: Condvar,
+    /// Each family's `covered_by`.
+    pub(super) covered_by: Mutex<BTreeMap<String, String>>,
+    /// The clock that each command the work launches moves on by the time it took.
+    pub(super) clock: Mutex<Option<Arc<FakeClock>>>,
 }
 
 impl FakeWork {
@@ -89,13 +95,39 @@ impl FakeWork {
             .insert(check.clone(), output.to_owned());
     }
 
+    /// Launches a command as the real work does, `list` to list families and `run` with a
+    /// results file to run checks, and moves the clock on by the time the launcher says it took.
+    fn launch(&self, ctx: &Context, command: &str) {
+        let env = if command == "run" {
+            vec![("IGNITE_RESULTS".to_owned(), "/dev/null".to_owned())]
+        } else {
+            Vec::new()
+        };
+        let result = ctx.launcher.run(&CommandSpec {
+            args: vec![command.to_owned()],
+            cwd: PathBuf::from("/repo"),
+            env,
+            class: Class::Tip,
+            cores: 1,
+            resources: Vec::new(),
+            grows: false,
+            tree: None,
+            ticket: None,
+            hang_limit_s: None,
+        });
+        if let Some(clock) = self.clock.lock().unwrap().as_ref() {
+            clock.advance(result.usage.wall_s + result.usage.queued_s);
+        }
+    }
+
     pub(super) fn runs(&self) -> Vec<Run> {
         self.runs.lock().unwrap().clone()
     }
 }
 
 impl TipWork for FakeWork {
-    fn checks(&self, _ctx: &Context, at: &Commit) -> Result<TipSet> {
+    fn checks(&self, ctx: &Context, at: &Commit) -> Result<TipSet> {
+        self.launch(ctx, "list");
         Ok(TipSet {
             checks: self.listed(at),
             unlisted: self
@@ -112,6 +144,10 @@ impl TipWork for FakeWork {
         (*self.parallel.lock().unwrap()).max(1)
     }
 
+    fn covered_by(&self) -> BTreeMap<String, String> {
+        self.covered_by.lock().unwrap().clone()
+    }
+
     fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {
         let wanted = *self.parallel.lock().unwrap();
         if wanted > 1 {
@@ -125,6 +161,7 @@ impl TipWork for FakeWork {
                 .unwrap();
             active.0 -= 1;
         }
+        self.launch(ctx, "run");
         self.runs
             .lock()
             .unwrap()

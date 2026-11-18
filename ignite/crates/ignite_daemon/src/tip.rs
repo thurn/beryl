@@ -9,9 +9,13 @@
 //!   verified commit has the same input hash, so the result cache answers it. A check this
 //!   machine cannot run is in the set as a key that only another machine's pass satisfies, and
 //!   a family that cannot be listed here makes the tip wait ([`TipSet::unlisted`]).
+//! - A check of a family whose `covered_by` names another family is left out when the covering
+//!   family lists a check of the same name: the covering check stands for it (see `covered`).
 //! - The set is claimed from the hub in batches of one family's checks, so two machines never
-//!   run the same batch. Checks only this machine's platform can run go first. Each family is
-//!   listed once and several families run at once (see `families`).
+//!   run the same batch. A batch holds about a minute of recorded cost, cut alike on every
+//!   machine from costs the hub fixes for the tip. Checks only this machine's platform can run
+//!   go first. Each family is listed once and several families run at once (see `families`).
+//! - Each round sends the hub a record of where its time went (see `meter`).
 //! - `master` moves to the tip once every check in its set has a pass on each platform it
 //!   needs. A failure or an `incomplete` check holds it. A cached failure is run once here
 //!   before it holds `master`, so a fault of one run, or of Ignite, heals.
@@ -34,7 +38,9 @@
 //!   only another platform's machines can run, the hub is told once per tip and platform, and
 //!   files a P1 ticket naming those machines. `master` keeps waiting.
 
+mod covered;
 mod families;
+mod meter;
 mod report;
 mod work;
 
@@ -53,14 +59,10 @@ use ignite_core::protocol::hub::{
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Push, Result};
-use ignite_git::changed::CommitPaths;
 
 use crate::server::Context;
 
-pub use work::CheckTipWork;
-
-/// How many of one family's checks one claim covers.
-pub const BATCH: usize = 50;
+pub use work::{CheckTipWork, ticketed_landings};
 
 /// The most runs one culprit search may make before it reports a range.
 pub const MAX_RUNS: u32 = 10;
@@ -179,6 +181,11 @@ pub trait TipWork: Send + Sync {
     /// How many families a round may run at once.
     fn parallel(&self) -> usize {
         1
+    }
+    /// Each family's `covered_by`: the family whose checks stand for its checks of the same
+    /// name.
+    fn covered_by(&self) -> BTreeMap<String, String> {
+        BTreeMap::new()
     }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;
@@ -317,11 +324,9 @@ impl TipVerifier {
     }
 
     /// Verifies one tip: runs what its set still needs, then moves `master`, reports failures
-    /// or waits.
-    #[allow(clippy::too_many_lines)]
+    /// or waits. A round that ran sends the hub a record of where its time went.
     pub fn verify(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
-        let repository = &ctx.config.repository;
-        let last = ctx.git.tip(&repository.master)?;
+        let last = ctx.git.tip(&ctx.config.repository.master)?;
         if last == *tip {
             // `master` already holds the tip: another machine verified it, or someone pushed it
             // by hand. The hub records it, so that it and older tips stop showing as waiting.
@@ -332,8 +337,26 @@ impl TipVerifier {
             })?;
             return Ok(TipOutcome::Verified);
         }
+        let (meter, metered) = meter::Meter::start(ctx);
+        let mut tally = meter::Tally::default();
+        let outcome = self.verify_round(&metered, &last, tip, &mut tally);
+        meter::send(ctx, &meter.finish(ctx, tip, tally));
+        outcome
+    }
+
+    /// [`TipVerifier::verify`] once `master` is known to be behind the tip at `last`, counting
+    /// in `tally` the checks run and answered by the cache.
+    #[allow(clippy::too_many_lines)]
+    fn verify_round(
+        &mut self,
+        ctx: &Context,
+        last: &Commit,
+        tip: &Commit,
+        tally: &mut meter::Tally,
+    ) -> Result<TipOutcome> {
         self.own_outputs.clear();
         let TipSet { checks, unlisted } = self.work.checks(ctx, tip)?;
+        let checks = covered::drop_covered(checks, &self.work.covered_by());
         let now = ctx.clock.now();
         let keys: Vec<ResultKey> = checks.iter().map(|c| c.key.clone()).collect();
         let cached = ctx.hub.lookup(&keys)?;
@@ -368,15 +391,20 @@ impl TipVerifier {
             }
         }
         self.record_cached(ctx, tip, &checks, &to_run, &recheck);
+        tally.cached = u32::try_from(verdicts.len()).unwrap_or(u32::MAX);
 
-        let (superseded, runs) = self.run_families(ctx, tip, &to_run)?;
+        let (superseded, runs) = self.run_families(ctx, tip, &checks, &to_run)?;
         if let Some(by) = superseded {
             return Ok(TipOutcome::Superseded { by });
         }
+        tally.ran = u32::try_from(runs.len()).unwrap_or(u32::MAX);
         settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         if !recheck.is_empty() {
             let names: Vec<CheckName> = recheck.iter().map(|c| c.check.clone()).collect();
             let runs = self.work.run(ctx, tip, &names, true);
+            tally.ran = tally
+                .ran
+                .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));
             settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
@@ -409,7 +437,7 @@ impl TipVerifier {
                 let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
                 // A failure to find the culprit or to reach the hub must not keep the tip from
                 // being recorded as failed; a later tip that still fails reports it again.
-                if let Err(error) = self.blame(ctx, &last, tip, check, output.as_deref()) {
+                if let Err(error) = self.blame(ctx, last, tip, check, output.as_deref()) {
                     eprintln!(
                         "ignite: regression of {} not reported: {error}",
                         check.check
@@ -703,31 +731,6 @@ impl TipVerifier {
             eprintln!("ignite: cache-hit records not sent: {error}");
         }
     }
-}
-
-/// Groups `commits`, oldest first, into landings by the ticket the hub says landed each one.
-/// A run of commits no landing recorded, such as a push by hand, is a landing with no ticket.
-pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec<TipLanding>> {
-    let shas: Vec<Commit> = commits.iter().map(|c| c.commit.clone()).collect();
-    let owners: HashMap<Commit, TicketId> = ctx
-        .hub
-        .landed_commits(&shas)?
-        .into_iter()
-        .map(|landed| (landed.commit, landed.ticket))
-        .collect();
-    let owner = |i: usize| owners.get(&shas[i]);
-    let ends: Vec<Commit> = (0..shas.len())
-        .filter(|&i| i + 1 == shas.len() || owner(i) != owner(i + 1))
-        .map(|i| shas[i].clone())
-        .collect();
-    Ok(ignite_git::changed::group(commits, &ends)
-        .into_iter()
-        .map(|landing| TipLanding {
-            ticket: landing.commits.last().and_then(|c| owners.get(c)).cloned(),
-            commits: landing.commits,
-            paths: landing.paths,
-        })
-        .collect())
 }
 
 fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun {

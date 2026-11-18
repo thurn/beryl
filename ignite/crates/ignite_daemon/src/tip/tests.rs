@@ -8,6 +8,7 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{IncompleteReason, Landed, NewResult, ResultKey, TipClaim};
 use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::time::Timestamp;
+use ignite_core::tipround::UNMEASURED_BATCH;
 use ignite_core::traits::{Git, Hub};
 
 use super::*;
@@ -67,6 +68,7 @@ struct World {
     hub: Arc<FakeHub>,
     git: Arc<FakeGit>,
     work: Arc<FakeWork>,
+    launcher: Arc<FakeLauncher>,
 }
 
 impl World {
@@ -76,6 +78,7 @@ impl World {
             hub: Arc::new(FakeHub::default()),
             git: Arc::new(FakeGit::default()),
             work: Arc::new(FakeWork::default()),
+            launcher: Arc::new(FakeLauncher::default()),
         };
         world.git.set_tip("master", commit("aaaa000"));
         world
@@ -89,7 +92,7 @@ impl World {
             clock: self.clock.clone(),
             hub: self.hub.clone(),
             git: self.git.clone(),
-            launcher: Arc::new(FakeLauncher::default()),
+            launcher: self.launcher.clone(),
             builds: Arc::new(FakeBuilds::default()),
             session: None,
             tree: None,
@@ -175,7 +178,7 @@ fn two_machines_never_run_the_same_batch() {
     let world = World::new();
     let tip = commit("bbbb000");
     world.land(&tip);
-    let checks: Vec<TipCheck> = (0..BATCH + 10)
+    let checks: Vec<TipCheck> = (0..UNMEASURED_BATCH + 10)
         .map(|i| {
             let mut c = check(&format!("t{i:03}"), 'c');
             c.key.hash = InputHash::new(format!("{i:064x}")).unwrap();
@@ -196,7 +199,7 @@ fn two_machines_never_run_the_same_batch() {
     let TipOutcome::Waiting { checks: waiting } = one else {
         panic!("expected m-1 to wait, got {one:?}");
     };
-    assert_eq!(waiting.len(), BATCH);
+    assert_eq!(waiting.len(), UNMEASURED_BATCH);
     assert_eq!(world.master(), commit("aaaa000"));
 
     let two = world.verifier().verify(&world.ctx("m-2"), &tip).unwrap();
@@ -212,7 +215,7 @@ fn two_machines_never_run_the_same_batch() {
     };
     let (by_one, by_two) = (ran_by("m-1"), ran_by("m-2"));
     assert_eq!(by_one.len(), 10);
-    assert_eq!(by_two.len(), BATCH);
+    assert_eq!(by_two.len(), UNMEASURED_BATCH);
     assert!(by_one.iter().all(|c| !by_two.contains(c)));
 }
 
@@ -653,4 +656,5 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
 }
 
 mod more;
+mod rounds;
 mod speed;

@@ -22,11 +22,13 @@ use crate::protocol::tickets::{
     LeaseReply, Operation, OperationResult, Precondition, Ticket, TicketDetail, TicketQuery,
 };
 use crate::time::Timestamp;
+use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
 use crate::traits::{
     BuildFor, BuildResult, Builds, Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult,
 };
 
 mod git;
+mod tips;
 pub use git::FakeGit;
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -189,6 +191,7 @@ pub struct FakeHub {
     justiciars: Mutex<Vec<JusticiarReport>>,
     incompletes: Mutex<Vec<IncompleteReport>>,
     listings: Mutex<HashMap<ListingKey, String>>,
+    tips: tips::FakeTips,
 }
 
 impl FakeHub {
@@ -352,6 +355,18 @@ impl Hub for FakeHub {
         self.reachable()?;
         let listings = lock(&self.listings);
         Ok(keys.iter().map(|key| listings.get(key).cloned()).collect())
+    }
+
+    fn tip_costs(&self, request: &TipCostsRequest) -> Result<TipCosts> {
+        self.fake_tip_costs(request)
+    }
+
+    fn tip_round(&self, round: &TipRound) -> Result<TipRoundFiled> {
+        self.fake_tip_round(round)
+    }
+
+    fn last_tip_round(&self) -> Result<Option<TipRound>> {
+        self.fake_last_tip_round()
     }
 
     fn store_listing(&self, listing: &StoredListing) -> Result<()> {

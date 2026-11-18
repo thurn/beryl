@@ -57,6 +57,8 @@ pub struct Config {
     pub improvement: Improvement,
     #[serde(default)]
     pub rules: Rules,
+    #[serde(default)]
+    pub tip: Tip,
     /// Machines by hostname.
     pub machine: BTreeMap<String, Machine>,
     /// Edits whose rebuild cost `ignite rebuild` measures.
@@ -163,6 +165,23 @@ impl Default for Improvement {
             backlog_low: 0.05,
             backlog_high: 0.20,
             window: 20,
+        }
+    }
+}
+
+/// How tip verification divides a round's checks into claims (see "How long a round takes" in
+/// `docs/ignite.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Tip {
+    /// The measured work one claim holds, in CPU seconds: a family's checks are cut into
+    /// batches whose recorded costs add up to about this much.
+    pub claim_seconds: f64,
+}
+
+impl Default for Tip {
+    fn default() -> Self {
+        Self {
+            claim_seconds: 60.0,
         }
     }
 }
@@ -330,6 +349,9 @@ impl Config {
         if share.window == 0 {
             return fail("improvement.window", "must be above zero");
         }
+        if !positive(self.tip.claim_seconds) {
+            return fail("tip.claim_seconds", "must be above zero");
+        }
         if let Some(metrics) = &self.metrics {
             if metrics.ingest.is_empty() {
                 return fail("metrics.ingest", "must name a program");
@@ -493,6 +515,18 @@ products = ["clippy", "rust-tests"]
         );
         let (_, none) = Config::parse_with_unknown("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
         assert!(none.is_empty(), "{none:?}");
+    }
+
+    #[test]
+    fn a_tip_claim_defaults_to_a_minute_and_must_be_above_zero() {
+        let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
+        assert!((config.tip.claim_seconds - 60.0).abs() < f64::EPSILON);
+        let text = format!("{DOCUMENT_EXAMPLES}\n[tip]\nclaim_seconds = 30\n");
+        let config = Config::parse("ignite.toml", &text).unwrap();
+        assert!((config.tip.claim_seconds - 30.0).abs() < f64::EPSILON);
+        let text = format!("{DOCUMENT_EXAMPLES}\n[tip]\nclaim_seconds = 0\n");
+        let error = Config::parse("ignite.toml", &text).unwrap_err();
+        assert_eq!(error.key, "tip.claim_seconds");
     }
 
     #[test]

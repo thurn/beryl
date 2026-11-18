@@ -1,5 +1,6 @@
-//! The `tips` page: the newest `staging` commit, the last verified one, the batches each
-//! machine holds, open regressions and the checks switched off as flaky.
+//! The `tips` page: the newest `staging` commit, the last verified one, where the last rounds'
+//! time went, the batches each machine holds, open regressions and the checks switched off as
+//! flaky.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
@@ -7,6 +8,7 @@
 use rusqlite::Connection;
 
 use ignite_core::time::Timestamp;
+use ignite_store::hub::tip_rounds;
 
 use super::attention::{age, frame};
 use super::components::{self as c, PageOptions, Tone, esc};
@@ -59,6 +61,36 @@ fn claims_section(conn: &Connection, now: Timestamp) -> Result<(String, usize), 
     };
 
     Ok((running, claims.len()))
+}
+
+/// How many recent rounds the page shows.
+const ROUNDS_SHOWN: u32 = 5;
+
+/// The newest rounds with where their time went, and how many are shown.
+fn rounds_section(conn: &Connection, now: Timestamp) -> Result<(String, usize), ReadError> {
+    let rounds = tip_rounds::recent(conn, ROUNDS_SHOWN)?;
+    let shown = if rounds.is_empty() {
+        c::empty("No round has been recorded.")
+    } else {
+        c::rows(rounds.iter().map(|round| {
+            let (tone, label) = if round.overhead().is_some() {
+                (Tone::Red, "slow")
+            } else {
+                (Tone::Green, "ok")
+            };
+            let at = round.at.to_string();
+            c::row(
+                &(c::dot(tone, label, None)
+                    + " "
+                    + &c::mono(&short(round.commit.as_str()))
+                    + &c::muted(" · ")
+                    + &esc(&round.summary())),
+                &format!("{} ago", esc(&age(now, Some(&at)))),
+                None,
+            )
+        }))
+    };
+    Ok((shown, rounds.len()))
 }
 
 /// The open regressions, and how many there are.
@@ -174,11 +206,13 @@ pub(crate) fn options(
         }))
     };
 
+    let (rounds, round_count) = rounds_section(conn, now)?;
     let (running, held) = claims_section(conn, now)?;
     let (open, regression_count) = regressions_section(conn, root)?;
     let (off, flaky_count) = flaky_section(conn)?;
     let body = summary
         + &c::section("Recent tips", &recent, Some(tips.len()), None, 3)
+        + &c::section("Recent rounds", &rounds, Some(round_count), None, 3)
         + &c::section("Batches machines hold", &running, Some(held), None, 3)
         + &c::section("Open regressions", &open, Some(regression_count), None, 3)
         + &c::section("Switched off as flaky", &off, Some(flaky_count), None, 3);

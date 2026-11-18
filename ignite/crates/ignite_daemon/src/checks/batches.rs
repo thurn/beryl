@@ -1,9 +1,12 @@
 //! Running one family's checks in batches from one listing, for tip verification.
 //!
 //! [`Checks::run`] lists and keys the whole family each time it is called. A tip round runs a
-//! family in batches of a few dozen checks so that machines can share the work, and listing a
-//! family of thousands of checks once per batch cost most of a round's time. Here the tree is
-//! opened and the family listed and keyed once, and each batch runs from that listing.
+//! family in batches, each about a minute of recorded cost, so that machines can share the
+//! work, and listing a family of thousands of checks once per batch cost most of a round's
+//! time. Here the tree is opened and the family listed and keyed once, and each batch runs from
+//! that listing.
+
+use std::collections::BTreeMap;
 
 use ignite_core::ids::{CheckName, TreeId};
 use ignite_core::protocol::Outcome;
@@ -13,6 +16,13 @@ use super::{CheckRun, Checks, RunOptions, incomplete};
 use crate::server::Context;
 
 impl Checks {
+    /// Each family's `covered_by` from the manifest: the family whose checks find every fault
+    /// its checks find. Tip verification runs only the covering family's check of a name both
+    /// families list.
+    pub(crate) fn covered_by(&self) -> &BTreeMap<String, String> {
+        &self.settings.manifest.covered_by
+    }
+
     /// Runs `batches` of the family `family` in `tree`, listing and keying the family once.
     /// `claim` is asked right before each batch, with the batch's number, and a batch it
     /// refuses is skipped. Returns the run and how many batches ran.

@@ -8,6 +8,7 @@ pub mod dispatch;
 pub mod feed;
 pub mod listings;
 pub mod tickets;
+pub mod tip_rounds;
 
 use crate::auth::Writer;
 

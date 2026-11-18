@@ -249,6 +249,31 @@ crate::tables! {
         at: String,
     }
 
+    /// The check costs a tip round cuts one family's batches by, frozen at the first request.
+    TipCostRow = "tip_costs" {
+        commit_sha: String,
+        family: String,
+        claim_seconds: f64,
+        /// JSON object of check name to CPU seconds.
+        costs: String,
+        at: String,
+    }
+
+    /// One finished tip verification round and where its time went, in seconds.
+    TipRoundRow = "tip_rounds" {
+        id: i64,
+        commit_sha: String,
+        machine: String,
+        at: String,
+        wall_s: f64,
+        ran: i64,
+        cached: i64,
+        checks_s: f64,
+        listing_s: f64,
+        building_s: f64,
+        waiting_s: f64,
+    }
+
     Metric = "metrics" { machine: String, source: String, data: String, at: String }
 
     /// One change in the feed's journal, which keeps only the most recent positions.

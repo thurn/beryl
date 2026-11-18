@@ -227,3 +227,30 @@ fn tips_show_the_tip_the_verified_commit_regressions_and_flaky_checks() {
     assert!(body.contains("slow-oracle"));
     assert!(body.contains("batch 1"));
 }
+
+#[test]
+fn tips_show_where_the_last_rounds_time_went() {
+    use ignite_core::ids::{Commit, MachineId};
+    use ignite_core::tipround::TipRound;
+    let conn = seeded();
+    assert!(page(&conn, "/tips").contains("No round has been recorded."));
+    let round = TipRound {
+        commit: Commit::new("3333333333").unwrap(),
+        machine: MachineId::new("jarvis").unwrap(),
+        at: Timestamp::parse(NOW).unwrap(),
+        wall_s: 600.0,
+        ran: 12,
+        cached: 30,
+        checks_s: 400.0,
+        listing_s: 180.0,
+        building_s: 0.0,
+        waiting_s: 20.0,
+    };
+    hub::tip_rounds::record(&conn, &round).unwrap();
+    let body = page(&conn, "/tips");
+    assert!(body.contains("Recent rounds"), "{body}");
+    assert!(body.contains("333333333"), "{body}");
+    assert!(body.contains("12 checks run, 30 cached"), "{body}");
+    assert!(body.contains("3.0 listing"), "{body}");
+    assert!(body.contains("slow"), "{body}");
+}

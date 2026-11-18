@@ -29,6 +29,7 @@ use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, Ticket,
     TicketDetail, TicketQuery,
 };
+use ignite_core::tipround::{LastTipRound, TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
 use ignite_core::traits::{Error, Hub, Result};
 
 /// How an error for a body too large for the hub begins; see [`too_large`].
@@ -372,6 +373,19 @@ impl Hub for HubClient {
 
     fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {
         self.post("/tips/waiting", waiting)
+    }
+
+    fn tip_costs(&self, request: &TipCostsRequest) -> Result<TipCosts> {
+        self.post("/tips/costs", request)
+    }
+
+    fn tip_round(&self, round: &TipRound) -> Result<TipRoundFiled> {
+        self.post("/tips/rounds", round)
+    }
+
+    fn last_tip_round(&self) -> Result<Option<TipRound>> {
+        let reply: LastTipRound = self.get("/tips/rounds/last", &[])?;
+        Ok(reply.round)
     }
 
     /// `GET /tickets/<id>` with its comments and history.
