@@ -1,6 +1,6 @@
 //! [`FakeGit`], the in-memory repository of [`super`]'s fakes.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -18,6 +18,8 @@ pub struct FakeGit {
     rebase: Mutex<Option<Rebase>>,
     pushes: Mutex<Vec<(PathBuf, Commit, String)>>,
     rejection: Mutex<Option<String>>,
+    /// Pairs `(ancestor, descendant)` that are not related; every other pair is.
+    unrelated: Mutex<HashSet<(Commit, Commit)>>,
 }
 
 impl FakeGit {
@@ -38,6 +40,12 @@ impl FakeGit {
 
     pub fn set_tip(&self, branch: &str, commit: Commit) {
         lock(&self.tips).insert(branch.to_owned(), commit);
+    }
+
+    /// Makes `ancestor` not an ancestor of `descendant`. By default every commit is an
+    /// ancestor of every other, as on a branch that only moves forward.
+    pub fn set_not_ancestor(&self, ancestor: &Commit, descendant: &Commit) {
+        lock(&self.unrelated).insert((ancestor.clone(), descendant.clone()));
     }
 
     /// The next rebase's result; by default a rebase is clean onto the tip given.
@@ -94,5 +102,9 @@ impl Git for FakeGit {
             .get(branch)
             .cloned()
             .ok_or_else(|| Error::NotFound(branch.to_owned()))
+    }
+
+    fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
+        Ok(!lock(&self.unrelated).contains(&(ancestor.clone(), descendant.clone())))
     }
 }

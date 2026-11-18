@@ -150,6 +150,7 @@ fn self_update(base: &assemble::Base) -> selfupdate::SelfUpdate {
         restart: Box::new(ExecRestart),
         ready: Mutex::new(None),
         rounds: std::sync::atomic::AtomicU32::new(0),
+        ahead_of: Mutex::default(),
     }
 }
 

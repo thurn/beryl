@@ -435,3 +435,31 @@ fn install_refuses_a_machine_that_ignite_toml_does_not_declare() {
     assert!(error.to_string().contains("[machine.stranger]"), "{error}");
     assert!(builder.built.borrow().is_empty());
 }
+
+#[test]
+fn a_release_tip_that_does_not_contain_the_running_commit_is_not_an_update() {
+    let home = tempdir("ahead");
+    let store = ExecutableStore::new(home.join("bin"));
+    let (running, tip) = (commit("ccccccc"), commit("ddddddd"));
+    let git = FakeGit::default();
+    git.set_tip("master", tip.clone());
+    git.set_changed(
+        &running,
+        &tip,
+        &["ignite/crates/ignite_daemon/src/update.rs"],
+    );
+    git.set_not_ancestor(&running, &tip);
+    let builder = FakeBuilder {
+        out: home.join("build"),
+        built: RefCell::default(),
+    };
+    let updater = Updater {
+        git: &git,
+        builder: &builder,
+        store: &store,
+        master: "master",
+        source: "ignite",
+    };
+    assert_eq!(updater.check(&running).unwrap(), UpdateCheck::Ahead { tip });
+    assert!(builder.built.borrow().is_empty());
+}

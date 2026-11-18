@@ -657,6 +657,10 @@ pub enum UpdateCheck {
     UpToDate,
     /// `master` moved but nothing under `ignite/` changed, so the executable stays.
     NotNeeded { tip: Commit },
+    /// The release branch's tip is not a descendant of the running commit: the daemon was
+    /// installed by hand from a newer or diverged commit. Going to the tip would be a
+    /// downgrade, so the executable stays until the branch moves past it.
+    Ahead { tip: Commit },
     /// The executable of `to` is built and stored, and is what a restart starts.
     Ready {
         from: Commit,
@@ -682,6 +686,9 @@ impl Updater<'_> {
         let tip = self.git.tip(self.master)?;
         if &tip == current || self.store.is_rejected(&tip) {
             return Ok(UpdateCheck::UpToDate);
+        }
+        if !self.git.is_ancestor(current, &tip)? {
+            return Ok(UpdateCheck::Ahead { tip });
         }
         let prefix = format!("{}/", self.source.trim_end_matches('/'));
         let changed = self.git.changed(current, &tip)?;

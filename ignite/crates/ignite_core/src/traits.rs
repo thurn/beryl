@@ -164,6 +164,8 @@ pub trait Git: Send + Sync {
     fn push(&self, tree: &Path, commit: &Commit, branch: &str) -> Result<Push>;
     /// The remote branch's newest commit.
     fn tip(&self, branch: &str) -> Result<Commit>;
+    /// Whether `ancestor` is `descendant` or one of its ancestors.
+    fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool>;
 }
 
 pub trait Hub: Send + Sync {

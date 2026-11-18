@@ -5,7 +5,9 @@
 //! - The release branch (`master`, unless the repository names a `release` branch) moves and
 //!   files under Ignite's own source directory changed. The tip loop calls
 //!   [`SelfUpdate::after_master_moved`], which builds the new executable in the update tree and
-//!   stores it under its commit. The daemon restarts into it once no command runs.
+//!   stores it under its commit. The daemon restarts into it once no command runs. A daemon
+//!   whose own commit the branch does not contain, such as one installed by hand from
+//!   `staging`, stays where it is: going to the branch's tip would be a downgrade.
 //! - Someone pushes straight to the release branch, which tip verification never sees. The
 //!   sender loop calls [`SelfUpdate::poll_release`] every round, and every
 //!   [`POLL_EVERY_ROUNDS`]th call fetches the branch's tip and prepares the build the same way.
@@ -50,6 +52,8 @@ pub struct SelfUpdate {
     pub ready: Mutex<Option<PathBuf>>,
     /// How many times [`SelfUpdate::poll_release`] has been called.
     pub rounds: AtomicU32,
+    /// The release tip last reported as not containing this daemon's commit.
+    pub ahead_of: Mutex<Option<Commit>>,
 }
 
 impl SelfUpdate {
@@ -78,8 +82,21 @@ impl SelfUpdate {
             // from there.
             return Ok(());
         }
-        if let UpdateCheck::Ready { executable, .. } = self.updater().check(own)? {
-            *self.ready() = Some(executable);
+        match self.updater().check(own)? {
+            UpdateCheck::Ready { executable, .. } => *self.ready() = Some(executable),
+            UpdateCheck::Ahead { tip } => {
+                // Said once per tip, not on every poll.
+                let mut seen = self.ahead_of.lock().unwrap_or_else(PoisonError::into_inner);
+                if seen.as_ref() != Some(&tip) {
+                    eprintln!(
+                        "ignite: staying on {own}: the release branch {} is at {tip}, which \
+                         does not contain it",
+                        self.master
+                    );
+                    *seen = Some(tip);
+                }
+            }
+            UpdateCheck::UpToDate | UpdateCheck::NotNeeded { .. } => {}
         }
         Ok(())
     }
@@ -152,7 +169,9 @@ impl SelfUpdate {
         }
         match self.updater().prepare(own, hub)? {
             UpdateCheck::Ready { executable, .. } => Ok(Some(executable)),
-            UpdateCheck::UpToDate | UpdateCheck::NotNeeded { .. } => Ok(None),
+            UpdateCheck::UpToDate | UpdateCheck::NotNeeded { .. } | UpdateCheck::Ahead { .. } => {
+                Ok(None)
+            }
         }
     }
 }

@@ -227,6 +227,16 @@ impl Git for TestGit {
     fn tip(&self, _branch: &str) -> Result<Commit> {
         Ok(self.tip_now())
     }
+
+    fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
+        // The integration branch is linear, so order in its history is ancestry.
+        let repo = self.repo.lock().unwrap();
+        let position = |c: &Commit| repo.history.iter().position(|h| h == c);
+        Ok(matches!(
+            (position(ancestor), position(descendant)),
+            (Some(a), Some(d)) if a <= d
+        ))
+    }
 }
 
 /// The fake hub, with leases that expire by the clock. `landed_down` makes only `POST /landed`

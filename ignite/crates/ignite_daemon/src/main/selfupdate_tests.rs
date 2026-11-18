@@ -72,6 +72,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         restart: Box::new(restart.clone()),
         ready: Mutex::new(None),
         rounds: AtomicU32::new(0),
+        ahead_of: Mutex::default(),
     };
     (update, git, restart)
 }
@@ -215,4 +216,20 @@ fn the_release_branch_is_fetched_at_most_every_thirty_rounds() {
     assert!(!update.store.has(&commit(NEW)));
     update.poll_release().unwrap();
     assert!(update.store.has(&commit(NEW)));
+}
+
+#[test]
+fn a_daemon_installed_ahead_of_the_release_branch_stays_on_its_build() {
+    // Installed by hand from a newer commit: `master`'s tip differs from the daemon's commit
+    // and Ignite's source differs between them, but the tip does not contain the daemon's
+    // commit, so going there would be a downgrade.
+    let (update, git, restart) = daemon(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
+    git.set_not_ancestor(&commit(OLD), &commit(NEW));
+
+    update.poll_release().unwrap();
+    assert!(!update.store.has(&commit(NEW)));
+    // The daemon serves the hub, so the hub reports the daemon's own version.
+    assert!(update.after_heartbeat(Some(OLD), 0));
+    assert!(restart.started().is_empty());
 }
