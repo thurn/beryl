@@ -16,8 +16,9 @@ use ignite_core::traits::Result;
 use super::Idle;
 use crate::trees::DiskReport;
 
-/// The least time between two measurements of the trees' disk use.
-pub const DISK_EVERY: Duration = Duration::from_mins(10);
+/// The least time between two measurements of the trees' disk use. A measurement walks every
+/// file of every build directory, about 290 GB on jarvis, so it is kept rare on a busy machine.
+pub const DISK_EVERY: Duration = Duration::from_mins(30);
 
 impl Idle {
     /// Brings the trees under their disk limit if they are over it, unless they were measured
