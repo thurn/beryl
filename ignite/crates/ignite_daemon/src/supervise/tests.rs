@@ -42,6 +42,8 @@ fn context(launcher: Arc<FakeLauncher>) -> Context {
         git: Arc::new(FakeGit::default()),
         launcher,
         builds: Arc::new(FakeBuilds::default()),
+        session: None,
+        tree: None,
     }
 }
 

@@ -37,7 +37,6 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
     ("sync", "Landing"),
     ("test", "Check runner and the result cache client"),
     ("ticket", "Ticket commands"),
-    ("wait", "Daemon core: requests, handles and the hub client"),
     ("why", "Check runner and the result cache client"),
 ];
 
@@ -89,13 +88,19 @@ pub fn request(verb: &str, raw: &[String], cwd: PathBuf, session: Option<Session
     }
 }
 
-/// Sends the request to the machine's daemon and reads its reply.
-///
-/// Stub. The ticket Thrh4.23 (Daemon core: requests, handles and the hub client) owns the
-/// daemon's side of this exchange and replaces the `todo!()` body.
+/// Sends the request to the machine's daemon over its socket and reads its reply. A daemon
+/// that cannot be reached is a configuration error.
 pub fn send(request: &Request) -> Reply {
-    let _ = request;
-    todo!("Thrh4.23 (Daemon core: requests, handles and the hub client)")
+    let socket = ignite_daemon::server::default_socket();
+    ignite_daemon::server::send(&socket.to_string_lossy(), request).unwrap_or_else(|error| {
+        Reply::text(
+            Exit::Usage,
+            format!(
+                "failed   the daemon at {} did not answer: {error}\nnext     ignite doctor",
+                socket.display()
+            ),
+        )
+    })
 }
 
 #[cfg(test)]

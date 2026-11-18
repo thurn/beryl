@@ -19,5 +19,9 @@ serde.workspace = true
 serde_json.workspace = true
 ureq.workspace = true
 
+[dev-dependencies]
+# A stand-in hub for the HTTP client's tests.
+tiny_http.workspace = true
+
 [lints]
 workspace = true

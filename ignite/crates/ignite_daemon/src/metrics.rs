@@ -268,6 +268,8 @@ mod tests {
             git: Arc::new(FakeGit::default()),
             launcher: launcher.clone(),
             builds: Arc::new(FakeBuilds::default()),
+            session: None,
+            tree: None,
         };
         Setup {
             ctx,
