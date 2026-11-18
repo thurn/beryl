@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime};
 
 use ignite_core::config::Machine;
 
@@ -148,7 +148,7 @@ fn disk_finding(free: Option<u64>, used: Option<u64>, budget: Option<u32>) -> Fi
 const USED_FRESH: Duration = Duration::from_hours(1);
 
 /// The last measurement of a trees folder: when it was made, and the gigabytes it found.
-static USED: Mutex<Option<(PathBuf, Instant, u64)>> = Mutex::new(None);
+static USED: Mutex<Option<(PathBuf, SystemTime, u64)>> = Mutex::new(None);
 /// A measurement is running.
 static MEASURING: AtomicBool = AtomicBool::new(false);
 
@@ -161,21 +161,51 @@ pub(super) fn used_gb(dir: &Path) -> Option<u64> {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone()
-        .filter(|(measured, _, _)| measured == dir);
+        .filter(|(measured, _, _)| measured == dir)
+        .or_else(|| saved(dir));
     let fresh = last
         .as_ref()
-        .is_some_and(|(_, at, _)| at.elapsed() < USED_FRESH);
+        .is_some_and(|(_, at, _)| at.elapsed().is_ok_and(|age| age < USED_FRESH));
     if !fresh && !MEASURING.swap(true, Ordering::SeqCst) {
         let dir = dir.to_path_buf();
         std::thread::spawn(move || {
             if let Some(gb) = measure_gb(&dir) {
-                *USED.lock().unwrap_or_else(PoisonError::into_inner) =
-                    Some((dir, Instant::now(), gb));
+                let at = SystemTime::now();
+                save(&dir, at, gb);
+                *USED.lock().unwrap_or_else(PoisonError::into_inner) = Some((dir, at, gb));
             }
             MEASURING.store(false, Ordering::SeqCst);
         });
     }
     last.map(|(_, _, gb)| gb)
+}
+
+/// Where the last measurement of `dir` is kept, so that it outlives the daemon: the daemon
+/// restarts far more often than a measurement (`du` over hundreds of gigabytes) finishes, and
+/// a measurement kept only in memory left `doctor` saying "not measured yet" for good.
+fn saved_path(dir: &Path) -> PathBuf {
+    let name: String = dir
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect();
+    std::env::temp_dir().join(format!("ignite-trees-used{name}"))
+}
+
+/// The measurement of `dir` a previous daemon saved: seconds since the epoch and gigabytes.
+fn saved(dir: &Path) -> Option<(PathBuf, SystemTime, u64)> {
+    let text = std::fs::read_to_string(saved_path(dir)).ok()?;
+    let (at, gb) = text.trim().split_once(' ')?;
+    let at = SystemTime::UNIX_EPOCH + Duration::from_secs(at.parse().ok()?);
+    Some((dir.to_path_buf(), at, gb.parse().ok()?))
+}
+
+fn save(dir: &Path, at: SystemTime, gb: u64) {
+    let secs = at
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    // A measurement that cannot be saved is only measured again by the next daemon.
+    let _ = std::fs::write(saved_path(dir), format!("{secs} {gb}\n"));
 }
 
 /// The gigabytes `du` counts under `dir`.
@@ -189,6 +219,19 @@ fn measure_gb(dir: &Path) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The daemon restarts far more often than `du` finishes over the trees, so a measurement
+    /// kept only in memory never reached `doctor`. A saved measurement is read back.
+    #[test]
+    fn a_measurement_is_read_back_after_a_restart() {
+        let dir = std::env::temp_dir().join(format!("ignite-used-test-{}", std::process::id()));
+        let at = SystemTime::now();
+        save(&dir, at, 287);
+        let (_, read_at, gb) = saved(&dir).unwrap();
+        assert_eq!(gb, 287);
+        assert!(at.duration_since(read_at).unwrap() < Duration::from_secs(1));
+        let _ = std::fs::remove_file(saved_path(&dir));
+    }
 
     #[test]
     fn the_disk_has_room_when_free_space_and_the_trees_own_use_reach_the_budget() {
