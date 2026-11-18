@@ -43,30 +43,28 @@ fn fleet_page(path: &str) -> Option<&'static str> {
 }
 
 fn route(path: &str) -> Option<Route> {
-    match path {
-        "/" => Some(Route::Home),
-        _ => {
-            if let Some(page) = fleet_page(path) {
-                return Some(Route::Fleet(page));
-            }
-            // `/tickets/<name>` is the address the dashboard gave a ticket until its pages moved
-            // to the root, and `/beads/<id>.html` the address of the first dashboard.
-            let (name, legacy) = if let Some(name) = path.strip_prefix("/tickets/") {
-                (name, false)
-            } else if let Some(name) = path.strip_prefix("/beads/") {
-                (name, true)
-            } else {
-                (path.strip_prefix('/')?, false)
-            };
-            let name = name.strip_suffix('/').unwrap_or(name);
-            let name = if legacy {
-                name.strip_suffix(".html").unwrap_or(name)
-            } else {
-                name
-            };
-            (!name.is_empty() && !name.contains('/')).then(|| Route::Ticket(name.to_owned()))
-        }
+    if path == "/" {
+        return Some(Route::Home);
     }
+    if let Some(page) = fleet_page(path) {
+        return Some(Route::Fleet(page));
+    }
+    // `/tickets/<name>` is the address the dashboard gave a ticket until its pages moved to the
+    // root, and `/beads/<id>.html` the address of the first dashboard.
+    let (name, legacy) = if let Some(name) = path.strip_prefix("/tickets/") {
+        (name, false)
+    } else if let Some(name) = path.strip_prefix("/beads/") {
+        (name, true)
+    } else {
+        (path.strip_prefix('/')?, false)
+    };
+    let name = name.strip_suffix('/').unwrap_or(name);
+    let name = if legacy {
+        name.strip_suffix(".html").unwrap_or(name)
+    } else {
+        name
+    };
+    (!name.is_empty() && !name.contains('/')).then(|| Route::Ticket(name.to_owned()))
 }
 
 /// The redirect for a page address under the project's name or one of its older names
