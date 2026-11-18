@@ -8,8 +8,9 @@
 //! 5. It has a live child.
 //!
 //! A dependency is live when its ticket is not closed or still has a live descendant. Edges of
-//! the kinds `related` and `discovered-from` never block. These are the ticket service's rules,
-//! and the blockers come back sorted by rule, then by ticket ID, as it sorted them.
+//! the kinds `related` and `discovered-from` never block, and neither does an edge from a ticket
+//! to itself. These are the ticket service's rules, and the blockers come back sorted by rule,
+//! then by ticket ID, as it sorted them.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -51,7 +52,9 @@ impl<'a> Readiness<'a> {
                     .push(&ticket.id);
             }
         }
-        for edge in edges {
+        // A ticket that waits on itself would never be ready. No command makes such an edge,
+        // but an older tracker's data may hold one, so it is ignored rather than trusted.
+        for edge in edges.iter().filter(|e| e.src != e.dst) {
             readiness.outgoing.entry(&edge.src).or_default().push(edge);
         }
         readiness

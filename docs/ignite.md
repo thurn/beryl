@@ -1550,6 +1550,12 @@ leased for nothing.
 - The daemon releases the ticket only when the app confirms that the session is
   gone, or that it is idle and has stayed idle for 15 minutes after the message.
   Releasing keeps the work, as [Releasing work](#releasing-work) describes.
+- The hub releases the claims of a machine that has not reported for 2 hours,
+  with a comment on each ticket.
+- The hub also releases a ticket that is in progress although no Ignite session
+  or machine holds it, once it has not changed for 2 hours. Such a claim came
+  from outside Ignite, such as a ticket imported in progress from the old
+  tracker or a status set by hand, and nothing else would ever end it.
 
 ### Steering work in flight
 

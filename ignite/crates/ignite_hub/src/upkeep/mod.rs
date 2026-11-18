@@ -61,7 +61,8 @@ pub const PASS_SECONDS: u64 = 60;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UpkeepReport {
     pub lapsed_reservations: u32,
-    /// Tickets whose claim was released because their machine went offline.
+    /// Tickets whose claim was released because their machine went offline, or because no
+    /// Ignite session or machine held them.
     pub released_claims: Vec<String>,
     /// Tickets created or commented on.
     pub tickets_filed: Vec<String>,
@@ -113,6 +114,9 @@ impl Upkeep {
             report.lapsed_reservations = u32::try_from(lapsed.len()).unwrap_or(u32::MAX);
         }));
         keep(offline::release_claims(conn, now).map(|released| report.released_claims = released));
+        keep(offline::release_unheld(conn, now).map(|released| {
+            report.released_claims.extend(released);
+        }));
         keep(regressions::mark_fixed(conn).map(|fixed| report.regressions_fixed = fixed));
         keep(flaky::switch_off_repeated(conn, now).map(|flaky| {
             for (check, filed) in flaky.switched_off {

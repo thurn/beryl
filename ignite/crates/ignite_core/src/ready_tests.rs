@@ -185,3 +185,14 @@ fn a_closed_ticket_can_be_checked_against_the_live_set() {
         [blocker("a", 1), blocker("a.1", 5)]
     );
 }
+
+#[test]
+fn an_edge_from_a_ticket_to_itself_holds_nothing_back() {
+    let tickets = [ticket("a"), ticket("b")];
+    let edges = [
+        edge("a", "a", EdgeKind::Blocks),
+        edge("b", "b", EdgeKind::Blocks),
+    ];
+    assert_eq!(of(&tickets, &edges, "a"), []);
+    assert_eq!(ready(&tickets, &edges, NOW), [id("a"), id("b")]);
+}

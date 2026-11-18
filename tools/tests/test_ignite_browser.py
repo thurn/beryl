@@ -60,8 +60,29 @@ def test_the_listed_checks_of_motion_counts_and_smoke_follow_their_data() -> Non
         f"ui-counts:{f}" for f in gate["fixtures"]
     ]
     smoke = adapter.list_checks("ui-smoke", root)
-    assert [c["check"] for c in smoke] == [f"ui-smoke:{t}" for t in suites.SMOKE_TITLES]
+    assert [c["check"] for c in smoke] == [
+        f"ui-smoke:{adapter.kept_name(t)}" for t in suites.SMOKE_TITLES
+    ]
     assert "ui/scripts/kept-harness.mjs" in smoke[0]["inputs"]
+
+
+def test_a_kept_title_is_named_without_whitespace_and_read_back_exactly() -> None:
+    """Ignite refuses a check name with whitespace (`CheckName` in ignite_core), and the kept
+    checks are titled in sentences, so their names must hold none and still give the title.
+    """
+    titles = [
+        "a card castable from exile is cast from its pile",
+        "manual table turn Shift+Tab wraps to Untap and untaps",
+        "100% of a_b\tc\u00a0d, 2/2: done",
+    ]
+    for title in titles:
+        name = adapter.kept_name(title)
+        assert not any(c.isspace() or not c.isprintable() for c in name), name
+        assert adapter.kept_title(name) == title
+    assert (
+        adapter.kept_name(titles[0])
+        == "a_card_castable_from_exile_is_cast_from_its_pile"
+    )
 
 
 def test_three_named_checks_report_exactly_three_results(
@@ -98,7 +119,7 @@ def test_three_named_checks_report_exactly_three_results(
     monkeypatch.setattr(adapter, "play_scripts", play)
     results = tmp_path / "results.jsonl"
     names = [
-        "ui-test:a land is played",
+        "ui-test:a_land_is_played",
         "ui-test:verb:fly/you/desktop",
         "ui-test:shape:pile/you/phone",
     ]
@@ -111,7 +132,7 @@ def test_three_named_checks_report_exactly_three_results(
     lines = [json.loads(line) for line in results.read_text().splitlines()]
     assert [line["check"] for line in lines] == names
     assert lines[0] == {
-        "check": "ui-test:a land is played",
+        "check": "ui-test:a_land_is_played",
         "outcome": "fail",
         "at": "ui/src/stage/phone.ts:212",
         "message": "page error",
@@ -133,9 +154,10 @@ def test_a_smoke_check_is_a_kept_check_under_its_own_name(
     monkeypatch.setattr(adapter, "record_fixtures", lambda into, only=(): None)
     monkeypatch.setattr(adapter, "play_scripts", play)
     results = tmp_path / "results.jsonl"
-    adapter.run_checks("ui-smoke", [f"ui-smoke:{title}"], tmp_path, results)
+    name = f"ui-smoke:{adapter.kept_name(title)}"
+    adapter.run_checks("ui-smoke", [name], tmp_path, results)
     assert json.loads(results.read_text()) == {
-        "check": f"ui-smoke:{title}",
+        "check": name,
         "outcome": "pass",
     }
 

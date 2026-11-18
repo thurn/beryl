@@ -20,7 +20,10 @@ The checks, by family:
   prints its own checks with `--list` and reports each result through `recordResult`
   (ui/scripts/capture.mjs), which writes Ignite's line when `IGNITE_RESULTS` is set. A check's
   own inputs are the modules its script imports, directly or not, and the files they read.
-- `ui-smoke:<title>`: the kept checks slow CI plays today (`suites.SMOKE_TITLES`).
+  Ignite refuses a check name with whitespace in it, so a kept check's title is named with each
+  space written as `_` (`ui-test:a_land_is_played`); see `kept_name`.
+- `ui-smoke:<title>`: the kept checks slow CI plays today (`suites.SMOKE_TITLES`), named as
+  ui-test names them.
 - `shots:<name>`: one shot of ui/shots.json, which already lists each phone shot once per
   phone size (ui/scripts/shots.mjs).
 - `motion:<verb>/<layout>`: the stepped capture (ui/scripts/stepped.mjs) of each verb of
@@ -48,6 +51,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
@@ -95,6 +99,30 @@ MESSAGE_LIMIT = 300
 
 class UiError(Exception):
     """Serving the UI, recording the fixtures or installing the browser failed."""
+
+
+# --- Check names ---
+
+
+def kept_name(title: str) -> str:
+    """The name Ignite knows a kept check by: its title with each space written as `_`.
+    Ignite's check names may hold no whitespace or control character, and kept checks are
+    titled in sentences. `%`, `_`, other whitespace and control characters are written as
+    `%XX` (UTF-8, as in a URL), so `kept_title` gives the exact title back."""
+    out: list[str] = []
+    for char in title:
+        if char == " ":
+            out.append("_")
+        elif char in "%_" or char.isspace() or not char.isprintable():
+            out.append("".join(f"%{byte:02X}" for byte in char.encode()))
+        else:
+            out.append(char)
+    return "".join(out)
+
+
+def kept_title(name: str) -> str:
+    """The kept check's title that `kept_name` made `name` from."""
+    return urllib.parse.unquote(name.replace("_", " "))
 
 
 # --- What a script reads ---
@@ -289,6 +317,8 @@ def ui_test_checks(root: Path) -> list[dict[str, Any]]:
         prefix = SCRIPT_PREFIX[script]
         for line in lines:
             name = str(line["check"]).removeprefix(prefix)
+            if script == KEPT_SCRIPT:
+                name = kept_name(name)
             out.append({"check": f"ui-test:{name}", "inputs": inputs})
     return out
 
@@ -338,7 +368,8 @@ def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
     if family == "ui-smoke":
         inputs = check_inputs(KEPT_SCRIPT, root)
         return [
-            {"check": f"ui-smoke:{t}", "inputs": inputs} for t in suites.SMOKE_TITLES
+            {"check": f"ui-smoke:{kept_name(t)}", "inputs": inputs}
+            for t in suites.SMOKE_TITLES
         ]
     if family == "shots":
         lines = node_lines([str(root / SHOTS_SCRIPT), "--list", str(root / SHOTS_FILE)])
@@ -495,6 +526,7 @@ def run_ui_test(family: str, names: Sequence[str], results: Path) -> None:
             script = SHAPE_SCRIPT
         else:
             script = KEPT_SCRIPT
+            bare = kept_title(bare)
         # kept.mjs' chosen titles are bare; its results carry the `ui-test:` prefix.
         asked[script].append(bare)
         script_name[name] = f"{SCRIPT_PREFIX[script]}{bare}"

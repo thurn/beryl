@@ -37,6 +37,20 @@ pub fn list(tickets: &Value) -> String {
     }
 }
 
+/// The tickets that hold `ticket` back, other than itself. The hub lists a ticket that is not
+/// open, or is deferred, as its own blocker, but its status line already says so, and
+/// "blocked by" naming the ticket itself reads as a dependency loop.
+fn other_blockers(ticket: &Value) -> Vec<&str> {
+    let own = text(ticket, "id");
+    ticket["blocked_by"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|blocker| text(blocker, "id"))
+        .filter(|id| *id != own)
+        .collect()
+}
+
 /// A ticket with its text, edges and, when asked for, comments and history.
 pub fn detail(ticket: &Value) -> String {
     let mut out = vec![line(ticket)];
@@ -55,9 +69,9 @@ pub fn detail(ticket: &Value) -> String {
     if ticket["ready"] == true {
         out.push("ready".to_owned());
     }
-    if let Some(blockers) = ticket["blocked_by"].as_array().filter(|b| !b.is_empty()) {
-        let ids: Vec<&str> = blockers.iter().map(|b| text(b, "id")).collect();
-        out.push(format!("blocked by: {}", ids.join(", ")));
+    let blockers = other_blockers(ticket);
+    if !blockers.is_empty() {
+        out.push(format!("blocked by: {}", blockers.join(", ")));
     }
     out.extend(edges(ticket));
     for key in ["body", "acceptance", "design", "notes"] {
@@ -153,12 +167,7 @@ pub fn open_children(children: &Value) -> String {
         if let Some(assignee) = child["assignee"].as_str() {
             out.push(format!("    assignee: {assignee}"));
         }
-        let blockers: Vec<&str> = child["blocked_by"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|blocker| text(blocker, "id"))
-            .collect();
+        let blockers = other_blockers(child);
         if !blockers.is_empty() {
             out.push(format!("    blocked by: {}", blockers.join(", ")));
         }
@@ -215,6 +224,26 @@ mod tests {
             "Ta  P1  open  One  [x, y]\nTb  P2  closed  Two"
         );
         assert_eq!(list(&json!([])), "no tickets");
+    }
+
+    #[test]
+    fn a_closed_ticket_is_not_shown_as_blocked_by_itself() {
+        let ticket = json!({"id": "Ta", "priority": 0, "status": "closed", "title": "Done",
+                            "blocked_by": [{"id": "Ta", "rule": 1}]});
+        assert!(
+            !detail(&ticket).contains("blocked by"),
+            "{}",
+            detail(&ticket)
+        );
+        let waiting = json!({"id": "Tb", "priority": 0, "status": "in_progress", "title": "W",
+                             "blocked_by": [{"id": "Tb", "rule": 1}, {"id": "Tc", "rule": 2}]});
+        assert!(
+            detail(&waiting).lines().any(|l| l == "blocked by: Tc"),
+            "{}",
+            detail(&waiting)
+        );
+        let children = json!([waiting]);
+        assert!(open_children(&children).contains("    blocked by: Tc"));
     }
 
     #[test]

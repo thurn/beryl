@@ -13,8 +13,16 @@
 //!   its next comment (unless the ticket already has that text, as from an earlier import), and
 //!   the report says so.
 //!
-//! The old service's `events` and `leases` are not imported: events were its own log of sessions and CI, and leases are locks held by processes
-//! that stop at the switch. The global change counter `seq` moves up to the old service's, so
+//! Two kinds of old data are left out, because Ignite would misread them:
+//!
+//! - An edge from a ticket to itself, which would show the ticket as waiting on itself. It is
+//!   counted as skipped and named in the report.
+//! - A `role:*` label, which named the old service's kind of worker for the ticket. Ignite hands
+//!   tickets to any worker, and a role label on a ticket in its ready list reads as an
+//!   instruction nobody follows.
+//!
+//! The old service's `events` and `leases` are not imported: events were its own log of sessions
+//! and CI, and leases are locks held by processes that stop at the switch. The global change counter `seq` moves up to the old service's, so
 //! changes after the import number above every imported ticket's `version`.
 
 use std::path::Path;
@@ -175,9 +183,23 @@ fn copy(
     ))?;
     let mut rows = select.query([])?;
     while let Some(row) = rows.next()? {
-        let values = (0..all.len())
+        let mut values = (0..all.len())
             .map(|i| row.get::<_, Value>(i))
             .collect::<rusqlite::Result<Vec<Value>>>()?;
+        if table.name == "edges" && values[0] == values[1] {
+            let count = report.kind(table.kind);
+            count.read += 1;
+            count.skipped += 1;
+            if let Value::Text(id) = &values[0] {
+                report.problem(format!("{id} waits on itself; that edge was left out"));
+            }
+            continue;
+        }
+        if table.name == "tickets"
+            && let Some(labels) = all.iter().position(|c| *c == "labels")
+        {
+            values[labels] = without_roles(&values[labels]);
+        }
         let mut changed = upsert.execute(params_from_iter(values.iter()))?;
         if changed == 0 && table.existing == Existing::AppendComment {
             changed = append_comment(hub, &values, report)?;
@@ -191,6 +213,22 @@ fn copy(
         }
     }
     Ok(())
+}
+
+/// A ticket's `labels` (a JSON array of strings) without its `role:*` labels. A value that is
+/// not such an array is kept as it is.
+fn without_roles(labels: &Value) -> Value {
+    let Value::Text(text) = labels else {
+        return labels.clone();
+    };
+    let Ok(list) = serde_json::from_str::<Vec<String>>(text) else {
+        return labels.clone();
+    };
+    let kept: Vec<String> = list
+        .into_iter()
+        .filter(|label| !label.starts_with("role:"))
+        .collect();
+    Value::Text(serde_json::to_string(&kept).unwrap_or_else(|_| text.clone()))
 }
 
 /// Appends an imported comment whose `(ticket, n)` the hub holds with another text, as the
@@ -352,13 +390,32 @@ mod tests {
         let ticket = hub::tickets::load(&hub, "ab1.1").unwrap().unwrap();
         assert_eq!(ticket.title, "First");
         assert_eq!(ticket.close_reason.as_deref(), Some("done"));
-        assert_eq!(ticket.labels, vec!["role:executor".to_owned()]);
+        // The old service's role label is left out.
+        assert!(ticket.labels.is_empty(), "{:?}", ticket.labels);
         let by_alias = hub::tickets::resolve(&hub, "by-old1").unwrap().unwrap();
         assert_eq!(by_alias.as_str(), "ab1.1");
 
         let second = import_tickets(&mut hub, &path, false);
         assert!(!second.wrote(), "{second}");
         assert_eq!(second.get("comments").unwrap().skipped, 2);
+    }
+
+    #[test]
+    fn an_edge_from_a_ticket_to_itself_is_left_out() {
+        let path = old_database("self-edge");
+        Connection::open(&path)
+            .unwrap()
+            .execute("INSERT INTO edges VALUES ('ab1.2', 'ab1.2', 'blocks')", [])
+            .unwrap();
+        let mut hub = hub::open_in_memory().unwrap();
+        let report = import_tickets(&mut hub, &path, false);
+        assert_eq!(count(&hub, "edges"), 1);
+        let edges = report.get("edges").unwrap();
+        assert_eq!((edges.read, edges.written, edges.skipped), (2, 1, 1));
+        assert!(
+            report.to_string().contains("ab1.2 waits on itself"),
+            "{report}"
+        );
     }
 
     #[test]

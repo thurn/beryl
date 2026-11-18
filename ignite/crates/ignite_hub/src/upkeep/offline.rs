@@ -6,6 +6,12 @@
 //! heartbeat is more than [`OFFLINE_SECONDS`] old. The ticket returns to the queue with a
 //! comment, and a daemon that comes back finds its claim lost, which `/landed` and `/release`
 //! answer with 409 (exit code 3).
+//!
+//! [`release_unheld`] gives back a ticket that is in progress although no Ignite session or
+//! machine holds it, once it has gone [`OFFLINE_SECONDS`] without a change. Such a ticket was
+//! claimed outside Ignite: by the tracker it was imported from, or by a status set by hand. No
+//! heartbeat ever ends that claim, and the stall rule covers only Ignite's own workers, so
+//! without this step the ticket would count against its epic's share of workers for good.
 
 use rusqlite::{Connection, TransactionBehavior};
 use serde_json::Value;
@@ -102,6 +108,76 @@ pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<Strin
     Ok(released)
 }
 
+/// Releases each ticket in progress that no session and no machine holds and that has not
+/// changed for [`OFFLINE_SECONDS`]. Returns the tickets released.
+pub fn release_unheld(conn: &mut Connection, now: Timestamp) -> Result<Vec<String>> {
+    let unheld = {
+        let mut select = conn.prepare(
+            "SELECT id, assignee, updated_at FROM tickets
+             WHERE status = 'in_progress' AND session IS NULL AND machine IS NULL ORDER BY id",
+        )?;
+        select
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let mut released = Vec::new();
+    for (id, assignee, updated_at) in unheld {
+        if now.seconds_since(parse_time(&updated_at)?) < OFFLINE_SECONDS {
+            continue;
+        }
+        let holder = assignee
+            .as_deref()
+            .map_or_else(|| "nobody".to_owned(), |a| format!("`{a}`"));
+        let text = format!(
+            "Released by the hub: this ticket was in progress, held by {holder}, but no Ignite \
+             session or machine holds it, and it has not changed since {updated_at}. Work from \
+             before Ignite may be saved on a branch of the remote that names the ticket. The \
+             ticket is back in the queue."
+        );
+        let request = BatchRequest {
+            preconditions: vec![Precondition::Assignee {
+                id: id
+                    .parse()
+                    .map_err(|e| StoreError::Invalid(format!("{e}")))?,
+                assignee,
+            }],
+            ops: vec![
+                Operation::Update {
+                    id: id.clone(),
+                    set: Some(TicketFields {
+                        status: Some(Status::Open),
+                        assignee: Some(None),
+                        ..TicketFields::default()
+                    }),
+                    add_labels: Vec::new(),
+                    remove_labels: Vec::new(),
+                    set_meta: std::collections::BTreeMap::new(),
+                    unset_meta: Vec::new(),
+                },
+                Operation::Comment {
+                    id: id.clone(),
+                    text,
+                },
+            ],
+        };
+        let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        match batch::apply_in(&mut tx, &request, ACTOR, super::filing::UPKEEP.machine, now)? {
+            BatchOutcome::Applied(_) => {}
+            // Someone changed the ticket since it was read; the next pass looks again.
+            BatchOutcome::Conflict(_) => continue,
+        }
+        tx.commit()?;
+        released.push(id);
+    }
+    Ok(released)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,5 +250,60 @@ mod tests {
         );
         // Nothing is left to release on the next pass.
         assert!(release_claims(&mut conn, at(20_000.0)).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_ticket_in_progress_that_no_ignite_session_holds_returns_to_the_queue() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let ids = apply(
+            &mut conn,
+            vec![
+                crate::upkeep::tests::create(
+                    "imported",
+                    ignite_core::protocol::tickets::TicketType::Task,
+                    None,
+                    &[],
+                ),
+                crate::upkeep::tests::create(
+                    "worked",
+                    ignite_core::protocol::tickets::TicketType::Task,
+                    None,
+                    &[],
+                ),
+            ],
+            at(0.0),
+        );
+        // The first is held as the old tracker left it: an assignee, but no session or
+        // machine. The second is held by an Ignite session on a machine.
+        conn.execute(
+            "UPDATE tickets SET status = 'in_progress', assignee = 'old-run' WHERE id = ?1",
+            [&ids[0]],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE tickets SET status = 'in_progress', assignee = 'local_a', session = 'local_a',
+               machine = 'm-1' WHERE id = ?1",
+            [&ids[1]],
+        )
+        .unwrap();
+
+        // Under two hours since the last change: nothing happens.
+        assert!(release_unheld(&mut conn, at(7_199.0)).unwrap().is_empty());
+
+        let released = release_unheld(&mut conn, at(7_200.0)).unwrap();
+        assert_eq!(released, [ids[0].clone()]);
+        let ticket = tickets::load(&conn, &ids[0]).unwrap().unwrap();
+        assert_eq!(ticket.status, Status::Open);
+        assert_eq!(ticket.assignee, None);
+        let comments = tickets::comments(&conn, &ids[0]).unwrap();
+        assert!(
+            comments[0].text.contains("`old-run`"),
+            "{}",
+            comments[0].text
+        );
+        let worked = tickets::load(&conn, &ids[1]).unwrap().unwrap();
+        assert_eq!(worked.status, Status::InProgress);
+        // Nothing is left to release on the next pass.
+        assert!(release_unheld(&mut conn, at(20_000.0)).unwrap().is_empty());
     }
 }
