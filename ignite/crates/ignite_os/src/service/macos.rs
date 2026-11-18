@@ -31,7 +31,12 @@ enum Launch {
 /// `node` or Homebrew tools, and with none of the `IGNITE_*` settings, so the hub's machine
 /// would not serve the hub. `IGNITE_SESSION` and `IGNITE_TOKEN` belong to one session and stay
 /// out.
-const KEPT_VARIABLES: &[&str] = &["PATH", "IGNITE_HOME", "IGNITE_HUB_LISTEN"];
+const KEPT_VARIABLES: &[&str] = &[
+    "PATH",
+    "IGNITE_HOME",
+    "IGNITE_HUB_LISTEN",
+    "IGNITE_HUB_PUBLIC_LISTEN",
+];
 
 /// Writes the agent `label`'s property list and loads it, replacing an earlier registration.
 fn install_agent(

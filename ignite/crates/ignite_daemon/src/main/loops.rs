@@ -306,7 +306,25 @@ pub fn serve_hub_if_asked(options: &DaemonOptions) -> Result<()> {
         &listen.to_string_lossy(),
         &dir,
         &options.version,
-    )
+    )?;
+    if let Some(public) = std::env::var_os("IGNITE_HUB_PUBLIC_LISTEN") {
+        serve_public_hub(&options.repo, &public.to_string_lossy(), &dir)?;
+    }
+    Ok(())
+}
+
+/// Serves the hub's database read-only at `listen` (`IGNITE_HUB_PUBLIC_LISTEN`), the address
+/// that `tailscale funnel` publishes. It answers only `GET` and `HEAD` and never serves
+/// `/export`, so the public internet can read the dashboard but cannot write.
+fn serve_public_hub(repo: &Path, listen: &str, dir: &Path) -> Result<()> {
+    let running = ignite_hub::server::HubServer {
+        config: super::read_config(repo)?,
+        listen: listen.to_owned(),
+        database: dir.join("hub.db"),
+    }
+    .start_read_only()?;
+    crash::spawn_loop("ignite-hub-public-accept", move || running.wait());
+    Ok(())
 }
 
 /// Serves the hub's database in `dir` at `listen` and starts its upkeep thread.

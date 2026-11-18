@@ -78,6 +78,18 @@ impl HubServer {
 
     /// Opens the database and starts serving in the background.
     pub fn start(&self) -> io::Result<RunningHub> {
+        self.start_with(false)
+    }
+
+    /// Like [`HubServer::start`], but the server answers only `GET` and `HEAD` requests and
+    /// refuses `/<project>/api/export`, so it is safe to publish beyond the private network
+    /// (Tailscale Funnel). It has its own request-thread cap and connection pool, so a flood
+    /// on it cannot starve the private listener.
+    pub fn start_read_only(&self) -> io::Result<RunningHub> {
+        self.start_with(true)
+    }
+
+    fn start_with(&self, read_only: bool) -> io::Result<RunningHub> {
         let first = hub::open(&self.database).map_err(io::Error::other)?;
         let server = Server::http(&self.listen).map_err(io::Error::other)?;
         let address = server
@@ -96,6 +108,7 @@ impl HubServer {
             }),
             returned: Condvar::new(),
             active: AtomicUsize::new(0),
+            read_only,
         });
         let accepting = Arc::clone(&server);
         let thread = thread::spawn(move || {
@@ -164,6 +177,8 @@ struct Shared {
     returned: Condvar,
     /// Requests being answered now.
     active: AtomicUsize,
+    /// Whether only reads are served; see [`HubServer::start_read_only`].
+    read_only: bool,
 }
 
 struct Pool {
@@ -254,6 +269,9 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     let url = http.url().to_owned();
     let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
     let path = percent_decode(path);
+    if shared.read_only && !matches!(http.method().as_str(), "GET" | "HEAD") {
+        return failure(405, "this listener is read-only");
+    }
     // The stylesheet, script, service worker and icons live at the hub's root.
     if let Some(file) = dashboard::serve::static_file(http.method().as_str(), &path) {
         return file;
@@ -273,6 +291,10 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     else {
         return failure(404, "Unknown route");
     };
+    // `/export` dumps every ticket, which a public listener does not serve.
+    if shared.read_only && (rest == "/api/export" || rest.starts_with("/api/export/")) {
+        return failure(404, "Unknown route");
+    }
     let headers: Vec<(String, String)> = http
         .headers()
         .iter()
