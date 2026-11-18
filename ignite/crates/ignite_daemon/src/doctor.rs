@@ -49,8 +49,12 @@ fn command_output(program: &str, args: &[&str]) -> Option<String> {
 }
 
 impl Host for NativeHost {
+    /// The short hostname in lower case, the way `ignite.toml` names machines: macOS reports
+    /// the computer name's case, such as `JARVIS`.
     fn hostname(&self) -> String {
-        command_output("hostname", &["-s"]).unwrap_or_default()
+        command_output("hostname", &["-s"])
+            .unwrap_or_default()
+            .to_lowercase()
     }
 
     fn cores(&self) -> u32 {

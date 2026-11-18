@@ -256,9 +256,15 @@ impl Config {
         Ok(config)
     }
 
-    /// The declaration of the machine with this hostname.
+    /// The declaration of the machine with this hostname. Hostnames are compared without regard
+    /// to case, as DNS compares them: macOS reports `JARVIS` for a machine declared as `jarvis`.
     pub fn machine(&self, hostname: &str) -> Option<&Machine> {
-        self.machine.get(hostname)
+        self.machine.get(hostname).or_else(|| {
+            self.machine
+                .iter()
+                .find(|(name, _)| name.eq_ignore_ascii_case(hostname))
+                .map(|(_, machine)| machine)
+        })
     }
 
     fn validate(&self) -> Result<(), (String, String)> {
@@ -423,6 +429,15 @@ products = ["clippy", "rust-tests"]
         assert_eq!(cygnus.os, Some(Os::Windows));
         assert_eq!(cygnus.floor, Floor { batch: 8, tip: 2 });
         assert_eq!(config.rebuild[1].name, "one-card");
+    }
+
+    #[test]
+    fn machines_are_found_whatever_the_hostname_case() {
+        let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
+        let declared = config.machine("jarvis").unwrap();
+        assert!(std::ptr::eq(config.machine("JARVIS").unwrap(), declared));
+        assert!(config.machine("Jarvis").is_some());
+        assert!(config.machine("nobody").is_none());
     }
 
     #[test]
