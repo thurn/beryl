@@ -30,6 +30,8 @@ const WORKING: &str = "⚒️";
 /// The emoji while it works a regression ticket: a check that tip verification found failing,
 /// which holds `master` back until it is fixed.
 const FIREFIGHTING: &str = "🚒";
+/// The emoji while it works a justiciar ticket: an emergency that stops work for everyone.
+const JUSTICIAR: &str = "🔥";
 /// The emoji once its ticket is landed or closed.
 const DONE: &str = "✅";
 /// The emoji once it has given its ticket back unfinished.
@@ -42,6 +44,9 @@ const MAX_NEEDS: usize = 8;
 
 /// The labels that call for a guide topic, and the topic. The first match wins.
 const GUIDES: &[(&str, &str)] = &[
+    ("justiciar", "justiciar"),
+    ("graph-repair", "justiciar"),
+    ("fleet", "justiciar"),
     ("regression", "regression"),
     ("review", "review"),
     ("review:inline", "review"),
@@ -50,6 +55,8 @@ const GUIDES: &[(&str, &str)] = &[
     ("machine", "machine"),
     ("checks", "checks"),
     ("flaky", "checks"),
+    ("incomplete", "checks"),
+    ("cache-audit", "checks"),
 ];
 
 /// The tree as the brief shows it.
@@ -104,9 +111,12 @@ pub fn title_of(brief: Option<&TicketBrief>, ticket: &TicketId) -> String {
     }
 }
 
-/// The emoji of the title while `ticket` is worked: 🚒 for a regression ticket, else ⚒️.
+/// The emoji of the title while `ticket` is worked: 🔥 for a justiciar ticket, 🚒 for a
+/// regression ticket, else ⚒️.
 fn working(ticket: &Ticket) -> &'static str {
-    if ticket.labels.iter().any(|l| l == "regression") {
+    if ticket.labels.iter().any(|l| l == "justiciar") {
+        JUSTICIAR
+    } else if ticket.labels.iter().any(|l| l == "regression") {
         FIREFIGHTING
     } else {
         WORKING

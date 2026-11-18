@@ -302,6 +302,27 @@ fn a_regression_ticket_is_titled_with_the_fire_engine() {
 }
 
 #[test]
+fn a_justiciar_ticket_names_its_guide_and_is_titled_with_fire() {
+    let world = World::new();
+    let mut emergency = ticket("Tq.52", "master has not moved for 4 hours", "");
+    emergency.labels = vec!["justiciar".to_owned(), "hub".to_owned()];
+    world.desk.add(emergency);
+    let reply = start(&world, &["Tq.52"], WORKER);
+    assert!(
+        reply.text.contains("guide    ignite guide justiciar"),
+        "{}",
+        reply.text
+    );
+    assert!(
+        reply
+            .text
+            .contains("title    🔥 [Tq.52] master has not moved"),
+        "{}",
+        reply.text
+    );
+}
+
+#[test]
 fn a_tree_whose_reset_failed_after_a_refused_claim_is_reset_by_a_later_tick() {
     let world = World::new();
     world.desk.add(ticket("Tq.48", "Counter names", ""));
