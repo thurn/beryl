@@ -128,6 +128,13 @@ pub struct Family {
     /// when these files change.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_inputs: BTreeMap<String, Vec<InputPattern>>,
+    /// The files the `digest` of each listed check is computed from, beyond `inputs` and the
+    /// inputs of the products in `needs`. A family that declares them says its digests hold
+    /// nothing these files do not, so its listing is kept under a hash that covers them, and a
+    /// change that touches none of them leaves it out of the gate. Without them a listing whose
+    /// checks carry a digest is never kept, as the digest may stand for something no file holds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub digest_inputs: Vec<InputPattern>,
     /// Blocks every landing its inputs touch.
     #[serde(default)]
     pub always: bool,
@@ -402,6 +409,9 @@ fn check_family(family: &Family) -> Result<(), (String, String)> {
             return fail(&field, "crate-closure belongs in the family's inputs");
         }
     }
+    if family.digest_inputs.contains(&InputPattern::CrateClosure) {
+        return fail("digest_inputs", "crate-closure belongs in the family's inputs");
+    }
     match (family.kind, &family.next) {
         (Kind::Exploration, None) => {
             return fail("next", "is required for an exploration family");
@@ -610,6 +620,25 @@ outputs = ["ui/node_modules"]
             assert_eq!(error.key, "family.rust.package_inputs.core");
             assert!(error.message.contains(message), "{error}");
         }
+    }
+
+    #[test]
+    fn digest_inputs_are_read_and_refuse_crate_closure() {
+        let declare = |list: &str| {
+            RUST.replace(
+                "\n[product.rust-tests]",
+                &format!("digest_inputs = {list}\n\n[product.rust-tests]"),
+            )
+        };
+        let text = declare("[\"data/pins.json\"]");
+        let manifest = Manifest::from_files(&files(&[("checks/rust.toml", &text)])).unwrap();
+        assert_eq!(
+            manifest.families["rust"].family.digest_inputs,
+            [InputPattern::Path("data/pins.json".to_owned())]
+        );
+        let text = declare("[\"crate-closure\"]");
+        let error = Manifest::from_files(&files(&[("checks/rust.toml", &text)])).unwrap_err();
+        assert_eq!(error.key, "family.rust.digest_inputs");
     }
 
     #[test]

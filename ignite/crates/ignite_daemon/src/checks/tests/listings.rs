@@ -110,6 +110,38 @@ fn a_listing_with_a_digest_is_never_kept() {
     );
 }
 
+/// The oracle family's checks carry a digest of each scenario's exported input, so its listing
+/// was never kept and every landing listed it, after building what listing needs. A family
+/// that declares the files its digests are computed from has its listing kept under a hash
+/// that covers them, and listed again when one of them changes.
+#[test]
+fn a_listing_with_digests_from_declared_files_is_kept_until_they_change() {
+    let manifest = MANIFEST.replace(
+        "list = \"lister\"\n",
+        "list = \"lister\"\ndigest_inputs = [\"data/core.json\"]\n",
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\": \"unit:a\", \"digest\": \"d1\"}}\n{NEXTEST_LISTING}\n");
+    world
+        .git
+        .set_object("data/core.json", Oid::new("a".repeat(40)).unwrap());
+    assert!(run(&world, &["unit:a"]).passed());
+    assert!(run(&world, &["unit:a"]).passed());
+    assert!(world.hub.listing_keys().iter().any(|k| k.family == "unit"));
+    assert_eq!(world.launcher.commands("lister").len(), 1, "kept");
+
+    world
+        .git
+        .set_object("data/core.json", Oid::new("b".repeat(40)).unwrap());
+    run(&world, &["unit:a"]);
+    assert_eq!(
+        world.launcher.commands("lister").len(),
+        2,
+        "a file its digests are computed from changed"
+    );
+}
+
 /// A check's own inputs are not in the listing hash, so a kept listing also records what they
 /// named; a change to them, or a new file beside them, means the listing may be out of date.
 #[test]

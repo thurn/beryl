@@ -265,3 +265,104 @@ fn a_change_to_another_workspaces_crate_leaves_the_rust_families_out() {
     assert_eq!(world.builds.requests().len(), builds, "nothing was built");
     assert_eq!(list_commands(&world), lists, "nothing was listed");
 }
+
+/// [`REPOSITORY`] with a family whose checks carry a digest computed from the client's build
+/// and the files under `data/oracle/`, as the oracle family's are.
+fn with_digests() -> World {
+    let manifest = format!(
+        "{REPOSITORY}
+[family.oracle]
+kind = \"regression\"
+adapter = \"jsonl\"
+platforms = \"any\"
+needs = [\"client\"]
+list = \"lister oracle\"
+run = \"runner {{checks}}\"
+inputs = [\"tools/oracle.py\"]
+digest_inputs = [\"data/oracle/**\"]
+"
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    let base = repository();
+    for path in ["docs", "docs/ignite.md", "data/client", "rust/Cargo.lock"] {
+        world
+            .git
+            .set_object(path, Oid::new("a".repeat(40)).unwrap());
+    }
+    for path in [
+        "rust/Cargo.toml",
+        "rust/client",
+        "rust/crates",
+        "rust/crates/core",
+        "tools/rules.py",
+        "tools/oracle.py",
+        "data/oracle",
+        "data/oracle/gaps.json",
+    ] {
+        world
+            .git
+            .set_object(path, Oid::new("a".repeat(40)).unwrap());
+    }
+    let listing = base.launcher.listing.lock().unwrap().clone();
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\": \"oracle:scenario/xmage\", \"digest\": \"d1\"}}\n{listing}");
+    world
+}
+
+/// The tree of [`with_digests`], changed in `changed`.
+fn digest_tree(world: &World, changed: &[&str]) -> FakeTrees {
+    let mut trees = tree_with(world, changed);
+    trees.tracked.extend(
+        ["tools/oracle.py", "data/oracle/gaps.json"]
+            .iter()
+            .map(|s| (*s).to_owned()),
+    );
+    trees
+}
+
+/// Every landing listed the oracle family, after building what its listing needs, and counted
+/// it in scope, because its checks carry digests and a listing with digests was never kept. A
+/// family that declares the files its digests come from is judged by them.
+#[test]
+fn a_family_with_declared_digest_inputs_is_left_out_when_none_changed() {
+    let world = with_digests();
+    let tip = daemon(&world, memory(), digest_tree(&world, &[]));
+    let tree = tip.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let mut probe = CheckRun::default();
+    let families = ["client-interface", "markdown", "oracle", "rust"];
+    let prepared = tip.prepare(&world.ctx, &tree, &families, &options(false), &mut probe);
+    assert_eq!(prepared.len(), 4, "{:?}", probe.incomplete_families);
+    let lists = list_commands(&world);
+    let builds = world.builds.requests().len();
+
+    let docs = daemon(&world, memory(), digest_tree(&world, &["docs/ignite.md"]));
+    let gated = docs.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+    assert_eq!(
+        gated.run.out_of_scope,
+        ["client-interface", "oracle", "rust"]
+    );
+    assert_eq!(list_commands(&world), lists, "nothing was listed");
+    assert_eq!(world.builds.requests().len(), builds, "nothing was built");
+
+    // A change to a file its digests are computed from puts it in scope, and lists it again.
+    world
+        .git
+        .set_object("data/oracle/gaps.json", Oid::new("b".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("data/oracle", Oid::new("b".repeat(40)).unwrap());
+    let listers = world.launcher.commands("lister").len();
+    let changed = ["data/oracle/gaps.json"];
+    let gaps = daemon(&world, memory(), digest_tree(&world, &changed));
+    let gated = gaps.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+    assert!(
+        !gated.run.out_of_scope.contains(&"oracle".to_owned()),
+        "{:?}",
+        gated.run.out_of_scope
+    );
+    let listed: Vec<String> = world.launcher.commands("lister")[listers..]
+        .iter()
+        .map(|args| args[1].clone())
+        .collect();
+    assert_eq!(listed, ["oracle"]);
+}

@@ -16,9 +16,12 @@
 //!
 //! Three kinds of listing are never kept: one with no checks (a `nextest` family always lists
 //! tests, and a `jsonl` family that listed checks before does not suddenly list none, so such a
-//! listing is a failed one), one in which a check carries a digest (it stands for something no
-//! file holds, such as the commit subjects since staging, so the listing hash cannot say when it
-//! changes), and one with checks Ignite refused.
+//! listing is a failed one), one in which a check carries a digest of a family that declares no
+//! `digest_inputs` (the digest may stand for something no file holds, such as the commit
+//! subjects since staging, so the listing hash cannot say when it changes), and one with checks
+//! Ignite refused. A family that declares `digest_inputs` says its digests are computed from
+//! those files and from what its listing hash already covers, so the listing hash covers them
+//! too and its listing is kept like any other.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
@@ -77,7 +80,8 @@ pub(crate) struct Listing {
 
 impl Checks {
     /// The patterns a family's `list` can read: its inputs, those of every product it needs to
-    /// list or run, and every package's `package_inputs`.
+    /// list or run, every package's `package_inputs`, and the files its checks' digests are
+    /// computed from (`digest_inputs`).
     pub(crate) fn listing_patterns(&self, family: &Family) -> Vec<InputPattern> {
         let manifest = &self.settings.manifest;
         let mut every = hash::input_patterns(family, manifest);
@@ -86,6 +90,7 @@ impl Checks {
             every.extend(product.inputs.iter().cloned());
         }
         every.extend(family.package_inputs.values().flatten().cloned());
+        every.extend(family.digest_inputs.iter().cloned());
         every
     }
 
@@ -392,10 +397,11 @@ impl Checks {
                 continue;
             }
             self.note_listed(name, &listed);
+            let digests_from_files = !family.digest_inputs.is_empty();
             let keepable = !listed.is_empty()
-                && listed
-                    .iter()
-                    .all(|l| l.digest.is_none() && l.refused.is_none());
+                && listed.iter().all(|l| {
+                    (l.digest.is_none() || digests_from_files) && l.refused.is_none()
+                });
             let key = key.filter(|key| {
                 if !keepable {
                     let mut not_kept = self.not_kept.lock().unwrap_or_else(PoisonError::into_inner);

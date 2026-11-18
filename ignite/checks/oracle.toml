@@ -9,6 +9,12 @@
 # tools/tests/test_ignite_inputs.py), so an edit to a card or the rules reruns just the
 # scenarios whose exported input changes. A machine without `just oracle-setup` fails to
 # list, which leaves the family incomplete.
+#
+# `digest_inputs` names the files a digest is computed from beyond those inputs and the
+# `scenario-dump` product's (which the dump that is exported is built from): the Java harnesses
+# (`SIDE_GLOBS` in the adapter) and the two lists. The pins are in oracles.py, an input. With
+# them declared, the family's listing is kept, and a landing that touches none of these files
+# leaves the family out instead of building `scenario-dump` and listing it (about 9 s).
 
 # Lessons from the checks Ignite replaces:
 #
@@ -35,6 +41,12 @@ platforms = "any"
 needs = ["scenario-dump", "python-env"]
 resources = ["oracle"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle list oracle"
+digest_inputs = [
+  "tools/oracles/**",
+  "tools/src/beryl_tools/BerylScenarioTest.java",
+  "data/oracle-divergences.json",
+  "data/oracle-exporter-gaps.json",
+]
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle run oracle {checks}"
 inputs = [
   "tools/src/beryl_tools/ignite/oracle.py",

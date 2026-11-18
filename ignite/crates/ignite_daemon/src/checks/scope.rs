@@ -2,14 +2,15 @@
 //! "Landing" in `docs/ignite.md`).
 //!
 //! A family is out of scope when no changed path matches anything its checks can read: its
-//! `inputs` and `package_inputs`, the inputs of the products it needs, the lock file, manifest
-//! and toolchain file of every Cargo workspace those name, the manifest file that declares the
-//! family, and every input of their own that its checks printed in its kept listing (with the
-//! directory of each such file, where a new check would appear). A family one of whose checks
-//! is named after a file the change edits stays in scope too. A family with no kept listing
-//! for the tree's inputs cannot be judged, and stays in scope to be listed as before. A family in
-//! the always set is treated the same way: it blocks every landing its inputs touch, so it too
-//! is left out when the change touches none of them.
+//! `inputs`, `package_inputs` and `digest_inputs`, the inputs of the products it needs, the
+//! lock file, manifest and toolchain file of every Cargo workspace those name, the manifest
+//! file that declares the family, and every input of their own that its checks printed in its
+//! kept listing (with the directory of each such file, where a new check would appear). A
+//! family one of whose checks is named after a file the change edits stays in scope too. A
+//! family with no kept listing for the tree's inputs cannot be judged, and stays in scope to be
+//! listed as before; a family whose checks carry digests has a kept listing only when it
+//! declares `digest_inputs`. A family in the always set is treated the same way: it blocks
+//! every landing its inputs touch, so it too is left out when the change touches none of them.
 //!
 //! In a family with a kept listing, `crate-closure` stands for the packages its checks belong
 //! to, with the packages each depends on, not for every package of every workspace. A change
