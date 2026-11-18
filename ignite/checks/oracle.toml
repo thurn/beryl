@@ -9,12 +9,21 @@
 # the scenarios whose exported input changes. A machine without `just oracle-setup` fails to
 # list, which leaves the family incomplete.
 
-# The binary that writes the scenarios as JSON (`beryl_scenario dump`), in rust/target/debug.
-[product.scenario-dump]
-build = "cargo build --locked --quiet --profile test -p beryl_cards --features scenarios --bin beryl_scenario"
-dir = "rust"
-inputs = ["crate:beryl_cards"]
-outputs = ["rust/target"]
+# Lessons from the checks Ignite replaces:
+#
+# - The dump binary is the `scenario-dump` product (rust.toml), built in the `test` profile at
+#   opt-level 1: an unoptimized `beryl_scenario` took 48 s to dump against 4.5 s.
+# - A machine without `just oracle-setup` cannot run the oracles. `list` and `next` then fail
+#   and `run` reports nothing, so the family is `incomplete` there, which is never a failure.
+# - The old fast check kept a generated scenario that had already failed on staging from
+#   failing every session's push. Here that scenario's check keeps its input hash across a
+#   landing that does not change its export, so its failure belongs to tip verification and
+#   the regression ticket it files, not to the landing.
+# - The old runs played a scenario named in data/oracle-exporter-gaps.json or
+#   data/oracle-divergences.json only with its card, so that a stale entry was judged on a run
+#   that played it. Here each such scenario is a check of its own, the entries naming it are
+#   part of its input, and an entry whose scenario no longer fails is reported as a failure
+#   of that check.
 
 # One check per scenario and engine: every card's scenarios and the random ones of the first
 # 100 seeds, as `by oracle` plays them today.
