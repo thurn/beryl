@@ -1,6 +1,6 @@
 ---
 name: ignite
-description: Start work through Ignite. `/ignite <ticket or small task>` does it in this session; `/ignite <plan or large task>` settles the design and files an epic of tickets for the worker pool; `/ignite sweep` triages stale open tickets; `/ignite pool <n>` adds worker sessions; `/ignite dispatch` starts this machine's dispatcher. Use when the user invokes /ignite or asks to plan, file, sweep or staff work for Ignite's pool.
+description: Start work through Ignite. `/ignite <ticket or small task>` does it in this session; `/ignite <plan or large task>` settles the design and files an epic of tickets for the worker pool; `/ignite sweep` triages stale open tickets. Use when the user invokes /ignite or asks to plan, file or sweep work for Ignite's pool, or asks how to staff it.
 ---
 
 # Ignite
@@ -17,8 +17,7 @@ Pick the mode from the argument:
 | a ticket ID, or a task of a few steps  | [Do it here](#do-it-here)    |
 | a plan file, or a task of many tickets | [Plan](#plan)                |
 | `sweep [older than N days] [dry]`      | [Sweep](#sweep)              |
-| `pool <n>`                             | [Pool](#pool)                |
-| `dispatch`                             | [Dispatcher](#dispatcher)    |
+| `pool <n>` or `dispatch`               | [Staffing](#staffing)        |
 
 Titles, for every session: `⚒️` while working, `🔍` while waiting on the
 person's answer (only when a person is there), `✅` done, `⛔` stopped
@@ -159,51 +158,21 @@ will work.
   give its epic a `--workers` share, or file it under an active epic.
 - `dry` shows the table and closes, comments on and activates nothing.
 
-## Pool
+## Staffing
 
-`/ignite pool <n>` adds `n` workers to this machine's pool. Run it only in the
-dispatcher's own session, in a turn a person started: the desktop app lets only
-such a turn start sessions, and its tools for clearing and prompting a session
-only work on sessions the caller started.
+The dispatcher and the workers are not started from this project. Each machine
+has one dispatcher session, opened by a person in a folder outside the
+repository, which starts the workers itself, because only the session that
+started a worker can clear and prompt it. Tell the person:
 
-1. Read this session's permission mode (`get_session` on `self`). Refuse unless
-   it never prompts (`bypassPermissions` or `auto`): workers inherit it, and a
-   prompt stalls a worker that nobody watches.
-2. Start `n` sessions, at most ten in this message, one `start_session` call
-   each: `initiation: "user_asked"`, `context: "fresh"`, `use_worktree: false`,
-   `cwd` the project's main checkout by its full path, title
-   `✅ ignite worker <k>`, prompt "Ignite pool worker: reply only `ready`."
-3. Register them in one call: `ignite pool add <id>... --app claude`.
-4. Say how many joined. The limit of ten is per message, not a lifetime cap:
-   the person adds more by sending `/ignite pool <n>` again.
+1. Run `ignite pool init` once per machine from the main checkout. It writes
+   `~/ignite` with the dispatcher's instructions and the main checkout's path,
+   so the workers start in the checkout. Run it again after Ignite's
+   instructions change.
+2. Open a session in `~/ignite` on Sonnet, in a permission mode that never
+   prompts, and send `/ignite pool <n>` there. That session registers itself
+   as the dispatcher, starts `n` workers and runs the dispatch loop. Sending it
+   again adds more workers.
 
-In Codex, a worker is a new chat per ticket, which the dispatcher opens at each
-hand-off, so the pool needs no standing chats.
-
-## Dispatcher
-
-`/ignite dispatch` starts this machine's dispatcher: one small session per
-machine and per app, whose whole job is the tool calls `ignite dispatch` asks
-for. Run it in a turn a person started.
-
-1. Make its folder outside the repository, `~/.ignite/dispatcher/claude/`, so
-   its context holds none of the project's instruction files. Put in it:
-   - `CLAUDE.md`, a copy of [`dispatcher.md`](dispatcher.md) beside this skill;
-   - `.claude/settings.json`: `{"autoCompactWindow": 120000}`;
-   - `.claude/skills/ignite`, a symbolic link to this skill's folder, so that
-     `/ignite pool` works there.
-2. Start it with `start_session`: `initiation: "user_asked"`,
-   `context: "fresh"`, `cwd` the folder's full path, model Sonnet, title
-   `🔮 dispatcher <machine>`, prompt "Follow CLAUDE.md." Then read it back with
-   `get_session` and set the model with `set_session_model` if it is not Sonnet.
-3. Register it: `ignite pool add <id> --app claude --dispatcher`.
-4. Tell the person to open the dispatcher session, check that its permission
-   mode never prompts, and send `/ignite pool <n>` there.
-
-The Codex equivalent: the folder `~/.ignite/dispatcher/codex/` with
-`AGENTS.md`, a copy of `dispatcher.md`, and the skill linked at
-`.agents/skills/ignite`. Codex has no `autoCompactWindow`; the daemon tells a
-Codex dispatcher to open a new chat as the dispatcher once its context passes
-the same size. Register the folder as a Codex project by its full path, open a
-chat there with `create_thread` on the app's small, fast model, and register its ready
-thread ID with `ignite pool add <id> --app codex --dispatcher`.
+`/ignite pool` sent in this project does none of this; give the person these
+steps instead.

@@ -324,8 +324,8 @@ impl Dispatcher {
                 model: None,
                 effort: None,
                 prompt: Some(
-                    "Your context has grown. Open a new chat as this machine's dispatcher \
-                     with `/ignite dispatch`, then stop."
+                    "Your context has grown. Open a new chat in your folder whose prompt is \
+                     `/ignite pool 0`, then stop."
                         .to_owned(),
                 ),
             });

@@ -262,14 +262,20 @@ pub enum DispatchCommand {
 pub enum PoolCommand {
     /// List the pool's sessions and what each holds.
     List,
-    /// Add sessions to the pool.
+    /// Write the folder a person opens the dispatcher session in (default `~/ignite`).
+    Init {
+        /// The folder to write.
+        #[arg(long)]
+        dir: Option<std::path::PathBuf>,
+    },
+    /// Add sessions to the pool. With `--dispatcher` and no session, adds the calling session.
     Add {
-        #[arg(required = true)]
         sessions: Vec<String>,
         /// `claude` or `codex`.
         #[arg(long)]
         app: String,
-        /// Add them as the dispatcher instead of workers.
+        /// Add the session as this app's dispatcher on the machine, replacing any earlier one
+        /// and removing the workers that one started.
         #[arg(long)]
         dispatcher: bool,
         /// The model tiers the app runs, comma-separated; by default `opus,sonnet,light` for

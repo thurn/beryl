@@ -226,8 +226,17 @@ impl PoolVerb {
         if app != "claude" && app != "codex" {
             return Err(Error::Invalid(format!("unknown app {app}")));
         }
+        if sessions.is_empty()
+            && dispatcher
+            && let Some(caller) = &req.session
+        {
+            sessions.push(caller.clone());
+        }
         if sessions.is_empty() {
             return Err(Error::Invalid("name at least one session".to_owned()));
+        }
+        if dispatcher && sessions.len() > 1 {
+            return Err(Error::Invalid("name one dispatcher".to_owned()));
         }
         let models = models.unwrap_or_else(|| match app.as_str() {
             "claude" => CLAUDE_MODELS.iter().map(|m| (*m).to_owned()).collect(),
@@ -246,6 +255,11 @@ impl PoolVerb {
             req.session.clone()
         };
         let pool = self.dispatcher.pool();
+        let replaced = if dispatcher {
+            self.replace_dispatcher(&app, &sessions[0])?
+        } else {
+            Vec::new()
+        };
         for session in &sessions {
             pool.put(&Member {
                 session: session.clone(),
@@ -264,7 +278,34 @@ impl PoolVerb {
         if let Some(parent) = &parent {
             let _ = write!(text, ", parent {parent}");
         }
+        if !replaced.is_empty() {
+            let names: Vec<&str> = replaced.iter().map(SessionId::as_str).collect();
+            let _ = write!(text, "\nremoved  {}", names.join(", "));
+        }
         Ok(Reply::text(Exit::Success, text))
+    }
+
+    /// Removes every other dispatcher of `app` on this machine and the workers each one started,
+    /// since only the session that started a worker can clear and prompt it. Returns the removed
+    /// sessions. Registering the same dispatcher again removes nothing.
+    fn replace_dispatcher(&self, app: &str, new: &SessionId) -> Result<Vec<SessionId>> {
+        let pool = self.dispatcher.pool();
+        let members = pool.members()?;
+        let old: Vec<&SessionId> = members
+            .iter()
+            .filter(|m| m.role == WorkerRole::Dispatcher && m.app == app && &m.session != new)
+            .map(|m| &m.session)
+            .collect();
+        let mut removed = Vec::new();
+        for member in &members {
+            let orphan = member.parent.as_ref().is_some_and(|p| old.contains(&p));
+            if old.contains(&&member.session) || orphan {
+                pool.remove(&member.session)?;
+                self.dispatcher.forget(&member.session);
+                removed.push(member.session.clone());
+            }
+        }
+        Ok(removed)
     }
 
     fn remove(&self, session: &str) -> Result<Reply> {

@@ -621,3 +621,50 @@ fn dispatch_prints_the_instruction_then_the_loop() {
     );
     assert_eq!(again.exit, Exit::Usage);
 }
+
+#[test]
+fn a_new_dispatcher_replaces_the_old_one_and_its_workers() {
+    let rig = rig(&["local_w1"]);
+    let members = |rig: &Rig| -> Vec<String> {
+        let mut names: Vec<String> = rig
+            .dispatcher
+            .pool()
+            .members()
+            .unwrap()
+            .iter()
+            .map(|m| m.session.as_str().to_owned())
+            .collect();
+        names.sort();
+        names
+    };
+    // With no session named, `--dispatcher` registers the caller.
+    let first = rig.pool(
+        &["add", "--app", "claude", "--dispatcher"],
+        Some("local_dispatcher"),
+    );
+    assert_eq!(first.exit, Exit::Success, "{}", first.text);
+    assert!(!first.text.contains("removed"), "{}", first.text);
+    assert_eq!(members(&rig), ["local_dispatcher", "local_w1"]);
+    // Registering again is safe.
+    rig.pool(
+        &["add", "--app", "claude", "--dispatcher"],
+        Some("local_dispatcher"),
+    );
+    assert_eq!(members(&rig), ["local_dispatcher", "local_w1"]);
+    // A Codex dispatcher leaves the Claude one alone.
+    rig.pool(
+        &["add", "--app", "codex", "--dispatcher"],
+        Some("local_codex"),
+    );
+    assert_eq!(
+        members(&rig),
+        ["local_codex", "local_dispatcher", "local_w1"]
+    );
+    // A new Claude dispatcher cannot drive the old one's workers, so both go.
+    let second = rig.pool(
+        &["add", "--app", "claude", "--dispatcher"],
+        Some("local_new"),
+    );
+    assert!(second.text.contains("removed"), "{}", second.text);
+    assert_eq!(members(&rig), ["local_codex", "local_new"]);
+}

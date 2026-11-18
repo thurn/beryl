@@ -1252,10 +1252,17 @@ machine's daemon holds work back while that machine is full.
 
 Each machine has one standing pool that serves every active epic.
 
-- A person adds workers in a turn they start in the dispatcher's own session, at
-  most ten per message: `/ignite pool 8`. The desktop app lets only such a turn
-  start sessions, and its tools for clearing and prompting a session are only
-  known to work on sessions the caller started.
+- A person staffs a machine in two steps. `ignite pool init`, run once from the
+  main checkout, writes the dispatcher's folder, `~/ignite`. The person then
+  opens a session there and sends `/ignite pool 8`. That session registers
+  itself as the machine's dispatcher, starts the workers in the main checkout
+  (at most ten per message) and runs the dispatch loop. The desktop app lets
+  only a turn a person started start sessions, and its tools for clearing and
+  prompting a session are only known to work on sessions the caller started, so
+  the session that starts the workers must be the dispatcher.
+- Registering a dispatcher replaces any earlier dispatcher of the same app on
+  that machine, and removes the workers the earlier one started, which the new
+  one could not drive.
 - Workers must run in a permission mode that never prompts. A permission prompt
   stalls a worker nobody is watching, so `/ignite pool` refuses to start workers
   in any other mode.
@@ -1271,13 +1278,16 @@ Each machine has one standing pool that serves every active epic.
 The dispatcher is one session per machine and per app whose whole job is to make
 the tool calls the daemon asks for.
 
-- It runs on Sonnet 5.5, in a folder of its own outside the repository, so its
-  fixed prefix holds none of Beryl's instruction files.
+- It runs on Sonnet 5.5, in `~/ignite`, a folder outside the repository, so its
+  fixed prefix holds none of Beryl's instruction files. The folder's
+  instructions name the main checkout, because a session started from the
+  dispatcher otherwise runs in the dispatcher's folder.
 - That folder's `.claude/settings.json` sets `autoCompactWindow` to 120,000
   tokens, so its context never grows the way an orchestrator's does today.
 - It never plans, reads tickets or decides anything.
 - Codex has no such setting. When a Codex dispatcher's context passes the same
-  size, the daemon's next instruction has it open a new chat as the dispatcher
+  size, the daemon's next instruction has it open a new chat in its folder with
+  the prompt `/ignite pool 0`, which registers the new chat as the dispatcher,
   and stop.
 
 Its loop is one blocking command and the tool calls that command returns:
@@ -2064,11 +2074,12 @@ These show that cores, trees and workers go where the rules say.
 - **No free tree.** Lease every ticket tree and run `ignite start` in one more
   session. Expect a wait that names the reason, no new directory, and no
   hand-off from the dispatcher.
-- **The dispatcher.** Add four workers with `/ignite pool 4` and start the
-  dispatcher. File six ready tickets. Expect four hand-offs at once and two as
-  workers finish, and each worker titled with its ticket. After 50 hand-offs,
-  expect the dispatcher's transcript to show at least one compaction and no
-  request with more than about 130,000 tokens of context.
+- **The dispatcher.** Run `ignite pool init`, open a session in `~/ignite` and
+  send `/ignite pool 4`. Expect four workers whose folder is the main checkout.
+  File six ready tickets. Expect four hand-offs at once and two as workers
+  finish, and each worker titled with its ticket. After 50 hand-offs, expect the
+  dispatcher's transcript to show at least one compaction and no request with
+  more than about 130,000 tokens of context.
 - **A stalled worker.** Stop a worker mid-ticket. Expect one message after 30
   minutes, then the ticket released, the tree reset and a comment on the ticket.
 - **A waiting worker.** Have a worker run `ignite wait` on a landing that is
