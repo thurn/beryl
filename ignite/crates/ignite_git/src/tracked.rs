@@ -25,12 +25,30 @@ pub fn toplevel(dir: &Path) -> Result<PathBuf> {
     ))
 }
 
-/// Every file git tracks in the checkout at `root`, relative to it with `/` separators.
+/// Every file git tracks in the checkout at `root`, and every untracked file it does not ignore,
+/// relative to it with `/` separators.
+///
+/// Untracked files are included because input hashes are taken over the files `git add --all`
+/// would stage (see [`crate::treehash`]). An input glob resolved over the index alone would miss
+/// a new file an agent has not added yet, so a check that reads it would keep its old hash.
 pub fn files(root: &Path) -> Result<Vec<String>> {
-    let text = git(root, &["ls-files", "-z"])?;
-    Ok(text
+    let text = git(
+        root,
+        &[
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--deduplicate",
+        ],
+    )?;
+    let mut files: Vec<String> = text
         .split('\0')
         .filter(|path| !path.is_empty())
         .map(str::to_owned)
-        .collect())
+        .collect();
+    // git lists untracked files after the index's, so sort them in.
+    files.sort();
+    Ok(files)
 }

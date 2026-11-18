@@ -12,7 +12,10 @@ platforms = "any"
 always = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list commit"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run commit {checks}"
-inputs = ["tools/src/beryl_tools/ignite/rules.py"]
+inputs = [
+  "tools/src/beryl_tools/ignite/rules.py",
+  "tools/src/beryl_tools/**",
+]
 
 # Conflict markers outside Markdown, file length, the rules that keep card names, a second
 # player, the board and discarded pushes out of generic code, and the citations of the rules.
@@ -25,7 +28,11 @@ platforms = "any"
 always = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list source"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run source {checks}"
-inputs = ["tools/src/beryl_tools/ignite/rules.py", "tools/src/beryl_tools/paths.py"]
+inputs = [
+  "tools/src/beryl_tools/ignite/rules.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/**",
+]
 
 # Everything that reads Markdown, so that a change to documentation reruns only these.
 [family.markdown]
@@ -35,7 +42,11 @@ platforms = "any"
 always = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list markdown"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run markdown {checks}"
-inputs = ["tools/src/beryl_tools/ignite/rules.py", "tools/src/beryl_tools/paths.py"]
+inputs = [
+  "tools/src/beryl_tools/ignite/rules.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/**",
+]
 
 # The justfile's format, and the two generated files held to their data.
 [family.repository]
@@ -45,4 +56,8 @@ platforms = "any"
 always = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list repository"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run repository {checks}"
-inputs = ["tools/src/beryl_tools/ignite/rules.py", "tools/src/beryl_tools/paths.py"]
+inputs = [
+  "tools/src/beryl_tools/ignite/rules.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/**",
+]

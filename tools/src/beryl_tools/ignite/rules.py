@@ -5,7 +5,9 @@ Two commands, both run from the checkout's root:
 
 - `list <family>` prints one JSON line per check of the family:
   `{"check": "source:file-length", "inputs": ["rust/crates/**", ...]}`. `inputs` are the
-  paths and patterns that check reads beyond the family's own `inputs`.
+  paths and patterns that check reads beyond the family's own `inputs`. The commit check adds
+  a `digest` of the commit subjects since `IGNITE_BASE`, which it reads and no tree ID
+  covers, so Ignite reuses its pass only for the same subjects.
 - `run <family> <check>...` runs the checks named, with or without the family prefix, and
   writes one JSON line per check to the file named by `IGNITE_RESULTS` (to standard output
   when it is unset): `{"check": ..., "outcome": "pass" | "fail" | "incomplete", "at": ...,
@@ -22,11 +24,13 @@ Each check wraps the function that implements it in a domain module (`file_lengt
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -141,6 +145,24 @@ def commit_subject(root: Path) -> list[str]:
     log = git(root, "log", "--no-merges", "--format=%h%x09%s", f"{base}..HEAD")
     rows = [tuple(row.split("\t", 1)) for row in log.splitlines() if "\t" in row]
     return subject_problems([(sha, subject) for sha, subject in rows])
+
+
+def commit_digest(root: Path) -> str:
+    """A hash of what `commit_subject` reads: the subjects since `IGNITE_BASE`. Without a base,
+    or when git cannot answer, a digest no other listing shares, so no pass is reused.
+    """
+    base = os.environ.get("IGNITE_BASE")
+    try:
+        if not base:
+            raise Incomplete("no IGNITE_BASE")
+        log = git(root, "log", "--no-merges", "--format=%s", f"{base}..HEAD")
+    except Incomplete:
+        return f"unknown:{uuid.uuid4().hex}"
+    return hashlib.sha256(log.encode()).hexdigest()
+
+
+# What a check reads that no file holds, by check name (see `commit_digest`).
+DIGESTS: dict[str, Callable[[Path], str]] = {"commit-subject": commit_digest}
 
 
 def conflict_markers_in(root: Path, files: Sequence[str]) -> list[str]:
@@ -458,10 +480,17 @@ def family_checks(family: str) -> list[Check]:
     return [c for c in CHECKS if c.family == family]
 
 
-def listing(family: str) -> list[dict[str, str | list[str]]]:
-    return [
-        {"check": c.full, "inputs": [SELF, *c.inputs]} for c in family_checks(family)
-    ]
+def listing(family: str, root: Path) -> list[dict[str, str | list[str]]]:
+    lines: list[dict[str, str | list[str]]] = []
+    for c in family_checks(family):
+        line: dict[str, str | list[str]] = {
+            "check": c.full,
+            "inputs": [SELF, *c.inputs],
+        }
+        if c.name in DIGESTS:
+            line["digest"] = DIGESTS[c.name](root)
+        lines.append(line)
+    return lines
 
 
 def result(check: Check, root: Path) -> dict[str, object]:
@@ -507,7 +536,7 @@ def main(argv: Sequence[str]) -> int:
             p.add_argument("checks", nargs="+")
     args = parser.parse_args(argv)
     if args.verb == "list":
-        for entry in listing(args.family):
+        for entry in listing(args.family, paths.REPO):
             print(json.dumps(entry))
         return 0
     try:

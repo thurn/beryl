@@ -93,6 +93,38 @@ def test_commit_subjects_are_conventional_and_short(
     assert "not a Conventional Commit" in message and "over 60 characters" in message
 
 
+def test_the_commit_check_lists_a_digest_of_the_subjects_it_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root: Path = repository(tmp_path)
+
+    def commit(subject: str) -> str:
+        write(root, "a.txt", subject)
+        subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t"]
+            + ["commit", "--quiet", "-m", subject],
+            check=True,
+        )
+        return subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def digest() -> object:
+        return rules.listing("commit", root)[0]["digest"]
+
+    monkeypatch.setenv("IGNITE_BASE", commit("chore: start"))
+    commit("feat: one")
+    first = digest()
+    assert digest() == first, "the same subjects give the same digest"
+    commit("Fixed the thing")
+    assert digest() != first, "a new subject is a new input"
+    monkeypatch.delenv("IGNITE_BASE")
+    assert digest() != digest(), "with no base, no listing shares a digest"
+
+
 def test_a_commit_check_with_no_base_is_incomplete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -547,6 +547,7 @@ impl Builds for BuildManager {
 fn hash_of(ids: &[(String, ignite_core::ids::Oid)], commands: &[String]) -> InputHash {
     input_hash(&HashParts {
         inputs: ids,
+        digest: None,
         commands,
         toolchain: "",
         platform: None,

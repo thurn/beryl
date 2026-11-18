@@ -417,7 +417,8 @@ impl Checks {
         };
         let mut output = PathBuf::new();
         for _ in 0..TRIES {
-            let result = self.launch(ctx, tree, name, family, args.clone(), &cwd, vec![], options);
+            let env = base_env(ctx);
+            let result = self.launch(ctx, tree, name, family, args.clone(), &cwd, env, options);
             output.clone_from(&result.output);
             if result.exit != Some(0) {
                 continue;
@@ -457,13 +458,14 @@ impl Checks {
         let paths = inputs::resolve(&patterns, None, &tree.graph, &tree.tracked)
             .map_err(|e| Error::Invalid(e.to_string()))?;
         let ids = inputs::object_ids(ctx.git.as_ref(), &tree.path, &paths)?;
-        Ok(self.hash(family, &ids))
+        Ok(self.hash(family, &ids, None))
     }
 
-    fn hash(&self, family: &Family, ids: &[(String, Oid)]) -> InputHash {
+    fn hash(&self, family: &Family, ids: &[(String, Oid)], digest: Option<&str>) -> InputHash {
         let commands = hash::commands(family, &self.settings.manifest);
         hash::input_hash(&HashParts {
             inputs: ids,
+            digest,
             commands: &commands,
             toolchain: &self.settings.toolchain,
             platform: hash::platform(&family.platforms, self.settings.os),
@@ -490,7 +492,7 @@ impl Checks {
         let ids = inputs::object_ids(ctx.git.as_ref(), &tree.path, &paths)?;
         let key = ResultKey {
             check: listed.check.clone(),
-            hash: self.hash(family, &ids),
+            hash: self.hash(family, &ids, listed.digest.as_deref()),
             platform: hash::platform(&family.platforms, self.settings.os),
         };
         Ok(Keyed {
@@ -519,6 +521,15 @@ fn incomplete(check: &CheckName, error: &Error) -> Failure {
         message: Some(error.to_string()),
         output: None,
     }
+}
+
+/// `IGNITE_BASE`, the commit staging is at, for a family's `list` and `run` commands. A check
+/// that reads the commits since then (the commit subjects) prints a digest of them when listed.
+pub(crate) fn base_env(ctx: &Context) -> Vec<(String, String)> {
+    ctx.git
+        .tip(&ctx.config.repository.staging)
+        .map(|base| vec![("IGNITE_BASE".to_owned(), base.to_string())])
+        .unwrap_or_default()
 }
 
 fn path_text(path: &Path) -> String {

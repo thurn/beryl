@@ -2,10 +2,11 @@
 //! results" in `docs/ignite.md`).
 //!
 //! - `jsonl`: the family's `list` command prints one JSON line per check,
-//!   `{"check": "<family>:<name>", "inputs": [...]}`, where `inputs` are path patterns the check
-//!   reads beyond the family's own. Its `run` command, with `{checks}` replaced by the names,
-//!   writes one JSON line per check to the file named by `IGNITE_RESULTS`:
-//!   `{"check", "outcome", "at", "message"}`.
+//!   `{"check": "<family>:<name>", "inputs": [...], "digest": "..."}`, where `inputs` are path
+//!   patterns the check reads beyond the family's own and the optional `digest` stands for what
+//!   it reads that no file holds (see [`Listed::digest`]). Its `run` command, with `{checks}`
+//!   replaced by the names, writes one JSON line per check to the file named by
+//!   `IGNITE_RESULTS`: `{"check", "outcome", "at", "message"}`.
 //! - `nextest`: cargo-nextest's own output. `cargo nextest list --message-format json` gives the
 //!   tests of each test binary, and `cargo nextest run --message-format libtest-json-plus` one
 //!   JSON line per test event. A test's check is named `<family>:<binary id>::<test>`, so a
@@ -41,6 +42,10 @@ pub struct Listed {
     pub check: CheckName,
     /// Path patterns the check reads beyond its family's `inputs`.
     pub inputs: Vec<String>,
+    /// What the check reads that no file in the tree holds, as the family's `list` command
+    /// summarizes it, such as the commit subjects since the branch left staging. It enters the
+    /// input hash, so a pass is reused only while it is unchanged.
+    pub digest: Option<String>,
     /// The workspace package that holds the check, which `crate-closure` starts from.
     pub package: Option<String>,
     /// How cargo-nextest names the test, for a `nextest` family.
@@ -102,6 +107,7 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
         check: CheckName,
         #[serde(default)]
         inputs: Vec<String>,
+        digest: Option<String>,
     }
     text.lines()
         .filter_map(|line| serde_json::from_str::<Line>(line.trim()).ok())
@@ -109,6 +115,7 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
         .map(|line| Listed {
             check: line.check,
             inputs: line.inputs,
+            digest: line.digest,
             package: None,
             target: None,
         })
@@ -116,7 +123,9 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
 }
 
 /// The results a `jsonl` family's `run` command wrote. A later line for a check replaces an
-/// earlier one.
+/// earlier one, except that nothing replaces a failure: a tool that judges one check in several
+/// steps, such as a page in each layout, may write a line per step, and a pass from the last
+/// step must not hide a failure from an earlier one.
 pub fn jsonl_results(text: &str) -> Vec<Reported> {
     #[derive(Deserialize)]
     struct Line {
@@ -130,6 +139,12 @@ pub fn jsonl_results(text: &str) -> Vec<Reported> {
         .lines()
         .filter_map(|l| serde_json::from_str::<Line>(l.trim()).ok())
     {
+        if reported
+            .iter()
+            .any(|r| r.check == line.check && r.outcome == Outcome::Fail)
+        {
+            continue;
+        }
         reported.retain(|r| r.check != line.check);
         reported.push(Reported {
             check: line.check,
@@ -186,6 +201,7 @@ pub fn nextest_list(text: &str, family: &str) -> Vec<Listed> {
             listed.push(Listed {
                 check,
                 inputs: Vec::new(),
+                digest: None,
                 package: Some(package.clone()),
                 target: Some(Target {
                     binary_id: binary_id.clone(),
@@ -273,16 +289,32 @@ mod tests {
     fn jsonl_listing_and_results() {
         let listing = "building...\n\
             {\"check\": \"py:t/test_a.py::one\", \"inputs\": [\"t/a.py\"]}\n\
-            {\"check\": \"other:x\"}\n";
+            {\"check\": \"other:x\"}\n\
+            {\"check\": \"py:t/test_a.py::two\", \"digest\": \"d1\"}\n";
         let listed = jsonl_list(listing, "py");
-        assert_eq!(listed.len(), 1);
+        assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].inputs, ["t/a.py"]);
+        assert_eq!(listed[0].digest, None);
+        assert_eq!(listed[1].digest.as_deref(), Some("d1"));
         let results = "{\"check\": \"py:a\", \"outcome\": \"incomplete\"}\n\
             {\"check\": \"py:a\", \"outcome\": \"fail\", \"at\": \"a.py:3\", \"message\": \"no\"}\n";
         let reported = jsonl_results(results);
         assert_eq!(reported.len(), 1);
         assert_eq!(reported[0].outcome, Outcome::Fail);
         assert_eq!(reported[0].at.as_deref(), Some("a.py:3"));
+    }
+
+    #[test]
+    fn a_later_pass_does_not_hide_a_failure_of_the_same_check() {
+        let results = "{\"check\": \"py:a\", \"outcome\": \"fail\", \"at\": \"a.py:3\"}\n\
+            {\"check\": \"py:a\", \"outcome\": \"pass\"}\n\
+            {\"check\": \"py:b\", \"outcome\": \"incomplete\"}\n\
+            {\"check\": \"py:b\", \"outcome\": \"pass\"}\n";
+        let reported = jsonl_results(results);
+        let outcome = |check: &str| reported.iter().find(|r| r.check.as_str() == check).unwrap();
+        assert_eq!(outcome("py:a").outcome, Outcome::Fail);
+        assert_eq!(outcome("py:a").at.as_deref(), Some("a.py:3"));
+        assert_eq!(outcome("py:b").outcome, Outcome::Pass);
     }
 
     #[test]

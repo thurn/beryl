@@ -755,8 +755,10 @@ The fields:
   package with every workspace package it depends on, and `crate-closure` for
   the same computed per test from the package that holds it. The lock file, the
   toolchain version and the family's own commands are always included.
-- `list` prints the family's checks, each with any inputs of its own. `run` runs
-  the checks named.
+- `list` prints the family's checks, each with any inputs of its own. A check
+  that reads something no file holds, such as the commit subjects since the
+  branch left staging, also prints a `digest` of it, which enters its input
+  hash. `run` runs the checks named.
 - `always = true` marks a family that blocks every landing its inputs touch. See
   [Where regression checks run](#where-regression-checks-run).
 

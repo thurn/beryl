@@ -205,3 +205,21 @@ fn reset_aborts_a_rebase_left_in_progress() {
     assert!(!repo.join(".git/rebase-merge").exists());
     assert_eq!(git(&repo, &["status", "--porcelain"]), "");
 }
+
+#[test]
+fn tracked_files_include_new_untracked_files_but_not_ignored_ones() {
+    let scratch = Scratch::new("tracked");
+    let tree = scratch.path("tree");
+    fs::create_dir_all(&tree).unwrap();
+    init(&tree);
+    write(&tree, ".gitignore", "target/\n");
+    write(&tree, "tests/test_old.py", "old\n");
+    commit_all(&tree, "first");
+    write(&tree, "tests/test_new.py", "new\n");
+    write(&tree, "target/out.txt", "built\n");
+    let files = ignite_git::tracked::files(&tree).unwrap();
+    assert_eq!(
+        files,
+        [".gitignore", "tests/test_new.py", "tests/test_old.py"]
+    );
+}

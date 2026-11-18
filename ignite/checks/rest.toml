@@ -51,6 +51,12 @@ inputs = [
   "tools/src/beryl_tools/vm_host.py",
   "tools/src/beryl_tools/count_trend.py",
   "tools/src/beryl_tools/ignite/rest.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
 # Random-game fuzzing: `next` reserves a batch of seeds on this machine that no earlier batch
@@ -73,6 +79,13 @@ inputs = [
   "data/set-groups.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/rest.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/count_trend.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
 # Every sequence of decisions from the end positions of one card's scenarios
@@ -108,6 +121,13 @@ inputs = [
   "data/card-store.tsv",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/rest.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/count_trend.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
 # The Python tests that read every card file or the vocabulary (the scale harness's, the card
@@ -133,6 +153,13 @@ inputs = [
   "data/card-store.tsv",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/rest.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/count_trend.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
 # The iroh transport: building `beryl_link_iroh` and playing its tests over loopback with the
@@ -157,7 +184,18 @@ platforms = "any"
 needs = ["python-env", "ignite-tests"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list ignite"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run ignite {checks}"
-inputs = ["ignite/**", "ignite.toml", "tools/src/beryl_tools/ignite/rest.py"]
+inputs = [
+  "ignite/**",
+  "ignite.toml",
+  "tools/src/beryl_tools/ignite/rest.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/count_trend.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/ignite/script.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
+]
 
 # The test binaries of the fuzzers, optimized with debug assertions and overflow checks on (the
 # build `just fuzz` makes). They land in rust/target/release.

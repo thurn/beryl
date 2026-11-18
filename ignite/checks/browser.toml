@@ -38,6 +38,14 @@ inputs = [
   "crate:beryl_cli",
   "tools/src/beryl_tools/ignite/browser.py",
   "tools/src/beryl_tools/suites.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/conventions.py",
+  "tools/src/beryl_tools/motion_measure.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/video.py",
+  "tools/src/beryl_tools/video_measure.py",
+  "tools/src/beryl_tools/video_shape.py",
 ]
 
 # The few kept checks slow CI plays today (`SMOKE_TITLES` in tools/src/beryl_tools/suites.py).
@@ -59,6 +67,14 @@ inputs = [
   "crate:beryl_cli",
   "tools/src/beryl_tools/ignite/browser.py",
   "tools/src/beryl_tools/suites.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/conventions.py",
+  "tools/src/beryl_tools/motion_measure.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/video.py",
+  "tools/src/beryl_tools/video_measure.py",
+  "tools/src/beryl_tools/video_shape.py",
 ]
 
 # One check per screen in ui/shots.json, which lists each phone screen once per phone size.
@@ -88,6 +104,15 @@ inputs = [
   "ui/scripts/told.mjs",
   "crate:beryl_cli",
   "tools/src/beryl_tools/ignite/browser.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/conventions.py",
+  "tools/src/beryl_tools/motion_measure.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/suites.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/video.py",
+  "tools/src/beryl_tools/video_measure.py",
+  "tools/src/beryl_tools/video_shape.py",
 ]
 
 # One check per verb of ui/verbs.json and layout: the stepped capture of ui/scripts/stepped.mjs
@@ -127,6 +152,9 @@ inputs = [
   "tools/src/beryl_tools/video.py",
   "tools/src/beryl_tools/video_measure.py",
   "tools/src/beryl_tools/video_shape.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/system.py",
 ]
 
 # One check per fixture of data/ui-counts.json: the work the UI does to play it in each layout
@@ -154,4 +182,13 @@ inputs = [
   "ui/scripts/slots.mjs",
   "crate:beryl_cli",
   "tools/src/beryl_tools/ignite/browser.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/conventions.py",
+  "tools/src/beryl_tools/motion_measure.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/suites.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/video.py",
+  "tools/src/beryl_tools/video_measure.py",
+  "tools/src/beryl_tools/video_shape.py",
 ]

@@ -5,8 +5,9 @@
 # Each check's own input is the `digest` its list line carries: a hash of the scenario's
 # exported Java method and Forge JSON, the oracles' pins, the Java harnesses and the entries of
 # data/oracle-divergences.json and data/oracle-exporter-gaps.json that name it. The family
-# inputs below are only the adapter, so an edit to a card, the rules or an exporter reruns just
-# the scenarios whose exported input changes. A machine without `just oracle-setup` fails to
+# inputs below are only the adapter and the modules it loads (held to its imports by
+# tools/tests/test_ignite_inputs.py), so an edit to a card or the rules reruns just the
+# scenarios whose exported input changes. A machine without `just oracle-setup` fails to
 # list, which leaves the family incomplete.
 
 # Lessons from the checks Ignite replaces:
@@ -35,7 +36,27 @@ needs = ["scenario-dump", "python-env"]
 resources = ["oracle"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle list oracle"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle run oracle {checks}"
-inputs = ["tools/src/beryl_tools/ignite/oracle.py"]
+inputs = [
+  "tools/src/beryl_tools/ignite/oracle.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/card_facts.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/forge.py",
+  "tools/src/beryl_tools/oracle_exports.py",
+  "tools/src/beryl_tools/oracles.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/xmage.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+  "tools/src/beryl_tools/xmage_export.py",
+  "tools/src/beryl_tools/xmage_java.py",
+  "tools/src/beryl_tools/xmage_payment.py",
+  "tools/src/beryl_tools/xmage_trace.py",
+]
 
 # Random scenarios from seeds nobody has played: `next` reserves a batch of new seeds on this
 # machine and yields the scenarios they make.
@@ -48,4 +69,24 @@ resources = ["oracle"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle list oracle-generated"
 next = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle next oracle-generated"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle run oracle-generated {checks}"
-inputs = ["tools/src/beryl_tools/ignite/oracle.py"]
+inputs = [
+  "tools/src/beryl_tools/ignite/oracle.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/card_facts.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/forge.py",
+  "tools/src/beryl_tools/oracle_exports.py",
+  "tools/src/beryl_tools/oracles.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/xmage.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+  "tools/src/beryl_tools/xmage_export.py",
+  "tools/src/beryl_tools/xmage_java.py",
+  "tools/src/beryl_tools/xmage_payment.py",
+  "tools/src/beryl_tools/xmage_trace.py",
+]

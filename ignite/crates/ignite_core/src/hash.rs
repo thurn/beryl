@@ -1,5 +1,6 @@
-//! Input hashes: SHA-256 over a check's sorted inputs, its family's commands, the toolchain
-//! version and, for a check that is not portable, the operating system.
+//! Input hashes: SHA-256 over a check's sorted inputs, the digest its list line names, its
+//! family's commands, the toolchain version and, for a check that is not portable, the operating
+//! system.
 //!
 //! Two trees that give a check the same hash must give it the same result, so the hash covers
 //! everything the check reads. Git already stores a content hash for every file and directory,
@@ -16,13 +17,17 @@ use crate::ids::{InputHash, Oid};
 use crate::manifest::{Family, Manifest, Platforms};
 
 /// Written first, so that a change to the layout below gives every check a new hash.
-const LAYOUT: &str = "ignite input hash 1";
+const LAYOUT: &str = "ignite input hash 2";
 
 /// Everything that goes into one check's input hash.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HashParts<'a> {
     /// Each input path with its git blob or tree ID.
     pub inputs: &'a [(String, Oid)],
+    /// An input of the check's own that no file holds, which its family's `list` command
+    /// computes and prints as `digest`: such as the commit subjects a commit check reads, or an
+    /// oracle scenario's exported input.
+    pub digest: Option<&'a str>,
     /// The family's `list` and `run` commands and its products' build commands.
     pub commands: &'a [String],
     pub toolchain: &'a str,
@@ -42,6 +47,13 @@ pub fn input_hash(parts: &HashParts<'_>) -> InputHash {
     for (path, oid) in inputs {
         field(&mut hasher, path);
         field(&mut hasher, oid.as_str());
+    }
+    match parts.digest {
+        Some(digest) => {
+            count(&mut hasher, 1);
+            field(&mut hasher, digest);
+        }
+        None => count(&mut hasher, 0),
     }
     count(&mut hasher, parts.commands.len());
     for command in parts.commands {
@@ -109,6 +121,7 @@ mod tests {
         let commands = ["cargo nextest run".to_owned()];
         input_hash(&HashParts {
             inputs: &inputs,
+            digest: None,
             commands: &commands,
             toolchain: "1.93.0",
             platform,
@@ -138,6 +151,7 @@ mod tests {
             let commands: Vec<String> = commands.iter().map(|c| (*c).to_owned()).collect();
             input_hash(&HashParts {
                 inputs: &inputs,
+                digest: None,
                 commands: &commands,
                 toolchain: "t",
                 platform: None,
@@ -145,6 +159,23 @@ mod tests {
         };
         assert_ne!(split(&["a b"]), split(&["a", "b"]));
         assert_ne!(split(&["a"]), split(&["b"]));
+    }
+
+    #[test]
+    fn the_digest_enters_the_hash_and_an_empty_one_is_not_none() {
+        let inputs = [("a".to_owned(), oid('1'))];
+        let with = |digest: Option<&str>| {
+            input_hash(&HashParts {
+                inputs: &inputs,
+                digest,
+                commands: &[],
+                toolchain: "t",
+                platform: None,
+            })
+        };
+        assert_eq!(with(Some("d1")), with(Some("d1")));
+        assert_ne!(with(Some("d1")), with(Some("d2")));
+        assert_ne!(with(None), with(Some("")));
     }
 
     #[test]

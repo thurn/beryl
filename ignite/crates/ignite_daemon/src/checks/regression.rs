@@ -79,6 +79,7 @@ impl Checks {
                 for os in &other_platforms {
                     let hash = hash::input_hash(&HashParts {
                         inputs: &keyed.inputs,
+                        digest: keyed.listed.digest.as_deref(),
                         commands: &commands,
                         toolchain: &self.settings.toolchain,
                         platform: Some(*os),

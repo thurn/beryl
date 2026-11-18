@@ -188,6 +188,7 @@ fn the_hash_moves_with_its_inputs_and_not_with_other_files() {
         let ids = object_ids(git, Path::new("tree"), &paths).unwrap();
         input_hash(&HashParts {
             inputs: &ids,
+            digest: None,
             commands: &[],
             toolchain: "1.93.0",
             platform: None,

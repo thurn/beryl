@@ -226,6 +226,7 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
     let builds = Arc::new(FakeBuilds::default());
     let git = Arc::new(FakeGit::default());
     git.set_object("src", Oid::new("a".repeat(40)).unwrap());
+    git.set_tip("staging", Commit::new("ba5e123").unwrap());
     let launcher = Arc::new(ScriptLauncher {
         dir: dir.clone(),
         ..ScriptLauncher::default()
@@ -355,6 +356,31 @@ fn a_cached_pass_runs_nothing_and_builds_nothing() {
     let last = records.last().unwrap();
     assert_eq!((last.verb.as_str(), last.wall_s), ("cached", 0.0));
     assert_eq!(last.family.as_deref(), Some("unit"));
+}
+
+#[test]
+fn a_changed_digest_misses_the_cache_and_list_is_told_the_base() {
+    let world = jsonl_world();
+    let listing = |digest: &str| {
+        *world.launcher.listing.lock().unwrap() =
+            format!("{{\"check\": \"unit:a\", \"digest\": \"{digest}\"}}\n");
+    };
+    listing("d1");
+    assert_eq!(run(&world, &["unit:a"]).ran, 1);
+    assert_eq!(
+        run(&world, &["unit:a"]).from_cache,
+        1,
+        "the same digest is a hit"
+    );
+    listing("d2");
+    assert_eq!(run(&world, &["unit:a"]).ran, 1, "a new digest runs again");
+    let runs = world.launcher.runs.lock().unwrap();
+    let list = runs.iter().find(|s| s.args[0] == "lister").unwrap();
+    let base = ("IGNITE_BASE".to_owned(), "ba5e123".to_owned());
+    assert!(
+        list.env.contains(&base),
+        "list sees the base its digest covers"
+    );
 }
 
 #[test]

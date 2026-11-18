@@ -14,7 +14,7 @@ use ignite_core::traits::{BuildResult, CommandSpec, Error, RunResult};
 
 use super::{
     Built, CheckRun, Checks, Failure, Final, Keyed, Listed, OpenTree, Reported, RunOptions, TRIES,
-    Target, adapters, failure, incomplete, path_text,
+    Target, adapters, base_env, failure, incomplete, path_text,
 };
 use crate::server::Context;
 
@@ -244,9 +244,7 @@ impl Checks {
                 let names: Vec<&CheckName> = checks.iter().map(|k| &k.listed.check).collect();
                 let args = adapters::jsonl_run(family.run.as_deref().unwrap_or_default(), &names);
                 let mut env = vec![(adapters::RESULTS_ENV.to_owned(), path_text(&file))];
-                if let Ok(base) = ctx.git.tip(&ctx.config.repository.staging) {
-                    env.push(("IGNITE_BASE".to_owned(), base.to_string()));
-                }
+                env.extend(base_env(ctx));
                 let result = self.launch(ctx, tree, name, family, args, &tree.path, env, options);
                 let text = fs::read_to_string(&file).unwrap_or_default();
                 let _ = fs::remove_file(&file);

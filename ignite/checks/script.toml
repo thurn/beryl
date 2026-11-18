@@ -83,6 +83,6 @@ list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list 
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run mobile {checks}"
 inputs = [
   "crate:beryl_app",
-  "crate:beryl_mobile",
+  "crate:beryl-mobile",
   "tools/src/beryl_tools/ignite/script.py",
 ]
