@@ -21,7 +21,8 @@ use rusqlite::Connection;
 use crate::Result;
 use crate::migrate::{self, Migration};
 
-/// The local schema, oldest step first. A later change appends a step; it never edits one.
+/// The local schema, oldest step first. A later change appends a step; it never edits one. A
+/// step that is not purely additive carries a `-- breaking:` line (see `migrate`).
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -74,6 +75,18 @@ mod tests {
         let conn = open_in_memory().unwrap();
         assert_eq!(migrate::version(&conn).unwrap(), MIGRATIONS.len() as u32);
         crate::test_support::assert_rows_match_schema(&conn, rows::TABLES);
+    }
+
+    #[test]
+    fn every_migration_is_additive_unless_it_says_otherwise() {
+        migrate::assert_additive_unless_breaking(MIGRATIONS);
+        // Only the outbox rebuild is breaking, so a rollback of any later release still opens.
+        let breaking: Vec<u32> = MIGRATIONS
+            .iter()
+            .filter(|m| m.breaking())
+            .map(|m| m.version)
+            .collect();
+        assert_eq!(breaking, [2]);
     }
 
     #[test]

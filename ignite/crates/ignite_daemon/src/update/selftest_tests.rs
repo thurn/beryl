@@ -95,7 +95,8 @@ fn a_database_newer_than_the_build_fails_and_is_not_changed() {
     {
         let conn = rusqlite::Connection::open(&live).unwrap();
         conn.execute(
-            "UPDATE meta SET value = '999999' WHERE key = 'schema_version'",
+            "UPDATE meta SET value = '999999' \
+             WHERE key IN ('schema_version', 'min_reader_version')",
             [],
         )
         .unwrap();

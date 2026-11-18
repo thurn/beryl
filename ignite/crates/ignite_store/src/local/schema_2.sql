@@ -1,3 +1,4 @@
+-- breaking: the outbox is dropped and rebuilt, so an older build must not write to it.
 -- Schema version 2. A tree has a state, so the daemon can refuse to lease a tree that is being
 -- built or reset. The outbox's sequence numbers become `AUTOINCREMENT`, so one is never reused
 -- after the outbox empties and a late acknowledgement cannot drop a newer entry. SQLite cannot

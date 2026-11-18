@@ -28,7 +28,8 @@ use rusqlite::{Connection, OpenFlags};
 use crate::Result;
 use crate::migrate::{self, Migration};
 
-/// The hub's schema, oldest step first. A later change appends a step; it never edits one.
+/// The hub's schema, oldest step first. A later change appends a step; it never edits one. A
+/// step that is not purely additive carries a `-- breaking:` line (see `migrate`).
 pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
@@ -107,6 +108,28 @@ mod tests {
     fn a_new_database_is_at_the_last_version() {
         let conn = open_in_memory().unwrap();
         assert_eq!(migrate::version(&conn).unwrap(), MIGRATIONS.len() as u32);
+    }
+
+    #[test]
+    fn every_migration_is_additive_unless_it_says_otherwise() {
+        migrate::assert_additive_unless_breaking(MIGRATIONS);
+        assert!(MIGRATIONS.iter().all(|m| !m.breaking()));
+    }
+
+    /// `select` names the ticket columns, so a column added to `tickets` must be added to the
+    /// list on purpose.
+    #[test]
+    fn the_ticket_column_list_is_the_tickets_table() {
+        let conn = open_in_memory().unwrap();
+        let actual: Vec<String> = conn
+            .prepare("SELECT name FROM pragma_table_info('tickets')")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|name| name.unwrap())
+            .collect();
+        let listed: Vec<&str> = tickets::TICKET_COLUMNS.split(',').map(str::trim).collect();
+        assert_eq!(actual, listed);
     }
 
     #[test]
