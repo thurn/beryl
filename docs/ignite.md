@@ -541,9 +541,13 @@ Each machine has a fixed number of trees of two kinds:
 
 - A **ticket tree** is leased to one ticket from `ignite start` until its
   landing or release.
-- A **landing tree** stays at the tip. Landings and tip verification build in
-  it, so each builds only what one change added. A ticket tree last built
-  whatever the tip was when its ticket started, often 20 to 30 commits earlier.
+- A **landing tree** stays at the tip. Tip verification builds in it, and so
+  does a landing when commits landed since the branch's base, so each builds
+  only what one change added. A ticket tree last built whatever the tip was when
+  its ticket started, often 20 to 30 commits earlier. When nothing landed since
+  the base, the landing gates in the ticket tree instead: the rebase changed
+  nothing, so that tree already holds the branch's own build at the tip, and a
+  landing tree would only build it again.
 - Idle work (exploration, cache audits and rebuild counts) also borrows a
   landing tree, but only while another landing tree stays free. Nothing stops
   idle work for a tree, and a rebuild count can hold one for a long build, so a
@@ -859,6 +863,13 @@ The fields:
   that reads something no file holds, such as the commit subjects since the
   branch left staging, also prints a `digest` of it, which enters its input
   hash. `run` runs the checks named.
+- A listing is kept under the family's name and the hash of everything `list`
+  can read, in the daemon's memory, its local database and the hub, so a listing
+  one machine made serves every machine whose tree has that hash. A listing is
+  also checked against its checks' own inputs and the folders holding them. A
+  listing with no checks, with a digest, or with refused checks is never kept,
+  so `list` must read nothing beyond the family's inputs, the products it needs
+  and what its checks print as their own inputs.
 - `always = true` marks a family that blocks every landing its inputs touch. See
   [Where regression checks run](#where-regression-checks-run).
 - `covered_by` names a family whose checks find every fault this family's checks
@@ -1085,6 +1096,10 @@ happens once for everyone.
 
 ### The threshold and the cap
 
+Only families the change can affect are scored (see [Landing](#landing)). A
+family it cannot affect has the same inputs as at the tip, so its result there
+stands.
+
 The landing gate runs every check whose score is at or above a threshold, in
 score order, until their summed cost reaches a cap:
 
@@ -1133,8 +1148,16 @@ The steps, in order:
 2. Rebase the branch onto the tip. A conflict exits with code 3 and the files.
 3. Take a landing tree, unless the ticket tree is already at the tip. Check out
    the rebased commit there.
-4. Compute input hashes, look up the result cache, build what the remaining
-   checks need, and run the always set and the gate.
+4. Decide which families the change can affect, from the paths that differ
+   between the rebased commit and the tip, before anything is listed or built. A
+   family is left out when no changed path matches its inputs, its
+   `package_inputs`, the inputs of the products it needs, the lock file,
+   manifest and toolchain file of the Cargo workspaces those name, its manifest
+   file, or any input its checks printed in its kept listing. A family with no
+   kept listing for the tree's inputs is listed. The always set follows the same
+   rule. Then compute input hashes, look up the result cache, build what the
+   remaining checks need, and run the always set and the gate. The output's
+   `scope` line says how many families were left out.
 5. Take the hub's short `staging` lease. If the tip moved since step 2, release
    it and go back to step 2. The second pass is mostly cache hits. A landing
    that loses this race three times takes the lease before its next pass and
@@ -1213,7 +1236,9 @@ How a daemon verifies a tip:
   later landing already repaired files nothing.
 
 Because results are cached by input, a check that only the sweeps ran every
-three hours now runs exactly when something it reads changes.
+three hours now runs exactly when something it reads changes. Every family's
+listing is kept as [Declaring a family](#declaring-a-family) describes, so a
+round whose families' inputs did not change lists and builds nothing.
 
 ### How long a round takes
 
