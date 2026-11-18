@@ -52,6 +52,8 @@ pub struct Config {
     pub gate: Gate,
     #[serde(default)]
     pub improvement: Improvement,
+    #[serde(default)]
+    pub rules: Rules,
     /// Machines by hostname.
     pub machine: BTreeMap<String, Machine>,
     /// Edits whose rebuild cost `ignite rebuild` measures.
@@ -139,6 +141,39 @@ impl Default for Improvement {
             backlog_high: 0.20,
             window: 20,
         }
+    }
+}
+
+/// How the improvement rules file tickets.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rules {
+    /// Rules whose findings show on the dashboard and file no ticket, such as one that
+    /// compares model tiers, because that choice stays with people.
+    pub report_only: Vec<String>,
+    /// Checks that `never-caught` never names, each a family (`clippy`) or a whole check name
+    /// (`family:name`). They are cheap, and what they guard is too basic to give up for want
+    /// of a recent failure.
+    pub protected: Vec<String>,
+}
+
+impl Default for Rules {
+    fn default() -> Self {
+        let names = |list: &[&str]| list.iter().map(|&name| name.to_owned()).collect();
+        Self {
+            report_only: names(&["tier-gap"]),
+            protected: names(&["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]),
+        }
+    }
+}
+
+impl Rules {
+    /// Whether `check`, named `family:name`, is protected by its own name or its family's.
+    pub fn is_protected(&self, check: &str) -> bool {
+        let family = check.split_once(':').map_or(check, |(family, _)| family);
+        self.protected
+            .iter()
+            .any(|entry| entry == check || entry == family)
     }
 }
 
@@ -356,6 +391,7 @@ products = ["clippy", "rust-tests"]
         let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
         assert!((config.gate.threshold - 0.004).abs() < 1e-12);
         assert_eq!(config.improvement, Improvement::default());
+        assert_eq!(config.rules, Rules::default());
         let jarvis = config.machine("jarvis").unwrap();
         assert_eq!((jarvis.ticket_trees, jarvis.landing_trees), (24, 3));
         assert_eq!(jarvis.resources["browser-pages"], 9);
@@ -396,5 +432,18 @@ products = ["clippy", "rust-tests"]
         let text = std::fs::read_to_string(path).unwrap();
         let config = Config::parse("ignite.toml", &text).unwrap();
         assert!(config.machine.len() >= 2);
+        assert_eq!(config.rules, Rules::default());
+    }
+
+    #[test]
+    fn a_check_is_protected_by_its_own_name_or_its_family() {
+        let rules = Rules {
+            report_only: Vec::new(),
+            protected: vec!["lint".to_owned(), "tests:boots".to_owned()],
+        };
+        assert!(rules.is_protected("lint:workspace"));
+        assert!(rules.is_protected("tests:boots"));
+        assert!(!rules.is_protected("tests:other"));
+        assert!(!rules.is_protected("linter:workspace"));
     }
 }

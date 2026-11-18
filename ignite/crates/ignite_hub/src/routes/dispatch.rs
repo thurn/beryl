@@ -420,7 +420,7 @@ fn apply(
 /// Writes ticket columns that the batch's fields do not cover (the session, tree and what
 /// landed), as one change: the next feed position becomes the ticket's version, with a history
 /// row of `{column: [old, new]}`, so that a reader caching on the feed position sees it.
-fn set_columns(
+pub(crate) fn set_columns(
     conn: &Connection,
     id: &str,
     actor: &str,

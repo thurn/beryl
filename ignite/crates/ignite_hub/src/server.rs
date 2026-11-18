@@ -19,7 +19,7 @@ use rusqlite::Connection;
 use serde_json::json;
 use tiny_http::{Header, Server};
 
-use ignite_core::config::Config;
+use ignite_core::config::{Config, Rules};
 use ignite_core::time::{SystemClock, Timestamp};
 use ignite_core::traits::Clock;
 use ignite_store::hub;
@@ -27,6 +27,7 @@ use ignite_store::hub;
 use crate::auth;
 use crate::dashboard;
 use crate::routes::{self, Request, Response};
+use crate::rules;
 
 /// The largest request body the hub reads, as the ticket service allowed.
 const MAX_BODY: u64 = 100 * 1024 * 1024;
@@ -58,6 +59,7 @@ impl HubServer {
         let server = Arc::new(server);
         let shared = Arc::new(Shared {
             project: self.config.hub.project.clone(),
+            rules: self.config.rules.clone(),
             database: self.database.clone(),
             pool: Mutex::new(vec![first]),
         });
@@ -102,6 +104,8 @@ impl RunningHub {
 
 struct Shared {
     project: String,
+    /// The improvement rules' settings, evaluated when records or efficiency rows arrive.
+    rules: Rules,
     database: PathBuf,
     /// Idle connections; a request takes one or opens a new one, and gives it back.
     pool: Mutex<Vec<Connection>>,
@@ -129,7 +133,11 @@ impl Shared {
 }
 
 fn answer(shared: &Shared, mut http: tiny_http::Request) {
-    let response = respond(shared, &mut http, SystemClock.now());
+    let now = SystemClock.now();
+    let path = http.url().split('?').next().unwrap_or_default().to_owned();
+    let response = respond(shared, &mut http, now);
+    let new_records = path.ends_with("/api/records") || path.ends_with("/api/metrics/import");
+    let evaluate = new_records && response.status == 200;
     let mut reply = tiny_http::Response::from_data(response.body).with_status_code(response.status);
     let headers =
         std::iter::once(("Content-Type", response.content_type.to_owned())).chain(response.headers);
@@ -139,6 +147,22 @@ fn answer(shared: &Shared, mut http: tiny_http::Request) {
         }
     }
     let _ = http.respond(reply);
+    if evaluate {
+        evaluate_rules(shared, now);
+    }
+}
+
+/// Evaluates the improvement rules after new records or efficiency rows have been stored and
+/// answered, so the machine that sent them does not wait. A failed evaluation leaves the rows
+/// stored, and the next arrival tries again.
+fn evaluate_rules(shared: &Shared, now: Timestamp) {
+    let Ok(mut conn) = shared.connection() else {
+        return;
+    };
+    if let Err(error) = rules::filing::evaluate_if_due(&mut conn, &shared.rules, now) {
+        eprintln!("ignite hub: evaluating the improvement rules failed: {error}");
+    }
+    shared.give_back(conn);
 }
 
 fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Response {

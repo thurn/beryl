@@ -26,6 +26,12 @@ backlog_low = 0.05
 backlog_high = 0.20
 window = 20
 
+# Improvement rules (docs/ignite.md, "Improvement tickets"). A report-only rule files nothing.
+# `never-caught` never names a protected check: a family, or a whole `family:name`.
+[rules]
+report_only = ["tier-gap"]
+protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
+
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"

@@ -10,13 +10,11 @@
 //!   `ignite.toml`, not at the hub.
 //! - The hub holds no check manifests, so a ticket's families are empty and every machine can
 //!   run them. A `needs:<os>` label still limits a ticket to one operating system.
-//! - Last week's totals for the improvement share come from the records: core-hours from CPU
-//!   seconds and agent-hours from the wall time of `agent` commands. Records hold no dollars, so
-//!   that unit is left out of the backlog fraction.
+//! - The backlog's ratios for the improvement share come from `crate::rules::backlog`.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use rusqlite::{Connection, params};
+use rusqlite::Connection;
 
 use ignite_core::admission::{self, Worked};
 use ignite_core::config::Improvement;
@@ -24,13 +22,12 @@ use ignite_core::dispatch::{self, ReadyTicket, TicketKind};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
-use ignite_core::shares::{self, Amounts, EpicDemand, Group, Unit};
+use ignite_core::shares::{self, EpicDemand, Group, Unit};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{fleet, tickets};
 use ignite_store::{Result, StoreError};
 
-/// Seconds in the week that last week's totals cover.
-const WEEK_SECONDS: f64 = 7.0 * 86_400.0;
+use crate::rules;
 
 /// The ticket to reserve for `free`'s machine, already reserved and logged, or `None`. Call it
 /// inside an `IMMEDIATE` transaction after lapsing old reservations, so that two machines asking
@@ -389,10 +386,7 @@ fn improvements_due(conn: &Connection, machine: &str, now: Timestamp) -> Result<
             _ => TicketKind::Ordinary,
         })
         .collect();
-    let share = shares::improvement_share(
-        shares::backlog_fraction(&backlog(conn)?, &last_week(conn, now)?),
-        &config,
-    );
+    let share = shares::improvement_share(rules::backlog::ratios(conn, now)?.fraction, &config);
     if !shares::improvements_due(&kinds, share, &config) {
         return Ok(None);
     }
@@ -403,45 +397,6 @@ fn improvements_due(conn: &Connection, machine: &str, now: Timestamp) -> Result<
             .and_then(|saving| Unit::parse(&saving.unit));
     }
     Ok(Some(shares::first_unit(last)))
-}
-
-/// The estimated weekly saving of every open improvement ticket, by unit.
-fn backlog(conn: &Connection) -> Result<Amounts> {
-    let mut statement =
-        conn.prepare("SELECT saving FROM tickets WHERE status != 'closed' AND saving IS NOT NULL")?;
-    let savings = statement
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    let mut amounts = Amounts::default();
-    for text in savings {
-        let Ok(saving) = serde_json::from_str::<Saving>(&text) else {
-            continue;
-        };
-        match Unit::parse(&saving.unit) {
-            Some(Unit::Dollars) => amounts.dollars += saving.amount,
-            Some(Unit::AgentHours) => amounts.agent_hours += saving.amount,
-            Some(Unit::CoreHours) => amounts.core_hours += saving.amount,
-            None => {}
-        }
-    }
-    Ok(amounts)
-}
-
-/// The fleet's use over the week before `now`, from the records.
-fn last_week(conn: &Connection, now: Timestamp) -> Result<Amounts> {
-    let since = now.plus_seconds(-WEEK_SECONDS).to_string();
-    let (cpu_s, agent_s) = conn.query_row(
-        "SELECT COALESCE(SUM(cpu_s), 0),
-           COALESCE(SUM(CASE WHEN class = 'agent' THEN wall_s ELSE 0 END), 0)
-         FROM records WHERE at >= ?1",
-        params![since],
-        |row| Ok((row.get::<_, f64>(0)?, row.get::<_, f64>(1)?)),
-    )?;
-    Ok(Amounts {
-        dollars: 0.0,
-        agent_hours: agent_s / 3600.0,
-        core_hours: cpu_s / 3600.0,
-    })
 }
 
 /// Each worker's last ticket's files, as its machine last reported them.
