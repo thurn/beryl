@@ -2,8 +2,8 @@
 
 Ignite is the build, check and delivery system. `docs/ignite.md` says what it
 does; the code contract in the design field of the epic `Thrh4`
-(`tk show Thrh4 --json`) says where each part lives and which ticket owns which
-file. These are the contract's rules.
+(`ignite ticket show Thrh4 --json`) says where each part lives and which ticket
+owns which file. These are the contract's rules.
 
 ## The workspace
 
@@ -15,7 +15,8 @@ file. These are the contract's rules.
   HTTP server and dashboard), `ignite_daemon` (one per machine) and `ignite_cli`
   (the `ignite` executable).
 - Check it with `cd ignite && cargo test -p <crate>` for one crate, or the
-  `ignite` lane (`just ci ignite`) for formatting, clippy and every test.
+  `ignite` check family (`ignite test ignite:fmt ignite:clippy ignite:test`) for
+  formatting, clippy and every test.
 
 ## Rules
 

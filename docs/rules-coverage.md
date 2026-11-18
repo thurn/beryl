@@ -8,8 +8,8 @@ the game uses costs one predictable branch.
 26 hard effect types and sequenced them by the cube cards they unlocked. This
 version turns that list into one piece of work: 24 keystone cards, each chosen
 because it forces a decision that would be expensive to change once thousands of
-cards exist. The work is tracked as an Enact epic in tickets; this document is
-the plan its tickets are written against.*
+cards exist. The work is tracked as an epic in tickets; this document is the
+plan its tickets are written against.*
 
 - **In scope:** the engine mechanisms the keystone cards need, the keystone
   cards, and the partner cards their scenarios need. Each keystone is playable

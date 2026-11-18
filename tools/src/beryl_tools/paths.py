@@ -22,7 +22,7 @@ AGENT_ENV = (
     "CLAUDECODE",
     "CLAUDE_CODE_SESSION_ID",
     "CODEX_THREAD_ID",
-    "ENACT_SESSION",
+    "IGNITE_SESSION",
     "CI",
 )
 

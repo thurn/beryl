@@ -6,18 +6,18 @@ way [benchmarking.md](benchmarking.md) describes.*
 
 This is the design of the Rust rules engine and of the boundaries that search
 and the desktop UI build on. It is not an implementation plan: milestone plans
-are Enact epics in tickets, written against this document. It was written when
-the target was cube draft, and the project has since moved to fixed decklists,
-so some examples and comments name cards from the earlier target. Milestone 1
-built the engine, the game UI and the first AI opponents for a mirror match of
-the deck in `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a
-mythic drafter's WU Control deck from the cube's Arena run. It built the
-structures described here, but only the mechanics its cards use. More decks come
-in later milestones. The twenty-two decisions it rests on are marked **D1** to
-**D22** where they apply and listed again in the first appendix. On 2026-11-10
-the structure was rebuilt so that it would hold every Magic card (Project 50k):
-a kernel crate that owns the state, card behavior as effect data, set crates and
-a card store for the whole pool. The decisions of that rebuild are marked **K1**
+are epics in tickets, written against this document. It was written when the
+target was cube draft, and the project has since moved to fixed decklists, so
+some examples and comments name cards from the earlier target. Milestone 1 built
+the engine, the game UI and the first AI opponents for a mirror match of the
+deck in `docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt`, a mythic
+drafter's WU Control deck from the cube's Arena run. It built the structures
+described here, but only the mechanics its cards use. More decks come in later
+milestones. The twenty-two decisions it rests on are marked **D1** to **D22**
+where they apply and listed again in the first appendix. On 2026-11-10 the
+structure was rebuilt so that it would hold every Magic card (Project 50k): a
+kernel crate that owns the state, card behavior as effect data, set crates and a
+card store for the whole pool. The decisions of that rebuild are marked **K1**
 to **K29** and listed in the second appendix, with the measurements behind them.
 
 ## 1. Goals

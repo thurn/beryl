@@ -30,10 +30,10 @@ what the first measurements found.
 
 ## Related information
 
-- Epic `by-ig5e` (`tk show Tig5e`) tracks the work and records the decisions
-  taken with the user on 2026-11-15.
-- [`docs/checks.md`](checks.md) describes the fast check, slow CI, the run log
-  and the CPU sampler that this design reads.
+- Epic `by-ig5e` (`ignite ticket show Tig5e`) tracks the work and records the
+  decisions taken with the user on 2026-11-15.
+- `docs/checks.md`, deleted when Ignite replaced Enact, described the fast
+  check, slow CI, the run log and the CPU sampler that this design reads.
 - `tools/src/beryl_tools/runlog.py` defines the run log, one line per check per
   run.
 - `tools/src/beryl_tools/cpu.py` defines the CPU sampler and its row format.

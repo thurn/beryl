@@ -3,8 +3,7 @@
 *The plan for the second half of Project 50k: an engine structure and a card
 workflow that would still work with a full implementation of the Comprehensive
 Rules and 50,000 card definitions. Decided 2026-11-15 in a design interview. The
-work is the Enact epic `by-ptc7`, whose tickets are written against this
-document.*
+work is the epic `by-ptc7`, whose tickets are written against this document.*
 
 Part I (`by-w8gv`) rebuilt the engine around a kernel crate, card behavior as
 effect data, set crates and a card store. The rules keystones epic (`by-bajq`,
@@ -948,7 +947,7 @@ The whole epic waits for `by-bajq` to close.
 ## Risks
 
 - **The module passes collide.** Fifteen sessions move files in one crate at
-  once. Each pass owns a disjoint set of files, `enact push` rebases, and the
+  once. Each pass owns a disjoint set of files, `ignite land` rebases, and the
   shared files (`lib.rs`, `game.rs`) are edited additively. The first commit of
   each pass, the move, lands by itself so that the others rebase over a small
   change.

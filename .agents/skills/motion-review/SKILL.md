@@ -103,7 +103,7 @@ it names. `PASS` is every line of the rubric scored pass or note. When the work
 has a ticket, put the report there too as one comment:
 
 ```sh
-tk comments add <ticket> "Motion review, round <n> (<model>): <its report>"
+ignite ticket comment <ticket> "Motion review, round <n> (<model>): <its report>"
 ```
 
 ## 4. After the report
