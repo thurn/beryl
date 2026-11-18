@@ -770,3 +770,21 @@ fn the_deploy_state_gives_why_a_build_failed_or_was_rolled_back() {
     git.set_not_ancestor(&commit(NEW), &commit(OLD));
     assert!(!update.reached(&commit(OLD), &commit(NEW)));
 }
+
+#[test]
+fn a_drill_restart_drains_and_restarts_into_the_given_executable_even_unstored() {
+    let (mut update, _git, restart) = daemon(OLD);
+    update.own = None;
+    let drain = Arc::new(FakeDrain {
+        restart: restart.clone(),
+        calls: Mutex::default(),
+    });
+    let _ = update.drain.set(drain.clone());
+    let own = PathBuf::from("/opt/ignite/ignite");
+    update.restart_now(&own, &|| false);
+    assert_eq!(restart.started(), [own]);
+    assert_eq!(
+        *drain.calls.lock().unwrap(),
+        ["drain 30s after 0", "undrain"]
+    );
+}

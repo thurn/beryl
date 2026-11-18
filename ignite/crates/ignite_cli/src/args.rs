@@ -248,6 +248,9 @@ pub enum InternalCommand {
     /// Run the verb of a running handle in this process, from start to finish (a verb process),
     /// and write its reply into the handle's row.
     Verb { handle: String },
+    /// Make the running daemon restart into its own executable, as it does into a new release,
+    /// and wait until the new daemon answers. A drill: refused to a session that holds a tree.
+    Restart,
 }
 
 /// Arguments passed through untouched.
@@ -723,6 +726,14 @@ mod tests {
             Command::Internal {
                 command: InternalCommand::Verb { handle }
             } if handle == "L-6"
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["ignite", "internal", "restart"])
+                .unwrap()
+                .command,
+            Command::Internal {
+                command: InternalCommand::Restart
+            }
         ));
     }
 }

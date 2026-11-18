@@ -77,6 +77,9 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Internal {
             command: InternalCommand::Verb { handle },
         } => exit_reply(ignite_daemon::verbproc::run(handle, &current_dir())),
+        Command::Internal {
+            command: InternalCommand::Restart,
+        } => restart(current_dir()),
         _ => {
             let session = client::session_from_env(|name| std::env::var(name).ok());
             let request = client::request(verb, raw, current_dir(), session);
@@ -138,6 +141,90 @@ fn prime(cwd: &std::path::Path) -> Reply {
     match config_above(cwd) {
         Ok((_, config)) => Reply::text(Exit::Success, ignite_core::prime::prime(&config)),
         Err(failure) => failure.into_reply(),
+    }
+}
+
+/// `ignite internal restart`: asks the daemon to restart into its own executable (see
+/// `ignite_daemon::main::drill`), then asks again until the new daemon answers, and says how
+/// long after the request that was. The request is sent once: a connection that drops before
+/// the reply means the daemon restarted before its reply was written.
+fn restart(cwd: std::path::PathBuf) -> Reply {
+    use ignite_core::protocol::client::{Exit, Request};
+    use ignite_daemon::main::drill::{PROBE, RESTART_VERB};
+    use ignite_daemon::server::{exchange, is_restarting};
+    let socket = ignite_daemon::server::default_socket();
+    let name = socket.to_string_lossy();
+    let request = Request {
+        verb: RESTART_VERB.to_owned(),
+        args: Vec::new(),
+        cwd,
+        session: client::session_from_env(|name| std::env::var(name).ok()),
+        wait_s: client::DEFAULT_WAIT_S,
+        pid: Some(std::process::id()),
+    };
+    let pid_in = |reply: &Reply| {
+        reply
+            .json
+            .as_ref()
+            .and_then(|json| json.get("pid"))
+            .and_then(serde_json::Value::as_u64)
+    };
+    let asked = std::time::Instant::now();
+    let from = match exchange(&name, &request, None) {
+        Ok(reply) if is_restarting(&reply) => None,
+        Ok(reply) if reply.exit != Exit::Success => return reply,
+        Ok(reply) => pid_in(&reply),
+        Err(cut) if cut.sent => None,
+        Err(cut) => {
+            return Reply::text(
+                Exit::Usage,
+                format!(
+                    "failed   the daemon at {} did not answer: {}",
+                    socket.display(),
+                    cut.error
+                ),
+            );
+        }
+    };
+    let probe = Request {
+        args: vec![PROBE.to_owned()],
+        ..request
+    };
+    let pid = loop {
+        match exchange(&name, &probe, None) {
+            Ok(reply) if reply.exit == Exit::Success && !is_restarting(&reply) => {
+                break pid_in(&reply);
+            }
+            _ if asked.elapsed() >= reattach::RETRY_FOR => {
+                return Reply::text(
+                    Exit::Unreachable,
+                    format!(
+                        "failed   no daemon answered at {} in the {} minutes after the restart\n\
+                         next     ignite doctor",
+                        socket.display(),
+                        reattach::RETRY_FOR.as_secs() / 60
+                    ),
+                );
+            }
+            _ => std::thread::sleep(std::time::Duration::from_millis(50)),
+        }
+    };
+    let after_ms = asked.elapsed().as_millis();
+    let named = |pid: Option<u64>| pid.map_or_else(|| "?".to_owned(), |pid| pid.to_string());
+    Reply {
+        json: Some(serde_json::json!({
+            "from_pid": from,
+            "pid": pid,
+            "answered_after_ms": after_ms,
+        })),
+        ..Reply::text(
+            Exit::Success,
+            format!(
+                "restart  daemon {} restarted as {}; it answered {after_ms} ms after the request",
+                named(from),
+                named(pid)
+            ),
+        )
     }
 }
 

@@ -17,6 +17,7 @@
 
 pub(crate) mod assemble;
 mod desk;
+pub mod drill;
 mod loops;
 mod selfupdate;
 
@@ -123,6 +124,12 @@ impl Daemon {
         };
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
         let _ = parts.update.drain.set(server.clone());
+        server.register_late(Box::new(drill::RestartVerb {
+            update: parts.update.clone(),
+            server: Arc::downgrade(&server),
+            executable: base.options.ignite.clone(),
+            database: base.options.home.root.join("daemon.db"),
+        }));
         Ok(Daemon {
             server,
             ctx,
@@ -282,6 +289,10 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     // First, before anything this build could fail at: records the start, and goes back to the
     // last-good build if this one crash-loops.
     if let Some(code) = crate::update::guard_start(&home) {
+        return code;
+    }
+    // A rollback drill: a build the fault file names exits as one that crashes at start would.
+    if let Some(code) = drill::fault_exit(&home, running_version) {
         return code;
     }
     let repo = checkout(cwd, &home);

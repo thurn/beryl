@@ -443,20 +443,39 @@ impl SelfUpdate {
             return;
         }
         self.restart_hub_first(reported.as_ref(), &executable);
+        self.drain_and_restart(&executable);
+        // Only a failed restart returns. Forget the build so the next heartbeat does not
+        // retry it every few seconds; the next move of `master` prepares it again.
+        *self.ready() = None;
+    }
+
+    /// Restarts the daemon into `executable` now, by the same steps as a restart into a release,
+    /// for `ignite internal restart`, which drills a restart into the daemon's own executable:
+    /// waits while `critical` says a verb is in a part that may not be cut short, stops taking
+    /// requests, waits for the verbs on the daemon's threads, records a clean stop and restarts.
+    /// Returns only if the restart failed, after taking requests again.
+    pub fn restart_now(&self, executable: &std::path::Path, critical: &dyn Fn() -> bool) {
+        while critical() {
+            thread::sleep(std::time::Duration::from_secs(1));
+        }
+        self.drain_and_restart(executable);
+    }
+
+    /// Stops taking requests, waits up to [`DRAIN_WAIT`] for the verbs on the daemon's threads,
+    /// records a clean stop and restarts into `executable`. Returns only if the restart failed,
+    /// after taking requests again.
+    fn drain_and_restart(&self, executable: &std::path::Path) {
         let drain = self.drain.get();
         if let Some(drain) = drain {
             drain.drain(DRAIN_WAIT);
         }
         eprintln!("ignite: restarting into {}", executable.display());
         crate::update::record_clean_stop_from(&self.store);
-        let error = restart_into(self.restart.as_ref(), &executable);
-        // Only a failed restart returns. Forget the build so the next heartbeat does not
-        // retry it every few seconds; the next move of `master` prepares it again.
+        let error = restart_into(self.restart.as_ref(), executable);
         eprintln!("ignite: {error}");
         if let Some(drain) = drain {
             drain.undrain();
         }
-        *self.ready() = None;
     }
 
     /// Whether this is the hub's machine and the daemon runs `bin/current`, which the hub's

@@ -39,6 +39,7 @@ use ignite_store::local::{rows, trees};
 
 use crate::handles::{Handles, WaitVerb, lock};
 
+mod late;
 mod process;
 mod resume;
 mod wire;
@@ -251,6 +252,8 @@ pub struct Server {
     /// Set while the daemon is about to restart: new requests are refused (see
     /// [`Server::drain`]).
     draining: AtomicBool,
+    /// Verbs registered after the server was built (see `server/late.rs`).
+    late: std::sync::RwLock<Registry>,
     /// Held only by the server, so the threads it starts can tell when it is gone.
     token: Arc<()>,
 }
@@ -306,6 +309,7 @@ impl Server {
             running: Arc::new(AtomicUsize::new(0)),
             processes,
             draining: AtomicBool::new(false),
+            late: std::sync::RwLock::default(),
             token: Arc::new(()),
         };
         if let Some(processes) = &server.processes {
@@ -404,7 +408,10 @@ impl Server {
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
         ctx.tree = ctx.tree_of(&req.cwd);
-        let verb = self.registry.get(&req.verb);
+        let verb = self
+            .registry
+            .get(&req.verb)
+            .or_else(|| self.late_verb(&req.verb));
         if verb.as_ref().is_none_or(|verb| verb.needs_the_tree_lease())
             && let Some(refusal) = self.refuse_without_lease(&ctx)
         {
