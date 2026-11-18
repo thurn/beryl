@@ -891,6 +891,10 @@ How Ignite uses this:
   and ends every process still in it, as Windows does through the job object.
 - Each compiler process is counted by the `RUSTC_WRAPPER`, and each Rust test
   process by a Cargo target runner, so costs are known per crate and per test.
+  The daemon's builds and each `nextest` family's `run` command get both, with a
+  units file of their own, and the units are stored on the command's record.
+  (cargo-nextest's `--list` calls also pass through the runner and appear as
+  units of mode `run`.)
 - Where one process runs many checks, as pytest does, the process's instructions
   are divided among its checks by the seconds each reports.
 - Windows reports no instruction count. Cygnus records CPU seconds, and a
