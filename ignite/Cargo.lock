@@ -329,6 +329,7 @@ dependencies = [
  "ignite_daemon",
  "ignite_git",
  "ignite_os",
+ "ignite_store",
  "serde",
  "serde_json",
 ]

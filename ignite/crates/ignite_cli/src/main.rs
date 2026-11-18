@@ -3,6 +3,7 @@
 
 mod args;
 mod client;
+mod import;
 mod manifest;
 mod plan;
 mod replay;
@@ -41,6 +42,7 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Ticket { command } => ticket::run(command),
         Command::Plan { command } => plan::run(command),
         Command::Manifest { command } => manifest::run(command, &current_dir()),
+        Command::Import { .. } => import::run(&cli.command, &current_dir()),
         Command::Gate { command } => replay::run(command),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
         Command::Supervise { spec } => exit_reply(ignite_daemon::supervise::supervise(spec)),

@@ -13,7 +13,7 @@ use ignite_core::protocol::client::{Exit, Reply};
 use crate::args::ManifestCommand;
 
 /// The configuration file at the checkout's root.
-const CONFIG_FILE: &str = "ignite.toml";
+pub(crate) const CONFIG_FILE: &str = "ignite.toml";
 
 pub fn run(command: &ManifestCommand, dir: &Path) -> Reply {
     match command {
@@ -64,7 +64,7 @@ fn read_manifest(dir: &Path) -> Result<Manifest, String> {
 }
 
 /// The packages of every Cargo workspace in the checkout: each tracked lock file marks one.
-fn crate_graph(root: &Path, tracked: &[String]) -> Result<CrateGraph, String> {
+pub(crate) fn crate_graph(root: &Path, tracked: &[String]) -> Result<CrateGraph, String> {
     let mut graph = CrateGraph::default();
     let root_text = root.to_string_lossy();
     for lock in tracked

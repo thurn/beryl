@@ -136,17 +136,27 @@ pub enum Command {
         #[command(subcommand)]
         command: ManifestCommand,
     },
-    /// Import the old systems' data into the hub's database.
+    /// Import the old systems' data into the hub's database. Safe to run twice.
     Import {
-        /// The old ticket service's database file.
+        /// The hub's database file, created if it does not exist.
+        #[arg(long)]
+        hub: PathBuf,
+        /// The old ticket service's database file, which is only read.
         #[arg(long)]
         tickets: Option<PathBuf>,
-        /// The old run log.
-        #[arg(long)]
+        /// The folder of the old run log's `*.jsonl` files. Verdicts are read from the
+        /// tickets, so import those first or in the same command.
+        #[arg(long, alias = "runlog")]
         run_log: Option<PathBuf>,
-        /// The recorded per-crate compile timings.
+        /// The old efficiency store, whose `compile_timings` table holds per-crate timings.
         #[arg(long)]
         compile_timings: Option<PathBuf>,
+        /// An old lane whose checks are exploration, left out of the check records; repeatable.
+        #[arg(long)]
+        exploration: Vec<String>,
+        /// Report what would be written, and write nothing.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Run the daemon.
     #[command(hide = true)]

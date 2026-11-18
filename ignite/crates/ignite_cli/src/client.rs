@@ -22,7 +22,6 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
     ),
     ("dispatch", "Dispatcher endpoint and the pool"),
     ("gate", "Gate replay"),
-    ("import", "Import from the old systems"),
     ("land", "Landing"),
     ("plan", "Plan check"),
     ("pool", "Dispatcher endpoint and the pool"),
