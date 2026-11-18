@@ -25,6 +25,7 @@ fn status_display(status: Status) -> (Tone, &'static str) {
         Status::Blocked => (Tone::Amber, "Blocked"),
         Status::Open => (Tone::Neutral, "Open"),
         Status::Deferred => (Tone::Muted, "Deferred"),
+        Status::PendingApproval => (Tone::Muted, "Pending approval"),
         Status::Closed => (Tone::Green, "Closed"),
     }
 }

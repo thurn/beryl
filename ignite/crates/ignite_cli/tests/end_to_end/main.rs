@@ -187,5 +187,9 @@ fn a_change_that_breaks_a_check_below_the_threshold_files_a_regression() {
         .iter()
         .find(|t| t.title.contains("extra:beta_adds"))
         .unwrap_or_else(|| panic!("no regression ticket among {tickets:?}"));
-    assert_eq!(regression.status, Status::Open);
+    assert_eq!(
+        regression.status,
+        Status::PendingApproval,
+        "a regression waits for a person to release it like any other ticket"
+    );
 }

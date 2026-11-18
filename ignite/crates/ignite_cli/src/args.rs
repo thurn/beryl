@@ -401,6 +401,10 @@ pub enum TicketCommand {
         /// Comma-separated tickets the new one depends on.
         #[arg(long, value_delimiter = ',')]
         deps: Vec<String>,
+        /// File it released for implementation. Without this flag the ticket is filed
+        /// `pending_approval`, and the pool is never offered it until a person releases it.
+        #[arg(long)]
+        release: bool,
     },
     /// Show one or more tickets.
     Show {
@@ -452,6 +456,10 @@ pub enum TicketCommand {
         add_label: Vec<String>,
         #[arg(long)]
         remove_label: Vec<String>,
+        /// Release the ticket, and every descendant still pending approval, for
+        /// implementation: each becomes `open`, so the pool may be offered it.
+        #[arg(long, conflicts_with = "status")]
+        release: bool,
     },
     /// Close a ticket.
     Close {

@@ -106,12 +106,13 @@ fn status_rank(status: Status) -> u8 {
         Status::Blocked => 1,
         Status::Open => 2,
         Status::Deferred => 3,
-        Status::Closed => 4,
+        Status::PendingApproval => 4,
+        Status::Closed => 5,
     }
 }
 
-/// Orders cards by what needs attention: working, blocked, open, deferred, closed; then by
-/// priority; then the most recently updated first.
+/// Orders cards by what needs attention: working, blocked, open, deferred, pending approval,
+/// closed; then by priority; then the most recently updated first.
 pub fn by_attention(left: &Card, right: &Card) -> std::cmp::Ordering {
     status_rank(left.status)
         .cmp(&status_rank(right.status))

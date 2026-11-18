@@ -123,6 +123,24 @@ fn tickets_can_be_created_shown_listed_linked_claimed_and_closed() {
     assert_eq!(hub.json(&format!("show {child_id}"))["cores"], 1.5);
 
     hub.json(&format!("dep add {other_id} {child_id}"));
+    assert_eq!(
+        hub.json(&format!("show {child_id}"))["status"],
+        "pending_approval",
+        "a ticket is filed pending approval"
+    );
+    assert_eq!(
+        hub.json("ready").as_array().unwrap().len(),
+        0,
+        "nothing is ready before a person releases it"
+    );
+    hub.json(&format!("update {epic_id} --release"));
+    for id in [&epic_id, &child_id, &other_id] {
+        assert_eq!(
+            hub.json(&format!("show {id}"))["status"],
+            "open",
+            "releasing the epic releases {id} below it"
+        );
+    }
     let ready = hub.json("ready");
     let ids: Vec<&str> = ready
         .as_array()
@@ -255,7 +273,7 @@ fn wait_returns_when_another_writer_closes_the_ticket() {
 #[test]
 fn wait_that_runs_out_exits_with_the_running_code_and_a_met_status_returns_at_once() {
     let hub = Fixture::new("timeout");
-    let id = hub.json("create Open")["results"][0]["id"]
+    let id = hub.json("create Open --release")["results"][0]["id"]
         .as_str()
         .unwrap()
         .to_owned();
@@ -301,7 +319,7 @@ fn dep_list_multi_show_and_open_children_gather_related_tickets() {
     let id = |reply: Value| reply["results"][0]["id"].as_str().unwrap().to_owned();
     let epic = id(hub.json("create Epic --type epic"));
     let first = id(hub.json(&format!("create First --parent {epic}")));
-    let second = id(hub.json(&format!("create Second --parent {epic}")));
+    let second = id(hub.json(&format!("create Second --parent {epic} --release")));
     let done = id(hub.json(&format!("create Done --parent {epic}")));
     hub.json(&format!("dep add {second} {first}"));
     hub.json(&format!("close {done} --reason obsolete"));

@@ -15,7 +15,7 @@ use rusqlite::{Connection, params};
 use serde_json::Value;
 
 use ignite_core::protocol::tickets::{
-    BatchRequest, Dependency, Operation, Precondition, TicketFields,
+    BatchRequest, Dependency, Operation, Precondition, Status, TicketFields,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
@@ -194,6 +194,8 @@ fn create(filing: &Filing, key: &str, previous: Option<&str>) -> Operation {
         labels.push(HUB_LABEL.to_owned());
     }
     fields.labels = Some(labels);
+    // Nothing is scheduled until a person releases it, the hub's own tickets included.
+    fields.status = Some(Status::PendingApproval);
     Operation::Create {
         fields,
         parent: None,

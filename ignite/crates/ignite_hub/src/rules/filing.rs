@@ -15,7 +15,9 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde_json::{Value, json};
 
 use ignite_core::config;
-use ignite_core::protocol::tickets::{BatchRequest, Operation, Saving, TicketFields, TicketType};
+use ignite_core::protocol::tickets::{
+    BatchRequest, Operation, Saving, Status, TicketFields, TicketType,
+};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{findings, rows};
@@ -147,6 +149,8 @@ fn file(conn: &mut Connection, finding: &Finding, now: Timestamp) -> Result<Stri
     let create = Operation::Create {
         fields: TicketFields {
             title: Some(finding.title.clone()),
+            // Nothing is scheduled until a person releases it, improvements included.
+            status: Some(Status::PendingApproval),
             body: Some(finding.body.clone()),
             ticket_type: Some(TicketType::Task),
             priority: Some(2),

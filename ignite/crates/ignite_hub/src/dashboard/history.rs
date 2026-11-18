@@ -83,7 +83,17 @@ fn truthy(value: Option<&Value>) -> bool {
 
 fn status(value: &Value) -> String {
     match value.as_str() {
-        Some(name) if ["open", "in_progress", "blocked", "deferred", "closed"].contains(&name) => {
+        Some(name)
+            if [
+                "open",
+                "in_progress",
+                "blocked",
+                "deferred",
+                "closed",
+                "pending_approval",
+            ]
+            .contains(&name) =>
+        {
             status_dot(parse_status(name), true)
         }
         _ => esc(&text(value)),

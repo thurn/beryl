@@ -138,6 +138,8 @@ fn create(report: &RegressionReport) -> Operation {
     Operation::Create {
         fields: TicketFields {
             title: Some(format!("Regression: {}", report.check)),
+            // Nothing is scheduled until a person releases it, regressions included.
+            status: Some(Status::PendingApproval),
             body: Some(details(report)),
             ticket_type: Some(TicketType::Bug),
             priority: Some(0),

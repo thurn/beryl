@@ -75,10 +75,11 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             fields,
             labels,
             deps,
+            release,
         } => write(
             hub,
             "created",
-            build::single(build::create(title, fields, labels, deps)?),
+            build::single(build::create(title, fields, labels, deps, *release)?),
         ),
         TicketCommand::Update {
             id,
@@ -88,19 +89,24 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             assignee,
             add_label,
             remove_label,
+            release,
         } => {
             let changes = build::Changes {
                 title: title.as_deref(),
-                status: status.as_deref(),
+                status: if *release {
+                    Some(build::RELEASED)
+                } else {
+                    status.as_deref()
+                },
                 assignee: assignee.as_deref(),
                 add_labels: add_label,
                 remove_labels: remove_label,
             };
-            write(
-                hub,
-                "updated",
-                build::single(build::update(id, fields, &changes)?),
-            )
+            let mut ops = vec![build::update(id, fields, &changes)?];
+            if *release {
+                ops.extend(build::releases(&pending_descendants(hub, id)?));
+            }
+            write(hub, "updated", json!({"ops": ops}))
         }
         TicketCommand::Comment { id, text } => write(
             hub,
@@ -216,6 +222,21 @@ fn lookup(hub: &Hub, command: &TicketCommand) -> Result<Option<Reply>> {
         }
         _ => return Ok(None),
     }))
+}
+
+/// The IDs of `id`'s descendants that are still pending approval, as the hub spells them.
+fn pending_descendants(hub: &Hub, id: &str) -> Result<Vec<String>> {
+    let query = [
+        ("ancestor", id.to_owned()),
+        ("status", build::PENDING.to_owned()),
+    ];
+    let tickets = read(hub, &["tickets"], &query)?;
+    Ok(tickets
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|ticket| ticket["id"].as_str().map(str::to_owned))
+        .collect())
 }
 
 /// Prints every ticket as one JSON line, a page at a time, so a large export is never held

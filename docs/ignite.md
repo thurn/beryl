@@ -1945,15 +1945,21 @@ A machine can take a ticket when all of these hold:
   bring into its gate. Cygnus never takes a ticket that names UI files, or one
   labeled `needs:macos`.
 
-Not every open ticket is offered:
+Not every ticket is offered:
 
+- Nothing is scheduled until a person releases it. Every ticket is filed with
+  the status `pending_approval`, the hub's own regressions, improvements and
+  fault reports included, and the pool is never offered a pending ticket.
+  `ignite ticket update <id> --release` makes the ticket and every descendant
+  still pending `open`; `ignite ticket create --release` files a ticket already
+  released. A session may still start a pending ticket by name.
 - An epic is worked only once it is active, which means it has a `--workers`
   number. `/ignite` sets one when it files an epic or is given one. Until then
   the epic's tickets wait, however ready they are, so the pool never starts on a
   backlog that nobody asked for.
-- Tickets that the hub files itself are always offered: regressions,
-  improvements and repairs to a machine. So is a ticket that a session starts by
-  name.
+- Once released, tickets that the hub files itself are always offered:
+  regressions, improvements and repairs to a machine. So is a ticket that a
+  session starts by name.
 - A ticket marked `needs:person` is never offered.
 
 The hub reserves the ticket for that machine in the same request, so two

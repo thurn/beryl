@@ -36,6 +36,10 @@ pub enum Status {
     Blocked,
     Deferred,
     Closed,
+    /// Filed but not yet released for implementation, so the pool is never offered it. A person
+    /// releases it with `ignite ticket update <id> --release`, which makes it `open`, or files
+    /// it released with `ignite ticket create --release`. A session may still start it by name.
+    PendingApproval,
 }
 
 /// What one ticket landed, which the next ticket's `ignite start` prints.

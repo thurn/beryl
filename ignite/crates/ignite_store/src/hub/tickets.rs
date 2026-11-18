@@ -530,6 +530,7 @@ pub(crate) fn status_name(status: Status) -> &'static str {
         Status::Blocked => "blocked",
         Status::Deferred => "deferred",
         Status::Closed => "closed",
+        Status::PendingApproval => "pending_approval",
     }
 }
 

@@ -69,14 +69,26 @@ fn dependency(spec: &str) -> Result<Value> {
     Ok(json!({"on": id, "kind": kind}))
 }
 
+/// The status of a ticket filed but not yet released for implementation.
+pub const PENDING: &str = "pending_approval";
+
+/// The status a released ticket takes.
+pub const RELEASED: &str = "open";
+
+/// Files a ticket. Unless `release` is set it is filed pending approval, so that nothing is
+/// scheduled that a person has not released.
 pub fn create(
     title: &str,
     fields: &TicketFieldArgs,
     labels: &[String],
     deps: &[String],
+    release: bool,
 ) -> Result<Value> {
     let mut set = Fields::new();
     set.insert("title".into(), json!(title));
+    if !release {
+        set.insert("status".into(), json!(PENDING));
+    }
     shared_fields(&mut set, fields)?;
     if !labels.is_empty() {
         set.insert("labels".into(), json!(labels));
@@ -90,6 +102,13 @@ pub fn create(
         op["parent"] = json!(parent);
     }
     Ok(op)
+}
+
+/// The updates that release each of `ids` for implementation.
+pub fn releases(ids: &[String]) -> Vec<Value> {
+    ids.iter()
+        .map(|id| json!({"op": "update", "id": id, "set": {"status": RELEASED}}))
+        .collect()
 }
 
 /// What `update` was asked to change besides the shared fields.
@@ -233,19 +252,22 @@ mod tests {
             &fields,
             &["tier:opus".into()],
             &["a".into(), "blocked-by:b".into(), "relates-to:c".into()],
+            false,
         )
         .unwrap();
         assert_eq!(
             op,
             json!({
                 "op": "create", "parent": "Tig9a",
-                "fields": {"title": "Split", "priority": 1, "workers": 3, "max_workers": 5,
+                "fields": {"title": "Split", "status": "pending_approval", "priority": 1, "workers": 3, "max_workers": 5,
                            "cores": 2.5, "labels": ["tier:opus"]},
                 "deps": [{"on": "a"}, {"on": "b", "kind": "blocks"},
                          {"on": "c", "kind": "related"}],
             })
         );
-        assert!(create("x", &no_fields(), &[], &["blocks:z".into()]).is_err());
+        assert!(create("x", &no_fields(), &[], &["blocks:z".into()], false).is_err());
+        let released = create("x", &no_fields(), &[], &[], true).unwrap();
+        assert!(released["fields"].get("status").is_none());
     }
 
     #[test]
