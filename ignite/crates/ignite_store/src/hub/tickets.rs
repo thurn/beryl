@@ -207,9 +207,10 @@ pub fn graph(conn: &Connection, all: bool, now: Timestamp) -> Result<Graph> {
     })
 }
 
-/// The ticket an alias names, or the ID itself if it is a ticket. Accepts the displayed form
-/// with a leading `T` (`Tq44s.7`), a bare ID (`q44s.7`), an alias from an earlier tracker
-/// (`old`), and an imported form with a project prefix (`by-q44s.7` or `by-old`).
+/// The ticket an alias names, or the ID itself if it is a ticket. Names are matched without
+/// regard to case. Accepts the ID as stored and shown (`TQ44S.7`), the earlier spellings
+/// (`Tq44s.7` and a bare `q44s.7`), an alias from an earlier tracker (`old`), and an imported
+/// form with a project prefix (`by-q44s.7` or `by-old`).
 pub fn resolve(conn: &Connection, id_or_alias: &str) -> Result<Option<TicketId>> {
     let candidate = candidate_id(conn, id_or_alias)?;
     let exists: Option<String> = conn
@@ -227,34 +228,64 @@ pub fn resolve(conn: &Connection, id_or_alias: &str) -> Result<Option<TicketId>>
         .transpose()
 }
 
-/// The ID a name refers to, whether or not that ticket exists: the name without its `T`, the
-/// name itself when it is a ticket's ID, the ticket an alias points to, or the name without a
-/// project prefix.
+/// The ID a name refers to, whether or not that ticket exists: the ticket the name spells in
+/// any case, with or without its leading `T`, the ticket an alias points to, or the name
+/// without a project prefix.
 pub(crate) fn candidate_id(conn: &Connection, name: &str) -> Result<String> {
-    // Ticket IDs are lowercase, so an uppercase `T` can only be the displayed prefix.
-    if let Some(id) = name.strip_prefix('T') {
-        return Ok(id.to_owned());
+    // Ticket IDs are stored in capitals with a leading `T` (`TQ44S.7`). Before that they were
+    // stored in lowercase without the `T` and printed with it (`Tq44s.7`), and text written
+    // then still uses that spelling, so both are looked up. Root IDs carried over from earlier
+    // trackers hold dashes (`TCI-00031CED38`), so a name that spells a ticket is taken as it is
+    // before any dash is read as a project prefix.
+    if let Some(id) = spelled_ticket(conn, name)? {
+        return Ok(id);
     }
-    // Root IDs carried over from earlier trackers hold dashes (`ci-00031ced38`), so a name that
-    // is a ticket's ID is taken as it is before any dash is read as a project prefix.
-    let is_ticket: Option<i64> = conn
-        .query_row("SELECT 1 FROM tickets WHERE id = ?1", [name], |row| {
-            row.get(0)
-        })
-        .optional()?;
-    if is_ticket.is_some() {
-        return Ok(name.to_owned());
-    }
-    // Otherwise a dash marks an imported name with its project prefix (`by-q44s.7`).
-    let stripped = name.split_once('-').map_or(name, |(_, rest)| rest);
+    // Otherwise a dash marks an imported name with its project prefix (`by-q44s.7`). Aliases
+    // are stored in lowercase.
+    let lower = name.to_ascii_lowercase();
+    let stripped = lower
+        .split_once('-')
+        .map_or(lower.as_str(), |(_, rest)| rest);
     let alias: Option<String> = conn
         .query_row(
             "SELECT id FROM aliases WHERE alias = ?1 OR alias = ?2 ORDER BY alias = ?1 DESC LIMIT 1",
-            [stripped, name],
+            [stripped, lower.as_str()],
             |row| row.get(0),
         )
         .optional()?;
-    Ok(alias.unwrap_or_else(|| stripped.to_owned()))
+    if let Some(alias) = alias {
+        return Ok(alias);
+    }
+    if let Some(id) = spelled_ticket(conn, stripped)? {
+        return Ok(id);
+    }
+    Ok(canonical(stripped))
+}
+
+/// The ticket `name` spells in any case, with or without its leading `T`.
+fn spelled_ticket(conn: &Connection, name: &str) -> Result<Option<String>> {
+    let upper = name.to_ascii_uppercase();
+    for candidate in [upper.clone(), format!("T{upper}")] {
+        let found: Option<i64> = conn
+            .query_row("SELECT 1 FROM tickets WHERE id = ?1", [&candidate], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        if found.is_some() {
+            return Ok(Some(candidate));
+        }
+    }
+    Ok(None)
+}
+
+/// A name in the form IDs are stored in: capitals, with a leading `T`.
+fn canonical(name: &str) -> String {
+    let upper = name.to_ascii_uppercase();
+    if upper.starts_with('T') {
+        upper
+    } else {
+        format!("T{upper}")
+    }
 }
 
 /// One ticket by its exact ID.
@@ -426,22 +457,32 @@ fn search_candidates(
         return Err(StoreError::Rejected("search query is required".to_owned()));
     }
     let query = phrase.to_lowercase();
-    let displayed = phrase.starts_with('T');
-    let id_prefix = if displayed {
-        query[1..].to_owned()
-    } else {
-        query
+    // IDs are stored in capitals with a leading `T`, so a phrase is compared with them in
+    // capitals, with and without its own `T`; aliases are stored in lowercase.
+    let upper = phrase.to_ascii_uppercase();
+    let id_prefixes: Vec<String> = {
+        let without_project = upper
             .split_once('-')
-            .map_or(query.as_str(), |(_, rest)| rest)
-            .to_owned()
+            .map_or(upper.as_str(), |(_, rest)| rest);
+        let mut prefixes = vec![upper.clone(), format!("T{upper}")];
+        if without_project != upper {
+            prefixes.push(format!("T{without_project}"));
+        }
+        // Every ID starts with `T`, so a lone `T` would match them all.
+        prefixes.retain(|prefix| prefix.len() > 1);
+        prefixes
     };
-    let aliased: HashSet<String> = if displayed || id_prefix.is_empty() {
+    let alias_prefix = query
+        .split_once('-')
+        .map_or(query.as_str(), |(_, rest)| rest)
+        .to_owned();
+    let aliased: HashSet<String> = if alias_prefix.is_empty() {
         HashSet::new()
     } else {
         collect_strings(
             conn,
             "SELECT id FROM aliases WHERE instr(alias, ?1) = 1 OR instr(alias, ?2) = 1",
-            &[&query, &id_prefix],
+            &[&query, &alias_prefix],
         )?
         .into_iter()
         .collect()
@@ -462,8 +503,9 @@ fn search_candidates(
     .filter(|t| {
         let id = t.id.as_str();
         t.title.to_lowercase().contains(&query)
-            || id.starts_with(&query)
-            || (!id_prefix.is_empty() && id.starts_with(&id_prefix))
+            || id_prefixes
+                .iter()
+                .any(|prefix| id.starts_with(prefix.as_str()))
             || aliased.contains(id)
     })
     .collect())

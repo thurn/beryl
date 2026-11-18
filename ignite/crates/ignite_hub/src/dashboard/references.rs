@@ -1,6 +1,7 @@
 //! Ticket names in prose: finding them in text and turning them into links.
 //!
-//! A ticket is shown as `T` and its ID (`Tq44s.7`). Text may also name one by its bare dotted
+//! A ticket is shown by its ID, a `T` and then capitals (`TQ44S.7`). Text written before IDs
+//! were stored in capitals names one as `Tq44s.7`. Text may also name one by its bare dotted
 //! ID, by the project prefix (`proj-q44s.7`), or by the path of its page. These functions find
 //! those names the way the old dashboard's regular expressions did, written by hand because the
 //! workspace has no regex dependency.
@@ -10,12 +11,12 @@
 
 use super::components::esc;
 
-/// The name a ticket is shown by.
+/// The name a ticket is shown by: its ID, which is stored as it is shown.
 pub fn display_id(id: &str) -> String {
-    format!("T{id}")
+    id.to_owned()
 }
 
-/// The address of a ticket's page, under the dashboard's `root` (`/`): `/Tq44s.7`.
+/// The address of a ticket's page, under the dashboard's `root` (`/`): `/TQ44S.7`.
 pub fn ticket_url(root: &str, id: &str) -> String {
     format!("{root}{}", percent_encode(&display_id(id)))
 }
@@ -50,7 +51,7 @@ fn boundary(chars: &[char], at: usize) -> bool {
 }
 
 fn name_char(c: char) -> bool {
-    c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'
+    c.is_ascii_alphanumeric() || c == '-'
 }
 
 /// Extends from `at` over `(\.[0-9]+)*`, longest first, to a position that ends a word.
@@ -69,7 +70,7 @@ fn dotted(chars: &[char], at: usize) -> Option<usize> {
     boundary(chars, at).then_some(at)
 }
 
-/// The end of a ticket name `T?[a-z0-9-]+(\.[0-9]+)*` that starts at `start` and ends at a word
+/// The end of a ticket name `T?[A-Za-z0-9-]+(\.[0-9]+)*` that starts at `start` and ends at a word
 /// boundary, preferring the longest.
 fn name_at(chars: &[char], start: usize) -> Option<usize> {
     for skip in [usize::from(chars.get(start) == Some(&'T')), 0] {

@@ -1,5 +1,6 @@
-//! How ticket IDs are spelled in output. The hub stores a bare ID such as `q44s.7`; the commands
-//! print it with a leading `T` (`Tq44s.7`), and the hub accepts either spelling on input.
+//! How ticket IDs are spelled in output. The hub stores an ID as it is printed, a `T` and then
+//! capitals (`TQ44S.7`), and accepts any case, with or without the `T`, on input. A hub from
+//! before that stored a bare lowercase ID (`q44s.7`), so an ID without its `T` still gets one.
 //! Aliases from earlier trackers and anything a person wrote are printed as stored.
 
 use serde_json::Value;

@@ -21,6 +21,10 @@ pub struct Migration {
     /// Numbered from 1, without gaps.
     pub version: u32,
     pub sql: &'static str,
+    /// Run after `sql`, in the same transaction, for a rewrite that SQL cannot express, such
+    /// as finding ticket IDs inside free text. Its migration's SQL still decides whether it is
+    /// breaking, so a migration with code carries a [`BREAKING`] line when the code is.
+    pub code: Option<fn(&rusqlite::Transaction<'_>) -> Result<()>>,
 }
 
 /// A line a migration's SQL carries when it is not additive (it drops, renames or rewrites
@@ -140,6 +144,9 @@ pub fn apply(conn: &mut Connection, migrations: &[Migration]) -> Result<u32> {
     for migration in &migrations[current as usize..] {
         let transaction = conn.transaction()?;
         transaction.execute_batch(migration.sql)?;
+        if let Some(code) = migration.code {
+            code(&transaction)?;
+        }
         record(&transaction, "schema_version", migration.version)?;
         record(
             &transaction,
@@ -253,10 +260,12 @@ mod tests {
         Migration {
             version: 1,
             sql: "CREATE TABLE a (x INTEGER);",
+            code: None,
         },
         Migration {
             version: 2,
             sql: "ALTER TABLE a ADD COLUMN y TEXT;",
+            code: None,
         },
     ];
 
@@ -276,6 +285,7 @@ mod tests {
         let gap = [Migration {
             version: 2,
             sql: "",
+            code: None,
         }];
         assert!(apply(&mut Connection::open_in_memory().unwrap(), &gap).is_err());
     }
@@ -288,6 +298,7 @@ mod tests {
             Migration {
                 version: 2,
                 sql: "NOT SQL;",
+                code: None,
             },
         ];
         assert!(apply(&mut conn, &broken).is_err());
@@ -316,10 +327,12 @@ mod tests {
             Migration {
                 version: 3,
                 sql: "-- breaking: rewrites a.\nDROP TABLE a;\nCREATE TABLE a (z TEXT);",
+                code: None,
             },
             Migration {
                 version: 4,
                 sql: "CREATE TABLE b (x INTEGER);",
+                code: None,
             },
         ];
         let mut conn = Connection::open_in_memory().unwrap();

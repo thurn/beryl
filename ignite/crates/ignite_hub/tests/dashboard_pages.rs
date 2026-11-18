@@ -77,41 +77,41 @@ fn seeded() -> Hub {
     conn.execute_batch(
         "WITH RECURSIVE numbers(n) AS (VALUES (1) UNION ALL SELECT n + 1 FROM numbers WHERE n < 4992)
          INSERT INTO tickets (id, parent, title, status, body, created_at, updated_at, created_by, version)
-         SELECT CASE WHEN n <= 200 THEN printf('root%04d', n) ELSE printf('q44s.%d', n + 20) END,
-                CASE WHEN n > 200 THEN 'q44s' END, printf('Fixture ticket %d', n),
+         SELECT CASE WHEN n <= 200 THEN printf('TROOT%04d', n) ELSE printf('TQ44S.%d', n + 20) END,
+                CASE WHEN n > 200 THEN 'TQ44S' END, printf('Fixture ticket %d', n),
                 CASE WHEN n <= 20 THEN 'in_progress' WHEN n <= 200 THEN 'open' ELSE 'closed' END,
                 'Fixture issue body', '2026-11-15T19:30:00.000Z', '2026-11-15T19:30:00.000Z', 'Sim actor', n
          FROM numbers;
          INSERT INTO tickets (id, parent, title, type, status, labels, body, created_at, updated_at, created_by, version)
          VALUES
-          ('q44s', NULL, 'Dashboard epic', 'epic', 'open', '[]', 'Collect all dashboard work',
+          ('TQ44S', NULL, 'Dashboard epic', 'epic', 'open', '[]', 'Collect all dashboard work',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('q44s.7', 'q44s', 'Render milestone', 'milestone', 'open', '[]', '',
+          ('TQ44S.7', 'TQ44S', 'Render milestone', 'milestone', 'open', '[]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('q44s.7.24', 'q44s.7', 'Render live tickets <safely>', 'task', 'in_progress', '[\"lane:ui\"]',
+          ('TQ44S.7.24', 'TQ44S.7', 'Render live tickets <safely>', 'task', 'in_progress', '[\"lane:ui\"]',
            'Read proj-q44s, q44s.7, and Terro for **context**. See `proj-path` and [proj-path](/proj/tickets/proj-path?ref=notes).',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('q44s.7.24.1', 'q44s.7.24', 'Render detail rows', 'task', 'open', '[]', '',
+          ('TQ44S.7.24.1', 'TQ44S.7.24', 'Render detail rows', 'task', 'open', '[]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('erro', NULL, 'Simulator failure', 'bug', 'blocked', '[\"justiciar\"]', '',
+          ('TERRO', NULL, 'Simulator failure', 'bug', 'blocked', '[\"justiciar\"]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('brpt', NULL, 'Filed from the app', 'bug', 'open', '[\"bug-report\"]', '',
+          ('TBRPT', NULL, 'Filed from the app', 'bug', 'open', '[\"bug-report\"]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('wait', NULL, 'Wait for deployment', 'task', 'deferred', '[]', '',
+          ('TWAIT', NULL, 'Wait for deployment', 'task', 'deferred', '[]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('path', NULL, 'Validate the old path', 'task', 'open', '[]', '',
+          ('TPATH', NULL, 'Validate the old path', 'task', 'open', '[]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992);
          UPDATE tickets SET assignee = 'local_ff743711', session = 'local_ff743711', machine = 'm-one',
-                            claimed_at = '2026-11-16T19:31:00.000Z' WHERE id = 'q44s.7.24';
+                            claimed_at = '2026-11-16T19:31:00.000Z' WHERE id = 'TQ44S.7.24';
          UPDATE tickets SET metadata = '{\"_enact_beads\":{\"owner\":\"Old owner\",\"started_at\":\"2026-11-16T12:00:00Z\",
-           \"dependencies\":[{\"type\":\"blocks\"}]},\"enact_host\":\"test-mac\"}' WHERE id = 'wait';
-         INSERT INTO edges VALUES ('q44s.7.24', 'erro', 'blocks'), ('path', 'q44s.7.24', 'waits-for');
-         INSERT INTO aliases VALUES ('old', 'q44s.7.24');
+           \"dependencies\":[{\"type\":\"blocks\"}]},\"enact_host\":\"test-mac\"}' WHERE id = 'TWAIT';
+         INSERT INTO edges VALUES ('TQ44S.7.24', 'TERRO', 'blocks'), ('TPATH', 'TQ44S.7.24', 'waits-for');
+         INSERT INTO aliases VALUES ('old', 'TQ44S.7.24');
          INSERT INTO comments (ticket, n, author, at, text)
-           VALUES ('q44s.7.24', 1, 'Derek', '2026-11-16T20:00:00.000Z', 'See proj-path.');
-         INSERT INTO history VALUES ('q44s.7.24', 4993, 'Derek', '2026-11-16T19:30:00.000Z',
+           VALUES ('TQ44S.7.24', 1, 'Derek', '2026-11-16T20:00:00.000Z', 'See proj-path.');
+         INSERT INTO history VALUES ('TQ44S.7.24', 4993, 'Derek', '2026-11-16T19:30:00.000Z',
            '{\"title\":[\"Render tickets\",\"Render live tickets <safely>\"]}');
-         INSERT INTO history VALUES ('q44s.7.24', 0, 'Derek', '2026-11-16T19:30:00.000Z',
+         INSERT INTO history VALUES ('TQ44S.7.24', 0, 'Derek', '2026-11-16T19:30:00.000Z',
            '[{\"actor\":\"Derek\",\"created_at\":\"2026-11-15T19:30:00Z\",\"event_type\":\"created\"}]');",
     )
     .unwrap();
@@ -147,8 +147,8 @@ fn the_home_page_lists_the_open_tickets_with_progress() {
     }
     for expected in [
         "Incidents",
-        "href=\"/Tq44s.7.24\"",
-        "class=\"c-mono\">Tq44s</",
+        "href=\"/TQ44S.7.24\"",
+        "class=\"c-mono\">TQ44S</",
         "4792/4795",
         "<title>Tickets · Ignite</title>",
         "<meta name=\"cirrus-root\" content=\"/\">",
@@ -161,7 +161,7 @@ fn the_home_page_lists_the_open_tickets_with_progress() {
 #[test]
 fn a_ticket_page_shows_its_sections_links_and_changelog() {
     let hub = seeded();
-    let page = hub.text("/Tq44s.7.24");
+    let page = hub.text("/TQ44S.7.24");
     for expected in [
         "Description",
         "Comments",
@@ -177,25 +177,25 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
         "Validate the old path",
         "Simulator failure",
         "<strong>context</strong>",
-        "href=\"/Tq44s\"",
-        "href=\"/Tpath\"",
+        "href=\"/TQ44S\"",
+        "href=\"/TPATH\"",
         "renamed it",
         "created this",
-        "class=\"c-mono\">Tq44s.7.24</",
-        "href=\"/Tq44s.7\">Tq44s.7</",
-        "class=\"c-row-id c-mono c-hide-narrow\">Tq44s.7.24.1</",
-        "<code>Tpath</code>",
-        "href=\"/Tpath?ref=notes\">Tpath</a>",
+        "class=\"c-mono\">TQ44S.7.24</",
+        "href=\"/TQ44S.7\">TQ44S.7</",
+        "class=\"c-row-id c-mono c-hide-narrow\">TQ44S.7.24.1</",
+        "<code>TPATH</code>",
+        "href=\"/TPATH?ref=notes\">TPATH</a>",
     ] {
         assert!(page.contains(expected), "{expected}");
     }
     assert!(
-        page.contains("href=\"/Terro\"")
-            && page.contains("<span class=\"c-mono\">Terro</span></a>")
+        page.contains("href=\"/TERRO\"")
+            && page.contains("<span class=\"c-mono\">TERRO</span></a>")
     );
     assert!(!page.contains("proj-path") && !page.contains("proj-q44s"));
     assert!(
-        page.contains("data-feed-tickets=\"q44s.7.24 q44s.7.24.1 path erro q44s.7 q44s\""),
+        page.contains("data-feed-tickets=\"TQ44S.7.24 TQ44S.7.24.1 TPATH TERRO TQ44S.7 TQ44S\""),
         "{page}"
     );
 }
@@ -203,7 +203,7 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
 #[test]
 fn imported_tickets_show_their_owner_and_start_without_the_import_key() {
     let hub = seeded();
-    let page = hub.text("/Twait");
+    let page = hub.text("/TWAIT");
     assert!(page.contains("<dt>Owner</dt><dd>Old owner</dd>"));
     assert!(page.contains("<dt>Started</dt><dd><time"));
     assert!(page.contains("started work"));
@@ -215,12 +215,12 @@ fn imported_tickets_show_their_owner_and_start_without_the_import_key() {
 fn pages_revalidate_only_when_their_content_changes() {
     let mut hub = seeded();
     let home = hub.get("/");
-    let detail = hub.get("/Tq44s.7.24");
+    let detail = hub.get("/TQ44S.7.24");
     let (home_tag, detail_tag) = (
         header(&home, "etag").unwrap().to_owned(),
         header(&detail, "etag").unwrap().to_owned(),
     );
-    for (path, tag) in [("/", &home_tag), ("/Tq44s.7.24", &detail_tag)] {
+    for (path, tag) in [("/", &home_tag), ("/TQ44S.7.24", &detail_tag)] {
         assert!(tag.starts_with("W/\""));
         let unchanged = hub.request("GET", path, Some(&format!("\"another\", {}", &tag[2..])));
         assert_eq!(unchanged.status, 304);
@@ -230,7 +230,7 @@ fn pages_revalidate_only_when_their_content_changes() {
 
     hub.batch(&json!({"op": "comment", "id": "q44s.7.24", "text": "New dashboard comment"}));
     assert_eq!(hub.request("GET", "/", Some(&home_tag)).status, 304);
-    let commented = hub.request("GET", "/Tq44s.7.24", Some(&detail_tag));
+    let commented = hub.request("GET", "/TQ44S.7.24", Some(&detail_tag));
     assert_eq!(commented.status, 200);
     let body = String::from_utf8(commented.body.clone()).unwrap();
     assert!(body.contains("New dashboard comment"));
@@ -238,7 +238,7 @@ fn pages_revalidate_only_when_their_content_changes() {
 
     let tag = header(&commented, "etag").unwrap().to_owned();
     hub.batch(&json!({"op": "update", "id": "erro", "set": {"title": "Renamed failure"}}));
-    let changed = hub.request("GET", "/Tq44s.7.24", Some(&tag));
+    let changed = hub.request("GET", "/TQ44S.7.24", Some(&tag));
     assert_eq!(changed.status, 200);
     assert!(
         String::from_utf8(changed.body)
@@ -259,7 +259,7 @@ fn pages_revalidate_only_when_their_content_changes() {
     // Moving a ticket out of its epic changes the counts of every ancestor.
     hub.conn
         .execute(
-            "UPDATE tickets SET parent = NULL WHERE id = 'q44s.7.24'",
+            "UPDATE tickets SET parent = NULL WHERE id = 'TQ44S.7.24'",
             [],
         )
         .unwrap();
@@ -269,12 +269,19 @@ fn pages_revalidate_only_when_their_content_changes() {
 #[test]
 fn other_addresses_redirect_to_the_canonical_page_and_keep_the_query() {
     let hub = seeded();
-    for path in ["/proj-q44s.7.24", "/old", "/Tq44s.7.24/", "/q44s.7.24"] {
+    // Includes the spelling from before IDs were stored in capitals, `/Tq44s.7.24`.
+    for path in [
+        "/proj-q44s.7.24",
+        "/old",
+        "/TQ44S.7.24/",
+        "/q44s.7.24",
+        "/Tq44s.7.24",
+    ] {
         let redirect = hub.get(&format!("{path}?from=bookmark"));
         assert_eq!(redirect.status, 308, "{path}");
         assert_eq!(
             header(&redirect, "location"),
-            Some("/Tq44s.7.24?from=bookmark"),
+            Some("/TQ44S.7.24?from=bookmark"),
             "{path}"
         );
     }
@@ -285,14 +292,14 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
     let hub = seeded();
     let query = [("from".to_owned(), "bookmark".to_owned())];
     let aliases = ["former".to_owned()];
-    let ticket = "/Tq44s.7.24?from=bookmark";
+    let ticket = "/TQ44S.7.24?from=bookmark";
     // The dashboard's earlier ticket addresses redirect to the page at the root.
     for path in [
         "/beads/proj-q44s.7.24",
         "/beads/proj-q44s.7.24.html",
         "/beads/q44s.7.24.html",
         "/beads/old",
-        "/tickets/Tq44s.7.24",
+        "/tickets/TQ44S.7.24",
         "/tickets/proj-q44s.7.24",
         "/tickets/old",
         "/tickets/q44s.7.24/",
@@ -306,7 +313,7 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
             assert_eq!(header(&response, "location"), Some(ticket), "{path}");
         }
     }
-    for path in ["/", "/Tq44s.7.24"] {
+    for path in ["/", "/TQ44S.7.24"] {
         assert_eq!(hub.get(path).status, 200, "{path}");
     }
     // Addresses under the project's name or an old one redirect to the same address at the
@@ -317,8 +324,8 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
         ("/proj", "/"),
         ("/proj/", "/"),
         ("/proj/machines", "/machines"),
-        ("/proj/tickets/Tq44s.7.24", "/tickets/Tq44s.7.24"),
-        ("/former/tickets/Tq44s.7.24", "/tickets/Tq44s.7.24"),
+        ("/proj/tickets/TQ44S.7.24", "/tickets/TQ44S.7.24"),
+        ("/former/tickets/TQ44S.7.24", "/tickets/TQ44S.7.24"),
         (
             "/former/beads/proj-q44s.7.24.html",
             "/beads/proj-q44s.7.24.html",
@@ -351,8 +358,8 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
 #[test]
 fn head_matches_get_without_a_body_and_a_missing_ticket_is_404() {
     let hub = seeded();
-    let get = hub.get("/Tq44s.7.24");
-    let head = hub.request("HEAD", "/Tq44s.7.24", None);
+    let get = hub.get("/TQ44S.7.24");
+    let head = hub.request("HEAD", "/TQ44S.7.24", None);
     assert_eq!(header(&head, "etag"), header(&get, "etag"));
     assert!(head.body.is_empty());
     let missing = hub.get("/missing");
@@ -394,7 +401,7 @@ fn the_status_fragment_lists_sessions_and_leases() {
     let html = String::from_utf8(status.body).unwrap();
     for expected in [
         "session ff7437",
-        "href=\"/Tq44s.7.24\">Render live tickets &lt;safely&gt;</a>",
+        "href=\"/TQ44S.7.24\">Render live tickets &lt;safely&gt;</a>",
         "m-one",
         "landing lease",
         "Merge holder",
@@ -410,7 +417,7 @@ fn the_status_fragment_lists_sessions_and_leases() {
             && live.contains("<template id=\"c-status-fragment\">")
     );
     assert!(live.contains("Queued merger") && !live.contains("<script"));
-    let ticket = hub.text("/Tq44s.7.24?fragment=all");
+    let ticket = hub.text("/TQ44S.7.24?fragment=all");
     assert!(ticket.starts_with("<title>") && ticket.contains("<main class=\"c-main\""));
 }
 
@@ -454,7 +461,7 @@ fn a_configured_wordmark_replaces_the_brand_and_the_home_page_has_no_crumb() {
         home.contains(&format!("href=\"/\">{wordmark}</a></nav>")),
         "{home}"
     );
-    for target in ["/Tq44s.7.24", "/machines", "/no-such-ticket"] {
+    for target in ["/TQ44S.7.24", "/machines", "/no-such-ticket"] {
         let other = page(target);
         assert!(other.contains(wordmark), "{target}: {other}");
         assert!(!other.contains(">Ignite<"), "{target}: {other}");

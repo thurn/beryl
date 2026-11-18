@@ -30,11 +30,13 @@ fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
         create("Closed task", Some("$0"), json!({"status": "closed"})),
     ]));
     let [epic, milestone, bug, archived] = [&ids[0], &ids[1], &ids[2], &ids[3]];
-    let alphabet = "abcdefghjkmnpqrstvwxyz";
-    assert_eq!(epic.len(), 4);
-    assert!(alphabet.contains(&epic[..1]), "{epic}");
+    let alphabet = "ABCDEFGHJKMNPQRSTVWXYZ";
+    assert_eq!(epic.len(), 5);
+    assert!(epic.starts_with('T'), "{epic}");
+    assert!(alphabet.contains(&epic[1..2]), "{epic}");
     assert!(
-        epic.chars()
+        epic[1..]
+            .chars()
             .all(|c| c.is_ascii_digit() || alphabet.contains(c))
     );
     assert_eq!(*milestone, format!("{epic}.1"));
@@ -55,13 +57,11 @@ fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
     assert_eq!(shown.edges[0].src.as_str(), bug);
     assert_eq!(hub.show("lookup-legacy").ticket.id.as_str(), bug);
     assert_eq!(hub.show(&format!("lookup-{bug}")).ticket.id.as_str(), bug);
-    assert_eq!(hub.show(&format!("T{bug}")).ticket.id.as_str(), bug);
-    let upper = format!("T{}", bug.to_uppercase());
-    assert!(
-        tickets::get(&hub.conn, &upper, false, false, hub.now)
-            .unwrap()
-            .is_none()
-    );
+    // The spellings from before IDs were stored in capitals still find the ticket.
+    let old = bug[1..].to_lowercase();
+    assert_eq!(hub.show(&format!("T{old}")).ticket.id.as_str(), bug);
+    assert_eq!(hub.show(&old).ticket.id.as_str(), bug);
+    assert_eq!(hub.show(&bug.to_lowercase()).ticket.id.as_str(), bug);
     assert_eq!(
         tickets::resolve(&hub.conn, "old")
             .unwrap()
@@ -73,7 +73,7 @@ fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
 
     let all3 = [epic.clone(), milestone.clone(), bug.clone()];
     assert_eq!(
-        hub.list(json!({"parent": format!("T{milestone}")})),
+        hub.list(json!({"parent": milestone.to_lowercase()})),
         [bug.clone()]
     );
     assert_eq!(hub.list(json!({})), all3);
@@ -111,8 +111,8 @@ fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
 
     let version = hub.show(bug).ticket.version;
     let updated = hub.batch_if(
-        json!([{"op": "update", "id": format!("T{bug}"), "set": {"title": "Changed"}}]),
-        json!([{"id": format!("T{bug}"), "version": version.0}]),
+        json!([{"op": "update", "id": bug.to_lowercase(), "set": {"title": "Changed"}}]),
+        json!([{"id": bug[1..].to_lowercase(), "version": version.0}]),
     );
     assert_eq!(updated.results[0].id.as_str(), bug);
     assert_eq!(hub.show(bug).ticket.title, "Changed");
@@ -464,12 +464,12 @@ fn serves_the_live_graph_listing_and_a_conditional_batch_with_5000_stored_ticket
         .execute_batch(
             "WITH RECURSIVE ids(n) AS (VALUES (1) UNION ALL SELECT n + 1 FROM ids WHERE n < 5000)
              INSERT INTO tickets (id, parent, title, status, created_at, created_by, updated_at, version)
-             SELECT printf('seed%04d', n), CASE WHEN n > 10 THEN printf('seed%04d', 1 + n % 10) END,
+             SELECT printf('TSEED%04d', n), CASE WHEN n > 10 THEN printf('TSEED%04d', 1 + n % 10) END,
                printf('Ticket %04d', n), CASE WHEN n > 4700 THEN 'open' ELSE 'closed' END,
                '2026-11-01T00:00:00.000Z', 'seed', '2026-11-01T00:00:00.000Z', 0 FROM ids;
-             INSERT INTO edges SELECT id, 'seed4999', 'blocks'
-               FROM tickets WHERE status = 'open' AND id != 'seed4999';
-             INSERT INTO edges SELECT id, 'seed0001', 'blocks'
+             INSERT INTO edges SELECT id, 'TSEED4999', 'blocks'
+               FROM tickets WHERE status = 'open' AND id != 'TSEED4999';
+             INSERT INTO edges SELECT id, 'TSEED0001', 'blocks'
                FROM tickets WHERE status = 'closed' AND parent IS NOT NULL;",
         )
         .unwrap();
@@ -482,10 +482,10 @@ fn serves_the_live_graph_listing_and_a_conditional_batch_with_5000_stored_ticket
     assert_eq!(all.edges.len(), 4989);
     assert_eq!(edges::graph(&hub.conn, true).unwrap().len(), 4989);
     assert_eq!(hub.list(json!({})).len(), 300);
-    assert_eq!(hub.list(json!({"ready": true})), ["seed4999"]);
+    assert_eq!(hub.list(json!({"ready": true})), ["TSEED4999"]);
     hub.batch_if(
-        json!([{"op": "claim", "id": "seed4999"}]),
-        json!([{"seq": graph.seq.0}, {"id": "seed4999", "assignee": null}]),
+        json!([{"op": "claim", "id": "TSEED4999"}]),
+        json!([{"seq": graph.seq.0}, {"id": "TSEED4999", "assignee": null}]),
     );
     assert!(hub.list(json!({"ready": true})).is_empty());
 }
@@ -522,25 +522,32 @@ fn a_dependent_stays_blocked_until_the_last_child_of_its_prerequisite_closes() {
 
 #[test]
 fn a_root_id_with_a_dash_from_an_earlier_tracker_is_read_found_and_listed() {
-    // Thousands of the ticket service's closed tickets have IDs such as `ci-00031ced38`, with an
-    // alias carrying the project prefix.
+    // Thousands of the ticket service's closed tickets have IDs such as `TCI-00031CED38`
+    // (`ci-00031ced38` before IDs were stored in capitals), with an alias carrying the project
+    // prefix in lowercase.
     let mut hub = Hub::new();
     hub.conn
         .execute_batch(
             "INSERT INTO tickets (id, title, status, created_at, created_by, updated_at, version)
-               VALUES ('ci-0003', 'CI run', 'closed', '2026-11-01T00:00:00Z', 'tk',
+               VALUES ('TCI-0003', 'CI run', 'closed', '2026-11-01T00:00:00Z', 'tk',
                        '2026-11-01T00:00:00Z', 1);
-             INSERT INTO aliases VALUES ('pj-ci-0003', 'ci-0003');",
+             INSERT INTO aliases VALUES ('pj-ci-0003', 'TCI-0003');",
         )
         .unwrap();
-    for name in ["ci-0003", "Tci-0003", "pj-ci-0003"] {
-        assert_eq!(hub.show(name).ticket.id.as_str(), "ci-0003", "{name}");
+    for name in [
+        "TCI-0003",
+        "ci-0003",
+        "Tci-0003",
+        "pj-ci-0003",
+        "PJ-CI-0003",
+    ] {
+        assert_eq!(hub.show(name).ticket.id.as_str(), "TCI-0003", "{name}");
     }
-    assert_eq!(hub.list(json!({"all": true})), ["ci-0003"]);
+    assert_eq!(hub.list(json!({"all": true})), ["TCI-0003"]);
     let id = hub
         .ids(json!([{"op": "comment", "id": "ci-0003", "text": "still here"}]))
         .remove(0);
-    assert_eq!(id, "ci-0003");
+    assert_eq!(id, "TCI-0003");
 }
 
 #[test]

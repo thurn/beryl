@@ -94,7 +94,7 @@ fn ticket_shape(value: &str) -> Result<(), &'static str> {
     if value.split('.').any(str::is_empty) {
         return Err("has an empty dotted part");
     }
-    // Root IDs from earlier trackers may hold dashes (`ci-00031ced38`); a part never starts with
+    // Root IDs from earlier trackers may hold dashes (`TCI-00031CED38`); a part never starts with
     // one, so a dash cannot be mistaken for an option on a command line.
     if !value
         .chars()
@@ -137,7 +137,9 @@ fn check_shape(value: &str) -> Result<(), &'static str> {
 }
 
 string_id!(
-    /// A ticket, such as `Tq44s.9.48`: an epic's ID with one dotted part per level below it.
+    /// A ticket, such as `TQ44S.9.48`: an epic's ID with one dotted part per level below it.
+    /// The hub mints IDs as a `T` followed by capitals and digits; the shape check accepts any
+    /// case, since lookups by name do too.
     TicketId,
     "ticket ID",
     ticket_shape
@@ -233,9 +235,9 @@ mod tests {
 
     #[test]
     fn ticket_parent_drops_the_last_part() {
-        let id: TicketId = "Tq44s.9.48".parse().unwrap();
-        assert_eq!(id.parent().unwrap().as_str(), "Tq44s.9");
-        assert_eq!("Tq44s".parse::<TicketId>().unwrap().parent(), None);
+        let id: TicketId = "TQ44S.9.48".parse().unwrap();
+        assert_eq!(id.parent().unwrap().as_str(), "TQ44S.9");
+        assert_eq!("TQ44S".parse::<TicketId>().unwrap().parent(), None);
     }
 
     #[test]

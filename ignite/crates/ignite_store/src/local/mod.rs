@@ -30,50 +30,67 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
         sql: include_str!("schema.sql"),
+        code: None,
     },
     Migration {
         version: 2,
         sql: include_str!("schema_2.sql"),
+        code: None,
     },
     Migration {
         version: 3,
         sql: include_str!("schema_3.sql"),
+        code: None,
     },
     Migration {
         version: 4,
         sql: include_str!("schema_4.sql"),
+        code: None,
     },
     Migration {
         version: 5,
         sql: include_str!("schema_5.sql"),
+        code: None,
     },
     Migration {
         version: 6,
         sql: include_str!("schema_6.sql"),
+        code: None,
     },
     Migration {
         version: 7,
         sql: include_str!("schema_7.sql"),
+        code: None,
     },
     Migration {
         version: 8,
         sql: include_str!("schema_8.sql"),
+        code: None,
     },
     Migration {
         version: 9,
         sql: include_str!("schema_9.sql"),
+        code: None,
     },
     Migration {
         version: 10,
         sql: include_str!("schema_10.sql"),
+        code: None,
     },
     Migration {
         version: 11,
         sql: include_str!("schema_11.sql"),
+        code: None,
     },
     Migration {
         version: 12,
         sql: include_str!("schema_12.sql"),
+        code: None,
+    },
+    Migration {
+        version: 13,
+        sql: include_str!("schema_13.sql"),
+        code: None,
     },
 ];
 
@@ -99,13 +116,14 @@ mod tests {
     #[test]
     fn every_migration_is_additive_unless_it_says_otherwise() {
         migrate::assert_additive_unless_breaking(MIGRATIONS);
-        // Only the outbox rebuild is breaking, so a rollback of any later release still opens.
+        // Only the outbox rebuild and the rewrite of ticket IDs into capitals are breaking, so
+        // a rollback to a release between them, or after the second, still opens.
         let breaking: Vec<u32> = MIGRATIONS
             .iter()
             .filter(|m| m.breaking())
             .map(|m| m.version)
             .collect();
-        assert_eq!(breaking, [2]);
+        assert_eq!(breaking, [2, 13]);
     }
 
     #[test]

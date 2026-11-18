@@ -337,8 +337,7 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
 /// A ticket named in backticks or as the label of a Markdown link is shown by its display name.
 fn rewrite_code_and_labels(text: &str, display: &dyn Fn(&str) -> Option<String>) -> String {
     let chars: Vec<char> = text.chars().collect();
-    let name_char =
-        |c: char| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.' || c == 'T';
+    let name_char = |c: char| c.is_ascii_alphanumeric() || c == '-' || c == '.';
     let mut out = String::with_capacity(text.len());
     let mut index = 0;
     while index < chars.len() {
@@ -380,15 +379,13 @@ fn rewrite_code_and_labels(text: &str, display: &dyn Fn(&str) -> Option<String>)
     out
 }
 
-/// `T?[a-z0-9-]+(\.[0-9]+)*` exactly.
+/// `T?[A-Za-z0-9-]+(\.[0-9]+)*` exactly.
 fn valid_name(name: &str) -> bool {
     let body = name.strip_prefix('T').unwrap_or(name);
     let mut parts = body.split('.');
     let head = parts.next().unwrap_or("");
     !head.is_empty()
-        && head
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && head.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
         && parts.all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
 }
 

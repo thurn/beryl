@@ -1,8 +1,8 @@
 # Working on Ignite
 
 Ignite is the build, check and delivery system. `docs/ignite.md` says what it
-does; the code contract in the design field of the epic `Thrh4`
-(`ignite ticket show Thrh4 --json`) says where each part lives and which ticket
+does; the code contract in the design field of the epic `THRH4`
+(`ignite ticket show THRH4 --json`) says where each part lives and which ticket
 owns which file. These are the contract's rules.
 
 ## The workspace

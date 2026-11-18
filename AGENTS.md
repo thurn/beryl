@@ -322,7 +322,7 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 - Do not directly reference planning documents or tickets in code (e.g. "plan
   K16"), this gets stale fast. If you touch code with such references, delete
   them.
-- Never put a ticket number (an Ignite ticket ID such as `cjhb`, or an epic's
+- Never put a ticket number (an Ignite ticket ID such as `TCJHB`, or an epic's
   ID) in code, comments or documentation, including `docs/`, the `AGENTS.md`
   files and skills. A ticket closes and its number then tells a reader nothing,
   so say what the ticket would have said. Ticket numbers belong in commit

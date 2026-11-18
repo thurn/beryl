@@ -1,6 +1,7 @@
 //! The hub's shared database. Each submodule owns the queries over its tables.
 
 pub mod batch;
+pub mod capital_ids;
 pub mod catches;
 pub mod check_state;
 pub mod checks;
@@ -34,46 +35,62 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 1,
         sql: include_str!("schema.sql"),
+        code: None,
     },
     Migration {
         version: 2,
         sql: include_str!("schema_metrics.sql"),
+        code: None,
     },
     Migration {
         version: 3,
         sql: include_str!("feed.sql"),
+        code: None,
     },
     Migration {
         version: 4,
         sql: include_str!("workers_command.sql"),
+        code: None,
     },
     Migration {
         version: 5,
         sql: include_str!("dispatch_rules.sql"),
+        code: None,
     },
     Migration {
         version: 6,
         sql: include_str!("flaky_details.sql"),
+        code: None,
     },
     Migration {
         version: 7,
         sql: include_str!("rejected_commands.sql"),
+        code: None,
     },
     Migration {
         version: 8,
         sql: include_str!("check_state_changes.sql"),
+        code: None,
     },
     Migration {
         version: 9,
         sql: include_str!("listings.sql"),
+        code: None,
     },
     Migration {
         version: 10,
         sql: include_str!("tip_rounds.sql"),
+        code: None,
     },
     Migration {
         version: 11,
         sql: include_str!("two_budgets.sql"),
+        code: None,
+    },
+    Migration {
+        version: 12,
+        sql: include_str!("capital_ids.sql"),
+        code: Some(capital_ids::rewrite_text),
     },
 ];
 
@@ -113,7 +130,14 @@ mod tests {
     #[test]
     fn every_migration_is_additive_unless_it_says_otherwise() {
         migrate::assert_additive_unless_breaking(MIGRATIONS);
-        assert!(MIGRATIONS.iter().all(|m| !m.breaking()));
+        // Only the rewrite of ticket IDs into capitals is breaking, so a rollback to a release
+        // after it still opens.
+        let breaking: Vec<u32> = MIGRATIONS
+            .iter()
+            .filter(|m| m.breaking())
+            .map(|m| m.version)
+            .collect();
+        assert_eq!(breaking, [12]);
     }
 
     /// `select` names the ticket columns, so a column added to `tickets` must be added to the

@@ -143,7 +143,8 @@ fn a_ticket_is_claimed_by_its_id_with_or_without_the_t_or_by_alias() {
     )
     .unwrap();
     let names = [
-        (format!("T{}", ids[0]), 0),
+        // The spelling from before IDs were stored in capitals: `T` and the rest in lowercase.
+        (format!("T{}", ids[0].as_str()[1..].to_lowercase()), 0),
         (ids[1].to_string(), 1),
         ("old-name".to_owned(), 2),
     ];

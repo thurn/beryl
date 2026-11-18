@@ -39,9 +39,9 @@ pub enum BatchOutcome {
 /// How long a create's `request_key` makes a retry return the first create's ticket.
 const REQUEST_KEY_SECONDS: f64 = 86_400.0;
 
-/// The letters of a new root ID. The first is never a digit, so a root never looks like a
-/// number, and `i`, `l`, `o` and `u` are left out as easy to misread.
-const ALPHABET: &[u8; 32] = b"0123456789abcdefghjkmnpqrstvwxyz";
+/// The characters of a new root ID after its `T`. The first is never a digit, so a root never
+/// looks like a number, and `I`, `L`, `O` and `U` are left out as easy to misread.
+const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /// Applies `batch` for `actor` (the session writing) on `machine`. A failed precondition, or a
 /// claim of a ticket someone else holds, returns a conflict naming its index and the ticket as
@@ -700,7 +700,8 @@ impl<'a> Run<'a> {
         Ok(())
     }
 
-    /// A new root ID: a letter and three letters or digits, used by no ticket or alias.
+    /// A new root ID: `T`, a capital letter and three capitals or digits (`TQ44S`), used by no
+    /// ticket or alias. Aliases are stored in lowercase, so they are compared in lowercase.
     fn allocate_root(&self) -> Step<String> {
         loop {
             let mut bytes = [0_u8; 4];
@@ -710,7 +711,8 @@ impl<'a> Run<'a> {
             if bytes[0] >= 242 {
                 continue;
             }
-            let mut id = String::with_capacity(4);
+            let mut id = String::with_capacity(5);
+            id.push('T');
             id.push(char::from(ALPHABET[10 + usize::from(bytes[0]) % 22]));
             for byte in &bytes[1..] {
                 id.push(char::from(ALPHABET[usize::from(*byte) % 32]));
@@ -719,7 +721,8 @@ impl<'a> Run<'a> {
                 .conn
                 .query_row(
                     "SELECT 1 FROM tickets WHERE id = ?1 UNION ALL \
-                     SELECT 1 FROM aliases WHERE alias = ?1 OR alias LIKE '%-' || ?1 LIMIT 1",
+                     SELECT 1 FROM aliases WHERE alias = lower(?1) OR alias LIKE '%-' || lower(?1) \
+                     LIMIT 1",
                     [&id],
                     |row| row.get(0),
                 )

@@ -280,12 +280,12 @@ and tells the agent what to do next.
 A ticket from claim to landing looks like this:
 
 ```text
-$ ignite start Tq44s.9.48
-ticket   Tq44s.9.48  Beryl 3D manual table: counter names, untap lock
+$ ignite start TQ44S.9.48
+ticket   TQ44S.9.48  Beryl 3D manual table: counter names, untap lock
 tree     /Users/dthurn/beryl/.worktrees/tree-07  at staging 8c1f2ab
-title    ⚒️ [Tq44s.9.48] Counter names, untap lock
+title    ⚒️ [TQ44S.9.48] Counter names, untap lock
 files    rust/beryl3d/crates/beryl_scene/src/table/badges.rs  (+4, below)
-needs    Tq44s.9.31 landed 2f0c1d9: "badges draw from one record pool"
+needs    TQ44S.9.31 landed 2f0c1d9: "badges draw from one record pool"
 next     cd to the tree, set the title, read the files, then edit
 ```
 
@@ -303,7 +303,7 @@ $ ignite land -m "Named counters draw as rows above the plaque."
 rebased  onto staging 91d07be (4 commits landed since start)
 gate     38 checks: 31 from cache, 7 run, all passed in 52 s
 landed   3a9e4c1 on staging; ticket closed; tree-07 released
-title    ✅ [Tq44s.9.48] Counter names, untap lock
+title    ✅ [TQ44S.9.48] Counter names, untap lock
 next     nothing; wait for your next ticket
 ```
 
@@ -816,9 +816,9 @@ work lost at release has to be done again from nothing.
 ```text
 $ ignite release --needs person -m "Needs the App Store Connect key. Tried the
   keychain and the CI secrets; neither holds it."
-saved    2 commits and 3 uncommitted files as ignite/Tq44s.7.12
-released Tq44s.7.12; tree-04 is free; do not use this path again
-title    ⛔ [Tq44s.7.12] Sign the iOS build
+saved    2 commits and 3 uncommitted files as ignite/TQ44S.7.12
+released TQ44S.7.12; tree-04 is free; do not use this path again
+title    ⛔ [TQ44S.7.12] Sign the iOS build
 ```
 
 ### Builds
@@ -966,7 +966,7 @@ bench-vm = 1
 A long experiment registers the same way, so the scheduler counts its cores:
 
 ```sh
-ignite run --class batch --ticket Tix1t.12 -- just tournament --games 2000
+ignite run --class batch --ticket TIX1T.12 -- just tournament --games 2000
 ```
 
 ## Cost in instructions
@@ -1672,9 +1672,9 @@ The hub then files a **regression ticket**. It is an ordinary P0 ticket that any
 worker can take:
 
 ```text
-Tk3fc  P0 bug  regression  check:rust
+TK3FC  P0 bug  regression  check:rust
 Regression: beryl_bench::family::tests::family_corpora_never_change
-caused-by  Tw8gv.21.73 (commit 5e1b0aa "feat: ward counts mana spent")
+caused-by  TW8GV.21.73 (commit 5e1b0aa "feat: ward counts mana spent")
 culprit: found by running the check at earlier commits (3 runs)
 first bad 5e1b0aa, last good 77c2d14
 rerun: ignite test family_corpora_never_change
@@ -1762,10 +1762,18 @@ The hub takes over the ticket service that runs on jarvis today. Agents reach
 tickets only through `ignite ticket`, and every ticket operation is one request
 with no lock held across it.
 
+A ticket ID is a `T`, a root of a capital letter and three capitals or digits,
+and one dotted number for each level below the root: `TQ44S` is an epic and
+`TQ44S.7.24` a ticket two levels under it. IDs are stored and printed this way.
+Lookups ignore case and accept the spelling from before IDs were stored in
+capitals (`Tq44s.7` or a bare `q44s.7`), so old commit messages and notes still
+find their tickets. Roots carried over from earlier trackers keep their dashes
+(`TCI-00031CED38`).
+
 What carries over unchanged from the current service:
 
-- Tickets with their IDs (such as `Tq44s.7`), every alias from earlier trackers,
-  labels, priorities, parents, comments and history.
+- Tickets with their IDs, every alias from earlier trackers, labels, priorities,
+  parents, comments and history.
 - Dependency edges, and the readiness rules: a ticket is ready when it is open,
   not deferred, has no open blocker of its own or of an ancestor, and has no
   open child.
@@ -1789,9 +1797,9 @@ gets a new ticket that names the old one.
 
 ```sh
 ignite ticket create "Split beryl_session's replay code" -p P2 \
-  --parent Tig9a --labels tier:opus --deps Tig9a.1 --body-file body.txt
+  --parent TIG9A --labels tier:opus --deps TIG9A.1 --body-file body.txt
 ignite ticket ready --limit 10 --brief
-ignite ticket wait Tig9a.1 --status closed
+ignite ticket wait TIG9A.1 --status closed
 ```
 
 Labels carry what the dispatcher needs to know about a ticket: `tier:opus`,
@@ -1812,7 +1820,7 @@ dispatcher or with a paused pool, an open regression that no worker can take,
 and a ticket that no machine is able to run.
 
 The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
-example `/Tbeje.34`). Only the API is under the project name (`/by/api`). Page
+example `/TBEJE.34`). Only the API is under the project name (`/by/api`). Page
 addresses under `/by/` redirect to the root.
 
 The hub backs up its database hourly and exports it daily, as the service does
@@ -1885,7 +1893,7 @@ $ ignite dispatch --wait 540
 ```json
 {"id": 4812, "do": "handoff", "session": "local_c8470108",
  "clear": true, "model": "opus", "effort": "high",
- "prompt": "Run `ignite start Tq44s.9.48 --reservation 7f3a` and follow it."}
+ "prompt": "Run `ignite start TQ44S.9.48 --reservation 7f3a` and follow it."}
 ```
 
 The dispatcher carries out a hand-off as separate calls, in this order, and
@@ -1975,8 +1983,8 @@ A person decides how much of the fleet each epic gets by giving the epic a
 number of workers:
 
 ```sh
-ignite ticket update Tq44s --workers 5      # Beryl 3D
-ignite ticket update Tw8gv --workers 2      # Project 50k
+ignite ticket update TQ44S --workers 5      # Beryl 3D
+ignite ticket update TW8GV --workers 2      # Project 50k
 ```
 
 - The numbers are shares, not reservations. The hub gives the next free worker
@@ -2024,8 +2032,8 @@ tickets run beside expensive ones.
 ```text
 $ ignite status --admission
 admit_cores 13.0   in progress 11.6 (9 tickets)
-next  Tw8gv.21.80  beryl_kernel  expects 2.1 cores   waits
-next  Ten2c.4      tools/        expects 0.1 cores   admitted
+next  TW8GV.21.80  beryl_kernel  expects 2.1 cores   waits
+next  TEN2C.4      tools/        expects 0.1 cores   admitted
 ```
 
 A documentation or tools ticket is therefore admitted on a busy machine, limited
@@ -2129,7 +2137,7 @@ Correcting a ticket so that it lasts:
 Correcting it now:
 
 ```sh
-ignite tell Tq44s.9.48 "Do not wait for multivac. Land when the gate passes."
+ignite tell TQ44S.9.48 "Do not wait for multivac. Land when the gate passes."
 ignite tell --all "The oracle engines are down until noon. Skip oracle checks."
 ```
 
@@ -2204,9 +2212,9 @@ The `/ignite` skill is how a person starts work. It replaces `/enact` and
 56% of lead time:
 
 ```text
-$ ignite plan check Tig9a
+$ ignite plan check TIG9A
 tickets        41, ready at the start 17
-longest chain  6: Tig9a.1 > .4 > .9 > .15 > .22 > .30
+longest chain  6: TIG9A.1 > .4 > .9 > .15 > .22 > .30
 suspect edge   .12 depends on .7, and they name no file in common
 no files       .19, .27 name no files to read
 missing file   .21 names tools/old.py, which does not exist
@@ -2282,7 +2290,7 @@ The supervisor writes one **record** per command, and the daemon sends records
 to the hub as they are made:
 
 ```json
-{"machine": "m-7f3a", "ticket": "Tq44s.9.48", "session": "local_c8470108",
+{"machine": "m-7f3a", "ticket": "TQ44S.9.48", "session": "local_c8470108",
  "tree": "tree-07", "verb": "test", "class": "agent", "family": "b3d-test",
  "queued_s": 4.1, "wall_s": 58.2, "cpu_s": 301.0, "instructions": 1.21e12,
  "peak_mb": 2210, "outcome": "fail", "commit": "8c1f2ab", "ignite": "d97ed0e"}
@@ -2343,7 +2351,7 @@ Ignite adds its own:
   command or an alias for it.
 
 ```text
-Tm41q  P2 task  improvement  rule:slow-crate
+TM41Q  P2 task  improvement  rule:slow-crate
 beryl_session costs 38.2 core-hours a week in rebuilds (2,100 rebuilds,
 median 1,100 billion instructions). Estimated saving: 15.3 core-hours a
 week if its replay and export code move to crates that fewer changes rebuild.
@@ -2471,8 +2479,8 @@ rule lives where it is needed.
   can.
 
 ```text
-$ ignite start Tk3fc
-ticket   Tk3fc  Regression: family_corpora_never_change
+$ ignite start TK3FC
+ticket   TK3FC  Regression: family_corpora_never_change
 tree     /Users/dthurn/beryl/.worktrees/tree-02  at staging 91d07be
 guide    ignite guide regression   (read it before you change anything)
 ```
@@ -2593,7 +2601,7 @@ The change that deletes the old tools cannot go through Enact, whose check it
 removes. It is prepared on a branch of its own and is the first commit that
 Ignite lands.
 
-The work is tracked in the epic `Thrh4`, whose design field holds the code
+The work is tracked in the epic `THRH4`, whose design field holds the code
 contract: where each part lives and which ticket owns it.
 
 What the switch imports:
