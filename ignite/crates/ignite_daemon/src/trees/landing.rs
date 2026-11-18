@@ -1,7 +1,7 @@
 //! Landing trees: they stay at the tip, and a landing or a tip verification leases one so that
 //! it builds only what one change added.
 
-use ignite_core::ids::{Commit, TreeId};
+use ignite_core::ids::{Commit, TicketId, TreeId};
 use ignite_core::traits::{Error, Result};
 use ignite_git::worktree;
 use ignite_store::local::trees as store;
@@ -79,6 +79,14 @@ impl Trees {
     }
 
     /// Frees a landing tree; `built_at` is the commit its builds now match, if it built.
+    /// Names the ticket a leased ticket tree holds, keeping its branch: the hub numbers an ad
+    /// hoc ticket only when it files it, after the tree was leased under a placeholder.
+    pub fn set_ticket(&self, tree: &TreeId, ticket: &TicketId) -> Result<()> {
+        store::set_ticket(&self.lock().db, tree.as_str(), ticket.as_str())
+            .map_err(|e| store_error(&e))?;
+        Ok(())
+    }
+
     pub fn release_landing(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()> {
         let row = self.row(tree)?;
         if row.state != store::State::Landing.as_str() {

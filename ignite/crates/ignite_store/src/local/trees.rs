@@ -114,6 +114,17 @@ pub fn lease(
     Ok(changed == 1)
 }
 
+/// Names the ticket a leased tree holds, keeping its branch. An ad hoc ticket's tree is leased
+/// under a placeholder before the hub numbers the ticket, and is renamed here once it has.
+/// Returns whether a leased tree was changed.
+pub fn set_ticket(conn: &Connection, id: &str, ticket: &str) -> Result<bool> {
+    let changed = conn.execute(
+        "UPDATE trees SET ticket = ?2 WHERE id = ?1 AND state = 'leased'",
+        params![id, ticket],
+    )?;
+    Ok(changed == 1)
+}
+
 /// Moves a tree from `from` to `to` only if it is in `from` right now, as one statement. Returns
 /// `false`, changing nothing, when the tree is missing or in another state. Two callers that
 /// both try to take a tree out of `from` therefore cannot both succeed.
@@ -166,6 +177,33 @@ mod tests {
             leased_at: None,
             last_used: None,
         }
+    }
+
+    /// An ad hoc ticket's tree, leased under a placeholder, takes the hub's number and keeps
+    /// its branch; a free tree is never given a ticket this way.
+    #[test]
+    fn a_leased_tree_takes_its_tickets_number() {
+        let conn = open_in_memory().unwrap();
+        upsert(&conn, &sample("tree-01")).unwrap();
+        upsert(&conn, &sample("tree-02")).unwrap();
+        assert!(
+            lease(
+                &conn,
+                "tree-01",
+                State::Leased,
+                Some("adhoc20261118141021392"),
+                Some("local_a"),
+                Some("adhoc20261118141021392"),
+                "2026-11-18T00:00:00.000Z",
+            )
+            .unwrap()
+        );
+        assert!(set_ticket(&conn, "tree-01", "svn0").unwrap());
+        let tree = get(&conn, "tree-01").unwrap().unwrap();
+        assert_eq!(tree.ticket.as_deref(), Some("svn0"));
+        assert_eq!(tree.branch.as_deref(), Some("adhoc20261118141021392"));
+        assert!(!set_ticket(&conn, "tree-02", "svn0").unwrap());
+        assert_eq!(get(&conn, "tree-02").unwrap().unwrap().ticket, None);
     }
 
     #[test]

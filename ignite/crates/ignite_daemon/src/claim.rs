@@ -169,6 +169,8 @@ pub trait TreeDesk: Send + Sync {
     fn reset(&self, tree: &TreeId, caller: Option<u32>) -> Result<()>;
     /// Deletes the ticket's saved branch, once the ticket is closed.
     fn drop_saved(&self, ticket: &TicketId) -> Result<()>;
+    /// Names the ticket a leased tree holds, keeping its branch.
+    fn set_ticket(&self, tree: &TreeId, ticket: &TicketId) -> Result<()>;
 }
 
 /// What the desktop app says of a session.
@@ -383,6 +385,16 @@ impl Claims {
                 return reply;
             }
         };
+        // An ad hoc ticket's tree was leased under a placeholder; it takes the number the hub
+        // gave the ticket, so that landing it records and closes that ticket.
+        if brief.ticket.id != lease_id
+            && let Err(error) = self.trees.set_ticket(&leased.tree, &brief.ticket.id)
+        {
+            eprintln!(
+                "ignite: {} keeps the name {lease_id}, not {}: {error}",
+                leased.tree, brief.ticket.id
+            );
+        }
         self.remember(&brief, &leased, &session, detail.as_ref(), now);
         let tree = brief::TreeView {
             tree: &leased.tree,

@@ -232,6 +232,8 @@ pub struct FakeTrees {
     pub reset_fails: Mutex<bool>,
     pub leases: Mutex<Vec<(TicketId, bool)>>,
     pub resets: Mutex<Vec<TreeId>>,
+    /// The ticket each tree was renamed to after its claim.
+    pub renamed: Mutex<Vec<(TreeId, TicketId)>>,
 }
 
 pub fn tree_path(tree: &TreeId) -> PathBuf {
@@ -256,6 +258,11 @@ impl FakeTrees {
 }
 
 impl TreeDesk for FakeTrees {
+    fn set_ticket(&self, tree: &TreeId, ticket: &TicketId) -> Result<()> {
+        lock(&self.renamed).push((tree.clone(), ticket.clone()));
+        Ok(())
+    }
+
     fn lease(
         &self,
         ticket: &TicketId,

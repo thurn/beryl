@@ -117,6 +117,12 @@ fn a_summary_files_an_adhoc_ticket() {
         Target::Adhoc("Fix the flaky timer test".to_owned())
     );
     assert!(reply.text.contains("[Tadhoc.1] Fix the flaky timer test"));
+    // The tree was leased under a placeholder before the hub numbered the ticket. It takes the
+    // hub's number, or its landing is recorded against a ticket the hub has never heard of: on
+    // 2026-11-18 a landed change logged "Unknown ticket adhoc20261118141021392" again and again.
+    let renamed = lock(&world.trees.renamed).clone();
+    assert_eq!(renamed.len(), 1);
+    assert_eq!(renamed[0].1.as_str(), "Tadhoc.1");
 }
 
 #[test]

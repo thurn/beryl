@@ -198,6 +198,10 @@ impl TreeDeskOver {
 }
 
 impl TreeDesk for TreeDeskOver {
+    fn set_ticket(&self, tree: &TreeId, ticket: &TicketId) -> Result<()> {
+        self.trees.set_ticket(tree, ticket)
+    }
+
     fn lease(
         &self,
         ticket: &TicketId,
