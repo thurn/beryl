@@ -58,10 +58,20 @@ pub fn write(home: &Path, record: &CrashRecord) -> io::Result<PathBuf> {
     let millis = SystemClock.now().millis();
     let pid = std::process::id();
     let mut path = dir.join(format!("{millis}-{pid}{SUFFIX}"));
-    // Two panics in one millisecond of one process, such as two loops dying together.
+    // Two panics in one millisecond of one process, such as two loops dying together. The name
+    // is reserved by creating the file, so that two writers never both see it free and the
+    // second overwrites the first.
     for extra in 1.. {
-        if !path.exists() && !reported(&path).exists() {
-            break;
+        if !reported(&path).exists() {
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(_) => break,
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
         }
         path = dir.join(format!("{millis}-{pid}-{extra}{SUFFIX}"));
     }
@@ -209,6 +219,33 @@ mod tests {
             "{names:?}"
         );
         fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn records_written_at_once_never_overwrite_each_other() {
+        let home = scratch("together");
+        let writers: Vec<_> = (0..16)
+            .map(|n| {
+                let home = home.clone();
+                thread::spawn(move || {
+                    let record = CrashRecord {
+                        at: SystemClock.now().to_string(),
+                        commit: "abc1234".to_owned(),
+                        thread: format!("writer-{n}"),
+                        message: format!("panic {n}"),
+                        location: "here".to_owned(),
+                        backtrace: String::new(),
+                    };
+                    write(&home, &record).unwrap()
+                })
+            })
+            .collect();
+        let mut paths: Vec<PathBuf> = writers.into_iter().map(|w| w.join().unwrap()).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), 16);
+        assert_eq!(pending(&home).len(), 16);
+        let _ = fs::remove_dir_all(&home);
     }
 
     #[test]
