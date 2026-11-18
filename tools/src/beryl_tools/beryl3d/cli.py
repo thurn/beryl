@@ -82,14 +82,37 @@ def run_cargo(args: argparse.Namespace) -> int:
 def test_command(packages: list[str], filters: list[str], nextest: bool) -> list[str]:
     """The cargo arguments that test `packages` (the whole workspace for none) and the tests
     whose names contain any of `filters`: cargo-nextest where it is installed, else cargo
-    test, as `just test-rust` chooses."""
-    scope = [x for p in packages for x in ("-p", p)] or ["--workspace"]
+    test, as `just test-rust` chooses.
+
+    Under nextest the command always builds the whole workspace, as `SHARED_BUILD` does just
+    before it, and picks the packages and names with a filterset. Cargo resolves features for
+    the packages a command names, so `nextest run -p beryl_host -p beryl_scene` compiled 61
+    units a second time, with other features, after the shared build had compiled them.
+    """
     if nextest:
         return [
             *["nextest", "run", "--cargo-quiet", "--no-fail-fast", "--no-tests=pass"],
-            *["--status-level=fail", "--final-status-level=fail", *scope, *filters],
+            *["--status-level=fail", "--final-status-level=fail", "--workspace"],
+            *filterset(packages, filters),
         ]
+    scope = [x for p in packages for x in ("-p", p)] or ["--workspace"]
     return ["test", "-q", *scope, *filters]
+
+
+def filterset(packages: list[str], filters: list[str]) -> list[str]:
+    """The nextest `-E` arguments that select the tests of `packages` whose names contain any
+    of `filters`, or none when both are empty. A name filter on nextest's command line is
+    written as `test(...)` here, because how nextest combines name filters with a filterset
+    has changed between its releases."""
+    parts = [
+        f"({' | '.join(f'{kind}({value})' for value in values)})"
+        for kind, values in (
+            ("package", [f"={p}" for p in packages]),
+            ("test", filters),
+        )
+        if values
+    ]
+    return ["-E", " & ".join(parts)] if parts else []
 
 
 def test_arguments(parser: argparse.ArgumentParser) -> None:

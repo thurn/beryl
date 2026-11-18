@@ -67,6 +67,11 @@ again after an edit. Add a test file under `tests/all/`. Only a file that
 installs a global allocator gets a binary of its own in `tests/`. The tests,
 `record` and `gate` share one build in cargo's `test` profile (`SHARED_BUILD` in
 `tools/src/beryl_tools/beryl3d/cli.py`), so don't build them with `cargo run`.
+Don't compile with `just b3d cargo build` either: it builds the `dev` profile,
+which none of those commands reuse, and in a tree without that build it compiled
+77 crates for ten minutes. `just b3d cargo check -p <crate>` type-checks, and
+`just b3d cargo-test -p <crate>` builds and runs a crate's tests on the shared
+build.
 
 ## Seeing and checking
 

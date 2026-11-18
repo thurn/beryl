@@ -17,7 +17,19 @@ def test_tests_run_the_workspace_or_the_named_crates() -> None:
     assert plain == ["test", "-q", "-p", "a", "-p", "b", "pose"]
     fast = cli.test_command(["a"], [], nextest=True)
     assert fast[:2] == ["nextest", "run"] and "--no-tests=pass" in fast
-    assert fast[-2:] == ["-p", "a"]
+    assert fast[-3:] == ["--workspace", "-E", "(package(=a))"]
+    assert cli.test_command([], [], nextest=True)[-1] == "--workspace"
+
+
+def test_named_crates_under_nextest_build_what_the_shared_build_built() -> None:
+    """Naming packages to cargo changes which features it resolves, so nextest builds the
+    whole workspace, as `SHARED_BUILD` does, and filters the tests instead."""
+    named = cli.test_command(["a", "b"], ["pose", "turn"], nextest=True)
+    assert "-p" not in named and "--workspace" in named
+    assert named[-2:] == [
+        "-E",
+        "(package(=a) | package(=b)) & (test(pose) | test(turn))",
+    ]
 
 
 def test_text_commands_hand_every_argument_to_the_b3d_program(
