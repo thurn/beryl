@@ -16,6 +16,8 @@ use ignite_core::protocol::hub::{
 use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::traits::{BuildFor, BuildResult, CommandSpec, Error, RunResult};
 
+use crate::build::repair;
+
 use super::{
     Built, CheckRun, Checks, Failure, Final, Keyed, Listed, OpenTree, Reported, RunOptions, TRIES,
     Target, adapters, base_env, failure, hang_limit_s, incomplete, path_text,
@@ -161,10 +163,52 @@ impl Checks {
         // What each check's runs have cost so far: an equal share of every run it was in.
         let mut costs: BTreeMap<CheckName, ResultCost> = BTreeMap::new();
         let mut finals: Vec<Final> = Vec::new();
+        // Whether a damaged build was cleared and run again: that happens once.
+        let mut repaired = false;
         while !pending.is_empty() {
-            let (reported, output, record) =
-                self.run_family(ctx, tree, name, family, &pending, options);
+            let (reported, output, record, unbuilt) = self.run_family_built(
+                ctx,
+                tree,
+                name,
+                family,
+                &pending,
+                options,
+                run,
+                &mut repaired,
+            );
             run.wall_s += output.usage.wall_s;
+            if unbuilt {
+                // Running it again would fail the same way: the checks wait on the build, which
+                // the round reports once, and are never held off as if they had hung.
+                let product = family.needs.first().map_or(name, String::as_str);
+                if !run.build_failures.iter().any(|(p, _)| p == product) {
+                    run.build_failures
+                        .push((product.to_owned(), output.output.clone()));
+                }
+                let _ = supervise::keep(&output.output);
+                let shares = pending.len();
+                for keyed in pending.drain(..) {
+                    let cost = costs.remove(&keyed.listed.check).unwrap_or_default();
+                    let failure = Failure {
+                        check: keyed.listed.check.clone(),
+                        outcome: Outcome::Incomplete,
+                        at: None,
+                        message: Some(super::BUILD_FAILED.to_owned()),
+                        output: Some(output.output.display().to_string()),
+                        reason: Some(IncompleteReason::BuildFailed),
+                    };
+                    let cost = cost.plus(ResultCost::share_of(&output.usage, shares));
+                    finals.push((
+                        keyed,
+                        Outcome::Incomplete,
+                        Some(failure),
+                        None,
+                        cost,
+                        record,
+                    ));
+                }
+                break;
+            }
             let mut judged = output.hung;
             let mut again = Vec::new();
             let shares = pending.len();
@@ -400,6 +444,73 @@ impl Checks {
         Ok(())
     }
 
+    /// Runs the family's `run` command for `checks` as [`Checks::run_family`] does, and says
+    /// whether the Cargo build that a cargo-nextest run starts failed, so no check ran.
+    ///
+    /// A cargo-nextest run builds whatever is out of date before it tests. A build ended partway
+    /// in the tree is cleared up first, and a build failure that looks like damage to the tree's
+    /// build products (see `crate::build::repair`) is cleared and run once more, at most once
+    /// per `repaired`. The first run's time is added to `run`.
+    #[allow(clippy::too_many_arguments)]
+    fn run_family_built(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        name: &str,
+        family: &Family,
+        checks: &[Keyed],
+        options: &RunOptions,
+        run: &mut CheckRun,
+        repaired: &mut bool,
+    ) -> (Vec<Reported>, RunResult, Option<RecordId>, bool) {
+        if family.adapter != Adapter::Nextest {
+            let (reported, output, record) =
+                self.run_family(ctx, tree, name, family, checks, options);
+            return (reported, output, record, false);
+        }
+        let targets = self.target_dirs(tree, family);
+        for target in &targets {
+            repair::clear_if_suspect(target);
+        }
+        let (reported, output, record) = self.run_family(ctx, tree, name, family, checks, options);
+        repair::mark_if_ended(&output, &targets);
+        let failure = build_failure(&reported, &output);
+        let Some(failure) = failure else {
+            return (reported, output, record, false);
+        };
+        if !failure.damaged || *repaired {
+            return (reported, output, record, true);
+        }
+        *repaired = true;
+        run.wall_s += output.usage.wall_s;
+        for target in &targets {
+            repair::clear_crates(target, &failure.crates);
+        }
+        eprintln!(
+            "ignite: the build of {name}'s checks failed in {}; running them once more after \
+             clearing {}",
+            tree.id,
+            failure.crates.join(", ")
+        );
+        let (reported, output, record) = self.run_family(ctx, tree, name, family, checks, options);
+        repair::mark_if_ended(&output, &targets);
+        let unbuilt = build_failure(&reported, &output).is_some();
+        (reported, output, record, unbuilt)
+    }
+
+    /// The target directories of the products `family` needs, in `tree`.
+    fn target_dirs(&self, tree: &OpenTree, family: &Family) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = family
+            .needs
+            .iter()
+            .filter_map(|n| self.settings.manifest.products.get(n))
+            .flat_map(|p| p.outputs.iter().map(|o| tree.path.join(o)))
+            .collect();
+        dirs.sort();
+        dirs.dedup();
+        dirs
+    }
+
     /// Runs the family's `run` command once for `checks` and reads what it reported, with the
     /// ID the hub gave the run's record if it took it.
     pub(super) fn run_family(
@@ -608,6 +719,15 @@ impl Checks {
         };
         self.cache.record(&record)
     }
+}
+
+/// What a run's Cargo build said when it failed before any check ran (see
+/// [`repair::run_failure`]).
+fn build_failure(reported: &[Reported], output: &RunResult) -> Option<repair::CompileFailure> {
+    let ran = reported
+        .iter()
+        .any(|r| matches!(r.outcome, Outcome::Pass | Outcome::Fail | Outcome::Flaky));
+    repair::run_failure(ran, output)
 }
 
 /// The units file a command's environment names, if it names one.

@@ -37,6 +37,9 @@ struct Launched {
     /// While set, every build command fails with this exit code (`None` for a signal) and
     /// whether its supervisor ended it as hung, writing its output to a file.
     failing: Option<(Option<i32>, bool)>,
+    /// Outputs that the next build commands fail with, exit code 101, one each, before
+    /// `failing` applies.
+    fail_with: std::collections::VecDeque<String>,
 }
 
 impl TestLauncher {
@@ -128,6 +131,14 @@ impl Launcher for TestLauncher {
         fs::write(units, state.units.join("\n")).unwrap();
         state.active -= 1;
         self.changed.notify_all();
+        if let Some(text) = state.fail_with.pop_front() {
+            let output = self.dir.join(format!("build-{n}.txt"));
+            fs::write(&output, text).unwrap();
+            return RunResult {
+                exit: Some(101),
+                ..done(output)
+            };
+        }
         if let Some((exit, hung)) = state.failing {
             let output = self.dir.join(format!("build-{n}.txt"));
             fs::write(&output, "error: the build failed\n").unwrap();
@@ -719,3 +730,6 @@ fn a_stopped_request_stops_waiting_for_another_build() {
 
 #[path = "build/restart_tests.rs"]
 mod restart;
+
+#[path = "build/repair_build_tests.rs"]
+mod repair;

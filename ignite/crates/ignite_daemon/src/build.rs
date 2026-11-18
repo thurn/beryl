@@ -15,7 +15,8 @@
 //!   inputs fail the same way. A build that a signal ended, or that hung, is not remembered,
 //!   so the next request tries it again.
 //! - Otherwise it waits until no build is writing any of the product's output directories in
-//!   that tree, then runs the build command through the [`Launcher`].
+//!   that tree, then runs the build command through the [`Launcher`]. A failure that looks
+//!   like damage to the tree's own build products is cleared and run once more (see `repair`).
 //!
 //! The input hash covers the product's resolved inputs (by git object ID) and its build command
 //! as it will run, so an edit to anything the product reads makes the next request build.
@@ -45,6 +46,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 mod flight;
 mod rejoin;
+pub mod repair;
 mod store;
 use flight::{Flight, FlightGuard, STOP_RECHECK};
 pub use rejoin::BUILD_KEY_ENV;
@@ -553,28 +555,28 @@ impl BuildManager {
         result
     }
 
-    /// Runs the build command. The flag says whether a failure came from the command exiting
-    /// with a code, which the same inputs would repeat, rather than from a signal, a hang or
-    /// the daemon's own files.
-    fn run(&self, plan: &Plan) -> (BuildResult, bool) {
+    /// Runs the build command once, and returns how it ended with the file its compile units
+    /// are in. `Err` is the failure of the daemon's own files, before anything ran. A build
+    /// result's flag says whether a failure came from the command exiting with a code, which
+    /// the same inputs would repeat, rather than from a signal, a hang or the daemon's own files.
+    fn run_once(&self, plan: &Plan) -> std::result::Result<(RunResult, PathBuf), BuildResult> {
         let units_file = self.record_file(&plan.request.product, "units");
         let prepared =
             fs::create_dir_all(&self.settings.records).and_then(|()| fs::write(&units_file, ""));
         if let Err(error) = prepared {
             let message = format!("cannot create {}: {error}", units_file.display());
-            return (self.failure(&plan.request.product, &message), false);
+            return Err(self.failure(&plan.request.product, &message));
         }
-        let mut env = match self.wrapper_env(&units_file) {
-            Ok(env) => env,
-            Err(message) => return (self.failure(&plan.request.product, &message), false),
-        };
+        let mut env = self
+            .wrapper_env(&units_file)
+            .map_err(|message| self.failure(&plan.request.product, &message))?;
         env.push(rejoin::BuildKey::of(plan).variable());
         let spec = self.spec(plan, plan.args.clone(), self.settings.cores, env);
-        Self::outcome(self.launcher.run(&spec), &units_file)
+        Ok((self.launcher.run(&spec), units_file))
     }
 
     /// The result of a build command that ended with `run`, whose compile units are in
-    /// `units_file`, which it deletes. The flag is as for [`BuildManager::run`].
+    /// `units_file`, which it deletes. The flag is as for [`BuildManager::run_once`].
     fn outcome(run: RunResult, units_file: &Path) -> (BuildResult, bool) {
         let RunResult {
             exit,

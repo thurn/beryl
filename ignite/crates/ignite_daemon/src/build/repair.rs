@@ -1,0 +1,360 @@
+//! Repairing a Cargo target directory whose incremental build of one crate is damaged.
+//!
+//! rustc keeps each crate's incremental work in `<profile>/incremental/<crate>-<hash>/`, and its
+//! codegen units there are hard links to the object files in `<profile>/deps` (a `deps` object
+//! of a workspace crate has a link count of 2 or more, all inside the same tree). When a compile
+//! is ended partway, for example by a daemon restart, or when objects from two compiles get
+//! mixed, the next compile can reuse a damaged unit: on 2026-11-18 the test target `session`
+//! failed to link in one landing tree with "Undefined symbols for architecture arm64" for its
+//! own `.llvm.<n>` symbols, in 1-4 s on every retry, while the same commit built everywhere else.
+//! Deleting that crate's incremental folder and its `deps` files fixed it.
+//!
+//! Two things here do that by themselves:
+//!
+//! - After a build fails, [`compile_failure`] reads which crates Cargo could not compile and
+//!   whether the failure looks like damage to the tree's build rather than to the source (a link
+//!   error, a compiler crash, unreadable metadata). The caller clears those crates
+//!   ([`clear_crates`]) and builds once more before it reports the failure.
+//! - A build that was ended partway marks its target directory ([`mark_suspect`]). The next build
+//!   there first clears every crate that a compile left unfinished ([`clear_if_suspect`]): rustc
+//!   names a session folder `s-…-working` until the compile finishes.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use ignite_core::protocol::Usage;
+use ignite_core::traits::{BuildResult, RunResult};
+
+use super::rejoin::BuildKey;
+use super::{BUILD_KEY_ENV, BuildManager, Plan, lock, read_units};
+use crate::supervise::SpecFile;
+
+/// The file in a target directory that says a build there was ended partway.
+pub const SUSPECT_FILE: &str = ".ignite-suspect";
+
+/// Text in a failed build's output that says the tree's build products are damaged, not the
+/// source: the same inputs built elsewhere, or would after the crate's cache is cleared.
+const DAMAGE: &[&str] = &[
+    // The linkers of macOS, Linux and Windows, and Cargo's own line around them.
+    "error: linking with `",
+    "Undefined symbols for architecture",
+    "undefined reference to `",
+    "unresolved external symbol",
+    // rustc crashed, or could not read its own outputs or incremental session.
+    "internal compiler error",
+    "found invalid metadata files",
+    "incremental compilation",
+    "failed to load dep-graph",
+];
+
+/// What a failed Cargo build said about the crates it could not compile.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompileFailure {
+    /// The crate names, as rustc names their incremental folders and `deps` files.
+    pub crates: Vec<String>,
+    /// Whether the output says the build products are damaged (see [`DAMAGE`]).
+    pub damaged: bool,
+}
+
+/// The crates a failed Cargo build's output says could not compile, or `None` when it names
+/// none, as when the build failed before compiling.
+///
+/// Cargo ends each crate's errors with ``error: could not compile `<package>` (<target>)``,
+/// where the target is `lib`, `lib test`, `bin "<name>"`, `test "<name>"` and so on. A target
+/// with a name compiles to a crate of that name; a library to one named after the package.
+/// Build scripts are left out: rustc keeps no incremental work for them.
+pub fn compile_failure(output: &str) -> Option<CompileFailure> {
+    let mut crates: Vec<String> = Vec::new();
+    for line in output.lines() {
+        let Some((_, rest)) = line.split_once("could not compile `") else {
+            continue;
+        };
+        let Some((package, rest)) = rest.split_once('`') else {
+            continue;
+        };
+        if let Some(name) = crate_of(package, rest)
+            && !crates.contains(&name)
+        {
+            crates.push(name);
+        }
+    }
+    (!crates.is_empty()).then(|| CompileFailure {
+        crates,
+        damaged: DAMAGE.iter().any(|text| output.contains(text)),
+    })
+}
+
+/// The crate a `could not compile` line names, from its package and the text after it.
+fn crate_of(package: &str, rest: &str) -> Option<String> {
+    let target = rest
+        .trim_start()
+        .strip_prefix('(')
+        .and_then(|t| t.split_once(')'))
+        .map_or("", |(target, _)| target);
+    if target.starts_with("build script") {
+        return None;
+    }
+    let named = target.split('"').nth(1).filter(|name| !name.is_empty());
+    Some(named.unwrap_or(package).replace('-', "_"))
+}
+
+/// The profile directories of a target directory: those that hold `deps` or `incremental`,
+/// one level down (`<target>/debug`) or two for a cross build (`<target>/<triple>/debug`).
+fn profile_dirs(target: &Path) -> Vec<PathBuf> {
+    let is_profile = |dir: &Path| dir.join("deps").is_dir() || dir.join("incremental").is_dir();
+    let mut found = Vec::new();
+    for child in subdirectories(target) {
+        if is_profile(&child) {
+            found.push(child);
+        } else {
+            found.extend(subdirectories(&child).into_iter().filter(|d| is_profile(d)));
+        }
+    }
+    found
+}
+
+fn subdirectories(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut dirs: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    dirs.sort();
+    dirs
+}
+
+/// The names of the entries in `dir`.
+fn names(dir: &Path) -> Vec<String> {
+    fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok()?.file_name().into_string().ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Whether `rest` starts with a 16-digit hexadecimal Cargo metadata hash.
+fn hashed(rest: &str) -> bool {
+    rest.len() >= 16 && rest.as_bytes()[..16].iter().all(u8::is_ascii_hexdigit)
+}
+
+/// Whether `name`, in a `deps` folder, is an output of crate `krate`: `<crate>-<hash>…`,
+/// `lib<crate>-<hash>…`, or a codegen unit object `<crate>.<unit>….rcgu.o`.
+fn is_output_of(name: &str, krate: &str) -> bool {
+    let after = |prefix: &str| name.strip_prefix(prefix).and_then(|r| r.strip_prefix('-'));
+    after(krate).is_some_and(hashed)
+        || after(&format!("lib{krate}")).is_some_and(hashed)
+        || (name.strip_prefix(krate).is_some_and(|r| r.starts_with('.'))
+            && name.ends_with(".rcgu.o"))
+}
+
+/// Deletes the incremental folders and `deps` files of each of `crates` in every profile of the
+/// target directory `target`, and returns what it deleted. Cargo then compiles each from scratch:
+/// a crate whose outputs are missing is out of date.
+pub fn clear_crates(target: &Path, crates: &[String]) -> Vec<PathBuf> {
+    let mut deleted = Vec::new();
+    for profile in profile_dirs(target) {
+        let incremental = profile.join("incremental");
+        for name in names(&incremental) {
+            let Some((krate, _)) = name.rsplit_once('-') else {
+                continue;
+            };
+            let path = incremental.join(&name);
+            if crates.iter().any(|c| c == krate) && fs::remove_dir_all(&path).is_ok() {
+                deleted.push(path);
+            }
+        }
+        let deps = profile.join("deps");
+        for name in names(&deps) {
+            if !crates.iter().any(|c| is_output_of(&name, c)) {
+                continue;
+            }
+            let path = deps.join(&name);
+            let removed = if path.is_dir() {
+                fs::remove_dir_all(&path)
+            } else {
+                fs::remove_file(&path)
+            };
+            if removed.is_ok() {
+                deleted.push(path);
+            }
+        }
+    }
+    deleted
+}
+
+/// Marks `target` as holding a build that was ended partway, when it is a directory.
+pub fn mark_suspect(target: &Path) {
+    if target.is_dir() {
+        let _ = fs::write(
+            target.join(SUSPECT_FILE),
+            "a build here was ended partway\n",
+        );
+    }
+}
+
+/// If `target` is marked as holding a build that was ended partway, clears each crate whose
+/// incremental session a compile left unfinished (`s-…-working`) and removes the mark. Returns
+/// the crates cleared.
+pub fn clear_if_suspect(target: &Path) -> Vec<String> {
+    let mark = target.join(SUSPECT_FILE);
+    if !mark.is_file() {
+        return Vec::new();
+    }
+    let mut unfinished: Vec<String> = Vec::new();
+    for profile in profile_dirs(target) {
+        let incremental = profile.join("incremental");
+        for name in names(&incremental) {
+            let working = names(&incremental.join(&name))
+                .iter()
+                .any(|session| session.starts_with("s-") && session.ends_with("-working"));
+            if let (true, Some((krate, _))) = (working, name.rsplit_once('-'))
+                && !unfinished.iter().any(|c| c == krate)
+            {
+                unfinished.push(krate.to_owned());
+            }
+        }
+    }
+    if !unfinished.is_empty() {
+        clear_crates(target, &unfinished);
+        eprintln!(
+            "ignite: cleared {} in {}: a build there was ended partway",
+            unfinished.join(", "),
+            target.display()
+        );
+    }
+    let _ = fs::remove_file(mark);
+    unfinished
+}
+
+/// Marks the target directories of a command that was ended partway, when it may have been
+/// compiling: a build manager's build (its `IGNITE_BUILD_KEY` names its output directories in
+/// `tree`), or any other command that runs `cargo`, whose target directory is `target` in its
+/// working directory.
+pub fn mark_ended(spec: &SpecFile, tree: &Path) {
+    let key = spec
+        .env
+        .iter()
+        .find(|(name, _)| name == BUILD_KEY_ENV)
+        .and_then(|(_, value)| serde_json::from_str::<BuildKey>(value).ok());
+    if let Some(key) = key {
+        for output in &key.outputs {
+            mark_suspect(&tree.join(output));
+        }
+    } else if spec.args.iter().any(|arg| arg == "cargo") {
+        mark_suspect(&spec.cwd.join("target"));
+    }
+}
+
+/// Whether a command was ended before it finished: by a signal, or at its hang limit.
+pub fn ended_partway(run: &RunResult) -> bool {
+    run.exit.is_none() || run.hung
+}
+
+/// Marks each of `targets` when `run`, a command that may have compiled in them, was ended
+/// partway, so the next build there clears what it left unfinished.
+pub fn mark_if_ended(run: &RunResult, targets: &[PathBuf]) {
+    if ended_partway(run) {
+        for target in targets {
+            mark_suspect(target);
+        }
+    }
+}
+
+/// What a command's Cargo build said when it failed before the command did anything else: it
+/// exited with a code, `reported` is false (it reported no result), and its output names crates
+/// that could not compile.
+pub fn run_failure(reported: bool, run: &RunResult) -> Option<CompileFailure> {
+    if reported || run.hung || run.exit.is_none_or(|code| code == 0) {
+        return None;
+    }
+    compile_failure(&fs::read_to_string(&run.output).unwrap_or_default())
+}
+
+/// The sum of two commands' usage, for a build run twice.
+fn add_usage(a: &Usage, b: &Usage) -> Usage {
+    Usage {
+        queued_s: a.queued_s + b.queued_s,
+        wall_s: a.wall_s + b.wall_s,
+        cpu_s: a.cpu_s + b.cpu_s,
+        instructions: match (a.instructions, b.instructions) {
+            (Some(a), Some(b)) => Some(a + b),
+            (one, other) => one.or(other),
+        },
+        peak_mb: a.peak_mb.max(b.peak_mb),
+    }
+}
+
+impl BuildManager {
+    /// Runs the build command, first clearing what a build ended partway left, and once more
+    /// after clearing the crates that failed when the failure looks like damage to this tree's
+    /// build (see the module documentation). The flag is as for [`BuildManager::run_once`].
+    pub(super) fn run(&self, plan: &Plan) -> (BuildResult, bool) {
+        let targets: Vec<PathBuf> = plan
+            .product
+            .outputs
+            .iter()
+            .map(|output| plan.path.join(output))
+            .collect();
+        for target in &targets {
+            clear_if_suspect(target);
+        }
+        let (first, units_file) = match self.run_once(plan) {
+            Ok(ran) => ran,
+            Err(failed) => return (failed, false),
+        };
+        mark_if_ended(&first, &targets);
+        let repair = run_failure(false, &first)
+            .filter(|failure| failure.damaged || self.held_elsewhere(plan));
+        let Some(failure) = repair else {
+            return Self::outcome(first, &units_file);
+        };
+        let first_units = read_units(&units_file);
+        let _ = fs::remove_file(&units_file);
+        for target in &targets {
+            clear_crates(target, &failure.crates);
+        }
+        eprintln!(
+            "ignite: {} failed to build in {}; building once more after clearing {}",
+            plan.request.product,
+            plan.request.tree,
+            failure.crates.join(", ")
+        );
+        let (second, units_file) = match self.run_once(plan) {
+            Ok(ran) => ran,
+            Err(failed) => return (failed, false),
+        };
+        mark_if_ended(&second, &targets);
+        match Self::outcome(second, &units_file) {
+            (BuildResult::Built { usage, units }, remember) => {
+                let mut all = first_units;
+                all.extend(units);
+                let usage = add_usage(&first.usage, &usage);
+                (BuildResult::Built { usage, units: all }, remember)
+            }
+            (BuildResult::Failed { output, usage }, remember) => {
+                let usage = add_usage(&first.usage, &usage);
+                (BuildResult::Failed { output, usage }, remember)
+            }
+            other => other,
+        }
+    }
+
+    /// Whether another tree holds the same product and packages built from the same inputs, so
+    /// a failure here comes from this tree's build products and not from the source.
+    fn held_elsewhere(&self, plan: &Plan) -> bool {
+        lock(&self.state).held.iter().any(|(request, hash)| {
+            request.tree != plan.request.tree
+                && request.product == plan.request.product
+                && request.packages == plan.request.packages
+                && *hash == plan.hash
+        })
+    }
+}
+
+#[cfg(test)]
+#[path = "repair_tests.rs"]
+mod tests;

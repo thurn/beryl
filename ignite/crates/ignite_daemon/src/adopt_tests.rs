@@ -217,3 +217,39 @@ fn a_command_that_started_at_another_commit_is_ended_not_adopted() {
     assert_eq!(inner.runs().len(), 1);
     assert_eq!(launcher.waiting(), 0);
 }
+
+/// A restart once ended a `cargo nextest run` that was compiling in a landing tree, and every
+/// later build there failed to link the crate it had been compiling. Ending such a run now marks
+/// its target directory, so the next build there clears what the compile left unfinished.
+#[test]
+fn ending_a_compiling_run_in_a_reset_tree_marks_its_target_directory() {
+    let dir = std::env::temp_dir().join(format!("ignite-adopt-{}-ended", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let tree = dir.join("trees").join("landing-2");
+    let target = tree.join("rust").join("target");
+    std::fs::create_dir_all(&target).unwrap();
+    let runs = dir.join("runs");
+    let started = |name: &str, args: &[&str], cwd: &Path| {
+        let run = runs.join(name);
+        std::fs::create_dir_all(&run).unwrap();
+        let spec = SpecFile {
+            args: args.iter().map(|a| (*a).to_owned()).collect(),
+            cwd: cwd.to_path_buf(),
+            env: Vec::new(),
+            queued_s: 0.0,
+            jobserver: None,
+            build_jobs: None,
+            hang_limit_s: None,
+            grant: None,
+        };
+        std::fs::write(run.join("spec.json"), serde_json::to_vec(&spec).unwrap()).unwrap();
+    };
+    started("1-1-0", &["cargo", "nextest", "run"], &tree.join("rust"));
+    started("1-1-1", &["cargo", "nextest", "run"], &dir);
+
+    let unfinished = SupervisedLauncher::new(Path::new("ignite"), runs).unfinished();
+    let kept = end_runs_in(unfinished, std::slice::from_ref(&tree));
+    assert_eq!(kept.len(), 1, "the run outside the reset tree is kept");
+    assert!(target.join(crate::build::repair::SUSPECT_FILE).is_file());
+    std::fs::remove_dir_all(&dir).unwrap();
+}

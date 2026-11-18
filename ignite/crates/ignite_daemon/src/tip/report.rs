@@ -34,7 +34,10 @@ impl TipVerifier {
     /// leaves it alone for a growing time, and the hub is told once per check, in one report
     /// for each family, reason and platform. A check whose run ended incomplete through no
     /// fault of its own (no landing tree was free) is not given up on; the next round runs it
-    /// again.
+    /// again. Nor is a check whose build failed: holding it off is for a check that ran and
+    /// hung or went unreported, and a build fails the same way at once until its tree or its
+    /// inputs change, so holding its checks off only kept `master` waiting for hours after a
+    /// tree's damaged build was mended.
     pub(super) fn note_incomplete(
         &mut self,
         ctx: &Context,
@@ -53,11 +56,13 @@ impl TipVerifier {
             let (Outcome::Incomplete, Some(reason)) = (run.outcome, run.reason) else {
                 continue;
             };
-            let runs = self.incomplete_runs.entry(check.key.clone()).or_insert(0);
-            *runs += 1;
-            let wait = (GIVE_UP_S * f64::from(1_u32 << (*runs - 1).min(10))).min(GIVE_UP_MAX_S);
-            self.held_off
-                .insert(check.key.clone(), now.plus_seconds(wait));
+            if reason != IncompleteReason::BuildFailed {
+                let runs = self.incomplete_runs.entry(check.key.clone()).or_insert(0);
+                *runs += 1;
+                let wait = (GIVE_UP_S * f64::from(1_u32 << (*runs - 1).min(10))).min(GIVE_UP_MAX_S);
+                self.held_off
+                    .insert(check.key.clone(), now.plus_seconds(wait));
+            }
             if self.reported_incomplete.contains(&check.key) {
                 continue;
             }
@@ -305,3 +310,7 @@ fn incomplete_report(
         product: None,
     }
 }
+
+#[cfg(test)]
+#[path = "report_tests.rs"]
+mod tests;

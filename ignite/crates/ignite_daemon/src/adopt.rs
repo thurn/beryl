@@ -97,22 +97,33 @@ fn spec_of(run: &Run) -> Option<SpecFile> {
 
 /// Ends every run in `runs` whose working directory is inside one of `trees`, and returns the
 /// others. The restarted daemon resets those trees, so what the runs would report is about files
-/// that are no longer there.
+/// that are no longer there. A run that may have been compiling marks its target directory, so
+/// the next build there first clears what the ended compile left unfinished (see
+/// `crate::build::repair`).
 pub fn end_runs_in(runs: Vec<Run>, trees: &[PathBuf]) -> Vec<Run> {
     runs.into_iter()
         .filter(|run| {
-            let inside = spec_of(run)
-                .is_some_and(|spec| trees.iter().any(|tree| spec.cwd.starts_with(tree)));
-            if inside {
-                eprintln!(
-                    "ignite: ending {}: its tree is reset after the restart",
-                    run.dir().display()
-                );
-                let _ = run.end();
-            }
-            !inside
+            let spec = spec_of(run);
+            let Some((spec, tree)) = spec.as_ref().and_then(|spec| tree_of(spec, trees)) else {
+                return true;
+            };
+            eprintln!(
+                "ignite: ending {}: its tree is reset after the restart",
+                run.dir().display()
+            );
+            let _ = run.end();
+            crate::build::repair::mark_ended(spec, tree);
+            false
         })
         .collect()
+}
+
+/// The run's spec with the tree of `trees` its working directory is inside, if any.
+fn tree_of<'a>(spec: &'a SpecFile, trees: &'a [PathBuf]) -> Option<(&'a SpecFile, &'a Path)> {
+    trees
+        .iter()
+        .find(|tree| spec.cwd.starts_with(tree))
+        .map(|tree| (spec, tree.as_path()))
 }
 
 /// A launcher that hands each command a previous daemon started for the same handle back to

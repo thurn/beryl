@@ -2,6 +2,7 @@
 //! builds and git, and a tree in a temporary directory.
 
 mod budget;
+mod compile;
 mod costs;
 mod fail_fast;
 mod hardening;
@@ -56,6 +57,9 @@ struct ScriptLauncher {
     list_exit: Mutex<i32>,
     outcomes: Mutex<HashMap<String, VecDeque<Option<&'static str>>>>,
     nextest_run: Mutex<String>,
+    /// Outputs that the next cargo-nextest runs fail with, exit code 101, one each, as when
+    /// their Cargo build fails.
+    nextest_failures: Mutex<VecDeque<String>>,
     runs: Mutex<Vec<CommandSpec>>,
     files: AtomicU64,
     /// Called when a family's `run` command starts, to change the tree under it.
@@ -134,7 +138,12 @@ impl Launcher for ScriptLauncher {
                     let unit = "{\"crate\":\"core\",\"mode\":\"run\",\"instructions\":5.0e8,\"cpu_s\":0.25,\"rebuilt\":false}\n";
                     fs::write(file, unit).unwrap();
                 }
-                self.nextest_run.lock().unwrap().clone()
+                if let Some(failure) = self.nextest_failures.lock().unwrap().pop_front() {
+                    exit = Some(101);
+                    failure
+                } else {
+                    self.nextest_run.lock().unwrap().clone()
+                }
             }
             _ => String::new(),
         };
