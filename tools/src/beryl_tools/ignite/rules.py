@@ -507,12 +507,30 @@ def family_checks(family: str) -> list[Check]:
     return [c for c in CHECKS if c.family == family]
 
 
+def matching(root: Path, patterns: Sequence[str]) -> list[str]:
+    """`patterns` without the wildcard patterns that match no tracked file. Ignite refuses a
+    check whose input pattern matches nothing, and a check that scans every file of some
+    extensions under several roots names patterns such as `docs/*.py` that match nothing today.
+    A file added later where such a pattern would match is covered once the pattern is listed
+    again, which any change to the check's other inputs causes."""
+    kept: list[str] = []
+    for pattern in patterns:
+        plain_tree = pattern.endswith("/**") and "*" not in pattern[: -len("/**")]
+        if "*" not in pattern or plain_tree:
+            kept.append(pattern)
+        elif git(
+            root, "ls-files", "-co", "--exclude-standard", "--", f":(glob){pattern}"
+        ):
+            kept.append(pattern)
+    return kept
+
+
 def listing(family: str, root: Path) -> list[dict[str, str | list[str]]]:
     lines: list[dict[str, str | list[str]]] = []
     for c in family_checks(family):
         line: dict[str, str | list[str]] = {
             "check": c.full,
-            "inputs": [SELF, *c.inputs],
+            "inputs": [SELF, *matching(root, c.inputs)],
         }
         if c.name in DIGESTS:
             line["digest"] = DIGESTS[c.name](root)

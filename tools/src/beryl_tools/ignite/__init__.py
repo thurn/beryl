@@ -30,6 +30,9 @@ class Listed:
 
     check: str
     inputs: list[str] = field(default_factory=list)
+    # The workspace package the check belongs to, for a family whose build products are built
+    # per package (`crate-closure` in a product's inputs).
+    package: str = ""
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,8 @@ def listed(checks: Iterable[Listed]) -> None:
         line: dict[str, object] = {"check": entry.check}
         if entry.inputs:
             line["inputs"] = entry.inputs
+        if entry.package:
+            line["package"] = entry.package
         print(json.dumps(line), flush=True)
 
 

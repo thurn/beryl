@@ -393,3 +393,22 @@ def test_the_adapter_imports_no_orchestration() -> None:
             if node.module:
                 imported.add(node.module.split(".")[0])
     assert imported and not imported & FORBIDDEN
+
+
+def test_no_listed_input_matches_nothing() -> None:
+    """Ignite refuses a check whose input pattern matches no tracked file: `source:citations`
+    named `docs/*.json` and every landing failed with "invalid: docs/*.json: matches no tracked
+    file". Each listed wildcard pattern must match something."""
+    for family in sorted({c.family for c in rules.CHECKS}):
+        for line in rules.listing(family, REPO):
+            for pattern in line["inputs"]:
+                if "*" in pattern and not pattern.endswith("/**"):
+                    found = rules.git(
+                        REPO,
+                        "ls-files",
+                        "-co",
+                        "--exclude-standard",
+                        "--",
+                        f":(glob){pattern}",
+                    )
+                    assert found, f"{line['check']}: {pattern} matches no tracked file"

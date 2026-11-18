@@ -129,6 +129,10 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
         #[serde(default)]
         inputs: Vec<String>,
         digest: Option<String>,
+        /// The workspace package the check belongs to, for a family whose products build per
+        /// package (`crate-closure` in a product's inputs, `{packages}` in its build).
+        #[serde(default)]
+        package: Option<String>,
     }
     let mut listed = Vec::new();
     let mut refused = Vec::new();
@@ -147,7 +151,7 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
                 check: line.check,
                 inputs: line.inputs,
                 digest: line.digest,
-                package: None,
+                package: line.package,
                 target: None,
                 refused: None,
             }),
@@ -406,6 +410,19 @@ mod tests {
         assert!(few.ends_with("\"bad 1\" (spaces)"), "{few}");
     }
 
+    /// A `jsonl` family that needs a product built per package failed every check with
+    /// "crate-closure: the check belongs to no package", because a listing line could not name
+    /// its package. It now can.
+    #[test]
+    fn a_jsonl_listing_line_names_its_package() {
+        let listed = jsonl_list(
+            "{\"check\": \"alloc:core\", \"package\": \"core\"}\n",
+            "alloc",
+        );
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].package.as_deref(), Some("core"));
+    }
+
     #[test]
     fn jsonl_listing_and_results() {
         let listing = "building...\n\
@@ -414,6 +431,7 @@ mod tests {
             {\"check\": \"py:t/test_a.py::two\", \"digest\": \"d1\"}\n";
         let listed = jsonl_list(listing, "py");
         assert_eq!(listed.len(), 2);
+        assert_eq!(listed[0].package, None);
         assert_eq!(listed[0].inputs, ["t/a.py"]);
         assert_eq!(listed[0].digest, None);
         assert_eq!(listed[1].digest.as_deref(), Some("d1"));

@@ -114,8 +114,15 @@ def parse_packages(metadata: str, checkout: Path) -> list[Package]:
     return sorted(found, key=lambda p: p.name)
 
 
-def per_package(family: str, chosen: Iterable[Package]) -> list[Listed]:
-    return [Listed(f"{family}:{p.name}", [f"crate:{p.name}"]) for p in chosen]
+def per_package(
+    family: str, chosen: Iterable[Package], named: bool = False
+) -> list[Listed]:
+    """One check per package. `named` also names the package on the listing line, for a
+    family whose products Ignite builds per package."""
+    return [
+        Listed(f"{family}:{p.name}", [f"crate:{p.name}"], p.name if named else "")
+        for p in chosen
+    ]
 
 
 def asked(family: str, checks: Iterable[str]) -> list[str]:
@@ -478,7 +485,9 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
         Listed(f"rust-format:{p.name}", [p.dir]) for p in packages()
     ],
     "doctests": lambda: per_package("doctests", filter(documented, packages())),
-    ALLOCATIONS: lambda: per_package(ALLOCATIONS, filter(has_allocations, packages())),
+    ALLOCATIONS: lambda: per_package(
+        ALLOCATIONS, filter(has_allocations, packages()), named=True
+    ),
     "card-text": card_text_list,
 }
 
