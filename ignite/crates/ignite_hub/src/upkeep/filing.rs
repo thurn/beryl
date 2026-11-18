@@ -149,6 +149,34 @@ pub fn file(
     )))
 }
 
+/// The open ticket with this signature, if there is one.
+pub fn open_ticket(conn: &Connection, signature: &Signature) -> Result<Option<String>> {
+    Ok(matching(conn, &signature.key())?
+        .into_iter()
+        .find(|m| !m.closed)
+        .map(|m| m.id))
+}
+
+/// How many tickets that are not closed carry every label of `labels` and hold the sighting
+/// `evidence`.
+pub fn sighted(conn: &Connection, labels: &[&str], evidence: &str) -> Result<usize> {
+    let labels = serde_json::to_string(labels)
+        .map_err(|error| StoreError::Invalid(format!("labels {labels:?}: {error}")))?;
+    let count: i64 = conn.query_row(
+        "SELECT count(*) FROM tickets t
+         WHERE t.status != 'closed'
+           AND NOT EXISTS (
+             SELECT 1 FROM json_each(?1) wanted
+             WHERE NOT EXISTS (SELECT 1 FROM json_each(t.labels) had WHERE had.value = wanted.value))
+           AND EXISTS (
+             SELECT 1 FROM json_each(t.metadata, '$.ignite_sightings') seen
+             WHERE seen.value = ?2)",
+        params![labels, evidence],
+        |row| row.get(0),
+    )?;
+    Ok(usize::try_from(count).unwrap_or(0))
+}
+
 fn create(filing: &Filing, key: &str, previous: Option<&str>) -> Operation {
     let mut fields = filing.fields.clone();
     let mut metadata = fields.metadata.take().unwrap_or_default();

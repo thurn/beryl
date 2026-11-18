@@ -1,5 +1,5 @@
-//! The signature of a fault the hub files by itself: which check, what kind of failure, on which
-//! platform, and the diagnostic part of its output.
+//! The signature of a fault the hub files by itself: which check or cause, what kind of failure,
+//! on which platform, and the diagnostic part of its output.
 //!
 //! Two reports with one signature are one fault, so the second adds a comment to the first's
 //! ticket. The diagnostic keeps what tells faults apart, such as the values in a failed
@@ -18,8 +18,9 @@ pub struct Signature {
     /// The check, or another subject such as an epic or a machine.
     pub subject: String,
     /// The kind of failure: `regression`, `flaky`, `flaky-always`, `machine-flaky`,
-    /// `disagreement`, `incomplete`, `cannot-run`, `audit`, `found`, `unreachable` or
-    /// `stuck-epic`.
+    /// `disagreement`, `incomplete`, `cannot-run`, `hung`, `build-failed`, `invalid-entry`,
+    /// `incomplete-overflow`, `audit`, `found`, `unreachable` or `stuck-epic`. For incomplete
+    /// checks the subject is the cause (a product or a family), never one check's name.
     pub category: String,
     /// The operating system, empty for a portable check.
     pub platform: String,

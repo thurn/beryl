@@ -432,6 +432,9 @@ fn an_incomplete_check_and_a_disagreeing_audit_file_p1_tickets() {
         reason: IncompleteReason::CannotRun,
         commit: Commit::new("abcd").unwrap(),
         output: "cannot-run: no simulator on multivac".to_owned(),
+        checks: Vec::new(),
+        count: 0,
+        product: None,
     };
     let filed = stuck::incomplete(&mut conn, UPKEEP, &incomplete, clock.now()).unwrap();
     let held = ticket(&conn, &filed.ticket);

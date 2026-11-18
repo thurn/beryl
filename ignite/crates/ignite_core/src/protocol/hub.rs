@@ -585,7 +585,13 @@ pub struct LandedReply {
     pub next: Option<Reservation>,
 }
 
-/// `POST /incomplete`: a check that stayed `incomplete` after its last attempt on a machine.
+/// `POST /incomplete`: one cause that left checks `incomplete` on a machine, such as a build
+/// that failed or a command that ended without reporting them. The hub files one ticket per
+/// cause, never one per check.
+///
+/// `check` is the first check the cause holds back, or a name for the cause itself such as
+/// `<family>:build`. A report from an older daemon names one check and leaves `checks`,
+/// `count` and `product` empty.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IncompleteReport {
     pub check: CheckName,
@@ -600,9 +606,27 @@ pub struct IncompleteReport {
     pub commit: Commit,
     /// The last lines of the command's output.
     pub output: String,
+    /// The first [`INCOMPLETE_LISTED`] of the checks this cause holds back, for the ticket.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub checks: Vec<CheckName>,
+    /// How many checks this cause holds back, when that is more than `check` alone.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub count: u32,
+    /// The build product whose build failed or was refused, for [`IncompleteReason::BuildFailed`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product: Option<String>,
 }
 
-/// Why a run left a check without a verdict.
+/// How many checks an [`IncompleteReport`] names; `count` gives the whole number.
+pub const INCOMPLETE_LISTED: usize = 20;
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
+/// Why a run left a check without a verdict. New values are appended, so that an older hub's
+/// reading of the ones it knows is unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum IncompleteReason {
@@ -612,6 +636,10 @@ pub enum IncompleteReason {
     CannotRun,
     /// The command ran past its hang limit and was ended.
     Hung,
+    /// A build the checks need failed or was refused, so their command never ran.
+    BuildFailed,
+    /// The checks' manifest entry is invalid: their inputs cannot be resolved.
+    InvalidEntry,
 }
 
 /// `POST /audits`: a rerun of a cache hit that disagreed with the cached result.

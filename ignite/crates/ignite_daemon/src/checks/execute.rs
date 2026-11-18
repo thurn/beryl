@@ -111,7 +111,11 @@ impl Checks {
             for keyed in &pending {
                 let check = &keyed.listed.check;
                 let error = Error::Io(super::BUILD_FAILED.to_owned());
-                run.finish(check, Outcome::Incomplete, Some(incomplete(check, &error)));
+                let failure = Failure {
+                    reason: Some(IncompleteReason::BuildFailed),
+                    ..incomplete(check, &error)
+                };
+                run.finish(check, Outcome::Incomplete, Some(failure));
             }
             return;
         }
@@ -591,6 +595,8 @@ fn incomplete_message(
         IncompleteReason::Hung => {
             "hung: ended at its hang limit; its output lists the processes it left".to_owned()
         }
+        IncompleteReason::BuildFailed => super::BUILD_FAILED.to_owned(),
+        IncompleteReason::InvalidEntry => "its manifest entry is invalid".to_owned(),
     };
     match said {
         Some(said) => format!("{why}: {said}"),

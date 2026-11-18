@@ -231,6 +231,15 @@ pub(crate) struct OpenTree {
 /// The message of a check that a build it needs kept from running.
 pub(crate) const BUILD_FAILED: &str = "a build it needs failed";
 
+/// The words in an unlisted check's message (`the inputs of <check> cannot be resolved: <why>`)
+/// before what is wrong with its manifest entry. Tip verification reports the checks with one
+/// family and message as one cause.
+pub(crate) const UNRESOLVED: &str = " cannot be resolved: ";
+
+/// The words in an unlisted family's message (`a product the listing of <family> needs failed
+/// to build: <products>`) before the products, separated by `, `.
+pub(crate) const LISTING_BUILD_FAILED: &str = " needs failed to build: ";
+
 /// One family's checks, keyed.
 #[derive(Clone)]
 pub(crate) struct Prepared {
@@ -555,12 +564,12 @@ impl Checks {
         for listed in &listing.checks {
             if let Some(why) = &listed.refused {
                 eprintln!("ignite: {why}");
-                broken.push(incomplete(&listed.check, &Error::Invalid(why.clone())));
+                broken.push(invalid_entry(&listed.check, &Error::Invalid(why.clone())));
                 continue;
             }
             match self.key_paths(tree, family, listed, &mut memo) {
                 Ok(paths) => resolved.push((listed, paths)),
-                Err(error) => broken.push(incomplete(&listed.check, &error)),
+                Err(error) => broken.push(invalid_entry(&listed.check, &error)),
             }
         }
         let sources = Self::source_paths(tree, &listing.checks);
@@ -726,6 +735,15 @@ fn incomplete(check: &CheckName, error: &Error) -> Failure {
         message: Some(error.to_string()),
         output: None,
         reason: None,
+    }
+}
+
+/// The failure of a check whose manifest entry is invalid: its input patterns cannot be
+/// resolved, or its listing was refused.
+fn invalid_entry(check: &CheckName, error: &Error) -> Failure {
+    Failure {
+        reason: Some(IncompleteReason::InvalidEntry),
+        ..incomplete(check, error)
     }
 }
 

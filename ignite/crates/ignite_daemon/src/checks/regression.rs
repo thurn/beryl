@@ -6,10 +6,10 @@ use ignite_core::hash::{self, HashParts};
 use ignite_core::ids::{CheckName, TreeId};
 use ignite_core::manifest::{Family, Kind, Platforms};
 use ignite_core::protocol::Class;
-use ignite_core::protocol::hub::{CheckState, ResultKey};
+use ignite_core::protocol::hub::{CheckState, IncompleteReason, ResultKey};
 use ignite_core::traits::Result;
 
-use super::{CheckRun, Checks, RunOptions};
+use super::{CheckRun, Checks, LISTING_BUILD_FAILED, RunOptions, UNRESOLVED};
 use crate::server::Context;
 use crate::tip::{TipCheck, TipSet, Unlisted};
 
@@ -71,7 +71,7 @@ impl Checks {
                 let products: Vec<String> =
                     run.build_failures.iter().map(|(p, _)| p.clone()).collect();
                 set.unlisted.push(unlisted(format!(
-                    "a product the listing of {name} needs failed to build: {}",
+                    "a product the listing of {name}{LISTING_BUILD_FAILED}{}",
                     products.join(", ")
                 )));
             }
@@ -86,9 +86,15 @@ impl Checks {
                 set.unlisted.push(Unlisted {
                     name: broken.check.clone(),
                     family: prepared.family.clone(),
+                    // Only an invalid manifest entry uses the words the report groups by.
                     message: format!(
-                        "the inputs of {} cannot be resolved: {}",
+                        "the inputs of {}{}{}",
                         broken.check,
+                        if broken.reason == Some(IncompleteReason::InvalidEntry) {
+                            UNRESOLVED
+                        } else {
+                            " could not be read: "
+                        },
                         broken.message.as_deref().unwrap_or_default()
                     ),
                     reportable: runs_here,

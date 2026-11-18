@@ -1,6 +1,7 @@
 //! P1 tickets for work that cannot go on by itself:
 //!
-//! - a check still `incomplete` after its last attempt, or one that cannot run on a machine;
+//! - checks still `incomplete` after their last attempt, one ticket per cause
+//!   ([`incomplete`], in `stuck_incomplete.rs`);
 //! - a cache audit whose rerun disagreed with the cache, which also switches off caching for
 //!   that check;
 //! - a tip that has waited an hour while a machine has not reported, or for checks that only
@@ -18,9 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rusqlite::{Connection, params};
 
 use ignite_core::ids::{CheckName, TicketId};
-use ignite_core::protocol::hub::{
-    AuditReport, CheckState, IncompleteReason, IncompleteReport, TipWaiting,
-};
+use ignite_core::protocol::hub::{AuditReport, CheckState, TipWaiting};
 use ignite_core::protocol::tickets::{Graph, GraphTicket, Status, TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
@@ -31,75 +30,13 @@ use super::regressions::OUTPUT_LINES;
 use super::signature::Signature;
 use super::{parse_time, tail};
 
+#[path = "stuck_incomplete.rs"]
+mod incomplete;
+
+pub use incomplete::{ROUND_LIMIT, incomplete};
+
 /// How long a tip waits for a machine that has not reported before a ticket names it.
 pub const TIP_WAIT_SECONDS: f64 = 3_600.0;
-
-/// Files the ticket for a check that stayed incomplete; the ticket names the machine.
-pub fn incomplete(
-    conn: &mut Connection,
-    author: Author,
-    report: &IncompleteReport,
-    now: Timestamp,
-) -> Result<Filed> {
-    let check = report.check.as_str();
-    let (category, title, why) = match report.reason {
-        IncompleteReason::Unreported => (
-            "incomplete",
-            format!("Check stays incomplete: {check}"),
-            format!(
-                "The command ended without reporting {check} in each of {} attempts.",
-                report.attempts
-            ),
-        ),
-        IncompleteReason::CannotRun => (
-            "cannot-run",
-            format!("Check cannot run on {}: {check}", report.host),
-            format!(
-                "The command said it cannot run on {}, so it is not run there again.",
-                report.host
-            ),
-        ),
-        IncompleteReason::Hung => (
-            "hung",
-            format!("Check hangs: {check}"),
-            "The command ran past its hang limit and was ended with everything it started. \
-             It is not run again, because a hung command hangs again; the output lists the \
-             processes it left."
-                .to_owned(),
-        ),
-    };
-    let platform = report.platform.map_or("", |os| os.as_str());
-    let mut labels = vec![
-        "incomplete".to_owned(),
-        format!("check:{}", report.check.family()),
-    ];
-    if let Some(os) = report.platform {
-        labels.push(format!("needs:{}", os.as_str()));
-    }
-    let body = format!(
-        "{why}\nmachine {} ({}), commit {}\n\
-         A landing or a tip that needs the check waits for it.\n\n\
-         output (last {OUTPUT_LINES} lines):\n{}",
-        report.host,
-        report.machine,
-        report.commit,
-        tail(&report.output, OUTPUT_LINES)
-    );
-    let filing = Filing {
-        signature: Signature::of_output(check, category, platform, &report.output, &report.host),
-        evidence: format!("{}@{}", report.commit, report.machine),
-        fields: TicketFields {
-            title: Some(title),
-            body: Some(body),
-            ticket_type: Some(TicketType::Bug),
-            priority: Some(1),
-            labels: Some(labels),
-            ..TicketFields::default()
-        },
-        deps: Vec::new(),
-    };
-    filing::file(conn, author, &filing, now)
-}
 
 /// Switches off caching for the audited check and files the ticket naming both runs.
 pub fn audit(
@@ -644,7 +581,8 @@ fn held_filing(held: &Held) -> Filing {
             body: Some(format!(
                 "{ticket} ({title}) is held for {hours} hours by session {session} on machine \
                  {machine}. A session that stopped, a worker that lost the ticket or a ticket \
-                 too large for one session leaves it so. Find out which, and release, split or                  finish the ticket."
+                 too large for one session leaves it so. Find out which, and release, split or \
+                 finish the ticket."
             )),
             ticket_type: Some(TicketType::Task),
             priority: Some(1),

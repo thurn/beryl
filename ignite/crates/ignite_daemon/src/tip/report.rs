@@ -1,16 +1,24 @@
-//! What a round tells the hub when it cannot finish a tip by itself: a check that stays
-//! incomplete, a family or a check it cannot list or key, and a push to `master` that is
-//! refused. Each is told once, and a failure to tell is logged and tried again next round.
+//! What a round tells the hub when it cannot finish a tip by itself: checks that stay
+//! incomplete, a build that failed, a family or a check it cannot list or key, and a push to
+//! `master` that is refused. Each is told once, and a failure to tell is logged and tried again
+//! next round.
+//!
+//! A report names one cause, never one check: the hub files a ticket per report's cause, so
+//! checks held back by one cause go in one report, which lists the first of them and counts
+//! all of them. One refused build once filed a P1 ticket for each of its 1,446 checks.
 
 use std::collections::HashMap;
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{IncompleteReason, IncompleteReport, ResultKey};
+use ignite_core::protocol::hub::{
+    INCOMPLETE_LISTED, IncompleteReason, IncompleteReport, ResultKey,
+};
 use ignite_core::verdict;
 
 use super::{TipCheck, TipRun, TipVerifier, Unlisted, tail};
+use crate::checks::{LISTING_BUILD_FAILED, UNRESOLVED};
 use crate::server::Context;
 
 /// How long this machine leaves a check alone after its first run ended incomplete: an hour.
@@ -23,9 +31,10 @@ const GIVE_UP_MAX_S: f64 = 86_400.0;
 impl TipVerifier {
     /// Gives up on each check of `verdicts` that stayed incomplete after the attempts of its
     /// run (see [`verdict::MAX_INCOMPLETE`]), which the runner has already made: this machine
-    /// leaves it alone for a growing time, and the hub files a ticket once per check and
-    /// inputs. A check whose run ended incomplete through no fault of its own (no landing tree
-    /// was free) is not given up on; the next round runs it again.
+    /// leaves it alone for a growing time, and the hub is told once per check, in one report
+    /// for each family, reason and platform. A check whose run ended incomplete through no
+    /// fault of its own (no landing tree was free) is not given up on; the next round runs it
+    /// again.
     pub(super) fn note_incomplete(
         &mut self,
         ctx: &Context,
@@ -35,6 +44,8 @@ impl TipVerifier {
     ) {
         let now = ctx.clock.now();
         self.report_failed_builds(ctx, tip, checks, verdicts);
+        // Checks not yet told, by family, reason and platform, with the first one's output.
+        let mut causes: Vec<Cause<ResultKey>> = Vec::new();
         for check in checks.iter().filter(|c| c.runnable) {
             let Some(run) = verdicts.get(&check.key) else {
                 continue;
@@ -50,34 +61,40 @@ impl TipVerifier {
             if self.reported_incomplete.contains(&check.key) {
                 continue;
             }
-            let output = run
-                .output
-                .as_deref()
-                .map(|o| tail(o, &self.own_outputs))
-                .unwrap_or_default();
-            let mut report = incomplete_report(
-                ctx,
-                tip,
-                &check.check,
-                check.key.platform,
-                reason,
-                u32::try_from(verdict::MAX_INCOMPLETE).unwrap_or(u32::MAX),
-                output,
-            );
+            let group = (check.family.clone(), reason, check.key.platform);
+            let at = if let Some(at) = causes.iter().position(|c| c.group == group) {
+                at
+            } else {
+                let output = run
+                    .output
+                    .as_deref()
+                    .map(|o| tail(o, &self.own_outputs))
+                    .unwrap_or_default();
+                causes.push(Cause::new(group, output));
+                causes.len() - 1
+            };
+            causes[at].add(check.key.clone(), &check.check);
+        }
+        let attempts = u32::try_from(verdict::MAX_INCOMPLETE).unwrap_or(u32::MAX);
+        for cause in causes {
+            let (_, reason, platform) = cause.group.clone();
+            let mut report =
+                incomplete_report(ctx, tip, &cause.checks[0], platform, reason, attempts, "");
+            cause.fill(&mut report);
             self.name_host(&mut report);
             match ctx.hub.incomplete(&report) {
-                Ok(_) => {
-                    self.reported_incomplete.insert(check.key.clone());
+                Ok(_) => self.reported_incomplete.extend(cause.keys),
+                Err(error) => {
+                    eprintln!("ignite: incomplete {} not reported: {error}", report.check);
                 }
-                Err(error) => eprintln!("ignite: incomplete {} not reported: {error}", check.check),
             }
         }
     }
 
-    /// Tells the hub once per tip of each family whose checks a failed build kept from running,
-    /// naming the check `<family>:build` and quoting the build's output. One build used to file
-    /// a ticket for each of its checks: 1,456 P1 tickets for one refused Rust build. The checks
-    /// are not held off, since the build is not run again until an input changes.
+    /// Tells the hub once per tip of each product whose failed build kept checks from running,
+    /// naming the first family's `<family>:build` and quoting the build's output, with the
+    /// number of checks that wait on it. The checks are not held off, since the build is not
+    /// run again until an input changes.
     fn report_failed_builds(
         &mut self,
         ctx: &Context,
@@ -85,7 +102,8 @@ impl TipVerifier {
         checks: &[TipCheck],
         verdicts: &HashMap<ResultKey, TipRun>,
     ) {
-        let mut families: Vec<(String, String, String)> = Vec::new();
+        // Each failed product, with the name of its report: the first family's `<family>:build`.
+        let mut builds: Vec<(CheckName, Cause<()>)> = Vec::new();
         for check in checks.iter().filter(|c| c.runnable) {
             let Some(run) = verdicts.get(&check.key) else {
                 continue;
@@ -93,32 +111,87 @@ impl TipVerifier {
             let (Outcome::Incomplete, Some(product)) = (run.outcome, &run.build) else {
                 continue;
             };
-            if !families
-                .iter()
-                .any(|(family, _, _)| *family == check.family)
-            {
+            let group = (product.clone(), IncompleteReason::BuildFailed, None);
+            let at = if let Some(at) = builds.iter().position(|(_, c)| c.group == group) {
+                at
+            } else {
+                let Ok(name) = CheckName::new(format!("{}:build", check.family)) else {
+                    continue;
+                };
                 let output = run.output.clone().unwrap_or_default();
-                families.push((check.family.clone(), product.clone(), output));
-            }
-        }
-        for (family, product, output) in families {
-            let Ok(name) = CheckName::new(format!("{family}:build")) else {
-                continue;
+                let text = format!(
+                    "The build of {product} failed, so no check of {} ran.\n\n{}",
+                    check.family,
+                    tail(&output, &self.own_outputs)
+                );
+                builds.push((name, Cause::new(group, text)));
+                builds.len() - 1
             };
-            let text = format!(
-                "The build of {product} failed, so no check of {family} ran.\n\n{}",
-                tail(&output, &self.own_outputs)
-            );
-            self.report_stuck(ctx, tip, &name, None, &text);
+            builds[at].1.add((), &check.check);
+        }
+        for (name, build) in builds {
+            let mut report =
+                incomplete_report(ctx, tip, &name, None, IncompleteReason::BuildFailed, 1, "");
+            build.fill(&mut report);
+            report.product = Some(build.group.0);
+            self.send_once(ctx, tip, &report);
         }
     }
 
     /// Tells the hub once per tip of each family or check in `unlisted` that this machine runs
-    /// itself. The report is an incomplete-check report with the reason `Unreported`, which
-    /// the hub files as a P1 ticket naming the machine; the output says what was wrong.
+    /// itself: checks whose inputs cannot be resolved in one report per family and message,
+    /// a listing whose build failed in one report per product, and any other family that
+    /// cannot be listed as an incomplete-check report with the reason `Unreported`. The output
+    /// says what was wrong.
     pub(super) fn report_unlisted(&mut self, ctx: &Context, tip: &Commit, unlisted: &[Unlisted]) {
+        let mut entries: Vec<Cause<CheckName>> = Vec::new();
         for missing in unlisted.iter().filter(|u| u.reportable) {
-            self.report_stuck(ctx, tip, &missing.name, None, &missing.message);
+            if let Some((_, message)) = missing.message.split_once(UNRESOLVED) {
+                let group = (
+                    format!("{}\n{message}", missing.family),
+                    IncompleteReason::InvalidEntry,
+                    None,
+                );
+                let at = if let Some(at) = entries.iter().position(|c| c.group == group) {
+                    at
+                } else {
+                    entries.push(Cause::new(group, message.to_owned()));
+                    entries.len() - 1
+                };
+                entries[at].add(missing.name.clone(), &missing.name);
+            } else if let Some(products) = missing.message.split_once(LISTING_BUILD_FAILED) {
+                for product in products.1.split(", ").filter(|p| !p.is_empty()) {
+                    let mut report = incomplete_report(
+                        ctx,
+                        tip,
+                        &missing.name,
+                        None,
+                        IncompleteReason::BuildFailed,
+                        1,
+                        &format!(
+                            "The build of {product} failed, so {} could not be listed.",
+                            missing.family
+                        ),
+                    );
+                    report.product = Some(product.to_owned());
+                    self.send_once(ctx, tip, &report);
+                }
+            } else {
+                self.report_stuck(ctx, tip, &missing.name, None, &missing.message);
+            }
+        }
+        for entry in entries {
+            let mut report = incomplete_report(
+                ctx,
+                tip,
+                &entry.checks[0],
+                None,
+                IncompleteReason::InvalidEntry,
+                1,
+                "",
+            );
+            entry.fill(&mut report);
+            self.send_once(ctx, tip, &report);
         }
     }
 
@@ -131,25 +204,33 @@ impl TipVerifier {
         platform: Option<Os>,
         output: &str,
     ) {
-        let key = (tip.clone(), name.clone());
-        if self.reported_stuck.contains(&key) {
-            return;
-        }
-        let mut report = incomplete_report(
+        let report = incomplete_report(
             ctx,
             tip,
             name,
             platform,
             IncompleteReason::Unreported,
             1,
-            output.to_owned(),
+            output,
         );
+        self.send_once(ctx, tip, &report);
+    }
+
+    /// Sends `report` unless this tip already told the hub about its check and the checks it
+    /// lists, and remembers all of them once the hub took it.
+    fn send_once(&mut self, ctx: &Context, tip: &Commit, report: &IncompleteReport) {
+        let mut names: Vec<CheckName> = vec![report.check.clone()];
+        names.extend(report.checks.iter().cloned());
+        let keys: Vec<(Commit, CheckName)> =
+            names.into_iter().map(|name| (tip.clone(), name)).collect();
+        if keys.iter().all(|key| self.reported_stuck.contains(key)) {
+            return;
+        }
+        let mut report = report.clone();
         self.name_host(&mut report);
         match ctx.hub.incomplete(&report) {
-            Ok(_) => {
-                self.reported_stuck.insert(key);
-            }
-            Err(error) => eprintln!("ignite: {name} not reported: {error}"),
+            Ok(_) => self.reported_stuck.extend(keys),
+            Err(error) => eprintln!("ignite: {} not reported: {error}", report.check),
         }
     }
 
@@ -158,6 +239,44 @@ impl TipVerifier {
         if !self.host.is_empty() {
             report.host.clone_from(&self.host);
         }
+    }
+}
+
+/// The checks one cause holds back, gathered for one report: what tells causes apart, its
+/// output, and every check (with a key the verifier remembers it by).
+struct Cause<K> {
+    group: (String, IncompleteReason, Option<Os>),
+    output: String,
+    checks: Vec<CheckName>,
+    keys: Vec<K>,
+}
+
+impl<K> Cause<K> {
+    fn new(group: (String, IncompleteReason, Option<Os>), output: String) -> Self {
+        Cause {
+            group,
+            output,
+            checks: Vec::new(),
+            keys: Vec::new(),
+        }
+    }
+
+    fn add(&mut self, key: K, check: &CheckName) {
+        self.keys.push(key);
+        self.checks.push(check.clone());
+    }
+
+    /// Puts the cause's output, its first [`INCOMPLETE_LISTED`] checks and its count in
+    /// `report`.
+    fn fill(&self, report: &mut IncompleteReport) {
+        report.output.clone_from(&self.output);
+        report.checks = self
+            .checks
+            .iter()
+            .take(INCOMPLETE_LISTED)
+            .cloned()
+            .collect();
+        report.count = u32::try_from(self.checks.len()).unwrap_or(u32::MAX);
     }
 }
 
@@ -170,7 +289,7 @@ fn incomplete_report(
     platform: Option<Os>,
     reason: IncompleteReason,
     attempts: u32,
-    output: String,
+    output: &str,
 ) -> IncompleteReport {
     IncompleteReport {
         check: check.clone(),
@@ -180,6 +299,9 @@ fn incomplete_report(
         attempts,
         reason,
         commit: tip.clone(),
-        output,
+        output: output.to_owned(),
+        checks: Vec::new(),
+        count: 0,
+        product: None,
     }
 }
