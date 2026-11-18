@@ -915,8 +915,9 @@ Rules for cores:
   even when processes outside Ignite fill the machine, so a landing and `master`
   always make progress.
 - `tip` and `batch` each have a floor of cores per machine that higher classes
-  cannot take, so `master` keeps moving and an experiment is slowed but never
-  stopped.
+  cannot take while a request of that class waits, so `master` keeps moving and
+  an experiment is slowed but never stopped. A floor class whose commands are
+  running and that waits for nothing more keeps no cores back.
 - `idle` work starts only while the machine is under 70% busy, and is the first
   thing stopped when a higher class waits for cores, or for a resource the idle
   work holds. Stopping sends `SIGTERM`, then `SIGKILL` ten seconds later. While

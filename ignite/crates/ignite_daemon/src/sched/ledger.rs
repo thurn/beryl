@@ -577,17 +577,19 @@ impl Ledger {
     }
 
     /// The cores held back for `class` so higher classes cannot take them: its floor less what
-    /// it already holds, while it has anything running or waiting. A floor with nothing to use
-    /// it is not held back.
+    /// it already holds, while it has a request waiting. A floor with nothing waiting for it is
+    /// not held back.
     fn floor_reserve(&self, class: Class) -> u32 {
         let floor = match class {
             Class::Tip => self.limits.floor.tip,
             Class::Batch => self.limits.floor.batch,
             _ => return 0,
         };
-        let active = self.held.values().any(|h| h.class == class)
-            || self.waiting.iter().any(|w| w.request.class == class);
-        if active {
+        // Only a waiting request needs cores kept back for it. Counting a class's running
+        // commands as well kept cores idle: one `batch` command on one core kept seven more
+        // reserved for `batch` work that never came, while seven agent requests waited for
+        // the six free cores for over half an hour and every landing stood still.
+        if self.waiting.iter().any(|w| w.request.class == class) {
             floor.saturating_sub(self.class_cores(class))
         } else {
             0

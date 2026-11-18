@@ -139,6 +139,22 @@ fn a_floor_is_not_held_back_when_its_class_has_no_work() {
 }
 
 #[test]
+fn a_running_floor_class_with_nothing_waiting_holds_back_no_cores() {
+    let mut ledger = Ledger::new(limits());
+    ledger.enqueue(ask(Class::Batch, 1), T0);
+    ledger.step(T0);
+    assert_eq!(granted_cores(&ledger), 1);
+    // Batch runs one command on one core and asks for nothing more, so its floor of eight
+    // keeps nothing back: the agents share all 23 other cores.
+    for _ in 0..30 {
+        ledger.enqueue(ask(Class::Agent, 1), at(1.0));
+    }
+    let step = ledger.step(at(1.0));
+    assert_eq!(step.granted.len(), 23);
+    assert_eq!(granted_cores(&ledger), 24);
+}
+
+#[test]
 fn a_lower_class_starts_nothing_while_a_higher_one_waits() {
     let mut ledger = Ledger::new(limits());
     for _ in 0..30 {
