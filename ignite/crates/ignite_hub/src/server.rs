@@ -4,8 +4,14 @@
 //! Load is bounded: at most [`MAX_REQUEST_THREADS`] requests are answered at once (the next
 //! gets 503), at most [`MAX_CONNECTIONS`] database connections are open (a request waits a few
 //! seconds for one, then gets 503), and a request without a valid token may send only
-//! [`MAX_UNAUTHENTICATED_BODY`] bytes. `tiny_http` offers no socket timeouts, so a client that
-//! stalls mid-body holds one of the request threads until it disconnects.
+//! [`MAX_UNAUTHENTICATED_BODY`] bytes.
+//!
+//! There are no socket timeouts, so a client that stalls mid-body holds one of the request
+//! threads until it disconnects; the thread cap bounds the harm. `tiny_http` 0.12 never hands
+//! out an accepted socket, and its `Listener` is a closed enum, so a server cannot set
+//! `SO_RCVTIMEO` or `SO_SNDTIMEO` on each connection. Setting them on the listening socket,
+//! which accepted sockets inherit, would also make an idle `accept` time out, and `tiny_http`'s
+//! accept thread stops for good at its first error. Timeouts need a different HTTP server.
 //!
 //! The server listens on the address it is given, normally the loopback address, and Tailscale
 //! publishes it on the private network, as it did the ticket service. API requests live under
