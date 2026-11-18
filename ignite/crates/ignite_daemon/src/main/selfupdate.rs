@@ -412,6 +412,7 @@ impl SelfUpdate {
         }
         self.restart_hub_first(reported.as_ref(), &executable);
         eprintln!("ignite: restarting into {}", executable.display());
+        crate::update::record_clean_stop_from(&self.store);
         let error = restart_into(self.restart.as_ref(), &executable);
         // Only a failed restart returns. Forget the build so the next heartbeat does not
         // retry it every few seconds; the next move of `master` prepares it again.

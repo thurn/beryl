@@ -401,6 +401,12 @@ fn a_second_process_for_a_running_handle_runs_nothing() {
     let outcome = process(&scratch, &db, &handle, &host).run(unused);
     assert_eq!(outcome, Outcome::AlreadyRunning);
     drop(held);
+    // A child that another test forks shares the lock's open file until it runs `exec`, so the
+    // lock can stay held for a moment after `drop`.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while alive(&scratch.home, &handle) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     assert!(!alive(&scratch.home, &handle));
     assert_eq!(row(&db, &handle).state, "running");
 }
