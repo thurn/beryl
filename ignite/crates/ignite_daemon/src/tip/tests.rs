@@ -241,7 +241,7 @@ impl World {
     }
 
     fn verifier(&self) -> TipVerifier {
-        TipVerifier::new(self.work.clone(), "test")
+        TipVerifier::new(self.work.clone(), "test").with_host("jarvis")
     }
 
     fn store(&self, key: &ResultKey, outcome: Outcome, machine: &str) {

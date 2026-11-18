@@ -91,6 +91,7 @@ impl Daemon {
             sender_db: Mutex::new(Some(base.open()?)),
             home: base.options.home.clone(),
             version: base.options.version.clone(),
+            hostname: base.options.hostname.clone(),
             feed_wait_s: base.options.feed_wait_s,
             update: Arc::new(self_update(&base)),
             health: health.clone(),

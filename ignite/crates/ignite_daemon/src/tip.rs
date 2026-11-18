@@ -183,6 +183,9 @@ pub struct TipVerifier {
     work: Arc<dyn TipWork>,
     /// The Ignite commit that records name.
     ignite: String,
+    /// This machine's hostname, which the hub's tickets about its checks name. Empty when not
+    /// set, and then the machine's ID stands in for it.
+    host: String,
     /// The feed position already seen.
     since: Seq,
     /// The last tip that was verified or failed. A waiting or superseded tip is tried again.
@@ -217,6 +220,7 @@ impl TipVerifier {
         Self {
             work,
             ignite: ignite.into(),
+            host: String::new(),
             since: Seq(0),
             settled: None,
             reported: HashSet::new(),
@@ -229,6 +233,14 @@ impl TipVerifier {
             reported_stuck: HashSet::new(),
             rechecked: HashSet::new(),
         }
+    }
+
+    /// Names this machine's hostname in the reports of checks that stay incomplete, so the
+    /// hub's tickets say `jarvis` rather than the machine's ID.
+    #[must_use]
+    pub fn with_host(mut self, host: impl Into<String>) -> Self {
+        self.host = host.into();
+        self
     }
 
     /// Waits up to `wait_s` for the hub's feed to show a change, then verifies the newest

@@ -89,6 +89,8 @@ fn a_check_that_stays_incomplete_is_reported_once_and_left_alone_for_an_hour() {
     assert_eq!(reports[0].reason, IncompleteReason::Unreported);
     assert_eq!(reports[0].commit, tip);
     assert_eq!(reports[0].attempts, 3);
+    assert_eq!(reports[0].machine.as_str(), "m-1");
+    assert_eq!(reports[0].host, "jarvis");
     assert_eq!(world.work.runs().len(), 1);
 
     // Later rounds on the same tip keep waiting without running it or reporting it again.

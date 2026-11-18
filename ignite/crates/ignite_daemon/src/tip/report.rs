@@ -54,7 +54,7 @@ impl TipVerifier {
                 .as_deref()
                 .map(|o| tail(o, &self.own_outputs))
                 .unwrap_or_default();
-            let report = incomplete_report(
+            let mut report = incomplete_report(
                 ctx,
                 tip,
                 &check.check,
@@ -63,6 +63,7 @@ impl TipVerifier {
                 u32::try_from(verdict::MAX_INCOMPLETE).unwrap_or(u32::MAX),
                 output,
             );
+            self.name_host(&mut report);
             match ctx.hub.incomplete(&report) {
                 Ok(_) => {
                     self.reported_incomplete.insert(check.key.clone());
@@ -94,7 +95,7 @@ impl TipVerifier {
         if self.reported_stuck.contains(&key) {
             return;
         }
-        let report = incomplete_report(
+        let mut report = incomplete_report(
             ctx,
             tip,
             name,
@@ -103,6 +104,7 @@ impl TipVerifier {
             1,
             output.to_owned(),
         );
+        self.name_host(&mut report);
         match ctx.hub.incomplete(&report) {
             Ok(_) => {
                 self.reported_stuck.insert(key);
@@ -110,8 +112,17 @@ impl TipVerifier {
             Err(error) => eprintln!("ignite: {name} not reported: {error}"),
         }
     }
+
+    /// Puts this machine's hostname in a report's `host`, when the verifier knows it.
+    fn name_host(&self, report: &mut IncompleteReport) {
+        if !self.host.is_empty() {
+            report.host.clone_from(&self.host);
+        }
+    }
 }
 
+/// The report of `check`, naming the machine by its ID in both `machine` and `host`; the caller
+/// puts the hostname in `host` when it knows it (see `TipVerifier::name_host`).
 fn incomplete_report(
     ctx: &Context,
     tip: &Commit,

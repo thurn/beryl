@@ -68,6 +68,8 @@ pub struct Parts {
     pub sender_db: Mutex<Option<Connection>>,
     pub home: Home,
     pub version: String,
+    /// The machine's hostname, which names it in the hub's tickets.
+    pub hostname: String,
     pub feed_wait_s: u32,
     pub update: Arc<SelfUpdate>,
     /// What each background loop has done lately, for `status` and `doctor`.
@@ -162,7 +164,7 @@ impl Parts {
             checks: self.checks.clone(),
             trees: Arc::new(self.trees.clone()),
         };
-        TipVerifier::new(Arc::new(work), self.version.clone())
+        TipVerifier::new(Arc::new(work), self.version.clone()).with_host(self.hostname.clone())
     }
 
     /// See [`super::Daemon::verify_tip`].
