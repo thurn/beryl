@@ -23,6 +23,7 @@ use crate::sched;
 use crate::server::{Context, Verb};
 use crate::update::ExecutableStore;
 
+pub mod listener;
 mod loops;
 mod running;
 mod trees;
@@ -506,6 +507,8 @@ pub struct DoctorInput<'a> {
     pub host: &'a dyn Host,
     pub trees: &'a dyn TreeSource,
     pub hub: &'a dyn ignite_core::traits::Hub,
+    /// Sends the write probe that tells the hub's listeners apart.
+    pub probe: &'a dyn listener::WriteProbe,
     /// The check manifests, or the reason they cannot be read.
     pub manifest: std::result::Result<Manifest, String>,
     pub version: Option<Commit>,
@@ -563,7 +566,9 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
 
     let url = &input.config.hub.url;
     findings.push(match input.hub.feed(Seq(0), 0) {
-        Ok(_) => Finding::ok("hub", format!("reachable at {url}.")),
+        // A reachable hub may still be the read-only listener.
+        Ok(_) => listener::finding(&input.config.hub, input.probe)
+            .unwrap_or_else(|| Finding::ok("hub", format!("reachable at {url}."))),
         Err(error) => Finding::problem(
             "hub",
             format!("cannot reach the hub at {url}: {error}."),
@@ -716,6 +721,7 @@ impl Verb for DoctorVerb {
             host: &NativeHost,
             trees: &trees,
             hub: ctx.hub.as_ref(),
+            probe: &listener::HttpProbe,
             manifest: read_manifest(&ctx.repo, &ctx.config.repository.checks),
             version: running_version(),
         };

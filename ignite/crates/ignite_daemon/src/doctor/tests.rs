@@ -1,5 +1,6 @@
 use ignite_core::fakes::FakeHub;
 
+use super::listener::WriteProbe as _;
 use super::*;
 
 struct FakeHost {
@@ -121,9 +122,106 @@ fn diagnose_with(host: &FakeHost, hub: &FakeHub, trees: &FakeTrees) -> Vec<Findi
         host,
         trees,
         hub,
+        probe: &Writable,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
     })
+}
+
+/// A hub whose listener accepts writes: it refuses a tokenless `POST` with 401.
+struct Writable;
+
+impl listener::WriteProbe for Writable {
+    fn post_without_token(&self, _url: &str, _path: &str) -> Option<(u16, String)> {
+        Some((401, r#"{"error":"missing token"}"#.to_owned()))
+    }
+}
+
+/// A probe that answers with a fixed status and body, and records the path it was sent to.
+struct Answering(Option<(u16, &'static str)>, std::cell::RefCell<Vec<String>>);
+
+impl listener::WriteProbe for Answering {
+    fn post_without_token(&self, url: &str, path: &str) -> Option<(u16, String)> {
+        self.1.borrow_mut().push(format!("{url}{path}"));
+        self.0.map(|(status, body)| (status, body.to_owned()))
+    }
+}
+
+fn diagnose_with_probe(probe: &dyn listener::WriteProbe) -> Vec<Finding> {
+    diagnose(&DoctorInput {
+        config: &config(),
+        repo: Path::new("/repo"),
+        host: &healthy_host(),
+        trees: &all_trees(),
+        hub: &FakeHub::default(),
+        probe,
+        manifest: Ok(manifest()),
+        version: Commit::new("abc1234").ok(),
+    })
+}
+
+#[test]
+fn doctor_reports_a_hub_url_that_reaches_the_read_only_listener() {
+    let probe = Answering(
+        Some((405, r#"{"error":"this listener is read-only"}"#)),
+        std::cell::RefCell::default(),
+    );
+    let findings = diagnose_with_probe(&probe);
+    let problems: Vec<_> = findings.iter().filter(|f| !f.ok).collect();
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    let line = problems[0].line();
+    assert!(line.starts_with("PROBLEM  listener"), "{line}");
+    assert!(line.contains("http://hub.example:8443"), "{line}");
+    assert!(
+        line.contains("To fix: point the hub URL at the writable listener"),
+        "{line}"
+    );
+    assert_eq!(
+        *probe.1.borrow(),
+        ["http://hub.example:8443/test/api/machines/heartbeat"]
+    );
+    assert_eq!(report(&findings).exit, Exit::CheckFailed);
+}
+
+#[test]
+fn doctor_accepts_a_writable_hub_and_ignores_other_405s() {
+    for answer in [
+        Some((401, r#"{"error":"missing token"}"#)),
+        // A proxy's own 405 is not the read-only listener.
+        Some((405, "Method Not Allowed")),
+        None,
+    ] {
+        let findings = diagnose_with_probe(&Answering(answer, std::cell::RefCell::default()));
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.line() == "ok       hub       reachable at http://hub.example:8443."),
+            "{answer:?}: {findings:?}"
+        );
+    }
+}
+
+#[test]
+fn doctor_does_not_probe_a_hub_it_cannot_reach() {
+    let hub = FakeHub::default();
+    hub.set_unreachable(true);
+    let probe = Answering(
+        Some((405, r#"{"error":"this listener is read-only"}"#)),
+        std::cell::RefCell::default(),
+    );
+    let findings = diagnose(&DoctorInput {
+        config: &config(),
+        repo: Path::new("/repo"),
+        host: &healthy_host(),
+        trees: &all_trees(),
+        hub: &hub,
+        probe: &probe,
+        manifest: Ok(manifest()),
+        version: Commit::new("abc1234").ok(),
+    });
+    let hub_line = findings.iter().find(|f| f.label == "hub").unwrap().line();
+    assert!(hub_line.contains("cannot reach the hub"), "{hub_line}");
+    assert!(probe.1.borrow().is_empty());
 }
 
 fn all_trees() -> FakeTrees {
@@ -291,6 +389,7 @@ fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
         host: &healthy_host(),
         trees: &source,
         hub: &FakeHub::default(),
+        probe: &Writable,
         manifest: Ok(manifest()),
         version: Commit::new("abc1234").ok(),
     });
@@ -335,4 +434,41 @@ fn the_version_recorded_at_startup_is_reported_after_the_link_moves() {
     let started = Commit::new("1234567").unwrap();
     super::remember_running_version(Some(started.clone()));
     assert_eq!(super::running_version(), Some(started));
+}
+
+#[test]
+fn the_http_probe_sends_a_tokenless_post_and_reads_the_refusal() {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/", server.server_addr().to_ip().unwrap());
+    let handle = std::thread::spawn(move || {
+        let request = server.recv().unwrap();
+        let seen = (
+            request.method().to_string(),
+            request.url().to_owned(),
+            request
+                .headers()
+                .iter()
+                .any(|h| h.field.equiv("Authorization")),
+        );
+        request
+            .respond(
+                tiny_http::Response::from_string(r#"{"error":"this listener is read-only"}"#)
+                    .with_status_code(405),
+            )
+            .unwrap();
+        seen
+    });
+    let answer = listener::HttpProbe.post_without_token(&url, "/test/api/machines/heartbeat");
+    assert_eq!(
+        answer,
+        Some((405, r#"{"error":"this listener is read-only"}"#.to_owned()))
+    );
+    assert_eq!(
+        handle.join().unwrap(),
+        (
+            "POST".to_owned(),
+            "/test/api/machines/heartbeat".to_owned(),
+            false
+        )
+    );
 }
