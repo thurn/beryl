@@ -1,0 +1,50 @@
+# The UI's checks that need no browser. The adapter is ui/scripts/ignite-checks.mjs.
+# Formatting and types are in the always set (docs/ignite.md, "The always set").
+
+[product.ui-deps]
+build = "npm ci"
+dir = "ui"
+inputs = ["ui/package-lock.json"]
+outputs = ["ui/node_modules"]
+
+[family.ui-format]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["ui-deps"]
+always = true
+list = "node ui/scripts/ignite-checks.mjs ui-format --list"
+run = "node ui/scripts/ignite-checks.mjs ui-format {checks}"
+inputs = ["ui/**", "ui/scripts/ignite-checks.mjs"]
+
+[family.ui-types]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["ui-deps"]
+always = true
+list = "node ui/scripts/ignite-checks.mjs ui-types --list"
+run = "node ui/scripts/ignite-checks.mjs ui-types {checks}"
+inputs = [
+    "ui/src/**",
+    "ui/tsconfig.json",
+    "ui/vite.config.ts",
+    "ui/package.json",
+    "ui/scripts/ignite-checks.mjs",
+]
+
+# One check per ui/scripts/*.test.mjs. A test may read more than ui/; the adapter lists those
+# files as the check's own inputs.
+[family.ui-unit]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["ui-deps"]
+list = "node ui/scripts/ignite-checks.mjs ui-unit --list"
+run = "node ui/scripts/ignite-checks.mjs ui-unit {checks}"
+inputs = [
+    "ui/src/**",
+    "ui/scripts/**",
+    "ui/*.json",
+    "ui/package.json",
+]
