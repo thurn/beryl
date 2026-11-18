@@ -325,6 +325,11 @@ pub trait Hub: Send + Sync {
         let _ = pause;
         Err(not_supported("pause hand-offs"))
     }
+
+    /// The Ignite commit the hub and each registered machine runs (`GET /machines/versions`).
+    fn fleet_versions(&self) -> Result<crate::protocol::fleet::FleetVersions> {
+        Err(not_supported("give the fleet's versions"))
+    }
 }
 
 /// The error of a [`Hub`] method that an implementation does not provide yet.

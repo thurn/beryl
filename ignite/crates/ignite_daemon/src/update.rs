@@ -648,6 +648,9 @@ pub enum UpdateCheck {
     /// installed by hand from a newer or diverged commit. Going to the tip would be a
     /// downgrade, so the executable stays until the branch moves past it.
     Ahead { tip: Commit },
+    /// The release branch's tip was rolled back or failed its selftest on this machine, so the
+    /// executable stays until the branch moves again.
+    Rejected { tip: Commit },
     /// The executable of `to` is built and stored, and is what a restart starts.
     Ready {
         from: Commit,
@@ -681,8 +684,11 @@ impl Updater<'_> {
     /// building anything.
     pub fn plan(&self, current: &Commit) -> Result<Plan> {
         let tip = self.git.tip(self.master)?;
-        if &tip == current || self.store.is_rejected(&tip) {
+        if &tip == current {
             return Ok(Plan::Done(UpdateCheck::UpToDate));
+        }
+        if self.store.is_rejected(&tip) {
+            return Ok(Plan::Done(UpdateCheck::Rejected { tip }));
         }
         if !self.git.is_ancestor(current, &tip)? {
             return Ok(Plan::Done(UpdateCheck::Ahead { tip }));

@@ -476,16 +476,29 @@ pub fn incomplete(verb: &str, handle: &Handle, reason: &str) -> Reply {
 }
 
 /// `ignite wait <handle>`: blocks until a handle's operation finishes, for at most the
-/// request's `wait_s`, then answers with the operation's reply.
+/// request's `wait_s`, then answers with the operation's reply. A `deploy-<commit>` handle,
+/// which `ignite land` prints when it moves the release branch, is answered by the daemon's
+/// deploy waiter instead (see [`crate::deploy`]).
 pub struct WaitVerb {
     handles: Arc<Handles>,
     steps: Arc<Steps>,
+    deploys: crate::deploy::Slot,
 }
 
 impl WaitVerb {
     /// `steps` holds what each running operation is doing, which a wait that ends first prints.
     pub fn new(handles: Arc<Handles>, steps: Arc<Steps>) -> WaitVerb {
-        WaitVerb { handles, steps }
+        WaitVerb {
+            handles,
+            steps,
+            deploys: crate::deploy::slot(),
+        }
+    }
+
+    /// The verb with deploy handles answered by the waiter in `deploys` instead of the daemon's.
+    #[must_use]
+    pub fn with_deploys(self, deploys: crate::deploy::Slot) -> WaitVerb {
+        WaitVerb { deploys, ..self }
     }
 }
 
@@ -521,6 +534,17 @@ impl Verb for WaitVerb {
         let [name] = req.args.as_slice() else {
             return Reply::text(Exit::Usage, "usage    ignite wait <handle>");
         };
+        if let Some(target) = crate::deploy::parse_handle(name) {
+            let Some(waiter) = self.deploys.get() else {
+                return Reply::text(
+                    Exit::Usage,
+                    format!("failed   this daemon does not follow releases, so {name} is unknown"),
+                );
+            };
+            let probe = crate::server::caller_probe();
+            let left = move || probe.as_ref().is_some_and(|gone| gone());
+            return waiter.wait(&target, req.wait_s, progress, &left);
+        }
         let Ok(handle) = Handle::new(name.as_str()) else {
             return Reply::text(Exit::Usage, format!("unknown handle: {name}"));
         };

@@ -509,6 +509,10 @@ impl Hub for HubClient {
         self.get("/rates", &[])
     }
 
+    fn fleet_versions(&self) -> Result<ignite_core::protocol::fleet::FleetVersions> {
+        self.get("/machines/versions", &[])
+    }
+
     /// `GET /tickets/<id>` with its comments and history.
     fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
         let query = [("comments", "1".to_owned()), ("history", "1".to_owned())];

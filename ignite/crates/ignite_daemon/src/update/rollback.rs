@@ -107,6 +107,20 @@ impl ExecutableStore {
         );
     }
 
+    /// Why `commit` was rejected: the newest line of `bin/rollbacks.log` that names it, without
+    /// its time, or `None` when it names it nowhere.
+    pub fn rejection(&self, commit: &Commit) -> Option<String> {
+        let log = fs::read_to_string(self.root.join(LOG)).ok()?;
+        log.lines()
+            .rev()
+            .find(|line| line.split_whitespace().any(|word| word == commit.as_str()))
+            .map(|line| {
+                line.split_once(' ')
+                    .map_or(line, |(_, rest)| rest)
+                    .to_owned()
+            })
+    }
+
     pub(super) fn read_commit(&self, name: &str) -> Option<Commit> {
         Commit::new(fs::read_to_string(self.root.join(name)).ok()?.trim()).ok()
     }

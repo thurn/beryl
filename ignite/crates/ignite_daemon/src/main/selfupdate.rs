@@ -54,9 +54,16 @@
 //! supervisors (see `server/resume.rs` and [`crate::adopt`]), and a client whose connection
 //! dropped waits on its handle again. A restart also waits for a verb on the daemon's threads in
 //! a part that may not be cut short (see [`crate::steps::critical`]), which lasts seconds.
+//!
+//! What the self-update is doing is shown by `ignite status` and waited for by
+//! `ignite wait deploy-<commit>` (see [`crate::deploy`]), through its [`DeployState`]: the tip its
+//! last check of the release branch saw and what that found, when it checks next, the build and
+//! selftest running, a build ready to restart into, and why the last build failed. A deploy wait
+//! asks for the branch to be checked at the next round ([`DeployState::check_soon`]), so a
+//! landing that moved the release is picked up within seconds instead of at the regular check.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::thread::{self, JoinHandle};
 
@@ -65,6 +72,7 @@ use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
+use crate::deploy::{Checked, DeployState, LocalRelease, Work};
 use crate::server::{DRAIN_WAIT, Drain};
 use crate::update::selftest::Selftest;
 use crate::update::{
@@ -73,6 +81,9 @@ use crate::update::{
 
 /// The sender loop runs every 10 seconds, so this many of its rounds are 5 minutes.
 pub const POLL_EVERY_ROUNDS: u32 = 30;
+
+/// Seconds between two rounds of the sender loop, which calls [`SelfUpdate::poll_release`].
+const ROUND_S: f64 = 10.0;
 
 /// A hub that lags behind the daemon on its machine is kickstarted at most this often.
 pub const HUB_KICK_GAP_S: f64 = 300.0;
@@ -90,6 +101,8 @@ pub trait HubService: Send + Sync {
 pub struct Building {
     pub commit: Commit,
     handle: JoinHandle<std::result::Result<PathBuf, Failure>>,
+    /// Set by the thread once the executable is stored and its selftest runs.
+    testing: Arc<AtomicBool>,
 }
 
 /// Why a release was not made ready.
@@ -121,9 +134,9 @@ pub struct SelfUpdate {
     /// The release build that is running, if any. At most one runs, so a second request for the
     /// same commit (the tip loop and the sender can both ask) starts nothing.
     pub building: Mutex<Option<Building>>,
-    /// The commit whose build last failed, which is not built again until another commit is
-    /// wanted.
-    pub failed: Mutex<Option<Commit>>,
+    /// The commit whose build last failed, and why. It is not built again until another commit
+    /// is wanted.
+    pub failed: Mutex<Option<(Commit, String)>>,
     /// Checks a built executable before the daemon restarts into it.
     pub selftest: Arc<dyn Selftest>,
     /// Where selftest failures are reported.
@@ -212,7 +225,7 @@ impl SelfUpdate {
         self.building.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn failed(&self) -> MutexGuard<'_, Option<Commit>> {
+    fn failed(&self) -> MutexGuard<'_, Option<(Commit, String)>> {
         self.failed.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -221,7 +234,7 @@ impl SelfUpdate {
     /// it when it is not stored, then runs its selftest.
     fn start_build(&self, target: &Commit) {
         let mut building = self.building();
-        if building.is_some() || self.failed().as_ref() == Some(target) {
+        if building.is_some() || self.failed().as_ref().map(|(commit, _)| commit) == Some(target) {
             return;
         }
         let (builder, store, selftest, commit) = (
@@ -230,6 +243,8 @@ impl SelfUpdate {
             self.selftest.clone(),
             target.clone(),
         );
+        let testing = Arc::new(AtomicBool::new(false));
+        let tested = testing.clone();
         let spawned = thread::Builder::new()
             .name("ignite-release-build".to_owned())
             .spawn(move || {
@@ -240,6 +255,7 @@ impl SelfUpdate {
                         .map_err(|e| Failure::Build(e.into()))?;
                 }
                 let executable = store.path(&commit);
+                tested.store(true, Ordering::SeqCst);
                 selftest
                     .run(&executable)
                     .map_err(|e| Failure::Selftest(e.to_string()))?;
@@ -251,11 +267,12 @@ impl SelfUpdate {
                 *building = Some(Building {
                     commit: target.clone(),
                     handle,
+                    testing,
                 });
             }
             Err(error) => {
                 eprintln!("ignite: cannot start the build of release {target}: {error}");
-                *self.failed() = Some(target.clone());
+                self.record_failure(target, &format!("cannot start a thread: {error}"));
             }
         }
     }
@@ -281,7 +298,7 @@ impl SelfUpdate {
             return;
         }
         drop(slot);
-        let Building { commit, handle } = building;
+        let Building { commit, handle, .. } = building;
         let built = handle.join().unwrap_or_else(|_| {
             Err(Failure::Build(Error::Io(
                 "the build thread panicked".to_owned(),
@@ -296,12 +313,12 @@ impl SelfUpdate {
                 Ok(_) => {}
                 Err(error) => {
                     eprintln!("ignite: the release {commit} was not activated: {error}");
-                    *self.failed() = Some(commit);
+                    self.record_failure(&commit, &error.to_string());
                 }
             },
             Err(Failure::Build(error)) => {
                 eprintln!("ignite: the release {commit} was not built: {error}");
-                *self.failed() = Some(commit);
+                self.record_failure(&commit, &error.to_string());
             }
             Err(Failure::Selftest(reason)) => {
                 eprintln!("ignite: the release {commit} failed its selftest: {reason}");
@@ -311,10 +328,16 @@ impl SelfUpdate {
                     .lock()
                     .unwrap_or_else(PoisonError::into_inner)
                     .push(self.selftest_report(&commit, &reason));
-                *self.failed() = Some(commit);
+                self.record_failure(&commit, &reason);
                 self.send_reports();
             }
         }
+    }
+
+    /// Records that making `commit` ready failed, for `reason`: it is not built again until
+    /// another commit is wanted.
+    fn record_failure(&self, commit: &Commit, reason: &str) {
+        *self.failed() = Some((commit.clone(), reason.to_owned()));
     }
 
     fn selftest_report(&self, commit: &Commit, reason: &str) -> JusticiarReport {
@@ -483,6 +506,77 @@ impl SelfUpdate {
             return Ok(None);
         }
         Ok(self.stage(hub))
+    }
+}
+
+impl DeployState for SelfUpdate {
+    fn local(&self) -> LocalRelease {
+        let building = self
+            .building()
+            .as_ref()
+            .map(|b| (b.commit.clone(), b.testing.load(Ordering::SeqCst)));
+        let work = match building {
+            Some((commit, true)) => Some(Work::SelfTesting(commit)),
+            Some((commit, false)) => Some(Work::Building(commit)),
+            None => match self
+                .ready()
+                .as_deref()
+                .and_then(ExecutableStore::version_of)
+            {
+                Some(commit) => Some(Work::Restarting(commit)),
+                None => self
+                    .failed()
+                    .clone()
+                    .map(|(commit, reason)| Work::Failed(commit, reason)),
+            },
+        };
+        // The call of `poll_release` that finds a multiple of `POLL_EVERY_ROUNDS` checks the
+        // branch, one round of the sender loop after another.
+        let rounds = self.rounds.load(Ordering::Relaxed);
+        let left = (POLL_EVERY_ROUNDS - rounds % POLL_EVERY_ROUNDS) % POLL_EVERY_ROUNDS;
+        LocalRelease {
+            own: self.own.clone(),
+            branch: self.master.clone(),
+            next_check: Some(self.clock.now().plus_seconds(f64::from(left) * ROUND_S)),
+            work,
+        }
+    }
+
+    fn check(&self) -> Result<(Commit, Checked)> {
+        let tip = self.git.tip(&self.master)?;
+        let Some(own) = &self.own else {
+            return Ok((tip, Checked::Current));
+        };
+        Ok(match self.updater().plan(own)? {
+            Plan::Build(tip) => (tip, Checked::Build),
+            Plan::Done(UpdateCheck::Ahead { tip }) => (tip, Checked::Ahead),
+            Plan::Done(UpdateCheck::NotNeeded { tip }) => (tip, Checked::Unchanged),
+            Plan::Done(UpdateCheck::Rejected { tip }) => (tip, Checked::Rejected),
+            Plan::Done(UpdateCheck::UpToDate | UpdateCheck::Ready { .. }) => {
+                (tip, Checked::Current)
+            }
+        })
+    }
+
+    /// The next call of [`SelfUpdate::poll_release`], within a round of the sender loop, checks
+    /// the branch.
+    fn check_soon(&self) {
+        self.rounds.store(0, Ordering::Relaxed);
+    }
+
+    fn reached(&self, version: &Commit, target: &Commit) -> bool {
+        version == target || self.git.is_ancestor(target, version).unwrap_or(false)
+    }
+
+    fn rejection(&self, commit: &Commit) -> Option<String> {
+        if !self.store.is_rejected(commit) {
+            return None;
+        }
+        Some(
+            self.store
+                .rejection(commit)
+                .unwrap_or_else(|| format!("{commit} is listed in bin/rejected")),
+        )
     }
 }
 

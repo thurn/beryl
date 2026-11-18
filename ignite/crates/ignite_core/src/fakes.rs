@@ -26,6 +26,7 @@ use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
 use crate::traits::{Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult};
 
 mod builds;
+mod fleet;
 mod git;
 mod host;
 mod tips;
@@ -139,6 +140,7 @@ pub struct FakeHub {
     incompletes: Mutex<Vec<IncompleteReport>>,
     listings: Mutex<HashMap<ListingKey, String>>,
     tips: tips::FakeTips,
+    fleet: fleet::FakeFleet,
 }
 
 impl FakeHub {
@@ -319,6 +321,10 @@ impl Hub for FakeHub {
 
     fn last_tip_round(&self) -> Result<Option<TipRound>> {
         self.fake_last_tip_round()
+    }
+
+    fn fleet_versions(&self) -> Result<crate::protocol::fleet::FleetVersions> {
+        self.fake_fleet_versions()
     }
 
     fn store_listing(&self, listing: &StoredListing) -> Result<()> {

@@ -146,3 +146,16 @@ fn pruning_keeps_the_current_previous_and_two_other_releases() {
         .count();
     assert_eq!(others, KEEP_EXTRA);
 }
+
+#[test]
+fn the_rejection_reason_is_the_newest_log_line_naming_the_commit() {
+    let store = store_with("aaaaaaa", "bbbbbbb");
+    let bad = commit("bbbbbbb");
+    assert_eq!(store.rejection(&bad), None);
+    store.reject_with_reason(&bad, "migrations\nfailed", at(0.0));
+    store.reject_with_reason(&commit("ccccccc"), "other", at(1.0));
+    assert_eq!(
+        store.rejection(&bad).as_deref(),
+        Some("bbbbbbb failed its selftest: migrations failed")
+    );
+}

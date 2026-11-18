@@ -4,11 +4,13 @@
 //! - [`tickets`]: the ticket routes, which keep the ticket service's contract.
 //! - [`hub`]: the hub's other routes: machines, hand-offs, the result cache, tips and records.
 //! - [`host`]: the calls a verb process makes to its machine's daemon.
+//! - [`fleet`]: the Ignite version the hub and each machine runs.
 //!
 //! Types that more than one of those use (the command classes, the cost of a command, a
 //! check's outcome) are defined here.
 
 pub mod client;
+pub mod fleet;
 pub mod host;
 pub mod hub;
 pub mod tickets;

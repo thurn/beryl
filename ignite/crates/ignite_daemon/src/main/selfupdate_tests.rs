@@ -8,6 +8,7 @@ use ignite_core::fakes::{FakeClock, FakeGit, FakeHub};
 use ignite_core::ids::MachineId;
 
 use super::*;
+use crate::deploy::{Checked, Work};
 
 const OLD: &str = "a1b2c3d";
 const NEW: &str = "e4f5a6b";
@@ -531,7 +532,10 @@ fn a_failed_release_build_is_not_started_again_for_the_same_commit() {
 
     poll(&update);
     assert_eq!(started.load(Ordering::SeqCst), 1);
-    assert_eq!(update.failed().as_ref(), Some(&commit(NEW)));
+    assert_eq!(
+        update.failed().as_ref().map(|(failed, _)| failed),
+        Some(&commit(NEW))
+    );
 
     // Neither the sender's poll, the tip loop nor the hub's version tries the same commit again.
     poll(&update);
@@ -678,4 +682,91 @@ fn a_restart_stops_taking_requests_and_waits_for_the_daemons_own_verbs_first() {
         *drain.calls.lock().unwrap(),
         ["drain 30s after 0", "undrain"]
     );
+}
+
+/// A selftest that waits for its gate, so a test can see the daemon while it runs.
+struct GatedSelftest(Gate);
+
+impl Selftest for GatedSelftest {
+    fn run(&self, _executable: &Path) -> Result<String> {
+        let (lock, wake) = &*self.0;
+        let mut open = lock.lock().unwrap();
+        while !*open {
+            open = wake.wait(open).unwrap();
+        }
+        Ok("selftest passed".to_owned())
+    }
+}
+
+/// `ignite status` and `ignite wait deploy-<commit>` see the build, its selftest and the ready
+/// build the next heartbeat restarts into.
+#[test]
+fn the_deploy_state_follows_the_build_its_selftest_and_the_restart() {
+    let (mut update, git, _restart) = daemon(NEW);
+    let gate: Gate = Arc::new((StdMutex::new(false), Condvar::new()));
+    update.selftest = Arc::new(GatedSelftest(gate.clone()));
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/a.rs"]);
+    assert_eq!(update.check().unwrap(), (commit(NEW), Checked::Build));
+    assert_eq!(update.local().work, None);
+
+    update.poll_release().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while update.local().work != Some(Work::SelfTesting(commit(NEW))) {
+        assert!(Instant::now() < deadline, "{:?}", update.local().work);
+        thread::sleep(Duration::from_millis(2));
+    }
+    open_gate(&gate);
+    settle(&update);
+    assert_eq!(update.local().work, Some(Work::Restarting(commit(NEW))));
+}
+
+/// A deploy wait makes the next round of the sender loop check the release branch, instead of
+/// waiting up to five minutes for the regular check.
+#[test]
+fn a_deploy_wait_makes_the_next_round_check_the_release_branch() {
+    let (update, git, _restart) = daemon(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/a.rs"]);
+    let now = update.clock.now();
+    // The regular check has just run.
+    update.rounds.store(1, Ordering::Relaxed);
+    assert_eq!(
+        update.local().next_check,
+        Some(now.plus_seconds(f64::from(POLL_EVERY_ROUNDS - 1) * 10.0))
+    );
+    update.check_soon();
+    assert_eq!(update.local().next_check, Some(now));
+    update.poll_release().unwrap();
+    settle(&update);
+    assert!(update.store.has(&commit(NEW)));
+}
+
+#[test]
+fn the_deploy_state_gives_why_a_build_failed_or_was_rolled_back() {
+    let (builder, gate, _started) = SlowBuilder::new(tempdir(), true);
+    let (update, git, _restart) = daemon_building_with(builder);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/a.rs"]);
+    open_gate(&gate);
+    poll(&update);
+    assert_eq!(
+        update.local().work,
+        Some(Work::Failed(
+            commit(NEW),
+            format!("cargo build failed for {NEW}")
+        ))
+    );
+
+    assert_eq!(update.rejection(&commit(NEW)), None);
+    update
+        .store
+        .reject_with_reason(&commit(NEW), "bad manifest", update.clock.now());
+    assert_eq!(
+        update.rejection(&commit(NEW)).as_deref(),
+        Some(format!("{NEW} failed its selftest: bad manifest").as_str())
+    );
+    assert_eq!(update.check().unwrap(), (commit(NEW), Checked::Rejected));
+
+    // A commit that contains the release has reached it; one the release is not in has not.
+    assert!(update.reached(&commit(NEW), &commit(OLD)));
+    git.set_not_ancestor(&commit(NEW), &commit(OLD));
+    assert!(!update.reached(&commit(OLD), &commit(NEW)));
 }

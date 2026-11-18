@@ -401,6 +401,7 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
         .or_else(|| routes::checks::handle(conn, request, now))
         .or_else(|| routes::listings::handle(conn, request, now))
         .or_else(|| routes::tip_rounds::handle(conn, request, now))
+        .or_else(|| routes::versions::handle(conn, request, now))
         .or_else(|| routes::check_state::handle(conn, request, now))
         .or_else(|| routes::dispatch::handle(conn, request, now))
         .or_else(|| routes::commands::handle(conn, request, now))

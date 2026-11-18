@@ -374,3 +374,29 @@ fn a_landing_whose_push_was_rejected_can_be_stopped_on_its_next_pass() {
     assert!(world.git.pushes().is_empty());
     assert_eq!(world.hub.holder("staging"), None);
 }
+
+/// The deploy handle is named only for a `release` line that says the branch moved to the
+/// landed commit.
+#[test]
+fn a_landing_that_moved_the_release_names_its_deploy_handle() {
+    use crate::deploy::landed_handle;
+    let world = source_world();
+    let reply = {
+        world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+        world.land_as("tree-01", "local_a")
+    };
+    let line = reply
+        .text
+        .lines()
+        .find_map(|line| line.strip_prefix("release  "))
+        .unwrap();
+    let pushed = world.git.repo.lock().unwrap().branch_pushes[0].1.clone();
+    let branch = world.ctx.config.repository.release.as_deref();
+    assert_eq!(
+        landed_handle(branch, line, &pushed),
+        Some(format!("deploy-{pushed}"))
+    );
+    let refused = "release not moved: rel checks did not pass";
+    assert_eq!(landed_handle(branch, refused, &pushed), None);
+    assert_eq!(landed_handle(None, line, &pushed), None);
+}

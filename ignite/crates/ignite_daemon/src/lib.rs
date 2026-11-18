@@ -15,6 +15,7 @@ pub mod cache;
 pub mod checks;
 pub mod claim;
 pub mod crash;
+pub mod deploy;
 pub mod dispatchd;
 pub mod doctor;
 pub mod handles;

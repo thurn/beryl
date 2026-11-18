@@ -6,13 +6,17 @@
 //! gate counts when it ran the whole family, and otherwise the family is run now in the tree
 //! that holds the commit. Whatever happens here is reported on the landing's `release` line and
 //! never fails or undoes the landing.
+//!
+//! A landing that moved the release names the deploy handle in its `next` line
+//! ([`crate::deploy::landed_handle`]): `ignite wait deploy-<commit>` waits until every machine
+//! runs the release or it was rolled back (see [`crate::deploy`]).
 
 use ignite_core::ids::Commit;
 use ignite_core::protocol::Outcome;
 use ignite_core::traits::Push;
 
 use super::env::GateTree;
-use super::{Landing, line, short};
+use super::{Landing, line};
 use crate::checks::{GateRun, RunOptions};
 use crate::server::Context;
 use crate::update::SOURCE;
@@ -66,10 +70,9 @@ impl Landing {
         }
         Some(
             match ctx.git.push(&landed.tree.path, landed.commit, branch) {
-                Ok(Push::Pushed { .. }) => line(
-                    "release",
-                    format!("{branch} moved to {}", short(landed.commit)),
-                ),
+                Ok(Push::Pushed { .. }) => {
+                    line("release", crate::deploy::moved(branch, landed.commit))
+                }
                 Ok(Push::Rejected { reason }) => self.not_moved(branch, &reason),
                 Err(error) => self.not_moved(branch, &error.to_string()),
             },
