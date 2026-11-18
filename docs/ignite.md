@@ -478,19 +478,19 @@ survive each other's restarts.
   daemon watches supervisors, so it can restart while commands keep running.
 - **A verb process** runs one long verb from start to finish:
   `ignite internal verb <handle>`, a hidden subcommand. `land`, `test`, `check`,
-  `run`, `rebuild`, `audit` and the internal verbs `idle-job` (one idle job)
-  and `tip-round` (one round of tip verification) run in verb processes; every
-  other verb runs on a thread of the daemon. The daemon gives the verb its
-  handle and records the request in the handle's row in `daemon.db`, then starts
-  the verb process from its own executable, `bin/<commit>/ignite`, in the
-  repository's main checkout, in a process group of its own (detached and
-  outside the daemon's job object on Windows, as supervisors are). The verb
-  process holds `verbs/<handle>/lock` in the Ignite home for its whole life,
-  records its process ID, its executable's commit and its protocol version in
-  the handle's row, runs the verb, writes the reply into the row and exits. Its
-  log is `verbs/<handle>/verb.log`. It starts no process itself: it asks the
-  daemon for what needs one authority on the machine over the daemon's socket,
-  one connection per call (the host protocol, calls named `host-…`): starting a
+  `run`, `rebuild`, `audit` and the internal verbs `idle-job` (one idle job) and
+  `tip-round` (one round of tip verification) run in verb processes; every other
+  verb runs on a thread of the daemon. The daemon gives the verb its handle and
+  records the request in the handle's row in `daemon.db`, then starts the verb
+  process from its own executable, `bin/<commit>/ignite`, in the repository's
+  main checkout, in a process group of its own (detached and outside the
+  daemon's job object on Windows, as supervisors are). The verb process holds
+  `verbs/<handle>/lock` in the Ignite home for its whole life, records its
+  process ID, its executable's commit and its protocol version in the handle's
+  row, runs the verb, writes the reply into the row and exits. Its log is
+  `verbs/<handle>/verb.log`. It starts no process itself: it asks the daemon for
+  what needs one authority on the machine over the daemon's socket, one
+  connection per call (the host protocol, calls named `host-…`): starting a
   supervised command, which includes waiting for cores, making a build product
   current, leasing and freeing a landing tree, and reporting its step and
   whether it may be stopped. Each call carries a request ID, the handle and a
@@ -1538,9 +1538,9 @@ How a daemon verifies a tip:
   whose verb process dies is not run again: its handle ends `incomplete` and the
   loop starts a new round if the tip still needs one.
 
-- While a batch runs, the round claims it again every five minutes, which
-  renews its claim at the hub, so a batch that runs longer than the hub's
-  15-minute claim is not taken by another machine meanwhile.
+- While a batch runs, the round claims it again every five minutes, which renews
+  its claim at the hub, so a batch that runs longer than the hub's 15-minute
+  claim is not taken by another machine meanwhile.
 
 - The verifier's memory survives a restart: the feed position, the last settled
   tip, what it already reported, the checks held off, the cached failures
