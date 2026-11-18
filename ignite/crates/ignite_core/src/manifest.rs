@@ -111,6 +111,9 @@ pub struct Family {
     pub list: Option<String>,
     /// Runs the checks named in `{checks}`.
     pub run: Option<String>,
+    /// An exploration family's source of new checks: prints, in the format of `list`, checks
+    /// that this command has never printed before, such as scenarios from unplayed seeds.
+    pub next: Option<String>,
     pub inputs: Vec<InputPattern>,
     /// Blocks every landing its inputs touch.
     #[serde(default)]
@@ -268,6 +271,15 @@ fn check_family(family: &Family) -> Result<(), (&'static str, &'static str)> {
     if family.inputs.is_empty() {
         return Err(("inputs", "must name what the checks read"));
     }
+    match (family.kind, &family.next) {
+        (Kind::Exploration, None) => {
+            return Err(("next", "is required for an exploration family"));
+        }
+        (Kind::Regression, Some(_)) => {
+            return Err(("next", "is only for an exploration family"));
+        }
+        _ => {}
+    }
     if family.adapter == Adapter::Jsonl {
         if family.list.is_none() {
             return Err(("list", "is required for the jsonl adapter"));
@@ -378,6 +390,28 @@ outputs = ["ui/node_modules"]
         assert!(error.message.contains("platforms"), "{error}");
         let text = RUST.replace("kind = ", "knid = ");
         assert!(Manifest::from_files(&files(&[("checks/rust.toml", &text)])).is_err());
+    }
+
+    #[test]
+    fn only_an_exploration_family_has_a_next_command() {
+        let explore = SHOTS
+            .replace("kind = \"regression\"", "kind = \"exploration\"")
+            .replace(
+                "[family.shots]\n",
+                "[family.shots]\nnext = \"node seeds.mjs\"\n",
+            );
+        let manifest = Manifest::from_files(&files(&[("checks/ui.toml", &explore)])).unwrap();
+        let shots = &manifest.families["shots"].family;
+        assert_eq!(shots.next.as_deref(), Some("node seeds.mjs"));
+        let text = SHOTS.replace("kind = \"regression\"", "kind = \"exploration\"");
+        let error = Manifest::from_files(&files(&[("checks/ui.toml", &text)])).unwrap_err();
+        assert_eq!(error.key, "family.shots.next");
+        let text = SHOTS.replace(
+            "[family.shots]\n",
+            "[family.shots]\nnext = \"node seeds.mjs\"\n",
+        );
+        let error = Manifest::from_files(&files(&[("checks/ui.toml", &text)])).unwrap_err();
+        assert_eq!(error.key, "family.shots.next");
     }
 
     #[test]

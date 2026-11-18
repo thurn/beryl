@@ -43,16 +43,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from . import card_store, cards, checks, forge, oracle_selection, paths, runlog, system
+# The orchestration modules (`checks`, `deadline`, `oracle_selection`, `oracle_memory` and
+# `card_diverge`, which imports the checks) are imported inside `oracle`, so that the Ignite
+# adapter (ignite/oracle.py) can use the functions here without importing them.
+from . import card_store, cards, forge, paths, system
 from . import (
-    card_diverge,
-    deadline,
-    oracle_memory,
     oracle_exports,
     xmage,
     xmage_java,
 )
-from .oracle_selection import skip_all
 
 FORMULAS = ("maven", "openjdk@21")
 
@@ -660,6 +659,9 @@ def check_xmage(prepared: oracle_exports.Exports, log: Path) -> dict[str, object
 
 
 def oracle(args: argparse.Namespace) -> int:
+    from . import card_diverge, checks, deadline, oracle_memory, oracle_selection
+    from .oracle_selection import skip_all
+
     work = root() / "run"
     work.mkdir(exist_ok=True)
     # Whether the oracles and the scenarios built, so that a failure is the scenarios'.

@@ -4,10 +4,12 @@
 //! `--json` it prints one JSON object per card and line, `{"name": .., "faces": [{"name": ..,
 //! "text": ..}]}`, which `just card render` reads.
 //!
-//! `beryl_scenario dump [PATH] [--generated N] [--card NAME]...`: writes every card's scenarios
-//! as JSON, to PATH or to standard output, for the oracle exporters (architecture §17.2), with
-//! the scenarios generated for each card built from library effects ([`beryl_cards::derive`]),
-//! followed by N generated scenarios ([`beryl_cards::generate`]), none by default. A card
+//! `beryl_scenario dump [PATH] [--generated N] [--seed S] [--card NAME]...`: writes every card's
+//! scenarios as JSON, to PATH or to standard output, for the oracle exporters (architecture
+//! §17.2), with the scenarios generated for each card built from library effects
+//! ([`beryl_cards::derive`]), followed by the generated scenarios ([`beryl_cards::generate`]) of
+//! the N seeds from S on (S is 1 by default; N is 0, so none, by default). A seed whose script
+//! the runner refuses gives no scenario. A card
 //! complete from the card store, which has no file, gets its generated scenarios only when a
 //! `--card` names it: there are hundreds, and no sweep plays them all. It lives here rather than
 //! in `beryl_scenario` because it needs the cards, and the cards depend on that crate.
@@ -30,8 +32,8 @@ use beryl_scenario::Scenario;
 /// The seed of the first generated scenario: fixed, so a dump is the same each time.
 const SEED: u64 = 1;
 
-const USAGE: &str = "usage: beryl_scenario dump [PATH] [--generated N] [--card NAME]... | run \
-                     --card NAME | generated --card NAME | render [--json] [NAME]...";
+const USAGE: &str = "usage: beryl_scenario dump [PATH] [--generated N] [--seed S] [--card NAME]... \
+                     | run --card NAME | generated --card NAME | render [--json] [NAME]...";
 
 fn usage() -> ExitCode {
     eprintln!("{USAGE}");
@@ -59,15 +61,23 @@ fn main() -> ExitCode {
         generated = n;
         args.drain(i..i + 2);
     }
+    let mut seed = SEED;
+    if let Some(i) = args.iter().position(|a| a == "--seed") {
+        let Some(Ok(s)) = args.get(i + 1).map(|s| s.parse()) else {
+            return usage();
+        };
+        seed = s;
+        args.drain(i..i + 2);
+    }
     match (args.as_slice(), named.as_slice()) {
         ([run], [card]) if run == "run" => run_card(card),
         ([generated], [card]) if generated == "generated" => generated_card(card),
         ([dump], _) if dump == "dump" => {
-            println!("{}", dump_json(generated, &named));
+            println!("{}", dump_json(generated, seed, &named));
             ExitCode::SUCCESS
         }
         ([dump, path], _) if dump == "dump" => {
-            if let Err(e) = std::fs::write(path, dump_json(generated, &named) + "\n") {
+            if let Err(e) = std::fs::write(path, dump_json(generated, seed, &named) + "\n") {
                 eprintln!("beryl_scenario: {path}: {e}");
                 return ExitCode::FAILURE;
             }
@@ -78,9 +88,10 @@ fn main() -> ExitCode {
 }
 
 /// The dump: every card's scenarios, the generated ones of the cards built from library
-/// effects and of the `named` cards complete from the store, then `generated` random ones.
-fn dump_json(generated: usize, named: &[String]) -> String {
-    let scenarios = generate::scenarios(generated, SEED);
+/// effects and of the `named` cards complete from the store, then the random ones of the
+/// `generated` seeds from `seed` on.
+fn dump_json(generated: usize, seed: u64, named: &[String]) -> String {
+    let scenarios = generate::scenarios(generated, seed);
     let mut cards = beryl_cards::scenarios().to_vec();
     // The rules library's entries' scenarios, each as its card's.
     for (card, of_entry) in beryl_cards::library::by_card() {

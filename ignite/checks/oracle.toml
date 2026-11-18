@@ -1,0 +1,42 @@
+# The oracle check families: Beryl's scenarios played in XMage and Forge. Their adapter is
+# tools/src/beryl_tools/ignite/oracle.py. See docs/ignite.md, "Declaring a family" and
+# "Exploration checks".
+#
+# Each check's own input is the `digest` its list line carries: a hash of the scenario's
+# exported Java method and Forge JSON, the oracles' pins, the Java harnesses and the entries of
+# data/oracle-divergences.json and data/oracle-exporter-gaps.json that name it. The family
+# inputs below are only the adapter, so an edit to a card, the rules or an exporter reruns just
+# the scenarios whose exported input changes. A machine without `just oracle-setup` fails to
+# list, which leaves the family incomplete.
+
+# The binary that writes the scenarios as JSON (`beryl_scenario dump`), in rust/target/debug.
+[product.scenario-dump]
+build = "cargo build --locked --quiet --profile test -p beryl_cards --features scenarios --bin beryl_scenario"
+dir = "rust"
+inputs = ["crate:beryl_cards"]
+outputs = ["rust/target"]
+
+# One check per scenario and engine: every card's scenarios and the random ones of the first
+# 100 seeds, as `by oracle` plays them today.
+[family.oracle]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["scenario-dump", "python-env"]
+resources = ["oracle"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle list oracle"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle run oracle {checks}"
+inputs = ["tools/src/beryl_tools/ignite/oracle.py"]
+
+# Random scenarios from seeds nobody has played: `next` reserves a batch of new seeds on this
+# machine and yields the scenarios they make.
+[family.oracle-generated]
+kind = "exploration"
+adapter = "jsonl"
+platforms = "any"
+needs = ["scenario-dump", "python-env"]
+resources = ["oracle"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle list oracle-generated"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle next oracle-generated"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle run oracle-generated {checks}"
+inputs = ["tools/src/beryl_tools/ignite/oracle.py"]

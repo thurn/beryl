@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import oracle_exports, oracle_memory, oracles, xmage_java
+from beryl_tools import (
+    oracle_exports,
+    oracle_memory,
+    oracle_selection,
+    oracles,
+    xmage_java,
+)
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -181,7 +187,7 @@ def test_select_plays_slow_cis_cards_and_logs_why(
     results = tmp_path / "results.jsonl"
     monkeypatch.setenv("BERYL_CHECK_RESULTS", str(results))
     chosen: dict[str, str] | None = {"Ponder": "card file changed"}
-    monkeypatch.setattr(oracles.oracle_selection, "slow_ci", lambda every: chosen)
+    monkeypatch.setattr(oracle_selection, "slow_ci", lambda every: chosen)
     assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
     # Counterspell is no changed card, but it has never passed, so it plays as new.
     assert played == [["Counterspell", "Ponder"]] * 2
@@ -239,7 +245,7 @@ def test_changed_exports_are_prepared_once_and_reused_after_selection(
         {"card": "Ponder", "name": "looks at three"},
     ]
     monkeypatch.setattr(oracles, "dump_scenarios", lambda *args: entries)
-    monkeypatch.setattr(oracles.oracle_selection, "slow_ci", lambda every: {})
+    monkeypatch.setattr(oracle_selection, "slow_ci", lambda every: {})
     prepare: Callable[[list[dict[str, object]], Path], oracle_exports.Exports] = (
         oracle_exports.Exports.prepare
     )
