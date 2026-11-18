@@ -1,6 +1,9 @@
 //! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`,
-//! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/regressions`, `/records` and
-//! `/metrics/import`.
+//! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/regressions`, `/records`,
+//! `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits` and `/finds`.
+//!
+//! The tickets a report files are written by `crate::upkeep`, which also matches them against
+//! earlier tickets.
 //!
 //! Each route decodes its body with the types of `ignite_core::protocol::hub`, calls the store in
 //! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup` and
@@ -12,24 +15,20 @@ use serde_json::json;
 
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    FlakyReport, LookupReply, LookupRequest, MetricsImport, NewResult, RecordBatch,
-    RegressionFiled, RegressionReport, StoreRequest, TipClaim, TipVerified,
-};
-use ignite_core::protocol::tickets::{
-    BatchRequest, Dependency, EdgeKind, Operation, TicketFields, TicketType,
+    AuditReport, ExplorationFind, FlakyReport, IncompleteReport, LookupReply, LookupRequest,
+    MetricsImport, NewResult, RecordBatch, RegressionReport, ReportFiled, StoreRequest, TipClaim,
+    TipVerified,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
-use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{checks, records, results, tips};
 
 use super::{Request, Response};
+use crate::upkeep::filing::Author;
+use crate::upkeep::{explore, regressions, stuck};
 
 /// Instructions are stored one by one; checks are costed in billions of them.
 const BILLION: f64 = 1e9;
-
-/// The lines of a regression's output kept in its ticket.
-const OUTPUT_LINES: usize = 40;
 
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
@@ -37,7 +36,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         "/results/lookup" => ("POST", false),
         "/checks/stats" => ("GET", false),
         "/results/store" | "/flaky" | "/tips/claim" | "/tips/verified" | "/regressions"
-        | "/records" | "/metrics/import" => ("POST", true),
+        | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds" => ("POST", true),
         _ => return None,
     };
     if request.method != method {
@@ -76,6 +75,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(Response::json(200, &json!({ "ids": ids })))
         }
         "/metrics/import" => import_metrics(conn, &body(request)?, now),
+        "/incomplete" | "/audits" | "/finds" => report(conn, request, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }
@@ -186,9 +186,7 @@ fn stats(conn: &Connection, request: &Request) -> Result<Response, Response> {
     Ok(Response::json(200, &json!(reply)))
 }
 
-/// Records the regression and returns the ticket for it. A check with no regression gets a new P0
-/// ticket; one whose regression was fixed gets its old ticket reopened with the new output; one
-/// that is already open keeps its ticket and nothing changes.
+/// Records the regression and returns the ticket for it (see `upkeep::regressions`).
 fn regression(
     conn: &mut Connection,
     request: &Request,
@@ -196,93 +194,39 @@ fn regression(
     now: Timestamp,
 ) -> Result<Response, Response> {
     let writer = request.writer.as_ref().expect("checked in handle");
-    let existing: Option<(String, String)> = conn
-        .query_row(
-            "SELECT ticket, state FROM regressions WHERE check_name = ?1",
-            params![report.check.as_str()],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()
-        .map_err(|e| store_failure(&e.into()))?;
-    let ops = match &existing {
-        Some((_, state)) if state != tips::FIXED => Vec::new(),
-        Some((ticket, _)) => vec![
-            Operation::Reopen { id: ticket.clone() },
-            Operation::Comment {
-                id: ticket.clone(),
-                text: details(report),
-            },
-        ],
-        None => vec![create_operation(report)],
+    let author = Author {
+        actor: &writer.actor,
+        machine: writer.machine.as_str(),
     };
-    let mut ticket = existing.map(|(ticket, _)| ticket);
-    if !ops.is_empty() {
-        let batch = BatchRequest {
-            preconditions: Vec::new(),
-            ops,
-        };
-        let outcome = batch::apply(conn, &batch, &writer.actor, writer.machine.as_str(), now)
-            .map_err(|e| store_failure(&e))?;
-        match outcome {
-            BatchOutcome::Applied(reply) => {
-                ticket = Some(reply.results[0].id.to_string());
-            }
-            BatchOutcome::Conflict(conflict) => {
-                return Err(Response::json(409, &json!(conflict)));
-            }
-        }
-    }
-    let ticket = ticket.expect("a ticket exists or was just filed");
-    tips::regression(conn, report, &ticket).map_err(|e| store_failure(&e))?;
-    let filed = RegressionFiled {
-        ticket: ticket
-            .parse()
-            .map_err(|error| failure(500, &format!("ticket ID {ticket:?}: {error}")))?,
-    };
-    Ok(Response::json(200, &json!(filed)))
+    let (ticket, _) = regressions::file(conn, author, report, now).map_err(|e| match e {
+        StoreError::Rejected(message) => failure(409, &message),
+        other => store_failure(&other),
+    })?;
+    filed_reply(&ticket)
 }
 
-fn create_operation(report: &RegressionReport) -> Operation {
-    let family = report
-        .check
-        .as_str()
-        .split_once(':')
-        .map_or(report.check.as_str(), |(family, _)| family);
-    let deps = report
-        .caused_by
-        .iter()
-        .map(|ticket| Dependency {
-            on: ticket.to_string(),
-            kind: Some(EdgeKind::DiscoveredFrom),
-        })
-        .collect();
-    Operation::Create {
-        fields: TicketFields {
-            title: Some(format!("Regression: {}", report.check)),
-            body: Some(details(report)),
-            ticket_type: Some(TicketType::Bug),
-            priority: Some(0),
-            labels: Some(vec!["regression".to_owned(), format!("check:{family}")]),
-            ..TicketFields::default()
-        },
-        parent: None,
-        deps,
-        request_key: Some(format!("regression:{}:{}", report.check, report.first_bad)),
+/// Files the ticket for an incomplete check, a cache audit that disagreed or an exploration
+/// find, and returns it.
+fn report(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Response, Response> {
+    let writer = request.writer.as_ref().expect("checked in handle");
+    let author = Author {
+        actor: &writer.actor,
+        machine: writer.machine.as_str(),
+    };
+    let filed = match request.path.as_str() {
+        "/incomplete" => stuck::incomplete(conn, author, &body::<IncompleteReport>(request)?, now),
+        "/audits" => stuck::audit(conn, author, &body::<AuditReport>(request)?, now),
+        _ => explore::find(conn, author, &body::<ExplorationFind>(request)?, now),
     }
+    .map_err(|e| store_failure(&e))?;
+    filed_reply(&filed.ticket)
 }
 
-/// The ticket text: what failed, between which commits, and the end of its output.
-fn details(report: &RegressionReport) -> String {
-    let lines: Vec<&str> = report.output.lines().collect();
-    let tail = lines[lines.len().saturating_sub(OUTPUT_LINES)..].join("\n");
-    let caused_by = report
-        .caused_by
-        .as_ref()
-        .map_or_else(String::new, |ticket| format!("caused-by {ticket}\n"));
-    format!(
-        "{caused_by}first bad {}, last good {}\nrerun: ignite check {}\n\noutput (last {OUTPUT_LINES} lines):\n{tail}",
-        report.first_bad, report.last_good, report.check
-    )
+fn filed_reply(ticket: &str) -> Result<Response, Response> {
+    let ticket = ticket
+        .parse()
+        .map_err(|error| failure(500, &format!("ticket ID {ticket:?}: {error}")))?;
+    Ok(Response::json(200, &json!(ReportFiled { ticket })))
 }
 
 /// Stores each row once per machine and source, however often a batch is sent.

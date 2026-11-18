@@ -292,6 +292,13 @@ pub struct RegressionReport {
     pub caused_by: Option<TicketId>,
     /// The last lines of the failure's output.
     pub output: String,
+    /// When the culprit search ended with a range instead of one landing: the ticket of every
+    /// landing in it.
+    #[serde(default)]
+    pub suspects: Vec<TicketId>,
+    /// The operating system the check failed on, for a check that is not portable.
+    #[serde(default)]
+    pub platform: Option<Os>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -368,6 +375,72 @@ pub struct AdhocClaim {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LandedReply {
     pub next: Option<Reservation>,
+}
+
+/// `POST /incomplete`: a check that stayed `incomplete` after its last attempt on a machine.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IncompleteReport {
+    pub check: CheckName,
+    pub machine: MachineId,
+    /// The machine's hostname, which the ticket names and its signature leaves out.
+    pub host: String,
+    /// The operating system, for a check that is not portable.
+    #[serde(default)]
+    pub platform: Option<Os>,
+    pub attempts: u32,
+    pub reason: IncompleteReason,
+    pub commit: Commit,
+    /// The last lines of the command's output.
+    pub output: String,
+}
+
+/// Why a run left a check without a verdict.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IncompleteReason {
+    /// The command ended without reporting the check.
+    Unreported,
+    /// The command said it cannot run on this machine.
+    CannotRun,
+    /// The command ran past its hang limit and was ended.
+    Hung,
+}
+
+/// `POST /audits`: a rerun of a cache hit that disagreed with the cached result.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AuditReport {
+    pub key: ResultKey,
+    /// The cached result and the record of the run that produced it.
+    pub cached: Outcome,
+    pub cached_record: RecordId,
+    pub cached_machine: MachineId,
+    /// The rerun's result, record and machine.
+    pub rerun: Outcome,
+    pub rerun_record: RecordId,
+    pub rerun_machine: MachineId,
+    pub commit: Commit,
+    /// The last lines of the rerun's output.
+    pub output: String,
+}
+
+/// `POST /finds`: an exploration check that failed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExplorationFind {
+    pub check: CheckName,
+    pub machine: MachineId,
+    /// The machine's hostname, which the signature leaves out.
+    pub host: String,
+    pub commit: Commit,
+    /// The command that plays the check again.
+    pub replay: String,
+    /// The last lines of the failure's output.
+    pub output: String,
+}
+
+/// The reply to `/incomplete`, `/audits` and `/finds`: the ticket that holds the report.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportFiled {
+    pub ticket: TicketId,
 }
 
 #[cfg(test)]

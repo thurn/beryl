@@ -11,6 +11,7 @@ ignite_store.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tiny_http.workspace = true
 
 [lints]

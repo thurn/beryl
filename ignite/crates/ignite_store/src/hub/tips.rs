@@ -192,6 +192,8 @@ mod tests {
             last_good: Commit::new("0000").unwrap(),
             caused_by: Some(TicketId::new("t.1").unwrap()),
             output: "boom".to_owned(),
+            suspects: Vec::new(),
+            platform: None,
         }
     }
 
