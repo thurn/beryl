@@ -493,6 +493,15 @@ How the executable is installed and kept current:
   without waiting for running commands. The only thing a restart waits for is a
   landing inside its push, which lasts seconds. Daemons look at the branch every
   five minutes, so a fix pushed to it by hand deploys too.
+- The release build is not run by a loop. When the release branch moves, or the
+  hub reports a version this daemon doesn't have, the daemon starts one build on
+  a thread of its own, as a supervised `agent` command in `update/update-tree`
+  with a one-hour hang limit; only one runs at a time. The sender loop never
+  waits for it: each round it looks whether the build has finished and shows
+  "building release <commit>" as its step meanwhile, and the next heartbeat
+  after it finishes restarts the daemon into it. A failed build is logged once
+  and not retried until another commit is wanted. A daemon that restarts
+  mid-build waits for Cargo's lock before it resets the update tree.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it. A fix to Ignite therefore reaches every machine minutes after it
