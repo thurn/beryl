@@ -95,6 +95,11 @@ impl Drop for Drill {
     fn drop(&mut self) {
         // Lets every waiting command finish, so no process outlives the test.
         let _ = fs::write(&self.gate, "");
+        // A failed test can leave verb processes waiting on a daemon that is gone; they run
+        // outside the daemon's process group, so ending the daemon does not end them.
+        for pid in self.verb_processes() {
+            kill(pid);
+        }
         if let Some(pid) = self.restarted {
             kill(pid);
         }
@@ -106,6 +111,26 @@ impl Drop for Drill {
             hub.stop();
         }
         let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+impl Drill {
+    /// The process IDs the daemon's handles record for their verb processes.
+    fn verb_processes(&self) -> Vec<u32> {
+        let Ok(db) = ignite_store::local::open(&self.home.join("daemon.db")) else {
+            return Vec::new();
+        };
+        let Ok(mut statement) = db.prepare("SELECT pid FROM handles WHERE pid IS NOT NULL") else {
+            return Vec::new();
+        };
+        statement
+            .query_map([], |row| row.get::<_, i64>(0))
+            .map(|rows| {
+                rows.filter_map(Result::ok)
+                    .filter_map(|pid| u32::try_from(pid).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 }
 
