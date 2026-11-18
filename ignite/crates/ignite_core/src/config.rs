@@ -81,6 +81,11 @@ pub struct Metrics {
     /// The export of this machine's rows as JSON lines. `{since}` is replaced by the UTC date
     /// of the last export sent (or `all`) and `{out}` by the file to write.
     pub export: Vec<String>,
+    /// The dashboard's findings as one JSON report on standard output. It runs after each
+    /// export is sent, and its report is posted to the hub as one row from the source
+    /// `findings`, which the hub's improvement rules read. Empty runs nothing.
+    #[serde(default)]
+    pub findings: Vec<String>,
 }
 
 /// The repository Ignite delivers to.

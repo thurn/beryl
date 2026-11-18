@@ -77,6 +77,9 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
             rows,
         })?;
     }
+    if !metrics.findings.is_empty() {
+        post_findings(ctx, metrics.findings.clone())?;
+    }
     save(
         state,
         &Sent {
@@ -88,8 +91,28 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
     Ok(count)
 }
 
-/// Runs one of the dashboard's commands from the main checkout, as idle work.
-fn run(ctx: &Context, args: Vec<String>) -> Result<()> {
+/// Runs the findings command and posts its JSON report as one row from the source `findings`,
+/// the source the hub's efficiency rules read. The report is whatever the command printed
+/// last that parses as a JSON object, so a warning printed before it does not matter.
+fn post_findings(ctx: &Context, args: Vec<String>) -> Result<()> {
+    let output = run(ctx, args)?;
+    let text = fs::read_to_string(&output)
+        .map_err(|error| Error::Io(format!("reading {}: {error}", output.display())))?;
+    let report = text
+        .match_indices('{')
+        .find_map(|(start, _)| serde_json::from_str::<serde_json::Value>(&text[start..]).ok())
+        .ok_or_else(|| Error::Invalid(format!("{} holds no findings report", output.display())))?;
+    ctx.hub.metrics(&MetricsImport {
+        machine: ctx.machine.clone(),
+        source: "findings".to_owned(),
+        rows: vec![report],
+    })?;
+    Ok(())
+}
+
+/// Runs one of the dashboard's commands from the main checkout, as idle work, and returns the
+/// file that holds its output.
+fn run(ctx: &Context, args: Vec<String>) -> Result<PathBuf> {
     let name = args.join(" ");
     let result = ctx.launcher.run(&CommandSpec {
         args,
@@ -102,7 +125,7 @@ fn run(ctx: &Context, args: Vec<String>) -> Result<()> {
         ticket: None,
     });
     match result.exit {
-        Some(0) => Ok(()),
+        Some(0) => Ok(result.output),
         exit => Err(Error::Io(format!(
             "`{name}` failed with exit {exit:?}; its output is in {}",
             result.output.display()
@@ -229,6 +252,10 @@ mod tests {
     }
 
     fn setup(scratch: &Scratch, metrics: bool) -> Setup {
+        setup_with(scratch, metrics, "")
+    }
+
+    fn setup_with(scratch: &Scratch, metrics: bool, extra: &str) -> Setup {
         let mut text = r#"
             [repository]
             remote = "origin"
@@ -254,6 +281,7 @@ mod tests {
                  export = [\"dash\", \"export\", \"--since\", \"{{since}}\", \"--out\", \"{{out}}\"]\n",
                 scratch.0.join("transcripts").to_string_lossy()
             );
+            text.push_str(extra);
         }
         let hub = Arc::new(FakeHub::default());
         let launcher = Arc::new(FakeLauncher::default());
@@ -330,6 +358,42 @@ mod tests {
         assert_eq!(imports[0].source, "multivac");
         assert_eq!(imports[0].rows.len(), 3);
         assert!(!out.exists(), "the export is removed once sent");
+    }
+
+    #[test]
+    fn the_findings_report_is_posted_after_the_export() {
+        let scratch = Scratch::new("findings");
+        let s = setup_with(
+            &scratch,
+            true,
+            "findings = [\"dash\", \"findings\", \"--json\"]\n",
+        );
+        grow_transcripts(&scratch, "a.jsonl");
+        write_export(&s, 1);
+        let report = scratch.0.join("findings.out");
+        fs::write(
+            &report,
+            "warning: stale\n{\"groups\": [{\"findings\": []}]}\n",
+        )
+        .unwrap();
+        s.launcher.script(
+            &["dash", "findings"],
+            RunResult {
+                exit: Some(0),
+                output: report,
+                usage: ignite_core::protocol::Usage::default(),
+            },
+        );
+        post_new_rows(&s.ctx, &s.state).unwrap();
+        let runs = s.launcher.runs();
+        assert_eq!(args(&runs[2]), ["dash", "findings", "--json"]);
+        let imports = s.hub.metrics_imports();
+        assert_eq!(imports.len(), 2);
+        assert_eq!(imports[0].source, "multivac");
+        assert_eq!(imports[1].source, "findings");
+        assert_eq!(imports[1].machine.as_str(), "m-7f3a");
+        assert_eq!(imports[1].rows.len(), 1);
+        assert!(imports[1].rows[0].get("groups").is_some());
     }
 
     #[test]
