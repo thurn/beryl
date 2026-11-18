@@ -4,7 +4,9 @@
 //! file one for the outage. The daemon then has its dispatcher hand a justiciar prompt to an
 //! idle worker of its own pool directly, through the same hand-off steps as a ticket: clear the
 //! session, set the model, send the prompt. That worker is not offered tickets for
-//! [`HOLD_S`], the time it may spend on the repair.
+//! [`HOLD_S`], the time it may spend on the repair. A hand-off that fails, or that is dropped
+//! after its last give, releases the hold, so the worker goes back to tickets and the next
+//! check of the hub may give the prompt to another worker.
 
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::client::{DispatchAction, DispatchInstruction};
@@ -22,6 +24,21 @@ pub(super) fn holds(state: &State, session: &SessionId, now: Timestamp) -> bool 
         .justiciar
         .as_ref()
         .is_some_and(|(s, at)| s == session && now.seconds_since(*at) < HOLD_S)
+}
+
+/// Releases the justiciar hold if `queued` is the justiciar hand-off and it failed: its worker
+/// refused it or it was never acknowledged. A worker that refused is left alone for a minute,
+/// as after a refused ticket.
+pub(super) fn handoff_failed(state: &mut State, queued: &Queued, now: Timestamp) {
+    let is_justiciar = matches!(queued.purpose, Purpose::Message)
+        && queued.body.action == DispatchAction::Handoff
+        && state
+            .justiciar
+            .as_ref()
+            .is_some_and(|(s, _)| Some(s) == queued.body.session.as_ref());
+    if is_justiciar && let Some((session, _)) = state.justiciar.take() {
+        state.refused.insert(session, now);
+    }
 }
 
 impl Dispatcher {

@@ -440,6 +440,9 @@ impl Dispatcher {
         state.failures = 0;
         state.down = false;
         let mut text = format!("acked    {id} {result}");
+        if result == "failed" {
+            justiciar::handoff_failed(&mut state, &queued, now);
+        }
         let mut release = None;
         match (&queued.purpose, result, session) {
             (Purpose::Handoff(reserved), "failed", Some(session)) => {
@@ -523,6 +526,7 @@ impl Dispatcher {
                 state.down = true;
             }
             if given.queued.gives >= MAX_FAILURES {
+                justiciar::handoff_failed(state, &given.queued, now);
                 if let (Purpose::Handoff(_), Some(session)) =
                     (&given.queued.purpose, &given.queued.body.session)
                 {

@@ -151,3 +151,22 @@ fn asking_for_a_justiciar_files_it_and_keeps_it_while_the_hub_is_down() {
     assert_eq!(rig.hub.justiciar_reports().len(), 2);
     assert!(!home.join("justiciar-request.json").exists());
 }
+
+#[test]
+fn a_refused_justiciar_hand_off_releases_the_hold() {
+    let rig = rig(&["local_w1", "local_w2"]);
+    let first = rig
+        .dispatcher
+        .hand_off_justiciar(&rig.ctx, "repair the hub")
+        .expect("a worker");
+    let given = rig.step().expect("the hand-off");
+    assert_eq!(rig.ack(given.id, "failed", "busy").exit, Exit::Success);
+    let now = rig.clock.now();
+    assert!(!justiciar::holds(&rig.dispatcher.state(), &first, now));
+    // The prompt can go to another worker straight away.
+    let second = rig
+        .dispatcher
+        .hand_off_justiciar(&rig.ctx, "repair the hub")
+        .expect("another worker");
+    assert_ne!(second, first);
+}
