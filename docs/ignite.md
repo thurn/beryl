@@ -329,11 +329,14 @@ The verbs an agent uses while working:
   runs and why. Outside a build tree, such as in the main checkout, it prints
   only the hub's record, since the cache and the gate's choice depend on a
   tree's change.
-- `ignite status` and `ignite doctor` print the machine's state and health.
-  `doctor` also probes the hub's write path with one tokenless `POST` to the
-  heartbeat route: the writable hub refuses it with 401, while the read-only
-  public listener (`IGNITE_HUB_PUBLIC_LISTEN`) answers 405, and `doctor` then
-  reports a `listener` problem naming the URL to point at the writable listener.
+- `ignite status` and `ignite doctor` print the machine's state and health. If
+  `[hub] url` reaches the hub's read-only listener, every write is answered 405;
+  the daemon does not retry it, logs one line naming the URL and the fix, and
+  logs nothing more about it until a heartbeat succeeds. `doctor` also probes
+  the hub's write path with one tokenless `POST` to the heartbeat route: the
+  writable hub refuses it with 401, while the read-only public listener
+  (`IGNITE_HUB_PUBLIC_LISTEN`) answers 405, and `doctor` then reports a
+  `listener` problem naming the URL to point at the writable listener.
 - `ignite tell <ticket | session | --all> "<text>"` sends a correction to work
   that is under way. See [Steering work in flight](#steering-work-in-flight).
 - `ignite close -m "<reason>"` closes the ticket without landing anything, for a
@@ -738,6 +741,12 @@ The daemon runs builds so that sessions do not compete inside one tree:
   running build.
 - A request for a product the tree already holds is answered at once, without
   starting Cargo. This covers the 4,982 runs in 3 days that compiled nothing.
+- What each tree holds and which builds failed are kept in the daemon's
+  database, so a restarted daemon answers a request for a product the tree
+  already holds without starting Cargo; a recorded product whose output
+  directories were deleted or emptied is forgotten, at start and whenever the
+  disk sweep clears a tree. A build command still running across a restart is
+  rejoined: requests for the same build wait for it instead of starting Cargo.
 - A build that exited with a failing code is not run again for the same inputs:
   later requests get the same failure and its output until an input changes or
   the tree is leased again. A build that a signal ended, or that hung, is tried
@@ -1459,8 +1468,10 @@ single listing and the families run at once above, prevent it:
   is run only when the covering family has no such check.
 - **A round reports where its time went.** Its record holds the minutes spent
   running checks, listing, building and waiting for cores. When more than 10% of
-  a round goes to anything but checks and builds, the round files an improvement
-  ticket.
+  a round goes to listing and Ignite's own work between commands, the round
+  files an improvement ticket. Waiting for cores is shown but never files one:
+  the round's commands run in the `tip` class, which yields to landings and
+  agents by design.
 
 How these work:
 
@@ -1469,8 +1480,10 @@ How these work:
   command that also paid its program's start-up.
 - The hub fixes the costs and `claim_seconds` for each tip and family the first
   time any machine asks (`POST /tips/costs`). Each machine cuts batches over
-  every check of the family at the tip, so a batch number names the same checks
-  on every machine.
+  every check of the family it lists at the tip, including checks switched off
+  as flaky and checks another family covers, so a batch number names the same
+  checks on every machine even when the hub switches a check off partway through
+  a round.
 - A covered check is left out only when its covering check reads at least its
   inputs.
 - A round's record (`POST /tips/rounds`) counts any command with a results file
@@ -1493,7 +1506,11 @@ and what each commit changed:
 - One candidate is the culprit, with nothing run.
 - With several candidates, Ignite runs that one check at commits between them,
   by bisection, for at most 10 runs. A search that ends early reports the range.
-- The unit of blame is one landing, which is one ticket's commits.
+- The unit of blame is one landing, which is one ticket's commits. A commit that
+  no landing recorded, such as a push by hand, is a landing of its own.
+- The regression ticket says how the search ended: the only candidate with
+  nothing run, found in N runs, ended early with the reason, or not run with the
+  reason.
 
 ### Regression tickets
 
@@ -1504,6 +1521,7 @@ worker can take:
 Tk3fc  P0 bug  regression  check:rust
 Regression: beryl_bench::family::tests::family_corpora_never_change
 caused-by  Tw8gv.21.73 (commit 5e1b0aa "feat: ward counts mana spent")
+culprit: found by running the check at earlier commits (3 runs)
 first bad 5e1b0aa, last good 77c2d14
 rerun: ignite test family_corpora_never_change
 output (last 40 lines; whole output on jarvis at ...)
