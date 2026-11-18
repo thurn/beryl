@@ -277,6 +277,73 @@ fn a_session_whose_claim_was_lost_gets_409() {
     }
 }
 
+/// Under Enact, a metadata write by the dispatcher between the reservation and the worker's start
+/// changed the ticket's version, and the start, which checked that version, failed as if another
+/// owner held the ticket. Here a claim checks only the reservation and the assignee, so a write
+/// that changes neither (a comment and a metadata key, as `ignite tell` writes) cannot fail it.
+#[test]
+fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let id = file(&mut conn, &[("handed off", &[], &[])]).remove(0);
+    let (_, reserved) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(reserved["ticket"], id.as_str());
+    let before = tickets::load(&conn, id.as_str()).unwrap().unwrap().version;
+    let write = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![
+            Operation::Comment {
+                id: id.to_string(),
+                text: "a message for the worker".into(),
+            },
+            Operation::Update {
+                id: id.to_string(),
+                set: None,
+                add_labels: Vec::new(),
+                remove_labels: Vec::new(),
+                set_meta: std::collections::BTreeMap::from([("tell".to_owned(), json!(1))]),
+                unset_meta: Vec::new(),
+            },
+        ],
+    };
+    assert!(matches!(
+        batch::apply(&mut conn, &write, "dispatcher", "m-1", at(1.0)).unwrap(),
+        batch::BatchOutcome::Applied(_)
+    ));
+    assert_ne!(
+        tickets::load(&conn, id.as_str()).unwrap().unwrap().version,
+        before
+    );
+    // Another session is refused, and the reply says the ticket is someone else's.
+    let (status, reply) = post(
+        &mut conn,
+        "/claims",
+        &claim(id.as_str(), "local_b"),
+        at(2.0),
+    );
+    assert_eq!(status, 409);
+    assert_eq!(
+        reply["error"],
+        format!("{id} is reserved for another session")
+    );
+    let (status, brief) = post(
+        &mut conn,
+        "/claims",
+        &claim(id.as_str(), "local_a"),
+        at(3.0),
+    );
+    assert_eq!(status, 200, "{brief}");
+    assert_eq!(brief["ticket"]["assignee"], "local_a");
+    // A start retried after a lost reply is answered with the brief again.
+    let (status, again) = post(
+        &mut conn,
+        "/claims",
+        &claim(id.as_str(), "local_a"),
+        at(4.0),
+    );
+    assert_eq!(status, 200, "{again}");
+    assert_eq!(again["ticket"]["session"], "local_a");
+}
+
 #[test]
 fn a_released_ticket_returns_to_the_queue_with_a_comment() {
     let mut conn = hub::open_in_memory().unwrap();
