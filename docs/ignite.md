@@ -229,8 +229,12 @@ The expected values are estimates from those measurements, not promises.
   hand-offs follow machine load and every machine draws on one queue.
 - **Repair share**, the repair tickets as a share of all tickets: 38% today.
   Expected: under 10%.
-- **`master` lag**, the minutes `master` is behind `staging`: 1,728 a week
-  today. Expected: under 300.
+- **`master` lag**, the minutes from a landing until `master` reaches it. Today
+  `master` is behind `staging` for 1,728 minutes a week. Expected: a median
+  under 10 minutes per landing. A landing that changes inputs nearly every check
+  reads, such as the kernel crate, takes as long as the build and the checks
+  take when run as few commands. That figure is recorded once measured. See
+  [How long a round takes](#how-long-a-round-takes).
 - **Dispatch cost**: $591 a week today. Expected: under $60.
 - **Fleet coverage**: one machine of two measured today. Required: both.
 
@@ -857,6 +861,9 @@ The fields:
   hash. `run` runs the checks named.
 - `always = true` marks a family that blocks every landing its inputs touch. See
   [Where regression checks run](#where-regression-checks-run).
+- `covered_by` names a family whose checks find every fault this family's checks
+  find. Tip verification then runs the covering family only. See
+  [How long a round takes](#how-long-a-round-takes).
 - `grows = true` marks a family whose `run` rereads the file `IGNITE_CORES_FILE`
   names and starts more threads when it rises, so its grant grows as cores free
   up. A build product takes the same field, and `ignite run --grows` does the
@@ -1182,14 +1189,16 @@ How a daemon verifies a tip:
 - It claims those checks from the hub in batches, so two machines do not run the
   same ones, then runs them in the `tip` class. Each family is listed once per
   round and its batches run from that listing. Several families run at once,
-  each in its own landing tree, leaving one landing tree free for landings.
+  each in its own landing tree, leaving one landing tree free for landings. See
+  [How long a round takes](#how-long-a-round-takes) for how large a batch is.
 - A build that fails keeps its family's checks from running. The hub hears of it
   once, as `<family>:build`, not once for each check.
 - A tip left waiting (for incomplete checks, or checks another machine holds) is
   verified again after ten minutes, or at once when a newer tip arrives.
-- When a newer tip arrives meanwhile, the next round verifies the newest one.
-  Checks whose inputs did not change again are cache hits. Tips in between are
-  not verified one by one.
+- A round that has started runs to its end. When a newer tip arrives meanwhile,
+  the round is not restarted: its results are cached by input, and the next
+  round verifies the newest tip. Checks whose inputs did not change again are
+  cache hits. Tips in between are not verified one by one.
 - When every regression check for a tip has a pass on a platform that satisfies
   it, the daemon that completed the set moves `master` to that tip. A check that
   is switched off as flaky is not part of the set. An `incomplete` check or one
@@ -1205,6 +1214,36 @@ How a daemon verifies a tip:
 
 Because results are cached by input, a check that only the sweeps ran every
 three hours now runs exactly when something it reads changes.
+
+### How long a round takes
+
+A round costs the checks whose inputs changed, and close to nothing per check
+beyond them. The first rounds after the switch broke that rule. A kernel change
+reran 17,700 Beryl 3D interface checks in about an hour, although the program
+that runs 9,153 of them finishes in 11 to 13 seconds. The hour was Ignite's own
+overhead: batches of 50 checks, each a new launch of that program, run one after
+another, with the family listed again for every batch. These rules, with the
+single listing and the families run at once above, prevent it:
+
+- **A batch is sized by cost, not by count.** A claim holds about one minute of
+  measured work (`claim_seconds` under `[tip]` in `ignite.toml`), so a family of
+  9,000 checks that cost milliseconds each is one or two commands. A check
+  nobody has measured counts as its family's median. A family nobody has
+  measured starts at 50 checks a claim and doubles with each claim.
+- **A covered family is not run twice.** `covered_by = "<family>"` on a family
+  says that the named family's checks find every fault this family's find, as
+  `b3d-every-tick` does for `b3d-interface`. The gate may still choose the
+  cheaper family. In tip verification a covered check counts as passed when the
+  check of the same name in the covering family passed on the same inputs, and
+  is run only when the covering family has no such check.
+- **A round reports where its time went.** Its record holds the minutes spent
+  running checks, listing, building and waiting for cores. When more than 10% of
+  a round goes to anything but checks and builds, the round files an improvement
+  ticket.
+
+Expected: a round after a landing that touches one crate or one area finishes in
+under 5 minutes. A round after a change to the kernel crate or the lock file
+costs the build, the recordings and each large family run as a few commands.
 
 ### Finding the culprit
 
