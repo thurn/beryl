@@ -1,0 +1,33 @@
+[package]
+name = "ignite_os"
+description = "Ignite's operating-system layer: process usage, groups, local sockets, login items."
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+ignite_core.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
+# The workspace's lints, except that this crate is the one place `unsafe` is allowed: it calls
+# the operating system directly.
+[lints.rust]
+unsafe_code = "allow"
+warnings = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+many_single_char_names = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"

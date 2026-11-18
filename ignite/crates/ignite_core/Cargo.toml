@@ -1,10 +1,15 @@
 [package]
 name = "ignite_core"
-version = "0.1.0"
-description = "Ignite's core types and traits"
+description = "Ignite's pure logic: identifiers, configuration, manifests, protocol and traits."
 edition.workspace = true
 license.workspace = true
-publish = false
+version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+toml.workspace = true
 
 [lints]
 workspace = true

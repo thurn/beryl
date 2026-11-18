@@ -1,0 +1,15 @@
+[package]
+name = "ignite_store"
+description = "Ignite's SQLite databases: the hub's shared store and each daemon's local store."
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+ignite_core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,12 @@
+[package]
+name = "ignite_git"
+description = "Everything Ignite does with git: trees, object IDs, rebases, pushes and refs."
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+ignite_core.workspace = true
+
+[lints]
+workspace = true

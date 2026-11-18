@@ -1,0 +1,70 @@
+# Ignite's configuration for this repository: what Ignite knows about the repository it delivers
+# to and the machines that serve it. Check families and build products are in ignite/checks/.
+# See docs/ignite.md.
+
+[repository]
+remote = "origin"
+staging = "staging"
+master = "master"
+trees = ".worktrees"
+checks = "ignite/checks"
+
+[hub]
+url = "https://jarvis.tail4b0774.ts.net:8443"
+project = "by"
+
+# Placeholder values until the switch replays 14 days of history to set them (docs/ignite.md,
+# "The threshold and the cap"). Only a commit changes them.
+[gate]
+threshold = 0.004 # expected failures per billion instructions
+cap = 400         # billions of instructions per landing
+
+[improvement]
+min_share = 0.15
+max_share = 0.30
+backlog_low = 0.05
+backlog_high = 0.20
+window = 20
+
+# The Mac Studio that runs the hub.
+[machine.jarvis]
+os = "macos"
+ticket_trees = 24
+landing_trees = 3
+trees_disk_gb = 400
+floor = { batch = 8, tip = 2 }
+
+[machine.jarvis.resources]
+browser-pages = 9
+oracle = 1
+bench-vm = 1
+
+# The MacBook Pro.
+[machine.multivac]
+os = "macos"
+ticket_trees = 8
+landing_trees = 2
+trees_disk_gb = 200
+floor = { batch = 2, tip = 2 }
+
+[machine.multivac.resources]
+browser-pages = 4
+oracle = 1
+
+# The Windows PC: no browser, oracle or app families.
+[machine.cygnus]
+os = "windows"
+ticket_trees = 6
+landing_trees = 2
+families = ["rust", "clippy", "format", "source-rules", "python"]
+floor = { batch = 8, tip = 2 }
+
+[[rebuild]]
+name = "kernel-body"
+edit = "append a no-op statement to one function in beryl_kernel"
+products = ["clippy", "rust-tests"]
+
+[[rebuild]]
+name = "one-card"
+edit = "append a no-op statement to one card file"
+products = ["clippy", "rust-tests"]

@@ -1,0 +1,64 @@
+//! One row struct per table of a daemon's local database, with the columns as they are stored.
+
+crate::tables! {
+    Tree = "trees" {
+        id: String,
+        path: String,
+        kind: String,
+        ticket: Option<String>,
+        session: Option<String>,
+        branch: Option<String>,
+        built_commit: Option<String>,
+        leased_at: Option<String>,
+        last_used: Option<String>,
+    }
+
+    Grant = "grants" {
+        id: i64,
+        handle: Option<String>,
+        class: String,
+        cores: i64,
+        /// JSON array of resource names.
+        resources: String,
+        tree: Option<String>,
+        ticket: Option<String>,
+        pid: Option<i64>,
+        granted_at: String,
+    }
+
+    Handle = "handles" {
+        id: String,
+        verb: String,
+        session: Option<String>,
+        tree: Option<String>,
+        state: String,
+        exit: Option<i64>,
+        /// JSON: the reply, once done.
+        reply: Option<String>,
+        started_at: String,
+        finished_at: Option<String>,
+    }
+
+    OutboxEntry = "outbox" { seq: i64, kind: String, body: String, at: String }
+
+    CachedResult = "results" {
+        check_name: String,
+        hash: String,
+        platform: String,
+        outcome: String,
+        record: Option<i64>,
+        at: String,
+        output: Option<String>,
+    }
+
+    PoolMember = "pool" {
+        session: String,
+        app: String,
+        role: String,
+        state: String,
+        ticket: Option<String>,
+        /// JSON: model tiers its app can run.
+        models: String,
+        added_at: String,
+    }
+}

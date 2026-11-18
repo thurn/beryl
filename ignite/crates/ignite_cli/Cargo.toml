@@ -1,0 +1,21 @@
+[package]
+name = "ignite_cli"
+description = "The `ignite` command."
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "ignite"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+ignite_core.workspace = true
+ignite_daemon.workspace = true
+ignite_os.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,3 +1,5 @@
+# Ignite: the build, check and delivery system. A workspace of its own, so building it never
+# rebuilds the game's crates and its dependencies never enter the game's lock file.
 [workspace]
 resolver = "3"
 members = ["crates/*"]
@@ -5,11 +7,49 @@ members = ["crates/*"]
 [workspace.package]
 edition = "2024"
 license = "Apache-2.0"
+version = "0.1.0"
+
+[workspace.dependencies]
+ignite_core = { path = "crates/ignite_core" }
+ignite_os = { path = "crates/ignite_os" }
+ignite_git = { path = "crates/ignite_git" }
+ignite_store = { path = "crates/ignite_store" }
+ignite_hub = { path = "crates/ignite_hub" }
+ignite_daemon = { path = "crates/ignite_daemon" }
+# Serialization of the protocol, the records and the JSON columns; replaces hand-written JSON.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+# Parses `ignite.toml` and the check manifests; replaces a hand-written TOML reader.
+toml = "1.2.0"
+# SHA-256 for input hashes; replaces shelling out to `shasum`.
+sha2 = "0.10.9"
+# The hub's and the daemon's databases, with SQLite compiled in; replaces the ticket service's
+# own SQLite binding and the Python run log.
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+# The hub's HTTP server; replaces the ticket service's web framework.
+tiny_http = "0.12.0"
+# The daemon's HTTP client for the hub; replaces the `tk` client.
+ureq = "3.5.2"
+# Argument parsing for the `ignite` command; replaces hand-written parsing.
+clap = { version = "4.6.7", features = ["derive"] }
+# macOS system calls for process usage, groups and sockets; replaces `ps` and `getrusage` shims.
+libc = "0.2.191"
+# Windows system calls for job objects, named pipes and CPU times; replaces PowerShell probes.
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_JobObjects",
+  "Win32_System_Pipes",
+  "Win32_System_ProcessStatus",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+] }
 
 # Copied from rust/Cargo.toml: Ignite's code is held to the same lints as the game's.
 [workspace.lints.rust]
 unsafe_code = "deny"
-# Every warning is an error, in every build.
 warnings = "deny"
 
 [workspace.lints.clippy]

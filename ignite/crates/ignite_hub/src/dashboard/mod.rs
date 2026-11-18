@@ -1,0 +1,15 @@
+//! The dashboard, the one page meant for a person: the ticket views, each machine's cores and
+//! trees, the pool, the landing queue, tip verification, open regressions and exploration finds.
+//! Pages are server-rendered HTML; each page module renders itself and its fragments.
+
+pub mod components;
+pub mod explore;
+pub mod history;
+pub mod home;
+pub mod landings;
+pub mod machines;
+pub mod markdown;
+pub mod pool;
+pub mod status;
+pub mod ticket;
+pub mod tips;

@@ -1,0 +1,23 @@
+[package]
+name = "ignite_daemon"
+description = "Ignite's per-machine daemon: scheduling, trees, builds, checks, landing and workers."
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+# `src/main.rs` is the module that wires the daemon together, not a binary: the `ignite`
+# executable in `ignite_cli` starts the daemon through a hidden subcommand.
+autobins = false
+
+[dependencies]
+ignite_core.workspace = true
+ignite_git.workspace = true
+ignite_hub.workspace = true
+ignite_os.workspace = true
+ignite_store.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true
