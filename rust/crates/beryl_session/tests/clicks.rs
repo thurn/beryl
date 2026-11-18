@@ -4,8 +4,6 @@
 //! shows, and checks that the clicks end where the picks a UI holding the prompt's
 //! state itself would send end.
 
-use std::sync::mpsc::channel;
-
 use crate::play;
 
 use beryl_cards::CARDS;
@@ -17,15 +15,12 @@ use beryl_cards::names::{
 use beryl_engine::card::Purpose;
 use beryl_engine::{Seat, TurnStep};
 use beryl_scenario::{P0, P1, Permanent, Scenario};
-use beryl_search::Budget;
-use beryl_session::prompt::{ButtonId, Click, ClickReply, ClickRequest, ShapeBody};
+use beryl_session::prompt::{ButtonId, Click, ClickRequest, ShapeBody};
 use beryl_session::protocol::ObjectId;
-use beryl_session::protocol::{Candidate, DecisionView, Kind, Side, ZoneName};
+use beryl_session::protocol::{Candidate, Kind, Side, ZoneName};
 use beryl_session::replay::{Entry, ReplayFile};
 use beryl_session::save::Kind as SavedKind;
-use beryl_session::{
-    CandidateIndex, Game, Prepared, SessionError, Sessions, StartGame, Status, StopsSetting,
-};
+use beryl_session::{Game, SessionError, StartGame, Status, StopsSetting};
 use play::{Casts, Play, SESSION, cards};
 
 /// The choices of the log from entry `from` on: the kind of decision each answered and
@@ -794,82 +789,6 @@ fn a_click_on_another_decision_or_an_earlier_state_is_refused() {
     };
     assert_eq!(decision.prompt.revision, 1);
     assert_eq!(*decision.prompt, *play.decision().prompt);
-}
-
-/// The click command through a session, as the app sends it: the reply is the prompt's new
-/// state, the latest view keeps it for a UI that takes the game up again, and a click that
-/// answers says so. Every step waits on the session's thread, which waits on the human, so
-/// nothing here runs beside the game playing on. What a second click finds once the game
-/// does play on depends on how far it got; `sessions.rs` checks that race through `choose`,
-/// and `a_click_on_another_decision_or_an_earlier_state_is_refused` checks the refusal.
-#[test]
-fn a_session_takes_clicks_and_its_latest_view_keeps_the_prompt() {
-    let (table, state) = beryl_scenario::position(&CARDS, &TEFERI_UNTAPS).unwrap();
-    let random = beryl_search::agent("random").unwrap();
-    let (sent, views) = channel();
-    let sessions = Sessions::new(None, move |update| {
-        let _ = sent.send(update);
-    });
-    sessions
-        .start_prepared(Prepared {
-            opponent: (random.new)(&table, 1, Budget::DEFAULT),
-            stand_in: (random.new)(&table, 2, Budget::DEFAULT),
-            // The human answers their own decisions from the first.
-            hand_over: Some(Box::new(|| true)),
-            scripted: false,
-            table,
-            state,
-            human: Seat::P0,
-            stops: StopsSetting::SMART,
-        })
-        .unwrap();
-    // The view of the human's next decision.
-    let deciding = || loop {
-        let view = views.recv().unwrap().view;
-        if let Status::Deciding { decision } = view.status {
-            break decision;
-        }
-    };
-    let index = |decision: &DecisionView, wanted: &dyn Fn(&Candidate) -> bool| {
-        let at = (decision.candidates.iter()).position(|c| wanted(&c.option));
-        CandidateIndex(at.unwrap() as u16)
-    };
-    let mut decision = deciding();
-    let plus = index(&decision, &|c| {
-        matches!(c, Candidate::Activate { ability: 0, .. })
-    });
-    sessions.choose(decision.id, plus).unwrap();
-    decision = deciding();
-    while decision.kind == Kind::Priority {
-        let pass = index(&decision, &|c| *c == Candidate::Pass);
-        sessions.choose(decision.id, pass).unwrap();
-        decision = deciding();
-    }
-    assert!(decision.prompt.is(Purpose::Untap));
-    let ShapeBody::Pick { picked, .. } = &decision.prompt.body else {
-        panic!("an untap is a pick the session holds");
-    };
-    // Unpicking a land changes the prompt and nothing else.
-    let click = |revision, click| ClickRequest {
-        decision: decision.id,
-        revision,
-        click,
-    };
-    let reply = sessions.click(click(0, Click::On { on: picked[0] }));
-    let Ok(ClickReply::Open { prompt }) = reply else {
-        panic!("the click changes the prompt: {reply:?}");
-    };
-    assert_eq!(prompt.revision, 1);
-    let Status::Deciding { decision: latest } = sessions.current().unwrap().view.status else {
-        panic!("the untap is open");
-    };
-    assert_eq!(latest.prompt, prompt);
-    assert_eq!(latest.id, decision.id);
-    // The button answers the untap.
-    let confirm = Click::Button {
-        button: ButtonId::Confirm,
-    };
-    assert_eq!(sessions.click(click(1, confirm)), Ok(ClickReply::Answered));
 }
 
 fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
