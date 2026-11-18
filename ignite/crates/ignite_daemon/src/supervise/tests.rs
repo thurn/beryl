@@ -127,6 +127,7 @@ fn a_failed_command_replies_check_failed_with_its_exit_and_the_end_of_its_output
                 wall_s: 12.4,
                 ..Usage::default()
             },
+            hung: false,
         },
     );
     let reply = RunVerb.run(&context(launcher), &request(&["--", "cargo", "test"]));

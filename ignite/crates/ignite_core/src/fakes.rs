@@ -94,6 +94,7 @@ impl Launcher for FakeLauncher {
                     exit: Some(0),
                     output: PathBuf::new(),
                     usage: Usage::default(),
+                    hung: false,
                 },
                 |(_, result)| result.clone(),
             )
@@ -739,6 +740,7 @@ mod tests {
             exit: Some(2),
             output: PathBuf::from("out"),
             usage: Usage::default(),
+            hung: false,
         };
         launcher.script(&["cargo", "test"], failing);
         let spec = |args: &[&str]| CommandSpec {
@@ -751,6 +753,7 @@ mod tests {
             grows: false,
             tree: None,
             ticket: None,
+            hang_limit_s: None,
         };
         assert_eq!(
             launcher.run(&spec(&["cargo", "test", "-p", "x"])).exit,

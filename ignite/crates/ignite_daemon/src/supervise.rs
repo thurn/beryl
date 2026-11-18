@@ -19,6 +19,13 @@
 //!   ([`ResultFile`]).
 //! - `collected`: written by the daemon once it has taken the result, so a restarted daemon
 //!   skips the run.
+//! - `output.keep`: written by whoever judged the run failed, flaky or incomplete ([`keep`]), so
+//!   its output is kept for [`KEEP_JUDGED_S`] instead of [`KEEP_S`] ([`SupervisedLauncher::prune`]).
+//!
+//! A command with a hang limit that runs past it is ended by its supervisor with everything it
+//! started, after the supervisor has written the processes still running to its output. Its
+//! result says it hung. The limit counts from the command's start, so time spent waiting for
+//! cores does not count.
 //!
 //! The supervisor starts in a process group of its own, so ending the daemon (or its group)
 //! leaves the command running. The command runs in a second group, led by itself, so that
@@ -48,9 +55,13 @@ use serde::{Deserialize, Serialize};
 use crate::sched::{Grant, GrantRequest, Scheduler};
 use crate::server::{Context, Verb};
 
+mod hang;
 mod jobserver;
+mod retain;
 
+use hang::{Watchdog, signal_group};
 use jobserver::{Jobserver, compiles_only, read_cores};
+pub use retain::{KEEP_JUDGED_S, KEEP_S, keep};
 
 /// The line a supervisor prints on its standard output once it holds its run's lock. The
 /// launcher reads lines until it sees this one, so other output before it does no harm.
@@ -85,6 +96,9 @@ pub struct SpecFile {
     /// build under a jobserver of its own that follows the file.
     #[serde(default)]
     pub jobserver: Option<PathBuf>,
+    /// Seconds after which the supervisor ends the command; `None` for no limit.
+    #[serde(default)]
+    pub hang_limit_s: Option<u64>,
 }
 
 /// How a supervised command ended: the `result.json` of a run directory.
@@ -94,6 +108,9 @@ pub struct ResultFile {
     pub exit: Option<i32>,
     pub output: PathBuf,
     pub usage: Usage,
+    /// The supervisor ended the command at its hang limit.
+    #[serde(default)]
+    pub hung: bool,
 }
 
 /// Runs commands by starting a supervisor for each.
@@ -103,6 +120,8 @@ pub struct SupervisedLauncher {
     runs: PathBuf,
     scheduler: Option<Arc<Scheduler>>,
     next: AtomicU64,
+    /// When old run directories were last deleted, in seconds since the Unix epoch.
+    pruned: AtomicU64,
 }
 
 impl SupervisedLauncher {
@@ -122,6 +141,7 @@ impl SupervisedLauncher {
             runs,
             scheduler: None,
             next: AtomicU64::new(0),
+            pruned: AtomicU64::new(0),
         }
     }
 
@@ -172,6 +192,7 @@ impl SupervisedLauncher {
             env: all_env,
             queued_s,
             jobserver,
+            hang_limit_s: spec.hang_limit_s,
         };
         write_json(&dir.join(SPEC), &file)?;
         let (program, rest) = self
@@ -286,6 +307,7 @@ impl Launcher for SupervisedLauncher {
         if let Some(scheduler) = &self.scheduler {
             scheduler.release(&grant);
         }
+        self.prune_now_and_then();
         result
     }
 }
@@ -300,6 +322,7 @@ fn not_started(spec: &CommandSpec, error: &io::Error) -> RunResult {
         exit: None,
         output: PathBuf::new(),
         usage: Usage::default(),
+        hung: false,
     }
 }
 
@@ -343,11 +366,7 @@ impl Run {
             .trim()
             .parse()
             .map_err(|_| io::Error::other("the group file holds no process group ID"))?;
-        Command::new("/bin/kill")
-            .args(["-TERM", "--", &format!("-{group}")])
-            .stderr(Stdio::null())
-            .status()?;
-        Ok(())
+        signal_group(group, "TERM")
     }
 
     /// Blocks until the run's supervisor has exited, then returns the result it wrote and marks
@@ -366,11 +385,13 @@ impl Run {
                 exit: file.exit,
                 output: file.output,
                 usage: file.usage,
+                hung: file.hung,
             },
             None => RunResult {
                 exit: None,
                 output: self.dir.join(SUPERVISOR_LOG),
                 usage: Usage::default(),
+                hung: false,
             },
         }
     }
@@ -415,7 +436,13 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     stdout.flush()?;
     drop(stdout);
 
-    let (exit, usage) = match group.and_then(wait_measured) {
+    let watchdog = match (&group, spec.hang_limit_s) {
+        (Ok(group), Some(limit)) => Some(Watchdog::start(group.id, limit, output.try_clone()?)),
+        _ => None,
+    };
+    let measured = group.and_then(wait_measured);
+    let hung = watchdog.is_some_and(Watchdog::finish);
+    let (exit, usage) = match measured {
         Ok((status, usage)) => (status.code(), usage),
         Err(error) => {
             writeln!(&output, "ignite: cannot run {:?}: {error}", spec.args)?;
@@ -432,6 +459,7 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
             instructions: usage.instructions,
             peak_mb: usage.peak_bytes / (1024 * 1024),
         },
+        hung,
     };
     write_json(&dir.join(RESULT), &result)?;
     // The lock is released when the process exits, after the result exists.
@@ -619,6 +647,7 @@ impl Verb for RunVerb {
             grows: args.grows,
             tree: None,
             ticket: args.ticket,
+            hang_limit_s: None,
         };
         let result = ctx.launcher.run(&spec);
         render(&args.command, &result)

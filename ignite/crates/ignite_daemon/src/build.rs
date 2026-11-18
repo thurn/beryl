@@ -331,6 +331,7 @@ impl BuildManager {
             grows: plan.product.grows,
             tree: Some(plan.request.tree.clone()),
             ticket: None,
+            hang_limit_s: None,
         }
     }
 
@@ -518,6 +519,7 @@ impl BuildManager {
             exit,
             output,
             usage,
+            ..
         } = self.launcher.run(&spec);
         let units = read_units(&units_file);
         let _ = fs::remove_file(&units_file);

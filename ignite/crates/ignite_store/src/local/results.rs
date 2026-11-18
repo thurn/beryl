@@ -15,7 +15,7 @@ pub fn get(
 ) -> Result<Option<rows::CachedResult>> {
     Ok(conn
         .query_row(
-            "SELECT check_name, hash, platform, outcome, record, at, output FROM results \
+            "SELECT check_name, hash, platform, outcome, record, at, output, machine FROM results \
              WHERE check_name = ?1 AND hash = ?2 AND platform = ?3",
             params![check, hash, platform],
             |row| {
@@ -27,6 +27,7 @@ pub fn get(
                     record: row.get(4)?,
                     at: row.get(5)?,
                     output: row.get(6)?,
+                    machine: row.get(7)?,
                 })
             },
         )
@@ -37,8 +38,9 @@ pub fn get(
 /// gains the hub's record ID once the hub accepts it.
 pub fn put(conn: &Connection, result: &rows::CachedResult) -> Result<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO results (check_name, hash, platform, outcome, record, at, output) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT OR REPLACE INTO results \
+         (check_name, hash, platform, outcome, record, at, output, machine) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             result.check_name,
             result.hash,
@@ -47,6 +49,7 @@ pub fn put(conn: &Connection, result: &rows::CachedResult) -> Result<()> {
             result.record,
             result.at,
             result.output,
+            result.machine,
         ],
     )?;
     Ok(())
@@ -66,6 +69,7 @@ mod tests {
             record: None,
             at: "2026-11-18T00:00:00.000Z".to_owned(),
             output: Some("ok".to_owned()),
+            machine: Some("m-1".to_owned()),
         }
     }
 

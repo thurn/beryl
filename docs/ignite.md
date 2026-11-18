@@ -797,15 +797,27 @@ Some runs produce no verdict, and Ignite never guesses one:
   a tip that needs the check waits for it.
 - A command that says it cannot run on this machine, because a tool, a virtual
   machine or a download is missing, is `incomplete` with that reason and is not
-  run again there. The ticket names the machine.
+  run again there. The ticket names the machine. A `jsonl` command says so with
+  `"reason": "cannot-run"` on the check's line, as in the example below.
+- Each command is told its class in `IGNITE_CLASS` (`land`, `agent`, `tip`,
+  `batch` or `idle`), so a family whose checks wait on a slow tool can wait
+  longer outside the gate.
 - A command that runs past its hang limit is ended with everything it started
   and is `incomplete` as hung. It is not run again, because a hung command hangs
   again, and its output lists the processes it left. The limit is four times the
   command's slowest pass in 30 days, at least 15 minutes and at most 40, and 30
   minutes for a command with no pass on record. Time spent waiting for cores
-  does not count.
+  does not count. Each machine keeps the pass times of its own commands, a
+  family's `list` and `run` apart, so the limit fits that machine's speed.
 - A failure to file a ticket or to reach the hub never changes a check's
   outcome.
+
+A check that cannot run on this machine:
+
+```json
+{"check": "ios:smoke", "outcome": "incomplete", "reason": "cannot-run",
+ "message": "no simulator runtime is installed"}
+```
 
 Ignite keeps the whole output of every command in a file. The output of a
 failed, flaky or incomplete run is kept for 14 days, and other output for a day.
@@ -846,8 +858,10 @@ one global view save work:
   saved output. `--rerun` forces a fresh run.
 - A failure from another machine is not trusted to block. The check runs once
   here first. If it passes here, the failure belongs to that machine's own
-  state, such as a stale cache or a broken tool: the pass is stored, and the hub
-  files a P1 ticket for that machine.
+  state, such as a stale cache or a broken tool: the pass is stored, and the
+  hub, seeing it replace that machine's failure, files a P1 ticket for that
+  machine. Each daemon's copy of the cache records which machine produced each
+  entry.
 - A check is run a second time at once when it fails. Passing the second time
   makes it flaky, not failed. See [Flaky checks](#flaky-checks).
 - An exploration check that was played on the same inputs is never played again.

@@ -1,6 +1,8 @@
 //! The check runner against the fakes: a launcher that answers from a script, a fake hub, fake
 //! builds and git, and a tree in a temporary directory.
 
+mod verdicts;
+
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt::Write as _;
 use std::fs;
@@ -38,7 +40,8 @@ fn temp_dir() -> PathBuf {
 
 /// Answers `lister` with the listing, `runner <checks>` by writing each check's next scripted
 /// outcome (a pass when nothing is scripted, nothing for `None`) to `IGNITE_RESULTS`, and
-/// cargo-nextest's commands with their scripted output.
+/// cargo-nextest's commands with their scripted output. `cannot-run` writes an incomplete line
+/// with that reason; `hang` writes nothing and makes the run end as hung.
 #[derive(Default)]
 struct ScriptLauncher {
     dir: PathBuf,
@@ -68,10 +71,11 @@ impl ScriptLauncher {
 impl Launcher for ScriptLauncher {
     fn run(&self, spec: &CommandSpec) -> RunResult {
         self.runs.lock().unwrap().push(spec.clone());
-        let mut exit = 0;
+        let mut exit = Some(0);
+        let mut hung = false;
         let text = match spec.args[0].as_str() {
             "lister" => {
-                exit = *self.list_exit.lock().unwrap();
+                exit = Some(*self.list_exit.lock().unwrap());
                 self.listing.lock().unwrap().clone()
             }
             "runner" => {
@@ -88,7 +92,14 @@ impl Launcher for ScriptLauncher {
                         .get_mut(check)
                         .and_then(VecDeque::pop_front)
                         .unwrap_or(Some("pass"));
-                    if let Some(outcome) = next {
+                    if next == Some("hang") {
+                        hung = true;
+                    } else if next == Some("cannot-run") {
+                        let _ = writeln!(
+                            lines,
+                            "{{\"check\": \"{check}\", \"outcome\": \"incomplete\", \"reason\": \"cannot-run\", \"message\": \"no simulator\"}}"
+                        );
+                    } else if let Some(outcome) = next {
                         let _ = writeln!(
                             lines,
                             "{{\"check\": \"{check}\", \"outcome\": \"{outcome}\", \"at\": \"src/a.py:3\"}}"
@@ -105,13 +116,17 @@ impl Launcher for ScriptLauncher {
         let n = self.files.fetch_add(1, Ordering::Relaxed);
         let output = self.dir.join(format!("output-{n}.txt"));
         fs::write(&output, text).unwrap();
+        if hung {
+            exit = None;
+        }
         RunResult {
-            exit: Some(exit),
+            exit,
             output,
             usage: Usage {
                 wall_s: 1.0,
                 ..Usage::default()
             },
+            hung,
         }
     }
 }
@@ -317,8 +332,8 @@ fn outcome(run: &CheckRun, check: &str) -> Outcome {
         .unwrap()
 }
 
-/// What the hub and the local copy hold for `check`'s key in this world.
-fn cached(world: &World, check: &str) -> Option<Outcome> {
+/// The result key of `check` in this world's tree.
+fn key_of(world: &World, check: &str) -> ResultKey {
     let mut probe = CheckRun::default();
     let tree = world.checks.open(&TreeId::new("tree-01").unwrap()).unwrap();
     let family = name(check).family().to_owned();
@@ -330,10 +345,12 @@ fn cached(world: &World, check: &str) -> Option<Outcome> {
         .iter()
         .find(|k| k.listed.check.as_str() == check)
         .unwrap();
-    world
-        .checks
-        .cache()
-        .lookup(std::slice::from_ref(&keyed.key))[0]
+    keyed.key.clone()
+}
+
+/// What the hub and the local copy hold for `check`'s key in this world.
+fn cached(world: &World, check: &str) -> Option<Outcome> {
+    world.checks.cache().lookup(&[key_of(world, check)])[0]
         .as_ref()
         .map(|r| r.outcome)
 }

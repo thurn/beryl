@@ -80,6 +80,9 @@ pub struct CommandSpec {
     pub grows: bool,
     pub tree: Option<TreeId>,
     pub ticket: Option<TicketId>,
+    /// Seconds the command may run before its supervisor ends it with everything it started.
+    /// Time spent waiting for cores does not count. `None` lets it run until it exits.
+    pub hang_limit_s: Option<u64>,
 }
 
 /// How a supervised command ended.
@@ -90,6 +93,8 @@ pub struct RunResult {
     /// The file that holds its whole output.
     pub output: PathBuf,
     pub usage: Usage,
+    /// It ran past its hang limit and its supervisor ended it.
+    pub hung: bool,
 }
 
 pub trait Launcher: Send + Sync {

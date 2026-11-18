@@ -416,6 +416,7 @@ impl LandGate for CacheGate {
                     at: Some(format!("{}/src/a.rs:3", tree.path.display())),
                     message: Some("left: 1 right: 2".to_owned()),
                     output: None,
+                    reason: None,
                 });
                 run.outcomes.push((key.check, Outcome::Fail));
             } else {

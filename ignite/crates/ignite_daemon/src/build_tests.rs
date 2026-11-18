@@ -90,6 +90,7 @@ impl Launcher for TestLauncher {
                 wall_s: 3.0,
                 ..Usage::default()
             },
+            hung: false,
         };
         let mut state = lock(&self.state);
         state.runs.push(spec.clone());

@@ -224,6 +224,7 @@ impl Idle {
             grows: family.grows,
             tree: Some(tree.clone()),
             ticket: None,
+            hang_limit_s: None,
         }
     }
 

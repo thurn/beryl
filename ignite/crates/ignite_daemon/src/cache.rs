@@ -8,8 +8,10 @@
 //! Only passes and failures are cached. An `incomplete` run says nothing about the check, and a
 //! `flaky` one is reported to the hub's flaky table instead (see [`ResultCache::flaky`]).
 //!
-//! Results, records and flaky reports that the hub cannot take now wait in the local outbox
-//! ([`crate::outbox`]), which sends them once it is reachable.
+//! Results, records and flaky reports that the hub cannot take now wait in the local outbox ([`crate::outbox`]), which sends them once it is reachable.
+//!
+//! The local database also keeps how long each check command took when it passed, from which
+//! the check runner computes the command's hang limit ([`ResultCache::slowest_pass`]).
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -21,9 +23,12 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{CachedResult, FlakyReport, NewResult, Record, ResultKey};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Hub};
-use ignite_store::local::{outbox as queue, results, rows};
+use ignite_store::local::{outbox as queue, passes, results, rows};
 
 use crate::outbox;
+
+/// How far back a command's passes count toward its hang limit: 30 days.
+const PASSES_KEPT_S: f64 = 30.0 * 24.0 * 60.0 * 60.0;
 
 /// The result cache as one daemon sees it. See the module documentation.
 pub struct ResultCache {
@@ -57,8 +62,8 @@ impl ResultCache {
     /// what the hub answers is copied locally. When the hub cannot be reached, those keys are
     /// misses.
     ///
-    /// A local entry does not record which machine produced it, so a hit from the copy names
-    /// this machine.
+    /// A local entry stored before entries recorded their machine is used only if it is a
+    /// pass, and then names this machine; such a failure is asked of the hub again.
     pub fn lookup(&self, keys: &[ResultKey]) -> Vec<Option<CachedResult>> {
         let mut found: Vec<Option<CachedResult>> = {
             let conn = self.conn();
@@ -123,6 +128,28 @@ impl ResultCache {
         }
     }
 
+    /// Records that `family`'s `command` (`list` or `run`) passed in `wall_s` seconds.
+    pub fn note_pass(&self, family: &str, command: &str, wall_s: f64) {
+        let now = self.clock.now();
+        let forget = now.plus_seconds(-PASSES_KEPT_S);
+        let _ = passes::add(
+            &self.conn(),
+            family,
+            command,
+            wall_s,
+            &now.to_string(),
+            &forget.to_string(),
+        );
+    }
+
+    /// The longest pass of `family`'s `command` in the last 30 days, if any.
+    pub fn slowest_pass(&self, family: &str, command: &str) -> Option<f64> {
+        let since = self.clock.now().plus_seconds(-PASSES_KEPT_S);
+        passes::slowest(&self.conn(), family, command, &since.to_string())
+            .ok()
+            .flatten()
+    }
+
     /// The outbox entries not yet sent, oldest first, as (kind, body).
     pub fn queued(&self) -> Vec<(String, String)> {
         queue::peek(&self.conn(), u32::MAX)
@@ -140,10 +167,16 @@ impl ResultCache {
             "fail" => Outcome::Fail,
             _ => return None,
         };
+        let machine = match row.machine.map(MachineId::new) {
+            Some(Ok(machine)) => machine,
+            // Whose failure this is is not known, so the hub is asked.
+            _ if outcome == Outcome::Fail => return None,
+            _ => self.machine.clone(),
+        };
         Some(CachedResult {
             key: key.clone(),
             outcome,
-            machine: self.machine.clone(),
+            machine,
             record: RecordId(
                 row.record
                     .and_then(|id| u64::try_from(id).ok())
@@ -186,6 +219,7 @@ fn row(result: &CachedResult) -> rows::CachedResult {
         record: i64::try_from(result.record.0).ok().filter(|id| *id != 0),
         at: result.at.to_string(),
         output: result.output.clone(),
+        machine: Some(result.machine.as_str().to_owned()),
     }
 }
 
@@ -262,6 +296,23 @@ mod tests {
             outcomes,
             [Some(Outcome::Pass), Some(Outcome::Fail), None, None]
         );
+    }
+
+    #[test]
+    fn a_local_failure_names_its_machine_and_an_unattributed_one_is_asked_again() {
+        let hub = Arc::new(FakeHub::default());
+        let cache = cache(&hub);
+        let mut other = new("f:a", Outcome::Fail);
+        other.machine = MachineId::new("m-2").unwrap();
+        cache.store(&[other]);
+        hub.set_unreachable(true);
+        let found = cache.lookup(&[key("f:a")]);
+        assert_eq!(found[0].as_ref().unwrap().machine.as_str(), "m-2");
+        // A row from before machines were kept.
+        let mut old = row(&cached(&new("f:b", Outcome::Fail), Timestamp::EPOCH));
+        old.machine = None;
+        results::put(&cache.conn(), &old).unwrap();
+        assert!(cache.lookup(&[key("f:b")])[0].is_none());
     }
 
     #[test]

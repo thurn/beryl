@@ -159,6 +159,7 @@ impl Launcher for Seeds {
                 instructions: Some(2_000_000_000),
                 ..Usage::default()
             },
+            hung: false,
         }
     }
 }

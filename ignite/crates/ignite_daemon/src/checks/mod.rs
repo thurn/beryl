@@ -11,6 +11,14 @@
 //!   reported to the hub's flaky table. A check that a run did not report, or whose family's
 //!   `list` failed, is `incomplete` and is tried at most twice more. Incomplete and flaky
 //!   outcomes are never cached.
+//! - A check whose command says it cannot run on this machine, and every check a command left
+//!   unreported when it ran past its hang limit, is `incomplete` at once and not run again.
+//!   The hang limit is four times the command's slowest pass in 30 days on this machine, at
+//!   least 15 minutes and at most 40, and 30 minutes with no pass on record.
+//! - A cached failure from another machine is not trusted: the check runs here, and a pass is
+//!   stored, which replaces the failure and makes the hub file a ticket for that machine.
+//! - The output of a failed, flaky or incomplete run is kept for 14 days, other output for a
+//!   day ([`crate::supervise::keep`]).
 //! - Every command leaves a record with its cost, and a family answered wholly from the cache
 //!   leaves one record with the verb `cached` and no cost.
 //!
@@ -37,6 +45,7 @@ use ignite_core::hash::{self, HashParts};
 use ignite_core::ids::{CheckName, Commit, InputHash, Oid, SessionId, TicketId, TreeId};
 use ignite_core::inputs::{self, CrateGraph};
 use ignite_core::manifest::{Adapter, Family, InputPattern, Manifest, Platforms};
+use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::hub::{CachedResult, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::traits::{Error, Result};
@@ -50,6 +59,20 @@ pub use verbs::{CheckVerb, GateRun, TestVerb, WhyVerb};
 
 /// How many times one check or one family listing is tried while it comes back incomplete.
 const TRIES: u32 = 3;
+
+/// The bounds of a command's hang limit, and the limit of a command with no pass on record,
+/// in seconds.
+const HANG_MIN_S: f64 = 15.0 * 60.0;
+const HANG_MAX_S: f64 = 40.0 * 60.0;
+const HANG_UNKNOWN_S: u64 = 30 * 60;
+
+/// A command's hang limit: four times its slowest pass, within the bounds above.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn hang_limit_s(slowest_pass_s: Option<f64>) -> u64 {
+    slowest_pass_s.map_or(HANG_UNKNOWN_S, |slowest| {
+        (4.0 * slowest).clamp(HANG_MIN_S, HANG_MAX_S) as u64
+    })
+}
 
 /// How the runner is set up on this machine.
 #[derive(Clone, Debug)]
@@ -90,6 +113,8 @@ pub struct Failure {
     pub message: Option<String>,
     /// The file that holds the whole output.
     pub output: Option<String>,
+    /// Why an `Incomplete` check has no verdict, when a run left it so.
+    pub reason: Option<IncompleteReason>,
 }
 
 /// A build product that had to be built.
@@ -418,9 +443,24 @@ impl Checks {
         let mut output = PathBuf::new();
         for _ in 0..TRIES {
             let env = base_env(ctx);
-            let result = self.launch(ctx, tree, name, family, args.clone(), &cwd, env, options);
+            let result = self.launch(
+                ctx,
+                tree,
+                name,
+                family,
+                execute::LIST,
+                args.clone(),
+                &cwd,
+                env,
+                options,
+            );
             output.clone_from(&result.output);
             if result.exit != Some(0) {
+                let _ = crate::supervise::keep(&result.output);
+                if result.hung {
+                    // A hung command hangs again.
+                    break;
+                }
                 continue;
             }
             let Ok(text) = fs::read_to_string(&result.output) else {
@@ -510,6 +550,7 @@ fn failure(report: &Reported, output: &Path) -> Failure {
         at: report.at.clone(),
         message: report.message.clone(),
         output: Some(output.display().to_string()),
+        reason: None,
     }
 }
 
@@ -520,6 +561,7 @@ fn incomplete(check: &CheckName, error: &Error) -> Failure {
         at: None,
         message: Some(error.to_string()),
         output: None,
+        reason: None,
     }
 }
 

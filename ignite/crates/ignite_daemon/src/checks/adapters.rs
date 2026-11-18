@@ -6,7 +6,9 @@
 //!   patterns the check reads beyond the family's own and the optional `digest` stands for what
 //!   it reads that no file holds (see [`Listed::digest`]). Its `run` command, with `{checks}`
 //!   replaced by the names, writes one JSON line per check to the file named by
-//!   `IGNITE_RESULTS`: `{"check", "outcome", "at", "message"}`.
+//!   `IGNITE_RESULTS`: `{"check", "outcome", "at", "message", "reason"}`. An `incomplete` line
+//!   may give the `reason` `cannot-run` when a tool, a virtual machine or a download this
+//!   machine lacks stops the check; the check is then not run again here.
 //! - `nextest`: cargo-nextest's own output. `cargo nextest list --message-format json` gives the
 //!   tests of each test binary, and `cargo nextest run --message-format libtest-json-plus` one
 //!   JSON line per test event. A test's check is named `<family>:<binary id>::<test>`, so a
@@ -20,6 +22,7 @@ use serde_json::Value;
 
 use ignite_core::ids::CheckName;
 use ignite_core::protocol::Outcome;
+use ignite_core::protocol::hub::IncompleteReason;
 
 /// The variable that names the file a `jsonl` family's `run` command writes its results to.
 pub const RESULTS_ENV: &str = "IGNITE_RESULTS";
@@ -72,6 +75,8 @@ pub struct Reported {
     pub at: Option<String>,
     /// The first lines of a failure's message.
     pub message: Option<String>,
+    /// Why an `incomplete` check has no verdict, if the command said.
+    pub reason: Option<IncompleteReason>,
 }
 
 /// A command as arguments: split on whitespace.
@@ -133,6 +138,8 @@ pub fn jsonl_results(text: &str) -> Vec<Reported> {
         outcome: Outcome,
         at: Option<String>,
         message: Option<String>,
+        #[serde(default)]
+        reason: Option<IncompleteReason>,
     }
     let mut reported: Vec<Reported> = Vec::new();
     for line in text
@@ -151,6 +158,7 @@ pub fn jsonl_results(text: &str) -> Vec<Reported> {
             outcome: line.outcome,
             at: line.at,
             message: line.message,
+            reason: line.reason,
         });
     }
     reported
@@ -250,6 +258,7 @@ pub fn nextest_results(text: &str, listed: &[Listed]) -> Vec<Reported> {
             outcome,
             at,
             message,
+            reason: None,
         });
     }
     reported
@@ -297,11 +306,14 @@ mod tests {
         assert_eq!(listed[0].digest, None);
         assert_eq!(listed[1].digest.as_deref(), Some("d1"));
         let results = "{\"check\": \"py:a\", \"outcome\": \"incomplete\"}\n\
-            {\"check\": \"py:a\", \"outcome\": \"fail\", \"at\": \"a.py:3\", \"message\": \"no\"}\n";
+            {\"check\": \"py:a\", \"outcome\": \"fail\", \"at\": \"a.py:3\", \"message\": \"no\"}\n\
+            {\"check\": \"py:b\", \"outcome\": \"incomplete\", \"reason\": \"cannot-run\"}\n";
         let reported = jsonl_results(results);
-        assert_eq!(reported.len(), 1);
+        assert_eq!(reported.len(), 2);
         assert_eq!(reported[0].outcome, Outcome::Fail);
         assert_eq!(reported[0].at.as_deref(), Some("a.py:3"));
+        assert_eq!(reported[0].reason, None);
+        assert_eq!(reported[1].reason, Some(IncompleteReason::CannotRun));
     }
 
     #[test]

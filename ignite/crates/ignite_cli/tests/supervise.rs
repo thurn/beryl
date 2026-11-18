@@ -42,6 +42,7 @@ fn shell(cwd: &Path, script: &str) -> CommandSpec {
         grows: false,
         tree: None,
         ticket: None,
+        hang_limit_s: None,
     }
 }
 
@@ -289,5 +290,63 @@ echo "cores $(cat "$IGNITE_CORES_FILE")"
     assert_eq!(result.exit, Some(0), "{output}");
     assert!(output.contains("took 3 slots\n"), "{output}");
     assert!(output.contains("cores 2\n"), "{output}");
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_command_past_its_hang_limit_is_ended_with_its_children_and_reads_as_hung() {
+    let root = scratch("hung");
+    // The command and its child both wait forever; the child ignores `SIGTERM`.
+    let mut spec = shell(
+        &root,
+        "/bin/sh -c 'trap \"\" TERM; while :; do sleep 1; done' & wait",
+    );
+    spec.hang_limit_s = Some(1);
+    let result = launcher(&root).run(&spec);
+    assert!(result.hung);
+    assert_eq!(result.exit, None);
+    let output = fs::read_to_string(&result.output).unwrap();
+    assert!(output.contains("hang limit of 1 s"), "{output}");
+    assert!(
+        output.contains("while :"),
+        "the processes left are listed: {output}"
+    );
+    let file: ResultFile = serde_json::from_slice(
+        &fs::read(result.output.parent().unwrap().join("result.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(file.hung);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn a_command_within_its_hang_limit_is_not_hung() {
+    let root = scratch("in-time");
+    let mut spec = shell(&root, "exit 3");
+    spec.hang_limit_s = Some(600);
+    let result = launcher(&root).run(&spec);
+    assert_eq!((result.exit, result.hung), (Some(3), false));
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
+fn old_run_directories_are_deleted_and_judged_ones_are_kept_longer() {
+    use ignite_daemon::supervise::{KEEP_JUDGED_S, KEEP_S, keep};
+    use std::time::{Duration, SystemTime};
+
+    let root = scratch("prune");
+    let launcher = launcher(&root);
+    let plain = launcher.run(&shell(&root, "echo plain"));
+    let judged = launcher.run(&shell(&root, "echo judged"));
+    keep(&judged.output).unwrap();
+    let alive = |result: &ignite_core::traits::RunResult| result.output.exists();
+    let after = |seconds: u64| SystemTime::now() + Duration::from_secs(seconds);
+
+    assert_eq!(launcher.prune(after(KEEP_S / 2)), 0);
+    assert_eq!(launcher.prune(after(KEEP_S + 60)), 1);
+    assert!(!alive(&plain));
+    assert!(alive(&judged));
+    assert_eq!(launcher.prune(after(KEEP_JUDGED_S + 60)), 1);
+    assert!(!alive(&judged));
     fs::remove_dir_all(&root).unwrap();
 }

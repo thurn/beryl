@@ -51,6 +51,16 @@ crate::tables! {
         record: Option<i64>,
         at: String,
         output: Option<String>,
+        /// The machine that produced it; `None` for a row stored before machines were kept.
+        machine: Option<String>,
+    }
+
+    Pass = "passes" {
+        family: String,
+        /// `list` or `run`.
+        command: String,
+        wall_s: f64,
+        at: String,
     }
 
     PoolMember = "pool" {

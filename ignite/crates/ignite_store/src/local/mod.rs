@@ -4,6 +4,7 @@
 pub mod grants;
 pub mod handles;
 pub mod outbox;
+pub mod passes;
 pub mod pool;
 pub mod results;
 pub mod rows;
@@ -34,6 +35,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 4,
         sql: include_str!("schema_4.sql"),
+    },
+    Migration {
+        version: 5,
+        sql: include_str!("schema_5.sql"),
     },
 ];
 

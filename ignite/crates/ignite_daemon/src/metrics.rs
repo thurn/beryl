@@ -124,6 +124,7 @@ fn run(ctx: &Context, args: Vec<String>) -> Result<PathBuf> {
         grows: false,
         tree: None,
         ticket: None,
+        hang_limit_s: None,
     });
     match result.exit {
         Some(0) => Ok(result.output),
@@ -383,6 +384,7 @@ mod tests {
                 exit: Some(0),
                 output: report,
                 usage: ignite_core::protocol::Usage::default(),
+                hung: false,
             },
         );
         post_new_rows(&s.ctx, &s.state).unwrap();
@@ -447,6 +449,7 @@ mod tests {
                 exit: Some(1),
                 output: PathBuf::from("/out"),
                 usage: ignite_core::protocol::Usage::default(),
+                hung: false,
             },
         );
         assert!(post_new_rows(&s.ctx, &s.state).is_err());
