@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: cifix description: Work the open tickets that Beryl's CI files by itself — flaky checks, checks to cut for slow CI's budget, fast-check budget audits, browser-sweep failures, nightly failures and unclaimed slow-CI Steward tickets — as an Enact run. Groups them by shared cause, routes them into lanes and model tiers, then runs them through /enact-plan's vizier loop, where worker sessions fix the cause, replace a check with a deterministic test, delete it or move it to the nightly. Use when asked to work, fix or clear the CI tickets, flaky checks, CI cuts or sweep or nightly failures, or to run /cifix.
+---
+name: cifix
+description: Work the open tickets that Beryl's CI files by itself — flaky checks, checks to cut for slow CI's budget, fast-check budget audits, browser-sweep failures, nightly failures and unclaimed slow-CI Steward tickets — as an Enact run. Groups them by shared cause, routes them into lanes and model tiers, then runs them through /enact-plan's vizier loop, where worker sessions fix the cause, replace a check with a deterministic test, delete it or move it to the nightly. Use when asked to work, fix or clear the CI tickets, flaky checks, CI cuts or sweep or nightly failures, or to run /cifix.
+---
 
 # Fixing the tickets CI files
 

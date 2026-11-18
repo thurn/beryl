@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: motion-review description: Get a verb's motion on Beryl's stage judged by an independent reviewer, when the user asks for that. Films the verb from both seats in both layouts beside Arena's clips of it, hands only the films to a fresh Opus or Fable reviewer who scores a fixed rubric (readable, staged, path and easing, anticipation and settle, depth, groups, fits Beryl, pace), and reports the verdict. Use only when the user asks to review, judge or pass an animation; it gates nothing, so never run it because a verb is new, its motion changed or a ticket is closing.
+---
+name: motion-review
+description: Get a verb's motion on Beryl's stage judged by an independent reviewer, when the user asks for that. Films the verb from both seats in both layouts beside Arena's clips of it, hands only the films to a fresh Opus or Fable reviewer who scores a fixed rubric (readable, staged, path and easing, anticipation and settle, depth, groups, fits Beryl, pace), and reports the verdict. Use only when the user asks to review, judge or pass an animation; it gates nothing, so never run it because a verb is new, its motion changed or a ticket is closing.
+---
 
 # Motion review
 

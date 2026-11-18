@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: efficiency description: Find out where agent time, CPU, LLM tokens (dollars) or CI cost went for a ticket, epic, session, cohort or day, and find savings opportunities, with `just efficiency` and its local page. Use when asked what a ticket or epic cost, why a session was slow or expensive, what CI or pushes cost, which models or roles spend the most, or what to cut to save time or tokens.
+---
+name: efficiency
+description: Find out where agent time, CPU, LLM tokens (dollars) or CI cost went for a ticket, epic, session, cohort or day, and find savings opportunities, with `just efficiency` and its local page. Use when asked what a ticket or epic cost, why a session was slow or expensive, what CI or pushes cost, which models or roles spend the most, or what to cut to save time or tokens.
+---
 
 # Efficiency tools
 

@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: card-writing description: Write one card's definition in Beryl from its brief, using only the existing card vocabulary (beryl_card), then check it with just card check and commit it, or escalate the card by recording the mechanic it needs in data/card-escalations.json. Use when asked to implement, write or add a card, or to work through cards one at a time.
+---
+name: card-writing
+description: Write one card's definition in Beryl from its brief, using only the existing card vocabulary (beryl_card), then check it with just card check and commit it, or escalate the card by recording the mechanic it needs in data/card-escalations.json. Use when asked to implement, write or add a card, or to work through cards one at a time.
+---
 
 # Writing one card
 

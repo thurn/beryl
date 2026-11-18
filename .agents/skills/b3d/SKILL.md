@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: b3d description: See and check what Beryl 3D, the native 3D client in rust/beryl3d, shows at any moment of a recording, as text, with no window and no GPU — `just b3d list`, `info`, `tree`, `diff`, `check` and `test`, and pictures of a moment or a span with `png` and `film`. Lists recordings and their moments, prints the elements on screen as a tree whose lines are locators, drives the client with actions (hover, press, drag), diffs two moments, runs every interface check on every tick, and runs every interface test over the window matrix. Use when changing or debugging Beryl 3D's scene, layout, animation or prompts, or checking a Beryl 3D change from the player's side.
+---
+name: b3d
+description: See and check what Beryl 3D, the native 3D client in rust/beryl3d, shows at any moment of a recording, as text, with no window and no GPU — `just b3d list`, `info`, `tree`, `diff`, `check` and `test`, and pictures of a moment or a span with `png` and `film`. Lists recordings and their moments, prints the elements on screen as a tree whose lines are locators, drives the client with actions (hover, press, drag), diffs two moments, runs every interface check on every tick, and runs every interface test over the window matrix. Use when changing or debugging Beryl 3D's scene, layout, animation or prompts, or checking a Beryl 3D change from the player's side.
+---
 
 # Seeing and checking Beryl 3D
 

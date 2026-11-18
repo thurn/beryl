@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: arena-video description: Find out exactly how MTG Arena presents something (a card's cast or trigger, a prompt, a choice, a targeting arrow, an animation's timing) from the gameplay recordings indexed in ~/arena, and compare it with Beryl's UI. Gives a searchable timeline of every spell, ability, prompt and button with timestamps, a screenshot per event, and filmstrips of any moment at any frame rate and crop. Use when matching Beryl to Arena, when asked how Arena shows or animates something, or before designing a prompt, chooser or animation Arena already has.
+---
+name: arena-video
+description: Find out exactly how MTG Arena presents something (a card's cast or trigger, a prompt, a choice, a targeting arrow, an animation's timing) from the gameplay recordings indexed in ~/arena, and compare it with Beryl's UI. Gives a searchable timeline of every spell, ability, prompt and button with timestamps, a screenshot per event, and filmstrips of any moment at any frame rate and crop. Use when matching Beryl to Arena, when asked how Arena shows or animates something, or before designing a prompt, chooser or animation Arena already has.
+---
 
 # Arena video reference
 

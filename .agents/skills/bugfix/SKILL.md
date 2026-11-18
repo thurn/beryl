@@ -1,6 +1,7 @@
-______________________________________________________________________
-
-## name: bugfix description: Work the bug reports filed from Beryl's in-app bug button (⌘B) as an Enact run — file them as tickets, group reports that share a cause into lanes and give each a model tier, then run them through /enact-plan's vizier loop, where worker sessions reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
+---
+name: bugfix
+description: Work the bug reports filed from Beryl's in-app bug button (⌘B) as an Enact run — file them as tickets, group reports that share a cause into lanes and give each a model tier, then run them through /enact-plan's vizier loop, where worker sessions reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
+---
 
 # Fixing reported bugs
 
