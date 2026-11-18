@@ -353,12 +353,13 @@ fn a_restart_under_load_ends_no_command_and_runs_nothing_twice() {
     // daemon.
     assert!(test.try_wait().unwrap().is_none());
     assert!(land.try_wait().unwrap().is_none());
+    // The daemon's own tip round may be a verb process too, so look for each verb by name.
     until("the new daemon serves both verbs", || {
-        drill
-            .log()
-            .matches("still runs in its verb process")
-            .count()
-            == 2
+        let log = drill.log();
+        ["`ignite test`", "`ignite land`"].iter().all(|verb| {
+            log.lines()
+                .any(|line| line.contains(verb) && line.contains("still runs in its verb process"))
+        })
     });
 
     fs::write(&drill.gate, "").unwrap();
