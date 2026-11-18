@@ -97,11 +97,15 @@ impl HostCpu for Native {
         let info = unsafe { info.assume_init() };
         // SAFETY: `sysconf` only reads its argument.
         let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        // Free pages plus purgeable ones, which the kernel drops on demand without writing them
-        // anywhere. `free_count` includes the speculative pages. Inactive pages are left out:
-        // they hold data that was used recently and must be compressed or paged out to be
-        // reused, so counting them as free would hide memory pressure.
-        let pages = u64::from(info.free_count) + u64::from(info.purgeable_count);
+        // Free, inactive and purgeable pages: what the kernel can hand out without taking
+        // memory from a running process. `free_count` includes the speculative pages. macOS
+        // keeps free pages to a few hundred megabytes and leaves the rest of reclaimable
+        // memory inactive, so leaving inactive pages out reported about 1 GB free on a 64 GB
+        // machine with 76% free (`memory_pressure`), and the scheduler stopped granting any
+        // command that asked for memory.
+        let pages = u64::from(info.free_count)
+            + u64::from(info.inactive_count)
+            + u64::from(info.purgeable_count);
         Ok(pages * page.max(0) as u64 / (1024 * 1024))
     }
 }
@@ -190,5 +194,33 @@ mod tests {
     fn the_machine_has_cores_and_free_memory() {
         assert!(Native.cores() >= 1);
         assert!(Native.free_memory_mb().unwrap() > 0);
+    }
+
+    /// Free memory counts the inactive pages that `vm_stat` reports. Leaving them out once made
+    /// a machine with most of its memory reclaimable look full, and the scheduler stopped.
+    #[test]
+    fn free_memory_counts_inactive_pages() {
+        let out = std::process::Command::new("vm_stat").output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        let page: u64 = text
+            .split("page size of ")
+            .nth(1)
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|n| n.parse().ok())
+            .unwrap();
+        let pages = |label: &str| -> u64 {
+            text.lines()
+                .find(|line| line.starts_with(label))
+                .and_then(|line| line.rsplit(':').next())
+                .and_then(|n| n.trim().trim_end_matches('.').parse().ok())
+                .unwrap()
+        };
+        let reclaimable_mb = (pages("Pages free") + pages("Pages inactive")) * page / (1024 * 1024);
+        // The two readings are moments apart, so allow for pages moving between lists.
+        assert!(
+            Native.free_memory_mb().unwrap() * 2 >= reclaimable_mb,
+            "{} MB reported, {reclaimable_mb} MB free or inactive",
+            Native.free_memory_mb().unwrap()
+        );
     }
 }
