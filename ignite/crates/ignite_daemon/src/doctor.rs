@@ -40,6 +40,11 @@ pub trait Host {
     fn memory_mb(&self) -> u64;
     /// Gigabytes free on the disk that holds `path`.
     fn disk_free_gb(&self, path: &Path) -> Option<u64>;
+    /// Gigabytes the files under the trees folder `dir` take up, from a recent measurement, or
+    /// `None` while none has been made. It must answer at once: `doctor` stays cheap.
+    fn trees_used_gb(&self, _dir: &Path) -> Option<u64> {
+        None
+    }
     /// Where the program called `name` is found on the search path.
     fn tool_path(&self, name: &str) -> Option<PathBuf>;
     fn path_exists(&self, path: &Path) -> bool;
@@ -85,6 +90,10 @@ impl Host for NativeHost {
             .parse()
             .ok()?;
         Some(kilobytes / (1024 * 1024))
+    }
+
+    fn trees_used_gb(&self, dir: &Path) -> Option<u64> {
+        trees::used_gb(dir)
     }
 
     fn tool_path(&self, name: &str) -> Option<PathBuf> {

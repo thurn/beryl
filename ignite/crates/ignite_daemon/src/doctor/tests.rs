@@ -5,6 +5,8 @@ use super::*;
 struct FakeHost {
     existing: Vec<PathBuf>,
     free_gb: u64,
+    /// What the trees use already.
+    used_gb: u64,
     tools: Vec<&'static str>,
 }
 
@@ -20,6 +22,9 @@ impl Host for FakeHost {
     }
     fn disk_free_gb(&self, _path: &Path) -> Option<u64> {
         Some(self.free_gb)
+    }
+    fn trees_used_gb(&self, _dir: &Path) -> Option<u64> {
+        Some(self.used_gb)
     }
     fn tool_path(&self, name: &str) -> Option<PathBuf> {
         self.tools
@@ -104,6 +109,7 @@ fn healthy_host() -> FakeHost {
         .map(PathBuf::from)
         .to_vec(),
         free_gb: 500,
+        used_gb: 10,
         tools: vec!["git", "cargo"],
     }
 }
