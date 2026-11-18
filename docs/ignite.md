@@ -534,8 +534,15 @@ How a restart is survived:
   results are stored once, and trees, cores and leases are given back as the old
   daemon would have. A landing finds where it got to from its record on disk.
 - Any other verb cut off by a restart ends its handle `incomplete`, with the
-  reason. Commands in landing trees, which a restarted daemon resets, are ended,
-  and their checks run again.
+  reason.
+- A landing tree records the handle of the landing that leased it. A restarted
+  daemon keeps a landing tree whose landing it runs again, with the commands
+  running in it. The rerun gets the same tree back, untouched if it is still at
+  the commit the landing asks for and reset otherwise. Every other landing tree,
+  and every tree left being prebuilt or reset, is reset at start and its
+  commands are ended. Each command of a verb with a handle records its
+  checkout's commit as `IGNITE_TREE_COMMIT`; a previous command is taken over
+  only while the checkout is still at that commit.
 - The daemon's loops start their round over.
 - A client whose connection drops after it was told the handle waits on it as
   `ignite wait` does, for up to five minutes, and prints the reply as if nothing
