@@ -25,7 +25,7 @@ use crate::hubclient::HubClient;
 use crate::idle::Idle;
 use crate::land::Landing;
 use crate::loop_health::{LoopHealth, LoopTicker};
-use crate::sched::{ClassStatus, Scheduler};
+use crate::sched::Scheduler;
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
 use crate::tip::{CheckTipWork, TipOutcome, TipVerifier};
@@ -79,8 +79,8 @@ pub struct Parts {
 }
 
 impl Parts {
-    /// Starts every loop. A second call starts nothing. `server` reports which verbs are
-    /// still running, which an update waits for.
+    /// Starts every loop. A second call starts nothing. `server` reports whether a verb is in a
+    /// part that may not be cut short, which a restart waits for.
     pub fn spawn(&self, server: &Arc<Server>) {
         let Some(db) = self
             .sender_db
@@ -98,9 +98,8 @@ impl Parts {
     }
 
     /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each
-    /// heartbeat it compares the daemon's version with the hub's: it stops asking for work
-    /// while an update waits for running commands, and restarts into the new executable once
-    /// none runs.
+    /// heartbeat it compares the daemon's version with the hub's and restarts into a new
+    /// executable as soon as one is ready, whatever runs (see [`SelfUpdate::after_heartbeat`]).
     fn spawn_sender(&self, db: Connection, server: Arc<Server>) {
         let (ctx, client, landing, dispatcher, version) = (
             self.ctx.clone(),
@@ -109,7 +108,7 @@ impl Parts {
             self.dispatcher.clone(),
             self.version.clone(),
         );
-        let (scheduler, update) = (self.scheduler.clone(), self.update.clone());
+        let update = self.update.clone();
         let reporter = self.reporter.clone();
         self.start_loop("ignite-sender", SENDER_STALLS_AFTER, move |ticker| {
             // The hub's version from the last heartbeat it answered.
@@ -130,12 +129,8 @@ impl Parts {
                     if let Err(error) = update.poll_release() {
                         eprintln!("ignite: the release branch was not checked: {error}");
                     }
-                    let running = running_commands(&server, &scheduler);
-                    let may_ask = update.after_heartbeat(hub_version.borrow().as_deref(), running);
-                    dispatcher.set_draining(!may_ask);
-                    // Idle work only runs on a quiet machine, so an update that waits for it
-                    // would wait for as long as the machine is loaded: stop it and start none.
-                    scheduler.set_draining(!may_ask);
+                    let critical = server.steps().critical_now();
+                    update.after_heartbeat(hub_version.borrow().as_deref(), critical);
                     reporter.tick(&ctx, sent.is_ok());
                     sent
                 });
@@ -291,29 +286,6 @@ fn loop_class(name: &str) -> Option<Class> {
     }
 }
 
-/// The commands an update waits for: verbs still running in the server, and commands that
-/// hold cores or wait for them, such as the checks of tip verification. `idle` requests that
-/// still wait are left out, because they start only while the machine is under 70% busy, which
-/// may be never: waiting for them would hold the update back forever. `idle` work that runs is
-/// counted, and the update stops it.
-fn running_commands(server: &Server, scheduler: &Scheduler) -> usize {
-    commands_in(&scheduler.status().classes) + server.running_verbs()
-}
-
-fn commands_in(classes: &[ClassStatus]) -> usize {
-    classes
-        .iter()
-        .map(|class| {
-            let waiting = if class.class == Class::Idle {
-                0
-            } else {
-                class.waiting
-            };
-            (class.running + waiting) as usize
-        })
-        .sum()
-}
-
 /// Takes over the runs a stopped daemon left: each is registered with the scheduler under the
 /// cores and resources it was granted, so nothing else is granted them while it runs, and
 /// released when its supervisor has exited.
@@ -362,32 +334,10 @@ pub fn serve_hub(repo: &Path, listen: &str, dir: &Path, version: &str) -> Result
 mod tests {
     use super::*;
 
-    fn class(class: Class, running: u32, waiting: u32) -> ClassStatus {
-        ClassStatus {
-            class,
-            running,
-            cores: running,
-            waiting,
-        }
-    }
-
     #[test]
     fn the_tip_and_idle_loops_do_their_work_in_their_own_classes() {
         assert_eq!(loop_class("ignite-tip"), Some(Class::Tip));
         assert_eq!(loop_class("ignite-idle"), Some(Class::Idle));
         assert_eq!(loop_class("ignite-sender"), None);
-    }
-
-    #[test]
-    fn an_update_does_not_wait_for_idle_requests_that_have_not_started() {
-        let classes = [
-            class(Class::Land, 0, 0),
-            class(Class::Agent, 1, 2),
-            class(Class::Idle, 1, 3),
-        ];
-        // The agent's running and waiting commands and the one idle command that runs; not the
-        // three idle requests that wait for a quiet machine.
-        assert_eq!(commands_in(&classes), 1 + 2 + 1);
-        assert_eq!(commands_in(&[class(Class::Idle, 0, 5)]), 0);
     }
 }

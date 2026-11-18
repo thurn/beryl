@@ -1,10 +1,14 @@
 //! Requests from clients.
 //!
-//! The client sends one JSON line over the machine's local socket and reads one JSON line back.
-//! A [`Verb`] answers one verb; the [`Registry`] finds the verb a request names; the [`Server`]
-//! builds each request's [`Context`], runs the verb, turns a verb that outlives the caller's wait
-//! into a handle (see [`crate::handles`]), runs the [`Hook`]s for requests from a leased tree and
-//! remembers the command each session ran last.
+//! The client sends one JSON line over the machine's local socket and reads lines back until
+//! the reply (see `server/wire.rs`). A [`Verb`] answers one verb; the [`Registry`] finds the verb a
+//! request names; the [`Server`] builds each request's [`Context`], gives a verb that does work
+//! its handle before it starts (see [`crate::handles`]), runs the verb, answers with the handle
+//! when the verb outlives the caller's wait, runs the [`Hook`]s for requests from a leased tree
+//! and remembers the command each session ran last.
+//!
+//! A restarted daemon runs again, under the same handle, the verbs the previous daemon was
+//! running when it stopped, or ends their handles `incomplete` (see `server/resume.rs`).
 //!
 //! Only the session that holds a build tree's lease may use the tree. A request whose working
 //! directory is inside a tree that the local database has not leased to the asking session is
@@ -13,8 +17,7 @@
 //! is asked from opts out with [`Verb::needs_the_tree_lease`].
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader, Write};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -28,10 +31,12 @@ use ignite_core::ids::{Handle, MachineId, SessionId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Builds, Clock, Error, Git, Hub, Launcher};
-use ignite_os::ipc::{Ipc, Listener, Stream};
 use ignite_store::local::{rows, trees};
 
 use crate::handles::{Handles, WaitVerb, lock};
+
+mod resume;
+mod wire;
 use crate::steps::{self, Activity, Kind, Steps, Work};
 use crate::stop::StopVerb;
 
@@ -86,9 +91,11 @@ pub trait Verb: Send + Sync {
     fn needs_the_tree_lease(&self) -> bool {
         true
     }
-    /// False for a verb that only waits for something or only reads, so that a daemon waiting
-    /// to update does not wait for it: the dispatcher's `dispatch --wait` and a worker's `wait`
-    /// are always running, and an update that waited for them would never start.
+    /// False for a verb that only waits for something or only reads, such as `status`, the
+    /// dispatcher's `dispatch --wait` or a worker's `wait`. Every other verb gets its handle
+    /// before it starts, so that a client cut off by a restart can wait on it again, and counts
+    /// in [`Server::running_verbs`]. A verb that only reads gets no handle: the client sends it
+    /// again instead.
     fn blocks_update(&self) -> bool {
         true
     }
@@ -114,6 +121,8 @@ pub fn caller_probe() -> Option<CallerProbe> {
 #[derive(Default)]
 pub struct Registry {
     verbs: BTreeMap<String, Arc<dyn Verb>>,
+    /// The verbs a restarted daemon runs again under the handle of a run it was cut off in.
+    resumable: BTreeSet<String>,
 }
 
 impl Registry {
@@ -122,6 +131,21 @@ impl Registry {
         let name = verb.name().to_owned();
         let previous = self.verbs.insert(name.clone(), Arc::from(verb));
         assert!(previous.is_none(), "the verb {name:?} is registered twice");
+    }
+
+    /// Adds a verb that a restarted daemon runs again, under the same handle, when the previous
+    /// daemon stopped while it ran (see `server/resume.rs`). Only a verb that is safe to
+    /// run twice belongs here: one whose finished commands come back from the result cache and
+    /// whose running commands are adopted from their supervisors, such as `test`, or one that
+    /// finds where it got to on disk, such as `land`.
+    pub fn register_resumable(&mut self, verb: Box<dyn Verb>) {
+        self.resumable.insert(verb.name().to_owned());
+        self.register(verb);
+    }
+
+    /// The verb `name`, if a restarted daemon runs it again.
+    pub fn resumable(&self, name: &str) -> Option<Arc<dyn Verb>> {
+        self.resumable.contains(name).then(|| self.get(name))?
     }
 
     /// The registered verbs' names, sorted.
@@ -194,7 +218,8 @@ impl Server {
     }
 
     /// [`Server::new`], with the running verbs listed in `steps` instead of the daemon's
-    /// registry. `wait` and `stop` are added.
+    /// registry. `wait` and `stop` are added. Handles the previous daemon left running are run
+    /// again or ended (see `server/resume.rs`).
     pub fn with_steps(
         ctx: Context,
         mut registry: Registry,
@@ -207,7 +232,7 @@ impl Server {
         });
         registry.register(Box::new(WaitVerb::new(handles.clone(), steps.clone())));
         registry.register(Box::new(StopVerb::new(handles.clone(), steps.clone())));
-        Ok(Server {
+        let server = Server {
             ctx,
             registry,
             handles,
@@ -216,7 +241,9 @@ impl Server {
             commands: Mutex::new(BTreeMap::new()),
             steps,
             running: Arc::new(AtomicUsize::new(0)),
-        })
+        };
+        server.resume_orphans();
+        Ok(server)
     }
 
     /// What each running verb is doing.
@@ -264,9 +291,9 @@ impl Server {
         lock(&self.commands).get(session).cloned()
     }
 
-    /// The number of verbs still running that an update has to wait for, whether or not their
-    /// callers still wait. `wait` itself is not counted: it only waits on another verb, and
-    /// neither is any verb that [does not block an update](Verb::blocks_update).
+    /// The number of verbs still running that do work, whether or not their callers still wait.
+    /// `wait` itself is not counted: it only waits on another verb, and neither is any verb that
+    /// [only reads or waits](Verb::blocks_update).
     pub fn running_verbs(&self) -> usize {
         self.running.load(Ordering::SeqCst)
     }
@@ -289,6 +316,18 @@ impl Server {
         req: &Request,
         caller: Option<CallerProbe>,
         progress: Option<&mut dyn FnMut(&str) -> bool>,
+    ) -> Reply {
+        self.handle_answering(req, caller, progress, None)
+    }
+
+    /// [`Server::handle_streaming`], also passing the verb's handle to `named` before the verb
+    /// starts, for a verb that [does work](Verb::blocks_update).
+    pub fn handle_answering(
+        &self,
+        req: &Request,
+        caller: Option<CallerProbe>,
+        progress: Option<&mut dyn FnMut(&str) -> bool>,
+        named: Option<&mut dyn FnMut(&Handle)>,
     ) -> Reply {
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
@@ -313,7 +352,7 @@ impl Server {
         let mut reply = match verb {
             None => unknown_verb(&req.verb),
             Some(verb) if verb.keeps_its_own_wait() => verb.run(&ctx, req),
-            Some(verb) => self.run_or_hand_off(verb, &ctx, req, caller, progress),
+            Some(verb) => self.run_or_hand_off(verb, &ctx, req, caller, progress, named),
         };
         self.run_hooks(&ctx, req, &mut reply);
         if let Some(session) = &req.session
@@ -324,17 +363,9 @@ impl Server {
         reply
     }
 
-    /// Runs the verb on a thread of its own. If it has not finished when the caller's wait
-    /// ends, the reply names a handle, and the verb's reply goes to the handle when it finishes.
-    fn run_or_hand_off(
-        &self,
-        verb: Arc<dyn Verb>,
-        ctx: &Context,
-        req: &Request,
-        caller: Option<CallerProbe>,
-        mut progress: Option<&mut dyn FnMut(&str) -> bool>,
-    ) -> Reply {
-        let activity = self.steps.begin(
+    /// The activity of a verb about to run for `req` (see [`crate::steps`]).
+    fn begin(&self, ctx: &Context, req: &Request) -> Arc<Activity> {
+        self.steps.begin(
             Kind::Verb(req.verb.clone()),
             Work {
                 class: None,
@@ -350,28 +381,105 @@ impl Server {
                         .join(tree.as_str())
                 }),
             },
-        );
-        let steps_heard = progress.is_some().then(|| activity.subscribe());
-        let slot = Arc::new((Mutex::new(Slot::Pending), Condvar::new()));
-        let counted = verb.blocks_update();
-        if counted {
-            self.running.fetch_add(1, Ordering::SeqCst);
+        )
+    }
+
+    /// Runs the verb on a thread of its own. A verb that [does work](Verb::blocks_update) gets
+    /// its handle first, which `named` hears. If the verb has not finished when the caller's
+    /// wait ends, the reply names the handle (one made now for a verb that had none), and the
+    /// verb's reply goes to the handle when it finishes.
+    fn run_or_hand_off(
+        &self,
+        verb: Arc<dyn Verb>,
+        ctx: &Context,
+        req: &Request,
+        caller: Option<CallerProbe>,
+        mut progress: Option<&mut dyn FnMut(&str) -> bool>,
+        named: Option<&mut dyn FnMut(&Handle)>,
+    ) -> Reply {
+        let activity = self.begin(ctx, req);
+        let handle = verb.blocks_update().then(|| {
+            let handle = self.handles.create_for(
+                &req.verb,
+                ctx.session.as_ref(),
+                ctx.tree.as_ref(),
+                Some(req),
+            );
+            activity.attach_handle(&handle);
+            handle
+        });
+        if let (Some(handle), Some(named)) = (&handle, named) {
+            named(handle);
         }
+        let steps_heard = progress.is_some().then(|| activity.subscribe());
         // Set once the caller has been given a handle and may leave.
         let handed_off = Arc::new(AtomicBool::new(false));
         let probe: Option<CallerProbe> = caller.map(|gone| {
             let handed_off = handed_off.clone();
             Arc::new(move || !handed_off.load(Ordering::SeqCst) && gone()) as CallerProbe
         });
+        let launch = Launch {
+            verb,
+            ctx: ctx.clone(),
+            req: req.clone(),
+            activity: activity.clone(),
+            handle: handle.clone(),
+            probe,
+        };
+        let slot = match self.spawn_verb(launch) {
+            Ok(slot) => slot,
+            Err(reply) => return reply,
+        };
+
+        let wait = Duration::from_secs(u64::from(req.wait_s));
+        if let (Some(heard), Some(progress)) = (steps_heard, progress.as_mut()) {
+            pass_steps(&slot, &activity, &heard, wait, &mut **progress);
+        }
+        let (state, finished) = &*slot;
+        let guard = lock(state);
+        let (mut guard, _) = finished
+            .wait_timeout_while(guard, wait, |s| matches!(s, Slot::Pending))
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Slot::Done(reply) = std::mem::replace(&mut *guard, Slot::Pending) {
+            if let Some(handle) = &handle {
+                self.handles.delivered(handle);
+            }
+            return reply;
+        }
+        let handle = handle.unwrap_or_else(|| {
+            let handle = self
+                .handles
+                .create(&req.verb, ctx.session.as_ref(), ctx.tree.as_ref());
+            activity.attach_handle(&handle);
+            handle
+        });
+        activity.unsubscribe_all();
+        *guard = Slot::HandedOff(handle.clone());
+        handed_off.store(true, Ordering::SeqCst);
+        still_running_at(&req.verb, &handle, Some(&activity.view()))
+    }
+
+    /// Starts `launch`'s verb on a thread of its own. Its reply goes to the returned slot, and
+    /// to its handle when it has one: the one it was given, or the one the slot is handed off
+    /// to.
+    fn spawn_verb(&self, launch: Launch) -> Result<SharedSlot, Reply> {
+        let Launch {
+            verb,
+            ctx,
+            req,
+            activity,
+            handle,
+            probe,
+        } = launch;
+        let slot: SharedSlot = Arc::new((Mutex::new(Slot::Pending), Condvar::new()));
+        let counted = verb.blocks_update();
+        if counted {
+            self.running.fetch_add(1, Ordering::SeqCst);
+        }
+        let thread = format!("ignite-verb-{}", req.verb);
         let worker = {
-            let (slot, handles, ctx, req, running, activity) = (
-                slot.clone(),
-                self.handles.clone(),
-                ctx.clone(),
-                req.clone(),
-                self.running.clone(),
-                activity.clone(),
-            );
+            let (slot, handles, running) =
+                (slot.clone(), self.handles.clone(), self.running.clone());
             move || {
                 CALLER.with(|caller| *caller.borrow_mut() = probe);
                 let entered = activity.enter();
@@ -389,10 +497,17 @@ impl Server {
                     reply = stopped_reply(&req.verb, activity.handle().as_ref());
                 }
                 let mut state = lock(&slot.0);
-                match &*state {
-                    Slot::HandedOff(handle) if stopped => handles.finish_stopped(handle, reply),
-                    Slot::HandedOff(handle) => handles.finish(handle, reply),
-                    _ => *state = Slot::Done(reply),
+                let to = match &*state {
+                    Slot::HandedOff(handle) => Some(handle.clone()),
+                    _ => handle,
+                };
+                match &to {
+                    Some(handle) if stopped => handles.finish_stopped(handle, reply.clone()),
+                    Some(handle) => handles.finish(handle, reply.clone()),
+                    None => {}
+                }
+                if !matches!(*state, Slot::HandedOff(_)) {
+                    *state = Slot::Done(reply);
                 }
                 if counted {
                     running.fetch_sub(1, Ordering::SeqCst);
@@ -403,37 +518,16 @@ impl Server {
                 activity.finish();
             }
         };
-        let name = format!("ignite-verb-{}", req.verb);
-        if let Err(error) = std::thread::Builder::new().name(name).spawn(worker) {
+        if let Err(error) = std::thread::Builder::new().name(thread).spawn(worker) {
             if counted {
                 self.running.fetch_sub(1, Ordering::SeqCst);
             }
-            return Reply::text(
+            return Err(Reply::text(
                 Exit::Usage,
                 format!("failed   cannot start a thread: {error}"),
-            );
+            ));
         }
-
-        let wait = Duration::from_secs(u64::from(req.wait_s));
-        if let (Some(heard), Some(progress)) = (steps_heard, progress.as_mut()) {
-            pass_steps(&slot, &activity, &heard, wait, &mut **progress);
-        }
-        let (state, finished) = &*slot;
-        let guard = lock(state);
-        let (mut guard, _) = finished
-            .wait_timeout_while(guard, wait, |s| matches!(s, Slot::Pending))
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Slot::Done(reply) = std::mem::replace(&mut *guard, Slot::Pending) {
-            return reply;
-        }
-        let handle = self
-            .handles
-            .create(&req.verb, ctx.session.as_ref(), ctx.tree.as_ref());
-        activity.attach_handle(&handle);
-        activity.unsubscribe_all();
-        *guard = Slot::HandedOff(handle.clone());
-        handed_off.store(true, Ordering::SeqCst);
-        still_running_at(&req.verb, &handle, Some(&activity.view()))
+        Ok(slot)
     }
 
     fn run_hooks(&self, ctx: &Context, req: &Request, reply: &mut Reply) {
@@ -552,6 +646,20 @@ pub fn stopped_reply(verb: &str, handle: Option<&Handle>) -> Reply {
     }
 }
 
+/// A verb about to run on a thread of its own.
+struct Launch {
+    verb: Arc<dyn Verb>,
+    ctx: Context,
+    req: Request,
+    activity: Arc<Activity>,
+    /// The handle its reply goes to, when it was given one before it started.
+    handle: Option<Handle>,
+    probe: Option<CallerProbe>,
+}
+
+/// A verb's [`Slot`], with the condition that signals its change.
+type SharedSlot = Arc<(Mutex<Slot>, Condvar)>;
+
 /// Where a verb running on its own thread leaves its reply.
 enum Slot {
     Pending,
@@ -601,148 +709,7 @@ pub fn error_reply(error: &Error) -> Reply {
     Reply::text(exit, format!("{label:<8} {error}"))
 }
 
-/// The daemon's socket: `daemon.sock` in the machine's Ignite home (`$IGNITE_HOME`, or
-/// `~/.config/ignite`).
-pub fn default_socket() -> PathBuf {
-    crate::update::Home::from_env().root.join("daemon.sock")
-}
-
-/// Listens on `socket` and answers every client from `server`, one thread per connection,
-/// until the process ends.
-pub fn serve(server: &Arc<Server>, socket: &str) -> std::io::Result<()> {
-    let listener = ignite_os::Native.listen(socket)?;
-    serve_listener(server, listener.as_ref())
-}
-
-/// How long a client that has connected has to send its request. A client that sends nothing
-/// would otherwise hold its thread for as long as it stays connected.
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-/// The longest pause after failed accepts in a row.
-const ACCEPT_PAUSE_MAX: Duration = Duration::from_secs(2);
-
-/// [`serve`] on a listener that is already open. A failed accept (as when the process has run
-/// out of file descriptors for a moment) is reported and tried again after a pause that grows
-/// while they continue; it never ends the daemon.
-pub fn serve_listener(server: &Arc<Server>, listener: &dyn Listener) -> std::io::Result<()> {
-    let mut pause = Duration::from_millis(50);
-    loop {
-        let stream = match listener.accept() {
-            Ok(stream) => stream,
-            Err(error) => {
-                eprintln!("ignite: cannot accept a connection: {error}");
-                std::thread::sleep(pause);
-                pause = (pause * 2).min(ACCEPT_PAUSE_MAX);
-                continue;
-            }
-        };
-        pause = Duration::from_millis(50);
-        let server = server.clone();
-        let spawned = std::thread::Builder::new()
-            .name("ignite-connection".to_owned())
-            .spawn(move || answer(&server, stream));
-        if let Err(error) = spawned {
-            eprintln!("ignite: cannot start a thread for a connection: {error}");
-        }
-    }
-}
-
-/// Reads one request line from `stream` and writes the reply line.
-fn answer(server: &Server, mut stream: Box<dyn Stream>) {
-    let _ = stream.set_read_timeout(Some(REQUEST_TIMEOUT));
-    let mut line = String::new();
-    if BufReader::new(&mut stream).read_line(&mut line).is_err() {
-        return;
-    }
-    let _ = stream.set_read_timeout(None);
-    let caller: Option<CallerProbe> = stream.closed_probe().map(Arc::from);
-    let wants = serde_json::from_str::<Wants>(&line).unwrap_or_default();
-    let reply = match serde_json::from_str::<Request>(&line) {
-        Ok(req) if wants.progress => {
-            let mut open = true;
-            let mut pass = |text: &str| {
-                open = open && write_line(&mut stream, &Progress { progress: text }).is_ok();
-                open
-            };
-            server.handle_streaming(&req, caller, Some(&mut pass))
-        }
-        Ok(req) => server.handle_from(&req, caller),
-        Err(error) => Reply::text(Exit::Usage, format!("failed   unreadable request: {error}")),
-    };
-    // The client may have gone away, as when its tool call was interrupted; nothing is lost,
-    // because a reply that outlives its caller is kept under a handle.
-    let _ = write_line(&mut stream, &reply);
-}
-
-fn write_line(stream: &mut dyn Write, value: &impl Serialize) -> std::io::Result<()> {
-    let mut bytes = serde_json::to_vec(value).map_err(std::io::Error::other)?;
-    bytes.push(b'\n');
-    stream.write_all(&bytes)?;
-    stream.flush()
-}
-
-/// What a client asks for beside its [`Request`], read from the same JSON line. A daemon that
-/// does not know a field ignores it, and a client that sends none gets one reply line.
-#[derive(Default, Deserialize)]
-struct Wants {
-    /// Send each step of the verb as a [`Progress`] line before the reply.
-    #[serde(default)]
-    progress: bool,
-}
-
-/// A line sent before the reply to a client that asked for progress: a step of the verb.
-#[derive(Serialize)]
-struct Progress<'a> {
-    progress: &'a str,
-}
-
-/// A [`Progress`] line as the client reads it.
-#[derive(Deserialize)]
-struct ProgressLine {
-    progress: String,
-}
-
-/// The client's side: sends `req` to the daemon listening on `socket` and reads its reply.
-pub fn send(socket: &str, req: &Request) -> std::io::Result<Reply> {
-    send_reading(socket, req, None)
-}
-
-/// [`send`], asking the daemon for each step of the verb as it starts and passing it to
-/// `progress` before the reply comes.
-pub fn send_reading(
-    socket: &str,
-    req: &Request,
-    progress: Option<&mut dyn FnMut(&str)>,
-) -> std::io::Result<Reply> {
-    let mut stream = ignite_os::Native.connect(socket)?;
-    let mut value = serde_json::to_value(req).map_err(std::io::Error::other)?;
-    if progress.is_some()
-        && let Some(object) = value.as_object_mut()
-    {
-        object.insert("progress".to_owned(), serde_json::Value::Bool(true));
-    }
-    write_line(&mut stream, &value)?;
-    read_reply(BufReader::new(&mut stream), progress)
-}
-
-/// Reads [`Progress`] lines, passing each to `progress`, until the reply line.
-fn read_reply(
-    mut reader: impl BufRead,
-    mut progress: Option<&mut dyn FnMut(&str)>,
-) -> std::io::Result<Reply> {
-    loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line)? == 0 {
-            return Err(std::io::Error::other("the daemon closed the connection"));
-        }
-        if let Ok(step) = serde_json::from_str::<ProgressLine>(&line) {
-            if let Some(progress) = progress.as_mut() {
-                progress(&step.progress);
-            }
-            continue;
-        }
-        return serde_json::from_str(&line).map_err(std::io::Error::other);
-    }
-}
+pub use wire::{Cut, default_socket, exchange, send, send_reading, serve, serve_listener};
 
 #[cfg(test)]
 #[path = "server_tests.rs"]

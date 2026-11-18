@@ -1,3 +1,4 @@
+use std::io::{BufRead, BufReader};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 
@@ -6,7 +7,9 @@ use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::hub::Claim;
 
+use super::wire::{read_reply, write_line};
 use crate::hubclient::tests::stopped_hub;
+use ignite_os::ipc::{Ipc, Listener, Stream};
 
 struct Echo;
 
@@ -656,20 +659,34 @@ fn a_client_that_asks_for_progress_hears_each_step_before_the_reply() {
 }
 
 #[test]
-fn the_client_prints_progress_lines_and_returns_the_reply_line() {
-    let reply = Reply::text(Exit::Success, "landed");
+fn the_client_prints_progress_lines_keeps_the_handle_and_returns_the_reply_line() {
+    let handle = Handle::new("L-3").unwrap();
+    // A reply with a handle of its own is still the reply, not a handle line.
+    let reply = still_running("land", &handle);
     let text = format!(
-        "{}\n{}\n{}\n",
+        "{}\n{}\n{}\n{}\n",
+        serde_json::json!({"handle": "L-3"}),
         serde_json::json!({"progress": "rebasing onto staging"}),
         serde_json::json!({"progress": "running the gate in \"landing-3\""}),
         serde_json::to_string(&reply).unwrap()
     );
     let mut heard = Vec::new();
     let mut show = |line: &str| heard.push(line.to_owned());
-    let read = read_reply(std::io::Cursor::new(text), Some(&mut show)).unwrap();
+    let mut named = None;
+    let read = read_reply(std::io::Cursor::new(text), Some(&mut show), &mut named).unwrap();
     assert_eq!(read, reply);
+    assert_eq!(named, Some(handle));
     assert_eq!(
         heard,
         ["rebasing onto staging", "running the gate in \"landing-3\""]
     );
+    // A connection that ends before the reply keeps the handle it named.
+    let mut named = None;
+    let cut = read_reply(
+        std::io::Cursor::new(format!("{}\n", serde_json::json!({"handle": "T-9"}))),
+        None,
+        &mut named,
+    );
+    assert_eq!(cut.unwrap_err().kind(), std::io::ErrorKind::UnexpectedEof);
+    assert_eq!(named.unwrap().as_str(), "T-9");
 }

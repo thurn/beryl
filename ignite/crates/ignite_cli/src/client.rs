@@ -5,9 +5,13 @@
 //! implements a verb deletes its row.
 
 use std::path::PathBuf;
+use std::time::Instant;
 
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_daemon::server::Cut;
+
+use crate::reattach::SocketDaemon;
 
 /// The verbs nobody has built yet, with the owning ticket's title.
 pub const NOT_BUILT: &[(&str, &str)] = &[];
@@ -61,10 +65,11 @@ pub fn request(verb: &str, raw: &[String], cwd: PathBuf, session: Option<Session
     }
 }
 
-/// Sends the request to the machine's daemon over its socket and reads its reply. A daemon
-/// that cannot be reached is a configuration error.
+/// Sends the request to the machine's daemon over its socket and reads its reply, keeping it
+/// across a restart of the daemon (see [`crate::reattach`]). A daemon that cannot be reached is
+/// a configuration error.
 pub fn send(request: &Request) -> Reply {
-    send_or(request, |_| None)
+    deliver(request, None, true).unwrap_or_else(|(socket, cut)| unreachable_daemon(&socket, &cut))
 }
 
 /// The verbs whose client prints each step as it starts, before the reply.
@@ -84,36 +89,45 @@ pub fn send_showing_steps(request: &Request) -> Reply {
                 .is_ok();
         }
     };
-    let socket = ignite_daemon::server::default_socket();
-    ignite_daemon::server::send_reading(&socket.to_string_lossy(), request, Some(&mut show))
-        .unwrap_or_else(|error| unreachable_daemon(&socket, &error))
+    deliver(request, Some(&mut show), true)
+        .unwrap_or_else(|(socket, cut)| unreachable_daemon(&socket, &cut))
 }
 
-fn unreachable_daemon(socket: &std::path::Path, error: &std::io::Error) -> Reply {
+/// Sends `request` to the machine's daemon through [`crate::reattach::send`]. `Err` names the
+/// socket and the failure to reach a daemon.
+fn deliver(
+    request: &Request,
+    progress: Option<&mut dyn FnMut(&str)>,
+    retry_unsent: bool,
+) -> Result<Reply, (PathBuf, Cut)> {
+    let socket = ignite_daemon::server::default_socket();
+    let mut daemon = SocketDaemon {
+        socket: socket.to_string_lossy().into_owned(),
+        started: Instant::now(),
+    };
+    crate::reattach::send(&mut daemon, request, progress, retry_unsent).map_err(|cut| (socket, cut))
+}
+
+fn unreachable_daemon(socket: &std::path::Path, cut: &Cut) -> Reply {
     Reply::text(
         Exit::Usage,
         format!(
-            "failed   the daemon at {} did not answer: {error}\nnext     ignite doctor",
-            socket.display()
+            "failed   the daemon at {} did not answer: {}\nnext     ignite doctor",
+            socket.display(),
+            cut.error
         ),
     )
 }
 
 /// [`send`], but a daemon that cannot be reached is first offered to `fallback`, whose reply,
-/// if it gives one, is the answer.
+/// if it gives one, is the answer. A daemon that refuses the connection goes to the fallback at
+/// once, which waits by itself; one whose connection drops during the request is tried again.
 pub fn send_or(request: &Request, fallback: impl FnOnce(&Request) -> Option<Reply>) -> Reply {
-    let socket = ignite_daemon::server::default_socket();
-    match ignite_daemon::server::send(&socket.to_string_lossy(), request) {
+    match deliver(request, None, false) {
         Ok(reply) => reply,
-        Err(error) => fallback(request).unwrap_or_else(|| {
-            Reply::text(
-                Exit::Usage,
-                format!(
-                    "failed   the daemon at {} did not answer: {error}\nnext     ignite doctor",
-                    socket.display()
-                ),
-            )
-        }),
+        Err((socket, cut)) => {
+            fallback(request).unwrap_or_else(|| unreachable_daemon(&socket, &cut))
+        }
     }
 }
 

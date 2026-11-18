@@ -32,6 +32,10 @@
 //!   caller can give up instead of starting what may not be interrupted.
 //! - [`allow_stop`] lifts that refusal once the part that may not be interrupted is over, as
 //!   when the remote rejected a landing's push and the landing goes back to rebase.
+//! - [`critical`]`()` returns a guard. Until it is dropped, the work is in a part that may not
+//!   be cut short, such as a push, and a ready build waits to restart the daemon (see
+//!   `main/selfupdate.rs`). Every other moment, the daemon may restart under the work, which a
+//!   restarted daemon then runs again (see `server/resume.rs`).
 //! - [`current`] returns the entered activity, so that a thread spawned for part of the work can
 //!   enter it as well:
 //!
@@ -102,6 +106,8 @@ struct State {
     waits: Vec<(u64, String, Timestamp)>,
     next_wait: u64,
     stop: Stop,
+    /// How many [`critical`] guards are held.
+    critical: u32,
     finished: bool,
     /// Receivers of each step and wait as it starts, such as the client of `ignite land`.
     observers: Vec<Sender<String>>,
@@ -187,6 +193,7 @@ impl Activity {
                 waits: Vec::new(),
                 next_wait: 0,
                 stop: Stop::Running,
+                critical: 0,
                 finished: false,
                 observers: Vec::new(),
             }),
@@ -287,6 +294,11 @@ impl Activity {
         true
     }
 
+    /// Whether the work is in a part that may not be cut short (see [`critical`]).
+    pub fn in_critical(&self) -> bool {
+        lock(&self.state).critical > 0
+    }
+
     /// See [`allow_stop`].
     pub fn allow_stop(&self) {
         let mut state = lock(&self.state);
@@ -301,7 +313,8 @@ impl Activity {
         matches!(lock(&self.state).stop, Stop::Refused(_))
     }
 
-    /// Names the handle the work's reply will go to, once its caller stopped waiting.
+    /// Names the handle the work's reply goes to: given before a verb that does work starts,
+    /// or once its caller stopped waiting.
     pub fn attach_handle(&self, handle: &Handle) {
         lock(&self.state).handle = Some(handle.clone());
     }
@@ -421,6 +434,20 @@ impl Drop for During {
     }
 }
 
+/// The guard [`critical`] returns.
+pub struct Critical {
+    held: Option<Arc<Activity>>,
+}
+
+impl Drop for Critical {
+    fn drop(&mut self) {
+        if let Some(activity) = self.held.take() {
+            let mut state = lock(&activity.state);
+            state.critical = state.critical.saturating_sub(1);
+        }
+    }
+}
+
 /// The guard [`waiting`] returns.
 pub struct Waiting {
     held: Option<(Arc<Activity>, u64)>,
@@ -467,6 +494,11 @@ impl Steps {
             .filter_map(Weak::upgrade)
             .filter(|activity| !activity.is_finished())
             .collect()
+    }
+
+    /// Whether any running work is in a part that may not be cut short (see [`critical`]).
+    pub fn critical_now(&self) -> bool {
+        self.live().iter().any(|activity| activity.in_critical())
     }
 
     /// The running activity whose reply goes to `handle`.
@@ -550,6 +582,15 @@ pub fn waiting(what: impl AsRef<str>) -> Waiting {
             let id = activity.push_wait(what.as_ref());
             (activity, id)
         }),
+    }
+}
+
+/// Marks the calling thread's work as in a part that may not be cut short, such as a push, until
+/// the guard is dropped: the daemon does not restart into a new build meanwhile.
+#[must_use = "the part ends when the guard is dropped"]
+pub fn critical() -> Critical {
+    Critical {
+        held: current().inspect(|activity| lock(&activity.state).critical += 1),
     }
 }
 

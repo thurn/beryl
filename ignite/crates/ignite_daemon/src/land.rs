@@ -500,12 +500,17 @@ impl Landing {
                 free_landing(None);
                 return Err(stopped());
             }
+            // The daemon does not restart into a new build from the record's write until the
+            // push has been recorded either way.
+            let critical = steps::critical();
             self.records.write(&record).map_err(fail)?;
             steps::step(format!("pushing {} to {staging}", short(&rebased.head)));
-            match ctx.git.push(&gate_tree.path, &rebased.head, &staging) {
+            let pushed = ctx.git.push(&gate_tree.path, &rebased.head, &staging);
+            match pushed {
                 Ok(Push::Pushed { .. }) => {
                     record.state = RecordState::Pushed;
                     self.records.write(&record).map_err(fail)?;
+                    drop(critical);
                 }
                 // Nothing was pushed, so the landing may be stopped again while it goes back
                 // to rebase.

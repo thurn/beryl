@@ -78,41 +78,46 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
 }
 
 #[test]
-fn a_daemon_on_another_version_than_the_hub_drains_then_restarts_into_the_hubs() {
+fn a_daemon_on_another_version_than_the_hub_restarts_into_the_hubs_at_once() {
     let (update, _git, restart) = daemon(NEW);
 
-    // Two commands still run: no new work, no restart.
-    assert!(!update.after_heartbeat(Some(NEW), 2));
-    assert!(restart.started().is_empty());
-
-    // Once nothing runs, the hub's version is built and the daemon restarts into it.
-    assert!(!update.after_heartbeat(Some(NEW), 0));
+    // Commands may run; the restart does not wait for them.
+    update.after_heartbeat(Some(NEW), false);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
 
 #[test]
-fn a_daemon_on_the_hubs_version_asks_for_work() {
+fn a_daemon_on_the_hubs_version_stays() {
     let (update, _git, restart) = daemon(OLD);
-    assert!(update.after_heartbeat(Some(OLD), 3));
+    update.after_heartbeat(Some(OLD), false);
     // A hub that has not answered yet changes nothing.
-    assert!(update.after_heartbeat(None, 0));
+    update.after_heartbeat(None, false);
     assert!(restart.started().is_empty());
 }
 
 #[test]
-fn master_moving_with_changed_ignite_source_builds_and_restarts_once_idle() {
+fn master_moving_with_changed_ignite_source_builds_and_restarts_at_once() {
     let (update, git, restart) = daemon(NEW);
     git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
 
     update.after_master_moved().unwrap();
     assert!(update.store.has(&commit(NEW)));
 
-    // The hub is still on this daemon's version, but the new build waits for the running
-    // command and the daemon takes no new work meanwhile.
-    assert!(!update.after_heartbeat(Some(OLD), 1));
-    assert!(restart.started().is_empty());
+    // The hub is still on this daemon's version; the new build is restarted into at the next
+    // heartbeat, whatever runs.
+    update.after_heartbeat(Some(OLD), false);
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+}
 
-    assert!(!update.after_heartbeat(Some(OLD), 0));
+#[test]
+fn a_ready_build_waits_only_for_a_push_in_progress() {
+    let (update, git, restart) = daemon(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
+    update.after_master_moved().unwrap();
+
+    update.after_heartbeat(Some(OLD), true);
+    assert!(restart.started().is_empty());
+    update.after_heartbeat(Some(OLD), false);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
 
@@ -122,7 +127,7 @@ fn master_moving_without_ignite_changes_keeps_the_executable() {
     git.set_changed(&commit(OLD), &commit(NEW), &["docs/readme.md"]);
 
     update.after_master_moved().unwrap();
-    assert!(update.after_heartbeat(Some(OLD), 0));
+    update.after_heartbeat(Some(OLD), false);
     assert!(restart.started().is_empty());
     assert!(!update.store.has(&commit(NEW)));
 }
@@ -131,7 +136,7 @@ fn master_moving_without_ignite_changes_keeps_the_executable() {
 fn a_daemon_already_on_masters_tip_waits_for_the_hub_to_catch_up() {
     // This daemon runs `OLD`, which is `master`'s tip; the hub still reports an older commit.
     let (update, _git, restart) = daemon(OLD);
-    assert!(!update.after_heartbeat(Some(NEW), 0));
+    update.after_heartbeat(Some(NEW), false);
     assert!(restart.started().is_empty());
 }
 
@@ -139,7 +144,7 @@ fn a_daemon_already_on_masters_tip_waits_for_the_hub_to_catch_up() {
 fn an_unstored_daemon_never_updates() {
     let (mut update, _git, restart) = daemon(NEW);
     update.own = None;
-    assert!(update.after_heartbeat(Some(NEW), 0));
+    update.after_heartbeat(Some(NEW), false);
     update.after_master_moved().unwrap();
     assert!(restart.started().is_empty());
 }
@@ -163,7 +168,7 @@ fn a_push_straight_to_the_release_branch_deploys() {
 
     poll(&update);
     assert!(update.store.has(&commit(NEW)));
-    assert!(!update.after_heartbeat(Some(OLD), 0));
+    update.after_heartbeat(Some(OLD), false);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
 
@@ -171,7 +176,7 @@ fn a_push_straight_to_the_release_branch_deploys() {
 fn a_release_branch_that_has_not_moved_builds_nothing() {
     let (update, _git, restart) = daemon(OLD);
     poll(&update);
-    assert!(update.after_heartbeat(Some(OLD), 0));
+    update.after_heartbeat(Some(OLD), false);
     assert!(restart.started().is_empty());
     assert!(!update.store.has(&commit(NEW)));
 }
@@ -181,7 +186,7 @@ fn a_release_move_without_ignite_changes_builds_nothing() {
     let (update, git, restart) = daemon(NEW);
     git.set_changed(&commit(OLD), &commit(NEW), &["docs/readme.md"]);
     poll(&update);
-    assert!(update.after_heartbeat(Some(OLD), 0));
+    update.after_heartbeat(Some(OLD), false);
     assert!(restart.started().is_empty());
     assert!(!update.store.has(&commit(NEW)));
 }
@@ -195,7 +200,7 @@ fn a_build_recorded_as_bad_is_never_installed_again_but_a_newer_one_is() {
     poll(&update);
     assert!(!update.store.has(&commit(NEW)));
     // Not by the hub's version either.
-    assert!(update.after_heartbeat(Some(NEW), 0));
+    update.after_heartbeat(Some(NEW), false);
     assert!(restart.started().is_empty());
 
     let newer = "f00dfee";
@@ -230,6 +235,6 @@ fn a_daemon_installed_ahead_of_the_release_branch_stays_on_its_build() {
     update.poll_release().unwrap();
     assert!(!update.store.has(&commit(NEW)));
     // The daemon serves the hub, so the hub reports the daemon's own version.
-    assert!(update.after_heartbeat(Some(OLD), 0));
+    update.after_heartbeat(Some(OLD), false);
     assert!(restart.started().is_empty());
 }

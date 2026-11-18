@@ -19,6 +19,7 @@ use ignite_git::GitCli;
 use ignite_os::hostcpu::HostCpu;
 
 use super::{DaemonOptions, desk, loops};
+use crate::adopt::AdoptingLauncher;
 use crate::build::{BuildManager, BuildSettings, DirectoryTrees};
 use crate::cache::ResultCache;
 use crate::checks::sources::HubHistory;
@@ -146,7 +147,13 @@ pub fn machinery(base: &Base) -> Result<Machinery> {
     let supervised = SupervisedLauncher::new(&base.options.ignite, base.home("runs"))
         .with_scheduler(scheduler.clone());
     loops::collect_unfinished(&supervised);
-    let launcher: Arc<dyn Launcher> = Arc::new(supervised);
+    // Commands that a verb cut off by the restart had running are handed back to the verb when
+    // it runs again (see `crate::adopt`), except those in trees `Trees::setup` resets below.
+    let reset = trees_reset_at_start(&base.open()?)?;
+    let launcher: Arc<dyn Launcher> = Arc::new(AdoptingLauncher::over_supervised(
+        Arc::new(supervised),
+        &reset,
+    ));
     let builds = Arc::new(BuildManager::new(
         BuildSettings {
             manifest: base.manifest.clone(),
@@ -175,6 +182,22 @@ pub fn machinery(base: &Base) -> Result<Machinery> {
         builds,
         trees,
     })
+}
+
+/// The directories of the trees that `Trees::setup` resets because a daemon that stopped left
+/// them in the middle of something: landing trees, and trees being built or reset.
+fn trees_reset_at_start(conn: &Connection) -> Result<Vec<PathBuf>> {
+    let rows = ignite_store::local::trees::all(conn).map_err(|e| Error::Io(e.to_string()))?;
+    let unfinished = [
+        ignite_store::local::trees::State::Prebuilding,
+        ignite_store::local::trees::State::Resetting,
+        ignite_store::local::trees::State::Landing,
+    ];
+    Ok(rows
+        .into_iter()
+        .filter(|row| unfinished.iter().any(|state| row.state == state.as_str()))
+        .map(|row| PathBuf::from(row.path))
+        .collect())
 }
 
 /// The check runner, with landing and idle work, which both run checks through it.
@@ -295,16 +318,19 @@ pub fn server(
     registry.register(Box::new(ReleaseVerb(claims.clone())));
     registry.register(Box::new(CloseVerb(claims.clone())));
     let checks = &parts.checks;
-    registry.register(Box::new(TestVerb {
+    // A restarted daemon runs these again under the handle of a run it was cut off in (see
+    // `server/resume.rs`): finished checks come from the cache and running commands from
+    // their supervisors, and a landing finds where it got to in its record on disk.
+    registry.register_resumable(Box::new(TestVerb {
         checks: checks.clone(),
     }));
-    registry.register(Box::new(CheckVerb {
+    registry.register_resumable(Box::new(CheckVerb {
         checks: checks.clone(),
     }));
     registry.register(Box::new(WhyVerb {
         checks: checks.clone(),
     }));
-    registry.register(Box::new(LandVerb {
+    registry.register_resumable(Box::new(LandVerb {
         landing: parts.landing.clone(),
     }));
     registry.register(Box::new(SyncVerb {

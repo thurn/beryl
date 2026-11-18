@@ -9,6 +9,7 @@
 // are seen, so it is allowed for the crate.
 #![allow(special_module_name)]
 
+pub mod adopt;
 pub mod build;
 pub mod cache;
 pub mod checks;

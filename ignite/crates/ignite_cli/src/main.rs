@@ -9,6 +9,7 @@ mod import;
 mod manifest;
 mod plan;
 mod pool_init;
+mod reattach;
 mod rejected;
 mod replay;
 mod ticket;

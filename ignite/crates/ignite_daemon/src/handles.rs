@@ -1,9 +1,15 @@
 //! Handles: an operation that would outlive the client's wait answers with a short name, such as
 //! `L-5521`, and `ignite wait <handle>` blocks until it finishes.
 //!
+//! A verb that does work gets its handle before it starts (see [`crate::server`]), so that a
+//! client whose connection drops, as when the daemon restarts into a new build, can wait on it
+//! again.
+//!
 //! Each handle is kept in the local database as well as in memory, so a restarted daemon still
-//! answers `wait` for a handle from before the restart. An operation that was still running when
-//! the daemon stopped cannot finish any more: its handle answers that it was lost.
+//! answers `wait` for a handle from before the restart. While its operation runs, the row's
+//! `reply` column holds the request that started it, so that a restarted daemon can
+//! run the verb again under the same handle (see [`crate::server::Server`]). An operation that
+//! cannot be run again ends `incomplete`, with a reply that says why.
 //!
 //! A wait that ends before its operation does prints what the operation is doing now and for
 //! how long (see [`crate::steps`]). An operation that was stopped (see [`crate::stop`]) is kept
@@ -17,6 +23,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 
 use ignite_core::ids::{Handle, SessionId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
@@ -48,6 +55,22 @@ pub enum Waited {
 /// the local database keeps it; without a database it stays this long.
 pub const KEEP_REPLY_S: f64 = 24.0 * 60.0 * 60.0;
 
+/// What the `reply` column of a running handle's row holds: the request that started it.
+#[derive(Serialize, Deserialize)]
+struct Running {
+    request: Request,
+}
+
+/// A handle that was still running when the daemon stopped, as a restarted daemon finds it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Orphan {
+    pub handle: Handle,
+    pub verb: String,
+    /// The request that started it, if it was recorded (handles made by older daemons, or for
+    /// work no request started, have none).
+    pub request: Option<Request>,
+}
+
 /// Operations still running, and the replies of those that finished.
 pub struct Handles {
     clock: Arc<dyn Clock>,
@@ -65,6 +88,8 @@ struct State {
     /// Waits in progress, by a number of their own, with the interrupt each has been given.
     waiters: BTreeMap<u64, Waiter>,
     next_waiter: u64,
+    /// Handles the database listed as running when it was opened, until the server takes them.
+    orphans: Vec<Orphan>,
 }
 
 /// One handle in memory.
@@ -107,28 +132,61 @@ impl Handles {
     }
 
     /// Handles kept in the daemon's local database. A handle the database lists as running
-    /// belongs to a daemon that stopped before it finished, so it is marked lost here.
+    /// belongs to a daemon that stopped before it finished: it stays running, and
+    /// [`Handles::take_orphans`] hands it to the server, which runs its verb again or ends it
+    /// `incomplete`.
     pub fn open(clock: Arc<dyn Clock>, db: Arc<Mutex<Connection>>) -> Result<Handles> {
-        {
-            let conn = lock(&db);
-            let now = clock.now().to_string();
-            for mut row in store::running(&conn).map_err(|e| store_error(&e))? {
-                let reply = lost(&row.verb, &row.id);
-                "lost".clone_into(&mut row.state);
-                row.exit = Some(i64::from(reply.exit.code()));
-                row.reply = Some(serde_json::to_string(&reply).map_err(|e| json_error(&e))?);
-                row.finished_at = Some(now.clone());
-                store::upsert(&conn, &row).map_err(|e| store_error(&e))?;
-            }
+        let mut orphans = Vec::new();
+        for row in store::running(&lock(&db)).map_err(|e| store_error(&e))? {
+            let Ok(handle) = Handle::new(row.id.as_str()) else {
+                continue;
+            };
+            let request = row
+                .reply
+                .as_deref()
+                .and_then(|text| serde_json::from_str::<Running>(text).ok())
+                .map(|running| running.request);
+            orphans.push(Orphan {
+                handle,
+                verb: row.verb,
+                request,
+            });
         }
         let mut handles = Handles::new(clock);
         handles.db = Some(db);
+        let state = handles
+            .state
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner);
+        for orphan in &orphans {
+            state
+                .replies
+                .insert(orphan.handle.clone(), Entry::running(&orphan.verb));
+        }
+        state.orphans = orphans;
         Ok(handles)
+    }
+
+    /// The handles that were running when the daemon stopped; the second call returns none.
+    pub fn take_orphans(&self) -> Vec<Orphan> {
+        std::mem::take(&mut lock(&self.state).orphans)
     }
 
     /// Names a running operation: the verb's first letter in capitals and a number, such as
     /// `L-12` for `land`.
     pub fn create(&self, verb: &str, session: Option<&SessionId>, tree: Option<&TreeId>) -> Handle {
+        self.create_for(verb, session, tree, None)
+    }
+
+    /// [`Handles::create`], recording `request` with the handle so that a restarted daemon can
+    /// run it again.
+    pub fn create_for(
+        &self,
+        verb: &str,
+        session: Option<&SessionId>,
+        tree: Option<&TreeId>,
+        request: Option<&Request>,
+    ) -> Handle {
         let prefix = verb
             .chars()
             .find(char::is_ascii_alphanumeric)
@@ -151,7 +209,12 @@ impl Handles {
             tree: tree.map(ToString::to_string),
             state: "running".to_owned(),
             exit: None,
-            reply: None,
+            reply: request.and_then(|request| {
+                serde_json::to_string(&Running {
+                    request: request.clone(),
+                })
+                .ok()
+            }),
             started_at: self.clock.now().to_string(),
             finished_at: None,
         });
@@ -167,6 +230,22 @@ impl Handles {
     /// release` stopped: the database keeps it as `stopped`.
     pub fn finish_stopped(&self, handle: &Handle, reply: Reply) {
         self.finish_as(handle, reply, "stopped");
+    }
+
+    /// [`Handles::finish`] for an operation the daemon stopped in the middle of and could not run
+    /// again: the database keeps it as `incomplete`.
+    pub fn finish_incomplete(&self, handle: &Handle, reply: Reply) {
+        self.finish_as(handle, reply, "incomplete");
+    }
+
+    /// Records that the caller got the operation's reply straight from the verb, so memory need
+    /// not keep it for a wait (the database still does).
+    pub fn delivered(&self, handle: &Handle) {
+        let mut state = lock(&self.state);
+        if let Some(entry) = state.replies.get_mut(handle) {
+            entry.read = true;
+        }
+        self.prune(&mut state);
     }
 
     fn finish_as(&self, handle: &Handle, reply: Reply, how: &str) {
@@ -210,7 +289,11 @@ impl Handles {
                 let Some(row) = self.stored(handle) else {
                     break Waited::Unknown;
                 };
-                let reply = row.reply.and_then(|text| serde_json::from_str(&text).ok());
+                // A running row's `reply` holds its request, not a reply.
+                let reply = row
+                    .reply
+                    .filter(|_| row.state != "running")
+                    .and_then(|text| serde_json::from_str(&text).ok());
                 let finished_at = reply.as_ref().map(|_| self.clock.now());
                 state.replies.insert(
                     handle.clone(),
@@ -304,16 +387,23 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
     Error::Io(error.to_string())
 }
 
-fn json_error(error: &serde_json::Error) -> Error {
-    Error::Io(error.to_string())
-}
-
-/// The reply of an operation the daemon stopped in the middle of.
-fn lost(verb: &str, handle: &str) -> Reply {
-    Reply::text(
-        Exit::Conflict,
-        format!("lost     the daemon restarted while `ignite {verb}` ({handle}) ran; run it again"),
-    )
+/// The reply of an operation the daemon stopped in the middle of and could not run again, for
+/// `reason`.
+pub fn incomplete(verb: &str, handle: &Handle, reason: &str) -> Reply {
+    Reply {
+        exit: Exit::Conflict,
+        text: format!(
+            "incomplete the daemon restarted while `ignite {verb}` ({handle}) ran, and {reason}\n\
+             next     ignite status shows what it left; run it again if it is still needed"
+        ),
+        json: Some(serde_json::json!({
+            "verb": verb,
+            "handle": handle,
+            "incomplete": true,
+            "reason": reason,
+        })),
+        handle: None,
+    }
 }
 
 /// `ignite wait <handle>`: blocks until a handle's operation finishes, for at most the

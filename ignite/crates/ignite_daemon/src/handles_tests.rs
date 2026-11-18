@@ -46,23 +46,63 @@ fn a_wait_returns_the_reply_once_the_operation_finishes() {
     assert_eq!(handles.wait(&unknown, 0, None), Waited::Unknown);
 }
 
+fn test_request() -> Request {
+    Request {
+        verb: "test".to_owned(),
+        args: vec!["rust".to_owned()],
+        cwd: std::path::PathBuf::from("/repo/trees/tree-01"),
+        session: Some(session("local_a")),
+        wait_s: 540,
+        pid: Some(7),
+    }
+}
+
 #[test]
 fn a_restarted_daemon_still_answers_for_a_handle_from_before() {
     let path = temp_db("restart");
     let reply = Reply::text(Exit::CheckFailed, "failed   rust:a");
-    let (finished, unfinished) = {
+    let (finished, unfinished, unrecorded) = {
         let handles = open(&path);
         let finished = handles.create("land", Some(&session("local_a")), None);
         handles.finish(&finished, reply.clone());
-        (finished, handles.create("test", None, None))
+        let request = test_request();
+        let unfinished = handles.create_for("test", None, None, Some(&request));
+        (finished, unfinished, handles.create("start", None, None))
     };
     let handles = open(&path);
     assert_eq!(handles.wait(&finished, 0, None), Waited::Done(reply));
-    let Waited::Done(lost) = handles.wait(&unfinished, 0, None) else {
-        panic!("an operation the daemon stopped in is answered as lost");
+    // The handles left running are handed over with their requests (oldest first, then by
+    // name), and still read as running until the server finishes them.
+    let orphans = handles.take_orphans();
+    assert_eq!(
+        orphans,
+        [
+            Orphan {
+                handle: unrecorded.clone(),
+                verb: "start".to_owned(),
+                request: None,
+            },
+            Orphan {
+                handle: unfinished.clone(),
+                verb: "test".to_owned(),
+                request: Some(test_request()),
+            },
+        ]
+    );
+    assert!(handles.take_orphans().is_empty());
+    assert_eq!(
+        handles.wait(&unfinished, 0, None),
+        Waited::Running("test".to_owned())
+    );
+    handles.finish_incomplete(
+        &unrecorded,
+        incomplete("start", &unrecorded, "it was cut off"),
+    );
+    let Waited::Done(ended) = handles.wait(&unrecorded, 0, None) else {
+        panic!("an operation that could not be run again is answered as incomplete");
     };
-    assert_eq!(lost.exit, Exit::Conflict);
-    assert!(lost.text.starts_with("lost "), "{}", lost.text);
+    assert_eq!(ended.exit, Exit::Conflict);
+    assert!(ended.text.starts_with("incomplete "), "{}", ended.text);
     // A name used before the restart is skipped: `L-1` is taken, `L-2` was never used.
     assert_eq!(handles.create("land", None, None).as_str(), "L-2");
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
