@@ -112,15 +112,17 @@ fn every_fleet_page_renders_from_a_seeded_database() {
         let body = page(&conn, path);
         assert!(body.contains(expected), "{path} lacks {expected}");
         assert!(
-            body.contains("href=\"/proj/pool\""),
+            body.contains("href=\"/pool\""),
             "{path} lacks the page links"
         );
     }
-    // A trailing slash is the same page; an unknown name is not a fleet page.
+    // A trailing slash is the same page; an unknown name is looked up as a
+    // ticket and is a 404, and a path with several segments is no dashboard route.
     assert!(page(&conn, "/pool/").contains("local_long"));
+    assert_eq!(get(&conn, "/nowhere").0, 404);
     let request = Request {
         method: "GET".to_owned(),
-        path: "/nowhere".to_owned(),
+        path: "/nowhere/deeper".to_owned(),
         query: Vec::new(),
         writer: None,
         body: Vec::new(),

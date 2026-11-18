@@ -327,7 +327,7 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
         root: root.to_owned(),
         asset_root: Some("/".to_owned()),
         icons: Some(SITE_ICONS),
-        brand: brand(root),
+        brand: brand(),
         description: card.title.clone(),
         crumbs,
         ..PageOptions::default()

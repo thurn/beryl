@@ -284,15 +284,14 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     ) {
         return redirect;
     }
-    let Some(rest) = path
+    // The API is under `/<project>/api`. Every other address is a dashboard page at the root.
+    let api = path
         .strip_prefix('/')
         .and_then(|p| p.strip_prefix(shared.project.as_str()))
-        .filter(|rest| rest.is_empty() || rest.starts_with('/'))
-    else {
-        return failure(404, "Unknown route");
-    };
+        .and_then(|rest| rest.strip_prefix("/api"))
+        .filter(|api| api.is_empty() || api.starts_with('/'));
     // `/export` dumps every ticket, which a public listener does not serve.
-    if shared.read_only && (rest == "/api/export" || rest.starts_with("/api/export/")) {
+    if shared.read_only && api.is_some_and(|api| api == "/export" || api.starts_with("/export/")) {
         return failure(404, "Unknown route");
     }
     let headers: Vec<(String, String)> = http
@@ -353,11 +352,11 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         body,
         headers,
     };
-    let (response, conn) = if let Some(api) = rest.strip_prefix("/api") {
+    let (response, conn) = if let Some(api) = api {
         api.clone_into(&mut request.path);
         caught(conn, |conn| api_route(conn, &request, now))
     } else {
-        rest.clone_into(&mut request.path);
+        path.clone_into(&mut request.path);
         caught(conn, |conn| page(conn, &request, &shared.project, now))
     };
     match conn {
@@ -402,8 +401,8 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
         .unwrap_or_else(|| failure(404, "Unknown route"))
 }
 
-/// The dashboard's pages, which [`dashboard::serve::serve`] routes and renders from the path
-/// after `/<project>`.
+/// The dashboard's pages, which [`dashboard::serve::serve`] routes and renders from the request
+/// path.
 fn page(conn: &mut Connection, request: &Request, project: &str, now: Timestamp) -> Response {
     dashboard::serve::serve(conn, request, project, now)
         .unwrap_or_else(|| failure(404, "Unknown route"))

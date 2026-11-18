@@ -23,7 +23,8 @@ checks = "ignite/checks"
 [hub]
 url = "https://jarvis.tail4b0774.ts.net:8443"
 project = "by"
-# The old dashboard also answered at /beryl/; those page addresses redirect to /by/.
+# The dashboard is at the hub's root; only the API is under /by/api. The old dashboard also
+# answered at /beryl/, and page addresses under /by/ and /beryl/ redirect to the root.
 aliases = ["beryl"]
 
 # From `ignite gate replay` over the 14 days of history before 2026-11-18 (docs/ignite.md, "The

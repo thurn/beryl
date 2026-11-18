@@ -197,10 +197,11 @@ fn an_unknown_project_is_not_found_and_the_configured_one_serves_reads() {
         "/typo-project/api/tickets",
         "/typo-project/",
         "/pjx/api/tickets",
-        "/",
     ] {
         assert_eq!(hub.send("GET", path, None, &[]).status, 404, "{path}");
     }
+    // The root is the dashboard's home page, not part of the API.
+    assert_eq!(hub.send("GET", "/", None, &[]).status, 200);
     let reply = hub.get("/tickets");
     assert_eq!(reply.status, 200);
     assert_eq!(reply.json(), json!([]));

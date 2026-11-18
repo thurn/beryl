@@ -15,14 +15,15 @@ pub fn display_id(id: &str) -> String {
     format!("T{id}")
 }
 
-/// The address of a ticket's page, under the project home `root` (`/proj/`).
+/// The address of a ticket's page, under the dashboard's `root` (`/`): `/Tq44s.7`.
 pub fn ticket_url(root: &str, id: &str) -> String {
-    format!("{root}tickets/{}", percent_encode(&display_id(id)))
+    format!("{root}{}", percent_encode(&display_id(id)))
 }
 
-/// The project home for a project name.
-pub fn dashboard_root(project: &str) -> String {
-    format!("/{project}/")
+/// The dashboard's home. The hub serves it at its own root; only the API is under the project
+/// name (`/<project>/api`).
+pub fn dashboard_root() -> String {
+    "/".to_owned()
 }
 
 pub fn percent_encode(text: &str) -> String {
@@ -126,7 +127,7 @@ pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> Stri
 }
 
 /// Calls `replace(id, path)` on each path of this project's ticket pages in `text`
-/// (`/<project>/tickets/<id>`), when the path does not continue a longer word or path.
+/// in their earlier form (`/<project>/tickets/<id>`), when the path does not continue a longer word or path.
 pub fn ticket_paths(
     project: &str,
     text: &str,
@@ -164,7 +165,7 @@ pub fn rewrite_ticket_paths(
     text: &str,
     resolve: &dyn Fn(&str) -> Option<String>,
 ) -> String {
-    let root = dashboard_root(project);
+    let root = dashboard_root();
     ticket_paths(project, text, &mut |name, path| {
         resolve(name).map_or_else(|| path.to_owned(), |id| ticket_url(&root, &id))
     })

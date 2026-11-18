@@ -21,7 +21,7 @@ fn request(method: &str, target: &str, tag: Option<&str>) -> Request {
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
     Request {
         method: method.to_owned(),
-        path: path.strip_prefix("/proj").unwrap_or(path).to_owned(),
+        path: path.to_owned(),
         query: query
             .split('&')
             .filter_map(|pair| pair.split_once('='))
@@ -130,7 +130,7 @@ fn count(text: &str, needle: &str) -> usize {
 #[test]
 fn the_home_page_lists_the_open_tickets_with_progress() {
     let hub = seeded();
-    let reply = hub.get("/proj/");
+    let reply = hub.get("/");
     assert_eq!(reply.status, 200);
     let home = String::from_utf8(reply.body).unwrap();
     assert_eq!(count(&home, "class=\"c-card\""), 226);
@@ -147,11 +147,11 @@ fn the_home_page_lists_the_open_tickets_with_progress() {
     }
     for expected in [
         "Incidents",
-        "href=\"/proj/tickets/Tq44s.7.24\"",
+        "href=\"/Tq44s.7.24\"",
         "class=\"c-mono\">Tq44s</",
         "4792/4795",
-        "<title>Tickets · Proj</title>",
-        "<meta name=\"cirrus-root\" content=\"/proj/\">",
+        "<title>Tickets · Ignite</title>",
+        "<meta name=\"cirrus-root\" content=\"/\">",
         "data-feed-seq=\"4993\"",
     ] {
         assert!(home.contains(expected), "{expected}");
@@ -161,7 +161,7 @@ fn the_home_page_lists_the_open_tickets_with_progress() {
 #[test]
 fn a_ticket_page_shows_its_sections_links_and_changelog() {
     let hub = seeded();
-    let page = hub.text("/proj/tickets/Tq44s.7.24");
+    let page = hub.text("/Tq44s.7.24");
     for expected in [
         "Description",
         "Comments",
@@ -177,20 +177,20 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
         "Validate the old path",
         "Simulator failure",
         "<strong>context</strong>",
-        "href=\"/proj/tickets/Tq44s\"",
-        "href=\"/proj/tickets/Tpath\"",
+        "href=\"/Tq44s\"",
+        "href=\"/Tpath\"",
         "renamed it",
         "created this",
         "class=\"c-mono\">Tq44s.7.24</",
-        "href=\"/proj/tickets/Tq44s.7\">Tq44s.7</",
+        "href=\"/Tq44s.7\">Tq44s.7</",
         "class=\"c-row-id c-mono c-hide-narrow\">Tq44s.7.24.1</",
         "<code>Tpath</code>",
-        "href=\"/proj/tickets/Tpath?ref=notes\">Tpath</a>",
+        "href=\"/Tpath?ref=notes\">Tpath</a>",
     ] {
         assert!(page.contains(expected), "{expected}");
     }
     assert!(
-        page.contains("href=\"/proj/tickets/Terro\"")
+        page.contains("href=\"/Terro\"")
             && page.contains("<span class=\"c-mono\">Terro</span></a>")
     );
     assert!(!page.contains("proj-path") && !page.contains("proj-q44s"));
@@ -203,7 +203,7 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
 #[test]
 fn imported_tickets_show_their_owner_and_start_without_the_import_key() {
     let hub = seeded();
-    let page = hub.text("/proj/tickets/Twait");
+    let page = hub.text("/Twait");
     assert!(page.contains("<dt>Owner</dt><dd>Old owner</dd>"));
     assert!(page.contains("<dt>Started</dt><dd><time"));
     assert!(page.contains("started work"));
@@ -214,16 +214,13 @@ fn imported_tickets_show_their_owner_and_start_without_the_import_key() {
 #[test]
 fn pages_revalidate_only_when_their_content_changes() {
     let mut hub = seeded();
-    let home = hub.get("/proj/");
-    let detail = hub.get("/proj/tickets/Tq44s.7.24");
+    let home = hub.get("/");
+    let detail = hub.get("/Tq44s.7.24");
     let (home_tag, detail_tag) = (
         header(&home, "etag").unwrap().to_owned(),
         header(&detail, "etag").unwrap().to_owned(),
     );
-    for (path, tag) in [
-        ("/proj/", &home_tag),
-        ("/proj/tickets/Tq44s.7.24", &detail_tag),
-    ] {
+    for (path, tag) in [("/", &home_tag), ("/Tq44s.7.24", &detail_tag)] {
         assert!(tag.starts_with("W/\""));
         let unchanged = hub.request("GET", path, Some(&format!("\"another\", {}", &tag[2..])));
         assert_eq!(unchanged.status, 304);
@@ -232,8 +229,8 @@ fn pages_revalidate_only_when_their_content_changes() {
     }
 
     hub.batch(&json!({"op": "comment", "id": "q44s.7.24", "text": "New dashboard comment"}));
-    assert_eq!(hub.request("GET", "/proj/", Some(&home_tag)).status, 304);
-    let commented = hub.request("GET", "/proj/tickets/Tq44s.7.24", Some(&detail_tag));
+    assert_eq!(hub.request("GET", "/", Some(&home_tag)).status, 304);
+    let commented = hub.request("GET", "/Tq44s.7.24", Some(&detail_tag));
     assert_eq!(commented.status, 200);
     let body = String::from_utf8(commented.body.clone()).unwrap();
     assert!(body.contains("New dashboard comment"));
@@ -241,7 +238,7 @@ fn pages_revalidate_only_when_their_content_changes() {
 
     let tag = header(&commented, "etag").unwrap().to_owned();
     hub.batch(&json!({"op": "update", "id": "erro", "set": {"title": "Renamed failure"}}));
-    let changed = hub.request("GET", "/proj/tickets/Tq44s.7.24", Some(&tag));
+    let changed = hub.request("GET", "/Tq44s.7.24", Some(&tag));
     assert_eq!(changed.status, 200);
     assert!(
         String::from_utf8(changed.body)
@@ -249,9 +246,9 @@ fn pages_revalidate_only_when_their_content_changes() {
             .contains("Renamed failure")
     );
 
-    let before = header(&hub.get("/proj/"), "etag").unwrap().to_owned();
+    let before = header(&hub.get("/"), "etag").unwrap().to_owned();
     hub.batch(&json!({"op": "reopen", "id": "q44s.999"}));
-    let progressed = hub.request("GET", "/proj/", Some(&before));
+    let progressed = hub.request("GET", "/", Some(&before));
     assert_eq!(progressed.status, 200);
     assert!(
         String::from_utf8(progressed.body)
@@ -266,23 +263,18 @@ fn pages_revalidate_only_when_their_content_changes() {
             [],
         )
         .unwrap();
-    assert!(hub.text("/proj/").contains("4791/4793"));
+    assert!(hub.text("/").contains("4791/4793"));
 }
 
 #[test]
 fn other_addresses_redirect_to_the_canonical_page_and_keep_the_query() {
     let hub = seeded();
-    for path in [
-        "/proj/tickets/proj-q44s.7.24",
-        "/proj/tickets/old",
-        "/proj/tickets/Tq44s.7.24/",
-        "/proj/tickets/q44s.7.24",
-    ] {
+    for path in ["/proj-q44s.7.24", "/old", "/Tq44s.7.24/", "/q44s.7.24"] {
         let redirect = hub.get(&format!("{path}?from=bookmark"));
         assert_eq!(redirect.status, 308, "{path}");
         assert_eq!(
             header(&redirect, "location"),
-            Some("/proj/tickets/Tq44s.7.24?from=bookmark"),
+            Some("/Tq44s.7.24?from=bookmark"),
             "{path}"
         );
     }
@@ -293,35 +285,43 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
     let hub = seeded();
     let query = [("from".to_owned(), "bookmark".to_owned())];
     let aliases = ["former".to_owned()];
-    let ticket = "/proj/tickets/Tq44s.7.24?from=bookmark";
-    // Addresses under the project: the page itself, or a redirect to it.
-    for (path, location) in [
-        ("/proj", "/proj/?from=bookmark"),
-        ("/proj/beads/proj-q44s.7.24", ticket),
-        ("/proj/beads/proj-q44s.7.24.html", ticket),
-        ("/proj/beads/q44s.7.24.html", ticket),
-        ("/proj/beads/old", ticket),
-        ("/proj/tickets/proj-q44s.7.24", ticket),
-        ("/proj/tickets/old", ticket),
-        ("/proj/tickets/q44s.7.24/", ticket),
+    let ticket = "/Tq44s.7.24?from=bookmark";
+    // The dashboard's earlier ticket addresses redirect to the page at the root.
+    for path in [
+        "/beads/proj-q44s.7.24",
+        "/beads/proj-q44s.7.24.html",
+        "/beads/q44s.7.24.html",
+        "/beads/old",
+        "/tickets/Tq44s.7.24",
+        "/tickets/proj-q44s.7.24",
+        "/tickets/old",
+        "/tickets/q44s.7.24/",
+        "/proj-q44s.7.24",
+        "/old",
+        "/q44s.7.24/",
     ] {
         for method in ["GET", "HEAD"] {
             let response = hub.request(method, &format!("{path}?from=bookmark"), None);
             assert_eq!(response.status, 308, "{method} {path}");
-            assert_eq!(header(&response, "location"), Some(location), "{path}");
+            assert_eq!(header(&response, "location"), Some(ticket), "{path}");
         }
     }
-    for path in ["/proj/", "/proj/tickets/Tq44s.7.24"] {
+    for path in ["/", "/Tq44s.7.24"] {
         assert_eq!(hub.get(path).status, 200, "{path}");
     }
-    // Addresses under an old project name redirect, and its API paths are left to the API.
+    // Addresses under the project's name or an old one redirect to the same address at the
+    // root, and their API paths are left to the API.
     for (path, location) in [
-        ("/former", "/proj"),
-        ("/former/", "/proj/"),
-        ("/former/tickets/Tq44s.7.24", "/proj/tickets/Tq44s.7.24"),
+        ("/former", "/"),
+        ("/former/", "/"),
+        ("/proj", "/"),
+        ("/proj/", "/"),
+        ("/proj/machines", "/machines"),
+        ("/proj/tickets/Tq44s.7.24", "/tickets/Tq44s.7.24"),
+        ("/former/tickets/Tq44s.7.24", "/tickets/Tq44s.7.24"),
         (
             "/former/beads/proj-q44s.7.24.html",
-            "/proj/beads/proj-q44s.7.24.html",
+            "/beads/proj-q44s.7.24.html",
         ),
     ] {
         let response = alias_redirect(path, &query, "proj", &aliases).expect(path);
@@ -335,7 +335,9 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
     for path in [
         "/former/api/tickets/x",
         "/former/api",
-        "/proj/",
+        "/proj/api/tickets/x",
+        "/proj/api",
+        "/",
         "/formers/",
         "/other/",
     ] {
@@ -349,11 +351,11 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
 #[test]
 fn head_matches_get_without_a_body_and_a_missing_ticket_is_404() {
     let hub = seeded();
-    let get = hub.get("/proj/tickets/Tq44s.7.24");
-    let head = hub.request("HEAD", "/proj/tickets/Tq44s.7.24", None);
+    let get = hub.get("/Tq44s.7.24");
+    let head = hub.request("HEAD", "/Tq44s.7.24", None);
     assert_eq!(header(&head, "etag"), header(&get, "etag"));
     assert!(head.body.is_empty());
-    let missing = hub.get("/proj/tickets/missing");
+    let missing = hub.get("/missing");
     assert_eq!(missing.status, 404);
     assert!(
         String::from_utf8(missing.body)
@@ -366,11 +368,7 @@ fn head_matches_get_without_a_body_and_a_missing_ticket_is_404() {
 fn routes_the_dashboard_does_not_own_are_left_alone() {
     let hub = seeded();
     let now = Timestamp::parse(NOW).unwrap();
-    for (method, target) in [
-        ("GET", "/proj/tickets/a/b"),
-        ("GET", "/proj/nowhere"),
-        ("POST", "/proj/"),
-    ] {
+    for (method, target) in [("GET", "/a/b"), ("GET", "/nowhere/deeper"), ("POST", "/")] {
         assert!(
             serve(&hub.conn, &request(method, target, None), "proj", now).is_none(),
             "{target}"
@@ -389,14 +387,14 @@ fn the_status_fragment_lists_sessions_and_leases() {
             [json!([{"holder": "Queued merger", "since": "2026-11-17T11:59:50.000Z"}]).to_string()],
         )
         .unwrap();
-    let status = hub.get("/proj/?fragment=status");
+    let status = hub.get("/?fragment=status");
     assert_eq!(status.status, 200);
     assert_eq!(header(&status, "x-cirrus-sequence"), Some("4993"));
     assert_eq!(header(&status, "cache-control"), Some("no-store"));
     let html = String::from_utf8(status.body).unwrap();
     for expected in [
         "session ff7437",
-        "href=\"/proj/tickets/Tq44s.7.24\">Render live tickets &lt;safely&gt;</a>",
+        "href=\"/Tq44s.7.24\">Render live tickets &lt;safely&gt;</a>",
         "m-one",
         "landing lease",
         "Merge holder",
@@ -406,13 +404,13 @@ fn the_status_fragment_lists_sessions_and_leases() {
     }
     assert!(!html.contains("<main") && !html.contains("<script"));
 
-    let live = hub.text("/proj/?fragment=all");
+    let live = hub.text("/?fragment=all");
     assert!(
         live.contains("<main class=\"c-main\"")
             && live.contains("<template id=\"c-status-fragment\">")
     );
     assert!(live.contains("Queued merger") && !live.contains("<script"));
-    let ticket = hub.text("/proj/tickets/Tq44s.7.24?fragment=all");
+    let ticket = hub.text("/Tq44s.7.24?fragment=all");
     assert!(ticket.starts_with("<title>") && ticket.contains("<main class=\"c-main\""));
 }
 
@@ -421,9 +419,9 @@ fn an_empty_hub_shows_empty_states() {
     let hub = Hub {
         conn: hub::open_in_memory().unwrap(),
     };
-    let home = hub.text("/proj/");
+    let home = hub.text("/");
     assert!(home.contains("Nothing is in progress.") && home.contains("No open tickets."));
-    let status = hub.text("/proj/?fragment=status");
+    let status = hub.text("/?fragment=status");
     assert!(
         status.contains("No active sessions reported.") && status.contains("No lease is held.")
     );

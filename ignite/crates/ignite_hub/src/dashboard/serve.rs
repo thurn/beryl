@@ -25,11 +25,10 @@ use crate::routes::{Request, Response};
 enum Route {
     /// `/`.
     Home,
-    /// The project's address without its trailing slash.
-    NoSlash,
     /// One of the fleet pages (`machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
     Fleet(&'static str),
-    /// `/tickets/<name>`, with an optional trailing slash.
+    /// `/<name>`, with an optional trailing slash: a ticket's page, or a redirect to it from
+    /// another name for it.
     Ticket(String),
 }
 
@@ -45,16 +44,19 @@ fn fleet_page(path: &str) -> Option<&'static str> {
 
 fn route(path: &str) -> Option<Route> {
     match path {
-        "" => Some(Route::NoSlash),
         "/" => Some(Route::Home),
         _ => {
             if let Some(page) = fleet_page(path) {
                 return Some(Route::Fleet(page));
             }
-            // `/beads/<id>.html` is the address the first dashboard gave a ticket.
-            let (name, legacy) = match path.strip_prefix("/tickets/") {
-                Some(name) => (name, false),
-                None => (path.strip_prefix("/beads/")?, true),
+            // `/tickets/<name>` is the address the dashboard gave a ticket until its pages moved
+            // to the root, and `/beads/<id>.html` the address of the first dashboard.
+            let (name, legacy) = if let Some(name) = path.strip_prefix("/tickets/") {
+                (name, false)
+            } else if let Some(name) = path.strip_prefix("/beads/") {
+                (name, true)
+            } else {
+                (path.strip_prefix('/')?, false)
             };
             let name = name.strip_suffix('/').unwrap_or(name);
             let name = if legacy {
@@ -67,9 +69,10 @@ fn route(path: &str) -> Option<Route> {
     }
 }
 
-/// The redirect for a page address under one of the project's older names (`aliases`), or
-/// `None` when `path` is not under one or is an API address, which still answers under the old
-/// names. `path` is the whole request path, and the redirect keeps the query.
+/// The redirect for a page address under the project's name or one of its older names
+/// (`aliases`), which is the same address at the hub's root (`/by/Tq44s.7` is `/Tq44s.7`). It is
+/// `None` when `path` is not under one of those names or is an API address, which stays under
+/// `/<project>/api`. `path` is the whole request path, and the redirect keeps the query.
 pub fn alias_redirect(
     path: &str,
     query: &[(String, String)],
@@ -78,10 +81,13 @@ pub fn alias_redirect(
 ) -> Option<Response> {
     let rest = path.strip_prefix('/')?;
     let (name, rest) = rest.find('/').map_or((rest, ""), |at| rest.split_at(at));
-    if !aliases.iter().any(|alias| alias == name) || rest == "/api" || rest.starts_with("/api/") {
+    if (name != project && !aliases.iter().any(|alias| alias == name))
+        || rest == "/api"
+        || rest.starts_with("/api/")
+    {
         return None;
     }
-    Some(redirect(&format!("/{project}{rest}"), query))
+    Some(redirect(if rest.is_empty() { "/" } else { rest }, query))
 }
 
 /// The hub's change-feed position, as the page records it.
@@ -174,13 +180,13 @@ fn not_found(root: &str, head: bool) -> Response {
             c::link(root, "Back to tickets", None, "c-muted")
         );
     let options = PageOptions {
-        title: format!("Not found · {}", brand(root)),
+        title: format!("Not found · {}", brand()),
         body,
         root: root.to_owned(),
         asset_root: Some("/".to_owned()),
         icons: Some(SITE_ICONS),
         crumbs: vec![("Tickets".to_owned(), Some(root.to_owned()))],
-        brand: brand(root),
+        brand: brand(),
         ..PageOptions::default()
     };
     let page = c::document(&options, &c::page_regions(&options));
@@ -213,8 +219,8 @@ pub fn static_file(method: &str, path: &str) -> Option<Response> {
 }
 
 /// Answers a `GET` or `HEAD` for a ticket view of `project`: the home page, a ticket's page or
-/// the fragments the script loads. `request.path` is the path after `/<project>`. Returns `None`
-/// for any other request.
+/// the fragments the script loads. `request.path` is the whole request path. Returns `None` for
+/// any other request.
 pub fn serve(
     conn: &Connection,
     request: &Request,
@@ -228,10 +234,9 @@ pub fn serve(
     let route = route(&request.path)?;
     let if_none_match = request.header("if-none-match");
     let fragment_kind = request.param("fragment");
-    let root = dashboard_root(project);
+    let root = dashboard_root();
     let seq = feed_position(conn);
     Some(match route {
-        Route::NoSlash => redirect(&root, &request.query),
         Route::Home => {
             let panel = || status::fragment(conn, &root, now);
             if fragment_kind == Some("status") {
@@ -278,7 +283,7 @@ pub fn serve(
                 Err(error) => return Some(failed(&error)),
             };
             let canonical = ticket_url(&root, id.as_str());
-            if format!("/{}", canonical.strip_prefix(&root).unwrap_or(&canonical)) != request.path {
+            if canonical != request.path {
                 return Some(redirect(&canonical, &request.query));
             }
             match ticket::options(conn, &root, project, id.as_str(), &seq) {

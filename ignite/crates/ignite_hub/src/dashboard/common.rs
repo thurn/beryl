@@ -112,13 +112,10 @@ pub fn children_progress(count: Option<&Progress>) -> String {
     )
 }
 
-/// The project's name for the header: its address segment, capitalized.
-pub fn brand(root: &str) -> String {
-    let project = root.trim_matches('/');
-    let mut chars = project.chars();
-    chars.next().map_or_else(String::new, |first| {
-        first.to_uppercase().chain(chars).collect()
-    })
+/// The name in the header and page titles. The dashboard is the hub's root, so no project name
+/// appears in its addresses to derive one from.
+pub fn brand() -> String {
+    "Ignite".to_owned()
 }
 
 /// A card's ID and priority.

@@ -68,7 +68,7 @@ fn the_home_page_shows_justiciar_tickets_under_incidents() {
         ticket("Tr1", &["regression", "hub"]),
         ticket("Tt1", &[]),
     ];
-    let body = page("/proj/", &cards, &[], "0").body;
+    let body = page("/", &cards, &[], "0").body;
     assert!(body.contains("Filed automatically"), "{body}");
     assert!(body.contains(">Incidents"), "{body}");
     assert!(body.contains(">Regressions"), "{body}");

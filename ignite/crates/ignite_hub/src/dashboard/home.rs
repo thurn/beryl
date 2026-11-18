@@ -201,7 +201,7 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
         "project-status",
         None,
     );
-    let name = brand(root);
+    let name = brand();
     PageOptions {
         title: format!("Tickets · {name}"),
         body: c::title("Tickets", "", "What is in progress, and everything open.")

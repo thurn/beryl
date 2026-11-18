@@ -28,8 +28,8 @@ self.addEventListener("fetch", (event) => {
     if (!url.pathname.startsWith(root)) return;
     const path = url.pathname.slice(root.length);
     if (url.searchParams.has("fragment")) return;
-    // Let old ticket URLs reach the Worker so they redirect to the canonical ID.
-    if (path === "" || /^tickets\/T[^/]+$/.test(path)) {
+    // Let other names for a ticket reach the Worker so they redirect to the canonical ID.
+    if (path === "" || /^T[^/]+$/.test(path)) {
         event.respondWith(staleWhileRevalidate(event, request));
     }
 });

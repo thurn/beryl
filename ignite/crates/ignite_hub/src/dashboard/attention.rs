@@ -47,7 +47,7 @@ pub fn frame(root: &str, seq: &str, path: &str, sub: &str, body: &str) -> PageOp
         .iter()
         .find(|(candidate, _)| *candidate == path)
         .map_or(path, |(_, label)| *label);
-    let name = brand(root);
+    let name = brand();
     PageOptions {
         title: format!("{label} · {name}"),
         body: c::title(label, "", sub) + &nav(root) + body,
