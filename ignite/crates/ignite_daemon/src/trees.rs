@@ -578,6 +578,12 @@ impl Trees {
         }
     }
 
+    /// Frees a tree that was leased to a waiter who never came for it, without saving or
+    /// resetting it, and serves the next waiter.
+    pub fn abandon(&self, lease: &TreeLease) {
+        self.give_back(&lease.tree);
+    }
+
     /// Frees a tree that was leased but never used, without saving or resetting it.
     fn give_back(&self, tree: &TreeId) {
         let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());

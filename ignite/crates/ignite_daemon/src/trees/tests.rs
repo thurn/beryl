@@ -570,3 +570,41 @@ fn a_failed_reset_in_a_release_leaves_the_tree_leased_for_a_retry() {
         .unwrap();
     assert_eq!(f.state("tree-01"), "free");
 }
+
+#[test]
+fn of_two_overlapping_releases_only_the_first_resets_the_tree() {
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    let row = f.trees.row(&lease.tree).unwrap();
+
+    // Another release has taken the tree out of `leased` since this one read its row.
+    store::set_state(
+        &f.trees.lock().db,
+        lease.tree.as_str(),
+        store::State::Resetting,
+        "t",
+    )
+    .unwrap();
+    let error = f
+        .trees
+        .reset_leased(&lease.tree, &row, &f.tip(), None)
+        .unwrap_err();
+
+    assert!(matches!(error, Error::Conflict(_)), "{error:?}");
+    assert_eq!(f.state("tree-01"), "resetting");
+}
+
+#[test]
+fn a_tree_held_for_a_waiter_that_never_came_is_freed_for_the_next_lease() {
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    assert!(matches!(
+        f.trees.lease(f.request("T.2", false)).unwrap(),
+        Lease::Waiting(_)
+    ));
+
+    f.trees.abandon(&lease);
+
+    assert_eq!(f.state("tree-01"), "free");
+    f.lease("T.3", false);
+}

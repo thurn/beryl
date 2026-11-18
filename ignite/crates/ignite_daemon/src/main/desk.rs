@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ignite_core::admission::Worked;
-use ignite_core::ids::{Commit, MachineId, SessionId, TicketId};
+use ignite_core::ids::{Commit, MachineId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::{AdhocClaim, Claim, Close, Release, TicketBrief};
 use ignite_core::protocol::tickets::TicketDetail;
@@ -31,6 +31,24 @@ use crate::trees::{self, Kind, LeaseRequest, TreeLease, Trees};
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
+
+/// How long a waiting `ignite start` may go without any client waiting on its handle before the
+/// daemon stops waiting for a tree on its behalf.
+const WAITER_ABANDONED_AFTER: Duration = Duration::from_mins(10);
+/// How often a waiting lease checks for a served tree and for a client that went away.
+const WAITER_POLL: Duration = Duration::from_secs(30);
+/// How long a tree held for a waiting `ignite start` waits for the client's next try before it
+/// goes back to the free trees.
+const SERVED_HELD_FOR: Duration = Duration::from_mins(5);
+
+/// Whether a waiting lease's client has been away for too long to come back: nobody has waited
+/// on its handle for `away`.
+fn abandoned(away: Duration) -> bool {
+    away >= WAITER_ABANDONED_AFTER
+}
+
+/// Trees held for a waiting `ignite start`'s next try, by the ticket and session that asked.
+type Served = Arc<Mutex<BTreeMap<(TicketId, SessionId), TreeLease>>>;
 
 /// [`TicketDesk`] over the hub's ticket and hand-off routes.
 pub struct HubDesk {
@@ -118,7 +136,7 @@ pub struct TreeDeskOver {
     /// Set once the server exists: a lease that waits for a tree finishes through a handle.
     pub handles: OnceLock<Arc<Handles>>,
     /// Trees that came free for a waiting `ignite start`, kept for its next try.
-    pub served: Arc<Mutex<BTreeMap<(TicketId, SessionId), TreeLease>>>,
+    pub served: Served,
 }
 
 impl TreeDeskOver {
@@ -220,18 +238,35 @@ impl TreeDesk for TreeDeskOver {
             .ok_or_else(|| Error::Invalid("the daemon is still starting".to_owned()))?
             .clone();
         let handle = handles.create("start", Some(session), None);
-        let (served, finished) = (self.served.clone(), handle.clone());
+        let (served, finished, trees) = (self.served.clone(), handle.clone(), self.trees.clone());
+        let waiting_session = session.clone();
         std::thread::spawn(move || {
+            let mut last_seen = Instant::now();
             let reply = loop {
-                match waiter.wait(Duration::from_secs(3600)) {
-                    None => {}
+                match waiter.wait(WAITER_POLL) {
+                    None => {
+                        if handles.waits_of(&waiting_session) > 0 {
+                            last_seen = Instant::now();
+                        } else if abandoned(last_seen.elapsed()) {
+                            // Dropping the waiter takes it off the queue, so a later release
+                            // is not spent on a client that has gone.
+                            break Reply::text(
+                                Exit::Conflict,
+                                format!(
+                                    "gave up  nobody waited for a tree for {}; run `ignite start \
+                                     {}` again",
+                                    key.0, key.0
+                                ),
+                            );
+                        }
+                    }
                     Some(Err(error)) => break error_reply(&error),
                     Some(Ok(lease)) => {
                         let text = format!(
                             "free     {} is held for {}; run `ignite start {}` again",
                             lease.tree, key.0, key.0
                         );
-                        lock(&served).insert(key, lease);
+                        hold_for_next_try(&served, &trees, key, lease, SERVED_HELD_FOR);
                         break Reply::text(Exit::Success, text);
                     }
                 }
@@ -256,8 +291,12 @@ impl TreeDesk for TreeDeskOver {
         })
     }
 
+    /// Frees the tree without depending on the network: the tip comes from a fetch if one works,
+    /// and otherwise from the last fetch's remote-tracking ref, so a network failure cannot
+    /// leave the tree leased.
     fn reset(&self, tree: &ignite_core::ids::TreeId, caller: Option<u32>) -> Result<()> {
-        let tip = refs::remote_tip(self.repo(), self.remote(), &self.staging)?;
+        let tip = refs::remote_tip(self.repo(), self.remote(), &self.staging)
+            .or_else(|_| refs::cached_tip(self.repo(), self.remote(), &self.staging))?;
         self.trees.release_unsaved(tree, &tip, caller).map(|_| ())
     }
 
@@ -266,6 +305,36 @@ impl TreeDesk for TreeDeskOver {
             return Ok(());
         }
         push::delete(self.repo(), self.remote(), &trees::save_branch(ticket))
+    }
+}
+
+/// Keeps a tree that came free for a waiting `ignite start` until the client's next try, and
+/// gives it back to the free trees if no try collects it within `hold`.
+fn hold_for_next_try(
+    served: &Served,
+    trees: &Trees,
+    key: (TicketId, SessionId),
+    lease: TreeLease,
+    hold: Duration,
+) {
+    let tree = lease.tree.clone();
+    lock(served).insert(key.clone(), lease);
+    let (served, trees) = (served.clone(), trees.clone());
+    std::thread::spawn(move || {
+        std::thread::sleep(hold);
+        release_unclaimed(&served, &trees, &key, &tree);
+    });
+}
+
+/// Gives the tree held for `key` back to the free trees, unless the client collected it (or a
+/// later wait replaced it with another tree) in the meantime.
+fn release_unclaimed(served: &Served, trees: &Trees, key: &(TicketId, SessionId), tree: &TreeId) {
+    let mut held = lock(served);
+    if held.get(key).is_some_and(|lease| lease.tree == *tree)
+        && let Some(lease) = held.remove(key)
+    {
+        drop(held);
+        trees.abandon(&lease);
     }
 }
 
@@ -377,4 +446,15 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
         )));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_waiting_start_is_given_up_only_after_its_client_has_been_away_a_while() {
+        assert!(!abandoned(Duration::from_secs(60)));
+        assert!(abandoned(WAITER_ABANDONED_AFTER));
+    }
 }

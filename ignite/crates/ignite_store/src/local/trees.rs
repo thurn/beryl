@@ -114,8 +114,20 @@ pub fn lease(
     Ok(changed == 1)
 }
 
-/// Sets the state of an existing tree, such as `Resetting` once its lease ends. Returns whether
-/// the tree exists. Use [`lease`] to take a free tree; this does not check the old state.
+/// Moves a tree from `from` to `to` only if it is in `from` right now, as one statement. Returns
+/// `false`, changing nothing, when the tree is missing or in another state. Two callers that
+/// both try to take a tree out of `from` therefore cannot both succeed.
+pub fn transition(conn: &Connection, id: &str, from: State, to: State, now: &str) -> Result<bool> {
+    let changed = conn.execute(
+        "UPDATE trees SET state = ?3, last_used = ?4 WHERE id = ?1 AND state = ?2",
+        params![id, from.as_str(), to.as_str(), now],
+    )?;
+    Ok(changed == 1)
+}
+
+/// Sets the state of an existing tree whatever state it is in. Returns whether the tree exists.
+/// Use [`lease`] to take a free tree and [`transition`] to leave a state that others may also
+/// be leaving; this does not check the old state.
 pub fn set_state(conn: &Connection, id: &str, state: State, now: &str) -> Result<bool> {
     let changed = conn.execute(
         "UPDATE trees SET state = ?2, last_used = ?3 WHERE id = ?1",
@@ -197,6 +209,17 @@ mod tests {
             ("free", None, Some("9d0e1f2"))
         );
         assert!(lease_it("T.2"));
+    }
+
+    #[test]
+    fn a_transition_happens_only_from_the_expected_state() {
+        let conn = open_in_memory().unwrap();
+        upsert(&conn, &sample("tree-01")).unwrap();
+        set_state(&conn, "tree-01", State::Leased, "t").unwrap();
+        assert!(transition(&conn, "tree-01", State::Leased, State::Resetting, "t").unwrap());
+        assert!(!transition(&conn, "tree-01", State::Leased, State::Resetting, "t").unwrap());
+        assert!(!transition(&conn, "missing", State::Leased, State::Resetting, "t").unwrap());
+        assert_eq!(get(&conn, "tree-01").unwrap().unwrap().state, "resetting");
     }
 
     #[test]

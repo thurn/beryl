@@ -15,19 +15,59 @@ use crate::cmd;
 pub fn remote_tip(repo: &Path, remote: &str, branch: &str) -> Result<Commit> {
     let tracking = format!("refs/remotes/{remote}/{branch}");
     let refspec = format!("+refs/heads/{branch}:{tracking}");
-    let mut fetch = cmd::git(repo, ["fetch", "--quiet", "--no-tags", remote, &refspec]);
-    let out = cmd::output(&mut fetch)?;
-    if !out.status.success() {
+    let mut attempt = 0;
+    loop {
+        let mut fetch = cmd::git(repo, ["fetch", "--quiet", "--no-tags", remote, &refspec]);
+        let out = cmd::output(&mut fetch)?;
+        if out.status.success() {
+            break;
+        }
         let message = cmd::failure(&fetch, &out);
-        if String::from_utf8_lossy(&out.stderr).contains("couldn't find remote ref") {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if stderr.contains("couldn't find remote ref") {
             return Err(Error::NotFound(message));
+        }
+        if is_lock_contention(&stderr) {
+            // Another fetch in this checkout holds a ref or `FETCH_HEAD` lock. It is not a
+            // network failure, and it clears in moments, so wait and try again.
+            attempt += 1;
+            if attempt >= LOCK_TRIES {
+                return Err(Error::Io(message));
+            }
+            std::thread::sleep(LOCK_PAUSE * attempt);
+            continue;
         }
         return Err(Error::Unreachable(message));
     }
-    cmd::commit(&cmd::run(
+    cached_tip(repo, remote, branch)
+}
+
+/// How many times a fetch that hit a lock held by another git process is tried, and how long
+/// the first pause is (each further pause is one pause longer).
+const LOCK_TRIES: u32 = 6;
+const LOCK_PAUSE: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// Whether a failed git command's error output says another git process holds a lock:
+/// `cannot lock ref '...'` or `Unable to create '....lock': File exists`.
+fn is_lock_contention(stderr: &str) -> bool {
+    stderr.contains("cannot lock ref")
+        || (stderr.contains("Unable to create") && stderr.contains(".lock"))
+}
+
+/// The newest commit of `branch` as of the last fetch, without contacting the remote: what the
+/// remote-tracking ref `refs/remotes/<remote>/<branch>` holds. A branch never fetched is
+/// [`Error::NotFound`].
+pub fn cached_tip(repo: &Path, remote: &str, branch: &str) -> Result<Commit> {
+    let tracking = format!("refs/remotes/{remote}/{branch}");
+    let mut parse = cmd::git(
         repo,
         ["rev-parse", "--verify", &format!("{tracking}^{{commit}}")],
-    )?)
+    );
+    let out = cmd::output(&mut parse)?;
+    if !out.status.success() {
+        return Err(Error::NotFound(format!("{tracking} was never fetched")));
+    }
+    cmd::commit(String::from_utf8_lossy(&out.stdout).trim())
 }
 
 /// The commit a tree has checked out.
@@ -95,6 +135,19 @@ mod tests {
             .unwrap();
         assert!(out.status.success(), "{args:?}: {out:?}");
         String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    }
+
+    #[test]
+    fn lock_errors_are_told_from_network_errors() {
+        assert!(is_lock_contention(
+            "error: cannot lock ref 'refs/remotes/origin/staging': is at abc but expected def"
+        ));
+        assert!(is_lock_contention(
+            "fatal: Unable to create '/r/.git/FETCH_HEAD.lock': File exists."
+        ));
+        assert!(!is_lock_contention(
+            "fatal: unable to access 'https://x/': Could not resolve host"
+        ));
     }
 
     #[test]

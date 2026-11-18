@@ -242,6 +242,8 @@ impl Claims {
 
     /// Runs the stall procedure on every held ticket; the daemon calls it about once a minute.
     pub fn tick(&self, ctx: &Context) {
+        self.forget_released();
+        self.retry_failed_resets();
         let now = self.clock.now();
         let mut verdicts = Vec::new();
         {
