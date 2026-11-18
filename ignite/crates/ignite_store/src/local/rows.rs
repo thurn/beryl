@@ -42,6 +42,13 @@ crate::tables! {
         reply: Option<String>,
         started_at: String,
         finished_at: Option<String>,
+        /// The process ID of the verb process running the verb; `None` for a verb the daemon
+        /// runs itself.
+        pid: Option<i64>,
+        /// The Ignite commit of the verb process's executable.
+        executable: Option<String>,
+        /// The host protocol version the verb process speaks.
+        protocol: Option<i64>,
     }
 
     OutboxEntry = "outbox" { seq: i64, kind: String, body: String, at: String }

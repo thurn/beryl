@@ -14,7 +14,7 @@ use ignite_core::manifest::Manifest;
 use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::MachineRegister;
 use ignite_core::time::SystemClock;
-use ignite_core::traits::{Clock, Error, Git, Hub, Launcher, Result};
+use ignite_core::traits::{Builds, Clock, Error, Git, Hub, Launcher, Result};
 use ignite_git::GitCli;
 use ignite_os::hostcpu::HostCpu;
 
@@ -34,12 +34,12 @@ use crate::doctor::{
 use crate::host::{Host, HostParts, SupervisedStarter, TreesLanding};
 use crate::hubclient::HubClient;
 use crate::idle::{AuditVerb, Idle, IdleSettings, LiveHost, RebuildVerb};
-use crate::land::env::{ChecksGate, MachineTrees};
+use crate::land::env::{ChecksGate, LandTrees, MachineTrees};
 use crate::land::records::Records;
 use crate::land::{LandVerb, Landing, SyncVerb};
 use crate::pool::{Pool, PoolVerb};
 use crate::sched::{Limits, Scheduler};
-use crate::server::{Context, Registry, Server};
+use crate::server::{Context, Registry, Server, Verb};
 use crate::supervise::{RunVerb, SupervisedLauncher};
 use crate::trees::{TreeConfig, Trees};
 use crate::update::InstallVerb;
@@ -218,6 +218,19 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
 
 /// The check runner, with landing and idle work, which both run checks through it.
 pub fn checking(base: &Base, trees: &Trees) -> Result<(Arc<Checks>, Arc<Landing>, Arc<Idle>)> {
+    let landing_trees = Arc::new(MachineTrees {
+        trees: trees.clone(),
+    });
+    checking_with(base, landing_trees, trees)
+}
+
+/// [`checking`], with landing's trees given: the machine's trees in the daemon, and in a verb
+/// process the same trees with landing trees leased from the daemon (see `crate::verbproc`).
+pub fn checking_with(
+    base: &Base,
+    landing_trees: Arc<dyn LandTrees>,
+    trees: &Trees,
+) -> Result<(Arc<Checks>, Arc<Landing>, Arc<Idle>)> {
     let per_command = base.limits.max_per_command();
     let checks = Arc::new(Checks::new(
         CheckSettings {
@@ -244,9 +257,7 @@ pub fn checking(base: &Base, trees: &Trees) -> Result<(Arc<Checks>, Arc<Landing>
         }),
     ));
     let landing = Arc::new(Landing {
-        trees: Arc::new(MachineTrees {
-            trees: trees.clone(),
-        }),
+        trees: landing_trees,
         gate: Arc::new(ChecksGate {
             checks: checks.clone(),
         }),
@@ -273,6 +284,43 @@ pub fn checking(base: &Base, trees: &Trees) -> Result<(Arc<Checks>, Arc<Landing>
     )?);
     checks.set_hit_sink(idle.clone());
     Ok((checks, landing, idle))
+}
+
+/// What a verb process runs its verb with (see `crate::verbproc`): the context, with `launcher`
+/// and `builds` asking the daemon, and the long verbs, built over the machine's trees as the
+/// daemon builds them, with landing trees as `landing` makes them from the machine's. Nothing
+/// here changes the trees or starts a loop: that stays the daemon's.
+pub fn verb_side(
+    base: &Base,
+    launcher: Arc<dyn Launcher>,
+    builds: Arc<dyn Builds>,
+    landing: impl FnOnce(MachineTrees) -> Arc<dyn LandTrees>,
+) -> Result<(Context, Vec<LongVerb>)> {
+    let repo = &base.options.repo;
+    let tree_config = TreeConfig::new(repo, &base.config, &base.options.hostname, &base.manifest)?;
+    let trees = Trees::new(
+        tree_config,
+        base.open()?,
+        base.clock.clone(),
+        builds.clone(),
+    );
+    let landing_trees = landing(MachineTrees {
+        trees: trees.clone(),
+    });
+    let (checks, landing, idle) = checking_with(base, landing_trees, &trees)?;
+    let ctx = Context {
+        config: base.config.clone(),
+        repo: repo.clone(),
+        machine: base.machine.clone(),
+        clock: base.clock.clone(),
+        hub: base.hub.clone(),
+        git: base.git.clone(),
+        launcher,
+        builds,
+        session: None,
+        tree: None,
+    };
+    Ok((ctx, long_verbs(&checks, &landing, &idle)))
 }
 
 /// The claims, the dispatcher, and the late links both need to the server.
@@ -338,31 +386,18 @@ pub fn server(
     registry.register(Box::new(BriefVerb(claims.clone())));
     registry.register(Box::new(ReleaseVerb(claims.clone())));
     registry.register(Box::new(CloseVerb(claims.clone())));
-    let checks = &parts.checks;
-    // A restarted daemon runs these again under the handle of a run it was cut off in (see
-    // `server/resume.rs`): finished checks come from the cache and running commands from
-    // their supervisors, and a landing finds where it got to in its record on disk.
-    registry.register_resumable(Box::new(TestVerb {
-        checks: checks.clone(),
-    }));
-    registry.register_resumable(Box::new(CheckVerb {
-        checks: checks.clone(),
-    }));
+    for (verb, resumable) in long_verbs(&parts.checks, &parts.landing, &parts.idle) {
+        if resumable {
+            registry.register_resumable(verb);
+        } else {
+            registry.register(verb);
+        }
+    }
     registry.register(Box::new(WhyVerb {
-        checks: checks.clone(),
-    }));
-    registry.register_resumable(Box::new(LandVerb {
-        landing: parts.landing.clone(),
+        checks: parts.checks.clone(),
     }));
     registry.register(Box::new(SyncVerb {
         landing: parts.landing.clone(),
-    }));
-    registry.register(Box::new(RunVerb));
-    registry.register(Box::new(RebuildVerb {
-        idle: parts.idle.clone(),
-    }));
-    registry.register(Box::new(AuditVerb {
-        idle: parts.idle.clone(),
     }));
     registry.register(Box::new(DispatchVerb::new(parts.dispatcher.clone())));
     registry.register(Box::new(PoolVerb::new(parts.dispatcher.clone())));
@@ -403,6 +438,39 @@ pub fn server(
     let _ = desks.host.server.set(Arc::downgrade(&server));
     let _ = desks.tree_desk.handles.set(server.handles().clone());
     Ok(server)
+}
+
+/// A verb that runs long, with whether a restarted daemon runs it again (see [`long_verbs`]).
+pub type LongVerb = (Box<dyn Verb>, bool);
+
+/// The verbs that run long, each with whether a restarted daemon runs it again under the handle
+/// of a run it was cut off in (see `server/resume.rs`): finished checks come from the cache and
+/// running commands from their supervisors, and a landing finds where it got to in its record on
+/// disk. The daemon registers them, and a verb process runs one of them (see `crate::verbproc`).
+pub fn long_verbs(checks: &Arc<Checks>, landing: &Arc<Landing>, idle: &Arc<Idle>) -> Vec<LongVerb> {
+    vec![
+        (
+            Box::new(TestVerb {
+                checks: checks.clone(),
+            }),
+            true,
+        ),
+        (
+            Box::new(CheckVerb {
+                checks: checks.clone(),
+            }),
+            true,
+        ),
+        (
+            Box::new(LandVerb {
+                landing: landing.clone(),
+            }),
+            true,
+        ),
+        (Box::new(RunVerb), false),
+        (Box::new(RebuildVerb { idle: idle.clone() }), false),
+        (Box::new(AuditVerb { idle: idle.clone() }), false),
+    ]
 }
 
 fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSection>> {

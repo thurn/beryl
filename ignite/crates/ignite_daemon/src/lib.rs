@@ -40,4 +40,5 @@ mod testhub;
 pub mod tip;
 pub mod trees;
 pub mod update;
+pub mod verbproc;
 pub mod wrap;

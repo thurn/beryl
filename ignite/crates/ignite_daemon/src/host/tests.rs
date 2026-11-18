@@ -283,6 +283,9 @@ fn running(db: &Arc<Mutex<Connection>>, handle: &str) -> Handle {
         reply: None,
         started_at: T0.to_string(),
         finished_at: None,
+        pid: None,
+        executable: None,
+        protocol: None,
     };
     handle_store::upsert(&lock(db), &row).unwrap();
     Handle::new(handle).unwrap()

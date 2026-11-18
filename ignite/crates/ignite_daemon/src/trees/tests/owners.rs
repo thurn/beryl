@@ -33,6 +33,9 @@ fn record_handle(f: &Fixture, id: &str, state: &str) {
             reply: None,
             started_at: "2026-11-18T00:00:00.000Z".to_owned(),
             finished_at: None,
+            pid: None,
+            executable: None,
+            protocol: None,
         },
     )
     .unwrap();

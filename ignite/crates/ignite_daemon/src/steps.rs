@@ -32,6 +32,10 @@
 //!   caller can give up instead of starting what may not be interrupted.
 //! - [`allow_stop`] lifts that refusal once the part that may not be interrupted is over, as
 //!   when the remote rejected a landing's push and the landing goes back to rebase.
+//!
+//!   In a verb process (see `crate::verbproc`), the daemon decides whether a stop was asked, so
+//!   the activity is given a [`StopKeeper`] that asks the daemon before refusing and tells it
+//!   when the refusal is lifted.
 //! - [`critical`]`()` returns a guard. Until it is dropped, the work is in a part that may not
 //!   be cut short, such as a push, and a ready build waits to restart the daemon (see
 //!   `main/selfupdate.rs`). Every other moment, the daemon may restart under the work, which a
@@ -113,6 +117,15 @@ struct State {
     observers: Vec<Sender<String>>,
 }
 
+/// Where the stop state of work is decided when it is not this process: for a verb running in a
+/// process of its own, the daemon, which `ignite stop` asks (see `crate::verbproc`).
+pub trait StopKeeper: Send + Sync {
+    /// Refuses every later stop with `reason`. False when a stop was already asked.
+    fn refuse_stop(&self, reason: &str) -> bool;
+    /// Lifts the refusal.
+    fn allow_stop(&self);
+}
+
 /// One running piece of work. See the module documentation.
 pub struct Activity {
     kind: Kind,
@@ -120,6 +133,7 @@ pub struct Activity {
     started: Timestamp,
     state: Mutex<State>,
     changed: Condvar,
+    keeper: std::sync::OnceLock<Arc<dyn StopKeeper>>,
 }
 
 /// What an activity is doing, for `status`, `wait` and `doctor`.
@@ -198,7 +212,14 @@ impl Activity {
                 observers: Vec::new(),
             }),
             changed: Condvar::new(),
+            keeper: std::sync::OnceLock::new(),
         }
+    }
+
+    /// Makes `keeper` decide, with this activity, whether stopping may be refused (see
+    /// [`StopKeeper`]). Only the first keeper given counts.
+    pub fn keep_stop_with(&self, keeper: Arc<dyn StopKeeper>) {
+        let _ = self.keeper.set(keeper);
     }
 
     pub fn kind(&self) -> &Kind {
@@ -284,8 +305,18 @@ impl Activity {
         lock(&self.state).stop == Stop::Asked
     }
 
-    /// See [`refuse_stop`].
+    /// See [`refuse_stop`]. With a [`StopKeeper`], the keeper is asked first, and a stop it
+    /// says was asked is recorded here as well.
     pub fn refuse_stop(&self, reason: &str) -> bool {
+        if self.stop_requested() {
+            return false;
+        }
+        if let Some(keeper) = self.keeper.get()
+            && !keeper.refuse_stop(reason)
+        {
+            let _ = self.request_stop();
+            return false;
+        }
         let mut state = lock(&self.state);
         if state.stop == Stop::Asked {
             return false;
@@ -299,12 +330,26 @@ impl Activity {
         lock(&self.state).critical > 0
     }
 
-    /// See [`allow_stop`].
+    /// See [`allow_stop`]. A [`StopKeeper`] is told as well.
     pub fn allow_stop(&self) {
         let mut state = lock(&self.state);
-        if matches!(state.stop, Stop::Refused(_)) {
+        let refused = matches!(state.stop, Stop::Refused(_));
+        if refused {
             state.stop = Stop::Running;
         }
+        drop(state);
+        if refused && let Some(keeper) = self.keeper.get() {
+            keeper.allow_stop();
+        }
+    }
+
+    /// What the work waits for, outermost first, as the host protocol's `host-step` carries it.
+    pub fn waits(&self) -> Vec<String> {
+        lock(&self.state)
+            .waits
+            .iter()
+            .map(|(_, what, _)| what.clone())
+            .collect()
     }
 
     /// Whether stopping is refused now (see [`refuse_stop`]): the work is in a part that may

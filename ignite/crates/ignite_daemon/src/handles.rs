@@ -225,6 +225,9 @@ impl Handles {
             }),
             started_at: self.clock.now().to_string(),
             finished_at: None,
+            pid: None,
+            executable: None,
+            protocol: None,
         });
         handle
     }
@@ -409,6 +412,43 @@ impl Handles {
 
 fn store_error(error: &ignite_store::StoreError) -> Error {
     Error::Io(error.to_string())
+}
+
+/// The verb and the request of a handle that is still running, as a verb process reads them
+/// from the handle's row when it starts (see `crate::verbproc`). `None` when the handle is
+/// unknown, has finished, or has no request recorded.
+pub fn running_request(db: &Connection, handle: &Handle) -> Result<Option<(String, Request)>> {
+    let Some(row) = store::get(db, handle.as_str()).map_err(|e| store_error(&e))? else {
+        return Ok(None);
+    };
+    if row.state != "running" {
+        return Ok(None);
+    }
+    Ok(row
+        .reply
+        .as_deref()
+        .and_then(|text| serde_json::from_str::<Running>(text).ok())
+        .map(|running| (row.verb, running.request)))
+}
+
+/// Writes the reply of a verb process's verb into its running handle's row, in one transaction:
+/// `stopped` when it was stopped, otherwise `done`. The daemon hands it to whoever waits once
+/// the process says it has finished. False when the row was no longer running.
+pub fn finish_in_row(
+    db: &Connection,
+    handle: &Handle,
+    reply: &Reply,
+    stopped: bool,
+    now: Timestamp,
+) -> Result<bool> {
+    let text = serde_json::to_string(reply).map_err(|e| Error::Invalid(e.to_string()))?;
+    let ending = store::Ending {
+        state: if stopped { "stopped" } else { "done" },
+        exit: i64::from(reply.exit.code()),
+        reply: &text,
+        finished_at: &now.to_string(),
+    };
+    store::finish_running(db, handle.as_str(), &ending).map_err(|e| store_error(&e))
 }
 
 /// The reply of an operation the daemon stopped in the middle of and could not run again, for

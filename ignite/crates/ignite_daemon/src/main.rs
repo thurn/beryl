@@ -15,7 +15,7 @@
 //! hub itself only on a machine whose hub has no service yet (see
 //! [`loops::daemon_serves_hub`]).
 
-mod assemble;
+pub(crate) mod assemble;
 mod desk;
 mod loops;
 mod selfupdate;
