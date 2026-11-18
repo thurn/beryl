@@ -16,7 +16,7 @@
 //! epic or one the hub filed itself, never one set aside for a person or kept for something the
 //! asking machine lacks, and nothing at all while the machine's hand-offs are paused.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use rusqlite::Connection;
 
@@ -79,8 +79,17 @@ pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Opt
     let mut free = free.clone();
     free.idle_workers
         .retain(|worker| !waiting.contains(worker.session.as_str()));
-    let ready = snapshot.ready_tickets(conn, machine, free.os, now)?;
-    let epic_order = shares::epic_order(&snapshot.demand(&ready));
+    let mut ready = snapshot.ready_tickets(conn, machine, free.os, now)?;
+    let demand = snapshot.demand(&ready);
+    // Improvements go ahead of the epic order and so skip the share, but not a group's
+    // `--max-workers` cap.
+    let full: BTreeSet<&Group> = demand
+        .iter()
+        .filter(|group| group.max_workers.is_some_and(|cap| group.held >= cap))
+        .map(|group| &group.epic)
+        .collect();
+    ready.retain(|ticket| ticket.kind != TicketKind::Improvement || !full.contains(&ticket.epic));
+    let epic_order = shares::epic_order(&demand);
     let improvements = improvements_due(conn, machine, now)?;
     let last_files = last_files(conn, machine)?;
     let Some(handoff) = dispatch::next_for(&free, &ready, &epic_order, improvements, &last_files)
@@ -531,11 +540,11 @@ fn history(conn: &Connection, machine: &str) -> Result<Vec<Worked>> {
 /// the unit whose largest saving goes first: the one after the last improvement's unit.
 fn improvements_due(conn: &Connection, machine: &str, now: Timestamp) -> Result<Option<Unit>> {
     let config = Improvement::default();
-    let recent = fleet::recent_handoffs(conn, machine, config.window)?;
+    let recent = taken_handoffs(conn, machine, config.window)?;
     let kinds: Vec<TicketKind> = recent
         .iter()
         .rev()
-        .map(|handoff| match handoff.kind.as_str() {
+        .map(|(_, kind)| match kind.as_str() {
             "improvement" => TicketKind::Improvement,
             "regression" => TicketKind::Regression,
             _ => TicketKind::Ordinary,
@@ -546,12 +555,35 @@ fn improvements_due(conn: &Connection, machine: &str, now: Timestamp) -> Result<
         return Ok(None);
     }
     let mut last = None;
-    if let Some(handoff) = recent.iter().find(|h| h.kind == "improvement") {
-        last = tickets::load(conn, &handoff.ticket)?
+    if let Some((ticket, _)) = recent.iter().find(|(_, kind)| kind == "improvement") {
+        last = tickets::load(conn, ticket)?
             .and_then(|ticket| ticket.saving)
             .and_then(|saving| Unit::parse(&saving.unit));
     }
     Ok(Some(shares::first_unit(last)))
+}
+
+/// The last `n` hand-offs to a machine that were not regressions and whose reservation did not
+/// lapse, newest first, as `(ticket, kind)`: the improvement share is a share of these. A
+/// hand-off counts while its reservation stands, and once the machine has claimed the ticket
+/// since; a reservation that lapsed unclaimed was never work, so it does not count.
+fn taken_handoffs(conn: &Connection, machine: &str, n: u32) -> Result<Vec<(String, String)>> {
+    let mut statement = conn.prepare(
+        "SELECT h.ticket, h.kind FROM handoffs h
+         WHERE h.machine = ?1 AND h.kind != 'regression'
+           AND (EXISTS (SELECT 1 FROM reservations r
+                        WHERE r.ticket = h.ticket AND r.machine = h.machine)
+                OR EXISTS (SELECT 1 FROM tickets t
+                           WHERE t.id = h.ticket AND t.machine = h.machine
+                             AND t.claimed_at >= h.at))
+         ORDER BY h.seq DESC LIMIT ?2",
+    )?;
+    let rows = statement
+        .query_map(rusqlite::params![machine, i64::from(n)], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .collect::<std::result::Result<_, _>>()?;
+    Ok(rows)
 }
 
 /// Each worker's last ticket's files, as its machine last reported them.

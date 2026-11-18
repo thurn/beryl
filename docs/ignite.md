@@ -1434,7 +1434,8 @@ machine can take:
 1. An open regression ticket. It needs an idle worker and a free tree on a
    machine that can run its check, and skips the test of expected cores below.
 2. An improvement ticket, when improvements are under their share. See
-   [Improvement tickets](#improvement-tickets).
+   [Improvement tickets](#improvement-tickets). It skips its epic's share but
+   not its `--max-workers` cap.
 3. A ready ticket from the epic that is furthest below its share of workers. See
    [Dividing workers between epics](#dividing-workers-between-epics). Within an
    epic, the ticket of highest priority goes first, then the one with the
@@ -1850,8 +1851,9 @@ Rules for filing:
 Rules for the share:
 
 - Improvement tickets get at least 15% of the last 20 hand-offs to each machine,
-  not counting hand-offs of regression tickets. The hub counts them when it
-  answers a machine's request for a ticket.
+  not counting hand-offs of regression tickets or hand-offs whose reservation
+  lapsed unclaimed. The hub counts them when it answers a machine's request for
+  a ticket.
 - The share rises in a straight line to 30% as the backlog grows. The measure is
   the backlog's estimated saving as a fraction of last week's total, taken in
   each of the three units (dollars, agent-hours, core-hours), using the largest.

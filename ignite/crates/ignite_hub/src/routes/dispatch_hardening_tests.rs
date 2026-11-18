@@ -174,3 +174,70 @@ fn a_close_resent_after_a_batch_closed_the_ticket_frees_the_worker_and_the_findi
     assert_eq!(state, "idle");
     assert!(findings::open(&conn).unwrap().is_empty());
 }
+
+/// Gives the ticket a saving, which makes it an improvement.
+fn make_improvement(conn: &rusqlite::Connection, id: &str) {
+    conn.execute(
+        "UPDATE tickets SET saving = ?2 WHERE id = ?1",
+        [
+            id,
+            r#"{"rule":"slow-verb","subject":"check","unit":"dollars","amount":5.0}"#,
+        ],
+    )
+    .unwrap();
+}
+
+#[test]
+fn an_improvement_respects_its_epic_s_cap() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let (epic, ids) = file_under(
+        &mut conn,
+        Parent::Epic(Some(2)),
+        &[("work", &[], &[]), ("improve", &[], &[])],
+    );
+    make_improvement(&conn, ids[1].as_str());
+    conn.execute(
+        "UPDATE tickets SET max_workers = 1 WHERE id = ?1",
+        [epic.unwrap().as_str()],
+    )
+    .unwrap();
+    let (status, _) = post(
+        &mut conn,
+        "/claims",
+        &claim(ids[0].as_str(), "local_a"),
+        start(),
+    );
+    assert_eq!(status, 200);
+    // The epic's one worker is taken, so its improvement waits like any other ticket.
+    let (_, reply) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1.0));
+    assert_eq!(reply, Value::Null);
+}
+
+#[test]
+fn a_lapsed_improvement_does_not_count_toward_the_improvement_share() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let ids = file(&mut conn, &[("work", &[], &[]), ("improve", &[], &[])]);
+    make_improvement(&conn, ids[1].as_str());
+    // Lower priority, so that the improvement goes first only while improvements are due.
+    conn.execute(
+        "UPDATE tickets SET priority = 3 WHERE id = ?1",
+        [ids[1].as_str()],
+    )
+    .unwrap();
+    let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(first["ticket"], ids[1].as_str());
+    // The reservation lapses unclaimed, so improvements are still under their share.
+    let (_, again) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(3_600.0));
+    assert_eq!(again["ticket"], ids[1].as_str());
+    // Once claimed, the hand-off counts, and the improvement has its share.
+    let (status, _) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&again, "local_b"),
+        at(3_601.0),
+    );
+    assert_eq!(status, 200);
+    let (_, next) = post(&mut conn, "/next", &free("m-1", &["local_c"]), at(3_602.0));
+    assert_eq!(next["ticket"], ids[0].as_str());
+}
