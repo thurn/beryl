@@ -6,14 +6,12 @@ use std::process::{Child, ExitStatus};
 
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(windows)]
-mod windows;
 
 /// One process tree's resource use.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ProcessUsage {
     pub cpu_s: f64,
-    /// `None` where the operating system does not count instructions (Windows).
+    /// `None` where the operating system does not count instructions.
     pub instructions: Option<u64>,
     pub peak_bytes: u64,
 }

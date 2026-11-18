@@ -382,7 +382,6 @@ version = "0.1.0"
 dependencies = [
  "ignite_core",
  "libc",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

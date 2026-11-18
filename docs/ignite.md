@@ -62,9 +62,9 @@ decide what Ignite is. It starts with the names the numbers use.
 
 - A **ticket** is one task in the project's tracker, reached with the `tk`
   command. An **epic** is a ticket that groups child tickets.
-- Agent sessions run in the Claude and Codex desktop apps on three machines:
-  jarvis (a Mac with 18 cores and 64 GB, the main development machine), multivac
-  (a MacBook Pro) and cygnus (a Windows PC).
+- Agent sessions run in the Claude and Codex desktop apps on two machines:
+  jarvis (a Mac with 18 cores and 64 GB, the main development machine) and
+  multivac (a MacBook Pro).
 - Enact gives each ticket a git worktree. `enact push` rebases the work, runs
   the **fast check** (about a minute of checks chosen for the change) and pushes
   to the `staging` branch.
@@ -176,11 +176,11 @@ Enact's orchestrator sessions cost $591 in the week, 7% of all spend:
   that planned an epic also ran its loop for up to two days.
 - $496 of the cost was rereading that context. Output cost $35.
 
-### Two of three machines are unmeasured
+### One of two machines is unmeasured
 
-Jarvis runs Claude Code sessions, and multivac and cygnus run Codex sessions.
-About 285 tickets ran on multivac and cygnus, and the efficiency store holds no
-data for them, because moving data between machines is a manual export and
+Jarvis runs Claude Code sessions, and multivac runs Codex sessions. About 285
+tickets ran on multivac and a machine since retired, and the efficiency store
+holds no data for them, because moving data between machines is a manual export and
 import.
 
 ### One rules fix, step by step
@@ -425,7 +425,7 @@ Ignite is one executable. This section says which processes exist and how they
 survive each other's restarts.
 
 - **The client** is the `ignite` command an agent types. It sends the request to
-  the machine's daemon over a local socket (a named pipe on Windows), prints the
+  the machine's daemon over a local socket, prints the
   reply and exits.
 - **The daemon** starts at login on every machine. It keeps its state in a local
   SQLite database, so a restart loses nothing.
@@ -628,8 +628,6 @@ How Ignite uses this:
   process by a Cargo target runner, so costs are known per crate and per test.
 - Where one process runs many checks, as pytest does, the process's instructions
   are divided among its checks by the seconds each reports.
-- Windows reports no instruction count. Cygnus records CPU seconds, and a
-  check's cost for scoring comes from the Macs' records.
 
 ## Checks
 
@@ -837,9 +835,9 @@ The parts:
   agent's new regression test is never skipped.
 - Checks that have failed in exactly the same runs are scored as one check, with
   their summed cost.
-- A cost known only in CPU seconds, from Windows or from history imported at the
+- A cost known only in CPU seconds, from history imported at the
   switch, is converted at the rate measured on jarvis, about 17 billion
-  instructions per CPU second, until the check has run under Ignite on a Mac.
+  instructions per CPU second, until the check has run under Ignite.
 
 Two checks after a change to one function in `beryl_rules`, with a threshold of
 0.004:
@@ -1074,8 +1072,8 @@ ignite ticket wait Tig9a.1 --status closed
 ```
 
 Labels carry what the dispatcher needs to know about a ticket: `tier:opus`,
-`tier:sonnet` or `tier:light` names the model it needs, `needs:macos` an
-operating system, and `lane:<name>` a chain. `ignite ticket batch` creates or
+`tier:sonnet` or `tier:light` names the model it needs, and `lane:<name>` a
+chain. `ignite ticket batch` creates or
 changes many tickets in one request that succeeds or fails as a whole.
 
 Every change to anything in Beryl has a ticket. `ignite start "<summary>"` makes
@@ -1169,8 +1167,7 @@ A machine can take a ticket when all of these hold:
 - The ticket's expected use of cores fits beside the tickets already in progress
   there. See [Light and heavy tickets](#light-and-heavy-tickets).
 - The machine can run every check family that the ticket's named files could
-  bring into its gate. Cygnus never takes a ticket that names UI files, or one
-  labeled `needs:macos`.
+  bring into its gate.
 
 The hub reserves the ticket for that machine in the same request, so two
 machines never take one ticket. What happens next:
@@ -1317,12 +1314,12 @@ Every machine runs the same daemon and differs only in what it declares it can
 do. The hub is the one shared point.
 
 ```toml
-[machine.cygnus]
-os = "windows"
-ticket_trees = 6
+[machine.multivac]
+os = "macos"
+ticket_trees = 8
 landing_trees = 2
 families = ["rust", "clippy", "format", "source-rules", "python"]
-floor = { batch = 8, tip = 2 }
+floor = { batch = 2, tip = 2 }
 ```
 
 `families` lists the check families the machine can run, here the Rust tests,
@@ -1333,21 +1330,16 @@ What is shared, and what is not:
 
 - **Tickets, the result cache and records are shared** through the hub.
 - **Build output is not shared.** Incremental builds belong to one path on one
-  machine, and Windows output is useless to a Mac. The fleet grows by placing
-  whole sessions, each with a build tree, on machines with cores.
+  machine. The fleet grows by placing whole
+  sessions, each with a build tree, on machines with cores.
 - **A machine is known by an ID** the daemon creates and stores, not by its
   hostname, so renaming a machine does not split its history.
 
 How the machines divide verification:
 
-- A check with `platforms = "any"` needs one pass anywhere. Cygnus can therefore
-  verify pure engine logic for the whole fleet.
-- A check with a platform list needs a pass on each. Only the Macs run the
-  browser, oracle and app families.
+- A check with `platforms = "any"` needs one pass anywhere, on any machine.
+- A check with a platform list needs a pass on each platform it lists.
 - A daemon prefers the checks only it can run, then claims portable ones.
-
-On Windows the daemon uses a named pipe for the client, job objects to end a
-tree's processes, and CPU seconds for cost.
 
 ## Records and metrics
 
@@ -1604,7 +1596,7 @@ These are the choices that were weighed against measurements and set aside.
 
 These checks are run by hand in the rehearsal described under
 [The switch from Enact](#the-switch-from-enact), on jarvis first and then on
-multivac and cygnus. They are the condition for the switch.
+multivac. They are the condition for the switch.
 
 ### The first check
 
@@ -1628,8 +1620,8 @@ stay correct when they race.
   same commit in another tree and run it again. Expect every check from cache
   and no build started.
 - **Result cache across machines.** Land a change to `beryl_kernel` on jarvis.
-  Expect cygnus to claim and run the portable Rust checks for that tip, and
-  jarvis to show them as cached with cygnus as the source.
+  Expect multivac to claim and run the portable Rust checks for that tip, and
+  jarvis to show them as cached with multivac as the source.
 - **A rebase that matters and one that does not.** Start two tickets from the
   same tip. Land one that edits `ui/`. Land the other, which edits
   `beryl_rules`. Expect its gate to be nearly all cache hits. Repeat with both
@@ -1684,7 +1676,7 @@ These show that cores, trees and workers go where the rules say.
 - **Improvement share.** File several improvement tickets and twenty product
   tickets. Expect at least three of the next twenty hand-offs to be improvement
   tickets, largest saving first.
-- **A batch job.** Start a tournament with `ignite run --class batch` on cygnus
+- **A batch job.** Start a tournament with `ignite run --class batch` on multivac
   and then several landings. Expect the tournament to keep its floor of cores
   and the landings to take the rest.
 - **Shares between epics.** Give one epic `--workers 5` and another

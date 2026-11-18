@@ -18,14 +18,12 @@ use crate::manifest::RebuildEdit;
 #[serde(rename_all = "lowercase")]
 pub enum Os {
     Macos,
-    Windows,
 }
 
 impl Os {
     pub fn as_str(self) -> &'static str {
         match self {
             Os::Macos => "macos",
-            Os::Windows => "windows",
         }
     }
 
@@ -33,8 +31,6 @@ impl Os {
     pub fn current() -> Option<Os> {
         if cfg!(target_os = "macos") {
             Some(Os::Macos)
-        } else if cfg!(windows) {
-            Some(Os::Windows)
         } else {
             None
         }
@@ -312,8 +308,8 @@ browser-pages = 9
 oracle = 1
 bench-vm = 1
 
-[machine.cygnus]
-os = "windows"
+[machine.multivac]
+os = "macos"
 ticket_trees = 6
 landing_trees = 2
 families = ["rust", "clippy", "format", "source-rules", "python"]
@@ -338,9 +334,9 @@ products = ["clippy", "rust-tests"]
         assert_eq!((jarvis.ticket_trees, jarvis.landing_trees), (24, 3));
         assert_eq!(jarvis.resources["browser-pages"], 9);
         assert_eq!(jarvis.families, None);
-        let cygnus = config.machine("cygnus").unwrap();
-        assert_eq!(cygnus.os, Some(Os::Windows));
-        assert_eq!(cygnus.floor, Floor { batch: 8, tip: 2 });
+        let multivac = config.machine("multivac").unwrap();
+        assert_eq!(multivac.os, Some(Os::Macos));
+        assert_eq!(multivac.floor, Floor { batch: 8, tip: 2 });
         assert_eq!(config.rebuild[1].name, "one-card");
     }
 
@@ -356,10 +352,10 @@ products = ["clippy", "rust-tests"]
     fn semantic_errors_name_the_key() {
         let text = DOCUMENT_EXAMPLES.replace("landing_trees = 2", "landing_trees = 0");
         let error = Config::parse("ignite.toml", &text).unwrap_err();
-        assert_eq!(error.key, "machine.cygnus.landing_trees");
+        assert_eq!(error.key, "machine.multivac.landing_trees");
         assert_eq!(
             error.to_string(),
-            "ignite.toml: machine.cygnus.landing_trees: must be above zero"
+            "ignite.toml: machine.multivac.landing_trees: must be above zero"
         );
         let text = DOCUMENT_EXAMPLES.replace("name = \"one-card\"", "name = \"kernel-body\"");
         assert_eq!(
@@ -373,6 +369,6 @@ products = ["clippy", "rust-tests"]
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../ignite.toml");
         let text = std::fs::read_to_string(path).unwrap();
         let config = Config::parse("ignite.toml", &text).unwrap();
-        assert!(config.machine.len() >= 3);
+        assert!(config.machine.len() >= 2);
     }
 }

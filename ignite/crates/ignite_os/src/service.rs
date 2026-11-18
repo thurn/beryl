@@ -1,12 +1,10 @@
-//! Starting the daemon at login: a launch agent on macOS, a scheduled task on Windows.
+//! Starting the daemon at login: a launch agent.
 
 use std::io;
 use std::path::Path;
 
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(windows)]
-mod windows;
 
 pub trait Service {
     /// Registers `executable args` to start at login, replacing an earlier registration.
