@@ -17,6 +17,13 @@
 //! longer before each new attempt, and is reported to the hub after a few failures (see
 //! [`backoff`]).
 //!
+//! The idle loop in the daemon decides whether idle work may run, and each job runs in a verb
+//! process of its own as the internal verb `idle-job` ([`IdleJobVerb`], started by [`Idle::drive`]),
+//! so a restart of the daemon does not cut it. Several processes then share the state file:
+//! every change to it reads the file again under a file lock (see `share`), and a job holds a
+//! second file lock for its whole run, so `ignite rebuild`, `ignite audit` and the idle job
+//! never edit one tree at once.
+//!
 //! Holding the trees under their disk limit is not a job: the idle loop calls
 //! [`Idle::hold_disk`] every round, which measures at most every ten minutes.
 
@@ -24,7 +31,10 @@ mod audit;
 mod backoff;
 mod disk;
 mod explore;
+mod launch;
 mod rebuild;
+mod remote;
+mod share;
 mod state;
 #[cfg(test)]
 mod tests;
@@ -46,7 +56,9 @@ use crate::trees::{DiskReport, Trees};
 
 pub use audit::AuditSummary;
 pub use disk::{DISK_EVERY, ROOM_GB};
+pub use launch::{IdleJobVerb, JobRunner, JobWait, ServerJobs};
 pub use rebuild::RebuildCount;
+pub use remote::RemoteIdleHost;
 use state::{Report, State};
 
 /// One piece of idle work.
@@ -55,6 +67,32 @@ pub enum IdleJob {
     Explore { family: String },
     Audit,
     Rebuild { name: String },
+}
+
+impl IdleJob {
+    /// The arguments of the `idle-job` request that runs this job.
+    pub fn to_args(&self) -> Vec<String> {
+        match self {
+            IdleJob::Explore { family } => vec!["explore".to_owned(), family.clone()],
+            IdleJob::Audit => vec!["audit".to_owned()],
+            IdleJob::Rebuild { name } => vec!["rebuild".to_owned(), name.clone()],
+        }
+    }
+
+    /// The job that [`IdleJob::to_args`] named.
+    pub fn from_args(args: &[String]) -> Option<IdleJob> {
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        match args.as_slice() {
+            ["explore", family] => Some(IdleJob::Explore {
+                family: (*family).to_owned(),
+            }),
+            ["audit"] => Some(IdleJob::Audit),
+            ["rebuild", name] => Some(IdleJob::Rebuild {
+                name: (*name).to_owned(),
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// Where idle work runs, and the repository facts it needs. [`LiveHost`] is the real one.
@@ -175,8 +213,7 @@ pub struct Idle {
     state: Mutex<State>,
     /// Each family's share of exploration time, as the hub gives them; equal shares until then.
     shares: Mutex<Vec<(String, f64)>>,
-    /// Held while a job runs, so that `ignite rebuild` and the idle loop never edit one tree
-    /// at once.
+    /// Held while a job runs in this process (see [`Idle::work`]).
     work: Mutex<()>,
     /// When the trees' disk use was last measured, which [`Idle::hold_disk`] limits.
     disk_held: Mutex<Option<Timestamp>>,
@@ -286,7 +323,7 @@ impl Idle {
     /// Runs one job, after sending any reports the hub has not taken yet. A failure makes the
     /// job wait before it runs again; a job that ran and succeeded is cleared of its failures.
     pub fn run(&self, ctx: &Context, job: &IdleJob) -> Result<()> {
-        let _work = lock(&self.work);
+        let _work = self.work();
         self.send_reports(ctx);
         let ran = match job {
             IdleJob::Explore { family } => self.explore(ctx, family),
@@ -310,11 +347,45 @@ impl Idle {
         lock(&self.state)
     }
 
+    /// Reads the state file again, because another process (the idle job in its verb process,
+    /// `ignite rebuild`, a test run that sampled a cache hit) may have changed it. A file that
+    /// cannot be read leaves the state as it was.
+    fn refresh(&self) {
+        if let Ok(state) = State::load(&self.settings.state) {
+            *self.state() = state;
+        }
+    }
+
+    /// Takes the right to run a job: held for the job's whole run, in this process and in every
+    /// other (see the module documentation), so that `ignite rebuild`, `ignite audit` and the
+    /// idle job never edit one tree at once. The state is read again once it is held, because
+    /// the job that held it before may have changed it.
+    fn work(&self) -> Work<'_> {
+        let guard = lock(&self.work);
+        let file = share::lock(&self.settings.state, "job-lock");
+        self.refresh();
+        Work {
+            _guard: guard,
+            _file: file,
+        }
+    }
+
     /// Changes the state and saves it before returning.
     fn update<T>(&self, change: impl FnOnce(&mut State) -> T) -> Result<T> {
+        let changed = self.update_if(|state| Some(change(state)))?;
+        Ok(changed.expect("the change always saves"))
+    }
+
+    /// Reads the state file under its file lock, applies `change` and saves the result, unless
+    /// `change` returns `None`, which leaves the file alone.
+    fn update_if<T>(&self, change: impl FnOnce(&mut State) -> Option<T>) -> Result<Option<T>> {
+        let _file = share::lock(&self.settings.state, "state-lock");
+        self.refresh();
         let mut state = self.state();
         let value = change(&mut state);
-        state.save(&self.settings.state)?;
+        if value.is_some() {
+            state.save(&self.settings.state)?;
+        }
         Ok(value)
     }
 
@@ -359,6 +430,12 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// The right to run a job, from [`Idle::work`].
+struct Work<'a> {
+    _guard: MutexGuard<'a, ()>,
+    _file: Option<share::FileLock>,
+}
+
 /// The exit code for an error from idle work.
 fn error_reply(error: &Error) -> Reply {
     let exit = match error {
@@ -395,7 +472,7 @@ impl Verb for RebuildVerb {
                 "usage: ignite rebuild <name> | --list | --last",
             );
         };
-        let _work = lock(&self.idle.work);
+        let _work = self.idle.work();
         match self.idle.rebuild(ctx, name) {
             Ok(Some(count)) => {
                 // A measurement that works clears the idle job's failures, so it runs as due.
@@ -430,7 +507,7 @@ impl Verb for AuditVerb {
         if !req.args.iter().any(|a| a == "--now") {
             return Reply::text(Exit::Usage, "usage: ignite audit --now");
         }
-        let _work = lock(&self.idle.work);
+        let _work = self.idle.work();
         self.idle.send_reports(ctx);
         match self.idle.audit(ctx, true) {
             Ok(summary) => Reply::text(Exit::Success, summary.render()),

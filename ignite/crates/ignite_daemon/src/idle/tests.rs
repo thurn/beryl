@@ -31,6 +31,8 @@ use crate::trees::DiskReport;
 mod backoff;
 #[path = "disk_tests.rs"]
 mod disk;
+#[path = "launch_tests.rs"]
+mod launch;
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 

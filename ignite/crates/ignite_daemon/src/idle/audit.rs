@@ -82,30 +82,31 @@ impl HitSink for Idle {
             commit: commit.clone(),
             audited: false,
         };
-        let mut state = self.state();
-        let today = state.hits.entry(day).or_default();
-        let known = today.sampled.iter().any(|h| h.cached.key == cached.key)
-            || today
+        // A hit that cannot be saved is only a smaller sample.
+        let _ = self.update_if(|state| {
+            let today = state.hits.entry(day.clone()).or_default();
+            let known = today.sampled.iter().any(|h| h.cached.key == cached.key)
+                || today
+                    .lowest
+                    .as_ref()
+                    .is_some_and(|(_, h)| h.cached.key == cached.key);
+            if known {
+                return None;
+            }
+            if value < threshold() {
+                today.sampled.push(hit);
+            } else if today
                 .lowest
                 .as_ref()
-                .is_some_and(|(_, h)| h.cached.key == cached.key);
-        if known {
-            return;
-        }
-        if value < threshold() {
-            today.sampled.push(hit);
-        } else if today
-            .lowest
-            .as_ref()
-            .is_none_or(|(lowest, _)| value < *lowest)
-        {
-            today.lowest = Some((value, hit));
-        } else {
-            return;
-        }
-        state.hits.retain(|day, _| *day >= cutoff);
-        // A hit that cannot be saved is only a smaller sample.
-        let _ = state.save(&self.settings.state);
+                .is_none_or(|(lowest, _)| value < *lowest)
+            {
+                today.lowest = Some((value, hit));
+            } else {
+                return None;
+            }
+            state.hits.retain(|day, _| *day >= cutoff);
+            Some(())
+        });
     }
 }
 
