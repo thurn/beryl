@@ -85,6 +85,9 @@ crate::tables! {
         state: String,
         ticket: Option<String>,
         files: String,
+        command: Option<String>,
+        command_since: Option<String>,
+        command_running: bool,
     }
 
     Reservation = "reservations" {

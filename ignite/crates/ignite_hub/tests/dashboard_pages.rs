@@ -310,7 +310,7 @@ fn routes_the_dashboard_does_not_own_are_left_alone() {
     let now = Timestamp::parse(NOW).unwrap();
     for (method, target) in [
         ("GET", "/proj/tickets/a/b"),
-        ("GET", "/proj/machines"),
+        ("GET", "/proj/nowhere"),
         ("POST", "/proj/"),
     ] {
         assert!(

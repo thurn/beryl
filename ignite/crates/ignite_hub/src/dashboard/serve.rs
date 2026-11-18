@@ -13,10 +13,11 @@ use sha2::{Digest, Sha256};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{feed, tickets};
 
+use super::attention::PAGES;
 use super::common::{SITE_ICONS, brand};
 use super::components::{self as c, PageOptions, esc};
 use super::references::{dashboard_root, percent_encode, ticket_url};
-use super::{assets, home, status, ticket};
+use super::{assets, explore, home, landings, machines, pool, status, ticket, tips};
 use crate::routes::{Request, Response};
 
 /// What a path under the project names.
@@ -24,14 +25,29 @@ use crate::routes::{Request, Response};
 enum Route {
     /// `/`.
     Home,
+    /// One of the fleet pages (`machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
+    Fleet(&'static str),
     /// `/tickets/<name>`, with an optional trailing slash.
     Ticket(String),
+}
+
+/// The fleet page that `path` (`/machines`, with an optional trailing slash) names.
+fn fleet_page(path: &str) -> Option<&'static str> {
+    let name = path.strip_prefix('/')?;
+    let name = name.strip_suffix('/').unwrap_or(name);
+    PAGES
+        .iter()
+        .find(|(page, _)| *page == name)
+        .map(|(page, _)| *page)
 }
 
 fn route(path: &str) -> Option<Route> {
     match path {
         "" | "/" => Some(Route::Home),
         _ => {
+            if let Some(page) = fleet_page(path) {
+                return Some(Route::Fleet(page));
+            }
             let name = path.strip_prefix("/tickets/")?;
             let name = name.strip_suffix('/').unwrap_or(name);
             (!name.is_empty() && !name.contains('/')).then(|| Route::Ticket(name.to_owned()))
@@ -193,7 +209,7 @@ pub fn serve(
                     panel().map_or_else(|error| failed(&error), |body| fragment(&seq, body, head)),
                 );
             }
-            match home::options(conn, &root, &seq) {
+            match home::options(conn, &root, &seq, now) {
                 Err(error) => failed(&error),
                 Ok(options) if fragment_kind == Some("all") => match panel() {
                     Err(error) => failed(&error),
@@ -205,6 +221,23 @@ pub fn serve(
                         fragment(&seq, body, head)
                     }
                 },
+                Ok(options) => page_reply(&options, if_none_match, head),
+            }
+        }
+        Route::Fleet(page) => {
+            let built = match page {
+                "machines" => machines::options(conn, &root, &seq, now),
+                "pool" => pool::options(conn, &root, &seq, now),
+                "epics" => pool::epics(conn, &root, &seq, now),
+                "landings" => landings::options(conn, &root, &seq, now),
+                "tips" => tips::options(conn, &root, &seq, now),
+                _ => explore::options(conn, &root, &seq, now),
+            };
+            match built {
+                Err(error) => failed(&error),
+                Ok(options) if fragment_kind == Some("all") => {
+                    fragment(&seq, regions(&options), head)
+                }
                 Ok(options) => page_reply(&options, if_none_match, head),
             }
         }

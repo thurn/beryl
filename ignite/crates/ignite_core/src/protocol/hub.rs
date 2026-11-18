@@ -66,6 +66,9 @@ pub struct WorkerState {
     /// When that command started, or when it ended if it is no longer running.
     #[serde(default)]
     pub command_since: Option<Timestamp>,
+    /// Whether that command is still running.
+    #[serde(default)]
+    pub command_running: bool,
 }
 
 /// `POST /machines/heartbeat`.

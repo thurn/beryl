@@ -35,6 +35,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 3,
         sql: include_str!("feed.sql"),
     },
+    Migration {
+        version: 4,
+        sql: include_str!("workers_command.sql"),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

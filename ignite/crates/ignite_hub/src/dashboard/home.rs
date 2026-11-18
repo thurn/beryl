@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 
 use ignite_core::protocol::tickets::Status;
+use ignite_core::time::Timestamp;
 
+use super::attention;
 use super::common::{SITE_ICONS, brand, children_progress, person, status_dot, ticket_heading};
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{HomeCard, Progress, ReadError, home_data};
@@ -206,7 +208,15 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
 }
 
 /// The page for the router.
-pub(crate) fn options(conn: &Connection, root: &str, seq: &str) -> Result<PageOptions, ReadError> {
+pub(crate) fn options(
+    conn: &Connection,
+    root: &str,
+    seq: &str,
+    now: Timestamp,
+) -> Result<PageOptions, ReadError> {
     let (cards, counts) = home_data(conn)?;
-    Ok(page(root, &cards, &counts, seq))
+    let mut options = page(root, &cards, &counts, seq);
+    let attention = attention::line(conn, root, now)?;
+    options.body = attention + &options.body;
+    Ok(options)
 }

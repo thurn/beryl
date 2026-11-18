@@ -270,38 +270,11 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
         .unwrap_or_else(|| failure(404, "Unknown route"))
 }
 
-/// One dashboard page's renderer: its HTML, or `None` for a path that is not its own.
-type Page = fn(&Connection, &str, Timestamp) -> Option<String>;
-
-/// The dashboard's pages. The ticket views need the project, the query and the request's
-/// headers, so [`dashboard::serve::serve`] answers them; each other page renders from the path
+/// The dashboard's pages, which [`dashboard::serve::serve`] routes and renders from the path
 /// after `/<project>`.
 fn page(conn: &mut Connection, request: &Request, project: &str, now: Timestamp) -> Response {
-    if let Some(response) = dashboard::serve::serve(conn, request, project, now) {
-        return response;
-    }
-    if request.method != "GET" {
-        return failure(404, "Unknown route");
-    }
-    let pages: [Page; 5] = [
-        dashboard::machines::render,
-        dashboard::pool::render,
-        dashboard::landings::render,
-        dashboard::tips::render,
-        dashboard::explore::render,
-    ];
-    pages
-        .iter()
-        .find_map(|render| render(conn, &request.path, now))
-        .map_or_else(
-            || failure(404, "Unknown route"),
-            |html| Response {
-                status: 200,
-                content_type: "text/html; charset=utf-8",
-                body: html.into_bytes(),
-                headers: Vec::new(),
-            },
-        )
+    dashboard::serve::serve(conn, request, project, now)
+        .unwrap_or_else(|| failure(404, "Unknown route"))
 }
 
 fn parse_query(query: &str) -> Vec<(String, String)> {

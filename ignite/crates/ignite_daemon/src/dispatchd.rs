@@ -269,7 +269,8 @@ impl Dispatcher {
                     ticket: held.or(reserved.map(|r| &r.ticket)).cloned(),
                     files: member.files.clone(),
                     command: command.as_ref().map(|c| c.command.clone()),
-                    command_since: command.map(|c| c.since),
+                    command_since: command.as_ref().map(|c| c.since),
+                    command_running: command.is_some_and(|c| c.running),
                 }
             })
             .collect())

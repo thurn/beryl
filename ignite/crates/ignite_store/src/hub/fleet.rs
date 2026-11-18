@@ -62,8 +62,10 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
             ignite_core::protocol::hub::WorkerRole::Dispatcher => "dispatcher",
         };
         tx.execute(
-            "INSERT OR REPLACE INTO workers (machine, session, app, role, state, ticket, files)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT OR REPLACE INTO workers
+               (machine, session, app, role, state, ticket, files, command, command_since,
+                command_running)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 machine,
                 worker.session.as_str(),
@@ -72,6 +74,9 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
                 worker.state,
                 worker.ticket.as_ref().map(ToString::to_string),
                 files,
+                worker.command,
+                worker.command_since.map(|since| since.to_string()),
+                worker.command_running,
             ],
         )?;
     }
@@ -105,7 +110,8 @@ pub fn machines(conn: &Connection) -> Result<Vec<rows::Machine>> {
 /// Every worker of a machine, ordered by session.
 pub fn workers(conn: &Connection, machine: &str) -> Result<Vec<rows::Worker>> {
     let mut statement = conn.prepare(
-        "SELECT machine, session, app, role, state, ticket, files
+        "SELECT machine, session, app, role, state, ticket, files, command, command_since,
+                command_running
          FROM workers WHERE machine = ?1 ORDER BY session",
     )?;
     let workers = statement
@@ -118,6 +124,9 @@ pub fn workers(conn: &Connection, machine: &str) -> Result<Vec<rows::Worker>> {
                 state: row.get(4)?,
                 ticket: row.get(5)?,
                 files: row.get(6)?,
+                command: row.get(7)?,
+                command_since: row.get(8)?,
+                command_running: row.get(9)?,
             })
         })?
         .collect::<std::result::Result<_, _>>()?;
@@ -230,6 +239,7 @@ mod tests {
             files: vec!["rust/a.rs".into()],
             command: None,
             command_since: None,
+            command_running: false,
         }
     }
 
@@ -352,5 +362,31 @@ mod tests {
         assert_eq!(recent[0].ticket, "T29");
         assert!(recent.windows(2).all(|pair| pair[0].seq > pair[1].seq));
         assert_eq!(recent_handoffs(&conn, "m-7f3a", 3).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn a_heartbeat_carries_the_command_each_worker_runs() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let clock = clock();
+        register(&conn, &register_message(), clock.now()).unwrap();
+        let mut running = worker("local_1", "working", Some("q1.1"));
+        running.command = Some("test".into());
+        running.command_since = Some(clock.now());
+        running.command_running = true;
+        let beat = Heartbeat {
+            machine: "m-7f3a".parse().unwrap(),
+            version: "d97ed0e".into(),
+            workers: vec![running, worker("local_2", "idle", None)],
+        };
+        heartbeat(&mut conn, &beat, clock.now()).unwrap();
+        let stored = workers(&conn, "m-7f3a").unwrap();
+        assert_eq!(stored[0].command.as_deref(), Some("test"));
+        assert_eq!(
+            stored[0].command_since.as_deref(),
+            Some("2026-11-17T14:00:00.000Z")
+        );
+        assert!(stored[0].command_running);
+        assert_eq!(stored[1].command, None);
+        assert!(!stored[1].command_running);
     }
 }
