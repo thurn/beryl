@@ -124,6 +124,7 @@ fn spec_file(grant: Option<GrantFile>) -> SpecFile {
         env: Vec::new(),
         queued_s: 0.0,
         jobserver: None,
+        build_jobs: None,
         hang_limit_s: None,
         grant,
     }

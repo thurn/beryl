@@ -362,8 +362,8 @@ mod grants {
         fs::remove_dir_all(&root).unwrap();
     }
 
-    /// A Cargo build that only compiles runs under the supervisor's jobserver, without
-    /// `CARGO_BUILD_JOBS`. Its job slots grow when another grant is released, and it gives cores
+    /// A Cargo build that only compiles runs under the supervisor's jobserver, with
+    /// `CARGO_BUILD_JOBS` at the most one command may hold. Its job slots grow when another grant is released, and it gives cores
     /// back while a landing waits, so the landing gets them before the build ends.
     #[test]
     fn a_cargo_build_takes_job_slots_as_its_grant_grows_and_shrinks_for_a_landing() {
@@ -379,7 +379,7 @@ mod grants {
         fs::write(
             &cargo,
             r#"#!/bin/sh
-    [ -z "$CARGO_BUILD_JOBS" ] || { echo "CARGO_BUILD_JOBS is $CARGO_BUILD_JOBS"; exit 1; }
+    [ "$CARGO_BUILD_JOBS" = 4 ] || { echo "CARGO_BUILD_JOBS is $CARGO_BUILD_JOBS"; exit 1; }
     exec 3<>"${CARGO_MAKEFLAGS#*fifo:}"
     dd bs=1 count=1 <&3 >/dev/null 2>&1
     echo go > "$STARTED"
@@ -424,6 +424,62 @@ mod grants {
         assert_eq!(result.exit, Some(0), "{output}");
         assert!(output.contains("took 3 slots\n"), "{output}");
         assert!(output.contains("cores 2\n"), "{output}");
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A build started while the machine was busy stayed on its first core after the machine
+    /// freed up: only a command whose first word was `cargo` got a jobserver, and the `b3d`
+    /// product runs Cargo from a Python script. Now a script that starts Cargo inside it is
+    /// granted one core, and once another grant is released its Cargo takes three more job
+    /// slots. Its tests still run on the grant's first size.
+    #[test]
+    fn cargo_inside_a_script_takes_job_slots_as_the_grant_grows() {
+        let root = scratch("script");
+        let scheduler = six_cores();
+        let holder = scheduler.acquire(&ask(Class::Agent, 4));
+        let other = scheduler.acquire(&ask(Class::Agent, 1));
+        let started = signal(&root, "started");
+        // A stand-in for Cargo that takes slots from the jobserver as compiler jobs would: the
+        // read blocks until the FIFO holds three bytes.
+        let cargo = root.join("cargo");
+        fs::write(
+            &cargo,
+            r#"#!/bin/sh
+    echo "jobs $CARGO_BUILD_JOBS, tests $NEXTEST_TEST_THREADS"
+    echo go > "$STARTED"
+    [ -n "$CARGO_MAKEFLAGS" ] || { echo "no jobserver"; exit 1; }
+    exec 3<>"${CARGO_MAKEFLAGS#*fifo:}"
+    dd bs=1 count=3 <&3 >/dev/null 2>&1
+    echo "took 3 slots"
+    printf '+++' >&3
+    "#,
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let mut spec = shell(
+            &root,
+            r#"echo "script starts"; "$CARGO" build; echo "script ends""#,
+        );
+        spec.cores = 4;
+        spec.env.extend([
+            ("STARTED".to_owned(), started.display().to_string()),
+            ("CARGO".to_owned(), cargo.display().to_string()),
+        ]);
+        let launcher = launcher(&root).with_scheduler(Arc::clone(&scheduler));
+        let run = thread::spawn(move || launcher.run(&spec));
+
+        fs::read_to_string(&started).unwrap();
+        scheduler.release(&holder);
+        let result = run.join().unwrap();
+        scheduler.release(&other);
+
+        let output = fs::read_to_string(&result.output).unwrap();
+        assert_eq!(result.exit, Some(0), "{output}");
+        assert!(output.contains("jobs 4, tests 1\n"), "{output}");
+        assert!(output.contains("took 3 slots\nscript ends\n"), "{output}");
         fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -1,16 +1,21 @@
-//! The jobserver a supervisor runs a Cargo build under, so that the build follows its grant as
-//! the grant shrinks and grows.
+//! The jobserver a supervisor runs its command under, so that every Cargo build the command
+//! starts follows the grant as the grant shrinks and grows.
 //!
 //! Cargo takes its job slots from a FIFO in the GNU make jobserver protocol: one byte per slot
 //! after the first, which every process holds without a byte. The supervisor makes the FIFO in
-//! the run directory with one byte per granted core after the first, and names it to Cargo in
-//! `CARGO_MAKEFLAGS`. About every [`FOLLOW_EVERY`] it rereads the grant's cores file, which the
-//! scheduler rewrites when the grant changes. When the size rises it writes a byte for each new
-//! slot. When it falls it reads back bytes, but only those in the pipe, which no compile job
-//! holds; a slot a job holds comes back when the job ends and is read back on a later pass. Cargo
-//! then runs fewer jobs, and a waiting landing gets a long build's cores within seconds.
+//! the run directory with one byte per granted core after the first, and names it in
+//! `CARGO_MAKEFLAGS`. Every command gets one, whatever its first word: a Cargo run that `uv`,
+//! `just` or a script starts inherits the variable and follows the grant too. About every
+//! [`FOLLOW_EVERY`] the supervisor rereads the grant's cores file, which the scheduler rewrites
+//! when the grant changes. When the size rises it writes a byte for each new slot. When it falls
+//! it reads back bytes, but only those in the pipe, which no compile job holds; a slot a job
+//! holds comes back when the job ends and is read back on a later pass. Cargo then runs fewer
+//! jobs, and a waiting landing gets a long build's cores within seconds.
 //!
-//! Cargo ignores the jobserver when `CARGO_BUILD_JOBS` is set, so the build runs without it.
+//! Cargo takes its slots from an inherited jobserver whatever `CARGO_BUILD_JOBS` says (measured
+//! with Cargo 1.98: a build with `CARGO_BUILD_JOBS=1` ran six build scripts at once on six
+//! bytes). The supervisor still sets it to the most one command may hold, because Cargo passes
+//! it to build scripts as `NUM_JOBS`.
 
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
@@ -112,10 +117,11 @@ pub(super) fn read_cores(path: &Path) -> Option<u32> {
     fs::read_to_string(path).ok()?.trim().parse().ok()
 }
 
-/// Whether `args` run a Cargo command that only compiles, whose jobs end within seconds, so it
-/// can give cores back while it runs. `cargo test`, `nextest` and `run` are not: the tests or
-/// the program they run take as many threads as they started with, which the jobserver does not
-/// control.
+/// Whether `args` run a Cargo command that only compiles, whose jobs end within seconds, so its
+/// grant can shrink while it runs. Every command runs under the jobserver, but only these give
+/// cores back: `cargo test`, `nextest`, `run` and any other command may run tests or a program
+/// that take as many threads as they started with (`NEXTEST_TEST_THREADS` and the like), which
+/// the jobserver does not control.
 pub(super) fn compiles_only(args: &[String]) -> bool {
     const COMPILES: [&str; 5] = ["build", "check", "clippy", "rustc", "doc"];
     let Some((program, rest)) = args.split_first() else {

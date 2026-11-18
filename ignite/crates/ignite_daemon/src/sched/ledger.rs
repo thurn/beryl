@@ -35,8 +35,8 @@ struct Held {
     cores: u32,
     resources: Vec<String>,
     memory_mb: Option<u64>,
-    /// For a growing grant, the cores it asked for, capped at two thirds of the machine, which
-    /// it grows to; `None` for a grant that does not grow.
+    /// For a grant with a cores file, the cores it asked for, capped at two thirds of the
+    /// machine, which it grows to; `None` for a grant that does not grow.
     grows_to: Option<u32>,
     shrinks: bool,
     /// Granted after the last memory reading, so that reading does not yet show its memory.
@@ -373,9 +373,11 @@ impl Ledger {
 
     /// Whether waiter `id`, which would be granted `cores`, waits instead for lower classes to
     /// give back cores that shrink: it would start short of what it wants, it has waited under
-    /// [`RECLAIM_SECONDS`], and it neither shrinks nor grows itself. A command that shrinks is
-    /// a build that may find nothing to compile, and one that grows takes the cores once they
-    /// are free, so both start at once.
+    /// [`RECLAIM_SECONDS`], and it neither shrinks nor rereads its cores file. A command that
+    /// shrinks is a build that may find nothing to compile, and one that rereads its cores file
+    /// starts more threads once the cores are free, so both start at once. A command that only
+    /// follows its grant through the jobserver still waits: what it runs besides Cargo, such as
+    /// tests, keeps the thread count it started with.
     fn waits_to_reclaim(&self, id: u64, cores: u32, now: Timestamp) -> bool {
         let waiter = &self.waiting[index_of(&self.waiting, id)];
         cores < self.want(id)
@@ -453,8 +455,13 @@ impl Ledger {
 
     fn hold(&mut self, waiter: Waiter, cores: u32, now: Timestamp) -> Grant {
         let queued_s = now.seconds_since(waiter.since).max(0.0) as u64;
-        let grows = waiter.request.grows && waiter.request.cores_file.is_some();
-        let grows_to = grows.then(|| waiter.request.cores.clamp(1, self.limits.max_per_command()));
+        // A grant with a cores file grows: its command follows the file through its jobserver,
+        // and a command that rereads the file starts more threads.
+        let grows_to = waiter
+            .request
+            .cores_file
+            .is_some()
+            .then(|| waiter.request.cores.clamp(1, self.limits.max_per_command()));
         self.held.insert(
             waiter.id,
             Held {

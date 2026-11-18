@@ -25,6 +25,15 @@ fn growing(class: Class, cores: u32, file: PathBuf) -> GrantRequest {
     }
 }
 
+/// A command that only follows its grant through the jobserver, such as a script that runs
+/// Cargo and then a program, or a test build that also runs the tests.
+fn under_jobserver(class: Class, cores: u32, file: PathBuf) -> GrantRequest {
+    GrantRequest {
+        cores_file: Some(file),
+        ..ask(class, cores)
+    }
+}
+
 fn agent_cores(ledger: &Ledger) -> u32 {
     ledger.status().classes[1].cores
 }
@@ -123,4 +132,36 @@ fn a_growing_commands_file_shows_its_grant_rise_as_another_command_ends() {
     assert_eq!(read(), "16");
     scheduler.release(&grant);
     fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A build started on one core while the machine was busy stayed on one core: only a command
+/// that reread its cores file grew, and a script that runs Cargo does not. A grant with a cores
+/// file now grows for its jobserver, but it still waits for shrinking grants before it starts
+/// short, because what it runs besides Cargo keeps the thread count it started with.
+#[test]
+fn a_grant_followed_through_the_jobserver_grows_and_still_waits_to_reclaim() {
+    let mut ledger = Ledger::new(limits());
+    let holder = ledger.enqueue(ask(Class::Agent, 16), T0);
+    ledger.enqueue(ask(Class::Agent, 7), T0);
+    assert_eq!(ledger.step(T0).granted.len(), 2);
+    let script = ledger.enqueue(
+        under_jobserver(Class::Agent, 12, "/runs/s/cores".into()),
+        T0,
+    );
+    let step = ledger.step(T0);
+    assert_eq!(step.granted[0].id, script);
+    assert_eq!(step.granted[0].cores, 1);
+
+    ledger.release(holder);
+    let step = ledger.step(at(1.0));
+    assert_eq!(step.resized, [(script, 12)]);
+
+    // With a shrinking build of a lower class holding cores, a landing under the jobserver
+    // waits for them instead of starting on the one core that is free.
+    let mut ledger = Ledger::new(limits());
+    ledger.enqueue(compile(Class::Agent, 12), T0);
+    ledger.enqueue(ask(Class::Agent, 11), T0);
+    ledger.step(T0);
+    ledger.enqueue(under_jobserver(Class::Land, 4, "/runs/l/cores".into()), T0);
+    assert!(ledger.step(T0).granted.is_empty());
 }

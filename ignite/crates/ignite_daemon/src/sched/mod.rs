@@ -25,9 +25,10 @@
 //! - A request whose family usually needs more memory than is free waits while something else
 //!   runs.
 //! - A grant can change while its command runs. One that shrinks (a Cargo build that only
-//!   compiles) gives a core back on each step, down to one, while a higher class waits. One that
-//!   grows takes cores as they free up, to what it asked for, and the scheduler writes its
-//!   current size to its cores file (`IGNITE_CORES_FILE`), which the command rereads.
+//!   compiles) gives a core back on each step, down to one, while a higher class waits. One with
+//!   a cores file takes cores as they free up, to what it asked for, and the scheduler writes
+//!   its current size to the file (`IGNITE_CORES_FILE`), which the command's jobserver follows
+//!   and which a command that can use more threads rereads.
 //! - A request that would start short of what it wants, while lower classes hold cores that
 //!   shrink, waits up to [`RECLAIM_SECONDS`] for them before it takes what is free. A short
 //!   growing grant of `land` counts as a waiter, so freed cores go to it first.
@@ -80,10 +81,11 @@ pub struct GrantRequest {
     /// higher class waits: a Cargo build that only compiles, whose jobs end within seconds.
     pub shrinks: bool,
     /// The command rereads its cores file while it runs and starts more threads as its grant
-    /// grows. Only a grant with a `cores_file` grows.
+    /// grows, so it starts at once on what is free instead of waiting for shrinking grants.
     pub grows: bool,
     /// The file the scheduler keeps the grant's current size in, as a plain integer, from the
-    /// moment it is granted. Named to the command by `IGNITE_CORES_FILE`.
+    /// moment it is granted. Named to the command by `IGNITE_CORES_FILE`. A grant with one grows
+    /// as cores free up, to what it asked for: the command's jobserver follows the file.
     pub cores_file: Option<PathBuf>,
 }
 

@@ -1,5 +1,6 @@
 //! Named pipes (FIFOs), which a jobserver in the GNU make protocol is made of: the supervisor of
-//! a Cargo build keeps one byte in the pipe for each job slot the build may use beyond its first.
+//! a command keeps one byte in the pipe for each job slot its Cargo builds may use beyond the
+//! first.
 //! Windows has no FIFOs, so there a build keeps the size it started with.
 
 use std::fs::File;
@@ -10,6 +11,9 @@ use std::path::Path;
 mod macos;
 #[cfg(windows)]
 mod windows;
+
+/// Whether this system has FIFOs, so that a supervisor can keep a jobserver.
+pub const AVAILABLE: bool = !cfg!(windows);
 
 pub trait Fifos {
     /// Makes a FIFO at `path`, readable and writable by this user only, and opens it for both

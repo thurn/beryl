@@ -5,10 +5,10 @@
 //!
 //! - `spec.json`: what to run ([`SpecFile`]), written by the daemon before it starts the
 //!   supervisor.
-//! - `cores`: for a grant that shrinks or grows, its current size, which the scheduler rewrites
-//!   when it changes and the command finds in `IGNITE_CORES_FILE`.
-//! - `jobserver`: for a Cargo build that only compiles, the FIFO its job slots come from, kept
-//!   at the size in `cores` (see `jobserver`).
+//! - `cores`: for a command run under the scheduler, its grant's current size, which the
+//!   scheduler rewrites when it changes and the command finds in `IGNITE_CORES_FILE`.
+//! - `jobserver`: for a command run under the scheduler, the FIFO that the Cargo builds it runs
+//!   take their job slots from, kept at the size in `cores` (see `jobserver`).
 //! - `lock`: held exclusively by the supervisor for as long as it lives. Whoever wants the
 //!   result takes a shared lock on it, which blocks until the supervisor exits. This works for
 //!   a daemon that started the supervisor and for one that restarted since and is no longer its
@@ -51,6 +51,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::traits::{CommandSpec, Launcher, RunResult};
 use ignite_os::Native;
+use ignite_os::fifo;
 use ignite_os::proc::{Group, Processes};
 use ignite_os::usage::{ProcessUsage, TreeMeter, UsageReader};
 use serde::{Deserialize, Serialize};
@@ -106,10 +107,17 @@ pub struct SpecFile {
     pub env: Vec<(String, String)>,
     /// Seconds the command waited for its grant, copied into its usage.
     pub queued_s: f64,
-    /// For a Cargo build that only compiles, the grant's cores file: the supervisor runs the
-    /// build under a jobserver of its own that follows the file.
+    /// The grant's cores file, for a command run under the scheduler: the supervisor runs the
+    /// command under a jobserver of its own that follows the file, which every Cargo build the
+    /// command starts takes its job slots from.
     #[serde(default)]
     pub jobserver: Option<PathBuf>,
+    /// `CARGO_BUILD_JOBS` under the jobserver: the most cores one command may hold. Cargo takes
+    /// its job slots from an inherited jobserver whatever this says, but passes it to build
+    /// scripts as `NUM_JOBS`, so it must not be the grant's first size. Without a jobserver the
+    /// grant's first size in `env` stays.
+    #[serde(default)]
+    pub build_jobs: Option<u32>,
     /// Seconds after which the supervisor ends the command; `None` for no limit.
     #[serde(default)]
     pub hang_limit_s: Option<u64>,
@@ -206,14 +214,14 @@ impl SupervisedLauncher {
     }
 
     /// [`Self::start`] in run directory `dir`, made already, with the cores file a jobserver
-    /// follows, if any.
+    /// follows and the `CARGO_BUILD_JOBS` under it, if any.
     fn start_in(
         &self,
         dir: PathBuf,
         spec: &CommandSpec,
         env: Vec<(String, String)>,
         queued_s: f64,
-        jobserver: Option<PathBuf>,
+        jobserver: Option<(PathBuf, u32)>,
         grant: Option<GrantFile>,
     ) -> io::Result<Started> {
         let mut all_env = spec.env.clone();
@@ -223,7 +231,8 @@ impl SupervisedLauncher {
             cwd: spec.cwd.clone(),
             env: all_env,
             queued_s,
-            jobserver,
+            jobserver: jobserver.as_ref().map(|(file, _)| file.clone()),
+            build_jobs: jobserver.map(|(_, jobs)| jobs),
             hang_limit_s: spec.hang_limit_s,
             grant,
         };
@@ -287,9 +296,9 @@ impl SupervisedLauncher {
         format!("{nanos:020}-{}-{count}", std::process::id())
     }
 
-    /// Asks the scheduler for the command's cores. A Cargo build that only compiles shrinks
-    /// while a higher class waits and grows back, through its jobserver; a command that rereads
-    /// its cores file grows. Either keeps its size in `cores_file`.
+    /// Asks the scheduler for the command's cores. A grant with a `cores_file` keeps its size
+    /// there and grows as cores free up, which the command's jobserver follows. A Cargo build
+    /// that only compiles also shrinks while a higher class waits.
     fn grant(
         &self,
         spec: &CommandSpec,
@@ -307,7 +316,7 @@ impl SupervisedLauncher {
                     // command back while less than that is free.
                     memory_mb: self.usual_memory(&spec.args),
                     shrinks,
-                    grows: cores_file.is_some(),
+                    grows: spec.grows,
                     cores_file,
                 },
                 cancelled,
@@ -357,9 +366,17 @@ impl SupervisedLauncher {
             Ok(dir) => dir,
             Err(error) => return not_started(spec, &error),
         };
+        // Every command gets a jobserver, whatever its first word, so that the Cargo builds a
+        // script, `just` or `uv` starts follow the grant as it grows. Only a Cargo command that
+        // only compiles shrinks: what other commands run besides Cargo, such as tests, keeps
+        // the thread count it started with. Where there are no FIFOs, a command without a
+        // jobserver keeps the size it started with, unless it rereads its cores file.
         let shrinks = compiles_only(&spec.args);
-        let cores_file =
-            (self.scheduler.is_some() && (shrinks || spec.grows)).then(|| dir.join(CORES));
+        let cores_file = self
+            .scheduler
+            .as_ref()
+            .filter(|_| fifo::AVAILABLE || shrinks || spec.grows)
+            .map(|_| dir.join(CORES));
         let Some(grant) = self.grant(spec, shrinks, cores_file.clone(), &either) else {
             let _ = fs::remove_dir_all(&dir);
             return stopped(spec);
@@ -367,7 +384,10 @@ impl SupervisedLauncher {
         // Released when this function ends, however it ends.
         let held = GrantGuard::new(self.scheduler.clone(), grant);
         let grant = held.grant();
-        let jobserver = cores_file.filter(|_| shrinks);
+        let jobserver = cores_file
+            .filter(|_| fifo::AVAILABLE)
+            .zip(self.scheduler.as_ref())
+            .map(|(file, scheduler)| (file, scheduler.status().max_per_command));
         let file = GrantFile {
             class: spec.class,
             cores: grant.cores,
@@ -654,9 +674,9 @@ fn exit_code(status: ExitStatus) -> Option<i32> {
     status.code()
 }
 
-/// The jobserver for a Cargo build, with room for the grant's size when it started: the number
-/// in its cores file, or else `IGNITE_CORES`. Where none can be made (Windows has no FIFOs) the
-/// build runs on `CARGO_BUILD_JOBS`, and the reason is in its output.
+/// The jobserver for a command, with room for the grant's size when it started: the number
+/// in its cores file, or else `IGNITE_CORES`. Where none can be made the command runs on the
+/// grant's first size in `CARGO_BUILD_JOBS`, and the reason is in its output.
 fn open_jobserver(
     spec: &SpecFile,
     cores_file: &Path,
@@ -684,8 +704,8 @@ fn open_jobserver(
 }
 
 /// Starts the command as the leader of a group of its own and records the group's ID in `dir`.
-/// Under a jobserver, `CARGO_BUILD_JOBS` is removed, because Cargo ignores the jobserver while
-/// it is set.
+/// Under a jobserver, `CARGO_BUILD_JOBS` is the spec's `build_jobs`, so that the jobserver, not
+/// the grant's first size, limits the build.
 fn start_command(
     spec: &SpecFile,
     jobserver: Option<(String, String)>,
@@ -705,7 +725,11 @@ fn start_command(
         .stdout(output.try_clone()?)
         .stderr(output.try_clone()?);
     if let Some((name, value)) = jobserver {
-        command.env_remove("CARGO_BUILD_JOBS").env(name, value);
+        command.env(name, value);
+        match spec.build_jobs {
+            Some(jobs) => command.env("CARGO_BUILD_JOBS", jobs.to_string()),
+            None => command.env_remove("CARGO_BUILD_JOBS"),
+        };
     }
     let group = Native.spawn_group(&mut command)?;
     fs::write(dir.join(GROUP), group.id.to_string())?;
