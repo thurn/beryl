@@ -1280,6 +1280,23 @@ single listing and the families run at once above, prevent it:
   a round goes to anything but checks and builds, the round files an improvement
   ticket.
 
+How these work:
+
+- A claim's cost is measured in CPU seconds. Each check uses the lowest of its
+  last 20 recorded costs, because each recorded cost is an equal share of a
+  command that also paid its program's start-up.
+- The hub fixes the costs and `claim_seconds` for each tip and family the first
+  time any machine asks (`POST /tips/costs`). Each machine cuts batches over
+  every check of the family at the tip, so a batch number names the same checks
+  on every machine.
+- A covered check is left out only when its covering check reads at least its
+  inputs.
+- A round's record (`POST /tips/rounds`) counts any command with a results file
+  as running checks, other commands as listing, `queued_s` as waiting for cores,
+  and time inside builds as building. `ignite status` and the dashboard's tips
+  page show the last rounds. Only rounds of two minutes or more can file a
+  ticket, and an open ticket is reused without a comment.
+
 Expected: a round after a landing that touches one crate or one area finishes in
 under 5 minutes. A round after a change to the kernel crate or the lock file
 costs the build, the recordings and each large family run as a few commands.

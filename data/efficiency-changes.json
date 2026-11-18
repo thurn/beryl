@@ -294,5 +294,10 @@
     "label": "Kept listings (memory, local, hub) and the landing gate deciding which families a change can affect before it lists or builds anything",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Tip claims sized by measured cost instead of 50 checks, and a covered family (b3d-interface) not run beside the family that covers it",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]
