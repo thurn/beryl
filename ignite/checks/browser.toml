@@ -1,0 +1,156 @@
+# The browser check families, which play the UI headless against recorded game fixtures. Their
+# adapter is tools/src/beryl_tools/ignite/browser.py: it records the fixtures, serves ui/ with
+# Vite and runs the scripts in ui/scripts/, which print their checks with `--list` and write
+# Ignite's result lines when `IGNITE_RESULTS` is set (`recordResult` in ui/scripts/capture.mjs).
+# See docs/ignite.md, "Declaring a family".
+#
+# Every family needs a pass on macOS: the checks play the app's webview engine, WebKit on macOS,
+# and the ui-counts limits and the motion values are measured there. Each takes the
+# `browser-pages` resource, which replaces the page slots of ui/scripts/slots.mjs. The
+# `ui-deps` product is declared in ui.toml.
+
+# The `beryl_cli` executable, which records the game fixtures (`beryl_cli record-fixture`) and
+# serves the manual table's sessions.
+[product.cli]
+build = "cargo build --locked --quiet --bin beryl_cli"
+dir = "rust"
+inputs = ["crate:beryl_cli"]
+outputs = ["rust/target"]
+
+# The game screen played headless: one check per kept check of ui/scripts/kept.mjs (by title),
+# per verb, seat and layout of ui/scripts/verbs.mjs, and per prompt shape, seat and layout of
+# ui/scripts/shapes.mjs. Each check's own inputs are the modules its script imports and the
+# files they read, so a change to the verb cases reaches no kept check.
+[family.ui-test]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["cli", "ui-deps"]
+resources = ["browser-pages"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list ui-test"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run ui-test {checks}"
+inputs = [
+  "ui/src/**",
+  "ui/index.html",
+  "ui/vite.config.ts",
+  "ui/package.json",
+  "ui/public/**",
+  "ui/fixtures.json",
+  "crate:beryl_cli",
+  "tools/src/beryl_tools/ignite/browser.py",
+  "tools/src/beryl_tools/suites.py",
+]
+
+# The few kept checks slow CI plays today (`SMOKE_TITLES` in tools/src/beryl_tools/suites.py).
+[family.ui-smoke]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["cli", "ui-deps"]
+resources = ["browser-pages"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list ui-smoke"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run ui-smoke {checks}"
+inputs = [
+  "ui/src/**",
+  "ui/index.html",
+  "ui/vite.config.ts",
+  "ui/package.json",
+  "ui/public/**",
+  "ui/fixtures.json",
+  "crate:beryl_cli",
+  "tools/src/beryl_tools/ignite/browser.py",
+  "tools/src/beryl_tools/suites.py",
+]
+
+# One check per screen in ui/shots.json, which lists each phone screen once per phone size.
+[family.shots]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["cli", "ui-deps"]
+resources = ["browser-pages"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list shots"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run shots {checks}"
+inputs = [
+  "ui/src/**",
+  "ui/index.html",
+  "ui/vite.config.ts",
+  "ui/package.json",
+  "ui/public/**",
+  "ui/fixtures.json",
+  "ui/shots.json",
+  "ui/scripts/shots.mjs",
+  "ui/scripts/capture.mjs",
+  "ui/scripts/hang.mjs",
+  "ui/scripts/phone-faults.mjs",
+  "ui/scripts/screen-faults.mjs",
+  "ui/scripts/slots.mjs",
+  "ui/scripts/told.mjs",
+  "crate:beryl_cli",
+  "tools/src/beryl_tools/ignite/browser.py",
+]
+
+# One check per verb of ui/verbs.json and layout: the stepped capture of ui/scripts/stepped.mjs
+# held to the verb's values in data/ui-conventions.json (tools/src/beryl_tools/motion_measure.py).
+[family.motion]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["cli", "ui-deps"]
+resources = ["browser-pages"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list motion"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run motion {checks}"
+inputs = [
+  "ui/src/**",
+  "ui/index.html",
+  "ui/vite.config.ts",
+  "ui/package.json",
+  "ui/public/**",
+  "ui/fixtures.json",
+  "ui/verbs.json",
+  "ui/scripts/stepped.mjs",
+  "ui/scripts/capture.mjs",
+  "ui/scripts/fixture-views.mjs",
+  "ui/scripts/hang.mjs",
+  "ui/scripts/phone-faults.mjs",
+  "ui/scripts/screen-faults.mjs",
+  "ui/scripts/slots.mjs",
+  "ui/scripts/written-marks.mjs",
+  "data/ui-conventions.json",
+  "data/arena-motion.json",
+  "crate:beryl_cli",
+  "tools/src/beryl_tools/ignite/browser.py",
+  "tools/src/beryl_tools/suites.py",
+  "tools/src/beryl_tools/conventions.py",
+  "tools/src/beryl_tools/motion_measure.py",
+  "tools/src/beryl_tools/video.py",
+  "tools/src/beryl_tools/video_measure.py",
+  "tools/src/beryl_tools/video_shape.py",
+]
+
+# One check per fixture of data/ui-counts.json: the work the UI does to play it in each layout
+# there, held to its limits within their tolerance.
+[family.ui-counts]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["cli", "ui-deps"]
+resources = ["browser-pages"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list ui-counts"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run ui-counts {checks}"
+inputs = [
+  "ui/src/**",
+  "ui/index.html",
+  "ui/vite.config.ts",
+  "ui/package.json",
+  "ui/public/**",
+  "ui/fixtures.json",
+  "data/ui-counts.json",
+  "ui/scripts/counts.mjs",
+  "ui/scripts/fixture-views.mjs",
+  "ui/scripts/hang.mjs",
+  "ui/scripts/moments.mjs",
+  "ui/scripts/slots.mjs",
+  "crate:beryl_cli",
+  "tools/src/beryl_tools/ignite/browser.py",
+]

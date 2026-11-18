@@ -1,5 +1,7 @@
 // Captures UI states with headless Playwright WebKit; `by ui-shots` (tools/) serves the UI and
 // runs this. Usage: node scripts/shots.mjs <base-url> <out-dir> <shots.json> [name...]
+// or, to print each shot's check as a JSON line and take none (Ignite's `list`,
+// docs/ignite.md "Declaring a family"): node scripts/shots.mjs --list <shots.json>
 // Captures several at once (capture.mjs' workers) and prints each screenshot's path; exits
 // non-zero if a page logs an error, cuts off text (capture.mjs' clippedText), draws the game
 // otherwise than its fixture's view has it (screenFaults), crowds a control (crowdedControls),
@@ -15,6 +17,7 @@ import {
     compareSheet,
     coverage,
     crowdedControls,
+    failureOf,
     launch,
     openPage,
     phoneFaults,
@@ -35,6 +38,13 @@ const RESIZED = [
     { width: 1180, height: 820 },
     { width: 2560, height: 1080 },
 ];
+
+if (process.argv[2] === "--list") {
+    const file = process.argv[3] ?? "shots.json";
+    for (const { name } of JSON.parse(await readFile(file, "utf8")).shots)
+        console.log(JSON.stringify({ check: `shots:${name}` }));
+    process.exit(0);
+}
 
 const [base, out, list, ...only] = process.argv.slice(2);
 if (!base || !out || !list) {
@@ -156,7 +166,7 @@ async function capture(browser, shot) {
     if (errors.length) {
         console.error(`ui-shots: ${shot.name}: ${errors.join("\n  ")}`);
     }
-    return { ok: !errors.length, covered };
+    return { ok: !errors.length, covered, errors };
 }
 
 const browser = await launch();
@@ -166,13 +176,14 @@ try {
     for (const shot of chosen) {
         await run(async () => {
             const started = performance.now();
-            const { ok, covered } = await capture(browser, shot);
+            const { ok, covered, errors } = await capture(browser, shot);
             if (!ok) failed = true;
             recordResult(
                 `shots:${shot.name}`,
                 ok ? "pass" : "fail",
                 (performance.now() - started) / 1000,
                 covered,
+                failureOf(errors),
             );
         });
     }

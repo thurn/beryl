@@ -1,6 +1,7 @@
 // The verb suite: every verb the stage plays, checked from both seats on
 // the stage's own clock. `by ui-test` serves the UI and runs this after kept.mjs. Usage:
 //   node scripts/verbs.mjs <base-url> <fixtures-dir> [check...]
+//   node scripts/verbs.mjs --list
 // A check is `verb:<verb>/<seat>/<layout>` (ui/verbs.json lists them), named whole or in
 // part to run it alone, and logged by that name. Each opens its moments' fixtures
 // in its layout's windows (the desktop's, or each phone size ui/shots.json has with `?phone`),
@@ -20,7 +21,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { launch, recordResult, stageFaults, workers } from "./capture.mjs";
+import {
+    failureOf,
+    launch,
+    recordResult,
+    stageFaults,
+    workers,
+} from "./capture.mjs";
 import { ending as endOf } from "./fixture-views.mjs";
 import { CHECK_SECONDS, HangError, hangGuard, hangContext } from "./hang.mjs";
 import { CASES as ZONES } from "./verb-cases.mjs";
@@ -36,15 +43,27 @@ import { install as installSpans } from "./verb-spans.mjs";
 import { install as installMarks } from "./written-marks.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
-if (!base || !fixtures) {
+if (!base || (!fixtures && base !== "--list")) {
     console.error(
-        "usage: node scripts/verbs.mjs <base-url> <fixtures-dir> [check...]",
+        "usage: node scripts/verbs.mjs <base-url> <fixtures-dir> [check...]\n" +
+            "       node scripts/verbs.mjs --list",
     );
     process.exit(2);
 }
 const { verbs, layouts, moment, more, watches } = JSON.parse(
     await readFile(new URL("../verbs.json", import.meta.url), "utf8"),
 );
+// `--list` prints each check as a JSON line and runs none (Ignite's `list`, docs/ignite.md
+// "Declaring a family").
+if (base === "--list") {
+    for (const verb of verbs)
+        for (const seat of Object.keys(moment))
+            for (const layout of layouts)
+                console.log(
+                    JSON.stringify({ check: `verb:${verb}/${seat}/${layout}` }),
+                );
+    process.exit(0);
+}
 /** The checks the fast check chose (`by ui-test --select`, tools' selection.py), from the file
  * `BERYL_CHECKS` names, one a line; null to run every check the filters reach. */
 const chosen = process.env.BERYL_CHECKS
@@ -725,6 +744,7 @@ for (const { check, verb, seat, reflows, played, reads, audit } of checks) {
         ...(audit ? [audit] : []),
     ];
     let threw = false;
+    let thrown = null;
     try {
         const script = await recorded(played.whole);
         for (const { at, moments } of reads) {
@@ -756,6 +776,7 @@ for (const { check, verb, seat, reflows, played, reads, audit } of checks) {
     } catch (e) {
         failed = true;
         threw = true;
+        thrown = e;
         console.error(`FAILED: ${check}\n${e.stack ?? e}`);
     }
     const seen = [...new Set(read)].flatMap((held) =>
@@ -768,6 +789,7 @@ for (const { check, verb, seat, reflows, played, reads, audit } of checks) {
         threw || seen.length ? "fail" : "pass",
         [...new Set(read)].reduce((sum, held) => sum + held.seconds, 0),
         read[0].covered,
+        failureOf(seen, thrown),
     );
 }
 await close();

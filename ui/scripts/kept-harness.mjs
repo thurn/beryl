@@ -5,13 +5,25 @@ import assert from "node:assert/strict";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { strings } from "../src/cardRecords.ts";
-import { coverage, launch, recordResult, workers } from "./capture.mjs";
+import {
+    coverage,
+    failureOf,
+    launch,
+    pageError,
+    recordResult,
+    workers,
+} from "./capture.mjs";
 import { CHECK_SECONDS, HangError, hangGuard, hangContext } from "./hang.mjs";
 
 export const [base, fixtures, ...filters] = process.argv.slice(2);
+/** `--list` in place of the base URL prints each check as a JSON line, `{"check":
+ * "ui-test:<title>"}`, and runs none (Ignite's `list`, docs/ignite.md "Declaring a family").
+ * The checks still need the recorded fixtures, which some of them derive their pages from. */
+export const listing = base === "--list";
 if (!base || !fixtures) {
     console.error(
-        "usage: node scripts/kept.mjs <base-url> <fixtures-dir> [title-filter...]",
+        "usage: node scripts/kept.mjs <base-url> <fixtures-dir> [title-filter...]\n" +
+            "       node scripts/kept.mjs --list <fixtures-dir>",
     );
     process.exit(2);
 }
@@ -131,7 +143,7 @@ export const chosen = (page) =>
             .map((c) => c.args.request.index),
     );
 
-const browser = await launch();
+const browser = listing ? null : await launch();
 const errors = [];
 let failed = false;
 const queue = workers(6);
@@ -175,6 +187,10 @@ export async function check(
         pages = 1,
     } = {},
 ) {
+    if (listing) {
+        console.log(JSON.stringify({ check: `ui-test:${title}` }));
+        return;
+    }
     if (!wanted(title) || (chosenTitles && !chosenTitles.has(title))) return;
     ran += 1;
     const run = async () => {
@@ -204,7 +220,7 @@ export async function check(
             const finish = await coverage(page);
             let covered = null;
             const seen = [];
-            page.on("pageerror", (e) => seen.push(`${title}: ${e.message}`));
+            page.on("pageerror", (e) => seen.push(`${title}: ${pageError(e)}`));
             page.on(
                 "console",
                 (m) =>
@@ -212,6 +228,7 @@ export async function check(
             );
             let booted = false;
             let threw = false;
+            let thrown = null;
             let hung = false;
             const play = async () => {
                 assert.ok(["paused", "off"].includes(clock), clock);
@@ -240,6 +257,7 @@ export async function check(
                 if (!booted && lost && boots < 2) continue;
                 failed = true;
                 threw = true;
+                thrown = e;
                 console.error(`FAILED: ${title}\n${e.stack ?? e}`);
             } finally {
                 // A page that hung would hold its coverage too: closing the context ends it.
@@ -253,6 +271,7 @@ export async function check(
                 threw || seen.length ? "fail" : "pass",
                 (performance.now() - started) / 1000,
                 covered,
+                failureOf(seen, thrown),
             );
             break;
         }
@@ -441,6 +460,7 @@ export const tokenRun = {
 /** Waits for every check to finish, then exits non-zero if one failed, a page logged an error,
  * or the filters reached none. */
 export async function finish(cleanup) {
+    if (listing) process.exit(0);
     await queue.drain();
     await browser.close();
     await cleanup?.();

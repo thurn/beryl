@@ -2,7 +2,7 @@
 // every verb's check of a seat and a layout watches the same moments at the same windows and
 // ticks, so the moment is played once and each check holds its own cases to the run.
 import assert from "node:assert/strict";
-import { coverage } from "./capture.mjs";
+import { coverage, pageError } from "./capture.mjs";
 
 /** Pages opened on `queue`'s workers, one context of windows of each size from `open` shared
  * by every page at that size. `once(key, first, task)` queues `task` (given a `watch` to show
@@ -30,7 +30,7 @@ export function sharedPages(queue, open) {
         }
         const held = { first, errors: [], covered: null, seconds: 0 };
         const watch = async (page) => {
-            page.on("pageerror", (e) => held.errors.push(e.message));
+            page.on("pageerror", (e) => held.errors.push(pageError(e)));
             page.on(
                 "console",
                 (m) => m.type() === "error" && held.errors.push(m.text()),

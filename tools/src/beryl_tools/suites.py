@@ -2,7 +2,8 @@
 own run-log prefix and a list of its checks Python can read: the stage's verbs
 (ui/scripts/verbs.mjs, ui/verbs.json) and its prompt shapes (ui/scripts/shapes.mjs,
 ui/shapes.json). selection.py chooses among them, and shots.py and motion.py record their
-fixtures."""
+fixtures. It also names the fixtures kept.mjs reads and the checks slow CI's `ui-smoke` plays,
+which Ignite's browser adapter (beryl_tools/ignite/browser.py) shares."""
 
 from __future__ import annotations
 
@@ -107,3 +108,77 @@ def shape_fixtures() -> list[str]:
     shapes = shape_suite().get("shapes")
     seats = list(shapes.values()) if isinstance(shapes, dict) else []
     return sorted({str(f) for s in seats if isinstance(s, dict) for f in s.values()})
+
+
+# The fixtures recorded for ui/scripts/kept.mjs: its checks open some by name, one looks at the
+# last decision of every recording (kept-piles.mjs), and the fixtures it derives draw their
+# card records from them all (kept-harness.mjs `recordedCards`).
+KEPT_FIXTURES = [
+    "table-drawn",
+    "greedy-turn-9",
+    "opening-bottom",
+    "opening-keep",
+    "opponent-turn",
+    "combat-declare",
+    "combat-double-block",
+    "combat-blockers",
+    "choice-scry",
+    "choice-look",
+    "choice-jace",
+    "choice-pay",
+    "choice-trigger-order",
+    "hand-pair",
+    "hand-pair-twin",
+    "cast-oculus",
+    "cast-exile-choice",
+    "cast-kicker",
+    "cast-evoke",
+    "teferi-timing",
+    "pay-default",
+    "pay-other",
+    "exiled-beneath",
+    "attached-across",
+    "exile-cast",
+    "arrow-spell",
+    "arrow-ability",
+    "arrow-player",
+    "arrow-stacked",
+    "counterspell-targets",
+    "reprieve-target",
+    "marks",
+    "marks-damage",
+    "tokens",
+    "mana-floating",
+    "stack-x",
+    "menu-choices",
+    "walker-low",
+    "namesake-target",
+    "pay-life",
+    "crowded",
+    "piles-crowded",
+    "target-up-to-one",
+    "target-own",
+    "attack-past-walker",
+    "choice-explore",
+    "choice-loot",
+    "choice-untap",
+    "choice-search",
+    "choice-thirst",
+    "choice-cleanup",
+    "choice-teferi",
+    "target-graveyard",
+    "attack-token",
+    "crew",
+    "waterbend-tap",
+    "game-over",
+]
+
+# The `ui-test` checks slow CI's `ui-smoke` lane plays, by title: the start screen starts a game,
+# and on a recorded game the stage passes priority (Space) and plays a land at a click. Each
+# takes about a second, runs on the page's own clock (no wall-clock waits) and has not failed in
+# over 100 slow-CI runs. Every other browser check runs in the fast check's selection and in the
+# browser sweep every few hours (sweep.py).
+SMOKE_TITLES: tuple[str, ...] = (
+    "Enter on the start screen starts a game",
+    "a land pressed while a script plays on to it is played",
+)

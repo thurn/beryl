@@ -263,70 +263,6 @@ def ui_shots(args: argparse.Namespace) -> int:
     return code
 
 
-# The fixtures recorded for ui/scripts/kept.mjs: its checks open some by name, one looks at the
-# last decision of every recording (kept-piles.mjs), and the fixtures it derives draw their
-# card records from them all (kept-harness.mjs `recordedCards`).
-KEPT_FIXTURES = [
-    "table-drawn",
-    "greedy-turn-9",
-    "opening-bottom",
-    "opening-keep",
-    "opponent-turn",
-    "combat-declare",
-    "combat-double-block",
-    "combat-blockers",
-    "choice-scry",
-    "choice-look",
-    "choice-jace",
-    "choice-pay",
-    "choice-trigger-order",
-    "hand-pair",
-    "hand-pair-twin",
-    "cast-oculus",
-    "cast-exile-choice",
-    "cast-kicker",
-    "cast-evoke",
-    "teferi-timing",
-    "pay-default",
-    "pay-other",
-    "exiled-beneath",
-    "attached-across",
-    "exile-cast",
-    "arrow-spell",
-    "arrow-ability",
-    "arrow-player",
-    "arrow-stacked",
-    "counterspell-targets",
-    "reprieve-target",
-    "marks",
-    "marks-damage",
-    "tokens",
-    "mana-floating",
-    "stack-x",
-    "menu-choices",
-    "walker-low",
-    "namesake-target",
-    "pay-life",
-    "crowded",
-    "piles-crowded",
-    "target-up-to-one",
-    "target-own",
-    "attack-past-walker",
-    "choice-explore",
-    "choice-loot",
-    "choice-untap",
-    "choice-search",
-    "choice-thirst",
-    "choice-cleanup",
-    "choice-teferi",
-    "target-graveyard",
-    "attack-token",
-    "crew",
-    "waterbend-tap",
-    "game-over",
-]
-
-
 def ui_test(args: argparse.Namespace) -> int:
     chooser = chooser_for("ui-test", args)
     if chooser and chooser.choice.idle():
@@ -354,7 +290,7 @@ def ui_test(args: argparse.Namespace) -> int:
 def ui_test_fixtures() -> list[str]:
     """The fixtures `ui-test` records: kept.mjs', and the verb and shape suites'."""
     fixtures = suites.verb_fixtures() + suites.shape_fixtures()
-    return list(dict.fromkeys(KEPT_FIXTURES + fixtures))
+    return list(dict.fromkeys(suites.KEPT_FIXTURES + fixtures))
 
 
 def scripted(

@@ -2,6 +2,7 @@
 // seat that is asked and watched from the seat across the table. `by ui-test` serves the UI
 // and runs this after kept.mjs and verbs.mjs. Usage:
 //   node scripts/shapes.mjs <base-url> <fixtures-dir> [check...]
+//   node scripts/shapes.mjs --list
 // A check is `shape:<shape>/<seat>/<layout>` (ui/shapes.json lists them), named whole or in
 // part to run it alone, and logged by that name.
 //
@@ -54,7 +55,9 @@ import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
     coverage,
+    failureOf,
     launch,
+    pageError,
     recordResult,
     screenFaults,
     stageFaults,
@@ -83,15 +86,29 @@ import {
 } from "./shape-cases-table.mjs";
 
 const [base, fixtures, ...filters] = process.argv.slice(2);
-if (!base || !fixtures) {
+if (!base || (!fixtures && base !== "--list")) {
     console.error(
-        "usage: node scripts/shapes.mjs <base-url> <fixtures-dir> [check...]",
+        "usage: node scripts/shapes.mjs <base-url> <fixtures-dir> [check...]\n" +
+            "       node scripts/shapes.mjs --list",
     );
     process.exit(2);
 }
 const { shapes, layouts } = JSON.parse(
     await readFile(new URL("../shapes.json", import.meta.url), "utf8"),
 );
+// `--list` prints each check as a JSON line and runs none (Ignite's `list`, docs/ignite.md
+// "Declaring a family").
+if (base === "--list") {
+    for (const [shape, seats] of Object.entries(shapes))
+        for (const seat of Object.keys(seats))
+            for (const layout of layouts)
+                console.log(
+                    JSON.stringify({
+                        check: `shape:${shape}/${seat}/${layout}`,
+                    }),
+                );
+    process.exit(0);
+}
 /** The checks the fast check chose (`by ui-test --select`, tools' selection.py), from the file
  * `BERYL_CHECKS` names, one a line; null to run every check the filters reach. */
 const chosen = process.env.BERYL_CHECKS
@@ -691,12 +708,13 @@ for (const [shape, seats] of Object.entries(shapes)) {
                 const contexts = [];
                 const seen = [];
                 let threw = false;
+                let thrown = null;
                 let hung = false;
                 let covered;
                 // Every page's errors are the check's; what a page ran is taken of the first.
                 const watch = async (page) => {
                     page.on("pageerror", (e) =>
-                        seen.push(`${check}: ${e.message}`),
+                        seen.push(`${check}: ${pageError(e)}`),
                     );
                     page.on(
                         "console",
@@ -758,6 +776,7 @@ for (const [shape, seats] of Object.entries(shapes)) {
                 } catch (e) {
                     failed = true;
                     threw = true;
+                    thrown = e;
                     console.error(`FAILED: ${check}\n${e.stack ?? e}`);
                 } finally {
                     for (const context of contexts) await context.close();
@@ -768,6 +787,7 @@ for (const [shape, seats] of Object.entries(shapes)) {
                     threw || seen.length ? "fail" : "pass",
                     (performance.now() - started) / 1000,
                     covered ?? null,
+                    failureOf(seen, thrown),
                 );
             });
         }

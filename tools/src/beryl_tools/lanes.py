@@ -18,16 +18,7 @@ from .reruns import (
     failed_titles,
     whole,
 )
-
-# The `ui-test` checks slow CI's `ui-smoke` lane plays, by title: the start screen starts a game,
-# and on a recorded game the stage passes priority (Space) and plays a land at a click. Each
-# takes about a second, runs on the page's own clock (no wall-clock waits) and has not failed in
-# over 100 slow-CI runs. Every other browser check runs in the fast check's selection and in the
-# browser sweep every few hours (sweep.py).
-SMOKE_TITLES: tuple[str, ...] = (
-    "Enter on the start screen starts a game",
-    "a land pressed while a script plays on to it is played",
-)
+from .suites import SMOKE_TITLES
 
 BY: list[str] = [sys.executable, "-m", "beryl_tools.cli"]
 

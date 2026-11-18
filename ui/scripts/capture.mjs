@@ -14,14 +14,30 @@ export const launch = () =>
     (process.env.BERYL_BROWSER === "chromium" ? chromium : webkit).launch();
 
 /** Reports one check's result to the run log (tools/src/beryl_tools/runlog.py) when `by check`
- * or `by ci` asked for results (`BERYL_CHECK_RESULTS`), and what its page ran (`covered`, from
- * `coverage`) when `by coverage` asked for that; otherwise does nothing. A log that cannot be
- * written fails no check. */
-export function recordResult(check, outcome, seconds, covered = null) {
+ * or `by ci` asked for results (`BERYL_CHECK_RESULTS`), to Ignite when it asked
+ * (`IGNITE_RESULTS`, docs/ignite.md "Reporting results"), and what its page ran (`covered`,
+ * from `coverage`) when `by coverage` asked for that; otherwise does nothing. `failure` is
+ * what failed, from `failureOf`, which Ignite's line carries. A log that cannot be written
+ * fails no check. */
+export function recordResult(
+    check,
+    outcome,
+    seconds,
+    covered = null,
+    failure = {},
+) {
     const path = process.env.BERYL_CHECK_RESULTS;
     const line = { check, outcome, seconds: Math.round(seconds * 1000) / 1000 };
     try {
         if (path) appendFileSync(path, `${JSON.stringify(line)}\n`);
+        const ignite = process.env.IGNITE_RESULTS;
+        if (ignite) {
+            const told = outcome === "fail" ? failure : {};
+            appendFileSync(
+                ignite,
+                `${JSON.stringify({ check, outcome, ...told })}\n`,
+            );
+        }
         const folder = process.env.BERYL_COVERAGE;
         if (folder) {
             appendFileSync(
@@ -32,6 +48,47 @@ export function recordResult(check, outcome, seconds, covered = null) {
     } catch (e) {
         console.error(`run log: not written: ${e.message}`);
     }
+}
+
+/** A place in the UI's source, `ui/<path>:<line>`, in a stack or message: a module the dev
+ * server served the page (`http://127.0.0.1:5173/src/stage/x.ts?t=1:212:7`) or a script of
+ * this folder (`file:///…/ui/scripts/kept-x.mjs:40:5`), or a place `pageError` already wrote
+ * (`(at ui/src/stage/x.ts:212)`). */
+const SOURCE_PLACE =
+    /(?:https?:\/\/[^/\s]+\/|(?:^|[/\s(])ui\/)((?:src|scripts)\/[^?:\s()]+)(?:\?[^:\s()]*)?:(\d+)/;
+
+/** The first place in the UI's source that `text` names, as `ui/<path>:<line>`; null if none. */
+export function sourcePlace(text) {
+    const found = SOURCE_PLACE.exec(text ?? "");
+    return found ? `ui/${found[1]}:${found[2]}` : null;
+}
+
+/** A page error as a check reports it: its message, with the place in the app's source it was
+ * thrown from where its stack names one. */
+export function pageError(e) {
+    const place = sourcePlace(e.stack);
+    return place ? `${e.message} (at ${place})` : e.message;
+}
+
+/** The longest message a result carries to Ignite. */
+const MESSAGE_LIMIT = 300;
+
+/** What failed in a check, for `recordResult`: the first of `texts` (the page's errors, then
+ * what the check threw, each a string or an error) as the message, and the first place in the
+ * UI's source any of them names. */
+export function failureOf(...texts) {
+    const said = texts
+        .flat()
+        .filter(Boolean)
+        .map((t) => (t instanceof Error ? (t.stack ?? t.message) : String(t)));
+    if (said.length === 0) return {};
+    const first = said[0].split("\n")[0].replace(/\s+/g, " ").trim();
+    const message =
+        first.length <= MESSAGE_LIMIT
+            ? first
+            : `${first.slice(0, MESSAGE_LIMIT - 1)}…`;
+    const at = said.map(sourcePlace).find(Boolean);
+    return at ? { message, at } : { message };
 }
 
 /** The sources `coverage` has saved in this process, by their file names. */
@@ -166,7 +223,7 @@ export async function openPage(browser, { width, height, scale = 1 }) {
     });
     const page = await context.newPage();
     const errors = [];
-    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("pageerror", (e) => errors.push(pageError(e)));
     page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
     return { context, page, errors };
 }
