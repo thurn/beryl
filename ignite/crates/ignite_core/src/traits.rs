@@ -12,10 +12,12 @@ use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     CachedResult, Claim, CompileUnit, FlakyReport, Landed, MachineFree, MetricsImport, NewResult,
-    Record, RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified,
+    Pause, Record, RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief,
+    TipClaim, TipClaimReply, TipVerified,
 };
-use crate::protocol::tickets::{FeedBatch, LeaseOp, LeaseReply};
+use crate::protocol::tickets::{
+    BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
+};
 use crate::time::Timestamp;
 
 /// Why an operation behind one of these traits failed.
@@ -167,4 +169,32 @@ pub trait Hub: Send + Sync {
     fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
     /// Reports a regression; the hub files or reopens its ticket (`POST /regressions`).
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled>;
+
+    /// One ticket with its comments (`GET /tickets/<id>`).
+    fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
+        Err(not_supported(&format!("read the ticket {id}")))
+    }
+
+    /// The tickets matching `query` (`GET /tickets`).
+    fn tickets(&self, query: &TicketQuery) -> Result<Vec<Ticket>> {
+        let _ = query;
+        Err(not_supported("list tickets"))
+    }
+
+    /// Applies every operation or none (`POST /batch`).
+    fn batch(&self, request: &BatchRequest) -> Result<BatchReply> {
+        let _ = request;
+        Err(not_supported("write a batch"))
+    }
+
+    /// Pauses or resumes hand-offs to one machine or to all (`POST /pause`).
+    fn pause(&self, pause: &Pause) -> Result<()> {
+        let _ = pause;
+        Err(not_supported("pause hand-offs"))
+    }
+}
+
+/// The error of a [`Hub`] method that an implementation does not provide yet.
+fn not_supported(what: &str) -> Error {
+    Error::Invalid(format!("this hub client cannot {what} yet"))
 }

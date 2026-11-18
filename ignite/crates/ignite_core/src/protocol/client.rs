@@ -118,6 +118,11 @@ pub enum DispatchAction {
     Message,
     /// The wait ended with nothing to do.
     Idle,
+    /// Ask the app whether a session is running, idle or gone; the acknowledgement carries the
+    /// answer.
+    Check,
+    /// A Codex dispatcher whose context has grown opens a new chat as the dispatcher and stops.
+    Rotate,
 }
 
 #[cfg(test)]

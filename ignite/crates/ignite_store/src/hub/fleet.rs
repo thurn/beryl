@@ -228,6 +228,8 @@ mod tests {
             state: state.into(),
             ticket: ticket.map(|t| t.parse().unwrap()),
             files: vec!["rust/a.rs".into()],
+            command: None,
+            command_since: None,
         }
     }
 

@@ -62,6 +62,10 @@ crate::tables! {
         /// JSON: model tiers its app can run.
         models: String,
         added_at: String,
+        /// The dispatcher session that added it.
+        parent: Option<String>,
+        /// JSON: the files its last ticket touched.
+        files: String,
     }
 
     /// The newest change to a leased tree's ticket that its session has been shown.
@@ -71,4 +75,6 @@ crate::tables! {
         comment: i64,
         history: i64,
     }
+
+    PoolSetting = "pool_settings" { key: String, value: String }
 }

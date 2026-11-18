@@ -124,6 +124,16 @@ pub enum Command {
         #[command(subcommand)]
         command: PoolCommand,
     },
+    /// Comment on a ticket and send the text to the session working it now:
+    /// `ignite tell <ticket | session> "<text>"` or `ignite tell --all "<text>"`.
+    Tell {
+        /// Every ticket in progress, on every machine.
+        #[arg(long)]
+        all: bool,
+        /// The ticket or session, then the text; only the text with `--all`.
+        #[arg(required = true, num_args = 1..=2)]
+        words: Vec<String>,
+    },
     /// Check an epic's ticket graph.
     Plan {
         #[command(subcommand)]
@@ -204,10 +214,17 @@ pub enum ClassArg {
     Idle,
 }
 
+/// How an instruction ended: `ok` or `failed` for a hand-off or message, and for a `check`
+/// what the app said of the session (`unknown` when the lookup itself failed).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum AckResult {
     Ok,
-    Fail,
+    #[value(alias = "fail")]
+    Failed,
+    Running,
+    Idle,
+    Gone,
+    Unknown,
 }
 
 #[derive(Debug, Subcommand)]
@@ -220,7 +237,13 @@ pub enum ManifestCommand {
 #[derive(Debug, Subcommand)]
 pub enum DispatchCommand {
     /// Report that an instruction was carried out.
-    Ack { id: u64, result: AckResult },
+    Ack {
+        id: u64,
+        result: AckResult,
+        /// Why it failed.
+        #[arg(trailing_var_arg = true)]
+        reason: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -237,9 +260,25 @@ pub enum PoolCommand {
         /// Add them as the dispatcher instead of workers.
         #[arg(long)]
         dispatcher: bool,
+        /// The model tiers the app runs, comma-separated; by default `opus,sonnet,light` for
+        /// `claude` and none for `codex`.
+        #[arg(long, value_delimiter = ',')]
+        models: Option<Vec<String>>,
     },
     /// Remove a session from the pool.
     Remove { session: String },
+    /// Stop handing off new tickets; running workers finish.
+    Pause {
+        /// On every machine.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Start handing off tickets again.
+    Resume {
+        /// On every machine.
+        #[arg(long)]
+        all: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -449,6 +488,7 @@ impl Command {
             Command::Install => "install",
             Command::Dispatch { .. } => "dispatch",
             Command::Pool { .. } => "pool",
+            Command::Tell { .. } => "tell",
             Command::Plan { .. } => "plan",
             Command::Gate { .. } => "gate",
             Command::Rebuild { .. } => "rebuild",
@@ -551,6 +591,27 @@ mod tests {
         assert!(matches!(
             parse("ignite dispatch --wait 540"),
             Command::Dispatch { wait: 540, .. }
+        ));
+        let Command::Dispatch {
+            command: Some(DispatchCommand::Ack { result, reason, .. }),
+            ..
+        } = parse("ignite dispatch ack 4813 failed clear refused")
+        else {
+            panic!("not ack");
+        };
+        assert_eq!(
+            (result, reason.join(" ")),
+            (AckResult::Failed, "clear refused".to_owned())
+        );
+        assert!(matches!(
+            parse("ignite tell --all Skip"),
+            Command::Tell { all: true, words } if words == ["Skip"]
+        ));
+        assert!(matches!(
+            parse("ignite pool pause --all"),
+            Command::Pool {
+                command: PoolCommand::Pause { all: true }
+            }
         ));
         assert!(matches!(
             parse("ignite status --admission"),

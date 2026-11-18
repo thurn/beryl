@@ -31,6 +31,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 3,
         sql: include_str!("schema_3.sql"),
     },
+    Migration {
+        version: 4,
+        sql: include_str!("schema_4.sql"),
+    },
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {

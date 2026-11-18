@@ -1,6 +1,6 @@
-//! The pool: the machine's worker and dispatcher sessions.
+//! The pool: the machine's worker and dispatcher sessions, and whether hand-offs are paused.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::Result;
 use crate::local::rows;
@@ -8,7 +8,8 @@ use crate::local::rows;
 /// Every member, ordered by session ID.
 pub fn all(conn: &Connection) -> Result<Vec<rows::PoolMember>> {
     let mut statement = conn.prepare(
-        "SELECT session, app, role, state, ticket, models, added_at FROM pool ORDER BY session",
+        "SELECT session, app, role, state, ticket, models, added_at, parent, files FROM pool \
+         ORDER BY session",
     )?;
     let members = statement
         .query_map([], |row| {
@@ -20,6 +21,8 @@ pub fn all(conn: &Connection) -> Result<Vec<rows::PoolMember>> {
                 ticket: row.get(4)?,
                 models: row.get(5)?,
                 added_at: row.get(6)?,
+                parent: row.get(7)?,
+                files: row.get(8)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -29,8 +32,8 @@ pub fn all(conn: &Connection) -> Result<Vec<rows::PoolMember>> {
 /// Inserts the member or replaces every column of the existing row.
 pub fn upsert(conn: &Connection, member: &rows::PoolMember) -> Result<()> {
     conn.execute(
-        "INSERT OR REPLACE INTO pool (session, app, role, state, ticket, models, added_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT OR REPLACE INTO pool (session, app, role, state, ticket, models, added_at, parent, \
+         files) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             member.session,
             member.app,
@@ -39,6 +42,8 @@ pub fn upsert(conn: &Connection, member: &rows::PoolMember) -> Result<()> {
             member.ticket,
             member.models,
             member.added_at,
+            member.parent,
+            member.files,
         ],
     )?;
     Ok(())
@@ -47,6 +52,26 @@ pub fn upsert(conn: &Connection, member: &rows::PoolMember) -> Result<()> {
 /// Removes the session. Removing one that is not in the pool is not an error.
 pub fn remove(conn: &Connection, session: &str) -> Result<()> {
     conn.execute("DELETE FROM pool WHERE session = ?1", [session])?;
+    Ok(())
+}
+
+/// Whether hand-offs to this machine are paused.
+pub fn paused(conn: &Connection) -> Result<bool> {
+    let value: Option<String> = conn
+        .query_row(
+            "SELECT value FROM pool_settings WHERE key = 'paused'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(value.as_deref() == Some("true"))
+}
+
+pub fn set_paused(conn: &Connection, paused: bool) -> Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO pool_settings (key, value) VALUES ('paused', ?1)",
+        [if paused { "true" } else { "false" }],
+    )?;
     Ok(())
 }
 
@@ -64,6 +89,8 @@ mod tests {
             ticket: None,
             models: "[\"sonnet\"]".to_owned(),
             added_at: "2026-11-18T00:00:00.000Z".to_owned(),
+            parent: Some("local_d".to_owned()),
+            files: "[]".to_owned(),
         }
     }
 
@@ -88,5 +115,15 @@ mod tests {
         remove(&conn, "local_a").unwrap();
         remove(&conn, "local_a").unwrap();
         assert_eq!(all(&conn).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_pause_is_kept_until_it_is_lifted() {
+        let conn = open_in_memory().unwrap();
+        assert!(!paused(&conn).unwrap());
+        set_paused(&conn, true).unwrap();
+        assert!(paused(&conn).unwrap());
+        set_paused(&conn, false).unwrap();
+        assert!(!paused(&conn).unwrap());
     }
 }

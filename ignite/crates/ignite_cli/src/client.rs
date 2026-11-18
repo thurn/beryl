@@ -19,10 +19,8 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
         "daemon",
         "Assemble the daemon and prove one ticket end to end",
     ),
-    ("dispatch", "Dispatcher endpoint and the pool"),
     ("gate", "Gate replay"),
     ("land", "Landing"),
-    ("pool", "Dispatcher endpoint and the pool"),
     ("prime", "Command output and the workflow text"),
     (
         "rebuild",

@@ -12,11 +12,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    CachedResult, Claim, FlakyReport, Landed, MachineFree, MetricsImport, NewResult, Record,
+    CachedResult, Claim, FlakyReport, Landed, MachineFree, MetricsImport, NewResult, Pause, Record,
     RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
     TipClaimReply, TipVerified,
 };
-use crate::protocol::tickets::{FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp, LeaseReply};
+use crate::protocol::tickets::{
+    BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
+    LeaseReply, Operation, OperationResult, Precondition, Ticket, TicketDetail, TicketQuery,
+};
 use crate::time::Timestamp;
 use crate::traits::{
     BuildResult, Builds, Clock, CommandSpec, Error, Git, Hub, Launcher, Push, Rebase, Result,
@@ -232,9 +235,33 @@ pub struct FakeHub {
     tip_claims: Mutex<Vec<TipClaim>>,
     tip_states: Mutex<Vec<TipVerified>>,
     regressions: Mutex<Vec<RegressionReport>>,
+    tickets: Mutex<BTreeMap<TicketId, TicketDetail>>,
+    batches: Mutex<Vec<BatchRequest>>,
+    pauses: Mutex<Vec<Pause>>,
+    asked: Mutex<Vec<MachineFree>>,
 }
 
 impl FakeHub {
+    /// Stores a ticket for `ticket`, `tickets` and `batch` to read and change.
+    pub fn insert_ticket(&self, detail: TicketDetail) {
+        lock(&self.tickets).insert(detail.ticket.id.clone(), detail);
+    }
+
+    /// Every batch applied so far, in order.
+    pub fn batches(&self) -> Vec<BatchRequest> {
+        lock(&self.batches).clone()
+    }
+
+    /// Every pause or resume sent so far, in order.
+    pub fn pauses(&self) -> Vec<Pause> {
+        lock(&self.pauses).clone()
+    }
+
+    /// What each call to `next` said the machine had free, in order.
+    pub fn asked(&self) -> Vec<MachineFree> {
+        lock(&self.asked).clone()
+    }
+
     pub fn set_unreachable(&self, unreachable: bool) {
         self.unreachable.store(unreachable, Ordering::SeqCst);
     }
@@ -332,8 +359,9 @@ impl Hub for FakeHub {
         Ok(())
     }
 
-    fn next(&self, _free: &MachineFree) -> Result<Option<Reservation>> {
+    fn next(&self, free: &MachineFree) -> Result<Option<Reservation>> {
         self.reachable()?;
+        lock(&self.asked).push(free.clone());
         Ok(lock(&self.reservations).pop_front())
     }
 
@@ -455,6 +483,97 @@ impl Hub for FakeHub {
         let ticket = TicketId::new(format!("tk.{}", regressions.len()))
             .map_err(|e| Error::Invalid(e.to_string()))?;
         Ok(RegressionFiled { ticket })
+    }
+
+    fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
+        self.reachable()?;
+        lock(&self.tickets)
+            .get(id)
+            .cloned()
+            .ok_or_else(|| Error::NotFound(id.to_string()))
+    }
+
+    /// Filters by status and assignee only.
+    fn tickets(&self, query: &TicketQuery) -> Result<Vec<Ticket>> {
+        self.reachable()?;
+        Ok(lock(&self.tickets)
+            .values()
+            .map(|detail| &detail.ticket)
+            .filter(|t| query.status.is_none_or(|status| t.status == status))
+            .filter(|t| query.assignee.is_none() || t.assignee == query.assignee)
+            .cloned()
+            .collect())
+    }
+
+    /// Checks `version` preconditions and applies comments and metadata updates; any other
+    /// operation or precondition is refused as invalid. Each changed ticket gets a new version
+    /// and a feed change.
+    fn batch(&self, request: &BatchRequest) -> Result<BatchReply> {
+        self.reachable()?;
+        let mut tickets = lock(&self.tickets);
+        let mut changed = tickets.clone();
+        for precondition in &request.preconditions {
+            let Precondition::Version { id, version } = precondition else {
+                return Err(Error::Invalid("fake hub checks only versions".to_owned()));
+            };
+            let current = changed
+                .get(id)
+                .ok_or_else(|| Error::NotFound(id.to_string()))?;
+            if current.ticket.version != *version {
+                return Err(Error::Conflict(format!("{id} has changed")));
+            }
+        }
+        let mut results = Vec::new();
+        for operation in &request.ops {
+            let (Operation::Comment { id, .. } | Operation::Update { id, .. }) = operation else {
+                return Err(Error::Invalid(
+                    "fake hub applies only comments and updates".to_owned(),
+                ));
+            };
+            let id = TicketId::new(id.clone()).map_err(|e| Error::Invalid(e.to_string()))?;
+            let detail = changed
+                .get_mut(&id)
+                .ok_or_else(|| Error::NotFound(id.to_string()))?;
+            match operation {
+                Operation::Comment { text, .. } => {
+                    let comments = detail.comments.get_or_insert_with(Vec::new);
+                    let n = comments.iter().map(|c| c.n).max().unwrap_or(0) + 1;
+                    comments.push(Comment {
+                        ticket: id.clone(),
+                        n,
+                        author: "fake".to_owned(),
+                        at: Timestamp::EPOCH,
+                        text: text.clone(),
+                        legacy_id: None,
+                    });
+                }
+                Operation::Update { set_meta, .. } => {
+                    detail.ticket.metadata.extend(set_meta.clone());
+                }
+                _ => unreachable!("refused above"),
+            }
+            results.push(OperationResult {
+                id,
+                closed: Vec::new(),
+                ready: None,
+            });
+        }
+        let mut seq = Seq(0);
+        for result in &results {
+            seq = self.push_change("ticket", Some(result.id.clone()));
+            if let Some(detail) = changed.get_mut(&result.id) {
+                detail.ticket.version = seq;
+            }
+        }
+        *tickets = changed;
+        lock(&self.batches).push(request.clone());
+        Ok(BatchReply { seq, results })
+    }
+
+    fn pause(&self, pause: &Pause) -> Result<()> {
+        self.reachable()?;
+        lock(&self.pauses).push(pause.clone());
+        Ok(())
     }
 }
 

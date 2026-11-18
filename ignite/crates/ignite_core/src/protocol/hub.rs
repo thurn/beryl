@@ -53,12 +53,19 @@ pub struct WorkerState {
     /// `claude` or `codex`.
     pub app: String,
     pub role: WorkerRole,
-    /// `idle`, `working`, `stalled` or `down`.
+    /// `idle`, `reserved`, `working`, `stalled` or `down`.
     pub state: String,
     pub ticket: Option<TicketId>,
     /// The files the worker's last ticket touched.
     #[serde(default)]
     pub files: Vec<String>,
+    /// The `ignite` command the session is running or last ran: the verb and its first
+    /// argument, such as `wait L-5521`.
+    #[serde(default)]
+    pub command: Option<String>,
+    /// When that command started, or when it ended if it is no longer running.
+    #[serde(default)]
+    pub command_since: Option<Timestamp>,
 }
 
 /// `POST /machines/heartbeat`.
@@ -441,6 +448,14 @@ pub struct ExplorationFind {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReportFiled {
     pub ticket: TicketId,
+}
+
+/// `POST /pause`: stops (or restarts) hand-offs to one machine, or to every machine when
+/// `machine` is `None`. While a pause holds, `/next` answers nothing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pause {
+    pub machine: Option<MachineId>,
+    pub paused: bool,
 }
 
 #[cfg(test)]
