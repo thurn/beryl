@@ -102,6 +102,22 @@ pub struct Repository {
     pub trees: PathBuf,
     /// The directory of check manifests (`*.toml`), relative to the checkout's root.
     pub checks: PathBuf,
+    /// The branch daemons take Ignite's own executable from. Unset, it is `master`. A separate
+    /// branch lets a fix to Ignite reach every machine without waiting for tip verification of
+    /// everything else, which an Ignite bug can itself be blocking.
+    #[serde(default)]
+    pub release: Option<String>,
+    /// The check family that must pass on a landed commit that changed Ignite's own source
+    /// before that commit moves `release`. Unset, landings never move `release`.
+    #[serde(default)]
+    pub release_family: Option<String>,
+}
+
+impl Repository {
+    /// The branch daemons build Ignite's executable from: `release`, or else `master`.
+    pub fn release_branch(&self) -> &str {
+        self.release.as_deref().unwrap_or(&self.master)
+    }
 }
 
 /// Where the hub is.
