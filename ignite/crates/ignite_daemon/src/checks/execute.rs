@@ -49,7 +49,9 @@ impl Checks {
     }
 
     /// Answers each check from its cached result or runs it, with the rerun of a failure and
-    /// the retries of an incomplete run, and stores what it learns.
+    /// the retries of an incomplete run, and stores what it learns. With `fail_fast`, as in
+    /// the landing gate, no further command starts once a check's failure is confirmed.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn execute(
         &self,
         ctx: &Context,
@@ -58,6 +60,7 @@ impl Checks {
         items: Vec<(Keyed, Option<CachedResult>)>,
         options: &RunOptions,
         run: &mut CheckRun,
+        fail_fast: bool,
     ) {
         let Some(family) = self.settings.manifest.families.get(name).map(|d| &d.family) else {
             return;
@@ -120,14 +123,16 @@ impl Checks {
             return;
         }
         run.ran += u32::try_from(pending.len()).unwrap_or(u32::MAX);
-        let finals = self.attempts(ctx, tree, name, family, pending, options, run);
+        let finals = self.attempts(ctx, tree, name, family, pending, options, run, fail_fast);
         self.settle(ctx, tree, family, finals, run);
     }
 
     /// Runs `pending` until each has a verdict: a failure runs once more at once, and a check
     /// left unreported runs at most [`TRIES`] times. A check its command says cannot run on this
     /// machine, and every check a hung command left unreported, is incomplete at once, because
-    /// running it again here would end the same way.
+    /// running it again here would end the same way. With `fail_fast`, once a failure is
+    /// confirmed by its rerun, the checks still waiting for another run are left unanswered and
+    /// counted in `run.skipped`.
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(super) fn attempts(
         &self,
@@ -138,6 +143,7 @@ impl Checks {
         mut pending: Vec<Keyed>,
         options: &RunOptions,
         run: &mut CheckRun,
+        fail_fast: bool,
     ) -> Vec<Final> {
         // A first failure, with its run's output and record.
         let mut failed: BTreeMap<CheckName, (Reported, PathBuf, Option<RecordId>)> =
@@ -274,6 +280,10 @@ impl Checks {
                 let _ = supervise::keep(&output.output);
             }
             pending = again;
+            if fail_fast && !pending.is_empty() && finals.iter().any(|f| f.1 == Outcome::Fail) {
+                run.skipped += u32::try_from(pending.len()).unwrap_or(u32::MAX);
+                pending.clear();
+            }
         }
         finals
     }

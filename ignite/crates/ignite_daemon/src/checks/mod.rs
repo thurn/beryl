@@ -12,6 +12,11 @@
 //!   either is a failed listing, never kept.
 //! - Scope: the landing gate leaves out every family whose inputs the change does not touch,
 //!   before it lists or builds anything ([`scope`]).
+//! - Failing fast: the landing gate stops at the first fault it knows of. It lists first the
+//!   families that build nothing to be listed, refuses the landing before anything is built
+//!   when a listed check's manifest entry is invalid ([`prepare`]), runs the families cheapest
+//!   per expected failure first, and starts no further command once a failure is confirmed by
+//!   its rerun ([`gate`]). What it leaves out is counted in `CheckRun::unlisted` and `skipped`.
 //! - Lookup: one result cache request per command, for every check it needs ([`ResultCache`]).
 //! - A failed check runs a second time at once. A pass then makes it flaky, which passes and is
 //!   reported to the hub's flaky table. A check that a run did not report, or whose family's
@@ -36,8 +41,10 @@
 pub mod adapters;
 mod batches;
 mod execute;
+mod gate;
 pub(crate) mod listings;
 mod plan;
+mod prepare;
 mod regression;
 mod scope;
 pub mod sources;
@@ -64,11 +71,12 @@ use ignite_core::traits::{Error, Result};
 
 use crate::cache::ResultCache;
 use crate::server::Context;
-use listings::{Kept, Listing, Origin};
+use listings::{Kept, Listing};
 
 pub use adapters::{Listed, Reported, Target};
+pub use gate::GateRun;
 pub use sources::{CheckHistory, HubHistory, TreeSource};
-pub use verbs::{CheckVerb, GateRun, TestVerb, WhyVerb};
+pub use verbs::{CheckVerb, TestVerb, WhyVerb};
 
 /// How many times one check or one family listing is tried while it comes back incomplete.
 const TRIES: u32 = 3;
@@ -154,6 +162,12 @@ pub struct CheckRun {
     pub incomplete_families: Vec<(String, PathBuf)>,
     /// Families the landing gate left out, because the change touches none of their inputs.
     pub out_of_scope: Vec<String>,
+    /// Checks the landing gate chose but neither ran nor took from the cache, because it
+    /// stopped at the first fault it knew of.
+    pub skipped: u32,
+    /// Families in the landing gate's scope that it did not list, because it stopped at the
+    /// first fault it knew of.
+    pub unlisted: Vec<String>,
     /// Seconds the check commands ran, builds excluded.
     pub wall_s: f64,
     /// For each check a run gave a verdict, the hub's ID for that run's record, when the hub
@@ -166,6 +180,8 @@ impl CheckRun {
     pub fn passed(&self) -> bool {
         self.build_failures.is_empty()
             && self.incomplete_families.is_empty()
+            && self.skipped == 0
+            && self.unlisted.is_empty()
             && self
                 .outcomes
                 .iter()
@@ -384,7 +400,7 @@ impl Checks {
                 .into_iter()
                 .map(|k| (k, hits.next().flatten()))
                 .collect();
-            self.execute(ctx, tree, &family.family, items, options, run);
+            self.execute(ctx, tree, &family.family, items, options, run, false);
         }
     }
 
@@ -437,109 +453,6 @@ impl Checks {
                 Platforms::Each(list) => list.contains(&self.settings.os),
             })
             .map(|(name, declared)| (name.as_str(), &declared.family))
-    }
-
-    /// Lists and keys the checks of each family named that this machine runs. A family whose
-    /// listing fails is recorded in `run` as incomplete; a check whose inputs cannot be
-    /// resolved is kept in `broken`.
-    pub(crate) fn prepare(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        families: &[&str],
-        options: &RunOptions,
-        run: &mut CheckRun,
-    ) -> Vec<Prepared> {
-        let among: Vec<(&str, &Family)> = self
-            .families()
-            .filter(|(n, _)| families.contains(n))
-            .collect();
-        self.prepare_among(ctx, tree, &among, options, run)
-    }
-
-    /// [`Checks::prepare`] for exactly the families given, whether or not this machine runs
-    /// them, which tip verification needs to know the checks other machines run.
-    pub(crate) fn prepare_among(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        among: &[(&str, &Family)],
-        options: &RunOptions,
-        run: &mut CheckRun,
-    ) -> Vec<Prepared> {
-        // Every family's listing hash from one reading of the tree, and one request for every
-        // kept listing, so a hub that cannot be reached costs its timeout once, not once per
-        // family.
-        let hashes = self.listing_hashes(ctx, tree, among);
-        let mut kept = self.kept_for(hashes.clone());
-        let mut prepared = Vec::new();
-        for &(name, family) in among {
-            let key = hashes.get(name).map(|hash| ListingKey {
-                family: name.to_owned(),
-                hash: hash.clone(),
-            });
-            let listed = self.list_remembering_foreign(
-                ctx,
-                tree,
-                (name, family),
-                options,
-                run,
-                key.clone(),
-                kept.remove(name),
-            );
-            let Some(mut listing) = Self::listed_or_noted(name, listed, run) else {
-                continue;
-            };
-            let (mut keyed, mut broken, mut sources) =
-                self.key_listing(ctx, tree, family, &listing);
-            if let Origin::Kept {
-                key: old,
-                sources: kept,
-            } = &listing.origin
-                && sources.as_ref() != Some(kept)
-            {
-                // The listing was made from other files than the tree's: list the family again.
-                self.forget(old);
-                self.forget_foreign(name);
-                let listed = self.list(ctx, tree, name, family, options, run, key, None);
-                let Some(fresh) = Self::listed_or_noted(name, listed, run) else {
-                    continue;
-                };
-                listing = fresh;
-                (keyed, broken, sources) = self.key_listing(ctx, tree, family, &listing);
-            }
-            if let (Origin::Made { key: Some(key) }, Some(sources)) = (&listing.origin, sources) {
-                let kept = Kept {
-                    sources,
-                    checks: listing.checks,
-                };
-                self.keep(key.clone(), kept);
-            }
-            prepared.push(Prepared {
-                family: name.to_owned(),
-                keyed,
-                broken,
-            });
-        }
-        prepared
-    }
-
-    /// The listing, or `None` after recording in `run` why there is none.
-    fn listed_or_noted(
-        name: &str,
-        listed: std::result::Result<Listing, ListError>,
-        run: &mut CheckRun,
-    ) -> Option<Listing> {
-        match listed {
-            Ok(listing) => Some(listing),
-            // The build is already in `run.build_failures`; the family's list never ran, so it
-            // is not an incomplete family.
-            Err(ListError::Build) => None,
-            Err(ListError::Output(output)) => {
-                run.incomplete_families.push((name.to_owned(), output));
-                None
-            }
-        }
     }
 
     /// Keys a listing's checks, and hashes its sources, from one reading of the tree. Returns

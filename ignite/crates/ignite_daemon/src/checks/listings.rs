@@ -4,7 +4,7 @@
 //! A listing is kept under the family's name and its listing hash: the hash of everything the
 //! family's `list` command can read, which is its `inputs`, its `package_inputs`, the inputs of
 //! the products it needs, its commands and the toolchain, with `crate-closure` standing for
-//! every workspace package. It is looked for in this daemon's memory, then in the local
+//! every package of the workspaces the family reaches into ([`Checks::closure_packages`]). It is looked for in this daemon's memory, then in the local
 //! database, then at the hub, and the family is built and listed only when all three miss. A
 //! hub that cannot be reached is a miss. A listing made here is kept in all three, so a listing
 //! one machine made serves every other machine whose tree has the same listing hash.
@@ -89,6 +89,84 @@ impl Checks {
         every
     }
 
+    /// The packages `crate-closure` stands for in a family's listing hash: every package of
+    /// each workspace the family's other inputs reach into, with the packages they depend on.
+    /// A workspace is reached when one of the family's paths lies in it (or holds it), when a
+    /// `crate:` pattern names one of its packages, or when a product the family needs is built
+    /// in it. A family that reaches no workspace, or has a path pattern that starts with a
+    /// wildcard, hashes every package, as before.
+    ///
+    /// A family's `list` enumerates the packages of its own workspaces, so a package in
+    /// another workspace cannot change what it lists. Hashing every package made each change
+    /// to Ignite's crates miss the kept listing of the game's Rust test families, which then
+    /// built the game's tests only to list them again.
+    pub(crate) fn closure_packages(
+        &self,
+        family: &Family,
+        patterns: &[InputPattern],
+        graph: &inputs::CrateGraph,
+    ) -> Vec<String> {
+        let every = || graph.packages.iter().map(|p| p.name.clone()).collect();
+        let manifest = &self.settings.manifest;
+        let mut dirs: Vec<String> = Vec::new();
+        let mut workspaces: BTreeSet<&str> = BTreeSet::new();
+        for pattern in patterns {
+            match pattern {
+                InputPattern::CrateClosure => {}
+                InputPattern::Crate(package) => {
+                    if let Some(found) = graph.packages.iter().find(|p| p.name == *package) {
+                        workspaces.insert(found.workspace.as_str());
+                    }
+                }
+                InputPattern::Path(text) => {
+                    let literal: Vec<&str> = text
+                        .split('/')
+                        .take_while(|segment| !segment.contains(['*', '?', '[']))
+                        .collect();
+                    if literal.is_empty() {
+                        return every();
+                    }
+                    dirs.push(literal.join("/"));
+                }
+            }
+        }
+        let products = family
+            .needs
+            .iter()
+            .chain(family.list_needs.iter().flatten());
+        dirs.extend(
+            products
+                .filter_map(|n| manifest.products.get(n))
+                .filter_map(|p| p.dir.clone()),
+        );
+        for package in &graph.packages {
+            let workspace = package.workspace.as_str();
+            if dirs
+                .iter()
+                .any(|dir| within(dir, workspace) || within(workspace, dir))
+            {
+                workspaces.insert(workspace);
+            }
+        }
+        if workspaces.is_empty() {
+            return every();
+        }
+        let mut packages = BTreeSet::new();
+        for package in graph
+            .packages
+            .iter()
+            .filter(|p| workspaces.contains(p.workspace.as_str()))
+        {
+            match inputs::closure(&package.name, graph) {
+                Ok(closure) => packages.extend(closure),
+                Err(_) => {
+                    packages.insert(package.name.clone());
+                }
+            }
+        }
+        packages.into_iter().collect()
+    }
+
     /// The listing hash of each family given, from one reading of the tree. A family whose
     /// patterns cannot be resolved is left out, and is listed every time.
     pub(crate) fn listing_hashes(
@@ -99,15 +177,14 @@ impl Checks {
     ) -> HashMap<String, InputHash> {
         let mut resolved: Vec<(&str, &Family, Vec<String>)> = Vec::new();
         for &(name, family) in among {
-            let patterns: Vec<InputPattern> = self
-                .listing_patterns(family)
+            let listing = self.listing_patterns(family);
+            let closure = self.closure_packages(family, &listing, &tree.graph);
+            let patterns: Vec<InputPattern> = listing
                 .into_iter()
                 .flat_map(|pattern| match pattern {
-                    InputPattern::CrateClosure => tree
-                        .graph
-                        .packages
+                    InputPattern::CrateClosure => closure
                         .iter()
-                        .map(|p| InputPattern::Crate(p.name.clone()))
+                        .map(|p| InputPattern::Crate(p.clone()))
                         .collect(),
                     other => vec![other],
                 })
@@ -357,4 +434,13 @@ impl Checks {
                 .unwrap_or_else(PoisonError::into_inner)
                 .contains(name)
     }
+}
+
+/// Whether `path` is `dir` or lies below it; every path lies in the checkout's root, `""`.
+fn within(path: &str, dir: &str) -> bool {
+    dir.is_empty()
+        || path == dir
+        || path
+            .strip_prefix(dir)
+            .is_some_and(|rest| rest.starts_with('/'))
 }

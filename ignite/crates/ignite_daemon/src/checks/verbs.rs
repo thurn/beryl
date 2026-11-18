@@ -13,6 +13,8 @@ use ignite_core::protocol::hub::CachedResult;
 use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::protocol::{Class, Outcome};
 
+pub(crate) use super::gate::gate_lines;
+use super::gate::scope_line;
 use super::plan::{self, GateView};
 use super::why_record;
 use super::{CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
@@ -165,129 +167,6 @@ impl Verb for CheckVerb {
     }
 }
 
-/// What the landing gate ran: the checks it chose, and how many it left to tip verification.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct GateRun {
-    pub run: CheckRun,
-    /// Checks past the cap or below the threshold, which tip verification runs.
-    pub left: usize,
-}
-
-impl Checks {
-    /// Runs what the landing gate runs on `tree` as it is: the always set and the checks whose
-    /// score passes the threshold, within the cap, each from the cache where it can be.
-    pub fn gate(&self, ctx: &Context, tree: &TreeId, options: &RunOptions) -> GateRun {
-        match self.open(tree) {
-            Ok(tree) => self.gate_in(ctx, &tree, options),
-            Err(error) => {
-                let mut gated = GateRun::default();
-                gated
-                    .run
-                    .incomplete_families
-                    .push((format!("tree {tree}: {error}"), std::path::PathBuf::new()));
-                gated
-            }
-        }
-    }
-
-    fn gate_in(&self, ctx: &Context, tree: &OpenTree, options: &RunOptions) -> GateRun {
-        let mut run = CheckRun::default();
-        // Without the changed paths the gate cannot tell which checks the change edited, and
-        // would drop them silently, so it fails instead.
-        let changed = match changed_paths(self, ctx, tree) {
-            Ok(changed) => changed,
-            Err(error) => {
-                run.incomplete_families.push((
-                    format!("the changed files of the tree cannot be read: {error}"),
-                    std::path::PathBuf::new(),
-                ));
-                return GateRun { run, left: 0 };
-            }
-        };
-        // Which families the change can affect is decided first, so a family it cannot affect
-        // is neither listed nor built.
-        let regression: Vec<(&str, &Family)> = self
-            .families()
-            .filter(|(_, f)| f.kind == Kind::Regression)
-            .collect();
-        let (among, left_out) = self.scope(ctx, tree, &regression, &changed);
-        run.out_of_scope = left_out;
-        let mut prepared = self.prepare_among(ctx, tree, &among, options, &mut run);
-        for family in &mut prepared {
-            family.keep(|_| true, &mut run);
-        }
-        let hits = self.lookup(&prepared, options);
-        let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
-        view.landing.clone_from(&options.ticket);
-        let gate_plan = view.plan(&ctx.config.gate);
-        let to_run: Vec<&CheckName> = gate_plan.run.iter().map(|p| &p.check).collect();
-        let cached: Vec<&CheckName> = gate_plan.cached.iter().map(|p| &p.check).collect();
-        let mut hits = hits.into_iter();
-        for family in prepared {
-            let items: Vec<(Keyed, Option<CachedResult>)> = family
-                .keyed
-                .into_iter()
-                .map(|k| (k, hits.next().flatten()))
-                .filter(|(k, _)| {
-                    to_run.contains(&&k.listed.check) || cached.contains(&&k.listed.check)
-                })
-                .map(|(k, hit)| {
-                    let hit = hit.filter(|_| cached.contains(&&k.listed.check));
-                    (k, hit)
-                })
-                .collect();
-            self.execute(ctx, tree, &family.family, items, options, &mut run);
-        }
-        GateRun {
-            run,
-            left: gate_plan.past_cap.len() + gate_plan.tip.len(),
-        }
-    }
-}
-
-/// The `gate` line, the failures and the `tip` line of a gate's output.
-pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
-    let run = &gated.run;
-    let total = run.outcomes.len();
-    let verdict = if run.passed() {
-        "all passed".to_owned()
-    } else {
-        counts(run)
-    };
-    let mut lines = vec![(
-        "gate".to_owned(),
-        format!(
-            "{total} checks: {} from cache, {} run, {verdict} in {:.0} s",
-            run.from_cache, run.ran, run.wall_s
-        ),
-    )];
-    lines.extend(failure_lines(run));
-    lines.extend(scope_line(run));
-    if gated.left > 0 {
-        lines.push((
-            "tip".to_owned(),
-            format!(
-                "{} checks left to tip verification",
-                plan::thousands(gated.left)
-            ),
-        ));
-    }
-    lines
-}
-
-/// The `scope` line: how many families the gate left out because the change touches none of
-/// their inputs.
-fn scope_line(run: &CheckRun) -> Option<(String, String)> {
-    let n = run.out_of_scope.len();
-    let families = if n == 1 { "family" } else { "families" };
-    (n > 0).then(|| {
-        (
-            "scope".to_owned(),
-            format!("{n} {families} left out: the change touches none of their inputs"),
-        )
-    })
-}
-
 /// `ignite why <check> [--inputs]`: prints a check's record (its cost, its failures, where it
 /// runs and why), or with `--inputs` what its input hash covers.
 pub struct WhyVerb {
@@ -422,7 +301,7 @@ fn gate_view(
 }
 
 /// The paths the tree changes since its branch left the integration branch.
-fn changed_paths(
+pub(super) fn changed_paths(
     checks: &Checks,
     ctx: &Context,
     tree: &OpenTree,
@@ -435,7 +314,7 @@ fn changed_paths(
 }
 
 /// [`gate_view`] over `changed`, which the caller read.
-fn gate_view_of(
+pub(super) fn gate_view_of(
     checks: &Checks,
     ctx: &Context,
     tree: &OpenTree,
@@ -580,7 +459,7 @@ pub(crate) fn built_lines(run: &CheckRun) -> Vec<(String, String)> {
         .collect()
 }
 
-fn counts(run: &CheckRun) -> String {
+pub(super) fn counts(run: &CheckRun) -> String {
     let parts: Vec<String> = [
         (Outcome::Pass, "passed"),
         (Outcome::Fail, "failed"),
@@ -613,7 +492,7 @@ fn ran_line(run: &CheckRun) -> String {
     format!("{} checks: {verdict}{cache}", run.outcomes.len())
 }
 
-fn failure_lines(run: &CheckRun) -> Vec<(String, String)> {
+pub(super) fn failure_lines(run: &CheckRun) -> Vec<(String, String)> {
     let mut lines = Vec::new();
     for (product, output) in &run.build_failures {
         lines.push((

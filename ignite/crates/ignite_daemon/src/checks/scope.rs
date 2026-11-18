@@ -10,13 +10,18 @@
 //! for the tree's inputs cannot be judged, and stays in scope to be listed as before. A family in
 //! the always set is treated the same way: it blocks every landing its inputs touch, so it too
 //! is left out when the change touches none of them.
+//!
+//! In a family with a kept listing, `crate-closure` stands for the packages its checks belong
+//! to, with the packages each depends on, not for every package of every workspace. A change
+//! to Ignite's own crates once kept the game's Rust test families in scope, because their
+//! `crate-closure` reached every package the checkout holds.
 
 use std::path::Path;
 
 use ignite_core::inputs;
 use ignite_core::manifest::{Family, InputPattern};
 
-use super::{Checks, OpenTree, plan};
+use super::{Checks, Listed, OpenTree, plan};
 use crate::server::Context;
 
 impl Checks {
@@ -47,6 +52,7 @@ impl Checks {
                 Some((_, listing)) => {
                     let mut patterns = self.listing_patterns(family);
                     patterns.extend(Self::source_patterns(tree, &listing.checks));
+                    let mut patterns = listed_packages(patterns, &listing.checks);
                     patterns.extend(self.manifest_file(ctx, name).map(InputPattern::Path));
                     // A pattern that cannot be matched, such as a crate that is gone, says
                     // nothing about the change, so the family is listed to find out.
@@ -70,4 +76,27 @@ impl Checks {
             Path::new(&ctx.config.repository.checks).join(format!("{}.toml", declared.group));
         Some(file.to_str()?.replace('\\', "/"))
     }
+}
+
+/// `patterns` with `crate-closure` standing for the packages `checks` belong to. A check's
+/// `crate-closure` reads its own package and the packages that package depends on, which
+/// [`inputs::touched`] follows from a `crate:` pattern. Where a check belongs to no package,
+/// nothing narrower can be said, and `crate-closure` is kept.
+fn listed_packages(patterns: Vec<InputPattern>, checks: &[Listed]) -> Vec<InputPattern> {
+    if !patterns.contains(&InputPattern::CrateClosure) {
+        return patterns;
+    }
+    let Some(packages) = checks
+        .iter()
+        .map(|c| c.package.clone())
+        .collect::<Option<std::collections::BTreeSet<String>>>()
+    else {
+        return patterns;
+    };
+    let mut narrowed: Vec<InputPattern> = patterns
+        .into_iter()
+        .filter(|p| *p != InputPattern::CrateClosure)
+        .collect();
+    narrowed.extend(packages.into_iter().map(InputPattern::Crate));
+    narrowed
 }

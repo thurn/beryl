@@ -149,6 +149,43 @@ impl GateView {
     }
 }
 
+/// The least chance of failing the gate credits a check with when ordering families, so a
+/// check with no record of failing still counts for something.
+const LEAST_CHANCE: f64 = 1e-4;
+
+/// The cost of each family's checks to run in `gate_plan` per failure they are expected to find,
+/// in billions of instructions. The gate runs families in this order, smallest first, so a
+/// cheap check likely to fail refuses a landing before a long family starts. A family with no
+/// check to run (all from the cache) is absent and goes first.
+pub(crate) fn run_order(view: &GateView, gate_plan: &GatePlan) -> BTreeMap<String, f64> {
+    let mut totals: BTreeMap<String, (f64, f64)> = BTreeMap::new();
+    for planned in &gate_plan.run {
+        let Some(check) = view.checks.iter().find(|c| c.check == planned.check) else {
+            continue;
+        };
+        let cost = check
+            .history
+            .as_ref()
+            .map_or(check.family_median_cost, |h| h.median_cost)
+            .billions(score::BILLIONS_PER_CPU_SECOND)
+            .max(f64::EPSILON);
+        // A score is a chance of failing per billion instructions; the always set has none.
+        let chance = planned
+            .score
+            .map_or(check.family_rate, |score| score * cost)
+            .max(LEAST_CHANCE);
+        let total = totals
+            .entry(planned.check.family().to_owned())
+            .or_insert((0.0, 0.0));
+        total.0 += cost;
+        total.1 += chance;
+    }
+    totals
+        .into_iter()
+        .map(|(family, (cost, chance))| (family, cost / chance))
+        .collect()
+}
+
 /// A check's own file is one the change edits: its name, after the family, starts with that
 /// path and goes on with `:` or `/` or ends there.
 pub(super) fn edited(check: &CheckName, changed: &[String]) -> bool {

@@ -206,3 +206,62 @@ fn a_landings_builds_run_in_its_class_for_its_ticket() {
         assert_eq!(who.ticket, Some("tk.7".parse().unwrap()), "{product}");
     }
 }
+
+/// `cargo metadata` for a second workspace, `tool/`, with one package, `hub`, which no family
+/// of [`REPOSITORY`] reads.
+const TOOL_METADATA: &str = r#"{"packages": [{"name": "hub",
+    "manifest_path": "/repo/tool/crates/hub/Cargo.toml", "dependencies": []}],
+    "workspace_root": "/repo/tool"}"#;
+
+/// The tree of [`repository`] with the `tool/` workspace beside `rust/`, changed in `changed`.
+fn two_workspaces(world: &World, changed: &[&str]) -> FakeTrees {
+    let mut trees = tree_with(world, changed);
+    trees.tracked.extend(
+        [
+            "tool/Cargo.lock",
+            "tool/Cargo.toml",
+            "tool/crates/hub/src/lib.rs",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned()),
+    );
+    trees.graph.add_workspace(TOOL_METADATA, "/repo").unwrap();
+    trees
+}
+
+/// A landing that changed only Ignite's own crates listed, built and ran the game's Rust tests.
+/// `crate-closure` stood for every package of every workspace in the checkout, both in the
+/// listing hash, so the kept listing missed, and in the scope, so the family stayed in it. It
+/// now stands for the packages of the family's own workspace and those its checks belong to.
+#[test]
+fn a_change_to_another_workspaces_crate_leaves_the_rust_families_out() {
+    let world = repository();
+    for path in ["tool/Cargo.lock", "tool/Cargo.toml", "tool/crates/hub"] {
+        world
+            .git
+            .set_object(path, Oid::new("a".repeat(40)).unwrap());
+    }
+    let tip = daemon(&world, memory(), two_workspaces(&world, &[]));
+    let tree = tip.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let mut probe = CheckRun::default();
+    let families = ["client-interface", "markdown", "rust"];
+    let prepared = tip.prepare(&world.ctx, &tree, &families, &options(false), &mut probe);
+    assert_eq!(prepared.len(), 3, "{:?}", probe.incomplete_families);
+    // The change edits the `hub` crate.
+    world
+        .git
+        .set_object("tool/crates/hub", Oid::new("b".repeat(40)).unwrap());
+    let builds = world.builds.requests().len();
+    let lists = list_commands(&world);
+
+    let changed = ["tool/crates/hub/src/lib.rs"];
+    let restarted = daemon(&world, memory(), two_workspaces(&world, &changed));
+    let gated = restarted.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+
+    assert_eq!(
+        gated.run.out_of_scope,
+        ["client-interface", "markdown", "rust"]
+    );
+    assert_eq!(world.builds.requests().len(), builds, "nothing was built");
+    assert_eq!(list_commands(&world), lists, "nothing was listed");
+}

@@ -2,6 +2,7 @@
 //! builds and git, and a tree in a temporary directory.
 
 mod costs;
+mod fail_fast;
 mod hardening;
 mod listings;
 mod plan;
