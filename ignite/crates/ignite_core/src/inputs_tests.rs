@@ -241,6 +241,10 @@ platforms = "any"
 needs = ["p"]
 inputs = ["crate-closure", "web/src/**", "web/gone/**", "crate:ghost"]
 
+[family.f.package_inputs]
+app = ["web/shots.json", "web/lost.json"]
+ghost = ["README.md"]
+
 [product.p]
 build = "cargo build"
 inputs = ["ws/Cargo.lock", "ws/*.json"]
@@ -256,6 +260,8 @@ outputs = ["ws/target"]
         [
             "family.f.inputs[2]: web/gone/**: matches no tracked file",
             "family.f.inputs[3]: crate:ghost: names no workspace package",
+            "family.f.package_inputs.app[1]: web/lost.json: matches no tracked file",
+            "family.f.package_inputs.ghost: ghost: names no workspace package",
             "product.p.inputs[1]: ws/*.json: matches no tracked file",
         ]
     );

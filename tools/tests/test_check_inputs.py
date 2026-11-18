@@ -85,3 +85,17 @@ def test_the_allowlist_holds_a_file_to_its_count_which_only_goes_down(
     assert len(check_inputs.problems(found, {"x.rs": 1})) == 2
     lower = check_inputs.problems(found[:1], {"x.rs": 2})
     assert lower and "lower its count" in lower[0]
+
+
+def test_a_package_input_covers_that_package_alone(tmp_path: Path) -> None:
+    tracked = workspace(tmp_path)
+    write(
+        tmp_path, "ws/b/tests/reads.rs", 'include_str!("../../../data/secret.json");\n'
+    )
+    tracked.append("ws/b/tests/reads.rs")
+    manifest = MANIFEST + '\n[family.unit.package_inputs]\na = ["data/secret.json"]\n'
+    write(tmp_path, "ignite/checks/unit.toml", manifest)
+    # Package a's read is declared for it; package b reads the same file without declaring it.
+    assert check_inputs.uncovered(tmp_path, tracked) == [
+        "ws/b/tests/reads.rs:1: data/secret.json (unit, b)"
+    ]

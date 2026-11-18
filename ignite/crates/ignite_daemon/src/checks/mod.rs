@@ -633,9 +633,12 @@ impl Checks {
     }
 
     /// The hash of everything a `nextest` family can read: its inputs with `crate-closure`
-    /// standing for every workspace package. Its tests cannot change while this holds.
+    /// standing for every workspace package, and every package's `package_inputs`. Its tests
+    /// cannot change while this holds.
     fn listing_hash(&self, ctx: &Context, tree: &OpenTree, family: &Family) -> Result<InputHash> {
-        let patterns: Vec<InputPattern> = hash::input_patterns(family, &self.settings.manifest)
+        let mut every = hash::input_patterns(family, &self.settings.manifest);
+        every.extend(family.package_inputs.values().flatten().cloned());
+        let patterns: Vec<InputPattern> = every
             .iter()
             .flat_map(|pattern| match pattern {
                 InputPattern::CrateClosure => tree
@@ -664,7 +667,8 @@ impl Checks {
         })
     }
 
-    /// The check's input hash over its family's inputs and its own.
+    /// The check's input hash over its family's inputs, the family's `package_inputs` for the
+    /// package that holds the check, and the check's own inputs.
     pub(crate) fn key(
         &self,
         ctx: &Context,
@@ -673,6 +677,7 @@ impl Checks {
         listed: Listed,
     ) -> Result<Keyed> {
         let mut patterns = hash::input_patterns(family, &self.settings.manifest);
+        patterns.extend_from_slice(family.package_patterns(listed.package.as_deref()));
         patterns.extend(listed.inputs.iter().cloned().map(InputPattern::from));
         let paths = inputs::resolve(
             &patterns,

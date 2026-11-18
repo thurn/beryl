@@ -53,6 +53,15 @@ inputs = [
   "docs/sample-decks/**",
 ]
 
+# What one package's tests read beyond the inputs above, hashed into that package's tests alone,
+# so that a card file or an incident report reruns only the tests that read it.
+# beryl_card_build's tests walk every card file and read the engine's keyword list from
+# beryl_card's source, which is not among its dependencies; beryl_cli's blunder tests check
+# that each blunder's incident report exists.
+[family.rust.package_inputs]
+beryl_card_build = ["rust/cards/**", "rust/crates/beryl_card/src/characteristics.rs"]
+beryl_cli = ["docs/incidents/**"]
+
 # The doctests of each package whose library has any, which cargo-nextest does not run. They
 # are where a `compile_fail` block holds that one index type cannot pass for another.
 [family.doctests]

@@ -162,7 +162,7 @@ impl TreeSource for FakeTrees {
     }
 
     fn tracked(&self, _path: &Path) -> Result<Vec<String>> {
-        Ok(vec!["src/a.py".to_owned()])
+        Ok(vec!["src/a.py".to_owned(), "data/core.json".to_owned()])
     }
 
     fn crate_graph(&self, _path: &Path, _tracked: &[String]) -> Result<CrateGraph> {
@@ -528,6 +528,30 @@ fn a_cached_nextest_family_neither_builds_nor_lists_again() {
     assert_eq!(second.from_cache, 1);
     assert_eq!(world.launcher.runs.lock().unwrap().len(), launched);
     assert_eq!(world.builds.requests().len(), builds);
+}
+
+#[test]
+fn package_inputs_enter_only_their_own_packages_keys() {
+    // The Rust family is the manifest's last table, so this extends it.
+    let manifest = format!("{MANIFEST}\n[family.rs.package_inputs]\ncore = [\"data/core.json\"]\n");
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = NEXTEST_LISTING.replace(
+        "}}}}}}",
+        "}}}}, \"other\": {\"binary-id\": \"other\", \"binary-name\": \"other\", \
+         \"package-name\": \"other\", \"testcases\": {\"b\": {\"ignored\": false, \
+         \"filter-match\": {\"status\": \"matches\"}}}}}}",
+    );
+    world
+        .git
+        .set_object("data/core.json", Oid::new("c".repeat(40)).unwrap());
+    let core = key_of(&world, "rs:core::a");
+    let other = key_of(&world, "rs:other::b");
+
+    world
+        .git
+        .set_object("data/core.json", Oid::new("d".repeat(40)).unwrap());
+    assert_ne!(key_of(&world, "rs:core::a"), core);
+    assert_eq!(key_of(&world, "rs:other::b"), other);
 }
 
 #[test]

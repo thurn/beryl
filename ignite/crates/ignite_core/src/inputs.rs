@@ -271,18 +271,33 @@ impl fmt::Display for LintFinding {
     }
 }
 
-/// Every pattern in `manifest` that matches no tracked file, and every `crate:` that names no
-/// workspace package, in the order of the manifest's keys.
+/// Every pattern in `manifest` that matches no tracked file, every `crate:` that names no
+/// workspace package, and every key of a family's `package_inputs` that names no workspace
+/// package, in the order of the manifest's keys.
 pub fn lint(manifest: &Manifest, graph: &CrateGraph, tracked: &[String]) -> Vec<LintFinding> {
-    let mut lists: BTreeMap<String, &[InputPattern]> = BTreeMap::new();
+    // Each list by its key, with the package a `package_inputs` list is for.
+    let mut lists: BTreeMap<String, (Option<&str>, &[InputPattern])> = BTreeMap::new();
     for (name, declared) in &manifest.families {
-        lists.insert(format!("family.{name}.inputs"), &declared.family.inputs);
+        let family = &declared.family;
+        lists.insert(format!("family.{name}.inputs"), (None, &family.inputs));
+        for (package, patterns) in &family.package_inputs {
+            let key = format!("family.{name}.package_inputs.{package}");
+            lists.insert(key, (Some(package), patterns));
+        }
     }
     for (name, product) in &manifest.products {
-        lists.insert(format!("product.{name}.inputs"), &product.inputs);
+        lists.insert(format!("product.{name}.inputs"), (None, &product.inputs));
     }
     let mut findings = Vec::new();
-    for (key, patterns) in lists {
+    for (key, (package, patterns)) in lists {
+        if let Some(package) = package
+            && graph.package(package).is_none()
+        {
+            findings.push(LintFinding {
+                key: key.clone(),
+                error: input_error(package, "names no workspace package"),
+            });
+        }
         for (index, pattern) in patterns.iter().enumerate() {
             let checked = match pattern {
                 InputPattern::Path(text) => match_path(text, tracked).map(drop),

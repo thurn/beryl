@@ -844,6 +844,11 @@ The fields:
   package with every workspace package it depends on, and `crate-closure` for
   the same computed per test from the package that holds it. The lock file, the
   toolchain version and the family's own commands are always included.
+- `package_inputs` maps a package to what only its checks read beyond `inputs`,
+  in the same syntax except `crate-closure`, as in
+  `beryl_card_build = ["rust/cards/**"]` under `[family.rust.package_inputs]`.
+  Only the checks that package holds hash those entries, so the family's other
+  checks keep their cached results when the files change.
 - `list` prints the family's checks, each with any inputs of its own. A check
   that reads something no file holds, such as the commit subjects since the
   branch left staging, also prints a `digest` of it, which enters its input
@@ -929,6 +934,9 @@ not hash file contents itself:
   temporary index and asks git for the tree object, without touching the branch.
   This takes a fraction of a second.
 - A directory input contributes its git tree ID, and a file input its blob ID.
+- A check's inputs are its family's `inputs`, the `package_inputs` of the
+  package that holds it, the inputs its own `list` line names, and the inputs of
+  the products its family needs.
 - The input hash is SHA-256 over the sorted inputs, the family's commands, the
   toolchain version and, for a check that is not `platforms = "any"`, the
   operating system.
@@ -984,7 +992,8 @@ guards against that with reruns, which need no tracing of file access:
   `check-inputs` source rule compares the repository paths its Rust tests and
   build scripts read through a literal (`include_str!`, `fs::read`, a `join` on
   `CARGO_MANIFEST_DIR`) with the inputs of each `crate-closure` family that runs
-  them.
+  them, counting the family's `package_inputs` for the package that holds the
+  file.
 
 ## Where regression checks run
 

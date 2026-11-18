@@ -12,7 +12,8 @@ So this check reads the Rust files of each package a `crate-closure` family runs
 string literals that name a tracked repository path in a statement that reads a file or builds
 a path (`include_str!`, `include_bytes!`, `fs::read`, `read_to_string`, `read_dir`, `.join(`,
 `concat!`, `CARGO_MANIFEST_DIR`), and reports each path that the family's inputs do not cover
-for that package. A literal is tried relative to its file's directory, to its package's
+for that package, counting the family's `package_inputs` for that package (the extra inputs
+that only its checks hash). A literal is tried relative to its file's directory, to its package's
 directory, to its workspace's root and to the checkout's root, in that order.
 
 It cannot see a path built from parts it cannot read, such as a name passed in as an argument;
@@ -70,6 +71,10 @@ class Family:
     # Packages its commands name with `-p`, if any, and those they leave out with `--exclude`.
     only: tuple[str, ...]
     excluded: tuple[str, ...]
+    # Its `package_inputs`: by package, the extra path patterns and `crate:` entries that only
+    # that package's checks hash.
+    package_patterns: dict[str, tuple[str, ...]]
+    package_crates: dict[str, tuple[str, ...]]
 
 
 @dataclass(frozen=True)
@@ -103,23 +108,37 @@ def families(root: Path) -> list[Family]:
             needs = [str(n) for n in family.get("needs", [])]
             if needs and needs[0] in products:
                 workspace = str(products[needs[0]].get("dir", ""))
+        per_package: dict[str, list[str]] = {
+            str(package): [str(i) for i in listed]
+            for package, listed in family.get("package_inputs", {}).items()
+        }
         found.append(
             Family(
                 name=name,
                 workspace=workspace,
-                patterns=tuple(
-                    i
-                    for i in inputs
-                    if i != "crate-closure" and not i.startswith("crate:")
-                ),
-                crates=tuple(i[6:] for i in inputs if i.startswith("crate:")),
+                patterns=path_patterns(inputs),
+                crates=crate_patterns(inputs),
                 only=tuple(w for i, w in enumerate(words[1:]) if words[i] == "-p"),
                 excluded=tuple(
                     w for i, w in enumerate(words[1:]) if words[i] == "--exclude"
                 ),
+                package_patterns={p: path_patterns(i) for p, i in per_package.items()},
+                package_crates={p: crate_patterns(i) for p, i in per_package.items()},
             )
         )
     return found
+
+
+def path_patterns(inputs: Sequence[str]) -> tuple[str, ...]:
+    """The path patterns among `inputs`, beside `crate-closure` and `crate:` entries."""
+    return tuple(
+        i for i in inputs if i != "crate-closure" and not i.startswith("crate:")
+    )
+
+
+def crate_patterns(inputs: Sequence[str]) -> tuple[str, ...]:
+    """The packages that `crate:` entries among `inputs` name."""
+    return tuple(i[6:] for i in inputs if i.startswith("crate:"))
 
 
 def packages(root: Path, workspace: str) -> list[Package]:
@@ -268,10 +287,12 @@ def uncovered(root: Path, tracked: Sequence[str]) -> list[str]:
             if package.name in family.excluded:
                 continue
             crates = closure(package.name, graph)
-            for extra in family.crates:
+            extras = [*family.crates, *family.package_crates.get(package.name, ())]
+            for extra in extras:
                 crates |= closure(extra, graph)
             patterns = [
                 *family.patterns,
+                *family.package_patterns.get(package.name, ()),
                 *(graph[c].dir for c in crates),
                 *(posixpath.join(family.workspace, f) for f in WORKSPACE_FILES),
             ]

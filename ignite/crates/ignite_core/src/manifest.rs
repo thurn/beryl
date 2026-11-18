@@ -122,9 +122,25 @@ pub struct Family {
     /// that this command has never printed before, such as scenarios from unplayed seeds.
     pub next: Option<String>,
     pub inputs: Vec<InputPattern>,
+    /// Extra inputs of one package's checks, by package name: what that package's tests read
+    /// beyond `inputs`, such as the card files a code generator's tests walk. Only the checks
+    /// that package holds hash them, so the family's other checks keep their cached results
+    /// when these files change.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub package_inputs: BTreeMap<String, Vec<InputPattern>>,
     /// Blocks every landing its inputs touch.
     #[serde(default)]
     pub always: bool,
+}
+
+impl Family {
+    /// The family's extra inputs for the checks of `package`, from `package_inputs`; none for a
+    /// check that belongs to no package.
+    pub fn package_patterns(&self, package: Option<&str>) -> &[InputPattern] {
+        package
+            .and_then(|name| self.package_inputs.get(name))
+            .map_or(&[], Vec::as_slice)
+    }
 }
 
 /// A `[product.<name>]` table.
@@ -236,9 +252,8 @@ impl Manifest {
                 .to_owned();
             for (name, family) in parsed.family {
                 let key = format!("family.{name}");
-                check_family(&family).map_err(|(field, message)| {
-                    error(format!("{key}.{field}"), message.to_owned())
-                })?;
+                check_family(&family)
+                    .map_err(|(field, message)| error(format!("{key}.{field}"), message))?;
                 if let Some(first) = origin.insert(key.clone(), path) {
                     return Err(error(
                         key,
@@ -298,30 +313,43 @@ impl Manifest {
     }
 }
 
-fn check_family(family: &Family) -> Result<(), (&'static str, &'static str)> {
+/// The field at fault, after `family.<name>.`, and what is wrong with it.
+fn check_family(family: &Family) -> Result<(), (String, String)> {
+    let fail = |field: &str, message: &str| Err((field.to_owned(), message.to_owned()));
     if let Platforms::Each(list) = &family.platforms
         && list.is_empty()
     {
-        return Err(("platforms", "names no operating system"));
+        return fail("platforms", "names no operating system");
     }
     if family.inputs.is_empty() {
-        return Err(("inputs", "must name what the checks read"));
+        return fail("inputs", "must name what the checks read");
+    }
+    for (package, patterns) in &family.package_inputs {
+        let field = format!("package_inputs.{package}");
+        if patterns.is_empty() {
+            return fail(&field, "must name what the package's checks read");
+        }
+        // `crate-closure` already starts from the package that holds each check, so it belongs
+        // in `inputs`, where it covers every package.
+        if patterns.contains(&InputPattern::CrateClosure) {
+            return fail(&field, "crate-closure belongs in the family's inputs");
+        }
     }
     match (family.kind, &family.next) {
         (Kind::Exploration, None) => {
-            return Err(("next", "is required for an exploration family"));
+            return fail("next", "is required for an exploration family");
         }
         (Kind::Regression, Some(_)) => {
-            return Err(("next", "is only for an exploration family"));
+            return fail("next", "is only for an exploration family");
         }
         _ => {}
     }
     if family.adapter == Adapter::Jsonl {
         if family.list.is_none() {
-            return Err(("list", "is required for the jsonl adapter"));
+            return fail("list", "is required for the jsonl adapter");
         }
         if family.run.is_none() {
-            return Err(("run", "is required for the jsonl adapter"));
+            return fail("run", "is required for the jsonl adapter");
         }
     }
     Ok(())
@@ -477,6 +505,44 @@ outputs = ["ui/node_modules"]
         );
         let error = Manifest::from_files(&files(&[("checks/ui.toml", &text)])).unwrap_err();
         assert_eq!(error.key, "family.shots.next");
+    }
+
+    #[test]
+    fn package_inputs_belong_to_their_package_alone() {
+        let text = RUST.replace(
+            "\n[product.rust-tests]",
+            "[family.rust.package_inputs]\ncore = [\"data/cards/**\", \"crate:extra\"]\n\n\
+             [product.rust-tests]",
+        );
+        let manifest = Manifest::from_files(&files(&[("checks/rust.toml", &text)])).unwrap();
+        let rust = &manifest.families["rust"].family;
+        assert_eq!(
+            rust.package_patterns(Some("core")),
+            [
+                InputPattern::Path("data/cards/**".to_owned()),
+                InputPattern::Crate("extra".to_owned())
+            ]
+        );
+        assert!(rust.package_patterns(Some("other")).is_empty());
+        assert!(rust.package_patterns(None).is_empty());
+        let without = Manifest::from_files(&files(&[("checks/rust.toml", RUST)])).unwrap();
+        assert!(without.families["rust"].family.package_inputs.is_empty());
+    }
+
+    #[test]
+    fn package_inputs_refuse_an_empty_list_and_crate_closure() {
+        for (list, message) in [
+            ("[]", "must name"),
+            ("[\"crate-closure\"]", "belongs in the family's inputs"),
+        ] {
+            let text = RUST.replace(
+                "\n[product.rust-tests]",
+                &format!("[family.rust.package_inputs]\ncore = {list}\n\n[product.rust-tests]"),
+            );
+            let error = Manifest::from_files(&files(&[("checks/rust.toml", &text)])).unwrap_err();
+            assert_eq!(error.key, "family.rust.package_inputs.core");
+            assert!(error.message.contains(message), "{error}");
+        }
     }
 
     #[test]
