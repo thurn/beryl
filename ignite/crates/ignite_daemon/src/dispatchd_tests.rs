@@ -388,6 +388,17 @@ fn a_paused_pool_hands_off_nothing_until_resumed() {
 }
 
 #[test]
+fn a_draining_daemon_asks_the_hub_for_nothing_until_it_stops() {
+    let rig = rig(&["local_w1"]);
+    rig.reserve("T.1", "local_w1", &[]);
+    rig.dispatcher.set_draining(true);
+    assert!(rig.step().is_none());
+    assert!(rig.hub.asked().is_empty());
+    rig.dispatcher.set_draining(false);
+    assert_eq!(handoff_to(&rig.step().unwrap()), ("local_w1", "T.1"));
+}
+
+#[test]
 fn a_check_answered_unknown_changes_nothing() {
     let rig = rig(&["local_w1"]);
     rig.hold("local_w1", "T.1");

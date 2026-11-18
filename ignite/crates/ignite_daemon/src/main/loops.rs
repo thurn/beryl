@@ -2,6 +2,7 @@
 //! daemon. Each loop reports a failed round on standard error and tries again, so an
 //! unreachable hub or a busy tree never stops the daemon.
 
+use std::cell::RefCell;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -14,6 +15,7 @@ use ignite_core::time::SystemClock;
 use ignite_core::traits::{Error, Result};
 
 use super::DaemonOptions;
+use super::selfupdate::SelfUpdate;
 use crate::checks::Checks;
 use crate::claim::Claims;
 use crate::dispatchd::Dispatcher;
@@ -21,7 +23,7 @@ use crate::hubclient::HubClient;
 use crate::idle::Idle;
 use crate::land::Landing;
 use crate::sched::Scheduler;
-use crate::server::Context;
+use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
 use crate::tip::{CheckTipWork, TipOutcome, TipVerifier};
 use crate::trees::Trees;
@@ -54,11 +56,13 @@ pub struct Parts {
     pub home: Home,
     pub version: String,
     pub feed_wait_s: u32,
+    pub update: Arc<SelfUpdate>,
 }
 
 impl Parts {
-    /// Starts every loop. A second call starts nothing.
-    pub fn spawn(&self) {
+    /// Starts every loop. A second call starts nothing. `server` reports which verbs are
+    /// still running, which an update waits for.
+    pub fn spawn(&self, server: &Arc<Server>) {
         let Some(db) = self
             .sender_db
             .lock()
@@ -67,15 +71,18 @@ impl Parts {
         else {
             return;
         };
-        self.spawn_sender(db);
+        self.spawn_sender(db, server.clone());
         self.spawn_tip();
         self.spawn_claims();
         self.spawn_idle();
         self.spawn_metrics();
     }
 
-    /// Sends the outbox, the heartbeat and any landing the hub has not heard of.
-    fn spawn_sender(&self, db: Connection) {
+    /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each
+    /// heartbeat it compares the daemon's version with the hub's: it stops asking for work
+    /// while an update waits for running commands, and restarts into the new executable once
+    /// none runs.
+    fn spawn_sender(&self, db: Connection, server: Arc<Server>) {
         let (ctx, client, landing, dispatcher, version) = (
             self.ctx.clone(),
             self.client.clone(),
@@ -83,19 +90,25 @@ impl Parts {
             self.dispatcher.clone(),
             self.version.clone(),
         );
+        let (scheduler, update) = (self.scheduler.clone(), self.update.clone());
         thread::spawn(move || {
+            // The hub's version from the last heartbeat it answered.
+            let hub_version: RefCell<Option<String>> = RefCell::new(None);
             let beat = || {
-                client
-                    .heartbeat(&Heartbeat {
-                        machine: ctx.machine.clone(),
-                        version: version.clone(),
-                        workers: dispatcher.view().unwrap_or_default(),
-                    })
-                    .map(|_| ())
+                let reply = client.heartbeat(&Heartbeat {
+                    machine: ctx.machine.clone(),
+                    version: version.clone(),
+                    workers: dispatcher.view().unwrap_or_default(),
+                })?;
+                *hub_version.borrow_mut() = Some(reply.hub_version);
+                Ok(())
             };
             loop {
                 crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
                 landing.deliver_pending(ctx.hub.as_ref());
+                let running = running_commands(&server, &scheduler);
+                let may_ask = update.after_heartbeat(hub_version.borrow().as_deref(), running);
+                dispatcher.set_draining(!may_ask);
                 thread::sleep(SEND_EVERY);
             }
         });
@@ -120,11 +133,20 @@ impl Parts {
     fn spawn_tip(&self) {
         let mut verifier = self.verifier();
         let (ctx, trees, wait_s) = (self.ctx.clone(), self.trees.clone(), self.feed_wait_s);
+        let update = self.update.clone();
         thread::spawn(move || {
             loop {
-                if let Err(error) = verifier.round(&ctx, wait_s) {
-                    eprintln!("ignite: tip verification: {error}");
-                    thread::sleep(TIP_RETRY);
+                match verifier.round(&ctx, wait_s) {
+                    Ok(Some((_, TipOutcome::Verified))) => {
+                        if let Err(error) = update.after_master_moved() {
+                            eprintln!("ignite: the new release was not built: {error}");
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        eprintln!("ignite: tip verification: {error}");
+                        thread::sleep(TIP_RETRY);
+                    }
                 }
                 if let Err(error) = trees.fast_forward_main() {
                     eprintln!("ignite: main checkout not fast-forwarded: {error}");
@@ -184,6 +206,18 @@ impl Parts {
             }
         });
     }
+}
+
+/// The commands an update waits for: verbs still running in the server, and commands that
+/// hold or wait for cores, such as the checks of tip verification and idle work.
+fn running_commands(server: &Server, scheduler: &Scheduler) -> usize {
+    let held: u32 = scheduler
+        .status()
+        .classes
+        .iter()
+        .map(|class| class.running + class.waiting)
+        .sum();
+    server.running_verbs() + held as usize
 }
 
 /// Collects the runs a stopped daemon left, each on a thread that waits for its supervisor.

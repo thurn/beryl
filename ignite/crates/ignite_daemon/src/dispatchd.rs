@@ -156,6 +156,8 @@ struct State {
     given: BTreeMap<u64, Given>,
     failures: u32,
     down: bool,
+    /// The daemon is waiting to update to another version and asks for no new work.
+    draining: bool,
     reserved: BTreeMap<SessionId, Reserved>,
     /// Hand-offs whose worker refused them, waiting for another idle worker.
     orphans: Vec<Reserved>,
@@ -242,6 +244,12 @@ impl Dispatcher {
     }
 
     /// Every member as the hub's heartbeat and `ignite pool list` show it.
+    /// Stops or resumes asking the hub for tickets while the daemon waits to update. Work
+    /// already handed to workers carries on.
+    pub fn set_draining(&self, draining: bool) {
+        self.state().draining = draining;
+    }
+
     pub fn view(&self) -> Result<Vec<WorkerState>> {
         let members = self.pool.members()?;
         let holders = self.host.holders();
@@ -544,7 +552,7 @@ impl Dispatcher {
 
     /// Asks the hub for tickets while workers are idle and ticket trees are free.
     fn ask_for_work(&self, ctx: &Context, state: &mut State, members: &[Member], now: Timestamp) {
-        if state.down || self.pool.paused().unwrap_or(true) {
+        if state.down || state.draining || self.pool.paused().unwrap_or(true) {
             return;
         }
         let mut idle: Vec<&Member> = Self::idle_workers(state, members, now);

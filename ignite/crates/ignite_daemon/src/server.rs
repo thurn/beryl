@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -148,6 +149,8 @@ pub struct Server {
     db: Option<Arc<Mutex<Connection>>>,
     hooks: Vec<Box<dyn Hook>>,
     commands: Mutex<BTreeMap<SessionId, CurrentCommand>>,
+    /// Verbs running on threads of their own, including those handed off to a handle.
+    running: Arc<AtomicUsize>,
 }
 
 impl Server {
@@ -171,6 +174,7 @@ impl Server {
             db,
             hooks: Vec::new(),
             commands: Mutex::new(BTreeMap::new()),
+            running: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -187,6 +191,12 @@ impl Server {
     /// The command `session` is running, or the one it ran last.
     pub fn current_command(&self, session: &SessionId) -> Option<CurrentCommand> {
         lock(&self.commands).get(session).cloned()
+    }
+
+    /// The number of verbs still running, whether or not their callers still wait. `wait`
+    /// itself is not counted: it only waits on another verb.
+    pub fn running_verbs(&self) -> usize {
+        self.running.load(Ordering::SeqCst)
     }
 
     /// Answers one request.
@@ -229,9 +239,15 @@ impl Server {
     /// ends, the reply names a handle, and the verb's reply goes to the handle when it finishes.
     fn run_or_hand_off(&self, verb: Arc<dyn Verb>, ctx: &Context, req: &Request) -> Reply {
         let slot = Arc::new((Mutex::new(Slot::Pending), Condvar::new()));
+        self.running.fetch_add(1, Ordering::SeqCst);
         let worker = {
-            let (slot, handles, ctx, req) =
-                (slot.clone(), self.handles.clone(), ctx.clone(), req.clone());
+            let (slot, handles, ctx, req, running) = (
+                slot.clone(),
+                self.handles.clone(),
+                ctx.clone(),
+                req.clone(),
+                self.running.clone(),
+            );
             move || {
                 let reply =
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| verb.run(&ctx, &req)))
@@ -246,6 +262,7 @@ impl Server {
                     Slot::HandedOff(handle) => handles.finish(handle, reply),
                     _ => *state = Slot::Done(reply),
                 }
+                running.fetch_sub(1, Ordering::SeqCst);
                 slot.1.notify_all();
             }
         };

@@ -15,17 +15,19 @@
 mod assemble;
 mod desk;
 mod loops;
+mod selfupdate;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use ignite_core::config::Config;
+use ignite_core::ids::Commit;
 use ignite_core::manifest::Manifest;
 use ignite_core::traits::{Error, Result};
 
 use crate::doctor::NativeHost;
 use crate::server::{Context, Server};
-use crate::update::Home;
+use crate::update::{ExecRestart, Home, TreeBuilder};
 
 /// What one daemon is started with.
 #[derive(Clone, Debug)]
@@ -87,6 +89,7 @@ impl Daemon {
             home: base.options.home.clone(),
             version: base.options.version.clone(),
             feed_wait_s: base.options.feed_wait_s,
+            update: Arc::new(self_update(&base)),
         };
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
         Ok(Daemon {
@@ -100,7 +103,7 @@ impl Daemon {
     /// Starts the background loops: the outbox and heartbeat, tip verification, idle work,
     /// the stall check, the main checkout's fast-forward and fleet metrics.
     pub fn run_loops(&self) {
-        self.parts.spawn();
+        self.parts.spawn(&self.server);
     }
 
     /// Verifies the integration branch's newest commit once, now, as one round of the tip loop
@@ -112,6 +115,24 @@ impl Daemon {
     /// Serves the socket until the process ends.
     pub fn serve(&self, socket: &Path) -> std::io::Result<()> {
         crate::server::serve(&self.server, &socket.to_string_lossy())
+    }
+}
+
+/// Updates this daemon to new releases: builds them in `update/update-tree` in the home
+/// folder, apart from the build trees, and restarts with [`ExecRestart`].
+fn self_update(base: &assemble::Base) -> selfupdate::SelfUpdate {
+    let options = &base.options;
+    selfupdate::SelfUpdate {
+        own: Commit::new(&options.version).ok(),
+        git: base.git.clone(),
+        builder: Box::new(TreeBuilder {
+            repo: options.repo.clone(),
+            work: options.home.root.join("update"),
+        }),
+        store: options.home.store(),
+        master: base.config.repository.master.clone(),
+        restart: Box::new(ExecRestart),
+        ready: Mutex::new(None),
     }
 }
 
