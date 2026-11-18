@@ -22,7 +22,7 @@ use ignite_core::protocol::hub::{
     AuditReport, CheckState, IncompleteReason, IncompleteReport, TipWaiting,
 };
 use ignite_core::protocol::tickets::{
-    EdgeKind, Graph, GraphTicket, Status, TicketFields, TicketType,
+    Graph, GraphTicket, Status, TicketFields, TicketType,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
@@ -481,9 +481,11 @@ fn epic_filing(epic: &str, lines: &[String]) -> Filing {
     }
 }
 
-/// Each loop of live tickets that wait on one another through `blocks`, `conditional-blocks` or
-/// `waits-for` edges, among tickets none of which has an epic above it (an epic's own graph is
-/// reported with the epic). Each loop is its tickets in order of ID.
+/// Each loop of live tickets that wait on one another, among tickets none of which has an epic
+/// above it (an epic's own graph is reported with the epic). A ticket waits on what the
+/// readiness rules say holds it back, so a loop can run through `blocks`, `conditional-blocks`
+/// or `waits-for` edges, through a parent's dependencies and through a parent's live children.
+/// Each loop is its tickets in order of ID.
 fn find_cycles(graph: &Graph) -> Vec<Vec<String>> {
     let parents: BTreeMap<&str, Option<&str>> = graph
         .tickets
@@ -506,17 +508,19 @@ fn find_cycles(graph: &Graph) -> Vec<Vec<String>> {
         })
         .any(|up| types.get(up) == Some(&TicketType::Epic))
     };
+    // A ticket waits on each of its blockers but itself (rule 1, a ticket that is not open):
+    // its own dependencies, its ancestors' dependencies, the siblings a `last` ticket waits
+    // for and its live children. So a loop that runs through a parent link is a loop here.
     let mut forward: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     let mut backward: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-    for edge in &graph.edges {
-        let blocks = matches!(
-            edge.kind,
-            EdgeKind::Blocks | EdgeKind::ConditionalBlocks | EdgeKind::WaitsFor
-        );
-        let (src, dst) = (edge.src.as_str(), edge.dst.as_str());
-        if blocks && parents.contains_key(src) && parents.contains_key(dst) {
-            forward.entry(src).or_default().push(dst);
-            backward.entry(dst).or_default().push(src);
+    for entry in &graph.tickets {
+        let src = entry.ticket.id.as_str();
+        for blocker in &entry.blocked_by {
+            let dst = blocker.id.as_str();
+            if dst != src && parents.contains_key(dst) {
+                forward.entry(src).or_default().push(dst);
+                backward.entry(dst).or_default().push(src);
+            }
         }
     }
     // Kosaraju's algorithm, with explicit stacks so that a long chain cannot overflow.

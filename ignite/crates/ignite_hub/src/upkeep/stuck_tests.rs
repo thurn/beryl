@@ -203,3 +203,35 @@ fn an_epic_waiting_on_a_moving_epic_is_not_stuck() {
     assert!(titles.iter().any(|t| t.contains(&milestone[0])), "{titles:?}");
     assert!(titles.iter().any(|t| t.contains(&last[0])), "{titles:?}");
 }
+
+#[test]
+fn a_loop_through_a_parent_link_is_reported() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let ids = apply(
+        &mut conn,
+        vec![
+            create("A", TicketType::Task, None, &[]),
+            create("Parent", TicketType::Task, None, &[]),
+        ],
+        clock.now(),
+    );
+    let child = apply(
+        &mut conn,
+        vec![create("Child", TicketType::Task, Some(&ids[1]), &[])],
+        clock.now(),
+    );
+    // A waits on Child, and Child waits on A through its parent's dependency on A.
+    edges::add(&conn, &ids[0], &child[0], EdgeKind::Blocks).unwrap();
+    edges::add(&conn, &ids[1], &ids[0], EdgeKind::Blocks).unwrap();
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert_eq!(report.tickets_filed.len(), 1);
+    let filed = ticket(&conn, &report.tickets_filed[0]);
+    assert!(filed.labels.contains(&"graph-repair".to_owned()));
+    assert!(
+        filed.title.contains(&ids[0]) && filed.title.contains(&child[0]),
+        "{}",
+        filed.title
+    );
+}
