@@ -330,6 +330,10 @@ The verbs an agent uses while working:
   only the hub's record, since the cache and the gate's choice depend on a
   tree's change.
 - `ignite status` and `ignite doctor` print the machine's state and health.
+  `doctor` also probes the hub's write path with one tokenless `POST` to the
+  heartbeat route: the writable hub refuses it with 401, while the read-only
+  public listener (`IGNITE_HUB_PUBLIC_LISTEN`) answers 405, and `doctor` then
+  reports a `listener` problem naming the URL to point at the writable listener.
 - `ignite tell <ticket | session | --all> "<text>"` sends a correction to work
   that is under way. See [Steering work in flight](#steering-work-in-flight).
 - `ignite close -m "<reason>"` closes the ticket without landing anything, for a
