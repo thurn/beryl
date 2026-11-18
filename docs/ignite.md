@@ -774,9 +774,9 @@ Rules for trees:
   program) with a newer unit of the same crate and settings, together with every
   unit only it depends on, followed through the dependency fingerprints that
   Cargo records. A unit that a kept build depends on is never deleted, however
-  alike it looks to another. While the disk has less than 50 GB free, it also holds
-  the trees under their current size less what the disk lacks, since the limit
-  was set for the disk as it was then.
+  alike it looks to another. While the disk has less than 50 GB free, it also
+  holds the trees under their current size less what the disk lacks, since the
+  limit was set for the disk as it was then.
 - The daemon's disk loop checks this every minute, in a loop of its own so that
   idle work waiting for cores cannot hold it up. It measures the trees at most
   once every 30 minutes (every 5 while under 50 GB free), and not at all while
