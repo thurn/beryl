@@ -82,26 +82,22 @@ impl Replay {
 /// Replays `catches` against `checks`, the hub's records of every regression check. `None`
 /// when no catch could be scored.
 pub fn replay(catches: &[Catch], checks: &[GateCheck]) -> Option<Replay> {
-    let everything = Gate {
-        threshold: 0.0,
-        cap: f64::INFINITY,
-    };
-    let mut scored: Vec<(&Catch, f64)> = Vec::new();
-    for catch in catches {
-        let gate = plan_for(&catch.areas, checks, &everything);
-        let score = gate
-            .run
+    let lists = solo_scores(catches, checks);
+    let mut scored: Vec<(f64, &[(f64, f64)])> = Vec::new();
+    for (catch, list) in catches.iter().zip(&lists) {
+        let score = checks
             .iter()
-            .find(|p| p.why == Why::Scored && p.check.as_str() == catch.check)
-            .and_then(|p| p.score);
+            .zip(list)
+            .find(|(check, _)| check.check.as_str() == catch.check)
+            .map(|(_, (score, _))| *score);
         if let Some(score) = score {
-            scored.push((catch, score));
+            scored.push((score, list));
         }
     }
     if scored.is_empty() {
         return None;
     }
-    let mut candidates: Vec<f64> = scored.iter().map(|(_, score)| *score).collect();
+    let mut candidates: Vec<f64> = scored.iter().map(|(score, _)| *score).collect();
     candidates.sort_by(|a, b| b.total_cmp(a));
     let need = ((KEEP * scored.len() as f64).ceil() as usize).clamp(1, scored.len());
     let chosen = candidates[need - 1];
@@ -113,14 +109,17 @@ pub fn replay(catches: &[Catch], checks: &[GateCheck]) -> Option<Replay> {
         .count();
     let start = at.saturating_sub(NEARBY);
     let row = |threshold: f64| {
-        let kept = scored.iter().filter(|(_, s)| *s >= threshold).count();
-        let gate = Gate {
-            threshold,
-            cap: f64::INFINITY,
-        };
+        let kept = scored.iter().filter(|(s, _)| *s >= threshold).count();
+        // With no cap, no builds to charge and nothing cached, the gate runs every check
+        // scoring at or above the threshold, so its scored cost is the sum of their costs.
         let costs: Vec<f64> = scored
             .iter()
-            .map(|(catch, _)| plan_for(&catch.areas, checks, &gate).scored_cost)
+            .map(|(_, list)| {
+                list.iter()
+                    .filter(|(score, _)| *score >= threshold)
+                    .map(|(_, cost)| cost)
+                    .sum()
+            })
             .collect();
         Row {
             threshold,
@@ -137,6 +136,42 @@ pub fn replay(catches: &[Catch], checks: &[GateCheck]) -> Option<Replay> {
         unscored: catches.len() - scored.len(),
         nearby,
         chosen: at - start,
+    })
+}
+
+/// For each catch, the gate's score and cost for each of `checks` (in order), each planned
+/// alone. Planning all of them together costs time quadratic in their number, and with no
+/// builds to charge and no groups (see [`gate_checks`]) a check's score does not depend on
+/// the others. A check the gate would not score gets a score of negative infinity.
+fn solo_scores(catches: &[Catch], checks: &[GateCheck]) -> Vec<Vec<(f64, f64)>> {
+    let everything = Gate {
+        threshold: f64::NEG_INFINITY,
+        cap: f64::INFINITY,
+    };
+    let score_one = |catch: &Catch| -> Vec<(f64, f64)> {
+        checks
+            .iter()
+            .map(|check| {
+                let gate = plan_for(&catch.areas, std::slice::from_ref(check), &everything);
+                gate.run
+                    .iter()
+                    .find(|p| p.why == Why::Scored)
+                    .and_then(|p| p.score)
+                    .map_or((f64::NEG_INFINITY, 0.0), |score| (score, gate.scored_cost))
+            })
+            .collect()
+    };
+    let threads = std::thread::available_parallelism().map_or(1, usize::from);
+    let chunk = catches.len().div_ceil(threads).max(1);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = catches
+            .chunks(chunk)
+            .map(|part| scope.spawn(move || part.iter().map(score_one).collect::<Vec<_>>()))
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|handle| handle.join().expect("a replay thread panicked"))
+            .collect()
     })
 }
 
