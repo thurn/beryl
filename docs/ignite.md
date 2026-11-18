@@ -180,8 +180,8 @@ Enact's orchestrator sessions cost $591 in the week, 7% of all spend:
 
 Jarvis runs Claude Code sessions, and multivac runs Codex sessions. About 285
 tickets ran on multivac and a machine since retired, and the efficiency store
-holds no data for them, because moving data between machines is a manual export and
-import.
+holds no data for them, because moving data between machines is a manual export
+and import.
 
 ### One rules fix, step by step
 
@@ -425,8 +425,7 @@ Ignite is one executable. This section says which processes exist and how they
 survive each other's restarts.
 
 - **The client** is the `ignite` command an agent types. It sends the request to
-  the machine's daemon over a local socket, prints the
-  reply and exits.
+  the machine's daemon over a local socket, prints the reply and exits.
 - **The daemon** starts at login on every machine. It keeps its state in a local
   SQLite database, so a restart loses nothing.
 - **A supervisor** is a small process, started from the same executable, that
@@ -835,9 +834,9 @@ The parts:
   agent's new regression test is never skipped.
 - Checks that have failed in exactly the same runs are scored as one check, with
   their summed cost.
-- A cost known only in CPU seconds, from history imported at the
-  switch, is converted at the rate measured on jarvis, about 17 billion
-  instructions per CPU second, until the check has run under Ignite.
+- A cost known only in CPU seconds, from history imported at the switch, is
+  converted at the rate measured on jarvis, about 17 billion instructions per
+  CPU second, until the check has run under Ignite.
 
 Two checks after a change to one function in `beryl_rules`, with a threshold of
 0.004:
@@ -1073,8 +1072,8 @@ ignite ticket wait Tig9a.1 --status closed
 
 Labels carry what the dispatcher needs to know about a ticket: `tier:opus`,
 `tier:sonnet` or `tier:light` names the model it needs, and `lane:<name>` a
-chain. `ignite ticket batch` creates or
-changes many tickets in one request that succeeds or fails as a whole.
+chain. `ignite ticket batch` creates or changes many tickets in one request that
+succeeds or fails as a whole.
 
 Every change to anything in Beryl has a ticket. `ignite start "<summary>"` makes
 that cheap for a session that was handed a task directly: it files the ticket
@@ -1330,8 +1329,8 @@ What is shared, and what is not:
 
 - **Tickets, the result cache and records are shared** through the hub.
 - **Build output is not shared.** Incremental builds belong to one path on one
-  machine. The fleet grows by placing whole
-  sessions, each with a build tree, on machines with cores.
+  machine. The fleet grows by placing whole sessions, each with a build tree, on
+  machines with cores.
 - **A machine is known by an ID** the daemon creates and stores, not by its
   hostname, so renaming a machine does not split its history.
 
@@ -1676,9 +1675,9 @@ These show that cores, trees and workers go where the rules say.
 - **Improvement share.** File several improvement tickets and twenty product
   tickets. Expect at least three of the next twenty hand-offs to be improvement
   tickets, largest saving first.
-- **A batch job.** Start a tournament with `ignite run --class batch` on multivac
-  and then several landings. Expect the tournament to keep its floor of cores
-  and the landings to take the rest.
+- **A batch job.** Start a tournament with `ignite run --class batch` on
+  multivac and then several landings. Expect the tournament to keep its floor of
+  cores and the landings to take the rest.
 - **Shares between epics.** Give one epic `--workers 5` and another
   `--workers 2`, each with twenty ready tickets, and a pool of seven. Expect
   five and two in progress. Close all but one of the second epic's tickets and
