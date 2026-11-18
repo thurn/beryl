@@ -48,14 +48,22 @@ pub const RUNNER_SCRIPT: &str = "test-runner.cmd";
 pub const RUN_MODE: &str = "run";
 
 /// Writes the `cargo` shim, the compiler wrapper script and the test runner script into `dir`,
-/// each calling the `ignite` executable at `ignite`.
+/// each calling the `ignite` executable at `ignite`. A script that already holds the same text
+/// is left alone, and one that changes is replaced whole, so this is safe while they run.
 pub fn write_shims(dir: &Path, ignite: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)?;
     fs::write(dir.join(SHIM_MARKER), "")?;
     for (name, text) in scripts(&ignite.display().to_string()) {
+        // Written beside the script and renamed over it, so a build that starts the script
+        // while it is being rewritten runs either the old text or the new, never a part.
         let path = dir.join(name);
-        fs::write(&path, text)?;
-        make_executable(&path)?;
+        if fs::read_to_string(&path).is_ok_and(|old| old == text) {
+            continue;
+        }
+        let partial = dir.join(format!("{name}.{}.partial", std::process::id()));
+        fs::write(&partial, text)?;
+        make_executable(&partial)?;
+        fs::rename(&partial, &path)?;
     }
     Ok(())
 }

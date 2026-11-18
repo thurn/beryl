@@ -153,6 +153,8 @@ pub fn machinery(base: &Base) -> Result<Machinery> {
             records: base.home("records"),
             cores: base.limits.max_per_command(),
             class: Class::Agent,
+            ignite: base.options.ignite.clone(),
+            shims: base.home("shims"),
         },
         launcher.clone(),
         base.git.clone(),

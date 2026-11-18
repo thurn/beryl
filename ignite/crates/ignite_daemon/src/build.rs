@@ -46,7 +46,7 @@ use ignite_core::traits::{
 
 /// The environment variable that names the file the compiler wrapper appends compile units to,
 /// one JSON [`CompileUnit`] per line.
-pub const UNITS_ENV: &str = "IGNITE_UNITS";
+pub use crate::wrap::UNITS_ENV;
 
 /// The placeholder in a product's `build` command for the packages a request names.
 const PACKAGES: &str = "{packages}";
@@ -134,6 +134,12 @@ pub struct BuildSettings {
     pub cores: u32,
     /// The class builds run in.
     pub class: Class,
+    /// The `ignite` executable that the compiler wrapper and test runner scripts call. When it
+    /// is empty (the daemon could not find its own executable), builds run without the wrapper
+    /// and record no compile units.
+    pub ignite: PathBuf,
+    /// The directory the wrapper scripts are written to before each build.
+    pub shims: PathBuf,
 }
 
 /// Runs build products in build trees. See the module documentation.
@@ -416,6 +422,28 @@ impl BuildManager {
         }
     }
 
+    /// The variables that make Cargo compile through `ignite rustc-wrap`, which appends each
+    /// compile unit to `units_file`. Without them a build records no units, so rebuild counts
+    /// and the hub's compile records have nothing to read. The scripts are checked, and rewritten
+    /// if they differ, before every build, so a deleted shim directory or a daemon that moved to
+    /// a new executable still gets a wrapper that calls the running `ignite`.
+    fn wrapper_env(&self, units_file: &Path) -> std::result::Result<Vec<(String, String)>, String> {
+        let units = (
+            UNITS_ENV.to_owned(),
+            units_file.to_string_lossy().into_owned(),
+        );
+        if self.settings.ignite.as_os_str().is_empty() {
+            return Ok(vec![units]);
+        }
+        crate::wrap::write_shims(&self.settings.shims, &self.settings.ignite).map_err(|error| {
+            format!(
+                "cannot write the compiler wrapper to {}: {error}",
+                self.settings.shims.display()
+            )
+        })?;
+        Ok(crate::wrap::cargo_env(&self.settings.shims, units_file))
+    }
+
     /// A new file name in the records directory, unique within this process.
     fn record_file(&self, plan_product: &str, extension: &str) -> PathBuf {
         let n = self.next_file.fetch_add(1, Ordering::Relaxed);
@@ -599,10 +627,10 @@ impl BuildManager {
             let message = format!("cannot create {}: {error}", units_file.display());
             return (self.failure(&plan.request.product, &message), false);
         }
-        let env = vec![(
-            UNITS_ENV.to_owned(),
-            units_file.to_string_lossy().into_owned(),
-        )];
+        let env = match self.wrapper_env(&units_file) {
+            Ok(env) => env,
+            Err(message) => return (self.failure(&plan.request.product, &message), false),
+        };
         let spec = self.spec(plan, plan.args.clone(), self.settings.cores, env);
         let RunResult {
             exit,

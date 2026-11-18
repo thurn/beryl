@@ -233,6 +233,8 @@ fn fixture(name: &str, gated: bool) -> Fixture {
         records: dir.join("records"),
         cores: 8,
         class: Class::Agent,
+        ignite: dir.join("bin").join("ignite"),
+        shims: dir.join("shims"),
     };
     let manager = Arc::new(BuildManager::new(
         settings,
@@ -391,6 +393,33 @@ fn matching_features_build_and_report_the_crates_recompiled() {
     assert!((usage.wall_s - 3.0).abs() < f64::EPSILON);
     assert_eq!(units.len(), 3);
     assert_eq!(recompiled(&units), 1);
+}
+
+/// A build that ran without `RUSTC_WRAPPER` recorded no compile units, so every rebuild count
+/// failed with "carry no instruction counts". Each build must run through the wrapper script,
+/// which calls the daemon's own `ignite` and records into the build's units file.
+#[test]
+fn builds_compile_through_the_wrapper_that_records_units() {
+    let f = fixture("wrapper", false);
+    f.manager.ensure(&tree(), "tests", &names(&["a"]));
+    let spec = f.launcher.with(|s| s.runs.last().unwrap().clone());
+    let var = |name: &str| {
+        let found = spec.env.iter().find(|(k, _)| k == name);
+        let (_, value) =
+            found.unwrap_or_else(|| panic!("the build's env has no {name}: {:?}", spec.env));
+        value.clone()
+    };
+    let wrapper = PathBuf::from(var("RUSTC_WRAPPER"));
+    assert_eq!(
+        wrapper,
+        f.dir.join("shims").join(crate::wrap::RUSTC_WRAP_SCRIPT)
+    );
+    let script = fs::read_to_string(&wrapper).unwrap();
+    assert!(script.contains("rustc-wrap"), "{script}");
+    let ignite = f.dir.join("bin").join("ignite");
+    assert!(script.contains(&*ignite.to_string_lossy()), "{script}");
+    let units = PathBuf::from(var(UNITS_ENV));
+    assert_eq!(units.parent(), Some(f.dir.join("records").as_path()));
 }
 
 #[test]
