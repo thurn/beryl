@@ -10,6 +10,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from beryl_tools import paths
 from beryl_tools.beryl3d import gate, timeline
 from beryl_tools.ignite import Result
@@ -152,6 +154,38 @@ def test_interface_results_follow_each_tests_outcome() -> None:
 def test_a_run_of_some_tests_plays_only_their_common_prefix() -> None:
     assert adapter.common_prefix(["a/b/you/1", "a/b/opponent/1"]) == "a/b/"
     assert adapter.common_prefix(["a/you/1", "b/you/1"]) == ""
+
+
+def test_a_batch_across_recordings_runs_only_its_recordings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    universe: list[str] = [
+        f"{r}/{s}/1440x900" for r in "abc" for s in ("you", "opponent")
+    ]
+    played: list[str] = []
+
+    def fake(
+        command: list[str], cwd: Path = adapter.WORKSPACE
+    ) -> subprocess.CompletedProcess[str]:
+        prefix = command[2] if command[2] != "--json" else ""
+        names = [t for t in universe if t.startswith(prefix)]
+        played.extend(names)
+        rows = [{"test": f"b3d:{t}", "outcome": "pass"} for t in names]
+        return subprocess.CompletedProcess(
+            command, 0, json.dumps({"results": rows}), ""
+        )
+
+    monkeypatch.setattr(adapter, "run_out", fake)
+    results = adapter.interface_run(
+        "b3d-interface",
+        ["b3d-interface:a/you/1440x900", "b3d-interface:c/opponent/1440x900"],
+        [],
+    )
+    assert sorted(played) == ["a/you/1440x900", "c/opponent/1440x900"]
+    assert [(r.check, r.outcome) for r in results] == [
+        ("b3d-interface:a/you/1440x900", "pass"),
+        ("b3d-interface:c/opponent/1440x900", "pass"),
+    ]
 
 
 def frame(index: int, **counts: float) -> dict[str, object]:

@@ -366,23 +366,39 @@ def interface_results(
     return results
 
 
+def prefix_groups(tests: list[str]) -> list[str]:
+    """The prefixes to run `b3d test` with so that it plays the named `tests` and little else.
+    `b3d test` takes one prefix, and the common prefix of tests from several recordings is empty
+    or short, which plays every test (a batch did, 21 of the tip's 184, at about 3,775 billion
+    instructions each). So there is one prefix per recording: the longest prefix its named tests
+    share, which always includes the recording's name and a `/`."""
+    by_recording: dict[str, list[str]] = {}
+    for test in tests:
+        by_recording.setdefault(recording_of(test), []).append(test)
+    return [common_prefix(group) for _, group in sorted(by_recording.items())]
+
+
 def interface_run(family: str, checks: list[str], switches: list[str]) -> list[Result]:
     wanted = asked(family, checks)
     if not wanted:
         return []
     tests = [w for w in wanted if w != FRAME_LIMITS]
-    # The median of the frame limits is held only over a run of every test.
-    prefix = "" if FRAME_LIMITS in wanted else common_prefix(tests)
-    command = [str(DEBUG / "b3d"), "test", "--json", *switches]
-    if prefix:
-        command.insert(2, prefix)
-    done = run_out(command)
-    try:
-        output = json.loads(done.stdout)
-    except json.JSONDecodeError:
-        print(done.stderr or done.stdout, file=sys.stderr)
-        return []
-    return interface_results(output, family, wanted)
+    # The median of the frame limits is held only over a run of every test, which also plays
+    # every named test.
+    prefixes = [""] if FRAME_LIMITS in wanted else prefix_groups(tests)
+    results: list[Result] = []
+    for prefix in prefixes:
+        command = [str(DEBUG / "b3d"), "test", "--json", *switches]
+        if prefix:
+            command.insert(2, prefix)
+        done = run_out(command)
+        try:
+            output = json.loads(done.stdout)
+        except json.JSONDecodeError:
+            print(done.stderr or done.stdout, file=sys.stderr)
+            continue
+        results += interface_results(output, family, wanted)
+    return results
 
 
 # The native frame gate.
