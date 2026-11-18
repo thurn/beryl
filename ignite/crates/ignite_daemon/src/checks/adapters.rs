@@ -157,14 +157,30 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
             digest: None,
             package: None,
             target: None,
-            refused: Some(format!(
-                "the listing of {family} named {} check(s) Ignite refuses, which never run: {}",
-                refused.len(),
-                refused.join(", ")
-            )),
+            refused: Some(refused_message(family, &refused)),
         });
     }
     listed
+}
+
+/// How many refused names [`refused_message`] quotes; the rest are only counted, so that one
+/// family with many bad names does not write a log line of tens of kilobytes.
+const REFUSED_QUOTED: usize = 3;
+
+/// The message of a family's `<family>:listing` check: how many listed names Ignite refused,
+/// and the first few of them with the reason.
+fn refused_message(family: &str, refused: &[String]) -> String {
+    let quoted = refused[..refused.len().min(REFUSED_QUOTED)].join(", ");
+    let more = refused.len().saturating_sub(REFUSED_QUOTED);
+    let rest = if more > 0 {
+        format!(" and {more} more")
+    } else {
+        String::new()
+    };
+    format!(
+        "the listing of {family} named {} check(s) Ignite refuses, which never run: {quoted}{rest}",
+        refused.len()
+    )
 }
 
 /// The results a `jsonl` family's `run` command wrote. A later line for a check replaces an
@@ -371,6 +387,18 @@ fn first_lines(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_listing_with_many_refused_names_quotes_only_the_first_few() {
+        let refused: Vec<String> = (0..74).map(|n| format!("\"bad {n}\" (spaces)")).collect();
+        let message = refused_message("pytest", &refused);
+        assert!(message.contains("named 74 check(s)"), "{message}");
+        assert!(message.contains("\"bad 2\""), "{message}");
+        assert!(!message.contains("\"bad 3\""), "{message}");
+        assert!(message.ends_with("and 71 more"), "{message}");
+        let few = refused_message("pytest", &refused[..2]);
+        assert!(few.ends_with("\"bad 1\" (spaces)"), "{few}");
+    }
 
     #[test]
     fn jsonl_listing_and_results() {

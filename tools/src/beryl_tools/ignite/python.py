@@ -38,6 +38,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from beryl_tools.ignite.names import check_part, decode_part
+
 if TYPE_CHECKING:
     import pytest
 
@@ -244,7 +246,10 @@ def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
                 if test_file not in cache:
                     cache[test_file] = test_inputs(test_file, path, files, graph, root)
                 out.append(
-                    {"check": f"pytest:{folder}/{node}", "inputs": cache[test_file]}
+                    {
+                        "check": f"pytest:{folder}/{check_part(node)}",
+                        "inputs": cache[test_file],
+                    }
                 )
         else:
             raise ValueError(f"unknown family {family!r}")
@@ -325,7 +330,7 @@ def run_checks(family: str, names: Sequence[str], root: Path, results: Path) -> 
         grouped: dict[str, list[str]] = {}
         for name in names:
             folder, _, node = name.removeprefix("pytest:").partition("/")
-            grouped.setdefault(folder, []).append(node)
+            grouped.setdefault(folder, []).append(decode_part(node))
         for folder, nodes in grouped.items():
             run_pytest(by_folder[folder], nodes, root, results)
         return
@@ -383,7 +388,7 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     append(
         Path(results),
         (
-            {"check": f"pytest:{prefix}{node}", **entry}
+            {"check": f"pytest:{prefix}{check_part(node)}", **entry}
             for node, entry in sorted(_seen.items())
         ),
     )

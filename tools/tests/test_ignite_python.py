@@ -168,3 +168,60 @@ def test_a_collection_error_leaves_the_test_unreported(tmp_path: Path) -> None:
         capture_output=True,
     )
     assert not results.exists() or results.read_text().strip() == ""
+
+
+SPACED_TESTS = """\
+import pytest
+
+@pytest.mark.parametrize("card", ["Grizzly Bears", "Counterspell"])
+def test_card(card: str) -> None:
+    pass
+"""
+
+
+def test_a_parametrized_id_with_spaces_is_a_valid_check_name_that_runs(
+    tmp_path: Path,
+) -> None:
+    write(tmp_path, {"test_x.py": SPACED_TESTS})
+    results = tmp_path / "results.jsonl"
+    spaced = "pytest:proj/test_x.py::test_card[Grizzly%20Bears]"
+    plain = "pytest:proj/test_x.py::test_card[Counterspell]"
+    nodes = [
+        adapter.decode_part(name.removeprefix("pytest:proj/"))
+        for name in (spaced, plain)
+    ]
+    assert nodes == [
+        "test_x.py::test_card[Grizzly Bears]",
+        "test_x.py::test_card[Counterspell]",
+    ]
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-p",
+            "beryl_tools.ignite.python",
+            *nodes,
+        ],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "IGNITE_RESULTS": str(results),
+            "IGNITE_PYTEST_PREFIX": "proj/",
+        },
+        capture_output=True,
+    )
+    lines = {r["check"]: r for r in map(json.loads, results.read_text().splitlines())}
+    assert set(lines) == {spaced, plain}
+    assert all(not any(c.isspace() for c in name) for name in lines)
+    assert lines[spaced]["outcome"] == "pass"
+
+
+def test_a_name_without_spaces_or_percent_signs_is_unchanged() -> None:
+    for name in ["test_x.py::test_a_b", "test_x.py::test_c[1-2]"]:
+        assert adapter.check_part(name) == name
+    odd = "test_x.py::t[a b\t100%]"
+    assert adapter.decode_part(adapter.check_part(odd)) == odd
