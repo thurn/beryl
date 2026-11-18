@@ -200,7 +200,10 @@ fn an_epic_waiting_on_a_moving_epic_is_not_stuck() {
         .map(|id| ticket(&conn, id).title)
         .collect();
     assert!(titles.iter().any(|t| t.contains(&phase[0])), "{titles:?}");
-    assert!(titles.iter().any(|t| t.contains(&milestone[0])), "{titles:?}");
+    assert!(
+        titles.iter().any(|t| t.contains(&milestone[0])),
+        "{titles:?}"
+    );
     assert!(titles.iter().any(|t| t.contains(&last[0])), "{titles:?}");
 }
 

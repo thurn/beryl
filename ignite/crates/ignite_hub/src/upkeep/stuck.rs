@@ -21,9 +21,7 @@ use ignite_core::ids::{CheckName, TicketId};
 use ignite_core::protocol::hub::{
     AuditReport, CheckState, IncompleteReason, IncompleteReport, TipWaiting,
 };
-use ignite_core::protocol::tickets::{
-    Graph, GraphTicket, Status, TicketFields, TicketType,
-};
+use ignite_core::protocol::tickets::{Graph, GraphTicket, Status, TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{checks, fleet, tickets};

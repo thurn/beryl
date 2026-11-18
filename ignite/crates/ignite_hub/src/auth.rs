@@ -4,6 +4,10 @@
 //! A token is registered when its machine registers with the hub, which keeps only its SHA-256
 //! (`ignite_store::hub::tokens`). Reads need no token; each route that writes refuses a request
 //! without a [`Writer`] with HTTP 401.
+//!
+//! A token stands for its machine only: a route whose body names a machine refuses, with HTTP
+//! 403, a token issued to another one (`routes::dispatch`). The `X-Actor` session or person is
+//! taken on trust, a risk accepted because the hub is reachable only on the private network.
 
 use rusqlite::Connection;
 

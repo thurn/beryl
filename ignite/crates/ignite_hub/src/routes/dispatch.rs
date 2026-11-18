@@ -162,7 +162,15 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
             parsed.ticket = canonical(conn, &parsed.ticket)?;
             close(conn, &parsed, now)
         }
-        "/pause" => pause(conn, &body(request)?, now),
+        "/pause" => {
+            // Any machine may pause every machine, as `ignite pool pause --all` does, but only
+            // a machine itself may pause or resume it alone.
+            let parsed: Pause = body(request)?;
+            if let Some(machine) = &parsed.machine {
+                same_machine(request, machine)?;
+            }
+            pause(conn, &parsed, now)
+        }
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }

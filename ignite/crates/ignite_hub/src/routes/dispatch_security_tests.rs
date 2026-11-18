@@ -163,3 +163,25 @@ fn a_ticket_is_claimed_by_its_id_with_or_without_the_t_or_by_alias() {
     let (status, _) = post(&mut conn, "/claims", &claim("Tzzzz.9", "local_a"), at(2.0));
     assert_eq!(status, 404);
 }
+
+#[test]
+fn a_machine_may_pause_itself_or_every_machine_but_not_another_alone() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let pause_as = |conn: &mut Connection, writer: &str, machine: Value| {
+        let request = Request {
+            method: "POST".into(),
+            path: "/pause".into(),
+            query: Vec::new(),
+            writer: Some(Writer {
+                machine: MachineId::new(writer).unwrap(),
+                actor: "test".into(),
+            }),
+            body: serde_json::to_vec(&json!({"machine": machine, "paused": true})).unwrap(),
+            headers: Vec::new(),
+        };
+        handle(conn, &request, start()).unwrap().status
+    };
+    assert_eq!(pause_as(&mut conn, "m-1", json!("m-2")), 403);
+    assert_eq!(pause_as(&mut conn, "m-1", json!("m-1")), 200);
+    assert_eq!(pause_as(&mut conn, "m-1", Value::Null), 200);
+}
