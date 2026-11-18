@@ -292,7 +292,7 @@ fn other_addresses_redirect_to_the_canonical_page_and_keep_the_query() {
 fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query() {
     let hub = seeded();
     let query = [("from".to_owned(), "bookmark".to_owned())];
-    let aliases = ["beryl".to_owned()];
+    let aliases = ["former".to_owned()];
     let ticket = "/proj/tickets/Tq44s.7.24?from=bookmark";
     // Addresses under the project: the page itself, or a redirect to it.
     for (path, location) in [
@@ -316,11 +316,11 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
     }
     // Addresses under an old project name redirect, and its API paths are left to the API.
     for (path, location) in [
-        ("/beryl", "/proj"),
-        ("/beryl/", "/proj/"),
-        ("/beryl/tickets/Tq44s.7.24", "/proj/tickets/Tq44s.7.24"),
+        ("/former", "/proj"),
+        ("/former/", "/proj/"),
+        ("/former/tickets/Tq44s.7.24", "/proj/tickets/Tq44s.7.24"),
         (
-            "/beryl/beads/proj-q44s.7.24.html",
+            "/former/beads/proj-q44s.7.24.html",
             "/proj/beads/proj-q44s.7.24.html",
         ),
     ] {
@@ -333,10 +333,10 @@ fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query(
         );
     }
     for path in [
-        "/beryl/api/tickets/x",
-        "/beryl/api",
+        "/former/api/tickets/x",
+        "/former/api",
         "/proj/",
-        "/beryls/",
+        "/formers/",
         "/other/",
     ] {
         assert!(
