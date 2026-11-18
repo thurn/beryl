@@ -52,6 +52,10 @@ protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 os = "macos"
 ticket_trees = 24
 landing_trees = 3
+# Measured 2026-11-18: the 27 trees use 200 GB, 8 of them built at 10 to 50 GB each and the rest
+# near 0.1 GB, with 277 GB of the disk free. 400 GB lets every landing tree and a dozen ticket
+# trees hold builds, and leaves about 75 GB free when the trees reach it; past it the daemon
+# deletes the oldest builds of free trees.
 trees_disk_gb = 400
 floor = { batch = 8, tip = 2 }
 
