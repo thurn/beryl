@@ -1,34 +1,490 @@
 //! Supervisors: one small process per command, its parent, which waits for it, measures it and
 //! writes the result to a file, so the daemon can restart while commands run.
 //!
-//! Stub. The ticket Thrh4.25 (Supervisor, `ignite run` and the compiler wrapper) owns this file
-//! and replaces the `todo!()` bodies.
-#![allow(unused_variables)]
+//! Each command gets a run directory under the launcher's `runs` folder:
+//!
+//! - `spec.json`: what to run ([`SpecFile`]), written by the daemon before it starts the
+//!   supervisor.
+//! - `lock`: held exclusively by the supervisor for as long as it lives. Whoever wants the
+//!   result takes a shared lock on it, which blocks until the supervisor exits. This works for
+//!   a daemon that started the supervisor and for one that restarted since and is no longer its
+//!   parent, with no polling.
+//! - `group`: the command's process group ID, written by the supervisor once it has started it.
+//! - `output.log`: the command's standard output and standard error, interleaved.
+//! - `result.json`: written by the supervisor, by rename, once the command has exited
+//!   ([`ResultFile`]).
+//! - `collected`: written by the daemon once it has taken the result, so a restarted daemon
+//!   skips the run.
+//!
+//! The supervisor starts in a process group of its own, so ending the daemon (or its group)
+//! leaves the command running. The command runs in a second group, led by itself, so that
+//! everything it starts can be ended at once and measured together.
 
-use std::path::Path;
+use std::fmt::Write as _;
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex, PoisonError};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use ignite_core::protocol::client::{Reply, Request};
+use ignite_core::ids::TicketId;
+use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::protocol::{Class, Usage};
 use ignite_core::traits::{CommandSpec, Launcher, RunResult};
+use ignite_os::Native;
+use ignite_os::proc::{Group, Processes};
+use ignite_os::usage::{ProcessUsage, TreeMeter, UsageReader};
+use serde::{Deserialize, Serialize};
 
+use crate::sched::{Grant, GrantRequest, Scheduler};
 use crate::server::{Context, Verb};
 
+/// The line a supervisor prints on its standard output once it holds its run's lock. The
+/// launcher reads lines until it sees this one, so other output before it does no harm.
+pub const READY: &str = "ignite-supervisor-ready";
+
+const SPEC: &str = "spec.json";
+const LOCK: &str = "lock";
+const OUTPUT: &str = "output.log";
+const RESULT: &str = "result.json";
+const COLLECTED: &str = "collected";
+/// The process group ID of the command, which ends it and everything it started.
+const GROUP: &str = "group";
+/// The supervisor's own standard error, for a supervisor that fails before it can write a
+/// result.
+const SUPERVISOR_LOG: &str = "supervisor.log";
+
+/// How often a supervisor reads the command's descendants while it runs. The operating system
+/// totals only a direct child exactly, so a descendant is counted up to its last reading.
+const SAMPLE_EVERY: Duration = Duration::from_secs(1);
+
+/// What a supervisor runs: the `spec.json` of a run directory.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpecFile {
+    pub args: Vec<String>,
+    pub cwd: PathBuf,
+    /// Variables added to the supervisor's environment, the grant's thread counts included.
+    pub env: Vec<(String, String)>,
+    /// Seconds the command waited for its grant, copied into its usage.
+    pub queued_s: f64,
+}
+
+/// How a supervised command ended: the `result.json` of a run directory.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ResultFile {
+    /// The exit code; `None` if a signal ended it.
+    pub exit: Option<i32>,
+    pub output: PathBuf,
+    pub usage: Usage,
+}
+
 /// Runs commands by starting a supervisor for each.
-#[derive(Debug, Default)]
-pub struct SupervisedLauncher;
+pub struct SupervisedLauncher {
+    /// The program and arguments that start a supervisor; the spec file's path is appended.
+    supervisor: Vec<String>,
+    runs: PathBuf,
+    scheduler: Option<Arc<Scheduler>>,
+    next: AtomicU64,
+}
+
+impl SupervisedLauncher {
+    /// A launcher that starts supervisors with `<ignite> supervise <spec>` and keeps run
+    /// directories under `runs`.
+    pub fn new(ignite: &Path, runs: PathBuf) -> Self {
+        Self::with_command(
+            vec![ignite.display().to_string(), "supervise".to_owned()],
+            runs,
+        )
+    }
+
+    /// A launcher whose supervisor is started by `command` followed by the spec file's path.
+    pub fn with_command(command: Vec<String>, runs: PathBuf) -> Self {
+        Self {
+            supervisor: command,
+            runs,
+            scheduler: None,
+            next: AtomicU64::new(0),
+        }
+    }
+
+    /// Takes cores and resources from `scheduler` before each run. Without one, a command gets
+    /// the cores it asked for.
+    #[must_use]
+    pub fn with_scheduler(mut self, scheduler: Arc<Scheduler>) -> Self {
+        self.scheduler = Some(scheduler);
+        self
+    }
+
+    /// Writes the run directory and starts its supervisor, returning once the supervisor holds
+    /// the run's lock. `env` is added to the spec's own variables.
+    pub fn start(
+        &self,
+        spec: &CommandSpec,
+        env: Vec<(String, String)>,
+        queued_s: f64,
+    ) -> io::Result<Started> {
+        let dir = self.runs.join(self.run_name());
+        fs::create_dir_all(&dir)?;
+        let mut all_env = spec.env.clone();
+        all_env.extend(env);
+        let file = SpecFile {
+            args: spec.args.clone(),
+            cwd: spec.cwd.clone(),
+            env: all_env,
+            queued_s,
+        };
+        write_json(&dir.join(SPEC), &file)?;
+        let (program, rest) = self
+            .supervisor
+            .split_first()
+            .ok_or_else(|| io::Error::other("no supervisor command"))?;
+        let mut child = Command::new(program)
+            .args(rest)
+            .arg(dir.join(SPEC))
+            .process_group(0)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(File::create(dir.join(SUPERVISOR_LOG))?)
+            .spawn()?;
+        if let Some(stdout) = child.stdout.take() {
+            let ready = BufReader::new(stdout)
+                .lines()
+                .map_while(Result::ok)
+                .any(|line| line == READY);
+            if !ready {
+                // It exited without taking the lock; the run reads as lost.
+                let _ = child.wait();
+            }
+        }
+        Ok(Started {
+            run: Run { dir },
+            child,
+        })
+    }
+
+    /// The runs whose results nobody has collected: those a previous daemon started. Each one's
+    /// [`Run::wait`] returns its result once its command has finished.
+    pub fn unfinished(&self) -> Vec<Run> {
+        let Ok(entries) = fs::read_dir(&self.runs) else {
+            return Vec::new();
+        };
+        let mut runs: Vec<Run> = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|dir| dir.join(SPEC).is_file() && !dir.join(COLLECTED).exists())
+            .map(|dir| Run { dir })
+            .collect();
+        runs.sort_by(|a, b| a.dir.cmp(&b.dir));
+        runs
+    }
+
+    /// A run directory name that sorts by start time and is unique across daemon restarts.
+    fn run_name(&self) -> String {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let count = self.next.fetch_add(1, Ordering::Relaxed);
+        format!("{nanos:020}-{}-{count}", std::process::id())
+    }
+
+    fn grant(&self, spec: &CommandSpec) -> Grant {
+        match &self.scheduler {
+            Some(scheduler) => scheduler.acquire(&GrantRequest {
+                class: spec.class,
+                cores: spec.cores,
+                resources: spec.resources.clone(),
+                memory_mb: None,
+            }),
+            None => Grant {
+                id: 0,
+                cores: spec.cores.max(1),
+                resources: spec.resources.clone(),
+                queued_s: 0,
+            },
+        }
+    }
+}
 
 impl Launcher for SupervisedLauncher {
     fn run(&self, spec: &CommandSpec) -> RunResult {
-        todo!("Thrh4.25 (Supervisor, `ignite run` and the compiler wrapper)")
+        let grant = self.grant(spec);
+        let result = match self.start(spec, grant.env(), grant.queued_s as f64) {
+            Ok(started) => {
+                // The scheduler stops `idle` work when a higher class waits; stopping ends the
+                // command. The thread ends when the grant is released below.
+                if let (Class::Idle, Some(scheduler)) = (spec.class, &self.scheduler) {
+                    let scheduler = Arc::clone(scheduler);
+                    let id = grant.id;
+                    let run = started.run().clone();
+                    thread::spawn(move || {
+                        if scheduler.wait_stop(id) {
+                            let _ = run.end();
+                        }
+                    });
+                }
+                started.wait()
+            }
+            Err(error) => {
+                eprintln!(
+                    "ignite: cannot start a supervisor for {:?}: {error}",
+                    spec.args
+                );
+                RunResult {
+                    exit: None,
+                    output: PathBuf::new(),
+                    usage: Usage::default(),
+                }
+            }
+        };
+        if let Some(scheduler) = &self.scheduler {
+            scheduler.release(&grant);
+        }
+        result
+    }
+}
+
+/// A run this daemon started; its supervisor is this process's child.
+#[derive(Debug)]
+pub struct Started {
+    run: Run,
+    child: Child,
+}
+
+impl Started {
+    pub fn run(&self) -> &Run {
+        &self.run
+    }
+
+    /// Waits for the supervisor and returns the command's result.
+    pub fn wait(mut self) -> RunResult {
+        let _ = self.child.wait();
+        self.run.wait()
+    }
+}
+
+/// One run directory.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Run {
+    dir: PathBuf,
+}
+
+impl Run {
+    pub fn dir(&self) -> &Path {
+        &self.dir
+    }
+
+    /// Ends the command and every process in its group, with `SIGTERM`. Its supervisor then
+    /// writes a result with no exit code. Does nothing to a run whose command has not started.
+    pub fn end(&self) -> io::Result<()> {
+        let Ok(group) = fs::read_to_string(self.dir.join(GROUP)) else {
+            return Ok(());
+        };
+        let group: u64 = group
+            .trim()
+            .parse()
+            .map_err(|_| io::Error::other("the group file holds no process group ID"))?;
+        Command::new("/bin/kill")
+            .args(["-TERM", "--", &format!("-{group}")])
+            .stderr(Stdio::null())
+            .status()?;
+        Ok(())
+    }
+
+    /// Blocks until the run's supervisor has exited, then returns the result it wrote and marks
+    /// the run collected. A supervisor that died without writing one gives a result with no
+    /// exit code, whose output names the supervisor's own log.
+    pub fn wait(&self) -> RunResult {
+        if let Ok(lock) = File::open(self.dir.join(LOCK)) {
+            let _ = lock.lock_shared();
+        }
+        let result = fs::read(self.dir.join(RESULT))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<ResultFile>(&bytes).ok());
+        let _ = File::create(self.dir.join(COLLECTED));
+        match result {
+            Some(file) => RunResult {
+                exit: file.exit,
+                output: file.output,
+                usage: file.usage,
+            },
+            None => RunResult {
+                exit: None,
+                output: self.dir.join(SUPERVISOR_LOG),
+                usage: Usage::default(),
+            },
+        }
     }
 }
 
 /// The hidden `ignite supervise <spec file>` subcommand; returns the process's exit code.
 pub fn supervise(spec_file: &Path) -> i32 {
-    todo!("Thrh4.25 (Supervisor, `ignite run` and the compiler wrapper)")
+    match supervise_run(spec_file) {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("ignite supervise {}: {error}", spec_file.display());
+            1
+        }
+    }
+}
+
+fn supervise_run(spec_file: &Path) -> io::Result<()> {
+    let dir = spec_file
+        .parent()
+        .ok_or_else(|| io::Error::other("the spec file has no directory"))?;
+    let spec: SpecFile = serde_json::from_slice(&fs::read(spec_file)?)?;
+    let lock = File::create(dir.join(LOCK))?;
+    lock.try_lock()
+        .map_err(|_| io::Error::other("another supervisor holds this run's lock"))?;
+    let output_path = dir.join(OUTPUT);
+    let output = File::create(&output_path)?;
+    let started = Instant::now();
+    let group = start_command(&spec, &output, dir);
+    // Announced once the command has started (or failed to), so when the launcher's `start`
+    // returns, the lock is held and the group file exists. Written straight to the file
+    // descriptor, so that a test harness capturing `print!` cannot hold it back.
+    let mut stdout = io::stdout().lock();
+    writeln!(stdout, "{READY}")?;
+    stdout.flush()?;
+    drop(stdout);
+
+    let (exit, usage) = match group.and_then(wait_measured) {
+        Ok((status, usage)) => (status.code(), usage),
+        Err(error) => {
+            writeln!(&output, "ignite: cannot run {:?}: {error}", spec.args)?;
+            (Some(127), ProcessUsage::default())
+        }
+    };
+    let result = ResultFile {
+        exit,
+        output: output_path,
+        usage: Usage {
+            queued_s: spec.queued_s,
+            wall_s: started.elapsed().as_secs_f64(),
+            cpu_s: usage.cpu_s,
+            instructions: usage.instructions,
+            peak_mb: usage.peak_bytes / (1024 * 1024),
+        },
+    };
+    write_json(&dir.join(RESULT), &result)?;
+    // The lock is released when the process exits, after the result exists.
+    drop(lock);
+    Ok(())
+}
+
+/// Starts the command as the leader of a group of its own and records the group's ID in `dir`.
+fn start_command(spec: &SpecFile, output: &File, dir: &Path) -> io::Result<Group> {
+    let (program, rest) = spec
+        .args
+        .split_first()
+        .ok_or_else(|| io::Error::other("empty command"))?;
+    let mut command = Command::new(program);
+    command
+        .args(rest)
+        .current_dir(&spec.cwd)
+        .envs(spec.env.iter().map(|(k, v)| (k, v)))
+        .stdin(Stdio::null())
+        .stdout(output.try_clone()?)
+        .stderr(output.try_clone()?);
+    let group = Native.spawn_group(&mut command)?;
+    fs::write(dir.join(GROUP), group.id.to_string())?;
+    Ok(group)
+}
+
+/// Waits for the command, sampling its group about once a second, and returns its exit status
+/// with the whole group's use.
+fn wait_measured(mut group: Group) -> io::Result<(ExitStatus, ProcessUsage)> {
+    let meter = Arc::new(Mutex::new(TreeMeter::new(group.id, group.child.id())));
+    let (stop, stopped) = mpsc::channel::<()>();
+    let sampler = {
+        let meter = Arc::clone(&meter);
+        thread::spawn(move || {
+            while let Err(mpsc::RecvTimeoutError::Timeout) = stopped.recv_timeout(SAMPLE_EVERY) {
+                let _ = meter
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .sample();
+            }
+        })
+    };
+    let reaped = Native.reap(&mut group.child);
+    drop(stop);
+    let _ = sampler.join();
+    let (status, leader) = reaped?;
+    let total = meter
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .finish(leader);
+    Ok((status, total))
+}
+
+/// Writes `value` as JSON next to `path` and renames it into place, so a reader never sees a
+/// partial file.
+fn write_json<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
+    let partial = path.with_extension("partial");
+    fs::write(&partial, serde_json::to_vec(value)?)?;
+    fs::rename(partial, path)
 }
 
 /// `ignite run`: runs any heavy command with cores from the daemon, and records it.
 pub struct RunVerb;
+
+/// The lines of a command's output that `ignite run` prints, from its end.
+const TAIL_LINES: usize = 30;
+
+/// `ignite run`'s arguments: `[--class C] [--ticket ID] [--cores N] -- <command>`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RunArgs {
+    class: Class,
+    ticket: Option<TicketId>,
+    cores: Option<u32>,
+    command: Vec<String>,
+}
+
+fn parse_run_args(args: &[String]) -> Result<RunArgs, String> {
+    let mut parsed = RunArgs {
+        class: Class::Agent,
+        ticket: None,
+        cores: None,
+        command: Vec::new(),
+    };
+    let mut rest = args.iter();
+    while let Some(arg) = rest.next() {
+        let mut value = || {
+            rest.next()
+                .cloned()
+                .ok_or_else(|| format!("{arg} needs a value"))
+        };
+        match arg.as_str() {
+            "--" => {
+                parsed.command = rest.cloned().collect();
+                break;
+            }
+            "--class" => {
+                let name = value()?;
+                parsed.class = serde_json::from_value(serde_json::Value::String(name.clone()))
+                    .map_err(|_| format!("unknown class: {name}"))?;
+            }
+            "--ticket" => {
+                let id = value()?;
+                parsed.ticket = Some(TicketId::new(id).map_err(|e| e.to_string())?);
+            }
+            "--cores" => {
+                let n = value()?;
+                parsed.cores = Some(n.parse().map_err(|_| format!("not a core count: {n}"))?);
+            }
+            other => return Err(format!("unexpected argument: {other}")),
+        }
+    }
+    if parsed.command.is_empty() {
+        return Err("usage: ignite run [--class C] [--ticket ID] [--cores N] -- <command>".into());
+    }
+    Ok(parsed)
+}
 
 impl Verb for RunVerb {
     fn name(&self) -> &'static str {
@@ -36,6 +492,92 @@ impl Verb for RunVerb {
     }
 
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
-        todo!("Thrh4.25 (Supervisor, `ignite run` and the compiler wrapper)")
+        let args = match parse_run_args(&req.args) {
+            Ok(args) => args,
+            Err(message) => return Reply::text(Exit::Usage, message),
+        };
+        // The scheduler holds a command to two thirds of the machine and shares what is free,
+        // so asking for every core means "as many as I may have".
+        let cores = args.cores.unwrap_or_else(|| {
+            thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(1))
+        });
+        let spec = CommandSpec {
+            args: args.command.clone(),
+            cwd: req.cwd.clone(),
+            env: Vec::new(),
+            class: args.class,
+            cores,
+            resources: Vec::new(),
+            tree: None,
+            ticket: args.ticket,
+        };
+        let result = ctx.launcher.run(&spec);
+        render(&args.command, &result)
     }
 }
+
+/// The reply for a finished command: the verdict, the end of its output and where the rest is.
+fn render(command: &[String], result: &RunResult) -> Reply {
+    let shown = command.join(" ");
+    let shown = if shown.chars().count() > 60 {
+        format!("{}...", shown.chars().take(57).collect::<String>())
+    } else {
+        shown
+    };
+    let status = match result.exit {
+        Some(code) => format!("exit {code}"),
+        None => "ended by a signal".to_owned(),
+    };
+    let (verdict, exit) = if result.exit == Some(0) {
+        ("ran", Exit::Success)
+    } else {
+        ("failed", Exit::CheckFailed)
+    };
+    let mut text = format!(
+        "{verdict:<8} {shown} in {:.0} s: {status}\n",
+        result.usage.wall_s
+    );
+    for line in tail(&result.output, TAIL_LINES) {
+        text.push_str(&line);
+        text.push('\n');
+    }
+    let _ = writeln!(text, "output   {}", result.output.display());
+    Reply {
+        exit,
+        text,
+        json: Some(serde_json::json!({
+            "exit": result.exit,
+            "output": result.output,
+            "usage": result.usage,
+        })),
+        handle: None,
+    }
+}
+
+/// The last `lines` lines of a file, read from at most its last 64 KiB.
+fn tail(path: &Path, lines: usize) -> Vec<String> {
+    const WINDOW: u64 = 64 * 1024;
+    let Ok(mut file) = File::open(path) else {
+        return Vec::new();
+    };
+    let len = file.metadata().map_or(0, |m| m.len());
+    if file
+        .seek(SeekFrom::Start(len.saturating_sub(WINDOW)))
+        .is_err()
+    {
+        return Vec::new();
+    }
+    let mut bytes = Vec::new();
+    if file.read_to_end(&mut bytes).is_err() {
+        return Vec::new();
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    let all: Vec<&str> = text.lines().collect();
+    all[all.len().saturating_sub(lines)..]
+        .iter()
+        .map(|line| (*line).to_owned())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests;

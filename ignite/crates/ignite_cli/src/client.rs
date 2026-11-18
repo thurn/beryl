@@ -32,21 +32,8 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
         "Idle work: exploration, cache audits and rebuild counts",
     ),
     ("release", "Starting and releasing tickets"),
-    ("run", "Supervisor, `ignite run` and the compiler wrapper"),
-    (
-        "runner",
-        "Supervisor, `ignite run` and the compiler wrapper",
-    ),
-    (
-        "rustc-wrap",
-        "Supervisor, `ignite run` and the compiler wrapper",
-    ),
     ("start", "Starting and releasing tickets"),
     ("status", "Install, self-update, status and doctor"),
-    (
-        "supervise",
-        "Supervisor, `ignite run` and the compiler wrapper",
-    ),
     ("sync", "Landing"),
     ("test", "Check runner and the result cache client"),
     ("ticket", "Ticket commands"),
