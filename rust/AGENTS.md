@@ -5,9 +5,10 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
 Beryl 3D, the native 3D client, is a separate workspace in `rust/beryl3d` with
 its own build and checks; see `rust/beryl3d/AGENTS.md`.
 
-In a Claude session and under `by`, `cargo` is a shim (`tools/shims/cargo`) that
-runs the real cargo inside a lease of the machine's CPU tokens, so a build may
-wait a moment for cores before it starts. `BERYL_CPU_POOL=0` turns the pool off.
+In a build tree, the `cargo` on `PATH` runs through Ignite, which gives the
+command cores from the daemon and records it, so a build may wait a moment for
+cores before it starts. `ignite run -- <command>` does the same for any other
+heavy command.
 
 ## Crates and card files
 
@@ -22,8 +23,8 @@ wait a moment for cores before it starts. `BERYL_CPU_POOL=0` turns the pool off.
   runs solo, hosted and joined tables. Run their tests with
   `just test-rust -p beryl_table -p beryl_table_session`.
 - `crates/beryl_link` supplies the handshake and in-memory and loopback TCP
-  links. `crates/beryl_link_iroh` supplies the optional internet transport.
-  Nightly tests run iroh over loopback with the relay disabled.
+  links. `crates/beryl_link_iroh` supplies the optional internet transport. The
+  `iroh` check family runs its tests over loopback with the relay disabled.
 - Each card is one file, `rust/cards/<crate>/<set>/<card>.rs`, placed by the set
   it was first printed in. `just card path <name>` prints the path. Card crates
   depend only on the shared vocabulary crate.
@@ -93,15 +94,15 @@ wait a moment for cores before it starts. `BERYL_CPU_POOL=0` turns the pool off.
   what they need and writes `$BERYL_CACHE/set-plan-<code>.json`. The `drafted`
   tier records complete drafts; each new definition still goes through render
   and card checks. The planner reuses the local renderer and census report when
-  available. Add `--beads` to print draft commands for vocabulary groups and
-  batches of drafted or composed cards.
+  available. Add `--beads` to print draft ticket commands for vocabulary groups
+  and batches of drafted or composed cards.
 - `just census` counts which mechanics Forge's card scripts use that
   `beryl_card` has no entry for, and how many cards each one blocks, from the
   mapping in `data/census-coverage.json`. It writes its report to
   `$BERYL_CACHE/census.json`.
 - `beryl_cli script-check` runs every card's spec moments from both seats and
   every UI fixture's recording, checking each animation script against its
-  assertions (the `script` lane in `docs/checks.md`).
+  assertions (the `script` family in `ignite/checks/script.toml`).
 
 ## The app and the phone apps
 
@@ -143,7 +144,7 @@ robin for over 2 hours.
   priority (`taskpolicy -c utility`) so that other sessions' checks get the CPU
   first (`nice` doesn't do this on macOS). They slow down while the machine is
   busy.
-- Wardens (the sessions that evaluate AI changes) rerun only the matches that
+- Reviewers (the sessions that evaluate AI changes) rerun only the matches that
   decide whether a change is accepted, never the ones that are only reported.
 - The "long-think arena" is retired and its command deleted: it used the machine
   for days, and the AI now improves through the ladder's head-to-head matches

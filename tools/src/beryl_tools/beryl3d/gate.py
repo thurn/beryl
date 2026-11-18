@@ -296,8 +296,6 @@ def summary(board: Board) -> str:
 def play(names: list[str]) -> tuple[list[Board], list[Tiered]]:
     """Plays the boards called `names` (every gated board for none) with the `gate` binary, in
     Baseline and in Enhanced."""
-    # Not at the top: Ignite's adapter imports this module without it.
-    from .. import tokens
     from .cli import program, record  # cli imports this module.
 
     # The gated recorded boards are read from the pack, which only `record` builds. It builds
@@ -308,7 +306,7 @@ def play(names: list[str]) -> tuple[list[Board], list[Tiered]]:
     command = [str(program("gate"))]
     for name in names:
         command += ["--board", name]
-    done = tokens.run_program(
+    done = subprocess.run(
         command,
         cwd=paths.WORKSPACE,
         check=False,

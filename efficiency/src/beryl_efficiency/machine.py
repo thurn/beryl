@@ -51,11 +51,9 @@ class Narrow:
 
 @dataclass
 class Own:
-    """The tool's own CPU: the sampler's cores on average since it started, and the CPU
-    seconds of the range's ingests; each also as a percent of the machine's cores."""
+    """The tool's own CPU: the CPU seconds of the range's ingests, also as a percent of
+    the machine's cores."""
 
-    sampler_cores: float | None
-    sampler_percent: float | None
     ingest_cpu_seconds: float
     ingest_percent: float | None
 
@@ -240,8 +238,6 @@ def report(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Result:
         ).fetchone()[0]
     )
     machine_seconds = seconds * float(cores or 0)
-    sampler = cpu.sampler_cpu()
-    sampler_cores = sampler[0] / sampler[1] if sampler and sampler[1] > 0 else None
     result = Machine(
         scope.range.since,
         scope.range.until,
@@ -264,12 +260,6 @@ def report(db: sqlite3.Connection, facts: Facts, scope: Scope) -> Result:
         round(shared_total / 3600 / closed, 2) if closed else None,
         bar({k: v / 3600 for k, v in shared.items()}, shared_total / 3600, 2),
         Own(
-            round(sampler_cores, 3) if sampler_cores is not None else None,
-            (
-                round(100 * sampler_cores / cores, 2)
-                if sampler_cores is not None and cores
-                else None
-            ),
             round(ingest_cpu, 1),
             round(100 * ingest_cpu / machine_seconds, 3) if machine_seconds else None,
         ),
@@ -350,8 +340,7 @@ def lines(m: Machine) -> list[str]:
     found += split_lines("shared    ", m.shared, 2)
     own = m.own
     found.append(
-        f"own cpu   sampler {number(own.sampler_cores, 3)} cores "
-        f"({number(own.sampler_percent, 2)}%) | ingest {own.ingest_cpu_seconds:.1f} s "
+        f"own cpu   ingest {own.ingest_cpu_seconds:.1f} s "
         f"({number(own.ingest_percent, 3)}%)"
     )
     c = m.capacity

@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .. import checks, paths as repo_paths
+from .. import deps, paths as repo_paths
 from . import app, parity
 from .command import Command
 
@@ -147,7 +147,7 @@ def play(name: str, seconds: int, window: str) -> Path | None:
 
 def run_perf(args: argparse.Namespace) -> int:
     if not args.no_build and app.build() != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
     listed = subprocess.run(
         ["just", "b3d", "list", "--full"], capture_output=True, text=True, check=False
     )

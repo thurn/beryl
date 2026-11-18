@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from beryl_efficiency import cli, codex, ingest, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads
 from tests.synthetic import CHECKOUT
 from tests.synthetic import bead as bead_record
 from tests.synthetic import listing

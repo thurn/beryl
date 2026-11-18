@@ -1,12 +1,12 @@
 """The instruction-count gate's trend: small rises file tickets while they are fresh.
 
-The gate (`bench.count_gate`, slow CI's `counts` lane) fails only past its tolerance, and its
+The gate (`bench.count_gate`, run by Ignite's `counts` family) fails only past its tolerance, and its
 bar is the total since the bar last moved. Between 2026-11-11 and 2026-11-13 the count rose
 from 386.0M to 393.2M (+1.85%) in steps of 0.05% to 0.64%, with nothing flagging any of them,
 until one more commit failed the gate and had to win back the creep along with its own cost.
 
-Slow CI already measures each staging tip it tests, so watching the trend costs nothing: each
-count it measures on a staging commit goes in [`history_path`], and `report`
+Ignite already measures each staging tip it tests, so watching the trend costs nothing: each
+count it measures on a staging commit goes in [`history_path`], and `report_at`
 
 - prints the change since the previous measured tip, naming the commits between them;
 - files one "count creep" ticket ([`CREEP_LABEL`]) when one tested range adds more than
@@ -32,8 +32,7 @@ from . import paths
 
 
 class Tickets(Protocol):
-    """The ticket store the trend files into: today's CI reporting (`verdicts.STORE`) or
-    Ignite's (`ignite.rest.IgniteTickets`)."""
+    """The ticket store the trend files into (`ignite.rest.IgniteTickets`)."""
 
     def list_issues(self, *filters: str, include_closed: bool = False) -> object: ...
 
@@ -149,7 +148,7 @@ def git(*args: str) -> tuple[int, str]:
 
 def on_staging() -> str | None:
     """HEAD's full hash, when it is a clean, detached commit already on origin/staging, as
-    slow CI's checkouts are; None for a branch or a working tree with changes, whose
+    Ignite's checkouts of a tip are; None for a branch or a working tree with changes, whose
     counts say nothing about staging."""
     code, branch = git("symbolic-ref", "-q", "HEAD")
     if code == 0 and branch:
@@ -233,24 +232,12 @@ def file_or_comment(
     return f"filed {out.strip()}" if code == 0 else "ticket not filed"
 
 
-def report(
-    measured: int, bar: int, passed: bool, store: Tickets | None = None
-) -> list[str]:
-    """Records a staging tip's count and files the tickets its trend calls for; returns lines
-    to print. A count measured elsewhere is only compared, never recorded or filed on.
-    """
-    from . import (
-        verdicts,
-    )  # Today's CI only: Ignite passes its own store to `report_at`.
-
-    return report_at(on_staging(), measured, bar, passed, store or verdicts.STORE)
-
-
 def report_at(
     head: str | None, measured: int, bar: int, passed: bool, store: Tickets
 ) -> list[str]:
-    """`report` for the commit `head`, the verified one, or None to only compare the count with
-    the earlier ones of HEAD's ancestors."""
+    """Records the count measured on the commit `head`, the verified one, and files the tickets its
+    trend calls for; returns lines to print. `head` of None only compares the count with the
+    earlier ones of HEAD's ancestors, and records and files nothing."""
     path = history_path()
     try:
         records = load(path.read_text()) if path.exists() else []

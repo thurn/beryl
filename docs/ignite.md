@@ -34,9 +34,11 @@ resumes.
 
 ## Related information
 
-- [`docs/checks.md`](checks.md) describes the fast check, slow CI, the sweeps
-  and the CPU token pool that Ignite replaces. Its measurements of flaky checks,
-  budgets and incremental builds are the evidence for several decisions here.
+- `docs/checks.md`, deleted at the switch (read it with
+  `git show <commit before the switch>:docs/checks.md`), described the fast
+  check, slow CI, the sweeps and the CPU token pool that Ignite replaces. Its
+  measurements of flaky checks, budgets and incremental builds are the evidence
+  for several decisions here.
 - [`docs/efficiency-dashboard.md`](efficiency-dashboard.md) designs
   `just efficiency`, the tool that produced most numbers in this document. It
   stays, and reads Ignite's records in place of the logs it reads today.

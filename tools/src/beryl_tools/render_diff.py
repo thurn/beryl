@@ -408,16 +408,14 @@ def parse(result: subprocess.CompletedProcess[str]) -> Rendered | str:
 
 
 def test_build_binary() -> Path | str:
-    """The `beryl_scenario` binary that the rust lane's tests step built, or the error cargo
-    printed. The tests step builds the whole workspace with `cargo test <scope> --no-run`
-    (`rust_tests.BUILD_SCOPE`), whichever packages a change can break, which unifies the
-    features of every package and their dev-dependencies. `render_command` builds
-    `beryl_cards` alone with only `scenarios`, a different feature set, so after the tests
-    step it compiled the card crate and its binary a second time (about 20 s under load). The
-    same `cargo test` command finds the binary already built."""
-    from .rust_tests import BUILD_SCOPE
-
-    scope = BUILD_SCOPE
+    """The `beryl_scenario` binary built by `cargo test <scope> --no-run` over the whole
+    workspace (`paths.BUILD_SCOPE`), or the error cargo printed. That command unifies the
+    features of every package and their dev-dependencies, as the workspace's tests build
+    them. `render_command` builds `beryl_cards` alone with only `scenarios`, a different
+    feature set, so building it that way compiled the card crate and its binary a second time
+    (about 20 s under load). The same `cargo test` command finds the binary already built.
+    """
+    scope = paths.BUILD_SCOPE
     run = subprocess.run(
         ["cargo", "test", "--locked", *scope, "--no-run", "--message-format=json"],
         cwd=paths.RUST,

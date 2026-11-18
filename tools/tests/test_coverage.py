@@ -1,11 +1,10 @@
 import base64
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import coverage, paths, system
+from beryl_tools import coverage
 
 
 def inline(text: str, sources: list[str], mappings: str, comment: str = "//") -> str:
@@ -117,7 +116,7 @@ def test_the_coverage_file_maps_check_ids_to_line_runs(tmp_path: Path) -> None:
     assert path == coverage.folder() / "abc123.json"
     assert document["commit"] == "abc123"
     assert document["failed"] == ["shots:combat"]
-    assert document["lanes"] == {"ui-test": 0, "shots": 1}
+    assert document["groups"] == {"ui-test": 0, "shots": 1}
     assert document["checks"] == {
         "ui-test:declares an attack": {
             "outcome": "pass",
@@ -148,57 +147,6 @@ def test_a_dirty_tree_leaves_latest_alone(tmp_path: Path) -> None:
     assert path.name == "def456-dirty.json"
     latest = json.loads((coverage.folder() / "latest.json").read_text())
     assert latest["commit"] == "abc123"
-
-
-# Windows records no coverage, so `coverage.refresh` does nothing there.
-WINDOWS_SKIP: pytest.MarkDecorator = pytest.mark.skipif(
-    system.WINDOWS, reason="no coverage on Windows"
-)
-
-
-def started(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
-    """The commands `coverage.refresh` starts, recorded instead of run, from a main checkout
-    at /main."""
-    commands: list[list[str]] = []
-    monkeypatch.setattr(paths, "main_checkout", lambda: Path("/main"))
-
-    def popen(command: list[str], **_: object) -> None:
-        commands.append(command)
-
-    monkeypatch.setattr(subprocess, "Popen", popen)
-    return commands
-
-
-@WINDOWS_SKIP
-def test_a_refresh_measures_a_commit_newer_than_the_coverage(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    commands = started(monkeypatch)
-    coverage.write({}, "abc123", False, {}, 1.0)
-    line = coverage.refresh("def456")
-    assert "measuring def456" in line
-    [command] = commands
-    assert command[-4:] == ["by", "coverage", "--commit", "def456"]
-
-
-@WINDOWS_SKIP
-def test_a_refresh_skips_the_commit_coverage_has(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    commands = started(monkeypatch)
-    coverage.write({}, "abc123", False, {}, 1.0)
-    assert "measured already" in coverage.refresh("abc123")
-    assert commands == []
-
-
-@WINDOWS_SKIP
-def test_a_refresh_waits_for_no_coverage_run_in_progress(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    commands = started(monkeypatch)
-    with system.file_lock(coverage.folder() / ".lock"):
-        assert "in progress" in coverage.refresh("def456")
-    assert commands == []
 
 
 def test_spans_join_consecutive_lines() -> None:

@@ -17,9 +17,7 @@ cannot check a part of one, and one test for `pytest` (`pytest:<project>/<node i
 A pytest test's inputs are its file, the modules its file imports directly or indirectly (found
 with `ast`, from `tools/src` or `efficiency/src` and the test files), and its fixtures: the
 `conftest.py` files that apply to it, with what they import. Editing one module therefore
-changes the input hash of the tests that reach it and of no others. The method is the import
-graph that `beryl_tools.python_fit` builds; it is copied here because an adapter must not
-import orchestration code.
+changes the input hash of the tests that reach it and of no others.
 
 `pytest` has no skipped outcome in Ignite's vocabulary, and a skipped test is neither a failure
 nor evidence of a regression, so a skipped test (and an expected failure) is reported as a pass
@@ -69,7 +67,7 @@ PROJECTS: tuple[Project, ...] = (
 )
 
 
-# --- The import graph (the method of python_fit.py) ---
+# --- The import graph ---
 
 
 def module_name(path: Path, project: Path) -> str | None:

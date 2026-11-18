@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import cli
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads
 from beryl_efficiency.commits import Commit, Commits, History, is_card
 from beryl_efficiency.rework import CARD_FIX, SLOW_CI, Charge, compute
 from tests.synthetic import git_snapshot

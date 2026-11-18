@@ -277,7 +277,7 @@ first, at 10M over 200 games, and unsets the first one that scores under 45%.
 - **To promote:** in a worktree, set `DEEP_SEARCHER`'s options in
   `rust/crates/beryl_search/src/lib.rs` to the challenger's; update §3's table
   and §5's table here; put the family on the log's `Champion:` line and add the
-  row with the new champion's suite total. Push with `enact push`.
+  row with the new champion's suite total. Land it with `ignite land`.
 - **A promoted policy rule changes what rollouts play.** If the push's slow CI
   fails `counts` or `rollouts_never_change`, that is reason 1 of
   `rust/crates/beryl_bench/count-gate.toml`: update the pinned rollouts and the

@@ -26,8 +26,8 @@ no vocabulary entry says, such as a ruling about an unusual interaction.
 
 This file holds the rules that apply to every change. `rust/`, `ui/`, `data/`
 and `tools/` each have their own `AGENTS.md` with the reference material for
-work in that directory, and `docs/checks.md` describes how the checks work. Read
-the one for the area you are changing.
+work in that directory, and `ignite/checks/` declares the checks. Read the one
+for the area you are changing.
 
 ## Writing for readers
 
@@ -82,80 +82,84 @@ write:
 - `tools/`: `by`, the Python CLI behind the justfile. Run `just` to list the
   commands.
 - `efficiency/`: the efficiency dashboard, `just efficiency`, a standalone
-  Python project with its own check lane (`efficiency/AGENTS.md`).
+  Python project (`efficiency/AGENTS.md`).
+- `ignite/`: Ignite, the build, check and delivery system, a Cargo workspace of
+  its own (`ignite/AGENTS.md`). `ignite.toml` and `ignite/checks/` say what it
+  knows about this repository.
 - Outside the repository:
-  - `~/Library/Caches/beryl` (`$BERYL_CACHE`) holds the shared `rust/target` and
-    `ui/node_modules` that worktrees copy from, the oracle builds and their last
-    report (`oracles/logs/oracle.json`), and screenshots.
+  - `~/Library/Caches/beryl` (`$BERYL_CACHE`) holds the oracle builds and their
+    last report (`oracles/logs/oracle.json`), the Beryl 3D recordings packs, and
+    screenshots.
   - `~/arena` (`$BERYL_ARENA`) holds indexes of the MTG Arena gameplay
     recordings in `~/Movies/arena`, which are the reference for the UI. Use
     `just video` or the `arena-video` skill.
   - Never run `find` over `~` or `/`.
 
-## Enact
+## Ignite
 
-Enact is the tool that manages worktrees, CI and the task queue. `enact` below
-means `python3 ~/enact/scripts/enact.py`.
+Ignite builds, checks and delivers every change, and holds the tickets
+(`docs/ignite.md`). `ignite prime` prints the workflow every change follows:
+`ignite start`, the work, `ignite test` and `ignite check`, then `ignite land`.
+Follow what each command prints. `ignite guide <topic>` holds the rules for one
+situation, and a command names the topic when it applies.
 
-- **Every change goes through a worktree and CI**, whether it's made by a human,
-  an ad hoc agent session or an Enact run:
-  1. From the main checkout, run `enact worktree create <short-name>`. Work only
-     in the path it prints. Never edit or commit in the main checkout.
-  2. Commit there (see Conventions).
-  3. Run `enact push` in the worktree. It rebases onto `origin/staging` (and
-     merges `master` if someone bypassed staging), runs the fast check, pushes
-     to `staging`, starts slow CI in the background and deletes the worktree. If
-     it exits with code 2, fix the conflict or failing check it reports in the
-     same worktree and run it again.
-  4. If its output includes `watch_ci`, there is no Enact run around to fix a
-     slow-CI failure, so you must watch it yourself: run `enact ci --wait <sha>`
-     until it passes, and if it fails, claim and fix the Steward ticket before
-     you finish.
-- **Session titles show status.** An agent session making a change titles itself
-  `⚒️ <short summary>` when it starts (Claude Desktop: `set_session_title` on
-  `self`; Codex: `set_thread_title`). It switches to 🔮 while waiting on slow CI,
-  🚒 while fixing a Steward ticket, `✅ <same summary>` as its last step when
-  done, and `⛔` if it stops without finishing.
-- Never commit or push directly to `master` or `staging`. `master` only moves
-  forward when slow CI passes on `staging`. When slow CI fails, Enact files a P0
-  "Steward" ticket to get it fixed. `enact ci --status` shows the CI runner and
-  its log. Keep the main checkout clean, because Enact fast-forwards its
-  `staging` and `master` branches.
-- Slow CI runs on two machines: this Mac and Cygnus, a Windows PC. A pass on
-  either one moves `master` forward. `enact ci --wait` lists failures on the
-  other OS as `other_os_stewards`.
-- Beryl uses `tk` for tickets. Run `enact backend` for the managed client path.
-  Ticket writes publish immediately. Record plans, designs and decisions on
-  their tickets so the history records them.
-- File tickets freely and in parallel. Merge conflicts are cheap: `enact push`
-  rebases, and you fix and push again. A ticket can be picked up within minutes
-  of filing, so either land what it depends on in `staging` first or block it
-  with a dependency.
+- Every change, whoever makes it, starts with `ignite start <ticket>` (or
+  `ignite start "<summary>"` for a task with no ticket) and lands with
+  `ignite land`. Work only in the build tree it prints. Never edit or commit in
+  the main checkout, and never push to `master` or `staging` yourself.
+- **Session titles show status**: `⚒️ [<ticket>] <short summary>` while working,
+  `🔍` while waiting on the person's answer (only when a person is there), `✅`
+  when done and `⛔` when stopped unfinished. Every final turn ends on one of the
+  last three (Claude Desktop: `set_session_title` on `self`; Codex:
+  `set_thread_title`).
+- File tickets freely and in parallel with `ignite ticket create`, and record
+  plans, designs and decisions on their tickets. Merge conflicts are cheap:
+  `ignite land` rebases, and you fix and land again. A ticket can be picked up
+  within minutes of filing, so land what it depends on first or give it the
+  dependency.
 - Every session has to spend time learning the code it touches, so each ticket
-  should name the files, helpers and tests it needs by path, so that its session
-  can read them all in its first message. Label mechanical tickets (wiring,
-  renames, boilerplate tests) `tier:light` so they run on Sonnet.
-- A lane is a group of tickets that one session works through in order, so it
-  learns their code once. Give two to four tickets the same `lane:<name>` label
-  when they touch the same code and have the same tier. A lane's session keeps
-  the model of its first ticket, so a ticket with a different tier stays out of
-  the lane, as does a design ticket large enough to fill a session by itself.
-  Block such a ticket with a dependency if it edits the lane's code. Never put a
-  lane or tier label on an epic, because its children inherit it. `/enact-plan`
-  applies the same rules ("Lane and tier pass" in its skill) to tickets it is
-  given.
-- **No Fable without an explicit ask.** Never label a ticket `tier:fable`, and
-  never start a session or subagent on a Fable model, unless the user has
-  explicitly asked for it. Design work defaults to `tier:opus` and mechanical
-  work to `tier:sonnet` (or `tier:light`).
+  names the files, helpers and tests it needs by path, so that its session can
+  read them all in its first message.
+- Give each ticket a model tier: `tier:opus` for design work and `tier:sonnet`
+  for mechanical work. **No Fable without an explicit ask**: never label a
+  ticket `tier:fable`, and never start a session or subagent on a Fable model,
+  unless the user has explicitly asked for it. Never put a tier label on an
+  epic, because its children inherit it.
 - No plan, ticket or skill includes a step that waits for the user's approval.
   Where his judgement might be wanted, go ahead with a sensible default and
-  record the choice in the ticket you're working on. Never file a ticket asking
+  record the choice on the ticket you're working on. Never file a ticket asking
   him to look at something. The exceptions are the count gate (K1 in
   `docs/engine-architecture.md`) and adding a UI exception (see UI).
-- `/enact <tickets|epic|task>` runs work inline in one session, and
-  `/enact-plan <ticket|plan|task>` runs it unattended across several sessions.
-  Most work uses neither.
+- `/ignite <ticket or task>` does work in the current session, and
+  `/ignite <plan>` files an epic of tickets for the worker pool.
+
+## Checks
+
+Ignite's checks are declared in `ignite/checks/*.toml`, one family per kind of
+check, with the reason for each setting in a comment beside it. `ignite test`
+runs the checks you name, and `ignite check` runs what the landing gate would.
+`ignite guide checks` holds the general rules for a ticket about a check, and
+the `cifix` skill adds Beryl's.
+
+A phone UI state is a shot in `ui/shots.json` with `?phone` in its route at both
+393×759 and 375×647. The shot checks include `phoneFaults` for text and touch
+target sizes (`ui/scripts/capture.mjs`).
+
+- A UI bug fix adds the broken state as a fixture or spec moment, so the generic
+  UI checks (overlap, off-screen, reachability, duplicate objects, page errors,
+  motion) cover it. If the bug is a new kind of problem, extend one of those
+  checks. Only write a custom scripted check in `ui/scripts/kept.mjs` when none
+  of the generic checks can express the property, and explain why in a comment
+  (K20 in `docs/engine-architecture.md`).
+- The counts in an allowlist under `data/` may only go down.
+- A check's cost is measured, and a check that costs much and catches nothing is
+  replaced by a cheaper deterministic test or deleted.
+- Headless browser checks run at a higher priority than any build and share a
+  limited number of page slots across all sessions. Run only the browser checks
+  your change needs (`ignite test <check>`, `just ui-test <title>`,
+  `just specs --shots <card>`). Bare `just specs <card>` is not a check: it
+  serves the spec pages until interrupted, so a background wait on it never
+  ends.
 
 ## Code structure
 
@@ -205,17 +209,17 @@ means `python3 ~/enact/scripts/enact.py`.
 Use the cheapest test that covers your change. Agents never open a window;
 `just dev` refuses to run for them.
 
-1. Logic: `just test-rust` runs the workspace's tests. Test engine and AI
-   behavior here, not through the app. `rust/AGENTS.md` lists the card tools:
-   the XMage and Forge oracles, the citation check, the fuzzer and
+1. Logic: `ignite test <names>` runs the Rust tests you name in your tree, and
+   `just test-rust` runs the workspace's tests under cargo-nextest. Test engine
+   and AI behavior here, not through the app. `rust/AGENTS.md` lists the card
+   tools: the XMage and Forge oracles, the citation check, the fuzzer and
    `just card brief <name>` for starting a new card. To write a card, follow the
    `card-writing` skill.
 2. UI: run `just ui-typecheck`, and `just ui-unit` for the tests that need no
-   browser. Both first copy `ui/node_modules` into the worktree from the cache,
-   which a new worktree doesn't have. `ui/AGENTS.md` lists the browser checks.
-   The fast check plays the ones your change can break; slow CI plays only a
-   smoke test. To reproduce, debug or check a card's behavior in the UI, use the
-   `specs` skill.
+   browser. Both first install `ui/node_modules` with `npm ci` when it is
+   missing or older than `ui/package-lock.json`. `ui/AGENTS.md` lists the
+   browser checks. To reproduce, debug or check a card's behavior in the UI, use
+   the `specs` skill.
 3. The app: `just smoke` builds the debug app, launches it without a window and
    waits until the UI reports that it has loaded.
 4. Beryl 3D, the native client in `rust/beryl3d`: `just b3d tree`, `diff` and
@@ -231,38 +235,6 @@ Use the cheapest test that covers your change. Agents never open a window;
 Benchmarks follow `docs/benchmarking.md`. Tournaments (`just tournament`,
 `just play` and `just review --agent`) use the whole machine for minutes to
 hours, so read "Tournaments" in `rust/AGENTS.md` before running one.
-
-## Checks
-
-`just check` (fast) and `just ci` (slow) are split into "lanes", one per kind of
-file or test. The fast check runs only the lanes whose files have changed.
-`docs/checks.md` describes each lane, the time budgets and what Windows skips.
-
-A phone UI state is a shot in `ui/shots.json` with `?phone` in its route at both
-393×759 and 375×647. The shot checks include `phoneFaults` for text and touch
-target sizes (`ui/scripts/capture.mjs`).
-
-- A UI bug fix adds the broken state as a fixture or spec moment, so the generic
-  UI checks (overlap, off-screen, reachability, duplicate objects, page errors,
-  motion) cover it. If the bug is a new kind of problem, extend one of those
-  checks. Only write a custom scripted check in `ui/scripts/kept.mjs` when none
-  of the generic checks can express the property, and explain why in a comment
-  (K20 in `docs/engine-architecture.md`).
-- The counts in an allowlist under `data/` may only go down.
-- A check that runs over its time budget is sped up, moved or deleted. Never
-  raise a budget to make it pass.
-- A step killed at its hang limit (several times its slowest pass) is very
-  likely stuck, and a rerun would hang again. Look at the processes its log
-  lists before pushing again.
-- Browser checks: the fast check plays those a change can break, slow CI only a
-  smoke test (`ui-smoke`), and the browser sweep (`just sweep`) all of them on
-  staging every 3 hours, filing a ticket for what fails without blocking
-  `master`.
-- Headless browser checks run at a higher priority than any build and share a
-  limited number of page slots across all sessions. Run only the checks your
-  change needs (`just ui-test <title>`, `just specs --shots <card>`) rather than
-  a full sweep. Bare `just specs <card>` is not a check: it serves the spec
-  pages until interrupted, so a background wait on it never ends.
 
 ## UI
 
@@ -312,17 +284,17 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
   search with a "find nothing" option instead of asking "Search?" first). This
   rule is a Beryl exception: Arena asks first. Also never give players priority
   when they would only pass, such as when their own spell is alone on the stack.
-- It's fine to file your own tickets outside an Enact role, but in that case
-  offer to fix them in the current session rather than just adding them to the
-  backlog.
+- It's fine to file your own tickets while working on something else, but in
+  that case offer to fix them in the current session rather than just adding
+  them to the backlog.
 
 ## Conventions
 
 - Commits use short Conventional Commits subjects, e.g.
-  `feat: mulligan decisions`, of at most 60 characters (the fast check enforces
-  this). Add a body for every fix and for any change whose reason a reader
-  couldn't guess from the subject. The body follows "Writing for readers": what
-  was wrong as someone would have seen it, why, and what changed.
+  `feat: mulligan decisions`, of at most 60 characters (the `commit` check
+  enforces this). Add a body for every fix and for any change whose reason a
+  reader couldn't guess from the subject. The body follows "Writing for
+  readers": what was wrong as someone would have seen it, why, and what changed.
 - `just fmt` formats everything: black, rustfmt, prettier, mdformat (80 columns)
   and the justfile. Python is typed (pyre, strict), Rust passes clippy
   (pedantic) with `-D warnings`, and TypeScript is strict.
@@ -348,9 +320,9 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 - Do not directly reference planning documents or tickets in code (e.g. "plan
   K16"), this gets stale fast. If you touch code with such references, delete
   them.
-- Timeouts only catch hangs: a slow test or run files a ticket, never fails CI.
-  Tests fail deterministically; delete flaky ones. Avoid slow integration tests:
-  prefer a fast test that keeps most of their value.
+- Timeouts only catch hangs: a slow test or run never fails a check for being
+  slow. Tests fail deterministically; delete flaky ones. Avoid slow integration
+  tests: prefer a fast test that keeps most of their value.
 - Never use "no card with this behavior is implemented yet, so I can't write a
   test" as an excuse. Implement additional cards or file a ticket under your
   current epic for really major items.

@@ -1,12 +1,12 @@
 """The findings rules measured in agent hours (docs/efficiency-dashboard.md, "Findings"):
-queued, enact-lock-wait, compile-share, repeated-command, waiting-on-person and
+queued, compile-share, repeated-command, waiting-on-person and
 chained-commands."""
 
 from __future__ import annotations
 
 from collections import defaultdict
 
-from . import kinds, locks
+from . import kinds
 from .finding import (
     AGENT_HOURS,
     MIN_COHORT,
@@ -48,24 +48,6 @@ def window_category(c: Context, category: str, by_kind: bool) -> list[Item]:
 def queued(c: Context) -> list[Item]:
     """Time queued for cores, by kind of command."""
     return window_category(c, "queued", True)
-
-
-def enact_lock_wait(c: Context) -> list[Item]:
-    """Time sessions' Enact commands waited for Enact's ownership lock, by the command seen
-    holding it. These are the waited seconds of the lock-wait log's lines joined to tool
-    calls, so they can differ slightly from `enact lock wait` in `time --by kind`, which
-    divides seconds among commands that ran at once."""
-    return grouped(
-        (holder, bead, waited / HOUR, 0.0, waited / HOUR)
-        for holder, bead, waited in locks.held_up(c.db, c.facts, c.scope)
-    )
-
-
-def say_enact_lock_wait(items: list[Item]) -> str:
-    return (
-        f"Sessions waited {hours(total_cost(items))} a week for Enact's ownership lock, "
-        f"most while {top(items)} held it"
-    )
 
 
 def waiting_on_person(c: Context) -> list[Item]:
@@ -214,14 +196,6 @@ RULES: tuple[Rule, ...] = (
         queued,
         say_queued,
         "efficiency machine",
-    ),
-    Rule(
-        "enact-lock-wait",
-        AGENT_HOURS,
-        "zero: no Enact command waits for the ownership lock",
-        enact_lock_wait,
-        say_enact_lock_wait,
-        "efficiency enact",
     ),
     Rule(
         "compile-share",

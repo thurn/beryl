@@ -19,30 +19,23 @@ prints what that cost against the plan's budgets ([`BUDGETS`]):
 - largest compiler process: the highest peak resident set of any single process of the three
   builds (`/usr/bin/time -l`), which is a `rustc`.
 
-Seconds are wall-clock seconds on this machine with all its cores, load-adjusted as the checks'
-clocks are (`clock.Clock`: wall time over the load beyond the cores and the speed factor). The
-CPU-seconds beside each are what scales with machines. With `--assert`, a measure over its
-budget makes the run exit non-zero. A budget missed after three recorded attempts holds that
-measure to its recorded value plus 10% instead, naming the follow-up ticket that owns it.
-`--assert-memory` asserts only the largest compiler process, which the machine's load does not
-move.
+Seconds are wall-clock seconds on this machine with all its cores. The CPU-seconds beside each
+are what scales with machines. With `--assert`, a measure over its budget makes the run exit
+non-zero. A budget missed after three recorded attempts holds that measure to its recorded value
+plus 10% instead, naming the follow-up ticket that owns it. `--assert-memory` asserts only the
+largest compiler process, which the machine's load does not move.
 
-Every run is made under the machine's normal load, a load average of 20 to 40 on 18 cores
-(docs/benchmarking.md, "Timing under load"); there is no quiet run to wait for. The clock
-removes the load beyond the cores, but not the slowdown from sharing caches and memory below
-that, so the times still move with load: four cold checks took 41 to 56 s against the 60 s
-budget, and one-edit medians ranged from 2.2 to 3.2 s against 2 s. So:
+The times move with the machine's other load, because of the slowdown from sharing cores,
+caches and memory (docs/benchmarking.md, "Timing under load"): four cold checks took 41 to 56 s
+against the 60 s budget, and one-edit medians ranged from 2.2 to 3.2 s against 2 s. So:
 
-- `--assert` is how a budget is judged. Run it under normal load with `--edits 8` or more, and
-  read each time with its load and CPU-seconds. When a change is meant to move a time, compare
-  it with the change's base in alternating runs (A B B A) on two workspaces rather than against
-  the budget alone.
-- The nightly (nightly.py) passes `--assert-memory`, not `--assert`. A nightly failure files a
-  Steward ticket, so it asserts only the measure whose night-to-night spread is far below its
-  margin. The times are printed in its log, where their trend shows.
+- `--assert` is how a budget is judged. Run it with `--edits 8` or more, and read each time with
+  its CPU-seconds. When a change is meant to move a time, compare it with the change's base in
+  alternating runs (A B B A) on two workspaces rather than against the budget alone.
+- `--assert-memory` is the assertion for an unattended run, because the largest compiler
+  process's size is far less variable than the times are.
 
-The rehearsal holds the machine for minutes, so it runs in the nightly, never in a check. It
-then prints what scripts cost: the seconds
+The rehearsal holds the machine for minutes. It then prints what scripts cost: the seconds
 `beryl_cli script-check` takes to play every spec moment of each pooled card from both seats,
 per card and extrapolated to the N clones, reported with no bar.
 """
@@ -61,8 +54,9 @@ import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import IO
 
-from . import card_store, clock, nearest, paths, script_checks
+from . import card_store, nearest, paths, system
 from .scale_workspace import (
     BINARY,
     REGISTRY,
@@ -81,7 +75,7 @@ DEFAULT_CARDS = 50_000
 # `--edits` asks for more.
 REBUILDS = 3
 GIB: int = 2**30
-# A card's script check in the run log: `script:<card>/<moment>/<seat>`.
+# A card's script check in `script-check`'s results: `script:<card>/<moment>/<seat>`.
 SCRIPT_CHECK: re.Pattern[str] = re.compile(r"^script:([^/]+)/[^/]+/[^/]+$")
 # The cards the script cost names by name, the costliest first.
 COSTLIEST = 5
@@ -114,15 +108,12 @@ BUDGETS: dict[str, Budget] = {
 
 @dataclass
 class Run:
-    """One timed build: its load-adjusted and wall seconds, its CPU-seconds (user and system,
-    every process it waited for), its largest process's peak resident set in bytes and the
-    highest load average while it ran."""
+    """One timed build: its wall seconds, its CPU-seconds (user and system, every process it
+    waited for) and its largest process's peak resident set in bytes."""
 
     seconds: float
-    wall: float
     cpu: float
     rss: int
-    load: float
 
 
 def parse_time(output: str) -> tuple[float, float, int]:
@@ -145,9 +136,8 @@ def cargo_env(root: Path) -> dict[str, str]:
 
 
 def timed(cmd: list[str], root: Path) -> Run:
-    """Runs `cmd` in the workspace's `rust` directory under `/usr/bin/time -l`, on the
-    load-adjusted clock; a failure ends the run with the compiler's output."""
-    timer = clock.Clock()
+    """Runs `cmd` in the workspace's `rust` directory under `/usr/bin/time -l`; a failure
+    ends the run with the compiler's output."""
     run = subprocess.run(
         ["/usr/bin/time", "-l", *cmd],
         cwd=root / "rust",
@@ -156,15 +146,14 @@ def timed(cmd: list[str], root: Path) -> Run:
         text=True,
         check=False,
     )
-    adjusted = timer.now()
     if run.returncode != 0:
         sys.exit(f"scale: {' '.join(cmd)} failed:\n{run.stderr[-6000:]}")
     wall, cpu, rss = parse_time(run.stderr)
-    return Run(adjusted, wall, cpu, rss, timer.peak)
+    return Run(wall, cpu, rss)
 
 
 def median(runs: list[Run]) -> Run:
-    """The run of median load-adjusted seconds."""
+    """The run of median seconds."""
     return sorted(runs, key=lambda run: run.seconds)[len(runs) // 2]
 
 
@@ -194,7 +183,7 @@ def missed(values: dict[str, float], times: bool = True) -> list[str]:
 def report(
     cards: int, crates: int, chosen: bool, pool: int, runs: dict[str, Run]
 ) -> str:
-    """Each measure with its budget and margin, and each build's CPU-seconds and load."""
+    """Each measure with its budget and margin, and each build's CPU-seconds."""
     how = "as --crates gave" if chosen else "as the tree's grouping gives"
     lines = [
         f"{cards:,} cards: clones of {pool} real card files, in {crates} set crates "
@@ -215,11 +204,14 @@ def report(
         )
         if run is not None:
             line += (
-                f"\n{'':<26}{run.cpu:>10.0f} s CPU, {run.wall:.1f} s on the clock, "
-                f"peak load {run.load:.0f}, peak process {run.rss / GIB:.2f} GiB"
+                f"\n{'':<26}{run.cpu:>10.0f} s CPU, "
+                f"peak process {run.rss / GIB:.2f} GiB"
             )
         lines.append(line)
-    lines.append(clock.load_note())
+    one, five, fifteen = system.loadavg()
+    lines.append(
+        f"load average {one:.0f} {five:.0f} {fifteen:.0f} on {os.cpu_count()} cores"
+    )
     return "\n".join(lines)
 
 
@@ -233,18 +225,17 @@ def store_note(path: Path) -> str:
 @dataclass
 class Scripts:
     """What a script-check run of the pool's cards cost: each card's checks' seconds summed, by
-    slug, how many checks there were, the run's seconds and the seconds its checks took, past
-    the process's start, by its own clock."""
+    slug, how many checks there were, the run's wall seconds and the seconds its checks took,
+    past the process's start, by the checker's own clock."""
 
     cards: dict[str, float]
     checks: int
-    seconds: float  # load-adjusted
     wall: float
     checking: float
 
 
 def card_seconds(lines: Iterable[str]) -> tuple[dict[str, float], int]:
-    """Each card's script checks' seconds summed, by its slug, from `script-check`'s run-log
+    """Each card's script checks' seconds summed, by its slug, from `script-check`'s result
     lines, and how many checks there were; fixtures' recordings are no card's."""
     cards: dict[str, float] = {}
     count = 0
@@ -270,30 +261,54 @@ def clone_seconds(cards: dict[str, float], pool: list[Source], count: int) -> fl
     return rounds * math.fsum(each) + math.fsum(each[:rest])
 
 
+def build_checker() -> bool:
+    """Builds `beryl_cli` with debug assertions, where the script checks are assertions, into
+    `paths.RUN_TARGET`; whether it built."""
+    built = subprocess.run(
+        paths.CLI_BUILD,
+        cwd=paths.RUST,
+        env=paths.run_env(),
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    return built.returncode == 0
+
+
+def run_checker(only: list[str], results: Path, out: IO[str]) -> int:
+    """Runs the built checker's `script-check` on the checks `only` names (a card's slug), which
+    writes one line per check, with its seconds, to `results`; returns its exit code."""
+    binary = system.exe(paths.RUN_TARGET / "debug" / "beryl_cli")
+    return subprocess.run(
+        [str(binary), "script-check", str(paths.UI / "fixtures.json"), *only],
+        cwd=paths.RUST,
+        env={**os.environ, "BERYL_CHECK_RESULTS": str(results)},
+        stdin=subprocess.DEVNULL,
+        stdout=out,
+        check=False,
+    ).returncode
+
+
 def measure_scripts(pool: list[Source]) -> Scripts:
     """Runs the script checks of the pool's cards, every spec moment from both seats, and reads
     what each cost from the results they log."""
-    if not script_checks.build():
+    if not build_checker():
         sys.exit("scale: beryl_cli did not build for the script checks")
     slugs = sorted({nearest.slug(s.name) for s in pool})
     with tempfile.TemporaryDirectory() as tmp:
         results, printed = Path(tmp) / "results.jsonl", Path(tmp) / "out.txt"
-        timer = clock.Clock()
         began = time.monotonic()
         with open(printed, "w") as out:
-            code = script_checks.run(slugs, results, out=out)
-        wall, adjusted = time.monotonic() - began, timer.now()
+            code = run_checker(slugs, results, out)
+        wall = time.monotonic() - began
         output = printed.read_text()
         print(output, end="", file=sys.stderr)
         if code != 0:
-            sys.exit(
-                "scale: a script check failed: `just test-rust`, or the script lane"
-            )
+            sys.exit("scale: a script check failed: see `just test-rust`")
         lines = results.read_text().splitlines() if results.exists() else []
     summary = SCRIPT_SUMMARY.search(output)
     cards, count = card_seconds(lines)
     checking = float(summary.group(1)) if summary else wall
-    return Scripts(cards, count, adjusted, wall, checking)
+    return Scripts(cards, count, wall, checking)
 
 
 def script_report(scripts: Scripts, pool: list[Source], cards: int) -> str:
@@ -306,7 +321,7 @@ def script_report(scripts: Scripts, pool: list[Source], cards: int) -> str:
     clones = clone_seconds(scripts.cards, pool, cards)
     # The run's checks overlap on its threads: the clones' would as much.
     parallel = max(spent / scripts.checking, 1.0) if scripts.checking > 0 else 1.0
-    run = clock.took(scripts.wall, scripts.seconds)
+    run = f"{scripts.wall:.1f} s"
     lines = [
         "",
         f"{'script checks':<26}{run:>34}   {scripts.checks:,} checks: the spec moments "

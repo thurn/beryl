@@ -21,17 +21,11 @@ the file does not start `node`. Writing a new one deletes those older than [`WEB
 
 A run leaves nothing else behind: it deletes the exported recordings and Beryl 3D's timeline file
 when it is done. Both used to stay, about 400 MB a run in the temporary folder and 12 MB in
-`$BERYL_CACHE/b3d/out`, and after some 700 runs the disk was full and the sweep failed.
+`$BERYL_CACHE/b3d/out`, and after some 700 runs the disk was full.
 
-Measured with `--fixtures` (the lane's step) on 2026-11-15 at load averages of 20 to 60, five
-runs each: with the web lines cached, 24.8, 26.5, 27.3, 57.3 and 59.4 s (median 27.3 s); with
-them recomputed, 21.1, 27.5, 38.5, 49.1 and 57.3 s (median 38.5 s, as the load moved). Beryl
-3D's own `timeline --all` is most of it, so the step always compares the fixtures only and the
-sweep compares everything.
-
-It never runs for a change to `ui/` (the `beryl3d` lane's paths are Beryl 3D's alone): when the
-web interface's timeline moves, the sweep names the recordings that now differ, and Beryl 3D
-follows.
+`--fixtures` compares only the recorded fixtures, which takes about 25 to 60 s depending on
+machine load; without it the command compares every recording, since Beryl 3D's own
+`timeline --all` is most of the time.
 """
 
 from __future__ import annotations
@@ -387,7 +381,7 @@ def out(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
 def b3d(arguments: list[str]) -> str:
     """Runs the `b3d` binary built by `pack_name` and returns its output.
     Building `beryl_inspect` on its own resolves a different set of Cargo features and
-    leaves a second build in the sweep's target directory."""
+    leaves a second build in the target directory."""
     from . import cli
 
     line = [str(cli.program("b3d")), *arguments]
@@ -433,9 +427,9 @@ def web_lines(pack: str, directory: Path) -> list[str]:
     if cached.exists():
         return cached.read_text().splitlines()
     # Not at the top: Ignite's adapter imports this module without it.
-    from .. import warm
+    from .. import deps
 
-    warm.ensure_node_modules(repo_paths.REPO)
+    deps.ensure_node_modules(repo_paths.REPO)
     done = subprocess.run(
         ["node", "scripts/timeline.mjs", str(directory)],
         cwd=ui,
@@ -446,9 +440,9 @@ def web_lines(pack: str, directory: Path) -> list[str]:
     if done.returncode != 0:
         sys.stderr.write(done.stderr)
         raise SystemExit(done.returncode)
-    # Written beside the cache file and renamed onto it, so a run that starts meanwhile (the
-    # sweep runs `timeline-parity` and `timeline-parity-all` at once, and the fast check's trees
-    # share this cache) finds no file or the whole one, never the part written so far.
+    # Written beside the cache file and renamed onto it, so a run that starts meanwhile (two
+    # runs of `timeline-parity` at once share this cache) finds no file or the whole one, never
+    # the part written so far.
     partial = cached.with_name(f"{cached.name}.{os.getpid()}.tmp")
     partial.write_text(done.stdout)
     os.replace(partial, cached)

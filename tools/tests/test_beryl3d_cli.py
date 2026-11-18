@@ -3,13 +3,11 @@
 import os
 import subprocess
 import sys
-from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import cargo_pool, tokens
 from beryl_tools.beryl3d import cli
 
 
@@ -48,19 +46,16 @@ def test_text_commands_hand_every_argument_to_the_b3d_program(
     build, run = ran
     assert build == ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
     assert run == ["/linked/b3d", "tree", "verbs-zones", "--at", "1500ms", "--help"]
-    # The build starts without waiting for tokens, and the one-thread program runs at once
-    # inside a lease of one token it never waited for.
-    build_env, run_env = envs
-    assert build_env[cargo_pool.FLOOR_ENV] == str(cli.QUICK_JOBS)
-    assert run_env[tokens.LEASE_ENV] == "1"
+    # The one-thread program is told to use one thread.
+    _build_env, run_env = envs
+    assert run_env[cli.CORES_ENV] == "1"
 
 
 def test_interface_tests_run_the_shared_builds_b3d(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The lane's `test` step builds nothing beyond the shared build, which the `cargo-test`
-    and `timeline-parity` lanes also start with, so it never holds the build lock they wait
-    on (`cli.run_shared_b3d`)."""
+    """`test` builds nothing beyond the shared build, which `cargo-test` and `record` also
+    start with (`cli.run_shared_b3d`)."""
     ran: list[list[str]] = []
     monkeypatch.setattr(
         cli, "cargo", lambda arguments, env=None: ran.append(arguments) or 0
@@ -75,17 +70,8 @@ def test_interface_tests_run_the_shared_builds_b3d(
     monkeypatch.setattr(cli.subprocess, "run", program)
     monkeypatch.setattr(cli, "linked", lambda name: Path("/linked") / name)
     monkeypatch.setattr(cli, "program", lambda name: Path("/built") / name)
-    monkeypatch.setattr(cli.deadline, "step_limit", lambda: None)
     assert cli.main(["test", "verbs-"]) == 0
     assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test", "verbs-"]]
-
-    # Inside a fast check the tests stop starting `TEST_STOP` seconds before the end of the step's window,
-    # which would otherwise kill the step and report none of them.
-    ran.clear()
-    monkeypatch.setattr(cli.deadline, "step_limit", lambda: 70.0)
-    assert cli.main(["test"]) == 0
-    stop = f"{70.0 - cli.TEST_STOP:.1f}"
-    assert ran == [cli.SHARED_BUILD, ["/built/b3d", "test", "--stop-after", stop]]
 
 
 def test_a_missing_pack_is_recorded_and_the_command_run_again(
@@ -200,42 +186,13 @@ def test_picture_commands_hand_every_argument_to_the_b3d_render_program(
     ]
 
 
-def test_a_target_another_step_cloned_while_this_one_waited_is_not_cloned_again(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    workspace: Path = tmp_path / "beryl3d"
-    workspace.mkdir()
-    (tmp_path / "b3d" / "target").mkdir(parents=True)
-    monkeypatch.setattr(cli.paths, "WORKSPACE", workspace)
-    monkeypatch.setattr(cli.paths, "cache", lambda: tmp_path / "b3d")
-    monkeypatch.setattr(cli.paths, "target_lock", lambda: tmp_path / "lock")
-    real_lock: Callable[[Path], AbstractContextManager[None, bool | None]] = (
-        cli.system.file_lock
-    )
-
-    def lock_after_another_clone(
-        path: Path,
-    ) -> AbstractContextManager[None, bool | None]:
-        # The step that held the lock first finished its clone.
-        (workspace / "target").mkdir()
-        return real_lock(path)
-
-    monkeypatch.setattr(cli.system, "file_lock", lock_after_another_clone)
-    clones: list[Path] = []
-    monkeypatch.setattr(
-        cli.warm, "clone_into", lambda _source, dest: clones.append(dest) or True
-    )
-    cli.warm_target()
-    assert clones == []
-
-
 def test_a_build_runs_under_the_checkouts_build_lock(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     held: list[bool] = []
 
     def cargo(arguments: list[str]) -> int:
-        # Another build of this checkout would wait here, before its cargo takes tokens.
+        # Another build of this checkout would wait here, before it starts cargo.
         try:
             with cli.system.file_lock(cli.paths.build_lock(), timeout=0):
                 held.append(False)
@@ -248,7 +205,7 @@ def test_a_build_runs_under_the_checkouts_build_lock(
     assert held == [True]
 
 
-# A compiler controlled through stdin, so concurrent lanes and cancellation are tested
+# A compiler controlled through stdin, so concurrent builds and cancellation are tested
 # without sleeps or assumptions about how quickly either process gets scheduled.
 BUILD_CHILD = """
 import sys
@@ -282,7 +239,7 @@ raise SystemExit(cli.shared_build())
 
 
 @pytest.mark.parametrize("cancel", [False, True])
-def test_parallel_lanes_reuse_a_build_and_a_canceled_holder_releases_it(
+def test_parallel_builds_reuse_a_build_and_a_canceled_holder_releases_it(
     tmp_path: Path, cancel: bool
 ) -> None:
     children: list[subprocess.Popen[str]] = []

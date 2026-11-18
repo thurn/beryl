@@ -15,13 +15,12 @@ complete by the first few items still missing. The items come from:
 - `data/beryl3d/screens.json`, which lists Beryl 3D's screens and names a fixture for each
   prompt shape;
 - `data/beryl3d/conventions/<kind>.json`, which records how Beryl 3D follows each UI
-  Conventions entry, or why it cannot;
-- the Beryl 3D sweep's log, for the macOS launch test.
+  Conventions entry, or why it cannot.
 
 `--check` reads only the data files and fails when a skill directory or a web screen file has
 no entry in `parity.json`, or a key of it names something that no longer exists. It never fails
-for an incomplete list. The fast check's `repo` lane runs it as its `parity-list` step on every
-change, because a change anywhere can remove a skill or a screen file.
+for an incomplete list, so it can run after any change, since a change anywhere can remove a
+skill or a screen file.
 
 The command writes no file.
 """
@@ -37,8 +36,8 @@ from pathlib import Path
 from typing import Any
 
 from .. import paths as repo_paths
-from ..lanes import BY
-from . import paths, sweep
+from ..paths import BY
+from . import paths
 from .command import Command
 
 PARITY: Path = paths.DATA / "parity.json"
@@ -190,7 +189,6 @@ class Sources:
     timeline_keys: set[str]
     # The tests `test-faults.json` allows faults for.
     listed_faults: set[str]
-    sweep_records: list[dict[str, object]]
 
 
 def not_timed(sources: Sources) -> set[str]:
@@ -287,17 +285,6 @@ def tools_kind(sources: Sources) -> Kind:
     return Kind("tools", len(tools) - len(missing), len(tools), missing)
 
 
-def launch_kind(records: list[dict[str, object]]) -> Kind:
-    """The macOS launch test, which the sweep's `smoke` step runs in its quick part: passed at
-    the last commit whose quick part passed. The log keeps each part's result, not each step's,
-    so a failed quick part says nothing of `smoke` and the last pass is reported."""
-    commit = sweep.last_passed(records, sweep.QUICK)
-    others = "iOS, Android and Windows not required"
-    if commit:
-        return Kind("launch tests", 1, 1, [], f"macOS pass at {commit[:10]}; {others}")
-    return Kind("launch tests", 0, 1, [], f"macOS not run; {others}")
-
-
 def report(sources: Sources) -> list[Kind]:
     done = done_recordings(sources)
     parity = sources.parity
@@ -310,7 +297,6 @@ def report(sources: Sources) -> list[Kind]:
         screens_kind(sources, done),
         conventions_kind(sources, done),
         tools_kind(sources),
-        launch_kind(sources.sweep_records),
     ]
 
 
@@ -406,7 +392,6 @@ def read_sources(results: Results) -> Sources:
         conventions=read_conventions(),
         timeline_keys=set(timeline),
         listed_faults=set(faults),
-        sweep_records=sweep.read_log(),
     )
 
 

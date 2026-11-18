@@ -15,9 +15,8 @@ Run from the repository's root as `python -m beryl_tools.ignite.oracle <verb> <f
   failure or a pass with something to say, `message`. A check the oracles ended without judging
   gets no line, so Ignite records it as `incomplete`.
 
-A check's `digest` is the input of its own that Ignite adds to its input hash. It is what
-`oracle_memory.py` keys a scenario's remembered outcome on: a hash of the Java method and Forge
-JSON the exporters prepared for it (or their reasons for refusing it), the oracles' pins and the
+A check's `digest` is the input of its own that Ignite adds to its input hash: a hash of the
+Java method and Forge JSON the exporters prepared for it (or their reasons for refusing it), the oracles' pins and the
 Java harnesses. Here it also covers the engine and the entries of `data/oracle-divergences.json`
 and `data/oracle-exporter-gaps.json` that name the scenario for that engine, since they turn a
 failure into a pass. Editing an exporter, a card or the rules therefore reruns only the
@@ -72,9 +71,8 @@ BATCH = 20
 # different seeds, all far above the regression set's 1 to 100.
 REGION = 1 << 20
 
-# The files whose contents `oracle_memory.side` hashes besides the pins: the Java harnesses,
-# one of which (XMage's base class) lives beside the Python tools. Copied here because the
-# switch to Ignite deletes `oracle_memory`.
+# The files whose contents the digest covers besides the pins: the Java harnesses, one of
+# which (XMage's base class) lives beside the Python tools.
 SIDE_GLOBS: tuple[str, ...] = (
     "tools/oracles/**/*.java",
     "tools/src/beryl_tools/BerylScenarioTest.java",

@@ -76,15 +76,15 @@ says how Beryl follows MTG Arena.
   elements Chromium restyled and laid out. It plays on Playwright's paused
   clock, one frame at a time, so the counts don't depend on load and compare
   across runs on this Mac; use them, not `ui-perf`'s timings, to tell whether a
-  change made the UI do more work. Slow CI holds a few fixtures to the limits in
-  `data/ui-counts.json`.
+  change made the UI do more work. The `ui-counts` check family holds a few
+  fixtures to the limits in `data/ui-counts.json`.
 - `just motion` records each animation verb in stepped stage time and compares
-  it with its own values in `data/ui-conventions.json` (the `motion` lane in
-  `docs/checks.md`).
+  it with its own values in `data/ui-conventions.json` (the `motion` family in
+  `ignite/checks/browser.toml`).
 
 The machine runs at most half its core count's worth of browser pages at once,
-across all runs (`scripts/slots.mjs`). Runs that aren't checks share a third of
-those slots. Headless WebKit runs at a higher priority than any build, so run
-only the checks your change needs (`just ui-test <title>`,
-`just specs --shots <card>`) rather than a full sweep. Bare `just specs <card>`
-serves the spec pages until interrupted; it is not a check.
+across all runs (`scripts/slots.mjs`, and Ignite's `browser-pages` resource for
+checks). Headless WebKit runs at a higher priority than any build, so run only
+the checks your change needs (`ignite test <check>`, `just ui-test <title>`,
+`just specs --shots <card>`) rather than every browser check. Bare
+`just specs <card>` serves the spec pages until interrupted; it is not a check.

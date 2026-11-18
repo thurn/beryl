@@ -5,7 +5,7 @@ limits in `data/beryl3d/gates.json`:
 - **Shader cost**, under `materials.<name>`: the texture samples (`samples`) and naga
   expressions (`expressions`) of each material's `shade_` function in beryl_render's shader,
   with the fragment entry point's added. The `shader_cost` test of beryl_render counts them and
-  holds them to the limits, and runs on any machine, also in the lane's `cargo-test` step.
+  holds them to the limits, and runs on any machine, also in `cargo-test`.
 - **Fragments shaded**, under `tiers.<tier>.fragments.<board>` for the Baseline and Enhanced
   tiers: the most fragments any of a gated board's 8 ranked frames shades in that tier, in
   screens (fragments divided by the target's pixels), summed over every render pass of the
@@ -194,9 +194,6 @@ def lowered_materials(
 def shader_cost() -> tuple[int, str]:
     """Runs beryl_render's `shader_cost` tests, in the crate's one test binary, `all`: their exit
     code and output."""
-    from .cli import warm_target  # cli imports gate, which imports this module.
-
-    warm_target()
     done = subprocess.run(
         [
             "cargo",

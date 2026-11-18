@@ -20,7 +20,7 @@ import sys
 from dataclasses import dataclass
 
 from .. import specs
-from ..lanes import BY
+from ..paths import BY
 from .command import Command
 
 # The most lines of a tree printed for one prompt, so the output stays bounded.

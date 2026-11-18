@@ -11,14 +11,15 @@ anything at the time; ingest reads these sources afterwards:
 
 - Claude Code transcripts and the desktop app's session records, and Codex logs
   (`~/.codex/sessions`, `.jsonl` only). Ticket windows (the stretch of a session
-  spent on one ticket) come from the Enact commands a session ran.
-- Tickets (`tk list`), and `git log` and `master`'s reflog from the main
-  checkout.
-- The CPU sampler, the CPU token pool's lease log, the CI run log and the
-  verdicts on `ci-check` tickets.
-- Enact's lock-wait log (`.git/enact/lock-waits.jsonl` in the main checkout):
-  one line per acquisition of Enact's ownership lock, with the seconds waited,
-  held and spent syncing tickets, joined to the tool call that ran the command.
+  spent on one ticket) come from the `ignite start` commands a session ran (and
+  the older Enact commands in transcripts from before the switch).
+- Ignite's hub, on the machine that holds its database: tickets, one record per
+  command Ignite ran on any machine (checks, builds, cores and CPU), tips,
+  hand-offs, workers, and the efficiency rows other machines' daemons posted.
+- `git log` and `master`'s reflog from the main checkout.
+
+Rows from before the switch, from the old run log, CPU sampler, token pool,
+lock log and `tk`, stay in the store as history.
 
 The store is `$BERYL_CACHE/efficiency/store.sqlite`
 (`~/Library/Caches/beryl/efficiency/`). It holds only what ran on this machine.
@@ -57,10 +58,9 @@ just efficiency time --by kind --tier sonnet     # --by kind|model|tier|role|lan
 just efficiency dollars --by source --epic by-ig5e  # --by class|source|purpose|model|tier|role|lane|epic|day
 just efficiency cards --by tier                  # cost per card file added, with rework beside it
 just efficiency machine --since 7d               # cores in use, saturation, time queued for cores
-just efficiency enact --since 7d                 # time waiting for Enact's lock and syncing, by subcommand and holder
-just efficiency ci --lane oracle                 # CI cost by script, lane, family, check (--script ci|check|sweep|nightly|bisect)
-just efficiency pushes --since 24h               # the fast check per push: seconds, CPU, repeats
-just efficiency failures --since 7d              # what each slow-CI failure cost (Steward bead, bisection, time behind)
+just efficiency ci --lane oracle                 # check cost by script, family, check (--script check is the landing gate, ci is tip verification)
+just efficiency pushes --since 24h               # the gate per landing: seconds, CPU, repeats
+just efficiency failures --since 7d              # what each failure on staging cost (repair ticket, culprit search, time behind)
 just efficiency findings --since 7d              # waste ranked by what removing it would save per week
 just efficiency findings --rule carried-logs     # one rule's items in full
 just efficiency metrics bead.dollars             # a named series by day (no name lists them)
@@ -71,7 +71,7 @@ just efficiency sql "select count(*) from requests where model like 'claude-opus
 
 `findings` is where to start looking for savings. Its rules include
 `small-reads`, `carried-logs`, `fixed-prefix`, `wake-ups`, `outlier-beads`,
-`tier-gap`, `queued`, `enact-lock-wait`, `compile-share`, `repeated-command`,
+`tier-gap`, `queued`, `compile-share`, `repeated-command`,
 `chained-commands`, `never-caught` and `flake-cost`;
 `just efficiency findings --help` lists them all. Each item names its evidence
 query and example tickets.
@@ -120,18 +120,15 @@ questions.
 The user schedules work on purpose, so these are never reported as
 opportunities, in answers about velocity or in findings:
 
-- Time a ticket waits before anyone schedules it: a ready ticket that no active
-  Enact run owns, or the wait from a ticket's creation to the start of the run
-  that picks it up.
-- Hours when no ticket session is running, such as the gaps between Enact runs
-  or while a run is paused or stopped.
-- An "always-on worker pool" or dispatcher that drains `tk ready` without a run.
+- Time a ticket waits before anyone schedules it: a ticket in an epic nobody
+  has activated, or one set aside for a person.
+- Hours when no ticket session is running, such as while the pool is paused.
 - Sessions stopped by a usage limit (the weekly limit or a model's limit), and
   advice to avoid hitting one.
 
 When asked about velocity (wall-clock time to shipped tickets), measure only
-work the user has scheduled, usually the tickets of active Enact runs, and only
-the time while their run was going.
+work the user has scheduled, usually the tickets of active epics, and only the
+time while the pool was working them.
 
 ## Cross-checking findings against fixes
 
@@ -150,7 +147,7 @@ each finding before reporting it:
    It says what someone saw and what changed, so you can tell whether it covers
    this finding or only a nearby one.
 3. **Look for tickets.** Search the open and in-progress tickets, descriptions
-   as well as titles: `tk list --json`, filtered for the tool's name, the
+   as well as titles: `ignite ticket list --json`, filtered for the tool's name, the
    command and the symptom. A finding can also come from a ticket's own text:
    for example, the acceptance criteria that a tool writes into the tickets it
    files can send workers to run a slow command.
@@ -171,8 +168,9 @@ open finding is a new opportunity. Offer to file a ticket for it.
 - A command run in the background ends, in `tool_calls`, when it was launched.
   Its real end is the session's `notifications` row for that call, or the next
   `prompts` row of kind `background` that names it.
-- Vizier sessions can appear inside ticket windows. Before blaming workers, drop
-  sessions whose commands include `enact.py next --epic`.
+- Before the switch, Enact's vizier sessions can appear inside ticket windows.
+  Before blaming workers, drop sessions whose commands include
+  `enact.py next --epic`.
 - `just efficiency sql` ingests first unless given `--no-ingest`, which can take
   minutes on a loaded machine.
 
@@ -190,18 +188,19 @@ open finding is a new opportunity. Offer to file a ticket for it.
   minutes, never in them. Tool and queued time are split by command kind, from
   `data/efficiency-command-kinds.json`; a command that matches no pattern is
   "other", and `coverage` lists the longest ones.
-- **Core minutes** are the CPU used in a ticket's worktree, from the sampler.
+- **Core minutes** are the CPU used in a ticket's tree, from Ignite's records
+  (before the switch, from the CPU sampler).
 - **Dollars** split three ways, each summing to the total: by class (cache read,
   cache write, output, uncached input); by source (output, the fixed prefix of
   each request, new content, and content carried from earlier turns, split by
   the tool that added it); and by purpose (working against wake-up requests,
   which found nothing to do and went back to waiting).
-- **Rework** is what later tickets spent fixing a ticket's work: a Steward
-  ticket's cost when the ticket's commit broke slow CI, and later `fix` commits
+- **Rework** is what later tickets spent fixing a ticket's work: a
+  regression ticket's cost when the ticket's commit broke a check on staging, and later `fix` commits
   to a card it added. That money is already another ticket's direct cost, so
   rework is shown beside direct cost and never added to it.
-- In roll-ups, "orchestration" is the cost of an Enact run's orchestrator
-  session, charged to its epic but to no ticket, and "(no ticket)" is every
+- In roll-ups, "orchestration" is the cost of a dispatcher or (before the
+  switch) an Enact run's orchestrator session, charged to its epic but to no ticket, and "(no ticket)" is every
   other session's time outside a ticket window. The lines sum to the total.
 - A window counts toward `--since` when it starts in the range and a ticket when
   it closed in it; a closed ticket's own figures include all its windows.

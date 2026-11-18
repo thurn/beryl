@@ -6,6 +6,10 @@
 remote = "origin"
 staging = "staging"
 master = "master"
+# Build trees are fixed directories that keep their rust/target between tickets: rustc ignores
+# incremental caches built at another path, and a new directory per change rebuilt every crate
+# on the changed chain from scratch (421-544 CPU-seconds of test build after a one-function
+# beryl_kernel change, against 18 in a tree that built the state before).
 trees = ".worktrees"
 checks = "ignite/checks"
 
@@ -15,12 +19,12 @@ project = "by"
 # The old dashboard also answered at /beryl/; those page addresses redirect to /by/.
 aliases = ["beryl"]
 
-# From `ignite gate replay` over the 14 days of history before 2026-11-17 (docs/ignite.md, "The
-# threshold and the cap"): this threshold keeps 6304 of the 6635 catches in that history. Only a
-# commit changes them.
+# From `ignite gate replay` over the 14 days of history before the switch on 2026-11-18
+# (docs/ignite.md, "The threshold and the cap"): this threshold keeps 6308 of the 6640 catches in
+# that history. Only a commit changes them.
 [gate]
-threshold = 9.99e-4 # expected failures per billion instructions
-cap = 6158          # billions of instructions per landing
+threshold = 9.96e-4 # expected failures per billion instructions
+cap = 6236          # billions of instructions per landing
 
 [improvement]
 min_share = 0.15
@@ -43,6 +47,8 @@ landing_trees = 3
 trees_disk_gb = 400
 floor = { batch = 8, tip = 2 }
 
+# Browser pages: at most half the cores' worth at once across every tree. Headless WebKit runs at
+# a higher priority than any build, so more pages starve the builds beside them.
 [machine.jarvis.resources]
 browser-pages = 9
 oracle = 1
@@ -60,7 +66,8 @@ floor = { batch = 2, tip = 2 }
 browser-pages = 4
 oracle = 1
 
-# The Windows PC: no browser, oracle or app families.
+# The Windows PC: no browser, oracle or app families. Those need WebKit, the Java oracles, the
+# Lima machines or a desktop window system, which only the Macs have.
 [machine.cygnus]
 os = "windows"
 ticket_trees = 6

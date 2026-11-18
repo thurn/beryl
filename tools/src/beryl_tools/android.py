@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import mobile, paths, system, warm
+from . import deps, mobile, paths, system
 
 PACKAGE: str = mobile.BUNDLE_ID
 ACTIVITY: str = f"{PACKAGE}/.MainActivity"
@@ -55,7 +55,7 @@ def adb(*args: str, check: bool = False) -> subprocess.CompletedProcess[str]:
 
 def build() -> int:
     """Builds the debug app for arm64 through Tauri's CLI ([`APK`])."""
-    warm.ensure(tauri=True)
+    deps.ensure_node_modules()
     # Gradle's incremental APK can retain the old native library as an unreferenced ZIP gap
     # when the Rust library changes. Repackage from a fresh output to keep installs small.
     APK.unlink(missing_ok=True)

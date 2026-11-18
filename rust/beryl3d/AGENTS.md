@@ -12,8 +12,8 @@ path. Its `[workspace.lints]` table must equal the main one's, which the
 
 A program here that spreads work over threads sizes them with
 `beryl_inspect::runner::threads`, which follows the cores Ignite granted it
-(`IGNITE_CORES`, and the file `IGNITE_CORES_FILE` names) or the CPU tokens its
-`by` command leased (`tools/AGENTS.md`), never `available_parallelism` alone.
+(`IGNITE_CORES`, and the file `IGNITE_CORES_FILE` names), never
+`available_parallelism` alone.
 
 ## Crates
 
@@ -42,21 +42,22 @@ A program here that spreads work over threads sizes them with
 ## Commands
 
 `just b3d` lists every command, and `just b3d <command> --help` explains one.
-`just b3d lane` runs the checks of the `beryl3d` lane that the fast check runs
-for a change here. `just b3d timeline-parity [--fixtures] [prefix]` compares the
-web interface's and Beryl 3D's timelines of the recordings (see
-`data/beryl3d/timeline-parity.json`, below). The lane runs it with `--fixtures`
-and the sweep without. `just b3d parity` prints the parity list
-(docs/beryl-3d.md, "The parity list"): for each kind of item the web interface
-shows (fixtures, card specs, timelines, verbs, effects, marks, prompt shapes,
-screens, UI Conventions entries, tools and launch tests), how many Beryl 3D has
-and the first few it lacks; `--full` names all of them and `--json` prints the
-whole report. It runs `just b3d test` on the desktop and phone windows, or reads
-their `--json` outputs from `--results <dir>` (`desktop.json`, `phone.json`).
+Beryl 3D's checks are the `b3d-*` families in `ignite/checks/beryl3d.toml`;
+`ignite test <check>` runs any of them.
+`just b3d timeline-parity [--fixtures] [prefix]` compares the web interface's
+and Beryl 3D's timelines of the recordings (see
+`data/beryl3d/timeline-parity.json`, below). The `b3d-timeline` family runs it
+per fixture. `just b3d parity` prints the parity list (docs/beryl-3d.md, "The
+parity list"): for each kind of item the web interface shows (fixtures, card
+specs, timelines, verbs, effects, marks, prompt shapes, screens, UI Conventions
+entries, tools and launch tests), how many Beryl 3D has and the first few it
+lacks; `--full` names all of them and `--json` prints the whole report. It runs
+`just b3d test` on the desktop and phone windows, or reads their `--json`
+outputs from `--results <dir>` (`desktop.json`, `phone.json`).
 `just b3d parity --check` fails when `data/beryl3d/parity.json` misses a skill
-directory or a web screen file or names something gone; it is the fast check's
-`repo:parity-list` step, run on every change. `just b3d bug <report>` prints a
-Beryl 3D bug report and the commands that bring the app back to its state;
+directory or a web screen file or names something gone; it runs as a repository
+check on every change. `just b3d bug <report>` prints a Beryl 3D bug report and
+the commands that bring the app back to its state;
 `just b3d app --replay <replay.json>` resumes the game of a replay file, such as
 a report's, at its latest decision and saves nothing.
 
@@ -139,8 +140,8 @@ through the client with no window or GPU (the `b3d` skill has the details):
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you
 changed is drawn with `--scale 2` (the windowless app runs at 2 on macOS). A
-tree line shows that text was laid out, not that its glyphs drew. An executor or
-Warden closes a ticket that changes how something looks only after reading a
+tree line shows that text was laid out, not that its glyphs drew. A worker or
+reviewer closes a ticket that changes how something looks only after reading a
 picture of it beside the web interface's at the same moment
 (`just b3d compare --scale 2`), and names the file on the ticket ("What these
 tools cannot show" in the `b3d` skill).
@@ -167,7 +168,7 @@ surface, and exercises low memory, haptics, sharing and opening a URL.
 user asked for it in chat. `just b3d phone-search [--gles]` plays a live game
 against `mcts-hidden` on each platform for 5 minutes and compares late frames
 while the AI searched and while it did not: a measurement of whether the search
-starves the frame thread. None of these are in the lane or the sweep yet.
+starves the frame thread. None of these are check families yet.
 
 ## Paths
 
@@ -247,9 +248,9 @@ project, and selects the main lanes.
   the moment mid-animation, as `tree --at` does, instead of once the table
   rests. Its `shows` may leave out the line's id and box, as
   `card "Island" battlefield.yours.lands tapped`. An open entry for work that is
-  only not done yet names its ticket (`needs bead <id>`). Beryl 3D never edits
-  `data/ui-conventions.json` itself. A `beryl_inspect` test checks each key and
-  each recording.
+  only not done yet names its ticket (`needs bead <id>`, where a bead is a
+  ticket). Beryl 3D never edits `data/ui-conventions.json` itself. A
+  `beryl_inspect` test checks each key and each recording.
 
 - `data/beryl3d/gates.json`: the audit, frame, tier, material and test gates.
   Each number under `audit` becomes an `f32` constant in `beryl_scene`'s
@@ -278,37 +279,36 @@ project, and selects the main lanes.
   frame"). `just b3d gate --update` lowers them to what was measured.
   `worst_frame_instructions` and `total_instructions` are the instruction-count
   gate's, counted under Callgrind in `beryl3d-bench` by `just b3d gate --counts`
-  (a step of the sweep, the `b3d-frame-counts` program in `beryl_inspect`), and
-  `--counts --update` lowers them. Never wait for the count gate before pushing:
-  check a change's frame cost with `just b3d gate` and `frame_abba` on the Mac,
-  and leave the counts to the sweep, which files a ticket when one moves past
-  its tolerance. Run `--counts` only when a ticket's subject is instruction
-  counts, or when your change raises a work counter's limit because it added
-  work to every board (a new element on every screen, a verb a gated board
-  plays): then it moves the instruction limits in the same commit, since that
-  work moves them too. It takes a few minutes. A `--gpu` or `--counts` run that
-  a session starts goes ahead of the sweep's runs on `beryl3d-bench`, though it
-  still waits for one that has started. To fix a ticket the sweep filed, run the
-  failed step's own command in your worktree; `just b3d sweep --step <step>`
-  replays it in a tree of its own without waiting for a running sweep. A count
-  may pass its limit by the tolerance, 1%, which absorbs inlining and layout
-  shifts from unrelated changes; the work counters' limits have none. A count
-  below its limit (past the tolerance, for instructions) fails too, so that no
-  room is left for a later change to add work back unseen: a change that cuts
-  the work lowers the native limits in the same commit, and the sweep's ticket
+  (the `b3d-frame-counts` family, the `b3d-frame-counts` program in
+  `beryl_inspect`), and `--counts --update` lowers them. Never wait for the
+  count gate before pushing: check a change's frame cost with `just b3d gate`
+  and `frame_abba` on the Mac, and leave the counts to Ignite's tip
+  verification, which files a ticket when one moves past its tolerance. Run
+  `--counts` only when a ticket's subject is instruction counts, or when your
+  change raises a work counter's limit because it added work to every board (a
+  new element on every screen, a verb a gated board plays): then it moves the
+  instruction limits in the same commit, since that work moves them too. It
+  takes a few minutes. A `--gpu` or `--counts` run that a session starts shares
+  `beryl3d-bench` with the `b3d-frame-counts` checks (Ignite's `bench-vm`
+  resource) and waits for one that has started. To fix a ticket about a count,
+  run `ignite test b3d-frame-counts` in your tree. A count may pass its limit by
+  the tolerance, 1%, which absorbs inlining and layout shifts from unrelated
+  changes; the work counters' limits have none. A count below its limit (past
+  the tolerance, for instructions) fails too, so that no room is left for a
+  later change to add work back unseen: a change that cuts the work lowers the
+  native limits in the same commit, and the ticket that tip verification files
   lowers the instruction limits. During the build-out (`BUILD_OUT` in
   `tools/src/beryl_tools/beryl3d/build_out.py`) the instruction tolerance is 20%
   and a count below its limit passes, fragments over a board's limit only warn
   unless they pass the 1.75-screen target, and `scaling` holds `stress-1024`'s
   counts to at most a fixed multiple of `stress-255`'s, which fails work that
   grows faster than the board (docs/beryl-3d.md, "During the build-out"). The
-  native gate runs in its own lane, `beryl3d-gate`, in every fast check of a
-  Beryl 3D change, so a change that moves a native count fails its own push
-  until it moves the limit in the same commit. A limit rises only when the work
-  itself changed (a new verb, a new element on every screen) or a compiler or
-  dependency upgrade moved the count with no change to Beryl's code, and the
-  commit that raises it gives the old and new numbers. It needs nobody's
-  approval.
+  native gate is the `b3d-gate` family, so a change that moves a native count
+  fails its own landing until it moves the limit in the same commit. A limit
+  rises only when the work itself changed (a new verb, a new element on every
+  screen) or a compiler or dependency upgrade moved the count with no change to
+  Beryl's code, and the commit that raises it gives the old and new numbers. It
+  needs nobody's approval.
 
   A rebase does not stop on gates.json when two branches both raised the same
   limits. The repository's `.gitattributes` gives the file to a merge driver,

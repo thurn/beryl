@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import changes, claude, cli, facts, ingest, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads
 from beryl_efficiency.scope import Scope, parse_since
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
 from tests.synthetic import bead as bead_record

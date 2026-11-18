@@ -264,31 +264,39 @@ The sources use data that other tools already record.
   line gives the working directory and each `token_count` event gives the tokens
   of the last request and the running total. Tool calls and their outputs are
   timestamped.
-- **Tickets**, read through the managed `tk` executable returned by
-  `enact backend`. One `tk export` supplies IDs, parents, labels, creation and
-  close times, aliases, metadata, and verdict comments. `tk events --since`
-  supplies session starts, closes, and slow-CI results, with the last sequence
-  saved in SQLite. The local store retains these results after the service
-  expires them.
+- **Tickets**, read from Ignite's hub database (`ignite.py`), which replaced
+  `tk export` and `tk events`. The hub's ticket rows supply IDs, parents,
+  labels, creation, claim and close times, aliases and landed commits. Session
+  boundaries come from the `ignite start <ticket>` commands in transcripts. The
+  store keeps the tickets, events and verdicts that `tk` supplied before the
+  switch.
 - **Git history** of `staging` and `master`: each commit's time, subject and
   changed paths.
-- **The run log** (the hour files in `ci/runs/` in the cache, and the old single
-  file `ci/runs.jsonl`). Each line has `time`, `host`, `commit`, `script`,
-  `lane`, `check`, `outcome` (`pass`, `fail` or `skip`), `seconds`,
+- **Ignite's records**, one per command on any machine, from the hub database.
+  They replaced the run log, the CPU token pool's lease log and the CPU sampler
+  below, which are no longer written; the rows they produced stay in the store.
+  Each record becomes an `ignite_records` row, a `leases` row, `cpu` and
+  `cpu_minutes` rows, and for a check family `checks` and `lane_runs` rows.
+- **The run log** (history: the hour files in `ci/runs/` in the cache, and the
+  old single file `ci/runs.jsonl`). Each line has `time`, `host`, `commit`,
+  `script`, `lane`, `check`, `outcome` (`pass`, `fail` or `skip`), `seconds`,
   `cpu_seconds` and `load`. The first record of each step also has
   `step_seconds` and `step_cpu_seconds`, the whole step's wall and CPU time.
-- **CPU sampler rows** (`cpu/samples.jsonl` in the cache). Each row covers about
-  a minute and has `time`, `seconds`, `cores` (how many the machine has), `cpu`
-  (CPU seconds keyed by who asked for the work, the kind of work and the
-  worktree), `peak_cores` and `load`. The sampler's name for "who asked for the
-  work" is the context; this document calls it the **owner**, to keep "context"
-  for what a model reads. Owners include a session, the fast check and slow CI.
-- **Check verdicts**. On the ticket of a check that has failed, each failure is
-  a comment holding a JSON object with the commit and a `verdict`. See
-  [CI accounting](#ci-accounting) for the verdicts.
-- **Enact's lock-wait log** (`.git/enact/lock-waits.jsonl` in the main checkout,
-  rotated to `lock-waits.1.jsonl` at 8 MB). Enact writes one line per
-  acquisition of its ownership lock: `time` (when the wait began), `pid`,
+- **CPU sampler rows** (history: `cpu/samples.jsonl` in the cache). Each row
+  covers about a minute and has `time`, `seconds`, `cores` (how many the machine
+  has), `cpu` (CPU seconds keyed by who asked for the work, the kind of work and
+  the worktree), `peak_cores` and `load`. The sampler's name for "who asked for
+  the work" is the context; this document calls it the **owner**, to keep
+  "context" for what a model reads. Owners include a session, the fast check and
+  slow CI.
+- **Check verdicts** (history: the hub does not supply them yet). On the ticket
+  of a check that has failed, each failure is a comment holding a JSON object
+  with the commit and a `verdict`. See [CI accounting](#ci-accounting) for the
+  verdicts.
+- **Enact's lock-wait log** (history: nothing in Ignite waits on one lock, so it
+  has no counterpart and is no longer read; `.git/enact/lock-waits.jsonl` in the
+  main checkout, rotated to `lock-waits.1.jsonl` at 8 MB). Enact writes one line
+  per acquisition of its ownership lock: `time` (when the wait began), `pid`,
   `command`, `outcome` (`acquired` or `gave_up`), `waited_s`, `held_s`, `sync_s`
   (seconds syncing tickets with the remote while holding the lock), `syncs` and
   `holder` (the command holding the lock once a wait passed a second).
@@ -392,11 +400,12 @@ could apply, the first in this list wins.
 - **Tool**: a tool call is running, from the call to its result. It is
   subdivided by kind of command. An Enact command's seconds waiting for Enact's
   ownership lock and syncing tickets under it are the kinds `enact lock wait`
-  and `enact sync`, taken from its kind in proportion: each line of the
-  lock-wait log is joined to the top-level tool call that ran its command and
-  was running for the whole of its wait and hold, preferring one that names its
-  ticket. When the ticket server queues a push for the staging lease, its local
-  log records the wait against the push's ticket. Those seconds move from
+  and `enact sync`, taken from its kind in proportion (history: Ignite writes no
+  lock-wait log, so only calls from before the switch have them): each line of
+  the lock-wait log is joined to the top-level tool call that ran its command
+  and was running for the whole of its wait and hold, preferring one that names
+  its ticket. When the ticket server queues a push for the staging lease, its
+  local log records the wait against the push's ticket. Those seconds move from
   `enact push` to `enact lease wait`.
 - **Model**: the model is generating, from a tool result or a message to the
   next assistant message. This applies whether or not a background command is
@@ -995,8 +1004,6 @@ The rules, each with its unit and its reference:
   cohort's median. Reference: the cohort's median for each.
 - **queued** (agent hours): time queued for cores, by command kind. Reference:
   zero.
-- **enact-lock-wait** (agent hours): time sessions' Enact commands waited for
-  the ownership lock, by the command seen holding it. Reference: zero.
 - **compile-share** (agent hours): compile time inside tests and checks.
   Reference: the same commands at the 10th percentile compile time of commands
   of the same kind in the range.
@@ -1047,7 +1054,8 @@ machine and is never committed.
 
 The tables, each keyed so that ingesting the same bytes twice changes nothing.
 Every table with a `host` column also has a `provider`, except those from the
-run log, the CPU sampler and git, which are the machine's own.
+run log, the CPU sampler and git, which are the machine's own (Ignite's records
+fill those tables now).
 
 - **requests**: one row per model request, with its transcript, time, model, the
   four token classes (cache writes also by the 1-hour part), dollars in total
@@ -1091,8 +1099,10 @@ run log, the CPU sampler and git, which are the machine's own.
 - **cpu**, **cpu_minutes** and **leases**: the sampler's rows by minute, owner,
   kind and worktree; its rows by minute alone; and one row per CPU lease, joined
   to the tool call that waited for it.
-- **lock_waits**: one row per acquisition of Enact's ownership lock or wait for
-  the server's staging lease, joined to the tool call that ran the command.
+- **lock_waits** (history; nothing writes it since the switch to Ignite, and no
+  query shows it apart from the time split): one row per acquisition of Enact's
+  ownership lock or wait for the server's staging lease, joined to the tool call
+  that ran the command.
 - **codex_marks**: the lines of a Codex log that give a request its model and a
   turn its end.
 - **sources**, **ingests** and **settings**: for each source file, the byte
@@ -1143,7 +1153,6 @@ just efficiency time --by kind --where tier=sonnet
 just efficiency dollars --by source --epic by-bajq
 just efficiency cards --by tier
 just efficiency machine --since 7d
-just efficiency enact --since 7d
 just efficiency ci --lane oracle
 just efficiency pushes --since 24h
 just efficiency failures --since 7d
@@ -1161,8 +1170,6 @@ just efficiency coverage
 - `time` takes `--by` with any of: `kind`, `model`, `tier`, `role`, `lane`,
   `epic`, `day`. `dollars` takes those and `class`, `source` and `purpose`.
 - `machine` shows cores in use, saturation, queued core hours and shared CPU.
-  `enact` shows time waiting for Enact's ownership lock and syncing tickets, by
-  subcommand and by the command holding the lock.
 - `ci` shows the tree described under [CI accounting](#ci-accounting).
 - `pushes` shows [the fast check](#the-fast-check) per push, and `failures`
   shows [what each slow-CI failure costs](#what-a-slow-ci-failure-costs).

@@ -117,8 +117,6 @@ ADDRESSES: list[str] = [
     "/cards",
     "/cards?since=all&by=role",
     "/machine",
-    "/enact",
-    "/enact?since=all",
     "/ci",
     "/ci?script=check&since=all",
     "/ci?lane=rust",
@@ -131,11 +129,10 @@ ADDRESSES: list[str] = [
     "/metrics/bead.dollars?since=all",
     "/metrics/request.context-tokens?since=all",
 ]
-# The six views the page's header leads to, and the sections they open.
+# The five views the page's header leads to, and the sections they open.
 VIEWS: list[str] = [
     "/cards",
     "/machine",
-    "/enact",
     "/ci",
     "/changes",
     "/findings",
@@ -292,11 +289,11 @@ def test_a_trend_with_a_change_on_it_carries_the_changes_mark(marked: Path) -> N
 
 
 def test_every_view_leads_to_the_sections_it_opens(marked: Path) -> None:
-    """The header leads to the six views; a view's metrics are trends open from the start,
+    """The header leads to the five views; a view's metrics are trends open from the start,
     a change opens its metric's trend, a finding its items, and a check lane its families.
     """
     home = get("/").body.decode()
-    for name in ("cards", "machine", "enact", "ci", "changes", "findings"):
+    for name in ("cards", "machine", "ci", "changes", "findings"):
         assert f'href="/{name}?since=7d"' in home or f'href="/{name}"' in home, name
     cards = get("/cards").body.decode()
     assert (

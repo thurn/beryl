@@ -3,8 +3,8 @@
 The app listens on a Unix socket, `$TMPDIR/beryl3d-<process id>.sock`, when it is a build with
 the `tools` feature. A request is one line (`tree`, `png`, `do <action>` or `quit`) and the answer is
 read to the end of the connection: `ok` or `error` on its first line, then the tree, the
-picture's path or what went wrong. `release_socket_paths` is the sweep's check that a release
-build contains no such path.
+picture's path or what went wrong. `release_socket_paths` is the check that a release build
+contains no such path.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from .. import checks
+from .. import deps
 from . import paths
 
 # How long a request may take before it gives up, in seconds.
@@ -157,7 +157,7 @@ def run_release_socket(_args: argparse.Namespace) -> int:
     from .cli import build  # cli imports this module.
 
     if build(["build", "--release", "-p", "beryl_3d", "--bin", "beryl3d"]) != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
     binary = paths.WORKSPACE / "target" / "release" / "beryl3d"
     found = release_socket_paths(binary)
     if found:

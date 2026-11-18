@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .. import checks, paths as repo_paths, system
+from .. import deps, paths as repo_paths, system
 from . import live, paths
 
 BINARY: Path = system.exe(paths.WORKSPACE / "target" / "debug" / "beryl3d")
@@ -140,7 +140,7 @@ def run_app(args: argparse.Namespace) -> int:
         print(f"app: {error}", file=sys.stderr)
         return 2
     if not args.no_build and build() != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
     command = [str(BINARY), "--window", window]
     for option, value in (
         ("--fixture", args.fixture),
@@ -179,7 +179,7 @@ def run_smoke(args: argparse.Namespace) -> int:
     before then.
     """
     if not args.no_build and build() != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
     started = time.monotonic()
     try:
         shown = start_screen()

@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from . import system, tickets
+from . import paths, system
 
 REPORT = "report.md"
 DONE = "done"
@@ -44,7 +44,8 @@ BUNDLE_FILES: frozenset[str] = frozenset(
         "journal.jsonl",
     )
 )
-# Every ticket filed from a report carries it, so `tk list --label bug-report` finds them.
+# Every ticket filed from a report carries it, so `ignite ticket list --label bug-report` finds
+# them. A ticket also carries `bug-report:<report id>`, which says which report it came from.
 LABEL = "bug-report"
 # And a report of a questionable play of the AI's (`kind: ai`) carries this one too.
 AI_LABEL = "ai-play"
@@ -220,30 +221,56 @@ def description(report: Report) -> str:
     return "\n".join(words).strip()
 
 
+class TicketError(RuntimeError):
+    """The `ignite ticket` command failed or printed something unexpected."""
+
+
+def ignite_ticket(*args: str) -> Any:
+    """Runs `ignite --json ticket <args>` in the repository and returns its parsed output."""
+    result = subprocess.run(
+        ["ignite", "--json", "ticket", *args],
+        cwd=paths.REPO,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if result.returncode:
+        message = (result.stderr or result.stdout).strip()
+        raise TicketError(f"ignite ticket {args[0]}: {message}")
+    try:
+        return json.loads(result.stdout)
+    except ValueError as error:
+        raise TicketError(f"ignite ticket {args[0]}: not JSON: {error}") from error
+
+
 def file_bead(report: Report, priority: str) -> str:
-    reference = f"bug-report:{report.id}"
-    labels = [LABEL]
+    """Files a ticket for `report` and returns its ID, or the ID of the one already filed for
+    it, such as by an earlier attempt that failed before the report recorded the ID."""
+    filed = filed_beads()
+    if report.id in filed:
+        return filed[report.id]
+    labels = [LABEL, f"{LABEL}:{report.id}"]
     if report.kind == "ai":
         labels.append(AI_LABEL)
     elif report.kind == "spec-viewer":
         labels.append(SPEC_VIEWER_LABEL)
-    tk = tickets.client()
-    # A previous attempt may have created the issue before saving its ID locally.
-    filed = report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
-    if report.id in filed:
-        return filed[report.id]
-    return tickets.create_issue(
-        tk,
-        {
-            "type": "bug",
-            "title": report.title or report.id,
-            "body": bead_description(report),
-            "labels": labels,
-            "priority": int(priority),
-            "metadata": {"bug_report_id": report.id},
-        },
-        request_key=reference,
-    )
+    with tempfile.TemporaryDirectory(prefix="beryl-bug-") as folder:
+        body = Path(folder) / "body.md"
+        body.write_text(bead_description(report), encoding="utf-8")
+        created = ignite_ticket(
+            "create",
+            report.title or report.id,
+            "--type",
+            "bug",
+            "--priority",
+            f"P{int(priority)}",
+            "--labels",
+            ",".join(labels),
+            "--body-file",
+            str(body),
+        )
+    return str(created["results"][0]["id"])
 
 
 def list_cmd(args: argparse.Namespace) -> int:
@@ -396,32 +423,21 @@ def adopt_report(staged: Path, root: Path) -> bool:
 
 
 def report_issues(issues: list[dict[str, Any]]) -> dict[str, str]:
+    """The ticket ID for each report ID that the `bug-report:<report id>` labels of `issues`
+    name."""
     found: dict[str, str] = {}
     prefix = f"{LABEL}:"
     for issue in issues:
-        metadata = issue.get("metadata") or {}
-        report_id = metadata.get("bug_report_id")
-        if not report_id:
-            legacy = metadata.get("_enact_beads") or {}
-            ref = str(issue.get("external_ref") or legacy.get("external_ref") or "")
-            if ref.startswith(prefix):
-                report_id = ref.removeprefix(prefix)
-        if report_id:
-            found[str(report_id)] = str(issue["id"])
+        for label in issue.get("labels") or []:
+            if str(label).startswith(prefix):
+                found[str(label).removeprefix(prefix)] = str(issue["id"])
     return found
 
 
 def filed_beads() -> dict[str, str]:
-    """Issues already filed for a report, including those filed on another machine."""
-    try:
-        tk = tickets.client()
-        return report_issues(tickets.list_issues(tk, "--all", "--label", LABEL))
-    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
-        print(
-            f"bugs: can't list filed reports, importing as open: {error}",
-            file=sys.stderr,
-        )
-        return {}
+    """Tickets already filed for a report, including those filed on another machine. Raises
+    `TicketError` when the tickets cannot be listed."""
+    return report_issues(ignite_ticket("list", "--all", "--label", LABEL))
 
 
 def import_cmd(args: argparse.Namespace) -> int:
@@ -432,10 +448,17 @@ def import_cmd(args: argparse.Namespace) -> int:
             staging = Path(temp)
             with zipfile.ZipFile(args.bundle) as archive:
                 keys = stage_bundle(archive, staging)
-            beads = filed_beads()
+            try:
+                beads = filed_beads()
+            except (OSError, TicketError) as error:
+                print(
+                    f"bugs: can't list filed reports, importing as open: {error}",
+                    file=sys.stderr,
+                )
+                beads = {}
             for key in keys:
                 # The sender's `bead:` field isn't trusted, but a ticket in this tracker
-                # whose external ref names the report is: the report was filed already.
+                # labeled with the report's ID is: the report was filed already.
                 bead = beads.get(key, "")
                 if bead:
                     report = load(staging / key)

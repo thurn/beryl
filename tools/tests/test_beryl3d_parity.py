@@ -95,7 +95,6 @@ def sources(
         },
         timeline_keys=set(timeline),
         listed_faults=set(),
-        sweep_records=[],
     )
 
 
@@ -132,19 +131,13 @@ def test_a_verb_whose_recording_is_done_is_done() -> None:
     assert (found["marks"].done, found["marks"].total) == (1, 1)
 
 
-def test_screens_conventions_tools_and_launch_are_counted_from_their_files() -> None:
+def test_screens_conventions_and_tools_are_counted_from_their_files() -> None:
     found = kinds(sources())
     assert found["screens"].missing == ["testing"]
     assert found["conventions"].missing == [
         "Hand fan (open: needs a numbered exception)"
     ]
     assert found["tools"].missing == ["bugfix"]
-    assert found["launch tests"].done == 0
-    records: list[dict[str, object]] = [
-        {"commit": "abcdef0123456789", "parts": {"quick": {"code": 0}}}
-    ]
-    launch = parity.launch_kind(records)
-    assert launch.done == 1 and "macOS pass at abcdef0123" in launch.note
 
 
 def test_a_screen_or_convention_whose_recording_fails_is_not_done() -> None:

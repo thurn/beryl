@@ -1,12 +1,12 @@
 """A card file's generated header: written from its card's record, rewritten in place with the
-notes below it kept, and a stale one failing the `names` lane's `card-headers` step."""
+notes below it kept, and a stale one failing the `card-headers` step."""
 
 import shutil
 from pathlib import Path
 
 import pytest
 
-from beryl_tools import card_files, card_header, card_store, checks, paths
+from beryl_tools import card_files, card_header, card_store, paths
 
 JACE: card_store.Json = {
     "name": "Jace, Vryn's Prodigy // Jace, Telepath Unbound",
@@ -60,7 +60,7 @@ def test_a_rewrite_replaces_the_header_and_keeps_the_notes_below_it() -> None:
     assert card_header.with_header(noted, JACE) == noted
 
 
-def test_a_stale_header_fails_the_names_lane(tmp_path: Path) -> None:
+def test_a_stale_header_is_found(tmp_path: Path) -> None:
     real = paths.REPO / "rust/cards/cards_1993/lea/counterspell.rs"
     copy = tmp_path / "lea" / "counterspell.rs"
     copy.parent.mkdir()
@@ -71,17 +71,10 @@ def test_a_stale_header_fails_the_names_lane(tmp_path: Path) -> None:
         assert card_header.stale([copy], store) == [copy]
 
 
-def test_the_names_lane_checks_the_changed_card_files_headers(
+def test_the_step_passes_on_a_card_file_with_a_current_header(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     counterspell = "rust/cards/cards_1993/lea/counterspell.rs"
-    lane = checks.names_lane([counterspell, "tools/src/beryl_tools/card.py"])
-    steps = {step.name: step.cmd for step in lane.steps}
-    assert steps["card-headers"][-2:] == ["card-headers", counterspell]
-    # Every card file's in slow CI.
-    whole = {step.name: step.cmd for step in checks.names_lane(None).steps}
-    assert whole["card-headers"][-1] == "card-headers"
-    assert "card-headers" not in {s.name for s in checks.names_lane([]).steps}
     assert card_header.step(counterspell) == 0
     assert card_files.FILE.match(counterspell)
     assert capsys.readouterr().out == ""

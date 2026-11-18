@@ -9,7 +9,7 @@ every frame held back 25 ms, so that frames run late at 60 Hz, and reads each ru
 - with the measurement failing (`--probe fail`), it starts Baseline.
 
 `--probe` replaces the measurement's verdict, so the check does not depend on how loaded the
-machine is. It builds the app, so it is a step of the sweep and not of the lane.
+machine is. It builds the app, so it takes minutes on a cold target.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .. import checks
+from .. import deps
 from . import app, paths
 
 # The rate rule's frames that are not counted while a new window settles
@@ -118,7 +118,7 @@ def tiers_arguments(parser: argparse.ArgumentParser) -> None:
 
 def run_tiers(args: argparse.Namespace) -> int:
     if not args.no_build and app.build() != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
     failed = False
     for run in RUNS:
         try:

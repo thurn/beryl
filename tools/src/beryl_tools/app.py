@@ -12,13 +12,13 @@ import sys
 import time
 from pathlib import Path
 
-from . import checks, paths, system, warm
+from . import deps, paths, system
 
 BINARY: Path = system.exe(paths.TAURI_TARGET / "debug" / "beryl")
 
 
 def tauri(*args: str) -> int:
-    warm.ensure(tauri=True)
+    deps.ensure_node_modules()
     env = paths.tauri_env()
     if args and args[0] == "dev":
         env["BERYL_FILE_BUGS"] = str(paths.REPO)
@@ -71,7 +71,7 @@ def table_pair(_: argparse.Namespace) -> int:
 
 def launch_pair(cache: Path, mailbox: Path) -> int:
     if tauri("build", "--debug", "--no-bundle", "--features", "iroh") != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
 
     signals = [mailbox / name for name in ("invite", "invite.tmp", "guest-ready")]
     for signal in signals:
@@ -112,7 +112,7 @@ def smoke(args: argparse.Namespace) -> int:
     if not args.no_build:
         features = [] if args.without_iroh else ["--features", "iroh"]
         if tauri("build", "--debug", "--no-bundle", *features) != 0:
-            return checks.CANNOT_RUN
+            return deps.CANNOT_RUN
     # The app exits as soon as its UI reports that it loaded. `--seconds` only bounds a hang:
     # the app ends itself with an error then, and the timeout here catches one that cannot.
     try:

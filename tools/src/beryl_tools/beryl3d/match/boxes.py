@@ -27,7 +27,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from ... import tokens
 from .. import compare
 from . import joined, snapshot
 from .target import Target, arguments, target
@@ -364,22 +363,16 @@ def run_all(args: argparse.Namespace) -> int:
     targets = test_targets(prefix, args.at or ALL_AT)
     if targets is None:
         return 1
-    # Each target's snapshot runs three programs and a browser page, so the targets share the
-    # machine's CPU tokens as `b3d test`'s threads do (`beryl_inspect::runner::threads`); the
-    # pages also wait for the machine's browser page slots (ui/scripts/slots.mjs).
-    lease = tokens.acquire(
-        tokens.named_class(),
-        tokens.largest(tokens.pool_size()),
-        command="b3d match --all",
-    )
-    assert lease is not None
+    # Each target's snapshot runs three programs and a browser page, so the targets run on as
+    # many threads as the machine's cores; the pages also wait for the machine's browser page
+    # slots (ui/scripts/slots.mjs).
+    workers = max(1, int(os.environ.get("IGNITE_CORES") or os.cpu_count() or 1))
     failed = 0
-    with lease, snapshot.shared() as serving:
+    with snapshot.shared() as serving:
         if serving is None:
             return 1
-        os.environ.update(lease.env())
 
-        with concurrent.futures.ThreadPoolExecutor(max(1, lease.size)) as pool:
+        with concurrent.futures.ThreadPoolExecutor(workers) as pool:
             jobs = {
                 pool.submit(one, t, args.fresh, args.art, serving): t for t in targets
             }

@@ -1,35 +1,21 @@
-"""CPU accounting (docs/efficiency-dashboard.md, "CPU accounting"): the CPU sampler's rows, the
-CPU token pool's log of leases, and which ticket each minute of a worktree's CPU belongs to.
+"""CPU accounting (docs/efficiency-dashboard.md, "CPU accounting"): which tool call a lease's
+wait belongs to, and which ticket each minute of a worktree's CPU belongs to. The `cpu`,
+`cpu_minutes` and `leases` rows themselves come from Ignite's records (`ignite.py`); rows
+from before Ignite, written by the old CPU sampler and CPU token pool, stay in the store.
 
-Both files are written by the repository's tools and read here by their documented formats:
-
-- `<cache>/cpu/samples.jsonl` (tools/src/beryl_tools/cpu.py) has one row per minute: `time`
-  (seconds since the epoch), `seconds`, `cores`, `cpu` (CPU seconds keyed by
-  `owner/kind/worktree`, with `-` for no worktree) and `peak_cores`. The sampler calls the
-  owner the context. Each row becomes a `cpu_minutes` row and one `cpu` row per key.
-- `<cache>/cpu-tokens/leases.jsonl` (tools/src/beryl_tools/tokens.py) has one line per lease,
-  written when it is released: `time`, `class`, `worktree`, `command`, `cores`, `wanted`,
-  `waited_s` and `held_s`. A lease waited from `time - held_s - waited_s` to `time - held_s`.
-  A wait that got no lease has a line too, with `cores` 0, `held_s` 0 and an `outcome`
-  (`gave_up`, or `abandoned` when its process died waiting).
-
-After each ingest the leases not yet joined are joined to the tool call that was running in
-the lease's worktree while it waited, and the transcripts of those calls are accounted again,
-so that the seconds move from the call's kind to "queued for cores" (`timing.py`).
+A lease not yet joined is joined to the tool call that was running in the lease's tree while
+it waited, and the transcripts of those calls are accounted again, so that the seconds move
+from the call's kind to "queued for cores" (`timing.py`).
 """
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-from . import kinds, timing
-from .ingest import LineSource, Row
 
 # How close, in seconds, a lease's wait must fall inside a tool call to be joined to it: the
 # log's times are rounded to the second and its waits to a tenth.
@@ -56,105 +42,9 @@ def parse(value: str) -> datetime:
 
 
 def worktree_name(path: object) -> str:
-    """The last part of a worktree's path, which is how the sampler and the token pool name
-    it; empty for none."""
+    """The last part of a worktree's path, which is how the sampler, the token pool and
+    Ignite's records name it; empty for none."""
     return Path(str(path)).name if path else ""
-
-
-class Samples(LineSource):
-    """The CPU sampler's rows."""
-
-    name = "cpu"
-
-    def __init__(self, path: Path, host: str) -> None:
-        self.path = path
-        self.host = host
-
-    def files(self) -> list[Path]:
-        return [self.path] if self.path.exists() else []
-
-    def parse(self, path: Path, line: bytes) -> list[Row]:
-        record = json.loads(line)
-        time = from_epoch(float(record["time"]))
-        seconds = float(record["seconds"])
-        used: Mapping[str, object] = record["cpu"]
-        rows: list[Row] = [
-            (
-                "cpu_minutes",
-                {
-                    "host": self.host,
-                    "time": time,
-                    "seconds": seconds,
-                    "cores": int(record["cores"]),
-                    "cpu_seconds": sum(float(str(v)) for v in used.values()),
-                    "peak_cores": float(record.get("peak_cores") or 0),
-                },
-            )
-        ]
-        for key, value in used.items():
-            owner, kind, worktree = key.split("/", 2)
-            rows.append(
-                (
-                    "cpu",
-                    {
-                        "host": self.host,
-                        "time": time,
-                        "owner": owner,
-                        "kind": kind,
-                        "worktree": "" if worktree == "-" else worktree,
-                        "seconds": seconds,
-                        "cpu_seconds": float(str(value)),
-                    },
-                )
-            )
-        return rows
-
-
-class Leases(LineSource):
-    """The CPU token pool's log of leases."""
-
-    name = "leases"
-
-    def __init__(self, path: Path, host: str) -> None:
-        self.path = path
-        self.host = host
-
-    def files(self) -> list[Path]:
-        return [self.path] if self.path.exists() else []
-
-    def parse(self, path: Path, line: bytes) -> list[Row]:
-        record = json.loads(line)
-        released = parse(str(record["time"]))
-        waited = float(record["waited_s"])
-        held = float(record["held_s"])
-        wait_end = released - timedelta(seconds=held)
-        return [
-            (
-                "leases",
-                {
-                    "host": self.host,
-                    "time": iso(released),
-                    "class": str(record["class"]),
-                    "worktree": str(record["worktree"]),
-                    "command": str(record["command"]),
-                    "cores": int(record["cores"]),
-                    "wanted": int(record["wanted"]),
-                    "waited_seconds": waited,
-                    "held_seconds": held,
-                    "wait_start": iso(wait_end - timedelta(seconds=waited)),
-                    "wait_end": iso(wait_end),
-                },
-            )
-        ]
-
-    def finish(self, db: sqlite3.Connection, changed: list[Path]) -> int:
-        joined = join(db, self.host)
-        table, _ = kinds.load()
-        heavy = frozenset(k.kind for k in table if k.heavy)
-        return sum(
-            timing.account(db, self.host, provider, transcript, heavy)
-            for provider, transcript in sorted(joined)
-        )
 
 
 def call_worktrees(
@@ -315,73 +205,3 @@ def attribute(
         else:
             by_bead[bead] += seconds
     return dict(by_bead), shared
-
-
-def sampler_cpu() -> tuple[float, float] | None:
-    """The CPU sampler's own CPU seconds and how long it has run, from its launchd agent's
-    process (`by cpu install`) and every process under it (the agent runs `uv`, which runs
-    the sampler), with the children each has reaped (`ps -S`); `None` when it is not running
-    or this is not a Mac."""
-    import subprocess
-
-    try:
-        listed = subprocess.run(
-            ["launchctl", "list", "ca.thurn.beryl.cpu"],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout
-        table = subprocess.run(
-            ["ps", "-A", "-S", "-o", "pid=,ppid=,cputime=,etime="],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout
-    except OSError:
-        return None
-    pid = next(
-        (
-            line.split("=")[1].strip(" ;")
-            for line in listed.splitlines()
-            if '"PID"' in line
-        ),
-        None,
-    )
-    return tree_cpu(table, pid) if pid else None
-
-
-def tree_cpu(table: str, top: str) -> tuple[float, float] | None:
-    """From `ps -o pid=,ppid=,cputime=,etime=` output, the CPU seconds of `top` and every
-    process under it, and how long `top` has run; `None` when `top` is not listed."""
-    rows = [line.split() for line in table.splitlines()]
-    rows = [r for r in rows if len(r) == 4]
-    children: dict[str, list[str]] = defaultdict(list)
-    for pid, parent, _, _ in rows:
-        children[parent].append(pid)
-    times = {r[0]: (clock_seconds(r[2]), clock_seconds(r[3])) for r in rows}
-    if top not in times:
-        return None
-    used = 0.0
-    stack = [top]
-    while stack:
-        pid = stack.pop()
-        used += times[pid][0]
-        stack.extend(children.get(pid, []))
-    return used, times[top][1]
-
-
-def clock_seconds(text: str) -> float:
-    """Seconds in `ps`'s time columns: `1:02.50`, `01:02:03` or `2-01:02:03`."""
-    days, _, rest = text.rpartition("-")
-    total = 0.0
-    for part in rest.split(":"):
-        total = total * 60 + float(part)
-    return total + (int(days) * 86400 if days else 0)
-
-
-def samples_path(cache: Path) -> Path:
-    return cache / "cpu" / "samples.jsonl"
-
-
-def leases_path(cache: Path) -> Path:
-    return cache / "cpu-tokens" / "leases.jsonl"

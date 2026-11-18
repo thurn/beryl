@@ -250,12 +250,12 @@ def test_the_step_skips_and_passes_with_no_text_to_hold_the_tree_to(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     wrong, _ = step_tree(tmp_path, monkeypatch, cached=False)
-    # The fast check never fetches.
+    # Without `--fetch`, the step never fetches.
     assert citations.step(wrong) == 0
     assert capsys.readouterr().out == (
         "citations: skipped: the 2026-11-06 rules are not cached\n"
     )
-    # Slow CI fetches, and a failed fetch is no failure.
+    # With `--fetch` it fetches, and a failed fetch is no failure.
     assert citations.step("--fetch") == 0
     assert capsys.readouterr().out.startswith(
         "citations: skipped: the 2026-11-06 rules could not be fetched: "

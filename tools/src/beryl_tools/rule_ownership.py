@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import card_names, citations, paths, runlog
+from . import card_names, citations, paths
 
 SOURCE_ROOTS = ("rust/crates/beryl_kernel/src", "rust/crates/beryl_rules/src")
 ALLOWLIST = "data/rule-ownership-allowlist.json"
@@ -225,7 +225,6 @@ def step(*_args: str) -> int:
     rules, missing = citations.step_rules(citations.pinned(paths.REPO), fetch=False)
     if rules is None:
         print(f"rule-ownership: skipped: {missing}")
-        runlog.result("rule-ownership", "skip", 0.0)
         return 0
     problems = check(paths.REPO, rules)
     for problem in problems:

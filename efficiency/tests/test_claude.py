@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import bead, claude, cli, ingest, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
 from tests.synthetic import bead as bead_record
 
@@ -329,3 +329,12 @@ def test_coverage_counts_transcripts_not_yet_read(
     after = json.loads(capsys.readouterr().out)
     assert after["unread"] == {"never_read": 0, "partly_read": 0, "bytes": 0}
     assert after["sessions_without_window"] == {}
+
+
+def test_ignite_start_opens_a_window_and_its_other_verbs_do_not() -> None:
+    assert claude.enact_commands("ignite start Tq44s.9.48 --reservation 7f3a") == [
+        ("open", "Tq44s.9.48")
+    ]
+    assert claude.enact_commands('ignite start "Fix the badge"') == []
+    assert claude.enact_commands("ignite land -m done") == []
+    assert claude.enact_commands("grep 'ignite start Tq44s' notes.txt") == []

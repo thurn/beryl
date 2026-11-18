@@ -8,13 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import (
-    oracle_exports,
-    oracle_memory,
-    oracle_selection,
-    oracles,
-    xmage_java,
-)
+from beryl_tools import deps, oracle_exports, oracles, xmage_java
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -134,7 +128,6 @@ def fake_oracles(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Replaces the dump and both oracles with stand-ins that pass every scenario; returns the
     cards each oracle played, then "sim" for each round of Forge's AI games."""
     played: list[list[str]] = []
-    # The outcomes the runs record (oracle_memory.py) go to a cache of the test's own.
     monkeypatch.setenv("BERYL_CACHE", tempfile.mkdtemp(prefix="beryl-oracle-test-"))
 
     def check(exports: oracle_exports.Exports, _work: Path) -> dict[str, object]:
@@ -172,40 +165,8 @@ def oracle_args(
     *cards: str,
     no_sim: bool = False,
     lock_wait: float | None = None,
-    select: bool = False,
-    new: bool = False,
 ) -> argparse.Namespace:
-    return argparse.Namespace(
-        cards=list(cards), no_sim=no_sim, lock_wait=lock_wait, select=select, new=new
-    )
-
-
-def test_select_plays_slow_cis_cards_and_logs_why(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    played = fake_oracles(monkeypatch)
-    results = tmp_path / "results.jsonl"
-    monkeypatch.setenv("BERYL_CHECK_RESULTS", str(results))
-    chosen: dict[str, str] | None = {"Ponder": "card file changed"}
-    monkeypatch.setattr(oracle_selection, "slow_ci", lambda every: chosen)
-    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
-    # Counterspell is no changed card, but it has never passed, so it plays as new.
-    assert played == [["Counterspell", "Ponder"]] * 2
-    logged = [json.loads(line) for line in results.read_text().splitlines()]
-    assert {r["chosen"] for r in logged} == {"card file changed", oracle_memory.NEW}
-    # Both passed under the same oracles' side: the same choice plays neither again.
-    played.clear()
-    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
-    assert played == [[], []]
-    # Cards named too are a rerun's: they narrow the run.
-    played.clear()
-    assert oracles.oracle(oracle_args("Counterspell", select=True, no_sim=True)) == 0
-    assert played == [["Counterspell"], ["Counterspell"]]
-    # None selects every card.
-    played.clear()
-    chosen = None
-    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
-    assert played == [["Counterspell", "Ponder"]] * 2
+    return argparse.Namespace(cards=list(cards), no_sim=no_sim, lock_wait=lock_wait)
 
 
 def test_no_sim_skips_forge_s_games_and_cards_narrow_the_scenarios(
@@ -219,70 +180,11 @@ def test_no_sim_skips_forge_s_games_and_cards_narrow_the_scenarios(
     assert played == [["Counterspell", "Ponder"]] * 2 + [["sim"]]
 
 
-def test_a_run_waiting_past_the_lock_wait_skips_and_passes(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    played = fake_oracles(monkeypatch)
-    results = tmp_path / "results.jsonl"
-    monkeypatch.setenv("BERYL_CHECK_RESULTS", str(results))
-    with oracles.locked():
-        assert oracles.oracle(oracle_args("Ponder", lock_wait=0.2)) == 0
-    assert played == []
-    logged = [json.loads(line) for line in results.read_text().splitlines()]
-    assert [(r["check"], r["outcome"]) for r in logged] == [
-        ("oracle:Ponder/looks at three/xmage", "skip"),
-        ("oracle:Ponder/looks at three/forge", "skip"),
-    ]
-
-
-def test_changed_exports_are_prepared_once_and_reused_after_selection(
+def test_a_run_waiting_past_the_lock_wait_cannot_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     played = fake_oracles(monkeypatch)
-    entries = [
-        {"card": "Generated", "name": "Generated 1"},
-        {"card": "Generated", "name": "Generated 2"},
-        {"card": "Ponder", "name": "looks at three"},
-    ]
-    monkeypatch.setattr(oracles, "dump_scenarios", lambda *args: entries)
-    monkeypatch.setattr(oracle_selection, "slow_ci", lambda every: {})
-    prepare: Callable[[list[dict[str, object]], Path], oracle_exports.Exports] = (
-        oracle_exports.Exports.prepare
-    )
-    prepared: list[oracle_exports.Exports] = []
-    changed: bool = False
-
-    def export(
-        entries: list[dict[str, object]], checkout: Path
-    ) -> oracle_exports.Exports:
-        result = prepare(entries, checkout)
-        if changed:
-            result.xmage[1].body.append("execute();")
-        prepared.append(result)
-        return result
-
-    check: Callable[[oracle_exports.Exports, Path], dict[str, object]] = (
-        oracles.check_xmage
-    )
-
-    def xmage(exports: oracle_exports.Exports, log: Path) -> dict[str, object]:
-        # Execution must use the objects whose keys selection inspected, with their original
-        # method identities even when the earlier method in the same class was filtered out.
-        for item in exports.xmage:
-            assert any(item is original for original in prepared[-1].xmage)
-        if changed and exports.xmage:
-            assert [e.method for e in exports.xmage] == ["s1"]
-        return check(exports, log)
-
-    monkeypatch.setattr(oracle_exports.Exports, "prepare", export)
-    monkeypatch.setattr(oracles, "check_xmage", xmage)
-    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
-    assert played == [["Generated", "Generated", "Ponder"]] * 2
-    changed = True
-    played.clear()
-    assert oracles.oracle(oracle_args(new=True, no_sim=True)) == 0
-    assert played == [["Generated"]] * 2
-    played.clear()
-    assert oracles.oracle(oracle_args(select=True, no_sim=True)) == 0
-    assert played == [[], []]
-    assert len(prepared) == 3
+    with oracles.locked():
+        code = oracles.oracle(oracle_args("Ponder", lock_wait=0.2))
+    assert code == deps.CANNOT_RUN
+    assert played == []

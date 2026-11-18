@@ -266,17 +266,10 @@ def test_a_family_fails_over_its_ratio_or_with_a_tenth_skipped() -> None:
     assert not ok and "skipped" in message
 
 
-def test_the_counts_lane_gates_every_family_in_one_step() -> None:
-    steps = {s.name: s.cmd for s in bench.lane().steps}
-    assert steps["count-gate"][-1] == "count-gate"
-    families = steps["count-gate-families"]
-    assert families[families.index("--family") + 1] == "blank"
-
-
-def test_a_run_someone_waits_for_goes_before_a_sweeps_run() -> None:
+def test_a_run_someone_waits_for_goes_before_a_background_run() -> None:
     """The shell's order is checked by hand in the VM (macOS has no `flock`); this pins the
     protocol: a waited-for run holds the turn lock shared before it waits for the VM, and a
-    sweep's run takes the VM only while it can hold the turn lock alone, then lets it go.
+    background run takes the VM only while it can hold the turn lock alone, then lets it go.
     """
     waited = bench.locked("work", background=False)
     assert (

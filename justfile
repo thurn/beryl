@@ -19,17 +19,11 @@ search_cpu := if arch() == "aarch64" { "-C target-cpu=apple-m4" } else { "-C tar
 
 # Low priority for long compute: utility QoS, under which macOS gives interactive work and
 # checks the CPU first. `nice` does not: beside nice'd work a check ran as slowly as beside
-# work at full priority. Windows has neither: `by low` starts the work at idle priority. Work at
-# low priority takes no CPU tokens, so `BERYL_CPU_POOL=0` keeps its `cargo run` (the cargo shim,
-# tools/shims/cargo) from holding a lease for the hours it runs (`system.utility` does the same).
+# work at full priority. Windows has neither: `by low` starts the work at idle priority.
 
 by_anywhere := "uv run --quiet --project " + quote(justfile_directory() / "tools") + " by"
 
-# A command run inside a lease of the machine's CPU tokens (tokens.py), with as many threads as
-# it got.
-
-pooled := by_anywhere + " tokens-run --"
-low := if os() == "windows" { by_anywhere + " low --" } else { "env BERYL_CPU_POOL=0 BERYL_LOW_PRIORITY=1 taskpolicy -c utility" }
+low := if os() == "windows" { by_anywhere + " low --" } else { "env BERYL_LOW_PRIORITY=1 taskpolicy -c utility" }
 
 # Low priority, kept awake, for a blunder hunt that runs for hours.
 
@@ -101,13 +95,13 @@ ui-shots *args:
 # Type-check the UI with tsc, first restoring ui/node_modules from the cache
 [group('app')]
 ui-typecheck:
-    {{ by }} warm node
+    {{ by }} deps
     cd ui && npm run --silent typecheck
 
 # Run the UI's tests that need no browser (ui/scripts/*.test.mjs), first restoring ui/node_modules
 [group('app')]
 ui-unit:
-    {{ by }} warm node
+    {{ by }} deps
     cd ui && npm test --silent
 
 # Play the game screen headless through a recorded fixture: drag, click, hover (title filters)
@@ -151,14 +145,6 @@ playground *args:
 scenarios *args:
     {{ by }} scenarios "$@"
 
-# Open top-level tickets, excluding bug reports and automatically filed CI work
-tickets:
-    @{{ by }} tickets
-
-# Report the active tracker and its native client path
-ticket-backend:
-    @{{ by }} ticket-backend
-
 # The app's bug reports: list, import a ZIP, file tickets, or mark done
 [group('app')]
 bugs *args:
@@ -168,11 +154,6 @@ bugs *args:
 [group('app')]
 bundle:
     {{ by }} bundle
-
-# Restore rust/target and ui/node_modules from the cache (every command does this too)
-[group('app')]
-warm *args:
-    {{ by }} warm "$@"
 
 # Time benchmarks under the search profile, refusing a busy, unplugged or throttled machine (cargo bench flags; --force)
 [group('bench')]
@@ -184,31 +165,10 @@ bench *args:
 scale *args:
     {{ by }} scale "$@"
 
-# Measure this machine's speed against the reference, for the checks' budgets (--reference, --force)
-[group('bench')]
-speed *args:
-    {{ by }} speed "$@"
-
-# Record where the CPU goes, by session and kind of work (install, uninstall, sample [--interval S --duration S], report [--hours H])
-[group('bench')]
-cpu *args:
-    {{ by }} cpu "$@"
-
-# Where agent time, CPU and tokens go, per bead (ingest [--rebuild], sql '<query>', coverage; --json, --no-ingest; serve runs at normal priority)
+# Where agent time, CPU and tokens go, per ticket (ingest [--rebuild], sql '<query>', coverage; --json, --no-ingest; serve runs at normal priority)
 [group('bench')]
 efficiency *args:
     @{{ if args =~ '^serve( |$)' { "" } else { low } }} uv run --quiet --no-dev --project efficiency beryl-efficiency "$@"
-
-# Who holds and waits for the machine's CPU tokens
-[group('bench')]
-tokens:
-    {{ by }} tokens
-
-# A command inside a lease of CPU tokens, with as many threads as it got (--class push|agent|ci, --cores N, -- COMMAND...)
-[group('bench')]
-[no-cd]
-tokens-run *args:
-    {{ by_anywhere }} tokens-run "$@"
 
 # Gungraun instruction counts in the Lima VM (cargo bench flags; default -p beryl_bench --bench '*_counts')
 [group('bench')]
@@ -280,17 +240,17 @@ oracle *cards:
 oracle-smoke *args:
     {{ by }} oracle-smoke "$@"
 
-# The Rust tests, in parallel as the check runs them (-p beryl_app, a name filter; --doc, --test allocations or flags after -- go to cargo test)
+# The Rust workspace's tests under cargo-nextest (-p beryl_app, a name filter, other nextest flags); `ignite test` runs them as the gate does
 [group('test')]
 test-rust *args:
-    {{ by }} test-rust "$@"
+    cd rust && cargo nextest run "$@"
 
 # Random-game fuzzing at length: N engine games (and N/4 per keystone family), then N session games with every script checked, optimized but with debug assertions on (with the fuzz tests no check runs, which are ignored)
 [group('test')]
 fuzz games="10000":
     cd rust && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
-    {{ pooled }} cargo test --release -p beryl_search --test games --test shrink --test families -- --nocapture --include-ignored && \
-    {{ pooled }} cargo test --release -p beryl_session --lib fuzz:: -- --nocapture --include-ignored
+    cargo test --release -p beryl_search --test games --test shrink --test families -- --nocapture --include-ignored && \
+    cargo test --release -p beryl_session --lib fuzz:: -- --nocapture --include-ignored
 
 # The stage's verbs held to Arena's numbers: captured in stepped stage time and measured as Arena's clips were (--values: durations, delays and staggers only)
 [group('test')]
@@ -306,13 +266,13 @@ exhaust *args:
         --nodes) nodes="$2"; shift 2 ;; \
         *) card="$1"; shift ;; \
     esac; done; \
-    cd rust && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true {{ pooled }} cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
+    cd rust && BERYL_EXHAUST_CARD="$card" BERYL_EXHAUST_DEPTH="$depth" BERYL_EXHAUST_NODES="$nodes" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release -p beryl_cards --test exhaust every_scenario -- --nocapture
 
 # Adds saves to the frozen corpus, weekly or so: seeded games covering every card and decision, or one replay (--replay FILE, --games N, --seed N)
 [group('test')]
 [no-cd]
 freeze-saves *args:
-    {{ pooled }} cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- freeze-saves {{ quote(justfile_directory() / "rust" / "crates" / "beryl_session" / "tests" / "saves") }} "$@"
+    cargo run --quiet --release --manifest-path {{ quote(justfile_directory() / "rust" / "Cargo.toml") }} -p beryl_cli -- freeze-saves {{ quote(justfile_directory() / "rust" / "crates" / "beryl_session" / "tests" / "saves") }} "$@"
 
 # A seeded WU Control mirror game between two agents at low priority, as a transcript (--seed N, --out FILE)
 [group('agents')]
@@ -397,93 +357,22 @@ blunder-hunt *args:
 test-py *args:
     cd tools && uv run --quiet pytest "$@"
 
-# The fast check `enact push` runs (lanes for what changed, budget 60 s)
-[group('checks')]
-check:
-    {{ by }} check
-
-# The cheap source checks (file length, Markdown and Python formatting) on the staged files; also the first step of the fast check, so it fails in seconds
-[group('checks')]
-precheck:
-    cd tools && uv run --quiet python -m beryl_tools.hygiene
-
-# Slow CI: the lanes what changed since each last passed can affect, every lane hourly; or the lanes named, in full: repo, python, scale, rust, script, ui, names, app, ui-smoke, oracle, counts, efficiency, ignite, and the sweep's shots, ui-test, mobile (budget 300 s, 450 s on Windows)
-[group('checks')]
-ci *lanes:
-    {{ by }} ci "$@"
-
-# Each check's runs, failures, verdicts and seconds, costliest first, with lane totals (--days 30, --json, --pending, --prune)
-[group('checks')]
-ci-report *args:
-    {{ by }} ci-report "$@"
-
-# Each slow-CI check's real catches per CPU-second, lowest first, checks that fail together grouped (--days 30, --json, --budget CPU_S)
-[group('checks')]
-ci-value *args:
-    {{ by }} ci-value "$@"
-
 # The source lines each browser check runs, at low priority, into the cache (--commit REF, default origin/staging; --here)
 [group('checks')]
 coverage *args:
     {{ low }} {{ by }} coverage "$@"
-
-# The nightly work (coverage of origin/staging), unless one succeeded under 20 h ago or the machine is busy
-[group('checks')]
-nightly *args:
-    {{ by }} nightly "$@"
 
 # The file-event daemon's memory footprint, and whether the watchdog that restarts it is installed
 [group('checks')]
 fseventsd:
     {{ by }} fseventsd
 
-# Remove the cache folders of checkouts that are gone, unchanged for a day (--dry-run lists them), and prune the cached rust/target to its budget; part of the nightly
-[group('checks')]
-prune-caches *args:
-    {{ by }} prune-caches "$@"
-
-# The browser sweep: shots, ui-test and mobile in full on origin/staging, bisecting and filing what fails, unless staging has not moved or the machine is busy
-[group('checks')]
-sweep:
-    {{ by }} sweep
-
-# Load the launchd agent that runs `by sweep` every 3 h (macOS; idempotent)
-[group('checks')]
-sweep-install:
-    {{ by }} sweep-install
-
-# Unload and remove the browser sweep's launchd agent
-[group('checks')]
-sweep-uninstall:
-    {{ by }} sweep-uninstall
-
-# Load the launchd agent that runs `by nightly` at 03:00, hourly until 08:00 (macOS; idempotent)
-[group('checks')]
-nightly-install:
-    {{ by }} nightly-install
-
-# Unload and remove the nightly launchd agent
-[group('checks')]
-nightly-uninstall:
-    {{ by }} nightly-uninstall
-
-# Correct the latest verdict on a check's failure: just verdict '<check>' stale|catch|flaky|miss
-[group('checks')]
-verdict check verdict:
-    {{ by }} verdict "$1" "$2"
-
 # Format everything: black, rustfmt, prettier, mdformat (80 columns), the justfile
 [group('checks')]
 fmt:
     uv run --quiet --project tools black --quiet tools efficiency
-    cd rust && uv run --quiet --project ../tools python -m beryl_tools.checks rustfmt
-    {{ by }} warm
+    cd rust && uv run --quiet --project ../tools python -m beryl_tools.card_files rustfmt
+    {{ by }} deps
     cd ui && node_modules/.bin/prettier --write --log-level warn .
     just --fmt --unstable
     git ls-files -co --exclude-standard '*.md' | grep -v -e '^.agents/' | xargs uv run --quiet --project tools mdformat
-
-# Edit one file in $EDITOR in a fresh worktree, then commit and `enact push` it
-[group('enact')]
-[no-cd]
-edit file:
-    @uv run --quiet --project {{ quote(justfile_directory() / "tools") }} by edit "$1"

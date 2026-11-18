@@ -9,7 +9,7 @@ import pytest
 
 from beryl_tools import (
     card_store,
-    checks,
+    deps,
     oracles,
     oracle_exports,
     xmage,
@@ -348,8 +348,8 @@ def test_oracle_needs_the_oracles_built(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("BERYL_CACHE", str(tmp_path))
-    # Not built at its pin is no flake: slow CI does not rerun it.
-    assert oracles.oracle(argparse.Namespace(cards=[])) == checks.CANNOT_RUN
+    # Not built at its pin is a run that could not happen, not a failure.
+    assert oracles.oracle(argparse.Namespace(cards=[])) == deps.CANNOT_RUN
 
 
 def test_untap_shortcut_is_optional_before_explicit_land_picks() -> None:

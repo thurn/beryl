@@ -22,10 +22,10 @@ releases. It is fetched once per machine into `$BERYL_CACHE/rules` and never cha
 the first run needs the network. `just citations migrate <date>` moves the tree to a new
 release (`citation_migrate`).
 
-The `names` lane runs it as the `citations` step (`step`), which never fails for want of the
-network: slow CI holds the whole tree, fetching the text if it is not cached; the fast check
-holds the files changed on the branch and never fetches. With no text to hold them to, the step
-logs a skip and passes.
+`step` is the form a check runs: it holds the whole tree, or only the files named, to the
+release. It never fails for want of the network: with `--fetch` it fetches the text if it is not
+cached, and without it never fetches. With no text to hold the files to, it prints that it
+skipped and passes.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import paths, runlog
+from . import paths
 
 VERSION_FILE = "data/rules-version.json"
 ROOTS = ("rust/crates", "rust/cards", "ui/src", "tools/src", "data", "docs")
@@ -395,7 +395,6 @@ def step(*args: str) -> int:
     rules, missing = step_rules(version, fetch)
     if rules is None:
         print(f"citations: skipped: {missing}")
-        runlog.result("citations", "skip", 0.0)
         return 0
     found = check(paths.REPO, rules, only)
     for line in found:

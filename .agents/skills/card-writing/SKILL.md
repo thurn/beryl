@@ -51,9 +51,8 @@ and builders a card definition is made of.
 
 ## Steps
 
-1. **Worktree.** From the main checkout, run `enact worktree create <card-slug>`
-   (`enact` is defined in the root `AGENTS.md`) and work only in the path it
-   prints.
+1. **Tree.** Run `ignite start <ticket>` (or `ignite start "Card: <name>"` when
+   there is no ticket) and work only in the tree it prints.
 2. **Brief.** Run `just card brief "<name>"` and read all of it: the Oracle
    text, the rulings, the vocabulary entries, the nearest implemented cards and
    the XMage class. If it has an "Escalation" section, the card is blocked:
@@ -126,13 +125,14 @@ and builders a card definition is made of.
 7. **Check fully.** Run `just card check "<name>"`, which also plays the
    scenarios in XMage and Forge (about a minute; it waits for the shared oracle
    lock). Then run `just citations`.
-8. **Commit and push.** Commit the card file, with any card file written for its
-   scenarios, as `feat: <card name>`, and run `enact push` in the worktree. If
-   it exits with code 2, fix what it reports and run it again. If a test outside
+8. **Commit and land.** Commit the card file, with any card file written for its
+   scenarios, as `feat: <card name>`, and run
+   `ignite land -m "<what the card needed>"`. If it exits with code 2, fix what
+   it reports and run it again. If a test outside
    your card files fails, and passes once your files are moved aside, the card
    exposed a bug in that test or the engine, not in your definition. Leave the
    card uncommitted, file a ticket naming the test, the card and the failure,
-   and stop.
+   and release yours with `ignite release` naming that ticket.
 
 ## Cards for scenarios
 
@@ -222,7 +222,7 @@ To escalate:
    ```
 
 3. Commit only that entry as `chore: escalate <card name>`, with the missing
-   mechanic in the body, and push it as in step 8. `just card brief` now shows
+   mechanic in the body, and land it as in step 8. `just card brief` now shows
    the entry to the next writer.
 
 When the card already has a file (never delete a card implementation), or only

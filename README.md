@@ -20,16 +20,16 @@ On an Apple silicon Mac:
 | Node.js 24               | `brew install node`                                                                      |
 | uv                       | `brew install uv`                                                                        |
 | just 1.59+               | `cargo install just --locked`                                                            |
-| cargo-nextest            | `cargo install cargo-nextest --locked`; the fast check runs the Rust tests with it       |
-| Enact and tk             | [Enact setup](https://github.com/thurn/enact#setup), then `enact setup` here             |
+| cargo-nextest            | `cargo install cargo-nextest --locked`; Ignite runs the Rust tests with it               |
+| Ignite                   | `cargo install --locked --path ignite/crates/ignite_cli`, then `ignite install` here     |
 | Maven, JDK 21            | `just oracle-setup`, with Homebrew; it also builds the XMage and Forge oracles           |
 | Rosetta                  | `softwareupdate --install-rosetta --agree-to-license`; Forge's build runs an x86-64 tool |
 | iOS and Android SDKs     | `just mobile-setup`                                                                      |
 | Lima                     | `brew install lima`, then `just bench-count` once to create the count gate's VM          |
 
-Beryl uses Enact’s `tk` ticket client and the SQLite service hosted on JARVIS.
-Connect to the tailnet and run `enact backend` for the client path and effective
-URL. Browse tickets on the [Beryl dashboard][tickets].
+Beryl's tickets are on Ignite's hub, hosted on JARVIS. Connect to the tailnet,
+then `ignite ticket` reads and writes them and `ignite prime` prints the
+workflow. Browse tickets on the [Beryl dashboard][tickets].
 
 Run the setup recipes one at a time: each installs with Homebrew, which takes a
 lock.
@@ -52,8 +52,8 @@ and `BERYL_CACHE` on one Dev Drive (ReFS): copies there are block clones, as
 APFS clones are on macOS, and Defender's scans slow builds less.
 
 Then `just` lists the commands. `just dev` opens the app with hot reload;
-`just smoke` builds it and checks that it starts, headless; `just ci` runs every
-check.
+`just smoke` builds it and checks that it starts, headless; `ignite check` runs
+what the landing gate would.
 
 The app also builds for iOS and Android. Run `just mobile-setup` for their
 toolchains, then `just ios-smoke` or `just android-smoke` to check a native
@@ -65,4 +65,4 @@ The step icons beside each life total are from
 [Phosphor Icons](https://phosphoricons.com), Copyright (c) 2023 Phosphor Icons,
 under the MIT License.
 
-[tickets]: https://jarvis.tail4b0774.ts.net:8443/beryl/
+[tickets]: https://jarvis.tail4b0774.ts.net:8443/by/

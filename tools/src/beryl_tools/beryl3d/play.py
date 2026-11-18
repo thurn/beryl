@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from .. import checks
+from .. import deps
 from . import app, live, paths, stand_in
 from .command import Command
 
@@ -123,7 +123,7 @@ def run_play(args: argparse.Namespace) -> int:
         print(f"play: {error}", file=sys.stderr)
         return 2
     if not args.no_build and app.build() != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
     out = paths.cache() / "out"
     out.mkdir(parents=True, exist_ok=True)
     log = out / f"play-{os.getpid()}.log"

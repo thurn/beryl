@@ -14,8 +14,11 @@ store" and "Isolation" before changing anything here.
   match the tools (such as where the cache is), copy it and say where from.
 - Pyre is strict and code is formatted by black.
 - The repository is public. Tests use small synthetic sources built in the test
-  or kept in `tests/synthetic.py`. Never commit a real transcript, session
-  record, ticket dump or command line from a machine.
+  or kept in `tests/synthetic.py`. `tests/legacy_sources.py` holds stand-ins for
+  the readers that Ignite's hub replaced (a ticket snapshot, the run log, the
+  CPU sampler's rows, the lease log and the verdict comments); tests use them to
+  build stores in the shape of the stored history. Never commit a real
+  transcript, session record, ticket dump or command line from a machine.
 - Collection must cost agent sessions nothing: no hook, wrapper or prompt text
   in any session, and ingest never runs inside another command.
 
@@ -33,15 +36,15 @@ store" and "Isolation" before changing anything here.
   output, written only when its digest changed. Malformed lines are skipped and
   counted. Every ingest records its own wall and CPU seconds in the `ingests`
   table.
-- `beads.py`: the snapshot reader used by `tickets.py`. In the main checkout,
-  `enact backend` supplies the `tk` executable. One `tk export` supplies tickets
-  and verdicts. Ingest resumes `tk events --since` from the local store's
-  cursor. `ticket_ids.py` resolves native IDs and the aliases kept for imported
+- `beads.py`: `rows_of`, which builds the `beads` and `labels` rows of one
+  ticket record for `ignite.HubTickets`, and `main_checkout`, which `commits.py`
+  uses. `ticket_ids.py` resolves native IDs and the aliases kept for imported
   tickets.
 - `claude.py`: Claude Code transcripts (requests, tool calls, their results and
-  the Enact commands a session ran) and the desktop app's session records.
-  `windows.py` derives ticket windows from those commands and sets the `bead` of
-  each request and tool call.
+  the `ignite start <ticket>` commands a session ran, and the `enact` commands
+  in old transcripts) and the desktop app's session records. `windows.py`
+  derives ticket windows from those commands and sets the `bead` of each request
+  and tool call.
 - `codex.py`: Codex logs (`~/.codex/sessions` and `archived_sessions`, `.jsonl`
   only; the `.zst` ones are not read), as rows in the same tables with provider
   `codex`. A request is a `token_count` line, keyed by its running total; its
@@ -56,55 +59,50 @@ store" and "Isolation" before changing anything here.
   request's context, tool calls' added tokens and carrying cost, and each
   window's dollars by class, source, purpose and model in `window_dollars`. All
   of it is derived again when the price table changes.
-- `cpu.py`: the CPU sampler's rows (`cpu`, `cpu_minutes`) and the CPU token
-  pool's log of leases (`leases`), each lease joined to the top-level tool call
-  running in its worktree while it waited, which `timing.py` counts as queued
-  for cores. It also gives each minute of a worktree's CPU to a ticket.
-  `facts.Facts.core_minutes` uses it per ticket, and `machine.py` is the
-  `machine` query and the CPU metrics.
-- `locks.py`: Enact's lock-wait log (`.git/enact/lock-waits.jsonl` in the main
-  checkout, and `lock-waits.1.jsonl` it is rotated to), one line per acquisition
-  of Enact's ownership lock, into `lock_waits`. Each line is joined to the
-  top-level tool call that ran its command (one that names its ticket first),
-  and `timing.py` moves the call's waited and sync seconds into the kinds
-  `enact lock wait` and `enact sync`. `locks.report` is the `enact` query: those
-  agent minutes, the log's lines by subcommand and the commands seen holding the
-  lock; the `enact-lock-wait` finding ranks waits by holder. Lines from commands
-  other than `enact.py` are not read. The ticket-server merge queue writes
-  `staging-lease-waits.jsonl` in the same directory. Its waits join the push for
-  the ticket recorded in the line and count as `enact lease wait`.
-- `cilog.py`: CI's sources. The run log is added up as it is read into one
-  `checks` row per check per local day per host and script and one `lane_runs`
-  row per run of a check lane (a `LineSource` whose `merges` add each row to the
-  stored one); no line is kept. The verdicts on the `ci-check` tickets come from
-  `tk export` into `verdicts`. `family` names a check's family. `ci.py` is the
-  `ci` query (the tree script, check lane, family, check, with CPU by kind of
-  process from the sampler) and the CI metrics. `pushes.py` is the `pushes`
-  query: each `enact push` tool call split by the fast check's `lane_runs` in
-  the ticket's worktree inside the call, with repeats after losing the race to
+- `cpu.py`: joins each lease to the top-level tool call running in its tree
+  while it waited, which `timing.py` counts as queued for cores. It also gives
+  each minute of a tree's CPU to a ticket. `facts.Facts.core_minutes` uses it
+  per ticket, and `machine.py` is the `machine` query and the CPU metrics. The
+  `cpu`, `cpu_minutes` and `leases` rows come from Ignite's records
+  (`ignite.py`); rows the CPU sampler and the token pool's lease log wrote
+  before the switch stay in the store.
+- `cilog.py`: what `checks` and `lane_runs` rows share: `family` names a check's
+  family, and the merge rules that add each row to the stored one. Ignite's
+  records fill those tables; the run log and the `verdicts` that `tk export`
+  supplied are history in the store. `ci.py` is the `ci` query (the tree script,
+  check lane, family, check, with CPU by kind of process) and the CI metrics.
+  `pushes.py` is the `pushes` query: each `ignite land` (and, in old
+  transcripts, `enact push`) tool call split by the gate's `lane_runs` in the
+  ticket's tree inside the call, with repeats after losing the race to
   `staging`, the steps the push's output says were left to slow CI
-  (`tool_calls.deferred`), and the fast check's failures by verdict; the `bead`
-  query shows the same split for its pushes. A push run in the background ends
-  at its `notifications` row (or `prompts` row), when the session was told it
-  finished. `failures.py` is the `failures` query: per Steward ticket
-  (`enact_ci_range`) its sessions' cost, bisection's CPU and the minutes
-  `master` stayed behind.
+  (`tool_calls.deferred`), and the gate's failures by verdict; the `bead` query
+  shows the same split for its pushes. A push run in the background ends at its
+  `notifications` row (or `prompts` row), when the session was told it finished.
+  `failures.py` is the `failures` query: per Steward ticket (`enact_ci_range`)
+  its sessions' cost, bisection's CPU and the minutes `master` stayed behind.
 - `ignite.py`: Ignite's hub as a source, read only on the machine whose cache
   holds the hub's database (`$IGNITE_HUB_DB`, else `<cache>/ignite/hub.sqlite`).
-  Its records, one per command on any machine, stand in for the run log, the
-  token pool's leases and the CPU sampler: each becomes an `ignite_records` row,
-  a `leases` row, `cpu` and `cpu_minutes` rows over the minutes it ran and, for
-  a check family, `checks` and `lane_runs` rows (the gate as script `check`, tip
+  Its records, one per command on any machine, replaced the run log, the token
+  pool's leases and the CPU sampler: each becomes an `ignite_records` row, a
+  `leases` row, `cpu` and `cpu_minutes` rows over the minutes it ran and, for a
+  check family, `checks` and `lane_runs` rows (the gate as script `check`, tip
   verification as `ci`); compile units become `compile_timings`. The efficiency
   rows other machines' daemons posted (`metrics`, one export line per row) are
   imported as `import` imports a file. Tickets, tips, hand-offs and workers are
-  copied into the `ignite_*` tables. A machine is named by the first host seen
-  for its ID (`ignite_machines`), so a rename does not split it, and hub ticket
-  IDs are resolved with `ticket_ids.stored`. `ignite_metrics.py` registers the
-  `ignite.*` series: cycle time, waiting for a worker, repair share, `master`
-  lag, dispatch dollars, escapes per 100 landings, cache hits and the gate's
-  instructions, seconds and wait. These sit beside `cilog.py`, `cpu.py` and
-  `locks.py` until the switch from Enact removes those readers.
+  copied into the `ignite_*` tables, and `HubTickets` also writes the tickets as
+  `beads`, `labels` and `ticket_aliases` rows, which replaced `tk export` (the
+  hub supplies no verdict comments or session events, so those tables stop
+  growing). The `ignite` source comes first in `cli.sources()`, ahead of the
+  transcripts, because windows read the tickets; on a machine with no hub
+  database none of these sources exist and ingest keeps what the store has. A
+  machine is named by the first host seen for its ID (`ignite_machines`), so a
+  rename does not split it, and hub ticket IDs are resolved with
+  `ticket_ids.stored`. `ignite_metrics.py` registers the `ignite.*` series:
+  cycle time, waiting for a worker, repair share, `master` lag, dispatch
+  dollars, escapes per 100 landings, cache hits and the gate's instructions,
+  seconds and wait. Enact's lock-wait log has no Ignite counterpart:
+  `lock_waits` rows are history that `timing.py` still reads, and no query shows
+  them.
 - `commits.py`: the commits source, `git log` of `staging` and `master` run in
   the main checkout, with `master`'s reflog in `ref_moves` (kept after git
   expires it), which says when each commit reached `master`. `History` gives
@@ -153,7 +151,7 @@ store" and "Isolation" before changing anything here.
   refused. An export holds commands and paths, so it is copied between your own
   machines (`scp`, a USB drive) and never committed or published. `coverage`
   lists each host's newest row's date and the CPU tables that hold nothing for
-  it, because Windows has no sampler or lease log.
+  it, because a host may hold no Ignite records.
 - Windows: `paths.py` finds the providers' directories from the home directory
   (`%USERPROFILE%\.claude\projects`, `%USERPROFILE%\.codex\sessions`),
   `paths.project_name` builds a provider's project folder from the checkout path
@@ -168,22 +166,21 @@ store" and "Isolation" before changing anything here.
   is computed there), with one script that fetches a line's section the first
   time it opens. A category's colour comes from its place in the command kinds
   table, so it is the same in every bar and strip. `views.py` and `ci_views.py`
-  add the views the header leads to (`cards`, `machine`, `enact`, `ci`,
-  `changes`, `findings`) and the sections they open (`metrics`, `pushes`,
-  `failures`, one finding's items) to `page.RENDERERS`, built from the same
-  parts. A view's trend lines are the metrics its result names under `more`, as
-  lines open from the start whose section the script fetches at once; a trend
-  marks each efficiency change on its metric, and the summary's figures carry
-  the marks of the metrics in `rollups.FIGURE_METRICS`. `time` and `dollars`
-  answer `.json` only. The server answers each connection on its own thread,
-  because a browser holds connections open that it sends nothing on. A request
-  never waits for an ingest: the server answers from the store as it is and
-  keeps each answer until the next ingest. While the page is open, a thread runs
-  `efficiency ingest` as a separate background-priority process whenever the
-  store is over five minutes old, then computes the recently asked answers
-  again. `/status.json` feeds the header's "updated" or "updating" note, which
-  offers a reload once new data is in. `just efficiency serve` alone runs at
-  normal priority.
+  add the views the header leads to (`cards`, `machine`, `ci`, `changes`,
+  `findings`) and the sections they open (`metrics`, `pushes`, `failures`, one
+  finding's items) to `page.RENDERERS`, built from the same parts. A view's
+  trend lines are the metrics its result names under `more`, as lines open from
+  the start whose section the script fetches at once; a trend marks each
+  efficiency change on its metric, and the summary's figures carry the marks of
+  the metrics in `rollups.FIGURE_METRICS`. `time` and `dollars` answer `.json`
+  only. The server answers each connection on its own thread, because a browser
+  holds connections open that it sends nothing on. A request never waits for an
+  ingest: the server answers from the store as it is and keeps each answer until
+  the next ingest. While the page is open, a thread runs `efficiency ingest` as
+  a separate background-priority process whenever the store is over five minutes
+  old, then computes the recently asked answers again. `/status.json` feeds the
+  header's "updated" or "updating" note, which offers a reload once new data is
+  in. `just efficiency serve` alone runs at normal priority.
 - `just efficiency shot <address> [--dark] [--width N]` renders an address to a
   PNG under `$BERYL_CACHE/efficiency/shots/` with `shot.mjs`, which uses the
   main checkout's `ui/node_modules` Playwright and takes one of the machine's
@@ -203,9 +200,7 @@ store" and "Isolation" before changing anything here.
   first when the store's last ingest is over a minute old, unless given
   `--no-ingest` or another ingest is already running, in which case it answers
   from the store as it is. The store is `$BERYL_CACHE/efficiency/store.sqlite`.
-- The `efficiency` check lane (`tools/src/beryl_tools/efficiency.py`) runs
-  black, pyre and pytest here. Only a change under `efficiency/` or to
-  `data/efficiency-*.json` selects it, and such a change selects no other lane
-  but `repo`. To run its steps by hand from this directory:
-  `uv run --project ../tools python -m pytest`, and the same with
-  `python -m black --check .` and `pyre --noninteractive check`.
+- Ignite's check families `black:efficiency`, `pyre:efficiency` and
+  `pytest:efficiency/...` check this project. To run the same commands by hand
+  from this directory: `uv run --project ../tools python -m pytest`, and the
+  same with `python -m black --check .` and `pyre --noninteractive check`.

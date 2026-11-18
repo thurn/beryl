@@ -279,5 +279,10 @@
     "label": "Beryl 3D's parity-list check runs in the fast check's repo lane on every change instead of only in the 3-hourly Beryl 3D sweep, so a deleted or added skill fails at push time rather than leaving the sweep red, re-bisected and re-commented every run until a session takes the ticket",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The switch from Enact to Ignite: Ignite builds, checks and lands every change and holds the tickets, with checks chosen by input hashes, a shared result cache and scores in place of Enact's fast check, slow CI, sweeps, nightly, CPU token pool and role files",
+    "metric": "bead.lead-minutes",
+    "expect": "down"
   }
 ]

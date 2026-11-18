@@ -4,9 +4,8 @@ printed, from the card store, between two marker lines at the top of the file.
 Each face gives its name and mana cost, its type line with its power and toughness, loyalty or
 defense, and its Oracle text, wrapped to 100 columns. What a person writes about the card goes
 below the end marker, which `just card header` never touches: `just card header <name>`
-rewrites one card's header, `--all` every card's. The `names` lane of the checks fails on a
-stale header (`card-headers`): in the fast check the changed card files', in slow CI every
-file's.
+rewrites one card's header, `--all` every card's. Ignite's `source` family fails on a
+stale header (`card-headers`).
 """
 
 from __future__ import annotations

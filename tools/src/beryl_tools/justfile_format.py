@@ -3,8 +3,8 @@
 `just`'s formatter changes between releases (1.59 writes `set positional-arguments` where
 older ones wrote `set positional-arguments := true`), so the check's result depends on the
 installed `just` as well as the tree. An older `just` cannot run the check: it exits
-`CANNOT_RUN` with how to upgrade, which fails the lane but gives no verdict, instead of
-reporting a justfile that is fine as badly formatted and then as flaky once `just` is upgraded.
+`deps.CANNOT_RUN` with how to upgrade, which gives no verdict, instead of reporting a
+justfile that is fine as badly formatted.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 from . import paths
-from .reruns import CANNOT_RUN
+from .deps import CANNOT_RUN
 
 # The oldest `just` whose formatting the justfile follows; README.md's setup table says so too.
 MINIMUM = (1, 59)

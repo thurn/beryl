@@ -48,7 +48,10 @@ inputs = [
   "tools/src/beryl_tools/video_shape.py",
 ]
 
-# The few kept checks slow CI plays today (`SMOKE_TITLES` in tools/src/beryl_tools/suites.py).
+# The kept checks that show the browser UI starts and plays (`SMOKE_TITLES` in
+# tools/src/beryl_tools/suites.py): the start screen starts a game, and on a recorded game the
+# stage passes priority and plays a land. Each takes about a second and runs on the page's own
+# clock, so it passes on a loaded machine. `app` is protected in ignite.toml for the same reason.
 [family.ui-smoke]
 kind = "regression"
 adapter = "jsonl"
@@ -158,7 +161,11 @@ inputs = [
 ]
 
 # One check per fixture of data/ui-counts.json: the work the UI does to play it in each layout
-# there, held to its limits within their tolerance.
+# there (React components rendered, DOM mutations, elements restyled and laid out), counted on
+# Playwright's paused clock one frame at a time and held to its limits within their tolerance.
+# The counts do not depend on the machine's speed or load, so the file's 3% tolerance sits just
+# above their run-to-run noise, which is under 1%. A drop past the tolerance passes and asks for
+# lower limits (`just ui-counts --update`).
 [family.ui-counts]
 kind = "regression"
 adapter = "jsonl"

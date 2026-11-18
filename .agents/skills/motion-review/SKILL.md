@@ -17,7 +17,7 @@ judges motion himself, through his bug reports.
 When he asks, you never judge the verb yourself. You film it, hand the films to
 a reviewer with none of your context, and report what it says.
 
-It is not a check: nothing here runs in `just check` or is logged, and no image
+It is not a check: nothing here is a check family or is recorded, and no image
 is ever committed.
 
 ## 1. Film

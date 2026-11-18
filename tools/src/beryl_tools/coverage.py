@@ -1,4 +1,4 @@
-"""`coverage`: which source lines each browser check runs, for choosing the checks a diff can break.
+"""`coverage`: which source lines each browser check runs, to tell which checks a diff can break.
 
 It plays every ui-test check and every shot in Chromium, one page each, with the scripts' own
 `coverage` hook (ui/scripts/capture.mjs) recording V8's block coverage of the modules under
@@ -6,14 +6,14 @@ ui/src and the CSS rules each page used. Vite's dev server serves each module, a
 stylesheet a module imports, with an inline source map, through which this maps the byte ranges
 that ran to the lines of ui/src's files: JavaScript and CSS both at line granularity. Each check
 also names the fixtures its page fetched, and the file each fixture's recording's hash, for
-changes to the Rust that records them (selection.py).
+changes to the Rust that records them.
 
 By default it measures origin/staging in a detached worktree of its own, which it removes after;
 `--commit` names another commit, and `--here` measures this checkout as it is. The result goes to
-`$BERYL_CACHE/ci/coverage/<commit>.json`, keyed by the run log's check ids (`ui-test:<title>`,
-`verb:<verb>/<seat>/<layout>`, `shots:<name>`, runlog.py), with `latest.json` naming the newest
-clean one. A coverage run is not a check: it logs no results and fails on no check's failure,
-but lists the checks that failed.
+`$BERYL_CACHE/ci/coverage/<commit>.json`, keyed by the checks' ids (`ui-test:<title>`,
+`verb:<verb>/<seat>/<layout>`, `shots:<name>`), with `latest.json` naming the newest clean one.
+A coverage run is not a check: it fails on no check's failure, but lists the checks that
+failed.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import base64
 import bisect
+import hashlib
 import json
 import os
 import posixpath
@@ -36,7 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO
 
-from . import paths, runlog, selection, shots, system, tokens, warm
+from . import paths, shots, system
 
 FORMAT = 1
 # The browser with a coverage API: Playwright measures coverage only in Chromium.
@@ -235,6 +236,14 @@ def build(raw: Path, root: Path) -> dict[str, dict[str, object]]:
     return checks
 
 
+def hashes(folder: Path) -> dict[str, str]:
+    """Each recorded fixture's hash, by name."""
+    return {
+        f.stem: hashlib.sha256(f.read_bytes()).hexdigest()
+        for f in sorted(folder.glob("*.json"))
+    }
+
+
 def git(*args: str) -> str:
     return subprocess.run(
         ["git", *args],
@@ -249,14 +258,14 @@ def write(
     checks: dict[str, dict[str, object]],
     commit: str,
     dirty: bool,
-    lanes: dict[str, int],
+    groups: dict[str, int],
     seconds: float,
     recordings: dict[str, str] | None = None,
 ) -> Path:
     """Writes the coverage file for `commit`, and points latest.json at it if the tree was
-    clean. Returns its path. `recordings` hashes each fixture as recorded (selection.hashes),
-    against which the fast check finds the fixtures a Rust change re-recorded otherwise.
-    """
+    clean. Returns its path. `groups` is the exit code of each group of scripts that ran
+    (`ui-test`, `shots`). `recordings` hashes each fixture as recorded (`hashes`), against which
+    the fixtures a Rust change re-recorded are found otherwise."""
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     failed = sorted(c for c, e in checks.items() if e["outcome"] != "pass")
     document: dict[str, object] = {
@@ -265,7 +274,7 @@ def write(
         "dirty": dirty,
         "time": now,
         "seconds": round(seconds, 1),
-        "lanes": lanes,
+        "groups": groups,
         "failed": failed,
         "checks": checks,
     }
@@ -299,8 +308,6 @@ def measure_here() -> int:
             print(f"coverage: {e}", file=sys.stderr)
             return 1
         env["BERYL_COVERAGE"] = str(raw)
-        # Not a check: nothing reaches the run log.
-        env.pop(runlog.RESULTS_ENV, None)
         # ui-test's fixtures, and those of shots.json, which its pages fetch from ui/public.
         if (
             shots.record_fixtures(recorded, shots.ui_test_fixtures())
@@ -308,8 +315,8 @@ def measure_here() -> int:
         ):
             print("coverage: recording the fixtures failed", file=sys.stderr)
             return 1
-        recordings = selection.hashes(shots.RECORDED) | selection.hashes(recorded)
-        lanes: dict[str, int] = {}
+        recordings = hashes(shots.RECORDED) | hashes(recorded)
+        groups: dict[str, int] = {}
         try:
             with shots.served_ui(env) as url:
                 scripts = [
@@ -318,8 +325,8 @@ def measure_here() -> int:
                     ("ui-test", ["scripts/shapes.mjs", url, str(recorded)]),
                     ("shots", ["scripts/shots.mjs", url, str(out), "shots.json"]),
                 ]
-                for lane, script in scripts:
-                    print(f"coverage: {lane} {script[0]}", file=sys.stderr, flush=True)
+                for group, script in scripts:
+                    print(f"coverage: {group} {script[0]}", file=sys.stderr, flush=True)
                     code = subprocess.run(
                         ["node", *script],
                         cwd=paths.UI,
@@ -328,12 +335,12 @@ def measure_here() -> int:
                         stdout=subprocess.DEVNULL,
                         check=False,
                     ).returncode
-                    lanes[lane] = lanes.get(lane, 0) or code
+                    groups[group] = groups.get(group, 0) or code
         except shots.UiError as e:
             print(f"coverage: {e}", file=sys.stderr)
             return 1
         checks = build(raw, paths.REPO)
-    path = write(checks, commit, dirty, lanes, time.monotonic() - started, recordings)
+    path = write(checks, commit, dirty, groups, time.monotonic() - started, recordings)
     failed = sum(e["outcome"] != "pass" for e in checks.values())
     print(
         f"coverage: {len(checks)} checks ({failed} failed) in "
@@ -357,15 +364,13 @@ def in_tree(
     out: IO[str] | None = None,
     env: dict[str, str] | None = None,
     place: Path | None = None,
-    warm_rust: bool = True,
 ) -> int:
     """Runs `command` in a detached worktree of `commit`, removed after, with that commit's own
     tools on the Python path (`by` is `python -m beryl_tools.cli`), in `env` (this process's if
     None), its output to `out` (this process's if None).
 
     The tree goes under `place` (coverage's folder if None), whose lock it holds for the whole
-    run: a caller with a folder of its own does not wait for coverage or the browser sweep.
-    With `warm_rust`, the tree gets a clone of the main workspace's warm build directory.
+    run: a caller with a folder of its own does not wait for coverage.
     """
     place = place or folder()
     with system.file_lock(place / ".lock"):
@@ -389,8 +394,6 @@ def in_tree(
         remove_tree(tree)
         git("worktree", "add", "--detach", "--quiet", str(tree), sha)
         try:
-            if warm_rust:
-                warm.ensure(tree)
             env = {**(env or os.environ), "PYTHONPATH": str(tree / "tools" / "src")}
             return subprocess.run(
                 command,
@@ -403,71 +406,6 @@ def in_tree(
             ).returncode
         finally:
             remove_tree(tree)
-
-
-def refresh(commit: str) -> str:
-    """Starts measuring `commit` in the background at low priority, unless it is the newest
-    coverage already or another coverage run holds the lock, and returns a line saying which.
-
-    The browser sweep calls this after a sweep that passed (sweep.py). Without it, coverage is
-    measured only nightly, and a line of ui/src changed since then is one coverage cannot
-    place, so the fast check's selection plays every browser check (selection.py's
-    `Chooser.unboxed`). The
-    run starts from the main checkout's tools, as the nightly agent's does ([`detached`]).
-    """
-    if system.WINDOWS:
-        return "coverage: not refreshed: this host records no coverage"
-    try:
-        newest = json.loads((folder() / "latest.json").read_text()).get("commit")
-    except (OSError, ValueError):
-        newest = None
-    if newest == commit:
-        return f"coverage: {commit[:10]} is measured already"
-    try:
-        with system.file_lock(folder() / ".lock", timeout=0):
-            pass
-    except system.LockHeld:
-        return "coverage: not refreshed: another coverage run is in progress"
-    log = folder() / "refresh.log"
-    if not detached(["coverage", "--commit", commit], log):
-        return "coverage: not refreshed: needs the main checkout and uv"
-    return f"coverage: measuring {commit[:10]} in the background ({log})"
-
-
-def detached(by: list[str], log: Path, low: bool = True) -> bool:
-    """Starts `by <by>` from the main checkout's tools in a session of its own, its output to
-    `log`, so that it outlives slow CI's worktree, which Enact deletes when the run ends, ending
-    every process left inside it. False when there is no main checkout or uv. With `low`, it runs
-    at low priority (`system.utility`); without, at normal priority, taking CPU tokens of its own
-    rather than the lease of the slow CI step that started it (`tokens.unheld`).
-    """
-    main = paths.main_checkout()
-    uv = shutil.which("uv")
-    if main is None or uv is None:
-        return False
-    command = [uv, "run", "--quiet", "--project", str(main / "tools"), "by", *by]
-    # Not slow CI's: its worktree's environment, or its run log's results file.
-    leave = {"VIRTUAL_ENV", "PYTHONPATH", runlog.RESULTS_ENV}
-    env = {k: v for k, v in os.environ.items() if k not in leave}
-    if not low:
-        env = tokens.unheld(env)
-    with open(log, "w") as out:
-        subprocess.Popen(
-            system.utility(command) if low else command,
-            cwd=main,
-            env=env,
-            stdout=out,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    return True
-
-
-def detached_sweep(by: list[str], log: Path) -> bool:
-    """Starts a sweep, `by <by>`, as `detached` does, at normal priority: a sweep takes CPU
-    tokens of the `sweep` class (tokens.py) instead of running at low priority."""
-    return detached(by, log, low=False)
 
 
 def remove_tree(tree: Path) -> None:

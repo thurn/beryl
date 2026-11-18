@@ -576,7 +576,6 @@ STYLES: list[str] = []
 VIEWS: tuple[tuple[str, str], ...] = (
     ("cards", "Cards"),
     ("machine", "Machine"),
-    ("enact", "Enact"),
     ("ci", "CI"),
     ("changes", "Changes"),
     ("findings", "Findings"),

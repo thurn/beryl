@@ -18,7 +18,7 @@ This driver merges the three versions as JSON, key by key:
 
 The sum is right for the totals (`total_<counter>`, `handle_allocations`), since independent
 work adds up over a playback. For the worst frame (`worst_frame_<counter>`), two changes may
-not add up, but the fast check's `just b3d gate` still holds every board to exactly its limit,
+not add up, but `just b3d gate` still holds every board to exactly its limit,
 so a wrong number fails the push rather than landing: lower it with `just b3d gate --update`,
 or raise it by hand with the old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
 

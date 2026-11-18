@@ -1,9 +1,9 @@
 # Working on Ignite
 
-Ignite is the build, check and delivery system that replaces Enact.
-`docs/ignite.md` says what it does; the code contract in the design field of the
-epic `Thrh4` (`tk show Thrh4 --json`) says where each part lives and which
-ticket owns which file. These are the contract's rules.
+Ignite is the build, check and delivery system. `docs/ignite.md` says what it
+does; the code contract in the design field of the epic `Thrh4`
+(`tk show Thrh4 --json`) says where each part lives and which ticket owns which
+file. These are the contract's rules.
 
 ## The workspace
 

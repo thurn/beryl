@@ -1,5 +1,5 @@
 """The page's views beyond the first screen (docs/efficiency-dashboard.md, "The page"): Cards,
-Machine, Enact, Changes and Findings, and the sections they open in place (one metric's trend, one
+Machine, Changes and Findings, and the sections they open in place (one metric's trend, one
 finding's items); `ci_views` holds the CI view. Each renders one query's JSON as it is with
 the first screen's parts (`page`), and adds no figure of its own.
 
@@ -240,7 +240,6 @@ def machine(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
         )
         + figure("per day", number(data["shared_per_day"], 2), fields, "shared")
         + figure("per ticket", number(data["shared_per_bead"], 2), fields, "shared")
-        + figure("sampler cores", number(own["sampler_cores"], 3), fields, "own")
         + figure("ingest cpu s", number(own["ingest_cpu_seconds"], 1), fields, "own")
         + "</div>"
         + line_grid(
@@ -267,71 +266,6 @@ def machine(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
             narrow,
             fields,
             "narrow",
-        )
-    )
-
-
-def enact(data: Mapping[str, object], fields: Mapping[str, str]) -> str:
-    """Time waiting for Enact's ownership lock and syncing under it, by subcommand, then
-    the commands that held the lock while others waited."""
-    subcommands = [
-        (
-            [
-                text(s["subcommand"]),
-                integer(s["lines"]),
-                integer(s["gave_up"]),
-                number(s["wait_minutes"], 1),
-                number(s["sync_minutes"], 1),
-                number(s["held_minutes"], 1),
-                integer(s["calls"]),
-                number(s["call_minutes"], 1),
-                "",
-            ],
-            None,
-        )
-        for s in rows(data["subcommands"])
-    ]
-    holders = [
-        (
-            [text(h["holder"]), integer(h["waits"]), number(h["wait_minutes"], 1), ""],
-            None,
-        )
-        for h in rows(data["holders"])
-    ]
-    return (
-        '<div class="figs">'
-        + figure(
-            "lock wait min",
-            number(data["lock_wait_minutes"], 1),
-            fields,
-            "lock_wait_minutes",
-        )
-        + figure("sync min", number(data["sync_minutes"], 1), fields, "sync_minutes")
-        + figure("lines", integer(data["lines"]), fields, "lock_lines")
-        + figure("joined", integer(data["joined"]), fields, "lock_lines")
-        + figure("no call", integer(data["unjoined"]), fields, "lock_lines")
-        + "</div>"
-        + line_grid(
-            [
-                ("subcommand", "lock_lines"),
-                ("lines", None),
-                ("gave up", None),
-                ("wait min", None),
-                ("sync min", None),
-                ("held min", None),
-                ("calls", None),
-                ("call min", None),
-                ("", None),
-            ],
-            subcommands,
-            fields,
-            "subcommands",
-        )
-        + line_grid(
-            [("holder", "lock_lines"), ("waits", None), ("wait min", None), ("", None)],
-            holders,
-            fields,
-            "holders",
         )
     )
 
@@ -483,7 +417,6 @@ page.RENDERERS.update(
         "metrics": series,
         "cards": cards,
         "machine": machine,
-        "enact": enact,
         "changes": changes,
         "findings": findings,
     }
@@ -495,7 +428,6 @@ page.TITLES.update(
         ),
         "cards": lambda d: heading_of("Cards", f"by {d['by']}"),
         "machine": lambda _: heading_of("Machine"),
-        "enact": lambda _: heading_of("Enact"),
         "changes": lambda _: heading_of("Changes"),
         "findings": lambda d: heading_of("Findings", None),
     }

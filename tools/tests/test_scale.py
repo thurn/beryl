@@ -120,9 +120,9 @@ def test_time_report_parsing() -> None:
 
 def runs(check: float) -> dict[str, scale.Run]:
     return {
-        "cold check": scale.Run(check, check, 100.0, 2**30, 4.0),
-        "release build": scale.Run(90.0, 90.0, 300.0, 3 * 2**30, 4.0),
-        "one-edit rebuild": scale.Run(1.0, 1.0, 1.0, 2**29, 4.0),
+        "cold check": scale.Run(check, 100.0, 2**30),
+        "release build": scale.Run(90.0, 300.0, 3 * 2**30),
+        "one-edit rebuild": scale.Run(1.0, 1.0, 2**29),
     }
 
 
@@ -140,7 +140,7 @@ def test_a_measure_over_its_budget_is_missed() -> None:
     assert "MISSED" in scale.report(2000, 4, False, 41, runs(61.0))
 
 
-def test_the_nightly_holds_only_memory_which_load_does_not_move() -> None:
+def test_the_memory_assertion_ignores_times() -> None:
     slow = runs(61.0)
     assert scale.missed(scale.measures(slow), times=False) == []
     slow["release build"].rss = 5 * 2**30
@@ -179,7 +179,6 @@ def test_the_script_report_extrapolates_at_the_runs_parallelism() -> None:
     scripts = scale.Scripts(
         {"counterspell": 3.0, "brainstorm": 1.0},
         checks=6,
-        seconds=4.0,
         wall=4.0,
         checking=2.0,
     )
@@ -192,5 +191,5 @@ def test_the_script_report_extrapolates_at_the_runs_parallelism() -> None:
 
 
 def test_the_rebuild_is_the_median_run() -> None:
-    made = [scale.Run(s, s, s, 0, 0.0) for s in (5.0, 3.0, 9.0)]
+    made = [scale.Run(s, s, 0) for s in (5.0, 3.0, 9.0)]
     assert scale.median(made).seconds == 5.0

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import claude, cli, cpu, facts, ingest, machine, paths, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads, Leases, Samples, leases_path, samples_path
 from beryl_efficiency.scope import Scope
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
 from tests.synthetic import bead as bead_record
@@ -91,7 +91,7 @@ def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         .result(at(10, 20), "c3")
         .save()
     )
-    samples = cpu.samples_path(cache)
+    samples = samples_path(cache)
     samples.parent.mkdir(parents=True)
     samples.write_text(
         "\n".join(
@@ -113,7 +113,7 @@ def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         )
         + "\n"
     )
-    leases = cpu.leases_path(cache)
+    leases = leases_path(cache)
     leases.parent.mkdir(parents=True)
     leases.write_text(
         "\n".join(
@@ -130,11 +130,10 @@ def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         Beads(lambda: BEADS),
         claude.Sessions(tmp_path / "sessions", CHECKOUT, HOST),
         claude.Transcripts(tmp_path / "projects", CHECKOUT, HOST),
-        cpu.Samples(samples, HOST),
-        cpu.Leases(leases, HOST),
+        Samples(samples, HOST),
+        Leases(leases, HOST),
     ]
     monkeypatch.setattr(cli, "sources", lambda: sources)
-    monkeypatch.setattr(cpu, "sampler_cpu", lambda: (36.0, 3600.0))
     assert cli.main(["ingest"]) == 0
     assert cli.main(["ingest"]) == 0  # A second ingest changes nothing.
     return tmp_path
@@ -224,7 +223,7 @@ def test_the_machine_query(root: Path, capsys: pytest.CaptureFixture[str]) -> No
     shared = {p["name"]: p["value"] for p in found["shared"]}  # type: ignore[union-attr]
     assert shared == {"system/system": 0.17, "worktree by-c.1": 0.03}
     own = found["own"]
-    assert isinstance(own, dict) and own["sampler_cores"] == 0.01
+    assert isinstance(own, dict) and own["ingest_cpu_seconds"] >= 0
     capacity = found["capacity"]
     assert isinstance(capacity, dict)
     assert capacity["beads"] == 1 and capacity["machine_cores"] == CORES
@@ -242,24 +241,7 @@ def test_the_machine_metrics(root: Path, capsys: pytest.CaptureFixture[str]) -> 
     assert query(capsys, "metrics", "bead.core-minutes")["median"] == 3.0
 
 
-def test_the_sampler_s_cpu_counts_every_process_under_its_agent() -> None:
-    table = "\n".join(
-        [
-            "  10     1   0:00.03 01:00:00",
-            "  11    10   0:18.00 01:00:00",
-            "  12    11   0:01.50    00:02",
-            "  13     1   9:00.00 01:00:00",
-        ]
-    )
-    assert cpu.tree_cpu(table, "10") == (19.53, 3600.0)
-    assert cpu.tree_cpu(table, "99") is None
-    assert cpu.clock_seconds("2-01:02:03") == 2 * 86400 + 3723
-
-
-def test_a_minute_sampled_over_the_cores_counts_as_all_busy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(cpu, "sampler_cpu", lambda: None)
+def test_a_minute_sampled_over_the_cores_counts_as_all_busy(tmp_path: Path) -> None:
     found = store.open_store(tmp_path / "store.sqlite")
     with found:
         found.executemany(

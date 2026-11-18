@@ -12,6 +12,7 @@ from __future__ import annotations
 import functools
 import re
 import subprocess
+import sys
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -102,3 +103,10 @@ def constants(root: Path = CARDS, decks: Path = DECKS) -> dict[str, str]:
     """The constants of `beryl_cards::names`, each with its card's name."""
     names = [*deck_names(decks), *BASIC_LANDS, *implemented(root)]
     return {set_groups.constant(name): name for name in names}
+
+
+if __name__ == "__main__":
+    # `python -m beryl_tools.card_files rustfmt [--check]`, run in `rust/` by `just fmt`.
+    if sys.argv[1:2] != ["rustfmt"]:
+        sys.exit("usage: python -m beryl_tools.card_files rustfmt [--check]")
+    sys.exit(rustfmt_step(*sys.argv[2:]))

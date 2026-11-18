@@ -1,9 +1,9 @@
 """The suites `ui-test` runs beside the checks of kept.mjs, each with its
-own run-log prefix and a list of its checks Python can read: the stage's verbs
+own check-id prefix and a list of its checks Python can read: the stage's verbs
 (ui/scripts/verbs.mjs, ui/verbs.json) and its prompt shapes (ui/scripts/shapes.mjs,
-ui/shapes.json). selection.py chooses among them, and shots.py and motion.py record their
-fixtures. It also names the fixtures kept.mjs reads and the checks slow CI's `ui-smoke` plays,
-which Ignite's browser adapter (beryl_tools/ignite/browser.py) shares."""
+ui/shapes.json). shots.py and motion.py record their fixtures. It also names the fixtures
+kept.mjs reads and the checks of the `ui-smoke` family, which Ignite's browser adapter
+(beryl_tools/ignite/browser.py) shares."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import json
 from . import paths
 
 # The verb suite, which `ui-test` runs beside the checks: its script, its cases, the list
-# of its checks, and the prefix of their ids in the run log (the lane's others are `ui-test:<title>`).
+# of its checks, and the prefix of their ids (the other checks' ids are `ui-test:<title>`).
 VERB_SCRIPT = "ui/scripts/verbs.mjs"
 VERB_CASES = (
     "ui/scripts/verb-cases.mjs",
@@ -31,7 +31,7 @@ VERB_CASES = (
 VERBS = "ui/verbs.json"
 VERB_PREFIX = "verb:"
 # The shape suite, which `ui-test` runs after it: its script, its cases, the list of its checks,
-# and the prefix of their ids in the run log.
+# and the prefix of their ids.
 SHAPE_SCRIPT = "ui/scripts/shapes.mjs"
 SHAPE_CASES: tuple[str, ...] = tuple(
     f"ui/scripts/shape-cases{part}.mjs" for part in ("", "-table", "-panel")
@@ -51,7 +51,7 @@ def verb_suite() -> dict[str, object]:
 
 
 def verb_checks() -> list[str]:
-    """The verb suite's checks, by their run-log ids."""
+    """The verb suite's checks, by their ids."""
     suite = verb_suite()
     verbs, layouts, moment = (suite.get(k) for k in ("verbs", "layouts", "moment"))
     if not (
@@ -89,7 +89,7 @@ def shape_suite() -> dict[str, object]:
 
 
 def shape_checks() -> list[str]:
-    """The shape suite's checks, by their run-log ids."""
+    """The shape suite's checks, by their ids."""
     suite = shape_suite()
     shapes, layouts = suite.get("shapes"), suite.get("layouts")
     if not (isinstance(shapes, dict) and isinstance(layouts, list)):
@@ -173,11 +173,10 @@ KEPT_FIXTURES = [
     "game-over",
 ]
 
-# The `ui-test` checks slow CI's `ui-smoke` lane plays, by title: the start screen starts a game,
-# and on a recorded game the stage passes priority (Space) and plays a land at a click. Each
-# takes about a second, runs on the page's own clock (no wall-clock waits) and has not failed in
-# over 100 slow-CI runs. Every other browser check runs in the fast check's selection and in the
-# browser sweep every few hours (sweep.py).
+# The `ui-test` checks of the `ui-smoke` family, by title: the start screen starts a game, and on
+# a recorded game the stage passes priority (Space) and plays a land at a click. Each takes about
+# a second, runs on the page's own clock (no wall-clock waits) and had not failed in over 100
+# runs when it was chosen. Every other browser check is a family of its own.
 SMOKE_TITLES: tuple[str, ...] = (
     "Enter on the start screen starts a game",
     "a land pressed while a script plays on to it is played",

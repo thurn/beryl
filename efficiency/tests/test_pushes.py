@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import cilog, claude, cli, ingest
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads, RunLog, Verdicts, runlog_path
 from beryl_efficiency.failures import (
     BisectRun,
     CiRun,
@@ -89,7 +89,7 @@ def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         .result(at(10, 29, 30), "c4")
         .save()
     )
-    log = cilog.runlog_path(cache)
+    log = runlog_path(cache)
     log.parent.mkdir(parents=True)
     lines = [
         # The first check: the rust lane from 10:10:30 to 10:12, names inside it.
@@ -126,8 +126,8 @@ def root(tmp_path: Path, cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     sources: list[ingest.Source] = [
         Beads(lambda: BEADS),
         claude.Transcripts(tmp_path / "projects", CHECKOUT, HOST),
-        cilog.RunLog(log),
-        cilog.Verdicts(lambda: EXPORT.encode()),
+        RunLog(log),
+        Verdicts(lambda: EXPORT.encode()),
     ]
     monkeypatch.setattr(cli, "sources", lambda: sources)
     assert cli.main(["ingest"]) == 0

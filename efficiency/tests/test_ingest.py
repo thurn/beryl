@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import ingest, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads
 from beryl_efficiency.ingest import SourceError
 from tests.synthetic import Lines, bead, listing
 

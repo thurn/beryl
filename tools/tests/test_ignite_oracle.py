@@ -13,33 +13,6 @@ import pytest
 
 from beryl_tools.ignite import oracle as adapter
 
-# The modules the switch to Ignite deletes, which an adapter must not import.
-ORCHESTRATION = {
-    "tokens",
-    "lanes",
-    "step_runner",
-    "selection",
-    "rust_fit",
-    "python_fit",
-    "runlog",
-    "runstore",
-    "verdicts",
-    "budget",
-    "hang",
-    "flaky",
-    "bisect",
-    "slow_ci",
-    "sweep",
-    "nightly",
-    "warm",
-    "caches",
-    "incidents",
-    "deadline",
-    "clock",
-    "check_value",
-    "checks",
-}
-
 
 def repo_with_lists(root: Path, divergences: list[dict[str, str]]) -> Path:
     (root / "data").mkdir()
@@ -216,15 +189,3 @@ def test_a_stale_exporter_gap_fails() -> None:
     line = adapter.verdict(scenario("x", status="pass"), stale_gap=True)
     assert line["outcome"] == "fail"
     assert "oracle-exporter-gaps.json" in line["message"]
-
-
-def test_the_adapter_imports_no_orchestration_module() -> None:
-    code = (
-        "import sys, beryl_tools.ignite.oracle; "
-        "print(' '.join(m.split('.')[1] for m in sys.modules "
-        "if m.startswith('beryl_tools.') and m.count('.') == 1))"
-    )
-    done = subprocess.run(
-        [sys.executable, "-c", code], capture_output=True, text=True, check=True
-    )
-    assert not set(done.stdout.split()) & ORCHESTRATION

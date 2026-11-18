@@ -43,10 +43,10 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from . import checks, paths, selection, suites, system, warm
+from . import deps, kept_checks, paths, suites, system
 
-# Load-adjusted seconds (checks.Clock) after which Vite is taken to be hung. A crowded machine
-# stretches its start well past a minute, so this sits far above any healthy start.
+# Seconds after which Vite is taken to be hung. A crowded machine stretches its start well past
+# a minute, so this sits far above any healthy start.
 SERVER_TIMEOUT = 300.0
 # The game fixtures' definitions, and where they are recorded to: gitignored, served by Vite.
 FIXTURES: Path = paths.UI / "fixtures.json"
@@ -86,8 +86,8 @@ def port_free(port: int) -> bool:
 
 def wait_for_server(url: str, server: subprocess.Popen[bytes]) -> bool:
     """Polls until Vite answers, it exits, or the timeout passes."""
-    clock = checks.Clock()
-    while clock.now() < SERVER_TIMEOUT and server.poll() is None:
+    began = time.monotonic()
+    while time.monotonic() - began < SERVER_TIMEOUT and server.poll() is None:
         try:
             with urllib.request.urlopen(url, timeout=2):
                 return True
@@ -103,7 +103,7 @@ BROWSER = "chromium" if system.WINDOWS else "webkit"
 def browser_env(browser: str = BROWSER) -> dict[str, str]:
     """The environment for the capture scripts, with `browser` (by default the app webview's
     engine) installed in the cache for Playwright."""
-    warm.ensure()
+    deps.ensure_node_modules()
     env = {
         **os.environ,
         "PLAYWRIGHT_BROWSERS_PATH": str(paths.cache_root() / "playwright"),
@@ -215,38 +215,21 @@ def fixture_views(name: str) -> int:
     ).returncode
 
 
-def chooser_for(lane: str, args: argparse.Namespace) -> selection.Chooser | None:
-    """The lane's choice of checks for `--select` (the fast check's) or `--affected` (slow
-    CI's); None to run them all."""
-    if args.affected:
-        return selection.Chooser(lane, base=args.affected)
-    return selection.Chooser(lane) if args.select else None
-
-
-AFFECTED_HELP = "every check the change since BASE can break (slow CI, selection.py)"
-
-
 def ui_shots(args: argparse.Namespace) -> int:
     if args.views:
         return fixture_views(args.views)
-    chooser = chooser_for("shots", args)
-    if chooser and chooser.choice.idle():
-        print("shots: the change reaches no shot")
-        return 0
     out = out_dir()
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
     try:
         env = browser_env()
         # Recording builds and plays the fixtures; failing that, no shot was taken.
-        code = checks.CANNOT_RUN if record_fixtures() else 0
-        only = list(args.only)
-        if code == 0 and chooser:
-            only = chooser.run([RECORDED], only)
-        if code == 0 and (only or not chooser):
+        code = deps.CANNOT_RUN if record_fixtures() else 0
+        if code == 0:
             with served_ui(env) as url:
                 code = subprocess.run(
-                    ["node", "scripts/shots.mjs", url, str(out), "shots.json"] + only,
+                    ["node", "scripts/shots.mjs", url, str(out), "shots.json"]
+                    + list(args.only),
                     cwd=paths.UI,
                     env=env,
                     stdin=subprocess.DEVNULL,
@@ -254,34 +237,24 @@ def ui_shots(args: argparse.Namespace) -> int:
                 ).returncode
     except UiError as e:
         print(f"ui-shots: {e}", file=sys.stderr)
-        code = checks.CANNOT_RUN
-    finally:
-        if chooser:
-            chooser.label()
+        code = deps.CANNOT_RUN
     if code != 0:
         print("ui-shots: FAILED", file=sys.stderr)
     return code
 
 
 def ui_test(args: argparse.Namespace) -> int:
-    chooser = chooser_for("ui-test", args)
-    if chooser and chooser.choice.idle():
-        print("ui-test: the change reaches no check")
-        return 0
     try:
         env = browser_env()
         with tempfile.TemporaryDirectory(prefix="beryl-ui-test-fixtures-") as tmp:
             recorded = Path(tmp) / "fixtures"
             if record_fixtures(recorded, ui_test_fixtures()):
-                code = checks.CANNOT_RUN
+                code = deps.CANNOT_RUN
             else:
-                code = scripted(env, recorded, list(args.only), chooser)
+                code = scripted(env, recorded, list(args.only))
     except UiError as e:
         print(f"ui-test: {e}", file=sys.stderr)
-        code = checks.CANNOT_RUN
-    finally:
-        if chooser:
-            chooser.label()
+        code = deps.CANNOT_RUN
     if code != 0:
         print("ui-test: FAILED", file=sys.stderr)
     return code
@@ -293,48 +266,53 @@ def ui_test_fixtures() -> list[str]:
     return list(dict.fromkeys(suites.KEPT_FIXTURES + fixtures))
 
 
-def scripted(
-    env: dict[str, str],
-    recorded: Path,
-    only: list[str],
-    chooser: selection.Chooser | None,
-) -> int:
+# The exit code of a `ui-test` script that was given filters and reached no check by them.
+NONE_REACHED = 3
+
+
+def scripts(names: list[str]) -> dict[str, list[str]]:
+    """Which of `ui-test`'s scripts run, each with the filters of `names` that are its own: a
+    verb check's name goes to verbs.mjs, a shape check's to shapes.mjs, and any other, a kept
+    check's title or a filter (`just ui-test drag`), to kept.mjs. A script with none does not
+    run. With no names all run every check."""
+    every = [kept_checks.KEPT_SCRIPT, suites.VERB_SCRIPT, suites.SHAPE_SCRIPT]
+    if not names:
+        return {script: [] for script in every}
+    prefixes = {
+        suites.VERB_PREFIX: suites.VERB_SCRIPT,
+        suites.SHAPE_PREFIX: suites.SHAPE_SCRIPT,
+    }
+    found: dict[str, list[str]] = {script: [] for script in every}
+    for name in names:
+        suite = next((s for p, s in prefixes.items() if name.startswith(p)), None)
+        found[suite or kept_checks.KEPT_SCRIPT].append(name)
+    return {script: own for script, own in found.items() if own}
+
+
+def scripted(env: dict[str, str], recorded: Path, only: list[str]) -> int:
     """Plays the checks of kept.mjs, verbs.mjs and shapes.mjs in turn: those `only` names, or
-    with `chooser`, those it chose, which the scripts match exactly so that a rerun's filters
-    narrow them. A script none of the names is for does not run (selection.scripts), and one
-    they reach no check of is no failure unless none reach one. Fails if any script does.
-    """
-    with tempfile.TemporaryDirectory(prefix="beryl-ui-test-") as tmp:
-        names = only
-        if chooser:
-            names = chooser.run([recorded], only)
-            if not names:
-                return 0
-            if not only:
-                chosen = Path(tmp) / "chosen.txt"
-                chosen.write_text("".join(f"{t}\n" for t in names))
-                env = {**env, selection.CHOSEN_ENV: str(chosen)}
-        code = 0
-        # Whether a script reached a check: a filter goes to every script it may be for.
-        reached = False
-        with served_ui(env) as url:
-            for script, own in selection.scripts(names).items():
-                ran = subprocess.run(
-                    ["node", str(paths.REPO / script), url, str(recorded)]
-                    + (own if only else []),
-                    cwd=paths.UI,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    check=False,
-                )
-                if ran.returncode == selection.NONE_REACHED:
-                    continue
-                reached = True
-                code = code or ran.returncode
-        if only and not reached:
-            print(f"ui-test: no check's title contains {' or '.join(only)}")
-            return 1
-        return code
+    all. A script none of the names is for does not run (`scripts`), and one they reach no
+    check of is no failure unless none reach one. Fails if any script does."""
+    code = 0
+    # Whether a script reached a check: a filter goes to every script it may be for.
+    reached = False
+    with served_ui(env) as url:
+        for script, own in scripts(only).items():
+            ran = subprocess.run(
+                ["node", str(paths.REPO / script), url, str(recorded)] + own,
+                cwd=paths.UI,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
+            if ran.returncode == NONE_REACHED:
+                continue
+            reached = True
+            code = code or ran.returncode
+    if only and not reached:
+        print(f"ui-test: no check's title contains {' or '.join(only)}")
+        return 1
+    return code
 
 
 def ui_play(args: argparse.Namespace) -> int:
@@ -347,7 +325,7 @@ def ui_play(args: argparse.Namespace) -> int:
     try:
         env = browser_env()
         if record_fixtures(recorded, names):
-            code = checks.CANNOT_RUN
+            code = deps.CANNOT_RUN
         else:
             with served_ui(env) as url:
                 code = subprocess.run(
@@ -361,7 +339,7 @@ def ui_play(args: argparse.Namespace) -> int:
                 ).returncode
     except UiError as e:
         print(f"ui-play: {e}", file=sys.stderr)
-        code = checks.CANNOT_RUN
+        code = deps.CANNOT_RUN
     if code != 0:
         print("ui-play: FAILED", file=sys.stderr)
     return code
@@ -374,7 +352,7 @@ def ui_perf(args: argparse.Namespace) -> int:
     try:
         env = browser_env(args.browser)
         if record_fixtures(recorded, list(args.fixtures)):
-            return checks.CANNOT_RUN
+            return deps.CANNOT_RUN
         # React's development build is several times slower than the app's.
         built = subprocess.run(
             [system.npm_bin("vite"), "build"],
@@ -402,7 +380,7 @@ def ui_perf(args: argparse.Namespace) -> int:
             ).returncode
     except UiError as e:
         print(f"ui-perf: {e}", file=sys.stderr)
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
 
 
 def ui_live(args: argparse.Namespace) -> int:
@@ -481,12 +459,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p = sub.add_parser("ui-shots", help="screenshot UI states headless (ui/shots.json)")
     p.add_argument("only", nargs="*", help="shot names; all of them by default")
     p.add_argument(
-        "--select",
-        action="store_true",
-        help="only the shots the branch's change can break, as many as fit (selection.py)",
-    )
-    p.add_argument("--affected", metavar="BASE", default="", help=AFFECTED_HELP)
-    p.add_argument(
         "--views",
         metavar="FIXTURE",
         help="list a fixture's views with the index each route's &at= takes",
@@ -501,12 +473,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         help="run only the checks whose titles contain one of these (any case); a verb "
         "check by its name, verb:<verb>/<seat>/<layout>, or the start of it",
     )
-    p.add_argument(
-        "--select",
-        action="store_true",
-        help="only the checks the branch's change can break, as many as fit (selection.py)",
-    )
-    p.add_argument("--affected", metavar="BASE", default="", help=AFFECTED_HELP)
     p.set_defaults(func=ui_test)
     p = sub.add_parser(
         "ui-play",

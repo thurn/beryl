@@ -65,7 +65,7 @@ def ensure() -> int:
     code = start()
     if code != 0:
         return code
-    # From the machine's root: the sweep calls this from a worktree that the machine does not
+    # From the machine's root: it may be called from a worktree that the machine does not
     # mount, so the checkout's own path does not exist there.
     return bench.vm_shell(provision_script(bench.toolchain()), NAME, "/")
 

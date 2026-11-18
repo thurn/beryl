@@ -40,6 +40,16 @@ ENACT: re.Pattern[str] = re.compile(
     r"(?:(?P<verb>start|claim|close)\s+(?P<bead>" + ticket_ids.ID + r")(?=$|[\s;&|])"
     r"|worktree\s+create\s+(?P<name>[\w.-]+))"
 )
+# `ignite start <ticket>` at the start of a shell command or after `&&`, `;`, `|` or `(`. It
+# claims the ticket and opens its window, as `enact start` did. Ignite's other verbs name no
+# ticket (they use the session's tree), so a window ends at the next `start` or the
+# transcript's end.
+IGNITE: re.Pattern[str] = re.compile(
+    r"(?:^|[;&|(\n])\s*(?:(?:eval|timeout\s+\S+|[A-Za-z_]+=\S*)\s+)*"
+    r"\"?(?:\S*/)?ignite(?:\.exe)?\"?\s+start\s+(?P<bead>"
+    + ticket_ids.ID
+    + r")(?=$|[\s;&|])"
+)
 # The ticket `enact close --continue` claimed, in its printed result: the first `"id"` key in
 # its `"next"` object, which may follow other keys. A quote inside a JSON string is escaped,
 # so text in a description cannot match.
@@ -87,8 +97,8 @@ def transcript_of(path: Path) -> tuple[str, str | None]:
 
 
 def enact_commands(command: str) -> list[tuple[str, str]]:
-    """The `(verb, bead)` of each Enact command in a shell command, with `open` for start and
-    claim, `worktree` with the worktree's name for `enact worktree create`, and `continue`
+    """The `(verb, bead)` of each Enact command, and each `ignite start`, in a shell command,
+    with `open` for start and claim, `worktree` with the worktree's name for `enact worktree create`, and `continue`
     beside the `close` of an `enact close --continue`."""
     found: list[tuple[str, str]] = []
     for match in ENACT.finditer(command):
@@ -101,6 +111,7 @@ def enact_commands(command: str) -> list[tuple[str, str]]:
         rest = re.split(r"[;&|\n]", command[match.end() :], maxsplit=1)[0]
         if verb == "close" and "--continue" in rest.split():
             found.append(("continue", bead))
+    found += [("open", m.group("bead")) for m in IGNITE.finditer(command)]
     return found
 
 

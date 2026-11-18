@@ -8,8 +8,7 @@ not, how many of each were late, and the Mac's load.
 
 A simulator or emulator draws in software on a loaded Mac, so its numbers say nothing about a
 phone's speed. What they do show is the difference between frames drawn while the search runs
-on every core and frames drawn while it does not. This is a measurement, gated on nothing and
-in neither the lane nor the sweep.
+on every core and frames drawn while it does not. This is a measurement, gated on nothing and not part of any automatic check.
 """
 
 from __future__ import annotations

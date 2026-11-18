@@ -30,7 +30,10 @@
 # `counts:rollouts`, and each family's present cost against its ratio there, as
 # `counts:family/<name>`. The count is of the aarch64 build under Callgrind, so only macOS runs
 # it. A rise past the trend's bounds that still passes files one `count-creep` ticket and fails
-# nothing; a count far under the bar files one `count-lower` ticket.
+# nothing; a count far under the bar files one `count-lower` ticket. The count runs in the
+# `beryl-bench` Lima machine, which mounts only the main checkout: when the machine is missing,
+# stopped, out of reach or cannot see the tree, the adapter reports the check incomplete with
+# the reason (`cannot-run:`), which is never a failure.
 [family.counts]
 kind = "regression"
 adapter = "jsonl"
@@ -163,7 +166,9 @@ inputs = [
 ]
 
 # The iroh transport: building `beryl_link_iroh` and playing its tests over loopback with the
-# relay off, as the nightly did. Only the Mac ran it.
+# relay off, as the nightly did. Only the Mac ran it. It is a family of its own, and every other
+# Rust build product excludes the package, because a cold build of the iroh dependency alone
+# outlasted the old fast check's whole budget.
 [family.iroh]
 kind = "regression"
 adapter = "nextest"

@@ -30,7 +30,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .. import checks
+from .. import deps
 from . import app, live, paths
 
 # The agent the stand-in plays against, which the start screen lists only when `--offer`
@@ -448,7 +448,7 @@ def stand_in_arguments(parser: argparse.ArgumentParser) -> None:
 
 def run_stand_in(args: argparse.Namespace) -> int:
     if not args.no_build and app.build() != 0:
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
     profile = f"b3d-stand-in-{os.getpid()}"
     folder: Path | None = None
     first: Running | None = None

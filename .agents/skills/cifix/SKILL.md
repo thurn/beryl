@@ -1,252 +1,83 @@
 ---
 name: cifix
-description: Work the open tickets that Beryl's CI files by itself — flaky checks, checks to cut for slow CI's budget, fast-check budget audits, browser-sweep failures, nightly failures and unclaimed slow-CI Steward tickets — as an Enact run. Groups them by shared cause, routes them into lanes and model tiers, then runs them through /enact-plan's vizier loop, where worker sessions fix the cause, replace a check with a deterministic test, delete it or move it to the nightly. Use when asked to work, fix or clear the CI tickets, flaky checks, CI cuts or sweep or nightly failures, or to run /cifix.
+description: Beryl's guide to working a ticket about a check — a regression that tip verification found on staging, a flaky or hung check, or a check that costs much and never catches anything. Adds what is Beryl's to `ignite guide regression` and `ignite guide checks`: where to reproduce, what a fix must add, the order of remedies, protected checks and what must still cover a deleted browser check. Use when working such a ticket, or when asked to fix a failing, flaky or costly check, or to run /cifix.
 ---
 
-# Fixing the tickets CI files
+# Fixing a check or what it caught
 
-Beryl's checks file tickets by themselves. Each kind has its own label, and
-`just beads` leaves all of them out:
+Ignite files tickets about checks by itself: a regression ticket when tip
+verification finds a check failing on `staging`, naming the commit or range it
+blames, and an improvement ticket for a check that flakes, hangs or costs much
+and never catches anything. `ignite start` on such a ticket names the guide to
+read first. `ignite guide regression` and `ignite guide checks` hold the general
+rules, and `ignite why <check>` prints a check's record: its runs, costs,
+failures and where it runs. This skill adds only what is Beryl's.
 
-| Label             | Filed by                 | What it asks for                                                                                    |
-| ----------------- | ------------------------ | --------------------------------------------------------------------------------------------------- |
-| `flaky-check`     | `flaky.py`               | A check failed, then passed on a rerun of the same tree. Find the cause; fix, replace or delete it. |
-| `ci-cut`          | `budget.py` (`file_cut`) | Slow CI's full run is over its CPU budget. Take the listed low-value checks out of slow CI.         |
-| `check-budget`    | `budget.py` (`report`)   | A fast check (`by check`) ran over its 60 s budget. Speed up, move or delete its slowest steps.     |
-| `sweep-failure`   | `sweep.py`               | The 3-hourly browser sweep failed checks on staging, bisected to a commit or range. Fix the break.  |
-| `nightly-failure` | `nightly_failures.py`    | The nightly (fuzz, motion capture, oracle sweep) failed checks on staging. Fix the break.           |
-| `role:steward`    | Enact's slow-CI runner   | Slow CI failed (P0, titled "Fix slow CI failure on …"). `master` stays put until it is fixed.       |
+Each check family is declared in `ignite/checks/*.toml`, with the reason for
+each setting in a comment beside it. Read the family's declaration before
+changing how its checks run.
 
-The sweep and nightly tickets also carry `role:steward`. `docs/checks.md`
-describes each source ("Flaky checks", "Budgets and hang limits", the browser
-sweep and the nightly).
+## A failure: a regression ticket
 
-`/cifix` is an Enact run, shaped like `/bugfix`. The session that runs it is the
-🔮 **vizier** of `/enact-plan` (`~/enact/skills/enact-plan/SKILL.md`). It plans
-the run, then hands every ticket to worker sessions, and it never fixes or
-closes a ticket itself. Workers are Enact sessions. A `role:steward` ticket runs
-as a Steward (`steward.md` in Enact's roles) and every other ticket as an
-executor; each also follows [Worker: one CI ticket](#worker-one-ci-bead) below.
+The check really failed on `staging`, so something broke.
 
-`/enact-plan` cannot be invoked as a skill by a model, so read its `SKILL.md`
-(resolve `ENACT` from it as it says) and follow it. The user's `/cifix`
-invocation is the invocation `/enact-plan` expects. It authorizes the run's
-sessions, and any parallelism, **light** keyword or other instructions given
-with `/cifix` pass straight through. The input is the tickets chosen in
-[Vizier: planning the run](#vizier-planning-the-run), handled as "Several
-tickets". Everything `/enact-plan` says about pre-flight, permission mode, the
-Claude Desktop session pool, registering the run, the loop, titles and the final
-report applies unchanged. In Claude Desktop the pool can only be started in the
-turn the user invoked you, so do all of the planning below in that turn.
-
-Nothing in this workflow waits for the user.
-
-Run `just ticket-backend` and use the executable from its `tk` field for the
-ticket commands below.
-
-## One group in one session
-
-The scheduled routine `beryl-ci-steward-watch` runs every 30 minutes on this
-Mac. A scheduled run cannot start other sessions, so it works the CI tickets
-itself, one group per run, instead of running the vizier. Slow-CI Steward
-tickets come first; the routine handles those before it reaches this section. A
-session working alone this way:
-
-1. **Chooses one group.** Take the tickets that are waiting for a session (open
-   with no assignee, no parent, not deferred). Group them as in planning step 2
-   and pick the group with the highest-priority ticket, at most four tickets.
-   Read only as far as grouping needs.
-2. **Claims them** with `enact claim <ticket>` for each. Exit code 3 means
-   another session got that ticket first: drop it from the group, and stop if
-   none are left.
-3. **Works them** as [Worker: one CI ticket](#worker-one-ci-bead) says, in one
-   worktree, then lands the change with `enact push`. There is no vizier, so
-   when the output includes `watch_ci`, watch slow CI with
-   `enact ci --wait <sha>` until it passes, and fix any Steward ticket it files
-   as `steward.md` says.
-4. **Closes** each ticket with
-   `enact close <ticket> --reason "<cause and action>"`, or releases it as
-   "Closing" below says.
-5. **Leaves notes for the next run.** On each waiting ticket outside its group
-   whose cause it noticed while grouping, it appends the suspected cause and
-   group, so the next run starts there. Use the notes commands below.
-
-## Where the evidence is
-
-- The ticket: the checks it names (in its description and in its metadata:
-  `beryl_flaky_check`, `beryl_nightly_checks`, or for a cut, its checks with
-  their runs, catches and CPU seconds), the host, the commit or range, and an
-  output tail. Its comments list later runs that failed or flaked again.
-- The run log, one file per UTC hour in `$BERYL_CACHE/ci/runs/`: one JSON line
-  per check per run (`runlog.py`, `runstore.py`). Filter it with `python3` or
-  `jq` by `check`, `commit` and `script` (`check`, `ci`, `nightly`,
-  `sweep-run`). A flaky check's failing record is followed by a pass of the same
-  check on the same `tree`. Other checks that failed in the same run are clues
-  to a shared cause: a loaded machine, a full disk, a stuck page slot.
-- `just ci-report` sums the run log over 30 days: each check's runs, failures,
-  verdicts and timings (`--json` for JSON, `--prune` for what the pruning rule
-  would do). A `catch` verdict means the check once caught a real bug.
-  `just ci-value` scores each check by bugs caught per CPU second.
-- Slow CI's latest log: `.git/enact/ci.log` in the main checkout
-  (`enact ci --status` prints its path). It holds only the latest run.
-- The sweep's record: `$BERYL_CACHE/sweep/log.jsonl` and `last-output.txt`. The
-  nightly's: `$BERYL_CACHE/nightly`.
-
-## Vizier: planning the run
-
-This is `/enact-plan`'s pre-flight. Start with its steps 1 to 3 (title, update
-Enact, project setup, permission mode), then:
-
-1. **Choose the tickets.** List each label above with
-   `tk list --label <label> --status open --json`. Leave out tickets another
-   session or vizier is working (in progress or assigned), and Steward tickets
-   whose `enact_ci_host` is another machine, since only that machine can
-   reproduce them. Name both in your summary. A ticket filed by hand with one of
-   these labels belongs here too.
-
-2. **Find the shared causes.** A day of CI tickets usually has far fewer causes
-   than tickets. Read each ticket and its run-log records, then group tickets
-   that share a cause. Typical groups:
-
-   - **One break, several reports.** A sweep ticket, a nightly ticket and a
-     Steward ticket whose checks fail at the same commit usually share one
-     culprit. Fix it once.
-   - **Several flaky checks in one feature**, for example every check of the
-     pile viewer. Suspect one race in the product or in that feature's test
-     helper before suspecting each check.
-   - **A step that has no reason to be flaky:** formatters, lint, `file-length`,
-     `just --fmt`, pytest on pure functions. A flake there is almost always the
-     environment: a timeout under load, files another process changes during the
-     run, a temporary path or cache shared between worktrees, or a tool that
-     downloads something. The fix goes in the step or in `tools/`, and the step
-     stays. Never delete a lint step.
-   - **A cut or budget ticket and a flaky ticket naming the same check.** Taking
-     the check out of the run settles both.
-   - **One check alone:** a test that depends on timing (a wall-clock threshold,
-     a sleep, a first animation frame, a short `until`), on order (a hash map's
-     iteration order, two processes writing one file), or on the machine (free
-     disk, a port, a browser page slot).
-
-   Read the code only as far as you need to name the suspected cause and where
-   it is. Do not edit code, open a worktree or start reproducing.
-
-3. **Write each ticket's context packet.** Add its group, the suspected cause,
-   the files and tests involved, the run-log records that show it, and the line
-   "Follow the `cifix` skill's 'Worker: one CI ticket' section." For tickets,
-   read the existing notes and version with `tk show <id> --json`. Append the
-   packet to those notes and save with
-   `tk update <id> --notes "<combined notes>" --if-version <version>`.
-
-4. **Group, route and lane.** The tickets of one group share a `lane:<name>` so
-   one session finds the cause once and closes each ticket against it. Give
-   every ticket a tier:
-
-   - `tier:opus` for an unknown or shared cause, a suspected race in the
-     product, a break in rules or UI code, a group of browser checks, and every
-     `ci-cut` and `check-budget` ticket (choosing what a replacement test must
-     keep is judgment).
-   - `tier:sonnet` for a single check whose cause you could already name, such
-     as a sleep to replace with a wait on an event.
-   - `tier:light` only to delete a check that has no `catch` verdict and that
-     nothing else depends on.
-
-   Never use `tier:fable` unless the user asked for it. Then run `/enact-plan`'s
-   "Lane and tier pass": two to four tickets of one tier on the same code share
-   a lane, and a group larger than four becomes two lanes with a dependency
-   between them (`tk dep add <dependent> <prerequisite>`). A Steward ticket is
-   P0 and blocks `master`: give it no dependency on anything else, and put it
-   first in its lane.
-
-5. **Run them.** Continue with `/enact-plan` at "A ticket", case "Several
-   tickets": create the run epic (title `CI beads <date>`; its description lists
-   the groups, their suspected causes and the tier policy above), reparent each
-   ticket into it, then "Finish planning" and the loop. Add no Wardens, Masons,
-   Sages or Archivist unless the invocation asks.
-
-6. **Report.** When the loop returns `done` (or the run stops), give a short
-   outcome for every ticket: the cause, and what changed (the product or a step
-   fixed; a check replaced, deleted or moved to the nightly), or that it was
-   handed back unfinished.
-
-## Worker: one CI ticket
-
-Your Enact role files still apply: worktree, `enact push`, the handoff comment
-and `enact close` (a Steward also follows `steward.md`). Read the ticket's notes
-first: the vizier recorded the suspected cause and its group. Then follow the
-part for its kind.
-
-### A failure: `role:steward`, `sweep-failure`, `nightly-failure`
-
-These report checks that really failed on staging, so something broke.
-
-1. **Reproduce** with the command the ticket gives (its acceptance names it), on
-   the culprit commit the ticket names and on the staging tip.
+1. **Reproduce** it with `ignite test <check>` in your tree, at the culprit
+   commit the ticket names and at the staging tip. Read the ticket that landed
+   the culprit commit.
 2. **Find the cause.** When the product broke, fix the product: a rules engine
-   bug also gets an entry in `docs/bugs.md`, and a UI break adds the broken
-   state as a fixture or spec moment (AGENTS.md, Checks). When the check is
-   wrong and the product is right, fix or replace the check as in "A check to
-   change" below. A failure caused by this machine's state (a full disk, a stale
-   cache) gets fixed in `tools/` so it cannot recur.
-3. **Verify** that the reproduce command passes at the staging tip.
+   bug also gets an entry in `docs/bugs.md` (root `AGENTS.md`, Conventions), and
+   a UI break adds the broken state as a fixture or spec moment (root
+   `AGENTS.md`, Checks). When the check is wrong and the product is right, fix
+   or replace the check as in "A check to change" below. A failure caused by a
+   machine's state, such as a full disk or a stale cache, is fixed in `tools/`
+   or in the family's declaration, so it cannot recur.
+3. **Verify** that `ignite test <check>` passes at the staging tip.
 
-### A check to change: `flaky-check`, `ci-cut`, `check-budget`
+## A check to change: flaky, hung or costly
 
-These name checks that pass but cost too much: a flake, CPU time in slow CI, or
-seconds in the fast check.
+The check passes but costs too much: a flake, a hang, or instructions spent for
+nothing caught.
 
-1. **Find the check.** When a flaky ticket names a whole step (its title says
-   "the flaky test in step"), the step reported no checks of its own. Find which
-   test or command inside it failed from the evidence above. A `check-budget`
-   ticket lists each lane's slowest steps.
-
-2. **For a flake, find the cause.** Look for the patterns in planning step 2.
-   Try to reproduce it under load: run the check 10 to 20 times beside
-   `just test-rust` or a full `just ui-test`. Load is the normal state of this
-   machine (20 to 40 is typical), so a check has to pass under it. A flake you
-   cannot reproduce may still have a cause you can see in the code.
-
-3. **Choose one of these, in this order,** for each check, and record which and
-   why on the ticket:
-
-   - **Fix the product** when a flake comes from a race in Beryl itself, such as
-     a view that arrives before the state it shows. Players hit it too.
+1. **Find the check.** When the ticket names a whole step that reported no
+   checks of its own, find which test or command inside it failed from the
+   ticket's output and `ignite why`.
+2. **For a flake, find the cause.** Suspect, in this order: a race in the
+   product or in one feature's test helper (several flaky checks in one feature
+   usually share it); for a step that has no reason to be flaky, such as a
+   formatter, a lint, `file-length` or pytest on pure functions, the
+   environment (a timeout under load, files another process changes during the
+   run, a temporary path or cache shared between trees, a download); then the
+   check alone (a wall-clock threshold, a sleep, a first animation frame, a hash
+   map's order, two processes writing one file, free disk, a port, a browser
+   page). Try to reproduce it under load: run it 10 to 20 times beside a full
+   `just test-rust` or `just ui-test`. Load of 20 to 40 is this machine's normal
+   state, so a check has to pass under it.
+3. **Choose one remedy, in this order,** and record which and why on the
+   ticket:
+   - **Fix the product** when the flake is a race in Beryl itself, such as a
+     view that arrives before the state it shows. Players hit it too.
    - **Fix the environment** when a step that should be deterministic flaked
      because of a shared file, a timeout, the disk or the network. Keep the
-     step.
-   - **Make it cheaper or replace it** when a fast, deterministic test can keep
-     most of what the check protects: a Rust unit test, a Node test with no
-     browser, a check against a recorded fixture, or a browser check on the
-     paused clock that waits for an event instead of a time. Write it, then
-     delete the old check. Count work instead of timing it. Keep a timeout only
-     to catch a hang, with about ten times the loaded duration. Loosening a
-     threshold, adding a retry or raising a budget is not a fix.
-   - **Move it.** A `check-budget` step can move from the fast check to slow CI
-     (`verdicts.SLOW_ONLY`). A check that once caught a bug (a `catch` verdict)
-     can move from slow CI to the nightly (a step in `nightly.STEPS`). A check
-     the fast check also runs leaves slow CI alone and stays in the fast check
-     (`verdicts.FAST_ONLY`, for a Rust or Python test, a script check or
-     `ui:test`).
+     step; never delete a lint.
+   - **Replace it with a cheaper deterministic test** that keeps most of what
+     the check protects: a Rust unit test, a Node test with no browser, a check
+     against a recorded fixture, or a browser check on the paused clock that
+     waits for an event instead of a time. Count work instead of timing it.
+     Keep a timeout only to catch a hang, at about ten times the loaded
+     duration. Then delete the old check.
    - **Delete it** when it has never caught a bug.
 
-   A browser check you change follows `ui/AGENTS.md`. When you delete one, make
-   sure the generic UI checks (overlap, off-screen, reachability, duplicate
+   Loosening a threshold, adding a retry and raising a limit are not remedies.
+4. **Never cut a protected check**: the families and checks listed under
+   `protected` in `ignite.toml` (the app starting, the `ui-smoke` checks,
+   clippy, pyre, the UI's typecheck, the source rules).
+5. **A browser check** you change follows `ui/AGENTS.md`. When you delete one,
+   make sure the generic UI checks (overlap, off-screen, reachability, duplicate
    objects, page errors, motion) still cover what it showed, and that no fixture
-   or spec moment is left unused. Never cut a check in `budget.KEEP`.
+   or spec moment is left unused.
+6. **Verify.** Run a replaced or changed check 10 times under the same load as
+   step 2 and record the passes on the ticket. A deleted check needs no runs.
 
-4. **Verify.** Run a replaced or changed check 10 times under the same load as
-   step 2 and record the passes. A deleted or moved check needs no runs. For a
-   `check-budget` ticket, record the step's seconds before and after.
-
-### Closing
-
-Land the change with `enact push`. Then post the handoff comment and run
-`enact close <ticket> --reason "<cause and action>"` (with `--continue` in a
-lane). When one cause closes several tickets in your lane, close each with the
-same reason and name the commit. Enact's vizier waits for slow CI, so ignore
-`watch_ci`.
-
-A ticket you cannot finish goes back to the queue. Record what you tried, the
-cause you suspect and the next step with `tk comment <id> "..."`. Run
-`enact release <id> --reason "..."`, then detach it with
-`tk update <id> --parent ""`. Retitle ⛔ as Enact's role files say for a release,
-and end your turn with a summary of where the ticket stands.
+Then land with `ignite land -m "<cause and remedy>"`. When one cause settles
+several tickets, land once and close the others with
+`ignite close -m "<cause>, landed in <commit>"`.

@@ -10,7 +10,7 @@
   Each worktree builds into a target dir of its own there: Cargo names a path package's
   artifacts the same in every worktree and trusts mtimes, so a shared dir would let one
   worktree link another's code. Runs take turns under a lock in the VM.
-- `count-gate`, slow CI's `counts` lane, counts one benchmark there and fails when it rises past
+- `count-gate`, which Ignite's `counts` family runs, counts one benchmark there and fails when it rises past
   the bar in `beryl_bench/count-gate.toml`. With `--family <name>` it counts a family's paired
   rollouts instead, on both sides, and fails when their ratio passes the family's bar there.
 
@@ -32,13 +32,9 @@ import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from . import count_trend, paths, system, vm_host, warm
-from .reruns import CANNOT_RUN
-
-if TYPE_CHECKING:
-    from .checks import Lane
+from . import paths, system, vm_host
+from .deps import CANNOT_RUN
 
 # Compilers and the like, named in the load report: their bursts come and go faster than one
 # CPU sample.
@@ -46,7 +42,7 @@ BUILD_PROCESSES = ("rustc", "cargo", "clippy-driver", "clang", "swift-frontend")
 
 VM = "beryl-bench"
 VM_LOCK = "$HOME/bench-count.lock"  # held while a run provisions, builds and counts
-# Held shared by each run someone waits for, so that a sweep's run goes after it ([`locked`]).
+# Held shared by each run someone waits for, so that a low-priority run goes after it ([`locked`]).
 VM_TURN = "$HOME/bench-turn.lock"
 # Inside the VM, which mounts the checkout read-only, each worktree has a target dir and a
 # Gungraun home named after it, so its artifacts and "old" results are its own.
@@ -233,7 +229,6 @@ def timing_build(extra: list[str]) -> tuple[list[str], dict[str, str]]:
 
 
 def bench(args: argparse.Namespace) -> int:
-    warm.ensure()
     extra: list[str] = args.extra
     profile, env = timing_build(extra)
     env = {**os.environ, **env}
@@ -301,7 +296,7 @@ def vm_command(script: str, vm: str = VM, workdir: str | None = None) -> list[st
     """`script` run in `vm`'s login shell from `workdir`, by default this checkout's rust/
     directory. That path exists in the machine only when this checkout is in the main checkout,
     the one directory the machine mounts, so a script that may run from a worktree elsewhere
-    (the Beryl 3D sweep's) passes `/`."""
+    (Beryl 3D's counts) passes `/`."""
     where = str(paths.RUST) if workdir is None else workdir
     if system.WINDOWS:
         # Windows' command line would mangle the script's quotes on the way through wsl.exe:
@@ -328,10 +323,11 @@ def vm_shell(script: str, vm: str = VM, workdir: str | None = None) -> int:
 
 def locked(script: str, background: bool | None = None) -> str:
     """`script` holding the VM's lock, which the kernel drops when the shell exits, however. A
-    run someone waits for holds `VM_TURN` shared while it waits and runs; a sweep's run
+    run someone waits for holds `VM_TURN` shared while it waits and runs; a low-priority run
     (`background`, by default `vm_host.background`) takes `VM_LOCK` only while it can hold
     `VM_TURN` alone. `flock` hands a freed lock to any waiter, so a worker's `just b3d gate
-    --gpu` once waited 66 minutes behind sweep steps. A run that has started still goes first.
+    --gpu` once waited 66 minutes behind low-priority runs. A run that has started still goes
+    first.
     """
     if background is None:
         background = vm_host.background()
@@ -430,9 +426,9 @@ def vm_ensure(vm: str = VM, cpus: int = 4, memory_gib: int = 4) -> int:
     if not output("which", "limactl").strip():
         log("Lima is missing: brew install lima")
         return 2
-    # This command uses the machine until it exits: its CPUs count against the pool, and it is
-    # not stopped as idle meanwhile (vm_host.py).
-    vm_host.join(vm, cpus)
+    # This command uses the machine until it exits, so it is not stopped as idle meanwhile
+    # (vm_host.py).
+    vm_host.join(vm)
     status = vm_host.status(vm)
     checkout = paths.main_checkout() or paths.REPO
     size = [f"--cpus={cpus}", f"--memory={memory_gib}"]
@@ -475,11 +471,11 @@ def bench_count(args: argparse.Namespace) -> int:
     return vm_shell(script)
 
 
-# The instruction-count gate: slow CI's `counts` lane. Its bar, and when to move it, are in
+# The instruction-count gate. Its bar, and when to move it, are in
 # GATE_FILE's comments.
 
 GATE_FILE: Path = paths.RUST / "crates" / "beryl_bench" / "count-gate.toml"
-# Its own target dir and Gungraun home, shared by CI's throwaway worktrees so the build stays
+# Its own target dir and Gungraun home, shared by throwaway worktrees so the build stays
 # warm and they don't each leave one in the VM.
 GATE_NAME = "count-gate"
 
@@ -625,25 +621,6 @@ def judge_family(
     return True, said
 
 
-def lane() -> Lane:
-    """Counts the rollout benchmark's instructions in the bench VM (`by count-gate`) and
-    fails a rise past the bar in `beryl_bench/count-gate.toml`, then each family's present
-    cost (`by count-gate --family <name>`) against its bar there. The VM builds into its own
-    target dir, so it needs no warm clone."""
-    from .checks import BY, Lane  # It imports this module.
-    from .reruns import whole
-
-    lane = Lane("counts").step("count-gate", [*BY, "count-gate"], rerun=whole)
-    families = [
-        arg
-        for family in load_families(GATE_FILE.read_text())
-        for arg in ("--family", family.name)
-    ]
-    if families:
-        lane.step("count-gate-families", [*BY, "count-gate", *families], rerun=whole)
-    return lane
-
-
 def vm_ready() -> int:
     """0 when the bench VM can count now, else `CANNOT_RUN` with the reason logged, so a VM
     problem is not rerun, judged or bisected as a count that failed (vm_host.vm_failed).
@@ -654,7 +631,7 @@ def vm_ready() -> int:
         why = "the gate's bar is for Apple silicon; `just bench-count` compares here"
     elif not system.WINDOWS and shutil.which("limactl") is None:
         why = "Lima is missing: brew install lima, then `just bench-count` once"
-    elif vm_host.status(VM) is None:  # Creating it takes minutes, past CI's deadline.
+    elif vm_host.status(VM) is None:  # Creating it takes minutes, too long for a gate.
         why = f"no {VM} VM: run `just bench-count` once to create it"
     elif not vm_host.vm_sees(paths.RUST, VM):
         mounts = ", ".join(map(str, vm_host.vm_mounts(VM)))
@@ -738,7 +715,7 @@ def count_gate(args: argparse.Namespace) -> int:
     ok, message = judge(gate, measured)
     log(f"{gate.benchmark}: {message}")
     if args.measure:
-        # Ignite's `counts` family judges the trend itself, filing through `ignite ticket`.
+        # Ignite's `counts` family judges the trend itself and files its tickets.
         Path(args.measure).write_text(
             json.dumps(
                 {
@@ -751,8 +728,6 @@ def count_gate(args: argparse.Namespace) -> int:
             + "\n"
         )
         return 0 if ok else 1
-    for line in count_trend.report(measured, gate.instructions, ok):
-        log(line)
     return 0 if ok else 1
 
 

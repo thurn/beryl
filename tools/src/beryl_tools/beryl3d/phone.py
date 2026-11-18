@@ -11,7 +11,7 @@ A phone has no recordings pack and no engine to build one, so each recording is 
 file on the Mac (`beryl3d --fixture <name> --write-fixture <path>`) and copied into the app's
 data folder, where the app reads it and writes its frame log.
 
-These commands are in neither the lane nor the sweep: milestone 4 adds them.
+These commands are not part of any automatic check.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any
 
-from .. import checks, mobile, paths as repo_paths, system
+from .. import deps, mobile, paths as repo_paths, system
 from . import app, paths
 from .command import Command
 from .phone_log import (
@@ -85,9 +85,6 @@ def library(target: str, crate_type: str, release: bool, env: dict[str, str]) ->
     """Builds beryl_3d's library for `target` as a `staticlib` or `cdylib`, and returns the
     file. Cargo leaves a crate type the manifest does not declare in `deps`, so its path is
     read from cargo's messages."""
-    from .cli import warm_target  # cli imports this module.
-
-    warm_target()
     command = [
         *["cargo", "rustc", "-p", "beryl_3d", "--lib", "--crate-type", crate_type],
         *["--target", target, "--message-format", "json-render-diagnostics"],
@@ -711,7 +708,7 @@ def run_android_smoke(args: argparse.Namespace) -> int:
 def checked(
     run: Callable[[argparse.Namespace], int],
 ) -> Callable[[argparse.Namespace], int]:
-    """`run`, with a build or tool that cannot run reported as `checks.CANNOT_RUN`."""
+    """`run`, with a build or tool that cannot run reported as `deps.CANNOT_RUN`."""
 
     def wrapped(args: argparse.Namespace) -> int:
         try:
@@ -719,7 +716,7 @@ def checked(
         except SystemExit as error:
             if isinstance(error.code, str):
                 print(error.code, file=sys.stderr)
-                return checks.CANNOT_RUN
+                return deps.CANNOT_RUN
             raise
 
     return wrapped

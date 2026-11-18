@@ -18,10 +18,8 @@ fails, is on the divergence allowlist (data/oracle-divergences.json: where the o
 with the Comprehensive Rules citation that says so) or is unsupported (outside the exporter's
 vocabulary, with the reason). It fails on any failure the allowlist does not explain. Logs and
 the full results go to oracles/logs. Forge's AI also plays a few games of the deck, unless
-`--no-sim`. With `--lock-wait`, a run that finds another holding the oracles that long skips
-every scenario and passes: the fast check's oracle lane for changed cards does that.
-`--select` (slow CI) and `--new` (the fast check) play only the scenarios new to the oracles
-(oracle_memory.py).
+`--no-sim`. With `--lock-wait`, a run that finds another holding the oracles that long gives up
+with `deps.CANNOT_RUN` instead of waiting further.
 """
 
 from __future__ import annotations
@@ -43,10 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-# The orchestration modules (`checks`, `deadline`, `oracle_selection`, `oracle_memory` and
-# `card_diverge`, which imports the checks) are imported inside `oracle`, so that the Ignite
-# adapter (ignite/oracle.py) can use the functions here without importing them.
-from . import card_store, cards, forge, paths, system
+from . import card_store, cards, deps, forge, paths, system
 from . import (
     oracle_exports,
     xmage,
@@ -535,9 +530,9 @@ def apply_gaps(oracle: str, result: dict[str, object]) -> list[str]:
 def dump_scenarios(path: Path, log: Path, cards: list[str]) -> list[card_store.Json]:
     """Every card scenario and the generated ones, as `beryl_scenario dump` writes them, and
     those generated for each of `cards` complete from the card store (store_cards.py). The
-    binary is the one the rust lane's tests step builds (`paths.CLI_BUILD`, at opt-level 1):
-    `cargo run -p beryl_cards` built an unoptimized one, whose dump took 48 s of the 180 s the
-    fast check allows, against 4.5 s, and compiled the rules and card crates a second time.
+    binary is the one `paths.CLI_BUILD` builds, at opt-level 1: `cargo run -p beryl_cards`
+    built an unoptimized one, whose dump took 48 s against 4.5 s, and compiled the rules and
+    card crates a second time.
     """
     run(paths.CLI_BUILD, log, paths.RUST, CARGO_TARGET_DIR=str(paths.RUN_TARGET))
     binary = system.exe(paths.RUN_TARGET / "debug" / "beryl_scenario")
@@ -659,8 +654,7 @@ def check_xmage(prepared: oracle_exports.Exports, log: Path) -> dict[str, object
 
 
 def oracle(args: argparse.Namespace) -> int:
-    from . import card_diverge, checks, deadline, oracle_memory, oracle_selection
-    from .oracle_selection import skip_all
+    from . import card_diverge
 
     work = root() / "run"
     work.mkdir(exist_ok=True)
@@ -668,47 +662,24 @@ def oracle(args: argparse.Namespace) -> int:
     built = False
     try:
         require_built()
-        # Inside a fast check, the scenarios that fit its target (deadline.py) are played, with
-        # the records to plan with read while the scenarios dump.
-        records = deadline.Records("oracle") if deadline.left() is not None else None
         # The dump needs no oracle, so it runs before the wait for the lock, into a file of its
         # own: two runs may dump at once.
         with tempfile.TemporaryDirectory(prefix="beryl-oracle-") as dump:
             entries = dump_scenarios(
                 Path(dump) / "scenarios.json", log_dir() / "dump.log", args.cards
             )
-        # Cards named with --select are a rerun's or a bisection's, narrowing the selection.
-        every = sorted({cast(str, e["card"]) for e in entries})
-        chosen = (
-            oracle_selection.slow_ci(every) if args.select and not args.cards else None
-        )
-        # The scenarios new to the oracles, or all of them (oracle_memory.py).
+        entries = [e for e in entries if not args.cards or e["card"] in args.cards]
         exports = oracle_exports.Exports.prepare(entries, checkout(XMAGE))
-        memory = oracle_memory.Memory.load([o.commit for o in ORACLES], exports.keys())
-        sampled = oracle_selection.SAMPLED
-        entries = memory.select(entries, chosen, args.cards, args.new, sampled)
-        if chosen is not None:
-            print(f"oracle: chosen: {json.dumps(chosen)}")
-        if records is not None:
-            entries = oracle_selection.fitted(entries, records.get())
-            if not entries:
-                return 0
-        exports = exports.select(entries)
         try:
             with locked(args.lock_wait):
                 require_built()  # Again: a setup may have held the lock to rebuild one.
                 built = True
                 xmage_log = log_dir() / "xmage-oracle.log"
                 xmage_log.write_text("")
-                started = time.perf_counter()
                 results: dict[str, dict[str, object]] = {
                     "xmage": check_xmage(exports, xmage_log)
                 }
-                seconds = {"xmage": time.perf_counter() - started}
-                started = time.perf_counter()
                 results["forge"] = check_forge(exports, work)
-                seconds["forge"] = time.perf_counter() - started
-                memory.record(entries, results)  # Before the gaps rewrite failures.
                 if not args.no_sim:
                     # A few AI-versus-AI games of the deck: Forge knows every card of it.
                     sim_log = log_dir() / "forge-sim.log"
@@ -717,16 +688,15 @@ def oracle(args: argparse.Namespace) -> int:
                 stale = [g for name, r in results.items() for g in apply_gaps(name, r)]
                 for r in results.values():
                     mark_generated(r)
-                oracle_selection.log_results(results, seconds, chosen)
         except system.LockHeld:
-            # Another run holds the oracles, as slow CI's oracle lane does for a minute or more.
-            skip_all(
-                entries, f"another oracle run held the lock for {args.lock_wait:g} s"
+            print(
+                f"oracle: another oracle run held the lock for {args.lock_wait:g} s",
+                file=sys.stderr,
             )
-            return 0
+            return deps.CANNOT_RUN
     except (StepFailed, RuntimeError, subprocess.CalledProcessError) as e:
         print(f"oracle: {e}", file=sys.stderr)
-        return 1 if built else checks.CANNOT_RUN
+        return 1 if built else deps.CANNOT_RUN
     report = log_dir() / "oracle.json"
     report.write_text(json.dumps(results, indent=2))
     # Keep the count card check needs before filtering out clean passes.
@@ -765,20 +735,9 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--no-sim", action="store_true", help="skip Forge's AI games of the deck"
     )
     p.add_argument(
-        "--select",
-        action="store_true",
-        help="only the cards slow CI chooses: those changed since origin/master and a "
-        "sample, plus scenarios whose exported inputs have not passed",
-    )
-    p.add_argument(
-        "--new",
-        action="store_true",
-        help="the named cards' scenarios and the generated ones that have not passed",
-    )
-    p.add_argument(
         "--lock-wait",
         type=float,
         metavar="SECONDS",
-        help="skip every scenario, passing, when another run holds the oracles this long",
+        help="give up (exit code 125) when another run holds the oracles this long",
     )
     p.set_defaults(func=oracle)

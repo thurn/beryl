@@ -1,29 +1,16 @@
 ---
 name: bugfix
-description: Work the bug reports filed from Beryl's in-app bug button (⌘B) as an Enact run — file them as tickets, group reports that share a cause into lanes and give each a model tier, then run them through /enact-plan's vizier loop, where worker sessions reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
+description: Work the bug reports filed from Beryl's in-app bug button (⌘B) — file them as tickets, group reports that share a cause, give each a model tier and file them as an epic for Ignite's worker pool, where workers reproduce, fix, verify and close each report. Use when asked to fix reported bugs, work the bug reports, or run /bugfix.
 ---
 
 # Fixing reported bugs
 
-`/bugfix` is an Enact run. The session that runs it is the 🔮 **vizier** of
-`/enact-plan` (`~/enact/skills/enact-plan/SKILL.md`): it plans the run, then
-hands every report to worker sessions and never fixes, reproduces or closes a
-report itself. Workers are Enact executor sessions; each one follows
-[Worker: fixing one report](#worker-fixing-one-report) below for its ticket.
-
-`/enact-plan` cannot be invoked as a skill by a model, so read its `SKILL.md`
-(resolve `ENACT` from it as it says) and follow it. The user's `/bugfix`
-invocation is the invocation `/enact-plan` expects: it authorizes the run's
-sessions, and any parallelism, **light** keyword or other instructions given
-with `/bugfix` pass straight through. A `/bugfix` run's parallelism defaults to
-**3**, not `/enact-plan`'s 1, so its pool starts four sessions; a parallelism
-given with `/bugfix` overrides it. Its input is the bug-report tickets chosen in
-[Vizier: planning the run](#vizier-planning-the-run), handled as "Several
-tickets". Everything `/enact-plan` says about pre-flight, permission mode, the
-Claude Desktop session pool, registering the run, the loop, titles and the final
-report applies unchanged; this skill only adds how to choose and prepare the
-tickets. In Claude Desktop the pool can only be started in the turn the user
-invoked you, so do all of the planning below in that turn.
+`/bugfix` files the reports as tickets and plans them as one epic for Ignite's
+worker pool, as the `/ignite` skill's Plan mode does. The session that runs it
+is the planner: it chooses and prepares the tickets, files the epic and stops.
+It never fixes, reproduces or closes a report itself, and never waits on the
+workers. Each worker takes a ticket with `ignite start` and follows
+[Worker: fixing one report](#worker-fixing-one-report) below.
 
 Nothing in this workflow waits for the user. Where a report leaves a real
 question, the worker decides it (Worker step 1) and proceeds. Never file a
@@ -38,9 +25,6 @@ A plausible code change is a candidate fix. For rules and UI reports, closure
 requires evidence that the player's requested behavior works, including the
 scope of the complaint beyond the pictured card. AI reports retain the
 blunder-catalog completion criteria below.
-
-Run `just ticket-backend` and use the executable from its `tk` field for the
-ticket commands below.
 
 ## Where reports are
 
@@ -83,25 +67,22 @@ button on a moment's full-size page) also names its moment in the front matter's
 `just specs` commands that show it. A 🐞 note has no images or fixture: the spec
 reproduces it.
 
-## Vizier: planning the run
-
-This is `/enact-plan`'s pre-flight. Start with its steps 1 to 3 (title, update
-Enact, project setup, permission mode), then:
+## Planning the run
 
 1. **File them.** `just bugs` lists open and filed reports. `just bugs file`
    files a ticket for each open one (type bug, label `bug-report`, priority 1)
    holding the report's path and the player's words, and saves the issue ID in
    the report's front matter. For closed history and work left in progress, use
-   `tk list --label bug-report --all --json`. Reconcile the local reports with
+   `ignite ticket list --label bug-report --all --json`. Reconcile the local reports with
    the tickets and establish the reports in scope for this run; do not silently
    omit blocked, deferred, or interrupted work. Leave out tickets labeled
-   `human` (they wait on the reporter, below) and tickets another session or
-   vizier is actively working; name both in your summary.
+   `human` (they wait on the reporter, below) and tickets a worker is actively
+   working; name both in your summary.
 
 2. **Read each report, briefly.** Read every report in scope: its words and its
    screenshot. This reading is for routing, not for deciding what the player
    wants; the worker does that with the evidence in front of it (Worker step 1).
-   Do not read code, open a worktree, reproduce, or run subagents to interpret
+   Do not read code, open a tree, reproduce, or run subagents to interpret
    reports. Note on each ticket only facts you checked:
 
    - related open and closed reports and the commits that fixed them, found by
@@ -114,18 +95,19 @@ Enact, project setup, permission mode), then:
    how an earlier build or Arena showed something unless you have looked at it;
    the worker finds that out.
 
-3. **Group and route.** Several reports with one cause are one fix: give them
-   the same `lane:<name>` so one session fixes the cause once and verifies and
-   closes each report against it. Group only on a cause you can see from the
+3. **Group and route.** Several reports with one cause are one fix, made
+   once and verified against each report. Group only on a cause you can see from the
    reports themselves (the same prompt misbehaving the same way, one animation
    reported twice), not because two fixes might touch the same files or
-   directory: merge conflicts are cheap, and a lane costs parallelism. Do not
-   run `/enact-plan`'s "Lane and tier pass" over these tickets. Add an edge
-   (`tk dep add <dependent> <prerequisite>`) only where one fix changes how
-   another report must be judged.
+   directory: merge conflicts are cheap, and a chain costs parallelism. Within a
+   group, make the other tickets depend on the first
+   (`ignite ticket dep add <dependent> <prerequisite>`) and note the shared
+   cause on each; the worker who lands the fix verifies and closes the others
+   against it. Add any other edge only where one fix changes how another report
+   must be judged.
 
-   Then give every ticket a tier, since Beryl assigns models by name
-   (`/enact-plan`, "Models by name"; AGENTS.md, Enact):
+   Then give every ticket a tier, since Beryl assigns models by label
+   (AGENTS.md, Ignite):
 
    - `tier:opus` by default: reports whose cause is not obvious, rules engine
      behavior, motion, prompt shapes, repeat reports, and every `ai-play` report
@@ -135,30 +117,25 @@ Enact, project setup, permission mode), then:
 
    Never use `tier:fable` unless the user asked for it.
 
-4. **Run them.** Continue with `/enact-plan` at "A ticket", case "Several
-   tickets": create the run epic (title `Bug reports <date>`; its description
-   lists the reports in scope and the tier policy above), reparent each ticket
-   into it, then "Finish planning" and the loop. A bug-report ticket that
-   already sits under the open epic of an earlier `/bugfix` run with claimed
-   children belongs to that run's vizier: leave it. Under any other parent, move
-   it into the new epic and note the old parent on the ticket. Add no Wardens,
-   Masons, Sages or Archivist unless the invocation asks; each worker's
-   verification below is the review. From here on you are the vizier in
-   `/enact-plan`'s loop and nothing else: you never read a ticket's progress,
-   review a fix, or close a report.
+4. **File the epic.** Follow the `/ignite` skill's Plan mode for filing: one
+   epic titled `Bug reports <date>`, whose description lists the reports in
+   scope and the tier policy above, with each ticket moved under it, then check
+   the graph. A bug-report ticket that already sits under the open epic of an
+   earlier `/bugfix` run with claimed children belongs to that epic: leave it.
+   Under any other parent, move it into the new epic and note the old parent on
+   the ticket. File no review tickets unless the invocation asks; each worker's
+   verification below is the review.
 
-5. **Report.** When the loop returns `done` (or the run stops), reconcile the
-   reports in scope with `just bugs` and the final ticket states, and give the
-   reporter a concise outcome for every report: verified fixed (with commit),
-   cataloged AI blunder, awaiting the reporter (`human`), handed back
-   unfinished, or left out (with the reason). Do not let a successful subset
-   stand in for completing the run.
+5. **Report.** Give the reporter a concise list: each report in scope with its
+   ticket and group, and each report left out with the reason. Then stop: the
+   pool works the tickets, and a later `/bugfix` run reconciles `just bugs` with
+   the tickets' final states.
 
 ## Worker: fixing one report
 
-You are an Enact executor session working one bug-report ticket (or a lane of
-them). Your role files from Enact still apply: worktree, `enact push`, handoff
-comment and `enact close`. This section says what finishing a bug report means.
+You are a worker on one bug-report ticket, started with `ignite start`.
+`ignite prime` holds the workflow (the tree, `ignite land` and its note); this
+section says what finishing a bug report means.
 The ticket holds the report and related history, not an interpretation: deciding
 what the player is asking for is your first job (step 1).
 
@@ -205,7 +182,7 @@ what the player is asking for is your first job (step 1).
      - If you judge it a blunder, write an incident in `docs/incidents/` with
        its replay and add the case to `data/blunders.json`. Verify that
        `just blunders --only <id>` reaches the reported decision. Land the case
-       through the worktree workflow, then close and archive the report with
+       with `ignite land`, then close and archive the report with
        that commit as in step 3. The ladder owns later changes to the AI.
      - Otherwise, or if the evidence is inconclusive, record your reasoning in
        the ticket and return it to the reporter through the human review queue
@@ -242,8 +219,8 @@ what the player is asking for is your first job (step 1).
      resumes the game at its latest decision without saving it, and
      `just b3d live tree`, `live png` and `live do` look at and drive it.
 
-2. **Fix and verify** rules and UI bugs through a worktree as AGENTS.md says.
-   Enact has already claimed the ticket for you. Identify the shared mechanism
+2. **Fix and verify** rules and UI bugs in the tree `ignite start` gave you.
+   It has already claimed the ticket for you. Identify the shared mechanism
    responsible for the complaint and fix it at that level. Choose representative
    neighboring cases that could expose the same failure, such as both seats, a
    trigger resolving immediately versus stopping for priority, or different
@@ -287,43 +264,45 @@ what the player is asking for is your first job (step 1).
    result against each acceptance criterion in the ticket. Keep remaining
    uncertainty explicit; a partial fix leaves the report open.
 
-3. **Close** it only after the above verification and required CI pass and
-   `enact push` has landed the fix, or the AI blunder case meets step 1. You
-   close your own reports; the vizier never does. A UI report cannot close
+3. **Close** it only after the above verification passes and `ignite land`
+   has landed the fix, or the AI blunder case meets step 1. You close your own
+   reports; the planner never does. A UI report cannot close
    without this evidence on its ticket: the path of the final
    `arena-pixel-match` pair sheet of Arena and Beryl at the same moment, and its
    difference table (each row fixed, or named with its reason). Where Arena has
    no such moment, the ticket instead records the `arena-video` searches that
    found none and the hand-written expectation that stands in (the test above,
    or the UI Conventions entry it follows). Without one of these, hand the
-   report back as "only partly fixed" below. Then run
-   `just bugs done <ticket> --commit <sha>` with the `staging` SHA that
-   `enact push` reported, which marks the report done and moves it to `done/`,
-   and finish as Enact's role files say: the handoff comment, then
-   `enact close <ticket> --reason "<what was wrong>"` (with `--continue` in a
-   lane). Enact's vizier waits for slow CI, so ignore `watch_ci`.
+   report back as "only partly fixed" below. Land with
+   `ignite land -m "<what was wrong, what changed, what a reviewer should check>"`,
+   which closes the ticket, then run `just bugs done <ticket> --commit <sha>`
+   with the `staging` SHA it reported, which marks the report done and moves it
+   to `done/`. Close each other ticket of your group that the same fix settles
+   with `ignite close -m "<cause>, landed in <sha>"` after verifying it, and run
+   `just bugs done` for it too.
 
 Some reports end without a fix. Hand such a ticket back so the run can finish
 without it, and so a later `/bugfix` run sees it:
 
 - **Awaiting the reporter.** A rules report describes behavior the Comprehensive
   Rules require, or an AI report needs the reporter's judgment (step 1). Record
-  the evidence and expected behavior with `tk comment <id> "..."`. Run
-  `enact release <id> --reason "awaiting reporter"`, then detach it with
-  `tk update <id> --parent "" --add-label human`. Find these reports with
-  `tk list --label human --label bug-report`. Once the reporter confirms, record
-  the confirmation with `tk comment <id> "<confirmation>"` and clear the label
-  with `tk update <id> --remove-label human`. Run `just bugs done <id>`. If the
+  the evidence and expected behavior with `ignite ticket comment <id> "..."`,
+  add the label with `ignite ticket update <id> --add-label human`, then run
+  `ignite release --needs person -m "awaiting reporter: <the exact question>"`.
+  Find these reports with `ignite ticket list --label human --label bug-report`.
+  Once the reporter confirms, record the confirmation with
+  `ignite ticket comment <id> "<confirmation>"` and clear the label with
+  `ignite ticket update <id> --remove-label human`. Run `just bugs done <id>`. If the
   reporter instead identifies a bug or confirms a blunder, clear the label and
   leave the report filed for the next `/bugfix`.
 - **Not reproduced or only partly fixed.** A UI report is never working as
   intended merely because Arena does the same: the user's report wins (step 2).
   A rules or UI report you cannot reproduce stays filed. Record what you tried,
   the acceptance criteria still unmet and the next action with
-  `tk comment <id> "..."`. Run `enact release <id> --reason "..."`, then
-  `tk update <id> --parent ""`. Push any partial fix that is correct on its own,
+  `ignite ticket comment <id> "..."`, then run `ignite release -m "..."`, which
+  keeps your commits on the ticket's branch. Land any partial fix that is correct on its own,
   but never run `just bugs done` for it, and never archive a report merely
   because a related change landed.
 
-After a hand-back, retitle ⛔ as Enact's role files say for a release and end
-your turn with a summary of where the report stands.
+After a hand-back, retitle ⛔ and end your turn with a summary of where the
+report stands.

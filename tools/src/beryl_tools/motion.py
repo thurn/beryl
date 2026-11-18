@@ -1,6 +1,6 @@
 """`by motion`: the stage held to each verb's own values in `data/ui-conventions.json`, with
-Arena's numbers (`data/arena-motion.json`) beside them as reference and no verdict
-. This is a regression guard: it fails when the stage stops playing a
+Arena's numbers (`data/arena-motion.json`) beside them as reference and no verdict. This is a
+regression guard: it fails when the stage stops playing a
 verb as its values say.
 
 - `by motion --values` needs no browser: each verb's values, and each case's, beside Arena's
@@ -26,9 +26,8 @@ verb as its values say.
   squashed (video_shape.py); no value declares them. A step whose subject moves
   again at once or comes to rest out of the window is not screenshotted (the tracker needs it
   still either side and at rest in the frames), and says so. Stage time, never wall time, so
-  machine load cannot change a result. `by motion` runs it: the fast check when the stage or
-  these data change (checks.py) and nightly (nightly.py), with one run-log record a verb and
-  layout, `motion:<verb>/<layout>`.
+  machine load cannot change a result. `by motion` runs it, and prints one verdict a verb and
+  layout.
 - What the tracker can hold of the verbs that change a card where it lies (by-w8gv.21.41).
   A flip grows and turns over in place (src/stage/tracks.ts FLIP): its travel is held (in
   place) and its peak size shown. A strike lunges at what it hits and drifts back to where it
@@ -51,12 +50,12 @@ verb as its values say.
   announcement still passing over the table when a moment's recording ends is told no end and
   is not timed. The first moment plays mana's streaks and, from the seat across, the dwell on
   the opponent's spell; `--more` has the rest (a turn's banner, a scry's pill, a coin, damage).
-- `--more` runs nightly only: its moments add about two minutes to the lane, past the fast
-  check's 60 s (by-w8gv.21.38: the capture took 107 to 127 s with the moments of cards
+- `--more` adds the moments of the verbs only they play (MORE_ONLY), which take about two
+  minutes more (by-w8gv.21.38: the capture took 107 to 127 s with the moments of cards
   changing zone and about 20 s without, at loads of 25 to 50 on 18 cores, `zones` nearly all
   of it, its ten steps screenshotted about 350 frames a seat; by-w8gv.21.41: about 145 s with
   `combat` and `place` too, at loads of 20 to 30, their seven steps shot about 360 frames a
-  seat). The fast check skips the verbs only they play (MORE_ONLY).
+  seat). Without it those verbs are reported as skipped.
 
 A number is held within one tick of the capture or SHARE of its value, whichever is larger. A
 step's delay counts from its turn in its beat, but it begins no earlier than the step before
@@ -69,11 +68,9 @@ import argparse
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from . import conventions, deadline, paths, runlog, selection, shots, suites
+from . import conventions, paths, shots, suites
 from .motion_measure import (
     TIMED,
     SIZED,
@@ -108,57 +105,15 @@ from .motion_measure import (
     measure_capture,
 )
 
-if TYPE_CHECKING:
-    from .checks import Lane
 
-# Seconds the capture takes after its fixtures are recorded: serving the UI and playing the
-# stepped capture, 12 s to 19 s on this Mac at load 10 (2026-11-13). The fast check skips it
-# when recording, which builds beryl_cli when the cloned rust/target is behind, leaves less
-# than this of the box: under load, a rebuild of about 35 s and the capture passed 60 s.
-CAPTURE_SECONDS = 20.0
-# What the capture's verdicts follow: the stage, the capture, the tracker and the data the verbs
-# are played with and held to. The fast check runs the lane when one of them changed.
-INPUTS = (
-    r"^ui/src/stage/|^ui/scripts/stepped\.mjs$|^ui/verbs\.json$"
-    r"|^data/(ui-conventions|arena-motion)\.json$"
-    r"|^tools/src/beryl_tools/(motion|motion_measure|video_measure|video_shape)\.py$"
-)
-
-
-def boxed_out(box: float, recording: float) -> str | None:
-    """Why the fast check skips the capture, when recording the fixtures took `recording` of
-    its `box` seconds and the capture would not fit in what is left; None when it fits.
-    """
-    contract = deadline.left()
-    if contract is not None:
-        # Inside a fast check, what is left of its target (deadline.py), not a box of its own.
-        left = contract - selection.STARTUP
-        of = "the fast check's target"
-    else:
-        left = box - selection.STARTUP - recording
-        of = f"the {box:.0f} s box"
-    if left >= CAPTURE_SECONDS:
-        return None
-    return (
-        f"recording the fixtures took {recording:.0f} s, leaving {max(left, 0):.0f} s of"
-        f" {of} for a capture of about {CAPTURE_SECONDS:.0f} s; the nightly plays it"
-    )
-
-
-def capture(
-    out: Path, tick: float | None = None, more: bool = False, box: float | None = None
-) -> int | str:
+def capture(out: Path, tick: float | None = None, more: bool = False) -> int:
     """Records the verb suite's fixtures, serves the UI and runs the stepped capture into
     `out`, in ticks of `tick` ms (stepped.mjs's sixtieth of a second by default), with the
-    moments of `more` if `more`; its exit code. With `box`, the reason it skipped the
-    capture instead, when recording left too little of `box` seconds (`boxed_out`). An
-    earlier capture's frames are removed first, so that none is measured again."""
+    moments of `more` if `more`; its exit code. An earlier capture's frames are removed first,
+    so that none is measured again."""
     recorded = out / "fixtures"
-    began = time.monotonic()
     if shots.record_fixtures(recorded, suites.verb_fixtures()):
         return 1
-    if box is not None and (why := boxed_out(box, time.monotonic() - began)):
-        return why
     shutil.rmtree(out / "frames", ignore_errors=True)
     env = shots.browser_env()
     ticks = ["--tick", str(tick)] if tick else []
@@ -195,21 +150,17 @@ def command(args: argparse.Namespace) -> int:
         print("\n".join(values_report(data, reference)))
         return 0
     out = paths.cache_root() / "motion" / paths.REPO.name
-    began = time.monotonic()
     try:
-        code = capture(out, args.tick, args.more, args.box)
+        code = capture(out, args.tick, args.more)
     except shots.UiError as e:
         print(f"motion: {e}", file=sys.stderr)
         code = 1
-    if isinstance(code, str):
-        return cut(code, time.monotonic() - began)
     if code:
         print("motion: the capture failed", file=sys.stderr)
         return code
     measured = measure_capture(data, reference, out / "frames")
     verbs = suites.verb_suite().get("verbs")
     verbs = [str(v) for v in verbs] if isinstance(verbs, list) else []
-    took = (time.monotonic() - began) / max(1, len(verbs) * len(LAYOUTS))
     failed = False
     exempt = exempted(data)
     for layout in LAYOUTS:
@@ -223,51 +174,21 @@ def command(args: argparse.Namespace) -> int:
                 print(
                     f"{layout}: {verb} is exempt (exception {exempt[verb]}), not played"
                 )
-                runlog.result(f"motion:{verb}/{layout}", "pass", took)
                 continue
             if not mine:
                 said = f"{layout}: the stage played no {verb} to capture"
                 why = None if args.more else MORE_ONLY.get(verb)
-                runlog.result(
-                    f"motion:{verb}/{layout}", "skip" if why else "fail", took
-                )
                 print(f"{said}, skipped: {why}" if why else said)
                 failed = failed or why is None
                 continue
             bad = any(v.failed for _, vs in mine for v in vs)
             failed = failed or bad
-            runlog.result(f"motion:{verb}/{layout}", "fail" if bad else "pass", took)
             for name, vs in mine:
                 print(f"{name}:")
                 for v in vs:
                     print(f"  {v.line()}")
     print(f"motion: frames in {out / 'frames'}")
     return 1 if failed else 0
-
-
-def cut(why: str, took: float) -> int:
-    """Logs every verb and layout as cut by the fast check's box (`boxed_out`), which fails
-    nothing."""
-    print(f"motion: capture cut: {why}")
-    verbs = suites.verb_suite().get("verbs")
-    checks = [
-        f"motion:{v}/{layout}"
-        for layout in LAYOUTS
-        for v in (verbs if isinstance(verbs, list) else [])
-    ]
-    for check in checks:
-        runlog.result(check, "skip", took / max(1, len(checks)), "cut")
-    return 0
-
-
-def lane() -> Lane:
-    """The capture as a lane of the fast check (checks.py), which runs it when its inputs
-    changed, inside the browser lanes' box (selection.BOX); the nightly run always does
-    (nightly.py)."""
-    from .checks import BY, Lane  # It imports this module.
-
-    box = ["--box", str(selection.BOX)]
-    return Lane("motion", warm=True).step("motion", [*BY, "motion", *box])
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -284,8 +205,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.add_argument(
         "--more",
         action="store_true",
-        help="also the moments of cards changing zone and changing in place (nightly: past"
-        " the fast check's budget)",
+        help="also the moments of cards changing zone and changing in place (about two"
+        " minutes more)",
     )
     p.add_argument(
         "--film",
@@ -303,12 +224,6 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         "--instances",
         default="2",
         help="with --film, how many of Arena's instances of each case (default 2)",
-    )
-    p.add_argument(
-        "--box",
-        type=float,
-        help="skip the capture, logged as cut, when recording the fixtures leaves too little"
-        " of this many seconds for it (the fast check's lane)",
     )
     p.add_argument(
         "--tick",

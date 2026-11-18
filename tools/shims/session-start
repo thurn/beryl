@@ -1,7 +1,0 @@
-#!/bin/sh
-# A Claude session's start hook (.claude/settings.json): puts the cargo shim beside this file
-# first on PATH for every command the session runs, so that cargo typed by hand also runs
-# inside a lease of the machine's CPU tokens (tools/src/beryl_tools/cargo_pool.py).
-if [ -n "$CLAUDE_ENV_FILE" ]; then
-    printf 'export PATH="%s:$PATH"\n' "$(cd "$(dirname "$0")" && pwd)" >> "$CLAUDE_ENV_FILE"
-fi

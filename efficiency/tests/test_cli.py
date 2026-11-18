@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import cli, ingest, paths, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads
 from tests.synthetic import bead, listing
 
 # The tables "The store" in docs/efficiency-dashboard.md lists, and those that serve them:

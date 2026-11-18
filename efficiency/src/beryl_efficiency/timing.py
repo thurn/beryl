@@ -7,14 +7,15 @@ in this order wins:
 - `person`: a question to the user is unanswered (the `AskUserQuestion` tool), or the session
   ended its turn and the next prompt is one a person typed.
 - `queued`: a tool call is waiting for a CPU lease: the time the leases joined to it waited
-  (`cpu.py` joins each lease from the token pool's log to the call running in its worktree).
-  Leases that waited at once, such as two lanes of one fast check, count once.
+  (`cpu.join` joins each lease, which Ignite's record of a command supplies, to the call
+  running in its tree). Leases that waited at once, such as two lanes of one fast check,
+  count once.
 - `tool`: a tool call is running, by kind of command. Seconds when several run at once are
   divided equally among them. A cargo command's seconds are split into `compile` and `run`
-  parts by the share its `Finished` lines name. An Enact command's seconds waiting for
-  Enact's ownership lock and syncing tickets under it are the kinds `enact lock wait` and
-  `enact sync` (`locks.py` joins each line of Enact's lock-wait log to the call that ran it).
-  A push's wait for the ticket server's staging lease counts as `enact lease wait`.
+  parts by the share its `Finished` lines name. A call with rows in `lock_waits` has
+  its waited and sync seconds moved to the kinds `enact lock wait` and `enact sync`, and
+  its staging lease waits to `enact lease wait`. Only the history from before Ignite has
+  such rows: nothing writes them now, but the store keeps them.
 - `model`: the model is generating. This is every second no other category claims.
 - `background`: the session ended its turn and the next prompt reports that a background
   command or another session finished, by the kind of that command (`session` for another
@@ -55,7 +56,7 @@ QUESTION_TOOLS: frozenset[str] = frozenset({"AskUserQuestion"})
 VERSION = 2
 # Stop reasons of a request that ends a turn: anything but stopping to run a tool.
 TOOL_STOP = "tool_use"
-# The kinds an Enact command's lock waits and syncs move to.
+# The kinds a call's lock waits and syncs in the stored `lock_waits` rows move to.
 LOCK_WAIT = "enact lock wait"
 LEASE_WAIT = "enact lease wait"
 SYNC = "enact sync"

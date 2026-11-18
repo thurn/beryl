@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import claude, cli, exchange, ignite, ingest, paths, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import Beads
 from tests.synthetic import CHECKOUT, PROJECT, Transcript, listing
 from tests.synthetic import bead as bead_record
 
@@ -308,3 +308,40 @@ def test_a_plain_export_imports_as_a_compressed_one_does(tmp_path: Path) -> None
     for path in (tmp_path / "cygnus.jsonl", packed):
         target = store.open_store(tmp_path / f"target-{path.suffix}.sqlite")
         assert exchange.import_file(target, path, HOST).added == {"requests": 1}
+
+
+def test_hub_tickets_become_beads_labels_and_aliases(tmp_path: Path) -> None:
+    hub = tmp_path / "hub.sqlite"
+    db = sqlite3.connect(hub)
+    db.executescript("""
+        CREATE TABLE tickets (id TEXT PRIMARY KEY, parent TEXT, title TEXT, type TEXT,
+          status TEXT, priority INTEGER, labels TEXT, metadata TEXT, created_at TEXT,
+          claimed_at TEXT, closed_at TEXT, tree TEXT, session TEXT, landed TEXT);
+        CREATE TABLE aliases (alias TEXT PRIMARY KEY, id TEXT NOT NULL);
+        INSERT INTO tickets VALUES ('k7mq', NULL, 'Epic', 'epic', 'open', 2, '[]', '{}',
+          '2026-11-15T10:00:00Z', NULL, NULL, NULL, NULL, NULL);
+        INSERT INTO tickets VALUES ('k7mq.2', 'k7mq', 'Child', 'task', 'closed', 1,
+          '["tier:opus"]', '{}', '2026-11-15T10:00:00Z', '2026-11-15T10:05:00Z',
+          '2026-11-15T11:00:00Z', 'tree-07', 'local_1', '{"commits": ["abc", "def"]}');
+        INSERT INTO aliases VALUES ('by-old.2', 'k7mq.2');
+        """)
+    db.commit()
+    db.close()
+    store_db = store.open_store(tmp_path / "store.sqlite")
+    ingest.ingest(store_db, [ignite.HubTickets(hub)], HOST)
+    beads = {
+        r[0]: r[1:]
+        for r in store_db.execute("SELECT id, parent, status, started_at FROM beads")
+    }
+    assert beads == {
+        "by-k7mq": (None, "open", None),
+        "by-old.2": ("by-k7mq", "closed", "2026-11-15T10:05:00Z"),
+    }
+    assert store_db.execute("SELECT label FROM labels").fetchall() == [("tier:opus",)]
+    assert store_db.execute(
+        "SELECT bead FROM ticket_aliases WHERE alias IN ('Tk7mq.2', 'k7mq.2')"
+    ).fetchall() == [("by-old.2",), ("by-old.2",)]
+    commits = store_db.execute(
+        "SELECT json_extract(enact, '$.enact_commits') FROM beads WHERE id = 'by-old.2'"
+    ).fetchone()
+    assert commits == ("abc def",)

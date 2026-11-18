@@ -4,8 +4,7 @@ mutations, and Chromium's style and layout work. Timing frames (`ui-perf`) measu
 machine, which is much faster than the laptops Beryl targets and is never quiet; counts measure
 the tree.
 
-`by ui-counts <fixtures>` prints the counts. `by ui-counts --gate`, a step of the nightly (nightly.py),
-plays the gated fixtures and fails when a count rises more than the tolerance in
+`by ui-counts <fixtures>` prints the counts. `by ui-counts --gate` plays the gated fixtures and fails when a count rises more than the tolerance in
 `data/ui-counts.json` above its limit there. `--gate --update` writes the measured counts as
 the new limits.
 
@@ -15,8 +14,8 @@ into a separate commit. Across repeated runs, renders and mutations vary by abou
 style and layout work by up to about 2.5% (`verbs-zones` on the desktop lays out between 6,890
 and 7,039 objects at one commit). A limit taken from one low run would put ordinary runs over
 the tolerance, so `--update` plays the fixtures `UPDATE_PLAYS` times and writes the highest
-count of each metric. The limits were measured on macOS. Windows leaves the lane to the Mac, like the other browser lanes, because
-its text measures differently and would need limits of its own.
+count of each metric. The limits were measured on macOS. Windows leaves the gate to the Mac, like the other browser
+checks, because its text measures differently and would need limits of its own.
 """
 
 from __future__ import annotations
@@ -29,7 +28,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import checks, paths
+from . import deps, paths
 from .shots import UiError, browser_env, record_fixtures, served_ui
 
 GATE_FILE: Path = paths.REPO / "data" / "ui-counts.json"
@@ -129,7 +128,7 @@ def measure(
     try:
         env = browser_env("chromium")
         if record_fixtures(recorded, fixtures):
-            return checks.CANNOT_RUN
+            return deps.CANNOT_RUN
         with tempfile.TemporaryDirectory() as tmp, served_ui(env) as url:
             out = Path(tmp) / "counts.json"
             code = subprocess.run(
@@ -147,7 +146,7 @@ def measure(
             return json.loads(out.read_text())
     except UiError as e:
         print(f"ui-counts: {e}", file=sys.stderr)
-        return checks.CANNOT_RUN
+        return deps.CANNOT_RUN
 
 
 def ui_counts(args: argparse.Namespace) -> int:

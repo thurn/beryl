@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from beryl_tools import justfile_format
-from beryl_tools.reruns import CANNOT_RUN
+from beryl_tools.deps import CANNOT_RUN
 
 
 def test_the_version_is_read_from_just_version() -> None:

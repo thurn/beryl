@@ -14,7 +14,9 @@ the hub, ingest reads the hub's SQLite database read-only, by its schema
 - `metrics`, the efficiency rows other machines' daemons posted, one export line per row.
   They are imported as `just efficiency import` imports a file.
 - `tickets`, `tips`, `handoffs`, `regressions` and `workers`, copied whole into the
-  `ignite_*` tables when they change, for the series in `ignite_metrics.py`.
+  `ignite_*` tables when they change, for the series in `ignite_metrics.py`. The tickets,
+  with their labels and aliases, are also written as `beads`, `labels` and `ticket_aliases`
+  rows, which every per-ticket query reads, so that the hub replaces `tk export`.
 
 A machine is named by the first host name seen for its ID (`ignite_machines`), from the hub's
 `machines` table or an export's header, so renaming a machine does not split its history.
@@ -28,7 +30,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import exchange, kinds, ticket_ids, timing
+from . import beads, exchange, kinds, ticket_ids, timing
 from .cilog import CHECK_SUMS, LANE_RUN_SUMS, host_name, iso, local_day, utc
 from .cpu import join as join_leases
 from .ingest import CursorSource, Merge, Row, SnapshotSource, SourceError, write
@@ -419,8 +421,99 @@ class Hub(SnapshotSource):
         return rows, 0
 
 
+def legacy_id(ticket: str, aliases: list[str]) -> str:
+    """The ID the store keeps a ticket under: the `by-` alias an imported ticket had in the
+    earlier tracker, else the ticket's own ID with that prefix (`ticket_ids.prefixed`).
+    """
+    own = ticket_ids.prefixed(ticket)
+    legacy = [a for a in aliases if a.startswith(ticket_ids.PREFIX)]
+    return own if own in legacy else next(iter(legacy), own)
+
+
+class HubTickets(SnapshotSource):
+    """The hub's tickets as the `beads`, `labels` and `ticket_aliases` rows, as `tk export`
+    once supplied them. It owns no table: stored tickets that the hub no longer lists stay,
+    and so does a label removed from a ticket, since the stored history is kept."""
+
+    name = "ignite-beads"
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def read(self) -> bytes:
+        hub = open_hub(self.path)
+        try:
+            aliases: dict[str, list[str]] = {}
+            for alias, ticket in hub.execute("SELECT alias, id FROM aliases"):
+                aliases.setdefault(str(ticket), []).append(str(alias))
+            found = [
+                {**dict(r), "aliases": sorted(aliases.get(str(r["id"]), []))}
+                for r in hub.execute(
+                    "SELECT id, parent, title, type, status, priority, labels, metadata, "
+                    "created_at, claimed_at, closed_at, tree, session, landed FROM tickets"
+                )
+            ]
+        except sqlite3.Error as e:
+            raise SourceError(f"reading the hub: {e}") from e
+        finally:
+            hub.close()
+        return json.dumps(found, sort_keys=True).encode()
+
+    def parse(self, data: bytes) -> tuple[list[Row], int]:
+        records = json.loads(data)
+        names = {str(r["id"]): legacy_id(str(r["id"]), r["aliases"]) for r in records}
+        rows: list[Row] = []
+        skipped = 0
+        for r in records:
+            ticket = str(r["id"])
+            bead = names[ticket]
+            for alias in (
+                ticket,
+                f"T{ticket}",
+                ticket_ids.prefixed(ticket),
+                *r["aliases"],
+            ):
+                rows.append(("ticket_aliases", {"alias": alias, "bead": bead}))
+            try:
+                metadata = json.loads(r["metadata"] or "{}")
+                landed = json.loads(r["landed"] or "{}")
+                metadata.update(
+                    {
+                        "enact_commits": " ".join(landed.get("commits") or []),
+                        "enact_worktree": r["tree"],
+                        "enact_session": r["session"],
+                    }
+                )
+                parent = r["parent"]
+                rows += beads.rows_of(
+                    {
+                        "id": bead,
+                        "title": r["title"],
+                        "parent": names.get(str(parent), parent),
+                        "issue_type": r["type"],
+                        "status": r["status"],
+                        "priority": r["priority"],
+                        "created_at": r["created_at"],
+                        "started_at": r["claimed_at"],
+                        "closed_at": r["closed_at"],
+                        "labels": json.loads(r["labels"] or "[]"),
+                        "metadata": {k: v for k, v in metadata.items() if v},
+                    }
+                )
+            except (ValueError, TypeError, KeyError, AttributeError):
+                skipped += 1
+        return rows, skipped
+
+
+def ticket_sources(cache: Path) -> list[HubTickets]:
+    """The hub's ticket source, or none on a machine that holds no hub database. Ingest reads
+    it before the transcripts, since deriving their windows reads the tickets."""
+    path = hub_path(cache)
+    return [HubTickets(path)] if path.exists() else []
+
+
 def sources(cache: Path, local: str) -> list[Hub | Records | Imports]:
-    """The hub's sources, or none on a machine that holds no hub database."""
+    """The hub's other sources, or none on a machine that holds no hub database."""
     path = hub_path(cache)
     if not path.exists():
         return []

@@ -19,7 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
 
-from .. import caches, cargo_pool, deadline, system, tokens, warm
+from .. import system
 from .. import paths as repo_paths
 from . import (
     app,
@@ -28,7 +28,6 @@ from . import (
     clear_save,
     compare,
     gate,
-    lane,
     live,
     match,
     motion_film,
@@ -39,8 +38,6 @@ from . import (
     play,
     spec,
     stand_in,
-    sweep,
-    test_fit,
     tiers,
     timeline,
     vm,
@@ -49,47 +46,13 @@ from .command import Command
 
 # Exit code for a command line `just b3d` cannot run, as argparse uses.
 USAGE = 2
-
-
-def run_lane(_args: argparse.Namespace) -> int:
-    from .. import checks  # It imports this package's lane.
-
-    return checks.run_all(lane.lanes(), "b3d", checks.FAST_BUDGET).code
-
-
-def warm_target() -> None:
-    """Before each cargo command, clones `$BERYL_CACHE/b3d/target` into the workspace's
-    `target` when the cache holds one and the workspace has none, or else prunes the workspace's
-    `target` when it is crowded, and sweeps the builds newer ones replaced every few hours
-    (caches.tidy_target): a worktree that lives long held every artifact of every build it
-    ran, 46-53 GB in each of five worktrees on 2026-11-16."""
-    target = paths.WORKSPACE / "target"
-    cached = paths.cache() / "target"
-    if target.exists():
-        caches.tidy_target(target)
-        return
-    with system.file_lock(paths.target_lock()):
-        # Again under the lock: the sweep's steps start together, and each one that found no
-        # target before the first clone landed cloned all 133,575 files again and threw the
-        # copy away (five clones for one sweep on 2026-11-15).
-        if cached.is_dir() and not target.exists() and warm.clone_into(cached, target):
-            # Cargo rebuilds a workspace crate whose sources are newer than its last build, and
-            # a new worktree's checkout wrote every file afresh, so without these two the first
-            # `just b3d gate` in a new worktree rebuilt every crate of the workspace, and the
-            # engine crates under rust/crates it depends on, for 10 to 30 minutes under load.
-            # Give each file the cached build saw the time it had then, and point the build's
-            # absolute paths into rust/crates at this checkout (warm.py, `restore_sources`).
-            warm.restore_sources(repo_paths.REPO, target)
-            warm.rehome_paths(target, repo_paths.REPO)
-            # So that the builds' reads of units they do not rebuild count as uses, and
-            # `warm.prune` and `target_sweep.sweep` keep those units (`warm.mark`).
-            warm.mark(target)
+# The environment variable that tells a program how many threads it may use.
+CORES_ENV = "IGNITE_CORES"
 
 
 def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
     """Runs cargo with `arguments` in Beryl 3D's workspace, in `env` (this process's own by
     default)."""
-    warm_target()
     return subprocess.run(
         ["cargo", *arguments],
         cwd=paths.WORKSPACE,
@@ -100,29 +63,16 @@ def cargo(arguments: list[str], env: dict[str, str] | None = None) -> int:
 
 def build(arguments: list[str]) -> int:
     """Runs `cargo <arguments>`, a build in the workspace's own target directory, one at a time
-    across every process of this checkout. Cargo's lock on the directory makes a second build
-    wait while another runs, but the cargo shim takes its CPU tokens before cargo starts
-    (cargo_pool.py), so the waiting build held a lease of up to two thirds of the pool while it
-    did nothing. The fast check's Beryl 3D lanes start their builds together (lane.py), as do
-    the sweep's steps. Here a build waits on a file lock first (`paths.build_lock`), holding
-    no tokens, and then usually finds nothing left to do."""
+    across every process of this checkout. Cargo's lock on the directory already makes a second
+    build wait while another runs. Taking a file lock first (`paths.build_lock`) makes the
+    waiting explicit and means a second build usually finds nothing left to do."""
     with system.file_lock(paths.build_lock()):
         return cargo(arguments)
 
 
-# The job slots a rebuild after an edit starts on when the CPU token pool has no token free
-# (`quick_build`). After a one-line edit to `beryl_scene`, building `b3d` took 2.6 s on one job,
-# 1.6 to 2.5 s on two and 1.8 to 2.3 s on four, at load 19.
-QUICK_JOBS = 2
-
-
 def quick_build(arguments: list[str]) -> int:
-    """Runs `cargo <arguments>` as `build` does, for a program an agent waits on after an edit,
-    without waiting for CPU tokens: cargo starts on the tokens free now, or on `QUICK_JOBS` job
-    slots when none is, and grows as tokens come free (`cargo_pool.FLOOR_ENV` says why).
-    """
-    with system.file_lock(paths.build_lock()):
-        return cargo(arguments, {**os.environ, cargo_pool.FLOOR_ENV: str(QUICK_JOBS)})
+    """Runs `cargo <arguments>` as `build` does, for a program an agent waits on after an edit."""
+    return build(arguments)
 
 
 def run_cargo(args: argparse.Namespace) -> int:
@@ -149,16 +99,10 @@ def test_arguments(parser: argparse.ArgumentParser) -> None:
 
 def run_cargo_test(args: argparse.Namespace) -> int:
     nextest = shutil.which("cargo-nextest") is not None
-    # Every test of the workspace runs through test_fit.py, which logs each one's time and,
-    # inside a fast check, runs only those that fit; its records are read while the tests build.
-    whole = nextest and not args.package and not args.filter
-    known = test_fit.known() if whole else None
     # The tests read recordings, which only the `record` program can build.
     recorded = record()
     if recorded != 0:
         return recorded
-    if whole:
-        return test_fit.run(known)
     return cargo(test_command(args.package, args.filter, nextest))
 
 
@@ -166,7 +110,7 @@ def run_cargo_test(args: argparse.Namespace) -> int:
 # --workspace` builds, in cargo's `test` profile, and each program built as a program. Cargo
 # resolves features for the packages a command names, so `cargo run -p beryl_record` and
 # `cargo run -p beryl_inspect` each built `beryl_scene`, `beryl_inspect` and the engine with
-# other features than the tests do, and the lane compiled them three times after an edit to
+# other features than the tests do, and they compiled them three times after an edit to
 # `beryl_scene`. With this build the tests that follow it compile nothing more.
 SHARED_BUILD: list[str] = [
     *["build", "-q", "--workspace", "--profile", "test"],
@@ -200,10 +144,7 @@ def record() -> int:
     # Cargo refreshes the top-level copy even when it compiles nothing. Use the linker's
     # file so a warm invocation does not pay macOS's first-run check again (`linked`).
     line = [str(linked("record"))]
-    # `record` spreads its jobs over `runner::spread`, which adds threads as its lease grows.
-    return tokens.run_program(
-        line, grow=True, cwd=paths.WORKSPACE, check=False
-    ).returncode
+    return subprocess.run(line, cwd=paths.WORKSPACE, check=False).returncode
 
 
 def run_record(_args: argparse.Namespace) -> int:
@@ -239,26 +180,18 @@ def run_program(
     name: str,
     arguments: list[str],
     binary: Path | None = None,
-    grow: bool = False,
     want: int = 0,
 ) -> int:
     """Runs the built program `name` (the file `binary`, or else `linked(name)`) with
-    `arguments`, inside a lease of CPU tokens, since its checks spread over as many threads as
-    the lease allows (`beryl_inspect::runner::threads`). With `grow`, for a command whose work
-    goes through `runner::spread`, the lease grows while it runs (`tokens.run_program`). When
-    it says the recordings pack is missing, builds the pack and runs it again. `want` caps the
-    lease (`tokens.run_program`), and a `want` of 1 runs the program at once, outside the pool.
-    """
+    `arguments`. Its checks spread over as many threads as `IGNITE_CORES` allows, or over every
+    CPU when that is not set (`beryl_inspect::runner::threads`), and a `want` of 1 limits it
+    to one thread. When it says the recordings pack is missing, builds the pack and runs it
+    again."""
     line: list[str] = [str(binary or linked(name)), *arguments]
+    env: dict[str, str] | None = {**os.environ, CORES_ENV: str(want)} if want else None
 
     def launch() -> int:
-        if want == 1:
-            # A program on one thread runs at once, as if inside a lease of one token. A lease
-            # of one token waited up to 8 s while pushes waited, for a command that then ran
-            # for 0.4 s (`cargo_pool.FLOOR_ENV` says why the pool makes an agent wait).
-            env = {**os.environ, tokens.LEASE_ENV: "1"}
-            return subprocess.run(line, env=env, check=False).returncode
-        return tokens.run_program(line, grow=grow, want=want, check=False).returncode
+        return subprocess.run(line, env=env, check=False).returncode
 
     code = launch()
     if code != MISSING_PACK:
@@ -271,10 +204,8 @@ def run_program(
 
 def run_b3d(command: str, single: bool = False) -> Callable[[argparse.Namespace], int]:
     """Builds the `b3d` program of `beryl_inspect` and runs its `command` with the arguments.
-    A `single` command runs on one thread, as if inside a lease of one CPU token, without
-    waiting on the pool (`run_program`). Asking for the usual twelve, `just b3d tree`, which works for under a second, waited 10 s for them at load 20
-    on 2026-11-16 (the pool's `RECLAIM_SECONDS`), so after a one-line edit it took 15 to 24 s
-    against its 3 s target."""
+    A `single` command runs on one thread: `just b3d tree` works for under a second, so
+    starting a dozen threads for it only adds start-up time."""
 
     def run(args: argparse.Namespace) -> int:
         built = quick_build(["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"])
@@ -287,49 +218,17 @@ def run_b3d(command: str, single: bool = False) -> Callable[[argparse.Namespace]
 
 def run_shared_b3d(command: str) -> Callable[[argparse.Namespace], int]:
     """Runs the `b3d` program that `shared_build` built with its `command` and the arguments.
-    The fast check's `test` step runs this way. Building `b3d` alone (`run_b3d`) is a `dev`
-    build with other features than the shared `test` build, so it compiled eight crates again
-    (111 CPU-seconds and 22 s at load 11, with a warm target), and it held the checkout's build
-    lock (`build`) meanwhile, so the `cargo-test` and `timeline-parity` lanes, whose first
-    build finds nothing to do, waited behind it. In 12 of the 20 fast checks between 04:30
-    and 06:10 UTC on 2026-11-16 whose shared build finished, `cargo-test` was cut off at the
-    180 s limit after about 1 CPU-second of work. Both binaries ran every interface test in
-    11-13 s on all cores, about 150 CPU-seconds each."""
+    Building `b3d` alone (`run_b3d`) is a `dev` build with other features than the shared
+    `test` build, so it compiles eight crates again; `test` uses the shared build so that it
+    compiles nothing beyond what `cargo-test` and `record` already built."""
 
     def run(args: argparse.Namespace) -> int:
         built = shared_build()
         if built != 0:
             return built
-        arguments = [command, *args.arguments, *stop_after(command, args.arguments)]
-        # The shared commands (`test`) play their tests through `runner::spread`.
-        return run_program("b3d", arguments, program("b3d"), grow=True)
+        return run_program("b3d", [command, *args.arguments], program("b3d"))
 
     return run
-
-
-# The seconds before the end of the step's window (`deadline.step_limit`) after which `b3d test`
-# starts no test. The
-# tests already running finish (the slowest took 8 s at load 20 on 2026-11-16), and then the
-# step prints its report and logs each test.
-TEST_STOP = 20.0
-
-
-def stop_after(command: str, arguments: list[str]) -> list[str]:
-    """The `--stop-after` that a fast check gives `b3d test`, so that it starts no test after
-    its window (`deadline.step_limit`): until the run's target, but at least
-    `deadline.STEP_FLOOR` seconds, and never past the hard limit. The limit kills a step still
-    running and reports nothing of it, and after a long shared build it cut off this step in 141
-    of 330 fast checks on 2026-11-16. Planning against the hard limit instead then made every
-    Beryl 3D fast check take 180 s; the sweep plays every test on staging. Outside a fast check,
-    or when the arguments name it already, there is none."""
-    left = deadline.step_limit()
-    if (
-        command != "test"
-        or left is None
-        or any(a.startswith("--stop-after") for a in arguments)
-    ):
-        return []
-    return ["--stop-after", f"{max(left - TEST_STOP, 0.0):.1f}"]
 
 
 def b3d_command(
@@ -354,8 +253,8 @@ def run_render(command: str) -> Callable[[argparse.Namespace], int]:
         built = quick_build(arguments)
         if built != 0:
             return built
-        # It sizes no threads by its lease: `png` took 0.38 s on one token and on four, and
-        # 0.73 s and 0.77 s with every face drawn, so it runs as a one-thread program does.
+        # `png` took 0.38 s on one thread and on four, and 0.73 s and 0.77 s with every face
+        # drawn, so it runs on one thread.
         return run_program("b3d-render", [command, *args.arguments], want=1)
 
     return run
@@ -369,8 +268,7 @@ def render_command(name: str, summary: str) -> Command:
 
 # Clippy's own target directory, nested in the workspace's as the main workspace's is
 # (`paths.CLIPPY_TARGET`). Its check units are not the ones a build produces, so in the shared
-# directory it would share no work with the build, only Cargo's lock on it, and the fast check's
-# lanes could not run it beside the shared build (lane.py).
+# directory it would share no work with the build, only Cargo's lock on it.
 CLIPPY_TARGET: Path = paths.WORKSPACE / "target" / "clippy"
 
 
@@ -458,49 +356,11 @@ OWN_COMMANDS: tuple[Command, ...] = (
             ),
             (
                 "just b3d timeline-parity --fixtures",
-                "the recorded fixtures only, as the lane does",
+                "the recorded fixtures only",
             ),
         ),
         lambda args: timeline.run_parity(args),
         timeline.parity_arguments,
-    ),
-    Command(
-        "lane",
-        "runs the beryl3d lanes' steps, as the fast check does for a Beryl 3D change",
-        (
-            ("just b3d lane", "every step of the lanes"),
-            (
-                "CHECK_HANG_LIMIT_S=600 just b3d lane",
-                "every step, each allowed 600 s before it counts as hung",
-            ),
-        ),
-        run_lane,
-    ),
-    Command(
-        "sweep",
-        "Beryl 3D's checks on origin/staging when its code or inputs changed, filing failures",
-        (
-            ("just b3d sweep", "sweep the staging tip if one is due"),
-            (
-                "just b3d sweep --dry-run --commit HEAD --step cargo-test",
-                "run one step at HEAD and print the ticket it would file",
-            ),
-        ),
-        sweep.sweep_command,
-        sweep.sweep_arguments,
-    ),
-    Command(
-        "sweep-run",
-        "runs the sweep's steps at HEAD, bisecting and filing failures (the sweep's tree)",
-        (
-            ("just b3d sweep-run --dry-run", "every step, printing what it would file"),
-            (
-                "just b3d sweep-run --step clippy --since origin/master",
-                "one step, bisecting a failure from master",
-            ),
-        ),
-        sweep.sweep_run,
-        sweep.sweep_run_arguments,
     ),
     Command(
         "cargo",

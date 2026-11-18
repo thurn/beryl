@@ -1,7 +1,7 @@
 """Whether Beryl 3D is still in its build-out, when a new verb or screen lands every hour or so
 (docs/beryl-3d.md, 'During the build-out').
 
-While it is, the sweep's exact-count gates fail only on what a feature commit cannot explain:
+While it is, the exact-count gates fail only on what a feature commit cannot explain:
 
 - `just b3d gate --counts` lets an instruction count pass its limit by
   [`BUILD_OUT_TOLERANCE_PERCENT`] instead of [`TIGHT_TOLERANCE_PERCENT`], and a count below its

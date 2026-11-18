@@ -33,7 +33,7 @@ minutes for the four boards.
 hand, when the work itself changed or a compiler or dependency upgrade moved the count, with the
 old and new numbers in the commit body (rust/beryl3d/AGENTS.md).
 
-The machine mounts only the main checkout, and the sweep checks out its commit elsewhere, so
+The machine mounts only the main checkout, and a worktree is elsewhere, so
 the sources the program needs are sent into the machine (`source.py`), with the recordings
 pack the recorded boards are read from.
 """

@@ -11,7 +11,14 @@ from pathlib import Path
 import pytest
 
 from beryl_efficiency import cilog, cli, cpu, ingest, paths, store
-from beryl_efficiency.beads import Beads
+from tests.legacy_sources import (
+    Beads,
+    RunLog,
+    Samples,
+    Verdicts,
+    runlog_path,
+    samples_path,
+)
 from tests.synthetic import bead as bead_record
 from tests.synthetic import listing
 
@@ -147,17 +154,17 @@ def epoch(moment: str) -> float:
 @pytest.fixture
 def log(cache: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """The run log and the sources that read it; the test writes the log."""
-    path = cilog.runlog_path(cache)
+    path = runlog_path(cache)
     path.parent.mkdir(parents=True)
     path.write_text("")
-    samples = cpu.samples_path(cache)
+    samples = samples_path(cache)
     samples.parent.mkdir(parents=True)
     samples.write_text("")
     sources: list[ingest.Source] = [
         Beads(lambda: BEADS),
-        cpu.Samples(samples, HOST),
-        cilog.RunLog(path),
-        cilog.Verdicts(lambda: EXPORT.encode()),
+        Samples(samples, HOST),
+        RunLog(path),
+        Verdicts(lambda: EXPORT.encode()),
     ]
     monkeypatch.setattr(cli, "sources", lambda: sources)
     return path
@@ -331,7 +338,7 @@ def test_cpu_by_kind_joins_the_sampler_s_minutes_to_lane_runs(
         line(at(14, 10, 2), RUST, seconds=60.0, cpu_seconds=60.0),
     )
     append(
-        cpu.samples_path(cache),
+        samples_path(cache),
         minute(
             epoch(at(14, 10, 1)),
             {"slow_ci/oracle/ci-1": 90.0, "slow_ci/compile/ci-1": 30.0},
@@ -383,7 +390,7 @@ def test_the_ci_metrics(log: Path, capsys: pytest.CaptureFixture[str]) -> None:
 def test_the_run_log_reads_the_hour_files_but_not_the_folded_ones(
     tmp_path: Path,
 ) -> None:
-    single = cilog.runlog_path(tmp_path)
+    single = runlog_path(tmp_path)
     hours = single.parent / "runs"
     hours.mkdir(parents=True)
     for name in (
@@ -392,9 +399,9 @@ def test_the_run_log_reads_the_hour_files_but_not_the_folded_ones(
         "2026-11-16T08.folded.jsonl",
     ):
         (hours / name).write_text("")
-    assert [p.name for p in cilog.RunLog(single).files()] == [
+    assert [p.name for p in RunLog(single).files()] == [
         "2026-11-16T08.jsonl",
         "2026-11-16T09.jsonl",
     ]
     single.write_text("")
-    assert cilog.RunLog(single).files()[0] == single
+    assert RunLog(single).files()[0] == single

@@ -2,12 +2,15 @@
 
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
-All infrastructure schedules the machine's CPU through the token pool in
-`src/beryl_tools/tokens.py`: a command that uses many cores takes a lease
-(`tokens.acquire`, or `tokens.run_program` for a built program) and sizes its
-threads to it, and long background work runs at low priority (`system.utility`)
-instead. The sweeps are the exception: work that must finish within an interval
-takes tokens of the lowest class, `sweep`, at normal priority, because the
-utility class gets almost no CPU at the machine's usual load. Cargo commands
-take tokens through the shim in `shims/cargo`, and the Lima machines through
-`bench.vm_ensure`.
+Ignite's daemon schedules the machine's CPU: it gives each command it runs a
+number of cores in `IGNITE_CORES`, and a program that spreads its work over
+threads sizes them to that (or to `os.cpu_count()` when run by hand). Long
+background work that Ignite does not run, such as a tournament, runs at low
+priority (`system.utility`) instead.
+
+The adapters in `src/beryl_tools/ignite/` list each check family's checks and
+report their results to Ignite (`ignite/checks/*.toml` names the adapter of each
+family). An adapter imports only domain modules, never a command's own
+scheduling or reporting, so that its input hashes cover what it runs.
+`tools/tests/test_ignite_inputs.py` holds each family's declared inputs to the
+modules its adapter imports.

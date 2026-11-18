@@ -19,11 +19,9 @@ from . import (
     cards,
     changes,
     ci,
-    cilog,
     claude,
     commits,
     codex,
-    cpu,
     exchange,
     facts,
     failures,
@@ -32,7 +30,6 @@ from . import (
     ignite_metrics,  # registers its series
     ingest,
     kinds,
-    locks,
     machine,
     metrics,
     paths,
@@ -40,7 +37,6 @@ from . import (
     rollups,
     session,
     store,
-    tickets,
     timings,
 )
 from .beads import main_checkout
@@ -53,30 +49,22 @@ MAX_AGE = 60.0
 
 
 def sources() -> list[ingest.Source]:
-    """Every source, in the order ingest reads them: tickets and session records first, since
-    deriving windows from transcripts reads both, and the CPU token pool's leases and Enact's
-    lock-wait log after the transcripts, since they are joined to the transcripts' tool
-    calls."""
+    """Every source, in the order ingest reads them: the hub's tickets and the session records
+    first, since deriving windows from transcripts reads both, and the hub's records after the
+    transcripts, since their leases are joined to the transcripts' tool calls. On a machine
+    with no hub database the hub's sources are absent, and the store keeps what it has.
+    """
     checkout = main_checkout(Path.cwd())
     host = paths.host()
-    records, verdicts, events = tickets.sources(checkout)
-    found: list[ingest.Source] = [
-        records,
+    cache = paths.cache_root()
+    return [
+        *ignite.ticket_sources(cache),
         claude.Sessions(paths.claude_sessions(), checkout, host),
-    ]
-    if events is not None:
-        found.append(events)
-    return found + [
         claude.Transcripts(paths.claude_projects(), checkout, host),
         codex.Rollouts(paths.codex_sessions(), checkout, host),
-        cpu.Samples(cpu.samples_path(paths.cache_root()), host),
-        cpu.Leases(cpu.leases_path(paths.cache_root()), host),
-        locks.LockLog(locks.folder(checkout), host),
-        cilog.RunLog(cilog.runlog_path(paths.cache_root())),
-        timings.Timings(paths.cache_root()),
-        verdicts,
+        timings.Timings(cache),
         commits.Commits.here(checkout),
-        *ignite.sources(paths.cache_root(), host),
+        *ignite.sources(cache, host),
     ]
 
 
@@ -221,16 +209,7 @@ def unread(db: sqlite3.Connection, found: Sequence[ingest.Source]) -> dict[str, 
 def gaps(db: sqlite3.Connection) -> dict[str, object]:
     """What attribution could not place: top-level transcripts with no ticket window (by the
     kind of their one window), closes with no open window, and tickets that ran on a host the
-    store has no data from, by host, and Enact lock-wait lines joined to a tool call, joined
-    to none (run outside any session) and not looked at yet."""
-    lock_lines = {
-        str(r[0]): int(r[1])
-        for r in db.execute(
-            """SELECT CASE WHEN call IS NULL THEN 'pending' WHEN call = '' THEN 'no call'
-                ELSE 'joined' END, count(*)
-            FROM lock_waits GROUP BY 1 ORDER BY 1"""
-        )
-    }
+    store has no data from, by host."""
     without = {
         str(r[0]): int(r[1])
         for r in db.execute(
@@ -266,7 +245,6 @@ def gaps(db: sqlite3.Connection) -> dict[str, object]:
         "sessions_without_window": without,
         "stray_closes": stray,
         "beads_no_data": elsewhere,
-        "lock_lines": lock_lines,
     }
 
 
@@ -375,9 +353,7 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
     missing = gaps(db)
     without = missing["sessions_without_window"]
     elsewhere = missing["beads_no_data"]
-    lock_lines = missing["lock_lines"]
     assert isinstance(without, dict) and isinstance(elsewhere, dict)
-    assert isinstance(lock_lines, dict)
     lines = [
         "rows      " + " | ".join(f"{k} {v}" for k, v in counts.items()),
         "skipped   "
@@ -387,8 +363,6 @@ def coverage(db: sqlite3.Connection, pending: dict[str, int] | None = None) -> R
         + f" | closes with no open window {missing['stray_closes']}",
         "no data   tickets that ran on hosts with no data: "
         + (", ".join(f"{k} {v}" for k, v in elsewhere.items()) or "none"),
-        "enact     lock-wait lines: "
-        + (", ".join(f"{k} {v}" for k, v in lock_lines.items()) or "none"),
     ]
     per_host = hosts(db)
     lines.append(
@@ -545,10 +519,6 @@ def run_compile(args: argparse.Namespace) -> Result:
         db.close()
 
 
-def run_enact(args: argparse.Namespace) -> Result:
-    return answer(args, locks.report)
-
-
 def run_ci(args: argparse.Namespace) -> Result:
     return answer(
         args,
@@ -626,10 +596,6 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "cores in use, saturation, time queued for cores, shared CPU, capacity",
         run_machine,
     ),
-    "enact": (
-        "time waiting for Enact's lock and syncing, by subcommand and holder",
-        run_enact,
-    ),
     "ci": (
         "CI's cost, catches and flakiness by script, check lane, family and check",
         run_ci,
@@ -674,7 +640,6 @@ SCOPED: dict[str, str] = {
     "cards": "7d",
     "machine": "7d",
     "ci": "7d",
-    "enact": "7d",
     "pushes": "7d",
     "failures": "7d",
     "findings": "7d",

@@ -1,7 +1,7 @@
 """Sending this checkout's sources into the `beryl3d-bench` machine, for the gates that build
 there (`counts.py`, `gpu.py`).
 
-The machine mounts only the main checkout, and the sweep checks its commit out elsewhere, so a
+The machine mounts only the main checkout, and a worktree is elsewhere, so a
 gate cannot build from the checkout's path. It sends the files its build reads ([`SOURCES`]) as
 a tar stream on the script's stdin, and the script copies them over the machine's own copy,
 [`SOURCE`], with `rsync --checksum`: a file whose content did not change keeps its time, so Cargo

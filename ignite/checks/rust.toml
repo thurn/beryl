@@ -246,8 +246,11 @@ dir = "rust"
 inputs = ["crate-closure", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
 outputs = ["rust/target"]
 
-# Clippy's pass over the workspace in its own target directory, so that it never waits on
-# Cargo's lock of rust/target while a test build holds it. Lints are capped at warnings so that
+# Clippy's pass over the workspace in its own target directory, rust/target/clippy. Cargo holds
+# one lock on a target directory for the whole of a command, and clippy's check units are not the
+# ones a build or test makes, so in rust/target the two shared no work and only waited on each
+# other: from 2026-11-14 to 16 the old fast check killed clippy at its 180 s limit in 102 of 160
+# runs while it printed "Blocking waiting for file lock on build directory". Lints are capped at warnings so that
 # every unit's result is kept and the `clippy` family's run replays them (rust.py, `CLIPPY`).
 [product.clippy]
 build = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy build"
@@ -264,8 +267,10 @@ outputs = ["rust/target/clippy"]
 
 # The command-line tool, which the script, browser and oracle checks run. Built over the whole
 # workspace's libraries in the `test` profile, as the test binaries are, so that neither build
-# compiles a library the other did (tools/src/beryl_tools/paths.py, `CLI_BUILD`, says why). The
-# binary lands in rust/target/debug.
+# compiles a library the other did (tools/src/beryl_tools/paths.py, `CLI_BUILD`, says why): with
+# `--bin` alone, beryl_kernel, beryl_table, beryl_rules and beryl_engine compiled a second time.
+# tools/tests/test_cli_build.py fails if a dev-dependency turns on a feature that no normal
+# dependency does, which would split the two builds again. The binary lands in rust/target/debug.
 [product.cli]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli"
 dir = "rust"
@@ -273,7 +278,8 @@ inputs = ["crate:beryl_cli", "rust/Cargo.toml", "data/card-store.tsv", "data/set
 outputs = ["rust/target"]
 
 # `beryl_scenario`, which dumps the oracle scenarios and renders the cards' rules text, built
-# the same way as `cli`.
+# the same way as `cli`. The `test` profile builds at opt-level 1 (rust/Cargo.toml): an
+# unoptimized `beryl_scenario` took 48 s to dump the scenarios, against 4.5 s.
 [product.scenario-dump]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_scenario"
 dir = "rust"

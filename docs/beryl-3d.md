@@ -105,9 +105,10 @@ once.
 - [Benchmarking](benchmarking.md): the count gate, Callgrind in the
   `beryl-bench` Linux virtual machine, and timing under load. The performance
   gates here use the same tools.
-- [Checks](checks.md): the fast check that runs before every push, the slow
-  check that runs after, and their parts. Beryl 3D's checks are a lane and a
-  sweep of their own (see [Checks and isolation](#checks-and-isolation)).
+- [Ignite](ignite.md): the build, check and delivery system. Beryl 3D's checks
+  are the `b3d-*` families in `ignite/checks/beryl3d.toml` (see
+  [Checks and isolation](#checks-and-isolation), which describes the fast check,
+  slow CI and sweeps that came before Ignite).
 - [Manual multiplayer](manual-multiplayer.md): a rules-free table for two
   people. Its screens are part of what Beryl 3D must reproduce.
 - `ui/AGENTS.md` and `rust/AGENTS.md`: how the web interface and the Rust crates

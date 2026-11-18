@@ -1,22 +1,24 @@
-"""The tickets source: the stored format used by older imported ticket snapshots
-(docs/efficiency-dashboard.md, "Sources").
+"""Ticket rows and the main checkout (docs/efficiency-dashboard.md, "Sources").
 
-Later queries use each ticket's id, parent, labels, status, its creation, start and close
-times, and the Enact metadata (`enact_*`) that ties it to sessions, worktrees and commits.
+`rows_of` builds the `beads` and `labels` rows of one ticket record; `ignite.HubTickets` is
+the only caller. Later queries use each ticket's id, parent, labels, status, its creation,
+start and close times, and the metadata keys starting `enact_` that tie it to sessions,
+worktrees and commits (tickets from before Ignite carry them as imported; `ignite.py` sets
+the ones it can for newer tickets). `main_checkout` and `run_command` find the checkout and
+run `git` for `commits.py`.
 """
 
 from __future__ import annotations
 
 import json
 import subprocess
-from collections.abc import Callable
 from pathlib import Path
 
-from .ingest import Row, SnapshotSource, SourceError
+from .ingest import Row, SourceError
 
 
 def main_checkout(start: Path) -> Path:
-    """The main checkout of the repository at `start`, where the tickets database lives; `start`
+    """The main checkout of the repository at `start`, whose `.git` directory the worktrees share; `start`
     itself when git cannot say."""
     try:
         found = subprocess.run(
@@ -90,30 +92,3 @@ def rows_of(record: object) -> list[Row]:
     ]
     rows += [("labels", {"bead": bead, "label": str(label)}) for label in labels]
     return rows
-
-
-class Beads(SnapshotSource):
-    name = "beads"
-    owns = ("beads", "labels", "ticket_aliases")
-
-    def __init__(self, read: Callable[[], bytes]) -> None:
-        self._read = read
-
-    def read(self) -> bytes:
-        return self._read()
-
-    def parse(self, data: bytes) -> tuple[list[Row], int]:
-        try:
-            records = json.loads(data)
-        except ValueError as e:
-            raise SourceError(f"the snapshot contains no JSON: {e}") from e
-        if not isinstance(records, list):
-            raise SourceError("the snapshot contains no list of tickets")
-        rows: list[Row] = []
-        skipped = 0
-        for record in records:
-            try:
-                rows += rows_of(record)
-            except (TypeError, KeyError):
-                skipped += 1
-        return rows, skipped
