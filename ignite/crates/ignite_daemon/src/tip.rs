@@ -4,14 +4,26 @@
 //!
 //! - A round starts when the hub's change feed shows something new. It verifies the newest
 //!   `staging` commit; tips in between are never verified one by one.
-//! - The set: every regression check that the hub has not switched off, among the families this
-//!   machine runs, with no cached result for the tip. A check whose inputs did not change since
-//!   the last verified commit has the same input hash, so the result cache answers it.
+//! - The set: every regression check of every regression family that the hub has not switched
+//!   off, with no cached result for the tip. A check whose inputs did not change since the last
+//!   verified commit has the same input hash, so the result cache answers it. A check this
+//!   machine cannot run is in the set as a key that only another machine's pass satisfies, and
+//!   a family that cannot be listed here makes the tip wait ([`TipSet::unlisted`]).
 //! - The set is claimed from the hub in batches of one family's checks, so two machines never
 //!   run the same batch. Checks only this machine's platform can run go first.
 //! - `master` moves to the tip once every check in its set has a pass on each platform it
-//!   needs. A failure or an `incomplete` check holds it. A failure cached by another machine is
-//!   run once here before it holds `master`.
+//!   needs. A failure or an `incomplete` check holds it. A cached failure is run once here
+//!   before it holds `master`, so a fault of one run, or of Ignite, heals.
+//! - A check that stays `incomplete` through its attempts is reported to the hub once, which
+//!   files a ticket, and is not run again by this machine for an hour, then two, and so on up
+//!   to a day. The hold also leaves its batch unclaimed, so the claim lapses and another
+//!   machine can take it. `master` keeps waiting for the check.
+//! - Nothing a round meets sticks silently: a family that cannot be listed, a check whose inputs
+//!   cannot be resolved and a push that moves `master` but is refused are reported to the hub
+//!   once per tip, and the tip waits. Telemetry the hub refuses is logged and never fails a
+//!   round.
+//! - A round that has run a batch is finished even when a newer tip arrives, so a shared input
+//!   that every landing changes cannot keep any tip from being verified.
 //! - A failure's candidates are the landings since the last verified commit that changed one
 //!   of the check's inputs. One candidate is the culprit with nothing run; several are searched
 //!   by running that check between them, at most [`MAX_RUNS`] times. A landing is one
@@ -21,6 +33,7 @@
 //!   only another platform's machines can run, the hub is told once per tip and platform, and
 //!   files a P1 ticket naming those machines. `master` keeps waiting.
 
+mod report;
 mod work;
 
 #[cfg(test)]
@@ -33,11 +46,12 @@ use std::sync::Arc;
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Seq, TicketId};
 use ignite_core::protocol::hub::{
-    Record, RegressionReport, ResultKey, TipClaim, TipState, TipVerified, TipWaiting,
+    IncompleteReason, Record, RegressionReport, ResultKey, TipClaim, TipState, TipVerified,
+    TipWaiting,
 };
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{Error, Push, Result};
+use ignite_core::traits::{Push, Result};
 use ignite_git::changed::CommitPaths;
 
 use crate::server::Context;
@@ -79,6 +93,32 @@ pub struct TipRun {
     pub outcome: Outcome,
     /// The file or reference that holds a failure's output.
     pub output: Option<String>,
+    /// Why an `Incomplete` check has no verdict, when the command's own run left it so. `None`
+    /// when the fault was not the check's: no landing tree was free, for one.
+    pub reason: Option<IncompleteReason>,
+}
+
+/// A regression check or family that tip verification cannot list or key on this machine. The
+/// tip waits for it, and the hub is told once unless the machine could never run it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unlisted {
+    /// The check that cannot be keyed, or `<family>:listing` for a whole family.
+    pub name: CheckName,
+    pub family: String,
+    /// What went wrong, for the report.
+    pub message: String,
+    /// False for a family this machine does not run: its machine's trouble is not a fault of the
+    /// repository, so a machine that can run it moves `master` instead of a ticket.
+    pub reportable: bool,
+    /// The platforms whose machines can run a family this machine does not.
+    pub platforms: Vec<Os>,
+}
+
+/// What a tip needs: the keyed checks, and what could not be listed or keyed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TipSet {
+    pub checks: Vec<TipCheck>,
+    pub unlisted: Vec<Unlisted>,
 }
 
 /// One landing: one ticket's commits, oldest first, and the paths they changed.
@@ -100,7 +140,7 @@ impl TipLanding {
 /// there and the landings between two commits. [`CheckTipWork`] is the real one.
 pub trait TipWork: Send + Sync {
     /// Every regression check `commit` needs a pass for, as this machine can list them.
-    fn checks(&self, ctx: &Context, commit: &Commit) -> Result<Vec<TipCheck>>;
+    fn checks(&self, ctx: &Context, commit: &Commit) -> Result<TipSet>;
     /// Runs the named checks at `commit` in a landing tree, in the `tip` class, storing their
     /// results. `rerun` ignores cached results.
     fn run(&self, ctx: &Context, commit: &Commit, checks: &[CheckName], rerun: bool)
@@ -158,6 +198,18 @@ pub struct TipVerifier {
     /// The output references that runs on this machine returned in this round. Only these are
     /// opened to quote a failure's last lines.
     own_outputs: HashSet<String>,
+    /// When this machine may run a check that gave up again, by its key: an hour after the first
+    /// time, then twice as long each time, up to a day.
+    held_off: HashMap<ResultKey, Timestamp>,
+    /// How many runs of each check ended incomplete, which sets how long it is held off.
+    incomplete_runs: HashMap<ResultKey, u32>,
+    /// The incomplete checks the hub was told of.
+    reported_incomplete: HashSet<ResultKey>,
+    /// The tips and names (a family that could not be listed, a check without inputs, a refused
+    /// push) the hub was told of.
+    reported_stuck: HashSet<(Commit, CheckName)>,
+    /// The cached failures run again here once, so that they stand afterwards.
+    rechecked: HashSet<ResultKey>,
 }
 
 impl TipVerifier {
@@ -171,6 +223,11 @@ impl TipVerifier {
             waiting_since: BTreeMap::new(),
             flagged: HashSet::new(),
             own_outputs: HashSet::new(),
+            held_off: HashMap::new(),
+            incomplete_runs: HashMap::new(),
+            reported_incomplete: HashSet::new(),
+            reported_stuck: HashSet::new(),
+            rechecked: HashSet::new(),
         }
     }
 
@@ -193,6 +250,7 @@ impl TipVerifier {
 
     /// Verifies one tip: runs what its set still needs, then moves `master`, reports failures
     /// or waits.
+    #[allow(clippy::too_many_lines)]
     pub fn verify(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
         let repository = &ctx.config.repository;
         let last = ctx.git.tip(&repository.master)?;
@@ -200,33 +258,48 @@ impl TipVerifier {
             return Ok(TipOutcome::Verified);
         }
         self.own_outputs.clear();
-        let checks = self.work.checks(ctx, tip)?;
+        let TipSet { checks, unlisted } = self.work.checks(ctx, tip)?;
+        let now = ctx.clock.now();
         let keys: Vec<ResultKey> = checks.iter().map(|c| c.key.clone()).collect();
         let cached = ctx.hub.lookup(&keys)?;
         let mut verdicts: HashMap<ResultKey, TipRun> = HashMap::new();
         let mut to_run: Vec<&TipCheck> = Vec::new();
         let mut recheck: Vec<&TipCheck> = Vec::new();
         for (check, hit) in checks.iter().zip(cached) {
+            let held = self
+                .held_off
+                .get(&check.key)
+                .is_some_and(|until| now < *until);
             match hit.filter(|_| check.reuse) {
+                // A failure is run again once here before it holds `master`, whoever stored it:
+                // another machine's may be a fault of that machine, this one's a fault of one
+                // run. The rerun's result is stored over it, and stands afterwards.
                 Some(hit)
                     if hit.outcome == Outcome::Fail
                         && check.runnable
-                        && hit.machine != ctx.machine =>
+                        && !held
+                        && (hit.machine != ctx.machine
+                            || self.rechecked.insert(check.key.clone())) =>
                 {
                     recheck.push(check);
                 }
                 Some(hit) => {
                     verdicts.insert(check.key.clone(), verdict(check, hit.outcome, hit.output));
                 }
+                None if held => {}
                 None if check.runnable && check.reuse => to_run.push(check),
                 None if check.runnable => recheck.push(check),
                 None => {}
             }
         }
-        self.record_cached(ctx, tip, &checks, &to_run, &recheck)?;
+        self.record_cached(ctx, tip, &checks, &to_run, &recheck);
 
+        let mut ran_a_batch = false;
         for (index, (family, batch, names)) in batches(&to_run).into_iter().enumerate() {
-            if index > 0 {
+            // A round that has not run anything yet starts over at a newer tip. One that has is
+            // finished, so that a shared input every landing changes cannot keep it from ever
+            // ending. `master` may then move to a tip that is behind `staging`.
+            if index > 0 && !ran_a_batch {
                 let newest = ctx.git.tip(&repository.staging)?;
                 if newest != *tip {
                     return Ok(TipOutcome::Superseded { by: newest });
@@ -241,6 +314,7 @@ impl TipVerifier {
             if !ctx.hub.tip_claim(&claim)?.granted {
                 continue;
             }
+            ran_a_batch = true;
             let runs = self.work.run(ctx, tip, &names, false);
             settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         }
@@ -250,6 +324,8 @@ impl TipVerifier {
             settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
+        self.note_incomplete(ctx, tip, &checks, &verdicts);
+        self.report_unlisted(ctx, tip, &unlisted);
 
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting: Vec<CheckName> = Vec::new();
@@ -266,10 +342,23 @@ impl TipVerifier {
                 }
             }
         }
+        for missing in &unlisted {
+            waiting.push(missing.name.clone());
+            for os in &missing.platforms {
+                elsewhere.entry(*os).or_default().push(missing.name.clone());
+            }
+        }
         if !failed.is_empty() {
             for check in &failed {
                 let output = verdicts.get(&check.key).and_then(|v| v.output.clone());
-                self.blame(ctx, &last, tip, check, output.as_deref())?;
+                // A failure to find the culprit or to reach the hub must not keep the tip from
+                // being recorded as failed; a later tip that still fails reports it again.
+                if let Err(error) = self.blame(ctx, &last, tip, check, output.as_deref()) {
+                    eprintln!(
+                        "ignite: regression of {} not reported: {error}",
+                        check.check
+                    );
+                }
             }
             ctx.hub.tip_verified(&TipVerified {
                 commit: tip.clone(),
@@ -295,10 +384,13 @@ impl TipVerifier {
         match ctx.git.push(&ctx.repo, tip, &repository.master)? {
             Push::Pushed { .. } => {}
             Push::Rejected { reason } => {
-                return Err(Error::Conflict(format!(
-                    "{} did not move to {tip}: {reason}",
-                    repository.master
-                )));
+                // Typically `master` holds a commit `staging` lacks, such as a push by hand.
+                // Trying again gives the same answer, so the hub is told once.
+                let name = CheckName::new("tip:move-master")
+                    .unwrap_or_else(|_| unreachable!("a family and a word make a check name"));
+                let output = format!("{} did not move to {tip}: {reason}", repository.master);
+                self.report_stuck(ctx, tip, &name, None, &output);
+                return Ok(TipOutcome::Waiting { checks: vec![name] });
             }
         }
         ctx.hub.tip_verified(&TipVerified {
@@ -425,34 +517,48 @@ impl TipVerifier {
         if !check.runnable || self.reported.contains(&check.key) {
             return Ok(());
         }
-        let newest = ctx.git.tip(&ctx.config.repository.staging)?;
-        if newest != *tip && touches(&ctx.git.changed(tip, &newest)?, &check.inputs) {
+        // Where git cannot say, the failure is reported, which at worst repeats a report.
+        let newest = ctx
+            .git
+            .tip(&ctx.config.repository.staging)
+            .unwrap_or_else(|_| tip.clone());
+        if newest != *tip
+            && ctx
+                .git
+                .changed(tip, &newest)
+                .is_ok_and(|changed| touches(&changed, &check.inputs))
+        {
             return Ok(());
         }
         // A failing check at a tip is always reported. With no landing to blame (the hub
         // recorded none between the commits), the report names the whole range since the last
         // verified commit and no ticket.
-        let (first_bad, last_good, caused_by, suspects) =
-            match self.find_culprit(ctx, check, last, tip)? {
-                Some(culprit) => {
-                    let tickets: Vec<TicketId> = culprit
-                        .suspects
-                        .iter()
-                        .filter_map(|l| l.ticket.clone())
-                        .collect();
-                    if culprit.suspects.len() == 1 {
-                        (
-                            culprit.first_bad,
-                            culprit.last_good,
-                            tickets.into_iter().next(),
-                            Vec::new(),
-                        )
-                    } else {
-                        (culprit.first_bad, culprit.last_good, None, tickets)
-                    }
+        let culprit = self
+            .find_culprit(ctx, check, last, tip)
+            .unwrap_or_else(|error| {
+                eprintln!("ignite: no culprit found for {}: {error}", check.check);
+                None
+            });
+        let (first_bad, last_good, caused_by, suspects) = match culprit {
+            Some(culprit) => {
+                let tickets: Vec<TicketId> = culprit
+                    .suspects
+                    .iter()
+                    .filter_map(|l| l.ticket.clone())
+                    .collect();
+                if culprit.suspects.len() == 1 {
+                    (
+                        culprit.first_bad,
+                        culprit.last_good,
+                        tickets.into_iter().next(),
+                        Vec::new(),
+                    )
+                } else {
+                    (culprit.first_bad, culprit.last_good, None, tickets)
                 }
-                None => (tip.clone(), last.clone(), None, Vec::new()),
-            };
+            }
+            None => (tip.clone(), last.clone(), None, Vec::new()),
+        };
         ctx.hub.regression(&RegressionReport {
             check: check.check.clone(),
             first_bad,
@@ -504,7 +610,7 @@ impl TipVerifier {
         checks: &[TipCheck],
         to_run: &[&TipCheck],
         recheck: &[&TipCheck],
-    ) -> Result<()> {
+    ) {
         let families: BTreeSet<&str> = checks
             .iter()
             .filter(|c| c.runnable)
@@ -534,9 +640,12 @@ impl TipVerifier {
             })
             .collect();
         if records.is_empty() {
-            return Ok(());
+            return;
         }
-        ctx.hub.records(&records)
+        // Telemetry never decides a tip: a hub that refuses it is logged and the round goes on.
+        if let Err(error) = ctx.hub.records(&records) {
+            eprintln!("ignite: cache-hit records not sent: {error}");
+        }
     }
 }
 
@@ -570,6 +679,7 @@ fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun
         check: check.check.clone(),
         outcome,
         output,
+        reason: None,
     }
 }
 

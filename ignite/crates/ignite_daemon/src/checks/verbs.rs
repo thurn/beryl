@@ -6,10 +6,11 @@ use std::sync::Arc;
 
 use serde_json::json;
 
-use ignite_core::ids::{CheckName, TreeId};
+use ignite_core::ids::{CheckName, TicketId, TreeId};
 use ignite_core::manifest::Kind;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::CachedResult;
+use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::protocol::{Class, Outcome};
 
 use super::plan::{self, GateView};
@@ -86,7 +87,10 @@ impl Verb for TestVerb {
         lines.push(("ran".to_owned(), ran_line(&run)));
         lines.extend(failure_lines(&run));
         if let Some(first) = run.failures.first() {
-            lines.push(("rerun".to_owned(), format!("ignite test {}", first.check)));
+            lines.push((
+                "rerun".to_owned(),
+                format!("ignite test --rerun {}", first.check),
+            ));
         }
         reply(&run, render(&lines))
     }
@@ -186,8 +190,21 @@ impl Checks {
         for family in &mut prepared {
             family.keep(|_| true, &mut run);
         }
+        // Without the changed paths the gate cannot tell which checks the change edited, and
+        // would drop them silently, so it fails instead.
+        let changed = match changed_paths(self, ctx, tree) {
+            Ok(changed) => changed,
+            Err(error) => {
+                run.incomplete_families.push((
+                    format!("the changed files of the tree cannot be read: {error}"),
+                    std::path::PathBuf::new(),
+                ));
+                return GateRun { run, left: 0 };
+            }
+        };
         let hits = self.lookup(&prepared, options);
-        let view = gate_view(self, ctx, tree, &prepared, &hits);
+        let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
+        view.landing.clone_from(&options.ticket);
         let gate_plan = view.plan(&ctx.config.gate);
         let to_run: Vec<&CheckName> = gate_plan.run.iter().map(|p| &p.check).collect();
         let cached: Vec<&CheckName> = gate_plan.cached.iter().map(|p| &p.check).collect();
@@ -358,6 +375,8 @@ trait TreeVerb {
 }
 
 /// What the gate plan reads: the tree's changed paths and areas, and each family's record.
+/// Where the changed paths cannot be read, the view has none, which suits the verbs that only
+/// explain a check; the gate itself reads them first and fails when it cannot.
 fn gate_view(
     checks: &Checks,
     ctx: &Context,
@@ -365,12 +384,33 @@ fn gate_view(
     prepared: &[Prepared],
     hits: &[Option<CachedResult>],
 ) -> GateView {
+    let changed = changed_paths(checks, ctx, tree).unwrap_or_default();
+    gate_view_of(checks, ctx, tree, prepared, hits, &changed)
+}
+
+/// The paths the tree changes since its branch left the integration branch.
+fn changed_paths(
+    checks: &Checks,
+    ctx: &Context,
+    tree: &OpenTree,
+) -> ignite_core::traits::Result<Vec<String>> {
     let base = format!(
         "{}/{}",
         ctx.config.repository.remote, ctx.config.repository.staging
     );
-    let changed = checks.trees.changed(&tree.path, &base).unwrap_or_default();
-    let areas = plan::areas(&changed, &tree.graph);
+    checks.trees.changed(&tree.path, &base)
+}
+
+/// [`gate_view`] over `changed`, which the caller read.
+fn gate_view_of(
+    checks: &Checks,
+    ctx: &Context,
+    tree: &OpenTree,
+    prepared: &[Prepared],
+    hits: &[Option<CachedResult>],
+    changed: &[String],
+) -> GateView {
+    let areas = plan::areas(changed, &tree.graph);
     let stats: BTreeMap<String, _> = prepared
         .iter()
         .filter_map(|p| {
@@ -380,7 +420,28 @@ fn gate_view(
         .collect();
     let manifest = &checks.settings.manifest;
     let family = |name: &str| manifest.families.get(name).map(|d| &d.family);
-    GateView::new(prepared, hits, family, &stats, &changed, areas)
+    let regressions = open_regressions(ctx);
+    GateView::new(prepared, hits, family, &stats, &regressions, changed, areas)
+}
+
+/// The open regression ticket of each check the hub has one for. The hub files each as
+/// `Regression: <check>`. A hub that cannot be reached answers none, which only means the gate
+/// plans every check as if none were known to fail.
+pub(super) fn open_regressions(ctx: &Context) -> BTreeMap<CheckName, TicketId> {
+    let query = TicketQuery {
+        label: vec!["regression".to_owned()],
+        limit: Some(1000),
+        ..TicketQuery::default()
+    };
+    let tickets = ctx.hub.tickets(&query).unwrap_or_default();
+    tickets
+        .into_iter()
+        .filter(|t| t.status != Status::Closed)
+        .filter_map(|t| {
+            let check = t.title.strip_prefix("Regression: ")?.parse().ok()?;
+            Some((check, t.id))
+        })
+        .collect()
 }
 
 impl TreeVerb for TestVerb {

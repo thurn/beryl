@@ -132,6 +132,27 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
 /// steps, such as a page in each layout, may write a line per step, and a pass from the last
 /// step must not hide a failure from an earlier one.
 pub fn jsonl_results(text: &str) -> Vec<Reported> {
+    parsed_results(text).0
+}
+
+/// The results of a `jsonl` run that was cut short: it hung, or ended by a signal or by an
+/// error that no failing check explains. The check of the last line written may have been in
+/// the middle of its steps, and its pass says nothing about the steps that never ran, so that
+/// line becomes `incomplete` with no reason, which the runner retries on its own. Checks that
+/// other lines followed had finished.
+pub fn jsonl_results_cut_short(text: &str) -> Vec<Reported> {
+    let (mut reported, last) = parsed_results(text);
+    for r in &mut reported {
+        if Some(&r.check) == last.as_ref() && r.outcome == Outcome::Pass {
+            r.outcome = Outcome::Incomplete;
+            r.message = Some("the command ended after this check's last passing step".to_owned());
+        }
+    }
+    reported
+}
+
+/// The results in `text` (see [`jsonl_results`]) and the check the last line names.
+fn parsed_results(text: &str) -> (Vec<Reported>, Option<CheckName>) {
     #[derive(Deserialize)]
     struct Line {
         check: CheckName,
@@ -142,10 +163,12 @@ pub fn jsonl_results(text: &str) -> Vec<Reported> {
         reason: Option<IncompleteReason>,
     }
     let mut reported: Vec<Reported> = Vec::new();
+    let mut last = None;
     for line in text
         .lines()
         .filter_map(|l| serde_json::from_str::<Line>(l.trim()).ok())
     {
+        last = Some(line.check.clone());
         if reported
             .iter()
             .any(|r| r.check == line.check && r.outcome == Outcome::Fail)
@@ -161,7 +184,7 @@ pub fn jsonl_results(text: &str) -> Vec<Reported> {
             reason: line.reason,
         });
     }
-    reported
+    (reported, last)
 }
 
 /// A `nextest` family's list command.

@@ -5,17 +5,17 @@
 //! `&self` and must be `Send + Sync`.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
+use crate::ids::{Commit, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, JusticiarReport, Landed,
-    LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
-    RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply,
-    TipVerified, TipWaiting, TipWaitingFiled,
+    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
+    JusticiarReport, Landed, LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record,
+    RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim,
+    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
@@ -23,9 +23,11 @@ use crate::protocol::tickets::{
 };
 use crate::time::Timestamp;
 use crate::traits::{
-    BuildResult, Builds, Clock, CommandSpec, Error, Git, Hub, Launcher, Push, Rebase, Result,
-    RunResult,
+    BuildResult, Builds, Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult,
 };
+
+mod git;
+pub use git::FakeGit;
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
@@ -141,89 +143,12 @@ impl Builds for FakeBuilds {
     }
 }
 
-/// A repository held in maps: object IDs by path, changed paths by commit pair, branch tips.
-#[derive(Debug, Default)]
-pub struct FakeGit {
-    objects: Mutex<BTreeMap<String, Oid>>,
-    changes: Mutex<HashMap<(Commit, Commit), Vec<String>>>,
-    tips: Mutex<HashMap<String, Commit>>,
-    rebase: Mutex<Option<Rebase>>,
-    pushes: Mutex<Vec<(PathBuf, Commit, String)>>,
-}
-
-impl FakeGit {
-    pub fn set_object(&self, path: &str, oid: Oid) {
-        lock(&self.objects).insert(path.to_owned(), oid);
-    }
-
-    pub fn set_changed(&self, from: &Commit, to: &Commit, paths: &[&str]) {
-        let paths = paths.iter().map(|p| (*p).to_owned()).collect();
-        lock(&self.changes).insert((from.clone(), to.clone()), paths);
-    }
-
-    pub fn set_tip(&self, branch: &str, commit: Commit) {
-        lock(&self.tips).insert(branch.to_owned(), commit);
-    }
-
-    /// The next rebase's result; by default a rebase is clean onto the tip given.
-    pub fn script_rebase(&self, result: Rebase) {
-        *lock(&self.rebase) = Some(result);
-    }
-
-    /// Every push so far: tree, commit and branch.
-    pub fn pushes(&self) -> Vec<(PathBuf, Commit, String)> {
-        lock(&self.pushes).clone()
-    }
-}
-
-impl Git for FakeGit {
-    fn object_ids(&self, _tree: &Path, paths: &[String]) -> Result<Vec<(String, Oid)>> {
-        let objects = lock(&self.objects);
-        paths
-            .iter()
-            .map(|path| match objects.get(path) {
-                Some(oid) => Ok((path.clone(), oid.clone())),
-                None => Err(Error::NotFound(path.clone())),
-            })
-            .collect()
-    }
-
-    fn changed(&self, from: &Commit, to: &Commit) -> Result<Vec<String>> {
-        Ok(lock(&self.changes)
-            .get(&(from.clone(), to.clone()))
-            .cloned()
-            .unwrap_or_default())
-    }
-
-    fn rebase_onto(&self, _tree: &Path, tip: &Commit) -> Result<Rebase> {
-        Ok(lock(&self.rebase).take().unwrap_or_else(|| Rebase::Clean {
-            onto: tip.clone(),
-            head: tip.clone(),
-            landed_since: 0,
-        }))
-    }
-
-    fn push(&self, tree: &Path, commit: &Commit, branch: &str) -> Result<Push> {
-        lock(&self.pushes).push((tree.to_path_buf(), commit.clone(), branch.to_owned()));
-        lock(&self.tips).insert(branch.to_owned(), commit.clone());
-        Ok(Push::Pushed {
-            commit: commit.clone(),
-        })
-    }
-
-    fn tip(&self, branch: &str) -> Result<Commit> {
-        lock(&self.tips)
-            .get(branch)
-            .cloned()
-            .ok_or_else(|| Error::NotFound(branch.to_owned()))
-    }
-}
-
 /// A hub held in memory. [`FakeHub::set_unreachable`] makes every call fail as a network outage
 /// would.
 #[derive(Debug, Default)]
 pub struct FakeHub {
     unreachable: AtomicBool,
+    records_down: AtomicBool,
     results: Mutex<HashMap<ResultKey, CachedResult>>,
     reservations: Mutex<VecDeque<Reservation>>,
     briefs: Mutex<HashMap<TicketId, TicketBrief>>,
@@ -245,6 +170,7 @@ pub struct FakeHub {
     audits: Mutex<Vec<AuditReport>>,
     finds: Mutex<Vec<ExplorationFind>>,
     justiciars: Mutex<Vec<JusticiarReport>>,
+    incompletes: Mutex<Vec<IncompleteReport>>,
 }
 
 impl FakeHub {
@@ -266,6 +192,11 @@ impl FakeHub {
     /// What each call to `next` said the machine had free, in order.
     pub fn asked(&self) -> Vec<MachineFree> {
         lock(&self.asked).clone()
+    }
+
+    /// Makes `records` alone fail, as a hub that refuses telemetry does.
+    pub fn set_records_down(&self, down: bool) {
+        self.records_down.store(down, Ordering::SeqCst);
     }
 
     pub fn set_unreachable(&self, unreachable: bool) {
@@ -339,6 +270,11 @@ impl FakeHub {
 
     pub fn audit_reports(&self) -> Vec<AuditReport> {
         lock(&self.audits).clone()
+    }
+
+    /// Every incomplete-check report sent so far, in order.
+    pub fn incomplete_reports(&self) -> Vec<IncompleteReport> {
+        lock(&self.incompletes).clone()
     }
 
     pub fn exploration_finds(&self) -> Vec<ExplorationFind> {
@@ -468,6 +404,9 @@ impl Hub for FakeHub {
 
     fn records(&self, batch: &[Record]) -> Result<()> {
         self.reachable()?;
+        if self.records_down.load(Ordering::SeqCst) {
+            return Err(Error::Unreachable("records are refused".to_owned()));
+        }
         lock(&self.records).extend_from_slice(batch);
         Ok(())
     }
@@ -613,6 +552,13 @@ impl Hub for FakeHub {
         Ok(Self::filed(audits.len()))
     }
 
+    fn incomplete(&self, report: &IncompleteReport) -> Result<ReportFiled> {
+        self.reachable()?;
+        let mut reports = lock(&self.incompletes);
+        reports.push(report.clone());
+        Ok(Self::filed(reports.len()))
+    }
+
     fn find(&self, find: &ExplorationFind) -> Result<ReportFiled> {
         self.reachable()?;
         let mut finds = lock(&self.finds);
@@ -663,6 +609,8 @@ mod tests {
     use crate::config::Os;
     use crate::ids::{CheckName, InputHash, MachineId, RecordId};
     use crate::protocol::Outcome;
+    use crate::traits::Git;
+    use std::path::Path;
 
     fn key() -> ResultKey {
         ResultKey {

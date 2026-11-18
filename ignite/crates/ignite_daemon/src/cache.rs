@@ -64,12 +64,19 @@ impl ResultCache {
     ///
     /// A local entry stored before entries recorded their machine is used only if it is a
     /// pass, and then names this machine; such a failure is asked of the hub again.
+    ///
+    /// A local failure is always asked of the hub too, and the hub's entry wins when it has
+    /// one: the failure may have been repaired since (the hub then holds a newer pass), and a
+    /// failure that was only a fault of this machine must not outlive it. The local failure
+    /// stands only while the hub says nothing or cannot be reached.
     pub fn lookup(&self, keys: &[ResultKey]) -> Vec<Option<CachedResult>> {
         let mut found: Vec<Option<CachedResult>> = {
             let conn = self.conn();
             keys.iter().map(|key| self.local(&conn, key)).collect()
         };
-        let missing: Vec<usize> = (0..keys.len()).filter(|&i| found[i].is_none()).collect();
+        let missing: Vec<usize> = (0..keys.len())
+            .filter(|&i| found[i].as_ref().is_none_or(|r| r.outcome == Outcome::Fail))
+            .collect();
         if missing.is_empty() {
             return found;
         }
@@ -315,6 +322,32 @@ mod tests {
         old.machine = None;
         results::put(&cache.conn(), &old).unwrap();
         assert!(cache.lookup(&[key("f:b")])[0].is_none());
+    }
+
+    #[test]
+    fn a_newer_hub_pass_replaces_a_stale_local_failure() {
+        let hub = Arc::new(FakeHub::default());
+        let cache = cache(&hub);
+        cache.store(&[new("f:a", Outcome::Fail)]);
+        // Another machine repaired it on the same inputs; only the hub knows.
+        let mut pass = new("f:a", Outcome::Pass);
+        pass.machine = MachineId::new("m-2").unwrap();
+        hub.store(&[pass]).unwrap();
+        let found = cache.lookup(&[key("f:a")]);
+        assert_eq!(found[0].as_ref().unwrap().outcome, Outcome::Pass);
+        // The pass is copied, so it holds while the hub is down.
+        hub.set_unreachable(true);
+        let found = cache.lookup(&[key("f:a")]);
+        assert_eq!(found[0].as_ref().unwrap().outcome, Outcome::Pass);
+    }
+
+    #[test]
+    fn a_local_failure_the_hub_has_no_answer_for_stands() {
+        let hub = Arc::new(FakeHub::default());
+        let cache = cache(&hub);
+        cache.store(&[new("f:a", Outcome::Fail)]);
+        let found = cache.lookup(&[key("f:a")]);
+        assert_eq!(found[0].as_ref().unwrap().outcome, Outcome::Fail);
     }
 
     #[test]

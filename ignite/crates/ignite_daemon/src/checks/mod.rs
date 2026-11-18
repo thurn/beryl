@@ -6,6 +6,9 @@
 //!   cargo-nextest can list tests only after building them, so a `nextest` listing is kept in
 //!   memory under the hash of everything the family can read, and a family whose tests are all
 //!   cached builds nothing while that hash holds.
+//!   A listing with no checks that exited 0 is not believed: a `nextest` family always lists
+//!   tests, and a `jsonl` family that has listed checks since the daemon started does not
+//!   suddenly list none, so either is a failed listing, never remembered.
 //! - Lookup: one result cache request per command, for every check it needs ([`ResultCache`]).
 //! - A failed check runs a second time at once. A pass then makes it flaky, which passes and is
 //!   reported to the hub's flaky table. A check that a run did not report, or whose family's
@@ -15,6 +18,9 @@
 //!   unreported when it ran past its hang limit, is `incomplete` at once and not run again.
 //!   The hang limit is four times the command's slowest pass in 30 days on this machine, at
 //!   least 15 minutes and at most 40, and 30 minutes with no pass on record.
+//! - A `jsonl` command that hung, or ended by a signal or an error no failing check explains,
+//!   may have been cut in the middle of a check's steps: the check of its last line is run
+//!   again alone instead of counting as a pass.
 //! - A cached failure from another machine is not trusted: the check runs here, and a pass is
 //!   stored, which replaces the failure and makes the hub file a ticket for that machine.
 //! - The output of a failed, flaky or incomplete run is kept for 14 days, other output for a
@@ -34,7 +40,7 @@ pub(crate) mod verbs;
 #[cfg(test)]
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
@@ -232,6 +238,9 @@ pub struct Checks {
     history: Box<dyn CheckHistory>,
     /// `nextest` listings by family and the hash of everything the family can read.
     listings: Mutex<HashMap<(String, InputHash), Vec<Listed>>>,
+    /// The `jsonl` families that have listed at least one check since the daemon started. A
+    /// listing that later comes back empty is taken for a broken `list` command.
+    listed_before: Mutex<HashSet<String>>,
     next_file: AtomicU64,
     hits: OnceLock<Arc<dyn HitSink>>,
 }
@@ -249,6 +258,7 @@ impl Checks {
             trees,
             history,
             listings: Mutex::new(HashMap::new()),
+            listed_before: Mutex::new(HashSet::new()),
             next_file: AtomicU64::new(0),
             hits: OnceLock::new(),
         }
@@ -383,8 +393,9 @@ impl Checks {
             .map(|(name, declared)| (name.as_str(), &declared.family))
     }
 
-    /// Lists and keys the checks of each family named. A family whose listing fails is recorded
-    /// in `run` as incomplete; a check whose inputs cannot be resolved is kept in `broken`.
+    /// Lists and keys the checks of each family named that this machine runs. A family whose
+    /// listing fails is recorded in `run` as incomplete; a check whose inputs cannot be
+    /// resolved is kept in `broken`.
     pub(crate) fn prepare(
         &self,
         ctx: &Context,
@@ -393,8 +404,25 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Prepared> {
+        let among: Vec<(&str, &Family)> = self
+            .families()
+            .filter(|(n, _)| families.contains(n))
+            .collect();
+        self.prepare_among(ctx, tree, &among, options, run)
+    }
+
+    /// [`Checks::prepare`] for exactly the families given, whether or not this machine runs
+    /// them, which tip verification needs to know the checks other machines run.
+    pub(crate) fn prepare_among(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        among: &[(&str, &Family)],
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) -> Vec<Prepared> {
         let mut prepared = Vec::new();
-        for (name, family) in self.families().filter(|(n, _)| families.contains(n)) {
+        for &(name, family) in among {
             let listed = match self.list(ctx, tree, name, family, options, run) {
                 Ok(listed) => listed,
                 // The build is already in `run.build_failures`; the family's list never ran,
@@ -493,6 +521,19 @@ impl Checks {
                 Adapter::Jsonl => adapters::jsonl_list(&text, name),
                 Adapter::Nextest => adapters::nextest_list(&text, name),
             };
+            if listed.is_empty() && self.cannot_be_empty(name, family) {
+                // A zero-check listing that exited 0 would count as a vacuous pass, and a
+                // `nextest` one would be remembered. It counts as a failed try instead.
+                let _ = crate::supervise::keep(&result.output);
+                continue;
+            }
+            if !listed.is_empty() {
+                let mut seen = self
+                    .listed_before
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
+                seen.insert(name.to_owned());
+            }
             if let Some(memo) = memo {
                 let mut listings = self.listings.lock().unwrap_or_else(PoisonError::into_inner);
                 listings.insert(memo, listed.clone());
@@ -500,6 +541,18 @@ impl Checks {
             return Ok(listed);
         }
         Err(ListError::Output(output))
+    }
+
+    /// Whether an empty listing of `family` is a failure. The manifest has no way to say a
+    /// family may list nothing, so a Rust test family never may, and any other family may not
+    /// once it has listed checks.
+    fn cannot_be_empty(&self, name: &str, family: &Family) -> bool {
+        family.adapter == Adapter::Nextest
+            || self
+                .listed_before
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .contains(name)
     }
 
     /// The hash of everything a `nextest` family can read: its inputs with `crate-closure`

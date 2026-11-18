@@ -1,31 +1,46 @@
 //! The regression checks that tip verification needs a pass for, keyed at one commit (see "Tip
 //! verification" in `docs/ignite.md`).
 
+use ignite_core::config::Os;
 use ignite_core::hash::{self, HashParts};
-use ignite_core::ids::TreeId;
-use ignite_core::manifest::{Kind, Platforms};
+use ignite_core::ids::{CheckName, TreeId};
+use ignite_core::manifest::{Family, Kind, Platforms};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::{CheckState, ResultKey};
-use ignite_core::traits::{Error, Result};
+use ignite_core::traits::Result;
 
 use super::{CheckRun, Checks, RunOptions};
 use crate::server::Context;
-use crate::tip::TipCheck;
+use crate::tip::{TipCheck, TipSet, Unlisted};
 
 impl Checks {
-    /// Every regression check of the families this machine runs, keyed in `tree`. A check the
-    /// hub switched off as flaky is left out. A check whose family lists other platforms also
-    /// gets a key for each of them, marked as one this machine cannot run, so that `master`
-    /// waits for their passes too.
+    /// Every regression check of every regression family, keyed in `tree`, as a tip needs a
+    /// pass for it. A check the hub switched off as flaky is left out.
     ///
-    /// A family whose listing fails, or a check whose inputs cannot be resolved, is an error:
-    /// the tip cannot be verified without it.
-    pub(crate) fn regression_checks(&self, ctx: &Context, tree: &TreeId) -> Result<Vec<TipCheck>> {
+    /// A family this machine does not run (it is not in the machine's list, or the family does
+    /// not name this operating system) is listed all the same, and its checks are keyed as
+    /// ones only another machine can pass: [`TipCheck::runnable`] is false. So are the keys of a
+    /// check whose family lists other platforms, for each of them. Every such key is the key the
+    /// machine that runs it computes, so that machine's pass satisfies it here.
+    ///
+    /// A family that cannot be listed, one whose products cannot be built for its listing, and
+    /// a check whose inputs cannot be resolved are not errors: they come back in
+    /// [`TipSet::unlisted`], so the other families still verify and the tip waits for these.
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn regression_checks(&self, ctx: &Context, tree: &TreeId) -> Result<TipSet> {
         let tree = self.open(tree)?;
-        let families: Vec<&str> = self
+        let runs_here: Vec<&str> = self
             .families()
             .filter(|(_, family)| family.kind == Kind::Regression)
             .map(|(name, _)| name)
+            .collect();
+        let among: Vec<(&str, &Family)> = self
+            .settings
+            .manifest
+            .families
+            .iter()
+            .filter(|(_, declared)| declared.family.kind == Kind::Regression)
+            .map(|(name, declared)| (name.as_str(), &declared.family))
             .collect();
         let options = RunOptions {
             verb: "tip".to_owned(),
@@ -35,37 +50,58 @@ impl Checks {
             session: None,
         };
         let mut run = CheckRun::default();
-        let prepared = self.prepare(ctx, &tree, &families, &options, &mut run);
-        if let Some((family, output)) = run.incomplete_families.first() {
-            return Err(Error::Io(format!(
-                "the family {family} could not be listed; see {}",
-                output.display()
-            )));
-        }
-        let mut checks = Vec::new();
-        for prepared in prepared {
-            if let Some(broken) = prepared.broken.first() {
-                return Err(Error::Invalid(format!(
-                    "the inputs of {} cannot be resolved: {}",
-                    broken.check,
-                    broken.message.as_deref().unwrap_or_default()
+        let prepared = self.prepare_among(ctx, &tree, &among, &options, &mut run);
+        let mut set = TipSet::default();
+        for &(name, family) in &among {
+            let reportable = runs_here.contains(&name);
+            let unlisted = |message: String| Unlisted {
+                name: CheckName::new(format!("{name}:listing"))
+                    .unwrap_or_else(|_| unreachable!("a family name and a word make a check name")),
+                family: name.to_owned(),
+                message,
+                reportable,
+                platforms: other_platforms(family, reportable),
+            };
+            if let Some((_, output)) = run.incomplete_families.iter().find(|(f, _)| f == name) {
+                set.unlisted.push(unlisted(format!(
+                    "the family {name} could not be listed; see {}",
+                    output.display()
+                )));
+            } else if !prepared.iter().any(|p| p.family == name) {
+                let products: Vec<String> =
+                    run.build_failures.iter().map(|(p, _)| p.clone()).collect();
+                set.unlisted.push(unlisted(format!(
+                    "a product the listing of {name} needs failed to build: {}",
+                    products.join(", ")
                 )));
             }
+        }
+        for prepared in prepared {
             let Some(declared) = self.settings.manifest.families.get(&prepared.family) else {
                 continue;
             };
             let family = &declared.family;
+            let runs_here = runs_here.contains(&prepared.family.as_str());
+            for broken in &prepared.broken {
+                set.unlisted.push(Unlisted {
+                    name: broken.check.clone(),
+                    family: prepared.family.clone(),
+                    message: format!(
+                        "the inputs of {} cannot be resolved: {}",
+                        broken.check,
+                        broken.message.as_deref().unwrap_or_default()
+                    ),
+                    reportable: runs_here,
+                    platforms: other_platforms(family, runs_here),
+                });
+            }
             // Without the hub's record every check counts as on, which can only hold `master`
             // longer, never move it past a check.
             let family_stats = self.history.stats(&prepared.family).ok();
             let commands = hash::commands(family, &self.settings.manifest);
-            let other_platforms: Vec<_> = match &family.platforms {
-                Platforms::Any(_) => Vec::new(),
-                Platforms::Each(list) => list
-                    .iter()
-                    .copied()
-                    .filter(|os| *os != self.settings.os)
-                    .collect(),
+            let platforms: Vec<Option<Os>> = match &family.platforms {
+                Platforms::Any(_) => vec![None],
+                Platforms::Each(list) => list.iter().copied().map(Some).collect(),
             };
             for keyed in prepared.keyed {
                 let state = family_stats
@@ -76,37 +112,54 @@ impl Checks {
                     continue;
                 }
                 let inputs: Vec<String> = keyed.inputs.iter().map(|(p, _)| p.clone()).collect();
-                for os in &other_platforms {
+                let mut push = |key: ResultKey, runnable: bool| {
+                    set.checks.push(TipCheck {
+                        check: keyed.listed.check.clone(),
+                        family: prepared.family.clone(),
+                        key,
+                        inputs: inputs.clone(),
+                        runnable,
+                        reuse: state == CheckState::On,
+                    });
+                };
+                let mut mine = false;
+                for platform in &platforms {
+                    let mine_here = runs_here && platform.is_none_or(|os| os == self.settings.os);
+                    if mine_here {
+                        mine = true;
+                        continue;
+                    }
                     let hash = hash::input_hash(&HashParts {
                         inputs: &keyed.inputs,
                         digest: keyed.listed.digest.as_deref(),
                         commands: &commands,
                         toolchain: &self.settings.toolchain,
-                        platform: Some(*os),
+                        platform: *platform,
                     });
-                    checks.push(TipCheck {
-                        check: keyed.listed.check.clone(),
-                        family: prepared.family.clone(),
-                        key: ResultKey {
+                    push(
+                        ResultKey {
                             check: keyed.listed.check.clone(),
                             hash,
-                            platform: Some(*os),
+                            platform: *platform,
                         },
-                        inputs: inputs.clone(),
-                        runnable: false,
-                        reuse: state == CheckState::On,
-                    });
+                        false,
+                    );
                 }
-                checks.push(TipCheck {
-                    check: keyed.listed.check,
-                    family: prepared.family.clone(),
-                    key: keyed.key,
-                    inputs,
-                    runnable: true,
-                    reuse: state == CheckState::On,
-                });
+                if mine {
+                    push(keyed.key.clone(), true);
+                }
             }
         }
-        Ok(checks)
+        Ok(set)
+    }
+}
+
+/// The operating systems whose machines can run a family this machine does not run: those it
+/// names, when it names some. Empty for a family that runs here, whose trouble is this
+/// machine's own, and for a family that passes on any platform.
+fn other_platforms(family: &Family, runs_here: bool) -> Vec<Os> {
+    match &family.platforms {
+        Platforms::Each(list) if !runs_here => list.clone(),
+        _ => Vec::new(),
     }
 }

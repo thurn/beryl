@@ -14,11 +14,11 @@ use ignite_core::config::HubConfig;
 use ignite_core::ids::{Commit, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
-    HeartbeatReply, JusticiarReport, Landed, LandedCommit, LandingsReply, LandingsRequest,
-    LookupReply, LookupRequest, MachineFree, MachineRegister, MachineRegistered, MetricsImport,
-    NewResult, Pause, Record, RecordBatch, RegressionFiled, RegressionReport, Release, ReportFiled,
-    Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim, TipClaimReply, TipVerified,
-    TipWaiting, TipWaitingFiled,
+    HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandingsReply,
+    LandingsRequest, LookupReply, LookupRequest, MachineFree, MachineRegister, MachineRegistered,
+    MetricsImport, NewResult, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
+    Release, ReportFiled, Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim,
+    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, Ticket,
@@ -300,6 +300,10 @@ impl Hub for HubClient {
 
     fn justiciar(&self, report: &JusticiarReport) -> Result<ReportFiled> {
         self.post("/justiciar", report)
+    }
+
+    fn incomplete(&self, report: &IncompleteReport) -> Result<ReportFiled> {
+        self.post("/incomplete", report)
     }
 
     fn pause(&self, pause: &Pause) -> Result<()> {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -6,7 +6,7 @@ use ignite_core::config::{Config, Os};
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, SessionId, TicketId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{Landed, NewResult, ResultKey, TipClaim};
+use ignite_core::protocol::hub::{IncompleteReason, Landed, NewResult, ResultKey, TipClaim};
 use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Git, Hub, Result};
@@ -77,9 +77,24 @@ struct FakeWork {
     /// [`CheckTipWork`] groups them, when no landing is scripted.
     commits: Mutex<Vec<CommitPaths>>,
     runs: Mutex<Vec<Run>>,
+    /// What each commit's listing could not list.
+    unlisted: Mutex<HashMap<Commit, Vec<Unlisted>>>,
+    /// Checks whose incomplete runs carry no reason, as when no landing tree was free.
+    unreasoned: Mutex<HashSet<CheckName>>,
+    /// Makes `landings` fail, as when git cannot walk the range.
+    landings_fail: Mutex<bool>,
 }
 
 impl FakeWork {
+    fn listed(&self, at: &Commit) -> Vec<TipCheck> {
+        self.checks
+            .lock()
+            .unwrap()
+            .get(at)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     fn set_checks(&self, at: &Commit, checks: Vec<TipCheck>) {
         self.checks.lock().unwrap().insert(at.clone(), checks);
     }
@@ -119,14 +134,17 @@ impl FakeWork {
 }
 
 impl TipWork for FakeWork {
-    fn checks(&self, _ctx: &Context, at: &Commit) -> Result<Vec<TipCheck>> {
-        Ok(self
-            .checks
-            .lock()
-            .unwrap()
-            .get(at)
-            .cloned()
-            .unwrap_or_default())
+    fn checks(&self, _ctx: &Context, at: &Commit) -> Result<TipSet> {
+        Ok(TipSet {
+            checks: self.listed(at),
+            unlisted: self
+                .unlisted
+                .lock()
+                .unwrap()
+                .get(at)
+                .cloned()
+                .unwrap_or_default(),
+        })
     }
 
     fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {
@@ -134,7 +152,7 @@ impl TipWork for FakeWork {
             .lock()
             .unwrap()
             .push((ctx.machine.clone(), at.clone(), checks.to_vec(), rerun));
-        let listed = self.checks(ctx, at).unwrap();
+        let listed = self.listed(at);
         let outcomes = self.outcomes.lock().unwrap();
         let mut runs = Vec::new();
         for check in checks {
@@ -165,6 +183,9 @@ impl TipWork for FakeWork {
                     let scripted = self.outputs.lock().unwrap().get(check).cloned();
                     scripted.unwrap_or_else(|| format!("{check} failed"))
                 }),
+                reason: (outcome == Outcome::Incomplete
+                    && !self.unreasoned.lock().unwrap().contains(check))
+                .then_some(IncompleteReason::Unreported),
             });
         }
         runs
@@ -173,6 +194,9 @@ impl TipWork for FakeWork {
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
         // The scripted landings and commits all lie between the commits a test passes.
         assert_ne!(from, to);
+        if *self.landings_fail.lock().unwrap() {
+            return Err(ignite_core::traits::Error::Io("git failed".to_owned()));
+        }
         let commits = self.commits.lock().unwrap().clone();
         if commits.is_empty() {
             Ok(self.landings.lock().unwrap().clone())
@@ -363,6 +387,9 @@ fn master_stays_behind_a_failing_check_and_moves_at_the_tip_that_fixes_it() {
     let unrelated = commit("cccc000");
     world.land(&unrelated);
     world.work.set_checks(&unrelated, vec![check("a", 'a')]);
+    world
+        .work
+        .set_outcome(&unrelated, &name("unit:a"), Outcome::Fail);
     assert!(matches!(
         verifier.verify(&ctx, &unrelated).unwrap(),
         TipOutcome::Failed { .. }
@@ -548,27 +575,6 @@ fn a_check_only_another_platform_runs_holds_master_until_it_passes_there() {
     world.store(&elsewhere.key, Outcome::Pass, "m-2");
     assert_eq!(verifier.verify(&ctx, &tip).unwrap(), TipOutcome::Verified);
     assert_eq!(world.master(), tip);
-}
-
-#[test]
-fn a_newer_tip_supersedes_the_round_between_batches() {
-    let world = World::new();
-    let ctx = world.ctx("m-1");
-    let tip = commit("bbbb000");
-    world.land(&tip);
-    let mut first = check("a", 'a');
-    first.family = "alpha".to_owned();
-    let mut second = check("b", 'b');
-    second.family = "beta".to_owned();
-    world.work.set_checks(&tip, vec![first, second]);
-    let newer = commit("cccc000");
-    world.land(&newer);
-
-    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
-
-    assert_eq!(outcome, TipOutcome::Superseded { by: newer });
-    assert_eq!(world.work.runs().len(), 1);
-    assert_eq!(world.master(), commit("aaaa000"));
 }
 
 /// Two landings by tickets and one commit pushed by hand, recorded at the hub as `ignite land`
@@ -778,7 +784,10 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
         }])
         .unwrap();
 
-    world.verifier().verify(&ctx, &tip).unwrap();
+    // The failure was already run again here once, so it stands.
+    let mut verifier = world.verifier();
+    verifier.rechecked.insert(failing.key.clone());
+    verifier.verify(&ctx, &tip).unwrap();
 
     assert_eq!(
         world.hub.regressions()[0].output,
@@ -786,3 +795,5 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
     );
     let _ = std::fs::remove_file(private);
 }
+
+mod more;

@@ -145,6 +145,8 @@ impl Checks {
                     *total
                 };
                 let report = reported.iter().find(|r| r.check == check);
+                let unfinished =
+                    report.is_some_and(|r| r.outcome == Outcome::Incomplete && r.reason.is_none());
                 let gave_up = match report.map(|r| (r.outcome, r.reason)) {
                     Some((Outcome::Pass, _)) => {
                         match failed.remove(&check) {
@@ -194,7 +196,9 @@ impl Checks {
                     Some((Outcome::Incomplete, Some(reason @ IncompleteReason::CannotRun))) => {
                         reason
                     }
-                    _ if output.hung => IncompleteReason::Hung,
+                    // A check whose last step passed before the command ended is run again
+                    // alone, whatever ended the command, so it falls to the retries below.
+                    _ if output.hung && !unfinished => IncompleteReason::Hung,
                     _ => {
                         judged = true;
                         let count = tries.entry(check.clone()).or_insert(0);
@@ -358,7 +362,14 @@ impl Checks {
                     self.launch(ctx, tree, name, family, RUN, args, &tree.path, env, options);
                 let text = fs::read_to_string(&file).unwrap_or_default();
                 let _ = fs::remove_file(&file);
-                (adapters::jsonl_results(&text), result)
+                let reported = adapters::jsonl_results(&text);
+                let cut_short = result.hung
+                    || (result.exit != Some(0)
+                        && !reported.iter().any(|r| r.outcome == Outcome::Fail));
+                if cut_short {
+                    return (adapters::jsonl_results_cut_short(&text), result);
+                }
+                (reported, result)
             }
             Adapter::Nextest => {
                 let targets: Vec<&Target> = checks
