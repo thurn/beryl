@@ -435,6 +435,13 @@ pub fn server(
     registry.register(Box::new(
         StatusVerb::new(status_sections(base, parts)).running_under(executable_of(base)?),
     ));
+    // `ignite wait deploy-<commit>`, which `ignite land` names when it moves the release.
+    crate::deploy::install(Arc::new(crate::deploy::DeployWaiter {
+        state: parts.update.clone(),
+        hub: parts.ctx.hub.clone(),
+        clock: base.clock.clone(),
+        pause: Arc::new(|seconds| std::thread::sleep(std::time::Duration::from_secs_f64(seconds))),
+    }));
     // The calls of verb processes, which run long verbs outside the daemon (see `crate::host`).
     let host = Host::new(HostParts {
         starter: Arc::new(SupervisedStarter::new(
@@ -549,6 +556,11 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         }),
         Box::new(LoopsSection(parts.health.clone())),
         Box::new(doctor::TipRoundSection(parts.ctx.hub.clone())),
+        Box::new(crate::deploy::ReleaseSection {
+            state: parts.update.clone(),
+            hub: parts.ctx.hub.clone(),
+            clock: base.clock.clone(),
+        }),
     ]
 }
 

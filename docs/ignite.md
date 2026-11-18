@@ -585,6 +585,22 @@ How the executable is installed and kept current:
   followed. Daemons retry refused connections and 502, 503 and 504 answers from
   the hub for 15 seconds, so a hub restart is invisible to them.
 - Each record names the Ignite commit that produced it.
+- `ignite status` has a `release` section: the release branch's tip, the build
+  this daemon runs and what it is doing about the difference (waiting for its
+  next check of the branch, with when that is due; building; self-testing;
+  restarting at its next heartbeat; failed to build; or rolled back, with the
+  reason from `bin/rollbacks.log`), then the hub's version and each machine's,
+  which the hub reports at `GET /machines/versions`.
+- When `ignite land` moves the release branch, its `next` line names
+  `ignite wait deploy-<commit>`. That wait asks the daemon to check the release
+  branch at its next round instead of at its five-minute check. It then waits
+  until this daemon, the hub and every machine the hub heard from in the last
+  ten minutes run the commit or a later one (exit 0), or the commit was rolled
+  back, failed its selftest or failed to build on this machine (exit 2, with the
+  reason). A wait that ends first exits 5, or 4 when the hub cannot be reached.
+  The wait keeps no state, so a client cut off by the daemon restarting into the
+  release sends it again. A rollback on another machine shows only as that
+  machine staying behind.
 
 How a restart is survived:
 

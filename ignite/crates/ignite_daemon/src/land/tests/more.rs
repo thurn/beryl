@@ -213,6 +213,14 @@ fn a_landing_that_changed_ignite_moves_the_release_branch_after_the_gate_ran_its
         reply.text
     );
     assert_eq!(released(&world.git), ["release"]);
+    let pushed = world.git.repo.lock().unwrap().branch_pushes[0].1.clone();
+    assert!(
+        reply.text.contains(&format!(
+            "next     ignite wait deploy-{pushed} until every machine"
+        )),
+        "{}",
+        reply.text
+    );
     // The gate's own run counted, so the family was not run a second time.
     assert!(world.gate.family_runs.lock().unwrap().is_empty());
 }

@@ -643,7 +643,15 @@ impl Landing {
         }
         lines.extend(problems);
         lines.push(line("title", done_title(ctx, ticket)));
-        lines.push(line("next", "nothing; wait for your next ticket"));
+        // A landing that moved the release names the wait for it to reach every machine.
+        let (next, deploy) = crate::deploy::landed_next(
+            ctx.config.repository.release.as_deref(),
+            summary
+                .and_then(|s| s.release.as_ref())
+                .map(|(_, r)| r.as_str()),
+            &record.commit,
+        );
+        lines.push(line("next", next));
         let budget = summary.and_then(|s| s.gated.budget.as_ref());
         Reply {
             exit: Exit::Success,
@@ -661,6 +669,7 @@ impl Landing {
                 "budget_billions": budget.map(crate::checks::GateBudget::billions),
                 "rate": budget.map(|b| b.rate),
                 "closed": closed == "ticket closed",
+                "deploy": deploy,
             })),
             handle: None,
         }
