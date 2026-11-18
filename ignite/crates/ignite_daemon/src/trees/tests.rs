@@ -623,6 +623,9 @@ fn trees_over_the_limit_are_brought_under_it_and_a_leased_tree_is_left_alone() {
     assert!(report.after <= report.limit.unwrap(), "{report:?}");
     assert!(!report.cleared.is_empty());
     assert!(!report.cleared.contains(&leased.tree));
+    // The build manager is told, or it would still answer that the cleared trees hold their
+    // products.
+    assert_eq!(f.builds.forgotten(), report.cleared);
     assert!(leased.path.join("out/big").exists());
     let states: Vec<String> = limited
         .status()

@@ -596,6 +596,10 @@ impl BuildManager {
 }
 
 impl Builds for BuildManager {
+    fn forget(&self, tree: &TreeId) {
+        BuildManager::forget(self, tree);
+    }
+
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {
         let plan = match self.plan(tree, product, packages) {
             Ok(plan) => plan,

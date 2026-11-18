@@ -105,6 +105,9 @@ impl Trees {
             for dir in &self.inner.config.keep {
                 remove(&path.join(dir));
             }
+            // The build manager would otherwise still answer that the tree holds its products,
+            // and the gate would run checks against binaries that are gone.
+            self.inner.builds.forget(&id);
             row.built_commit = None;
             self.put_back(&row)?;
             usage.insert(id.clone(), 0);

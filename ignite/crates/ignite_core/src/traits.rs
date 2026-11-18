@@ -151,6 +151,12 @@ pub trait Builds: Send + Sync {
         let _ = (tree, product);
         true
     }
+
+    /// Forgets what `tree` holds, after its build directories were deleted, so the next
+    /// request builds instead of answering that the product is current.
+    fn forget(&self, tree: &TreeId) {
+        let _ = tree;
+    }
 }
 
 /// The command a build is made for: its class, ticket and session.

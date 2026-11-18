@@ -16,9 +16,15 @@ pub struct FakeBuilds {
     built: Mutex<Vec<(TreeId, String, Vec<String>)>>,
     whom: Mutex<Vec<(String, BuildFor)>>,
     never_built: Mutex<Vec<(TreeId, String)>>,
+    forgotten: Mutex<Vec<TreeId>>,
 }
 
 impl FakeBuilds {
+    /// The trees whose builds the caller said were deleted, in order.
+    pub fn forgotten(&self) -> Vec<TreeId> {
+        lock(&self.forgotten).clone()
+    }
+
     /// Makes `tree` report that it has never built `product`, until it is asked to build it.
     /// Every other product counts as built before.
     pub fn never_built(&self, tree: &TreeId, product: &str) {
@@ -42,6 +48,10 @@ impl FakeBuilds {
 }
 
 impl Builds for FakeBuilds {
+    fn forget(&self, tree: &TreeId) {
+        lock(&self.forgotten).push(tree.clone());
+    }
+
     fn has_built(&self, tree: &TreeId, product: &str) -> bool {
         let never = lock(&self.never_built)
             .iter()

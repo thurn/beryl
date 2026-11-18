@@ -154,23 +154,32 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     // left being prebuilt or reset, and landing trees whose owner will not run again. A landing
     // tree whose landing runs again is kept with its commands.
     let reset = crate::trees::reset_at_start(&base.open()?)?;
+    // Read before the adopting launcher ends the runs in trees that are reset; the build
+    // manager skips those runs itself.
+    let unfinished = supervised.unfinished();
     let launcher: Arc<dyn Launcher> = Arc::new(AdoptingLauncher::over_supervised(
         Arc::new(supervised),
         &reset,
     ));
-    let builds = Arc::new(BuildManager::new(
-        BuildSettings {
-            manifest: base.manifest.clone(),
-            records: base.home("records"),
-            cores: base.limits.max_per_command(),
-            class: Class::Agent,
-            ignite: base.options.ignite.clone(),
-            shims: base.home("shims"),
-        },
-        launcher.clone(),
-        base.git.clone(),
-        Arc::new(base.trees_source()),
-    ));
+    let builds = Arc::new(
+        BuildManager::new(
+            BuildSettings {
+                manifest: base.manifest.clone(),
+                records: base.home("records"),
+                cores: base.limits.max_per_command(),
+                class: Class::Agent,
+                ignite: base.options.ignite.clone(),
+                shims: base.home("shims"),
+            },
+            launcher.clone(),
+            base.git.clone(),
+            Arc::new(base.trees_source()),
+        )
+        // What each tree holds and which builds failed survive the restart, and builds a previous
+        // daemon left running are waited for instead of run again (see `crate::build`).
+        .with_store(base.open()?),
+    );
+    builds.rejoin(unfinished, &reset);
     let repo = &base.options.repo;
     let tree_config = TreeConfig::new(repo, &base.config, &base.options.hostname, &base.manifest)?;
     let trees = Trees::new(
