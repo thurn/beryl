@@ -16,10 +16,11 @@ and stop at the first that fails.
 1. Read this session's permission mode (`get_session` on `self`). Refuse unless
    it never prompts (`bypassPermissions` or `auto`): workers inherit it, and a
    prompt stalls a worker that nobody watches.
-2. Register yourself: `ignite pool add --app claude --dispatcher`. Running it
-   again is safe. It replaces any earlier Claude dispatcher on this machine and
-   removes the workers that dispatcher started, because only the session that
-   started a worker can clear and prompt it.
+2. Register yourself with your session ID from step 1:
+   `ignite pool add <id> --app claude --dispatcher`. Running it again is safe.
+   It replaces any earlier Claude dispatcher on this machine and removes the
+   workers that dispatcher started, because only the session that started a
+   worker can clear and prompt it.
 3. Start `n` workers, at most ten in this message, one `start_session` call
    each: `initiation: "user_asked"`, `context: "fresh"`, `use_worktree: false`,
    `cwd: "{checkout}"`, title `✅ ignite worker <k>`, prompt "Ignite pool worker:
@@ -63,8 +64,8 @@ Rules:
 ## In Codex
 
 - `/ignite pool <n>` only registers you, with
-  `ignite pool add --app codex --dispatcher`, and starts the loop. Codex keeps
-  no standing workers: each hand-off is a new chat.
+  `ignite pool add <your thread ID> --app codex --dispatcher`, and starts the
+  loop. Codex keeps no standing workers: each hand-off is a new chat.
 - A hand-off opens a new chat in the project at `{checkout}`, given by its full
   path, never matched by name. Only a ready thread ID identifies a worker. If
   the result is unclear, find the chat and confirm its project and the
