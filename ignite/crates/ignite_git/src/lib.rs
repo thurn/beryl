@@ -4,6 +4,7 @@
 //! functions of the modules below.
 
 pub mod changed;
+mod cmd;
 pub mod push;
 pub mod rebase;
 pub mod refs;
