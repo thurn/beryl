@@ -20,6 +20,7 @@
 //! [`TicketDesk`], [`TreeDesk`] and [`Dispatcher`], so this module is tested against fakes of
 //! them.
 
+mod activity;
 mod brief;
 mod parse;
 mod watch;
@@ -214,7 +215,12 @@ enum Stall {
     /// Commands are recent, or one is running.
     Active,
     /// A `check` is queued. `second` is set for the check after the message.
-    Asked { check: u64, second: bool },
+    Asked {
+        check: u64,
+        second: bool,
+        /// When the check was queued.
+        at: Timestamp,
+    },
     /// The session was idle and has been sent one message.
     Messaged { at: Timestamp },
     /// A `check`'s lookup failed at `at`; it is asked again later.
@@ -250,6 +256,8 @@ struct State {
     /// Trees whose reset failed after their ticket was given up. Nobody holds them, so
     /// [`Claims::tick`] keeps retrying the reset until it works.
     reset_failed: BTreeSet<TreeId>,
+    /// The silence clock rows last written, so that only a change is written again.
+    saved: BTreeMap<TreeId, rows::ClaimActivity>,
 }
 
 /// The tickets held on this machine, shared by the verbs, the request hooks and the stall check.
@@ -269,8 +277,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Claims {
-    /// Reads the leased ticket trees from the local database, so a restarted daemon still knows
-    /// which tickets it holds.
+    /// Reads the leased ticket trees and their silence clocks from the local database, so a
+    /// restarted daemon still knows which tickets it holds and how long each session has been
+    /// quiet.
     pub fn new(
         clock: Arc<dyn Clock>,
         desk: Arc<dyn TicketDesk>,
@@ -284,6 +293,22 @@ impl Claims {
         for row in rows {
             if let Some(held) = held_from_row(&row, now) {
                 state.held.insert(held.tree.clone(), held);
+            }
+        }
+        for row in activity::recorded(&db) {
+            let held = TreeId::new(row.tree.clone())
+                .ok()
+                .and_then(|tree| state.held.get_mut(&tree))
+                .filter(|held| held.ticket.as_str() == row.ticket);
+            match held {
+                Some(held) => {
+                    activity::restore(held, &row);
+                    state.saved.insert(held.tree.clone(), row);
+                }
+                // The tree was freed or leased to another ticket while no daemon ran.
+                None => {
+                    let _ = ignite_store::local::activity::clear(&db, &row.tree);
+                }
             }
         }
         Ok(Arc::new(Claims {
@@ -480,6 +505,8 @@ impl Claims {
                 synced: true,
             },
         );
+        drop(state);
+        self.save_activity([&leased.tree]);
     }
 
     /// The held ticket of the request's tree, or the reply that refuses the request.
@@ -607,6 +634,7 @@ impl Claims {
             state.dirty.remove(&held.ticket);
         }
         let _ = shown::clear(&lock(&self.db), held.tree.as_str());
+        self.forget_activity(&held.tree);
         self.reset_tree(&held.tree, caller).err()
     }
 
@@ -660,6 +688,7 @@ impl Claims {
                 }
                 drop(state);
                 let _ = shown::clear(&lock(&self.db), tree.as_str());
+                self.forget_activity(&tree);
             }
         }
     }

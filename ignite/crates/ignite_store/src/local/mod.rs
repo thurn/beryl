@@ -1,6 +1,8 @@
 //! A daemon's local database. A restarted daemon reads its state from here, so a restart loses
 //! nothing.
 
+pub mod activity;
+pub mod dispatch_queue;
 pub mod grants;
 pub mod handles;
 pub mod listings;
@@ -48,6 +50,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 7,
         sql: include_str!("schema_7.sql"),
+    },
+    Migration {
+        version: 8,
+        sql: include_str!("schema_8.sql"),
     },
 ];
 

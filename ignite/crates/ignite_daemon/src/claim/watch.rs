@@ -6,6 +6,9 @@
 //!   than the session made to its ticket since the session's previous command. The hub is read
 //!   only when the change feed names the ticket, or once after the daemon starts. What was shown
 //!   is recorded per tree in the local database, so a restart shows nothing twice.
+//! - The silence clock (`active_at` and the stall's place) is saved in the local database as it
+//!   changes and read when the daemon starts (see `activity`), so a restart does not give a
+//!   silent session another 30 minutes.
 //! - [`Claims::tick`] runs the stall procedure. A session whose command is still running, such
 //!   as a long `ignite run` or `ignite wait`, is active however long it runs. After 30 minutes
 //!   with no command running or ended, it queues a `check` of the session with the dispatcher and acts on the answer:
@@ -190,6 +193,7 @@ impl Claims {
                 state.cursor,
             )
         };
+        self.save_activity([&tree]);
         if let Some(cursor) = cursor
             && let Ok(batch) = ctx.hub.feed(cursor, 0)
         {
@@ -254,6 +258,8 @@ impl Claims {
                 }
             }
         }
+        let trees: Vec<_> = lock(&self.state).held.keys().cloned().collect();
+        self.save_activity(&trees);
         for Verdict::Release(held, liveness) in verdicts {
             let quiet = (now.seconds_since(held.active_at) / 60.0).round();
             let state = if liveness == Liveness::Gone {
@@ -284,6 +290,8 @@ impl Claims {
                     h.stall = Stall::Active;
                     h.active_at = now;
                 }
+                drop(state);
+                self.save_activity([&held.tree]);
             }
         }
     }
@@ -302,10 +310,11 @@ impl Claims {
                     held.stall = Stall::Asked {
                         check: self.dispatcher.check(&held.session),
                         second: false,
+                        at: now,
                     };
                 }
             }
-            Stall::Asked { check, second } => match self.dispatcher.answer(check)? {
+            Stall::Asked { check, second, .. } => match self.dispatcher.answer(check)? {
                 Liveness::Running => {
                     held.stall = Stall::Active;
                     held.active_at = now;
@@ -324,6 +333,7 @@ impl Claims {
                     held.stall = Stall::Asked {
                         check: self.dispatcher.check(&held.session),
                         second: true,
+                        at: now,
                     };
                 }
             }
@@ -332,6 +342,7 @@ impl Claims {
                     held.stall = Stall::Asked {
                         check: self.dispatcher.check(&held.session),
                         second,
+                        at: now,
                     };
                 }
             }

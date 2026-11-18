@@ -397,7 +397,12 @@ impl World {
     }
 
     pub fn with_db(db: rusqlite::Connection) -> World {
-        let clock = Arc::new(FakeClock::new(Timestamp::EPOCH));
+        World::with_db_at(db, Timestamp::EPOCH)
+    }
+
+    /// A daemon started at `now` over an existing database, as after a restart.
+    pub fn with_db_at(db: rusqlite::Connection, now: Timestamp) -> World {
+        let clock = Arc::new(FakeClock::new(now));
         let hub = Arc::new(FakeHub::default());
         let git = Arc::new(FakeGit::default());
         git.set_tip("staging", Commit::new("8c1f2ab9").unwrap());

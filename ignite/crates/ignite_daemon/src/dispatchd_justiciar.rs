@@ -76,6 +76,8 @@ impl Dispatcher {
             gives: 0,
         });
         state.justiciar = Some((session.clone(), now));
+        drop(state);
+        self.save();
         Some(session)
     }
 }

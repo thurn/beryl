@@ -19,12 +19,15 @@
 //!   once if it is idle, and releases its ticket when it is gone or stays idle 15 minutes more.
 //!
 //! What other parts of the daemon own (trees, admission, handles, releasing) reaches this module
-//! through [`Host`]. The instruction queue lives in memory: after a restart, a hand-off that was
-//! lost lapses at the hub after 10 minutes and the ticket is offered again.
+//! through [`Host`]. The instruction queue is saved in the local database whenever it changes
+//! (see `store`), so after a restart an instruction that was given and not acknowledged is given
+//! again at once instead of lapsing at the hub 10 minutes later.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt::Write as _;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use serde::{Deserialize, Serialize};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{Seq, SessionId, TicketId};
@@ -33,6 +36,7 @@ use ignite_core::protocol::hub::{Reservation, WorkerRole, WorkerState};
 use ignite_core::protocol::tickets::{Status, TicketDetail};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
+use ignite_store::local::rows::DispatchEntry;
 
 use crate::pool::{Member, Pool};
 use crate::server::Context;
@@ -43,6 +47,8 @@ mod feed;
 mod justiciar;
 #[path = "dispatchd_stall.rs"]
 mod stall;
+#[path = "dispatchd_store.rs"]
+mod store;
 #[path = "dispatchd_tell.rs"]
 mod tell;
 #[path = "dispatchd_verb.rs"]
@@ -112,7 +118,7 @@ pub struct Setup {
 }
 
 /// A ticket reserved for a worker here and not yet claimed.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Reserved {
     ticket: TicketId,
     expires_at: Timestamp,
@@ -125,14 +131,14 @@ struct Reserved {
 }
 
 /// Why an instruction was queued, which decides what its acknowledgement does.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 enum Purpose {
     Handoff(Reserved),
     Message,
     Check,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Queued {
     body: DispatchInstruction,
     purpose: Purpose,
@@ -147,7 +153,7 @@ struct Given {
 }
 
 /// A working session that went silent.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct Stall {
     checked_at: Timestamp,
     messaged_at: Option<Timestamp>,
@@ -188,6 +194,8 @@ pub struct Dispatcher {
     host: Arc<dyn Host>,
     setup: Setup,
     state: Mutex<State>,
+    /// The rows last written to the database (see `store`).
+    saved: Mutex<Vec<DispatchEntry>>,
 }
 
 /// The exit code for an error from the hub or the store.
@@ -220,11 +228,16 @@ fn suits(member: &Member, model: Option<&String>, app: &str) -> bool {
 
 impl Dispatcher {
     pub fn new(pool: Pool, host: Arc<dyn Host>, setup: Setup) -> Dispatcher {
+        let state = pool
+            .load_queue()
+            .map(|entries| store::restore(&entries))
+            .unwrap_or_default();
         Dispatcher {
             pool,
             host,
             setup,
-            state: Mutex::default(),
+            state: Mutex::new(state),
+            saved: Mutex::default(),
         }
     }
 
@@ -249,6 +262,8 @@ impl Dispatcher {
         state
             .pending
             .retain(|q| q.body.session.as_ref() != Some(session));
+        drop(state);
+        self.save();
     }
 
     /// Every member as the hub's heartbeat and `ignite pool list` show it.
@@ -306,11 +321,23 @@ impl Dispatcher {
         let detail = ctx.hub.ticket(&reservation.ticket).ok();
         let mut state = self.state();
         Self::queue_handoff(&mut state, reservation, &app, detail);
+        drop(state);
+        self.save();
     }
 
     /// Brings the state up to date and gives the next instruction for the dispatcher `asking`,
     /// if there is one.
     pub fn step(&self, ctx: &Context, asking: Option<&SessionId>) -> Option<DispatchInstruction> {
+        let instruction = self.next_instruction(ctx, asking);
+        self.save();
+        instruction
+    }
+
+    fn next_instruction(
+        &self,
+        ctx: &Context,
+        asking: Option<&SessionId>,
+    ) -> Option<DispatchInstruction> {
         let members = self.pool.members().unwrap_or_default();
         self.refresh(ctx, &members);
         let mut state = self.state();
@@ -412,6 +439,8 @@ impl Dispatcher {
         for (ticket, detail) in details {
             self.ticket_changed(&mut state, &members, &ticket, detail.as_ref(), now);
         }
+        drop(state);
+        self.save();
         Ok(())
     }
 
@@ -473,6 +502,7 @@ impl Dispatcher {
             _ => {}
         }
         drop(state);
+        self.save();
         // Giving a ticket back asks the hub, so it happens with the state unlocked.
         if let Some(due) = release {
             text.push_str(&self.release(&due));
@@ -718,6 +748,9 @@ mod hub_tests;
 #[cfg(test)]
 #[path = "dispatchd_justiciar_tests.rs"]
 mod justiciar_tests;
+#[cfg(test)]
+#[path = "dispatchd_restart_tests.rs"]
+mod restart_tests;
 #[cfg(test)]
 #[path = "dispatchd_tests.rs"]
 mod tests;

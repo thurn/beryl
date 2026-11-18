@@ -92,5 +92,26 @@ crate::tables! {
         history: i64,
     }
 
+    /// When a held tree's session last ran a command, and its place in the stall procedure.
+    ClaimActivity = "claim_activity" {
+        tree: String,
+        ticket: String,
+        active_at: String,
+        /// `active`, `asked`, `messaged` or `retry`.
+        stage: String,
+        checked_at: Option<String>,
+        messaged_at: Option<String>,
+        /// Whether the check is the one after the message.
+        second: bool,
+    }
+
+    /// One entry of the dispatcher's queue, as JSON.
+    DispatchEntry = "dispatch_queue" {
+        /// `pending`, `given`, `reserved`, `orphan`, `refused`, `stall` or `meta`.
+        kind: String,
+        key: String,
+        body: String,
+    }
+
     PoolSetting = "pool_settings" { key: String, value: String }
 }

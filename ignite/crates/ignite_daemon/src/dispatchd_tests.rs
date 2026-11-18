@@ -64,9 +64,19 @@ pub(super) struct Rig {
     pub(super) dispatcher: Arc<Dispatcher>,
 }
 
-const START: i64 = 1_800_000_000_000;
+pub(super) const START: i64 = 1_800_000_000_000;
 
 pub(super) fn rig(workers: &[&str]) -> Rig {
+    rig_on(
+        workers,
+        ignite_store::local::open_in_memory().unwrap(),
+        Timestamp::from_millis(START),
+    )
+}
+
+/// A dispatcher over `db` with its clock at `now`; a second one over the same database file is a
+/// restarted daemon.
+pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp) -> Rig {
     let text = r#"
         [repository]
         remote = "origin"
@@ -84,7 +94,7 @@ pub(super) fn rig(workers: &[&str]) -> Rig {
         ticket_trees = 4
         landing_trees = 1
     "#;
-    let clock = Arc::new(FakeClock::new(Timestamp::from_millis(START)));
+    let clock = Arc::new(FakeClock::new(now));
     let hub = Arc::new(FakeHub::default());
     let ctx = Context {
         config: Config::parse("ignite.toml", text).unwrap(),
@@ -101,7 +111,7 @@ pub(super) fn rig(workers: &[&str]) -> Rig {
     let host = Arc::new(FakeHost::default());
     *lock(&host.trees) = 8;
     *lock(&host.cores) = 10.0;
-    let pool = Pool::new(ignite_store::local::open_in_memory().unwrap());
+    let pool = Pool::new(db);
     let setup = Setup {
         os: Os::Macos,
         families: Vec::new(),
@@ -128,7 +138,7 @@ pub(super) fn session(name: &str) -> SessionId {
     SessionId::new(name).unwrap()
 }
 
-fn ticket_id(name: &str) -> TicketId {
+pub(super) fn ticket_id(name: &str) -> TicketId {
     TicketId::new(name).unwrap()
 }
 
@@ -163,7 +173,7 @@ pub(super) fn detail(
 }
 
 impl Rig {
-    fn pool(&self, args: &[&str], session: Option<&str>) -> Reply {
+    pub(super) fn pool(&self, args: &[&str], session: Option<&str>) -> Reply {
         PoolVerb::new(self.dispatcher.clone()).run(&self.ctx, &request("pool", args, session))
     }
 
@@ -208,7 +218,7 @@ impl Rig {
     }
 }
 
-fn handoff_to(instruction: &DispatchInstruction) -> (&str, &str) {
+pub(super) fn handoff_to(instruction: &DispatchInstruction) -> (&str, &str) {
     assert_eq!(instruction.action, DispatchAction::Handoff);
     let prompt = instruction.prompt.as_deref().unwrap();
     let command = prompt.split('`').nth(1).unwrap();

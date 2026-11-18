@@ -2,6 +2,7 @@ use serde_json::json;
 
 use ignite_core::ids::TreeId;
 use ignite_core::protocol::client::Exit;
+use ignite_core::time::Timestamp;
 use ignite_store::local::{rows, trees as tree_rows};
 
 use super::fakes::{World, id, session, ticket};
@@ -225,17 +226,10 @@ fn more_than_five_changes_are_counted() {
     assert_eq!(lines[5], "changed  and 2 more: ignite ticket show Tq.48");
 }
 
-#[test]
-fn a_restarted_daemon_does_not_repeat_a_change() {
-    let path = std::env::temp_dir().join(format!("ignite-claim-restart-{}.db", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    let world = World::with_db(ignite_store::local::open(&path).unwrap());
-    world.desk.add(ticket("Tq.48", "Counter names", ""));
-    start(&world);
-    // The trees module records the lease in the same database.
-    let conn = ignite_store::local::open(&path).unwrap();
+/// What the trees module records in the database when it leases `tree-01` to the worker.
+fn record_lease(conn: &rusqlite::Connection) {
     tree_rows::upsert(
-        &conn,
+        conn,
         &rows::Tree {
             id: "tree-01".to_owned(),
             path: TREE.to_owned(),
@@ -251,6 +245,17 @@ fn a_restarted_daemon_does_not_repeat_a_change() {
         },
     )
     .unwrap();
+}
+
+#[test]
+fn a_restarted_daemon_does_not_repeat_a_change() {
+    let path = std::env::temp_dir().join(format!("ignite-claim-restart-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let world = World::with_db(ignite_store::local::open(&path).unwrap());
+    world.desk.add(ticket("Tq.48", "Counter names", ""));
+    start(&world);
+    let conn = ignite_store::local::open(&path).unwrap();
+    record_lease(&conn);
     world.desk.comment("Tq.48", "derek", "First correction.");
     world.hub.push_change("ticket", Some(id("Tq.48")));
     assert_eq!(command(&world).len(), 1);
@@ -273,5 +278,91 @@ fn a_restarted_daemon_does_not_repeat_a_change() {
         ["changed  comment by derek: Second correction."]
     );
     drop(conn);
+    let _ = std::fs::remove_file(&path);
+}
+
+/// Starts a daemon over a database file, as a restart does, with its clock at `minutes` after
+/// the first daemon's start.
+fn restarted_at(path: &std::path::Path, minutes: f64) -> World {
+    let now = Timestamp::EPOCH.plus_seconds(minutes * 60.0);
+    World::with_db_at(ignite_store::local::open(path).unwrap(), now)
+}
+
+#[test]
+fn a_restart_keeps_how_long_a_session_has_been_quiet() {
+    let path = std::env::temp_dir().join(format!("ignite-claim-quiet-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let world = World::with_db(ignite_store::local::open(&path).unwrap());
+    world.desk.add(ticket("Tq.48", "Counter names", ""));
+    start(&world);
+    record_lease(&ignite_store::local::open(&path).unwrap());
+    minutes(&world, 20.0);
+    assert!(lock(&world.dispatcher.checks).is_empty());
+
+    // The daemon restarts 20 minutes after the session's last command. Before the clock was
+    // saved, the restarted daemon counted the 30 minutes from its own start.
+    let restarted = restarted_at(&path, 20.0);
+    assert!(restarted.claims.holder(TREE.as_ref()).is_some());
+    minutes(&restarted, 9.0);
+    assert!(
+        lock(&restarted.dispatcher.checks).is_empty(),
+        "not yet 30 minutes"
+    );
+    minutes(&restarted, 1.0);
+    assert_eq!(
+        lock(&restarted.dispatcher.checks).len(),
+        1,
+        "checked at 30 minutes"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn a_restart_keeps_the_message_already_sent_to_an_idle_session() {
+    let path = std::env::temp_dir().join(format!("ignite-claim-nudge-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let world = World::with_db(ignite_store::local::open(&path).unwrap());
+    world.desk.add(ticket("Tq.48", "Counter names", ""));
+    start(&world);
+    record_lease(&ignite_store::local::open(&path).unwrap());
+    *lock(&world.dispatcher.answer) = Some(Liveness::Idle);
+    minutes(&world, 30.0);
+    minutes(&world, 1.0);
+    assert_eq!(lock(&world.dispatcher.messages).len(), 1);
+
+    // 31 minutes in, the daemon restarts. The second look is due 15 minutes after the message.
+    let restarted = restarted_at(&path, 31.0);
+    *lock(&restarted.dispatcher.answer) = Some(Liveness::Idle);
+    minutes(&restarted, 14.0);
+    assert!(lock(&restarted.dispatcher.checks).is_empty());
+    minutes(&restarted, 1.0);
+    assert_eq!(lock(&restarted.dispatcher.checks).len(), 1);
+    minutes(&restarted, 1.0);
+    assert_eq!(lock(&restarted.desk.releases).len(), 1);
+    assert!(
+        lock(&restarted.dispatcher.messages).is_empty(),
+        "no second message"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn a_freed_tree_leaves_no_clock_behind() {
+    let path = std::env::temp_dir().join(format!("ignite-claim-freed-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let world = World::with_db(ignite_store::local::open(&path).unwrap());
+    world.desk.add(ticket("Tq.48", "Counter names", ""));
+    start(&world);
+    let conn = ignite_store::local::open(&path).unwrap();
+    assert_eq!(ignite_store::local::activity::all(&conn).unwrap().len(), 1);
+    *lock(&world.dispatcher.answer) = Some(Liveness::Gone);
+    minutes(&world, 30.0);
+    minutes(&world, 1.0);
+    assert!(world.claims.holder(TREE.as_ref()).is_none());
+    assert!(
+        ignite_store::local::activity::all(&conn)
+            .unwrap()
+            .is_empty()
+    );
     let _ = std::fs::remove_file(&path);
 }

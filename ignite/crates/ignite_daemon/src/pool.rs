@@ -131,6 +131,17 @@ impl Pool {
         Ok(())
     }
 
+    /// The dispatcher's saved queue, in the order it was written.
+    pub fn load_queue(&self) -> Result<Vec<rows::DispatchEntry>> {
+        ignite_store::local::dispatch_queue::all(&self.conn()).map_err(|e| store_error(&e))
+    }
+
+    /// Replaces the dispatcher's saved queue with `entries`.
+    pub fn save_queue(&self, entries: &[rows::DispatchEntry]) -> Result<()> {
+        ignite_store::local::dispatch_queue::replace_all(&mut self.conn(), entries)
+            .map_err(|e| store_error(&e))
+    }
+
     pub fn paused(&self) -> Result<bool> {
         store::paused(&self.conn()).map_err(|e| store_error(&e))
     }
