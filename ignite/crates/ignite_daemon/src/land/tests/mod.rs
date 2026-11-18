@@ -406,7 +406,7 @@ fn a_rebase_conflict_exits_3_with_the_files() {
 }
 
 #[test]
-fn an_unreachable_remote_exits_4_and_lets_the_lease_and_record_go() {
+fn an_unreachable_remote_exits_4_and_the_next_landing_pushes_once() {
     let world = world();
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
     world.git.push_unreachable.store(true, Ordering::SeqCst);
@@ -415,8 +415,40 @@ fn an_unreachable_remote_exits_4_and_lets_the_lease_and_record_go() {
 
     assert_eq!(reply.exit, Exit::Unreachable, "{}", reply.text);
     assert_eq!(world.hub.holder("staging"), None);
-    assert!(world.landing.records.all().unwrap().is_empty());
     assert!(world.landings().is_empty());
+
+    world.git.push_unreachable.store(false, Ordering::SeqCst);
+    world.git.land_other(&[("c.txt", "theirs")]);
+    let again = world.land_as("tree-01", "local_a");
+    assert_eq!(again.exit, Exit::Success, "{}", again.text);
+    assert_eq!(world.git.pushes().len(), 1);
+    assert_eq!(world.landings().len(), 1);
+    assert!(world.landing.records.all().unwrap().is_empty());
+}
+
+#[test]
+fn a_push_that_landed_before_its_connection_failed_closes_the_ticket_without_a_second_push() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world
+        .git
+        .push_lands_then_fails
+        .store(true, Ordering::SeqCst);
+
+    let reply = world.land_as("tree-01", "local_a");
+    assert_eq!(reply.exit, Exit::Unreachable, "{}", reply.text);
+    let pushed = world.git.tip_now();
+    assert!(world.landings().is_empty());
+
+    world.git.land_other(&[("c.txt", "theirs")]);
+    let again = world.land_as("tree-01", "local_a");
+
+    assert_eq!(again.exit, Exit::Success, "{}", again.text);
+    assert_eq!(world.git.pushes().len(), 1);
+    let landed = world.landings();
+    assert_eq!(landed.len(), 1);
+    assert_eq!(landed[0].work.commits, [pushed]);
+    assert!(world.landing.records.all().unwrap().is_empty());
 }
 
 #[test]

@@ -656,3 +656,37 @@ fn an_hour_waiting_on_another_platform_reports_it_once_and_master_waits() {
     assert_eq!(world.master(), commit("aaaa000"));
     assert!(world.git.pushes().is_empty());
 }
+
+#[test]
+fn a_failure_only_another_platform_can_run_holds_master_and_is_not_searched_here() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("dddd000");
+    world.land(&tip);
+    world
+        .work
+        .add_landing("tk.1", &["bbbb000"], &["src/a/one.rs"]);
+    world
+        .work
+        .add_landing("tk.2", &["cccc000"], &["src/a/two.rs"]);
+    world
+        .work
+        .add_landing("tk.3", &["dddd000"], &["src/a/three.rs"]);
+    let mut elsewhere = check("a", 'e');
+    elsewhere.runnable = false;
+    world.work.set_checks(&tip, vec![elsewhere.clone()]);
+    world.store(&elsewhere.key, Outcome::Fail, "m-2");
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert_eq!(
+        outcome,
+        TipOutcome::Failed {
+            checks: vec![name("unit:a")]
+        }
+    );
+    assert_eq!(world.master(), commit("aaaa000"));
+    // This machine's version of the check would pass everywhere and blame tk.3.
+    assert!(world.work.runs().is_empty());
+    assert!(world.hub.regressions().is_empty());
+}

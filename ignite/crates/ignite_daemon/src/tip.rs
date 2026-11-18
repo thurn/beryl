@@ -405,6 +405,10 @@ impl TipVerifier {
     /// Finds the culprit of a check that failed at `tip` and reports the regression, unless a
     /// newer tip changed the check's inputs (its next round runs the check there first) or this
     /// failure was reported already.
+    ///
+    /// A check only another platform can run is left to that platform's machines: a search here
+    /// would run this platform's version of the check, which passes at every commit, and blame
+    /// the newest candidate whatever the real culprit.
     fn blame(
         &mut self,
         ctx: &Context,
@@ -413,7 +417,7 @@ impl TipVerifier {
         check: &TipCheck,
         output: Option<&str>,
     ) -> Result<()> {
-        if self.reported.contains(&check.key) {
+        if !check.runnable || self.reported.contains(&check.key) {
             return Ok(());
         }
         let newest = ctx.git.tip(&ctx.config.repository.staging)?;

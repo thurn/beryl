@@ -51,6 +51,9 @@ pub struct Repo {
 pub struct TestGit {
     pub repo: Mutex<Repo>,
     pub push_unreachable: AtomicBool,
+    /// Makes the next push reach the remote and then fail as if the connection dropped
+    /// before the remote's answer arrived.
+    pub push_lands_then_fails: AtomicBool,
 }
 
 impl Repo {
@@ -156,6 +159,10 @@ impl Git for TestGit {
         let landed_since = u32::try_from(position(tip) - position(&old)).unwrap();
         let head = if old == *tip {
             repo.checked_out[tree].clone()
+        } else if repo.history.contains(&repo.checked_out[tree]) {
+            // The branch's commits are on the integration branch already, so the rebase
+            // fast-forwards it to the tip and leaves nothing to land, as git does.
+            tip.clone()
         } else {
             let changes = repo.edits[tree].clone();
             repo.commit(Some(tip), &changes)
@@ -181,6 +188,9 @@ impl Git for TestGit {
         }
         repo.history.push(commit.clone());
         repo.pushes.push((tree.to_path_buf(), commit.clone()));
+        if self.push_lands_then_fails.swap(false, Ordering::SeqCst) {
+            return Err(Error::Unreachable("connection reset".to_owned()));
+        }
         Ok(Push::Pushed {
             commit: commit.clone(),
         })

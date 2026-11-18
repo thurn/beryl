@@ -1,7 +1,8 @@
 //! Landing records: what a landing pushed, kept on the daemon's disk until the hub knows.
 //!
 //! A landing writes its record before it pushes, in the state `pushing`. A push the remote
-//! accepts moves it to `pushed`; a push that is refused or never reaches the remote deletes it.
+//! accepts moves it to `pushed`; a push the remote refuses deletes it. A push that fails with no
+//! answer leaves it `pushing`, because the remote may have taken the commit before the failure.
 //! A `pushed` record is sent to the hub (`POST /landed`, which closes the ticket) and deleted
 //! once the hub accepts it. While the hub cannot be reached, the record stays and is sent by a
 //! later landing or by the daemon's sender, so a landing is told to the hub exactly once and

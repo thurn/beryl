@@ -118,8 +118,12 @@ impl LandTrees for MachineTrees {
         self.trees.release_landing(tree, built_at)
     }
 
+    /// A landed tree has no work left to save (the landing refused stray files), so it is reset
+    /// without the save that [`Trees::release`] pushes to the ticket's saved branch.
     fn release_ticket(&self, tree: &TreeId, park_at: &Commit, caller: Option<u32>) -> Result<()> {
-        self.trees.release(tree, park_at, caller).map(|_| ())
+        self.trees
+            .release_unsaved(tree, park_at, caller)
+            .map(|_| ())
     }
 
     fn delete_saved(&self, ticket: &TicketId) -> Result<()> {

@@ -15,8 +15,10 @@
 //!    landing that loses this race three times takes the lease before its next pass and holds
 //!    it through the gate, so it cannot lose again.
 //! 6. A record of the landing is written to disk, and the rebased commit is pushed from the
-//!    gate's tree. A push the remote refuses because the tip moved goes back to step 2; a
-//!    remote that cannot be reached exits with code 4. Either way the record is deleted.
+//!    gate's tree. A push the remote refuses because the tip moved deletes the record and goes
+//!    back to step 2. A remote that cannot be reached exits with code 4 and keeps the record,
+//!    because the push may have landed before the connection failed; the next landing tells
+//!    which from whether the rebased branch is empty.
 //! 7. The hub is told what landed, which closes the ticket. If it cannot be reached, the record
 //!    stays on disk and the ticket closes when the hub returns (see [`records`]). The ticket
 //!    tree is released and the branch its work was saved to at a release is deleted.
@@ -357,13 +359,6 @@ impl Landing {
                 // The interrupted push never landed: start again from nothing.
                 self.records.remove(&record.landed.ticket).map_err(io)?;
             }
-            if losses >= LOSSES_BEFORE_HOLDING && lease.is_none() {
-                lease = Some(self.acquire(ctx, &holder, &ticket).map_err(io)?);
-                if ctx.git.tip(&staging).map_err(io)? != tip {
-                    continue;
-                }
-            }
-
             passes += 1;
             let landing_tree = if rebased.landed_since == 0 {
                 None
@@ -455,10 +450,10 @@ impl Landing {
                     }
                     continue;
                 }
-                Err(error) => {
-                    self.records.remove(&ticket).map_err(fail)?;
-                    return Err(fail(error));
-                }
+                // The push may have reached the remote before the error, so the record stays
+                // `pushing`: the next landing finds the branch empty if it did, and closes the
+                // ticket without pushing again, or drops the record and starts over if not.
+                Err(error) => return Err(fail(error)),
             }
             drop(lease);
             free_landing(Some(&rebased.head));
