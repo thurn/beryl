@@ -10,6 +10,7 @@ use ignite_core::score::BILLIONS_PER_CPU_SECOND;
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::{TipCosts, TipCostsRequest, TipRound};
 
+use crate::hub::checks;
 use crate::hub::results::parse;
 use crate::{Result, StoreError};
 
@@ -18,15 +19,16 @@ use crate::{Result, StoreError};
 pub const COSTS_KEPT_SECONDS: f64 = 2.0 * 86_400.0;
 
 /// The costs and claim length a round at `request.commit` cuts `request.family` by. The first
-/// request for a tip and family freezes them, with the claim length it names; every later
-/// request gets the same answer, whatever costs were recorded since. Frozen costs older than
-/// [`COSTS_KEPT_SECONDS`] are deleted.
+/// request for a tip and family freezes them, with the claim length it names less the family's
+/// start-up, which each claim's command pays once on top of its checks' costs (at least half the
+/// length named); every later request gets the same answer, whatever costs were recorded since.
+/// Frozen costs older than [`COSTS_KEPT_SECONDS`] are deleted.
 pub fn costs(conn: &Connection, request: &TipCostsRequest, now: Timestamp) -> Result<TipCosts> {
     if let Some(frozen) = frozen(conn, request)? {
         return Ok(frozen);
     }
     let fresh = TipCosts {
-        claim_seconds: request.claim_seconds,
+        claim_seconds: claim_seconds(conn, request)?,
         costs: recorded(conn, &request.family)?,
     };
     let json =
@@ -70,8 +72,23 @@ fn frozen(conn: &Connection, request: &TipCostsRequest) -> Result<Option<TipCost
     .transpose()
 }
 
-/// Each recorded check of `family` with the lowest of its kept costs, in CPU seconds. Costs
-/// kept in billions of instructions convert at [`BILLIONS_PER_CPU_SECOND`].
+/// The claim length named in `request` less the family's start-up in CPU seconds (from its
+/// instruction counts where known), and never less than half the length named.
+fn claim_seconds(conn: &Connection, request: &TipCostsRequest) -> Result<f64> {
+    let startup = checks::startup(conn, &request.family)?;
+    let seconds = startup
+        .billions
+        .map(|billions| billions / BILLIONS_PER_CPU_SECOND)
+        .or(startup.cpu_s)
+        .unwrap_or(0.0);
+    Ok((request.claim_seconds - seconds).max(request.claim_seconds / 2.0))
+}
+
+/// Each recorded check of `family` with the median of its kept costs, in CPU seconds. Costs
+/// kept in billions of instructions convert at [`BILLIONS_PER_CPU_SECOND`]. A kept cost leaves
+/// out the family's start-up (see [`checks::without_startup`]), so it no longer shrinks as the
+/// batch grows, and the median is the steadiest measure of what the check adds. Before the
+/// start-up was taken out, the lowest cost was used, as the one from the largest batch.
 fn recorded(conn: &Connection, family: &str) -> Result<BTreeMap<String, f64>> {
     let mut select = conn.prepare(
         "SELECT check_name, costs, unit FROM check_costs
@@ -90,15 +107,15 @@ fn recorded(conn: &Connection, family: &str) -> Result<BTreeMap<String, f64>> {
     for (check, json, unit) in rows {
         let kept: Vec<f64> = serde_json::from_str(&json)
             .map_err(|error| StoreError::Invalid(format!("stored costs of {check}: {error}")))?;
-        let lowest = kept
+        let kept: Vec<f64> = kept
             .into_iter()
             .filter(|cost| cost.is_finite() && *cost >= 0.0)
-            .min_by(f64::total_cmp);
-        if let Some(lowest) = lowest {
+            .collect();
+        if let Some(median) = checks::median(&kept) {
             let seconds = if unit == "cpu_s" {
-                lowest
+                median
             } else {
-                lowest / BILLIONS_PER_CPU_SECOND
+                median / BILLIONS_PER_CPU_SECOND
             };
             costs.insert(check, seconds);
         }
@@ -204,6 +221,38 @@ mod tests {
     }
 
     #[test]
+    fn a_claim_leaves_room_for_its_commands_start_up() {
+        let conn = hub::open_in_memory().unwrap();
+        // Commands of `unit` that each cost 17 billion (one CPU second) to start, and 1.7
+        // billion a check.
+        for (id, size) in [(1_i64, 10_i64), (2, 20), (3, 10), (4, 20), (5, 30)] {
+            let billions = 17.0 + 1.7 * size as f64;
+            conn.execute(
+                "INSERT INTO records (id, machine, verb, class, family, queued_s, wall_s, cpu_s,
+                                      instructions, peak_mb, ignite, at)
+                 VALUES (?1, 'm-1', 'tip', 'tip', 'unit', 0, 1, 1, ?2, 0, 'x', 'x')",
+                params![id, billions * 1e9],
+            )
+            .unwrap();
+            for n in 0..size {
+                conn.execute(
+                    "INSERT INTO results (check_name, hash, platform, outcome, machine, record,
+                                          at, last_lookup)
+                     VALUES (?1, ?2, '', 'pass', 'm-1', ?3, 'x', 'x')",
+                    params![format!("unit:c{n}"), id.to_string(), id],
+                )
+                .unwrap();
+            }
+        }
+        let at = Timestamp::EPOCH;
+        let costs = costs(&conn, &request("abcd", 60.0), at).unwrap();
+        assert!((costs.claim_seconds - 59.0).abs() < 1e-9, "{costs:?}");
+        // A start-up longer than half the claim leaves half of it.
+        let short = super::costs(&conn, &request("ef01", 1.5), at).unwrap();
+        assert!((short.claim_seconds - 0.75).abs() < 1e-9, "{short:?}");
+    }
+
+    #[test]
     fn costs_are_frozen_for_a_tip_at_the_first_request() {
         let conn = hub::open_in_memory().unwrap();
         checks::add_cost(&conn, "unit:a", 2.0, "cpu_s").unwrap();
@@ -213,10 +262,10 @@ mod tests {
         let now = Timestamp::EPOCH;
 
         let first = costs(&conn, &request("abcd", 60.0), now).unwrap();
-        // The lowest kept cost, instructions converted, and no check of another family.
+        // The median kept cost, instructions converted, and no check of another family.
         assert_eq!(
             first.costs,
-            BTreeMap::from([("unit:a".to_owned(), 1.0), ("unit:b".to_owned(), 2.0)])
+            BTreeMap::from([("unit:a".to_owned(), 1.5), ("unit:b".to_owned(), 2.0)])
         );
 
         // Costs recorded since, and another machine's claim length, change nothing for the tip.
@@ -225,7 +274,7 @@ mod tests {
         assert_eq!(second, first);
         // A new tip sees them.
         let newer = costs(&conn, &request("ef01", 30.0), now.plus_seconds(10.0)).unwrap();
-        assert!((newer.costs["unit:a"] - 0.5).abs() < f64::EPSILON);
+        assert!((newer.costs["unit:a"] - 1.0).abs() < f64::EPSILON);
         assert!((newer.claim_seconds - 30.0).abs() < f64::EPSILON);
 
         // Two days on, the old tips' costs are gone.

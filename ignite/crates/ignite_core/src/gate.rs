@@ -22,6 +22,11 @@
 //!   A member that must run anyway (always, edited or being fixed) leaves its group first.
 //! - A chosen check whose result is cached is answered from the cache and costs nothing against
 //!   the budget.
+//! - A check's cost leaves out the start-up of the command it runs in, which its family pays
+//!   once ([`GateCheck::family_startup`]): with the first check of the family that must run, or
+//!   else with the first one chosen by score, when it counts against the budget. A score
+//!   divides by the check's own cost alone, so a family's first check is not passed over for the
+//!   start-up the checks after it share.
 //!
 //! Tip verification splits a round's checks with the same function, with a threshold of zero
 //! and its own budget.
@@ -48,6 +53,9 @@ pub struct GateCheck {
     pub family_rate: f64,
     /// The family's median cost, which a check that has never run is charged.
     pub family_median_cost: Cost,
+    /// What starting one of the family's commands costs, paid once for the family however many
+    /// of its checks run; zero while unknown.
+    pub family_startup: Cost,
     /// Build products that must be current before the check runs.
     pub needs: Vec<String>,
     /// Checks that failed in exactly the same runs share a group.
@@ -133,9 +141,11 @@ pub struct GatePlan {
     pub tip: Vec<Left>,
     /// Checks left out because a regression ticket for them is open, with that ticket.
     pub known_failing: Vec<(CheckName, TicketId)>,
-    /// Billions of instructions the scored checks spend: what counts against the budget.
+    /// Billions of instructions the scored checks spend, with the start-ups of the families
+    /// they start: what counts against the budget.
     pub scored_cost: f64,
-    /// Billions of instructions the always set and the other checks that must run spend.
+    /// Billions of instructions the always set and the other checks that must run spend, with
+    /// the start-ups of their families.
     pub forced_cost: f64,
 }
 
@@ -212,6 +222,8 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
             unbuilt.remove(need);
         }
     }
+    // The families whose start-up a check that runs has paid.
+    let mut started: BTreeSet<&str> = BTreeSet::new();
     for (check, why) in forced {
         let score = (why != Why::Always).then(|| unit(input, vec![check]).score());
         let planned = Planned {
@@ -224,12 +236,43 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
             plan.cached.push(planned);
             continue;
         }
-        plan.forced_cost += planned.cost;
+        plan.forced_cost += planned.cost + startups(input, [check], &mut started);
         plan.run.push(planned);
     }
 
-    choose(input, budget, &unbuilt, units(input, scored), &mut plan);
+    choose(
+        input,
+        budget,
+        &unbuilt,
+        units(input, scored),
+        &mut started,
+        &mut plan,
+    );
     plan
+}
+
+/// The start-ups of the families of `checks` that are not in `started` yet, in billions of
+/// instructions, adding those families to it.
+fn startups<'a>(
+    input: &GateInput<'_>,
+    checks: impl IntoIterator<Item = &'a GateCheck>,
+    started: &mut BTreeSet<&'a str>,
+) -> f64 {
+    checks
+        .into_iter()
+        .filter(|check| started.insert(check.check.family()))
+        .map(|check| check.family_startup.billions(input.billions_per_cpu_second))
+        .sum()
+}
+
+/// What `startups` would add for the members of `unit` that run, without paying them.
+fn unpaid(input: &GateInput<'_>, unit: &Unit<'_>, started: &BTreeSet<&str>) -> f64 {
+    let mut seen = started.clone();
+    startups(
+        input,
+        unit.members.iter().copied().filter(|m| !m.cached),
+        &mut seen,
+    )
 }
 
 /// Chooses among `units` greedily by score until the best score left is below the threshold or
@@ -239,6 +282,7 @@ fn choose<'a>(
     budget: &Budget,
     unbuilt: &BTreeSet<String>,
     units: Vec<Unit<'a>>,
+    started: &mut BTreeSet<&'a str>,
     plan: &mut GatePlan,
 ) {
     let limit = budget.billions();
@@ -246,12 +290,13 @@ fn choose<'a>(
         units.into_iter().partition(|unit| unit.cold(unbuilt));
     // Once the budget would be passed, only units that cost nothing remain eligible: a unit whose
     // members are all cached spends no instructions, so the budget has no reason to leave it out.
+    // A unit that would start a family costs its start-up.
     let mut spent_out = false;
     loop {
         let best = units
             .iter()
             .enumerate()
-            .filter(|(_, unit)| !spent_out || unit.run_cost <= 0.0)
+            .filter(|(_, unit)| !spent_out || unit.run_cost + unpaid(input, unit, started) <= 0.0)
             .map(|(index, unit)| (index, unit.score()))
             .max_by(|(a, a_score), (b, b_score)| {
                 a_score
@@ -262,12 +307,14 @@ fn choose<'a>(
         if score < budget.threshold {
             break;
         }
-        if plan.scored_cost + units[index].run_cost > limit {
+        let startup = unpaid(input, &units[index], started);
+        if plan.scored_cost + units[index].run_cost + startup > limit {
             spent_out = true;
             continue;
         }
         let unit = units.swap_remove(index);
-        plan.scored_cost += unit.run_cost;
+        let running = unit.members.iter().copied().filter(|m| !m.cached);
+        plan.scored_cost += unit.run_cost + startups(input, running, started);
         for member in unit.members {
             let planned = Planned {
                 check: member.check.clone(),

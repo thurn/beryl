@@ -399,9 +399,9 @@ impl Checks {
             self.note_listed(name, &listed);
             let digests_from_files = !family.digest_inputs.is_empty();
             let keepable = !listed.is_empty()
-                && listed.iter().all(|l| {
-                    (l.digest.is_none() || digests_from_files) && l.refused.is_none()
-                });
+                && listed
+                    .iter()
+                    .all(|l| (l.digest.is_none() || digests_from_files) && l.refused.is_none());
             let key = key.filter(|key| {
                 if !keepable {
                     let mut not_kept = self.not_kept.lock().unwrap_or_else(PoisonError::into_inner);

@@ -13,6 +13,7 @@ use crate::checks::Scoring;
 /// A record of `failures` in 20 runs after changes to `src`, at 100 billion a run.
 fn scored(text: &str, failures: u32) -> GateCheck {
     GateCheck {
+        family_startup: ignite_core::score::Cost::Billions(0.0),
         check: name(&format!("unit:{text}")),
         always: false,
         edited: false,

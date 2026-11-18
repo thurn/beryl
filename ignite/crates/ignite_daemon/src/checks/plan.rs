@@ -22,6 +22,19 @@ const TOP: usize = 2;
 /// The cost charged to a check that has never run, in a family no check of which has a cost.
 const UNKNOWN_COST: Cost = Cost::Billions(1.0);
 
+/// The start-up of a family whose start-up the hub has not estimated.
+const NO_STARTUP: Cost = Cost::Billions(0.0);
+
+/// What starting one of the family's commands costs, as the hub estimated it: in billions of
+/// instructions where the family's machines count them, otherwise in CPU seconds.
+fn family_startup(reply: &CheckStatsReply) -> Cost {
+    match (reply.startup_billions, reply.startup_cpu_s) {
+        (Some(billions), _) => Cost::Billions(billions),
+        (None, Some(seconds)) => Cost::CpuSeconds(seconds),
+        (None, None) => NO_STARTUP,
+    }
+}
+
 /// The areas of a change: workspace packages and second-level directories, sorted.
 pub(crate) fn areas(changed: &[String], graph: &CrateGraph) -> Vec<String> {
     let areas: BTreeSet<String> = changed
@@ -74,6 +87,7 @@ pub(crate) fn scored_check(
         history: record.and_then(history),
         family_rate: reply.map_or(0.0, |r| r.family_rate),
         family_median_cost: reply.map_or(UNKNOWN_COST, family_median_cost),
+        family_startup: reply.map_or(NO_STARTUP, family_startup),
         needs: declared.needs.clone(),
         group: None,
         regression,
@@ -236,8 +250,8 @@ impl super::Checks {
 /// check with no record of failing still counts for something.
 const LEAST_CHANCE: f64 = 1e-4;
 
-/// The cost of each family's checks to run in `gate_plan` per failure they are expected to find,
-/// in billions of instructions. The gate runs families in this order, smallest first, so a
+/// The cost of each family's checks to run in `gate_plan`, with the family's start-up, per
+/// failure they are expected to find, in billions of instructions. The gate runs families in this order, smallest first, so a
 /// cheap check likely to fail refuses a landing before a long family starts. A family with no
 /// check to run (all from the cache) is absent and goes first.
 pub(crate) fn run_order(view: &GateView, gate_plan: &GatePlan) -> BTreeMap<String, f64> {
@@ -259,7 +273,12 @@ pub(crate) fn run_order(view: &GateView, gate_plan: &GatePlan) -> BTreeMap<Strin
             .max(LEAST_CHANCE);
         let total = totals
             .entry(planned.check.family().to_owned())
-            .or_insert((0.0, 0.0));
+            .or_insert_with(|| {
+                let startup = check
+                    .family_startup
+                    .billions(score::BILLIONS_PER_CPU_SECOND);
+                (startup, 0.0)
+            });
         total.0 += cost;
         total.1 += chance;
     }

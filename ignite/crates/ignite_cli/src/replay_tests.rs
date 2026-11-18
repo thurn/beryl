@@ -13,6 +13,7 @@ use super::{KEEP, gate_checks, replay, report};
 /// `cost` billion instructions, in a family that never fails otherwise.
 fn check(name: &str, areas: &[&str], runs: u32, failures: u32, cost: f64) -> GateCheck {
     GateCheck {
+        family_startup: Cost::Billions(0.0),
         check: CheckName::new(name).unwrap(),
         always: false,
         edited: false,
@@ -131,6 +132,8 @@ fn hub_records_become_gate_checks_without_switched_off_checks_or_left_out_famili
     };
     let replies = vec![
         CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
             family: "rust".to_owned(),
             family_rate: 0.1,
             checks: vec![
@@ -140,6 +143,8 @@ fn hub_records_become_gate_checks_without_switched_off_checks_or_left_out_famili
             ],
         },
         CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
             family: "fmt".to_owned(),
             family_rate: 0.0,
             checks: vec![stats("fmt:all", CheckState::On, Some(1.0), "instructions")],

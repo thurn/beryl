@@ -31,6 +31,7 @@ fn check(check: &str, failures: u32, runs: u32, family_rate: f64, cost: f64) -> 
         }),
         family_rate,
         family_median_cost: Cost::Billions(1.0),
+        family_startup: Cost::Billions(0.0),
         needs: Vec::new(),
         group: None,
         regression: None,
@@ -313,4 +314,58 @@ fn a_check_with_an_open_regression_is_left_out_unless_its_fix_is_landing() {
     assert_eq!(names(&plan.run), ["script:broken"]);
     assert_eq!(plan.run[0].why, Why::Fixes);
     assert!(plan.known_failing.is_empty());
+}
+
+/// A family whose checks each cost 1 billion and whose command costs 10 to start.
+fn started(check_name: &str) -> GateCheck {
+    GateCheck {
+        family_startup: Cost::Billions(10.0),
+        ..likely(check_name, 1.0)
+    }
+}
+
+/// b3d-interface checks recorded 0.7 CPU seconds each when run 50 to a command, most of it the
+/// command's start-up, so a budget took a few of them for what all 50 cost. The start-up is now
+/// charged once for the family, and each check costs what it adds.
+#[test]
+fn a_family_pays_its_start_up_once() {
+    let checks: Vec<GateCheck> = (0..5).map(|i| started(&format!("tests:c{i}"))).collect();
+    let plan = plan_for(&checks, &none(), &gate(0.0, 15.0));
+    assert_eq!(plan.run.len(), 5, "{plan:?}");
+    assert!(
+        (plan.scored_cost - 15.0).abs() < 1e-9,
+        "{}",
+        plan.scored_cost
+    );
+    assert!(plan.run.iter().all(|p| (p.cost - 1.0).abs() < 1e-9));
+
+    // The start-up alone does not fit, so no check of the family runs.
+    let plan = plan_for(&checks, &none(), &gate(0.0, 10.5));
+    assert!(plan.run.is_empty(), "{plan:?}");
+    assert_eq!(plan.past_budget.len(), 5);
+}
+
+#[test]
+fn a_family_started_by_a_check_that_must_run_charges_the_budget_nothing_more() {
+    let mut checks: Vec<GateCheck> = (0..3).map(|i| started(&format!("tests:c{i}"))).collect();
+    checks[0].always = true;
+    let plan = plan_for(&checks, &none(), &gate(0.0, 2.0));
+    assert_eq!(plan.run.len(), 3, "{plan:?}");
+    assert!((plan.forced_cost - 11.0).abs() < 1e-9);
+    assert!((plan.scored_cost - 2.0).abs() < 1e-9);
+}
+
+/// A check recorded as free whose family has not started yet cost its start-up, which used to
+/// leave the selection looping once the budget was spent.
+#[test]
+fn a_free_check_that_would_start_a_family_is_left_once_the_budget_is_spent() {
+    let free = GateCheck {
+        family_startup: Cost::Billions(10.0),
+        ..likely("other:free", 0.0)
+    };
+    let checks = vec![likely("tests:a", 5.0), free];
+    // The free check scores best, and its start-up does not fit, which spends the budget.
+    let plan = plan_for(&checks, &none(), &gate(0.0, 6.0));
+    assert!(plan.run.is_empty(), "{plan:?}");
+    assert_eq!(plan.past_budget.len(), 2);
 }

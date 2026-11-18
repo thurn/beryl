@@ -410,7 +410,10 @@ fn check_family(family: &Family) -> Result<(), (String, String)> {
         }
     }
     if family.digest_inputs.contains(&InputPattern::CrateClosure) {
-        return fail("digest_inputs", "crate-closure belongs in the family's inputs");
+        return fail(
+            "digest_inputs",
+            "crate-closure belongs in the family's inputs",
+        );
     }
     match (family.kind, &family.next) {
         (Kind::Exploration, None) => {

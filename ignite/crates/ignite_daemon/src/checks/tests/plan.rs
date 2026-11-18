@@ -44,6 +44,8 @@ fn seeded() -> World {
         listing.push(format!("lint:{lint}"));
     }
     let reply = |family: &str, checks: Vec<CheckStats>| CheckStatsReply {
+        startup_billions: None,
+        startup_cpu_s: None,
         family: family.to_owned(),
         family_rate: 0.02,
         checks,
@@ -299,6 +301,8 @@ fn tip_verification_lists_the_regression_checks_the_hub_has_not_switched_off() {
     history.replies.insert(
         "unit".to_owned(),
         CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.0,
             checks: vec![off],
@@ -320,4 +324,36 @@ fn tip_verification_lists_the_regression_checks_the_hub_has_not_switched_off() {
     assert_eq!(listed[0].inputs, vec!["src".to_owned()]);
     assert!(listed[0].runnable && listed[0].reuse);
     assert_eq!(listed[0].key.platform, None);
+}
+
+/// The hub's estimate of a family's start-up reaches each of its checks, so the gate charges it
+/// once for the family; billions of instructions are preferred to CPU seconds.
+#[test]
+fn a_scored_check_carries_its_familys_start_up() {
+    use ignite_core::score::Cost;
+    let manifest =
+        Manifest::from_files(&[(PathBuf::from("checks/test.toml"), MANIFEST.to_owned())]).unwrap();
+    let family = &manifest.families["unit"].family;
+    let reply = |billions: Option<f64>, cpu_s: Option<f64>| CheckStatsReply {
+        family: "unit".to_owned(),
+        family_rate: 0.0,
+        checks: Vec::new(),
+        startup_billions: billions,
+        startup_cpu_s: cpu_s,
+    };
+    let startup = |reply: Option<&CheckStatsReply>| {
+        crate::checks::plan::scored_check(&name("unit:a"), family, reply, None)
+            .unwrap()
+            .family_startup
+    };
+    assert_eq!(
+        startup(Some(&reply(Some(720.0), Some(42.0)))),
+        Cost::Billions(720.0)
+    );
+    assert_eq!(
+        startup(Some(&reply(None, Some(42.0)))),
+        Cost::CpuSeconds(42.0)
+    );
+    assert_eq!(startup(Some(&reply(None, None))), Cost::Billions(0.0));
+    assert_eq!(startup(None), Cost::Billions(0.0));
 }

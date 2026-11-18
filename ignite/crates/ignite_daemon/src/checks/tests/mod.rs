@@ -219,6 +219,8 @@ impl CheckHistory for FakeHistory {
             .get(family)
             .cloned()
             .unwrap_or(CheckStatsReply {
+                startup_billions: None,
+                startup_cpu_s: None,
                 family: family.to_owned(),
                 family_rate: 0.0,
                 checks: Vec::new(),

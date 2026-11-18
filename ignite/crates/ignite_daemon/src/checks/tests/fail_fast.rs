@@ -68,6 +68,8 @@ fn an_invalid_entry_refuses_the_landing_before_anything_is_built() {
 /// The history of a family in which each check costs `cost` billion instructions.
 fn history(family: &str, checks: &[&str], cost: f64) -> CheckStatsReply {
     CheckStatsReply {
+        startup_billions: None,
+        startup_cpu_s: None,
         family: family.to_owned(),
         family_rate: 0.1,
         checks: checks

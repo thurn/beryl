@@ -298,6 +298,11 @@ pub fn gate_checks(replies: &[CheckStatsReply], left_out: &BTreeSet<String>) -> 
                     median_cost: cost(stats.median_cost, &stats.unit).unwrap_or(family_median_cost),
                 });
             checks.push(GateCheck {
+                family_startup: match (reply.startup_billions, reply.startup_cpu_s) {
+                    (Some(billions), _) => Cost::Billions(billions),
+                    (None, Some(seconds)) => Cost::CpuSeconds(seconds),
+                    (None, None) => Cost::Billions(0.0),
+                },
                 check: stats.check.clone(),
                 always: false,
                 edited: false,

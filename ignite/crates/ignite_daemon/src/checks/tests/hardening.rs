@@ -270,6 +270,8 @@ fn gate_world(changed: &[&str]) -> World {
     history.replies.insert(
         "unit".to_owned(),
         CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.5,
             checks: vec![stats],

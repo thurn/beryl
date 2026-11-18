@@ -11,6 +11,8 @@
 //! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup`,
 //! `/landings/lookup` and `/checks/stats` changes the database, so it needs an authorized writer (HTTP 401 otherwise).
 
+use std::collections::BTreeMap;
+
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -172,6 +174,8 @@ fn store(
             eprintln!("ignite hub: filing a machine disagreement: {error}");
         }
     }
+    // Each family's start-up, estimated once for the request.
+    let mut startups: BTreeMap<&str, checks::Startup> = BTreeMap::new();
     for result in fresh {
         let check = result.key.check.as_str();
         let failed = result.outcome == Outcome::Fail;
@@ -182,6 +186,15 @@ fn store(
         };
         checks::count_run(conn, check, areas, failed).map_err(|e| store_failure(&e))?;
         if let Some((cost, unit)) = record_cost(conn, result).map_err(|e| store_failure(&e))? {
+            let family = result.key.check.family();
+            let startup = if let Some(startup) = startups.get(family) {
+                *startup
+            } else {
+                let startup = checks::startup(conn, family).map_err(|e| store_failure(&e))?;
+                *startups.entry(family).or_insert(startup)
+            };
+            // A cost the result carries is its share of one command, start-up and all.
+            let cost = checks::without_startup(cost, startup.in_unit(unit), result.cost.shared_by);
             checks::add_cost(conn, check, cost, unit).map_err(|e| store_failure(&e))?;
         }
     }

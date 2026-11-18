@@ -254,6 +254,51 @@ fn a_result_with_its_own_cost_adds_it_though_it_names_no_record() {
     assert_eq!(reply["checks"][0]["areas"][0]["runs"], 2);
 }
 
+/// b3d-interface checks recorded about 0.7 CPU seconds each when run 50 to a command, most of
+/// it the command's start-up. A share sent with the number of checks that shared the command
+/// is stored without its slice of the family's start-up, which the hub estimates from the
+/// family's commands of several sizes and reports with the family's stats.
+#[test]
+fn a_shared_cost_is_stored_without_its_slice_of_the_start_up() {
+    let hub = TestHub::start("startup");
+    list_check(&hub, "oracle:a", "oracle");
+    {
+        let conn = hub.conn.lock().unwrap();
+        // Commands that cost 720 billion to start and 1.2 billion a check.
+        for (id, checks) in [(1_i64, 30_u32), (2, 50), (3, 30), (4, 50), (5, 40)] {
+            let billions = 720.0 + 1.2 * f64::from(checks);
+            conn.execute(
+                "INSERT INTO records (id, machine, verb, class, family, queued_s, wall_s, cpu_s,
+                                      instructions, peak_mb, ignite, at)
+                 VALUES (?1, 'm-1', 'tip', 'tip', 'oracle', 0, 1, 1, ?2, 0, 'x', 'x')",
+                rusqlite::params![id, billions * 1e9],
+            )
+            .unwrap();
+            for n in 0..checks {
+                conn.execute(
+                    "INSERT INTO results (check_name, hash, platform, outcome, machine, record,
+                                          at, last_lookup)
+                     VALUES (?1, ?2, '', 'pass', 'm-1', ?3, 'x', 'x')",
+                    rusqlite::params![format!("oracle:s{n}"), id.to_string(), id],
+                )
+                .unwrap();
+            }
+        }
+    }
+    let mut result = new_result("oracle:a", 1, "pass", 0);
+    result["cost"] = json!({"instructions": 15_600_000_000_u64, "cpu_ms": 900, "shared_by": 50});
+    hub.post(
+        "/results/store",
+        &json!({"results": [result], "areas": ["kernel"]}),
+    );
+
+    let (_, reply) = hub.send("GET", "/checks/stats?family=oracle", None, false);
+    let startup = reply["startup_billions"].as_f64().unwrap();
+    assert!((startup - 720.0).abs() < 1e-6, "{reply}");
+    let cost = reply["checks"][0]["median_cost"].as_f64().unwrap();
+    assert!((cost - 1.2).abs() < 1e-6, "{reply}");
+}
+
 #[test]
 fn a_record_batch_sent_twice_is_stored_once_with_the_same_ids() {
     let hub = TestHub::start("records");

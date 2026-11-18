@@ -251,6 +251,7 @@ mod tests {
 
     fn scored(name: &str, failures: u32, cost: f64) -> GateCheck {
         GateCheck {
+            family_startup: ignite_core::score::Cost::Billions(0.0),
             check: CheckName::new(name).unwrap(),
             always: false,
             edited: false,

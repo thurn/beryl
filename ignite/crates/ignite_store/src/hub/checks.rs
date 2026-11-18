@@ -3,6 +3,7 @@
 use rusqlite::{Connection, TransactionBehavior, params};
 
 use ignite_core::protocol::hub::{AreaStats, CheckState, CheckStats, CheckStatsReply, FlakyReport};
+use ignite_core::score;
 use ignite_core::time::Timestamp;
 
 use crate::hub::results::parse;
@@ -82,7 +83,7 @@ pub fn count_run(conn: &mut Connection, check: &str, areas: &[String], failed: b
     Ok(())
 }
 
-fn median(values: &[f64]) -> Option<f64> {
+pub(crate) fn median(values: &[f64]) -> Option<f64> {
     let mut sorted = values.to_vec();
     sorted.sort_by(f64::total_cmp);
     let middle = sorted.len() / 2;
@@ -122,6 +123,85 @@ pub fn add_cost(conn: &Connection, check: &str, cost: f64, unit: &str) -> Result
         params![check, json, median(&costs), unit],
     )?;
     Ok(())
+}
+
+/// How many of a family's newest commands [`startup`] fits its estimate to.
+const STARTUP_RUNS: i64 = 200;
+
+/// What starting one of a family's commands costs, estimated by [`score::startup`] from its
+/// newest commands that stored a result, in each unit they were measured in.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Startup {
+    /// Billions of instructions, from the commands whose machine counted them.
+    pub billions: Option<f64>,
+    pub cpu_s: Option<f64>,
+}
+
+impl Startup {
+    /// The start-up in `unit`, `instructions` (billions) or `cpu_s`.
+    pub fn in_unit(&self, unit: &str) -> Option<f64> {
+        if unit == "cpu_s" {
+            self.cpu_s
+        } else {
+            self.billions
+        }
+    }
+}
+
+/// Estimates `family`'s start-up from its newest commands. A command's size is the number of
+/// results in the cache that name its record, which undercounts a command whose results a later
+/// run replaced; the estimate's bound by the cheap commands' cost keeps that from inflating it.
+/// The results are found by the family prefix of their check names, which the primary key
+/// orders, so only the family's own results are read.
+pub fn startup(conn: &Connection, family: &str) -> Result<Startup> {
+    let mut select = conn.prepare_cached(
+        "SELECT r.instructions, r.cpu_s, n.checks FROM records r
+         JOIN (SELECT record, count(*) AS checks FROM results
+               WHERE check_name > ?1 || ':' AND check_name < ?1 || ';'
+               GROUP BY record) n ON n.record = r.id
+         WHERE r.family = ?1
+         ORDER BY r.id DESC LIMIT ?2",
+    )?;
+    let runs = select
+        .query_map(params![family, STARTUP_RUNS], |row| {
+            Ok((
+                row.get::<_, Option<f64>>(0)?,
+                row.get::<_, f64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let size = |checks: i64| u32::try_from(checks).unwrap_or(u32::MAX);
+    let billions: Vec<(u32, f64)> = runs
+        .iter()
+        .filter_map(|(instructions, _, checks)| Some((size(*checks), (*instructions)? / 1e9)))
+        .collect();
+    let cpu_s: Vec<(u32, f64)> = runs
+        .iter()
+        .map(|(_, cpu_s, checks)| (size(*checks), *cpu_s))
+        .collect();
+    Ok(Startup {
+        billions: score::startup(&billions),
+        cpu_s: score::startup(&cpu_s),
+    })
+}
+
+/// The least part of a share that taking the start-up out leaves. The oracle family's start-up
+/// is about 12 times what its 50 checks add, so a share loses up to about 92 percent of itself.
+const LEAST_SHARE_LEFT: f64 = 0.05;
+
+/// A check's share of a command with the family's start-up taken out: `share - start-up /
+/// shared_by`, where `shared_by` checks shared the start-up. Never less than
+/// [`LEAST_SHARE_LEFT`] of the share, so that a command cheaper than the start-up estimate (one
+/// of the cheapest tenth, see [`score::startup`]) cannot make its checks look free; the share
+/// as it is when the start-up or `shared_by` is unknown.
+pub fn without_startup(share: f64, startup: Option<f64>, shared_by: u32) -> f64 {
+    match startup {
+        Some(startup) if shared_by > 0 => {
+            (share - startup / f64::from(shared_by)).max(share * LEAST_SHARE_LEFT)
+        }
+        _ => share,
+    }
 }
 
 /// The families that hold regression checks, in name order.
@@ -185,10 +265,13 @@ pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
     } else {
         all_failures as f64 / all_runs as f64
     };
+    let startup = startup(conn, family)?;
     Ok(CheckStatsReply {
         family: family.to_owned(),
         family_rate,
         checks,
+        startup_billions: startup.billions,
+        startup_cpu_s: startup.cpu_s,
     })
 }
 
@@ -354,6 +437,56 @@ mod tests {
             stats(&conn, "rust").unwrap().checks[0].state,
             CheckState::Uncached
         );
+    }
+
+    /// Stores a command of `family` that cost `billions` and stored `checks` results.
+    fn command(conn: &Connection, family: &str, id: i64, checks: u32, billions: f64) {
+        conn.execute(
+            "INSERT INTO records (id, machine, verb, class, family, queued_s, wall_s, cpu_s,
+                                  instructions, peak_mb, ignite, at)
+             VALUES (?1, 'm-1', 'tip', 'tip', ?2, 0, 1, ?3, ?4, 0, 'x', '2026-11-01T00:00:00Z')",
+            params![id, family, billions / 17.0, billions * 1e9],
+        )
+        .unwrap();
+        for n in 0..checks {
+            conn.execute(
+                "INSERT INTO results (check_name, hash, platform, outcome, machine, record, at,
+                                      last_lookup)
+                 VALUES (?1, ?2, '', 'pass', 'm-1', ?3, 'x', 'x')",
+                params![format!("{family}:c{n}"), format!("{id}"), id],
+            )
+            .unwrap();
+        }
+    }
+
+    /// The oracle family's commands each start two Java programs: about 720 billion
+    /// instructions before the first scenario, then about 1.2 billion a scenario.
+    #[test]
+    fn a_family_start_up_is_estimated_from_commands_of_several_sizes() {
+        let conn = hub::open_in_memory().unwrap();
+        for (id, checks) in [(1, 30), (2, 50), (3, 30), (4, 50), (5, 40), (6, 50)] {
+            command(&conn, "oracle", id, checks, 720.0 + 1.2 * f64::from(checks));
+        }
+        // Another family whose name starts the same is not counted.
+        command(&conn, "oracle-generated", 7, 3, 1.0);
+        let startup = startup(&conn, "oracle").unwrap();
+        let billions = startup.billions.unwrap();
+        assert!((billions - 720.0).abs() < 1e-6, "{billions}");
+        assert!((startup.cpu_s.unwrap() - 720.0 / 17.0).abs() < 1e-6);
+        assert_eq!(startup.in_unit("instructions"), startup.billions);
+
+        let reply = stats(&conn, "oracle").unwrap();
+        assert_eq!(reply.startup_billions, startup.billions);
+        assert_eq!(stats(&conn, "rust").unwrap().startup_billions, None);
+    }
+
+    #[test]
+    fn a_share_without_its_start_up_keeps_a_twentieth_of_itself() {
+        // 50 checks shared a command that cost 780: 720 to start and 1.2 a check.
+        assert!((without_startup(15.6, Some(720.0), 50) - 1.2).abs() < 1e-9);
+        assert!((without_startup(15.6, Some(2000.0), 50) - 0.78).abs() < 1e-9);
+        assert!((without_startup(15.6, None, 50) - 15.6).abs() < 1e-9);
+        assert!((without_startup(15.6, Some(720.0), 0) - 15.6).abs() < 1e-9);
     }
 
     #[test]

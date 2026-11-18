@@ -62,6 +62,8 @@ fn candidates_costing_three_budgets_run_the_best_third_and_land() {
     history.replies.insert(
         "unit".to_owned(),
         CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
             family: "unit".to_owned(),
             family_rate: 0.01,
             checks: (0..9u32)

@@ -42,9 +42,10 @@ pub struct GateBudget {
     pub seconds: f64,
     /// Billions of instructions per second of wall time that seconds converted at.
     pub rate: f64,
-    /// Chosen by score and run.
+    /// Chosen by score and run, with the start-ups of the families they start.
     pub scored: (usize, f64),
-    /// Run whatever the budget: the always set, edited checks and the regression being fixed.
+    /// Run whatever the budget: the always set, edited checks and the regression being fixed,
+    /// with the start-ups of their families.
     pub forced: (usize, f64),
     /// Answered from the cache, with what running them would have cost.
     pub cached: (usize, f64),
@@ -195,8 +196,9 @@ fn gate_budget(
     GateBudget {
         seconds: budget.seconds,
         rate: budget.rate,
-        scored: part(&scored),
-        forced: part(&forced),
+        // What the run checks spend includes the start-ups of the families they start.
+        scored: (scored.len(), plan.scored_cost),
+        forced: (forced.len(), plan.forced_cost),
         cached: part(&cached),
         past_budget: (plan.past_budget.len(), cost_of(&plan.past_budget)),
         cold: (plan.cold.len(), cost_of(&plan.cold)),

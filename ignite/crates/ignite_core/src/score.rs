@@ -7,6 +7,10 @@
 //! cost  = median instructions of its last 20 runs, in billions
 //! ```
 //!
+//! A run's cost is its equal share of the command it ran in, after the family's start-up
+//! ([`startup`]) is taken out of the command's cost. The gate charges a family's start-up once,
+//! when it first runs one of the family's checks.
+//!
 //! The cost is what running the check takes. Builds are not part of it: the gate runs checks on
 //! what its tree has already compiled and leaves a check that needs a cold build to tip
 //! verification ([`crate::gate`]).
@@ -78,6 +82,53 @@ pub fn probability_over_areas(areas: &[AreaRecord], family_rate: f64) -> f64 {
             Some(largest.map_or(p, |largest| largest.max(p)))
         })
         .unwrap_or(family_rate)
+}
+
+/// How many runs of a family [`startup`] needs before it estimates the family's start-up.
+pub const STARTUP_MIN_RUNS: usize = 5;
+
+/// The share of a family's runs that cost less than the start-up [`startup`] may estimate: a
+/// start-up is never estimated above what the cheapest tenth of its commands cost in all.
+const STARTUP_QUANTILE: f64 = 0.1;
+
+/// The cost of starting one command of a family, estimated from its runs, each a number of
+/// checks and what the whole command cost. A command costs about `start-up + checks x
+/// marginal`, so the estimate is the intercept of the least-squares line through the runs,
+/// at least zero and at most the [`STARTUP_QUANTILE`] quantile of the runs' costs, so that a
+/// family whose checks differ in cost from batch to batch, which tilts the line, never has
+/// more taken off than its cheap commands cost. `None` with fewer than [`STARTUP_MIN_RUNS`]
+/// runs or with every run the same size, which say nothing about the intercept.
+///
+/// A check's recorded cost is its equal share of the command it ran in. Without taking the
+/// start-up out first, every share carried a slice of it, so a family of cheap checks run 50
+/// to a command looked many times as costly as it is.
+pub fn startup(runs: &[(u32, f64)]) -> Option<f64> {
+    let runs: Vec<(f64, f64)> = runs
+        .iter()
+        .filter(|(checks, cost)| *checks > 0 && cost.is_finite() && *cost >= 0.0)
+        .map(|(checks, cost)| (f64::from(*checks), *cost))
+        .collect();
+    if runs.len() < STARTUP_MIN_RUNS {
+        return None;
+    }
+    let count = runs.len() as f64;
+    let mean_checks = runs.iter().map(|r| r.0).sum::<f64>() / count;
+    let mean_cost = runs.iter().map(|r| r.1).sum::<f64>() / count;
+    let spread: f64 = runs.iter().map(|r| (r.0 - mean_checks).powi(2)).sum();
+    if spread <= 0.0 {
+        return None;
+    }
+    let slope = runs
+        .iter()
+        .map(|r| (r.0 - mean_checks) * (r.1 - mean_cost))
+        .sum::<f64>()
+        / spread;
+    let intercept = mean_cost - slope * mean_checks;
+    let mut costs: Vec<f64> = runs.iter().map(|r| r.1).collect();
+    costs.sort_by(f64::total_cmp);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let cheap = costs[(STARTUP_QUANTILE * (costs.len() - 1) as f64) as usize];
+    Some(intercept.clamp(0.0, cheap))
 }
 
 /// A recorded cost, in the unit the machine that ran the check could measure.
@@ -152,6 +203,37 @@ mod tests {
     fn cpu_seconds_convert_at_the_given_rate() {
         assert!((Cost::CpuSeconds(2.0).billions(BILLIONS_PER_CPU_SECOND) - 34.0).abs() < 1e-12);
         assert!((Cost::Billions(3.0).billions(BILLIONS_PER_CPU_SECOND) - 3.0).abs() < 1e-12);
+    }
+
+    /// Runs of 10, 20 and 50 checks that each cost 2 to start and 0.5 a check.
+    #[test]
+    fn startup_is_the_intercept_of_cost_against_size() {
+        let runs: Vec<(u32, f64)> = [10, 20, 50, 50, 20, 10]
+            .iter()
+            .map(|n| (*n, 2.0 + 0.5 * f64::from(*n)))
+            .collect();
+        assert!((startup(&runs).unwrap() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn startup_needs_runs_of_several_sizes() {
+        assert_eq!(startup(&[(50, 10.0); 4]), None, "too few runs");
+        assert_eq!(startup(&[(50, 10.0); 8]), None, "one size says nothing");
+    }
+
+    /// The b3d-interface family's shape: batches of 50 whose cost varies with the recordings
+    /// they play, and whole runs of thousands. The line through them starts high above what
+    /// the cheapest batches cost in all, which bounds the start-up.
+    #[test]
+    fn startup_is_never_above_what_the_cheap_runs_cost() {
+        let mut runs = vec![(50, 17.0), (50, 20.0), (50, 25.0), (50, 600.0), (50, 900.0)];
+        runs.extend([(8884, 3725.0), (8884, 3773.0)]);
+        let estimate = startup(&runs).unwrap();
+        assert!((estimate - 17.0).abs() < 1e-9, "{estimate}");
+        let falling = [(1, 9.0), (2, 8.0), (3, 7.0), (4, 6.0), (5, 5.0)];
+        assert!((startup(&falling).unwrap() - 5.0).abs() < 1e-9);
+        let rising_from_below = [(10, 1.0), (20, 3.0), (30, 5.0), (40, 7.0), (50, 9.0)];
+        assert_eq!(startup(&rising_from_below), Some(0.0), "never below zero");
     }
 
     #[test]
