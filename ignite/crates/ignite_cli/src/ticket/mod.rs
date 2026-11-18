@@ -6,7 +6,7 @@
 //! per ticket; `--json` prints the hub's reply with each ticket ID spelled with its `T`.
 
 mod build;
-mod http;
+pub mod http;
 mod ids;
 mod render;
 mod wait;

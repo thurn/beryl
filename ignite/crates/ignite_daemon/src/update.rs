@@ -65,6 +65,12 @@ impl Home {
         }
     }
 
+    /// The file holding the path of the checkout `ignite install` was run from, which the
+    /// daemon serves when the login service starts it outside any checkout.
+    pub fn checkout_file(&self) -> PathBuf {
+        self.root.join("checkout")
+    }
+
     pub fn identity(&self) -> IdentityFile {
         IdentityFile {
             path: self.root.join("machine.json"),
@@ -425,40 +431,52 @@ impl Verb for InstallVerb {
     }
 
     fn run(&self, ctx: &Context, _req: &Request) -> Reply {
-        let home = Home::from_env();
-        let head = match ignite_git::refs::head(&ctx.repo) {
-            Ok(head) => head,
-            Err(error) => return failure(&error),
-        };
-        let store = home.store();
-        let identity = home.identity();
-        let deps = InstallDeps {
-            host: &NativeHost,
-            builder: &CheckoutBuilder {
-                repo: ctx.repo.clone(),
-            },
-            store: &store,
-            identity: &identity,
-            registrar: &HttpRegistrar {
-                url: ctx.config.hub.url.clone(),
-                project: ctx.config.hub.project.clone(),
-            },
-            service: &Native,
-        };
-        match install(&deps, &ctx.config, &head) {
-            Ok(done) => {
-                let mut text = String::new();
-                let _ = writeln!(text, "installed  {}", done.version);
-                let _ = writeln!(text, "machine    {}", done.machine);
-                let _ = writeln!(text, "binary     {}", done.executable.display());
-                let _ = write!(
-                    text,
-                    "daemon     starts at login; `ignite doctor` checks it"
-                );
-                Reply::text(Exit::Success, text)
-            }
-            Err(error) => failure(&error),
+        install_checkout(&ctx.repo, &ctx.config)
+    }
+}
+
+/// `ignite install` for the checkout at `repo`, run by the client itself, since no daemon runs
+/// before the first install. It also records the checkout in the home folder, where the daemon
+/// that the login service starts finds it.
+pub fn install_checkout(repo: &Path, config: &Config) -> Reply {
+    let home = Home::from_env();
+    let head = match ignite_git::refs::head(repo) {
+        Ok(head) => head,
+        Err(error) => return failure(&error),
+    };
+    let recorded = std::fs::create_dir_all(&home.root)
+        .and_then(|()| std::fs::write(home.checkout_file(), repo.to_string_lossy().as_bytes()));
+    if let Err(error) = recorded {
+        return failure(&Error::from(error));
+    }
+    let store = home.store();
+    let identity = home.identity();
+    let deps = InstallDeps {
+        host: &NativeHost,
+        builder: &CheckoutBuilder {
+            repo: repo.to_path_buf(),
+        },
+        store: &store,
+        identity: &identity,
+        registrar: &HttpRegistrar {
+            url: config.hub.url.clone(),
+            project: config.hub.project.clone(),
+        },
+        service: &Native,
+    };
+    match install(&deps, config, &head) {
+        Ok(done) => {
+            let mut text = String::new();
+            let _ = writeln!(text, "installed  {}", done.version);
+            let _ = writeln!(text, "machine    {}", done.machine);
+            let _ = writeln!(text, "binary     {}", done.executable.display());
+            let _ = write!(
+                text,
+                "daemon     starts at login; `ignite doctor` checks it"
+            );
+            Reply::text(Exit::Success, text)
         }
+        Err(error) => failure(&error),
     }
 }
 

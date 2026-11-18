@@ -10,15 +10,7 @@ use ignite_core::ids::SessionId;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 
 /// The verbs nobody has built yet, with the owning ticket's title.
-pub const NOT_BUILT: &[(&str, &str)] = &[
-    (
-        "daemon",
-        "Assemble the daemon and prove one ticket end to end",
-    ),
-    ("gate", "Gate replay"),
-    ("prime", "Command output and the workflow text"),
-    ("status", "Install, self-update, status and doctor"),
-];
+pub const NOT_BUILT: &[(&str, &str)] = &[("gate", "Gate replay")];
 
 /// How long the daemon may hold a reply before answering with a handle, below the agents'
 /// tool timeout.

@@ -48,6 +48,10 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Gate { command } => replay::run(command),
         // Answered here, so a worker can read the `machine` topic while the daemon is down.
         Command::Guide { topic } => ignite_core::guide::reply(topic.as_deref()),
+        // Answered here from the nearest `ignite.toml`, so it works while the daemon is down.
+        Command::Prime => prime(&current_dir()),
+        // Answered here: no daemon runs before the first install.
+        Command::Install => install(&current_dir()),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
         Command::Supervise { spec } => exit_reply(ignite_daemon::supervise::supervise(spec)),
         Command::RustcWrap(pass) => exit_reply(ignite_daemon::wrap::rustc_wrap(&pass.args)),
@@ -56,6 +60,35 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
             let session = client::session_from_env(|name| std::env::var(name).ok());
             client::send(&client::request(verb, raw, current_dir(), session))
         }
+    }
+}
+
+fn install(cwd: &std::path::Path) -> Reply {
+    match config_above(cwd) {
+        Ok((repo, config)) => ignite_daemon::update::install_checkout(&repo, &config),
+        Err(failure) => failure.into_reply(),
+    }
+}
+
+/// The checkout holding the nearest `ignite.toml` above `cwd`, and the file parsed.
+fn config_above(
+    cwd: &std::path::Path,
+) -> ticket::http::Result<(std::path::PathBuf, ignite_core::config::Config)> {
+    let (file, text) = ticket::http::find_config(cwd)?;
+    let config = ignite_core::config::Config::parse(&file.display().to_string(), &text)
+        .map_err(ticket::http::usage)?;
+    let repo = file
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_default();
+    Ok((repo, config))
+}
+
+fn prime(cwd: &std::path::Path) -> Reply {
+    use ignite_core::protocol::client::Exit;
+    match config_above(cwd) {
+        Ok((_, config)) => Reply::text(Exit::Success, ignite_core::prime::prime(&config)),
+        Err(failure) => failure.into_reply(),
     }
 }
 

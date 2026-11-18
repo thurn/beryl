@@ -274,7 +274,7 @@ impl Claims {
                 let _ = write!(note, "; all of it is saved as {}.", saved.branch);
                 note
             };
-            if self.give_back(ctx, &held, note, None).is_err() {
+            if self.give_back(ctx, &held, note, None, None).is_err() {
                 // The work could not be saved or the hub not told. The session keeps the
                 // ticket, and the procedure starts again.
                 let mut state = lock(&self.state);

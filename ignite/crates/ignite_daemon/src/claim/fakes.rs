@@ -297,7 +297,7 @@ impl TreeDesk for FakeTrees {
         })
     }
 
-    fn reset(&self, tree: &TreeId) -> Result<()> {
+    fn reset(&self, tree: &TreeId, _caller: Option<u32>) -> Result<()> {
         lock(&self.files).remove(tree);
         lock(&self.resets).push(tree.clone());
         lock(&self.free).push(tree.clone());

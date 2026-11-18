@@ -103,8 +103,9 @@ impl Hub {
         }
     }
 
-    /// The hub named by the `ignite.toml` above `cwd`, with the token from `IGNITE_TOKEN` or
-    /// `~/.config/ignite/token`. Reads need no token, so a missing one is reported only when a
+    /// The hub named by the `ignite.toml` above `cwd`, with the token from `IGNITE_TOKEN`, the
+    /// machine's identity that `ignite install` wrote (`machine.json` in `$IGNITE_HOME` or
+    /// `~/.config/ignite`), or the file `token` beside it. Reads need no token, so a missing one is reported only when a
     /// write is attempted.
     pub fn load(cwd: &Path, actor: String, env: impl Fn(&str) -> Option<String>) -> Result<Hub> {
         let (file, text) = find_config(cwd)?;
@@ -113,12 +114,13 @@ impl Hub {
             .and_then(|seconds| seconds.parse::<f64>().ok())
             .filter(|seconds| Duration::try_from_secs_f64(*seconds).is_ok())
             .unwrap_or(DEFAULT_RETRY_S);
+        let ignite_home = env("IGNITE_HOME")
+            .map(PathBuf::from)
+            .or_else(|| Some(PathBuf::from(env("HOME")?).join(".config/ignite")));
         let token = env("IGNITE_TOKEN")
             .filter(|token| !token.is_empty())
-            .or_else(|| {
-                let home = env("HOME")?;
-                std::fs::read_to_string(PathBuf::from(home).join(".config/ignite/token")).ok()
-            })
+            .or_else(|| machine_token(&ignite_home.clone()?.join("machine.json")))
+            .or_else(|| std::fs::read_to_string(ignite_home?.join("token")).ok())
             .map(|token| token.trim().to_owned())
             .filter(|token| !token.is_empty());
         Ok(Hub::new(
@@ -200,7 +202,7 @@ impl Hub {
             Some(_) => Some(format!(
                 "Bearer {}",
                 self.token.as_deref().ok_or_else(|| usage(
-                    "no write token: set IGNITE_TOKEN or put it in ~/.config/ignite/token"
+                    "no write token: run `ignite install`, or set IGNITE_TOKEN"
                 ))?
             )),
             None => None,
@@ -317,6 +319,12 @@ fn http_failure(status: u16, body: &str) -> Failure {
         message,
         body: parsed,
     }
+}
+
+/// The write token in the machine's identity file, if it has one.
+fn machine_token(path: &Path) -> Option<String> {
+    let identity: Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    identity.get("token")?.as_str().map(str::to_owned)
 }
 
 /// The text of the `ignite.toml` in `cwd` or the nearest directory above it.

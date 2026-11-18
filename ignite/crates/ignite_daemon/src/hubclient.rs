@@ -11,15 +11,19 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use ignite_core::config::HubConfig;
-use ignite_core::ids::{Commit, Seq};
+use ignite_core::ids::{Commit, Seq, TicketId};
 use ignite_core::protocol::hub::{
-    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Heartbeat, HeartbeatReply,
-    Landed, LandedCommit, LandingsReply, LandingsRequest, LookupReply, LookupRequest, MachineFree,
-    MachineRegister, MachineRegistered, MetricsImport, NewResult, Pause, Record, RecordBatch,
-    RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, StoreRequest,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
+    HeartbeatReply, Landed, LandedCommit, LandingsReply, LandingsRequest, LookupReply,
+    LookupRequest, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
+    Pause, Record, RecordBatch, RegressionFiled, RegressionReport, Release, ReportFiled,
+    Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    TipWaiting, TipWaitingFiled,
 };
-use ignite_core::protocol::tickets::{FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply};
+use ignite_core::protocol::tickets::{
+    BatchReply, BatchRequest, FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, Ticket,
+    TicketDetail, TicketQuery,
+};
 use ignite_core::traits::{Error, Hub, Result};
 
 /// How long an ordinary request may take before it counts as unreachable.
@@ -75,6 +79,36 @@ impl HubClient {
     /// `POST /machines/heartbeat`.
     pub fn heartbeat(&self, heartbeat: &Heartbeat) -> Result<HeartbeatReply> {
         self.post("/machines/heartbeat", heartbeat)
+    }
+
+    /// `POST /claims` with a summary: files an `adhoc` ticket and claims it.
+    pub fn claim_adhoc(&self, claim: &AdhocClaim) -> Result<TicketBrief> {
+        self.post("/claims", claim)
+    }
+
+    /// `POST /release`: gives a held ticket back with its note and saved branch.
+    pub fn release(&self, release: &Release) -> Result<()> {
+        let _: serde_json::Value = self.post("/release", release)?;
+        Ok(())
+    }
+
+    /// `POST /close`: closes a held ticket without a landing.
+    pub fn close(&self, close: &Close) -> Result<()> {
+        let _: serde_json::Value = self.post("/close", close)?;
+        Ok(())
+    }
+
+    /// `GET <path>` with the query's pairs.
+    fn get<R: DeserializeOwned>(&self, path: &str, query: &[(&str, String)]) -> Result<R> {
+        let url = format!("{}{path}", self.base);
+        let answer = self.with_retries(path, || {
+            let mut request = self.authorized(self.agent.get(&url));
+            for (key, value) in query {
+                request = request.query(*key, value);
+            }
+            request.call()
+        })?;
+        decode(path, &ok(path, answer)?.body)
     }
 
     fn post<B: Serialize, R: DeserializeOwned>(&self, path: &str, body: &B) -> Result<R> {
@@ -267,6 +301,51 @@ impl Hub for HubClient {
     fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {
         self.post("/tips/waiting", waiting)
     }
+
+    /// `GET /tickets/<id>` with its comments and history.
+    fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
+        let query = [("comments", "1".to_owned()), ("history", "1".to_owned())];
+        self.get(&format!("/tickets/{id}"), &query)
+    }
+
+    fn tickets(&self, query: &TicketQuery) -> Result<Vec<Ticket>> {
+        self.get("/tickets", &ticket_query(query))
+    }
+
+    fn batch(&self, request: &BatchRequest) -> Result<BatchReply> {
+        self.post("/batch", request)
+    }
+}
+
+/// The query string of `GET /tickets`, in the names the hub reads.
+fn ticket_query(query: &TicketQuery) -> Vec<(&'static str, String)> {
+    let spelled = |value: serde_json::Value| value.as_str().map(str::to_owned);
+    let mut pairs = Vec::new();
+    if let Some(status) = query.status.and_then(|s| spelled(serde_json::json!(s))) {
+        pairs.push(("status", status));
+    }
+    if let Some(kind) = query
+        .ticket_type
+        .and_then(|t| spelled(serde_json::json!(t)))
+    {
+        pairs.push(("type", kind));
+    }
+    let named = [
+        ("parent", query.parent.as_ref().map(ToString::to_string)),
+        ("ancestor", query.ancestor.as_ref().map(ToString::to_string)),
+        ("search", query.search.clone()),
+        ("assignee", query.assignee.clone()),
+        ("limit", query.limit.map(|l| l.to_string())),
+    ];
+    pairs.extend(named.into_iter().filter_map(|(k, v)| Some((k, v?))));
+    pairs.extend(query.label.iter().map(|l| ("label", l.clone())));
+    pairs.extend(query.label_any.iter().map(|l| ("label_any", l.clone())));
+    for (flag, set) in [("ready", query.ready), ("all", query.all)] {
+        if set {
+            pairs.push((flag, "1".to_owned()));
+        }
+    }
+    pairs
 }
 
 #[cfg(test)]

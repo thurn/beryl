@@ -521,6 +521,42 @@ impl Trees {
         let path = config.path(tree);
         let message = format!("wip: {ticket} saved at release\n\n{SAVED_TRAILER}");
         let saved = save::save(&path, &config.remote, &save_branch(&ticket), &message)?;
+        let ended = self.reset_leased(tree, &row, park_at, caller)?;
+        Ok(Released {
+            tree: tree.clone(),
+            saved,
+            ended,
+        })
+    }
+
+    /// Gives a ticket tree back without saving its work: ends the processes inside it, resets
+    /// it to `park_at` keeping its build directories, and serves the first waiter. For a tree
+    /// whose work is already saved or landed, or a claim that was refused.
+    pub fn release_unsaved(
+        &self,
+        tree: &TreeId,
+        park_at: &Commit,
+        caller: Option<u32>,
+    ) -> Result<Vec<Ended>> {
+        let row = self.row(tree)?;
+        if row.state != store::State::Leased.as_str() {
+            return Err(Error::Conflict(format!(
+                "tree {tree} is {}, not leased",
+                row.state
+            )));
+        }
+        self.reset_leased(tree, &row, park_at, caller)
+    }
+
+    fn reset_leased(
+        &self,
+        tree: &TreeId,
+        row: &rows::Tree,
+        park_at: &Commit,
+        caller: Option<u32>,
+    ) -> Result<Vec<Ended>> {
+        let config = &self.inner.config;
+        let path = config.path(tree);
         let head = refs::head(&path)?;
         store::set_state(
             &self.lock().db,
@@ -540,11 +576,7 @@ impl Trees {
         )
         .map_err(|e| store_error(&e))?;
         self.serve_waiters();
-        Ok(Released {
-            tree: tree.clone(),
-            saved,
-            ended,
-        })
+        Ok(ended)
     }
 
     fn row(&self, tree: &TreeId) -> Result<rows::Tree> {

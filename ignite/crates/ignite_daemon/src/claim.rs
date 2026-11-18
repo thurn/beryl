@@ -161,8 +161,9 @@ pub trait TreeDesk: Send + Sync {
     /// Commits whatever the tree holds as one commit marked as saved at release and pushes the
     /// branch as `ignite/<ticket>`. A failed push is an error and leaves the tree as it was.
     fn save(&self, tree: &TreeId, ticket: &TicketId) -> Result<Saved>;
-    /// Ends the tree's processes, resets it to a clean checkout and frees it.
-    fn reset(&self, tree: &TreeId) -> Result<()>;
+    /// Ends the tree's processes, resets it to a clean checkout and frees it. `caller` is the
+    /// `ignite` client asking, whose process is spared so that it can print the reply.
+    fn reset(&self, tree: &TreeId, caller: Option<u32>) -> Result<()>;
     /// Deletes the ticket's saved branch, once the ticket is closed.
     fn drop_saved(&self, ticket: &TicketId) -> Result<()>;
 }
@@ -300,6 +301,28 @@ impl Claims {
         held_at(&state, cwd).map(|h| (h.tree.clone(), h.ticket.clone(), h.session.clone()))
     }
 
+    /// Gives back `session`'s ticket for the dispatcher, keeping its work on the saved branch:
+    /// the note is `reason` followed by what was saved.
+    pub fn release_session(
+        &self,
+        ctx: &Context,
+        session: &SessionId,
+        ticket: &TicketId,
+        reason: &str,
+    ) -> Result<()> {
+        let held = {
+            let state = lock(&self.state);
+            let found = state
+                .held
+                .values()
+                .find(|h| &h.session == session && &h.ticket == ticket);
+            found.cloned()
+        }
+        .ok_or_else(|| Error::NotFound(format!("{session} holds no tree for {ticket}")))?;
+        let note = |saved: &Saved| format!("{reason} Its work is saved as {}.", saved.branch);
+        self.give_back(ctx, &held, note, None, None).map(|_| ())
+    }
+
     fn start(&self, ctx: &Context, req: &Request) -> Reply {
         let (target, session) = match parse_start(req) {
             Ok(parsed) => parsed,
@@ -343,7 +366,7 @@ impl Claims {
         let brief = match self.desk.claim(&claim) {
             Ok(brief) => brief,
             Err(error) => {
-                let reset = self.trees.reset(&leased.tree);
+                let reset = self.trees.reset(&leased.tree, req.pid);
                 let mut reply = failure(&error, "claim refused");
                 if let Err(reset) = reset {
                     let _ = write!(reply.text, "\nreset    {} failed: {reset}", leased.tree);
@@ -502,7 +525,7 @@ impl Claims {
             Err(reply) => return reply,
         };
         let title = brief::title_of(held.brief.as_ref(), &held.ticket);
-        match self.give_back(ctx, &held, |_| note, needs) {
+        match self.give_back(ctx, &held, |_| note, needs, req.pid) {
             Ok((saved, reset)) => brief::released(&held.ticket, &held.tree, &saved, &title, reset),
             Err(error) => failure(&error, &format!("{} is still yours", held.ticket)),
         }
@@ -518,6 +541,7 @@ impl Claims {
         held: &Held,
         note: impl FnOnce(&Saved) -> String,
         needs: Option<String>,
+        caller: Option<u32>,
     ) -> Result<(Saved, Option<Error>)> {
         let saved = self.trees.save(&held.tree, &held.ticket)?;
         self.desk.release(&ReleaseRequest {
@@ -528,7 +552,7 @@ impl Claims {
             needs,
             saved: saved.clone(),
         })?;
-        Ok((saved, self.free(held)))
+        Ok((saved, self.free(held, caller)))
     }
 
     fn close(&self, ctx: &Context, req: &Request) -> Reply {
@@ -548,19 +572,19 @@ impl Claims {
             return failure(&error, &format!("{} is still open", held.ticket));
         }
         let dropped = self.trees.drop_saved(&held.ticket).err();
-        let reset = self.free(&held);
+        let reset = self.free(&held, req.pid);
         brief::closed(&held.ticket, &held.tree, &reason, &title, dropped, reset)
     }
 
     /// Forgets a held ticket and resets its tree; returns the reset's failure, if any.
-    fn free(&self, held: &Held) -> Option<Error> {
+    fn free(&self, held: &Held, caller: Option<u32>) -> Option<Error> {
         {
             let mut state = lock(&self.state);
             state.held.remove(&held.tree);
             state.dirty.remove(&held.ticket);
         }
         let _ = shown::clear(&lock(&self.db), held.tree.as_str());
-        self.trees.reset(&held.tree).err()
+        self.trees.reset(&held.tree, caller).err()
     }
 }
 
