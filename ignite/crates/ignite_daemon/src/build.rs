@@ -47,6 +47,12 @@ pub const UNITS_ENV: &str = "IGNITE_UNITS";
 /// The placeholder in a product's `build` command for the packages a request names.
 const PACKAGES: &str = "{packages}";
 
+/// How long a build command may run before it is ended as hung, in seconds (two hours). Builds
+/// vary far more than checks do (a cold build of a large workspace takes tens of minutes), so
+/// the limit is fixed and generous: it only has to end a build that will never finish. Time
+/// spent waiting for cores does not count.
+const BUILD_HANG_LIMIT_S: u64 = 2 * 60 * 60;
+
 /// Files whose change can alter how Cargo resolves features: a change to any of them reruns
 /// the feature comparison, and their state keys the cached crate graph.
 const CARGO_FILES: &[&str] = &[
@@ -194,6 +200,61 @@ impl Flight {
     }
 }
 
+/// A build in progress: the output directories it holds and the flight that joiners wait on.
+/// [`FlightGuard::finish`] ends it with the build's result. Dropped without that call, as when
+/// the build panics, it frees the directories and ends the flight with a failure, so that no
+/// later request waits on a build that no longer runs.
+struct FlightGuard<'a> {
+    manager: &'a BuildManager,
+    plan: &'a Plan,
+    dirs: Vec<(TreeId, String)>,
+    flight_key: (Request, InputHash),
+    flight: Arc<Flight>,
+    finished: bool,
+}
+
+impl FlightGuard<'_> {
+    fn release(&self) {
+        let mut state = lock(&self.manager.state);
+        for dir in &self.dirs {
+            state.busy.remove(dir);
+        }
+        state.flights.remove(&self.flight_key);
+    }
+
+    fn finish(mut self, result: &BuildResult) {
+        self.finished = true;
+        let mut state = lock(&self.manager.state);
+        for dir in &self.dirs {
+            state.busy.remove(dir);
+        }
+        state.flights.remove(&self.flight_key);
+        if matches!(result, BuildResult::Built { .. }) {
+            state
+                .held
+                .insert(self.plan.request.clone(), self.plan.hash.clone());
+        }
+        drop(state);
+        self.flight.finish(result.clone());
+        self.manager.ended.notify_all();
+    }
+}
+
+impl Drop for FlightGuard<'_> {
+    fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
+        self.release();
+        let failed = self.manager.failure(
+            &self.plan.request.product,
+            "the build stopped without a result",
+        );
+        self.flight.finish(failed);
+        self.manager.ended.notify_all();
+    }
+}
+
 /// Everything a build of one request needs, worked out before any lock is taken.
 struct Plan {
     request: Request,
@@ -331,7 +392,7 @@ impl BuildManager {
             grows: plan.product.grows,
             tree: Some(plan.request.tree.clone()),
             ticket: None,
-            hang_limit_s: None,
+            hang_limit_s: Some(BUILD_HANG_LIMIT_S),
         }
     }
 
@@ -484,19 +545,17 @@ impl BuildManager {
         state.busy.extend(dirs.iter().cloned());
         drop(state);
 
+        // The guard frees the directories and wakes the joiners even if `run` panics.
+        let guard = FlightGuard {
+            manager: self,
+            plan,
+            dirs,
+            flight_key,
+            flight,
+            finished: false,
+        };
         let result = self.run(plan);
-
-        let mut state = lock(&self.state);
-        for dir in &dirs {
-            state.busy.remove(dir);
-        }
-        state.flights.remove(&flight_key);
-        if matches!(result, BuildResult::Built { .. }) {
-            state.held.insert(plan.request.clone(), plan.hash.clone());
-        }
-        drop(state);
-        flight.finish(result.clone());
-        self.ended.notify_all();
+        guard.finish(&result);
         result
     }
 

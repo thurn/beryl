@@ -30,6 +30,8 @@ struct Launched {
     units: Vec<String>,
     whole_tree: String,
     subset_tree: String,
+    /// Makes the next build command panic.
+    panic_next: bool,
 }
 
 impl TestLauncher {
@@ -104,6 +106,10 @@ impl Launcher for TestLauncher {
             let output = self.dir.join(format!("tree-{n}.txt"));
             fs::write(&output, text).unwrap();
             return done(output);
+        }
+        if std::mem::take(&mut state.panic_next) {
+            drop(state);
+            panic!("the launcher failed");
         }
         state.builds += 1;
         let mine = state.builds;
@@ -409,4 +415,30 @@ fn feature_differences_ignore_feature_nodes_and_repeats() {
     let whole = "x v1|a,b\nx feature \"a\"\nx v1|a,b (*)\ny v2|\n";
     assert!(feature_differences(whole, "x v1|a,b\ny v2|\n").is_empty());
     assert_eq!(feature_differences(whole, "x v1|a\n"), ["x"]);
+}
+
+#[test]
+fn a_build_that_panics_frees_its_directories_and_the_next_request_builds() {
+    let f = fixture("panics", false);
+    f.launcher.with(|s| s.panic_next = true);
+    let manager = Arc::clone(&f.manager);
+    let panicked = thread::spawn(move || manager.ensure(&tree(), "tests", &names(&["b"]))).join();
+    assert!(panicked.is_err());
+    assert_eq!(f.manager.waiting(), (0, 0));
+    let next = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(next, BuildResult::Built { .. }), "{next:?}");
+}
+
+#[test]
+fn builds_and_feature_checks_run_with_a_hang_limit() {
+    let f = fixture("hang-limit", false);
+    f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    let limits: Vec<Option<u64>> = f
+        .launcher
+        .with(|s| s.runs.iter().map(|r| r.hang_limit_s).collect());
+    assert!(!limits.is_empty());
+    assert!(
+        limits.iter().all(|l| *l == Some(BUILD_HANG_LIMIT_S)),
+        "{limits:?}"
+    );
 }
