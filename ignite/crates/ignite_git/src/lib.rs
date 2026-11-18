@@ -5,9 +5,11 @@
 
 pub mod changed;
 mod cmd;
+pub mod fastforward;
 pub mod push;
 pub mod rebase;
 pub mod refs;
+pub mod save;
 pub mod tracked;
 pub mod treehash;
 pub mod worktree;

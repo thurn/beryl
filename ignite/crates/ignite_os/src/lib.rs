@@ -5,6 +5,7 @@
 
 pub mod hostcpu;
 pub mod ipc;
+pub mod occupants;
 pub mod proc;
 pub mod service;
 pub mod usage;
