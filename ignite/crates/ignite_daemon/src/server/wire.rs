@@ -9,11 +9,14 @@
 //!   drops before the reply, as when the daemon restarts into a new build, waits on that handle
 //!   instead (`ignite wait T-12`).
 //! - `{"progress": "rebasing onto staging 1a2b3c4"}`, for each step of the verb as it starts.
+//!
+//! The daemon listens before it has finished starting (see [`Starting`]): a request that arrives
+//! meanwhile waits until the daemon is ready and is then answered, instead of being refused.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +39,135 @@ pub fn serve(server: &Arc<Server>, socket: &str) -> std::io::Result<()> {
     serve_listener(server, listener.as_ref())
 }
 
+/// The verbs answered at once while the daemon is starting, with a reply that says so, rather
+/// than waiting until it is ready: they only report, and are what a person runs to see why the
+/// daemon does not answer.
+const ANSWERED_WHILE_STARTING: &[&str] = &["status", "doctor"];
+
+/// The server a socket answers from, which exists only once the daemon has started.
+///
+/// The daemon binds its socket first, right after it takes the machine's lock, and serves it
+/// through a `Starting` while it reads its configuration, takes over the runs a previous daemon
+/// left and builds its parts. A request that arrives meanwhile waits for [`Starting::ready`]
+/// and is then answered as usual, so a client sees a slower reply rather than a refused
+/// connection. If the daemon cannot start, every waiting request is answered with the reason.
+pub struct Starting {
+    state: Mutex<State>,
+    changed: Condvar,
+    since: Instant,
+}
+
+struct State {
+    phase: Phase,
+    /// How many requests are waiting for the start.
+    waiting: usize,
+}
+
+enum Phase {
+    Starting,
+    Ready(Arc<Server>),
+    Failed(String),
+}
+
+impl Starting {
+    /// A daemon that has begun to start.
+    pub fn new() -> Arc<Starting> {
+        Arc::new(Starting {
+            state: Mutex::new(State {
+                phase: Phase::Starting,
+                waiting: 0,
+            }),
+            changed: Condvar::new(),
+            since: Instant::now(),
+        })
+    }
+
+    /// A daemon that is ready already, answering from `server`.
+    pub fn serving(server: Arc<Server>) -> Arc<Starting> {
+        let starting = Starting::new();
+        starting.ready(server);
+        starting
+    }
+
+    /// The daemon has started: every waiting request and every later one is answered from
+    /// `server`.
+    pub fn ready(&self, server: Arc<Server>) {
+        self.settle(Phase::Ready(server));
+    }
+
+    /// The daemon could not start: every waiting request and every later one is answered with
+    /// `reason`.
+    pub fn failed(&self, reason: impl Into<String>) {
+        self.settle(Phase::Failed(reason.into()));
+    }
+
+    fn settle(&self, phase: Phase) {
+        self.lock().phase = phase;
+        self.changed.notify_all();
+    }
+
+    /// The server, or why there is none, without waiting; `None` while the daemon is starting.
+    fn now(&self) -> Option<Result<Arc<Server>, String>> {
+        match &self.lock().phase {
+            Phase::Starting => None,
+            Phase::Ready(server) => Some(Ok(server.clone())),
+            Phase::Failed(reason) => Some(Err(reason.clone())),
+        }
+    }
+
+    /// Waits until the daemon has started or failed to.
+    fn wait(&self) -> Result<Arc<Server>, String> {
+        let mut state = self.lock();
+        state.waiting += 1;
+        self.changed.notify_all();
+        let settled = loop {
+            match &state.phase {
+                Phase::Starting => {}
+                Phase::Ready(server) => break Ok(server.clone()),
+                Phase::Failed(reason) => break Err(reason.clone()),
+            }
+            state = self
+                .changed
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+        };
+        state.waiting -= 1;
+        settled
+    }
+
+    /// Blocks until `count` requests are waiting for the start, for a test that must know its
+    /// request arrived before the daemon was ready.
+    #[cfg(test)]
+    pub(crate) fn until_waiting(&self, count: usize) {
+        let mut state = self.lock();
+        while state.waiting < count {
+            state = self
+                .changed
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The reply to a verb in [`ANSWERED_WHILE_STARTING`] while the daemon is starting.
+    fn starting_reply(&self) -> Reply {
+        let seconds = self.since.elapsed().as_secs_f64();
+        Reply {
+            json: Some(serde_json::json!({"starting": true, "seconds": seconds})),
+            ..Reply::text(
+                Exit::Success,
+                format!(
+                    "starting the daemon has been starting for {seconds:.1} s; other commands \
+                     wait until it is ready"
+                ),
+            )
+        }
+    }
+}
+
 /// How long a client that has connected has to send its request. A client that sends nothing
 /// would otherwise hold its thread for as long as it stays connected.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -46,6 +178,12 @@ const ACCEPT_PAUSE_MAX: Duration = Duration::from_secs(2);
 /// out of file descriptors for a moment) is reported and tried again after a pause that grows
 /// while they continue; it never ends the daemon.
 pub fn serve_listener(server: &Arc<Server>, listener: &dyn Listener) -> std::io::Result<()> {
+    serve_starting(&Starting::serving(server.clone()), listener)
+}
+
+/// [`serve_listener`] for a daemon that may still be starting: each request waits for
+/// `starting` to be ready (see [`Starting`]).
+pub fn serve_starting(starting: &Arc<Starting>, listener: &dyn Listener) -> std::io::Result<()> {
     let mut pause = Duration::from_millis(50);
     loop {
         let stream = match listener.accept() {
@@ -58,10 +196,10 @@ pub fn serve_listener(server: &Arc<Server>, listener: &dyn Listener) -> std::io:
             }
         };
         pause = Duration::from_millis(50);
-        let server = server.clone();
+        let starting = starting.clone();
         let spawned = std::thread::Builder::new()
             .name("ignite-connection".to_owned())
-            .spawn(move || answer(&server, stream));
+            .spawn(move || answer(&starting, stream));
         if let Err(error) = spawned {
             eprintln!("ignite: cannot start a thread for a connection: {error}");
         }
@@ -69,8 +207,9 @@ pub fn serve_listener(server: &Arc<Server>, listener: &dyn Listener) -> std::io:
 }
 
 /// Reads one request line from `stream` and writes the reply line, with the lines before it
-/// that the client asked for.
-fn answer(server: &Server, mut stream: Box<dyn Stream>) {
+/// that the client asked for. While the daemon is starting, the request waits for it (see
+/// [`Starting`]).
+fn answer(starting: &Starting, mut stream: Box<dyn Stream>) {
     let _ = stream.set_read_timeout(Some(REQUEST_TIMEOUT));
     let mut line = String::new();
     if BufReader::new(&mut stream).read_line(&mut line).is_err() {
@@ -79,31 +218,63 @@ fn answer(server: &Server, mut stream: Box<dyn Stream>) {
     let _ = stream.set_read_timeout(None);
     let caller: Option<CallerProbe> = stream.closed_probe().map(Arc::from);
     let wants = serde_json::from_str::<Wants>(&line).unwrap_or_default();
-    let reply = match serde_json::from_str::<Request>(&line) {
-        Ok(req) => {
-            // Both callbacks write to the stream, one after the other, never at once.
-            let stream = std::cell::RefCell::new(&mut stream);
-            let mut open = true;
-            let mut pass = |text: &str| {
-                open = open
-                    && write_line(&mut **stream.borrow_mut(), &Progress { progress: text }).is_ok();
-                open
-            };
-            let mut named = |handle: &Handle| {
-                let _ = write_line(&mut **stream.borrow_mut(), &HandleLine { handle });
-            };
-            server.handle_answering(
-                &req,
-                caller,
-                wants
-                    .progress
-                    .then_some(&mut pass as &mut dyn FnMut(&str) -> bool),
-                wants
-                    .reattach
-                    .then_some(&mut named as &mut dyn FnMut(&Handle)),
-            )
+    let req = match serde_json::from_str::<Request>(&line) {
+        Ok(req) => req,
+        Err(error) => {
+            let reply = Reply::text(Exit::Usage, format!("failed   unreadable request: {error}"));
+            let _ = write_line(&mut stream, &reply);
+            return;
         }
-        Err(error) => Reply::text(Exit::Usage, format!("failed   unreadable request: {error}")),
+    };
+    let server = match starting.now() {
+        Some(settled) => settled,
+        None if ANSWERED_WHILE_STARTING.contains(&req.verb.as_str()) => {
+            let _ = write_line(&mut stream, &starting.starting_reply());
+            return;
+        }
+        None => {
+            let settled = starting.wait();
+            // A client that went away while the daemon was starting was never told a handle,
+            // so nobody waits for the work; it is not started.
+            if caller.as_ref().is_some_and(|closed| closed()) {
+                return;
+            }
+            settled
+        }
+    };
+    let server = match server {
+        Ok(server) => server,
+        Err(reason) => {
+            let reply = Reply::text(
+                Exit::Usage,
+                format!("failed   the daemon did not start: {reason}\nnext     ignite doctor"),
+            );
+            let _ = write_line(&mut stream, &reply);
+            return;
+        }
+    };
+    let reply = {
+        // Both callbacks write to the stream, one after the other, never at once.
+        let stream = std::cell::RefCell::new(&mut stream);
+        let mut open = true;
+        let mut pass = |text: &str| {
+            open = open
+                && write_line(&mut **stream.borrow_mut(), &Progress { progress: text }).is_ok();
+            open
+        };
+        let mut named = |handle: &Handle| {
+            let _ = write_line(&mut **stream.borrow_mut(), &HandleLine { handle });
+        };
+        server.handle_answering(
+            &req,
+            caller,
+            wants
+                .progress
+                .then_some(&mut pass as &mut dyn FnMut(&str) -> bool),
+            wants
+                .reattach
+                .then_some(&mut named as &mut dyn FnMut(&Handle)),
+        )
     };
     // The client may have gone away, as when its tool call was interrupted; nothing is lost,
     // because a reply that outlives its caller is kept under a handle.

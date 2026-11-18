@@ -13,7 +13,10 @@
 //! A landing tree leased by a verb with a handle records that handle as its owner. When the
 //! daemon restarts, a landing tree whose owner is still running ([`owner_alive`]) is kept as it
 //! is, with the commands in it, for the verb the new daemon runs again under that handle; every
-//! other tree left in the middle of something is reset ([`reset_at_start`]).
+//! other tree left in the middle of something is reset ([`reset_at_start`]). The daemon marks
+//! those trees `resetting` before it serves its socket and resets them on a thread of its own
+//! afterwards ([`Trees::mark_unfinished`], [`Trees::finish_in_background`]), so a restart is not
+//! held up by `git`; a lease that needs one of them waits for it like any other.
 //!
 //! Releasing a ticket tree saves its work first ([`ignite_git::save`]) and fails, leaving the
 //! tree leased and untouched, if that push fails. It then stops every verb still running from
@@ -26,12 +29,12 @@ mod disk;
 pub mod head;
 mod landing;
 mod reset;
+mod setup;
 #[cfg(test)]
 mod tests;
 mod wait;
 
 use std::collections::{BTreeSet, VecDeque};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -48,6 +51,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 pub use disk::DiskReport;
+pub use setup::Unfinished;
 use wait::Slot;
 pub use wait::Waiter;
 
@@ -353,60 +357,6 @@ impl Trees {
 
     fn now(&self) -> String {
         self.inner.clock.now().to_string()
-    }
-
-    /// Creates every configured tree that does not exist yet, at `tip`, and finishes any reset
-    /// prebuild or landing that a stopped daemon left half done. Leased trees keep their leases,
-    /// and so does a landing tree whose owner runs again ([`reset_at_start`]).
-    pub fn setup(&self, tip: &Commit) -> Result<()> {
-        let config = &self.inner.config;
-        fs::create_dir_all(&config.dir)?;
-        for (id, kind) in config.configured() {
-            let path = config.path(&id);
-            let park = park_branch(&id);
-            let row = store::get(&self.lock().db, id.as_str()).map_err(|e| store_error(&e))?;
-            let fresh = !path.join(".git").exists();
-            if fresh {
-                worktree::add(&config.repo, &path, &park, tip)?;
-            }
-            let row = match row {
-                Some(row) if !fresh => row,
-                _ => {
-                    if !fresh {
-                        worktree::reset(&path, &park, tip, &config.keep)?;
-                    }
-                    rows::Tree {
-                        id: id.to_string(),
-                        path: path.display().to_string(),
-                        kind: kind.as_str().to_owned(),
-                        state: store::State::Free.as_str().to_owned(),
-                        ticket: None,
-                        session: None,
-                        branch: None,
-                        built_commit: None,
-                        leased_at: None,
-                        last_used: None,
-                        owner: None,
-                    }
-                }
-            };
-            let resets = resets_at_start(&self.lock().db, &row);
-            let row = if resets {
-                worktree::reset(&path, &park, tip, &config.keep)?;
-                rows::Tree {
-                    state: store::State::Free.as_str().to_owned(),
-                    ticket: None,
-                    session: None,
-                    branch: None,
-                    owner: None,
-                    ..row
-                }
-            } else {
-                row
-            };
-            store::upsert(&self.lock().db, &row).map_err(|e| store_error(&e))?;
-        }
-        Ok(())
     }
 
     /// Leases a free ticket tree and checks the request's branch out in it. A ticket expected

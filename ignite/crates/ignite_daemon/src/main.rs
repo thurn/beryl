@@ -56,13 +56,29 @@ pub struct Daemon {
     parts: loops::Parts,
 }
 
+/// When [`Daemon::start_with`] creates the trees that are missing and resets the ones a stopped
+/// daemon left in the middle of something.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TreeSetup {
+    /// Before it returns, so every tree is ready when the daemon is.
+    Now,
+    /// On a thread of its own, after marking them `resetting` (see `crate::trees`), so a
+    /// restarted daemon answers without waiting for `git`.
+    Background,
+}
+
 impl Daemon {
     /// Builds every part, registers the machine with the hub if it has no token yet and creates
     /// the build trees. The background loops start with [`Daemon::run_loops`], and serving is
     /// left to the caller.
     pub fn start(options: DaemonOptions) -> Result<Daemon> {
+        Daemon::start_with(options, TreeSetup::Now)
+    }
+
+    /// [`Daemon::start`], with the trees set up as `setup` says.
+    pub fn start_with(options: DaemonOptions, setup: TreeSetup) -> Result<Daemon> {
         let base = assemble::Base::read(options)?;
-        let machinery = assemble::machinery(&base)?;
+        let machinery = assemble::machinery(&base, setup)?;
         let (checks, landing, idle) = assemble::checking(&base, &machinery.trees)?;
         let ctx = Context {
             config: base.config.clone(),
@@ -224,23 +240,74 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         version,
         feed_wait_s: 60,
     };
-    if let Err(error) = loops::serve_hub_if_asked(&options) {
-        eprintln!("ignite: the hub did not start: {error}");
-        return 1;
-    }
-    let daemon = match Daemon::start(options) {
-        Ok(daemon) => daemon,
+    // The socket is served before the rest of the start: a request that arrives meanwhile
+    // waits for the daemon to be ready instead of being refused (see `crate::server::Starting`).
+    let socket = crate::server::default_socket();
+    let listener = match listen(&socket) {
+        Ok(listener) => listener,
         Err(error) => {
-            eprintln!("ignite: the daemon did not start: {error}");
+            eprintln!("ignite: cannot serve the socket: {error}");
             return 1;
         }
     };
-    daemon.run_loops();
-    match daemon.serve(&crate::server::default_socket()) {
-        Ok(()) => 0,
+    let starting = crate::server::Starting::new();
+    let accept = {
+        let starting = starting.clone();
+        std::thread::Builder::new()
+            .name("ignite-accept".to_owned())
+            .spawn(move || crate::server::serve_starting(&starting, listener.as_ref()))
+    };
+    let accept = match accept {
+        Ok(accept) => accept,
         Err(error) => {
+            eprintln!("ignite: cannot start the thread that serves the socket: {error}");
+            return 1;
+        }
+    };
+    let started = loops::serve_hub_if_asked(&options)
+        .map_err(|error| format!("the hub did not start: {error}"))
+        .and_then(|()| {
+            Daemon::start_with(options, TreeSetup::Background)
+                .map_err(|error| format!("the daemon did not start: {error}"))
+        });
+    let daemon = match started {
+        Ok(daemon) => daemon,
+        Err(reason) => {
+            eprintln!("ignite: {reason}");
+            starting.failed(reason);
+            // Gives the requests that waited for the start a moment to read why it failed.
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            return 1;
+        }
+    };
+    starting.ready(daemon.server.clone());
+    daemon.run_loops();
+    match accept.join() {
+        Ok(Ok(())) => 0,
+        Ok(Err(error)) => {
             eprintln!("ignite: cannot serve the socket: {error}");
             1
+        }
+        Err(_) => 1,
+    }
+}
+
+/// Listens on the daemon's socket. With the machine's lock held, a listener already on it can
+/// only be a daemon that is exiting (on Windows a restart starts the new process before the old
+/// one's pipe is gone), so a socket in use is tried again for as long as the lock was waited for.
+fn listen(socket: &Path) -> std::io::Result<Box<dyn ignite_os::ipc::Listener>> {
+    use ignite_os::ipc::Ipc;
+    let name = socket.to_string_lossy();
+    let started = std::time::Instant::now();
+    loop {
+        match ignite_os::Native.listen(&name) {
+            Err(error)
+                if error.kind() == std::io::ErrorKind::AddrInUse
+                    && started.elapsed() < crate::machine_lock::RESTART_WAIT =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            other => return other,
         }
     }
 }

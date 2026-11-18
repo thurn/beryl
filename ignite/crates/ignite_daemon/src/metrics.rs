@@ -19,7 +19,10 @@
 //!
 //! What was sent is kept in a small JSON file, so a restarted daemon carries on from it. An
 //! export overlaps the last one by up to a day, which costs nothing: importing a row twice
-//! changes nothing.
+//! changes nothing. The file also records when the ingest last ran, and a restarted daemon's
+//! first round waits until the loop's period has passed since then ([`first_round_in`]). Before,
+//! every start ran the ingest and the export at once, which cost 13 to 17 s of CPU per restart
+//! on a day of restarts every few minutes.
 
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
@@ -47,6 +50,24 @@ struct Sent {
     stamp: String,
     /// The UTC date the last export was taken, which the next export starts from.
     since: Option<String>,
+    /// When the ingest last began, whether or not its round finished.
+    #[serde(default)]
+    last_round_at: Option<Timestamp>,
+}
+
+/// How long a daemon that has just started waits before its first round, so that rounds stay
+/// `period` apart across restarts: what is left of `period` since the ingest last began, as
+/// recorded in `state`, or nothing if it never ran.
+pub fn first_round_in(
+    state: &Path,
+    now: Timestamp,
+    period: std::time::Duration,
+) -> std::time::Duration {
+    let Some(last) = load(state).last_round_at else {
+        return std::time::Duration::ZERO;
+    };
+    let left = period.as_secs_f64() - now.seconds_since(last);
+    std::time::Duration::from_secs_f64(left.clamp(0.0, period.as_secs_f64()))
 }
 
 /// Runs the ingest and posts its new rows if the watched files changed since the last post;
@@ -63,6 +84,15 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
         return Ok(0);
     }
     let started = ctx.clock.now();
+    // Recorded before the ingest runs, so a round that fails or is cut off by a restart still
+    // counts for the wait before the next start's first round.
+    save(
+        state,
+        &Sent {
+            last_round_at: Some(started),
+            ..sent.clone()
+        },
+    )?;
     run(ctx, metrics.ingest.clone())?;
     let out = state.with_extension("export.jsonl");
     let since = sent.since.as_deref().unwrap_or("all");
@@ -84,6 +114,7 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
         &Sent {
             stamp: now,
             since: Some(started.day()),
+            last_round_at: Some(started),
         },
     )?;
     let _ = fs::remove_file(&out);
@@ -547,6 +578,52 @@ mod tests {
         let runs = s.launcher.runs();
         assert_eq!(&runs[3].args[2..4], ["--since", "2026-11-17"]);
         assert_eq!(s.hub.metrics_imports().len(), 2);
+    }
+
+    #[test]
+    fn a_restarted_daemon_waits_out_the_period_since_the_last_ingest() {
+        let scratch = Scratch::new("first-round");
+        let s = setup(&scratch, true);
+        let period = std::time::Duration::from_secs(600);
+        let now = s.ctx.clock.now();
+        assert_eq!(
+            first_round_in(&s.state, now, period),
+            std::time::Duration::ZERO,
+            "the ingest never ran"
+        );
+
+        grow_transcripts(&scratch, "a.jsonl");
+        write_export(&s, 1);
+        post_new_rows(&s.ctx, &s.state).unwrap();
+
+        assert_eq!(first_round_in(&s.state, now, period), period);
+        assert_eq!(
+            first_round_in(&s.state, now.plus_seconds(240.0), period),
+            std::time::Duration::from_secs(360)
+        );
+        assert_eq!(
+            first_round_in(&s.state, now.plus_seconds(900.0), period),
+            std::time::Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn a_failed_ingest_still_counts_for_the_wait_before_the_next_round() {
+        let scratch = Scratch::new("failed-round");
+        let s = setup(&scratch, true);
+        grow_transcripts(&scratch, "a.jsonl");
+        s.launcher.script(
+            &["dash", "ingest"],
+            RunResult {
+                exit: Some(1),
+                output: PathBuf::from("/out"),
+                usage: ignite_core::protocol::Usage::default(),
+                hung: false,
+            },
+        );
+        assert!(post_new_rows(&s.ctx, &s.state).is_err());
+        let period = std::time::Duration::from_secs(600);
+        assert_eq!(first_round_in(&s.state, s.ctx.clock.now(), period), period);
     }
 
     #[test]

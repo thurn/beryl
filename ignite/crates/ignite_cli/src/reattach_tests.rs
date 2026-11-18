@@ -20,6 +20,8 @@ struct Scripted {
     answers: VecDeque<Answer>,
     sent: Vec<Request>,
     now: Duration,
+    /// What [`Daemon::starting`] answers: a daemon holds the lock or started a moment ago.
+    starting: bool,
 }
 
 impl Scripted {
@@ -28,6 +30,7 @@ impl Scripted {
             answers: answers.into(),
             sent: Vec::new(),
             now: Duration::ZERO,
+            starting: false,
         }
     }
 
@@ -70,6 +73,10 @@ impl Daemon for Scripted {
 
     fn elapsed(&self) -> Duration {
         self.now
+    }
+
+    fn starting(&self) -> bool {
+        self.starting
     }
 }
 
@@ -181,4 +188,29 @@ fn a_daemon_that_stays_down_is_given_up_on_after_five_minutes() {
     let cut = send(&mut daemon, &request("test"), None, true).unwrap_err();
     assert_eq!(cut.error.kind(), ErrorKind::ConnectionRefused);
     assert!(daemon.elapsed() >= RETRY_FOR);
+}
+
+/// On Windows the old daemon's pipe is gone before the new daemon creates its own, so the
+/// socket is missing while the new daemon starts. A client that finds it missing waits while a
+/// daemon is starting, and only then.
+#[test]
+fn a_missing_socket_is_retried_while_a_daemon_is_starting() {
+    let mut daemon = Scripted::new(vec![
+        Answer::Missing,
+        Answer::Missing,
+        Answer::Refused,
+        Answer::Reply(passed()),
+    ]);
+    daemon.starting = true;
+    assert_eq!(
+        send(&mut daemon, &request("land"), None, true).unwrap(),
+        passed()
+    );
+    assert_eq!(daemon.verbs(), ["land", "land", "land", "land"]);
+
+    let mut stopped = Scripted::new(vec![Answer::Missing, Answer::Reply(passed())]);
+    stopped.starting = false;
+    let cut = send(&mut stopped, &request("land"), None, true).unwrap_err();
+    assert_eq!(cut.error.kind(), ErrorKind::NotFound);
+    assert_eq!(stopped.verbs(), ["land"]);
 }

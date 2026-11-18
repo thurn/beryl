@@ -20,6 +20,7 @@ use ignite_store::local::open_in_memory;
 use super::*;
 
 mod owners;
+mod setup;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 

@@ -753,7 +753,10 @@ pub fn error_reply(error: &Error) -> Reply {
     Reply::text(exit, format!("{label:<8} {error}"))
 }
 
-pub use wire::{Cut, default_socket, exchange, send, send_reading, serve, serve_listener};
+pub use wire::{
+    Cut, Starting, default_socket, exchange, send, send_reading, serve, serve_listener,
+    serve_starting,
+};
 
 #[cfg(test)]
 #[path = "server_tests.rs"]

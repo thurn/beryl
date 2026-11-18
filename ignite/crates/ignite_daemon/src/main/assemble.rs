@@ -18,7 +18,7 @@ use ignite_core::traits::{Clock, Error, Git, Hub, Launcher, Result};
 use ignite_git::GitCli;
 use ignite_os::hostcpu::HostCpu;
 
-use super::{DaemonOptions, desk, loops};
+use super::{DaemonOptions, TreeSetup, desk, loops};
 use crate::adopt::AdoptingLauncher;
 use crate::build::{BuildManager, BuildSettings, DirectoryTrees};
 use crate::cache::ResultCache;
@@ -134,8 +134,10 @@ pub struct Machinery {
     pub trees: Trees,
 }
 
-/// The scheduler, the supervisor, builds and the trees, created at the tip if missing.
-pub fn machinery(base: &Base) -> Result<Machinery> {
+/// The scheduler, the supervisor, builds and the trees. Trees that are missing or were left in
+/// the middle of something are created or reset at the tip, before this returns or on a thread
+/// of their own, as `setup` says.
+pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     let scheduler = Arc::new(Scheduler::new(
         base.limits.clone(),
         base.clock.clone(),
@@ -177,7 +179,19 @@ pub fn machinery(base: &Base) -> Result<Machinery> {
         base.clock.clone(),
         builds.clone(),
     );
-    trees.setup(&base.git.tip(&base.config.repository.staging)?)?;
+    let unfinished = trees.mark_unfinished()?;
+    let staging = &base.config.repository.staging;
+    match setup {
+        TreeSetup::Now => {
+            let tip = base.git.tip(staging)?;
+            for tree in &unfinished {
+                trees.finish(tree, &tip)?;
+            }
+        }
+        TreeSetup::Background => {
+            trees.finish_in_background(base.git.clone(), staging.clone(), unfinished);
+        }
+    }
     Ok(Machinery {
         scheduler,
         launcher,

@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use super::*;
 
@@ -36,12 +37,9 @@ fn identity(path: &std::path::Path) -> (u64, u64) {
     (fs::metadata(path).unwrap().creation_time(), 0)
 }
 
-#[test]
-fn a_second_daemon_is_refused_until_the_first_dies() {
-    let root = std::env::temp_dir().join(format!("ignite-daemon-lock-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    let home = Home { root: root.clone() };
-
+/// Starts the first daemon in a process of its own, holding the lock in `root`, and returns once
+/// it holds it. Closing its standard input ends it.
+fn first_daemon(root: &std::path::Path) -> std::process::Child {
     let mut first = Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -49,7 +47,7 @@ fn a_second_daemon_is_refused_until_the_first_dies() {
             "--ignored",
             "--nocapture",
         ])
-        .env(HOME_VARIABLE, &root)
+        .env(HOME_VARIABLE, root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -64,10 +62,27 @@ fn a_second_daemon_is_refused_until_the_first_dies() {
             "the first daemon exited"
         );
     }
+    // Read to the end, so the first daemon can print its test's result when it exits.
+    std::thread::spawn(move || std::io::copy(&mut out, &mut std::io::sink()));
+    first
+}
+
+fn scratch_home(name: &str) -> Home {
+    let root = std::env::temp_dir().join(format!("ignite-{name}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    Home { root }
+}
+
+#[test]
+fn a_second_daemon_is_refused_until_the_first_dies() {
+    let home = scratch_home("daemon-lock");
+    let root = home.root.clone();
+    let mut first = first_daemon(&root);
     let path = root.join(LOCK_FILE);
     let before = identity(&path);
 
-    let refused = hold(&home).unwrap_err();
+    assert!(held(&home), "a client sees the lock held");
+    let refused = hold_waiting(&home, Duration::ZERO, || {}).unwrap_err();
     assert_eq!(refused.kind(), io::ErrorKind::AddrInUse);
     assert!(
         refused
@@ -83,6 +98,54 @@ fn a_second_daemon_is_refused_until_the_first_dies() {
     assert_eq!(identity(&path), before, "the lock file was replaced");
     drop(second);
     fs::remove_dir_all(root).unwrap();
+}
+
+/// On Windows a restart starts the new daemon before the old one has exited. The new one finds
+/// the lock held, waits instead of exiting, and takes the lock once the old one is gone.
+#[test]
+fn a_restarted_daemon_waits_for_its_predecessor_to_free_the_lock() {
+    let home = scratch_home("restart-lock");
+    let mut first = first_daemon(&home.root);
+    let mut stdin = first.stdin.take();
+
+    let mut found_held = false;
+    let lock = hold_waiting(&home, RESTART_WAIT, || {
+        found_held = true;
+        // The old daemon exits now, while the new one waits.
+        drop(stdin.take());
+    })
+    .unwrap();
+
+    assert!(found_held, "the lock was free from the start");
+    assert_eq!(lock.path, home.root.join(LOCK_FILE));
+    first.wait().unwrap();
+    drop(lock);
+    fs::remove_dir_all(&home.root).unwrap();
+}
+
+#[test]
+fn only_a_restart_from_another_process_waits_long_for_the_lock() {
+    assert_eq!(start_wait(Some("4242"), 7), RESTART_WAIT);
+    assert_eq!(start_wait(Some("7"), 7), START_GRACE, "macOS keeps the ID");
+    assert_eq!(start_wait(Some("garbage"), 7), START_GRACE);
+    assert_eq!(start_wait(None, 7), START_GRACE);
+}
+
+#[test]
+fn a_missing_socket_means_starting_only_after_a_recent_start() {
+    let home = scratch_home("lock-starting");
+    let now = ignite_core::time::Timestamp::parse("2026-11-18T16:10:40.000Z").unwrap();
+    assert!(!daemon_starting(&home, now), "no daemon was ever started");
+
+    let log = crate::update::start_log(&home);
+    let commit = ignite_core::ids::Commit::new("a".repeat(40)).unwrap();
+    log.record(now.plus_seconds(-2.0), &commit, 1).unwrap();
+    assert!(daemon_starting(&home, now), "a start 2 s ago");
+    assert!(
+        !daemon_starting(&home, now.plus_seconds(RECENT_START_S + 1.0)),
+        "a start over a minute ago, and nothing holds the lock"
+    );
+    fs::remove_dir_all(&home.root).unwrap();
 }
 
 /// The home folder holds the daemon's socket and the machine's write token, so only its user

@@ -208,6 +208,78 @@ fn a_reply_reaches_the_client_over_the_socket() {
     assert_eq!(reply.exit, Exit::Usage);
 }
 
+/// The daemon serves its socket before it has finished starting. A request sent meanwhile is
+/// answered once the daemon is ready, never refused; `status` is answered at once.
+#[test]
+fn a_request_sent_while_the_daemon_starts_is_answered_once_it_is_ready() {
+    let dir = std::env::temp_dir().join(format!("ignite-server-starting-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let socket = dir.join("d.sock").to_string_lossy().into_owned();
+    let listener = ignite_os::Native.listen(&socket).unwrap();
+    let starting = Starting::new();
+    {
+        let starting = starting.clone();
+        std::thread::spawn(move || serve_starting(&starting, listener.as_ref()));
+    }
+
+    let client = {
+        let socket = socket.clone();
+        std::thread::spawn(move || send(&socket, &request("echo", &["hello", "there"])))
+    };
+    starting.until_waiting(1);
+    let status = send(&socket, &request("status", &[])).unwrap();
+    assert_eq!(status.exit, Exit::Success);
+    assert!(status.text.starts_with("starting "), "{}", status.text);
+    assert_eq!(status.json.unwrap()["starting"], true);
+    assert!(
+        !client.is_finished(),
+        "answered before the daemon was ready"
+    );
+
+    let mut registry = Registry::default();
+    registry.register(Box::new(Echo));
+    starting.ready(Arc::new(Server::new(context(), registry, None).unwrap()));
+
+    let reply = client.join().unwrap().unwrap();
+    assert_eq!(
+        (reply.exit, reply.text.as_str()),
+        (Exit::Success, "hello there")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_request_sent_while_the_daemon_fails_to_start_is_told_why() {
+    let dir =
+        std::env::temp_dir().join(format!("ignite-server-start-fails-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let socket = dir.join("d.sock").to_string_lossy().into_owned();
+    let listener = ignite_os::Native.listen(&socket).unwrap();
+    let starting = Starting::new();
+    {
+        let starting = starting.clone();
+        std::thread::spawn(move || serve_starting(&starting, listener.as_ref()));
+    }
+    let client = {
+        let socket = socket.clone();
+        std::thread::spawn(move || send(&socket, &request("echo", &["hello"])))
+    };
+    starting.until_waiting(1);
+
+    starting.failed("ignite.toml declares no [machine.alpha]");
+
+    let reply = client.join().unwrap().unwrap();
+    assert_eq!(reply.exit, Exit::Usage);
+    assert!(
+        reply
+            .text
+            .contains("did not start: ignite.toml declares no [machine.alpha]"),
+        "{}",
+        reply.text
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_long_verb_returns_a_handle_and_wait_gets_its_result() {
     let (registry, finish) = gated();

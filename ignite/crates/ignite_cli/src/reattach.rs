@@ -12,8 +12,11 @@
 //!   reads or waits ([`REPEATABLE`]). Any other is answered with a reply that says its outcome
 //!   is unknown and how to find it.
 //! - A daemon that refuses the connection before the request is written is being started, so
-//!   the request is sent again for up to [`RETRY_FOR`]. A socket that does not exist at all
-//!   means no daemon is installed, which is answered at once.
+//!   the request is sent again for up to [`RETRY_FOR`]. So is one whose socket does not exist
+//!   while a process holds the machine's daemon lock or a daemon start was logged in the last
+//!   minute ([`Daemon::starting`]): on Windows the old daemon's pipe goes away before the new
+//!   daemon creates its own. Otherwise a missing socket means no daemon is installed or
+//!   running, which is answered at once.
 
 use std::io::ErrorKind;
 use std::time::{Duration, Instant};
@@ -45,6 +48,8 @@ pub trait Daemon {
     fn pause(&mut self, pause: Duration);
     /// How long ago the command started.
     fn elapsed(&self) -> Duration;
+    /// Whether a daemon is starting although its socket does not exist yet.
+    fn starting(&self) -> bool;
 }
 
 /// Sends `req`, keeping its reply across a restart of the daemon. `Err` holds the failure to
@@ -60,7 +65,7 @@ pub fn send(
         Ok(reply) => return Ok(reply),
         Err(cut) => cut,
     };
-    if !(cut.sent || retry_unsent && starting(&cut)) {
+    if !(cut.sent || retry_unsent && starting(daemon, &cut)) {
         return Err(cut);
     }
     let since = daemon.elapsed();
@@ -93,10 +98,14 @@ fn reborrow<'a>(progress: &'a mut Option<&mut dyn FnMut(&str)>) -> Option<&'a mu
     }
 }
 
-/// Whether the daemon refused a connection because it is starting: its socket is there, and
-/// nothing listens on it yet.
-fn starting(cut: &Cut) -> bool {
-    cut.error.kind() == ErrorKind::ConnectionRefused
+/// Whether the daemon could not be reached because it is starting: its socket is there and
+/// nothing listens on it yet, or the socket is missing while a daemon is starting.
+fn starting(daemon: &dyn Daemon, cut: &Cut) -> bool {
+    match cut.error.kind() {
+        ErrorKind::ConnectionRefused => true,
+        ErrorKind::NotFound => daemon.starting(),
+        _ => false,
+    }
 }
 
 /// Waits on `handle` for `req`'s reply, as `ignite wait` does, trying to reach the daemon for
@@ -166,6 +175,14 @@ impl Daemon for SocketDaemon {
 
     fn elapsed(&self) -> Duration {
         self.started.elapsed()
+    }
+
+    fn starting(&self) -> bool {
+        use ignite_core::traits::Clock;
+        ignite_daemon::machine_lock::daemon_starting(
+            &ignite_daemon::update::Home::from_env(),
+            ignite_core::time::SystemClock.now(),
+        )
     }
 }
 

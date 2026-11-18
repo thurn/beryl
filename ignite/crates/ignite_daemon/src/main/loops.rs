@@ -268,6 +268,12 @@ impl Parts {
     fn spawn_metrics(&self) {
         let (ctx, state) = (self.ctx.clone(), self.home.root.join("metrics.json"));
         self.start_loop("ignite-metrics", METRICS_STALL_AFTER, move |ticker| {
+            // Rounds stay a period apart across restarts, instead of one at every start.
+            thread::sleep(crate::metrics::first_round_in(
+                &state,
+                ctx.clock.now(),
+                METRICS_EVERY,
+            ));
             loop {
                 ticker.round(|| {
                     crate::metrics::post_new_rows(&ctx, &state).map_err(|error| {

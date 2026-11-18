@@ -595,9 +595,16 @@ pub trait Restart {
 ///
 /// Windows has no `exec`, so there the new daemon starts as a process of its own, apart from
 /// this one's console, and this process exits. Supervisors keep running, as they do on macOS.
-/// The new daemon may start before this process has exited and freed the machine's daemon
-/// lock.
+/// The new daemon may reach the machine's daemon lock before this process has exited and freed
+/// it, so it is told this process's ID in `IGNITE_RESTART_FROM` and waits for the lock (see
+/// `crate::machine_lock`). This process exits only once the new one has logged its start, or
+/// after `HANDOVER_WAIT`: a client that finds no pipe treats it as a daemon starting while a
+/// start was logged a moment ago, so no client sees a gap in which no daemon seems to run.
 pub struct ExecRestart;
+
+/// How long a restart on Windows waits for the new daemon to log its start before it exits.
+#[cfg(windows)]
+const HANDOVER_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl Restart for ExecRestart {
     #[cfg(unix)]
@@ -611,7 +618,18 @@ impl Restart for ExecRestart {
         use ignite_os::proc::Processes;
         let mut command = Command::new(executable);
         Native.detach(&mut command);
-        command.args(args).spawn()?;
+        command.env(
+            crate::machine_lock::RESTART_FROM,
+            std::process::id().to_string(),
+        );
+        let child = command.args(args).spawn()?;
+        let log = start_log(&Home::from_env());
+        let since = std::time::Instant::now();
+        while since.elapsed() < HANDOVER_WAIT
+            && !log.read().iter().any(|start| start.pid == child.id())
+        {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
         std::process::exit(0)
     }
 }
