@@ -1,14 +1,468 @@
-//! `ignite plan check <epic>`: the shape of an epic's ticket graph: tickets ready at the start,
-//! the longest chain, suspect edges, tickets that name no files and lanes whose tickets do not
-//! depend on each other.
+//! `ignite plan check <epic>`: the shape of an epic's ticket graph. It reports the ticket count
+//! and how many are ready at the start, the longest chain, dependencies between tickets that
+//! name no file in common, tickets that name no files, `lane:` groups that are not chains, and
+//! four problems that stall a run: a ticket no registered machine can take, a dependency placed
+//! on an epic, a `report` ticket with dependents and a ticket moved in from another open epic.
 //!
-//! Stub. The ticket Thrh4.37 (Plan check) owns this file and replaces the `todo!()` body.
+//! The command only reports and always exits with code 0.
 
-use ignite_core::protocol::client::Reply;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+
+use ignite_core::config::Config;
+use ignite_core::ids::TicketId;
+use ignite_core::protocol::client::{Exit, Reply};
+use ignite_core::protocol::tickets::{Edge, EdgeKind, Graph, Status, Ticket};
+use serde_json::{Value, json};
 
 use crate::args::PlanCommand;
+use crate::ticket::{Failure, Hub, find_config};
+
+/// The width of the label column.
+const LABEL_WIDTH: usize = 15;
 
 pub fn run(command: &PlanCommand) -> Reply {
-    let _ = command;
-    todo!("Thrh4.37 (Plan check)")
+    let PlanCommand::Check { epic } = command;
+    load(epic).unwrap_or_else(Failure::into_reply)
 }
+
+fn load(epic: &str) -> Result<Reply, Failure> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let (file, text) = find_config(&cwd)?;
+    let config = Config::parse(&file.display().to_string(), &text)
+        .map_err(|error| Failure::new(Exit::Usage, error))?;
+    let hub = Hub::load(&cwd, "ignite".to_owned(), |name| std::env::var(name).ok())?;
+    let epic = hub.get(&["tickets", epic], &[])?.json()?;
+    let epic_id = epic["id"].as_str().unwrap_or(epic_name(&epic)).to_owned();
+    let query = [("ancestor", epic_id.clone()), ("all", "1".to_owned())];
+    let tickets: Vec<Ticket> = decode(hub.get(&["tickets"], &query)?.json()?)?;
+    let graph: Graph = decode(hub.get(&["graph"], &[("all", "1".to_owned())])?.json()?)?;
+    let ready: HashSet<String> = graph
+        .tickets
+        .iter()
+        .filter(|ticket| ticket.ready)
+        .map(|ticket| ticket.ticket.id.to_string())
+        .collect();
+    let everything: Vec<Ticket> = graph.tickets.into_iter().map(|t| t.ticket).collect();
+    let machines = machine_names(&config);
+    let report = Graphs {
+        epic: &epic_id,
+        tickets: &tickets,
+        everything: &everything,
+        edges: &graph.edges,
+        ready: &ready,
+        machines: &machines,
+    }
+    .report();
+    let lines = report.join("\n");
+    let reply_json = json!({"epic": prefixed(&epic_id), "lines": report});
+    Ok(Reply {
+        exit: Exit::Success,
+        text: lines,
+        json: Some(reply_json),
+        handle: None,
+    })
+}
+
+fn epic_name(epic: &Value) -> &str {
+    epic["id"].as_str().unwrap_or_default()
+}
+
+fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, Failure> {
+    serde_json::from_value(value).map_err(|error| Failure::new(Exit::Usage, error))
+}
+
+/// The names a `needs:` label may use: each registered machine's hostname and operating system.
+fn machine_names(config: &Config) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for (hostname, machine) in &config.machine {
+        names.insert(hostname.clone());
+        if let Some(os) = machine.os {
+            names.insert(os.as_str().to_owned());
+        }
+    }
+    names
+}
+
+fn prefixed(id: &str) -> String {
+    if id.starts_with('T') {
+        id.to_owned()
+    } else {
+        format!("T{id}")
+    }
+}
+
+/// An epic's tickets and the graph around them, ready to be reported on.
+struct Graphs<'a> {
+    epic: &'a str,
+    /// The epic's descendants, closed ones included.
+    tickets: &'a [Ticket],
+    /// Every ticket in the graph, for looking up tickets outside the epic.
+    everything: &'a [Ticket],
+    edges: &'a [Edge],
+    ready: &'a HashSet<String>,
+    machines: &'a BTreeSet<String>,
+}
+
+impl Graphs<'_> {
+    fn report(&self) -> Vec<String> {
+        let live: Vec<&Ticket> = self
+            .tickets
+            .iter()
+            .filter(|ticket| ticket.status != Status::Closed)
+            .collect();
+        let ids: HashSet<&str> = live.iter().map(|t| t.id.as_str()).collect();
+        let deps = self.dependencies(&ids);
+        let files: HashMap<&str, Vec<String>> = live
+            .iter()
+            .map(|ticket| (ticket.id.as_str(), paths(ticket)))
+            .collect();
+
+        let mut lines = Vec::new();
+        let ready = live
+            .iter()
+            .filter(|ticket| self.ready.contains(ticket.id.as_str()))
+            .count();
+        lines.push(row(
+            "tickets",
+            &format!("{}, ready at the start {ready}", live.len()),
+        ));
+        lines.push(row("longest chain", &self.chain(&live, &deps)));
+        lines.extend(self.suspect_edges(&deps, &files));
+        lines.extend(self.nameless(&live, &files));
+        lines.extend(self.lanes(&live, &deps));
+        lines.extend(self.unplaceable(&live));
+        lines.extend(self.epic_edges(&ids));
+        lines.extend(self.reports(&live, &ids));
+        lines.extend(self.moved_in(&live));
+        lines
+    }
+
+    /// Each live ticket's blocking dependencies on other live tickets of the epic, in order.
+    fn dependencies<'a>(&'a self, ids: &HashSet<&str>) -> BTreeMap<&'a str, Vec<&'a str>> {
+        let mut deps: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for edge in self.edges.iter().filter(|edge| blocks(edge.kind)) {
+            if ids.contains(edge.src.as_str()) && ids.contains(edge.dst.as_str()) {
+                deps.entry(edge.src.as_str())
+                    .or_default()
+                    .push(edge.dst.as_str());
+            }
+        }
+        deps
+    }
+
+    /// The ticket as printed: its ID after the epic's, such as `.12`, or in full with a `T`.
+    fn short(&self, id: &str) -> String {
+        match id.strip_prefix(self.epic) {
+            Some(rest) if rest.starts_with('.') => rest.to_owned(),
+            _ => prefixed(id),
+        }
+    }
+
+    fn list(&self, ids: &[&str], last: &str) -> String {
+        let names: Vec<String> = ids.iter().map(|id| self.short(id)).collect();
+        match names.split_last() {
+            Some((tail, head)) if !head.is_empty() => {
+                format!("{} {last} {tail}", head.join(", "))
+            }
+            _ => names.join(""),
+        }
+    }
+
+    /// The longest run of tickets that each depend on the one before, from the one that needs
+    /// nothing to the one at the end.
+    fn chain(&self, live: &[&Ticket], deps: &BTreeMap<&str, Vec<&str>>) -> String {
+        let mut best: HashMap<&str, Vec<&str>> = HashMap::new();
+        for ticket in live {
+            longest(ticket.id.as_str(), deps, &mut best, &mut HashSet::new());
+        }
+        let mut chains: Vec<&Vec<&str>> = best.values().collect();
+        chains.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+        let Some(chain) = chains.first() else {
+            return "0".to_owned();
+        };
+        let mut path = chain.iter().rev();
+        let first = path.next().map(|id| prefixed(id)).unwrap_or_default();
+        let rest: Vec<String> = path.map(|id| self.short(id)).collect();
+        let tail = rest.iter().fold(String::new(), |mut tail, id| {
+            tail.push_str(" > ");
+            tail.push_str(id);
+            tail
+        });
+        format!("{}: {first}{tail}", chain.len())
+    }
+
+    /// A dependency between two tickets that both name files and share none.
+    fn suspect_edges(
+        &self,
+        deps: &BTreeMap<&str, Vec<&str>>,
+        files: &HashMap<&str, Vec<String>>,
+    ) -> Vec<String> {
+        let mut lines = Vec::new();
+        for (src, targets) in deps {
+            for dst in targets {
+                let (a, b) = (&files[src], &files[dst]);
+                if !a.is_empty() && !b.is_empty() && !share(a, b) {
+                    lines.push(row(
+                        "suspect edge",
+                        &format!(
+                            "{} depends on {}, and they name no file in common",
+                            self.short(src),
+                            self.short(dst)
+                        ),
+                    ));
+                }
+            }
+        }
+        lines
+    }
+
+    fn nameless(&self, live: &[&Ticket], files: &HashMap<&str, Vec<String>>) -> Option<String> {
+        let ids: Vec<&str> = live
+            .iter()
+            .map(|ticket| ticket.id.as_str())
+            .filter(|id| files[id].is_empty())
+            .collect();
+        let names: Vec<String> = ids.iter().map(|id| self.short(id)).collect();
+        let verb = if ids.len() == 1 { "names" } else { "name" };
+        (!ids.is_empty()).then(|| {
+            row(
+                "no files",
+                &format!("{} {verb} no files to read", names.join(", ")),
+            )
+        })
+    }
+
+    /// A `lane:` group whose tickets are not one chain, where each needs the one before.
+    fn lanes(&self, live: &[&Ticket], deps: &BTreeMap<&str, Vec<&str>>) -> Vec<String> {
+        let mut by_label: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for ticket in live {
+            for label in ticket.labels.iter().filter(|l| l.starts_with("lane:")) {
+                by_label.entry(label).or_default().push(ticket.id.as_str());
+            }
+        }
+        let mut lines = Vec::new();
+        for (label, members) in by_label {
+            let ordered = members.iter().enumerate().all(|(i, a)| {
+                members[i + 1..]
+                    .iter()
+                    .all(|b| reaches(a, b, deps) || reaches(b, a, deps))
+            });
+            if ordered {
+                continue;
+            }
+            let ending = if members.len() == 2 {
+                "which do not depend on each other"
+            } else {
+                "which are not one chain"
+            };
+            lines.push(row(
+                "lane",
+                &format!("{label} holds {}, {ending}", self.list(&members, "and")),
+            ));
+        }
+        lines
+    }
+
+    /// A ticket that needs something, by a `needs:` label, that no registered machine has.
+    fn unplaceable(&self, live: &[&Ticket]) -> Vec<String> {
+        let mut lines = Vec::new();
+        for ticket in live {
+            for need in ticket
+                .labels
+                .iter()
+                .filter_map(|l| l.strip_prefix("needs:"))
+            {
+                if need != "person" && !self.machines.contains(need) {
+                    lines.push(row(
+                        "no machine",
+                        &format!(
+                            "{} needs {need}, which no registered machine has",
+                            self.short(ticket.id.as_str())
+                        ),
+                    ));
+                }
+            }
+        }
+        lines
+    }
+
+    /// A dependency on a ticket that has children, which holds the dependent until every
+    /// child closes.
+    fn epic_edges(&self, ids: &HashSet<&str>) -> Vec<String> {
+        let parents: HashSet<&str> = self
+            .everything
+            .iter()
+            .filter(|ticket| ticket.status != Status::Closed)
+            .filter_map(|ticket| ticket.parent.as_ref().map(TicketId::as_str))
+            .collect();
+        let mut lines = Vec::new();
+        for edge in self.edges.iter().filter(|edge| blocks(edge.kind)) {
+            if ids.contains(edge.src.as_str()) && parents.contains(edge.dst.as_str()) {
+                lines.push(row(
+                    "epic edge",
+                    &format!(
+                        "{} depends on the epic {}; depend on the ticket that needs its result",
+                        self.short(edge.src.as_str()),
+                        self.short(edge.dst.as_str())
+                    ),
+                ));
+            }
+        }
+        lines
+    }
+
+    /// A ticket labeled `report` that others depend on. A report is read, never built on.
+    fn reports(&self, live: &[&Ticket], ids: &HashSet<&str>) -> Vec<String> {
+        let mut lines = Vec::new();
+        for ticket in live
+            .iter()
+            .filter(|t| t.labels.iter().any(|l| l == "report"))
+        {
+            let dependents: Vec<&str> = self
+                .edges
+                .iter()
+                .filter(|edge| blocks(edge.kind) && edge.dst == ticket.id)
+                .map(|edge| edge.src.as_str())
+                .filter(|src| ids.contains(src))
+                .collect();
+            if !dependents.is_empty() {
+                lines.push(row(
+                    "report",
+                    &format!(
+                        "{} is labeled report, and {} depend on it",
+                        self.short(ticket.id.as_str()),
+                        self.list(&dependents, "and")
+                    ),
+                ));
+            }
+        }
+        lines
+    }
+
+    /// A ticket whose parent is not the one its ID was made under, when that one is an epic
+    /// that is still open.
+    fn moved_in(&self, live: &[&Ticket]) -> Vec<String> {
+        let open: HashSet<&str> = self
+            .everything
+            .iter()
+            .filter(|ticket| ticket.status != Status::Closed)
+            .map(|ticket| ticket.id.as_str())
+            .collect();
+        let mut lines = Vec::new();
+        for ticket in live {
+            let Some(origin) = ticket.id.parent() else {
+                continue;
+            };
+            if ticket.parent.as_ref() != Some(&origin) && open.contains(origin.as_str()) {
+                lines.push(row(
+                    "moved in",
+                    &format!(
+                        "{} was moved in from the open epic {}",
+                        self.short(ticket.id.as_str()),
+                        self.short(origin.as_str())
+                    ),
+                ));
+            }
+        }
+        lines
+    }
+}
+
+fn row(label: &str, text: &str) -> String {
+    format!("{label:<LABEL_WIDTH$}{text}")
+}
+
+/// Whether an edge of this kind holds its source back.
+fn blocks(kind: EdgeKind) -> bool {
+    matches!(
+        kind,
+        EdgeKind::Blocks | EdgeKind::ConditionalBlocks | EdgeKind::WaitsFor
+    )
+}
+
+/// The longest chain ending at `id`, listed from `id` back to the ticket that needs nothing.
+fn longest<'a>(
+    id: &'a str,
+    deps: &BTreeMap<&'a str, Vec<&'a str>>,
+    best: &mut HashMap<&'a str, Vec<&'a str>>,
+    visiting: &mut HashSet<&'a str>,
+) -> Vec<&'a str> {
+    if let Some(found) = best.get(id) {
+        return found.clone();
+    }
+    // A cycle cannot make the walk loop forever.
+    if !visiting.insert(id) {
+        return vec![id];
+    }
+    let mut chain = vec![id];
+    for dep in deps.get(id).into_iter().flatten() {
+        let mut candidate = vec![id];
+        candidate.extend(longest(dep, deps, best, visiting));
+        if candidate.len() > chain.len() {
+            chain = candidate;
+        }
+    }
+    visiting.remove(id);
+    best.insert(id, chain.clone());
+    chain
+}
+
+/// Whether `from` depends on `to`, directly or through other tickets.
+fn reaches(from: &str, to: &str, deps: &BTreeMap<&str, Vec<&str>>) -> bool {
+    let mut seen = HashSet::new();
+    let mut stack = vec![from];
+    while let Some(id) = stack.pop() {
+        for dep in deps.get(id).into_iter().flatten() {
+            if *dep == to {
+                return true;
+            }
+            if seen.insert(*dep) {
+                stack.push(dep);
+            }
+        }
+    }
+    false
+}
+
+/// The paths a ticket names: backticked text without spaces that has a directory or an
+/// extension, with a trailing `:line` removed.
+fn paths(ticket: &Ticket) -> Vec<String> {
+    let mut found = Vec::new();
+    for text in [&ticket.body, &ticket.design] {
+        for (i, span) in text.split('`').enumerate() {
+            if i % 2 == 1
+                && let Some(path) = as_path(span)
+            {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+fn as_path(span: &str) -> Option<String> {
+    let span = span.split(':').next().unwrap_or_default();
+    let span = span.trim_end_matches(['*', '/']);
+    let plain = !span.is_empty()
+        && !span.starts_with('-')
+        && span
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/._-+".contains(c));
+    let extension = span
+        .rsplit_once('.')
+        .is_some_and(|(stem, ext)| !stem.is_empty() && (1..=5).contains(&ext.len()));
+    (plain && (span.contains('/') || extension)).then(|| span.to_owned())
+}
+
+/// Whether any path of `a` is a path of `b`, or a directory holding it, or the reverse.
+fn share(a: &[String], b: &[String]) -> bool {
+    a.iter().any(|x| {
+        b.iter()
+            .any(|y| x == y || y.starts_with(&format!("{x}/")) || x.starts_with(&format!("{y}/")))
+    })
+}
+
+#[cfg(test)]
+mod tests;

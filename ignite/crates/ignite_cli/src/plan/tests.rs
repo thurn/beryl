@@ -1,0 +1,154 @@
+//! The plan check against seeded graphs, with no hub.
+
+use std::collections::{BTreeSet, HashSet};
+
+use ignite_core::protocol::tickets::{Edge, Ticket};
+use serde_json::json;
+
+use super::Graphs;
+
+const EPIC: &str = "ig9a";
+
+fn ticket(id: &str, parent: &str, body: &str, labels: &[&str]) -> Ticket {
+    serde_json::from_value(json!({
+        "id": id, "parent": (!parent.is_empty()).then_some(parent), "next_child": 1, "title": id, "body": body,
+        "type": "task", "status": "open", "priority": 2, "assignee": null,
+        "labels": labels, "defer_until": null, "close_reason": null,
+        "created_at": "2026-11-18T00:00:00.000Z", "created_by": "t",
+        "updated_at": "2026-11-18T00:00:00.000Z", "closed_at": null, "version": 1,
+    }))
+    .unwrap()
+}
+
+fn edge(src: &str, dst: &str) -> Edge {
+    serde_json::from_value(json!({"src": src, "dst": dst})).unwrap()
+}
+
+fn id(n: u32) -> String {
+    format!("{EPIC}.{n}")
+}
+
+fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
+    let ready: HashSet<String> = ready.iter().cloned().collect();
+    let machines: BTreeSet<String> = ["jarvis", "macos"].map(str::to_owned).into();
+    Graphs {
+        epic: EPIC,
+        tickets,
+        everything: tickets,
+        edges,
+        ready: &ready,
+        machines: &machines,
+    }
+    .report()
+}
+
+#[test]
+fn a_seeded_epic_reproduces_the_documents_example_line_for_line() {
+    let tickets: Vec<Ticket> = (1..=41)
+        .map(|n| {
+            let body = match n {
+                19 | 27 => "Nothing to read.".to_owned(),
+                7 => "Edits `crates/seven.rs`.".to_owned(),
+                12 => "Edits `crates/twelve.rs`.".to_owned(),
+                _ => "Edits `crates/shared.rs`.".to_owned(),
+            };
+            let labels: &[&str] = if n == 31 || n == 33 {
+                &["lane:replay"]
+            } else {
+                &[]
+            };
+            ticket(&id(n), EPIC, &body, labels)
+        })
+        .collect();
+    let mut edges: Vec<Edge> = [(4, 1), (9, 4), (15, 9), (22, 15), (30, 22)]
+        .iter()
+        .map(|&(a, b)| edge(&id(a), &id(b)))
+        .collect();
+    edges.push(edge(&id(12), &id(7)));
+    let ready: Vec<String> = (1..=41)
+        .filter(|n| ![4, 9, 15, 22, 30, 12].contains(n))
+        .take(17)
+        .map(id)
+        .collect();
+    assert_eq!(
+        report(&tickets, &edges, &ready),
+        [
+            "tickets        41, ready at the start 17",
+            "longest chain  6: ig9a.1 > .4 > .9 > .15 > .22 > .30",
+            "suspect edge   .12 depends on .7, and they name no file in common",
+            "no files       .19, .27 name no files to read",
+            "lane           lane:replay holds .31 and .33, which do not depend on each other",
+        ]
+        .map(|line| line.replace("ig9a.1 >", "Tig9a.1 >"))
+    );
+}
+
+#[test]
+fn a_clean_epic_reports_only_its_shape() {
+    let tickets = [
+        ticket(&id(1), EPIC, "`a/x.rs`", &["lane:one"]),
+        ticket(&id(2), EPIC, "`a/x.rs`", &["lane:one"]),
+    ];
+    let edges = [edge(&id(2), &id(1))];
+    assert_eq!(
+        report(&tickets, &edges, &[id(1)]),
+        [
+            "tickets        2, ready at the start 1",
+            "longest chain  2: Tig9a.1 > .2"
+        ]
+    );
+}
+
+#[test]
+fn a_ticket_that_no_machine_can_take_is_reported_but_person_and_known_names_are_not() {
+    let tickets = [
+        ticket(&id(1), EPIC, "`a.rs`", &["needs:windows"]),
+        ticket(&id(2), EPIC, "`a.rs`", &["needs:macos", "needs:jarvis"]),
+        ticket(&id(3), EPIC, "`a.rs`", &["needs:person"]),
+    ];
+    let lines = report(&tickets, &[], &[]);
+    assert_eq!(
+        lines[2..],
+        ["no machine     .1 needs windows, which no registered machine has"]
+    );
+}
+
+#[test]
+fn a_dependency_on_an_epic_a_report_with_dependents_and_a_moved_ticket_each_get_a_line() {
+    let mut sub = ticket(&id(1), EPIC, "`a.rs`", &[]);
+    sub.next_child = 2;
+    let child = ticket("ig9a.1.1", &id(1), "`a.rs`", &[]);
+    let measure = ticket(&id(2), EPIC, "`a.rs`", &["report"]);
+    let user = ticket(&id(3), EPIC, "`a.rs`", &[]);
+    let waiter = ticket(&id(4), EPIC, "`a.rs`", &[]);
+    // Created under another epic, then moved here.
+    let moved = ticket("other.5", EPIC, "`a.rs`", &[]);
+    let other = ticket("other", "", "", &[]);
+    let tickets = [sub, child, measure, user, waiter, moved];
+    let mut everything = tickets.to_vec();
+    everything.push(other);
+    let edges = [
+        edge(&id(4), &id(1)),
+        edge(&id(3), &id(2)),
+        edge("ig9a.1.1", &id(2)),
+    ];
+    let ready = HashSet::new();
+    let machines = BTreeSet::new();
+    let lines = Graphs {
+        epic: EPIC,
+        tickets: &tickets,
+        everything: &everything,
+        edges: &edges,
+        ready: &ready,
+        machines: &machines,
+    }
+    .report();
+    assert_eq!(
+        lines[2..],
+        [
+            "epic edge      .4 depends on the epic .1; depend on the ticket that needs its result",
+            "report         .2 is labeled report, and .3 and .1.1 depend on it",
+            "moved in       Tother.5 was moved in from the open epic Tother",
+        ]
+    );
+}

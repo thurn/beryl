@@ -320,7 +320,7 @@ fn http_failure(status: u16, body: &str) -> Failure {
 }
 
 /// The text of the `ignite.toml` in `cwd` or the nearest directory above it.
-fn find_config(cwd: &Path) -> Result<(PathBuf, String)> {
+pub fn find_config(cwd: &Path) -> Result<(PathBuf, String)> {
     for directory in cwd.ancestors() {
         let file = directory.join("ignite.toml");
         match std::fs::read_to_string(&file) {

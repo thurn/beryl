@@ -18,7 +18,8 @@ use serde_json::{Value, json};
 
 use crate::args::{DepCommand, TicketCommand};
 use crate::client::session_from_env;
-use http::{Failure, Hub, Result, usage};
+pub(crate) use http::{Failure, Hub, find_config};
+use http::{Result, usage};
 
 pub fn run(command: &TicketCommand) -> Reply {
     let env = |name: &str| std::env::var(name).ok();
