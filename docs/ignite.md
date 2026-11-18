@@ -1507,9 +1507,9 @@ line says what needs a person: tickets marked `needs:person`, a machine with no
 dispatcher or with a paused pool, an open regression that no worker can take,
 and a ticket that no machine is able to run.
 
-The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for example
-`/Tbeje.34`). Only the API is under the project name (`/by/api`). Page addresses
-under `/by/` redirect to the root.
+The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
+example `/Tbeje.34`). Only the API is under the project name (`/by/api`). Page
+addresses under `/by/` redirect to the root.
 
 The hub backs up its database hourly and exports it daily, as the service does
 now. While the hub cannot be reached:
