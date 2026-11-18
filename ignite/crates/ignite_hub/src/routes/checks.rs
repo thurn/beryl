@@ -310,7 +310,7 @@ fn tip_waiting(
     Ok(Response::json(200, &json!(TipWaitingFiled { tickets })))
 }
 
-/// Files the ticket for an incomplete check, a cache audit that disagreed or an exploration
+/// Files the ticket for one cause of incomplete checks, a cache audit that disagreed or an exploration
 /// find, and returns it.
 fn report(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Response, Response> {
     let writer = request.writer.as_ref().expect("checked in handle");

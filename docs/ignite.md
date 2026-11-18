@@ -914,13 +914,25 @@ Some runs produce no verdict, and Ignite never guesses one:
   marks each line but the last `"partial": true`. A check whose last line is a
   partial pass is `incomplete`, because its later steps never reported. A
   failure in any step stands.
-- An `incomplete` check is run again, at most twice more. If it is still
-  incomplete, the hub files a P1 ticket that quotes the output, and a landing or
-  a tip that needs the check waits for it.
+- An `incomplete` check is run again, at most twice more. The hub files P1
+  tickets for incomplete checks one per cause, never one per check. Each ticket
+  opens with the cause and says how many checks wait on it, naming the first 20.
+  A build that failed or was refused is one ticket per product, "Build fails:
+  <product>", with the build's output. An invalid manifest entry is one ticket
+  per family and message. A command that ended without reporting some of its
+  checks is one ticket per family. A ticket's signature is its cause, so a later
+  sighting comments on the open ticket. One run of a family on one machine at
+  one commit files at most five tickets; further causes are comments on a single
+  "Too many causes" ticket. Only tip verification files these tickets: the
+  landing gate tells the landing session, and a fault the change did not cause
+  is filed when the tip shows it. A landing or a tip that needs the checks waits
+  for them.
 - A command that says it cannot run on this machine, because a tool, a virtual
   machine or a download is missing, is `incomplete` with that reason and is not
-  run again there. The ticket names the machine. A `jsonl` command says so with
-  `"reason": "cannot-run"` on the check's line, as in the example below.
+  run again there. The ticket, one per family, names the machine. A command that
+  runs past its hang limit likewise files one ticket per family. A `jsonl`
+  command says it cannot run with `"reason": "cannot-run"` on the check's line,
+  as in the example below.
 - Each command is told its class in `IGNITE_CLASS` (`land`, `agent`, `tip`,
   `batch` or `idle`), so a family whose checks wait on a slow tool can wait
   longer outside the gate.
