@@ -92,6 +92,18 @@ pub fn games(default: u64) -> u64 {
     std::env::var("BERYL_FUZZ_GAMES").map_or(default, |n| n.parse().expect("a game count"))
 }
 
+/// The first seed of a fuzz run: `BERYL_FUZZ_FIRST_SEED` when set, else 0. A run of `n` games
+/// plays the seeds from it up, so runs started from different seeds play different games.
+pub fn first_seed() -> u64 {
+    std::env::var("BERYL_FUZZ_FIRST_SEED").map_or(0, |n| n.parse().expect("a seed"))
+}
+
+/// The seeds of a fuzz run of `n` games, from [`first_seed`].
+pub fn seeds(n: u64) -> std::ops::Range<u64> {
+    let first = first_seed();
+    first..first + n
+}
+
 /// The state redealt from what `viewer` knows of `s` ([`Observation::determinize`]), under the
 /// budgets search plays under ([`State::search_limits`]). `next` counts each decision it returns
 /// toward the turn's budget, and `s` has counted its open decision already, as has the redealt

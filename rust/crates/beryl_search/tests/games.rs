@@ -1,6 +1,7 @@
 //! Random games over the cards implemented so far (architecture §17.4): fuzzing with the
 //! invariants after every decision, determinism, information independence and the perf
-//! counts. `BERYL_FUZZ_GAMES=<n>` plays more games and reports what they never reached; `just
+//! counts. `BERYL_FUZZ_GAMES=<n>` plays more games and reports what they never reached, from the
+//! seed `BERYL_FUZZ_FIRST_SEED` names (0 if unset); `just
 //! fuzz <n>` does that in an optimized build that keeps the debug assertions.
 
 mod common;
@@ -22,7 +23,7 @@ use beryl_engine::{
 };
 use beryl_search::{Agent, AgentDecision, GreedyAgent, RandomAgent};
 use common::widening::play_widening;
-use common::{agents, fingerprint, fixed_game, game, games, mirror, play, redeal};
+use common::{agents, fingerprint, fixed_game, game, games, mirror, play, redeal, seeds};
 
 /// Every fourth game is played in the [`Large`] layout from its start, so the layout a game
 /// outgrowing [`Small`](beryl_engine::Small) goes on in is fuzzed too. The others start in
@@ -41,7 +42,7 @@ fn random_games_keep_the_invariants() {
     let mut widened = Vec::new();
     let mut kinds: HashMap<String, u64> = HashMap::new();
     coverage::start();
-    for seed in 0..n {
+    for seed in seeds(n) {
         let (t, s) = game(seed);
         let outcome = if seed % 4 == 3 {
             fuzz(&t, s.widen(), seed, &mut kinds)

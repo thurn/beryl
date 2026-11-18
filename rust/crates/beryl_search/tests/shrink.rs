@@ -4,7 +4,8 @@
 //! generates the choices, and when a game breaks the property (an invariant or a reference
 //! violated or a panic) it shrinks them to the fewest that still break it
 //! and the test prints that game as a scenario to paste into a card's file.
-//! `BERYL_FUZZ_GAMES=<n>` plays more games, as `just fuzz` does.
+//! `BERYL_FUZZ_GAMES=<n>` plays more games, as `just fuzz` does, and `BERYL_FUZZ_FIRST_SEED=<n>`
+//! plays ones that no run from another seed played.
 //!
 //! Games are played under the exact profile with forced questions stopping too, as the
 //! scenario runner plays them, so that the printed scenario takes the same decisions. The
@@ -24,7 +25,7 @@ use beryl_engine::{
 use beryl_scenario::{
     Check, Live, Scenario, answer, describe, invariants, script, setup_source, source,
 };
-use common::games;
+use common::{first_seed, games};
 use proptest::collection::vec;
 use proptest::prelude::*;
 use proptest::test_runner::{Config, RngAlgorithm, TestError, TestRng, TestRunner};
@@ -214,6 +215,19 @@ fn position(t: &GameTable, s: &State, seed: u64) -> Scenario {
     scenario
 }
 
+/// The generator's randomness: the same for every run, unless `BERYL_FUZZ_FIRST_SEED` is set,
+/// when it starts from that seed so that a run plays games no earlier run did.
+fn rng() -> TestRng {
+    match first_seed() {
+        0 => TestRng::deterministic_rng(RngAlgorithm::ChaCha),
+        first => {
+            let mut seed = [0u8; 32];
+            seed[..8].copy_from_slice(&first.to_le_bytes());
+            TestRng::from_seed(RngAlgorithm::ChaCha, &seed)
+        }
+    }
+}
+
 /// Runs `cases` fuzz games under `check`, deterministically, and returns the game proptest
 /// shrank a failure to, with why it fails.
 fn shrink(cases: u32, check: Check) -> Option<(Game, String)> {
@@ -223,8 +237,7 @@ fn shrink(cases: u32, check: Check) -> Option<(Game, String)> {
         max_shrink_iters: 100_000,
         ..Config::default()
     };
-    let mut runner =
-        TestRunner::new_with_rng(config, TestRng::deterministic_rng(RngAlgorithm::ChaCha));
+    let mut runner = TestRunner::new_with_rng(config, rng());
     let games = (0..u64::from(u32::MAX), vec(any::<u16>(), 0..MOST_CHOICES))
         .prop_map(|(seed, choices)| Game { seed, choices });
     match runner.run(&games, |game| {

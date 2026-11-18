@@ -737,6 +737,20 @@ def count_gate(args: argparse.Namespace) -> int:
         return 2
     ok, message = judge(gate, measured)
     log(f"{gate.benchmark}: {message}")
+    if args.measure:
+        # Ignite's `counts` family judges the trend itself, filing through `ignite ticket`.
+        Path(args.measure).write_text(
+            json.dumps(
+                {
+                    "measured": measured,
+                    "bar": gate.instructions,
+                    "ok": ok,
+                    "message": message,
+                }
+            )
+            + "\n"
+        )
+        return 0 if ok else 1
     for line in count_trend.report(measured, gate.instructions, ok):
         log(line)
     return 0 if ok else 1
@@ -769,6 +783,12 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
         action="append",
         help="gate this family's present cost instead (`[family.<name>]` in count-gate.toml);"
         " repeat for several",
+    )
+    p.add_argument(
+        "--measure",
+        metavar="FILE",
+        help="write the count, the bar and the verdict to FILE as JSON and leave the trend's"
+        " tickets to the caller",
     )
     p.set_defaults(func=count_gate)
 

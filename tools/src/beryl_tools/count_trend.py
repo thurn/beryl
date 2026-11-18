@@ -23,11 +23,26 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Protocol
 
-from . import paths, verdicts
+from . import paths
+
+
+class Tickets(Protocol):
+    """The ticket store the trend files into: today's CI reporting (`verdicts.STORE`) or
+    Ignite's (`ignite.rest.IgniteTickets`)."""
+
+    def list_issues(self, *filters: str, include_closed: bool = False) -> object: ...
+
+    def add_comment(self, issue: str, comment: str) -> tuple[int, str]: ...
+
+    def create_issue(
+        self, *, title: str, body: str, priority: str, labels: str
+    ) -> tuple[int, str]: ...
+
 
 # One tested range adding more than this files a creep ticket. Unrelated changes move the count
 # by inlining and layout drift of up to about 0.05%; the steps that added up to the 2026-11-13
@@ -164,7 +179,7 @@ def rust_commits(old: str, new: str) -> list[str]:
     return out.splitlines()
 
 
-def open_bead(label: str, store: verdicts.Tickets) -> str | None:
+def open_bead(label: str, store: Tickets) -> str | None:
     beads = store.list_issues("--label", label)
     for b in beads if isinstance(beads, list) else []:
         if isinstance(b, dict) and b.get("status") != "closed":
@@ -203,7 +218,7 @@ def file_or_comment(
     title: str,
     body: str,
     tier: str,
-    store: verdicts.Tickets,
+    store: Tickets,
 ) -> str:
     known = open_bead(label, store)
     if known:
@@ -219,13 +234,23 @@ def file_or_comment(
 
 
 def report(
-    measured: int, bar: int, passed: bool, store: verdicts.Tickets | None = None
+    measured: int, bar: int, passed: bool, store: Tickets | None = None
 ) -> list[str]:
     """Records a staging tip's count and files the tickets its trend calls for; returns lines
     to print. A count measured elsewhere is only compared, never recorded or filed on.
     """
-    store = store or verdicts.STORE
-    head = on_staging()
+    from . import (
+        verdicts,
+    )  # Today's CI only: Ignite passes its own store to `report_at`.
+
+    return report_at(on_staging(), measured, bar, passed, store or verdicts.STORE)
+
+
+def report_at(
+    head: str | None, measured: int, bar: int, passed: bool, store: Tickets
+) -> list[str]:
+    """`report` for the commit `head`, the verified one, or None to only compare the count with
+    the earlier ones of HEAD's ancestors."""
     path = history_path()
     try:
         records = load(path.read_text()) if path.exists() else []
@@ -241,9 +266,9 @@ def report(
         with path.open("a") as out:
             out.write(dump(Record(head, measured, bar)) + "\n")
     except OSError as e:
-        verdicts.warn(f"count history: {e}")
+        print(f"count history: {e}", file=sys.stderr)
     lines = [step_line(f)] if f.previous else []
-    # A failing gate files a Steward ticket of its own.
+    # A failing gate files a ticket of its own.
     if passed and f.creep:
         said = file_or_comment(
             CREEP_LABEL,

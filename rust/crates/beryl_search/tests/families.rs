@@ -12,8 +12,8 @@ use std::collections::{BTreeMap, HashMap};
 use beryl_cards::CARDS;
 use beryl_cards::decks::{fuzz_deck_from, keystone_family};
 use beryl_engine::{GameTable, Outcome, Profile, StallReason, State};
-use common::games;
 use common::widening::play_widening;
+use common::{games, seeds};
 
 /// Plays a family's games: two fuzz decks per game from its cards, a quarter as many games as
 /// the whole fuzzer plays. No game may panic, break an invariant or stall for a reason other
@@ -25,7 +25,7 @@ fn family(name: &str) {
     let mut widened: BTreeMap<&str, u64> = BTreeMap::new();
     let mut kinds: HashMap<String, u64> = HashMap::new();
     let mut decisions = 0u64;
-    for seed in 0..n {
+    for seed in seeds(n) {
         let decks = [
             fuzz_deck_from(seed, &cards),
             fuzz_deck_from(seed.wrapping_add(1 << 32), &cards),

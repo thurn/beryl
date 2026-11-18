@@ -2,7 +2,8 @@
 //! played through a [`Game`], each update drawn for both seats with its script, in a build with
 //! debug assertions on, so that every script is held to the replay check and the rule
 //! invariants where it is built (`script/build.rs`). `BERYL_FUZZ_GAMES=<n>` plays more games,
-//! as `just fuzz` does.
+//! as `just fuzz` does, and `BERYL_FUZZ_FIRST_SEED=<n>` plays ones no run from another seed
+//! played.
 //!
 //! A game is a seed, which deals two fuzz decks, picks the human's seat and stops and draws the
 //! game's randomness, and the choices taken at its decisions in the order the engine asks them
@@ -166,6 +167,19 @@ impl Fuzz {
     }
 }
 
+/// The generator's randomness: the same for every run, unless `BERYL_FUZZ_FIRST_SEED` is set,
+/// when it starts from that seed so that a run plays games no earlier run did.
+fn rng() -> TestRng {
+    let first =
+        std::env::var("BERYL_FUZZ_FIRST_SEED").map_or(0, |n| n.parse::<u64>().expect("a seed"));
+    if first == 0 {
+        return TestRng::deterministic_rng(RngAlgorithm::ChaCha);
+    }
+    let mut seed = [0u8; 32];
+    seed[..8].copy_from_slice(&first.to_le_bytes());
+    TestRng::from_seed(RngAlgorithm::ChaCha, &seed)
+}
+
 /// Runs `cases` fuzz games of at most `most` choices, deterministically, and returns the game
 /// proptest shrank a failure to, with each choice as the index it took, and why it fails.
 fn shrink(cases: u32, most: usize) -> Option<(Fuzz, String)> {
@@ -175,8 +189,7 @@ fn shrink(cases: u32, most: usize) -> Option<(Fuzz, String)> {
         max_shrink_iters: 100_000,
         ..Config::default()
     };
-    let mut runner =
-        TestRunner::new_with_rng(config, TestRng::deterministic_rng(RngAlgorithm::ChaCha));
+    let mut runner = TestRunner::new_with_rng(config, rng());
     let games = (0..u64::from(u32::MAX), vec(any::<u16>(), 0..most))
         .prop_map(|(seed, choices)| Fuzz { seed, choices });
     match runner.run(&games, |game| game.play().1.map_err(TestCaseError::fail)) {

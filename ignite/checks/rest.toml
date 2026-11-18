@@ -1,0 +1,182 @@
+# The remaining check families: the instruction-count gate, the two exploration searches that run
+# on idle cores (`fuzz` and `exhaust`), the tests that read every card file (`scale`), the iroh
+# transport and Ignite's own workspace. Their adapter is tools/src/beryl_tools/ignite/rest.py
+# (the iroh tests use the `nextest` adapter instead), which lists each family's checks and
+# reports results as JSON lines. See docs/ignite.md, "Declaring a family", "Reporting results"
+# and "Exploration checks". The `python-env` product is in python.toml and `rust-tests` in
+# rust.toml.
+
+# Lessons from the checks Ignite replaces:
+#
+# - The count steps run in a Lima virtual machine that mounts only the main checkout. A tree
+#   under the checkout (trees live in `.worktrees/`, see ignite.toml) is inside that mount, so
+#   the `counts` family runs from the tree Ignite gives it. A second clone of the repository is
+#   not mounted: its run says `CANNOT_RUN`, which Ignite records as `incomplete` and does not
+#   rerun on that machine. The VM is also why the family holds the `bench-vm` resource: two runs
+#   at once would share its lock and build directory.
+# - A count says nothing about speed, so a loaded machine does not change it; the family may
+#   run in any class. Only a run in the `tip` class stores its count, since only a tip is a
+#   commit that was verified (`IGNITE_CLASS`, see rest.py).
+# - Fuzzing and exhaustive search run optimized but with debug assertions and overflow checks on
+#   (`CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS`, `CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS`): a debug
+#   build plays too few games and a plain release build skips the invariants. Their results never
+#   block anything; a failure is a bug found, not a commit to blame.
+# - The package beryl_link_iroh is left out of every other family because the cold build of its
+#   iroh dependency alone can outlast a fast check. Here it is one build, cached with the other
+#   test binaries, and the checks hold no cores while it builds.
+
+# The rollout benchmark's instruction count against the bar in
+# rust/crates/beryl_bench/count-gate.toml (that file's comments say when the bar may move), as
+# `counts:rollouts`, and each family's present cost against its ratio there, as
+# `counts:family/<name>`. The count is of the aarch64 build under Callgrind, so only macOS runs
+# it. A rise past the trend's bounds that still passes files one `count-creep` ticket and fails
+# nothing; a count far under the bar files one `count-lower` ticket.
+[family.counts]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env"]
+resources = ["bench-vm"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list counts"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run counts {checks}"
+inputs = [
+  "crate:beryl_bench",
+  "rust/Cargo.toml",
+  "rust/Cargo.lock",
+  "rust-toolchain.toml",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/bench.py",
+  "tools/src/beryl_tools/vm_host.py",
+  "tools/src/beryl_tools/count_trend.py",
+  "tools/src/beryl_tools/ignite/rest.py",
+]
+
+# Random-game fuzzing: `next` reserves a batch of seeds on this machine that no earlier batch
+# used and yields one check per search, `fuzz:<target>/<first seed>+<games>`. The targets are the
+# engine's games, the games that shrink to a few choices, the keystone families' games and the
+# session's games with every script checked (the four searches of `just fuzz`).
+[family.fuzz]
+kind = "exploration"
+adapter = "jsonl"
+platforms = "any"
+needs = ["fuzz-tests", "python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list fuzz"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.rest next fuzz"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run fuzz {checks}"
+inputs = [
+  "crate:beryl_search",
+  "crate:beryl_session",
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/rest.py",
+]
+
+# Every sequence of decisions from the end positions of one card's scenarios
+# (`just exhaust <card>`), deeper than the fast check's: one check per card,
+# `exhaust:<card>/depth<d>-nodes<n>`. A card's own input is its file, so editing one card
+# replays only that card; the family's inputs are the crates the search reads, without the card
+# files (the list is the `script` family's, which reads the same crates).
+[family.exhaust]
+kind = "exploration"
+adapter = "jsonl"
+platforms = "any"
+needs = ["exhaust-tests", "python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list exhaust"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.rest next exhaust"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run exhaust {checks}"
+inputs = [
+  "rust/Cargo.toml",
+  "rust/Cargo.lock",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "tools/src/beryl_tools/ignite/rest.py",
+]
+
+# The Python tests that read every card file or the vocabulary (the scale harness's, the card
+# name check's, `card brief`'s and the spec names'). The `pytest` family hashes a test over the
+# Python modules it imports, which cannot see a card file, so a change to a card would not
+# rerun them there. Each check's inputs are what `pytest` would give it plus the card crates
+# and files, and they run here in the same way, with the plugin of python.py.
+[family.scale]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list scale"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run scale {checks}"
+inputs = [
+  "tools/pyproject.toml",
+  "tools/uv.lock",
+  "rust/cards/**",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "tools/src/beryl_tools/ignite/rest.py",
+]
+
+# The iroh transport: building `beryl_link_iroh` and playing its tests over loopback with the
+# relay off, as the nightly did. Only the Mac ran it.
+[family.iroh]
+kind = "regression"
+adapter = "nextest"
+platforms = ["macos"]
+needs = ["rust-tests"]
+list = "cargo nextest list --manifest-path rust/Cargo.toml --locked --cargo-quiet -p beryl_link_iroh --message-format json"
+run = "cargo nextest run --manifest-path rust/Cargo.toml --locked --cargo-quiet -p beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail -E {checks}"
+inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
+
+# Ignite's own workspace: formatting, clippy and every test, as `ignite:fmt`, `ignite:clippy` and
+# `ignite:test`. The workspace shares nothing with the game's, so only a change under `ignite/`
+# (or to `ignite.toml`, which its tests read) selects these checks, and no other family reads
+# those paths. The tests parse `ignite.toml` and this directory's manifests.
+[family.ignite]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env", "ignite-tests"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list ignite"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run ignite {checks}"
+inputs = ["ignite/**", "ignite.toml", "tools/src/beryl_tools/ignite/rest.py"]
+
+# The test binaries of the fuzzers, optimized with debug assertions and overflow checks on (the
+# build `just fuzz` makes). They land in rust/target/release.
+[product.fuzz-tests]
+build = "env CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release --locked --no-run -p beryl_search -p beryl_session"
+dir = "rust"
+inputs = ["crate:beryl_search", "crate:beryl_session", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+outputs = ["rust/target"]
+
+# The exhaustive search's test binary, built the same way.
+[product.exhaust-tests]
+build = "env CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release --locked --no-run -p beryl_cards --test exhaust"
+dir = "rust"
+inputs = ["crate:beryl_cards", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+outputs = ["rust/target"]
+
+# The test binaries of Ignite's workspace, which has its own lock file and target directory.
+[product.ignite-tests]
+build = "cargo test --locked --no-run"
+dir = "ignite"
+inputs = ["ignite/**", "ignite.toml"]
+outputs = ["ignite/target"]
