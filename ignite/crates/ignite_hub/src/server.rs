@@ -274,6 +274,7 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
         .or_else(|| routes::feed::handle(conn, request, now))
         .or_else(|| routes::checks::handle(conn, request, now))
         .or_else(|| routes::dispatch::handle(conn, request, now))
+        .or_else(|| routes::commands::handle(conn, request, now))
         .unwrap_or_else(|| failure(404, "Unknown route"))
 }
 

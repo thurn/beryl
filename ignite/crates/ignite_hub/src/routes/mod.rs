@@ -2,6 +2,7 @@
 //! returns `None` for any other, so [`crate::server`] tries them in turn.
 
 pub mod checks;
+pub mod commands;
 pub mod dispatch;
 pub mod feed;
 pub mod tickets;

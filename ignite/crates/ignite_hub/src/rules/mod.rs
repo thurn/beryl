@@ -2,7 +2,8 @@
 //! estimate a cost and a saving per week (docs/ignite.md, "Improvement tickets").
 //!
 //! - [`slow_crate`], [`never_caught`], [`repeated_command`] and [`slow_verb`] are Ignite's own
-//!   rules over its records.
+//!   rules over its records, and [`rejected_command`] over the command lines the executable
+//!   refused.
 //! - [`efficiency`] reads the efficiency dashboard's findings from the rows each machine posts
 //!   to `POST /metrics/import`.
 //! - [`filing`] evaluates every rule and files one ticket per (rule, subject) that clears the
@@ -21,6 +22,7 @@ pub mod backlog;
 pub mod efficiency;
 pub mod filing;
 pub mod never_caught;
+pub mod rejected_command;
 pub mod repeated_command;
 pub mod slow_crate;
 pub mod slow_verb;
@@ -78,6 +80,9 @@ pub fn all(rules: &config::Rules) -> Vec<Box<dyn Rule>> {
         }),
         Box::new(slow_verb::SlowVerb {
             report_only: report_only(slow_verb::NAME),
+        }),
+        Box::new(rejected_command::RejectedCommand {
+            report_only: report_only(rejected_command::NAME),
         }),
         Box::new(efficiency::Efficiency),
     ]

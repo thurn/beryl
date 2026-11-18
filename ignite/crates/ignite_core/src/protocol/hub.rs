@@ -548,6 +548,25 @@ pub struct Pause {
     pub paused: bool,
 }
 
+/// `POST /commands/rejected`: a command line the `ignite` executable refused to parse, sent so
+/// the hub can tell which verbs and flags agents look for and do not find. The machine is the
+/// one whose token sent it; the hub adds the ticket the session holds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RejectedCommand {
+    /// The subcommands the parser recognized, then the word it rejected, such as
+    /// `ticket dep list` or `ticket children --open`.
+    pub verb: String,
+    /// Every argument after the executable's name.
+    pub args: Vec<String>,
+    /// What the parser objected to: `unknown subcommand` or `unknown argument`.
+    pub kind: String,
+    /// The parser's suggestion, when it had one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<SessionId>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

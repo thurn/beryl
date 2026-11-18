@@ -314,6 +314,9 @@ The verbs an agent uses while working:
   daemon, and records it. A `cargo` on the tree's `PATH` does the same for plain
   `cargo` calls.
 - `ignite ticket <verb>` creates, shows, lists, links and comments on tickets.
+  `ignite ticket children <epic> --open` lists an epic's unfinished tickets with
+  their assignees, blockers and last comments, and `ignite ticket dep list <id>`
+  shows what a ticket waits on and what waits on it.
 - `ignite why <check>` prints a check's record: its cost, its failures, where it
   runs and why.
 - `ignite status` and `ignite doctor` print the machine's state and health.
@@ -1640,6 +1643,12 @@ Ignite adds its own:
   their cohort.
 - `slow-verb`: an `ignite` verb whose own overhead, apart from the work it runs,
   is over a second at the median.
+- `rejected-command`: a verb or flag that at least three sessions typed in the
+  last week and the `ignite` executable refused, such as `ticket dep list`. The
+  executable sends every command line it cannot parse to the hub, which lists
+  them on the `finds` page. The cost is an estimated $0.25 a try, for the
+  refused request and the workaround after it. The ticket asks to add the
+  command or an alias for it.
 
 ```text
 Tm41q  P2 task  improvement  rule:slow-crate

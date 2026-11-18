@@ -1,5 +1,6 @@
 //! The `finds` page: what each exploration family found and spent over the last 30 days, its
-//! share of the spend, and each rebuild count's series.
+//! share of the spend, each rebuild count's series, and the commands the `ignite` executable
+//! refused over the last week.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
@@ -17,6 +18,42 @@ const DAYS: f64 = 30.0;
 
 /// How many measurements of a rebuild count the page lists.
 const SERIES: usize = 10;
+
+/// The commands the executable refused in the week before `now`, most tried first, as rows of
+/// `ticket dep list · 3 sessions` and `12 tries`.
+fn rejected(conn: &Connection, now: Timestamp) -> Result<(String, usize), ReadError> {
+    let since = now.plus_seconds(-7.0 * 86_400.0).to_string();
+    let mut statement = conn.prepare(
+        "SELECT verb, COUNT(*), COUNT(DISTINCT COALESCE(session, machine || '#' || id))
+         FROM rejected_commands WHERE at >= ?1 GROUP BY verb ORDER BY COUNT(*) DESC, verb",
+    )?;
+    let commands = statement
+        .query_map([&since], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let shown = if commands.is_empty() {
+        c::empty("No command was refused.")
+    } else {
+        c::rows(commands.iter().map(|(verb, tries, sessions)| {
+            let sessions = if *sessions == 1 {
+                "1 session".to_owned()
+            } else {
+                format!("{sessions} sessions")
+            };
+            c::row(
+                &(esc(verb) + &c::muted(&format!(" · {sessions}"))),
+                &format!("{tries} tries"),
+                None,
+            )
+        }))
+    };
+    Ok((shown, commands.len()))
+}
 
 /// The `finds` page.
 pub(crate) fn options(
@@ -93,6 +130,7 @@ pub(crate) fn options(
     } else {
         c::rows(rebuilds)
     };
+    let (refused, refused_count) = rejected(conn, now)?;
     let body = c::section(
         "Exploration, last 30 days",
         &explored,
@@ -105,12 +143,18 @@ pub(crate) fn options(
         Some(names.len()),
         None,
         3,
+    ) + &c::section(
+        "Commands refused, last 7 days",
+        &refused,
+        Some(refused_count),
+        None,
+        3,
     );
     Ok(frame(
         root,
         seq,
         "finds",
-        "What exploration found, and the rebuild counts.",
+        "What exploration found, the rebuild counts, and the commands agents looked for.",
         &body,
     ))
 }

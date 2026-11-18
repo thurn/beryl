@@ -6,6 +6,7 @@ mod client;
 mod import;
 mod manifest;
 mod plan;
+mod rejected;
 mod replay;
 mod ticket;
 
@@ -18,8 +19,8 @@ use ignite_core::protocol::client::Reply;
 use crate::args::{Cli, Command};
 
 fn main() -> ExitCode {
-    let cli = Cli::parse();
     let raw: Vec<String> = std::env::args().collect();
+    let cli = Cli::try_parse_from(&raw).unwrap_or_else(|error| rejected::exit(&error, &raw));
     let reply = answer(&cli, &raw);
     if cli.json && reply.json.is_none() && reply.text.is_empty() {
         // A command that printed its own output has nothing to wrap.

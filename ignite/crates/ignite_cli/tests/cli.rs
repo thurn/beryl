@@ -92,3 +92,33 @@ fn manifest_lint_exits_1_on_a_pattern_that_matches_nothing() {
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
+
+#[test]
+fn an_unknown_subcommand_prints_the_parsers_error_when_the_hub_is_down() {
+    let dir = std::env::temp_dir().join(format!("ignite-rejected-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // Port 1 refuses connections, so the report to the hub fails at once.
+    std::fs::write(
+        dir.join("ignite.toml"),
+        "[repository]\nremote = \"origin\"\nstaging = \"staging\"\nmaster = \"master\"\n\
+         trees = \".trees\"\nchecks = \"checks\"\n\n[hub]\nurl = \"http://127.0.0.1:1\"\n\
+         project = \"p\"\n\n[gate]\nthreshold = 0.1\ncap = 10\n\n[machine.m]\nticket_trees = 1\n\
+         landing_trees = 1\nfloor = { batch = 1, tip = 1 }\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ignite"))
+        .args(["ticket", "dep", "frob", "Ta.1"])
+        .current_dir(&dir)
+        .env("IGNITE_TOKEN", "token")
+        .env("IGNITE_SESSION", "s-1")
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(output.status.code(), Some(2), "clap's usage exit code");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        stderr.contains("unrecognized subcommand 'frob'"),
+        "{stderr}"
+    );
+}

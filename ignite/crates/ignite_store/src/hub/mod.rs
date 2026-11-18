@@ -8,6 +8,7 @@ pub mod findings;
 pub mod fleet;
 pub mod leases;
 pub mod records;
+pub mod rejected;
 pub mod results;
 pub mod rows;
 pub mod tickets;
@@ -46,6 +47,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 6,
         sql: include_str!("flaky_details.sql"),
+    },
+    Migration {
+        version: 7,
+        sql: include_str!("rejected_commands.sql"),
     },
 ];
 

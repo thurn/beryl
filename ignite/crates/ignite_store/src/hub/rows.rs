@@ -214,6 +214,19 @@ crate::tables! {
         crates: String,
     }
 
+    RejectedCommand = "rejected_commands" {
+        id: i64,
+        machine: String,
+        session: Option<String>,
+        ticket: Option<String>,
+        verb: String,
+        /// JSON array of strings.
+        args: String,
+        kind: String,
+        suggestion: Option<String>,
+        at: String,
+    }
+
     Metric = "metrics" { machine: String, source: String, data: String, at: String }
 
     /// One change in the feed's journal, which keeps only the most recent positions.

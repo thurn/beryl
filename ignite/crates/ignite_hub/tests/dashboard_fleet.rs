@@ -89,7 +89,10 @@ fn seed(conn: &Connection) {
            ('2222222222222', '2026-11-17T11:50:00.000Z', NULL, 'verifying');
          INSERT INTO tip_claims VALUES ('2222222222222', 'rust', 1, 'm-j', '2026-11-17T12:10:00.000Z');
          INSERT INTO explore VALUES ('fuzz', '2026-11-16', 3, 4e11), ('exhaust', '2026-11-16', 0, 2e11);
-         INSERT INTO rebuilds VALUES ('kernel-body', 'c1', 4.0e11, '{}'), ('kernel-body', 'c2', 4.1e11, '{}');",
+         INSERT INTO rebuilds VALUES ('kernel-body', 'c1', 4.0e11, '{}'), ('kernel-body', 'c2', 4.1e11, '{}');
+         INSERT INTO rejected_commands (machine, session, verb, args, kind, at) VALUES
+           ('m-j', 's-1', 'ticket dep list', '[]', 'unknown subcommand', '2026-11-17T11:00:00.000Z'),
+           ('m-j', 's-2', 'ticket dep list', '[]', 'unknown subcommand', '2026-11-17T11:30:00.000Z');",
     )
     .unwrap();
 }
@@ -104,6 +107,7 @@ fn every_fleet_page_renders_from_a_seeded_database() {
         ("/landings", "Landed task"),
         ("/tips", "kernel-test"),
         ("/finds", "kernel-body"),
+        ("/finds", "2 sessions"),
     ] {
         let body = page(&conn, path);
         assert!(body.contains(expected), "{path} lacks {expected}");

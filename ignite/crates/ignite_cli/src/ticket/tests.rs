@@ -348,3 +348,26 @@ fn dep_list_multi_show_and_open_children_gather_related_tickets() {
     assert!(text.contains(&format!("    blocked by: {first}")), "{text}");
     assert!(!text.contains("Done"), "{text}");
 }
+
+#[test]
+fn a_rejected_command_reaches_the_hub_only_with_a_token() {
+    let hub = Fixture::new("rejected");
+    let command = ignite_core::protocol::hub::RejectedCommand {
+        verb: "ticket dep frob".to_owned(),
+        args: vec!["ticket".into(), "dep".into(), "frob".into()],
+        kind: "unknown subcommand".to_owned(),
+        suggestion: None,
+        session: Some("s-1".parse().unwrap()),
+    };
+    crate::rejected::send(&hub.client(false), &command);
+    crate::rejected::send(&hub.client(true), &command);
+    let conn = hub::open(&hub.dir.join("hub.sqlite")).unwrap();
+    let rows: Vec<(String, String)> = conn
+        .prepare("SELECT verb, machine FROM rejected_commands")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(rows, [("ticket dep frob".to_owned(), "m-1".to_owned())]);
+}

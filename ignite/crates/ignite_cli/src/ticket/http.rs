@@ -175,6 +175,24 @@ impl Hub {
         )
     }
 
+    /// `POST path` once, waiting at most `timeout`, for a report whose loss does no harm.
+    /// Returns whether the hub accepted it.
+    pub fn post_once(&self, path: &[&str], body: &Value, timeout: Duration) -> bool {
+        let Some(token) = &self.token else {
+            return false;
+        };
+        self.agent
+            .post(&self.url(path, &[]))
+            .header("Authorization", &format!("Bearer {token}"))
+            .header("X-Actor", &self.actor)
+            .header("Content-Type", "application/json")
+            .config()
+            .timeout_global(Some(timeout))
+            .build()
+            .send(body.to_string().as_bytes())
+            .is_ok_and(|response| response.status().is_success())
+    }
+
     fn url(&self, path: &[&str], query: &[(&str, String)]) -> String {
         let mut url = self.base.clone();
         for segment in path {
