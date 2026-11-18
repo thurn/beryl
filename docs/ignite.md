@@ -502,6 +502,14 @@ How the executable is installed and kept current:
   after it finishes restarts the daemon into it. A failed build is logged once
   and not retried until another commit is wanted. A daemon that restarts
   mid-build waits for Cargo's lock before it resets the update tree.
+- Before the daemon restarts into a new release, the release thread runs the new
+  executable's selftest, `bin/<commit>/ignite internal selftest`, as a
+  supervised command. It parses `ignite.toml` and every check manifest as the
+  daemon does at start, requires this machine's `[machine.<host>]` table, and
+  applies the build's migrations to a copy of `daemon.db`. `bin/current` points
+  at the build only after it passes. A build that fails is added to
+  `bin/rejected`, so no daemon updates to it, and is reported once to the
+  justiciar; the daemon stays on its own build until the release branch moves.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it. A fix to Ignite therefore reaches every machine minutes after it
