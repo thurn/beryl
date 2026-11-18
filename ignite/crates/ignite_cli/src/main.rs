@@ -21,7 +21,9 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let raw: Vec<String> = std::env::args().collect();
     let reply = answer(&cli, &raw);
-    if cli.json {
+    if cli.json && reply.json.is_none() && reply.text.is_empty() {
+        // A command that printed its own output has nothing to wrap.
+    } else if cli.json {
         let json = reply
             .json
             .clone()

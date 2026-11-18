@@ -354,12 +354,36 @@ pub enum TicketCommand {
         #[command(subcommand)]
         command: DepCommand,
     },
-    /// Block until a ticket reaches a status.
+    /// Block until a ticket reaches a status. Exits 5 when the wait runs out.
     Wait {
         id: String,
         #[arg(long)]
         status: String,
+        /// Seconds to wait before giving up.
+        #[arg(long, default_value_t = 540)]
+        timeout: u32,
     },
+    /// List a ticket's children, closed ones included.
+    Children { id: String },
+    /// Find tickets by words in their title or text.
+    Search {
+        #[arg(required = true)]
+        words: Vec<String>,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        limit: Option<u32>,
+    },
+    /// Print the dependency graph.
+    Graph {
+        /// Include closed tickets.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Take a ticket, as the acting session.
+    Claim { id: String },
+    /// Print every ticket, with its edges, comments and history, as JSON lines.
+    Export,
     /// Apply a JSON batch file in one request that succeeds or fails as a whole.
     Batch { file: PathBuf },
 }

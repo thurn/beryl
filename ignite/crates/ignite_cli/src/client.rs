@@ -33,7 +33,6 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
     ("start", "Starting and releasing tickets"),
     ("status", "Install, self-update, status and doctor"),
     ("sync", "Landing"),
-    ("ticket", "Ticket commands"),
 ];
 
 /// How long the daemon may hold a reply before answering with a handle, below the agents'

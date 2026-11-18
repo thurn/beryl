@@ -325,13 +325,16 @@ name = "ignite_cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "getrandom",
  "ignite_core",
  "ignite_daemon",
  "ignite_git",
+ "ignite_hub",
  "ignite_os",
  "ignite_store",
  "serde",
  "serde_json",
+ "ureq",
 ]
 
 [[package]]
