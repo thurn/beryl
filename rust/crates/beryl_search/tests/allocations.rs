@@ -48,6 +48,15 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 fn main() {
+    // cargo-nextest lists every test binary, harness-less ones too, by running it with
+    // `--list`. Answer the way the test harness would, so that listing or building the
+    // workspace's tests never runs this binary's whole workload or trips on its output.
+    if std::env::args().any(|arg| arg == "--list") {
+        if !std::env::args().any(|arg| arg == "--ignored") {
+            println!("allocations: test");
+        }
+        return;
+    }
     for seed in 0..4 {
         // Fuzz decks reach the most cards; the fixed decks' games are long enough to cover
         // every step of a game.
