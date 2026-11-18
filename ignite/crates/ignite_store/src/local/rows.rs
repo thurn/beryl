@@ -11,6 +11,8 @@ crate::tables! {
         built_commit: Option<String>,
         leased_at: Option<String>,
         last_used: Option<String>,
+        /// `free`, `prebuilding`, `leased`, `landing` or `resetting`.
+        state: String,
     }
 
     Grant = "grants" {

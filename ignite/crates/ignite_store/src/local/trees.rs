@@ -1,18 +1,233 @@
 //! The machine's build trees: which are leased, to whom, and what each last built.
-//!
-//! Stub. The ticket Thrh4.14 (Daemon local store) owns this file
-//! and replaces the `todo!()` bodies.
-#![allow(unused_variables)]
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension, Row, params};
 
 use crate::Result;
 use crate::local::rows;
 
-pub fn all(conn: &Connection) -> Result<Vec<rows::Tree>> {
-    todo!("Thrh4.14 (Daemon local store)")
+/// What a tree is doing. A tree is leased only from `Free`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum State {
+    Free,
+    /// The daemon is building it at the tip, ahead of the next lease.
+    Prebuilding,
+    /// Leased to a ticket's session.
+    Leased,
+    /// Held by a landing or tip verification.
+    Landing,
+    /// Being reset to a clean checkout after its lease ended.
+    Resetting,
 }
 
+impl State {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            State::Free => "free",
+            State::Prebuilding => "prebuilding",
+            State::Leased => "leased",
+            State::Landing => "landing",
+            State::Resetting => "resetting",
+        }
+    }
+}
+
+const COLUMNS: &str = "id, path, kind, state, ticket, session, branch, built_commit, leased_at, \
+                       last_used";
+
+fn tree(row: &Row) -> rusqlite::Result<rows::Tree> {
+    Ok(rows::Tree {
+        id: row.get(0)?,
+        path: row.get(1)?,
+        kind: row.get(2)?,
+        state: row.get(3)?,
+        ticket: row.get(4)?,
+        session: row.get(5)?,
+        branch: row.get(6)?,
+        built_commit: row.get(7)?,
+        leased_at: row.get(8)?,
+        last_used: row.get(9)?,
+    })
+}
+
+pub fn all(conn: &Connection) -> Result<Vec<rows::Tree>> {
+    let mut statement = conn.prepare(&format!("SELECT {COLUMNS} FROM trees ORDER BY id"))?;
+    let trees = statement
+        .query_map([], tree)?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(trees)
+}
+
+pub fn get(conn: &Connection, id: &str) -> Result<Option<rows::Tree>> {
+    Ok(conn
+        .query_row(
+            &format!("SELECT {COLUMNS} FROM trees WHERE id = ?1"),
+            [id],
+            tree,
+        )
+        .optional()?)
+}
+
+/// Inserts the tree or replaces every column of the existing row.
 pub fn upsert(conn: &Connection, tree: &rows::Tree) -> Result<()> {
-    todo!("Thrh4.14 (Daemon local store)")
+    conn.execute(
+        &format!(
+            "INSERT OR REPLACE INTO trees ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
+             ?10)"
+        ),
+        params![
+            tree.id,
+            tree.path,
+            tree.kind,
+            tree.state,
+            tree.ticket,
+            tree.session,
+            tree.branch,
+            tree.built_commit,
+            tree.leased_at,
+            tree.last_used,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Moves a free tree to `to` (`Leased` for a ticket, `Landing` for a landing) and records who
+/// holds it. Returns `false`, changing nothing, when the tree is missing or in any state but
+/// `Free`: two sessions can never hold one tree, and a tree being reset or prebuilt is not
+/// available yet.
+pub fn lease(
+    conn: &Connection,
+    id: &str,
+    to: State,
+    ticket: Option<&str>,
+    session: Option<&str>,
+    branch: Option<&str>,
+    now: &str,
+) -> Result<bool> {
+    if to == State::Free {
+        return Ok(false);
+    }
+    let changed = conn.execute(
+        "UPDATE trees SET state = ?2, ticket = ?3, session = ?4, branch = ?5, leased_at = ?6, \
+         last_used = ?6 WHERE id = ?1 AND state = 'free'",
+        params![id, to.as_str(), ticket, session, branch, now],
+    )?;
+    Ok(changed == 1)
+}
+
+/// Sets the state of an existing tree, such as `Resetting` once its lease ends. Returns whether
+/// the tree exists. Use [`lease`] to take a free tree; this does not check the old state.
+pub fn set_state(conn: &Connection, id: &str, state: State, now: &str) -> Result<bool> {
+    let changed = conn.execute(
+        "UPDATE trees SET state = ?2, last_used = ?3 WHERE id = ?1",
+        params![id, state.as_str(), now],
+    )?;
+    Ok(changed == 1)
+}
+
+/// Makes the tree `Free` again with no ticket, session or branch, and records the commit its
+/// build directories now match.
+pub fn release(conn: &Connection, id: &str, built_commit: Option<&str>, now: &str) -> Result<bool> {
+    let changed = conn.execute(
+        "UPDATE trees SET state = 'free', ticket = NULL, session = NULL, branch = NULL, \
+         leased_at = NULL, built_commit = COALESCE(?2, built_commit), last_used = ?3 \
+         WHERE id = ?1",
+        params![id, built_commit, now],
+    )?;
+    Ok(changed == 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::local::{open, open_in_memory};
+
+    fn sample(id: &str) -> rows::Tree {
+        rows::Tree {
+            id: id.to_owned(),
+            path: format!("/trees/{id}"),
+            kind: "ticket".to_owned(),
+            state: "free".to_owned(),
+            ticket: None,
+            session: None,
+            branch: None,
+            built_commit: Some("8c1f2ab".to_owned()),
+            leased_at: None,
+            last_used: None,
+        }
+    }
+
+    #[test]
+    fn a_leased_tree_is_refused_until_released() {
+        let conn = open_in_memory().unwrap();
+        upsert(&conn, &sample("tree-01")).unwrap();
+        let lease_it = |ticket| {
+            lease(
+                &conn,
+                "tree-01",
+                State::Leased,
+                Some(ticket),
+                Some("local_a"),
+                Some("work/x"),
+                "2026-11-18T00:00:00.000Z",
+            )
+            .unwrap()
+        };
+        assert!(lease_it("T.1"));
+        assert!(!lease_it("T.2"));
+        assert_eq!(
+            get(&conn, "tree-01").unwrap().unwrap().ticket.as_deref(),
+            Some("T.1")
+        );
+        assert!(
+            release(
+                &conn,
+                "tree-01",
+                Some("9d0e1f2"),
+                "2026-11-18T01:00:00.000Z"
+            )
+            .unwrap()
+        );
+        let freed = get(&conn, "tree-01").unwrap().unwrap();
+        assert_eq!(
+            (
+                freed.state.as_str(),
+                freed.ticket,
+                freed.built_commit.as_deref()
+            ),
+            ("free", None, Some("9d0e1f2"))
+        );
+        assert!(lease_it("T.2"));
+    }
+
+    #[test]
+    fn only_a_free_tree_can_be_leased() {
+        let conn = open_in_memory().unwrap();
+        for state in [State::Prebuilding, State::Landing, State::Resetting] {
+            upsert(&conn, &sample("tree-01")).unwrap();
+            set_state(&conn, "tree-01", state, "t").unwrap();
+            assert!(!lease(&conn, "tree-01", State::Leased, None, None, None, "t").unwrap());
+        }
+        assert!(!lease(&conn, "missing", State::Leased, None, None, None, "t").unwrap());
+        assert!(!lease(&conn, "tree-01", State::Free, None, None, None, "t").unwrap());
+    }
+
+    #[test]
+    fn trees_survive_reopening_the_database() {
+        let dir = std::env::temp_dir().join(format!("ignite-trees-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("local.db");
+        let _ = std::fs::remove_file(&path);
+        let mut tree = sample("tree-02");
+        tree.state = "leased".to_owned();
+        tree.ticket = Some("T.1".to_owned());
+        {
+            let conn = open(&path).unwrap();
+            upsert(&conn, &tree).unwrap();
+            upsert(&conn, &sample("tree-01")).unwrap();
+        }
+        let conn = open(&path).unwrap();
+        let trees = all(&conn).unwrap();
+        assert_eq!(trees, vec![sample("tree-01"), tree]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

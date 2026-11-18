@@ -86,10 +86,14 @@ pub(crate) mod test_support {
     use rusqlite::Connection;
 
     /// Asserts that every table in `tables` exists with exactly the listed columns, in order,
-    /// and that the database holds no other table but `meta`.
+    /// and that the database holds no other table but `meta` and SQLite's own `sqlite_sequence`,
+    /// which `AUTOINCREMENT` creates.
     pub fn assert_rows_match_schema(conn: &Connection, tables: &[(&str, &[&str])]) {
         let mut names: Vec<String> = conn
-            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'meta'")
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' \
+             AND name NOT IN ('meta', 'sqlite_sequence')",
+            )
             .unwrap()
             .query_map([], |row| row.get(0))
             .unwrap()
