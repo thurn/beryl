@@ -145,6 +145,10 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     let url = http.url().to_owned();
     let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
     let path = percent_decode(path);
+    // The stylesheet, script, service worker and icons live at the hub's root.
+    if let Some(file) = dashboard::serve::static_file(http.method().as_str(), &path) {
+        return file;
+    }
     let Some(rest) = path
         .strip_prefix('/')
         .and_then(|p| p.strip_prefix(shared.project.as_str()))
@@ -203,7 +207,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         } else {
             rest.to_owned()
         };
-        caught(conn, |conn| page(conn, &request, now))
+        caught(conn, |conn| page(conn, &request, &shared.project, now))
     };
     if let Some(conn) = conn {
         shared.give_back(conn);
@@ -245,16 +249,17 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
 /// One dashboard page's renderer: its HTML, or `None` for a path that is not its own.
 type Page = fn(&Connection, &str, Timestamp) -> Option<String>;
 
-/// The dashboard's pages, each given the path after `/<project>`.
-fn page(conn: &mut Connection, request: &Request, now: Timestamp) -> Response {
+/// The dashboard's pages. The ticket views need the project, the query and the request's
+/// headers, so [`dashboard::serve::serve`] answers them; each other page renders from the path
+/// after `/<project>`.
+fn page(conn: &mut Connection, request: &Request, project: &str, now: Timestamp) -> Response {
+    if let Some(response) = dashboard::serve::serve(conn, request, project, now) {
+        return response;
+    }
     if request.method != "GET" {
         return failure(404, "Unknown route");
     }
-    let pages: [Page; 9] = [
-        dashboard::home::render,
-        dashboard::status::render,
-        dashboard::ticket::render,
-        dashboard::history::render,
+    let pages: [Page; 5] = [
         dashboard::machines::render,
         dashboard::pool::render,
         dashboard::landings::render,
@@ -275,7 +280,6 @@ fn page(conn: &mut Connection, request: &Request, now: Timestamp) -> Response {
         )
 }
 
-/// Query parameters in order, each key and value percent-decoded with `+` as a space.
 fn parse_query(query: &str) -> Vec<(String, String)> {
     query
         .split('&')

@@ -1,0 +1,136 @@
+{
+  "assets": {
+    "cirrus.css": "assets/cirrus.sample.css",
+    "cirrus.js": "assets/cirrus.sample.js"
+  },
+  "components": {
+    "esc": "A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;",
+    "escNull": "",
+    "page": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</title>\n<meta name=\"description\" content=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\">\n<meta name=\"cirrus-root\" content=\"\">\n<link rel=\"stylesheet\" href=\"assets/cirrus.sample.css\">\n<script src=\"assets/cirrus.sample.js\" defer></script>\n</head>\n<body>\n<div class=\"c-progress-bar\" aria-hidden=\"true\"></div>\n<header class=\"c-header\" id=\"c-header\">\n<nav class=\"c-crumbs\" aria-label=\"Breadcrumbs\"><a class=\"c-brand\" href=\"./\"></a></nav>\n</header>\n<main class=\"c-main\" id=\"c-main\">\n<strong>Example</strong>\n</main>\n</body>\n</html>\n",
+    "pageWithOptions": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<base href=\"https://example.com/enact/\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</title>\n<meta name=\"description\" content=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\">\n<meta name=\"cirrus-root\" content=\"../\">\n<link rel=\"stylesheet\" href=\"../assets/cirrus.sample.css\">\n<script src=\"../assets/cirrus.sample.js\" defer></script>\n</head>\n<body>\n<div class=\"c-progress-bar\" aria-hidden=\"true\"></div>\n<header class=\"c-header\" id=\"c-header\">\n<nav class=\"c-crumbs\" aria-label=\"Breadcrumbs\"><a class=\"c-brand\" href=\"../\">Enact &amp; Co.</a><a class=\"c-crumb\" href=\"/ticket?x=&quot;one&quot;&amp;y=two\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</a><span class=\"c-crumb\" aria-current=\"page\">Here</span></nav>\n</header>\n<main class=\"c-main\" id=\"c-main\">\n<strong>Example</strong>\n</main>\n</body>\n</html>\n",
+    "title": "<div class=\"c-titleblock\"><div class=\"c-eyebrow\"><strong>Example</strong></div><h1 class=\"c-title\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</h1><p class=\"c-subtitle\"><strong>Example</strong></p></div>",
+    "titlePlain": "<div class=\"c-titleblock\"><h1 class=\"c-title\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</h1></div>",
+    "chip": "<span class=\"c-chip c-tone-neutral\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</span>",
+    "chipWithTip": "<span class=\"c-chip c-tone-green\" data-tip=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\" tabindex=\"0\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</span>",
+    "dot": "<span class=\"c-dot c-tone-red\" data-tip=\"\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</span>",
+    "mono": "<span class=\"c-mono\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</span>",
+    "muted": "<span class=\"c-muted\"><strong>Example</strong></span>",
+    "tip": "<span class=\"c-tip-target\" tabindex=\"0\" data-tip=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\"><strong>Example</strong></span>",
+    "time": "<time class=\"c-time\" datetime=\"2026-11-16T12:35:00Z\" tabindex=\"0\" data-tip=\"2026-11-16T12:35:00Z\">2026-11-16</time>",
+    "timeFallback": "A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;",
+    "link": "<a href=\"/ticket?x=&quot;one&quot;&amp;y=two\" class=\"c-extra\" data-hovercard=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\"><strong>Example</strong></a>",
+    "template": "<template id=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\"><strong>Example</strong></template>",
+    "part": "<section class=\"c-part\" id=\"active\"><h2 class=\"c-part-title\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;<span class=\"c-count\">0</span></h2><strong>Example</strong></section>",
+    "section": "<section class=\"c-section\" id=\"open\"><h3 class=\"c-section-title\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;<span class=\"c-count\">2</span></h3><strong>Example</strong></section>",
+    "sectionUntitled": "<section class=\"c-section\"><strong>Example</strong></section>",
+    "subsection": "<div class=\"c-subsection\"><h4 class=\"c-subsection-title\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;<span class=\"c-count\">0</span></h4><strong>Example</strong></div>",
+    "grid": "<div class=\"c-grid\"><strong>Example</strong><strong>Example</strong></div>",
+    "card": "<a class=\"c-card\" href=\"/ticket?x=&quot;one&quot;&amp;y=two\" data-prefetch data-hovercard=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\"><strong>Example</strong></a>",
+    "rows": "<ul class=\"c-rows\"><li><strong>Example</strong></li><li><strong>Example</strong></li></ul>",
+    "row": "<a class=\"c-row\" href=\"/ticket?x=&quot;one&quot;&amp;y=two\" data-prefetch><span class=\"c-row-main\"><strong>Example</strong></span><span class=\"c-row-trailing\"><strong>Example</strong></span></a>",
+    "rowPlain": "<div class=\"c-row\"><span class=\"c-row-main\"><strong>Example</strong></span><span class=\"c-row-trailing\"></span></div>",
+    "meta": "<dl class=\"c-meta\"><div class=\"c-meta-item\"><dt>A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</dt><dd><strong>Example</strong></dd></div><div class=\"c-meta-item\"><dt>Next</dt><dd><strong>Example</strong></dd></div></dl>",
+    "progress": "<span class=\"c-progress\" data-tip=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\" tabindex=\"0\"><span class=\"c-progress-track\"><span class=\"c-progress-fill\" style=\"width:12%\"></span></span><span class=\"c-progress-label\">1/8</span></span>",
+    "progressEmpty": "<span class=\"c-progress\"><span class=\"c-progress-track\"><span class=\"c-progress-fill\" style=\"width:0%\"></span></span><span class=\"c-progress-label\">0/0</span></span>",
+    "disclosure": "<details class=\"c-disclosure\"><summary><strong>Example</strong></summary><div class=\"c-disclosure-body\"><strong>Example</strong></div></details>",
+    "disclosureOpen": "<details class=\"c-disclosure\" open><summary><strong>Example</strong></summary><div class=\"c-disclosure-body\"><strong>Example</strong></div></details>",
+    "skeleton": "<div class=\"c-skeleton\" aria-busy=\"true\" aria-label=\"Loading\"><span class=\"c-skeleton-line\" style=\"width:92%\"></span><span class=\"c-skeleton-line\" style=\"width:78%\"></span><span class=\"c-skeleton-line\" style=\"width:85%\"></span><span class=\"c-skeleton-line\" style=\"width:64%\"></span><span class=\"c-skeleton-line\" style=\"width:88%\"></span><span class=\"c-skeleton-line\" style=\"width:70%\"></span><span class=\"c-skeleton-line\" style=\"width:92%\"></span><span class=\"c-skeleton-line\" style=\"width:78%\"></span></div>",
+    "include": "<div class=\"c-include\" data-include=\"/ticket?x=&quot;one&quot;&amp;y=two\" data-missing=\"A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\"><div class=\"c-skeleton\" aria-busy=\"true\" aria-label=\"Loading\"><span class=\"c-skeleton-line\" style=\"width:92%\"></span><span class=\"c-skeleton-line\" style=\"width:78%\"></span></div></div>",
+    "empty": "<p class=\"c-empty\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</p>",
+    "prose": "<div class=\"c-prose\"><strong>Example</strong></div>",
+    "layout": "<div class=\"c-layout\"><div class=\"c-layout-main\"><strong>Example</strong></div><aside class=\"c-layout-aside\"><strong>Example</strong></aside></div>",
+    "timeline": "<ol class=\"c-timeline\"><strong>Example</strong><strong>Example</strong></ol>",
+    "timelineEntry": "<li class=\"c-timeline-entry c-quiet\"><div class=\"c-timeline-body\"><span class=\"c-timeline-actor\"><strong>Example</strong></span><strong>Example</strong></div><div class=\"c-timeline-when\">today</div></li>",
+    "timelineEntryPlain": "<li class=\"c-timeline-entry\"><div class=\"c-timeline-body\"><strong>Example</strong></div><div class=\"c-timeline-when\">today</div></li>",
+    "comment": "<article class=\"c-comment\"><div class=\"c-avatar\" aria-hidden=\"true\">𐐀</div><div class=\"c-comment-main\"><header class=\"c-comment-head\"><span class=\"c-comment-author\"><strong>Example</strong></span>today</header><div class=\"c-prose\"><strong>Example</strong></div></div></article>",
+    "commentAnonymous": "<article class=\"c-comment\"><div class=\"c-avatar\" aria-hidden=\"true\">?</div><div class=\"c-comment-main\"><header class=\"c-comment-head\"><span class=\"c-comment-author\"><strong>Example</strong></span>today</header><div class=\"c-prose\"><strong>Example</strong></div></div></article>",
+    "toc": "<nav class=\"c-toc\" aria-label=\"On this page\"><ul><li class=\"c-toc-item c-toc-depth-0\"><a class=\"c-toc-link\" href=\"#active\"><span class=\"c-toc-label\">A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;</span><span class=\"c-toc-count\">0</span></a></li><li class=\"c-toc-item c-toc-depth-1\"><a class=\"c-toc-link\" href=\"#A &amp; &lt;B&gt; &quot;C&quot; &#x27;D&#x27;\"><span class=\"c-toc-label\">Next</span></a></li></ul></nav>",
+    "withToc": "<div class=\"c-toc-layout\"><div class=\"c-toc-rail\"><strong>Example</strong></div><div class=\"c-toc-main\"><strong>Example</strong></div></div>"
+  },
+  "markdown": [
+    {
+      "name": "HTML escaping",
+      "kind": "render",
+      "source": "<script>x</script>",
+      "html": "<p>&lt;script&gt;x&lt;/script&gt;</p>"
+    },
+    {
+      "name": "marks and code",
+      "kind": "inline",
+      "source": "**bold** and *it* and `a<b`",
+      "html": "<strong>bold</strong> and <em>it</em> and <code>a&lt;b</code>"
+    },
+    {
+      "name": "unsafe explicit target",
+      "kind": "inline",
+      "source": "[x](javascript:alert(1))",
+      "html": "[x](javascript:alert(1))"
+    },
+    {
+      "name": "safe explicit target",
+      "kind": "inline",
+      "source": "[x](https://e.com)",
+      "html": "<a href=\"https://e.com\">x</a>"
+    },
+    {
+      "name": "bare URL punctuation",
+      "kind": "inline",
+      "source": "see https://e.com/a.",
+      "html": "see <a href=\"https://e.com/a\">https://e.com/a</a>."
+    },
+    {
+      "name": "headings, nested lists, fences and quotes",
+      "kind": "render",
+      "source": "# Head\n\n- a\n- b\n  - c\n\n1. one\n\n```py\nx < 1\n```\n\n> q",
+      "html": "<h3>Head</h3>\n<ul><li>a</li><li>b<ul><li>c</li></ul></li></ul>\n<ol><li>one</li></ol>\n<pre><code class=\"language-py\">x &lt; 1</code></pre>\n<blockquote><p>q</p></blockquote>"
+    },
+    {
+      "name": "tables",
+      "kind": "render",
+      "source": "| a | b |\n|---|---|\n| 1 | 2 |",
+      "html": "<div class=\"c-table\"><table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table></div>"
+    },
+    {
+      "name": "autolink skips code and links",
+      "kind": "autolink",
+      "source": "by-x and `by-x` [by-x](./by-x)",
+      "html": "<a>by-x</a> and <code>by-x</code> <a href=\"./by-x\">by-x</a>"
+    },
+    {
+      "name": "paragraph continuation",
+      "kind": "render",
+      "source": " First  \r\n   second \r\n\r\nThird",
+      "html": "<p>First second</p>\n<p>Third</p>"
+    },
+    {
+      "name": "heading levels",
+      "kind": "render",
+      "source": "## Two ##\n##### Five\n###### Six",
+      "html": "<h4>Two</h4>\n<h6>Five</h6>\n<h6>Six</h6>"
+    },
+    {
+      "name": "quotes and unclosed fence",
+      "kind": "render",
+      "source": "> > nested\n> outer\n\n~~~js\n'a<b'",
+      "html": "<blockquote><blockquote><p>nested</p></blockquote>\n<p>outer</p></blockquote>\n<pre><code class=\"language-js\">&#x27;a&lt;b&#x27;</code></pre>"
+    },
+    {
+      "name": "blank lines within and between lists",
+      "kind": "render",
+      "source": "- one\n  more\n\n- two\n\n2) next",
+      "html": "<ul><li>one more</li><li>two</li></ul>\n<ol><li>next</li></ol>"
+    },
+    {
+      "name": "Unicode lists and links",
+      "kind": "render",
+      "source": "١. [字](字/file)\n٢. café_it_ and _em_",
+      "html": "<ol><li><a href=\"字/file\">字</a></li><li>café_it_ and <em>em</em></li></ol>"
+    },
+    {
+      "name": "quotes, escaping and entities",
+      "kind": "inline",
+      "source": "' \" &amp; [a&b](./a\"b) `\"'`",
+      "html": "' \" &amp;amp; <a href=\"./a&quot;b\">a&amp;b</a> <code>&quot;&#x27;</code>"
+    }
+  ]
+}
