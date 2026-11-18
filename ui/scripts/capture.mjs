@@ -70,6 +70,25 @@ export function pageError(e) {
     return place ? `${e.message} (at ${place})` : e.message;
 }
 
+/** Prints each of `names` as a check's JSON line and exits: a script's `--list` (Ignite's
+ * `list`, docs/ignite.md "Declaring a family"). */
+export function listChecks(names) {
+    for (const check of names) console.log(JSON.stringify({ check }));
+    process.exit(0);
+}
+
+/** Lists a suite's checks, `<prefix><case>/<seat>/<layout>`, for `cases` of [case, its
+ * seats as an object keyed by seat], and exits (verbs.mjs and shapes.mjs `--list`). */
+export function listSuite(prefix, cases, layouts) {
+    listChecks(
+        cases.flatMap(([name, seats]) =>
+            Object.keys(seats).flatMap((seat) =>
+                layouts.map((layout) => `${prefix}${name}/${seat}/${layout}`),
+            ),
+        ),
+    );
+}
+
 /** The longest message a result carries to Ignite. */
 const MESSAGE_LIMIT = 300;
 

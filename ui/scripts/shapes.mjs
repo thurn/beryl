@@ -57,6 +57,7 @@ import {
     coverage,
     failureOf,
     launch,
+    listSuite,
     pageError,
     recordResult,
     screenFaults,
@@ -88,27 +89,14 @@ import {
 const [base, fixtures, ...filters] = process.argv.slice(2);
 if (!base || (!fixtures && base !== "--list")) {
     console.error(
-        "usage: node scripts/shapes.mjs <base-url> <fixtures-dir> [check...]\n" +
-            "       node scripts/shapes.mjs --list",
+        "usage: node scripts/shapes.mjs <base-url> <fixtures-dir> [check...] | --list",
     );
     process.exit(2);
 }
 const { shapes, layouts } = JSON.parse(
     await readFile(new URL("../shapes.json", import.meta.url), "utf8"),
 );
-// `--list` prints each check as a JSON line and runs none (Ignite's `list`, docs/ignite.md
-// "Declaring a family").
-if (base === "--list") {
-    for (const [shape, seats] of Object.entries(shapes))
-        for (const seat of Object.keys(seats))
-            for (const layout of layouts)
-                console.log(
-                    JSON.stringify({
-                        check: `shape:${shape}/${seat}/${layout}`,
-                    }),
-                );
-    process.exit(0);
-}
+if (base === "--list") listSuite("shape:", Object.entries(shapes), layouts);
 /** The checks the fast check chose (`by ui-test --select`, tools' selection.py), from the file
  * `BERYL_CHECKS` names, one a line; null to run every check the filters reach. */
 const chosen = process.env.BERYL_CHECKS
