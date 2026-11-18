@@ -1766,9 +1766,9 @@ to the hub as they are made:
 - The model's tokens and dollars still come from each provider's session
   transcripts, which the efficiency dashboard reads. Each daemon runs that
   ingest for its own machine and posts the new rows to the hub, so the hub's
-  store covers every machine with no manual export. The ingest and export run
-  in the `batch` class, because the scheduler stops `idle` work whenever other
-  work waits. The export goes in parts of about 4 MB, each with its own header,
+  store covers every machine with no manual export. The ingest and export run in
+  the `batch` class, because the scheduler stops `idle` work whenever other work
+  waits. The export goes in parts of about 4 MB, each with its own header,
   because a machine's first export holds its whole history (426 MB on jarvis),
   more than the hub reads in one request.
 
