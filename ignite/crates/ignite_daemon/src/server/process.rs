@@ -171,8 +171,7 @@ pub(super) struct Shared {
 pub fn restarting_reply() -> Reply {
     Reply {
         exit: Exit::Unreachable,
-        text: "restarting the daemon is restarting into a new build; send the request again"
-            .to_owned(),
+        text: "the daemon is restarting into a new build; send the request again".to_owned(),
         json: Some(serde_json::json!({ "restarting": true })),
         handle: None,
     }

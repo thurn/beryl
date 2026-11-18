@@ -2818,6 +2818,31 @@ These show that cores, trees and workers go where the rules say.
   a `plan check` report, and the planning session ending while the pool starts
   the ready tickets.
 
+### Restarts under load
+
+- **A restart loses no work.** Put jarvis under load: one `ignite land` whose
+  gate builds `rust-tests` and runs the b3d interface family, one `ignite test`
+  of a Rust family, `ignite run -- sleep 900`, a tip round and idle work. Every
+  30 to 90 seconds for 20 minutes, run `ignite internal restart` from a shell
+  outside every tree. It restarts the daemon into its own executable, as a
+  release would, and prints how long after the request the new daemon answered.
+  Then land a no-op change under `ignite/` so a real release deploys. Expect no
+  "its tree is reset" or "again after the restart" lines in the daemon's log, no
+  run in the window ended with exit `None` or 143 except those `ignite stop`
+  ended, every handle `done`, one push of the landing, one new `results` row per
+  check key, under 2 s from each start in `starts.jsonl` to the first accepted
+  request, and ordinary replies from every client.
+- **A rollback leaves verb processes running.** Write the running commit into
+  `fault-start` in the Ignite home and restart the daemon. A build the file
+  names exits with code 1 right after it records its start, and an empty file
+  names every build. Expect the daemon to roll back to `bin/last-good` within
+  three starts, and the verb processes started before it to finish. Delete the
+  file afterwards. The rolled-back commit is recorded as rejected, so the next
+  release is what moves the machine forward.
+
+The end-to-end test `ignite_cli/tests/restart.rs` runs the first check in
+miniature on macOS and Windows.
+
 ### Operations and measurement
 
 These show that the system survives its own failures and measures itself.
