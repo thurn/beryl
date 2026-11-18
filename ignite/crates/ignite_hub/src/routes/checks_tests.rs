@@ -342,3 +342,129 @@ fn writes_need_a_writer_and_every_route_checks_its_method_and_body() {
     };
     assert!(handle(&mut conn, &request, at(0.0)).is_none());
 }
+
+/// Files a ticket to stand for the landing that caused a regression, and returns its ID.
+fn culprit(hub: &TestHub) -> String {
+    let report = json!({"check": "rust:culprit", "first_bad": "c001", "last_good": "0000",
+                        "caused_by": null, "output": ""});
+    hub.post("/regressions", &report)["ticket"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+fn regression_report(culprit: &str, first_bad: &str, output: &str) -> Value {
+    json!({"check": "rust:a", "first_bad": first_bad, "last_good": "0000",
+           "caused_by": culprit, "output": output})
+}
+
+fn regression_row(hub: &TestHub) -> (String, String, String) {
+    hub.conn
+        .lock()
+        .unwrap()
+        .query_row(
+            "SELECT ticket, first_bad, state FROM regressions WHERE check_name = 'rust:a'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap()
+}
+
+fn ticket_count(hub: &TestHub) -> i64 {
+    hub.conn
+        .lock()
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM tickets", [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn a_new_regression_files_a_p0_bug_linked_to_its_cause() {
+    let hub = TestHub::start("regression-new");
+    let cause = culprit(&hub);
+    let reply = hub.post("/regressions", &regression_report(&cause, "ef01", "boom"));
+    let ticket = reply["ticket"].as_str().unwrap().to_owned();
+
+    let conn = hub.conn.lock().unwrap();
+    let (priority, kind, labels, body): (i64, String, String, String) = conn
+        .query_row(
+            "SELECT priority, type, labels, body FROM tickets WHERE id = ?1",
+            [&ticket],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .unwrap();
+    assert_eq!((priority, kind.as_str()), (0, "bug"));
+    let labels: Value = serde_json::from_str(&labels).unwrap();
+    assert_eq!(labels, json!(["regression", "check:rust"]));
+    assert!(body.contains("boom"), "{body}");
+    let edge: (String, String) = conn
+        .query_row(
+            "SELECT dst, kind FROM edges WHERE src = ?1",
+            [&ticket],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(edge, (cause, "discovered-from".to_owned()));
+    drop(conn);
+    assert_eq!(
+        regression_row(&hub),
+        (ticket, "ef01".to_owned(), "open".to_owned())
+    );
+}
+
+#[test]
+fn the_same_regression_sent_twice_returns_one_ticket() {
+    let hub = TestHub::start("regression-twice");
+    let cause = culprit(&hub);
+    let report = regression_report(&cause, "ef01", "boom");
+    let first = hub.post("/regressions", &report);
+    let after_first = ticket_count(&hub);
+    let second = hub.post("/regressions", &report);
+    assert_eq!(first, second);
+    assert_eq!(ticket_count(&hub), after_first);
+}
+
+#[test]
+fn a_regression_that_fails_again_after_its_fix_reopens_the_same_ticket() {
+    let hub = TestHub::start("regression-reopen");
+    let cause = culprit(&hub);
+    let ticket = hub.post("/regressions", &regression_report(&cause, "ef01", "boom"))["ticket"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    {
+        let conn = hub.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE tickets SET status = 'closed' WHERE id = ?1",
+            [&ticket],
+        )
+        .unwrap();
+        hub::tips::regression_fixed(&conn, "rust:a").unwrap();
+    }
+    let reply = hub.post(
+        "/regressions",
+        &regression_report(&cause, "9999", "bang again"),
+    );
+    assert_eq!(reply["ticket"], json!(ticket));
+
+    let conn = hub.conn.lock().unwrap();
+    let status: String = conn
+        .query_row("SELECT status FROM tickets WHERE id = ?1", [&ticket], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(status, "open");
+    let comment: String = conn
+        .query_row(
+            "SELECT text FROM comments WHERE ticket = ?1 ORDER BY n DESC LIMIT 1",
+            [&ticket],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(comment.contains("bang again"), "{comment}");
+    drop(conn);
+    assert_eq!(
+        regression_row(&hub),
+        (ticket, "9999".to_owned(), "reopened".to_owned())
+    );
+}
