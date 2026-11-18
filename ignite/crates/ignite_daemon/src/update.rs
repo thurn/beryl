@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 mod install;
 mod lastgood;
 mod rollback;
+pub mod selftest;
 mod starts;
 
 pub use install::{

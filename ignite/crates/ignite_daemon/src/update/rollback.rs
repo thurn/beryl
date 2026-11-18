@@ -80,6 +80,19 @@ impl ExecutableStore {
             .is_ok_and(|text| text.lines().any(|line| line.trim() == commit.as_str()))
     }
 
+    /// Records that `commit` failed its selftest ([`super::selftest`]) and must not be restarted
+    /// into, and why, in `bin/rollbacks.log`. A newer commit is not affected.
+    pub fn reject_with_reason(&self, commit: &Commit, reason: &str, now: Timestamp) {
+        self.reject(commit);
+        self.append(
+            LOG,
+            &format!(
+                "{now} {commit} failed its selftest: {}",
+                reason.replace('\n', " ")
+            ),
+        );
+    }
+
     pub(super) fn read_commit(&self, name: &str) -> Option<Commit> {
         Commit::new(fs::read_to_string(self.root.join(name)).ok()?.trim()).ok()
     }

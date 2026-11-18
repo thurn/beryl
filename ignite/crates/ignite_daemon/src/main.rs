@@ -151,7 +151,7 @@ fn self_update(
                 repo: options.repo.clone(),
                 work: options.home.root.join("update"),
             },
-            launcher,
+            launcher: launcher.clone(),
         }),
         store: options.home.store(),
         master: base.config.repository.release_branch().to_owned(),
@@ -161,6 +161,15 @@ fn self_update(
         ahead_of: Mutex::default(),
         building: Mutex::default(),
         failed: Mutex::default(),
+        selftest: Arc::new(crate::update::selftest::SupervisedSelftest {
+            launcher,
+            repo: options.repo.clone(),
+        }),
+        hub: base.hub.clone(),
+        clock: base.clock.clone(),
+        machine: base.machine.clone(),
+        host: options.hostname.clone(),
+        reports: Mutex::default(),
     }
 }
 
@@ -239,7 +248,7 @@ pub fn run_daemon(cwd: &Path) -> i32 {
 /// The main checkout of the repository at `cwd` if `cwd` holds an `ignite.toml`, else the
 /// checkout recorded in the home folder. A daemon started in a linked worktree serves the main
 /// checkout, as one started by the login service does.
-fn checkout(cwd: &Path, home: &Home) -> PathBuf {
+pub(crate) fn checkout(cwd: &Path, home: &Home) -> PathBuf {
     if cwd.join("ignite.toml").is_file() {
         return crate::update::main_checkout(cwd);
     }
@@ -247,7 +256,7 @@ fn checkout(cwd: &Path, home: &Home) -> PathBuf {
         .map_or_else(|_| cwd.to_path_buf(), |text| PathBuf::from(text.trim()))
 }
 
-fn read_config(repo: &Path) -> Result<Config> {
+pub(crate) fn read_config(repo: &Path) -> Result<Config> {
     let path = repo.join("ignite.toml");
     let text = std::fs::read_to_string(&path)
         .map_err(|e| Error::Invalid(format!("{}: {e}", path.display())))?;
@@ -263,7 +272,7 @@ fn read_config(repo: &Path) -> Result<Config> {
 }
 
 /// Every `*.toml` in the repository's manifest directory, parsed together.
-fn read_manifest(repo: &Path, config: &Config) -> std::result::Result<Manifest, String> {
+pub(crate) fn read_manifest(repo: &Path, config: &Config) -> std::result::Result<Manifest, String> {
     let dir = repo.join(&config.repository.checks);
     let entries = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let mut files = Vec::new();

@@ -227,6 +227,20 @@ pub enum Command {
     /// Cargo's test runner.
     #[command(hide = true)]
     Runner(Passthrough),
+    /// Checks this executable on this machine, for the daemon that is about to restart into it.
+    #[command(hide = true)]
+    Internal {
+        #[command(subcommand)]
+        command: InternalCommand,
+    },
+}
+
+/// The subcommands of `ignite internal`, which Ignite runs on itself.
+#[derive(Debug, Subcommand)]
+pub enum InternalCommand {
+    /// Parse `ignite.toml` and the check manifests and migrate a copy of `daemon.db`, as a
+    /// daemon starting now would; exit 0 if all of it works.
+    Selftest,
 }
 
 /// Arguments passed through untouched.
@@ -557,6 +571,7 @@ impl Command {
             Command::Supervise { .. } => "supervise",
             Command::RustcWrap(_) => "rustc-wrap",
             Command::Runner(_) => "runner",
+            Command::Internal { .. } => "internal",
         }
     }
 }
@@ -682,6 +697,12 @@ mod tests {
         assert!(matches!(
             parse("ignite rustc-wrap rustc --crate-name x"),
             Command::RustcWrap(Passthrough { args }) if args.len() == 3
+        ));
+        assert!(matches!(
+            parse("ignite internal selftest"),
+            Command::Internal {
+                command: InternalCommand::Selftest
+            }
         ));
         assert!(Cli::try_parse_from(["ignite", "ticket", "create", "x", "-p", "P7"]).is_err());
     }

@@ -20,7 +20,7 @@ use clap::Parser;
 
 use ignite_core::protocol::client::Reply;
 
-use crate::args::{Cli, Command, PoolCommand};
+use crate::args::{Cli, Command, InternalCommand, PoolCommand};
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
@@ -69,6 +69,9 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Supervise { spec } => exit_reply(ignite_daemon::supervise::supervise(spec)),
         Command::RustcWrap(pass) => exit_reply(ignite_daemon::wrap::rustc_wrap(&pass.args)),
         Command::Runner(pass) => exit_reply(ignite_daemon::wrap::runner(&pass.args)),
+        Command::Internal {
+            command: InternalCommand::Selftest,
+        } => exit_reply(ignite_daemon::update::selftest::command(&current_dir())),
         _ => {
             let session = client::session_from_env(|name| std::env::var(name).ok());
             let request = client::request(verb, raw, current_dir(), session);

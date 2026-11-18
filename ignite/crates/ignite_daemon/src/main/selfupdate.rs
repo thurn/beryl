@@ -28,6 +28,12 @@
 //! failed is reported once and not tried again for the same commit; the next move of the release
 //! branch tries the new commit.
 //!
+//! The same thread then runs the new executable's selftest (`ignite internal selftest`, see
+//! [`crate::update::selftest`]) before `bin/current` is pointed at it. A build that fails it is
+//! recorded as rejected, so no daemon restarts into it or updates to it again, and is reported
+//! to the justiciar once (the report is kept and sent again if the hub does not answer). The
+//! daemon stays on its own build.
+//!
 //! A restart does not wait for commands. Supervisors are other processes, started from the old
 //! executable's own path, so a restart leaves them running until their commands finish. The new
 //! daemon runs the verbs that were cut off again under their handles, taking their commands over
@@ -41,9 +47,11 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 
-use ignite_core::ids::Commit;
-use ignite_core::traits::{Error, Git, Result};
+use ignite_core::ids::{Commit, MachineId};
+use ignite_core::protocol::hub::JusticiarReport;
+use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
+use crate::update::selftest::Selftest;
 use crate::update::{
     Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, restart_into,
 };
@@ -54,7 +62,16 @@ pub const POLL_EVERY_ROUNDS: u32 = 30;
 /// A release build running on its own thread.
 pub struct Building {
     pub commit: Commit,
-    handle: JoinHandle<Result<PathBuf>>,
+    handle: JoinHandle<std::result::Result<PathBuf, Failure>>,
+}
+
+/// Why a release was not made ready.
+enum Failure {
+    /// Cargo, or storing the executable, failed. The commit is not tried again, but a rebuild
+    /// after the branch moves may work.
+    Build(Error),
+    /// The executable was built and failed its selftest, with the reason.
+    Selftest(String),
 }
 
 /// The daemon's view of its own version and the release it should run.
@@ -80,6 +97,15 @@ pub struct SelfUpdate {
     /// The commit whose build last failed, which is not built again until another commit is
     /// wanted.
     pub failed: Mutex<Option<Commit>>,
+    /// Checks a built executable before the daemon restarts into it.
+    pub selftest: Arc<dyn Selftest>,
+    /// Where selftest failures are reported.
+    pub hub: Arc<dyn Hub>,
+    pub clock: Arc<dyn Clock>,
+    pub machine: MachineId,
+    pub host: String,
+    /// Selftest failures the hub has not accepted yet.
+    pub reports: Mutex<Vec<JusticiarReport>>,
 }
 
 impl SelfUpdate {
@@ -110,7 +136,7 @@ impl SelfUpdate {
         }
         match self.updater().plan(own)? {
             Plan::Build(tip) => {
-                if let Some(executable) = self.stage(own, &tip)? {
+                if let Some(executable) = self.stage(&tip) {
                     *self.ready() = Some(executable);
                 }
             }
@@ -131,21 +157,21 @@ impl SelfUpdate {
         Ok(())
     }
 
-    /// The stored executable of `target`, activated, or `None` when it is not stored: a build is
-    /// then started on a thread of its own, unless one runs already or this commit's build
-    /// failed, and [`SelfUpdate::collect_build`] picks up its result.
-    fn stage(&self, own: &Commit, target: &Commit) -> Result<Option<PathBuf>> {
+    /// The executable of `target` if it has passed its selftest and been activated, else `None`:
+    /// a thread of its own then builds it (when it is not stored) and runs its selftest, unless
+    /// one runs already or this commit failed, and [`SelfUpdate::collect_build`] picks up the
+    /// result.
+    fn stage(&self, target: &Commit) -> Option<PathBuf> {
         if self.store.is_rejected(target) {
-            return Ok(None);
+            return None;
         }
-        if self.store.has(target) {
-            return match self.updater().activate(own, target)? {
-                UpdateCheck::Ready { executable, .. } => Ok(Some(executable)),
-                _ => Ok(None),
-            };
+        // A build that passed its selftest and was activated is not checked again.
+        let stored = self.store.path(target);
+        if self.ready().as_ref() == Some(&stored) {
+            return Some(stored);
         }
         self.start_build(target);
-        Ok(None)
+        None
     }
 
     fn building(&self) -> MutexGuard<'_, Option<Building>> {
@@ -156,17 +182,35 @@ impl SelfUpdate {
         self.failed.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Starts building `target` unless a build runs (of this commit or another, which finishes
-    /// first) or the last build of `target` failed.
+    /// Starts making `target` ready on a thread of its own, unless that is running (for this
+    /// commit or another, which finishes first) or the last attempt for `target` failed: builds
+    /// it when it is not stored, then runs its selftest.
     fn start_build(&self, target: &Commit) {
         let mut building = self.building();
         if building.is_some() || self.failed().as_ref() == Some(target) {
             return;
         }
-        let (builder, commit) = (self.builder.clone(), target.clone());
+        let (builder, store, selftest, commit) = (
+            self.builder.clone(),
+            self.store.clone(),
+            self.selftest.clone(),
+            target.clone(),
+        );
         let spawned = thread::Builder::new()
             .name("ignite-release-build".to_owned())
-            .spawn(move || builder.build(&commit));
+            .spawn(move || {
+                if !store.has(&commit) {
+                    let built = builder.build(&commit).map_err(Failure::Build)?;
+                    store
+                        .store(&commit, &built)
+                        .map_err(|e| Failure::Build(e.into()))?;
+                }
+                let executable = store.path(&commit);
+                selftest
+                    .run(&executable)
+                    .map_err(|e| Failure::Selftest(e.to_string()))?;
+                Ok(executable)
+            });
         match spawned {
             Ok(handle) => {
                 eprintln!("ignite: building release {target}");
@@ -183,12 +227,16 @@ impl SelfUpdate {
     }
 
     /// Looks, without waiting, whether the release build has finished. While it runs, records
-    /// "building release <commit>" as the calling loop's step. A finished build is stored and
-    /// becomes the ready build; a failed one is reported once and its commit is not built again.
+    /// "building release <commit>" as the calling loop's step. A finished build that passed its
+    /// selftest is activated and becomes the ready build. A failed build is reported once and
+    /// its commit is not built again. A build that failed its selftest is also recorded as
+    /// rejected and reported to the justiciar. Also sends justiciar reports the hub has not
+    /// accepted yet.
     pub fn collect_build(&self) {
         let Some(own) = &self.own else {
             return;
         };
+        self.send_reports();
         let mut slot = self.building();
         let Some(building) = slot.take() else {
             return;
@@ -200,21 +248,78 @@ impl SelfUpdate {
         }
         drop(slot);
         let Building { commit, handle } = building;
-        let built = handle
-            .join()
-            .unwrap_or_else(|_| Err(Error::Io("the build thread panicked".to_owned())))
-            .and_then(|built| self.updater().install(own, &commit, &built));
+        let built = handle.join().unwrap_or_else(|_| {
+            Err(Failure::Build(Error::Io(
+                "the build thread panicked".to_owned(),
+            )))
+        });
         match built {
-            Ok(UpdateCheck::Ready { executable, .. }) => {
-                eprintln!("ignite: built release {commit}");
-                *self.ready() = Some(executable);
-            }
-            Ok(_) => {}
-            Err(error) => {
+            Ok(_) => match self.updater().activate(own, &commit) {
+                Ok(UpdateCheck::Ready { executable, .. }) => {
+                    eprintln!("ignite: built release {commit}");
+                    *self.ready() = Some(executable);
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    eprintln!("ignite: the release {commit} was not activated: {error}");
+                    *self.failed() = Some(commit);
+                }
+            },
+            Err(Failure::Build(error)) => {
                 eprintln!("ignite: the release {commit} was not built: {error}");
                 *self.failed() = Some(commit);
             }
+            Err(Failure::Selftest(reason)) => {
+                eprintln!("ignite: the release {commit} failed its selftest: {reason}");
+                self.store
+                    .reject_with_reason(&commit, &reason, self.clock.now());
+                self.reports
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push(self.selftest_report(&commit, &reason));
+                *self.failed() = Some(commit);
+                self.send_reports();
+            }
         }
+    }
+
+    fn selftest_report(&self, commit: &Commit, reason: &str) -> JusticiarReport {
+        JusticiarReport {
+            subject: format!("release-selftest:{commit}"),
+            title: format!("Ignite release {commit} failed its selftest"),
+            details: format!(
+                "The daemon on {} built Ignite {commit}, ran `ignite internal selftest` with it \
+                 and it failed, so no daemon restarts into it: it is recorded in `bin/rejected` \
+                 and `bin/rollbacks.log` there, and the daemon stays on {}. The selftest parses \
+                 `ignite.toml` and the check manifests and applies the new build's migrations to \
+                 a copy of `daemon.db`. Fix the cause with a regression test and push a new \
+                 release through the release branch.\n\n{reason}",
+                self.host,
+                self.own.as_ref().map_or("its build", Commit::as_str),
+            ),
+            evidence: format!("{commit}@{}", self.host),
+            machine: self.machine.clone(),
+            host: self.host.clone(),
+            on_machine: false,
+        }
+    }
+
+    /// Sends the reports the hub has not accepted. A report the hub refuses or cannot be
+    /// reached for stays for the next round.
+    fn send_reports(&self) {
+        let pending =
+            std::mem::take(&mut *self.reports.lock().unwrap_or_else(PoisonError::into_inner));
+        let mut unsent = Vec::new();
+        for report in pending {
+            if let Err(error) = self.hub.justiciar(&report) {
+                eprintln!("ignite: cannot report {}: {error}", report.subject);
+                unsent.push(report);
+            }
+        }
+        self.reports
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend(unsent);
     }
 
     /// Called once per round of the sender loop. Every [`POLL_EVERY_ROUNDS`]th call (the first
@@ -284,7 +389,7 @@ impl SelfUpdate {
         if self.git.tip(&self.master)? == *own {
             return Ok(None);
         }
-        self.stage(own, hub)
+        Ok(self.stage(hub))
     }
 }
 
