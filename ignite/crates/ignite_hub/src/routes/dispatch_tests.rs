@@ -375,7 +375,7 @@ fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
         tickets::load(&conn, id.as_str()).unwrap().unwrap().version,
         before
     );
-    // Another session is refused, and the reply says the ticket is someone else's.
+    // A session without the code is refused, and the reply says the ticket is reserved.
     let (status, reply) = post(
         &mut conn,
         "/claims",
@@ -385,12 +385,12 @@ fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
     assert_eq!(status, 409);
     assert_eq!(
         reply["error"],
-        format!("{id} is reserved for another session")
+        format!("{id} is reserved; claim it with its reservation's code")
     );
     let (status, brief) = post(
         &mut conn,
         "/claims",
-        &claim(id.as_str(), "local_a"),
+        &claim_reserved(&reserved, "local_a"),
         at(3.0),
     );
     assert_eq!(status, 200, "{brief}");
