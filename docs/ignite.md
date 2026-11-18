@@ -476,6 +476,26 @@ survive each other's restarts.
   runs one command. It is the command's parent: it waits for it, collects its
   resource use from the operating system and writes the result to a file. The
   daemon watches supervisors, so it can restart while commands keep running.
+- **A verb process** runs one long verb from start to finish:
+  `ignite internal verb <handle>`, a hidden subcommand. `land`, `test`, `check`,
+  `run`, `rebuild` and `audit` run in verb processes; every other verb runs on a
+  thread of the daemon. The daemon gives the verb its handle and records the
+  request in the handle's row in `daemon.db`, then starts the verb process from
+  its own executable, `bin/<commit>/ignite`, in the repository's main checkout,
+  in a process group of its own (detached and outside the daemon's job object on
+  Windows, as supervisors are). The verb process holds `verbs/<handle>/lock` in
+  the Ignite home for its whole life, records its process ID, its executable's
+  commit and its protocol version in the handle's row, runs the verb, writes the
+  reply into the row and exits. Its log is `verbs/<handle>/verb.log`. It starts
+  no process itself: it asks the daemon for what needs one authority on the
+  machine over the daemon's socket, one connection per call (the host protocol,
+  calls named `host-…`): starting a supervised command, which includes waiting
+  for cores, making a build product current, leasing and freeing a landing tree,
+  and reporting its step and whether it may be stopped. Each call carries a
+  request ID, the handle and a counter, so a call cut off by a daemon restart is
+  sent again, for up to five minutes, and answered as the first attempt would
+  have been. A verb process waits for its own commands through their run
+  directories, as a restarted daemon does.
 - **The hub** runs on jarvis as a login service of its own, `ignite hub`,
   started from `bin/current`. It serves the shared database over HTTPS on the
   Tailscale network (`IGNITE_HUB_LISTEN`), and a read-only copy for the public
@@ -508,9 +528,14 @@ How the executable is installed and kept current:
   `repository.release` in `ignite.toml`, or `master` when that is unset. When
   the branch moves and Ignite's own source changed, each daemon builds the new
   executable in a tree of its own and restarts into it within ten seconds,
-  without waiting for running commands. The only thing a restart waits for is a
-  landing inside its push, which lasts seconds. Daemons look at the branch every
-  five minutes, so a fix pushed to it by hand deploys too.
+  without waiting for running commands or verb processes. Before it restarts,
+  the daemon answers every new request, except the calls of verb processes, with
+  a reply that says it is restarting, which the client sends again, and waits up
+  to 30 seconds for the verbs running on its own threads, such as a `release`.
+  It does not wait for a `start` that only waits for a free tree: the new daemon
+  runs that `start` again under its handle, and the rerun claims the tree if one
+  was leased to the session meanwhile. Daemons look at the branch every five
+  minutes, so a fix pushed to it by hand deploys too.
 - The release build is not run by a loop. When the release branch moves, or the
   hub reports a version this daemon doesn't have, the daemon starts one build on
   a thread of its own, as a supervised `agent` command in `update/update-tree`
@@ -546,7 +571,9 @@ How the executable is installed and kept current:
   lands, without waiting for tip verification of everything else, which an
   Ignite bug can itself be blocking.
 - Each build is stored under its commit, so a new executable never replaces a
-  file that is running. Supervisors finish under the version that started them.
+  file that is running. Supervisors and verb processes finish under the version
+  that started them; `ignite status` names the commit each running verb runs
+  under, such as `L-6 land under 87631b5 …`.
 - The hub updates first. Before the daemon on jarvis restarts into a release, it
   kickstarts the hub's service, which comes back on the new `bin/current` and
   reports its version in every heartbeat reply. A daemon whose version differs
@@ -559,11 +586,23 @@ How the executable is installed and kept current:
 
 How a restart is survived:
 
-- Every command runs under its own supervisor, which outlives the daemon.
+- Every command runs under its own supervisor, and every long verb in its own
+  verb process, and both outlive the daemon.
 - Every verb that does work gets its handle, with the request that started it,
   before it begins. The client is told the handle first.
-- The restarted daemon runs `test`, `check` and `land` again under the same
-  handle. Finished checks come from the result cache. Each command still running
+- The restarted daemon looks at each handle that was running. When
+  `verbs/<handle>/lock` is held, the verb process is alive: the daemon lists it
+  at once for `ignite status`, `ignite wait` and `ignite stop`, and the process
+  goes on with the new daemon at its next call. Nothing is run again. When the
+  lock is free and the row holds a reply, the process finished while no daemon
+  ran, and whoever waits gets the reply. When the lock is free and the row has
+  no reply, the process died (a crash, a kill, a reboot), and only then does the
+  daemon run the verb itself, as below. A verb process that dies while the
+  daemon runs is noticed within a second and treated the same way, after the
+  daemon ends the commands it left.
+- For a verb that ran on the previous daemon's threads, or whose verb process
+  died, the daemon runs `test`, `check`, `land` and a waiting `start` again
+  under the same handle. Finished checks come from the result cache. Each command still running
   is taken over from its supervisor, found by the handle in its `spec.json`,
   instead of being started again, and the files it writes through its
   environment, such as a check's results file, are handed to the rerun. So
@@ -572,8 +611,8 @@ How a restart is survived:
 - Any other verb cut off by a restart ends its handle `incomplete`, with the
   reason.
 - A landing tree records the handle of the landing that leased it. A restarted
-  daemon keeps a landing tree whose landing it runs again, with the commands
-  running in it. The rerun gets the same tree back, untouched if it is still at
+  daemon keeps a landing tree whose landing still runs in its verb process, or
+  that it runs again, with the commands running in it. The rerun gets the same tree back, untouched if it is still at
   the commit the landing asks for and reset otherwise. Every other landing tree,
   and every tree left being prebuilt or reset, is reset at start and its
   commands are ended. Each command of a verb with a handle records its
@@ -589,8 +628,9 @@ How a restart is survived:
 - The daemon's loops start their round over, except fleet metrics, whose first
   round waits until ten minutes have passed since the last ingest.
 - A client whose connection drops after it was told the handle waits on it as
-  `ignite wait` does, for up to five minutes, and prints the reply as if nothing
-  had happened. A read cut off earlier is sent again. Other work answers that
+  `ignite wait` does, for up to five minutes, prints the verb's steps as they
+  start, as the first request did, and prints the reply as if nothing had
+  happened. A read cut off earlier is sent again. Other work answers that
   its outcome is unknown and to check `ignite status`. A refused connection, or
   a missing socket or pipe while a process holds `daemon.lock` or a start was
   logged in the last minute, means a daemon that is starting, and is retried for
@@ -636,7 +676,9 @@ How a command knows who is asking:
 - The tree is the build tree that holds the working directory.
 
 A removed tree, a finished ticket or an expired lease ends every process that
-was started in that tree.
+was started in that tree. `ignite release` and `ignite close` first stop every
+verb running from the tree, verb processes included, and wait for each process
+to exit.
 
 ## Build trees
 

@@ -42,17 +42,22 @@
 //! to the justiciar once (the report is kept and sent again if the hub does not answer). The
 //! daemon stays on its own build.
 //!
-//! A restart does not wait for commands. Supervisors are other processes, started from the old
-//! executable's own path, so a restart leaves them running until their commands finish. The new
-//! daemon runs the verbs that were cut off again under their handles, taking their commands over
-//! from the supervisors (see `server/resume.rs` and [`crate::adopt`]), and a client whose
-//! connection dropped waits on its handle again. The only thing a restart waits for is a verb
-//! in a part that may not be cut short, such as a landing's push (see
-//! [`crate::steps::critical`]), which lasts seconds.
+//! A restart does not wait for commands or for the long verbs. Supervisors are other processes,
+//! started from the old executable's own path, so a restart leaves them running until their
+//! commands finish, and the long verbs (`land`, `test`, `check`, `run`, `rebuild`, `audit`) run
+//! in verb processes of their own, which go on with the new daemon (see `server/process.rs`).
+//! Before it restarts, the daemon stops taking new requests, which clients send again, and waits
+//! up to [`crate::server::DRAIN_WAIT`] for the verbs running on its own threads, such as a
+//! `release` ([`crate::server::Drain`]). A `start` that only waits for a free tree is not waited
+//! for: the new daemon runs it again. A verb still running on the daemon's threads after the
+//! wait is run again by the new daemon under its handle, taking its commands over from the
+//! supervisors (see `server/resume.rs` and [`crate::adopt`]), and a client whose connection
+//! dropped waits on its handle again. A restart also waits for a verb on the daemon's threads in
+//! a part that may not be cut short (see [`crate::steps::critical`]), which lasts seconds.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::thread::{self, JoinHandle};
 
 use ignite_core::ids::{Commit, MachineId};
@@ -60,6 +65,7 @@ use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
+use crate::server::{DRAIN_WAIT, Drain};
 use crate::update::selftest::Selftest;
 use crate::update::{
     Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, restart_into,
@@ -131,6 +137,9 @@ pub struct SelfUpdate {
     pub hub_service: Arc<dyn HubService>,
     /// When the hub was last kickstarted for lagging behind this daemon.
     pub hub_kicked: Mutex<Option<Timestamp>>,
+    /// The server, set once it exists, which stops taking requests and lets the verbs on the
+    /// daemon's threads finish before a restart.
+    pub drain: OnceLock<Arc<dyn Drain>>,
 }
 
 impl SelfUpdate {
@@ -411,12 +420,19 @@ impl SelfUpdate {
             return;
         }
         self.restart_hub_first(reported.as_ref(), &executable);
+        let drain = self.drain.get();
+        if let Some(drain) = drain {
+            drain.drain(DRAIN_WAIT);
+        }
         eprintln!("ignite: restarting into {}", executable.display());
         crate::update::record_clean_stop_from(&self.store);
         let error = restart_into(self.restart.as_ref(), &executable);
         // Only a failed restart returns. Forget the build so the next heartbeat does not
         // retry it every few seconds; the next move of `master` prepares it again.
         eprintln!("ignite: {error}");
+        if let Some(drain) = drain {
+            drain.undrain();
+        }
         *self.ready() = None;
     }
 

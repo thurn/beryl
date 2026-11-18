@@ -40,7 +40,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 use ignite_core::config::Config;
-use ignite_core::ids::{Commit, SessionId, TicketId, TreeId};
+use ignite_core::ids::{Commit, Handle, SessionId, TicketId, TreeId};
 use ignite_core::manifest::{InputPattern, Manifest};
 use ignite_core::traits::{BuildResult, Builds, Clock, Error, Result};
 use ignite_git::fastforward::{self, FastForward};
@@ -272,19 +272,30 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
 }
 
 /// Whether the verb that leased a landing tree under the handle `owner` will still use it: its
-/// handle is `running` in the local database. At start that is a verb the previous daemon ran
+/// handle is `running` in the local database, and, for a verb that runs in a verb process (see
+/// `server/process.rs`), the process still holds `verbs/<handle>/lock` in the Ignite home or the
+/// daemon runs the verb again once it finds the process dead. At start that is a verb process
+/// that outlived the previous daemon, or a verb the previous daemon ran (or whose process died)
 /// that this one runs again under the same handle (see `server/resume.rs`); while the daemon
 /// runs, a verb that has not finished.
 ///
 /// This is the only place that decides it. A handle the restarted daemon finds running but
 /// cannot run again is ended `incomplete` just after start; its tree is freed by the next
-/// landing lease ([`Trees::lease_landing`]). When verbs run in processes of their own, an owner
-/// will also be alive while its process holds `verbs/<handle>/lock`.
+/// landing lease ([`Trees::lease_landing`]).
 pub fn owner_alive(db: &Connection, owner: &str) -> bool {
-    matches!(
-        handle_store::get(db, owner),
-        Ok(Some(row)) if row.state == "running"
-    )
+    let Ok(Some(row)) = handle_store::get(db, owner) else {
+        return false;
+    };
+    if row.state != "running" {
+        return false;
+    }
+    // A verb run by the daemon itself names no process.
+    if row.pid.is_none() {
+        return true;
+    }
+    let home = crate::update::Home::from_env().root;
+    Handle::new(owner).is_ok_and(|handle| crate::verbproc::alive(&home, &handle))
+        || crate::server::RUN_AGAIN_AFTER_DEATH.contains(&row.verb.as_str())
 }
 
 /// Whether a restarted daemon resets `row`'s tree: it was being prebuilt or reset, or it is a

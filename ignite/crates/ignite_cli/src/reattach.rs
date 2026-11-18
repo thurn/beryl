@@ -1,13 +1,18 @@
 //! Keeping a command's reply across a restart of the daemon.
 //!
-//! The daemon restarts into a new build as soon as one is ready, whatever runs (see "Processes"
-//! in `docs/ignite.md`). Its connection to a waiting client then drops. The command itself goes
-//! on: the restarted daemon runs it again under the same handle, taking over its running
-//! commands (`ignite_daemon::server`). So the client does what `ignite wait` does:
+//! The daemon restarts into a new build as soon as one is ready (see "Processes" in
+//! `docs/ignite.md`). Its connection to a waiting client then drops. The command itself goes on:
+//! a long verb runs in a verb process of its own, which outlives the daemon, and any other verb
+//! is run again under the same handle by the restarted daemon (`ignite_daemon::server`). So the
+//! client does what `ignite wait` does:
 //!
 //! - The daemon names the handle of a verb that does work before the verb starts. A client cut
 //!   off after that waits on the handle, trying to reach the daemon for up to [`RETRY_FOR`],
-//!   and prints the reply as if nothing had happened.
+//!   printing the verb's steps as they start, as the first request did, and prints the reply as
+//!   if nothing had happened.
+//! - A daemon about to restart answers a new request with a reply that says so, before it
+//!   starts anything ([`ignite_daemon::server::is_restarting`]); the client sends the request
+//!   again as for a daemon that refuses the connection.
 //! - A verb that was cut off before it named a handle is sent again only if it is one that only
 //!   reads or waits ([`REPEATABLE`]). Any other is answered with a reply that says its outcome
 //!   is unknown and how to find it.
@@ -61,7 +66,7 @@ pub fn send(
     mut progress: Option<&mut dyn FnMut(&str)>,
     retry_unsent: bool,
 ) -> Result<Reply, Cut> {
-    let cut = match daemon.exchange(req, reborrow(&mut progress)) {
+    let cut = match exchange(daemon, req, reborrow(&mut progress)) {
         Ok(reply) => return Ok(reply),
         Err(cut) => cut,
     };
@@ -73,7 +78,13 @@ pub fn send(
     let mut cut = cut;
     loop {
         if let Some(handle) = cut.handle.take() {
-            return Ok(reattach(daemon, req, &handle, since));
+            return Ok(reattach(
+                daemon,
+                req,
+                &handle,
+                since,
+                reborrow(&mut progress),
+            ));
         }
         if cut.sent && !REPEATABLE.contains(&req.verb.as_str()) {
             return Ok(unknown_outcome(req, &cut));
@@ -83,10 +94,27 @@ pub fn send(
         }
         daemon.pause(pause);
         pause = (pause * 2).min(MAX_PAUSE);
-        cut = match daemon.exchange(req, reborrow(&mut progress)) {
+        cut = match exchange(daemon, req, reborrow(&mut progress)) {
             Ok(reply) => return Ok(reply),
             Err(cut) => cut,
         };
+    }
+}
+
+/// One exchange, with a daemon that answers that it is about to restart taken as one that
+/// refused the connection: it started nothing.
+fn exchange(
+    daemon: &mut dyn Daemon,
+    req: &Request,
+    progress: Option<&mut dyn FnMut(&str)>,
+) -> Result<Reply, Cut> {
+    match daemon.exchange(req, progress) {
+        Ok(reply) if ignite_daemon::server::is_restarting(&reply) => Err(Cut {
+            sent: false,
+            handle: None,
+            error: std::io::Error::new(ErrorKind::ConnectionRefused, reply.text),
+        }),
+        other => other,
     }
 }
 
@@ -108,9 +136,16 @@ fn starting(daemon: &dyn Daemon, cut: &Cut) -> bool {
     }
 }
 
-/// Waits on `handle` for `req`'s reply, as `ignite wait` does, trying to reach the daemon for
-/// up to [`RETRY_FOR`] after `since`. The wait lasts what is left of the request's own.
-fn reattach(daemon: &mut dyn Daemon, req: &Request, handle: &Handle, since: Duration) -> Reply {
+/// Waits on `handle` for `req`'s reply, as `ignite wait` does, passing the verb's steps to
+/// `progress`, trying to reach the daemon for up to [`RETRY_FOR`] after `since`. The wait lasts
+/// what is left of the request's own.
+fn reattach(
+    daemon: &mut dyn Daemon,
+    req: &Request,
+    handle: &Handle,
+    since: Duration,
+    mut progress: Option<&mut dyn FnMut(&str)>,
+) -> Reply {
     let mut pause = FIRST_PAUSE;
     loop {
         let left = u64::from(req.wait_s).saturating_sub(daemon.elapsed().as_secs());
@@ -120,7 +155,7 @@ fn reattach(daemon: &mut dyn Daemon, req: &Request, handle: &Handle, since: Dura
             wait_s: u32::try_from(left).unwrap_or(u32::MAX).max(1),
             ..req.clone()
         };
-        let cut = match daemon.exchange(&wait, None) {
+        let cut = match exchange(daemon, &wait, reborrow(&mut progress)) {
             Ok(reply) => return reply,
             Err(cut) => cut,
         };

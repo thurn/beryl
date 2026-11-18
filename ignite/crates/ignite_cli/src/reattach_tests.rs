@@ -214,3 +214,31 @@ fn a_missing_socket_is_retried_while_a_daemon_is_starting() {
     assert_eq!(cut.error.kind(), ErrorKind::NotFound);
     assert_eq!(stopped.verbs(), ["land"]);
 }
+
+#[test]
+fn a_reattached_wait_prints_the_verbs_steps_as_the_first_request_did() {
+    let mut daemon = Scripted::new(vec![
+        Answer::Dropped(Some("L-6")),
+        Answer::Refused,
+        Answer::Reply(passed()),
+    ]);
+    let mut heard = Vec::new();
+    let mut progress = |step: &str| heard.push(step.to_owned());
+    let reply = send(&mut daemon, &request("land"), Some(&mut progress), true).unwrap();
+    assert_eq!(reply, passed());
+    assert_eq!(daemon.verbs(), ["land", "wait L-6", "wait L-6"]);
+    // The scripted daemon passes one step per exchange that asks for them: the waits ask too.
+    assert_eq!(heard, ["rebasing", "rebasing", "rebasing"]);
+}
+
+#[test]
+fn a_daemon_about_to_restart_is_sent_the_request_again() {
+    let mut daemon = Scripted::new(vec![
+        Answer::Reply(ignite_daemon::server::restarting_reply()),
+        Answer::Refused,
+        Answer::Reply(passed()),
+    ]);
+    let reply = send(&mut daemon, &request("release"), None, true).unwrap();
+    assert_eq!(reply, passed());
+    assert_eq!(daemon.verbs(), ["release", "release", "release"]);
+}

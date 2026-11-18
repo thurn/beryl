@@ -80,6 +80,10 @@ impl Default for Timing {
     }
 }
 
+/// The environment variable in which the daemon names the machine, as it found it in
+/// `ignite.toml`, to the verb processes it starts, so both read the same `[machine.<name>]`.
+pub const HOSTNAME_VARIABLE: &str = "IGNITE_HOSTNAME";
+
 /// The folder of `handle`'s verb process in the Ignite home `home`.
 pub fn folder(home: &Path, handle: &Handle) -> PathBuf {
     home.join("verbs").join(handle.as_str())
@@ -333,7 +337,8 @@ pub fn run(handle: &str, cwd: &Path) -> i32 {
     let options = crate::main::DaemonOptions {
         repo: crate::main::checkout(cwd, &home),
         home: home.clone(),
-        hostname: crate::doctor::Host::hostname(&crate::doctor::NativeHost),
+        hostname: std::env::var(HOSTNAME_VARIABLE)
+            .unwrap_or_else(|_| crate::doctor::Host::hostname(&crate::doctor::NativeHost)),
         ignite,
         version: version.clone(),
         feed_wait_s: 60,

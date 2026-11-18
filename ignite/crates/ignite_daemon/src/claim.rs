@@ -154,13 +154,16 @@ pub enum Lease {
 pub trait TreeDesk: Send + Sync {
     /// Leases a free ticket tree to the ticket and session at `tip`, checking out the ticket's
     /// saved branch if the remote has one. With `compiles`, the tree built nearest the tip is
-    /// chosen and its usual builds start at once.
+    /// chosen and its usual builds start at once. A lease that waits records `start`, the
+    /// request of the `ignite start` that asked, with its handle, so that a daemon that restarts
+    /// meanwhile runs that `start` again under the handle instead of ending it.
     fn lease(
         &self,
         ticket: &TicketId,
         session: &SessionId,
         tip: &Commit,
         compiles: bool,
+        start: &Request,
     ) -> Result<Lease>;
     /// Commits whatever the tree holds as one commit marked as saved at release and pushes the
     /// branch as `ignite/<ticket>`. A failed push is an error and leaves the tree as it was.
@@ -362,10 +365,11 @@ impl Claims {
             Ok(parsed) => parsed,
             Err(reply) => return reply,
         };
-        if let Target::Ticket { id, .. } = &target
-            && let Some(reply) = self.already_held(id, &session, &ctx.config.repository.staging)
-        {
-            return reply;
+        if let Target::Ticket { id, .. } = &target {
+            self.claim_restored(ctx, &target, id, &session);
+            if let Some(reply) = self.already_held(id, &session, &ctx.config.repository.staging) {
+                return reply;
+            }
         }
         let now = ctx.clock.now();
         let detail = match &target {
@@ -386,7 +390,7 @@ impl Claims {
             // a name before that.
             Target::Adhoc(_) => adhoc_branch_name(now),
         };
-        let leased = match self.trees.lease(&lease_id, &session, &tip, compiles) {
+        let leased = match self.trees.lease(&lease_id, &session, &tip, compiles, req) {
             Ok(Lease::Leased(leased)) => leased,
             Ok(Lease::Waiting(handle)) => return brief::waiting_for_tree(handle),
             Err(error) => return failure(&error, "cannot lease a tree"),
@@ -434,6 +438,40 @@ impl Claims {
             text: brief::render(&brief, &tree),
             json: Some(brief::json(&brief, &tree)),
             handle: None,
+        }
+    }
+
+    /// Claims at the hub a ticket whose tree a previous daemon leased to `session`, when this
+    /// daemon has not seen its claim: a `start` that waited for a free tree and was run again
+    /// after a restart finds the tree the waiting lease got meanwhile, which nobody has claimed
+    /// at the hub yet. A claim of a ticket the session already holds is answered with its brief,
+    /// so a ticket that was claimed is not harmed.
+    fn claim_restored(&self, ctx: &Context, target: &Target, id: &TicketId, session: &SessionId) {
+        self.forget_released();
+        let restored = {
+            let state = lock(&self.state);
+            state
+                .held
+                .values()
+                .find(|h| &h.ticket == id && &h.session == session && h.brief.is_none())
+                .map(|h| h.tree.clone())
+        };
+        let Some(tree) = restored else {
+            return;
+        };
+        let claim = ClaimRequest {
+            target: target.clone(),
+            machine: ctx.machine.clone(),
+            session: session.clone(),
+            tree: tree.clone(),
+        };
+        match self.desk.claim(&claim) {
+            Ok(brief) => {
+                if let Some(held) = lock(&self.state).held.get_mut(&tree) {
+                    held.brief = Some(brief);
+                }
+            }
+            Err(error) => eprintln!("ignite: cannot claim {id} for the tree {tree}: {error}"),
         }
     }
 

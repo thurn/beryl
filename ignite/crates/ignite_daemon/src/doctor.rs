@@ -29,7 +29,7 @@ mod running;
 mod trees;
 
 pub use loops::LoopsSection;
-pub use running::RunningSection;
+pub use running::{ExecutableOf, RunningSection};
 
 /// The most lines `status` and `doctor` print.
 const MAX_LINES: usize = 40;
@@ -364,8 +364,16 @@ impl StatusVerb {
     /// The verb with `sections`, after the commands running on this machine
     /// ([`RunningSection`]).
     pub fn new(mut sections: Vec<Box<dyn StatusSection>>) -> Self {
-        sections.insert(0, Box::new(RunningSection(crate::steps::global())));
+        sections.insert(0, Box::new(RunningSection(crate::steps::global(), None)));
         Self { sections }
+    }
+
+    /// The verb, with each running verb shown with the commit of the executable it runs under,
+    /// as `executable_of` reads it for a handle.
+    #[must_use]
+    pub fn running_under(mut self, executable_of: ExecutableOf) -> Self {
+        self.sections[0] = Box::new(RunningSection(crate::steps::global(), Some(executable_of)));
+        self
     }
 
     /// The text and the same data as JSON, for the flags in `args`.

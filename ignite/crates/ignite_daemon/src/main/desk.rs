@@ -208,6 +208,7 @@ impl TreeDesk for TreeDeskOver {
         session: &SessionId,
         tip: &Commit,
         compiles: bool,
+        start: &ignite_core::protocol::client::Request,
     ) -> Result<claim::Lease> {
         let saved = self.saved_head(ticket)?;
         let key = (ticket.clone(), session.clone());
@@ -241,7 +242,10 @@ impl TreeDesk for TreeDeskOver {
             .get()
             .ok_or_else(|| Error::Invalid("the daemon is still starting".to_owned()))?
             .clone();
-        let handle = handles.create("start", Some(session), None);
+        // The handle records the request: a daemon that restarts while the lease waits runs the
+        // `start` again under it (`start` is resumable), and that run finds the tree if one was
+        // leased to the session meanwhile.
+        let handle = handles.create_for("start", Some(session), None, Some(start));
         let (served, finished, trees) = (self.served.clone(), handle.clone(), self.trees.clone());
         let waiting_session = session.clone();
         std::thread::spawn(move || {

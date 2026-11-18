@@ -7,8 +7,12 @@
 //! when the verb outlives the caller's wait, runs the [`Hook`]s for requests from a leased tree
 //! and remembers the command each session ran last.
 //!
-//! A restarted daemon runs again, under the same handle, the verbs the previous daemon was
-//! running when it stopped, or ends their handles `incomplete` (see `server/resume.rs`).
+//! The long verbs (`land`, `test`, `check`, `run`, `rebuild`, `audit`) run in verb processes of
+//! their own, which outlive restarts of the daemon (see `server/process.rs`); every other verb
+//! runs on a thread of the daemon. A restarted daemon finds each verb process still running by
+//! its lock and goes on serving it. It runs again, under the same handle, the verbs that ran on
+//! the previous daemon's threads or whose verb process died, or ends their handles `incomplete`
+//! (see `server/resume.rs`).
 //!
 //! Only the session that holds a build tree's lease may use the tree. A request whose working
 //! directory is inside a tree that the local database has not leased to the asking session is
@@ -35,10 +39,15 @@ use ignite_store::local::{rows, trees};
 
 use crate::handles::{Handles, WaitVerb, lock};
 
+mod process;
 mod resume;
 mod wire;
 use crate::steps::{self, Activity, Kind, Steps, Work};
 use crate::stop::StopVerb;
+pub use process::{
+    DRAIN_WAIT, Drain, NativeStarter, PROCESS_VERBS, Processes, RUN_AGAIN_AFTER_DEATH, VerbChild,
+    VerbStarter, is_restarting, restarting_reply,
+};
 
 /// What every verb may use. Tests build one from the fakes in `ignite_core::fakes`.
 #[derive(Clone)]
@@ -64,10 +73,19 @@ impl Context {
     pub fn tree_of(&self, cwd: &Path) -> Option<TreeId> {
         let root = self.repo.join(&self.config.repository.trees);
         let canonical = root.canonicalize().ok();
+        // A verb process finds the checkout through `git`, which may name it by another path
+        // than the client's working directory, such as `/private/var` for `/var` on macOS.
+        let canonical_cwd = cwd.canonicalize().ok();
         let relative = cwd
             .strip_prefix(&root)
             .ok()
-            .or_else(|| cwd.strip_prefix(canonical.as_ref()?).ok())?;
+            .or_else(|| cwd.strip_prefix(canonical.as_ref()?).ok())
+            .or_else(|| {
+                canonical_cwd
+                    .as_ref()?
+                    .strip_prefix(canonical.as_ref()?)
+                    .ok()
+            })?;
         match relative.components().next()? {
             Component::Normal(name) => TreeId::new(name.to_str()?).ok(),
             _ => None,
@@ -80,6 +98,18 @@ pub trait Verb: Send + Sync {
     /// The verb as the client sends it, such as `land`.
     fn name(&self) -> &str;
     fn run(&self, ctx: &Context, req: &Request) -> Reply;
+    /// [`Verb::run`] for a verb that [keeps its own wait](Verb::keeps_its_own_wait), passing
+    /// each step of the work it waits on to `progress` while it waits, such as `wait`. By
+    /// default it passes none. `progress` returns false once its client has gone.
+    fn run_streaming(
+        &self,
+        ctx: &Context,
+        req: &Request,
+        progress: Option<&mut dyn FnMut(&str) -> bool>,
+    ) -> Reply {
+        let _ = progress;
+        self.run(ctx, req)
+    }
     /// True for a verb that keeps to the request's `wait_s` by itself, such as `wait`. The server
     /// runs such a verb directly instead of handing it a handle when the wait ends.
     fn keeps_its_own_wait(&self) -> bool {
@@ -213,8 +243,16 @@ pub struct Server {
     /// What each running verb is doing (see [`crate::steps`]).
     steps: Arc<Steps>,
     /// Verbs running on threads of their own, including those handed off to a handle, except
-    /// those that do not [block an update](Verb::blocks_update).
+    /// those that do not [block an update](Verb::blocks_update), and verb processes being
+    /// started.
     running: Arc<AtomicUsize>,
+    /// How long verbs run in processes of their own, when they do (see `server/process.rs`).
+    processes: Option<Processes>,
+    /// Set while the daemon is about to restart: new requests are refused (see
+    /// [`Server::drain`]).
+    draining: AtomicBool,
+    /// Held only by the server, so the threads it starts can tell when it is gone.
+    token: Arc<()>,
 }
 
 impl Server {
@@ -234,9 +272,22 @@ impl Server {
     /// again or ended (see `server/resume.rs`).
     pub fn with_steps(
         ctx: Context,
+        registry: Registry,
+        db: Option<Arc<Mutex<Connection>>>,
+        steps: Arc<Steps>,
+    ) -> ignite_core::traits::Result<Server> {
+        Self::with_processes(ctx, registry, db, steps, None)
+    }
+
+    /// [`Server::with_steps`], running the verbs `processes` names in verb processes (see
+    /// `server/process.rs`). Its host is given the server's handles before handles the previous
+    /// daemon left running are looked at.
+    pub fn with_processes(
+        ctx: Context,
         mut registry: Registry,
         db: Option<Arc<Mutex<Connection>>>,
         steps: Arc<Steps>,
+        processes: Option<Processes>,
     ) -> ignite_core::traits::Result<Server> {
         let handles = Arc::new(match &db {
             Some(db) => Handles::open(ctx.clock.clone(), db.clone())?,
@@ -253,7 +304,13 @@ impl Server {
             commands: Mutex::new(BTreeMap::new()),
             steps,
             running: Arc::new(AtomicUsize::new(0)),
+            processes,
+            draining: AtomicBool::new(false),
+            token: Arc::new(()),
         };
+        if let Some(processes) = &server.processes {
+            processes.host.set_handles(server.handles.clone());
+        }
         server.resume_orphans();
         Ok(server)
     }
@@ -341,6 +398,9 @@ impl Server {
         progress: Option<&mut dyn FnMut(&str) -> bool>,
         named: Option<&mut dyn FnMut(&Handle)>,
     ) -> Reply {
+        if self.refused_while_draining(&req.verb) {
+            return restarting_reply();
+        }
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
         ctx.tree = ctx.tree_of(&req.cwd);
@@ -370,7 +430,7 @@ impl Server {
         }
         let mut reply = match verb {
             None => unknown_verb(&req.verb),
-            Some(verb) if verb.keeps_its_own_wait() => verb.run(&ctx, req),
+            Some(verb) if verb.keeps_its_own_wait() => verb.run_streaming(&ctx, req, progress),
             Some(verb) => self.run_or_hand_off(verb, &ctx, req, caller, progress, named),
         };
         self.run_hooks(&ctx, req, &mut reply);
@@ -384,51 +444,53 @@ impl Server {
 
     /// The activity of a verb about to run for `req` (see [`crate::steps`]).
     fn begin(&self, ctx: &Context, req: &Request) -> Arc<Activity> {
-        self.steps.begin(
-            Kind::Verb(req.verb.clone()),
-            Work {
-                class: None,
-                ticket: self
-                    .leased_tree(ctx)
-                    .and_then(|tree| tree.ticket)
-                    .and_then(|ticket| ignite_core::ids::TicketId::new(ticket).ok()),
-                session: ctx.session.clone(),
-                tree: ctx.tree.clone(),
-                tree_path: ctx.tree.as_ref().map(|tree| {
-                    ctx.repo
-                        .join(&ctx.config.repository.trees)
-                        .join(tree.as_str())
-                }),
-            },
-        )
+        begin_activity(&self.steps, self.db.as_ref(), ctx, req)
     }
 
-    /// Runs the verb on a thread of its own. A verb that [does work](Verb::blocks_update) gets
-    /// its handle first, which `named` hears. If the verb has not finished when the caller's
-    /// wait ends, the reply names the handle (one made now for a verb that had none), and the
-    /// verb's reply goes to the handle when it finishes.
+    /// Runs the verb in a verb process when it is one of those (see `server/process.rs`), else
+    /// on a thread of its own. A verb that [does work](Verb::blocks_update) gets its handle
+    /// first, which `named` hears.
     fn run_or_hand_off(
         &self,
         verb: Arc<dyn Verb>,
         ctx: &Context,
         req: &Request,
         caller: Option<CallerProbe>,
-        mut progress: Option<&mut dyn FnMut(&str) -> bool>,
+        progress: Option<&mut dyn FnMut(&str) -> bool>,
         named: Option<&mut dyn FnMut(&Handle)>,
     ) -> Reply {
-        let activity = self.begin(ctx, req);
+        if verb.blocks_update() && self.runs_in_process(&req.verb) {
+            return self.run_in_process(verb, ctx, req, caller, progress, named);
+        }
         let handle = verb.blocks_update().then(|| {
-            let handle = self.handles.create_for(
+            self.handles.create_for(
                 &req.verb,
                 ctx.session.as_ref(),
                 ctx.tree.as_ref(),
                 Some(req),
-            );
-            activity.attach_handle(&handle);
-            handle
+            )
         });
         if let (Some(handle), Some(named)) = (&handle, named) {
             named(handle);
+        }
+        self.run_on_thread(verb, ctx, req, caller, progress, handle)
+    }
+
+    /// Runs the verb on a thread of its own, under `handle` if it has one. If the verb has not
+    /// finished when the caller's wait ends, the reply names the handle (one made now for a verb
+    /// that had none), and the verb's reply goes to the handle when it finishes.
+    fn run_on_thread(
+        &self,
+        verb: Arc<dyn Verb>,
+        ctx: &Context,
+        req: &Request,
+        caller: Option<CallerProbe>,
+        mut progress: Option<&mut dyn FnMut(&str) -> bool>,
+        handle: Option<Handle>,
+    ) -> Reply {
+        let activity = self.begin(ctx, req);
+        if let Some(handle) = &handle {
+            activity.attach_handle(handle);
         }
         let steps_heard = progress.is_some().then(|| activity.subscribe());
         // Set once the caller has been given a handle and may leave.
@@ -478,75 +540,9 @@ impl Server {
         still_running_at(&req.verb, &handle, Some(&activity.view()))
     }
 
-    /// Starts `launch`'s verb on a thread of its own. Its reply goes to the returned slot, and
-    /// to its handle when it has one: the one it was given, or the one the slot is handed off
-    /// to.
+    /// Starts `launch`'s verb on a thread of its own (see [`spawn_on_thread`]).
     fn spawn_verb(&self, launch: Launch) -> Result<SharedSlot, Reply> {
-        let Launch {
-            verb,
-            ctx,
-            req,
-            activity,
-            handle,
-            probe,
-        } = launch;
-        let slot: SharedSlot = Arc::new((Mutex::new(Slot::Pending), Condvar::new()));
-        let counted = verb.blocks_update();
-        if counted {
-            self.running.fetch_add(1, Ordering::SeqCst);
-        }
-        let thread = format!("ignite-verb-{}", req.verb);
-        let worker = {
-            let (slot, handles, running) =
-                (slot.clone(), self.handles.clone(), self.running.clone());
-            move || {
-                CALLER.with(|caller| *caller.borrow_mut() = probe);
-                let entered = activity.enter();
-                let mut reply =
-                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| verb.run(&ctx, &req)))
-                        .unwrap_or_else(|_| {
-                            Reply::text(
-                                Exit::Usage,
-                                format!("failed   `{}` panicked in the daemon", req.verb),
-                            )
-                        });
-                drop(entered);
-                let stopped = activity.stop_requested();
-                if stopped {
-                    reply = stopped_reply(&req.verb, activity.handle().as_ref());
-                }
-                let mut state = lock(&slot.0);
-                let to = match &*state {
-                    Slot::HandedOff(handle) => Some(handle.clone()),
-                    _ => handle,
-                };
-                match &to {
-                    Some(handle) if stopped => handles.finish_stopped(handle, reply.clone()),
-                    Some(handle) => handles.finish(handle, reply.clone()),
-                    None => {}
-                }
-                if !matches!(*state, Slot::HandedOff(_)) {
-                    *state = Slot::Done(reply);
-                }
-                if counted {
-                    running.fetch_sub(1, Ordering::SeqCst);
-                }
-                slot.1.notify_all();
-                drop(state);
-                // After the reply is kept, so that whoever waits for the work to end finds it.
-                activity.finish();
-            }
-        };
-        if let Err(error) = std::thread::Builder::new().name(thread).spawn(worker) {
-            if counted {
-                self.running.fetch_sub(1, Ordering::SeqCst);
-            }
-            return Err(Reply::text(
-                Exit::Usage,
-                format!("failed   cannot start a thread: {error}"),
-            ));
-        }
-        Ok(slot)
+        spawn_on_thread(&self.handles, &self.running, launch)
     }
 
     fn run_hooks(&self, ctx: &Context, req: &Request, reply: &mut Reply) {
@@ -632,11 +628,115 @@ impl Server {
 
     /// The request's tree, when the local database has it leased to someone.
     fn leased_tree(&self, ctx: &Context) -> Option<rows::Tree> {
-        let id = ctx.tree.as_ref()?;
-        let db = self.db.as_ref()?;
-        let tree = trees::get(&lock(db), id.as_str()).ok()??;
-        (tree.state != trees::State::Free.as_str()).then_some(tree)
+        leased_tree_in(self.db.as_ref(), ctx)
     }
+}
+
+/// Starts `launch`'s verb on a thread of its own, counted in `running` while it runs if it
+/// [does work](Verb::blocks_update). Its reply goes to the returned slot, and to its handle in
+/// `handles` when it has one: the one it was given, or the one the slot is handed off to.
+fn spawn_on_thread(
+    handles: &Arc<Handles>,
+    running: &Arc<AtomicUsize>,
+    launch: Launch,
+) -> Result<SharedSlot, Reply> {
+    let Launch {
+        verb,
+        ctx,
+        req,
+        activity,
+        handle,
+        probe,
+    } = launch;
+    let slot: SharedSlot = Arc::new((Mutex::new(Slot::Pending), Condvar::new()));
+    let counted = verb.blocks_update();
+    if counted {
+        running.fetch_add(1, Ordering::SeqCst);
+    }
+    let thread = format!("ignite-verb-{}", req.verb);
+    let worker = {
+        let (slot, handles, running) = (slot.clone(), handles.clone(), running.clone());
+        move || {
+            CALLER.with(|caller| *caller.borrow_mut() = probe);
+            let entered = activity.enter();
+            let mut reply =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| verb.run(&ctx, &req)))
+                    .unwrap_or_else(|_| {
+                        Reply::text(
+                            Exit::Usage,
+                            format!("failed   `{}` panicked in the daemon", req.verb),
+                        )
+                    });
+            drop(entered);
+            let stopped = activity.stop_requested();
+            if stopped {
+                reply = stopped_reply(&req.verb, activity.handle().as_ref());
+            }
+            let mut state = lock(&slot.0);
+            let to = match &*state {
+                Slot::HandedOff(handle) => Some(handle.clone()),
+                _ => handle,
+            };
+            match &to {
+                Some(handle) if stopped => handles.finish_stopped(handle, reply.clone()),
+                Some(handle) => handles.finish(handle, reply.clone()),
+                None => {}
+            }
+            if !matches!(*state, Slot::HandedOff(_)) {
+                *state = Slot::Done(reply);
+            }
+            if counted {
+                running.fetch_sub(1, Ordering::SeqCst);
+            }
+            slot.1.notify_all();
+            drop(state);
+            // After the reply is kept, so that whoever waits for the work to end finds it.
+            activity.finish();
+        }
+    };
+    if let Err(error) = std::thread::Builder::new().name(thread).spawn(worker) {
+        if counted {
+            running.fetch_sub(1, Ordering::SeqCst);
+        }
+        return Err(Reply::text(
+            Exit::Usage,
+            format!("failed   cannot start a thread: {error}"),
+        ));
+    }
+    Ok(slot)
+}
+
+/// The activity of a verb about to run for `req` in `steps` (see [`crate::steps`]), with the
+/// ticket of the request's tree when `db` has it leased.
+fn begin_activity(
+    steps: &Steps,
+    db: Option<&Arc<Mutex<Connection>>>,
+    ctx: &Context,
+    req: &Request,
+) -> Arc<Activity> {
+    steps.begin(
+        Kind::Verb(req.verb.clone()),
+        Work {
+            class: None,
+            ticket: leased_tree_in(db, ctx)
+                .and_then(|tree| tree.ticket)
+                .and_then(|ticket| ignite_core::ids::TicketId::new(ticket).ok()),
+            session: ctx.session.clone(),
+            tree: ctx.tree.clone(),
+            tree_path: ctx.tree.as_ref().map(|tree| {
+                ctx.repo
+                    .join(&ctx.config.repository.trees)
+                    .join(tree.as_str())
+            }),
+        },
+    )
+}
+
+/// The request's tree, when `db` has it leased to someone.
+fn leased_tree_in(db: Option<&Arc<Mutex<Connection>>>, ctx: &Context) -> Option<rows::Tree> {
+    let id = ctx.tree.as_ref()?;
+    let tree = trees::get(&lock(db?), id.as_str()).ok()??;
+    (tree.state != trees::State::Free.as_str()).then_some(tree)
 }
 
 /// Passes each step `heard` from the verb's thread to `progress` until the verb has replied or

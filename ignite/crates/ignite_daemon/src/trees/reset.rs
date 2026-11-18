@@ -3,13 +3,14 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::traits::{Error, Result};
 use ignite_git::{refs, worktree};
 use ignite_os::Native;
 use ignite_os::occupants::Occupants;
-use ignite_store::local::{rows, trees as store};
+use ignite_store::local::{handles as handle_store, rows, trees as store};
 
 use super::{Ended, GRACE, Trees, park_branch, store_error};
 
@@ -101,7 +102,13 @@ impl Trees {
             if !activity.stop_requested() {
                 continue;
             }
-            if !activity.wait_finished(self.inner.stop_wait) {
+            let since = std::time::Instant::now();
+            if !activity.wait_finished(self.inner.stop_wait)
+                || !self.process_exited(
+                    activity,
+                    self.inner.stop_wait.saturating_sub(since.elapsed()),
+                )
+            {
                 problems.push(format!(
                     "{} did not end within {} s of being stopped",
                     name(activity),
@@ -116,6 +123,31 @@ impl Trees {
             "{tree} is not freed: {}",
             problems.join("; ")
         )))
+    }
+
+    /// Waits up to `within` for the verb process of `activity`'s handle to exit, once its verb
+    /// has written its reply, so nothing of it is left when the tree is reset. True at once for a
+    /// verb that runs in the daemon, whose handle's row names no process.
+    fn process_exited(&self, activity: &crate::steps::Activity, within: Duration) -> bool {
+        let Some(handle) = activity.handle() else {
+            return true;
+        };
+        let named = handle_store::get(&self.lock().db, handle.as_str())
+            .ok()
+            .flatten()
+            .is_some_and(|row| row.pid.is_some());
+        if !named {
+            return true;
+        }
+        let home = crate::update::Home::from_env().root;
+        let since = std::time::Instant::now();
+        while crate::verbproc::alive(&home, &handle) {
+            if since.elapsed() >= within {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        true
     }
 
     /// Puts a tree that a failed release left `resetting` back to `leased`.

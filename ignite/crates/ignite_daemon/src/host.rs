@@ -227,6 +227,14 @@ impl Host {
         self.remote(ctx, handle).is_some()
     }
 
+    /// Ends, with `SIGTERM`, every unfinished command of `handle`'s verb process, as when the
+    /// process died and the daemon runs the verb again itself.
+    pub fn end_runs_of(&self, handle: &Handle) {
+        for run in self.starter.runs_of(handle) {
+            self.starter.end(&run);
+        }
+    }
+
     /// The last `host-hello` of the verb process running `handle`, such as for the executable
     /// it runs under.
     pub fn hello_of(&self, handle: &Handle) -> Option<Hello> {

@@ -11,9 +11,7 @@ use std::process::Command;
 use std::sync::Arc;
 
 use ignite_core::protocol::tickets::{Status, TicketQuery};
-use ignite_daemon::server::serve_listener;
 use ignite_daemon::tip::TipOutcome;
-use ignite_os::ipc::Ipc;
 
 use world::{World, ask, commit, detail, start, ticket};
 
@@ -24,13 +22,6 @@ use world::{World, ask, commit, detail, start, ticket};
 fn a_ticket_lands_and_master_moves_once_the_tip_is_verified() {
     let world = World::new("one");
     let daemon = world.daemon("alpha");
-    let socket = daemon.options.home.root.join("daemon.sock");
-    // Listening before the first client connects, so no client has to wait for the socket.
-    let listener = ignite_os::Native.listen(&socket.to_string_lossy()).unwrap();
-    {
-        let server = Arc::clone(&daemon.server);
-        std::thread::spawn(move || serve_listener(&server, listener.as_ref()));
-    }
     let ticket = ticket(&daemon, "Alpha learns to add three numbers");
     let home = daemon.options.home.root.clone();
     let ignite = |cwd: &std::path::Path, args: &[&str]| {

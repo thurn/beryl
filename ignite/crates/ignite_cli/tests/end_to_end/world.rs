@@ -18,8 +18,10 @@ use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Reply, Request};
 use ignite_core::protocol::tickets::{BatchRequest, Operation, TicketDetail, TicketFields};
 use ignite_daemon::main::{Daemon, DaemonOptions};
+use ignite_daemon::server::serve_listener;
 use ignite_daemon::update::Home;
 use ignite_hub::server::{HubServer, RunningHub};
+use ignite_os::ipc::Ipc;
 
 /// The checks' adapter: `list <family>` prints the family's checks, `run <checks>…` writes one
 /// result line per check to `$IGNITE_RESULTS`.
@@ -189,6 +191,12 @@ impl World {
             feed_wait_s: 0,
         })
         .unwrap_or_else(|error| panic!("the daemon for {machine} did not start: {error}"));
+        // Its socket is served even for a test that asks the server directly: the long verbs
+        // run in verb processes, which reach the daemon through it.
+        let socket = daemon.options.home.root.join("daemon.sock");
+        let listener = ignite_os::Native.listen(&socket.to_string_lossy()).unwrap();
+        let server = Arc::clone(&daemon.server);
+        std::thread::spawn(move || serve_listener(&server, listener.as_ref()));
         Arc::new(daemon)
     }
 

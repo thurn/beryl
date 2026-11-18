@@ -112,6 +112,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         reports: Mutex::default(),
         hub_service: Arc::new(FakeHubService::default()),
         hub_kicked: Mutex::default(),
+        drain: std::sync::OnceLock::new(),
     };
     (update, git, restart)
 }
@@ -633,4 +634,48 @@ fn a_selftest_report_the_hub_did_not_take_is_sent_when_it_answers() {
     update.after_heartbeat(Some(OLD), false);
     assert_eq!(hub.justiciar_reports().len(), 1);
     assert!(restart.started().is_empty());
+}
+
+/// Records each drain with how many restarts had happened before it, and each undrain.
+#[derive(Default)]
+struct FakeDrain {
+    restart: FakeRestart,
+    calls: Mutex<Vec<String>>,
+}
+
+impl crate::server::Drain for FakeDrain {
+    fn drain(&self, within: std::time::Duration) {
+        let restarts = self.restart.started().len();
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("drain {}s after {restarts}", within.as_secs()));
+    }
+
+    fn undrain(&self) {
+        self.calls.lock().unwrap().push("undrain".to_owned());
+    }
+}
+
+#[test]
+fn a_restart_stops_taking_requests_and_waits_for_the_daemons_own_verbs_first() {
+    let (update, _git, restart) = daemon(NEW);
+    let drain = Arc::new(FakeDrain {
+        restart: restart.clone(),
+        calls: Mutex::default(),
+    });
+    let _ = update.drain.set(drain.clone());
+    update.after_heartbeat(Some(NEW), false);
+    settle(&update);
+    assert!(
+        drain.calls.lock().unwrap().is_empty(),
+        "nothing to restart into yet"
+    );
+    update.after_heartbeat(Some(NEW), false);
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+    // The fake restart returns, as a failed one does, so the server takes requests again.
+    assert_eq!(
+        *drain.calls.lock().unwrap(),
+        ["drain 30s after 0", "undrain"]
+    );
 }

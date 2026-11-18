@@ -39,7 +39,7 @@ use crate::land::records::Records;
 use crate::land::{LandVerb, Landing, SyncVerb};
 use crate::pool::{Pool, PoolVerb};
 use crate::sched::{Limits, Scheduler};
-use crate::server::{Context, Registry, Server, Verb};
+use crate::server::{Context, NativeStarter, Processes, Registry, Server, Verb};
 use crate::supervise::{RunVerb, SupervisedLauncher};
 use crate::trees::{TreeConfig, Trees};
 use crate::update::InstallVerb;
@@ -382,7 +382,9 @@ pub fn server(
 ) -> Result<Arc<Server>> {
     let mut registry = Registry::default();
     let claims = &parts.claims;
-    registry.register(Box::new(StartVerb(claims.clone())));
+    // A `start` that only waited for a free tree when the daemon restarted is run again by the
+    // new daemon, which finds the tree if one was leased to the session meanwhile.
+    registry.register_resumable(Box::new(StartVerb(claims.clone())));
     registry.register(Box::new(BriefVerb(claims.clone())));
     registry.register(Box::new(ReleaseVerb(claims.clone())));
     registry.register(Box::new(CloseVerb(claims.clone())));
@@ -411,7 +413,9 @@ pub fn server(
     registry.register(Box::new(DoctorVerb {
         loops: Some(parts.health.clone()),
     }));
-    registry.register(Box::new(StatusVerb::new(status_sections(base, parts))));
+    registry.register(Box::new(
+        StatusVerb::new(status_sections(base, parts)).running_under(executable_of(base)?),
+    ));
     // The calls of verb processes, which run long verbs outside the daemon (see `crate::host`).
     let host = Host::new(HostParts {
         starter: Arc::new(SupervisedStarter::new(
@@ -430,7 +434,26 @@ pub fn server(
     host.register(&mut registry);
 
     let local: Arc<Mutex<Connection>> = Arc::new(Mutex::new(base.open()?));
-    let mut server = Server::new(ctx.clone(), registry, Some(local))?;
+    // The long verbs run in verb processes started from this executable (see
+    // `server/process.rs`).
+    let home = base.options.home.root.clone();
+    let processes = Processes::new(
+        host.clone(),
+        Arc::new(NativeStarter {
+            executable: base.options.ignite.clone(),
+            home: home.clone(),
+            repo: base.options.repo.clone(),
+            hostname: base.options.hostname.clone(),
+        }),
+        home,
+    );
+    let mut server = Server::with_processes(
+        ctx.clone(),
+        registry,
+        Some(local),
+        crate::steps::global(),
+        Some(processes),
+    )?;
     server.add_hook(Box::new(ClaimHook(claims.clone())));
     let server = Arc::new(server);
     host.set_handles(server.handles().clone());
@@ -471,6 +494,19 @@ pub fn long_verbs(checks: &Arc<Checks>, landing: &Arc<Landing>, idle: &Arc<Idle>
         (Box::new(RebuildVerb { idle: idle.clone() }), false),
         (Box::new(AuditVerb { idle: idle.clone() }), false),
     ]
+}
+
+/// The commit of the executable a handle's verb runs under: the one its verb process recorded,
+/// or this daemon's own for a verb the daemon runs.
+fn executable_of(base: &Base) -> Result<doctor::ExecutableOf> {
+    let db = Mutex::new(base.open()?);
+    let own = base.options.version.clone();
+    Ok(Arc::new(move |handle: &str| {
+        let row = ignite_store::local::handles::get(&crate::handles::lock(&db), handle)
+            .ok()
+            .flatten()?;
+        Some(row.executable.unwrap_or_else(|| own.clone()))
+    }))
 }
 
 fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSection>> {

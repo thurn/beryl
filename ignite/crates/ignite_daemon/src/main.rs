@@ -122,6 +122,7 @@ impl Daemon {
             )),
         };
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
+        let _ = parts.update.drain.set(server.clone());
         Ok(Daemon {
             server,
             ctx,
@@ -190,6 +191,7 @@ fn self_update(
         reports: Mutex::default(),
         hub_service: Arc::new(NativeHubService),
         hub_kicked: Mutex::default(),
+        drain: std::sync::OnceLock::new(),
     }
 }
 
