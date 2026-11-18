@@ -12,6 +12,8 @@ checks = "ignite/checks"
 [hub]
 url = "https://jarvis.tail4b0774.ts.net:8443"
 project = "by"
+# The old dashboard also answered at /beryl/; those page addresses redirect to /by/.
+aliases = ["beryl"]
 
 # Placeholder values until the switch replays 14 days of history to set them (docs/ignite.md,
 # "The threshold and the cap"). Only a commit changes them.

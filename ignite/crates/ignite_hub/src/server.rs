@@ -59,6 +59,7 @@ impl HubServer {
         let server = Arc::new(server);
         let shared = Arc::new(Shared {
             project: self.config.hub.project.clone(),
+            aliases: self.config.hub.aliases.clone(),
             rules: self.config.rules.clone(),
             database: self.database.clone(),
             pool: Mutex::new(vec![first]),
@@ -104,6 +105,8 @@ impl RunningHub {
 
 struct Shared {
     project: String,
+    /// Older names of the project, which redirect to `project`.
+    aliases: Vec<String>,
     /// The improvement rules' settings, evaluated when records or efficiency rows arrive.
     rules: Rules,
     database: PathBuf,
@@ -173,6 +176,14 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     if let Some(file) = dashboard::serve::static_file(http.method().as_str(), &path) {
         return file;
     }
+    if let Some(redirect) = dashboard::serve::alias_redirect(
+        &path,
+        &parse_query(query),
+        &shared.project,
+        &shared.aliases,
+    ) {
+        return redirect;
+    }
     let Some(rest) = path
         .strip_prefix('/')
         .and_then(|p| p.strip_prefix(shared.project.as_str()))
@@ -226,11 +237,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         api.clone_into(&mut request.path);
         caught(conn, |conn| api_route(conn, &request, now))
     } else {
-        request.path = if rest.is_empty() {
-            "/".to_owned()
-        } else {
-            rest.to_owned()
-        };
+        rest.clone_into(&mut request.path);
         caught(conn, |conn| page(conn, &request, &shared.project, now))
     };
     if let Some(conn) = conn {

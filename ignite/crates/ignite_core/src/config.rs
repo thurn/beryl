@@ -112,6 +112,10 @@ pub struct HubConfig {
     pub url: String,
     /// The project name in the hub's routes, `/<project>/api`.
     pub project: String,
+    /// Older names the dashboard answered to. A page address under one redirects to the same
+    /// address under `project`, keeping the query, so bookmarks keep working.
+    #[serde(default)]
+    pub aliases: Vec<String>,
 }
 
 /// The landing gate's values. Only a commit changes them.

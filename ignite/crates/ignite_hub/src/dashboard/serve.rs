@@ -25,6 +25,8 @@ use crate::routes::{Request, Response};
 enum Route {
     /// `/`.
     Home,
+    /// The project's address without its trailing slash.
+    NoSlash,
     /// One of the fleet pages (`machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
     Fleet(&'static str),
     /// `/tickets/<name>`, with an optional trailing slash.
@@ -43,16 +45,43 @@ fn fleet_page(path: &str) -> Option<&'static str> {
 
 fn route(path: &str) -> Option<Route> {
     match path {
-        "" | "/" => Some(Route::Home),
+        "" => Some(Route::NoSlash),
+        "/" => Some(Route::Home),
         _ => {
             if let Some(page) = fleet_page(path) {
                 return Some(Route::Fleet(page));
             }
-            let name = path.strip_prefix("/tickets/")?;
+            // `/beads/<id>.html` is the address the first dashboard gave a ticket.
+            let (name, legacy) = match path.strip_prefix("/tickets/") {
+                Some(name) => (name, false),
+                None => (path.strip_prefix("/beads/")?, true),
+            };
             let name = name.strip_suffix('/').unwrap_or(name);
+            let name = if legacy {
+                name.strip_suffix(".html").unwrap_or(name)
+            } else {
+                name
+            };
             (!name.is_empty() && !name.contains('/')).then(|| Route::Ticket(name.to_owned()))
         }
     }
+}
+
+/// The redirect for a page address under one of the project's older names (`aliases`), or
+/// `None` when `path` is not under one or is an API address, which still answers under the old
+/// names. `path` is the whole request path, and the redirect keeps the query.
+pub fn alias_redirect(
+    path: &str,
+    query: &[(String, String)],
+    project: &str,
+    aliases: &[String],
+) -> Option<Response> {
+    let rest = path.strip_prefix('/')?;
+    let (name, rest) = rest.find('/').map_or((rest, ""), |at| rest.split_at(at));
+    if !aliases.iter().any(|alias| alias == name) || rest == "/api" || rest.starts_with("/api/") {
+        return None;
+    }
+    Some(redirect(&format!("/{project}{rest}"), query))
 }
 
 /// The hub's change-feed position, as the page records it.
@@ -202,6 +231,7 @@ pub fn serve(
     let root = dashboard_root(project);
     let seq = feed_position(conn);
     Some(match route {
+        Route::NoSlash => redirect(&root, &request.query),
         Route::Home => {
             let panel = || status::fragment(conn, &root, now);
             if fragment_kind == Some("status") {

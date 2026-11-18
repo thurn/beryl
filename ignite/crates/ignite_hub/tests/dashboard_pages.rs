@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use ignite_core::protocol::tickets::BatchRequest;
 use ignite_core::time::Timestamp;
-use ignite_hub::dashboard::serve::{serve, static_file};
+use ignite_hub::dashboard::serve::{alias_redirect, serve, static_file};
 use ignite_hub::routes::{Request, Response};
 use ignite_store::hub::{self, batch};
 
@@ -283,6 +283,64 @@ fn other_addresses_redirect_to_the_canonical_page_and_keep_the_query() {
         assert_eq!(
             header(&redirect, "location"),
             Some("/proj/tickets/Tq44s.7.24?from=bookmark"),
+            "{path}"
+        );
+    }
+}
+
+#[test]
+fn every_address_of_the_earlier_dashboards_reaches_the_page_and_keeps_the_query() {
+    let hub = seeded();
+    let query = [("from".to_owned(), "bookmark".to_owned())];
+    let aliases = ["beryl".to_owned()];
+    let ticket = "/proj/tickets/Tq44s.7.24?from=bookmark";
+    // Addresses under the project: the page itself, or a redirect to it.
+    for (path, location) in [
+        ("/proj", "/proj/?from=bookmark"),
+        ("/proj/beads/proj-q44s.7.24", ticket),
+        ("/proj/beads/proj-q44s.7.24.html", ticket),
+        ("/proj/beads/q44s.7.24.html", ticket),
+        ("/proj/beads/old", ticket),
+        ("/proj/tickets/proj-q44s.7.24", ticket),
+        ("/proj/tickets/old", ticket),
+        ("/proj/tickets/q44s.7.24/", ticket),
+    ] {
+        for method in ["GET", "HEAD"] {
+            let response = hub.request(method, &format!("{path}?from=bookmark"), None);
+            assert_eq!(response.status, 308, "{method} {path}");
+            assert_eq!(header(&response, "location"), Some(location), "{path}");
+        }
+    }
+    for path in ["/proj/", "/proj/tickets/Tq44s.7.24"] {
+        assert_eq!(hub.get(path).status, 200, "{path}");
+    }
+    // Addresses under an old project name redirect, and its API paths are left to the API.
+    for (path, location) in [
+        ("/beryl", "/proj"),
+        ("/beryl/", "/proj/"),
+        ("/beryl/tickets/Tq44s.7.24", "/proj/tickets/Tq44s.7.24"),
+        (
+            "/beryl/beads/proj-q44s.7.24.html",
+            "/proj/beads/proj-q44s.7.24.html",
+        ),
+    ] {
+        let response = alias_redirect(path, &query, "proj", &aliases).expect(path);
+        assert_eq!(response.status, 308, "{path}");
+        assert_eq!(
+            header(&response, "location"),
+            Some(format!("{location}?from=bookmark").as_str()),
+            "{path}"
+        );
+    }
+    for path in [
+        "/beryl/api/tickets/x",
+        "/beryl/api",
+        "/proj/",
+        "/beryls/",
+        "/other/",
+    ] {
+        assert!(
+            alias_redirect(path, &query, "proj", &aliases).is_none(),
             "{path}"
         );
     }
