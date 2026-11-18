@@ -171,6 +171,17 @@ pub fn release(conn: &Connection, id: &str, built_commit: Option<&str>, now: &st
     Ok(changed == 1)
 }
 
+/// Deletes a tree's row if the tree is in `state` right now, as one statement. Returns whether a
+/// row was deleted. A tree that `ignite.toml` no longer declares is deleted this way once it is
+/// free, so a lease that takes it at the same moment wins and the row stays.
+pub fn delete(conn: &Connection, id: &str, state: State) -> Result<bool> {
+    let changed = conn.execute(
+        "DELETE FROM trees WHERE id = ?1 AND state = ?2",
+        params![id, state.as_str()],
+    )?;
+    Ok(changed == 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

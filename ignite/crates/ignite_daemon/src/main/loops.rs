@@ -40,6 +40,9 @@ const SEND_EVERY: Duration = Duration::from_secs(10);
 const TICK_EVERY: Duration = Duration::from_secs(60);
 /// How often idle work looks for cores nobody uses.
 const IDLE_EVERY: Duration = Duration::from_secs(30);
+/// How often the disk loop looks at free space and at trees `ignite.toml` no longer declares.
+/// A round measures the trees only as often as `Idle::hold_disk` allows.
+const DISK_EVERY: Duration = Duration::from_secs(60);
 /// How often fleet metrics look for new session transcripts.
 const METRICS_EVERY: Duration = Duration::from_secs(600);
 /// The pause after a failed round of tip verification.
@@ -53,6 +56,8 @@ const SENDER_STALLS_AFTER: Duration = Duration::from_mins(10);
 const TIP_STALLS_AFTER: Duration = Duration::from_hours(3);
 const CLAIMS_STALL_AFTER: Duration = Duration::from_mins(10);
 const IDLE_STALLS_AFTER: Duration = Duration::from_mins(10);
+/// A measurement walked about 290 GB of build directories for over ten minutes on jarvis.
+const DISK_STALLS_AFTER: Duration = Duration::from_hours(1);
 const METRICS_STALL_AFTER: Duration = Duration::from_hours(1);
 
 /// What the loops share, built by [`super::Daemon::start`].
@@ -96,6 +101,7 @@ impl Parts {
         self.spawn_tip(server.clone());
         self.spawn_claims();
         self.spawn_idle(server.clone());
+        self.spawn_disk();
         self.spawn_metrics();
     }
 
@@ -246,13 +252,7 @@ impl Parts {
             loop {
                 thread::sleep(IDLE_EVERY);
                 ticker.round(|| {
-                    // Holding the disk is not idle work: it deletes files and costs a walk of
-                    // the trees, and the machine is the most likely to need it while busy.
                     let mut failure = None;
-                    if let Err(error) = idle.hold_disk() {
-                        eprintln!("ignite: trees not held under their disk limit: {error}");
-                        failure = Some(format!("trees not held under their disk limit: {error}"));
-                    }
                     let status = scheduler.status();
                     if status.granted > 0 || status.outside * 2 >= status.cores {
                         return failure.map_or(Ok(()), Err);
@@ -273,6 +273,43 @@ impl Parts {
                     }
                     failure.map_or(Ok(()), Err)
                 });
+            }
+        });
+    }
+
+    /// Holds the trees under their disk limit and the disk above its floor of free space, and
+    /// removes the free trees that `ignite.toml` no longer declares. This is a loop of its own
+    /// because a round of the idle loop waits for its job, which can wait hours for cores, and
+    /// the machine is the most likely to fill its disk while it is busy.
+    fn spawn_disk(&self) {
+        let (idle, trees) = (self.idle.clone(), self.trees.clone());
+        self.start_loop("ignite-disk", DISK_STALLS_AFTER, move |ticker| {
+            loop {
+                ticker.round(|| {
+                    let mut failure = None;
+                    crate::steps::step("removing trees ignite.toml no longer declares");
+                    match trees.retire_undeclared() {
+                        Ok(retired) if !retired.is_empty() => {
+                            let names: Vec<String> =
+                                retired.iter().map(ToString::to_string).collect();
+                            eprintln!(
+                                "ignite: removed trees ignite.toml no longer declares: {}",
+                                names.join(", ")
+                            );
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            eprintln!("ignite: undeclared trees not removed: {error}");
+                            failure = Some(format!("undeclared trees not removed: {error}"));
+                        }
+                    }
+                    if let Err(error) = idle.hold_disk() {
+                        eprintln!("ignite: trees not held under their disk limit: {error}");
+                        failure = Some(format!("trees not held under their disk limit: {error}"));
+                    }
+                    failure.map_or(Ok(()), Err)
+                });
+                thread::sleep(DISK_EVERY);
             }
         });
     }

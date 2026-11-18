@@ -1,4 +1,5 @@
-//! Holding the trees under the machine's disk limit (`trees_disk_gb` in `ignite.toml`).
+//! Holding the trees under the machine's disk limit (`trees_disk_gb` in `ignite.toml`), and
+//! under whatever size leaves the disk the free space the daemon keeps.
 //!
 //! The build directories are what grows. Each change to a crate's dependencies, features or
 //! profile makes Cargo build that crate, and every crate above it, under a new hash beside the
@@ -61,17 +62,25 @@ impl Trees {
             .collect()
     }
 
-    /// Brings the trees under the disk limit, if they are over it.
-    pub fn hold_disk(&self) -> Result<DiskReport> {
+    /// Brings the trees under the disk limit, if they are over it. `short` is how many bytes
+    /// the disk lacks of the free space the daemon keeps; the trees are then held that many
+    /// bytes under their current size as well, since a limit set when the disk had room says
+    /// nothing about how full the rest of the disk has become since.
+    pub fn hold_disk(&self, short: u64) -> Result<DiskReport> {
         let usage = self.disk_usage();
         let before: u64 = usage.iter().map(|(_, bytes)| bytes).sum();
+        let room = (short > 0).then(|| before.saturating_sub(short));
+        let limit = match (self.inner.config.disk_limit, room) {
+            (Some(limit), Some(room)) => Some(limit.min(room)),
+            (limit, room) => limit.or(room),
+        };
         let mut report = DiskReport {
             before,
             after: before,
-            limit: self.inner.config.disk_limit,
+            limit,
             ..DiskReport::default()
         };
-        let Some(limit) = report.limit else {
+        let Some(limit) = limit else {
             return Ok(report);
         };
         if before <= limit {
@@ -136,7 +145,7 @@ impl Trees {
     /// or `None` if a lease took it first. The row is read in the same lock as the change of
     /// state, so a lease and release since the caller listed the free trees cannot leave it
     /// writing back a stale `built_commit` or `last_used`.
-    fn take_for_sweep(&self, id: &str) -> Result<Option<rows::Tree>> {
+    pub(super) fn take_for_sweep(&self, id: &str) -> Result<Option<rows::Tree>> {
         let locked = self.lock();
         let Some(row) = store::get(&locked.db, id).map_err(|e| store_error(&e))? else {
             return Ok(None);
@@ -160,7 +169,7 @@ impl Trees {
     /// Writes a swept tree's row back, which frees it. If that write fails, tries once more to
     /// free the tree by changing only its state, so a store error cannot leave it `resetting`
     /// (nothing but a daemon restart would move it).
-    fn put_back(&self, row: &rows::Tree) -> Result<()> {
+    pub(super) fn put_back(&self, row: &rows::Tree) -> Result<()> {
         let locked = self.lock();
         if let Err(error) = store::upsert(&locked.db, row) {
             let _ = store::transition(
@@ -176,7 +185,7 @@ impl Trees {
     }
 }
 
-fn id_of(row: &rows::Tree) -> Result<TreeId> {
+pub(super) fn id_of(row: &rows::Tree) -> Result<TreeId> {
     TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))
 }
 

@@ -20,6 +20,7 @@ use ignite_store::local::open_in_memory;
 use super::*;
 
 mod owners;
+mod retire;
 mod setup;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -576,7 +577,7 @@ fn replaced_builds_are_swept_and_then_the_free_trees_used_longest_ago_are_cleare
         f.builds.clone(),
     );
     small.setup(&f.tip()).unwrap();
-    let report = small.hold_disk().unwrap();
+    let report = small.hold_disk(0).unwrap();
     assert!(report.before > report.after);
     assert_eq!(report.cleared, [id("tree-01"), id("tree-02")]);
     assert!(!f.repo.join(".worktrees/tree-02/out").exists());
@@ -617,7 +618,7 @@ fn trees_over_the_limit_are_brought_under_it_and_a_leased_tree_is_left_alone() {
         Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
     };
 
-    let report = limited.hold_disk().unwrap();
+    let report = limited.hold_disk(0).unwrap();
 
     assert!(report.before > report.limit.unwrap());
     assert!(report.after <= report.limit.unwrap(), "{report:?}");

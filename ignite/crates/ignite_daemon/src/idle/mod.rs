@@ -24,8 +24,9 @@
 //! second file lock for its whole run, so `ignite rebuild`, `ignite audit` and the idle job
 //! never edit one tree at once.
 //!
-//! Holding the trees under their disk limit is not a job: the idle loop calls
-//! [`Idle::hold_disk`] every round, which measures at most every ten minutes.
+//! Holding the trees under their disk limit is not a job: the daemon's disk loop calls
+//! [`Idle::hold_disk`] every round, which measures at most every 30 minutes, or every five
+//! while the disk is short of free space.
 
 mod audit;
 mod backoff;
@@ -55,7 +56,7 @@ use crate::server::{Context, Verb};
 use crate::trees::{DiskReport, Trees};
 
 pub use audit::AuditSummary;
-pub use disk::{DISK_EVERY, ROOM_GB};
+pub use disk::{DISK_EVERY, FLOOR_GB, LOW_EVERY, ROOM_GB};
 pub use launch::{IdleJobVerb, JobRunner, JobWait, ServerJobs};
 pub use rebuild::RebuildCount;
 pub use remote::RemoteIdleHost;
@@ -104,8 +105,9 @@ pub trait IdleHost: Send + Sync {
     fn release(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
     /// How many commits `to` has that `from` does not.
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize>;
-    /// Deletes build directories until the trees are under their disk limit.
-    fn hold_disk(&self) -> Result<DiskReport>;
+    /// Deletes build directories until the trees are under their disk limit, and `short` bytes
+    /// under their current size when the disk lacks that much of the free space kept.
+    fn hold_disk(&self, short: u64) -> Result<DiskReport>;
     /// Gigabytes free on the disk that holds the trees, when it can be read.
     fn disk_free_gb(&self) -> Option<u64> {
         None
@@ -174,8 +176,8 @@ impl IdleHost for LiveHost {
         Ok(ignite_git::refs::commits_between(&self.repo, from, to)?.len())
     }
 
-    fn hold_disk(&self) -> Result<DiskReport> {
-        self.trees.hold_disk()
+    fn hold_disk(&self, short: u64) -> Result<DiskReport> {
+        self.trees.hold_disk(short)
     }
 
     fn disk_free_gb(&self) -> Option<u64> {

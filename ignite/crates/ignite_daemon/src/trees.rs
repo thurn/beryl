@@ -29,6 +29,7 @@ mod disk;
 pub mod head;
 mod landing;
 mod reset;
+mod retire;
 mod setup;
 #[cfg(test)]
 mod tests;
@@ -629,8 +630,12 @@ impl Trees {
         let tree = {
             let locked = self.lock();
             let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
+            // A tree `ignite.toml` no longer declares is about to be removed, not built.
+            let configured = self.inner.config.configured();
             let free = |row: &&rows::Tree| {
-                row.kind == Kind::Ticket.as_str() && row.state == store::State::Free.as_str()
+                row.kind == Kind::Ticket.as_str()
+                    && row.state == store::State::Free.as_str()
+                    && configured.iter().any(|(id, _)| id.as_str() == row.id)
             };
             if rows
                 .iter()
@@ -673,15 +678,23 @@ impl Trees {
         Ok(built.then_some(tree))
     }
 
-    /// The configured tree that holds `path`, if any.
+    /// The tree that holds `path`, if any: a configured tree, or one that `ignite.toml` no
+    /// longer declares but the store still holds, so that a session leased it before the count
+    /// was lowered can go on and release it.
     pub fn tree_at(&self, path: &Path) -> Option<TreeId> {
         let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
         let path = real(path);
+        let stored = store::all(&self.lock().db).unwrap_or_default();
         self.inner
             .config
             .configured()
             .into_iter()
             .map(|(id, _)| id)
+            .chain(
+                stored
+                    .into_iter()
+                    .filter_map(|row| TreeId::new(row.id).ok()),
+            )
             .find(|id| path.starts_with(real(&self.inner.config.path(id))))
     }
 

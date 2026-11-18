@@ -66,13 +66,15 @@ seconds = 300
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"
-ticket_trees = 24
+# The most ticket trees ever leased at once was 11 on 2026-11-18. Each tree keeps its build
+# between tickets, at 15 to 50 GB once built, so a tree nobody needs is disk held for nothing.
+# Trees above the count are removed once free.
+ticket_trees = 12
 landing_trees = 3
-# Measured 2026-11-18: the 27 trees use 200 GB, 8 of them built at 10 to 50 GB each and the rest
-# near 0.1 GB, with 277 GB of the disk free. 400 GB lets every landing tree and a dozen ticket
-# trees hold builds, and leaves about 75 GB free when the trees reach it; past it the daemon
-# deletes the oldest builds of free trees.
-trees_disk_gb = 400
+# On 2026-11-18 the trees grew to 419 GB under a 400 GB limit while the rest of the disk filled,
+# leaving 1.6 GB free. 250 GB holds builds in the landing trees and about half the ticket trees.
+# The daemon also sweeps free trees whenever the disk has under 50 GB free, whatever this allows.
+trees_disk_gb = 250
 floor = { batch = 8, tip = 2 }
 
 # Browser pages: at most half the cores' worth at once across every tree. Headless WebKit runs at

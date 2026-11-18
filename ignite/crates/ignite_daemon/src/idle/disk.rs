@@ -1,11 +1,16 @@
-//! Holding the trees under `trees_disk_gb`: the idle loop asks [`Trees::hold_disk`] to delete
+//! Holding the trees under `trees_disk_gb`: the disk loop asks [`Trees::hold_disk`] to delete
 //! replaced builds, and then the build directories of the free trees used longest ago, whenever
-//! the trees are over their limit (`docs/ignite.md`, "Build trees").
+//! the trees are over their limit or the disk has less than [`FLOOR_GB`] free
+//! (`docs/ignite.md`, "Build trees").
 //!
 //! Measuring the trees walks every file in their build directories, which takes a while on
-//! hundreds of gigabytes, so the measurement is made at most once every [`DISK_EVERY`]. Only
-//! free trees are ever swept (see `trees/disk.rs`), so a tree that is leased or has a running
-//! command is left alone.
+//! hundreds of gigabytes, so the measurement is made at most once every [`DISK_EVERY`], or
+//! every [`LOW_EVERY`] while the disk is below its floor. Only free trees are ever swept (see
+//! `trees/disk.rs`), so a tree that is leased or has a running command is left alone.
+//!
+//! This ran in the idle loop until a round of idle work waited 107 minutes for cores while the
+//! disk filled from 130 GB free to 1.6 GB, with no measurement made. It runs in a loop of its
+//! own now, the disk loop in `main/loops.rs`.
 //!
 //! [`Trees::hold_disk`]: crate::trees::Trees::hold_disk
 
@@ -25,18 +30,29 @@ pub const DISK_EVERY: Duration = Duration::from_mins(30);
 /// round, while 255 GB of the disk was free; with that much room nothing needs deleting.
 pub const ROOM_GB: u64 = 150;
 
+/// Free disk space the daemon keeps. Below it the trees are held under their current size
+/// less what the disk lacks, whatever `trees_disk_gb` allows: that limit was set for the disk
+/// as it was then, and the rest of the disk can fill after it was set.
+pub const FLOOR_GB: u64 = 50;
+
+/// The least time between two measurements while the disk is below [`FLOOR_GB`].
+pub const LOW_EVERY: Duration = Duration::from_mins(5);
+
 impl Idle {
     /// Brings the trees under their disk limit if they are over it, unless they were measured
     /// less than [`DISK_EVERY`] ago. Returns the report of a measurement made, which is also
     /// printed when it deleted anything.
     pub fn hold_disk(&self) -> Result<Option<DiskReport>> {
-        if self.host.disk_free_gb().is_some_and(|free| free >= ROOM_GB) {
+        let free = self.host.disk_free_gb();
+        if free.is_some_and(|free| free >= ROOM_GB) {
             return Ok(None);
         }
+        let short_gb = free.map_or(0, |free| FLOOR_GB.saturating_sub(free));
+        let every = if short_gb > 0 { LOW_EVERY } else { DISK_EVERY };
         let now = self.clock.now();
         {
             let mut last = super::lock(&self.disk_held);
-            if last.is_some_and(|at| now.seconds_since(at) < DISK_EVERY.as_secs_f64()) {
+            if last.is_some_and(|at| now.seconds_since(at) < every.as_secs_f64()) {
                 return Ok(None);
             }
             // The time is taken before the sweep, so a sweep that fails is tried again only
@@ -44,7 +60,7 @@ impl Idle {
             *last = Some(now);
         }
         crate::steps::step("holding the trees under their disk limit");
-        let report = self.host.hold_disk()?;
+        let report = self.host.hold_disk(short_gb * 1_000_000_000)?;
         if !report.superseded.is_empty() || !report.cleared.is_empty() {
             let gb = |bytes: u64| bytes as f64 / 1e9;
             eprintln!(

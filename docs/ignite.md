@@ -741,9 +741,9 @@ Each machine has a fixed number of trees of two kinds:
 ```toml
 # ignite.toml, per machine
 [machine.jarvis]
-ticket_trees = 24
+ticket_trees = 12
 landing_trees = 3
-trees_disk_gb = 400
+trees_disk_gb = 250
 ```
 
 Rules for trees:
@@ -768,13 +768,20 @@ Rules for trees:
   little disk.
 - To hold the machine under `trees_disk_gb`, the daemon deletes builds that a
   newer build of the same unit replaced, then the build directories of the free
-  trees used longest ago.
-- The idle loop checks this limit every round, including while the machine is
-  busy, and measures the trees at most once every 30 minutes, and not at all
-  while the disk has 150 GB free, since a measurement walks every build
-  directory. Only free trees are swept, so a tree that is leased or has a
-  running command keeps its build directories. The daemon logs what it deleted
-  and how much it freed.
+  trees used longest ago. While the disk has less than 50 GB free, it also holds
+  the trees under their current size less what the disk lacks, since the limit
+  was set for the disk as it was then.
+- The daemon's disk loop checks this every minute, in a loop of its own so that
+  idle work waiting for cores cannot hold it up. It measures the trees at most
+  once every 30 minutes (every 5 while under 50 GB free), and not at all while
+  the disk has 150 GB free, since a measurement walks every build directory.
+  Only free trees are swept, so a tree that is leased or has a running command
+  keeps its build directories. The daemon logs what it deleted and how much it
+  freed.
+- Lowering `ticket_trees` or `landing_trees` removes the trees above the new
+  count: the disk loop deletes each one's worktree, build directories and row
+  once it is free. A session that held one keeps working in it until it releases
+  the tree, and no lease or prebuild takes it again.
 - Releasing a tree first saves what it holds, then resets it to a clean checkout
   and keeps its build directories. See [Releasing work](#releasing-work).
 - Releasing also ends every process whose working directory or executable is

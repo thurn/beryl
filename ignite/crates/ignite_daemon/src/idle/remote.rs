@@ -50,8 +50,8 @@ impl IdleHost for RemoteIdleHost {
         self.local.commits_between(from, to)
     }
 
-    fn hold_disk(&self) -> Result<DiskReport> {
-        self.local.hold_disk()
+    fn hold_disk(&self, short: u64) -> Result<DiskReport> {
+        self.local.hold_disk(short)
     }
 
     fn disk_free_gb(&self) -> Option<u64> {

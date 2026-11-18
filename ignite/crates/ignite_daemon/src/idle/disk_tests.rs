@@ -3,7 +3,7 @@
 use std::sync::atomic::Ordering;
 
 use super::Fixture;
-use crate::idle::{DISK_EVERY, ROOM_GB};
+use crate::idle::{DISK_EVERY, FLOOR_GB, LOW_EVERY, ROOM_GB};
 
 #[test]
 fn the_disk_is_held_at_most_once_every_thirty_minutes() {
@@ -36,4 +36,25 @@ fn the_trees_are_not_measured_while_the_disk_has_room() {
     *f.host.free_gb.lock().unwrap() = Some(ROOM_GB - 1);
     assert!(idle.hold_disk().unwrap().is_some());
     assert_eq!(f.host.held.load(Ordering::SeqCst), 1);
+}
+
+/// The disk filled to 1.6 GB free while the trees were under their 400 GB limit, because the
+/// limit had been set when 277 GB of the disk was free. Below the floor the hold is told how
+/// much the disk lacks, and measures again sooner.
+#[test]
+fn a_disk_below_its_floor_is_held_for_what_it_lacks_and_measured_sooner() {
+    let f = Fixture::new();
+    let idle = f.idle();
+    *f.host.free_gb.lock().unwrap() = Some(FLOOR_GB + 10);
+    assert!(idle.hold_disk().unwrap().is_some());
+    assert_eq!(f.host.short.load(Ordering::SeqCst), 0);
+
+    *f.host.free_gb.lock().unwrap() = Some(2);
+    f.clock.advance(LOW_EVERY.as_secs_f64() + 1.0);
+    assert!(idle.hold_disk().unwrap().is_some());
+    assert_eq!(f.host.held.load(Ordering::SeqCst), 2);
+    assert_eq!(
+        f.host.short.load(Ordering::SeqCst),
+        (FLOOR_GB - 2) * 1_000_000_000
+    );
 }
