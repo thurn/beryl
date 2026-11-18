@@ -101,7 +101,7 @@ impl Checks {
         if Self::build(ctx, tree, family, &packages, run).is_err() {
             for keyed in &pending {
                 let check = &keyed.listed.check;
-                let error = Error::Io("a build it needs failed".to_owned());
+                let error = Error::Io(super::BUILD_FAILED.to_owned());
                 run.finish(check, Outcome::Incomplete, Some(incomplete(check, &error)));
             }
             return;

@@ -393,6 +393,30 @@ fn a_family_reads_the_tree_once_to_hash_all_its_checks() {
     assert_eq!(world.git.object_id_calls() - before, 1);
 }
 
+/// A tip round runs a family in batches of a few dozen checks. Listing and keying the whole
+/// family again for each batch spent most of a round between commands; the batches now run
+/// from one listing, and a batch the claim refuses is skipped.
+#[test]
+fn batches_of_one_family_run_from_one_listing() {
+    let world = jsonl_world();
+    let tree = TreeId::new("tree-01").unwrap();
+    let batches = vec![
+        (0, vec![name("unit:a")]),
+        (1, vec![name("unit:b")]),
+        (2, vec![name("unit:a")]),
+    ];
+    let claim = |batch: u32| batch != 2;
+    let (run, ran) =
+        world
+            .checks
+            .run_batches(&world.ctx, &tree, "unit", &batches, &options(false), &claim);
+    assert_eq!(ran, 2);
+    assert!(run.passed(), "{:?}", run.failures);
+    assert_eq!(run.outcomes.len(), 2);
+    assert_eq!(world.launcher.commands("lister").len(), 1);
+    assert_eq!(world.launcher.commands("runner").len(), 2);
+}
+
 #[test]
 fn a_cached_pass_runs_nothing_and_builds_nothing() {
     let world = jsonl_world();

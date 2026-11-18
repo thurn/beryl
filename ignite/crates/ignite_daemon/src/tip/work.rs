@@ -8,7 +8,7 @@ use ignite_core::protocol::{Class, Outcome};
 use ignite_core::traits::{Error, Result};
 
 use super::{TipLanding, TipRun, TipSet, TipWork, ticketed_landings};
-use crate::checks::{Checks, RunOptions};
+use crate::checks::{BUILD_FAILED, CheckRun, Checks, RunOptions};
 use crate::server::Context;
 use crate::trees::Trees;
 
@@ -44,46 +44,38 @@ impl TipWork for CheckTipWork {
         checks: &[CheckName],
         rerun: bool,
     ) -> Vec<TipRun> {
-        let options = RunOptions {
-            verb: "tip".to_owned(),
-            class: Class::Tip,
-            rerun,
-            ticket: None,
-            session: None,
-        };
+        let options = options(rerun);
         match self.at(commit, |tree| self.checks.run(ctx, tree, checks, &options)) {
-            Ok(run) => run
-                .outcomes
-                .into_iter()
-                .map(|(check, outcome)| {
-                    let failure = run.failures.iter().find(|f| f.check == check);
-                    let mut output = failure.and_then(|f| f.output.clone());
-                    // An incomplete check always has a reason for the hub's ticket; one that
-                    // never got to run, for a failed build say, was not reported by a command.
-                    let reason = (outcome == Outcome::Incomplete).then(|| {
-                        output = output.take().or(failure.and_then(|f| f.message.clone()));
-                        failure
-                            .and_then(|f| f.reason)
-                            .unwrap_or(IncompleteReason::Unreported)
-                    });
-                    TipRun {
-                        check,
-                        outcome,
-                        output,
-                        reason,
-                    }
-                })
-                .collect(),
-            Err(error) => checks
-                .iter()
-                .map(|check| TipRun {
-                    check: check.clone(),
-                    outcome: Outcome::Incomplete,
-                    output: Some(error.to_string()),
-                    reason: None,
-                })
-                .collect(),
+            Ok(run) => tip_runs(run),
+            Err(error) => not_run(checks.iter(), &error),
         }
+    }
+
+    fn run_batches(
+        &self,
+        ctx: &Context,
+        commit: &Commit,
+        family: &str,
+        batches: &[(u32, Vec<CheckName>)],
+        claim: &dyn Fn(u32) -> bool,
+    ) -> (Vec<TipRun>, usize) {
+        let options = options(false);
+        let ran = self.at(commit, |tree| {
+            self.checks
+                .run_batches(ctx, tree, family, batches, &options, claim)
+        });
+        match ran {
+            Ok((run, ran)) => (tip_runs(run), ran),
+            Err(error) => (
+                not_run(batches.iter().flat_map(|(_, names)| names), &error),
+                0,
+            ),
+        }
+    }
+
+    /// One fewer than the landing trees, so that a landing always finds a tree free.
+    fn parallel(&self) -> usize {
+        self.trees.landing_count().saturating_sub(1).max(1)
     }
 
     /// The first-parent commits between the two, grouped by the ticket whose landing the hub
@@ -91,4 +83,69 @@ impl TipWork for CheckTipWork {
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
         ticketed_landings(ctx, ignite_git::changed::commits(&ctx.repo, from, to)?)
     }
+}
+
+fn options(rerun: bool) -> RunOptions {
+    RunOptions {
+        verb: "tip".to_owned(),
+        class: Class::Tip,
+        rerun,
+        ticket: None,
+        session: None,
+    }
+}
+
+/// Each check's outcome from a run. A check that a failed build kept from running names the
+/// product, so the round reports the build once instead of once for each of its checks.
+fn tip_runs(run: CheckRun) -> Vec<TipRun> {
+    let build = run
+        .build_failures
+        .first()
+        .map(|(product, output)| (product.clone(), output.to_string_lossy().into_owned()));
+    run.outcomes
+        .into_iter()
+        .map(|(check, outcome)| {
+            let failure = run.failures.iter().find(|f| f.check == check);
+            let mut output = failure.and_then(|f| f.output.clone());
+            let unbuilt = outcome == Outcome::Incomplete
+                && failure.is_some_and(|f| f.message.as_deref() == Some(BUILD_FAILED));
+            if unbuilt && let Some((product, build_output)) = &build {
+                return TipRun {
+                    check,
+                    outcome,
+                    output: Some(build_output.clone()),
+                    reason: None,
+                    build: Some(product.clone()),
+                };
+            }
+            // An incomplete check always has a reason for the hub's ticket; one that never got
+            // to run, for a failed build say, was not reported by a command.
+            let reason = (outcome == Outcome::Incomplete).then(|| {
+                output = output.take().or(failure.and_then(|f| f.message.clone()));
+                failure
+                    .and_then(|f| f.reason)
+                    .unwrap_or(IncompleteReason::Unreported)
+            });
+            TipRun {
+                check,
+                outcome,
+                output,
+                reason,
+                build: None,
+            }
+        })
+        .collect()
+}
+
+/// The checks of a run that could not start, such as when no landing tree was free.
+fn not_run<'a>(checks: impl Iterator<Item = &'a CheckName>, error: &Error) -> Vec<TipRun> {
+    checks
+        .map(|check| TipRun {
+            check: check.clone(),
+            outcome: Outcome::Incomplete,
+            output: Some(error.to_string()),
+            reason: None,
+            build: None,
+        })
+        .collect()
 }

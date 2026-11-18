@@ -256,6 +256,11 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
 }
 
 impl Trees {
+    /// How many landing trees this machine has.
+    pub fn landing_count(&self) -> usize {
+        usize::try_from(self.inner.config.landing_trees).unwrap_or(usize::MAX)
+    }
+
     pub fn new(
         config: TreeConfig,
         db: Connection,

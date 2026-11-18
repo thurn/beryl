@@ -1,6 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use ignite_core::config::{Config, Os};
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
@@ -9,8 +8,7 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{IncompleteReason, Landed, NewResult, ResultKey, TipClaim};
 use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{Git, Hub, Result};
-use ignite_git::changed::CommitPaths;
+use ignite_core::traits::{Git, Hub};
 
 use super::*;
 
@@ -61,150 +59,8 @@ fn check(text: &str, hash: char) -> TipCheck {
     }
 }
 
-/// Checks, run outcomes and landings scripted by commit. A run stores its results at the hub
-/// under the keys the commit's checks have there, as the real runner does.
-/// One run: the machine, the commit, the checks named and whether the cache was ignored.
-type Run = (MachineId, Commit, Vec<CheckName>, bool);
-
-#[derive(Default)]
-struct FakeWork {
-    checks: Mutex<HashMap<Commit, Vec<TipCheck>>>,
-    outcomes: Mutex<HashMap<(Commit, CheckName), Outcome>>,
-    landings: Mutex<Vec<TipLanding>>,
-    /// The output a failing run returns for a check, in place of the default message.
-    outputs: Mutex<HashMap<CheckName, String>>,
-    /// Commits between the commits a test passes, grouped into landings as
-    /// [`CheckTipWork`] groups them, when no landing is scripted.
-    commits: Mutex<Vec<CommitPaths>>,
-    runs: Mutex<Vec<Run>>,
-    /// What each commit's listing could not list.
-    unlisted: Mutex<HashMap<Commit, Vec<Unlisted>>>,
-    /// Checks whose incomplete runs carry no reason, as when no landing tree was free.
-    unreasoned: Mutex<HashSet<CheckName>>,
-    /// Makes `landings` fail, as when git cannot walk the range.
-    landings_fail: Mutex<bool>,
-}
-
-impl FakeWork {
-    fn listed(&self, at: &Commit) -> Vec<TipCheck> {
-        self.checks
-            .lock()
-            .unwrap()
-            .get(at)
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    fn set_checks(&self, at: &Commit, checks: Vec<TipCheck>) {
-        self.checks.lock().unwrap().insert(at.clone(), checks);
-    }
-
-    fn set_outcome(&self, at: &Commit, check: &CheckName, outcome: Outcome) {
-        self.outcomes
-            .lock()
-            .unwrap()
-            .insert((at.clone(), check.clone()), outcome);
-    }
-
-    fn add_landing(&self, ticket_id: &str, commits: &[&str], paths: &[&str]) {
-        self.landings.lock().unwrap().push(TipLanding {
-            ticket: Some(ticket(ticket_id)),
-            commits: commits.iter().map(|c| commit(c)).collect(),
-            paths: paths.iter().map(|p| (*p).to_owned()).collect(),
-        });
-    }
-
-    fn add_commit(&self, sha: &str, paths: &[&str]) {
-        self.commits.lock().unwrap().push(CommitPaths {
-            commit: commit(sha),
-            paths: paths.iter().map(|p| (*p).to_owned()).collect(),
-        });
-    }
-
-    fn set_output(&self, check: &CheckName, output: &str) {
-        self.outputs
-            .lock()
-            .unwrap()
-            .insert(check.clone(), output.to_owned());
-    }
-
-    fn runs(&self) -> Vec<Run> {
-        self.runs.lock().unwrap().clone()
-    }
-}
-
-impl TipWork for FakeWork {
-    fn checks(&self, _ctx: &Context, at: &Commit) -> Result<TipSet> {
-        Ok(TipSet {
-            checks: self.listed(at),
-            unlisted: self
-                .unlisted
-                .lock()
-                .unwrap()
-                .get(at)
-                .cloned()
-                .unwrap_or_default(),
-        })
-    }
-
-    fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {
-        self.runs
-            .lock()
-            .unwrap()
-            .push((ctx.machine.clone(), at.clone(), checks.to_vec(), rerun));
-        let listed = self.listed(at);
-        let outcomes = self.outcomes.lock().unwrap();
-        let mut runs = Vec::new();
-        for check in checks {
-            let outcome = outcomes
-                .get(&(at.clone(), check.clone()))
-                .copied()
-                .unwrap_or(Outcome::Pass);
-            if let Some(listed) = listed.iter().find(|c| c.check == *check)
-                && matches!(outcome, Outcome::Pass | Outcome::Fail)
-            {
-                let output = (outcome == Outcome::Fail).then(|| format!("{check} failed"));
-                ctx.hub
-                    .store(&[NewResult {
-                        key: listed.key.clone(),
-                        outcome,
-                        machine: ctx.machine.clone(),
-                        record: RecordId(1),
-                        output,
-                        cost: ignite_core::protocol::hub::ResultCost::default(),
-                        areas: Vec::new(),
-                    }])
-                    .unwrap();
-            }
-            runs.push(TipRun {
-                check: check.clone(),
-                outcome,
-                output: (outcome == Outcome::Fail).then(|| {
-                    let scripted = self.outputs.lock().unwrap().get(check).cloned();
-                    scripted.unwrap_or_else(|| format!("{check} failed"))
-                }),
-                reason: (outcome == Outcome::Incomplete
-                    && !self.unreasoned.lock().unwrap().contains(check))
-                .then_some(IncompleteReason::Unreported),
-            });
-        }
-        runs
-    }
-
-    fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
-        // The scripted landings and commits all lie between the commits a test passes.
-        assert_ne!(from, to);
-        if *self.landings_fail.lock().unwrap() {
-            return Err(ignite_core::traits::Error::Io("git failed".to_owned()));
-        }
-        let commits = self.commits.lock().unwrap().clone();
-        if commits.is_empty() {
-            Ok(self.landings.lock().unwrap().clone())
-        } else {
-            ticketed_landings(ctx, commits)
-        }
-    }
-}
+mod fake;
+use fake::FakeWork;
 
 struct World {
     clock: Arc<FakeClock>,
@@ -797,3 +653,4 @@ fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
 }
 
 mod more;
+mod speed;

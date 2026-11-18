@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from beryl_efficiency import changes, facts, store
+# `ignite_metrics` registers the Ignite series in `METRICS`, as the command line does, so an
+# entry may name `ignite.master-lag-minutes`.
+from beryl_efficiency import changes, facts, ignite_metrics, store
 from beryl_efficiency.changes import Change, compare, problems, split_metric
 from beryl_efficiency.metrics import METRICS
 

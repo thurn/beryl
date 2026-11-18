@@ -1180,7 +1180,13 @@ How a daemon verifies a tip:
   commit and that has no cached result for the tip, among the families this
   machine can run.
 - It claims those checks from the hub in batches, so two machines do not run the
-  same ones, then runs them in a landing tree in the `tip` class.
+  same ones, then runs them in the `tip` class. Each family is listed once per
+  round and its batches run from that listing. Several families run at once,
+  each in its own landing tree, leaving one landing tree free for landings.
+- A build that fails keeps its family's checks from running. The hub hears of it
+  once, as `<family>:build`, not once for each check.
+- A tip left waiting (for incomplete checks, or checks another machine holds) is
+  verified again after ten minutes, or at once when a newer tip arrives.
 - When a newer tip arrives meanwhile, the next round verifies the newest one.
   Checks whose inputs did not change again are cache hits. Tips in between are
   not verified one by one.

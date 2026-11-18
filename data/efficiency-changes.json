@@ -284,5 +284,10 @@
     "label": "The switch from Enact to Ignite: Ignite builds, checks and lands every change and holds the tickets, with checks chosen by input hashes, a shared result cache and scores in place of Enact's fast check, slow CI, sweeps, nightly, CPU token pool and role files",
     "metric": "bead.lead-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Tip verification lists each family once per round, runs families in parallel landing trees, builds the whole workspace when a subset's features differ, and leaves a waiting tip for ten minutes",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

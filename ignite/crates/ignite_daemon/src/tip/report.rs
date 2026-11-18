@@ -34,6 +34,7 @@ impl TipVerifier {
         verdicts: &HashMap<ResultKey, TipRun>,
     ) {
         let now = ctx.clock.now();
+        self.report_failed_builds(ctx, tip, checks, verdicts);
         for check in checks.iter().filter(|c| c.runnable) {
             let Some(run) = verdicts.get(&check.key) else {
                 continue;
@@ -70,6 +71,45 @@ impl TipVerifier {
                 }
                 Err(error) => eprintln!("ignite: incomplete {} not reported: {error}", check.check),
             }
+        }
+    }
+
+    /// Tells the hub once per tip of each family whose checks a failed build kept from running,
+    /// naming the check `<family>:build` and quoting the build's output. One build used to file
+    /// a ticket for each of its checks: 1,456 P1 tickets for one refused Rust build. The checks
+    /// are not held off, since the build is not run again until an input changes.
+    fn report_failed_builds(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        checks: &[TipCheck],
+        verdicts: &HashMap<ResultKey, TipRun>,
+    ) {
+        let mut families: Vec<(String, String, String)> = Vec::new();
+        for check in checks.iter().filter(|c| c.runnable) {
+            let Some(run) = verdicts.get(&check.key) else {
+                continue;
+            };
+            let (Outcome::Incomplete, Some(product)) = (run.outcome, &run.build) else {
+                continue;
+            };
+            if !families
+                .iter()
+                .any(|(family, _, _)| *family == check.family)
+            {
+                let output = run.output.clone().unwrap_or_default();
+                families.push((check.family.clone(), product.clone(), output));
+            }
+        }
+        for (family, product, output) in families {
+            let Ok(name) = CheckName::new(format!("{family}:build")) else {
+                continue;
+            };
+            let text = format!(
+                "The build of {product} failed, so no check of {family} ran.\n\n{}",
+                tail(&output, &self.own_outputs)
+            );
+            self.report_stuck(ctx, tip, &name, None, &text);
         }
     }
 

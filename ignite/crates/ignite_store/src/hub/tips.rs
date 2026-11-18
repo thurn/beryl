@@ -86,7 +86,10 @@ pub fn claim(conn: &Connection, claim: &TipClaim, now: Timestamp) -> Result<TipC
     })
 }
 
-/// Sets a tip's state. `verified` and `failed` also record when verification finished.
+/// Sets a tip's state. `verified` and `failed` also record when verification finished, and
+/// mark every older tip still `seen` or `verifying` as `superseded`: tips in between are never
+/// verified one by one, and leaving them `verifying` showed stale work on the dashboard and
+/// made the hub's upkeep blame silent machines for them.
 pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Result<()> {
     seen(conn, verified.commit.as_str(), now)?;
     let finished = matches!(verified.state, TipState::Verified | TipState::Failed);
@@ -100,6 +103,14 @@ pub fn verified(conn: &Connection, verified: &TipVerified, now: Timestamp) -> Re
             now.to_string()
         ],
     )?;
+    if finished {
+        conn.execute(
+            "UPDATE tips SET state = 'superseded'
+             WHERE state IN ('seen', 'verifying')
+               AND seen < (SELECT seen FROM tips WHERE commit_sha = ?1)",
+            params![verified.commit.as_str()],
+        )?;
+    }
     Ok(())
 }
 
@@ -312,6 +323,35 @@ mod tests {
         let renewed = claim(&conn, &claim_by("m-1", 0), at(100.0)).unwrap();
         assert!(renewed.granted);
         assert_eq!(renewed.expires_at, Some(at(100.0 + CLAIM_SECONDS)));
+    }
+
+    /// Tips 49a3e3b and 77fe5b6 stayed `verifying` for hours after a newer tip reached
+    /// `master`. A finished tip now marks every older unfinished one `superseded`.
+    #[test]
+    fn a_finished_tip_supersedes_older_unfinished_ones() {
+        let conn = hub::open_in_memory().unwrap();
+        seen(&conn, "old1", at(10.0)).unwrap();
+        seen(&conn, "old2", at(20.0)).unwrap();
+        seen(&conn, "abcd", at(30.0)).unwrap();
+        seen(&conn, "newer", at(40.0)).unwrap();
+        let done = TipVerified {
+            commit: Commit::new("abcd").unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            state: TipState::Verified,
+        };
+        verified(&conn, &done, at(50.0)).unwrap();
+        let state = |commit: &str| -> String {
+            conn.query_row(
+                "SELECT state FROM tips WHERE commit_sha = ?1",
+                params![commit],
+                |row| row.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(state("old1"), "superseded");
+        assert_eq!(state("old2"), "superseded");
+        assert_eq!(state("abcd"), "verified");
+        assert_eq!(state("newer"), "seen");
     }
 
     #[test]

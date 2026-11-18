@@ -31,6 +31,7 @@
 //! The verbs `ignite test`, `ignite check` and `ignite why` are in [`verbs`].
 
 pub mod adapters;
+mod batches;
 mod execute;
 mod plan;
 mod regression;
@@ -220,7 +221,11 @@ pub(crate) struct OpenTree {
     pub graph: CrateGraph,
 }
 
+/// The message of a check that a build it needs kept from running.
+pub(crate) const BUILD_FAILED: &str = "a build it needs failed";
+
 /// One family's checks, keyed.
+#[derive(Clone)]
 pub(crate) struct Prepared {
     pub family: String,
     pub keyed: Vec<Keyed>,

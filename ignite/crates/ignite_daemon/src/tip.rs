@@ -10,7 +10,8 @@
 //!   machine cannot run is in the set as a key that only another machine's pass satisfies, and
 //!   a family that cannot be listed here makes the tip wait ([`TipSet::unlisted`]).
 //! - The set is claimed from the hub in batches of one family's checks, so two machines never
-//!   run the same batch. Checks only this machine's platform can run go first.
+//!   run the same batch. Checks only this machine's platform can run go first. Each family is
+//!   listed once and several families run at once (see `families`).
 //! - `master` moves to the tip once every check in its set has a pass on each platform it
 //!   needs. A failure or an `incomplete` check holds it. A cached failure is run once here
 //!   before it holds `master`, so a fault of one run, or of Ignite, heals.
@@ -33,6 +34,7 @@
 //!   only another platform's machines can run, the hub is told once per tip and platform, and
 //!   files a P1 ticket naming those machines. `master` keeps waiting.
 
+mod families;
 mod report;
 mod work;
 
@@ -46,8 +48,7 @@ use std::sync::Arc;
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Seq, TicketId};
 use ignite_core::protocol::hub::{
-    IncompleteReason, Record, RegressionReport, ResultKey, TipClaim, TipState, TipVerified,
-    TipWaiting,
+    IncompleteReason, Record, RegressionReport, ResultKey, TipState, TipVerified, TipWaiting,
 };
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::time::Timestamp;
@@ -67,6 +68,11 @@ pub const MAX_RUNS: u32 = 10;
 /// How long tips may wait for checks only another platform's machines can run before the hub
 /// files a ticket naming those machines.
 pub const MACHINE_WAIT_S: f64 = 3_600.0;
+
+/// How long a tip that is waiting is left before it is verified again, unless a newer tip
+/// arrives. Each round lists every family, and the feed changes every minute or two, so a tip
+/// held by incomplete checks was listed again and again for nothing.
+pub const WAITING_RETRY_S: f64 = 600.0;
 
 /// How many lines of a failure's output a regression report carries.
 const OUTPUT_LINES: usize = 40;
@@ -96,6 +102,9 @@ pub struct TipRun {
     /// Why an `Incomplete` check has no verdict, when the command's own run left it so. `None`
     /// when the fault was not the check's: no landing tree was free, for one.
     pub reason: Option<IncompleteReason>,
+    /// The product whose failed build kept the check from running. The round reports the build
+    /// once, not each of its checks.
+    pub build: Option<String>,
 }
 
 /// A regression check or family that tip verification cannot list or key on this machine. The
@@ -145,6 +154,32 @@ pub trait TipWork: Send + Sync {
     /// results. `rerun` ignores cached results.
     fn run(&self, ctx: &Context, commit: &Commit, checks: &[CheckName], rerun: bool)
     -> Vec<TipRun>;
+    /// Runs one family's batches at `commit`, listing the family once. `claim` is asked right
+    /// before each batch, with its number, and a batch it refuses is skipped. Returns the runs
+    /// and how many batches ran.
+    fn run_batches(
+        &self,
+        ctx: &Context,
+        commit: &Commit,
+        family: &str,
+        batches: &[(u32, Vec<CheckName>)],
+        claim: &dyn Fn(u32) -> bool,
+    ) -> (Vec<TipRun>, usize) {
+        let _ = family;
+        let mut runs = Vec::new();
+        let mut ran = 0;
+        for (batch, names) in batches {
+            if claim(*batch) {
+                ran += 1;
+                runs.extend(self.run(ctx, commit, names, false));
+            }
+        }
+        (runs, ran)
+    }
+    /// How many families a round may run at once.
+    fn parallel(&self) -> usize {
+        1
+    }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;
 }
@@ -213,6 +248,8 @@ pub struct TipVerifier {
     reported_stuck: HashSet<(Commit, CheckName)>,
     /// The cached failures run again here once, so that they stand afterwards.
     rechecked: HashSet<ResultKey>,
+    /// A tip whose last round ended waiting, and when it may be verified again.
+    resting: Option<(Commit, Timestamp)>,
 }
 
 impl TipVerifier {
@@ -232,6 +269,7 @@ impl TipVerifier {
             reported_incomplete: HashSet::new(),
             reported_stuck: HashSet::new(),
             rechecked: HashSet::new(),
+            resting: None,
         }
     }
 
@@ -253,9 +291,27 @@ impl TipVerifier {
         if self.settled.as_ref() == Some(&tip) {
             return Ok(None);
         }
+        let now = ctx.clock.now();
+        if let Some((resting, until)) = &self.resting
+            && *resting == tip
+            && now < *until
+        {
+            return Ok(None);
+        }
         let outcome = self.verify(ctx, &tip)?;
-        if matches!(outcome, TipOutcome::Verified | TipOutcome::Failed { .. }) {
-            self.settled = Some(tip.clone());
+        self.resting = None;
+        match &outcome {
+            TipOutcome::Verified | TipOutcome::Failed { .. } => self.settled = Some(tip.clone()),
+            TipOutcome::Waiting { checks } => {
+                eprintln!(
+                    "ignite: tip {tip} waits for {} checks, first {}; trying again in {} minutes",
+                    checks.len(),
+                    checks.first().map_or("none", CheckName::as_str),
+                    WAITING_RETRY_S / 60.0
+                );
+                self.resting = Some((tip.clone(), now.plus_seconds(WAITING_RETRY_S)));
+            }
+            TipOutcome::Superseded { .. } => {}
         }
         Ok(Some((tip, outcome)))
     }
@@ -267,6 +323,13 @@ impl TipVerifier {
         let repository = &ctx.config.repository;
         let last = ctx.git.tip(&repository.master)?;
         if last == *tip {
+            // `master` already holds the tip: another machine verified it, or someone pushed it
+            // by hand. The hub records it, so that it and older tips stop showing as waiting.
+            ctx.hub.tip_verified(&TipVerified {
+                commit: tip.clone(),
+                machine: ctx.machine.clone(),
+                state: TipState::Verified,
+            })?;
             return Ok(TipOutcome::Verified);
         }
         self.own_outputs.clear();
@@ -306,30 +369,11 @@ impl TipVerifier {
         }
         self.record_cached(ctx, tip, &checks, &to_run, &recheck);
 
-        let mut ran_a_batch = false;
-        for (index, (family, batch, names)) in batches(&to_run).into_iter().enumerate() {
-            // A round that has not run anything yet starts over at a newer tip. One that has is
-            // finished, so that a shared input every landing changes cannot keep it from ever
-            // ending. `master` may then move to a tip that is behind `staging`.
-            if index > 0 && !ran_a_batch {
-                let newest = ctx.git.tip(&repository.staging)?;
-                if newest != *tip {
-                    return Ok(TipOutcome::Superseded { by: newest });
-                }
-            }
-            let claim = TipClaim {
-                commit: tip.clone(),
-                family,
-                batch,
-                machine: ctx.machine.clone(),
-            };
-            if !ctx.hub.tip_claim(&claim)?.granted {
-                continue;
-            }
-            ran_a_batch = true;
-            let runs = self.work.run(ctx, tip, &names, false);
-            settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
+        let (superseded, runs) = self.run_families(ctx, tip, &to_run)?;
+        if let Some(by) = superseded {
+            return Ok(TipOutcome::Superseded { by });
         }
+        settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         if !recheck.is_empty() {
             let names: Vec<CheckName> = recheck.iter().map(|c| c.check.clone()).collect();
             let runs = self.work.run(ctx, tip, &names, true);
@@ -692,6 +736,7 @@ fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun
         outcome,
         output,
         reason: None,
+        build: None,
     }
 }
 
@@ -709,30 +754,6 @@ fn settle_runs(
             verdicts.insert(check.key.clone(), run);
         }
     }
-}
-
-/// The checks to run, in claimable batches: one family's checks sorted by name and cut every
-/// [`BATCH`], so every machine cuts the same batches. Families with checks only this machine's
-/// platform can run come first.
-fn batches(to_run: &[&TipCheck]) -> Vec<(String, u32, Vec<CheckName>)> {
-    let mut families: BTreeMap<(bool, &str), Vec<CheckName>> = BTreeMap::new();
-    for check in to_run {
-        let portable = check.key.platform.is_none();
-        families
-            .entry((portable, check.family.as_str()))
-            .or_default()
-            .push(check.check.clone());
-    }
-    let mut batches = Vec::new();
-    for ((_, family), mut names) in families {
-        names.sort();
-        names.dedup();
-        for (index, chunk) in names.chunks(BATCH).enumerate() {
-            let batch = u32::try_from(index).unwrap_or(u32::MAX);
-            batches.push((family.to_owned(), batch, chunk.to_vec()));
-        }
-    }
-    batches
 }
 
 /// Whether any changed path is one of `inputs` or lies inside one of them.
