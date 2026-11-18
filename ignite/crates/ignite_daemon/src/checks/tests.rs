@@ -711,3 +711,39 @@ fn a_check_whose_inputs_cannot_be_resolved_only_affects_runs_that_name_it() {
     assert_eq!(outcome(&only_c, "unit:c"), Outcome::Incomplete);
     assert_eq!(only_c.outcomes.len(), 1);
 }
+
+#[test]
+fn tip_verification_lists_the_regression_checks_the_hub_has_not_switched_off() {
+    let mut history = FakeHistory::default();
+    let off = CheckStats {
+        check: name("unit:b"),
+        family: "unit".to_owned(),
+        state: CheckState::Off,
+        areas: Vec::new(),
+        median_cost: None,
+        unit: "cpu_s".to_owned(),
+    };
+    history.replies.insert(
+        "unit".to_owned(),
+        CheckStatsReply {
+            family: "unit".to_owned(),
+            family_rate: 0.0,
+            checks: vec![off],
+        },
+    );
+    let manifest = &MANIFEST[..MANIFEST.find("[family.rs]").unwrap()];
+    let world = world(manifest, &[], history);
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"unit:a\"}\n{\"check\": \"unit:b\"}\n".to_owned();
+
+    let listed = world
+        .checks
+        .regression_checks(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap();
+
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].check, name("unit:a"));
+    assert_eq!(listed[0].inputs, vec!["src".to_owned()]);
+    assert!(listed[0].runnable && listed[0].reuse);
+    assert_eq!(listed[0].key.platform, None);
+}

@@ -13,7 +13,8 @@ use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     CachedResult, Claim, FlakyReport, Landed, MachineFree, MetricsImport, NewResult, Record,
-    Reservation, ResultKey, TicketBrief,
+    RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
+    TipClaimReply, TipVerified,
 };
 use crate::protocol::tickets::{FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use crate::time::Timestamp;
@@ -228,6 +229,9 @@ pub struct FakeHub {
     records: Mutex<Vec<Record>>,
     metrics: Mutex<Vec<MetricsImport>>,
     flaky: Mutex<Vec<FlakyReport>>,
+    tip_claims: Mutex<Vec<TipClaim>>,
+    tip_states: Mutex<Vec<TipVerified>>,
+    regressions: Mutex<Vec<RegressionReport>>,
 }
 
 impl FakeHub {
@@ -277,6 +281,22 @@ impl FakeHub {
 
     pub fn flaky_reports(&self) -> Vec<FlakyReport> {
         lock(&self.flaky).clone()
+    }
+
+    /// Every tip claim granted so far, in order. A batch is granted to the first machine that
+    /// claims it, and again to that machine; claims never expire here.
+    pub fn tip_claims(&self) -> Vec<TipClaim> {
+        lock(&self.tip_claims).clone()
+    }
+
+    /// Every tip state reported so far, in order.
+    pub fn tip_states(&self) -> Vec<TipVerified> {
+        lock(&self.tip_states).clone()
+    }
+
+    /// Every regression reported so far, in order.
+    pub fn regressions(&self) -> Vec<RegressionReport> {
+        lock(&self.regressions).clone()
     }
 
     fn reachable(&self) -> Result<()> {
@@ -404,6 +424,37 @@ impl Hub for FakeHub {
         self.reachable()?;
         lock(&self.flaky).push(report.clone());
         Ok(())
+    }
+
+    fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
+        self.reachable()?;
+        let mut claims = lock(&self.tip_claims);
+        let holder = claims.iter().find(|c| {
+            c.commit == claim.commit && c.family == claim.family && c.batch == claim.batch
+        });
+        let granted = holder.is_none_or(|c| c.machine == claim.machine);
+        if granted && holder.is_none() {
+            claims.push(claim.clone());
+        }
+        Ok(TipClaimReply {
+            granted,
+            expires_at: None,
+        })
+    }
+
+    fn tip_verified(&self, verified: &TipVerified) -> Result<()> {
+        self.reachable()?;
+        lock(&self.tip_states).push(verified.clone());
+        Ok(())
+    }
+
+    fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
+        self.reachable()?;
+        let mut regressions = lock(&self.regressions);
+        regressions.push(report.clone());
+        let ticket = TicketId::new(format!("tk.{}", regressions.len()))
+            .map_err(|e| Error::Invalid(e.to_string()))?;
+        Ok(RegressionFiled { ticket })
     }
 }
 

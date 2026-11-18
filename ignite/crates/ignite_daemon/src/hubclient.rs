@@ -15,7 +15,8 @@ use ignite_core::ids::Seq;
 use ignite_core::protocol::hub::{
     CachedResult, Claim, FlakyReport, Heartbeat, HeartbeatReply, Landed, LookupReply,
     LookupRequest, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
-    Record, RecordBatch, Reservation, ResultKey, StoreRequest, TicketBrief,
+    Record, RecordBatch, RegressionFiled, RegressionReport, Reservation, ResultKey, StoreRequest,
+    TicketBrief, TipClaim, TipClaimReply, TipVerified,
 };
 use ignite_core::protocol::tickets::{FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use ignite_core::traits::{Error, Hub, Result};
@@ -226,6 +227,19 @@ impl Hub for HubClient {
     fn flaky(&self, report: &FlakyReport) -> Result<()> {
         let _: serde_json::Value = self.post("/flaky", report)?;
         Ok(())
+    }
+
+    fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
+        self.post("/tips/claim", claim)
+    }
+
+    fn tip_verified(&self, verified: &TipVerified) -> Result<()> {
+        let _: serde_json::Value = self.post("/tips/verified", verified)?;
+        Ok(())
+    }
+
+    fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
+        self.post("/regressions", report)
     }
 }
 

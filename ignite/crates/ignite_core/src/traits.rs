@@ -12,7 +12,8 @@ use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     CachedResult, Claim, CompileUnit, FlakyReport, Landed, MachineFree, MetricsImport, NewResult,
-    Record, Reservation, ResultKey, TicketBrief,
+    Record, RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
+    TipClaimReply, TipVerified,
 };
 use crate::protocol::tickets::{FeedBatch, LeaseOp, LeaseReply};
 use crate::time::Timestamp;
@@ -159,4 +160,11 @@ pub trait Hub: Send + Sync {
     fn metrics(&self, import: &MetricsImport) -> Result<()>;
     /// Reports a check that failed, then passed at once on the same inputs (`POST /flaky`).
     fn flaky(&self, report: &FlakyReport) -> Result<()>;
+    /// Claims one batch of one family's checks at a tip, so two machines never run the same
+    /// batch (`POST /tips/claim`).
+    fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply>;
+    /// Sets a tip's verification state (`POST /tips/verified`).
+    fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
+    /// Reports a regression; the hub files or reopens its ticket (`POST /regressions`).
+    fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled>;
 }

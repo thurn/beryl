@@ -19,6 +19,7 @@
 pub mod adapters;
 mod execute;
 mod plan;
+mod regression;
 pub mod sources;
 mod verbs;
 
