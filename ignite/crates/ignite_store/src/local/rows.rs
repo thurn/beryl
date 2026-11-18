@@ -13,6 +13,9 @@ crate::tables! {
         last_used: Option<String>,
         /// `free`, `prebuilding`, `leased`, `landing` or `resetting`.
         state: String,
+        /// The handle of the verb that leased a landing tree, such as `L-6`; `None` for a
+        /// holder without a handle and for every other state.
+        owner: Option<String>,
     }
 
     Grant = "grants" {

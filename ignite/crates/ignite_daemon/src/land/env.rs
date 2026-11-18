@@ -122,8 +122,15 @@ impl LandTrees for MachineTrees {
         refs::is_ancestor(path, ancestor, descendant)
     }
 
+    /// Leases the tree under the handle of the verb asking, when it has one, so that a restarted
+    /// daemon keeps the tree for that verb when it runs it again (see [`Trees::lease_landing_for`]).
     fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>> {
-        Ok(self.trees.lease_landing(holder, at)?.map(|lease| GateTree {
+        let owner = crate::steps::current().and_then(|activity| activity.handle());
+        let lease = match &owner {
+            Some(owner) => self.trees.lease_landing_for(holder, owner, at)?,
+            None => self.trees.lease_landing(holder, at)?,
+        };
+        Ok(lease.map(|lease| GateTree {
             tree: lease.tree,
             path: lease.path,
         }))

@@ -32,7 +32,7 @@ impl State {
 }
 
 const COLUMNS: &str = "id, path, kind, state, ticket, session, branch, built_commit, leased_at, \
-                       last_used";
+                       last_used, owner";
 
 fn tree(row: &Row) -> rusqlite::Result<rows::Tree> {
     Ok(rows::Tree {
@@ -46,6 +46,7 @@ fn tree(row: &Row) -> rusqlite::Result<rows::Tree> {
         built_commit: row.get(7)?,
         leased_at: row.get(8)?,
         last_used: row.get(9)?,
+        owner: row.get(10)?,
     })
 }
 
@@ -72,7 +73,7 @@ pub fn upsert(conn: &Connection, tree: &rows::Tree) -> Result<()> {
     conn.execute(
         &format!(
             "INSERT OR REPLACE INTO trees ({COLUMNS}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, \
-             ?10)"
+             ?10, ?11)"
         ),
         params![
             tree.id,
@@ -85,6 +86,7 @@ pub fn upsert(conn: &Connection, tree: &rows::Tree) -> Result<()> {
             tree.built_commit,
             tree.leased_at,
             tree.last_used,
+            tree.owner,
         ],
     )?;
     Ok(())
@@ -125,6 +127,16 @@ pub fn set_ticket(conn: &Connection, id: &str, ticket: &str) -> Result<bool> {
     Ok(changed == 1)
 }
 
+/// Records the handle of the verb that holds a landing tree, so that a restarted daemon that
+/// runs the verb again keeps the tree for it. Returns whether a landing tree was changed.
+pub fn set_owner(conn: &Connection, id: &str, owner: &str) -> Result<bool> {
+    let changed = conn.execute(
+        "UPDATE trees SET owner = ?2 WHERE id = ?1 AND state = 'landing'",
+        params![id, owner],
+    )?;
+    Ok(changed == 1)
+}
+
 /// Moves a tree from `from` to `to` only if it is in `from` right now, as one statement. Returns
 /// `false`, changing nothing, when the tree is missing or in another state. Two callers that
 /// both try to take a tree out of `from` therefore cannot both succeed.
@@ -147,12 +159,12 @@ pub fn set_state(conn: &Connection, id: &str, state: State, now: &str) -> Result
     Ok(changed == 1)
 }
 
-/// Makes the tree `Free` again with no ticket, session or branch, and records the commit its
-/// build directories now match.
+/// Makes the tree `Free` again with no ticket, session, branch or owner, and records the commit
+/// its build directories now match.
 pub fn release(conn: &Connection, id: &str, built_commit: Option<&str>, now: &str) -> Result<bool> {
     let changed = conn.execute(
         "UPDATE trees SET state = 'free', ticket = NULL, session = NULL, branch = NULL, \
-         leased_at = NULL, built_commit = COALESCE(?2, built_commit), last_used = ?3 \
+         leased_at = NULL, owner = NULL, built_commit = COALESCE(?2, built_commit), last_used = ?3 \
          WHERE id = ?1",
         params![id, built_commit, now],
     )?;
@@ -176,6 +188,7 @@ mod tests {
             built_commit: Some("8c1f2ab".to_owned()),
             leased_at: None,
             last_used: None,
+            owner: None,
         }
     }
 
@@ -247,6 +260,32 @@ mod tests {
             ("free", None, Some("9d0e1f2"))
         );
         assert!(lease_it("T.2"));
+    }
+
+    /// Only a landing tree takes an owner, and freeing it forgets the owner.
+    #[test]
+    fn a_landing_tree_keeps_its_owner_until_released() {
+        let conn = open_in_memory().unwrap();
+        upsert(&conn, &sample("landing-1")).unwrap();
+        assert!(!set_owner(&conn, "landing-1", "L-6").unwrap());
+        assert!(
+            lease(
+                &conn,
+                "landing-1",
+                State::Landing,
+                Some("m:T.1"),
+                None,
+                None,
+                "t"
+            )
+            .unwrap()
+        );
+        assert!(set_owner(&conn, "landing-1", "L-6").unwrap());
+        let held = get(&conn, "landing-1").unwrap().unwrap();
+        assert_eq!(held.owner.as_deref(), Some("L-6"));
+        assert_eq!(held.ticket.as_deref(), Some("m:T.1"));
+        assert!(release(&conn, "landing-1", None, "t").unwrap());
+        assert_eq!(get(&conn, "landing-1").unwrap().unwrap().owner, None);
     }
 
     #[test]

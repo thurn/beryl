@@ -7,17 +7,22 @@
 //! runs, instead of starting the command again: the work is done once and its result is stored
 //! once.
 //!
-//! A command is matched by the handle of the verb that started it, its arguments and its working
-//! directory. Its environment may differ: a check's runner names a new results file for each
+//! A command is matched by the handle of the verb that started it, its arguments, its working
+//! directory and the commit its checkout had at `HEAD` when it started. The launcher records that
+//! commit as `IGNITE_TREE_COMMIT` beside the handle, and a previous command whose commit differs
+//! from the checkout's `HEAD` now is ended and started again, never taken over: a landing run
+//! again that rebased onto a newer tip in the same tree must not report what an older commit's
+//! command found. Its environment may otherwise differ: a check's runner names a new results file for each
 //! run, so the files the adopted command wrote to paths its environment named are copied to
 //! the paths the second run named ([`carry_outputs`]). The launcher adds the handle to the environment of every command a handled verb
 //! starts, as `IGNITE_HANDLE`, which is how a restarted daemon finds it in the run's
 //! `spec.json`. Commands of background loops have no handle and are never adopted: a loop starts
 //! its round over.
 //!
-//! A run whose tree a restarted daemon resets (a landing tree, which only the daemon that leased
-//! it can free) has had its files changed under it, so its result says nothing about the commit
-//! it was started for. Such a run is ended at start ([`end_runs_in`]) and never adopted.
+//! A run whose tree a restarted daemon resets (see `crate::trees::reset_at_start`: a tree being
+//! prebuilt or reset, or a landing tree whose owner will not run again) has had its files changed
+//! under it, so its result says nothing about the commit it was started for. Such a run is ended
+//! at start ([`end_runs_in`]) and never adopted.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -25,13 +30,18 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use ignite_core::ids::Handle;
+use ignite_core::ids::{Commit, Handle};
 use ignite_core::traits::{CommandSpec, Launcher, RunResult};
 
 use crate::supervise::{Run, SpecFile, SupervisedLauncher};
+use crate::trees::head;
 
 /// The environment variable that names the handle of the verb a command was started for.
 pub const HANDLE_VARIABLE: &str = "IGNITE_HANDLE";
+
+/// The environment variable that names the commit a handled command's checkout had at `HEAD`
+/// when the command started. Absent outside a checkout.
+pub const TREE_COMMIT_VARIABLE: &str = "IGNITE_TREE_COMMIT";
 
 /// How often an adopted run's wait looks whether its caller wants it ended.
 const CANCEL_POLL: Duration = Duration::from_millis(250);
@@ -50,6 +60,15 @@ pub struct Previous {
 }
 
 impl Previous {
+    /// The commit the command's checkout had at `HEAD` when it started, as recorded in its
+    /// environment.
+    fn tree_commit(&self) -> Option<&str> {
+        self.env
+            .iter()
+            .find(|(name, _)| name == TREE_COMMIT_VARIABLE)
+            .map(|(_, value)| value.as_str())
+    }
+
     /// The command `run` holds, if a handled verb started it.
     pub fn of_run(run: &Run) -> Option<Previous> {
         let spec = spec_of(run)?;
@@ -136,18 +155,34 @@ impl AdoptingLauncher {
     }
 
     /// The previous command of `handle` with `spec`'s arguments and directory, taken out so no
-    /// other run takes it as well.
-    fn take(&self, handle: &Handle, spec: &CommandSpec) -> Option<Previous> {
-        let mut previous = self.lock();
-        let runs = previous.get_mut(handle)?;
-        let at = runs
-            .iter()
-            .position(|run| run.args == spec.args && same_dir(&run.cwd, &spec.cwd))?;
-        let run = runs.remove(at);
-        if runs.is_empty() {
-            previous.remove(handle);
+    /// other run takes it as well. One that started at another commit than `at`, the checkout's
+    /// `HEAD` now, is taken out too but ended, and `None` is returned so the command starts again.
+    fn take(&self, handle: &Handle, spec: &CommandSpec, at: Option<&Commit>) -> Option<Previous> {
+        let run = {
+            let mut previous = self.lock();
+            let runs = previous.get_mut(handle)?;
+            let found = runs
+                .iter()
+                .position(|run| run.args == spec.args && same_dir(&run.cwd, &spec.cwd))?;
+            let run = runs.remove(found);
+            if runs.is_empty() {
+                previous.remove(handle);
+            }
+            run
+        };
+        let now = at.map(Commit::as_str);
+        if run.tree_commit() == now {
+            return Some(run);
         }
-        Some(run)
+        eprintln!(
+            "ignite: starting `{}` for {handle} again: it ran at commit {}, and {} is now at {}",
+            spec.args.join(" "),
+            run.tree_commit().unwrap_or("(none recorded)"),
+            spec.cwd.display(),
+            now.unwrap_or("(no commit)"),
+        );
+        (run.end)();
+        None
     }
 
     fn run_with(
@@ -162,7 +197,8 @@ impl AdoptingLauncher {
                 None => self.inner.run(spec),
             };
         };
-        if let Some(previous) = self.take(&handle, spec) {
+        let at = head::commit_at(&spec.cwd);
+        if let Some(previous) = self.take(&handle, spec, at.as_ref()) {
             let stop = || {
                 cancelled.is_some_and(|c| c())
                     || activity.as_ref().is_some_and(|a| a.stop_requested())
@@ -176,6 +212,11 @@ impl AdoptingLauncher {
         tagged
             .env
             .push((HANDLE_VARIABLE.to_owned(), handle.to_string()));
+        if let Some(at) = at {
+            tagged
+                .env
+                .push((TREE_COMMIT_VARIABLE.to_owned(), at.to_string()));
+        }
         match cancelled {
             Some(cancelled) => self.inner.run_until(&tagged, cancelled),
             None => self.inner.run(&tagged),

@@ -189,3 +189,31 @@ fn files_an_adopted_command_wrote_reach_the_paths_the_second_run_named() {
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// A previous command is taken over only at the commit it started at: one that recorded a
+/// commit the checkout no longer has (here, a directory outside every checkout) is ended and
+/// started again.
+#[test]
+fn a_command_that_started_at_another_commit_is_ended_not_adopted() {
+    let inner = Arc::new(FakeLauncher::default());
+    inner.script(&["cargo"], result(0, "/runs/new/output.log"));
+    let waits = Arc::new(AtomicUsize::new(0));
+    let ended = Arc::new(AtomicBool::new(false));
+    let mut stale = previous("L-4", &["cargo", "nextest", "run"], 2, &waits);
+    stale.env = vec![(
+        TREE_COMMIT_VARIABLE.to_owned(),
+        "1234567890abcdef1234567890abcdef12345678".to_owned(),
+    )];
+    let flag = ended.clone();
+    stale.end = Box::new(move || flag.store(true, Ordering::SeqCst));
+    let launcher = AdoptingLauncher::new(inner.clone(), vec![stale]);
+
+    let result = as_handle(Some("L-4"), || {
+        launcher.run(&spec(&["cargo", "nextest", "run"]))
+    });
+    assert_eq!(result.exit, Some(0));
+    assert_eq!(waits.load(Ordering::SeqCst), 0);
+    assert!(ended.load(Ordering::SeqCst));
+    assert_eq!(inner.runs().len(), 1);
+    assert_eq!(launcher.waiting(), 0);
+}

@@ -246,6 +246,7 @@ fn a_restarted_daemon_does_not_repeat_a_change() {
             built_commit: None,
             leased_at: None,
             last_used: None,
+            owner: None,
             state: tree_rows::State::Leased.as_str().to_owned(),
         },
     )

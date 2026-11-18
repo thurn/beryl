@@ -139,6 +139,7 @@ fn tree(id: &str, state: &str) -> rows::Tree {
         built_commit: None,
         leased_at: None,
         last_used: None,
+        owner: None,
         state: state.to_owned(),
     }
 }

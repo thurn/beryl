@@ -148,8 +148,10 @@ pub fn machinery(base: &Base) -> Result<Machinery> {
         .with_scheduler(scheduler.clone());
     loops::collect_unfinished(&supervised);
     // Commands that a verb cut off by the restart had running are handed back to the verb when
-    // it runs again (see `crate::adopt`), except those in trees `Trees::setup` resets below.
-    let reset = trees_reset_at_start(&base.open()?)?;
+    // it runs again (see `crate::adopt`), except those in trees `Trees::setup` resets below: trees
+    // left being prebuilt or reset, and landing trees whose owner will not run again. A landing
+    // tree whose landing runs again is kept with its commands.
+    let reset = crate::trees::reset_at_start(&base.open()?)?;
     let launcher: Arc<dyn Launcher> = Arc::new(AdoptingLauncher::over_supervised(
         Arc::new(supervised),
         &reset,
@@ -182,22 +184,6 @@ pub fn machinery(base: &Base) -> Result<Machinery> {
         builds,
         trees,
     })
-}
-
-/// The directories of the trees that `Trees::setup` resets because a daemon that stopped left
-/// them in the middle of something: landing trees, and trees being built or reset.
-fn trees_reset_at_start(conn: &Connection) -> Result<Vec<PathBuf>> {
-    let rows = ignite_store::local::trees::all(conn).map_err(|e| Error::Io(e.to_string()))?;
-    let unfinished = [
-        ignite_store::local::trees::State::Prebuilding,
-        ignite_store::local::trees::State::Resetting,
-        ignite_store::local::trees::State::Landing,
-    ];
-    Ok(rows
-        .into_iter()
-        .filter(|row| unfinished.iter().any(|state| row.state == state.as_str()))
-        .map(|row| PathBuf::from(row.path))
-        .collect())
 }
 
 /// The check runner, with landing and idle work, which both run checks through it.

@@ -371,6 +371,7 @@ fn a_ticket_whose_tree_was_freed_by_a_landing_is_no_longer_held() {
             built_commit: None,
             leased_at: None,
             last_used: None,
+            owner: None,
             state: tree_rows::State::Leased.as_str().to_owned(),
         },
     )

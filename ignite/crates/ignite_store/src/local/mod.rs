@@ -45,6 +45,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 6,
         sql: include_str!("schema_6.sql"),
     },
+    Migration {
+        version: 7,
+        sql: include_str!("schema_7.sql"),
+    },
 ];
 
 pub fn open(path: &Path) -> Result<Connection> {
@@ -85,5 +89,23 @@ mod tests {
             .collect();
         assert_eq!(seqs, [1, 2]);
         assert_eq!(outbox::push(&conn, "record", "{}", "t3").unwrap(), 3);
+    }
+
+    /// A database from before trees had owners keeps its trees, each with no owner.
+    #[test]
+    fn upgrading_to_owned_trees_keeps_every_tree() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate::apply(&mut conn, &MIGRATIONS[..6]).unwrap();
+        conn.execute_batch(
+            "INSERT INTO trees (id, path, kind, state, ticket) \
+             VALUES ('landing-1', '/trees/landing-1', 'landing', 'landing', 'm:T.1');",
+        )
+        .unwrap();
+        migrate::apply(&mut conn, MIGRATIONS).unwrap();
+        let tree = trees::get(&conn, "landing-1").unwrap().unwrap();
+        assert_eq!(
+            (tree.state.as_str(), tree.ticket.as_deref(), tree.owner),
+            ("landing", Some("m:T.1"), None)
+        );
     }
 }

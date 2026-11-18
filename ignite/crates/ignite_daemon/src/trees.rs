@@ -10,6 +10,11 @@
 //! A tree's state lives in the daemon's local store (`ignite_store::local::trees`): `free`,
 //! `prebuilding`, `leased`, `landing` or `resetting`. Only a free tree is ever leased.
 //!
+//! A landing tree leased by a verb with a handle records that handle as its owner. When the
+//! daemon restarts, a landing tree whose owner is still running ([`owner_alive`]) is kept as it
+//! is, with the commands in it, for the verb the new daemon runs again under that handle; every
+//! other tree left in the middle of something is reset ([`reset_at_start`]).
+//!
 //! Releasing a ticket tree saves its work first ([`ignite_git::save`]) and fails, leaving the
 //! tree leased and untouched, if that push fails. It then stops every verb still running from
 //! the tree (a landing, a test) and waits for each to end, ends every process inside the tree
@@ -18,6 +23,7 @@
 //! began) or does not end in time leaves the tree leased, and the release says why.
 
 mod disk;
+pub mod head;
 mod landing;
 mod reset;
 #[cfg(test)]
@@ -37,7 +43,7 @@ use ignite_core::traits::{BuildResult, Builds, Clock, Error, Result};
 use ignite_git::fastforward::{self, FastForward};
 use ignite_git::save::{self, Saved};
 use ignite_git::{refs, worktree};
-use ignite_store::local::{rows, trees as store};
+use ignite_store::local::{handles as handle_store, rows, trees as store};
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -261,6 +267,52 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
     Error::Io(format!("local store: {error}"))
 }
 
+/// Whether the verb that leased a landing tree under the handle `owner` will still use it: its
+/// handle is `running` in the local database. At start that is a verb the previous daemon ran
+/// that this one runs again under the same handle (see `server/resume.rs`); while the daemon
+/// runs, a verb that has not finished.
+///
+/// This is the only place that decides it. A handle the restarted daemon finds running but
+/// cannot run again is ended `incomplete` just after start; its tree is freed by the next
+/// landing lease ([`Trees::lease_landing`]). When verbs run in processes of their own, an owner
+/// will also be alive while its process holds `verbs/<handle>/lock`.
+pub fn owner_alive(db: &Connection, owner: &str) -> bool {
+    matches!(
+        handle_store::get(db, owner),
+        Ok(Some(row)) if row.state == "running"
+    )
+}
+
+/// Whether a restarted daemon resets `row`'s tree: it was being prebuilt or reset, or it is a
+/// landing tree whose owner is not alive (a tip verification or idle work, which start over, or
+/// a verb that finished or will not run again). Leased ticket trees and free trees are not.
+fn resets_at_start(db: &Connection, row: &rows::Tree) -> bool {
+    let unfinished = [
+        store::State::Prebuilding,
+        store::State::Resetting,
+        store::State::Landing,
+    ]
+    .iter()
+    .any(|state| row.state == state.as_str());
+    let kept = row.state == store::State::Landing.as_str()
+        && row
+            .owner
+            .as_deref()
+            .is_some_and(|owner| owner_alive(db, owner));
+    unfinished && !kept
+}
+
+/// The directories of the trees that [`Trees::setup`] resets when a daemon starts, so that the
+/// commands still running in them can be ended first (see `crate::adopt`).
+pub fn reset_at_start(db: &Connection) -> Result<Vec<PathBuf>> {
+    let rows = store::all(db).map_err(|e| store_error(&e))?;
+    Ok(rows
+        .into_iter()
+        .filter(|row| resets_at_start(db, row))
+        .map(|row| PathBuf::from(row.path))
+        .collect())
+}
+
 impl Trees {
     /// How many landing trees this machine has.
     pub fn landing_count(&self) -> usize {
@@ -304,7 +356,8 @@ impl Trees {
     }
 
     /// Creates every configured tree that does not exist yet, at `tip`, and finishes any reset
-    /// prebuild or landing that a stopped daemon left half done. Leased trees keep their leases.
+    /// prebuild or landing that a stopped daemon left half done. Leased trees keep their leases,
+    /// and so does a landing tree whose owner runs again ([`reset_at_start`]).
     pub fn setup(&self, tip: &Commit) -> Result<()> {
         let config = &self.inner.config;
         fs::create_dir_all(&config.dir)?;
@@ -333,25 +386,19 @@ impl Trees {
                         built_commit: None,
                         leased_at: None,
                         last_used: None,
+                        owner: None,
                     }
                 }
             };
-            // A `landing` row's holder is a landing or tip verification of the daemon that
-            // stopped, so after a restart nothing can free it but this reset.
-            let unfinished = [
-                store::State::Prebuilding,
-                store::State::Resetting,
-                store::State::Landing,
-            ]
-            .iter()
-            .any(|state| row.state == state.as_str());
-            let row = if unfinished {
+            let resets = resets_at_start(&self.lock().db, &row);
+            let row = if resets {
                 worktree::reset(&path, &park, tip, &config.keep)?;
                 rows::Tree {
                     state: store::State::Free.as_str().to_owned(),
                     ticket: None,
                     session: None,
                     branch: None,
+                    owner: None,
                     ..row
                 }
             } else {
