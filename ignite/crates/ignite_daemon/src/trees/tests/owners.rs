@@ -307,3 +307,24 @@ fn a_running_owners_tree_is_not_given_to_another_holder() {
             .is_none()
     );
 }
+
+/// One handle that holds two landing trees at once under two holders, as a tip round runs two
+/// families at once, gets each tree back for its own holder and never the other's. Matching on
+/// the owner alone gave the second family the first family's tree.
+#[test]
+fn a_handle_gets_back_the_tree_of_each_holder_and_no_other() {
+    let f = Fixture::with_landing(1, 2, 2);
+    record_handle(&f, "T-1", "running");
+    let owner = handle("T-1");
+    let lease = |holder: &str| {
+        f.trees
+            .lease_landing_for(holder, &owner, &f.tip())
+            .unwrap()
+            .expect("a landing tree")
+    };
+    let first = lease("tip c unit");
+    let second = lease("tip c lint");
+    assert_ne!(first.tree, second.tree);
+    assert_eq!(lease("tip c unit").tree, first.tree);
+    assert_eq!(lease("tip c lint").tree, second.tree);
+}

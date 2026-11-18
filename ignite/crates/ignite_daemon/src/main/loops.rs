@@ -25,11 +25,12 @@ use crate::dispatchd::Dispatcher;
 use crate::hubclient::HubClient;
 use crate::idle::{Idle, ServerJobs};
 use crate::land::Landing;
+use crate::land::env::MachineTrees;
 use crate::loop_health::{LoopHealth, LoopTicker};
 use crate::sched::Scheduler;
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
-use crate::tip::{CheckTipWork, TipOutcome, TipVerifier};
+use crate::tip::{CheckTipWork, TipLoop, TipOutcome, TipRoundVerb};
 use crate::trees::Trees;
 use crate::update::Home;
 
@@ -92,7 +93,7 @@ impl Parts {
             return;
         };
         self.spawn_sender(db, server.clone());
-        self.spawn_tip();
+        self.spawn_tip(server.clone());
         self.spawn_claims();
         self.spawn_idle(server.clone());
         self.spawn_metrics();
@@ -158,52 +159,51 @@ impl Parts {
         crash::spawn_loop(name, move || body(ticker));
     }
 
-    /// Verifies each new tip of the integration branch, then keeps the main checkout's
-    /// branches fast-forwarded.
-    fn verifier(&self) -> TipVerifier {
+    /// One round of tip verification, as the daemon runs it on a thread of its own: over the
+    /// machine's trees, keeping the verifier's memory in the local database, so a restarted
+    /// daemon goes on from what the last round reported and held off.
+    fn round_verb(&self) -> TipRoundVerb {
         let work = CheckTipWork {
             checks: self.checks.clone(),
-            trees: Arc::new(self.trees.clone()),
+            trees: Arc::new(MachineTrees {
+                trees: self.trees.clone(),
+            }),
+            landing_trees: self.trees.landing_count(),
         };
-        let verifier =
-            TipVerifier::new(Arc::new(work), self.version.clone()).with_host(self.hostname.clone());
-        // The verifier keeps its own connection, so a restarted daemon goes on from what the
-        // last one reported and held off.
-        match ignite_store::local::open(&self.home.root.join("daemon.db")) {
-            Ok(conn) => verifier.with_memory(conn),
-            Err(error) => {
-                eprintln!("ignite: the tip verifier's memory is not kept: {error}");
-                verifier
-            }
-        }
+        TipRoundVerb::new(
+            Arc::new(work),
+            self.version.clone(),
+            self.hostname.clone(),
+            Some(self.home.root.join("daemon.db")),
+        )
     }
 
     /// See [`super::Daemon::verify_tip`].
     pub fn verify_tip(&self) -> Result<TipOutcome> {
         let tip = self.ctx.git.tip(&self.ctx.config.repository.staging)?;
-        self.verifier().verify(&self.ctx, &tip)
+        self.round_verb().verifier().verify(&self.ctx, &tip)
     }
 
-    fn spawn_tip(&self) {
-        let mut verifier = self.verifier();
+    /// Verifies each new tip of the integration branch, each round in a verb process of its own
+    /// that outlives a restart of the daemon (see [`TipLoop`]), then keeps the main checkout's
+    /// branches fast-forwarded. A round that moved `master` has the new release built.
+    fn spawn_tip(&self, server: Arc<Server>) {
+        let mut tips = TipLoop::new(server, Arc::new(self.round_verb()));
         let (ctx, trees, wait_s) = (self.ctx.clone(), self.trees.clone(), self.feed_wait_s);
         let update = self.update.clone();
         self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
-                let round = ticker.round(|| {
-                    crate::steps::step("waiting for a new tip, then verifying it");
-                    match verifier.round(&ctx, wait_s) {
-                        Ok(Some((_, TipOutcome::Verified))) => {
-                            if let Err(error) = update.after_master_moved() {
-                                eprintln!("ignite: the new release was not built: {error}");
-                            }
-                            Ok(())
+                let round = ticker.round(|| match tips.turn(&ctx, wait_s) {
+                    Ok(Some((_, TipOutcome::Verified))) => {
+                        if let Err(error) = update.after_master_moved() {
+                            eprintln!("ignite: the new release was not built: {error}");
                         }
-                        Ok(_) => Ok(()),
-                        Err(error) => {
-                            eprintln!("ignite: tip verification: {error}");
-                            Err(format!("tip verification: {error}"))
-                        }
+                        Ok(())
+                    }
+                    Ok(_) => Ok(()),
+                    Err(error) => {
+                        eprintln!("ignite: tip verification: {error}");
+                        Err(format!("tip verification: {error}"))
                     }
                 });
                 if round.is_none() {

@@ -54,7 +54,10 @@ impl Server {
             let resumable = self.registry.resumable(&verb);
             let runs = match (request, resumable) {
                 (Some(request), Some(runs)) => Ok((runs, request)),
-                _ if self.registry.get(&verb).is_none() => Err("this daemon has no such verb"),
+                // An internal verb, such as a tip round, is in no registry and is never run again.
+                _ if self.registry.get(&verb).is_none() && !self.runs_in_process(&verb) => {
+                    Err("this daemon has no such verb")
+                }
                 (_, None) => Err("it cannot be run again safely"),
                 (None, Some(_)) => Err("the request that started it was not recorded"),
             };
@@ -82,6 +85,18 @@ pub(super) fn run_again(
         }
     };
     eprintln!("ignite: running `ignite {verb}` ({handle}) again after the restart");
+    run_on_daemon(shared, handle, verb, runs, request);
+}
+
+/// Runs `runs`, the verb `verb`, on a thread of the daemon under `handle` with `request`, or
+/// ends the handle `incomplete` when no thread can be started.
+pub(super) fn run_on_daemon(
+    shared: &Shared,
+    handle: &Handle,
+    verb: &str,
+    runs: Arc<dyn Verb>,
+    request: Request,
+) {
     let request = Request {
         // Nobody waits on this run but `ignite wait`.
         wait_s: 0,

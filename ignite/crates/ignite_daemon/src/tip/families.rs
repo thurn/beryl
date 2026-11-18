@@ -10,14 +10,19 @@
 //! here, and one with none is not claimed.
 //!
 //! The batches are claimed from the hub one at a time, right before each runs, so two machines
-//! never run the same batch and a claim never lapses while its batch waits. Families run on up
-//! to [`TipWork::parallel`] threads, each in its own landing tree; every command still asks the
-//! scheduler for its cores in the `tip` class, so a busy machine runs fewer at once.
+//! never run the same batch and a claim never lapses while its batch waits. While a batch runs,
+//! the round claims it again every [`RENEW_EVERY`], which renews the claim, so a batch that runs
+//! longer than the hub's claim (15 minutes) is not taken by another machine meanwhile. The round
+//! runs in a verb process of its own (see `round`), so its claims are renewed across a restart
+//! of the daemon too. Families run on up to [`TipWork::parallel`] threads, each in its own
+//! landing tree; every command still asks the scheduler for its cores in the `tip` class, so a
+//! busy machine runs fewer at once.
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use ignite_core::ids::{CheckName, Commit};
 use ignite_core::protocol::hub::TipClaim;
@@ -26,6 +31,10 @@ use ignite_core::traits::Result;
 
 use super::{Listed, TipCheck, TipRun, TipVerifier};
 use crate::server::Context;
+
+/// How often a running batch's claim is renewed: a third of the hub's claim
+/// ([`ignite_store::hub::tips::CLAIM_SECONDS`]), so two renewals can fail before it lapses.
+pub const RENEW_EVERY: Duration = Duration::from_secs(300);
 
 /// One family's batches, in the order every machine cuts them.
 type FamilyBatches = (String, Vec<(u32, Vec<CheckName>)>);
@@ -45,6 +54,8 @@ struct Round<'a> {
     /// A newer tip that ended the round, or the error reading `staging`.
     ended: Mutex<Option<Result<Commit>>>,
     runs: Mutex<Vec<TipRun>>,
+    /// The batch each family is running under a claim, which the renewer claims again.
+    held: Mutex<BTreeMap<String, u32>>,
 }
 
 impl Round<'_> {
@@ -73,13 +84,26 @@ impl Round<'_> {
     /// Claims one batch from the hub. A claim the hub cannot answer is not granted, so the
     /// batch is left for a later round.
     fn claim(&self, family: &str, batch: u32) -> bool {
+        // A family asks for its next batch once the last one has finished.
+        lock(&self.held).remove(family);
+        let granted = self.ask(family, batch);
+        if granted {
+            self.ran_a_batch.store(true, Ordering::SeqCst);
+            lock(&self.held).insert(family.to_owned(), batch);
+        }
+        granted
+    }
+
+    /// Asks the hub for `batch` of `family`. The hub grants a batch this machine holds again,
+    /// renewing its claim.
+    fn ask(&self, family: &str, batch: u32) -> bool {
         let claim = TipClaim {
             commit: self.tip.clone(),
             family: family.to_owned(),
             batch,
             machine: self.ctx.machine.clone(),
         };
-        let granted = match self.ctx.hub.tip_claim(&claim) {
+        match self.ctx.hub.tip_claim(&claim) {
             Ok(reply) => reply.granted,
             Err(error) => {
                 eprintln!(
@@ -87,11 +111,32 @@ impl Round<'_> {
                 );
                 false
             }
-        };
-        if granted {
-            self.ran_a_batch.store(true, Ordering::SeqCst);
         }
-        granted
+    }
+
+    /// Claims every running batch again each `every`, until `done`.
+    fn renew_until(&self, done: &AtomicBool, every: Duration) {
+        let nap = every.min(Duration::from_millis(100));
+        let mut last = Instant::now();
+        while !done.load(Ordering::SeqCst) {
+            thread::sleep(nap);
+            if last.elapsed() < every {
+                continue;
+            }
+            last = Instant::now();
+            let held: Vec<(String, u32)> = lock(&self.held)
+                .iter()
+                .map(|(family, batch)| (family.clone(), *batch))
+                .collect();
+            for (family, batch) in held {
+                if !self.ask(&family, batch) {
+                    eprintln!(
+                        "ignite: tip verification: the claim on batch {batch} of {family} was \
+                         not renewed; another machine may run it too"
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -116,21 +161,38 @@ impl TipVerifier {
             ran_a_batch: AtomicBool::new(false),
             ended: Mutex::new(None),
             runs: Mutex::new(Vec::new()),
+            held: Mutex::new(BTreeMap::new()),
         };
         // Each family's thread works for the round's activity, so its builds run in the `tip`
         // class and `ignite status` shows which family it is on.
         let activity = crate::steps::current();
+        let done = AtomicBool::new(false);
         thread::scope(|scope| {
-            for _ in 0..self.work.parallel().max(1) {
-                scope.spawn(|| {
-                    let _entered = activity.as_ref().map(crate::steps::Activity::enter);
-                    while let Some((family, batches)) = round.next() {
-                        crate::steps::step(format!("verifying family {family}"));
-                        let claim = |batch: u32| round.claim(&family, batch);
-                        let (runs, _) = self.work.run_batches(ctx, tip, &family, &batches, &claim);
-                        lock(&round.runs).extend(runs);
-                    }
-                });
+            let workers: Vec<_> = (0..self.work.parallel().max(1))
+                .map(|_| {
+                    scope.spawn(|| {
+                        let _entered = activity.as_ref().map(crate::steps::Activity::enter);
+                        while let Some((family, batches)) = round.next() {
+                            crate::steps::step(format!("verifying family {family}"));
+                            let claim = |batch: u32| round.claim(&family, batch);
+                            let (runs, _) =
+                                self.work.run_batches(ctx, tip, &family, &batches, &claim);
+                            lock(&round.held).remove(&family);
+                            lock(&round.runs).extend(runs);
+                        }
+                    })
+                })
+                .collect();
+            scope.spawn(|| round.renew_until(&done, self.renew_every));
+            let mut panicked = None;
+            for worker in workers {
+                if let Err(panic) = worker.join() {
+                    panicked.get_or_insert(panic);
+                }
+            }
+            done.store(true, Ordering::SeqCst);
+            if let Some(panic) = panicked {
+                std::panic::resume_unwind(panic);
             }
         });
         let superseded = round

@@ -50,7 +50,7 @@ impl Trees {
             let locked = self.lock();
             self.free_dead_owners(&locked)?;
             match owner {
-                Some(owner) => Self::owned(&locked, owner)?,
+                Some(owner) => Self::owned(&locked, owner, holder)?,
                 None => None,
             }
         };
@@ -84,14 +84,19 @@ impl Trees {
         }))
     }
 
-    /// The landing tree `owner` holds, if any: one a previous daemon leased to the verb that
-    /// this daemon runs again under the same handle.
-    fn owned(locked: &Locked, owner: &Handle) -> Result<Option<TreeId>> {
+    /// The landing tree `owner` holds for `holder`, if any: one a previous daemon leased to the
+    /// verb that this daemon runs again under the same handle, or one a verb process asks for
+    /// again after a restart cut its call off. The holder must match as well, because one verb
+    /// can hold several landing trees at once: a tip round runs several families at once, each
+    /// in its own tree under its own holder, and matching on the owner alone gave the second
+    /// family the first family's tree.
+    fn owned(locked: &Locked, owner: &Handle, holder: &str) -> Result<Option<TreeId>> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         rows.into_iter()
             .find(|row| {
                 row.state == store::State::Landing.as_str()
                     && row.owner.as_deref() == Some(owner.as_str())
+                    && row.ticket.as_deref() == Some(holder)
             })
             .map(|row| TreeId::new(row.id).map_err(|e| Error::Invalid(e.to_string())))
             .transpose()

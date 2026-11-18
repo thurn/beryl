@@ -44,6 +44,7 @@ mod culprit;
 mod families;
 mod meter;
 mod report;
+mod round;
 mod split;
 mod state;
 mod work;
@@ -66,6 +67,7 @@ use ignite_core::traits::{Push, Result};
 use crate::checks::Scoring;
 use crate::server::Context;
 
+pub use round::{ROUND_VERB, TipLoop, TipRoundVerb};
 pub use work::{CheckTipWork, ticketed_landings};
 
 /// The most runs one culprit search may make before it reports a range.
@@ -222,8 +224,9 @@ pub trait TipWork: Send + Sync {
     }
 }
 
-/// How one tip's verification ended.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// How one tip's verification ended. A tip round's verb process answers with it (see `round`).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
 pub enum TipOutcome {
     /// Every check passed and `master` is at the tip.
     Verified,
@@ -295,6 +298,8 @@ pub struct TipVerifier {
     /// Where the memory above is saved between rounds (see `state`); `None` keeps it in
     /// memory only.
     saved: Option<state::Saved>,
+    /// How often a running batch's claim is renewed (see `families`).
+    renew_every: std::time::Duration,
 }
 
 impl TipVerifier {
@@ -317,7 +322,16 @@ impl TipVerifier {
             rechecked: HashSet::new(),
             resting: None,
             saved: None,
+            renew_every: families::RENEW_EVERY,
         }
+    }
+
+    /// Renews the claims of running batches every `every` instead of every
+    /// [`families::RENEW_EVERY`], as tests do.
+    #[must_use]
+    pub fn renewing_claims_every(mut self, every: std::time::Duration) -> Self {
+        self.renew_every = every;
+        self
     }
 
     /// Names this machine's hostname in the reports of checks that stay incomplete, so the
@@ -330,22 +344,40 @@ impl TipVerifier {
 
     /// Waits up to `wait_s` for the hub's feed to show a change, then verifies the newest
     /// `staging` commit unless it was already settled. Returns that tip and how it ended, or
-    /// `None` when there was nothing to verify.
+    /// `None` when there was nothing to verify. The daemon splits this in two: its tip loop
+    /// waits on the feed and asks [`TipVerifier::due`], and a verb process runs
+    /// [`TipVerifier::round_at`] (see `round`).
     pub fn round(&mut self, ctx: &Context, wait_s: u32) -> Result<Option<(Commit, TipOutcome)>> {
         let batch = ctx.hub.feed(self.since, wait_s)?;
         self.since = self.since.max(batch.seq);
         let tip = ctx.git.tip(&ctx.config.repository.staging)?;
-        if self.settled.as_ref() == Some(&tip) {
+        if !self.due(ctx, &tip) {
             return Ok(None);
         }
+        let outcome = self.round_at(ctx, &tip, self.since)?;
+        Ok(Some((tip, outcome)))
+    }
+
+    /// The feed position already seen.
+    pub fn since(&self) -> Seq {
+        self.since
+    }
+
+    /// Whether `tip` needs a round: it was not settled, and is not resting after a round that
+    /// ended waiting.
+    pub fn due(&self, ctx: &Context, tip: &Commit) -> bool {
+        if self.settled.as_ref() == Some(tip) {
+            return false;
+        }
+        !matches!(&self.resting, Some((resting, until)) if resting == tip && ctx.clock.now() < *until)
+    }
+
+    /// One round: verifies `tip`, remembers whether it settled or rests, and saves the memory
+    /// with the feed position `since` the round was started at.
+    pub fn round_at(&mut self, ctx: &Context, tip: &Commit, since: Seq) -> Result<TipOutcome> {
+        self.since = self.since.max(since);
         let now = ctx.clock.now();
-        if let Some((resting, until)) = &self.resting
-            && *resting == tip
-            && now < *until
-        {
-            return Ok(None);
-        }
-        let outcome = self.verify(ctx, &tip)?;
+        let outcome = self.verify(ctx, tip)?;
         self.resting = None;
         match &outcome {
             TipOutcome::Verified | TipOutcome::Failed { .. } => self.settled = Some(tip.clone()),
@@ -361,7 +393,7 @@ impl TipVerifier {
             TipOutcome::Superseded { .. } => {}
         }
         self.save(ctx);
-        Ok(Some((tip, outcome)))
+        Ok(outcome)
     }
 
     /// Verifies one tip: runs what its set still needs, then moves `master`, reports failures

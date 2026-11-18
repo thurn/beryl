@@ -12,26 +12,36 @@ use ignite_git::changed::CommitPaths;
 
 use super::{TipCheck, TipLanding, TipRun, TipSet, TipWork};
 use crate::checks::{BUILD_FAILED, CheckRun, Checks, RunOptions, Scoring};
+use crate::land::env::LandTrees;
 use crate::server::Context;
-use crate::trees::Trees;
 
-/// Lists and runs checks with [`Checks`] in a landing tree that [`Trees`] leases at the commit.
+/// Lists and runs checks with [`Checks`] in a landing tree leased at the commit. In the daemon
+/// the trees are the machine's own; in a tip round's verb process they are leased from the
+/// daemon (see `crate::verbproc`), owned by the round's handle, so a restarted daemon keeps them.
 pub struct CheckTipWork {
     pub checks: Arc<Checks>,
-    pub trees: Arc<Trees>,
+    pub trees: Arc<dyn LandTrees>,
+    /// How many landing trees the machine has.
+    pub landing_trees: usize,
 }
 
 impl CheckTipWork {
-    /// Leases a landing tree at `commit`, calls `f` with it and frees it again.
-    fn at<T>(&self, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
-        let holder = format!("tip {commit}");
+    /// Leases a landing tree at `commit` for `holder`, calls `f` with it and frees it again.
+    /// Leases that may be held at once need holders of their own: a lease owned by a handle is
+    /// given back to the same handle and holder (see `crate::trees`).
+    fn at_for<T>(&self, holder: &str, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
         let lease = self
             .trees
-            .lease_landing(&holder, commit)?
+            .lease_landing(holder, commit)?
             .ok_or_else(|| Error::Conflict("every landing tree is busy".to_owned()))?;
         let value = f(&lease.tree);
         self.trees.release_landing(&lease.tree, Some(commit))?;
         Ok(value)
+    }
+
+    /// [`CheckTipWork::at_for`] for one lease at a time, as listing and single runs take.
+    fn at<T>(&self, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
+        self.at_for(&format!("tip {commit}"), commit, f)
     }
 }
 
@@ -63,7 +73,8 @@ impl TipWork for CheckTipWork {
         claim: &dyn Fn(u32) -> bool,
     ) -> (Vec<TipRun>, usize) {
         let options = options(false);
-        let ran = self.at(commit, |tree| {
+        // Families run at once, each in a tree of its own.
+        let ran = self.at_for(&format!("tip {commit} {family}"), commit, |tree| {
             self.checks
                 .run_batches(ctx, tree, family, batches, &options, claim)
         });
@@ -82,7 +93,7 @@ impl TipWork for CheckTipWork {
 
     /// One fewer than the landing trees, so that a landing always finds a tree free.
     fn parallel(&self) -> usize {
-        self.trees.landing_count().saturating_sub(1).max(1)
+        self.landing_trees.saturating_sub(1).max(1)
     }
 
     /// The paths the commits after `from` changed, read with git, and the hub's record of each

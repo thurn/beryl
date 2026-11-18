@@ -713,3 +713,6 @@ fn a_dead_verb_process_owns_its_landing_tree_only_if_it_is_run_again() {
     assert!(!crate::trees::owner_alive(&db, rebuild.as_str()));
     assert!(crate::trees::owner_alive(&db, in_daemon.as_str()));
 }
+
+#[path = "process_tip_tests.rs"]
+mod tip_rounds;

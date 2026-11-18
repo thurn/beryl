@@ -124,6 +124,8 @@ pub struct FakeHub {
     metrics: Mutex<Vec<MetricsImport>>,
     flaky: Mutex<Vec<FlakyReport>>,
     tip_claims: Mutex<Vec<TipClaim>>,
+    /// Every tip claim asked, renewals included.
+    tip_claim_asks: Mutex<Vec<TipClaim>>,
     tip_states: Mutex<Vec<TipVerified>>,
     regressions: Mutex<Vec<RegressionReport>>,
     tips_waiting: Mutex<Vec<TipWaiting>>,
@@ -217,6 +219,11 @@ impl FakeHub {
     /// claims it, and again to that machine; claims never expire here.
     pub fn tip_claims(&self) -> Vec<TipClaim> {
         lock(&self.tip_claims).clone()
+    }
+
+    /// Every tip claim asked so far, in order, renewals of a claim already held included.
+    pub fn tip_claim_asks(&self) -> Vec<TipClaim> {
+        lock(&self.tip_claim_asks).clone()
     }
 
     /// Every tip state reported so far, in order.
@@ -428,6 +435,7 @@ impl Hub for FakeHub {
 
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply> {
         self.reachable()?;
+        lock(&self.tip_claim_asks).push(claim.clone());
         let mut claims = lock(&self.tip_claims);
         let holder = claims.iter().find(|c| {
             c.commit == claim.commit && c.family == claim.family && c.batch == claim.batch

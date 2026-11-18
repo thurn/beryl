@@ -478,8 +478,9 @@ survive each other's restarts.
   daemon watches supervisors, so it can restart while commands keep running.
 - **A verb process** runs one long verb from start to finish:
   `ignite internal verb <handle>`, a hidden subcommand. `land`, `test`, `check`,
-  `run`, `rebuild`, `audit` and the internal `idle-job` run in verb processes;
-  every other verb runs on a thread of the daemon. The daemon gives the verb its
+  `run`, `rebuild`, `audit` and the internal verbs `idle-job` (one idle job)
+  and `tip-round` (one round of tip verification) run in verb processes; every
+  other verb runs on a thread of the daemon. The daemon gives the verb its
   handle and records the request in the handle's row in `daemon.db`, then starts
   the verb process from its own executable, `bin/<commit>/ignite`, in the
   repository's main checkout, in a process group of its own (detached and
@@ -1525,11 +1526,27 @@ How a daemon verifies a tip:
 - When nothing can be scored (git or the hub cannot be read), every check runs
   before `master` moves.
 
+- Each round runs as the internal verb `tip-round` in a verb process of its own
+  (see [Processes](#processes)), so a restart of the daemon into a new release
+  does not cut it off. The daemon's tip loop only waits on the hub's feed,
+  decides whether the newest tip needs a round, starts it under a handle and
+  waits on the handle. The round leases its landing trees through the daemon,
+  owned by its handle, so a restarted daemon keeps those trees and the commands
+  in them. It moves `master` itself. When its reply says `master` moved, the
+  loop has the new release built. A restarted daemon whose loop finds a running
+  `tip-round` handle waits for that round instead of starting another. A round
+  whose verb process dies is not run again: its handle ends `incomplete` and the
+  loop starts a new round if the tip still needs one.
+
+- While a batch runs, the round claims it again every five minutes, which
+  renews its claim at the hub, so a batch that runs longer than the hub's
+  15-minute claim is not taken by another machine meanwhile.
+
 - The verifier's memory survives a restart: the feed position, the last settled
   tip, what it already reported, the checks held off, the cached failures
   already run again, each platform's wait and the tip waiting to be retried are
-  kept as one row in the daemon's database and saved after each report and at
-  the end of each round.
+  kept as one row in the daemon's database. Each round loads it when it starts,
+  and saves it after each report and at its end.
 
 - Each round's record says how it split its checks: the budget, the rate used,
   and the checks before the move (within the budget and forced) and after it,

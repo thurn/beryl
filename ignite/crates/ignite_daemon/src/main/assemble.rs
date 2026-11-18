@@ -41,6 +41,7 @@ use crate::pool::{Pool, PoolVerb};
 use crate::sched::{Limits, Scheduler};
 use crate::server::{Context, NativeStarter, Processes, Registry, Server, Verb};
 use crate::supervise::{RunVerb, SupervisedLauncher};
+use crate::tip::{CheckTipWork, TipRoundVerb};
 use crate::trees::{TreeConfig, Trees};
 use crate::update::InstallVerb;
 
@@ -290,8 +291,10 @@ pub fn checking_with(
 
 /// What a verb process runs its verb with (see `crate::verbproc`): the context, with `launcher`
 /// and `builds` asking the daemon, and the long verbs, built over the machine's trees as the
-/// daemon builds them, with landing trees as `landing` makes them from the machine's. Nothing
-/// here changes the trees or starts a loop: that stays the daemon's.
+/// daemon builds them, with landing trees as `landing` makes them from the machine's. The
+/// internal verbs the daemon's loops start come last, such as a round of tip verification (see
+/// `crate::tip::TipLoop`). Nothing here changes the trees or starts a loop: that stays the
+/// daemon's.
 pub fn verb_side(
     base: &Base,
     launcher: Arc<dyn Launcher>,
@@ -310,7 +313,7 @@ pub fn verb_side(
     let landing_trees = landing(MachineTrees {
         trees: trees.clone(),
     });
-    let (checks, landing, idle) = checking_with(base, landing_trees, &trees, idle_host)?;
+    let (checks, landing, idle) = checking_with(base, landing_trees.clone(), &trees, idle_host)?;
     let ctx = Context {
         config: base.config.clone(),
         repo: repo.clone(),
@@ -323,7 +326,20 @@ pub fn verb_side(
         session: None,
         tree: None,
     };
-    Ok((ctx, long_verbs(&checks, &landing, &idle)))
+    let mut verbs = long_verbs(&checks, &landing, &idle);
+    let tip_work = CheckTipWork {
+        checks: checks.clone(),
+        trees: landing_trees,
+        landing_trees: trees.landing_count(),
+    };
+    let round = TipRoundVerb::new(
+        Arc::new(tip_work),
+        base.options.version.clone(),
+        base.options.hostname.clone(),
+        Some(base.home("daemon.db")),
+    );
+    verbs.push((Box::new(round), false));
+    Ok((ctx, verbs))
 }
 
 /// The claims, the dispatcher, and the late links both need to the server.

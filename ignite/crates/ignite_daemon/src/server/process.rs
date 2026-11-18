@@ -1,7 +1,12 @@
 //! Long verbs run in verb processes: `land`, `test`, `check`, `run`, `rebuild`, `audit` and
-//! the internal `idle-job` each run from start to finish in a process of their own, `ignite internal verb <handle>` (see
-//! [`crate::verbproc`]), which outlives restarts of the daemon. Every other verb runs on a
-//! thread of the daemon.
+//! the internal `idle-job` each run from start to finish in a process of their own, `ignite
+//! internal verb <handle>` (see [`crate::verbproc`]), which outlives restarts of the daemon.
+//! Every other verb runs on a thread of the daemon.
+//!
+//! The tip loop runs each round of tip verification the same way, as the internal verb
+//! `tip-round`, which no client can ask for (see [`crate::tip::TipLoop`]). The loop starts it
+//! with [`Server::start_internal`], waits on its handle, and after a restart finds it still
+//! running with [`Server::running_internal`].
 //!
 //! For a request of such a verb, the server gives the verb its handle with the request (as for
 //! any verb that does work), starts the verb process from the daemon's own executable in a
@@ -43,10 +48,18 @@ use crate::handles::{Handles, StepFeed, lock};
 use crate::host::Host;
 use crate::steps::Steps;
 
-/// The verbs that run in verb processes. `idle-job` is the internal verb that runs one idle job
-/// (see `crate::idle`).
+/// The verbs that run in verb processes, the internal ones included: `idle-job` runs one idle
+/// job (see `crate::idle`) and `tip-round` one round of tip verification (see
+/// [`crate::tip::TipLoop`]).
 pub const PROCESS_VERBS: &[&str] = &[
-    "land", "test", "check", "run", "rebuild", "audit", "idle-job",
+    "land",
+    "test",
+    "check",
+    "run",
+    "rebuild",
+    "audit",
+    "idle-job",
+    crate::tip::ROUND_VERB,
 ];
 
 /// The verbs among [`PROCESS_VERBS`] that the daemon runs again, on a thread of its own, when
@@ -229,21 +242,7 @@ impl Server {
         if let Some(named) = named {
             named(&handle);
         }
-        // Counted while it starts, so a restart waits until the process holds its lock: a
-        // daemon that started in between would take it for a dead one and run it twice.
-        self.running.fetch_add(1, Ordering::SeqCst);
-        let started = processes.starter.start(&handle).map(|mut child| {
-            let since = Instant::now();
-            while !crate::verbproc::alive(&processes.home, &handle)
-                && !child.exited()
-                && since.elapsed() < LOCK_WAIT
-            {
-                std::thread::sleep(Duration::from_millis(5));
-            }
-            child
-        });
-        self.running.fetch_sub(1, Ordering::SeqCst);
-        let child = match started {
+        let child = match self.start_process(&handle) {
             Ok(child) => child,
             Err(error) => {
                 eprintln!(
@@ -319,6 +318,69 @@ impl Server {
             .by_handle(&handle)
             .map(|activity| activity.view());
         super::still_running_at(&req.verb, &handle, doing.as_ref())
+    }
+
+    /// Starts `handle`'s verb process and waits until it holds its lock, or has exited, or
+    /// [`LOCK_WAIT`] has passed.
+    fn start_process(&self, handle: &Handle) -> io::Result<Box<dyn VerbChild>> {
+        let processes = self
+            .processes
+            .as_ref()
+            .expect("only a server with verb processes starts one");
+        // Counted while it starts, so a restart waits until the process holds its lock: a
+        // daemon that started in between would take it for a dead one and run it twice.
+        self.running.fetch_add(1, Ordering::SeqCst);
+        let started = processes.starter.start(handle).map(|mut child| {
+            let since = Instant::now();
+            while !crate::verbproc::alive(&processes.home, handle)
+                && !child.exited()
+                && since.elapsed() < LOCK_WAIT
+            {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            child
+        });
+        self.running.fetch_sub(1, Ordering::SeqCst);
+        started
+    }
+
+    /// Starts the internal verb that `req` names for a loop of the daemon and returns its handle
+    /// at once; the loop waits on the handle (see [`Handles::wait`]). The verb runs in a verb
+    /// process when it is one of those, and otherwise, or when no verb process can be started,
+    /// on a thread of the daemon as `verb`. An internal verb is never run again: if its verb
+    /// process dies, its handle ends `incomplete` and the loop starts afresh.
+    pub fn start_internal(&self, verb: Arc<dyn Verb>, req: Request) -> Handle {
+        let handle = self.handles.create_for(&req.verb, None, None, Some(&req));
+        if self.runs_in_process(&req.verb) {
+            match self.start_process(&handle) {
+                Ok(child) => {
+                    if let Some(processes) = &self.processes {
+                        processes.host.track(&self.ctx, &handle);
+                    }
+                    watch(self.shared(), &handle, Some(child), None);
+                    return handle;
+                }
+                Err(error) => eprintln!(
+                    "ignite: cannot start the verb process of {handle}, so `{}` runs in the \
+                     daemon: {error}",
+                    req.verb
+                ),
+            }
+        }
+        let shared = self.shared();
+        let name = req.verb.clone();
+        super::resume::run_on_daemon(&shared, &handle, &name, verb, req);
+        handle
+    }
+
+    /// The handle of a running `verb`, such as an internal verb whose verb process outlived the
+    /// previous daemon: a restarted loop waits for it instead of starting another.
+    pub fn running_internal(&self, verb: &str) -> Option<Handle> {
+        let db = self.db.as_ref()?;
+        let rows = handle_store::running(&lock(db)).ok()?;
+        rows.into_iter()
+            .filter(|row| row.verb == verb)
+            .find_map(|row| Handle::new(row.id).ok())
     }
 
     /// Stops taking new requests and waits up to `within` for the verbs running on the daemon's
