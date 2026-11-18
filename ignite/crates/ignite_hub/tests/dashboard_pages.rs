@@ -93,7 +93,7 @@ fn seeded() -> Hub {
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
           ('q44s.7.24.1', 'q44s.7.24', 'Render detail rows', 'task', 'open', '[]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
-          ('erro', NULL, 'Simulator failure', 'bug', 'blocked', '[\"role:steward\"]', '',
+          ('erro', NULL, 'Simulator failure', 'bug', 'blocked', '[\"justiciar\"]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
           ('brpt', NULL, 'Filed from the app', 'bug', 'open', '[\"bug-report\"]', '',
            '2026-11-16T19:30:00.000Z', '2026-11-16T19:30:00.000Z', 'Derek', 4992),
@@ -146,7 +146,7 @@ fn the_home_page_lists_the_open_tickets_with_progress() {
         assert!(home.contains(&format!("href=\"#{id}\"")), "{id}");
     }
     for expected in [
-        "Slow CI failures",
+        "Incidents",
         "href=\"/proj/tickets/Tq44s.7.24\"",
         "class=\"c-mono\">Tq44s</",
         "4792/4795",

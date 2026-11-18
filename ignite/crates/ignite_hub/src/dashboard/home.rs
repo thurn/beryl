@@ -16,12 +16,18 @@ use super::common::{SITE_ICONS, brand, children_progress, person, status_dot, ti
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{HomeCard, Progress, ReadError, home_data};
 use super::references::ticket_url;
+use crate::upkeep::filing::HUB_LABEL;
+use crate::upkeep::justiciar;
 
-/// Tickets that tools file themselves, grouped by the labels they carry.
-const AUTOMATIC: [(&str, &[&str]); 8] = [
-    ("Slow CI failures", &["role:steward"]),
-    ("Incidents", &["role:justiciar"]),
-    ("Flaky checks", &["flaky-check"]),
+/// Tickets that tools file themselves, grouped by the labels they carry. A ticket goes in the
+/// first group one of whose labels it carries. The first groups hold the labels the hub puts on
+/// the tickets it files (see `upkeep`); the rest hold labels that the repository's own tools and
+/// tickets imported from earlier trackers carry.
+const AUTOMATIC: [(&str, &[&str]); 10] = [
+    ("Incidents", &[justiciar::LABEL, "ci-incident"]),
+    ("Regressions", &["regression"]),
+    ("Flaky checks", &["flaky", "flaky-check"]),
+    ("Machine faults", &["machine"]),
     (
         "Sweep and nightly failures",
         &["sweep-failure", "nightly-failure", "b3d-sweep"],
@@ -30,7 +36,16 @@ const AUTOMATIC: [(&str, &[&str]); 8] = [
     ("CI structure review", &["ci-structure", "ci-structure-log"]),
     ("Count gate", &["count-creep", "count-lower"]),
     ("Check verdicts", &["ci-check"]),
+    ("Filed by the hub", &[HUB_LABEL]),
 ];
+
+/// The index in [`AUTOMATIC`] of the group a ticket with `labels` goes in, if any.
+fn automatic_group(labels: &[String]) -> Option<usize> {
+    AUTOMATIC.iter().position(|(_, keys)| {
+        keys.iter()
+            .any(|key| labels.iter().any(|label| label == key))
+    })
+}
 
 /// Builds the home page for the project at `root`, at feed position `seq`.
 #[allow(clippy::too_many_lines)]
@@ -47,10 +62,7 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
     let mut groups: Vec<Vec<&HomeCard>> = AUTOMATIC.iter().map(|_| Vec::new()).collect();
 
     for ticket in cards {
-        let group = AUTOMATIC.iter().position(|(_, keys)| {
-            keys.iter()
-                .any(|key| ticket.labels.iter().any(|label| label == key))
-        });
+        let group = automatic_group(&ticket.labels);
         if ticket.card.status == Status::InProgress {
             active.push(ticket);
         }
@@ -220,3 +232,7 @@ pub(crate) fn options(
     options.body = attention + &options.body;
     Ok(options)
 }
+
+#[cfg(test)]
+#[path = "home_tests.rs"]
+mod tests;
