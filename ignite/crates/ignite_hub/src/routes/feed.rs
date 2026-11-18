@@ -1,17 +1,107 @@
 //! `GET /feed?since=<seq>&wait=<seconds>`: returns as soon as anything after `since` exists, or
 //! empty when the wait ends.
 //!
-//! Stub. The ticket Thrh4.16 (Hub ticket API) owns this file
-//! and replaces the `todo!()` bodies.
-#![allow(unused_variables)]
+//! This long poll replaces the ticket service's WebSocket feed. A waiting request sleeps on a
+//! process-wide condition variable that [`notify`] wakes after every write the hub serves, and
+//! looks at the database again at least once a second, so that a write made outside a request
+//! (by upkeep, say) is seen too.
+
+use std::sync::{Condvar, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
+use serde_json::json;
 
+use ignite_core::ids::Seq;
+use ignite_core::protocol::tickets::{FeedBatch, FeedChange};
 use ignite_core::time::Timestamp;
+use ignite_store::hub::feed;
 
 use super::{Request, Response};
 
+/// The longest wait a client may ask for, in seconds. A longer one is shortened to this.
+pub const MAX_WAIT_S: u64 = 120;
+
+/// The most changes one reply carries (one position's changes always come whole).
+const LIMIT: u32 = 1000;
+
+/// How long a waiting request sleeps before it looks at the database again.
+const RECHECK: Duration = Duration::from_secs(1);
+
+/// Counts writes, so a waiting request knows whether one happened since it last looked.
+static WRITES: Mutex<u64> = Mutex::new(0);
+static WRITTEN: Condvar = Condvar::new();
+
+/// Wakes every waiting feed request. The server calls it after each request that may have
+/// written.
+pub fn notify() {
+    let mut writes = WRITES.lock().unwrap_or_else(PoisonError::into_inner);
+    *writes += 1;
+    WRITTEN.notify_all();
+}
+
+fn writes() -> u64 {
+    *WRITES.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Sleeps until a write after `seen`, or for `timeout`.
+fn wait_for_write(seen: u64, timeout: Duration) {
+    let writes = WRITES.lock().unwrap_or_else(PoisonError::into_inner);
+    let _unused = WRITTEN
+        .wait_timeout_while(writes, timeout, |writes| *writes == seen)
+        .unwrap_or_else(PoisonError::into_inner);
+}
+
 /// The response if this module owns the request's path.
-pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
-    todo!("Thrh4.16 (Hub ticket API)")
+pub fn handle(conn: &mut Connection, request: &Request, _now: Timestamp) -> Option<Response> {
+    if request.path != "/feed" {
+        return None;
+    }
+    if request.method != "GET" {
+        return Some(failure(405, "use GET for /feed"));
+    }
+    let since = match request.param("since").map(str::parse::<u64>) {
+        Some(Ok(since)) => Seq(since),
+        _ => return Some(failure(400, "since must be a feed position")),
+    };
+    let wait_s = match request.param("wait").map(str::parse::<u64>) {
+        None => 0,
+        Some(Ok(wait_s)) => wait_s.min(MAX_WAIT_S),
+        Some(Err(_)) => return Some(failure(400, "wait must be a number of seconds")),
+    };
+    Some(match poll(conn, since, Duration::from_secs(wait_s)) {
+        Ok(batch) => Response::json(200, &json!(batch)),
+        Err(error) => failure(500, &error.to_string()),
+    })
+}
+
+/// The changes after `since`, waiting up to `wait` for the first one.
+fn poll(conn: &Connection, since: Seq, wait: Duration) -> ignite_store::Result<FeedBatch> {
+    let deadline = Instant::now() + wait;
+    loop {
+        // Read the count before the database, so a write between the two still wakes us.
+        let seen = writes();
+        let batch = feed::since(conn, since, LIMIT)?;
+        if since > batch.seq {
+            // The client counts from a database other than this one (a restored backup, say).
+            return Ok(FeedBatch {
+                seq: batch.seq,
+                changes: vec![FeedChange {
+                    seq: batch.seq,
+                    kind: feed::RESYNC.to_owned(),
+                    ticket: None,
+                    name: None,
+                }],
+            });
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if !batch.changes.is_empty() || left.is_zero() {
+            return Ok(batch);
+        }
+        wait_for_write(seen, left.min(RECHECK));
+    }
+}
+
+fn failure(status: u16, message: &str) -> Response {
+    Response::json(status, &json!({ "error": message }))
 }

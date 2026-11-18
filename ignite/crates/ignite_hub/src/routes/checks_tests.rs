@@ -61,6 +61,7 @@ impl TestHub {
                         actor: "tester".to_owned(),
                     }),
                     body,
+                    headers: Vec::new(),
                 };
                 let response = handle(&mut for_thread.lock().unwrap(), &request, at(100.0));
                 let reply = response.unwrap_or_else(|| super::Response::json(404, &json!({})));
@@ -337,6 +338,7 @@ fn writes_need_a_writer_and_every_route_checks_its_method_and_body() {
         query: Vec::new(),
         writer: None,
         body: Vec::new(),
+        headers: Vec::new(),
     };
     assert!(handle(&mut conn, &request, at(0.0)).is_none());
 }

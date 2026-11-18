@@ -19,6 +19,26 @@ pub struct Request {
     /// Present on an authorized write.
     pub writer: Option<Writer>,
     pub body: Vec<u8>,
+    /// Request headers in order, with their names in lowercase.
+    pub headers: Vec<(String, String)>,
+}
+
+impl Request {
+    /// The first value of a header, by its lowercase name.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
+    }
+
+    /// The first value of a query parameter.
+    pub fn param(&self, name: &str) -> Option<&str> {
+        self.query
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
+    }
 }
 
 /// One response.
@@ -27,6 +47,8 @@ pub struct Response {
     pub status: u16,
     pub content_type: &'static str,
     pub body: Vec<u8>,
+    /// Headers besides `Content-Type`, such as `ETag`.
+    pub headers: Vec<(&'static str, String)>,
 }
 
 impl Response {
@@ -36,6 +58,14 @@ impl Response {
             status,
             content_type: "application/json",
             body: serde_json::to_vec(value).unwrap_or_default(),
+            headers: Vec::new(),
         }
+    }
+
+    /// The same response with one more header.
+    #[must_use]
+    pub fn with_header(mut self, name: &'static str, value: String) -> Response {
+        self.headers.push((name, value));
+        self
     }
 }
