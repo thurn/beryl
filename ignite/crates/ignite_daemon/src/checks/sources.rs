@@ -5,12 +5,18 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use std::time::Duration;
+
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::inputs::CrateGraph;
 use ignite_core::protocol::hub::CheckStatsReply;
 use ignite_core::traits::{Error, Result};
 
 use crate::build::{DirectoryTrees, TreeFacts};
+
+/// How long a request for a family's record may take before it counts as unreachable. This is
+/// the hub client's own limit.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// What the check runner needs to know about build trees.
 pub trait TreeSource: Send + Sync {
@@ -111,7 +117,15 @@ impl CheckHistory for HubHistory {
             })
             .collect();
         let url = format!("{}/checks/stats?family={family}", self.base);
-        let mut response = ureq::get(&url)
+        // An agent with a timeout, so that a connection the hub never answers cannot hang the
+        // caller (tip verification, the gate) forever.
+        let agent = ureq::Agent::new_with_config(
+            ureq::Agent::config_builder()
+                .timeout_global(Some(REQUEST_TIMEOUT))
+                .build(),
+        );
+        let mut response = agent
+            .get(&url)
             .header("Authorization", &format!("Bearer {}", self.token))
             .call()
             .map_err(|e| Error::Unreachable(e.to_string()))?;
