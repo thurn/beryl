@@ -29,3 +29,5 @@ pub trait UsageReader {
 
 #[cfg(target_os = "macos")]
 pub use macos::TreeMeter;
+#[cfg(windows)]
+pub use windows::TreeMeter;

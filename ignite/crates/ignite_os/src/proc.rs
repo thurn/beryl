@@ -7,13 +7,14 @@ use std::process::{Child, Command};
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(windows)]
-mod windows;
+pub(crate) mod windows;
 
 /// A started command and the group that holds its descendants.
 #[derive(Debug)]
 pub struct Group {
     pub child: Child,
-    /// The process group ID (macOS) or job handle value (Windows).
+    /// The process group ID (macOS) or the number in the job object's name (Windows). Both are
+    /// the leader's process ID.
     pub id: u64,
 }
 
