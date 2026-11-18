@@ -99,16 +99,22 @@ impl Drop for FakeHttpHub {
 fn quick(mut client: HubClient) -> HubClient {
     client.retries = 1;
     client.retry_pause = Duration::ZERO;
+    client.restart_window = Duration::ZERO;
     client
+}
+
+/// A port where nothing listens.
+fn stopped_hub_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
 }
 
 /// A client for a port where nothing listens: the hub is stopped.
 pub(crate) fn stopped_hub() -> HubClient {
-    let port = std::net::TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port();
+    let port = stopped_hub_port();
     quick(HubClient::with_base(
         format!("http://127.0.0.1:{port}/test/api"),
         "secret",
@@ -185,6 +191,91 @@ fn a_server_error_is_tried_again() {
     });
     hub.client().records(&[record("test")]).unwrap();
     assert_eq!(*calls.lock().unwrap(), 2);
+}
+
+/// A client that tries once more, then goes on while the hub looks restarting for up to
+/// `window`, pausing 10 ms between tries.
+fn restart_tolerant(port: u16, window: Duration) -> HubClient {
+    let mut client =
+        HubClient::with_base(format!("http://127.0.0.1:{port}/test/api"), "secret", "m-1");
+    client.retries = 1;
+    client.retry_pause = Duration::from_millis(10);
+    client.restart_window = window;
+    client
+}
+
+#[test]
+fn a_hub_behind_a_proxy_that_answers_502_while_it_restarts_is_waited_for() {
+    // `tailscale serve` answers 502 while nothing listens behind it, here for six requests,
+    // far more than `retries` covers.
+    let calls = Arc::new(Mutex::new(0));
+    let counter = calls.clone();
+    let hub = FakeHttpHub::start(move |_, _, _| {
+        let mut calls = counter.lock().unwrap();
+        *calls += 1;
+        if *calls <= 6 {
+            (502, "Bad Gateway".to_owned())
+        } else {
+            (200, "{}".to_owned())
+        }
+    });
+    restart_tolerant(hub.port, Duration::from_secs(10))
+        .records(&[record("test")])
+        .unwrap();
+    assert_eq!(*calls.lock().unwrap(), 7);
+}
+
+#[test]
+fn a_server_error_that_is_not_a_restart_is_tried_only_retries_times() {
+    let calls = Arc::new(Mutex::new(0));
+    let counter = calls.clone();
+    let hub = FakeHttpHub::start(move |_, _, _| {
+        *counter.lock().unwrap() += 1;
+        (500, "broken".to_owned())
+    });
+    let error = restart_tolerant(hub.port, Duration::from_secs(10))
+        .records(&[record("test")])
+        .unwrap_err();
+    assert!(matches!(error, Error::Unreachable(_)), "{error:?}");
+    assert_eq!(*calls.lock().unwrap(), 2);
+}
+
+#[test]
+fn a_hub_whose_port_refuses_connections_while_it_restarts_is_waited_for() {
+    // The hub's port is free for 400 ms, as between the old hub's exit and the new one's
+    // bind, then a hub listens there again.
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let back = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(400));
+        let server = tiny_http::Server::http(("127.0.0.1", port)).unwrap();
+        let request = server.recv().unwrap();
+        let _ = request.respond(tiny_http::Response::from_string("{}"));
+    });
+    restart_tolerant(port, Duration::from_secs(10))
+        .records(&[record("test")])
+        .unwrap();
+    back.join().unwrap();
+}
+
+#[test]
+fn a_hub_that_stays_down_is_given_up_after_the_restart_window() {
+    let client = restart_tolerant(stopped_hub_port(), Duration::from_millis(300));
+    let began = std::time::Instant::now();
+    let error = client.records(&[record("test")]).unwrap_err();
+    assert!(matches!(error, Error::Unreachable(_)), "{error:?}");
+    assert!(began.elapsed() >= Duration::from_millis(300));
+    assert!(began.elapsed() < Duration::from_secs(5));
+}
+
+#[test]
+fn the_restart_window_covers_a_hub_restart() {
+    assert!(RESTART_WINDOW >= Duration::from_secs(15));
+    let client = HubClient::with_base("http://127.0.0.1:1/test/api", "", "m-1");
+    assert_eq!(client.restart_window, RESTART_WINDOW);
 }
 
 #[test]

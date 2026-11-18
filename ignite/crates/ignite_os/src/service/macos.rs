@@ -1,5 +1,6 @@
 //! The macOS half of `service`: a launchd agent in `~/Library/LaunchAgents`, loaded into the
-//! user's login session, that starts the daemon at login and restarts it if it exits.
+//! user's login session, that starts the daemon at login and restarts it if it exits. The
+//! monitor and, on the hub's machine, the hub are agents of their own.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -15,6 +16,8 @@ use crate::Native;
 const LABEL: &str = "ignite.daemon";
 /// The monitor agent's launchd label.
 const MONITOR_LABEL: &str = "ignite.monitor";
+/// The hub agent's launchd label, on the hub's machine only.
+const HUB_LABEL: &str = "ignite.hub";
 
 /// How launchd runs an agent.
 #[derive(Clone, Copy)]
@@ -26,24 +29,22 @@ enum Launch {
     Interval(u32),
 }
 
-/// The installer's environment variables that the agent keeps. launchd starts an agent with only
-/// `/usr/bin:/bin:/usr/sbin:/sbin` on its `PATH`, where the daemon finds no `cargo`, `just`,
-/// `node` or Homebrew tools, and with none of the `IGNITE_*` settings, so the hub's machine
-/// would not serve the hub. `IGNITE_SESSION` and `IGNITE_TOKEN` belong to one session and stay
-/// out.
-const KEPT_VARIABLES: &[&str] = &[
-    "PATH",
-    "IGNITE_HOME",
-    "IGNITE_HUB_LISTEN",
-    "IGNITE_HUB_PUBLIC_LISTEN",
-];
+/// The installer's environment variables that every agent keeps. launchd starts an agent with
+/// only `/usr/bin:/bin:/usr/sbin:/sbin` on its `PATH`, where the daemon finds no `cargo`, `just`,
+/// `node` or Homebrew tools, and with none of the `IGNITE_*` settings. `IGNITE_SESSION` and
+/// `IGNITE_TOKEN` belong to one session and stay out. The hub's listen addresses
+/// ([`super::HUB_VARIABLES`]) go only to the hub's agent, which the install hands them to: a
+/// daemon started with them would serve the hub itself.
+const KEPT_VARIABLES: &[&str] = &["PATH", "IGNITE_HOME"];
 
 /// Writes the agent `label`'s property list and loads it, replacing an earlier registration.
+/// The agent starts with the [`KEPT_VARIABLES`] that are set here and with `extra`.
 fn install_agent(
     label: &str,
     launch: Launch,
     executable: &Path,
     args: &[String],
+    extra: &[(String, String)],
 ) -> io::Result<()> {
     let path = plist_path(label)?;
     let logs = home()?.join("Library").join("Logs");
@@ -54,6 +55,7 @@ fn install_agent(
     let environment: Vec<(String, String)> = KEPT_VARIABLES
         .iter()
         .filter_map(|name| Some(((*name).to_owned(), std::env::var(name).ok()?)))
+        .chain(extra.iter().cloned())
         .collect();
     fs::write(
         &path,
@@ -175,11 +177,12 @@ fn uninstall_agent(label: &str) -> io::Result<()> {
 
 impl Service for Native {
     fn install(&self, executable: &Path, args: &[String]) -> io::Result<()> {
-        install_agent(LABEL, Launch::KeepAlive, executable, args)
+        install_agent(LABEL, Launch::KeepAlive, executable, args, &[])
     }
 
     fn uninstall(&self) -> io::Result<()> {
         uninstall_agent(MONITOR_LABEL)?;
+        uninstall_agent(HUB_LABEL)?;
         uninstall_agent(LABEL)
     }
 
@@ -193,6 +196,7 @@ impl Service for Native {
             Launch::Interval(super::MONITOR_INTERVAL_S),
             executable,
             args,
+            &[],
         )
     }
 
@@ -205,6 +209,59 @@ impl Service for Native {
     fn kickstart_daemon(&self) -> io::Result<()> {
         revive(&SystemLaunchctl, &domain(), LABEL, &plist_path(LABEL)?)
     }
+
+    fn install_hub(
+        &self,
+        executable: &Path,
+        args: &[String],
+        environment: &[(String, String)],
+    ) -> io::Result<()> {
+        install_agent(HUB_LABEL, Launch::KeepAlive, executable, args, environment)
+    }
+
+    fn hub_installed(&self) -> io::Result<bool> {
+        Ok(plist_path(HUB_LABEL)?.exists())
+    }
+
+    fn kickstart_hub(&self) -> io::Result<()> {
+        revive(
+            &SystemLaunchctl,
+            &domain(),
+            HUB_LABEL,
+            &plist_path(HUB_LABEL)?,
+        )
+    }
+
+    fn recorded_variable(&self, name: &str) -> io::Result<Option<String>> {
+        let hub = plist_path(HUB_LABEL)?;
+        let path = if hub.exists() {
+            hub
+        } else {
+            plist_path(LABEL)?
+        };
+        if !path.exists() {
+            return Ok(None);
+        }
+        plist_variable(&path, name)
+    }
+}
+
+/// The value of the variable `name` in the `EnvironmentVariables` of the property list at
+/// `path`, read with `plutil`, or `None` when it sets no such variable.
+fn plist_variable(path: &Path, name: &str) -> io::Result<Option<String>> {
+    let key = format!("EnvironmentVariables.{name}");
+    let output = Command::new("/usr/bin/plutil")
+        .args(["-extract", &key, "raw", "-o", "-"])
+        .arg(path)
+        .output()?;
+    // `plutil -extract` fails for a key the file does not have.
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let value = String::from_utf8_lossy(&output.stdout)
+        .trim_end_matches('\n')
+        .to_owned();
+    Ok(Some(value))
 }
 
 /// Starts the job `label` again: `launchctl kickstart -k` when launchd has it loaded, and
@@ -542,6 +599,44 @@ mod tests {
             String::from_utf8_lossy(&listen.stdout).trim(),
             "127.0.0.1:7345"
         );
+    }
+
+    #[test]
+    fn the_hub_agent_keeps_its_listen_addresses_and_install_can_read_them_back() {
+        let program = ["/opt/ignite/bin/current".to_owned(), "hub".to_owned()];
+        let environment = [
+            ("PATH".to_owned(), "/usr/bin".to_owned()),
+            ("IGNITE_HUB_LISTEN".to_owned(), "127.0.0.1:7345".to_owned()),
+            (
+                "IGNITE_HUB_PUBLIC_LISTEN".to_owned(),
+                "127.0.0.1:7346".to_owned(),
+            ),
+        ];
+        let text = plist(
+            HUB_LABEL,
+            Launch::KeepAlive,
+            &program,
+            &environment,
+            Path::new("/tmp/ignite.hub.log"),
+        );
+        assert!(text.contains("<string>ignite.hub</string>"));
+        assert!(text.contains("<key>KeepAlive</key>"));
+        let path = std::env::temp_dir().join(format!("ignite-hub-{}.plist", std::process::id()));
+        fs::write(&path, &text).unwrap();
+        let listen = plist_variable(&path, "IGNITE_HUB_LISTEN").unwrap();
+        let public = plist_variable(&path, "IGNITE_HUB_PUBLIC_LISTEN").unwrap();
+        let missing = plist_variable(&path, "IGNITE_HOME").unwrap();
+        fs::remove_file(&path).unwrap();
+        assert_eq!(listen.as_deref(), Some("127.0.0.1:7345"));
+        assert_eq!(public.as_deref(), Some("127.0.0.1:7346"));
+        assert_eq!(missing, None);
+    }
+
+    #[test]
+    fn the_daemon_agent_never_keeps_the_hubs_listen_addresses() {
+        for name in super::super::HUB_VARIABLES {
+            assert!(!KEPT_VARIABLES.contains(name), "{name}");
+        }
     }
 
     #[test]

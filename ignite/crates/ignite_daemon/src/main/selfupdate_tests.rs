@@ -110,8 +110,62 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         machine: MachineId::new("m-1").unwrap(),
         host: "jarvis".to_owned(),
         reports: Mutex::default(),
+        hub_service: Arc::new(FakeHubService::default()),
+        hub_kicked: Mutex::default(),
     };
     (update, git, restart)
+}
+
+/// The hub's login service on the hub's machine. Each kickstart records how many restarts of
+/// the daemon had happened before it, so a test can tell that the hub went first.
+#[derive(Default)]
+struct FakeHubService {
+    installed: bool,
+    restart: FakeRestart,
+    kicks: Mutex<Vec<usize>>,
+}
+
+impl HubService for FakeHubService {
+    fn installed(&self) -> bool {
+        self.installed
+    }
+
+    fn kickstart(&self) -> io::Result<()> {
+        self.kicks
+            .lock()
+            .unwrap()
+            .push(self.restart.started().len());
+        Ok(())
+    }
+}
+
+impl FakeHubService {
+    fn kicks(&self) -> Vec<usize> {
+        self.kicks.lock().unwrap().clone()
+    }
+}
+
+/// A daemon on the hub's machine, as [`daemon`] makes it, with its hub's login service and its
+/// clock.
+fn hub_machine_daemon(
+    master: &str,
+) -> (
+    SelfUpdate,
+    Arc<FakeGit>,
+    FakeRestart,
+    Arc<FakeHubService>,
+    Arc<FakeClock>,
+) {
+    let (mut update, git, restart) = daemon(master);
+    let service = Arc::new(FakeHubService {
+        installed: true,
+        restart: restart.clone(),
+        kicks: Mutex::default(),
+    });
+    let clock = Arc::new(FakeClock::new(ignite_core::time::Timestamp::from_millis(0)));
+    update.hub_service = service.clone();
+    update.clock = clock.clone();
+    (update, git, restart, service, clock)
 }
 
 #[test]
@@ -148,6 +202,73 @@ fn master_moving_with_changed_ignite_source_builds_and_restarts_at_once() {
     // heartbeat, whatever runs.
     update.after_heartbeat(Some(OLD), false);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+}
+
+#[test]
+fn on_the_hub_machine_the_hub_restarts_before_the_daemon() {
+    let (update, git, restart, service, _clock) = hub_machine_daemon(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
+    update.after_master_moved().unwrap();
+    settle(&update);
+    // `bin/current` points at the new build before either restarts, so the hub starts it.
+    assert_eq!(update.store.current_commit(), Some(commit(NEW)));
+
+    update.after_heartbeat(Some(OLD), false);
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+    // One kickstart of the hub, before any restart of the daemon.
+    assert_eq!(service.kicks(), [0]);
+}
+
+#[test]
+fn a_hub_already_on_the_release_is_not_restarted_again() {
+    // The hub reports `NEW` and this daemon follows it; the hub needs no restart.
+    let (update, _git, restart, service, _clock) = hub_machine_daemon(NEW);
+    update.after_heartbeat(Some(NEW), false);
+    settle(&update);
+    update.after_heartbeat(Some(NEW), false);
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+    assert!(service.kicks().is_empty());
+}
+
+#[test]
+fn a_hub_behind_the_daemon_on_its_machine_is_restarted_not_followed() {
+    // This daemon runs `bin/current`, `OLD`; the hub still reports `NEW`, an older or other
+    // build (its restart failed, or its service was installed after the release).
+    let (update, _git, restart, service, clock) = hub_machine_daemon(NEW);
+    let built = tempdir().join("built-old");
+    std::fs::write(&built, OLD).unwrap();
+    update.store.store(&commit(OLD), &built).unwrap();
+    update.store.point_current_at(&commit(OLD)).unwrap();
+
+    update.after_heartbeat(Some(NEW), false);
+    assert_eq!(service.kicks(), [0]);
+    // Not again on every heartbeat, but again after a while.
+    update.after_heartbeat(Some(NEW), false);
+    assert_eq!(service.kicks().len(), 1);
+    clock.advance(HUB_KICK_GAP_S + 1.0);
+    update.after_heartbeat(Some(NEW), false);
+    assert_eq!(service.kicks().len(), 2);
+    // The daemon never went to the hub's build.
+    settle(&update);
+    update.after_heartbeat(Some(NEW), false);
+    assert!(restart.started().is_empty());
+}
+
+#[test]
+fn a_hub_left_on_a_rejected_release_is_moved_back_with_the_daemon() {
+    // The daemon crash-looped on `NEW` and was rolled back to `OLD`, which `bin/current` now
+    // names; the hub still serves `NEW`.
+    let (update, _git, _restart, service, _clock) = hub_machine_daemon(NEW);
+    let built = tempdir().join("built-old");
+    std::fs::write(&built, OLD).unwrap();
+    update.store.store(&commit(OLD), &built).unwrap();
+    update.store.point_current_at(&commit(OLD)).unwrap();
+    update
+        .store
+        .reject_with_reason(&commit(NEW), "crash loop", update.clock.now());
+
+    update.after_heartbeat(Some(NEW), false);
+    assert_eq!(service.kicks(), [0]);
 }
 
 #[test]

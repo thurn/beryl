@@ -2,7 +2,10 @@
 //! on, and restarts it if it fails, registered with `schtasks` from a task definition in XML.
 //!
 //! The monitor is a second task, `ignite.monitor`, that runs at logon and then every
-//! [`MONITOR_INTERVAL_S`] seconds and is not restarted when it exits.
+//! [`MONITOR_INTERVAL_S`] seconds and is not restarted when it exits. On the hub's machine the
+//! hub is a third, `ignite.hub`, restarted like the daemon. A scheduled task carries no
+//! environment variables of its own, so the hub's listen addresses must be set in the user's
+//! environment, which the task inherits; no Windows machine serves the hub today.
 //!
 //! The task runs as the user who installs it, without elevation, only while they are logged
 //! on. The XML is needed because `schtasks /Create /SC ONLOGON` registers a task for every
@@ -21,6 +24,8 @@ use crate::Native;
 const TASK: &str = "ignite.daemon";
 /// The monitor task's name.
 const MONITOR_TASK: &str = "ignite.monitor";
+/// The hub task's name, on the hub's machine only.
+const HUB_TASK: &str = "ignite.hub";
 
 /// How the scheduler runs a task.
 #[derive(Clone, Copy)]
@@ -38,6 +43,7 @@ impl Service for Native {
 
     fn uninstall(&self) -> io::Result<()> {
         unregister(MONITOR_TASK)?;
+        unregister(HUB_TASK)?;
         unregister(TASK)
     }
 
@@ -65,10 +71,42 @@ impl Service for Native {
     }
 
     fn kickstart_daemon(&self) -> io::Result<()> {
-        // Ending a task that is not running fails harmlessly.
-        let _ = schtasks(&["/End", "/TN", TASK]);
-        check(TASK, "run", &schtasks(&["/Run", "/TN", TASK])?)
+        kickstart(TASK)
     }
+
+    fn install_hub(
+        &self,
+        executable: &Path,
+        args: &[String],
+        environment: &[(String, String)],
+    ) -> io::Result<()> {
+        // The task inherits the user's environment and can set none of its own, so a listen
+        // address that only this process has would be lost.
+        for (name, value) in environment {
+            if std::env::var(name).ok().as_deref() != Some(value.as_str()) {
+                return Err(io::Error::other(format!(
+                    "set {name}={value} in your user environment first: the hub's scheduled \
+                     task can only inherit it"
+                )));
+            }
+        }
+        register(HUB_TASK, Schedule::KeepAlive, executable, args)
+    }
+
+    fn hub_installed(&self) -> io::Result<bool> {
+        registered(HUB_TASK)
+    }
+
+    fn kickstart_hub(&self) -> io::Result<()> {
+        kickstart(HUB_TASK)
+    }
+}
+
+/// Ends the task `task` and runs it again.
+fn kickstart(task: &str) -> io::Result<()> {
+    // Ending a task that is not running fails harmlessly.
+    let _ = schtasks(&["/End", "/TN", task]);
+    check(task, "run", &schtasks(&["/Run", "/TN", task])?)
 }
 
 /// Registers the scheduled task `task` and starts it now, as logging on would.

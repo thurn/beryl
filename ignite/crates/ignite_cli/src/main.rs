@@ -66,6 +66,8 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         // Answered here, without the daemon: it is what looks after a daemon that is down.
         Command::Monitor => ignite_daemon::monitor::run(),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
+        // Answered here: it is the hub, which runs beside the daemon, not in it.
+        Command::Hub => exit_reply(ignite_daemon::main::run_hub(&current_dir())),
         Command::Supervise { spec } => exit_reply(ignite_daemon::supervise::supervise(spec)),
         Command::RustcWrap(pass) => exit_reply(ignite_daemon::wrap::rustc_wrap(&pass.args)),
         Command::Runner(pass) => exit_reply(ignite_daemon::wrap::runner(&pass.args)),

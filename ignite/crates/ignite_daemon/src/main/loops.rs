@@ -1,5 +1,5 @@
-//! The daemon's background threads, and the hub that the hub's machine serves beside its
-//! daemon. Each loop reports a failed round on standard error and tries again, so an
+//! The daemon's background threads, and the hub that the hub's machine serves in a process of
+//! its own (`ignite hub`). Each loop reports a failed round on standard error and tries again, so an
 //! unreachable hub or a busy tree never stops the daemon.
 
 use std::cell::RefCell;
@@ -317,64 +317,158 @@ pub fn collect_unfinished(launcher: &SupervisedLauncher) {
     launcher.adopt_unfinished();
 }
 
-/// On the hub's machine (`IGNITE_HUB_LISTEN` set), serves the hub and runs its upkeep for the
-/// life of the process.
-pub fn serve_hub_if_asked(options: &DaemonOptions) -> Result<()> {
-    let Some(listen) = std::env::var_os("IGNITE_HUB_LISTEN") else {
+/// Where the hub listens: the writable listener (`IGNITE_HUB_LISTEN`) and, if set, the read-only
+/// one that the public address proxies (`IGNITE_HUB_PUBLIC_LISTEN`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HubAddresses {
+    pub listen: String,
+    pub public: Option<String>,
+}
+
+impl HubAddresses {
+    /// The addresses `lookup` gives for [`ignite_os::service::HUB_VARIABLES`], or `None` when the
+    /// writable listener is not set.
+    pub fn from(lookup: impl Fn(&str) -> Option<String>) -> Option<HubAddresses> {
+        Some(HubAddresses {
+            listen: lookup("IGNITE_HUB_LISTEN").filter(|v| !v.is_empty())?,
+            public: lookup("IGNITE_HUB_PUBLIC_LISTEN").filter(|v| !v.is_empty()),
+        })
+    }
+
+    /// The addresses in this process's environment.
+    pub fn from_env() -> Option<HubAddresses> {
+        HubAddresses::from(|name| std::env::var(name).ok())
+    }
+}
+
+/// Whether the daemon serves the hub itself. The hub has a login service of its own
+/// (`ignite hub`, installed by `ignite install`), so a daemon restart does not take it away.
+/// A daemon still started with `IGNITE_HUB_LISTEN` on a machine without that service is one
+/// installed before the hub had a service, which a release reached by restarting: it keeps
+/// serving the hub until `ignite install` moves the hub to its own service, so that the
+/// upgrade does not leave every machine without a hub.
+pub fn daemon_serves_hub(addresses: Option<&HubAddresses>, hub_service: bool) -> bool {
+    addresses.is_some() && !hub_service
+}
+
+/// On a hub's machine that has no hub service yet (see [`daemon_serves_hub`]), serves the hub
+/// and runs its upkeep for the life of the daemon.
+pub fn serve_hub_if_asked(options: &DaemonOptions, hub_service: bool) -> Result<()> {
+    let addresses = HubAddresses::from_env();
+    if !daemon_serves_hub(addresses.as_ref(), hub_service) {
+        if addresses.is_some() {
+            eprintln!(
+                "ignite: not serving the hub: its own login service, `ignite hub`, serves it"
+            );
+        }
+        return Ok(());
+    }
+    let Some(addresses) = addresses else {
         return Ok(());
     };
-    let dir = options.home.root.join("hub");
-    std::fs::create_dir_all(&dir)?;
-    serve_hub(
+    eprintln!(
+        "ignite: serving the hub inside the daemon, since this machine has no hub service; \
+         run `ignite install` to give the hub a login service of its own"
+    );
+    serve_hub_at(
         &options.repo,
-        &listen.to_string_lossy(),
-        &dir,
+        &addresses,
+        &options.home.root.join("hub"),
         &options.version,
-    )?;
-    if let Some(public) = std::env::var_os("IGNITE_HUB_PUBLIC_LISTEN") {
-        serve_public_hub(&options.repo, &public.to_string_lossy(), &dir)?;
-    }
-    Ok(())
+        std::time::Duration::ZERO,
+    )
 }
 
-/// Serves the hub's database read-only at `listen` (`IGNITE_HUB_PUBLIC_LISTEN`), the address
-/// that `tailscale funnel` publishes. It answers only `GET` and `HEAD` and never serves
-/// `/export`, so the public internet can read the dashboard but cannot write.
-fn serve_public_hub(repo: &Path, listen: &str, dir: &Path) -> Result<()> {
-    let running = ignite_hub::server::HubServer {
-        config: super::read_config(repo)?,
-        listen: listen.to_owned(),
-        database: dir.join("hub.db"),
-    }
-    .start_read_only()?;
-    crash::spawn_loop("ignite-hub-public-accept", move || running.wait());
-    Ok(())
-}
-
-/// Serves the hub's database in `dir` at `listen` and starts its upkeep thread.
-pub fn serve_hub(repo: &Path, listen: &str, dir: &Path, version: &str) -> Result<()> {
+/// Serves the hub's database in `dir` at both of `addresses` and starts its upkeep thread, for
+/// the life of the process. A listener whose address is still taken is tried again for up to
+/// `bind_for`: a hub restarted by its login service may start before the old process has let go
+/// of the port.
+pub fn serve_hub_at(
+    repo: &Path,
+    addresses: &HubAddresses,
+    dir: &Path,
+    version: &str,
+    bind_for: Duration,
+) -> Result<()> {
+    std::fs::create_dir_all(dir)?;
     let config = super::read_config(repo)?;
     let database = dir.join("hub.db");
     let store = |e: ignite_store::StoreError| Error::Io(e.to_string());
     let conn = ignite_store::hub::open(&database).map_err(store)?;
     ignite_hub::routes::dispatch::set_hub_version(&conn, version).map_err(store)?;
-    let running = ignite_hub::server::HubServer {
-        config,
+    let server = |listen: &str| ignite_hub::server::HubServer {
+        config: config.clone(),
         listen: listen.to_owned(),
-        database,
-    }
-    .start()?;
+        database: database.clone(),
+    };
+    let running = retry_bind(bind_for, || server(&addresses.listen).start())?;
     // Served until the process ends. The accept loop ends only when `tiny_http` has failed to
-    // accept for good, so its end stops the daemon and the login service restarts it.
+    // accept for good, so its end stops the process and the login service restarts it.
     crash::spawn_loop("ignite-hub-accept", move || running.wait());
+    // The read-only listener (`IGNITE_HUB_PUBLIC_LISTEN`) is the address that `tailscale
+    // funnel` publishes. It answers only `GET` and `HEAD` and never serves `/export`, so the
+    // public internet can read the dashboard but cannot write.
+    if let Some(public) = &addresses.public {
+        let running = retry_bind(bind_for, || server(public).start_read_only())?;
+        crash::spawn_loop("ignite-hub-public-accept", move || running.wait());
+    }
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups"))).map_err(store)?;
     crash::spawn_loop("ignite-hub-upkeep", move || upkeep.run(conn, &SystemClock));
     Ok(())
 }
 
+/// Calls `start` until it succeeds or `window` has passed, pausing briefly between tries.
+fn retry_bind<T>(window: Duration, start: impl Fn() -> std::io::Result<T>) -> Result<T> {
+    let began = std::time::Instant::now();
+    loop {
+        match start() {
+            Ok(running) => return Ok(running),
+            Err(error) if began.elapsed() >= window => return Err(Error::Io(error.to_string())),
+            Err(_) => thread::sleep(Duration::from_millis(100)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_daemon_serves_the_hub_only_where_no_hub_service_does() {
+        let addresses = HubAddresses::from(|name| {
+            (name == "IGNITE_HUB_LISTEN").then(|| "127.0.0.1:7345".to_owned())
+        });
+        assert_eq!(
+            addresses,
+            Some(HubAddresses {
+                listen: "127.0.0.1:7345".to_owned(),
+                public: None
+            })
+        );
+        assert!(daemon_serves_hub(addresses.as_ref(), false));
+        assert!(!daemon_serves_hub(addresses.as_ref(), true));
+        assert!(!daemon_serves_hub(None, false));
+        assert_eq!(HubAddresses::from(|_| Some(String::new())), None);
+    }
+
+    #[test]
+    fn a_listener_whose_port_frees_up_is_served_within_the_window() {
+        let tries = std::cell::Cell::new(0);
+        let started = retry_bind(Duration::from_secs(5), || {
+            tries.set(tries.get() + 1);
+            if tries.get() < 3 {
+                Err(std::io::Error::from(std::io::ErrorKind::AddrInUse))
+            } else {
+                Ok(())
+            }
+        });
+        assert!(started.is_ok());
+        assert_eq!(tries.get(), 3);
+        let never = retry_bind(Duration::ZERO, || {
+            Err::<(), _>(std::io::Error::from(std::io::ErrorKind::AddrInUse))
+        });
+        assert!(never.is_err());
+    }
 
     #[test]
     fn the_tip_and_idle_loops_do_their_work_in_their_own_classes() {

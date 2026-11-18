@@ -8,9 +8,12 @@
 //! `ignite daemon` subcommand, takes the machine's lock and fills the options from the
 //! environment.
 //!
-//! The daemon on the hub's machine also serves the hub: when `IGNITE_HUB_LISTEN` names an
-//! address, such as `127.0.0.1:7345`, it serves the hub's database `hub/hub.db` in the home
-//! folder there and runs the hub's upkeep, writing backups into `hub/backups`.
+//! The hub's machine runs the hub as a login service of its own, [`run_hub`] (`ignite hub`):
+//! when `IGNITE_HUB_LISTEN` names an address, such as `127.0.0.1:7345`, it serves the hub's
+//! database `hub/hub.db` in the home folder there, and `IGNITE_HUB_PUBLIC_LISTEN` a read-only
+//! listener, and runs the hub's upkeep, writing backups into `hub/backups`. A daemon serves the
+//! hub itself only on a machine whose hub has no service yet (see
+//! [`loops::daemon_serves_hub`]).
 
 mod assemble;
 mod desk;
@@ -186,7 +189,80 @@ fn self_update(
         machine: base.machine.clone(),
         host: options.hostname.clone(),
         reports: Mutex::default(),
+        hub_service: Arc::new(NativeHubService),
+        hub_kicked: Mutex::default(),
     }
+}
+
+/// This machine's hub login service, through `ignite_os::service`.
+struct NativeHubService;
+
+impl selfupdate::HubService for NativeHubService {
+    fn installed(&self) -> bool {
+        use ignite_os::service::Service;
+        ignite_os::Native.hub_installed().unwrap_or(false)
+    }
+
+    fn kickstart(&self) -> std::io::Result<()> {
+        use ignite_os::service::Service;
+        ignite_os::Native.kickstart_hub()
+    }
+}
+
+/// How long `ignite hub` tries again to listen on an address that is taken: its login service
+/// may start it again before the old hub process has let go of the port.
+const HUB_BIND_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The hidden `ignite hub` subcommand, which the hub's login service runs from `bin/current`:
+/// serves the hub at the addresses in `IGNITE_HUB_LISTEN` and `IGNITE_HUB_PUBLIC_LISTEN`, and
+/// runs its upkeep, until the process ends. It does nothing else, so it starts in well under a
+/// second, and a daemon restart or crash on this machine leaves it serving. The hub reports
+/// this executable's commit as its version in heartbeat replies, which every daemon follows.
+/// Returns the exit code.
+pub fn run_hub(cwd: &Path) -> i32 {
+    let home = Home::from_env();
+    let Some(addresses) = loops::HubAddresses::from_env() else {
+        eprintln!(
+            "ignite: IGNITE_HUB_LISTEN is not set, so there is no address to serve the hub at"
+        );
+        return 1;
+    };
+    let repo = checkout(cwd, &home);
+    let version = running_version();
+    crate::crash::install_hook(home.root.clone(), version.clone());
+    let dir = home.root.join("hub");
+    if let Err(error) = loops::serve_hub_at(&repo, &addresses, &dir, &version, HUB_BIND_WINDOW) {
+        eprintln!("ignite: the hub did not start: {error}");
+        return 1;
+    }
+    eprintln!(
+        "ignite: serving the hub {version} at {}{}",
+        addresses.listen,
+        addresses
+            .public
+            .as_ref()
+            .map_or_else(String::new, |public| format!(", read-only at {public}"))
+    );
+    // The listeners and the upkeep run on threads of their own; any of them stopping ends the
+    // process (see `crate::crash::spawn_loop`).
+    loop {
+        std::thread::park();
+    }
+}
+
+/// This executable, resolved, and the commit it was built from ("unknown" for one that is not
+/// in the executable store).
+fn running_executable() -> (PathBuf, String) {
+    let ignite = std::env::current_exe()
+        .and_then(|exe| exe.canonicalize())
+        .unwrap_or_default();
+    let version = crate::update::ExecutableStore::version_of(&ignite)
+        .map_or_else(|| "unknown".to_owned(), |commit| commit.to_string());
+    (ignite, version)
+}
+
+fn running_version() -> String {
+    running_executable().1
 }
 
 /// The hidden `ignite daemon` subcommand: runs the daemon until the process ends, for the
@@ -209,11 +285,7 @@ pub fn run_daemon(cwd: &Path) -> i32 {
             return 1;
         }
     };
-    let ignite = std::env::current_exe()
-        .and_then(|exe| exe.canonicalize())
-        .unwrap_or_default();
-    let version = crate::update::ExecutableStore::version_of(&ignite)
-        .map_or_else(|| "unknown".to_owned(), |commit| commit.to_string());
+    let (ignite, version) = running_executable();
     // From here on, a panic anywhere in the daemon leaves a record in the home folder.
     crate::crash::install_hook(home.root.clone(), version.clone());
     let store = home.store();
@@ -264,12 +336,18 @@ pub fn run_daemon(cwd: &Path) -> i32 {
             return 1;
         }
     };
-    let started = loops::serve_hub_if_asked(&options)
-        .map_err(|error| format!("the hub did not start: {error}"))
-        .and_then(|()| {
-            Daemon::start_with(options, TreeSetup::Background)
-                .map_err(|error| format!("the daemon did not start: {error}"))
-        });
+    let hub_service = {
+        use ignite_os::service::Service;
+        ignite_os::Native.hub_installed().unwrap_or(false)
+    };
+    // A hub the daemon cannot serve, such as one whose address the hub's own service already
+    // holds, does not stop the daemon: the daemon is every verb on this machine, and the hub
+    // has its own service.
+    if let Err(error) = loops::serve_hub_if_asked(&options, hub_service) {
+        eprintln!("ignite: the daemon does not serve the hub: {error}");
+    }
+    let started = Daemon::start_with(options, TreeSetup::Background)
+        .map_err(|error| format!("the daemon did not start: {error}"));
     let daemon = match started {
         Ok(daemon) => daemon,
         Err(reason) => {

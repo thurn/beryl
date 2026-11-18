@@ -7,9 +7,11 @@
 //! ([`Handoff`]), which runs `ignite install` again with [`BUILT_VARIABLE`] set and goes
 //! straight to [`finish_install`].
 //!
-//! On the hub's machine the hub is served by the daemon that the install is about to set up, so
-//! when the hub cannot be reached, the install serves the hub itself for the length of the
-//! registration ([`HubFallback`], [`ServedHub`]).
+//! On the hub's machine the install also writes the hub's own login service, `ignite hub`
+//! started from `bin/current` with the hub's listen addresses ([`hub_settings`]), and leaves
+//! those addresses out of the daemon's service. Before the first install nothing serves the
+//! hub there, so when the hub cannot be reached, the install serves it itself for the length of
+//! the registration ([`HubFallback`], [`ServedHub`]).
 
 use std::ffi::OsStr;
 use std::fmt::Write as _;
@@ -24,7 +26,7 @@ use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{MachineRegister, MachineRegistered};
 use ignite_core::traits::{Error, Result};
 use ignite_os::Native;
-use ignite_os::service::Service;
+use ignite_os::service::{HUB_VARIABLES, Service};
 
 use super::{
     Builder, CheckoutBuilder, DAEMON_ARGS, ExecutableStore, Home, HttpRegistrar, IdentityFile,
@@ -37,9 +39,10 @@ use crate::server::{Context, Verb};
 /// executable is running the rest of the install.
 pub const BUILT_VARIABLE: &str = "IGNITE_INSTALL_BUILT";
 
-/// The variable that makes the daemon serve the hub, set on the hub's machine to the address to
-/// listen on, such as `127.0.0.1:7345`.
-pub const HUB_LISTEN_VARIABLE: &str = "IGNITE_HUB_LISTEN";
+pub use ignite_os::service::HUB_LISTEN_VARIABLE;
+
+/// The arguments the hub's login service runs the executable with.
+pub const HUB_ARGS: &[&str] = &["hub"];
 
 /// Everything `ignite install` touches.
 pub struct InstallDeps<'a> {
@@ -53,6 +56,8 @@ pub struct InstallDeps<'a> {
     /// the rest of the install to the new one.
     pub running: &'a Path,
     pub handoff: &'a dyn Handoff,
+    /// The install's environment, from which [`hub_settings`] reads the hub's listen addresses.
+    pub environment: &'a dyn Fn(&str) -> Option<String>,
 }
 
 /// What a finished install did.
@@ -63,6 +68,8 @@ pub struct Installed {
     pub executable: PathBuf,
     /// Whether the monitor was registered; it is not on a platform without one.
     pub monitor: bool,
+    /// The address the hub's login service listens on, on the hub's machine.
+    pub hub: Option<String>,
 }
 
 /// How [`install`] ended.
@@ -187,7 +194,10 @@ pub fn finish_install(deps: &InstallDeps, config: &Config, head: &Commit) -> Res
     identity.token = Some(registered.token);
     deps.identity.save(&identity)?;
 
+    let hub = hub_settings(deps.environment, deps.service);
     let args: Vec<String> = DAEMON_ARGS.iter().map(|s| (*s).to_owned()).collect();
+    // The daemon's service goes first: replacing it stops a daemon that an older install left
+    // serving the hub, which frees the hub's address for the hub's own service.
     deps.service.install(&deps.store.current_link(), &args)?;
     // The monitor runs the last-good build, so that it works when the newest one does not.
     let monitor = match deps
@@ -198,12 +208,48 @@ pub fn finish_install(deps: &InstallDeps, config: &Config, head: &Commit) -> Res
         Err(error) if error.kind() == io::ErrorKind::Unsupported => false,
         Err(error) => return Err(error.into()),
     };
+    let listen = hub
+        .iter()
+        .find(|(name, _)| name == HUB_LISTEN_VARIABLE)
+        .map(|(_, value)| value.clone());
+    if listen.is_some() {
+        let args: Vec<String> = HUB_ARGS.iter().map(|s| (*s).to_owned()).collect();
+        deps.service
+            .install_hub(&deps.store.current_link(), &args, &hub)?;
+    }
     Ok(Installed {
         monitor,
+        hub: listen,
         machine: identity.machine,
         version: head.clone(),
         executable: deps.store.path(head),
     })
+}
+
+/// The hub's listen addresses ([`HUB_VARIABLES`]) for its login service: each from the install's
+/// `environment`, else from what the installed services start with (the hub's, else the
+/// daemon's, which carried them before the hub had a service of its own), so that running
+/// `ignite install` again, or for the first time since the hub got its own service, keeps them.
+/// Empty on every machine but the hub's.
+pub fn hub_settings(
+    environment: &dyn Fn(&str) -> Option<String>,
+    service: &dyn Service,
+) -> Vec<(String, String)> {
+    let settings: Vec<(String, String)> = HUB_VARIABLES
+        .iter()
+        .filter_map(|name| {
+            let value = environment(name)
+                .filter(|value| !value.is_empty())
+                .or_else(|| service.recorded_variable(name).ok().flatten())?;
+            Some(((*name).to_owned(), value))
+        })
+        .collect();
+    // Without the writable listener there is no hub to serve.
+    if settings.iter().any(|(name, _)| name == HUB_LISTEN_VARIABLE) {
+        settings
+    } else {
+        Vec::new()
+    }
 }
 
 /// The hub this machine serves, started for one registration.
@@ -248,8 +294,8 @@ impl Registrar for HubFallback<'_> {
     }
 }
 
-/// The hub the daemon serves on the hub's machine: the database `hub.db` in `dir`, at the
-/// address in [`HUB_LISTEN_VARIABLE`].
+/// The hub served on the hub's machine: the database `hub.db` in `dir`, at the address in
+/// [`HUB_LISTEN_VARIABLE`].
 pub struct ServedHub {
     pub config: Config,
     pub listen: String,
@@ -283,8 +329,7 @@ impl LocalHub for ServedHub {
             project: self.config.hub.project.clone(),
         }
         .register(request, token);
-        // Stopped before the login service starts the daemon, which listens on the same
-        // address.
+        // Stopped before the hub's login service starts, which listens on the same address.
         running.stop();
         registered
     }
@@ -415,9 +460,11 @@ pub fn install_checkout(repo: &Path, config: &Config) -> Reply {
         url: config.hub.url.clone(),
         project: config.hub.project.clone(),
     };
-    let served = std::env::var(HUB_LISTEN_VARIABLE)
-        .ok()
-        .map(|listen| ServedHub {
+    let environment = |name: &str| std::env::var(name).ok();
+    let served = hub_settings(&environment, &Native)
+        .into_iter()
+        .find(|(name, _)| name == HUB_LISTEN_VARIABLE)
+        .map(|(_, listen)| ServedHub {
             config: config.clone(),
             listen,
             dir: home.root.join("hub"),
@@ -440,6 +487,7 @@ pub fn install_checkout(repo: &Path, config: &Config) -> Reply {
         handoff: &ProcessHandoff {
             repo: repo.to_path_buf(),
         },
+        environment: &environment,
     };
     let outcome = match built {
         Some(_) => finish_install(&deps, config, &head).map(Outcome::Installed),
@@ -489,6 +537,12 @@ fn installed_text(done: &Installed, main: &Path, link: &PathLink) -> String {
             "not supported on Windows yet; the daemon is not watched"
         }
     );
+    if let Some(listen) = &done.hub {
+        let _ = write!(
+            text,
+            "\nhub        serves {listen} as a login service of its own (`ignite hub`)"
+        );
+    }
     text
 }
 

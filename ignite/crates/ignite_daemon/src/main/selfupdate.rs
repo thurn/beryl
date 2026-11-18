@@ -20,6 +20,14 @@
 //! daemon that already runs `master`'s tip therefore waits for the hub instead of going back to
 //! the hub's older version.
 //!
+//! On the hub's machine the hub is a login service of its own (`ignite hub`), started from
+//! `bin/current`. Before the daemon there restarts into a release, it kickstarts the hub's
+//! service, so the hub comes back on the new build within a second and reports it to every
+//! other daemon. If the hub still reports another version than a daemon that runs
+//! `bin/current` (its restart failed, or the hub service was installed after the release), the
+//! daemon kickstarts it again, at most every [`HUB_KICK_GAP_S`] seconds, and does not follow it
+//! back to the older version.
+//!
 //! The release is built by a thread of its own, through the daemon's launcher (see
 //! [`crate::update::ReleaseBuilder`]), so the sender loop goes on sending heartbeats and the outbox
 //! while Cargo runs, which takes minutes on a loaded machine. Whichever loop asks for a build
@@ -49,6 +57,7 @@ use std::thread::{self, JoinHandle};
 
 use ignite_core::ids::{Commit, MachineId};
 use ignite_core::protocol::hub::JusticiarReport;
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
 use crate::update::selftest::Selftest;
@@ -58,6 +67,18 @@ use crate::update::{
 
 /// The sender loop runs every 10 seconds, so this many of its rounds are 5 minutes.
 pub const POLL_EVERY_ROUNDS: u32 = 30;
+
+/// A hub that lags behind the daemon on its machine is kickstarted at most this often.
+pub const HUB_KICK_GAP_S: f64 = 300.0;
+
+/// The hub's login service on this machine, which runs `bin/current hub`.
+pub trait HubService: Send + Sync {
+    /// Whether this machine has the hub's login service. Asked each time, so that a service
+    /// installed while the daemon runs is used.
+    fn installed(&self) -> bool;
+    /// Kills the hub and starts it again from `bin/current`.
+    fn kickstart(&self) -> std::io::Result<()>;
+}
 
 /// A release build running on its own thread.
 pub struct Building {
@@ -106,6 +127,10 @@ pub struct SelfUpdate {
     pub host: String,
     /// Selftest failures the hub has not accepted yet.
     pub reports: Mutex<Vec<JusticiarReport>>,
+    /// The hub's login service, on the hub's machine; restarted before the daemon.
+    pub hub_service: Arc<dyn HubService>,
+    /// When the hub was last kickstarted for lagging behind this daemon.
+    pub hub_kicked: Mutex<Option<Timestamp>>,
 }
 
 impl SelfUpdate {
@@ -350,8 +375,18 @@ impl SelfUpdate {
         // A hub that reports no commit, such as one run from an unstored executable, asks for
         // no update.
         // A release that was rolled back for failing to start is not updated to again.
-        let hub = hub_version
-            .and_then(|v| Commit::new(v).ok())
+        let reported = hub_version.and_then(|v| Commit::new(v).ok());
+        // On the hub's machine a hub on another build than the daemon is the one to move, even
+        // onto a rejected build: after a rollback the hub must leave the bad release too, or
+        // every other daemon would follow it there.
+        if let Some(hub) = reported.as_ref().filter(|hub| *hub != own)
+            && self.hub_lags_behind(own)
+        {
+            self.catch_the_hub_up(hub);
+            return;
+        }
+        let hub = reported
+            .clone()
             .filter(|hub| !self.store.is_rejected(hub))
             .filter(|hub| hub != own);
         let executable = match hub {
@@ -375,12 +410,53 @@ impl SelfUpdate {
             );
             return;
         }
+        self.restart_hub_first(reported.as_ref(), &executable);
         eprintln!("ignite: restarting into {}", executable.display());
         let error = restart_into(self.restart.as_ref(), &executable);
         // Only a failed restart returns. Forget the build so the next heartbeat does not
         // retry it every few seconds; the next move of `master` prepares it again.
         eprintln!("ignite: {error}");
         *self.ready() = None;
+    }
+
+    /// Whether this is the hub's machine and the daemon runs `bin/current`, which the hub's
+    /// service starts too: a hub on another version is then the one behind.
+    fn hub_lags_behind(&self, own: &Commit) -> bool {
+        self.hub_service.installed() && self.store.current_commit().as_ref() == Some(own)
+    }
+
+    /// Kickstarts the hub that reports `hub`, behind this daemon, unless that was done less than
+    /// [`HUB_KICK_GAP_S`] ago.
+    fn catch_the_hub_up(&self, hub: &Commit) {
+        let now = self.clock.now();
+        let mut kicked = self
+            .hub_kicked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if kicked.is_some_and(|at| (now.millis() - at.millis()) as f64 / 1000.0 < HUB_KICK_GAP_S) {
+            return;
+        }
+        *kicked = Some(now);
+        eprintln!("ignite: the hub runs {hub}, behind this daemon; restarting the hub");
+        if let Err(error) = self.hub_service.kickstart() {
+            eprintln!("ignite: cannot restart the hub: {error}");
+        }
+    }
+
+    /// On the hub's machine, kickstarts the hub's service before the daemon restarts into
+    /// `executable`, unless the hub already `reported` that version. `bin/current` already
+    /// points at it, so the hub comes back on the new build and tells every other daemon. A hub
+    /// that fails to restart does not hold the daemon back; the restarted daemon tries again
+    /// (see [`SelfUpdate::catch_the_hub_up`]).
+    fn restart_hub_first(&self, reported: Option<&Commit>, executable: &std::path::Path) {
+        let target = ExecutableStore::version_of(executable);
+        if target.is_none() || reported == target.as_ref() || !self.hub_service.installed() {
+            return;
+        }
+        eprintln!("ignite: restarting the hub before the daemon");
+        if let Err(error) = self.hub_service.kickstart() {
+            eprintln!("ignite: cannot restart the hub: {error}");
+        }
     }
 
     /// The stored executable of the hub's version, built now if it is not stored, or `None`

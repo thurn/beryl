@@ -21,6 +21,8 @@ fn commit(hex: &str) -> Commit {
 struct FakeMachine {
     running: bool,
     answers: bool,
+    /// On the hub's machine, whether its hub answers; `None` elsewhere.
+    hub: Option<bool>,
     log: RefCell<Vec<String>>,
 }
 
@@ -29,8 +31,14 @@ impl FakeMachine {
         Self {
             running,
             answers,
+            hub: None,
             log: RefCell::default(),
         }
+    }
+
+    fn with_hub(mut self, answers: bool) -> Self {
+        self.hub = Some(answers);
+        self
     }
 
     fn log(&self) -> Vec<String> {
@@ -51,6 +59,17 @@ impl Machine for FakeMachine {
     }
     fn notify(&self, title: &str, _text: &str) {
         self.log.borrow_mut().push(format!("notify {title}"));
+    }
+    fn hub_here(&self) -> bool {
+        self.hub.is_some()
+    }
+    fn probe_hub(&self) -> bool {
+        self.hub
+            .expect("the hub is probed only on the hub's machine")
+    }
+    fn kickstart_hub(&self) -> std::io::Result<()> {
+        self.log.borrow_mut().push("kickstart hub".to_owned());
+        Ok(())
     }
 }
 
@@ -233,4 +252,59 @@ fn an_unreadable_state_file_starts_afresh() {
     fs::write(home.root.join("monitor.json"), "{ not json").unwrap();
     assert_eq!(load(&home), MonitorState::default());
     let _: PathBuf = state_file(&home);
+}
+
+#[test]
+fn a_hub_that_stops_answering_is_kickstarted_after_two_runs_and_then_rests() {
+    let home = home();
+    let silent = FakeMachine::new(true, true).with_hub(false);
+    assert!(run_once(&home, &silent, at(0.0)).is_empty());
+    let done = run_once(&home, &silent, at(120.0));
+    assert_eq!(done, ["the hub did not answer; kickstarted it"]);
+    assert_eq!(silent.log(), ["kickstart hub"]);
+    // Not again while it may still be starting.
+    assert!(run_once(&home, &silent, at(240.0)).is_empty());
+    assert_eq!(
+        run_once(&home, &silent, at(120.0 + KICKSTART_GAP_S)),
+        ["the hub did not answer; kickstarted it"]
+    );
+    // The daemon answered throughout and was left alone.
+    assert!(!silent.log().contains(&"kickstart".to_owned()));
+}
+
+#[test]
+fn a_hub_that_answers_again_starts_the_count_over() {
+    let mut state = MonitorState::default();
+    assert!(!decide_hub(&mut state, true, false, at(0.0)));
+    assert!(!decide_hub(&mut state, true, true, at(120.0)));
+    assert!(!decide_hub(&mut state, true, false, at(240.0)));
+    assert!(decide_hub(&mut state, true, false, at(360.0)));
+}
+
+#[test]
+fn a_machine_without_the_hub_service_never_probes_or_kicks_a_hub() {
+    let home = home();
+    // `probe_hub` panics if it is called here.
+    let plain = FakeMachine::new(true, true);
+    for run in 0..4 {
+        assert!(run_once(&home, &plain, at(f64::from(run) * 120.0)).is_empty());
+    }
+    assert!(plain.log().is_empty());
+}
+
+#[test]
+fn the_hub_probe_takes_any_http_answer_and_not_a_closed_port() {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let address = server.server_addr().to_ip().unwrap();
+    let answering = std::thread::spawn(move || {
+        let request = server.recv().unwrap();
+        let _ = request.respond(tiny_http::Response::from_string("no").with_status_code(404));
+    });
+    assert!(hub_answers(&address.to_string()));
+    answering.join().unwrap();
+    let closed = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap();
+    assert!(!hub_answers(&closed.to_string()));
 }

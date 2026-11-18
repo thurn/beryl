@@ -9,9 +9,12 @@
 //! - goes back to the last-good build when `starts.jsonl` shows the current build crash-looping
 //!   (the same decision a starting daemon makes, in [`crate::update::detect_crash_loop`]);
 //! - after 15 minutes of failing in spite of kickstarts, writes `justiciar-needed.json` and
-//!   posts a notification, because a person or a repair session has to look.
+//!   posts a notification, because a person or a repair session has to look;
+//! - on the hub's machine, where the hub is a login service of its own, kickstarts the hub when
+//!   two runs in a row got no HTTP answer from it ([`decide_hub`]). The login service already
+//!   restarts a hub that exits; this catches one that runs and does not answer.
 //!
-//! It holds no agent logic and calls no hub. The decision ([`decide`]) is a function of what
+//! It holds no agent logic and calls the hub only to see that it answers. The decision ([`decide`]) is a function of what
 //! was observed; the observations and actions are the [`Machine`] trait, so the tests run the
 //! decision against a fake. A run reports a problem it handled and exits successfully.
 
@@ -37,8 +40,10 @@ pub const KICKSTART_GAP_S: f64 = 300.0;
 pub const ESCALATE_AFTER_S: f64 = 900.0;
 /// A repair request that has gone unanswered is posted again after this long.
 pub const RENOTIFY_AFTER_S: f64 = 3600.0;
-/// How long the daemon has to answer the probe.
+/// How long the daemon, or the hub, has to answer the probe.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// This many runs in a row without an answer from the hub get it kickstarted.
+pub const HUB_FAILURES_BEFORE_KICKSTART: u32 = 2;
 
 /// What the monitor remembers between runs: `<home>/monitor.json`.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,6 +59,9 @@ pub struct MonitorState {
     pub kickstarts: u32,
     /// When a repair was last asked for.
     pub escalated_at: Option<Timestamp>,
+    /// Runs in a row in which the hub, on the hub's machine, did not answer.
+    pub hub_failures: u32,
+    pub last_hub_kickstart: Option<Timestamp>,
 }
 
 /// What one run saw.
@@ -124,6 +132,26 @@ pub fn decide(state: &mut MonitorState, seen: &Observation, now: Timestamp) -> V
     actions
 }
 
+/// Updates `state` for a run at `now` that saw whether this machine has the hub's login service
+/// (`here`) and whether the hub answered, and says whether to kickstart the hub. Like the
+/// daemon, the hub is kickstarted at most every [`KICKSTART_GAP_S`] seconds, so one that is
+/// still starting is not killed.
+pub fn decide_hub(state: &mut MonitorState, here: bool, answered: bool, now: Timestamp) -> bool {
+    if !here || answered {
+        state.hub_failures = 0;
+        return false;
+    }
+    state.hub_failures += 1;
+    let rested = state
+        .last_hub_kickstart
+        .is_none_or(|last| seconds_since(last, now) >= KICKSTART_GAP_S);
+    if state.hub_failures >= HUB_FAILURES_BEFORE_KICKSTART && rested {
+        state.last_hub_kickstart = Some(now);
+        return true;
+    }
+    false
+}
+
 /// What the monitor observes and does outside the home folder's files.
 pub trait Machine {
     /// Whether the login service has a daemon process now.
@@ -134,6 +162,12 @@ pub trait Machine {
     fn kickstart(&self) -> std::io::Result<()>;
     /// Posts a desktop notification.
     fn notify(&self, title: &str, text: &str);
+    /// Whether this machine has the hub's login service.
+    fn hub_here(&self) -> bool;
+    /// Whether the hub answers an HTTP request in time.
+    fn probe_hub(&self) -> bool;
+    /// Kills the hub and starts it again through its login service.
+    fn kickstart_hub(&self) -> std::io::Result<()>;
 }
 
 fn state_file(home: &Home) -> PathBuf {
@@ -199,6 +233,13 @@ pub fn run_once(home: &Home, machine: &dyn Machine, now: Timestamp) -> Vec<Strin
     }
     if seen.running && seen.answered {
         let _ = fs::remove_file(home.root.join("justiciar-needed.json"));
+    }
+    let hub_here = machine.hub_here();
+    if decide_hub(&mut state, hub_here, hub_here && machine.probe_hub(), now) {
+        done.push(match machine.kickstart_hub() {
+            Ok(()) => "the hub did not answer; kickstarted it".to_owned(),
+            Err(error) => format!("the hub did not answer; cannot kickstart it: {error}"),
+        });
     }
     save(home, &state);
     done
@@ -278,6 +319,39 @@ impl Machine for NativeMachine {
     fn notify(&self, title: &str, text: &str) {
         ignite_os::notify::post(title, text);
     }
+
+    fn hub_here(&self) -> bool {
+        Native.hub_installed().unwrap_or(false)
+    }
+
+    fn probe_hub(&self) -> bool {
+        // The address the hub's service listens on; a service that names none is not probed.
+        let Ok(Some(listen)) = Native.recorded_variable(ignite_os::service::HUB_LISTEN_VARIABLE)
+        else {
+            return true;
+        };
+        hub_answers(&listen)
+    }
+
+    fn kickstart_hub(&self) -> std::io::Result<()> {
+        Native.kickstart_hub()
+    }
+}
+
+/// Whether the hub listening at `listen` answers an HTTP request within [`PROBE_TIMEOUT`]. Any
+/// answer counts, whatever its status: it shows the hub is serving.
+pub fn hub_answers(listen: &str) -> bool {
+    // An address that listens everywhere is reached through the loopback address.
+    let address = listen
+        .replace("0.0.0.0:", "127.0.0.1:")
+        .replace("[::]:", "[::1]:");
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .timeout_global(Some(PROBE_TIMEOUT))
+        .proxy(None)
+        .build()
+        .into();
+    agent.get(&format!("http://{address}/")).call().is_ok()
 }
 
 /// `ignite monitor`: one run against this machine. Never fails: a problem it handled is

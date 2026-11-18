@@ -218,6 +218,10 @@ pub enum Command {
     /// Run the daemon.
     #[command(hide = true)]
     Daemon,
+    /// Serve the hub at `IGNITE_HUB_LISTEN` (and `IGNITE_HUB_PUBLIC_LISTEN`), as the hub's login
+    /// service does on the hub's machine.
+    #[command(hide = true)]
+    Hub,
     /// Run one command as its supervisor.
     #[command(hide = true)]
     Supervise { spec: PathBuf },
@@ -568,6 +572,7 @@ impl Command {
             Command::Import { .. } => "import",
             Command::Monitor => "monitor",
             Command::Daemon => "daemon",
+            Command::Hub => "hub",
             Command::Supervise { .. } => "supervise",
             Command::RustcWrap(_) => "rustc-wrap",
             Command::Runner(_) => "runner",

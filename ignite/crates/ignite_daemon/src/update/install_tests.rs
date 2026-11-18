@@ -6,10 +6,26 @@ use ignite_core::protocol::hub::{MachineRegister, MachineRegistered};
 use super::super::tests::{FakeBuilder, commit, script, tempdir};
 use super::*;
 
+/// One hub service the install wrote.
+#[derive(Debug, PartialEq, Eq)]
+struct HubInstall {
+    executable: PathBuf,
+    args: Vec<String>,
+    environment: Vec<(String, String)>,
+    /// How many daemon services had been written before it.
+    daemons_before: usize,
+}
+
+/// An install's environment variables.
+type Environment = Box<dyn Fn(&str) -> Option<String>>;
+
 #[derive(Default)]
 struct FakeService {
     installed: RefCell<Vec<(PathBuf, Vec<String>)>>,
     monitors: RefCell<Vec<(PathBuf, Vec<String>)>>,
+    hubs: RefCell<Vec<HubInstall>>,
+    /// The variables the installed services already start with.
+    recorded: Vec<(String, String)>,
     /// Fail every daemon install, as `launchctl bootstrap` does when launchd refuses the agent.
     refuse: bool,
 }
@@ -36,6 +52,33 @@ impl Service for FakeService {
     fn is_installed(&self) -> io::Result<bool> {
         Ok(!self.installed.borrow().is_empty())
     }
+    fn install_hub(
+        &self,
+        executable: &Path,
+        args: &[String],
+        environment: &[(String, String)],
+    ) -> io::Result<()> {
+        self.hubs.borrow_mut().push(HubInstall {
+            executable: executable.to_owned(),
+            args: args.to_vec(),
+            environment: environment.to_vec(),
+            daemons_before: self.installed.borrow().len(),
+        });
+        Ok(())
+    }
+    fn recorded_variable(&self, name: &str) -> io::Result<Option<String>> {
+        Ok(self
+            .recorded
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.clone()))
+    }
+}
+
+fn pairs(list: &[(&str, &str)]) -> Vec<(String, String)> {
+    list.iter()
+        .map(|(n, v)| ((*n).to_owned(), (*v).to_owned()))
+        .collect()
 }
 
 struct FakeRegistrar {
@@ -136,6 +179,8 @@ struct Fixture {
     registrar: FakeRegistrar,
     service: FakeService,
     handoff: FakeHandoff,
+    /// The install's environment variables.
+    environment: Environment,
 }
 
 impl Fixture {
@@ -157,8 +202,17 @@ impl Fixture {
             },
             service: FakeService::default(),
             handoff: FakeHandoff::default(),
+            environment: Box::new(|_| None),
             home,
         }
+    }
+
+    /// Sets the install's environment variables.
+    fn with_environment(mut self, list: &[(&str, &str)]) -> Fixture {
+        let list = pairs(list);
+        self.environment =
+            Box::new(move |name| list.iter().find(|(n, _)| n == name).map(|(_, v)| v.clone()));
+        self
     }
 
     /// The install's collaborators, run by `running`.
@@ -172,6 +226,7 @@ impl Fixture {
             service: &self.service,
             running,
             handoff: &self.handoff,
+            environment: self.environment.as_ref(),
         }
     }
 }
@@ -226,6 +281,87 @@ fn install_stores_the_build_registers_and_starts_the_service() {
         *fx.registrar.tokens.borrow(),
         [None, Some("write-token".to_owned())]
     );
+}
+
+#[test]
+fn an_install_on_another_machine_writes_no_hub_service() {
+    let fx = Fixture::new("no-hub");
+    let head = commit("1234abc");
+    let running = fx.store.path(&head);
+    let done = installed(install(&fx.deps(&FakeHost, &running), &config(), &head).unwrap());
+    assert_eq!(done.hub, None);
+    assert!(fx.service.hubs.borrow().is_empty());
+    assert!(
+        !installed_text(&done, Path::new("/repo"), &PathLink::Present(running)).contains("\nhub ")
+    );
+}
+
+#[test]
+fn on_the_hub_machine_install_writes_the_hub_service_after_the_daemons() {
+    let fx = Fixture::new("hub-service").with_environment(&[
+        ("IGNITE_HUB_LISTEN", "127.0.0.1:7345"),
+        ("IGNITE_HUB_PUBLIC_LISTEN", "127.0.0.1:7346"),
+        ("PATH", "/usr/bin"),
+    ]);
+    let head = commit("1234abc");
+    let running = fx.store.path(&head);
+    let done = installed(install(&fx.deps(&FakeHost, &running), &config(), &head).unwrap());
+
+    assert_eq!(done.hub.as_deref(), Some("127.0.0.1:7345"));
+    // The daemon's service was replaced first, freeing the address an older daemon served
+    // the hub at.
+    assert_eq!(
+        *fx.service.hubs.borrow(),
+        [HubInstall {
+            executable: fx.store.current_link(),
+            args: vec!["hub".to_owned()],
+            environment: pairs(&[
+                ("IGNITE_HUB_LISTEN", "127.0.0.1:7345"),
+                ("IGNITE_HUB_PUBLIC_LISTEN", "127.0.0.1:7346"),
+            ]),
+            daemons_before: 1,
+        }]
+    );
+    // The daemon's service is written the same way as on any machine.
+    assert_eq!(
+        *fx.service.installed.borrow(),
+        [(fx.store.current_link(), vec!["daemon".to_owned()])]
+    );
+}
+
+#[test]
+fn install_moves_the_hub_addresses_from_the_daemons_service_to_the_hubs() {
+    // Installed before the hub had a service of its own: the daemon's service carries the
+    // addresses, and the shell that runs the install sets neither.
+    let mut fx = Fixture::new("hub-move");
+    fx.service.recorded = pairs(&[
+        ("IGNITE_HUB_LISTEN", "127.0.0.1:7345"),
+        ("IGNITE_HUB_PUBLIC_LISTEN", "127.0.0.1:7346"),
+    ]);
+    let head = commit("1234abc");
+    let running = fx.store.path(&head);
+    let done = installed(install(&fx.deps(&FakeHost, &running), &config(), &head).unwrap());
+    assert_eq!(done.hub.as_deref(), Some("127.0.0.1:7345"));
+    assert_eq!(fx.service.hubs.borrow()[0].environment, fx.service.recorded);
+}
+
+#[test]
+fn the_install_environment_wins_over_the_recorded_hub_addresses() {
+    let mut fx = Fixture::new("hub-env").with_environment(&[("IGNITE_HUB_LISTEN", "0.0.0.0:9")]);
+    fx.service.recorded = pairs(&[
+        ("IGNITE_HUB_LISTEN", "127.0.0.1:7345"),
+        ("IGNITE_HUB_PUBLIC_LISTEN", "127.0.0.1:7346"),
+    ]);
+    assert_eq!(
+        hub_settings(fx.environment.as_ref(), &fx.service),
+        pairs(&[
+            ("IGNITE_HUB_LISTEN", "0.0.0.0:9"),
+            ("IGNITE_HUB_PUBLIC_LISTEN", "127.0.0.1:7346"),
+        ])
+    );
+    // A public address alone is no hub.
+    fx.service.recorded = pairs(&[("IGNITE_HUB_PUBLIC_LISTEN", "127.0.0.1:7346")]);
+    assert!(hub_settings(&|_| None, &fx.service).is_empty());
 }
 
 #[test]
@@ -554,6 +690,7 @@ fn the_install_report_names_the_checkout_and_the_command_link() {
         version: commit("1234abc"),
         executable: PathBuf::from("/home/bin/1234abc/ignite"),
         monitor: true,
+        hub: Some("127.0.0.1:7345".to_owned()),
     };
     let text = installed_text(
         &done,
@@ -565,4 +702,5 @@ fn the_install_report_names_the_checkout_and_the_command_link() {
         text.contains("command    linked /home/.local/bin/ignite"),
         "{text}"
     );
+    assert!(text.contains("hub        serves 127.0.0.1:7345"), "{text}");
 }

@@ -96,6 +96,15 @@ pub static HUB_WRITES: FailureLog = FailureLog {
 /// How long an ordinary request may take before it counts as unreachable.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// How long a request goes on trying a hub that is restarting: one whose port refuses
+/// connections, or whose proxy (`tailscale serve`) answers 502, 503 or 504 because nothing
+/// listens behind it. The hub's own service restarts it in well under a second, and a daemon
+/// that served the hub took longer, so a restart within this window is invisible to callers.
+pub const RESTART_WINDOW: Duration = Duration::from_secs(15);
+
+/// The longest pause between two tries.
+const MAX_RETRY_PAUSE: Duration = Duration::from_secs(2);
+
 /// The hub at `base` (`<url>/<project>/api`), writing as `actor` with the machine's token.
 #[derive(Clone, Debug)]
 pub struct HubClient {
@@ -104,8 +113,11 @@ pub struct HubClient {
     pub actor: String,
     /// How many times a failed request is tried again.
     pub retries: u32,
-    /// The pause before the first retry; each later retry waits one pause longer.
+    /// The pause before the first retry; each later retry waits one pause longer, up to two
+    /// seconds.
     pub retry_pause: Duration,
+    /// How long a hub that looks restarting is tried, beyond `retries` (see [`RESTART_WINDOW`]).
+    pub restart_window: Duration,
     agent: ureq::Agent,
 }
 
@@ -134,6 +146,7 @@ impl HubClient {
             actor: actor.to_owned(),
             retries: 3,
             retry_pause: Duration::from_millis(500),
+            restart_window: RESTART_WINDOW,
             agent: ureq::Agent::new_with_config(config),
         }
     }
@@ -210,18 +223,21 @@ impl HubClient {
     }
 
     /// Sends a request, trying again while the hub cannot be reached or answers with a server
-    /// error.
+    /// error: `retries` times, and for as long as [`HubClient::restart_window`] while the hub
+    /// looks like it is restarting ([`restarting_status`], [`restarting_error`]).
     fn with_retries(
         &self,
         path: &str,
         send: impl Fn() -> std::result::Result<ureq::http::Response<ureq::Body>, ureq::Error>,
     ) -> Result<Answer> {
-        let mut last = String::new();
-        for attempt in 0..=self.retries {
+        let began = std::time::Instant::now();
+        let mut last;
+        let mut attempt: u32 = 0;
+        loop {
             if attempt > 0 {
-                std::thread::sleep(self.retry_pause * attempt);
+                std::thread::sleep((self.retry_pause * attempt).min(MAX_RETRY_PAUSE));
             }
-            match send() {
+            let restarting = match send() {
                 Ok(response) => {
                     let status = response.status().as_u16();
                     let body = response
@@ -230,18 +246,56 @@ impl HubClient {
                         .map_err(|e| Error::Unreachable(format!("{path}: {e}")));
                     match body {
                         Ok(body) if status < 500 => return Ok(Answer { status, body }),
-                        Ok(body) => last = format!("{status} {}", String::from_utf8_lossy(&body)),
-                        Err(Error::Unreachable(message)) => last = message,
+                        Ok(body) => {
+                            last = format!("{status} {}", String::from_utf8_lossy(&body));
+                            restarting_status(status)
+                        }
+                        Err(Error::Unreachable(message)) => {
+                            last = message;
+                            false
+                        }
                         Err(error) => return Err(error),
                     }
                 }
-                Err(error) => last = error.to_string(),
+                Err(error) => {
+                    last = error.to_string();
+                    restarting_error(&error)
+                }
+            };
+            attempt += 1;
+            let again =
+                attempt <= self.retries || (restarting && began.elapsed() < self.restart_window);
+            if !again {
+                break;
             }
         }
         Err(Error::Unreachable(format!(
             "the hub at {}{path}: {last}",
             self.base
         )))
+    }
+}
+
+/// Whether a status says that nothing listens behind the hub's proxy, as `tailscale serve`
+/// answers while the hub restarts.
+fn restarting_status(status: u16) -> bool {
+    matches!(status, 502..=504)
+}
+
+/// Whether a failed request says that nothing listens at the hub's address yet: the connection
+/// was refused, or cut before an answer, as when the hub stops mid-request.
+fn restarting_error(error: &ureq::Error) -> bool {
+    use std::io::ErrorKind;
+    match error {
+        ureq::Error::ConnectionFailed => true,
+        ureq::Error::Io(io) => matches!(
+            io.kind(),
+            ErrorKind::ConnectionRefused
+                | ErrorKind::ConnectionReset
+                | ErrorKind::ConnectionAborted
+                | ErrorKind::UnexpectedEof
+        ),
+        _ => false,
     }
 }
 
