@@ -551,6 +551,7 @@ fn an_empty_rebase_does_not_close_a_ticket_whose_push_never_reached_the_remote()
         commit: never_pushed,
         state: RecordState::Pushing,
         written_at: None,
+        tree: None,
     };
     world.landing.records.write(&record).unwrap();
 
@@ -583,6 +584,7 @@ fn a_malformed_record_is_moved_aside_and_the_others_are_still_delivered() {
         commit,
         state: RecordState::Pushed,
         written_at: None,
+        tree: None,
     };
     world.landing.records.write(&record).unwrap();
     // "a.1" sorts before "t.1", so the bad file is read first.

@@ -3,7 +3,7 @@
 
 use std::sync::atomic::Ordering;
 
-use ignite_core::ids::{Commit, TreeId};
+use ignite_core::ids::{Commit, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::hub::Landed;
 use ignite_core::protocol::tickets::LandedWork;
@@ -12,6 +12,7 @@ use ignite_core::traits::Clock;
 
 use super::fakes::TestGit;
 use super::{World, world, world_with, world_with_checks};
+use crate::land::env::LandTrees as _;
 use crate::land::records::{LandingRecord, RecordState};
 
 /// Writes a `pushing` record of the held ticket's, for `commit`, written at `at`.
@@ -32,6 +33,7 @@ fn write_pushing(world: &World, commit: &Commit, at: Option<Timestamp>) -> Landi
         commit: commit.clone(),
         state: RecordState::Pushing,
         written_at: at,
+        tree: Some(TreeId::new("tree-01").unwrap()),
     };
     world.landing.records.write(&record).unwrap();
     record
@@ -105,6 +107,53 @@ fn the_sender_closes_a_ticket_whose_push_landed_but_whose_landing_never_ran_agai
     assert_eq!(world.landings().len(), 1);
     assert!(world.landing.records.all().unwrap().is_empty());
     assert_eq!(world.git.pushes().len(), 1);
+}
+
+#[test]
+fn a_landing_the_sender_settles_releases_its_ticket_tree() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world
+        .git
+        .push_lands_then_fails
+        .store(true, Ordering::SeqCst);
+    world.land_as("tree-01", "local_a");
+    assert!(world.trees.released.lock().unwrap().is_empty());
+
+    world.clock.advance(120.0);
+    world.landing.deliver_pending(&world.ctx);
+
+    let tree = TreeId::new("tree-01").unwrap();
+    assert_eq!(
+        *world.trees.released.lock().unwrap(),
+        std::slice::from_ref(&tree)
+    );
+    assert_eq!(world.trees.deleted.lock().unwrap().len(), 1);
+    assert!(world.trees.ticket_tree(&tree).unwrap().is_none());
+}
+
+#[test]
+fn a_settled_landing_leaves_a_tree_leased_to_another_ticket_alone() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world
+        .git
+        .push_lands_then_fails
+        .store(true, Ordering::SeqCst);
+    world.land_as("tree-01", "local_a");
+    // The ticket was released by hand and its tree given to another ticket meanwhile.
+    {
+        let mut tickets = world.trees.tickets.lock().unwrap();
+        let held = tickets.get_mut(&TreeId::new("tree-01").unwrap()).unwrap();
+        held.ticket = TicketId::new("t.2").unwrap();
+        held.session = Some(SessionId::new("local_b").unwrap());
+    }
+
+    world.clock.advance(120.0);
+    world.landing.deliver_pending(&world.ctx);
+
+    assert_eq!(world.landings().len(), 1);
+    assert!(world.trees.released.lock().unwrap().is_empty());
 }
 
 #[test]

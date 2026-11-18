@@ -55,6 +55,10 @@ impl Occupants for Native {
             .map(|entry| entry.th32ParentProcessID)
     }
 
+    fn group(&self, _pid: u32) -> Option<u32> {
+        None
+    }
+
     fn end(&self, pids: &[u32], grace: Duration) -> io::Result<Vec<u32>> {
         let mut ended = Vec::new();
         for &pid in pids {

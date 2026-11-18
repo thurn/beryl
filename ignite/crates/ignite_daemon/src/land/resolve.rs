@@ -5,7 +5,9 @@
 //! ended, or the ticket was released), and the ticket would stay open although its commit is on
 //! the integration branch. The daemon's sender settles them too: a record whose commit is in the
 //! history of the remote tip becomes `pushed` and is told to the hub; one whose commit is not,
-//! and that is old enough that its push is not still in flight, is dropped.
+//! and that is old enough that its push is not still in flight, is dropped. A settled landing
+//! also releases its ticket tree and deletes the ticket's saved branch, as a landing that
+//! finishes does, while the tree is still leased to the record's ticket.
 
 use std::time::Duration;
 
@@ -62,7 +64,9 @@ impl Landing {
                             "ignite: landing of {} not settled: {error}",
                             record.landed.ticket
                         );
+                        continue;
                     }
+                    self.release_landed_tree(&record);
                 }
                 Ok(false) if age_s(&record, now) >= DROP_AFTER.as_secs_f64() => {
                     eprintln!(
@@ -82,6 +86,29 @@ impl Landing {
                     record.landed.ticket
                 ),
             }
+        }
+    }
+
+    /// Releases the ticket tree of a landing that the sender settled, and deletes the branch
+    /// the ticket's work was saved to. A tree that is no longer leased to the record's ticket
+    /// (released by hand, or leased to another ticket since) is left alone.
+    fn release_landed_tree(&self, record: &LandingRecord) {
+        let ticket = &record.landed.ticket;
+        let Some(tree) = &record.tree else { return };
+        match self.trees.ticket_tree(tree) {
+            Ok(Some(held)) if held.ticket == *ticket => {}
+            Ok(_) => return,
+            Err(error) => {
+                eprintln!("ignite: {tree} of the landed {ticket} not released: {error}");
+                return;
+            }
+        }
+        // No client asked for this release, so no process is spared but the daemon itself.
+        if let Err(error) = self.trees.release_ticket(tree, &record.commit, None) {
+            eprintln!("ignite: {tree} of the landed {ticket} not released: {error}");
+        }
+        if let Err(error) = self.trees.delete_saved(ticket) {
+            eprintln!("ignite: the saved branch of the landed {ticket} not deleted: {error}");
         }
     }
 }

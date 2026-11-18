@@ -86,7 +86,10 @@ impl Trees {
     }
 
     /// Ends every process whose working directory or executable is inside `path`, except this
-    /// process, `caller` and the ancestors of both.
+    /// process, `caller` and the ancestors of both, and every process in `caller`'s process
+    /// group. The group is spared because the client usually runs in a pipeline such as
+    /// `ignite close -m ... 2>&1 | tail -4` from a shell inside the tree: `tail` is neither the
+    /// client nor its ancestor, and ending it ended the command line with exit 143.
     pub(super) fn end_processes(path: &Path, caller: Option<u32>) -> Result<Vec<Ended>> {
         let mut spared = BTreeSet::new();
         for start in [Some(std::process::id()), caller].into_iter().flatten() {
@@ -95,10 +98,15 @@ impl Trees {
                 pid = Native.parent(current);
             }
         }
+        // A caller in the daemon's own group would spare everything the daemon started.
+        let caller_group = caller
+            .and_then(|pid| Native.group(pid))
+            .filter(|&group| group > 1 && Native.group(std::process::id()) != Some(group));
         let occupants: Vec<_> = Native
             .occupants(path)?
             .into_iter()
             .filter(|occupant| !spared.contains(&occupant.pid))
+            .filter(|occupant| caller_group.is_none() || Native.group(occupant.pid) != caller_group)
             .collect();
         let pids: Vec<u32> = occupants.iter().map(|o| o.pid).collect();
         let killed = Native.end(&pids, GRACE)?;

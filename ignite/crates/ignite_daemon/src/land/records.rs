@@ -15,7 +15,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use ignite_core::ids::{Commit, TicketId};
+use ignite_core::ids::{Commit, TicketId, TreeId};
 use ignite_core::protocol::hub::Landed;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Hub, Result};
@@ -41,6 +41,10 @@ pub struct LandingRecord {
     /// field existed has none and counts as old.
     #[serde(default)]
     pub written_at: Option<Timestamp>,
+    /// The ticket tree the landing came from, so that whoever settles a `pushing` record can
+    /// release it. A record from before this field existed has none.
+    #[serde(default)]
+    pub tree: Option<TreeId>,
 }
 
 /// The records of one daemon, one JSON file per ticket in one directory.

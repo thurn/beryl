@@ -117,3 +117,21 @@ fn a_finished_reply_nobody_read_is_dropped_after_a_day_without_a_database() {
     assert!(!lock(&handles.state).replies.contains_key(&kept));
     assert_eq!(handles.wait(&kept, 0, None), Waited::Unknown);
 }
+
+/// A worker reported that `ignite wait` on a running landing answered "still running" at once.
+/// The session's own transcript showed each call took the full 540 seconds; this keeps it so,
+/// with the database the daemon uses, for a session waiting from the landing's tree.
+#[test]
+fn a_wait_on_a_running_operation_blocks_for_its_whole_wait() {
+    let path = temp_db("blocks");
+    let handles = open(&path);
+    let tree = TreeId::new("tree-01").unwrap();
+    let handle = handles.create("land", Some(&session("local_a")), Some(&tree));
+    let started = Instant::now();
+    assert_eq!(
+        handles.wait(&handle, 1, Some(&session("local_a"))),
+        Waited::Running("land".to_owned())
+    );
+    assert!(started.elapsed() >= Duration::from_secs(1));
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}

@@ -476,6 +476,7 @@ impl Landing {
                 commit: rebased.head.clone(),
                 state: RecordState::Pushing,
                 written_at: Some(ctx.clock.now()),
+                tree: Some(held.tree.clone()),
             };
             self.records.write(&record).map_err(fail)?;
             match ctx.git.push(&gate_tree.path, &rebased.head, &staging) {

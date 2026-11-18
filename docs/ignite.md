@@ -569,9 +569,10 @@ Rules for trees:
 - Releasing a tree first saves what it holds, then resets it to a clean checkout
   and keeps its build directories. See [Releasing work](#releasing-work).
 - Releasing also ends every process whose working directory or executable is
-  inside the tree, whether or not Ignite started it, except the caller and its
-  ancestors. A server that an agent started by hand and forgot is the usual
-  case.
+  inside the tree, whether or not Ignite started it, except the caller, its
+  ancestors and the rest of its process group (the other side of a pipe such as
+  `ignite close -m ... | tail`). A server that an agent started by hand and
+  forgot is the usual case.
 - Only the session that holds a tree's lease may use it. Every `ignite` verb and
   the tree's `cargo` shim refuse any other session with exit code 3, so a
   session that was replaced cannot go on working in a tree that now belongs to
@@ -1114,7 +1115,10 @@ Rules:
 - The daemon writes a record of the landing to its own disk before it pushes. If
   the push succeeds and the hub cannot be told, the record stays queued and the
   ticket is closed when the hub returns. A record whose push was rejected is
-  dropped. A landing is never pushed twice.
+  dropped. A landing is never pushed twice. When a push fails with no answer,
+  the daemon later checks whether its commit reached `staging`; if it did, the
+  daemon closes the ticket and releases the ticket tree, as the landing would
+  have, unless the tree is leased to another ticket by then.
 - Paths in a failed gate's output are relative to the repository, because the
   gate may have run in a landing tree that the next landing reuses. The rerun
   command works in the ticket tree.

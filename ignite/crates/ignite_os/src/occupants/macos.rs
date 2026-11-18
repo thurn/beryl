@@ -44,6 +44,10 @@ impl Occupants for Native {
         bsd_info(pid).map(|info| info.pbi_ppid)
     }
 
+    fn group(&self, pid: u32) -> Option<u32> {
+        bsd_info(pid).map(|info| info.pbi_pgid)
+    }
+
     fn end(&self, pids: &[u32], grace: Duration) -> io::Result<Vec<u32>> {
         for &pid in pids {
             signal(pid, libc::SIGTERM)?;

@@ -361,6 +361,57 @@ fn a_release_ends_a_server_left_in_the_tree_but_not_the_caller() {
     caller.wait().unwrap();
 }
 
+/// The client usually runs in a pipeline from a shell inside the tree, as in
+/// `ignite close -m ... | tail -4`. The other side of the pipe is in the client's process group
+/// but is not its ancestor; ending it would end the whole command line.
+#[cfg(unix)]
+#[test]
+fn a_release_spares_the_rest_of_the_callers_command_line() {
+    use std::os::unix::process::CommandExt as _;
+
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    let mut server = Command::new("/bin/sleep")
+        .arg("1000")
+        .current_dir(&lease.path)
+        .stdin(Stdio::null())
+        .spawn()
+        .unwrap();
+    // The caller leads a process group of its own, as a shell's command line does.
+    let mut caller = Command::new("/bin/sh")
+        .args(["-c", "read line"])
+        .current_dir(&lease.path)
+        .stdin(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let group = i32::try_from(caller.id()).unwrap();
+    let mut tail = Command::new("/bin/sh")
+        .args(["-c", "read line"])
+        .current_dir(&lease.path)
+        .stdin(Stdio::piped())
+        .process_group(group)
+        .spawn()
+        .unwrap();
+
+    let released = f
+        .trees
+        .release(&lease.tree, &f.tip(), Some(caller.id()))
+        .unwrap();
+
+    let ended: Vec<u32> = released.ended.iter().map(|e| e.pid).collect();
+    assert_eq!(ended, [server.id()]);
+    assert!(!server.wait().unwrap().success());
+    assert!(
+        tail.try_wait().unwrap().is_none(),
+        "the pipe's other side was ended"
+    );
+    for child in [&mut caller, &mut tail] {
+        drop(child.stdin.take());
+        child.wait().unwrap();
+    }
+}
+
 #[test]
 fn no_directory_outside_the_configured_trees_is_created() {
     let f = Fixture::new(2, 2);

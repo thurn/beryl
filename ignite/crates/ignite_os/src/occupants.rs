@@ -32,6 +32,11 @@ pub trait Occupants {
     /// The parent of `pid`, or `None` once it has exited.
     fn parent(&self, pid: u32) -> Option<u32>;
 
+    /// The process group of `pid`, or `None` once it has exited. A shell puts every process of
+    /// one command line in one group, such as both sides of `ignite close | tail`. Windows has
+    /// no process groups and always answers `None`.
+    fn group(&self, pid: u32) -> Option<u32>;
+
     /// Sends `SIGTERM` to each process, waits up to `grace` for them to exit and sends `SIGKILL`
     /// to those still running. Returns the processes that needed `SIGKILL`.
     ///
