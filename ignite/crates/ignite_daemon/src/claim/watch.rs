@@ -248,6 +248,7 @@ impl Claims {
     pub fn tick(&self, ctx: &Context) {
         self.forget_released();
         self.retry_failed_resets();
+        self.free_closed_tickets();
         let now = self.clock.now();
         let mut verdicts = Vec::new();
         {

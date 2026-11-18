@@ -136,6 +136,27 @@ impl FakeDesk {
         });
     }
 
+    /// Closes a ticket as `ignite ticket close` does: at the hub only, which drops the claim.
+    pub fn close_by_hand(&self, ticket: &str) {
+        lock(&self.holders).remove(&id(ticket));
+        lock(&self.details)
+            .get_mut(&id(ticket))
+            .unwrap()
+            .ticket
+            .status = Status::Closed;
+    }
+
+    /// The hub's refusal of a release or close of a closed ticket, which it no longer holds.
+    fn refuse_closed(&self, ticket: &TicketId) -> Result<()> {
+        let closed = lock(&self.details)
+            .get(ticket)
+            .is_some_and(|d| d.ticket.status == Status::Closed);
+        if closed {
+            return Err(Error::Conflict(format!("{ticket} is not held by anyone")));
+        }
+        Ok(())
+    }
+
     fn brief_of(&self, ticket: &TicketId) -> Result<TicketBrief> {
         let details = lock(&self.details);
         let detail = details
@@ -201,6 +222,7 @@ impl TicketDesk for FakeDesk {
     }
 
     fn release(&self, release: &ReleaseRequest) -> Result<()> {
+        self.refuse_closed(&release.ticket)?;
         lock(&self.holders).remove(&release.ticket);
         lock(&self.releases).push(release.clone());
         Ok(())
@@ -213,6 +235,7 @@ impl TicketDesk for FakeDesk {
         _session: &SessionId,
         reason: &str,
     ) -> Result<()> {
+        self.refuse_closed(ticket)?;
         lock(&self.holders).remove(ticket);
         lock(&self.closes).push((ticket.clone(), reason.to_owned()));
         Ok(())

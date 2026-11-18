@@ -394,6 +394,30 @@ pub fn closed(
     }
 }
 
+/// The reply to a release or close of a ticket that was already closed at the hub by hand.
+pub fn already_closed(
+    ticket: &TicketId,
+    tree: &TreeId,
+    title: &str,
+    reset: Option<Error>,
+) -> Reply {
+    let mut rows = vec![(
+        "closed",
+        format!("{ticket} was already closed; {tree} freed; do not use this path again"),
+    )];
+    if let Some(error) = reset {
+        rows.push(("reset", format!("{tree} failed: {error}")));
+    }
+    rows.push(("title", format!("{DONE} {title}")));
+    rows.push(("next", "nothing; wait for your next ticket".to_owned()));
+    Reply {
+        exit: Exit::Success,
+        text: lines(&rows),
+        json: Some(json!({"closed": ticket, "tree": tree, "already_closed": true})),
+        handle: None,
+    }
+}
+
 #[cfg(test)]
 mod resolve_tests {
     use super::resolved;

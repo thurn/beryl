@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use ignite_core::ids::Commit;
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::hub::DependencyNote;
@@ -275,6 +277,51 @@ fn close_frees_the_tree_and_drops_the_saved_branch() {
     );
     assert!(lock(&world.trees.saved).is_empty());
     assert_eq!(lock(&world.trees.free).len(), 2);
+}
+
+#[test]
+fn release_after_a_hand_close_frees_the_tree() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.60", "Counter names", ""));
+    start(&world, &["Tq.60"], WORKER);
+    world.desk.close_by_hand("Tq.60");
+    let reply = release(&world, &["-m", "Done."], WORKER);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply
+            .text
+            .starts_with("closed   Tq.60 was already closed; tree-01 freed"),
+        "{}",
+        reply.text
+    );
+    assert_eq!(lock(&world.trees.free).len(), 3);
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
+}
+
+#[test]
+fn close_after_a_hand_close_frees_the_tree() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.61", "Counter names", ""));
+    start(&world, &["Tq.61"], WORKER);
+    world.desk.close_by_hand("Tq.61");
+    let req = world.request("close", &["-m", "Again."], "/trees/tree-01", WORKER);
+    let reply = CloseVerb(world.claims.clone()).run(&world.ctx, &req);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("was already closed; tree-01 freed"));
+    assert_eq!(lock(&world.trees.free).len(), 3);
+}
+
+#[test]
+fn the_tick_frees_the_tree_of_a_hand_closed_ticket() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.63", "Counter names", ""));
+    start(&world, &["Tq.63"], WORKER);
+    world.claims.tick(&world.ctx);
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_some());
+    world.desk.close_by_hand("Tq.63");
+    world.claims.tick(&world.ctx);
+    assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
+    assert_eq!(lock(&world.trees.free).len(), 3);
 }
 
 #[test]
