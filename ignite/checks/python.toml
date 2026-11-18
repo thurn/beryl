@@ -1,0 +1,58 @@
+# The Python check families, over `tools/` and `efficiency/`. Their adapter is
+# tools/src/beryl_tools/ignite/python.py, which lists each family's checks (with the inputs of
+# their own) and reports results as JSON lines. See docs/ignite.md, "Declaring a family".
+
+[product.python-env]
+build = "uv sync --quiet --project tools"
+inputs = ["tools/pyproject.toml", "tools/uv.lock"]
+outputs = ["tools/.venv"]
+
+# Formatting: one check per project, since black cannot check a part of one.
+[family.black]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.python list black"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.python run black {checks}"
+inputs = [
+  "tools/pyproject.toml",
+  "tools/uv.lock",
+  "efficiency/pyproject.toml",
+  "tools/src/beryl_tools/ignite/python.py",
+]
+
+# Types: one check per project. Pyre has no Windows build, so only macOS runs it.
+[family.pyre]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.python list pyre"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.python run pyre {checks}"
+inputs = [
+  "tools/pyproject.toml",
+  "tools/uv.lock",
+  "efficiency/pyproject.toml",
+  "tools/src/beryl_tools/ignite/python.py",
+]
+
+# Tests: one check per test. A test's own inputs are its file, the modules it imports
+# (directly or not) and its conftest files; these are what every test reads.
+[family.pytest]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.python list pytest"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.python run pytest {checks}"
+inputs = [
+  "tools/pyproject.toml",
+  "tools/uv.lock",
+  "tools/tests/fixtures",
+  "efficiency/pyproject.toml",
+  "data/card-store.tsv",
+  "tools/src/beryl_tools/ignite/python.py",
+]
