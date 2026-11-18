@@ -5,6 +5,8 @@ use std::io;
 
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(windows)]
+mod windows;
 
 pub trait HostCpu {
     /// Logical cores.

@@ -1,4 +1,4 @@
-//! Process groups: every process a command starts can be ended at once,
+//! Process groups (job objects on Windows): every process a command starts can be ended at once,
 //! when its tree is removed, its ticket finishes or its lease expires.
 
 use std::io;
@@ -6,12 +6,14 @@ use std::process::{Child, Command};
 
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(windows)]
+mod windows;
 
 /// A started command and the group that holds its descendants.
 #[derive(Debug)]
 pub struct Group {
     pub child: Child,
-    /// The process group ID.
+    /// The process group ID (macOS) or job handle value (Windows).
     pub id: u64,
 }
 

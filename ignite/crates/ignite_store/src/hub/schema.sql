@@ -73,7 +73,7 @@ CREATE INDEX aliases_id ON aliases(id);
 CREATE TABLE machines (
   id TEXT PRIMARY KEY,                     -- the ID the daemon created
   name TEXT NOT NULL,                      -- hostname
-  os TEXT NOT NULL,                        -- macos
+  os TEXT NOT NULL,                        -- macos|windows
   cores INTEGER NOT NULL,
   memory_mb INTEGER NOT NULL,
   families TEXT NOT NULL DEFAULT '[]',     -- JSON array; empty means every family

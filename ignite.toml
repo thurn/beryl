@@ -57,6 +57,14 @@ floor = { batch = 2, tip = 2 }
 browser-pages = 4
 oracle = 1
 
+# The Windows PC: no browser, oracle or app families.
+[machine.cygnus]
+os = "windows"
+ticket_trees = 6
+landing_trees = 2
+families = ["rust", "clippy", "format", "source-rules", "python"]
+floor = { batch = 8, tip = 2 }
+
 [[rebuild]]
 name = "kernel-body"
 edit = "append a no-op item to a module of beryl_kernel"

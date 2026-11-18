@@ -36,8 +36,8 @@ ticket owns which file. These are the contract's rules.
   or `local` module and updates the row structs, which a test compares with the
   tables. It never edits an applied migration.
 - No async runtime: threads and blocking I/O.
-- `unsafe` only in `ignite_os`, whose implementation of each module is in
-  `<module>/macos.rs`.
+- `unsafe` only in `ignite_os`, whose macOS and Windows halves of each module
+  are separate files (`<module>/macos.rs`, `<module>/windows.rs`).
 - A new dependency goes in `[workspace.dependencies]` with a comment saying what
   it replaces.
 - Time comes from the `Clock` trait. Tests never sleep to wait for something and

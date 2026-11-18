@@ -37,6 +37,18 @@ ureq = "3.5.2"
 clap = { version = "4.6.7", features = ["derive"] }
 # macOS system calls for process usage, groups and sockets; replaces `ps` and `getrusage` shims.
 libc = "0.2.191"
+# Windows system calls for job objects, named pipes and CPU times; replaces PowerShell probes.
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_JobObjects",
+  "Win32_System_Pipes",
+  "Win32_System_ProcessStatus",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+] }
 
 # Copied from rust/Cargo.toml: Ignite's code is held to the same lints as the game's.
 [workspace.lints.rust]

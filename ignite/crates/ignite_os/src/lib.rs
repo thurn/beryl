@@ -1,5 +1,6 @@
 //! The operating system, behind one trait per module. [`Native`] implements every trait: the
-//! implementation of each module is in `<module>/macos.rs`.
+//! macOS half of each module is in `<module>/macos.rs` and the Windows half in
+//! `<module>/windows.rs`, so the two can be written apart.
 //!
 //! This is the only crate where `unsafe` is allowed.
 

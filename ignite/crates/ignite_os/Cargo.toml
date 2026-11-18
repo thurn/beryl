@@ -11,6 +11,9 @@ ignite_core.workspace = true
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
 # The workspace's lints, except that this crate is the one place `unsafe` is allowed: it calls
 # the operating system directly.
 [lints.rust]
