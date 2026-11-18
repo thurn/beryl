@@ -103,6 +103,32 @@ pub fn named_files(ticket: &Ticket) -> Vec<String> {
     files
 }
 
+/// `files` with each short path replaced by the tracked file it means (see
+/// `resolve_named_file`), without repeats. A path that resolves to nothing stays as written.
+pub fn resolved(files: Vec<String>, tracked: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for file in files {
+        let file = ignite_hub::routes::dispatch::resolve_named_file(&file, tracked).unwrap_or(file);
+        if !out.contains(&file) {
+            out.push(file);
+        }
+    }
+    out
+}
+
+/// The files a ticket names, resolved against the files tracked in `tree`. When the tree cannot
+/// be listed, the paths stay as written.
+fn tree_files(ticket: &Ticket, tree: &Path) -> Vec<String> {
+    let files = named_files(ticket);
+    if files.is_empty() {
+        return files;
+    }
+    match ignite_git::tracked::files(tree) {
+        Ok(tracked) => resolved(files, &tracked),
+        Err(_) => files,
+    }
+}
+
 /// The session title for a ticket: `[<ticket>] <title>` without the emoji.
 pub fn title_of(brief: Option<&TicketBrief>, ticket: &TicketId) -> String {
     match brief {
@@ -208,7 +234,7 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
         "title",
         format!("{} {}", working(ticket), title_of(Some(brief), &ticket.id)),
     ));
-    let files = named_files(ticket);
+    let files = tree_files(ticket, tree.path);
     for (i, file) in files.iter().take(MAX_FILES).enumerate() {
         rows.push((if i == 0 { "files" } else { "" }, file.clone()));
     }
@@ -255,7 +281,7 @@ pub fn json(brief: &TicketBrief, tree: &TreeView) -> Value {
         "resumed": tree.resumed.map(|r| json!({
             "commits": r.commits, "authors": r.authors, "last_saved": r.last_saved,
         })),
-        "files": named_files(&brief.ticket),
+        "files": tree_files(&brief.ticket, tree.path),
         "guide": guide(&brief.ticket),
         "title": format!(
             "{} {}",
@@ -365,5 +391,30 @@ pub fn closed(
         text: lines(&rows),
         json: Some(json!({"closed": ticket, "tree": tree, "reason": reason})),
         handle: None,
+    }
+}
+
+#[cfg(test)]
+mod resolve_tests {
+    use super::resolved;
+
+    #[test]
+    fn short_paths_become_the_tracked_files_they_mean() {
+        let tracked = [
+            "rust/crates/scene/src/a.rs".to_owned(),
+            "docs/b.md".to_owned(),
+        ];
+        let files = [
+            "scene/src/a.rs",
+            "rust/crates/scene/src/a.rs",
+            "docs/b.md",
+            "x/y.rs",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        assert_eq!(
+            resolved(files, &tracked),
+            ["rust/crates/scene/src/a.rs", "docs/b.md", "x/y.rs"]
+        );
     }
 }

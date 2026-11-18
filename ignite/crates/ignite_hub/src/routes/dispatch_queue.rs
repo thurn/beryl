@@ -292,6 +292,7 @@ impl Snapshot {
         now: Timestamp,
     ) -> Result<Vec<ReadyTicket>> {
         let history = history(conn, machine)?;
+        let landed = landed_files(conn)?;
         let name = fleet::name_of(conn, machine)?;
         let has = |needed: &str| needed == os.as_str() || name.as_deref() == Some(needed);
         let mut memo = HashMap::new();
@@ -316,7 +317,7 @@ impl Snapshot {
             // operating system, which `ignite_core::dispatch` cannot do because it sees only the
             // operating system.
             ticket.labels.retain(|label| !label.starts_with(NEEDS));
-            ready.push(self.ready_ticket(ticket, &history, &mut memo, now));
+            ready.push(self.ready_ticket(ticket, &history, &landed, &mut memo, now));
         }
         Ok(ready)
     }
@@ -365,11 +366,12 @@ impl Snapshot {
         &self,
         ticket: Ticket,
         history: &[Worked],
+        landed: &[String],
         memo: &mut HashMap<String, u32>,
         now: Timestamp,
     ) -> ReadyTicket {
         let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
-        let areas = areas(&files);
+        let areas = areas(&files, landed);
         let saving = ticket
             .saving
             .as_ref()
@@ -492,11 +494,34 @@ pub fn resolve_named_file(path: &str, tracked: &[String]) -> Option<String> {
     matching.next().is_none().then(|| first.clone())
 }
 
-fn areas(files: &[String]) -> Vec<String> {
-    let mut areas: Vec<String> = files.iter().map(|f| admission::area_of(f, &[])).collect();
+/// The areas of the files a ticket names. A short path (see [`resolve_named_file`]) is resolved
+/// against `known`, the repository paths that landed tickets touched, because the hub has no
+/// checkout to list; a path that resolves to nothing is used as written.
+fn areas(files: &[String], known: &[String]) -> Vec<String> {
+    let mut areas: Vec<String> = files
+        .iter()
+        .map(|f| {
+            let file = resolve_named_file(f, known).unwrap_or_else(|| f.clone());
+            admission::area_of(&file, &[])
+        })
+        .collect();
     areas.sort();
     areas.dedup();
     areas
+}
+
+/// The repository paths that every landed ticket touched, without repeats, standing in for the
+/// list of tracked files that the hub cannot read.
+fn landed_files(conn: &Connection) -> Result<Vec<String>> {
+    let mut statement = conn.prepare("SELECT landed FROM tickets WHERE landed IS NOT NULL")?;
+    let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
+    let mut files = BTreeSet::new();
+    for row in rows {
+        if let Ok(work) = serde_json::from_str::<LandedWork>(&row?) {
+            files.extend(work.files);
+        }
+    }
+    Ok(files.into_iter().collect())
 }
 
 /// The machine's landed tickets, as history for expected cores: the areas of the files they
@@ -528,7 +553,7 @@ fn history(conn: &Connection, machine: &str) -> Result<Vec<Worked>> {
         };
         history.push(Worked {
             landed_at,
-            areas: areas(&work.map(|w| w.files).unwrap_or_default()),
+            areas: areas(&work.map(|w| w.files).unwrap_or_default(), &[]),
             core_minutes: cpu_s / 60.0,
             minutes: landed_at.seconds_since(claimed_at) / 60.0,
         });
@@ -616,7 +641,15 @@ fn parse_id(id: &str) -> Result<TicketId> {
 
 #[cfg(test)]
 mod named_file_tests {
-    use super::{named_files, resolve_named_file};
+    use super::{areas, named_files, resolve_named_file};
+
+    #[test]
+    fn a_short_path_gets_the_area_of_the_file_it_resolves_to() {
+        let known = ["rust/crates/scene/src/a.rs".to_owned()];
+        let full = areas(&["rust/crates/scene/src/a.rs".to_owned()], &[]);
+        assert_eq!(areas(&["scene/src/a.rs".to_owned()], &known), full);
+        assert_ne!(areas(&["scene/src/a.rs".to_owned()], &[]), full);
+    }
 
     #[test]
     fn a_ticket_names_the_paths_on_its_files_line() {
