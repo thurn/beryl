@@ -33,7 +33,7 @@ use crate::doctor::{
 };
 use crate::host::{Host, HostParts, SupervisedStarter, TreesLanding};
 use crate::hubclient::HubClient;
-use crate::idle::{AuditVerb, Idle, IdleSettings, LiveHost, RebuildVerb};
+use crate::idle::{AuditVerb, Idle, IdleHost, IdleJobVerb, IdleSettings, LiveHost, RebuildVerb};
 use crate::land::env::{ChecksGate, LandTrees, MachineTrees};
 use crate::land::records::Records;
 use crate::land::{LandVerb, Landing, SyncVerb};
@@ -221,15 +221,17 @@ pub fn checking(base: &Base, trees: &Trees) -> Result<(Arc<Checks>, Arc<Landing>
     let landing_trees = Arc::new(MachineTrees {
         trees: trees.clone(),
     });
-    checking_with(base, landing_trees, trees)
+    checking_with(base, landing_trees, trees, |live| Box::new(live))
 }
 
-/// [`checking`], with landing's trees given: the machine's trees in the daemon, and in a verb
-/// process the same trees with landing trees leased from the daemon (see `crate::verbproc`).
+/// [`checking`], with landing's trees and the idle host given: the machine's trees in the
+/// daemon, and in a verb process the same trees with landing trees leased from the daemon (see
+/// `crate::verbproc`).
 pub fn checking_with(
     base: &Base,
     landing_trees: Arc<dyn LandTrees>,
     trees: &Trees,
+    idle_host: impl FnOnce(LiveHost) -> Box<dyn IdleHost>,
 ) -> Result<(Arc<Checks>, Arc<Landing>, Arc<Idle>)> {
     let per_command = base.limits.max_per_command();
     let checks = Arc::new(Checks::new(
@@ -276,7 +278,7 @@ pub fn checking_with(
             ignite: base.options.version.clone(),
         },
         base.clock.clone(),
-        Box::new(LiveHost {
+        idle_host(LiveHost {
             trees: Arc::new(trees.clone()),
             repo: base.options.repo.clone(),
         }),
@@ -295,6 +297,7 @@ pub fn verb_side(
     launcher: Arc<dyn Launcher>,
     builds: Arc<dyn Builds>,
     landing: impl FnOnce(MachineTrees) -> Arc<dyn LandTrees>,
+    idle_host: impl FnOnce(LiveHost) -> Box<dyn IdleHost>,
 ) -> Result<(Context, Vec<LongVerb>)> {
     let repo = &base.options.repo;
     let tree_config = TreeConfig::new(repo, &base.config, &base.options.hostname, &base.manifest)?;
@@ -307,7 +310,7 @@ pub fn verb_side(
     let landing_trees = landing(MachineTrees {
         trees: trees.clone(),
     });
-    let (checks, landing, idle) = checking_with(base, landing_trees, &trees)?;
+    let (checks, landing, idle) = checking_with(base, landing_trees, &trees, idle_host)?;
     let ctx = Context {
         config: base.config.clone(),
         repo: repo.clone(),
@@ -493,6 +496,7 @@ pub fn long_verbs(checks: &Arc<Checks>, landing: &Arc<Landing>, idle: &Arc<Idle>
         (Box::new(RunVerb), false),
         (Box::new(RebuildVerb { idle: idle.clone() }), false),
         (Box::new(AuditVerb { idle: idle.clone() }), false),
+        (Box::new(IdleJobVerb { idle: idle.clone() }), false),
     ]
 }
 

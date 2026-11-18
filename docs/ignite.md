@@ -478,24 +478,25 @@ survive each other's restarts.
   daemon watches supervisors, so it can restart while commands keep running.
 - **A verb process** runs one long verb from start to finish:
   `ignite internal verb <handle>`, a hidden subcommand. `land`, `test`, `check`,
-  `run`, `rebuild` and `audit` run in verb processes; every other verb runs on a
-  thread of the daemon. The daemon gives the verb its handle and records the
-  request in the handle's row in `daemon.db`, then starts the verb process from
-  its own executable, `bin/<commit>/ignite`, in the repository's main checkout,
-  in a process group of its own (detached and outside the daemon's job object on
-  Windows, as supervisors are). The verb process holds `verbs/<handle>/lock` in
-  the Ignite home for its whole life, records its process ID, its executable's
-  commit and its protocol version in the handle's row, runs the verb, writes the
-  reply into the row and exits. Its log is `verbs/<handle>/verb.log`. It starts
-  no process itself: it asks the daemon for what needs one authority on the
-  machine over the daemon's socket, one connection per call (the host protocol,
-  calls named `host-…`): starting a supervised command, which includes waiting
-  for cores, making a build product current, leasing and freeing a landing tree,
-  and reporting its step and whether it may be stopped. Each call carries a
-  request ID, the handle and a counter, so a call cut off by a daemon restart is
-  sent again, for up to five minutes, and answered as the first attempt would
-  have been. A verb process waits for its own commands through their run
-  directories, as a restarted daemon does.
+  `run`, `rebuild`, `audit` and the internal `idle-job` run in verb processes;
+  every other verb runs on a thread of the daemon. The daemon gives the verb its
+  handle and records the request in the handle's row in `daemon.db`, then starts
+  the verb process from its own executable, `bin/<commit>/ignite`, in the
+  repository's main checkout, in a process group of its own (detached and
+  outside the daemon's job object on Windows, as supervisors are). The verb
+  process holds `verbs/<handle>/lock` in the Ignite home for its whole life,
+  records its process ID, its executable's commit and its protocol version in
+  the handle's row, runs the verb, writes the reply into the row and exits. Its
+  log is `verbs/<handle>/verb.log`. It starts no process itself: it asks the
+  daemon for what needs one authority on the machine over the daemon's socket,
+  one connection per call (the host protocol, calls named `host-…`): starting a
+  supervised command, which includes waiting for cores, making a build product
+  current, leasing and freeing a landing tree, and reporting its step and
+  whether it may be stopped. Each call carries a request ID, the handle and a
+  counter, so a call cut off by a daemon restart is sent again, for up to five
+  minutes, and answered as the first attempt would have been. A verb process
+  waits for its own commands through their run directories, as a restarted
+  daemon does.
 - **The hub** runs on jarvis as a login service of its own, `ignite hub`,
   started from `bin/current`. It serves the shared database over HTTPS on the
   Tailscale network (`IGNITE_HUB_LISTEN`), and a read-only copy for the public
@@ -705,6 +706,20 @@ Each machine has a fixed number of trees of two kinds:
   idle work for a tree, and a rebuild count can hold one for a long build, so a
   landing or tip verification that arrives meanwhile still finds a tree. A
   machine with one landing tree runs no idle work that needs a tree.
+- The idle loop in the daemon decides whether idle work may run and which job is
+  next; the job itself runs as the internal verb `idle-job` in a verb process
+  with a handle, so a restart of the daemon does not cut it. The job's landing
+  tree is leased through the daemon (`host-lease-landing` with `keep_free = 1`),
+  owned by the job's handle. The daemon records the handle in `idle-job.handle`
+  beside `idle.json`, and a restarted daemon's idle loop that finds a running
+  handle there waits for it and starts no second job. When a higher class needs
+  the cores, the scheduler still ends the job's commands from the daemon's side;
+  the job fails, its process exits, and the job runs again later from
+  `idle.json`. The processes that share `idle.json` (the daemon, the job,
+  `ignite rebuild`, `ignite audit`) read it again under a file lock before every
+  change, and a job holds a second file lock for its whole run, so no two of
+  them edit one tree at once. Keeping a free tree built at the tip stays in the
+  daemon.
 
 ```toml
 # ignite.toml, per machine

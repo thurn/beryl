@@ -23,7 +23,7 @@ use crate::claim::Claims;
 use crate::crash;
 use crate::dispatchd::Dispatcher;
 use crate::hubclient::HubClient;
-use crate::idle::Idle;
+use crate::idle::{Idle, ServerJobs};
 use crate::land::Landing;
 use crate::loop_health::{LoopHealth, LoopTicker};
 use crate::sched::Scheduler;
@@ -94,7 +94,7 @@ impl Parts {
         self.spawn_sender(db, server.clone());
         self.spawn_tip();
         self.spawn_claims();
-        self.spawn_idle();
+        self.spawn_idle(server.clone());
         self.spawn_metrics();
     }
 
@@ -231,7 +231,11 @@ impl Parts {
 
     /// While Ignite holds no cores and outside work leaves at least half the machine free,
     /// keeps one free tree built at the tip and runs one piece of idle work.
-    fn spawn_idle(&self) {
+    fn spawn_idle(&self, server: Arc<Server>) {
+        let jobs = ServerJobs {
+            server,
+            repo: self.ctx.repo.clone(),
+        };
         let (ctx, idle, trees, scheduler) = (
             self.ctx.clone(),
             self.idle.clone(),
@@ -260,15 +264,12 @@ impl Parts {
                         eprintln!("ignite: no tree kept built: {error}");
                         failure = Some(format!("no tree kept built: {error}"));
                     }
+                    // The job runs in a verb process (`idle-job`); a restarted daemon waits for
+                    // the job it finds instead of starting another.
                     crate::steps::step("choosing idle work");
-                    if let Some(job) = idle.next_job(&ctx)
-                        && let Err(error) = {
-                            crate::steps::step(format!("idle work {job:?}"));
-                            idle.run(&ctx, &job)
-                        }
-                    {
-                        eprintln!("ignite: idle work {job:?}: {error}");
-                        failure = Some(format!("idle work {job:?}: {error}"));
+                    if let Err(error) = idle.drive(&ctx, &jobs) {
+                        eprintln!("ignite: idle work: {error}");
+                        failure = Some(format!("idle work: {error}"));
                     }
                     failure.map_or(Ok(()), Err)
                 });

@@ -396,7 +396,17 @@ fn assemble(
             Arc::new(RemoteLandTrees { remote, local })
         }
     };
-    let (mut ctx, verbs) = crate::main::assemble::verb_side(&base, launcher, builds, landing)?;
+    let idle_host = {
+        let remote = remote.clone();
+        move |local| -> Box<dyn crate::idle::IdleHost> {
+            Box::new(crate::idle::RemoteIdleHost {
+                remote,
+                local: Box::new(local),
+            })
+        }
+    };
+    let (mut ctx, verbs) =
+        crate::main::assemble::verb_side(&base, launcher, builds, landing, idle_host)?;
     let verb = verbs
         .into_iter()
         .map(|(verb, _)| verb)

@@ -1,5 +1,5 @@
-//! Long verbs run in verb processes: `land`, `test`, `check`, `run`, `rebuild` and `audit` each
-//! run from start to finish in a process of their own, `ignite internal verb <handle>` (see
+//! Long verbs run in verb processes: `land`, `test`, `check`, `run`, `rebuild`, `audit` and
+//! the internal `idle-job` each run from start to finish in a process of their own, `ignite internal verb <handle>` (see
 //! [`crate::verbproc`]), which outlives restarts of the daemon. Every other verb runs on a
 //! thread of the daemon.
 //!
@@ -43,8 +43,11 @@ use crate::handles::{Handles, StepFeed, lock};
 use crate::host::Host;
 use crate::steps::Steps;
 
-/// The verbs that run in verb processes.
-pub const PROCESS_VERBS: &[&str] = &["land", "test", "check", "run", "rebuild", "audit"];
+/// The verbs that run in verb processes. `idle-job` is the internal verb that runs one idle job
+/// (see `crate::idle`).
+pub const PROCESS_VERBS: &[&str] = &[
+    "land", "test", "check", "run", "rebuild", "audit", "idle-job",
+];
 
 /// The verbs among [`PROCESS_VERBS`] that the daemon runs again, on a thread of its own, when
 /// their verb process died: those a restarted daemon runs again (see
