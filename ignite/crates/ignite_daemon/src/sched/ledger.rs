@@ -1,0 +1,387 @@
+//! The scheduler's state machine: who holds what, who waits, and what to grant or stop next.
+//!
+//! It reads no clock and no operating system. The caller passes the time to [`Ledger::enqueue`]
+//! and [`Ledger::step`], and the machine's CPU and memory to [`Ledger::observe`], so every rule
+//! can be tested by setting those values.
+
+use std::collections::BTreeMap;
+
+use ignite_core::protocol::Class;
+use ignite_core::time::Timestamp;
+
+use super::{Grant, GrantRequest, Limits, Status};
+
+/// `idle` work starts only while the machine is under this share of its cores busy.
+const IDLE_BUSY_LIMIT: f64 = 0.7;
+
+/// A request not granted yet.
+#[derive(Clone, Debug)]
+struct Waiter {
+    id: u64,
+    request: GrantRequest,
+    since: Timestamp,
+}
+
+/// A grant not released yet.
+#[derive(Clone, Debug)]
+struct Held {
+    class: Class,
+    cores: u32,
+    resources: Vec<String>,
+    memory_mb: Option<u64>,
+    /// Granted after the last memory reading, so that reading does not yet show its memory.
+    unseen_memory: bool,
+    /// Asked to stop to make room for a higher class; its cores are freed when it is released.
+    stopping: bool,
+}
+
+/// What [`Ledger::step`] decided.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Step {
+    pub granted: Vec<Grant>,
+    /// `idle` grants whose commands must be ended. Each stays held until it is released.
+    pub stop: Vec<u64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Ledger {
+    limits: Limits,
+    /// Cores busy with processes outside Ignite at the last reading.
+    outside: u32,
+    /// Free memory at the last reading; `None` until one succeeds.
+    free_memory_mb: Option<u64>,
+    next_id: u64,
+    /// In arrival order.
+    waiting: Vec<Waiter>,
+    held: BTreeMap<u64, Held>,
+}
+
+impl Ledger {
+    pub fn new(limits: Limits) -> Self {
+        Self {
+            limits,
+            outside: 0,
+            free_memory_mb: None,
+            next_id: 1,
+            waiting: Vec::new(),
+            held: BTreeMap::new(),
+        }
+    }
+
+    pub fn limits(&self) -> &Limits {
+        &self.limits
+    }
+
+    /// Adds a request to the queue and returns the ID its grant will carry.
+    pub fn enqueue(&mut self, request: GrantRequest, now: Timestamp) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.waiting.push(Waiter {
+            id,
+            request,
+            since: now,
+        });
+        id
+    }
+
+    /// Frees a grant's cores and resources, or withdraws a request still waiting. Returns
+    /// whether `id` was known.
+    pub fn release(&mut self, id: u64) -> bool {
+        if self.held.remove(&id).is_some() {
+            return true;
+        }
+        let before = self.waiting.len();
+        self.waiting.retain(|w| w.id != id);
+        self.waiting.len() != before
+    }
+
+    pub fn holds(&self, id: u64) -> bool {
+        self.held.contains_key(&id)
+    }
+
+    /// Records a reading of the machine: the fraction of all cores busy, from 0 to 1, and the
+    /// free memory, each if it could be read. Whatever is busy beyond the cores Ignite granted
+    /// belongs to processes outside Ignite, and is not granted until they finish.
+    pub fn observe(&mut self, busy: Option<f64>, free_memory_mb: Option<u64>) {
+        if let Some(busy) = busy {
+            let busy_cores = busy.clamp(0.0, 1.0) * f64::from(self.limits.cores);
+            let ours = f64::from(self.granted_cores());
+            self.outside = (busy_cores - ours).max(0.0).round() as u32;
+        }
+        if free_memory_mb.is_some() {
+            self.free_memory_mb = free_memory_mb;
+            for held in self.held.values_mut() {
+                held.unseen_memory = false;
+            }
+        }
+    }
+
+    /// Grants what can be granted now and names the `idle` grants to stop.
+    ///
+    /// Classes are served in order. Within a class, the requests that can run share the free
+    /// cores evenly, each capped at what it asked for and at two thirds of the machine. A class
+    /// with a request left waiting for cores stops every lower class from starting anything,
+    /// except that `tip` and `batch` may still take their floors.
+    pub fn step(&mut self, now: Timestamp) -> Step {
+        let mut step = Step::default();
+        let mut reserve: BTreeMap<Class, u32> = Class::ALL
+            .iter()
+            .map(|&c| (c, self.floor_reserve(c)))
+            .collect();
+        let mut free = self
+            .limits
+            .cores
+            .saturating_sub(self.outside)
+            .saturating_sub(self.granted_cores());
+        let mut blocked = false;
+        // Cores the higher classes' blocked requests want, to decide how much `idle` to stop.
+        let mut wanted_by_blocked = 0;
+        for class in Class::ALL {
+            let below: u32 = reserve
+                .iter()
+                .filter(|(c, _)| **c > class)
+                .map(|(_, r)| r)
+                .sum();
+            let mut usable = if blocked {
+                reserve[&class].min(free)
+            } else {
+                free.saturating_sub(below)
+            };
+            if class == Class::Idle {
+                usable = usable.min(self.idle_room());
+            }
+            let (picked, left) = self.pick(class, usable);
+            let grants = self.fill(&picked, usable);
+            for (id, cores) in picked.into_iter().zip(grants) {
+                let waiter = self.waiting.remove(index_of(&self.waiting, id));
+                free -= cores;
+                if let Some(left) = reserve.get_mut(&class) {
+                    *left = left.saturating_sub(cores);
+                }
+                step.granted.push(self.hold(waiter, cores, now));
+            }
+            if !left.is_empty() {
+                blocked = true;
+                if class != Class::Idle {
+                    wanted_by_blocked += left.iter().map(|&w| self.want(w)).sum::<u32>();
+                }
+            }
+        }
+        step.stop = self.stop_idle(wanted_by_blocked.saturating_sub(free));
+        step
+    }
+
+    /// The scheduler's state for `ignite status`.
+    pub fn status(&self) -> Status {
+        let classes = Class::ALL
+            .iter()
+            .map(|&class| super::ClassStatus {
+                class,
+                running: self.held.values().filter(|h| h.class == class).count() as u32,
+                cores: self.class_cores(class),
+                waiting: self
+                    .waiting
+                    .iter()
+                    .filter(|w| w.request.class == class)
+                    .count() as u32,
+            })
+            .collect();
+        let resources = self
+            .limits
+            .resources
+            .iter()
+            .map(|(name, &capacity)| super::ResourceStatus {
+                name: name.clone(),
+                capacity,
+                held: self.resource_held(name),
+                waiting: self
+                    .waiting
+                    .iter()
+                    .filter(|w| w.request.resources.contains(name))
+                    .count() as u32,
+            })
+            .collect();
+        Status {
+            cores: self.limits.cores,
+            outside: self.outside,
+            granted: self.granted_cores(),
+            max_per_command: self.limits.max_per_command(),
+            free_memory_mb: self.free_memory_mb,
+            classes,
+            resources,
+        }
+    }
+
+    /// The waiters of `class` that can start now, by ID in arrival order, at most `usable` of
+    /// them (each needs at least one core), and the IDs of those that could start but found no
+    /// core. A request whose resources are all held, or whose memory is not free, is neither.
+    fn pick(&self, class: Class, usable: u32) -> (Vec<u64>, Vec<u64>) {
+        let mut resources: BTreeMap<&str, u32> = BTreeMap::new();
+        let mut memory = self.free_memory_mb.map(|free| {
+            let unseen: u64 = self
+                .held
+                .values()
+                .filter(|h| h.unseen_memory)
+                .filter_map(|h| h.memory_mb)
+                .sum();
+            free.saturating_sub(unseen)
+        });
+        let (mut picked, mut left) = (Vec::new(), Vec::new());
+        for waiter in self.waiting.iter().filter(|w| w.request.class == class) {
+            let fits = waiter.request.resources.iter().all(|name| {
+                let taken = self.resource_held(name) + resources.get(name.as_str()).unwrap_or(&0);
+                taken < self.limits.capacity(name)
+            });
+            // Memory delays a command only while something else runs that could free some:
+            // with nothing running, waiting would never end.
+            let alone = self.held.is_empty() && picked.is_empty();
+            let room = match (waiter.request.memory_mb, memory) {
+                (Some(need), Some(free)) => need <= free || alone,
+                _ => true,
+            };
+            if !fits || !room {
+                continue;
+            }
+            if picked.len() as u32 >= usable {
+                left.push(waiter.id);
+                continue;
+            }
+            for name in &waiter.request.resources {
+                *resources.entry(name).or_default() += 1;
+            }
+            if let (Some(need), Some(free)) = (waiter.request.memory_mb, memory.as_mut()) {
+                *free = free.saturating_sub(need);
+            }
+            picked.push(waiter.id);
+        }
+        (picked, left)
+    }
+
+    /// Shares `usable` cores among the picked waiters evenly. A waiter that wants less than an
+    /// even share gets what it wants, and the rest is shared among the others; cores that do not
+    /// divide evenly go to the earliest arrivals. `usable` is at least the number picked.
+    fn fill(&self, picked: &[u64], usable: u32) -> Vec<u32> {
+        let wants: Vec<u32> = picked.iter().map(|&id| self.want(id)).collect();
+        let mut grants = vec![0; wants.len()];
+        let mut open: Vec<usize> = (0..wants.len()).collect();
+        let mut left = usable;
+        while !open.is_empty() {
+            let share = left / open.len() as u32;
+            let (settled, rest): (Vec<usize>, Vec<usize>) =
+                open.iter().partition(|&&i| wants[i] <= share);
+            if settled.is_empty() {
+                let extra = (left % open.len() as u32) as usize;
+                for (n, &i) in open.iter().enumerate() {
+                    grants[i] = share + u32::from(n < extra);
+                }
+                break;
+            }
+            for i in settled {
+                grants[i] = wants[i];
+                left -= wants[i];
+            }
+            open = rest;
+        }
+        grants
+    }
+
+    /// The cores waiter `id` would take with nothing else waiting.
+    fn want(&self, id: u64) -> u32 {
+        let waiter = &self.waiting[index_of(&self.waiting, id)];
+        waiter.request.cores.clamp(1, self.limits.max_per_command())
+    }
+
+    fn hold(&mut self, waiter: Waiter, cores: u32, now: Timestamp) -> Grant {
+        let queued_s = now.seconds_since(waiter.since).max(0.0) as u64;
+        self.held.insert(
+            waiter.id,
+            Held {
+                class: waiter.request.class,
+                cores,
+                resources: waiter.request.resources.clone(),
+                memory_mb: waiter.request.memory_mb,
+                unseen_memory: true,
+                stopping: false,
+            },
+        );
+        Grant {
+            id: waiter.id,
+            cores,
+            resources: waiter.request.resources,
+            queued_s,
+        }
+    }
+
+    /// Marks the newest `idle` grants as stopping until they, with those already stopping,
+    /// would free `needed` cores. Returns the IDs newly marked.
+    fn stop_idle(&mut self, needed: u32) -> Vec<u64> {
+        let mut freeing: u32 = self
+            .held
+            .values()
+            .filter(|h| h.stopping)
+            .map(|h| h.cores)
+            .sum();
+        let mut stopped = Vec::new();
+        for (&id, held) in self.held.iter_mut().rev() {
+            if freeing >= needed {
+                break;
+            }
+            if held.class == Class::Idle && !held.stopping {
+                held.stopping = true;
+                freeing += held.cores;
+                stopped.push(id);
+            }
+        }
+        stopped
+    }
+
+    /// The cores held back for `class` so higher classes cannot take them: its floor less what
+    /// it already holds, while it has anything running or waiting. A floor with nothing to use
+    /// it is not held back.
+    fn floor_reserve(&self, class: Class) -> u32 {
+        let floor = match class {
+            Class::Tip => self.limits.floor.tip,
+            Class::Batch => self.limits.floor.batch,
+            _ => return 0,
+        };
+        let active = self.held.values().any(|h| h.class == class)
+            || self.waiting.iter().any(|w| w.request.class == class);
+        if active {
+            floor.saturating_sub(self.class_cores(class))
+        } else {
+            0
+        }
+    }
+
+    /// The cores `idle` work may take before the machine reaches the idle busy limit.
+    fn idle_room(&self) -> u32 {
+        let limit = (f64::from(self.limits.cores) * IDLE_BUSY_LIMIT).floor() as u32;
+        limit.saturating_sub(self.outside + self.granted_cores())
+    }
+
+    fn granted_cores(&self) -> u32 {
+        self.held.values().map(|h| h.cores).sum()
+    }
+
+    fn class_cores(&self, class: Class) -> u32 {
+        self.held
+            .values()
+            .filter(|h| h.class == class)
+            .map(|h| h.cores)
+            .sum()
+    }
+
+    fn resource_held(&self, name: &str) -> u32 {
+        self.held
+            .values()
+            .filter(|h| h.resources.iter().any(|r| r == name))
+            .count() as u32
+    }
+}
+
+fn index_of(waiting: &[Waiter], id: u64) -> usize {
+    waiting
+        .iter()
+        .position(|w| w.id == id)
+        .expect("a picked waiter is still waiting")
+}
