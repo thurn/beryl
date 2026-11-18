@@ -162,7 +162,7 @@ fn each_command_is_told_its_class_and_given_a_hang_limit_from_its_slowest_pass()
         [
             ("lister".to_owned(), Some(1800)),
             ("runner".to_owned(), Some(1800)),
-            ("lister".to_owned(), Some(900)),
+            // The second run is answered from the kept listing.
             ("runner".to_owned(), Some(900)),
         ]
     );

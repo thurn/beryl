@@ -13,9 +13,9 @@ use crate::ids::{Commit, RecordId, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarReport, Landed, LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record,
-    RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
+    Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey,
+    StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
@@ -23,7 +23,7 @@ use crate::protocol::tickets::{
 };
 use crate::time::Timestamp;
 use crate::traits::{
-    BuildResult, Builds, Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult,
+    BuildFor, BuildResult, Builds, Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult,
 };
 
 mod git;
@@ -108,6 +108,7 @@ impl Launcher for FakeLauncher {
 pub struct FakeBuilds {
     scripted: Mutex<HashMap<(TreeId, String), BuildResult>>,
     built: Mutex<Vec<(TreeId, String, Vec<String>)>>,
+    whom: Mutex<Vec<(String, BuildFor)>>,
 }
 
 impl FakeBuilds {
@@ -120,9 +121,25 @@ impl FakeBuilds {
     pub fn requests(&self) -> Vec<(TreeId, String, Vec<String>)> {
         lock(&self.built).clone()
     }
+
+    /// Every request made through `ensure_for`: the product and whom it was built for.
+    pub fn requests_for(&self) -> Vec<(String, BuildFor)> {
+        lock(&self.whom).clone()
+    }
 }
 
 impl Builds for FakeBuilds {
+    fn ensure_for(
+        &self,
+        tree: &TreeId,
+        product: &str,
+        pkgs: &[String],
+        who: &BuildFor,
+    ) -> BuildResult {
+        lock(&self.whom).push((product.to_owned(), who.clone()));
+        self.ensure(tree, product, pkgs)
+    }
+
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {
         let mut built = lock(&self.built);
         let key = (tree.clone(), product.to_owned());
@@ -171,6 +188,7 @@ pub struct FakeHub {
     finds: Mutex<Vec<ExplorationFind>>,
     justiciars: Mutex<Vec<JusticiarReport>>,
     incompletes: Mutex<Vec<IncompleteReport>>,
+    listings: Mutex<HashMap<ListingKey, String>>,
 }
 
 impl FakeHub {
@@ -285,6 +303,11 @@ impl FakeHub {
         lock(&self.justiciars).clone()
     }
 
+    /// The keys of every listing stored so far.
+    pub fn listing_keys(&self) -> Vec<ListingKey> {
+        lock(&self.listings).keys().cloned().collect()
+    }
+
     /// The ticket a report filed: one per report, numbered in the order they arrived.
     fn filed(number: usize) -> ReportFiled {
         ReportFiled {
@@ -322,6 +345,19 @@ impl Hub for FakeHub {
             };
             results.insert(result.key.clone(), cached);
         }
+        Ok(())
+    }
+
+    fn listings(&self, keys: &[ListingKey]) -> Result<Vec<Option<String>>> {
+        self.reachable()?;
+        let listings = lock(&self.listings);
+        Ok(keys.iter().map(|key| listings.get(key).cloned()).collect())
+    }
+
+    fn store_listing(&self, listing: &StoredListing) -> Result<()> {
+        self.reachable()?;
+        let mut listings = lock(&self.listings);
+        listings.insert(listing.key.clone(), listing.listing.clone());
         Ok(())
     }
 

@@ -28,6 +28,7 @@ needs = ["cli", "ui-deps"]
 resources = ["browser-pages"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list ui-test"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run ui-test {checks}"
+# `ui/verbs.json` and `ui/shapes.json` name the verb and shape checks that `list` prints.
 inputs = [
   "ui/src/**",
   "ui/index.html",
@@ -35,6 +36,8 @@ inputs = [
   "ui/package.json",
   "ui/public/**",
   "ui/fixtures.json",
+  "ui/verbs.json",
+  "ui/shapes.json",
   "crate:beryl_cli",
   "tools/src/beryl_tools/ignite/browser.py",
   "tools/src/beryl_tools/suites.py",

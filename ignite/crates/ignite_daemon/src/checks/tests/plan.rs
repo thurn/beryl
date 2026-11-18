@@ -62,7 +62,8 @@ fn seeded() -> World {
     let family = |name: &str, always: bool| {
         format!(
             "[family.{name}]\nkind = \"regression\"\nadapter = \"jsonl\"\nplatforms = \"any\"\n\
-             always = {always}\nlist = \"lister\"\nrun = \"runner {{checks}}\"\ninputs = [\"src\"]\n"
+             always = {always}\nlist = \"lister\"\nrun = \"runner {{checks}}\"\n\
+             inputs = [\"src\", \"game_rules\"]\n"
         )
     };
     let manifest = [
@@ -72,6 +73,9 @@ fn seeded() -> World {
     ]
     .join("\n");
     let world = world(&manifest, &["game_rules/tests/entering.rs"], history);
+    world
+        .git
+        .set_object("game_rules", Oid::new("e".repeat(40)).unwrap());
     let lines: Vec<String> = listing
         .iter()
         .map(|c| format!("{{\"check\": \"{c}\"}}"))
@@ -211,10 +215,11 @@ runs     in the gate: score 0.1266, threshold 0.004
     );
     let reply = verb.run(&world.ctx, &request(&["lint:fmt", "--inputs"]));
     let lines: Vec<&str> = reply.text.lines().collect();
-    assert_eq!(lines[0], "dir      src  tree aaaaaaa");
-    assert!(lines[1].starts_with("hash     "), "{}", reply.text);
+    assert_eq!(lines[0], "dir      game_rules  tree eeeeeee");
+    assert_eq!(lines[1], "dir      src         tree aaaaaaa");
+    assert!(lines[2].starts_with("hash     "), "{}", reply.text);
     assert!(
-        lines[1].ends_with("passed on m-2 at 1970-01-01 00:00"),
+        lines[2].ends_with("passed on m-2 at 1970-01-01 00:00"),
         "{}",
         reply.text
     );

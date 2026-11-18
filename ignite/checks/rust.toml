@@ -71,8 +71,11 @@ platforms = "any"
 needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctests list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctests run {checks}"
+# The package manifests decide which packages `list` looks at.
 inputs = [
   "rust/Cargo.toml",
+  "rust/crates/*/Cargo.toml",
+  "rust/cards/*/Cargo.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
   "data/table-commands.json",
@@ -203,8 +206,12 @@ needs = ["python-env"]
 always = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust rust-format list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust rust-format run {checks}"
+# The workspace manifest and each package's manifest decide which packages are listed.
 inputs = [
   "rust/rustfmt.toml",
+  "rust/Cargo.toml",
+  "rust/crates/*/Cargo.toml",
+  "rust/cards/*/Cargo.toml",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
   "tools/src/beryl_tools/__init__.py",

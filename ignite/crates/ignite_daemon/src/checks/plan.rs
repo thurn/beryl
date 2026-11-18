@@ -151,7 +151,7 @@ impl GateView {
 
 /// A check's own file is one the change edits: its name, after the family, starts with that
 /// path and goes on with `:` or `/` or ends there.
-fn edited(check: &CheckName, changed: &[String]) -> bool {
+pub(super) fn edited(check: &CheckName, changed: &[String]) -> bool {
     let name = check.as_str().split_once(':').map_or("", |(_, name)| name);
     changed.iter().any(|path| {
         name.strip_prefix(path.as_str())

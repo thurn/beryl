@@ -1,0 +1,208 @@
+//! The gate's scope: the families a change cannot affect are left out before anything is
+//! listed or built, and the builds a command starts run in its class.
+
+use super::*;
+
+/// A repository shaped like the one Ignite was built for: a Rust test family, a family that
+/// needs a native client's build, and an always-run family whose checks read the docs.
+const REPOSITORY: &str = r#"
+[product.rust-tests]
+build = "cargo build --tests"
+dir = "rust"
+inputs = ["crate-closure", "rust/Cargo.toml"]
+outputs = ["rust/target"]
+
+[product.client]
+build = "client build"
+inputs = ["rust/client/**", "rust/crates/**"]
+outputs = ["rust/client/target"]
+
+[family.rust]
+kind = "regression"
+adapter = "nextest"
+platforms = ["macos"]
+needs = ["rust-tests"]
+inputs = ["crate-closure", "rust/Cargo.toml"]
+
+[family.client-interface]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["client"]
+list = "lister client-interface"
+run = "runner {checks}"
+inputs = ["crate:core", "data/client/**"]
+
+[family.markdown]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+always = true
+list = "lister markdown"
+run = "runner {checks}"
+inputs = ["tools/rules.py"]
+"#;
+
+const TRACKED: &[&str] = &[
+    "docs/ignite.md",
+    "data/client/layout.json",
+    "rust/Cargo.lock",
+    "rust/Cargo.toml",
+    "rust/client/src/main.rs",
+    "rust/crates/core/src/lib.rs",
+    "tools/rules.py",
+];
+
+/// `cargo metadata` for one workspace package, `core`, in `rust/`.
+const METADATA: &str = r#"{"packages": [{"name": "core",
+    "manifest_path": "/repo/rust/crates/core/Cargo.toml", "dependencies": []}],
+    "workspace_root": "/repo/rust"}"#;
+
+/// The world of [`REPOSITORY`], whose object IDs start from `a`.
+fn repository() -> World {
+    let world = world(REPOSITORY, &[], FakeHistory::default());
+    for (path, c) in [
+        ("docs", 'a'),
+        ("docs/ignite.md", 'a'),
+        ("data/client", 'a'),
+        ("rust/Cargo.lock", 'a'),
+        ("rust/Cargo.toml", 'a'),
+        ("rust/client", 'a'),
+        ("rust/crates", 'a'),
+        ("rust/crates/core", 'a'),
+        ("tools/rules.py", 'a'),
+    ] {
+        world
+            .git
+            .set_object(path, Oid::new(c.to_string().repeat(40)).unwrap());
+    }
+    *world.launcher.listing.lock().unwrap() = format!(
+        "{{\"check\": \"client-interface:hover\"}}\n\
+         {{\"check\": \"markdown:format\", \"inputs\": [\"docs/**\"]}}\n{NEXTEST_LISTING}\n"
+    );
+    world
+}
+
+/// The tree of [`repository`], changed in `changed`.
+fn tree_with(world: &World, changed: &[&str]) -> FakeTrees {
+    let mut trees = FakeTrees::new(&world.dir, changed);
+    trees.tracked = TRACKED.iter().map(|s| (*s).to_owned()).collect();
+    trees.graph.add_workspace(METADATA, "/repo").unwrap();
+    trees
+}
+
+fn memory() -> rusqlite::Connection {
+    ignite_store::local::open_in_memory().unwrap()
+}
+
+/// Lists every family of `world` on a daemon of its own, as tip verification does.
+fn listed_at_the_tip(world: &World) {
+    let tip = daemon(world, memory(), tree_with(world, &[]));
+    let tree = tip.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let mut probe = CheckRun::default();
+    let families = ["client-interface", "markdown", "rust"];
+    let prepared = tip.prepare(&world.ctx, &tree, &families, &options(false), &mut probe);
+    assert_eq!(prepared.len(), 3, "{:?}", probe.incomplete_families);
+}
+
+fn landing() -> RunOptions {
+    RunOptions {
+        verb: "land".to_owned(),
+        class: Class::Land,
+        rerun: false,
+        ticket: Some("tk.7".parse().unwrap()),
+        session: None,
+    }
+}
+
+fn list_commands(world: &World) -> usize {
+    world.launcher.commands("lister").len()
+        + world
+            .launcher
+            .commands("cargo")
+            .iter()
+            .filter(|args| args[2] == "list")
+            .count()
+}
+
+/// A landing that changed only `docs/ignite.md` compiled Rust test programs for over 35
+/// minutes, because the gate listed every family, building what each listing needs, before it
+/// asked which checks the change affects. It now asks first, from the listings tip
+/// verification kept, on a daemon that has just started.
+#[test]
+fn a_change_to_the_docs_lists_no_rust_family_and_builds_nothing() {
+    let world = repository();
+    listed_at_the_tip(&world);
+    let builds = world.builds.requests().len();
+    let lists = list_commands(&world);
+
+    let restarted = daemon(&world, memory(), tree_with(&world, &["docs/ignite.md"]));
+    let gated = restarted.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+
+    assert_eq!(gated.run.out_of_scope, ["client-interface", "rust"]);
+    assert_eq!(world.builds.requests().len(), builds, "nothing was built");
+    assert_eq!(list_commands(&world), lists, "nothing was listed");
+    let ran: Vec<&str> = gated.run.outcomes.iter().map(|(c, _)| c.as_str()).collect();
+    assert_eq!(ran, ["markdown:format"], "the always set reads the docs");
+    let text = verbs::render(&verbs::gate_lines(&gated));
+    assert!(
+        text.contains("scope    2 families left out: the change touches none of their inputs"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_change_to_one_crate_lists_only_the_families_that_read_it() {
+    let world = repository();
+    listed_at_the_tip(&world);
+    world
+        .git
+        .set_object("rust/crates/core", Oid::new("b".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("rust/crates", Oid::new("b".repeat(40)).unwrap());
+    let lists = world.launcher.commands("lister").len();
+
+    let changed = ["rust/crates/core/src/lib.rs"];
+    let restarted = daemon(&world, memory(), tree_with(&world, &changed));
+    let gated = restarted.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+
+    assert_eq!(gated.run.out_of_scope, ["markdown"]);
+    let listed: Vec<String> = world.launcher.commands("lister")[lists..]
+        .iter()
+        .map(|args| args[1].clone())
+        .collect();
+    assert_eq!(
+        listed,
+        ["client-interface"],
+        "its inputs changed, so it is listed"
+    );
+}
+
+#[test]
+fn a_family_with_no_kept_listing_is_listed() {
+    let world = repository();
+    let fresh = daemon(&world, memory(), tree_with(&world, &["docs/ignite.md"]));
+    let gated = fresh.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+    assert!(gated.run.out_of_scope.is_empty());
+    assert_eq!(list_commands(&world), 3, "every family is listed");
+    // The listings are kept, so the next landing can leave them out.
+    let next = daemon(&world, memory(), tree_with(&world, &["docs/ignite.md"]));
+    let gated = next.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+    assert_eq!(gated.run.out_of_scope, ["client-interface", "rust"]);
+}
+
+/// The builds a landing's listings needed ran in the agents' class with no ticket, so the
+/// landing showed no work while they compiled. They now run as the command that needs them.
+#[test]
+fn a_landings_builds_run_in_its_class_for_its_ticket() {
+    let world = repository();
+    let landing_tree = daemon(&world, memory(), tree_with(&world, &["rust/Cargo.toml"]));
+    landing_tree.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
+    let builds = world.builds.requests_for();
+    assert!(!builds.is_empty());
+    for (product, who) in builds {
+        assert_eq!(who.class, Class::Land, "{product}");
+        assert_eq!(who.ticket, Some("tk.7".parse().unwrap()), "{product}");
+    }
+}

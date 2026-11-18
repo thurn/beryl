@@ -19,10 +19,11 @@ use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
     HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandingsReply,
-    LandingsRequest, LookupReply, LookupRequest, MAX_BODY_BYTES, MachineFree, MachineRegister,
-    MachineRegistered, MetricsImport, NewResult, Pause, Record, RecordBatch, RegressionFiled,
-    RegressionReport, Release, ReportFiled, Reservation, ResultKey, StoreRequest, TicketBrief,
-    TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply, LookupRequest,
+    MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
+    Pause, Record, RecordBatch, RegressionFiled, RegressionReport, Release, ReportFiled,
+    Reservation, ResultKey, StoreRequest, StoredListing, TicketBrief, TipClaim, TipClaimReply,
+    TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, Ticket,
@@ -354,6 +355,19 @@ impl Hub for HubClient {
         };
         let reply: LandingsReply = self.post("/landings/lookup", &request)?;
         Ok(reply.commits)
+    }
+
+    fn listings(&self, keys: &[ListingKey]) -> Result<Vec<Option<String>>> {
+        let request = ListingLookup {
+            keys: keys.to_vec(),
+        };
+        let reply: ListingReply = self.post("/listings/lookup", &request)?;
+        Ok(reply.listings)
+    }
+
+    fn store_listing(&self, listing: &StoredListing) -> Result<()> {
+        let _: serde_json::Value = self.post("/listings/store", listing)?;
+        Ok(())
     }
 
     fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {

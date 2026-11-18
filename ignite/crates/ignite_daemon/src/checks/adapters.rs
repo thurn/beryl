@@ -19,7 +19,7 @@
 //! Commands are split on whitespace and run without a shell, so a check name is always one
 //! argument however it is spelled.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use ignite_core::ids::CheckName;
@@ -41,27 +41,33 @@ const NEXTEST_LIST: &str = "cargo nextest list --message-format json";
 /// cargo-nextest's run command, when the family names none.
 const NEXTEST_RUN: &str = "cargo nextest run --no-fail-fast --message-format libtest-json-plus";
 
-/// One check a family's `list` command printed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One check a family's `list` command printed. It is stored as JSON with the family's listing
+/// (see `checks::listings`), so the fields that are usually empty are left out there.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Listed {
     pub check: CheckName,
     /// Path patterns the check reads beyond its family's `inputs`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inputs: Vec<String>,
     /// What the check reads that no file in the tree holds, as the family's `list` command
     /// summarizes it, such as the commit subjects since the branch left staging. It enters the
     /// input hash, so a pass is reused only while it is unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub digest: Option<String>,
     /// The workspace package that holds the check, which `crate-closure` starts from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package: Option<String>,
     /// How cargo-nextest names the test, for a `nextest` family.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target: Option<Target>,
     /// Why the listing is incomplete, on the one entry named `<family>:listing` that stands
     /// for the checks a listing named but Ignite refused (see [`jsonl_list`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refused: Option<String>,
 }
 
 /// A test as cargo-nextest names it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Target {
     /// Such as `game_rules` for a library or `game_cli::cli` for an integration test.
     pub binary_id: String,

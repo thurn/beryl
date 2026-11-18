@@ -278,3 +278,34 @@ fn next_reads_nothing_as_no_reservation() {
     };
     assert_eq!(hub.client().next(&free).unwrap(), None);
 }
+
+#[test]
+fn listings_are_looked_up_and_stored_by_family_and_hash() {
+    let hub = FakeHttpHub::start(|_, url, _| {
+        if url.ends_with("/listings/lookup") {
+            (200, r#"{"listings": ["[1]", null]}"#.to_owned())
+        } else {
+            (200, r#"{"ok": true}"#.to_owned())
+        }
+    });
+    let key = |family: &str| ListingKey {
+        family: family.to_owned(),
+        hash: ignite_core::ids::InputHash::new("b".repeat(64)).unwrap(),
+    };
+    let found = hub.client().listings(&[key("unit"), key("rs")]).unwrap();
+    assert_eq!(found, [Some("[1]".to_owned()), None]);
+    let stored = StoredListing {
+        key: key("unit"),
+        listing: "[1]".to_owned(),
+    };
+    hub.client().store_listing(&stored).unwrap();
+    let seen = hub.seen();
+    assert_eq!(seen[0].url, "/test/api/listings/lookup");
+    assert_eq!(seen[1].url, "/test/api/listings/store");
+    let sent: StoredListing = serde_json::from_str(&seen[1].body).unwrap();
+    assert_eq!(sent, stored);
+    assert!(matches!(
+        stopped_hub().listings(&[key("unit")]),
+        Err(Error::Unreachable(_))
+    ));
+}

@@ -209,6 +209,71 @@ pub fn closure(package: &str, graph: &CrateGraph) -> Result<Vec<String>, InputEr
     Ok(seen.into_iter().collect())
 }
 
+/// The paths of `changed` that `patterns` can read, in order. Unlike [`resolve`], this matches
+/// the patterns against the changed paths themselves, so a deleted file still counts. A crate
+/// pattern reads its packages' directories and their workspace's manifest, lock file and any
+/// toolchain file above it; `crate-closure` stands for every package, since the checks it
+/// belongs to are not known here. A `crate:` pattern that names no package is an error.
+pub fn touched(
+    patterns: &[InputPattern],
+    graph: &CrateGraph,
+    changed: &[String],
+) -> Result<Vec<String>, InputError> {
+    let mut globs: Vec<&str> = Vec::new();
+    let mut crates = BTreeSet::new();
+    for pattern in patterns {
+        match pattern {
+            InputPattern::Path(text) => globs.push(text),
+            InputPattern::Crate(package) => crates.extend(closure(package, graph)?),
+            InputPattern::CrateClosure => {
+                crates.extend(graph.packages.iter().map(|p| p.name.clone()));
+            }
+        }
+    }
+    let mut dirs = Vec::new();
+    let mut workspaces = BTreeSet::new();
+    for name in &crates {
+        let package = graph
+            .package(name)
+            .ok_or_else(|| input_error(name.clone(), "is not a workspace package"))?;
+        dirs.push(package.dir.as_str());
+        workspaces.insert(package.workspace.as_str());
+    }
+    let reads = |path: &str| {
+        globs.iter().any(|pattern| path_matches(pattern, path))
+            || dirs.iter().any(|dir| is_within(path, dir))
+            || workspaces.iter().any(|workspace| {
+                [LOCK_FILE, WORKSPACE_MANIFEST]
+                    .iter()
+                    .any(|name| path == join(workspace, name))
+                    || is_toolchain_above(path, workspace)
+            })
+    };
+    Ok(changed.iter().filter(|p| reads(p)).cloned().collect())
+}
+
+/// Whether the path pattern `pattern` names `path` or a directory that holds it.
+fn path_matches(pattern: &str, path: &str) -> bool {
+    if let Some(dir) = pattern.strip_suffix("/**")
+        && !has_wildcard(dir)
+    {
+        return is_within(path, dir);
+    }
+    if !has_wildcard(pattern) {
+        return is_within(path, pattern.trim_end_matches('/'));
+    }
+    let segments: Vec<&str> = pattern.split('/').collect();
+    let parts: Vec<&str> = path.split('/').collect();
+    // A glob that names a directory covers every file below it.
+    (1..=parts.len()).any(|n| glob(&segments, &parts[..n]))
+}
+
+/// Whether `path` is a toolchain file in `workspace` or a directory above it.
+fn is_toolchain_above(path: &str, workspace: &str) -> bool {
+    let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
+    TOOLCHAIN_FILES.contains(&name) && is_within(workspace, dir)
+}
+
 /// Each of `paths` with its git object ID in the working tree `tree`, sorted by path.
 pub fn object_ids(git: &dyn Git, tree: &Path, paths: &[String]) -> GitResult<Vec<(String, Oid)>> {
     let mut ids = git.object_ids(tree, paths)?;

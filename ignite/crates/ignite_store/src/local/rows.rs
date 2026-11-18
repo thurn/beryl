@@ -55,6 +55,9 @@ crate::tables! {
         machine: Option<String>,
     }
 
+    /// A check family's listing, by family and listing hash.
+    Listing = "listings" { family: String, hash: String, listing: String, at: String }
+
     Pass = "passes" {
         family: String,
         /// `list` or `run`.

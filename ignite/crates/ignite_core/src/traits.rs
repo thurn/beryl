@@ -7,14 +7,14 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::ids::{Commit, Oid, RecordId, Seq, TicketId, TreeId};
+use crate::ids::{Commit, Oid, RecordId, Seq, SessionId, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
-    JusticiarReport, Landed, LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record,
-    RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
+    Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey,
+    StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
@@ -128,6 +128,28 @@ pub enum BuildResult {
 pub trait Builds: Send + Sync {
     /// Makes `product` current in `tree`, joining a build already running.
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult;
+
+    /// [`Builds::ensure`] for a command: the build runs in the command's class and is charged
+    /// to its ticket and session, so that a landing's builds count as the landing's. An
+    /// implementation that cannot tell builds apart ignores `who`.
+    fn ensure_for(
+        &self,
+        tree: &TreeId,
+        product: &str,
+        packages: &[String],
+        who: &BuildFor,
+    ) -> BuildResult {
+        let _ = who;
+        self.ensure(tree, product, packages)
+    }
+}
+
+/// The command a build is made for: its class, ticket and session.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuildFor {
+    pub class: Class,
+    pub ticket: Option<TicketId>,
+    pub session: Option<SessionId>,
 }
 
 /// How a rebase ended.
@@ -204,6 +226,19 @@ pub trait Hub: Send + Sync {
     fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
         let _ = commits;
         Err(not_supported("look up landings"))
+    }
+
+    /// The stored listing of each key, in order, or `None` where the hub has none
+    /// (`POST /listings/lookup`).
+    fn listings(&self, keys: &[ListingKey]) -> Result<Vec<Option<String>>> {
+        let _ = keys;
+        Err(not_supported("look up listings"))
+    }
+
+    /// Stores a family's listing for every machine to reuse (`POST /listings/store`).
+    fn store_listing(&self, listing: &StoredListing) -> Result<()> {
+        let _ = listing;
+        Err(not_supported("store a listing"))
     }
 
     /// Reports a check that stayed incomplete, or a family that cannot be listed; the hub files

@@ -10,6 +10,9 @@
 //!
 //! Results, records and flaky reports that the hub cannot take now wait in the local outbox ([`crate::outbox`]), which sends them once it is reachable.
 //!
+//! The local database also keeps each check family's listing by family and listing hash, and
+//! the hub keeps them for every machine ([`ResultCache::listings`]).
+//!
 //! The local database also keeps how long each check command took when it passed, from which
 //! the check runner computes the command's hang limit ([`ResultCache::slowest_pass`]).
 
@@ -20,10 +23,12 @@ use rusqlite::Connection;
 use ignite_core::config::Os;
 use ignite_core::ids::{MachineId, RecordId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{CachedResult, FlakyReport, NewResult, Record, ResultKey};
+use ignite_core::protocol::hub::{
+    CachedResult, FlakyReport, ListingKey, NewResult, Record, ResultKey, StoredListing,
+};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Hub};
-use ignite_store::local::{outbox as queue, passes, results, rows};
+use ignite_store::local::{listings, outbox as queue, passes, results, rows};
 
 use crate::outbox;
 
@@ -136,6 +141,52 @@ impl ResultCache {
         if self.hub.flaky(report).is_err() {
             let _ = outbox::push_flaky(&self.conn(), report, self.clock.now());
         }
+    }
+
+    /// The stored listing of each key, in order: the local copy first, then one hub request for
+    /// the keys it lacks. What the hub answers is copied locally. A hub that cannot be reached
+    /// leaves those keys missing, which only means the family is listed again.
+    pub fn listings(&self, keys: &[ListingKey]) -> Vec<Option<String>> {
+        let mut found: Vec<Option<String>> = {
+            let conn = self.conn();
+            keys.iter()
+                .map(|k| {
+                    listings::get(&conn, &k.family, k.hash.as_str())
+                        .ok()
+                        .flatten()
+                })
+                .collect()
+        };
+        let missing: Vec<usize> = (0..keys.len()).filter(|&i| found[i].is_none()).collect();
+        if missing.is_empty() {
+            return found;
+        }
+        let asked: Vec<ListingKey> = missing.iter().map(|&i| keys[i].clone()).collect();
+        let Ok(answers) = self.hub.listings(&asked) else {
+            return found;
+        };
+        let at = self.clock.now().to_string();
+        let conn = self.conn();
+        for (index, answer) in missing.into_iter().zip(answers) {
+            if let Some(listing) = answer {
+                let key = &keys[index];
+                // A failure to copy only costs a hub request next time.
+                let _ = listings::put(&conn, &key.family, key.hash.as_str(), &listing, &at);
+                found[index] = Some(listing);
+            }
+        }
+        found
+    }
+
+    /// Stores a family's listing locally and at the hub. A hub that cannot take it now is not
+    /// asked again: a missing listing only costs another machine a listing of its own.
+    pub fn store_listing(&self, key: &ListingKey, listing: &str) {
+        let at = self.clock.now().to_string();
+        let _ = listings::put(&self.conn(), &key.family, key.hash.as_str(), listing, &at);
+        let _ = self.hub.store_listing(&StoredListing {
+            key: key.clone(),
+            listing: listing.to_owned(),
+        });
     }
 
     /// Records that `family`'s `command` (`list` or `run`) passed in `wall_s` seconds.
@@ -351,6 +402,35 @@ mod tests {
         cache.store(&[new("f:a", Outcome::Fail)]);
         let found = cache.lookup(&[key("f:a")]);
         assert_eq!(found[0].as_ref().unwrap().outcome, Outcome::Fail);
+    }
+
+    #[test]
+    fn a_listing_is_kept_locally_and_shared_through_the_hub() {
+        let hub = Arc::new(FakeHub::default());
+        let key = ListingKey {
+            family: "unit".to_owned(),
+            hash: InputHash::new("d".repeat(64)).unwrap(),
+        };
+        let first = cache(&hub);
+        assert_eq!(first.listings(std::slice::from_ref(&key)), [None]);
+        first.store_listing(&key, "[1]");
+        // A second daemon with the same hub finds it, and keeps a copy for when the hub is down.
+        let second = cache(&hub);
+        assert_eq!(
+            second.listings(std::slice::from_ref(&key)),
+            [Some("[1]".to_owned())]
+        );
+        hub.set_unreachable(true);
+        assert_eq!(
+            second.listings(std::slice::from_ref(&key)),
+            [Some("[1]".to_owned())]
+        );
+        let third = cache(&hub);
+        assert_eq!(
+            third.listings(std::slice::from_ref(&key)),
+            [None],
+            "a down hub is a miss"
+        );
     }
 
     #[test]

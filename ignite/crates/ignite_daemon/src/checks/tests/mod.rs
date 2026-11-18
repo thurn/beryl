@@ -3,7 +3,9 @@
 
 mod costs;
 mod hardening;
+mod listings;
 mod plan;
+mod scope;
 mod verdicts;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -149,6 +151,20 @@ impl Launcher for ScriptLauncher {
 struct FakeTrees {
     dir: PathBuf,
     changed: Vec<String>,
+    /// The tracked files; the default three when empty.
+    tracked: Vec<String>,
+    graph: CrateGraph,
+}
+
+impl FakeTrees {
+    fn new(dir: &Path, changed: &[&str]) -> FakeTrees {
+        FakeTrees {
+            dir: dir.to_path_buf(),
+            changed: changed.iter().map(|s| (*s).to_owned()).collect(),
+            tracked: Vec::new(),
+            graph: CrateGraph::default(),
+        }
+    }
 }
 
 impl TreeSource for FakeTrees {
@@ -162,11 +178,18 @@ impl TreeSource for FakeTrees {
     }
 
     fn tracked(&self, _path: &Path) -> Result<Vec<String>> {
-        Ok(vec!["src/a.py".to_owned(), "data/core.json".to_owned()])
+        if !self.tracked.is_empty() {
+            return Ok(self.tracked.clone());
+        }
+        Ok(vec![
+            "src/a.py".to_owned(),
+            "data/core.json".to_owned(),
+            "game_rules/tests/entering.rs".to_owned(),
+        ])
     }
 
     fn crate_graph(&self, _path: &Path, _tracked: &[String]) -> Result<CrateGraph> {
-        Ok(CrateGraph::default())
+        Ok(self.graph.clone())
     }
 
     fn head(&self, _path: &Path) -> Result<Commit> {
@@ -297,10 +320,7 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
         machine,
         clock,
     );
-    let trees = FakeTrees {
-        dir: dir.clone(),
-        changed: changed.iter().map(|s| (*s).to_owned()).collect(),
-    };
+    let trees = FakeTrees::new(&dir, changed);
     let checks = Arc::new(Checks::new(
         settings,
         cache,
@@ -316,6 +336,24 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
         git,
         dir,
     }
+}
+
+/// Another daemon on this world's machine, hub, builds and launcher: with its own memory, the
+/// local database `local`, and a tree that `trees` describes. A daemon restarted on the same
+/// machine reopens the same local database.
+fn daemon(world: &World, local: rusqlite::Connection, trees: FakeTrees) -> Arc<Checks> {
+    let cache = ResultCache::new(
+        local,
+        world.hub.clone(),
+        world.ctx.machine.clone(),
+        world.ctx.clock.clone(),
+    );
+    Arc::new(Checks::new(
+        world.checks.settings.clone(),
+        cache,
+        Box::new(trees),
+        Box::new(FakeHistory::default()),
+    ))
 }
 
 fn jsonl_world() -> World {
@@ -390,7 +428,8 @@ fn a_family_reads_the_tree_once_to_hash_all_its_checks() {
         .checks
         .prepare(&world.ctx, &tree, &["unit"], &options(false), &mut probe);
     assert!(prepared[0].keyed.len() >= 2, "{}", prepared[0].keyed.len());
-    assert_eq!(world.git.object_id_calls() - before, 1);
+    // One reading for the family's listing hash, one for every check's key.
+    assert_eq!(world.git.object_id_calls() - before, 2);
 }
 
 /// A tip round runs a family in batches of a few dozen checks. Listing and keying the whole

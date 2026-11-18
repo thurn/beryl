@@ -14,7 +14,7 @@ use ignite_core::protocol::hub::{
     CachedResult, FlakyReport, IncompleteReason, NewResult, Record, ResultCost,
 };
 use ignite_core::protocol::{Outcome, Usage};
-use ignite_core::traits::{BuildResult, CommandSpec, Error, RunResult};
+use ignite_core::traits::{BuildFor, BuildResult, CommandSpec, Error, RunResult};
 
 use super::{
     Built, CheckRun, Checks, Failure, Final, Keyed, Listed, OpenTree, Reported, RunOptions, TRIES,
@@ -22,6 +22,15 @@ use super::{
 };
 use crate::server::Context;
 use crate::supervise;
+
+/// Whom a command's builds are for: its class, ticket and session.
+pub(super) fn build_for(options: &RunOptions) -> BuildFor {
+    BuildFor {
+        class: options.class,
+        ticket: options.ticket.clone(),
+        session: options.session.clone(),
+    }
+}
 
 /// The variable that tells each check command its class, so a family can wait longer for a slow
 /// tool outside the landing gate.
@@ -98,7 +107,7 @@ impl Checks {
             .collect();
         packages.sort();
         packages.dedup();
-        if Self::build(ctx, tree, family, &packages, run).is_err() {
+        if Self::build(ctx, tree, family, &packages, &build_for(options), run).is_err() {
             for keyed in &pending {
                 let check = &keyed.listed.check;
                 let error = Error::Io(super::BUILD_FAILED.to_owned());
@@ -331,21 +340,24 @@ impl Checks {
         tree: &OpenTree,
         family: &Family,
         packages: &[String],
+        who: &BuildFor,
         run: &mut CheckRun,
     ) -> std::result::Result<(), PathBuf> {
-        Self::build_products(ctx, tree, &family.needs, packages, run)
+        Self::build_products(ctx, tree, &family.needs, packages, who, run)
     }
 
-    /// Makes each of `products` current. `Err` holds a failed build's output.
+    /// Makes each of `products` current, in the class of the command `who` names and charged
+    /// to its ticket and session. `Err` holds a failed build's output.
     pub(super) fn build_products(
         ctx: &Context,
         tree: &OpenTree,
         products: &[String],
         packages: &[String],
+        who: &BuildFor,
         run: &mut CheckRun,
     ) -> std::result::Result<(), PathBuf> {
         for product in products {
-            match ctx.builds.ensure(&tree.id, product, packages) {
+            match ctx.builds.ensure_for(&tree.id, product, packages, who) {
                 BuildResult::Current => {}
                 BuildResult::Built { usage, units } => run.builds.push(Built {
                     product: product.clone(),

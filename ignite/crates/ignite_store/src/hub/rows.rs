@@ -240,6 +240,15 @@ crate::tables! {
         at: String,
     }
 
+    /// A check family's listing, by family and listing hash, as one machine made it.
+    Listing = "listings" {
+        family: String,
+        hash: String,
+        listing: String,
+        machine: String,
+        at: String,
+    }
+
     Metric = "metrics" { machine: String, source: String, data: String, at: String }
 
     /// One change in the feed's journal, which keeps only the most recent positions.

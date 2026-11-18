@@ -3,12 +3,15 @@
 //! "Checks" in `docs/ignite.md`).
 //!
 //! - Listing: a `jsonl` family's `list` command, or cargo-nextest's list for a `nextest` family.
-//!   cargo-nextest can list tests only after building them, so a `nextest` listing is kept in
-//!   memory under the hash of everything the family can read, and a family whose tests are all
-//!   cached builds nothing while that hash holds.
+//!   A listing is kept under the hash of everything the family's `list` can read, in memory, in
+//!   the local database and at the hub, and is made again only when none of them has one for
+//!   the tree's inputs ([`listings`]). cargo-nextest can list tests only after building them, so
+//!   a family whose listing is kept and whose tests are all cached builds nothing.
 //!   A listing with no checks that exited 0 is not believed: a `nextest` family always lists
-//!   tests, and a `jsonl` family that has listed checks since the daemon started does not
-//!   suddenly list none, so either is a failed listing, never remembered.
+//!   tests, and a `jsonl` family that has listed checks before does not suddenly list none, so
+//!   either is a failed listing, never kept.
+//! - Scope: the landing gate leaves out every family whose inputs the change does not touch,
+//!   before it lists or builds anything ([`scope`]).
 //! - Lookup: one result cache request per command, for every check it needs ([`ResultCache`]).
 //! - A failed check runs a second time at once. A pass then makes it flaky, which passes and is
 //!   reported to the hub's flaky table. A check that a run did not report, or whose family's
@@ -33,8 +36,10 @@
 pub mod adapters;
 mod batches;
 mod execute;
+pub(crate) mod listings;
 mod plan;
 mod regression;
+mod scope;
 pub mod sources;
 pub(crate) mod verbs;
 mod why_record;
@@ -43,7 +48,6 @@ mod why_record;
 mod tests;
 
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
@@ -52,14 +56,15 @@ use ignite_core::config::Os;
 use ignite_core::hash::{self, HashParts};
 use ignite_core::ids::{CheckName, Commit, InputHash, Oid, SessionId, TicketId, TreeId};
 use ignite_core::inputs::{self, CrateGraph};
-use ignite_core::manifest::{Adapter, Family, InputPattern, Manifest, Platforms};
+use ignite_core::manifest::{Family, InputPattern, Manifest, Platforms};
 use ignite_core::protocol::hub::IncompleteReason;
-use ignite_core::protocol::hub::{CachedResult, ResultKey};
+use ignite_core::protocol::hub::{CachedResult, ListingKey, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::traits::{Error, Result};
 
 use crate::cache::ResultCache;
 use crate::server::Context;
+use listings::{Kept, Listing, Origin};
 
 pub use adapters::{Listed, Reported, Target};
 pub use sources::{CheckHistory, HubHistory, TreeSource};
@@ -147,6 +152,8 @@ pub struct CheckRun {
     pub build_failures: Vec<(String, PathBuf)>,
     /// Families whose `list` failed every try, with the last output.
     pub incomplete_families: Vec<(String, PathBuf)>,
+    /// Families the landing gate left out, because the change touches none of their inputs.
+    pub out_of_scope: Vec<String>,
     /// Seconds the check commands ran, builds excluded.
     pub wall_s: f64,
     /// For each check a run gave a verdict, the hub's ID for that run's record, when the hub
@@ -199,7 +206,7 @@ enum ListError {
 /// What listing a family this machine does not run came to.
 #[derive(Clone)]
 enum Foreign {
-    Listed(Vec<Listed>),
+    Listed(Listing),
     /// The failure, and the builds that failed on the way, for `CheckRun::build_failures`.
     Failed(ListError, Vec<(String, PathBuf)>),
 }
@@ -256,8 +263,11 @@ pub struct Checks {
     cache: ResultCache,
     trees: Box<dyn TreeSource>,
     history: Box<dyn CheckHistory>,
-    /// `nextest` listings by family and the hash of everything the family can read.
-    listings: Mutex<HashMap<(String, InputHash), Vec<Listed>>>,
+    /// Kept listings by family and listing hash, as this daemon has made or read them.
+    listings: Mutex<HashMap<ListingKey, Arc<Kept>>>,
+    /// Listings made here that must not be kept (see [`listings`]), which nobody else has
+    /// either, so they are not asked for.
+    not_kept: Mutex<HashSet<ListingKey>>,
     /// The `jsonl` families that have listed at least one check since the daemon started. A
     /// listing that later comes back empty is taken for a broken `list` command.
     listed_before: Mutex<HashSet<String>>,
@@ -283,6 +293,7 @@ impl Checks {
             trees,
             history,
             listings: Mutex::new(HashMap::new()),
+            not_kept: Mutex::new(HashSet::new()),
             listed_before: Mutex::new(HashSet::new()),
             foreign_listings: Mutex::new(HashMap::new()),
             next_file: AtomicU64::new(0),
@@ -447,62 +458,53 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Prepared> {
+        // Every family's listing hash from one reading of the tree, and one request for every
+        // kept listing, so a hub that cannot be reached costs its timeout once, not once per
+        // family.
+        let hashes = self.listing_hashes(ctx, tree, among);
+        let mut kept = self.kept_for(hashes.clone());
         let mut prepared = Vec::new();
         for &(name, family) in among {
-            let listed = match self.list_remembering_foreign(ctx, tree, name, family, options, run)
-            {
-                Ok(listed) => listed,
-                // The build is already in `run.build_failures`; the family's list never ran,
-                // so it is not an incomplete family.
-                Err(ListError::Build) => continue,
-                Err(ListError::Output(output)) => {
-                    run.incomplete_families.push((name.to_owned(), output));
-                    continue;
-                }
+            let key = hashes.get(name).map(|hash| ListingKey {
+                family: name.to_owned(),
+                hash: hash.clone(),
+            });
+            let listed = self.list_remembering_foreign(
+                ctx,
+                tree,
+                (name, family),
+                options,
+                run,
+                key.clone(),
+                kept.remove(name),
+            );
+            let Some(mut listing) = Self::listed_or_noted(name, listed, run) else {
+                continue;
             };
-            let mut keyed = Vec::new();
-            let mut broken = Vec::new();
-            // Each check's input paths first, then the object IDs of all of them from one
-            // reading of the tree. Reading per check ran two git commands per check, which
-            // for the thousands of checks in a round took most of an hour under load.
-            let mut resolved = Vec::new();
-            // Checks of one package usually share every pattern, and matching patterns against
-            // every tracked file is the costly part, so each distinct set is matched once.
-            let mut memo: HashMap<String, Vec<String>> = HashMap::new();
-            for listed in listed {
-                if let Some(why) = &listed.refused {
-                    eprintln!("ignite: {why}");
-                    broken.push(incomplete(&listed.check, &Error::Invalid(why.clone())));
+            let (mut keyed, mut broken, mut sources) =
+                self.key_listing(ctx, tree, family, &listing);
+            if let Origin::Kept {
+                key: old,
+                sources: kept,
+            } = &listing.origin
+                && sources.as_ref() != Some(kept)
+            {
+                // The listing was made from other files than the tree's: list the family again.
+                self.forget(old);
+                self.forget_foreign(name);
+                let listed = self.list(ctx, tree, name, family, options, run, key, None);
+                let Some(fresh) = Self::listed_or_noted(name, listed, run) else {
                     continue;
-                }
-                match self.key_paths(tree, family, &listed, &mut memo) {
-                    Ok(paths) => resolved.push((listed, paths)),
-                    Err(error) => broken.push(incomplete(&listed.check, &error)),
-                }
+                };
+                listing = fresh;
+                (keyed, broken, sources) = self.key_listing(ctx, tree, family, &listing);
             }
-            let mut every: Vec<String> = resolved
-                .iter()
-                .flat_map(|(_, paths)| paths.iter().cloned())
-                .collect();
-            every.sort();
-            every.dedup();
-            match inputs::object_ids(ctx.git.as_ref(), &tree.path, &every) {
-                Ok(ids) => {
-                    let ids: HashMap<String, Oid> = ids.into_iter().collect();
-                    for (listed, paths) in resolved {
-                        let mut own: Vec<(String, Oid)> = paths
-                            .iter()
-                            .filter_map(|p| ids.get(p).map(|oid| (p.clone(), oid.clone())))
-                            .collect();
-                        own.sort();
-                        keyed.push(self.keyed(family, listed, own));
-                    }
-                }
-                Err(error) => {
-                    for (listed, _) in resolved {
-                        broken.push(incomplete(&listed.check, &error));
-                    }
-                }
+            if let (Origin::Made { key: Some(key) }, Some(sources)) = (&listing.origin, sources) {
+                let kept = Kept {
+                    sources,
+                    checks: listing.checks,
+                };
+                self.keep(key.clone(), kept);
             }
             prepared.push(Prepared {
                 family: name.to_owned(),
@@ -513,26 +515,105 @@ impl Checks {
         prepared
     }
 
+    /// The listing, or `None` after recording in `run` why there is none.
+    fn listed_or_noted(
+        name: &str,
+        listed: std::result::Result<Listing, ListError>,
+        run: &mut CheckRun,
+    ) -> Option<Listing> {
+        match listed {
+            Ok(listing) => Some(listing),
+            // The build is already in `run.build_failures`; the family's list never ran, so it
+            // is not an incomplete family.
+            Err(ListError::Build) => None,
+            Err(ListError::Output(output)) => {
+                run.incomplete_families.push((name.to_owned(), output));
+                None
+            }
+        }
+    }
+
+    /// Keys a listing's checks, and hashes its sources, from one reading of the tree. Returns
+    /// the keyed checks, the checks whose inputs cannot be resolved, and the sources hash
+    /// (`None` when the tree could not be read).
+    fn key_listing(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        family: &Family,
+        listing: &Listing,
+    ) -> (Vec<Keyed>, Vec<Failure>, Option<InputHash>) {
+        let mut keyed = Vec::new();
+        let mut broken = Vec::new();
+        // Each check's input paths first, then the object IDs of all of them from one reading
+        // of the tree. Reading per check ran two git commands per check, which for the
+        // thousands of checks in a round took most of an hour under load.
+        let mut resolved = Vec::new();
+        // Checks of one package usually share every pattern, and matching patterns against
+        // every tracked file is the costly part, so each distinct set is matched once.
+        let mut memo: HashMap<String, Vec<String>> = HashMap::new();
+        for listed in &listing.checks {
+            if let Some(why) = &listed.refused {
+                eprintln!("ignite: {why}");
+                broken.push(incomplete(&listed.check, &Error::Invalid(why.clone())));
+                continue;
+            }
+            match self.key_paths(tree, family, listed, &mut memo) {
+                Ok(paths) => resolved.push((listed, paths)),
+                Err(error) => broken.push(incomplete(&listed.check, &error)),
+            }
+        }
+        let sources = Self::source_paths(tree, &listing.checks);
+        let mut every: Vec<String> = resolved
+            .iter()
+            .flat_map(|(_, paths)| paths.iter().cloned())
+            .chain(sources.iter().cloned())
+            .collect();
+        every.sort();
+        every.dedup();
+        let ids = match inputs::object_ids(ctx.git.as_ref(), &tree.path, &every) {
+            Ok(ids) => ids,
+            Err(error) => {
+                for (listed, _) in resolved {
+                    broken.push(incomplete(&listed.check, &error));
+                }
+                return (keyed, broken, None);
+            }
+        };
+        let ids: HashMap<String, Oid> = ids.into_iter().collect();
+        let own_ids = |paths: &[String]| -> Vec<(String, Oid)> {
+            let mut own: Vec<(String, Oid)> = paths
+                .iter()
+                .filter_map(|p| ids.get(p).map(|oid| (p.clone(), oid.clone())))
+                .collect();
+            own.sort();
+            own
+        };
+        for (listed, paths) in resolved {
+            keyed.push(self.keyed(family, listed.clone(), own_ids(&paths)));
+        }
+        let sources = Self::sources_hash(&own_ids(&sources));
+        (keyed, broken, Some(sources))
+    }
+
     /// [`Checks::list`], except that for a family this machine does not run the outcome is kept
     /// for the family's current inputs, and a later call with the same inputs gets it back
     /// without building or running anything.
+    #[allow(clippy::too_many_arguments)]
     fn list_remembering_foreign(
         &self,
         ctx: &Context,
         tree: &OpenTree,
-        name: &str,
-        family: &Family,
+        (name, family): (&str, &Family),
         options: &RunOptions,
         run: &mut CheckRun,
-    ) -> std::result::Result<Vec<Listed>, ListError> {
+        key: Option<ListingKey>,
+        kept: Option<(ListingKey, Arc<Kept>)>,
+    ) -> std::result::Result<Listing, ListError> {
         let foreign = !self.families().any(|(own, _)| own == name);
-        let hash = if foreign {
-            self.listing_hash(ctx, tree, family).ok()
-        } else {
-            None
-        };
+        let hash = key.as_ref().filter(|_| foreign).map(|k| k.hash.clone());
         let Some(hash) = hash else {
-            return self.list(ctx, tree, name, family, options, run);
+            return self.list(ctx, tree, name, family, options, run, key, kept);
         };
         let remembered = self
             .foreign_listings
@@ -543,7 +624,7 @@ impl Checks {
             .map(|(_, outcome)| outcome.clone());
         if let Some(outcome) = remembered {
             return match outcome {
-                Foreign::Listed(listed) => Ok(listed),
+                Foreign::Listed(listing) => Ok(listing),
                 Foreign::Failed(failure, builds) => {
                     run.build_failures.extend(builds);
                     Err(failure)
@@ -551,9 +632,9 @@ impl Checks {
             };
         }
         let before = run.build_failures.len();
-        let result = self.list(ctx, tree, name, family, options, run);
+        let result = self.list(ctx, tree, name, family, options, run, key, kept);
         let outcome = match &result {
-            Ok(listed) => Foreign::Listed(listed.clone()),
+            Ok(listing) => Foreign::Listed(listing.clone()),
             Err(failure) => Foreign::Failed(failure.clone(), run.build_failures[before..].to_vec()),
         };
         self.foreign_listings
@@ -563,133 +644,13 @@ impl Checks {
         result
     }
 
-    /// The family's checks. `Err` holds the output of the last failed try.
-    fn list(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        name: &str,
-        family: &Family,
-        options: &RunOptions,
-        run: &mut CheckRun,
-    ) -> std::result::Result<Vec<Listed>, ListError> {
-        // `list` may read what a product builds, so it waits for the products it needs.
-        let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
-        let memo = match family.adapter {
-            Adapter::Jsonl => {
-                Self::build_products(ctx, tree, needs, &[], run).map_err(|_| ListError::Build)?;
-                None
-            }
-            Adapter::Nextest => {
-                let hash = self
-                    .listing_hash(ctx, tree, family)
-                    .map_err(|_| ListError::Output(PathBuf::new()))?;
-                let memo = (name.to_owned(), hash);
-                let listings = self.listings.lock().unwrap_or_else(PoisonError::into_inner);
-                if let Some(listed) = listings.get(&memo) {
-                    return Ok(listed.clone());
-                }
-                drop(listings);
-                Self::build_products(ctx, tree, needs, &[], run).map_err(|_| ListError::Build)?;
-                Some(memo)
-            }
-        };
-        let (args, cwd) = match family.adapter {
-            Adapter::Jsonl => (
-                adapters::words(family.list.as_deref().unwrap_or_default()),
-                tree.path.clone(),
-            ),
-            Adapter::Nextest => (
-                adapters::nextest_list_command(family.list.as_deref()),
-                self.nextest_dir(tree, family),
-            ),
-        };
-        let mut output = PathBuf::new();
-        for _ in 0..TRIES {
-            let env = base_env(ctx);
-            let result = self.launch(
-                ctx,
-                tree,
-                name,
-                family,
-                execute::LIST,
-                args.clone(),
-                &cwd,
-                env,
-                options,
-            );
-            output.clone_from(&result.output);
-            if result.exit != Some(0) {
-                let _ = crate::supervise::keep(&result.output);
-                if result.hung {
-                    // A hung command hangs again.
-                    break;
-                }
-                continue;
-            }
-            let Ok(text) = fs::read_to_string(&result.output) else {
-                continue;
-            };
-            let listed = match family.adapter {
-                Adapter::Jsonl => adapters::jsonl_list(&text, name),
-                Adapter::Nextest => adapters::nextest_list(&text, name),
-            };
-            if listed.is_empty() && self.cannot_be_empty(name, family) {
-                // A zero-check listing that exited 0 would count as a vacuous pass, and a
-                // `nextest` one would be remembered. It counts as a failed try instead.
-                let _ = crate::supervise::keep(&result.output);
-                continue;
-            }
-            if !listed.is_empty() {
-                let mut seen = self
-                    .listed_before
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner);
-                seen.insert(name.to_owned());
-            }
-            if let Some(memo) = memo {
-                let mut listings = self.listings.lock().unwrap_or_else(PoisonError::into_inner);
-                listings.insert(memo, listed.clone());
-            }
-            return Ok(listed);
-        }
-        Err(ListError::Output(output))
-    }
-
-    /// Whether an empty listing of `family` is a failure. The manifest has no way to say a
-    /// family may list nothing, so a Rust test family never may, and any other family may not
-    /// once it has listed checks.
-    fn cannot_be_empty(&self, name: &str, family: &Family) -> bool {
-        family.adapter == Adapter::Nextest
-            || self
-                .listed_before
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .contains(name)
-    }
-
-    /// The hash of everything a `nextest` family can read: its inputs with `crate-closure`
-    /// standing for every workspace package, and every package's `package_inputs`. Its tests
-    /// cannot change while this holds.
-    fn listing_hash(&self, ctx: &Context, tree: &OpenTree, family: &Family) -> Result<InputHash> {
-        let mut every = hash::input_patterns(family, &self.settings.manifest);
-        every.extend(family.package_inputs.values().flatten().cloned());
-        let patterns: Vec<InputPattern> = every
-            .iter()
-            .flat_map(|pattern| match pattern {
-                InputPattern::CrateClosure => tree
-                    .graph
-                    .packages
-                    .iter()
-                    .map(|p| InputPattern::Crate(p.name.clone()))
-                    .collect(),
-                other => vec![other.clone()],
-            })
-            .collect();
-        let paths = inputs::resolve(&patterns, None, &tree.graph, &tree.tracked)
-            .map_err(|e| Error::Invalid(e.to_string()))?;
-        let ids = inputs::object_ids(ctx.git.as_ref(), &tree.path, &paths)?;
-        Ok(self.hash(family, &ids, None))
+    /// Forgets what listing a family this machine does not run came to.
+    fn forget_foreign(&self, name: &str) {
+        let mut foreign = self
+            .foreign_listings
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        foreign.remove(name);
     }
 
     fn hash(&self, family: &Family, ids: &[(String, Oid)], digest: Option<&str>) -> InputHash {

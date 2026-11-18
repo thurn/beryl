@@ -7,7 +7,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use ignite_core::ids::{CheckName, TicketId, TreeId};
-use ignite_core::manifest::Kind;
+use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::CachedResult;
 use ignite_core::protocol::tickets::{Status, TicketQuery};
@@ -121,16 +121,24 @@ impl Verb for CheckVerb {
             lines.extend(gate_lines(&gated));
             return reply(&gated.run, render(&lines));
         }
-        let families: Vec<&str> = self
+        let regression: Vec<(&str, &Family)> = self
             .checks
             .families()
             .filter(|(_, f)| f.kind == Kind::Regression)
-            .map(|(name, _)| name)
             .collect();
         let mut run = CheckRun::default();
+        // Without the changed paths nothing can be left out of scope.
+        let among = match changed_paths(&self.checks, ctx, &tree) {
+            Ok(changed) => {
+                let (among, left_out) = self.checks.scope(ctx, &tree, &regression, &changed);
+                run.out_of_scope = left_out;
+                among
+            }
+            Err(_) => regression,
+        };
         let mut prepared = self
             .checks
-            .prepare(ctx, &tree, &families, &options, &mut run);
+            .prepare_among(ctx, &tree, &among, &options, &mut run);
         for family in &mut prepared {
             family.keep(|_| true, &mut run);
         }
@@ -139,6 +147,7 @@ impl Verb for CheckVerb {
         let gate_plan = view.plan(&ctx.config.gate);
         let mut lines = plan::plan_lines(&view, &gate_plan, &ctx.config.gate);
         lines.extend(failure_lines(&run));
+        lines.extend(scope_line(&run));
         Reply {
             exit: Exit::Success,
             text: render(&lines),
@@ -149,6 +158,7 @@ impl Verb for CheckVerb {
                 "tip": gate_plan.tip.len(),
                 "scored_cost": gate_plan.scored_cost,
                 "forced_cost": gate_plan.forced_cost,
+                "out_of_scope": run.out_of_scope,
             })),
             handle: None,
         }
@@ -181,16 +191,7 @@ impl Checks {
     }
 
     fn gate_in(&self, ctx: &Context, tree: &OpenTree, options: &RunOptions) -> GateRun {
-        let families: Vec<&str> = self
-            .families()
-            .filter(|(_, f)| f.kind == Kind::Regression)
-            .map(|(name, _)| name)
-            .collect();
         let mut run = CheckRun::default();
-        let mut prepared = self.prepare(ctx, tree, &families, options, &mut run);
-        for family in &mut prepared {
-            family.keep(|_| true, &mut run);
-        }
         // Without the changed paths the gate cannot tell which checks the change edited, and
         // would drop them silently, so it fails instead.
         let changed = match changed_paths(self, ctx, tree) {
@@ -203,6 +204,18 @@ impl Checks {
                 return GateRun { run, left: 0 };
             }
         };
+        // Which families the change can affect is decided first, so a family it cannot affect
+        // is neither listed nor built.
+        let regression: Vec<(&str, &Family)> = self
+            .families()
+            .filter(|(_, f)| f.kind == Kind::Regression)
+            .collect();
+        let (among, left_out) = self.scope(ctx, tree, &regression, &changed);
+        run.out_of_scope = left_out;
+        let mut prepared = self.prepare_among(ctx, tree, &among, options, &mut run);
+        for family in &mut prepared {
+            family.keep(|_| true, &mut run);
+        }
         let hits = self.lookup(&prepared, options);
         let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
         view.landing.clone_from(&options.ticket);
@@ -249,6 +262,7 @@ pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
         ),
     )];
     lines.extend(failure_lines(run));
+    lines.extend(scope_line(run));
     if gated.left > 0 {
         lines.push((
             "tip".to_owned(),
@@ -259,6 +273,19 @@ pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
         ));
     }
     lines
+}
+
+/// The `scope` line: how many families the gate left out because the change touches none of
+/// their inputs.
+fn scope_line(run: &CheckRun) -> Option<(String, String)> {
+    let n = run.out_of_scope.len();
+    let families = if n == 1 { "family" } else { "families" };
+    (n > 0).then(|| {
+        (
+            "scope".to_owned(),
+            format!("{n} {families} left out: the change touches none of their inputs"),
+        )
+    })
 }
 
 /// `ignite why <check> [--inputs]`: prints a check's record (its cost, its failures, where it

@@ -7,6 +7,7 @@
 //! - Tips: `POST /tips/claim`, `POST /tips/verified`, `POST /tips/waiting`, `POST /regressions`,
 //!   `POST /landings/lookup`.
 //! - Records: `POST /records`, `POST /metrics/import`.
+//! - Listings: `POST /listings/lookup`, `POST /listings/store`.
 
 use serde::{Deserialize, Serialize};
 
@@ -699,6 +700,35 @@ pub struct JusticiarReport {
     /// ticket is then labelled `needs:<host>`.
     #[serde(default)]
     pub on_machine: bool,
+}
+
+/// A family's stored listing is found by the family's name and its listing hash, the hash of
+/// everything the family's `list` command can read.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ListingKey {
+    pub family: String,
+    pub hash: InputHash,
+}
+
+/// `POST /listings/lookup`; the reply holds one entry per key, in order.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListingLookup {
+    pub keys: Vec<ListingKey>,
+}
+
+/// The stored listing of each key asked for, or `None` where the hub has none. A listing is
+/// text the daemon wrote; the hub keeps it without reading it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListingReply {
+    pub listings: Vec<Option<String>>,
+}
+
+/// `POST /listings/store`: a listing one machine made, for every machine to reuse while the
+/// family's listing hash holds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredListing {
+    pub key: ListingKey,
+    pub listing: String,
 }
 
 #[cfg(test)]

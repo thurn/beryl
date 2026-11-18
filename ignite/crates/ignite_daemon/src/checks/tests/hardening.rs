@@ -165,6 +165,10 @@ fn a_jsonl_family_that_listed_checks_and_then_lists_none_is_a_failed_listing() {
     let first = run(&world, &["unit:a"]);
     assert!(first.passed(), "{first:?}");
     *world.launcher.listing.lock().unwrap() = String::new();
+    // New inputs, so the kept listing does not answer.
+    world
+        .git
+        .set_object("src", Oid::new("b".repeat(40)).unwrap());
 
     let second = run(&world, &["unit:a"]);
 
@@ -289,14 +293,16 @@ fn gated(world: &World, ticket: Option<&str>) -> Vec<String> {
 
 #[test]
 fn the_gate_leaves_out_a_check_with_an_open_regression_unless_it_lands_the_fix() {
-    let free = gate_world(&["game_rules/tests/entering.rs"]);
+    // The change touches the family's inputs, so the family is in the gate's scope.
+    let changed = ["game_rules/tests/entering.rs", "src/a.py"];
+    let free = gate_world(&changed);
     assert_eq!(
         gated(&free, Some("tk.9")),
         ["unit:b"],
         "chosen while no regression is open"
     );
 
-    let world = gate_world(&["game_rules/tests/entering.rs"]);
+    let world = gate_world(&changed);
     world.hub.insert_ticket(regression_ticket("tk.1", "unit:b"));
     assert!(verbs::open_regressions(&world.ctx).contains_key(&name("unit:b")));
     assert!(

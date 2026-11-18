@@ -6,6 +6,7 @@ pub mod checks;
 pub mod commands;
 pub mod dispatch;
 pub mod feed;
+pub mod listings;
 pub mod tickets;
 
 use crate::auth::Writer;

@@ -284,3 +284,37 @@ fn a_top_level_file_is_the_same_area_for_scores_and_admission() {
         directory_area("justfile")
     );
 }
+
+#[test]
+fn touched_names_the_changed_paths_a_pattern_can_read() {
+    let changed: Vec<String> = [
+        "docs/guide.md",
+        "web/src/gone.ts",
+        "ws/Cargo.lock",
+        "ws/crates/core/src/lib.rs",
+        "rust-toolchain.toml",
+    ]
+    .iter()
+    .map(|s| (*s).to_owned())
+    .collect();
+    let touched = |list: &[&str]| touched(&patterns(list), &graph(), &changed).unwrap();
+    // A deleted file still counts, though no tracked file is left for it.
+    assert_eq!(touched(&["web/src/**"]), ["web/src/gone.ts"]);
+    assert_eq!(touched(&["web/*/*.ts"]), ["web/src/gone.ts"]);
+    assert_eq!(touched(&["docs"]), ["docs/guide.md"]);
+    assert!(touched(&["web/shots.json", "tools/**"]).is_empty());
+    // A crate reads its workspace's lock file and the toolchain file above it.
+    assert_eq!(
+        touched(&["crate:lonely"]),
+        ["ws/Cargo.lock", "rust-toolchain.toml"]
+    );
+    assert_eq!(
+        touched(&["crate-closure"]),
+        [
+            "ws/Cargo.lock",
+            "ws/crates/core/src/lib.rs",
+            "rust-toolchain.toml"
+        ]
+    );
+    assert!(super::touched(&patterns(&["crate:ghost"]), &graph(), &changed).is_err());
+}

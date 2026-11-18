@@ -10,6 +10,7 @@ pub mod feed;
 pub mod findings;
 pub mod fleet;
 pub mod leases;
+pub mod listings;
 pub mod records;
 pub mod rejected;
 pub mod results;
@@ -58,6 +59,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 8,
         sql: include_str!("check_state_changes.sql"),
+    },
+    Migration {
+        version: 9,
+        sql: include_str!("listings.sql"),
     },
 ];
 
