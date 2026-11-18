@@ -499,9 +499,11 @@ Rules for trees:
   [Light and heavy tickets](#light-and-heavy-tickets).
 - While cores are idle, the daemon keeps one free ticket tree built at the tip,
   so the next lease starts with nothing to compile.
-- A tree keeps `rust/target`, `rust/beryl3d/target` and `ui/node_modules`, each
-  created when a command first needs it. A tree that has only held documentation
-  or Python tickets uses little disk.
+- A tree keeps the directories that its build products declare as their output,
+  each created when a command first needs it. Today those are `rust/target`,
+  `rust/beryl3d/target` and `ui/node_modules`, and none of them is named in
+  Ignite's code. A tree that has only held documentation or Python tickets uses
+  little disk.
 - To hold the machine under `trees_disk_gb`, the daemon deletes builds that a
   newer build of the same unit replaced, then the build directories of the free
   trees used longest ago.
@@ -511,8 +513,22 @@ Rules for trees:
 ### Builds
 
 A **build product** is a named build that checks need, such as the Rust test
-binaries, the clippy pass or the `beryl_cli` executable. The daemon runs builds
-so that sessions do not compete inside one tree:
+binaries, the clippy pass or the `beryl_cli` executable. It is declared beside
+the check families, with its command, its inputs and the directories it writes:
+
+```toml
+[product.rust-tests]
+build = "cargo nextest run --no-run {packages}"
+dir = "rust"
+inputs = ["crate-closure"]
+outputs = ["rust/target"]
+```
+
+Ignite's code names no path, crate, tool or branch of Beryl's. Everything
+specific to this repository is in `ignite.toml` and these declarations, so
+merging a workspace or dropping a directory is an edit to a declaration.
+
+The daemon runs builds so that sessions do not compete inside one tree:
 
 - One build runs per target directory at a time, since Cargo locks the
   directory. Requests for the same product in the same tree state join the
@@ -604,8 +620,10 @@ Wall time rose 75% under load and CPU time 30%. The instruction count moved by
 How Ignite uses this:
 
 - Each supervisor reads its command's instructions, CPU seconds and peak memory
-  from the operating system when the command exits. Nothing samples processes to
-  attribute their cost.
+  from the operating system when the command exits. The operating system gives
+  an exact total for a direct child only, so for a command that starts processes
+  of its own the supervisor also reads those descendants about once a second
+  while they run.
 - Each compiler process is counted by the `RUSTC_WRAPPER`, and each Rust test
   process by a Cargo target runner, so costs are known per crate and per test.
 - Where one process runs many checks, as pytest does, the process's instructions
@@ -1495,7 +1513,16 @@ compatibility.
 
 Until the switch, Enact delivers Ignite's own code. Ignite's source is a Cargo
 workspace of its own in the repository, so building it never rebuilds the game's
-crates and its dependencies never enter the game's lock file.
+crates and its dependencies never enter the game's lock file. Today's checks
+give that workspace a lane of its own, so a change to Ignite runs Ignite's
+formatting, clippy and tests and none of the game's checks.
+
+The change that deletes the old tools cannot go through Enact, whose check it
+removes. It is prepared on a branch of its own and is the first commit that
+Ignite lands.
+
+The work is tracked in the epic `Thrh4`, whose design field holds the code
+contract: where each part lives and which ticket owns it.
 
 What the switch imports:
 
