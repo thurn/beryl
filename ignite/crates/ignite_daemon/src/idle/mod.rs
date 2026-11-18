@@ -13,9 +13,12 @@
 //! - a rebuild saves the edited file's old contents before editing it, and writes them back
 //!   before anything else when it finds them saved.
 //!
-//! Reports for the hub wait in the state file until the hub takes them.
+//! Reports for the hub wait in the state file until the hub takes them. A job that fails waits
+//! longer before each new attempt, and is reported to the hub after a few failures (see
+//! [`backoff`]).
 
 mod audit;
+mod backoff;
 mod explore;
 mod rebuild;
 mod state;
@@ -50,7 +53,8 @@ pub enum IdleJob {
 
 /// Where idle work runs, and the repository facts it needs. [`LiveHost`] is the real one.
 pub trait IdleHost: Send + Sync {
-    /// Leases a landing tree checked out at `commit`; `None` while every landing tree is busy.
+    /// Leases a landing tree checked out at `commit`, leaving another free for landings and
+    /// tip verification; `None` while fewer than two landing trees are free.
     fn lease(&self, commit: &Commit) -> Result<Option<(TreeId, PathBuf)>>;
     /// Frees a tree that [`IdleHost::lease`] gave; `built_at` is the commit its builds match.
     fn release(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
@@ -99,7 +103,7 @@ impl IdleHost for LiveHost {
     fn lease(&self, commit: &Commit) -> Result<Option<(TreeId, PathBuf)>> {
         Ok(self
             .trees
-            .lease_landing("idle work", commit)?
+            .lease_spare_landing("idle work", commit)?
             .map(|lease| (lease.tree, lease.path)))
     }
 
@@ -208,23 +212,36 @@ impl Idle {
 
     /// The next idle job: interrupted work first (an applied rebuild edit, then an unfinished
     /// exploration batch), then a due audit, then a due rebuild count, then exploration in the
-    /// families' shares. `None` when there is nothing to do.
+    /// families' shares. A job still waiting after a failure is passed over, and while an
+    /// applied rebuild edit waits, nothing runs. `None` when there is nothing to do.
     pub fn next_job(&self, ctx: &Context) -> Option<IdleJob> {
-        if let Some(journal) = &self.state().journal {
-            return Some(IdleJob::Rebuild {
+        let applied = self
+            .state()
+            .journal
+            .as_ref()
+            .map(|journal| IdleJob::Rebuild {
                 name: journal.name.clone(),
             });
+        if let Some(job) = applied {
+            // Other work could lease the edited tree, so it waits until the edit is undone.
+            return self.ready(&job).then_some(job);
         }
         let interrupted = {
+            let families = self.exploration_families();
             let state = self.state();
-            self.exploration_families()
+            families
                 .into_iter()
-                .find(|family| state.batches.contains_key(family))
+                .filter(|family| state.batches.contains_key(family))
+                .collect::<Vec<_>>()
         };
-        if let Some(family) = interrupted {
-            return Some(IdleJob::Explore { family });
+        if let Some(job) = interrupted
+            .into_iter()
+            .map(|family| IdleJob::Explore { family })
+            .find(|job| self.ready(job))
+        {
+            return Some(job);
         }
-        if self.audits_due() {
+        if self.audits_due() && self.ready(&IdleJob::Audit) {
             return Some(IdleJob::Audit);
         }
         if let Some(name) = self.rebuild_due(ctx) {
@@ -233,14 +250,26 @@ impl Idle {
         self.next_family().map(|family| IdleJob::Explore { family })
     }
 
-    /// Runs one job, after sending any reports the hub has not taken yet.
+    /// Runs one job, after sending any reports the hub has not taken yet. A failure makes the
+    /// job wait before it runs again; a job that ran and succeeded is cleared of its failures.
     pub fn run(&self, ctx: &Context, job: &IdleJob) -> Result<()> {
         let _work = lock(&self.work);
         self.send_reports(ctx);
-        match job {
+        let ran = match job {
             IdleJob::Explore { family } => self.explore(ctx, family),
-            IdleJob::Audit => self.audit(ctx, false).map(|_| ()),
-            IdleJob::Rebuild { name } => self.rebuild(ctx, name).map(|_| ()),
+            IdleJob::Audit => self.audit(ctx, false).map(|_| true),
+            IdleJob::Rebuild { name } => self.rebuild(ctx, name).map(|count| count.is_some()),
+        };
+        match ran {
+            Ok(true) => self.note_success(job),
+            // No landing tree was free, so the job did not run.
+            Ok(false) => Ok(()),
+            Err(error) => {
+                if let Err(unsaved) = self.note_failure(ctx, job, &error) {
+                    eprintln!("ignite: the failure of idle work {job:?} was not saved: {unsaved}");
+                }
+                Err(error)
+            }
         }
     }
 
@@ -335,8 +364,20 @@ impl Verb for RebuildVerb {
         };
         let _work = lock(&self.idle.work);
         match self.idle.rebuild(ctx, name) {
-            Ok(Some(count)) => Reply::text(Exit::Success, count.render()),
-            Ok(None) => Reply::text(Exit::Conflict, "every landing tree is busy; try again"),
+            Ok(Some(count)) => {
+                // A measurement that works clears the idle job's failures, so it runs as due.
+                let job = IdleJob::Rebuild {
+                    name: name.to_owned(),
+                };
+                if let Err(error) = self.idle.note_success(&job) {
+                    eprintln!("ignite: idle state not saved: {error}");
+                }
+                Reply::text(Exit::Success, count.render())
+            }
+            Ok(None) => Reply::text(
+                Exit::Conflict,
+                "no landing tree is free beside the one kept for landings; try again",
+            ),
             Err(error) => error_reply(&error),
         }
     }

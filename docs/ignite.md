@@ -529,6 +529,11 @@ Each machine has a fixed number of trees of two kinds:
 - A **landing tree** stays at the tip. Landings and tip verification build in
   it, so each builds only what one change added. A ticket tree last built
   whatever the tip was when its ticket started, often 20 to 30 commits earlier.
+- Idle work (exploration, cache audits and rebuild counts) also borrows a
+  landing tree, but only while another landing tree stays free. Nothing stops
+  idle work for a tree, and a rebuild count can hold one for a long build, so a
+  landing or tip verification that arrives meanwhile still finds a tree. A
+  machine with one landing tree runs no idle work that needs a tree.
 
 ```toml
 # ignite.toml, per machine
@@ -688,6 +693,13 @@ Rules for cores:
   thing stopped when a higher class waits for cores, or for a resource the idle
   work holds. Stopping sends `SIGTERM`, then `SIGKILL` ten seconds later. While
   an update waits for commands to finish, idle work is stopped and none starts.
+- An idle job that fails waits before it runs again: half an hour after its
+  first failure, then twice as long after each later one, up to a day. The wait
+  is kept in the idle state file, so a restart does not retry at once. After
+  three failures in a row the daemon sends one justiciar report for the job
+  (subject `idle:<job>`, such as `idle:rebuild:kernel-body`), and nothing more
+  until the job succeeds. A failure because the hub cannot be reached is not
+  counted.
 - Time spent waiting for cores is recorded apart from a command's own time.
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
@@ -1844,7 +1856,10 @@ What a count is for:
   after, and the two numbers are comparable whatever else the machine was doing.
 - **Showing the trend.** The daemon measures each count in the `idle` class, in
   a landing tree, when the verified commit has moved by 100 commits. The
-  dashboard draws the series.
+  dashboard draws the series. A measurement that fails is tried again after the
+  wait every failing idle job gets, whatever the commit, and is reported after
+  three failures (see
+  [Cores, memory and shared resources](#cores-memory-and-shared-resources)).
 
 What a count is not for:
 

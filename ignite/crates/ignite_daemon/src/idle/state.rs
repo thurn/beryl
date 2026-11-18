@@ -1,5 +1,5 @@
 //! The idle work's state file: what exploration has played, the cache hits sampled for audits,
-//! the rebuild counts and the work a stop interrupted.
+//! the rebuild counts, the jobs that keep failing and the work a stop interrupted.
 //!
 //! The file is JSON, rewritten whole through a temporary file and a rename, so a stop leaves
 //! either the old state or the new one and never half of each. Each job writes what it is about
@@ -17,6 +17,7 @@ use ignite_core::protocol::hub::{AuditReport, CachedResult, ExplorationFind};
 use ignite_core::traits::{Error, Result};
 
 use super::RebuildCount;
+use super::backoff::Failing;
 
 /// Everything the idle work remembers between runs and restarts.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -40,6 +41,8 @@ pub(super) struct State {
     /// The verified commit each rebuild edit was last measured at, or tried at if the
     /// measurement failed.
     pub rebuild_tried: BTreeMap<String, Commit>,
+    /// Idle jobs whose last run failed, by [`super::IdleJob::key`].
+    pub failing: BTreeMap<String, Failing>,
 }
 
 /// A check an exploration family's `next` command printed.

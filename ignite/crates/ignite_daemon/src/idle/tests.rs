@@ -26,6 +26,9 @@ use crate::checks::HitSink;
 use crate::server::{Context, Verb};
 use crate::testhub::SpyHub;
 
+#[path = "backoff_tests.rs"]
+mod backoff;
+
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 
 fn temp_dir() -> PathBuf {
@@ -173,10 +176,18 @@ impl Launcher for Seeds {
 struct Compiler {
     dir: PathBuf,
     stop: AtomicBool,
+    /// Every build fails, as a broken commit makes it.
+    broken: AtomicBool,
 }
 
 impl Builds for Compiler {
     fn ensure(&self, _tree: &TreeId, _product: &str, _packages: &[String]) -> BuildResult {
+        if self.broken.load(Ordering::SeqCst) {
+            return BuildResult::Failed {
+                output: self.dir.join("build.log"),
+                usage: Usage::default(),
+            };
+        }
         let edited = fs::read_to_string(self.dir.join("src/core.rs"))
             .unwrap()
             .contains("const _");

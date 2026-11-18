@@ -12,8 +12,8 @@ use ignite_core::protocol::hub::ExplorationFind;
 use ignite_core::protocol::{Class, Outcome, Usage};
 use ignite_core::traits::{BuildResult, CommandSpec, Error, Result};
 
-use super::Idle;
 use super::state::{NewCheck, Report};
+use super::{Idle, IdleJob};
 use crate::checks::adapters::{self, Reported};
 use crate::server::Context;
 
@@ -24,14 +24,22 @@ const WINDOW_DAYS: f64 = 30.0;
 const OUTPUT_LINES: usize = 40;
 
 impl Idle {
-    /// The exploration family to run next: the one that has spent least in the last 30 days
-    /// for its share of idle time.
+    /// The exploration family to run next: of those not waiting after a failure, the one that
+    /// has spent least in the last 30 days for its share of idle time.
     pub(super) fn next_family(&self) -> Option<String> {
         let families = self.exploration_families();
-        let state = self.state();
-        let shares = super::lock(&self.shares).clone();
         #[allow(clippy::cast_precision_loss)]
         let equal = 1.0 / families.len().max(1) as f64;
+        let ready: Vec<String> = families
+            .into_iter()
+            .filter(|family| {
+                self.ready(&IdleJob::Explore {
+                    family: family.clone(),
+                })
+            })
+            .collect();
+        let state = self.state();
+        let shares = super::lock(&self.shares).clone();
         let cutoff = self.cutoff();
         let need = |family: &String| {
             let share = shares
@@ -44,14 +52,15 @@ impl Idle {
             });
             spent / share
         };
-        families
+        ready
             .iter()
             .min_by(|a, b| need(a).total_cmp(&need(b)))
             .cloned()
     }
 
-    /// Runs one batch of `family`'s new checks.
-    pub(super) fn explore(&self, ctx: &Context, family: &str) -> Result<()> {
+    /// Runs one batch of `family`'s new checks. False if no landing tree was free, so nothing
+    /// ran.
+    pub(super) fn explore(&self, ctx: &Context, family: &str) -> Result<bool> {
         let declared = self
             .settings
             .manifest
@@ -66,7 +75,7 @@ impl Idle {
         }
         let commit = Self::verified(ctx)?;
         let Some((tree, path)) = self.host.lease(&commit)? else {
-            return Ok(());
+            return Ok(false);
         };
         let result = self.explore_in(ctx, family, &declared, &tree, &path, &commit);
         let built = matches!(result, Ok(true));
@@ -74,7 +83,7 @@ impl Idle {
         result?;
         released?;
         self.send_reports(ctx);
-        Ok(())
+        Ok(true)
     }
 
     /// Runs the family's saved batch, or a new one from `next`, in `tree`. True if the family's

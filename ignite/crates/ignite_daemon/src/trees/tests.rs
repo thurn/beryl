@@ -78,6 +78,10 @@ struct Fixture {
 
 impl Fixture {
     fn new(ticket_trees: u32, commits: usize) -> Fixture {
+        Fixture::with_landing(ticket_trees, 1, commits)
+    }
+
+    fn with_landing(ticket_trees: u32, landing_trees: u32, commits: usize) -> Fixture {
         let root = std::env::temp_dir().join(format!(
             "ignite-trees-{}-{}",
             std::process::id(),
@@ -117,7 +121,7 @@ impl Fixture {
             remote: "origin".to_owned(),
             branches: vec!["main".to_owned()],
             ticket_trees,
-            landing_trees: 1,
+            landing_trees,
             disk_limit: None,
             keep: vec!["out".to_owned()],
             prebuild: vec!["bin".to_owned()],
@@ -550,6 +554,30 @@ fn setup_frees_a_landing_tree_left_landing_by_a_stopped_daemon() {
             .unwrap()
             .is_some()
     );
+}
+
+#[test]
+fn idle_work_never_takes_the_last_free_landing_tree() {
+    let f = Fixture::with_landing(1, 2, 1);
+    let idle = f
+        .trees
+        .lease_spare_landing("idle work", &f.tip())
+        .unwrap()
+        .expect("two landing trees are free, so idle work may take one");
+    assert!(
+        f.trees
+            .lease_spare_landing("idle work", &f.tip())
+            .unwrap()
+            .is_none(),
+        "idle work took the last free landing tree"
+    );
+    // Tip verification still finds the tree idle work left.
+    let tip = f
+        .trees
+        .lease_landing("tip verification", &f.tip())
+        .unwrap()
+        .expect("the last landing tree is left for tip verification");
+    assert_ne!(tip.tree, idle.tree);
 }
 
 #[test]

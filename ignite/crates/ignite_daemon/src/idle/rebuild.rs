@@ -1,6 +1,7 @@
 //! Rebuild counts: the instructions the compiler runs to rebuild after one fixed edit, in a
-//! landing tree that has built the verified commit. A count is an instrument: it files nothing
-//! and blocks nothing.
+//! landing tree that has built the verified commit. A count is an instrument: a rising count
+//! files nothing and blocks nothing. A measurement that keeps failing is reported like any
+//! other idle job that keeps failing (see [`super::backoff`]).
 //!
 //! Each `[[rebuild]]` edit in `ignite.toml` names a file and the text to append to it. A
 //! measurement builds the edit's products, saves the file's contents, appends the text, builds
@@ -21,7 +22,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::{BuildResult, Error, Result};
 
 use super::state::Journal;
-use super::{Idle, REBUILD_EVERY};
+use super::{Idle, IdleJob, REBUILD_EVERY};
 use crate::server::Context;
 
 /// Counts kept per edit; older ones are dropped.
@@ -123,7 +124,10 @@ pub(super) fn list(edits: &[RebuildEdit]) -> String {
 
 impl Idle {
     /// The first edit due a measurement: never tried, or tried at a commit the verified commit
-    /// has since moved [`REBUILD_EVERY`] commits past.
+    /// has since moved [`REBUILD_EVERY`] commits past. An edit whose last measurement failed
+    /// is due instead once its wait after the failure is over, whatever the commit, so that a
+    /// failure that keeps happening is reported after a few hours rather than a few hundred
+    /// commits.
     pub(super) fn rebuild_due(&self, ctx: &Context) -> Option<String> {
         if ctx.config.rebuild.is_empty() || !counts_instructions(self.settings.os) {
             return None;
@@ -133,14 +137,22 @@ impl Idle {
         ctx.config
             .rebuild
             .iter()
-            .find(|edit| match tried.get(&edit.name) {
-                None => true,
-                Some(commit) => {
-                    *commit != verified
-                        && self
-                            .host
-                            .commits_between(commit, &verified)
-                            .is_ok_and(|n| n >= REBUILD_EVERY)
+            .find(|edit| {
+                let job = IdleJob::Rebuild {
+                    name: edit.name.clone(),
+                };
+                if self.has_failed(&job) {
+                    return self.ready(&job);
+                }
+                match tried.get(&edit.name) {
+                    None => true,
+                    Some(commit) => {
+                        *commit != verified
+                            && self
+                                .host
+                                .commits_between(commit, &verified)
+                                .is_ok_and(|n| n >= REBUILD_EVERY)
+                    }
                 }
             })
             .map(|edit| edit.name.clone())
