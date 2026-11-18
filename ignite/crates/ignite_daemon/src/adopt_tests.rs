@@ -42,6 +42,7 @@ fn previous(owner: &str, args: &[&str], exit: i32, waits: &Arc<AtomicUsize>) -> 
         handle: handle(owner),
         args: spec(args).args,
         cwd: spec(args).cwd,
+        env: Vec::new(),
         wait: Box::new(move || {
             waits.fetch_add(1, Ordering::SeqCst);
             result(exit, "/runs/previous/output.log")
@@ -131,6 +132,7 @@ fn an_adopted_command_is_ended_when_its_caller_cancels() {
         handle: handle("T-4"),
         args: spec(&["cargo", "test"]).args,
         cwd: spec(&["cargo", "test"]).cwd,
+        env: Vec::new(),
         wait: Box::new(move || {
             let _ = finished.recv();
             RunResult {
@@ -151,4 +153,39 @@ fn an_adopted_command_is_ended_when_its_caller_cancels() {
     });
     assert!(ended.load(Ordering::SeqCst));
     assert_eq!(result.exit, None);
+}
+
+#[test]
+fn files_an_adopted_command_wrote_reach_the_paths_the_second_run_named() {
+    let dir = std::env::temp_dir().join(format!("ignite-adopt-carry-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let (first, second) = (dir.join("results-1.jsonl"), dir.join("results-2.jsonl"));
+    let written = first.clone();
+    let previous = Previous {
+        handle: handle("T-4"),
+        args: spec(&["sh", "adapter.sh", "run"]).args,
+        cwd: spec(&["sh", "adapter.sh", "run"]).cwd,
+        env: vec![
+            ("IGNITE_RESULTS".to_owned(), first.display().to_string()),
+            ("GREETING".to_owned(), "hello".to_owned()),
+        ],
+        wait: Box::new(move || {
+            std::fs::write(&written, "{\"check\": \"core:a\", \"outcome\": \"pass\"}\n").unwrap();
+            result(0, "/runs/previous/output.log")
+        }),
+        end: Box::new(|| {}),
+    };
+    let launcher = AdoptingLauncher::new(Arc::new(FakeLauncher::default()), vec![previous]);
+    let mut asked = spec(&["sh", "adapter.sh", "run"]);
+    asked.env = vec![
+        ("IGNITE_RESULTS".to_owned(), second.display().to_string()),
+        ("GREETING".to_owned(), "hi".to_owned()),
+    ];
+    as_handle(Some("T-4"), || launcher.run(&asked));
+    assert_eq!(
+        std::fs::read_to_string(&second).unwrap(),
+        "{\"check\": \"core:a\", \"outcome\": \"pass\"}\n"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
 }

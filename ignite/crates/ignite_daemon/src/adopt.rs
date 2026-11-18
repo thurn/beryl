@@ -8,7 +8,9 @@
 //! once.
 //!
 //! A command is matched by the handle of the verb that started it, its arguments and its working
-//! directory. The launcher adds the handle to the environment of every command a handled verb
+//! directory. Its environment may differ: a check's runner names a new results file for each
+//! run, so the files the adopted command wrote to paths its environment named are copied to
+//! the paths the second run named ([`carry_outputs`]). The launcher adds the handle to the environment of every command a handled verb
 //! starts, as `IGNITE_HANDLE`, which is how a restarted daemon finds it in the run's
 //! `spec.json`. Commands of background loops have no handle and are never adopted: a loop starts
 //! its round over.
@@ -39,6 +41,8 @@ pub struct Previous {
     pub handle: Handle,
     pub args: Vec<String>,
     pub cwd: PathBuf,
+    /// The variables the command was started with.
+    pub env: Vec<(String, String)>,
     /// Blocks until the command has finished and returns its result.
     pub wait: Box<dyn FnOnce() -> RunResult + Send>,
     /// Ends the command and everything it started.
@@ -59,6 +63,7 @@ impl Previous {
             handle,
             args: spec.args,
             cwd: spec.cwd,
+            env: spec.env,
             wait: Box::new(move || waited.wait()),
             end: Box::new(move || {
                 let _ = ended.end();
@@ -162,7 +167,10 @@ impl AdoptingLauncher {
                 cancelled.is_some_and(|c| c())
                     || activity.as_ref().is_some_and(|a| a.stop_requested())
             };
-            return wait_adopted(previous, &stop);
+            let env = previous.env.clone();
+            let result = wait_adopted(previous, &stop);
+            carry_outputs(&env, &spec.env);
+            return result;
         }
         let mut tagged = spec.clone();
         tagged
@@ -171,6 +179,24 @@ impl AdoptingLauncher {
         match cancelled {
             Some(cancelled) => self.inner.run_until(&tagged, cancelled),
             None => self.inner.run(&tagged),
+        }
+    }
+}
+
+/// Copies the files an adopted command wrote to paths its environment named, such as the results
+/// file of a check (`IGNITE_RESULTS`), to the paths the second run's environment names for the
+/// same variables, where the caller looks for them. A variable whose value is the same in both,
+/// or whose first value is not a file, is left alone.
+fn carry_outputs(previous: &[(String, String)], wanted: &[(String, String)]) {
+    for (name, path) in wanted {
+        let Some((_, written)) = previous.iter().find(|(n, _)| n == name) else {
+            continue;
+        };
+        if written == path || !Path::new(written).is_file() {
+            continue;
+        }
+        if let Err(error) = std::fs::copy(written, path) {
+            eprintln!("ignite: {written} not copied to {path} for an adopted command: {error}");
         }
     }
 }

@@ -223,6 +223,7 @@ fn restart_during(
                 handle: tagged,
                 args: spec.args.clone(),
                 cwd: spec.cwd.clone(),
+                env: spec.env.clone(),
                 // The supervisor outlived the daemon and its command finished with exit 2.
                 wait: Box::new(|| passed(2)),
                 end: Box::new(|| {}),
