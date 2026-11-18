@@ -109,6 +109,8 @@ pub struct PageOptions {
     pub icons: Option<Icons>,
     pub crumbs: Vec<Crumb>,
     pub brand: String,
+    /// HTML shown at the left of the header in place of `brand`, from the hub's configuration.
+    pub wordmark: Option<String>,
     pub description: String,
     pub base: Option<String>,
     pub feed: Option<Feed>,
@@ -148,7 +150,11 @@ pub fn page_regions(options: &PageOptions) -> String {
          <a class=\"c-brand\" href=\"{}\">{}</a>{trail}</nav>\n</header>\n\
          <main class=\"c-main\" id=\"c-main\"{subscription}>\n{}\n</main>",
         esc(root),
-        esc(&options.brand),
+        // The wordmark comes from a file in the repository, so it is trusted HTML.
+        options
+            .wordmark
+            .as_deref()
+            .map_or_else(|| esc(&options.brand), str::to_owned),
         options.body
     )
 }

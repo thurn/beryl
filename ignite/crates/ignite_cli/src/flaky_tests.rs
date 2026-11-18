@@ -73,6 +73,7 @@ fn a_check_switched_off_as_flaky_can_be_listed_and_switched_back_on() {
         config: Config::parse("ignite.toml", CONFIG).unwrap(),
         listen: "127.0.0.1:0".to_owned(),
         database: database.clone(),
+        wordmark: None,
     }
     .start()
     .unwrap();

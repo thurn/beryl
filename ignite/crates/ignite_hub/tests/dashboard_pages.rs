@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use ignite_core::protocol::tickets::BatchRequest;
 use ignite_core::time::Timestamp;
-use ignite_hub::dashboard::serve::{alias_redirect, serve, static_file};
+use ignite_hub::dashboard::serve::{alias_redirect, serve, serve_with, static_file};
 use ignite_hub::routes::{Request, Response};
 use ignite_store::hub::{self, batch};
 
@@ -425,4 +425,38 @@ fn an_empty_hub_shows_empty_states() {
     assert!(
         status.contains("No active sessions reported.") && status.contains("No lease is held.")
     );
+}
+
+#[test]
+fn a_configured_wordmark_replaces_the_brand_and_the_home_page_has_no_crumb() {
+    let hub = seeded();
+    let header = |page: &str| {
+        page[page.find("<header").unwrap()..page.find("</header>").unwrap()].to_owned()
+    };
+    let home = header(&hub.text("/"));
+    assert!(home.contains(">Ignite</a></nav>"), "{home}");
+
+    let now = Timestamp::parse(NOW).unwrap();
+    let wordmark = "<svg aria-label=\"Mark\"></svg>";
+    let page = |target: &str| {
+        let reply = serve_with(
+            &hub.conn,
+            &request("GET", target, None),
+            "proj",
+            Some(wordmark),
+            now,
+        )
+        .expect("a dashboard route");
+        header(&String::from_utf8(reply.body).unwrap())
+    };
+    let home = page("/");
+    assert!(
+        home.contains(&format!("href=\"/\">{wordmark}</a></nav>")),
+        "{home}"
+    );
+    for target in ["/Tq44s.7.24", "/machines", "/no-such-ticket"] {
+        let other = page(target);
+        assert!(other.contains(wordmark), "{target}: {other}");
+        assert!(!other.contains(">Ignite<"), "{target}: {other}");
+    }
 }

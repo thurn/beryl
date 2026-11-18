@@ -26,6 +26,8 @@
 }
 
 .c-brand {
+  /* A project's wordmark (`[hub] wordmark`) keeps its size; the crumbs after it shorten. */
+  flex: none;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.01em;

@@ -171,7 +171,7 @@ fn regions(options: &PageOptions) -> String {
     )
 }
 
-fn not_found(root: &str, head: bool) -> Response {
+fn not_found(root: &str, wordmark: Option<&str>, head: bool) -> Response {
     let body = c::title("Not found", "", "No ticket has this address.")
         + &format!(
             "<p>{}</p>",
@@ -185,6 +185,7 @@ fn not_found(root: &str, head: bool) -> Response {
         icons: Some(SITE_ICONS),
         crumbs: vec![("Tickets".to_owned(), Some(root.to_owned()))],
         brand: brand(),
+        wordmark: wordmark.map(str::to_owned),
         ..PageOptions::default()
     };
     let page = c::document(&options, &c::page_regions(&options));
@@ -225,6 +226,18 @@ pub fn serve(
     project: &str,
     now: Timestamp,
 ) -> Option<Response> {
+    serve_with(conn, request, project, None, now)
+}
+
+/// Like [`serve`], with `wordmark` (HTML) shown at the left of every page's header in place of
+/// the name "Ignite"; see `HubServer::wordmark`.
+pub fn serve_with(
+    conn: &Connection,
+    request: &Request,
+    project: &str,
+    wordmark: Option<&str>,
+    now: Timestamp,
+) -> Option<Response> {
     let head = request.method.eq_ignore_ascii_case("HEAD");
     if !head && !request.method.eq_ignore_ascii_case("GET") {
         return None;
@@ -234,6 +247,10 @@ pub fn serve(
     let fragment_kind = request.param("fragment");
     let root = dashboard_root();
     let seq = feed_position(conn);
+    let brand = |options: PageOptions| PageOptions {
+        wordmark: wordmark.map(str::to_owned),
+        ..options
+    };
     Some(match route {
         Route::Home => {
             let panel = || status::fragment(conn, &root, now);
@@ -242,7 +259,7 @@ pub fn serve(
                     panel().map_or_else(|error| failed(&error), |body| fragment(&seq, body, head)),
                 );
             }
-            match home::options(conn, &root, &seq, now) {
+            match home::options(conn, &root, &seq, now).map(brand) {
                 Err(error) => failed(&error),
                 Ok(options) if fragment_kind == Some("all") => match panel() {
                     Err(error) => failed(&error),
@@ -266,7 +283,7 @@ pub fn serve(
                 "tips" => tips::options(conn, &root, &seq, now),
                 _ => explore::options(conn, &root, &seq, now),
             };
-            match built {
+            match built.map(brand) {
                 Err(error) => failed(&error),
                 Ok(options) if fragment_kind == Some("all") => {
                     fragment(&seq, regions(&options), head)
@@ -277,16 +294,16 @@ pub fn serve(
         Route::Ticket(name) => {
             let id = match tickets::resolve(conn, &name) {
                 Ok(Some(id)) => id,
-                Ok(None) => return Some(not_found(&root, head)),
+                Ok(None) => return Some(not_found(&root, wordmark, head)),
                 Err(error) => return Some(failed(&error)),
             };
             let canonical = ticket_url(&root, id.as_str());
             if canonical != request.path {
                 return Some(redirect(&canonical, &request.query));
             }
-            match ticket::options(conn, &root, project, id.as_str(), &seq) {
+            match ticket::options(conn, &root, project, id.as_str(), &seq).map(|o| o.map(brand)) {
                 Err(error) => failed(&error),
-                Ok(None) => not_found(&root, head),
+                Ok(None) => not_found(&root, wordmark, head),
                 Ok(Some(options)) if fragment_kind == Some("all") => {
                     fragment(&seq, regions(&options), head)
                 }

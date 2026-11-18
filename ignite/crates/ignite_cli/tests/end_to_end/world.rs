@@ -118,6 +118,7 @@ impl World {
             config: placeholder,
             listen: "127.0.0.1:0".to_owned(),
             database: root.join("hub.db"),
+            wordmark: None,
         }
         .start()
         .unwrap();

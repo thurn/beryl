@@ -55,6 +55,7 @@ impl Fixture {
             config: Config::parse("ignite.toml", CONFIG).unwrap(),
             listen: "127.0.0.1:0".to_owned(),
             database: dir.join("hub.sqlite"),
+            wordmark: None,
         };
         let running = server.start().unwrap();
         Fixture {

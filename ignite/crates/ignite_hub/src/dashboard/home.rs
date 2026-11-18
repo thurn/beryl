@@ -213,7 +213,8 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
         root: root.to_owned(),
         asset_root: Some("/".to_owned()),
         icons: Some(SITE_ICONS),
-        crumbs: vec![("Tickets".to_owned(), None)],
+        // The page's own title says "Tickets", so the header shows only the brand.
+        crumbs: Vec::new(),
         brand: name,
         ..PageOptions::default()
     }

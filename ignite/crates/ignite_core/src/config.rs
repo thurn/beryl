@@ -130,6 +130,10 @@ pub struct HubConfig {
     /// address under `project`, keeping the query, so bookmarks keep working.
     #[serde(default)]
     pub aliases: Vec<String>,
+    /// A file of HTML, relative to the repository root, that the dashboard shows at the left
+    /// of every page's header in place of the name "Ignite". The hub reads it when it starts.
+    #[serde(default)]
+    pub wordmark: Option<String>,
 }
 
 /// The landing gate's values. Only a commit changes them.

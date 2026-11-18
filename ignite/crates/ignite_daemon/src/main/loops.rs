@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
+use ignite_core::config::Config;
 use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::Heartbeat;
 use ignite_core::time::SystemClock;
@@ -396,10 +397,12 @@ pub fn serve_hub_at(
     let store = |e: ignite_store::StoreError| Error::Io(e.to_string());
     let conn = ignite_store::hub::open(&database).map_err(store)?;
     ignite_hub::routes::dispatch::set_hub_version(&conn, version).map_err(store)?;
+    let wordmark = read_wordmark(repo, &config);
     let server = |listen: &str| ignite_hub::server::HubServer {
         config: config.clone(),
         listen: listen.to_owned(),
         database: database.clone(),
+        wordmark: wordmark.clone(),
     };
     let running = retry_bind(bind_for, || server(&addresses.listen).start())?;
     // Served until the process ends. The accept loop ends only when `tiny_http` has failed to
@@ -415,6 +418,23 @@ pub fn serve_hub_at(
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups"))).map_err(store)?;
     crash::spawn_loop("ignite-hub-upkeep", move || upkeep.run(conn, &SystemClock));
     Ok(())
+}
+
+/// The file `[hub] wordmark` names, read from the repository. A file that cannot be read is
+/// logged and the dashboard shows the name "Ignite" instead, since a missing picture should not
+/// stop the hub.
+fn read_wordmark(repo: &Path, config: &Config) -> Option<String> {
+    let path = repo.join(config.hub.wordmark.as_ref()?);
+    match std::fs::read_to_string(&path) {
+        Ok(text) => Some(text),
+        Err(e) => {
+            eprintln!(
+                "ignite hub: cannot read the wordmark {}: {e}",
+                path.display()
+            );
+            None
+        }
+    }
 }
 
 /// Calls `start` until it succeeds or `window` has passed, pausing briefly between tries.

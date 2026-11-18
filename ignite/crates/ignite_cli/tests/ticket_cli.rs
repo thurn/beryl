@@ -69,6 +69,7 @@ fn another_process_closing_a_ticket_ends_a_waiting_process() {
         config: Config::parse("ignite.toml", &placeholder).unwrap(),
         listen: "127.0.0.1:0".to_owned(),
         database: dir.join("hub.sqlite"),
+        wordmark: None,
     }
     .start()
     .unwrap();

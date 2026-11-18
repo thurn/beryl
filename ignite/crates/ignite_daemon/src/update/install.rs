@@ -313,6 +313,7 @@ impl LocalHub for ServedHub {
             config: self.config.clone(),
             listen: self.listen.clone(),
             database: self.dir.join("hub.db"),
+            wordmark: None,
         }
         .start()
         .map_err(|e| Error::Io(format!("cannot serve the hub at {}: {e}", self.listen)))?;

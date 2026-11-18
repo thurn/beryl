@@ -26,6 +26,9 @@ project = "by"
 # The dashboard is at the hub's root; only the API is under /by/api. The old dashboard also
 # answered at /beryl/, and page addresses under /by/ and /beryl/ redirect to the root.
 aliases = ["beryl"]
+# Shown at the left of every dashboard page's header in place of the name "Ignite". The hub reads
+# it when it starts, so a change shows after the hub's next restart.
+wordmark = "ignite/wordmark.html"
 
 # The landing gate (docs/ignite.md, "Where regression checks run"). The threshold is from
 # `ignite gate replay` over the 14 days of history before 2026-11-18: it kept 6066 of the 6383

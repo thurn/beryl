@@ -55,6 +55,7 @@ fn the_public_listener_serves_reads_and_refuses_writes_and_export() {
         config: Config::parse("ignite.toml", CONFIG).unwrap(),
         listen: "127.0.0.1:0".to_owned(),
         database: dir.join("hub.sqlite"),
+        wordmark: None,
     };
     let public = server.start_read_only().unwrap();
     let private = server.start().unwrap();

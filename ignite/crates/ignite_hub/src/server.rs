@@ -67,6 +67,9 @@ pub struct HubServer {
     /// The address to listen on, such as `127.0.0.1:7345`; port 0 picks a free one.
     pub listen: String,
     pub database: PathBuf,
+    /// The HTML shown at the left of every dashboard page's header in place of the name
+    /// "Ignite": the contents of the file `[hub] wordmark` names, or `None` for the name.
+    pub wordmark: Option<String>,
 }
 
 impl HubServer {
@@ -100,6 +103,7 @@ impl HubServer {
         let shared = Arc::new(Shared {
             project: self.config.hub.project.clone(),
             aliases: self.config.hub.aliases.clone(),
+            wordmark: self.wordmark.clone(),
             rules: self.config.rules.clone(),
             database: self.database.clone(),
             pool: Mutex::new(Pool {
@@ -167,6 +171,8 @@ struct Shared {
     project: String,
     /// Older names of the project, which redirect to `project`.
     aliases: Vec<String>,
+    /// See [`HubServer::wordmark`].
+    wordmark: Option<String>,
     /// The improvement rules' settings, evaluated when records or efficiency rows arrive.
     rules: Rules,
     database: PathBuf,
@@ -357,7 +363,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         caught(conn, |conn| api_route(conn, &request, now))
     } else {
         path.clone_into(&mut request.path);
-        caught(conn, |conn| page(conn, &request, &shared.project, now))
+        caught(conn, |conn| page(conn, &request, shared, now))
     };
     match conn {
         Some(conn) => shared.give_back(conn),
@@ -403,9 +409,15 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
 
 /// The dashboard's pages, which [`dashboard::serve::serve`] routes and renders from the request
 /// path.
-fn page(conn: &mut Connection, request: &Request, project: &str, now: Timestamp) -> Response {
-    dashboard::serve::serve(conn, request, project, now)
-        .unwrap_or_else(|| failure(404, "Unknown route"))
+fn page(conn: &mut Connection, request: &Request, shared: &Shared, now: Timestamp) -> Response {
+    dashboard::serve::serve_with(
+        conn,
+        request,
+        &shared.project,
+        shared.wordmark.as_deref(),
+        now,
+    )
+    .unwrap_or_else(|| failure(404, "Unknown route"))
 }
 
 fn parse_query(query: &str) -> Vec<(String, String)> {
@@ -480,6 +492,7 @@ mod tests {
             .unwrap(),
             listen: "127.0.0.1:0".to_owned(),
             database: dir.join("hub.db"),
+            wordmark: None,
         }
         .start()
         .unwrap();
