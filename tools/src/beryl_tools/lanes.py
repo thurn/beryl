@@ -67,6 +67,10 @@ def repo_lane() -> Lane:
         )
         .step("file-length", [*checks, "file-length"])
         .step("conventions", [*checks, "conventions"])
+        # Beryl 3D's parity list maps every skill directory and web screen file (parity.py).
+        # It reads only data files, under a second, and a change outside Beryl 3D's paths, such
+        # as deleting a skill, can break it, so it runs on every change rather than in the sweep.
+        .step("parity-list", [*BY, "b3d", "parity", "--check"])
     )
 
 

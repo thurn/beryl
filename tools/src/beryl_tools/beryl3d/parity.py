@@ -20,7 +20,8 @@ complete by the first few items still missing. The items come from:
 
 `--check` reads only the data files and fails when a skill directory or a web screen file has
 no entry in `parity.json`, or a key of it names something that no longer exists. It never fails
-for an incomplete list. The sweep runs it as its `parity-list` step.
+for an incomplete list. The fast check's `repo` lane runs it as its `parity-list` step on every
+change, because a change anywhere can remove a skill or a screen file.
 
 The command writes no file.
 """
@@ -47,7 +48,9 @@ TIMELINE_PARITY: Path = paths.DATA / "timeline-parity.json"
 TEST_FAULTS: Path = paths.DATA / "test-faults.json"
 UI_CONVENTIONS: Path = repo_paths.REPO / "data" / "ui-conventions.json"
 FIXTURES: Path = repo_paths.REPO / "ui" / "fixtures.json"
-SKILLS: Path = repo_paths.REPO / ".claude" / "skills"
+# The skill directories themselves. `.claude/skills` holds symbolic links to them, which a
+# Windows checkout without symbolic links has as plain files.
+SKILLS: Path = repo_paths.REPO / ".agents" / "skills"
 # The section kinds of `data/ui-conventions.json` whose entries Beryl 3D follows, each with a
 # file of the same name under [`CONVENTIONS`].
 CONVENTION_KINDS: tuple[str, ...] = (

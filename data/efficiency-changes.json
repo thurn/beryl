@@ -274,5 +274,10 @@
     "label": "Python tests that run a fake ui-test, shots, script or oracle lane no longer start the real workspace cargo build from inside pytest, where four tests spent 37-59 s each in it, about 190 test-seconds and 500 CPU-seconds per full run in a fresh worktree",
     "metric": "fast-check.cpu-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Beryl 3D's parity-list check runs in the fast check's repo lane on every change instead of only in the 3-hourly Beryl 3D sweep, so a deleted or added skill fails at push time rather than leaving the sweep red, re-bisected and re-commented every run until a session takes the ticket",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

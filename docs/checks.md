@@ -27,7 +27,9 @@ and logs the rest as cut or deferred.
 
 The lanes:
 
-- `repo`: justfile and Markdown formatting.
+- `repo`: justfile and Markdown formatting, file lengths, UI Conventions, and
+  Beryl 3D's parity list (`just b3d parity --check`), which any change can break
+  by removing a skill or a web screen file.
 - `python`: black, pyre and pytest. If only cards or vocabulary changed, it runs
   just the scale harness's tests. Slow CI runs no Python tests, and the browser
   sweep runs all of them. In the fast check, pytest runs the test files that fit

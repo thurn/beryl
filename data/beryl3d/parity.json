@@ -16,9 +16,9 @@
     "card-writing": "none: writes card definitions, not a client",
     "cifix": "none: fixes the checks CI files, not a client",
     "efficiency": "none: measures agent and CI cost, not a client",
+    "ignite": "none: starts and staffs work through Ignite, not a client",
     "motion-review": "motion-review",
     "specs": "specs",
-    "status-dashboard": "none: the bead status site, not a client",
     "ui-review": "ui-review"
   },
   "web_screens": {

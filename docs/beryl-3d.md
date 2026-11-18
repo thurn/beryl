@@ -4477,8 +4477,8 @@ launch tests  macOS pass, Windows, iOS and Android not required
   recording is done. `parity.json` maps every screen file of the web interface
   to a screen of that list, or to `missing`.
 - **New web interface work adds to the list** automatically where it adds a
-  fixture or a spec. Adding a web screen file or a skill makes a sweep due, and
-  its `parity-list` step fails until `parity.json` maps the new file or skill.
+  fixture or a spec. Adding or removing a web screen file or a skill fails the
+  fast check's `repo:parity-list` step until `parity.json` matches.
 
 ### The switch
 
