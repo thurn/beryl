@@ -840,6 +840,16 @@ The daemon runs builds so that sessions do not compete inside one tree:
   later requests get the same failure and its output until an input changes or
   the tree is leased again. A build that a signal ended, or that hung, is tried
   again on the next request.
+- Before a failure is reported, a build whose output says that a tree's own
+  build products are damaged (a link error, a compiler crash, unreadable
+  metadata), or whose inputs another tree has built, is cleared and run once
+  more. Ignite deletes the failing crates' `incremental/<crate>-*` folders and
+  their `deps` files in that tree. The same applies to the Cargo build inside a
+  cargo-nextest run. A build or `cargo` command that ends partway, by a signal,
+  a hang or a restart, marks its target directory, so the next build there first
+  clears each crate whose compile it left unfinished. On 2026-11-18 a compile
+  that a restart ended left one landing tree failing to link `session` on every
+  run, and `master` waited an hour for it.
 - Checks waiting for a build hold no cores.
 - The gate builds test binaries only for the packages whose tests it will run. A
   `beryl_rules` change does not build `beryl_session`'s tests before landing
@@ -1498,7 +1508,11 @@ How a daemon verifies a tip:
   [How long a round takes](#how-long-a-round-takes) for how large a batch is.
 
 - A build that fails keeps its family's checks from running. The hub hears of it
-  once, as `<family>:build`, not once for each check.
+  once, as `<family>:build`, not once for each check. A check whose build failed
+  is never held off: holding off is for checks that ran and hung or went
+  unreported. Its build is reported once per tip, and the check runs again in
+  the next round. A nextest run whose own build fails reports its checks as
+  waiting on that build, not as unreported.
 
 - A tip left waiting (for incomplete checks, or checks another machine holds) is
   verified again after ten minutes, or at once when a newer tip arrives.
