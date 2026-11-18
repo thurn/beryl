@@ -74,6 +74,9 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Internal {
             command: InternalCommand::Selftest,
         } => exit_reply(ignite_daemon::update::selftest::command(&current_dir())),
+        Command::Internal {
+            command: InternalCommand::Verb { handle },
+        } => exit_reply(ignite_daemon::verbproc::run(handle, &current_dir())),
         _ => {
             let session = client::session_from_env(|name| std::env::var(name).ok());
             let request = client::request(verb, raw, current_dir(), session);

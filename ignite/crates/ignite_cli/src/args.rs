@@ -245,6 +245,9 @@ pub enum InternalCommand {
     /// Parse `ignite.toml` and the check manifests and migrate a copy of `daemon.db`, as a
     /// daemon starting now would; exit 0 if all of it works.
     Selftest,
+    /// Run the verb of a running handle in this process, from start to finish (a verb process),
+    /// and write its reply into the handle's row.
+    Verb { handle: String },
 }
 
 /// Arguments passed through untouched.
@@ -710,5 +713,16 @@ mod tests {
             }
         ));
         assert!(Cli::try_parse_from(["ignite", "ticket", "create", "x", "-p", "P7"]).is_err());
+    }
+
+    #[test]
+    fn parses_the_verb_process_command() {
+        let line = ["ignite", "internal", "verb", "L-6"];
+        assert!(matches!(
+            Cli::try_parse_from(line).unwrap().command,
+            Command::Internal {
+                command: InternalCommand::Verb { handle }
+            } if handle == "L-6"
+        ));
     }
 }
