@@ -26,6 +26,7 @@ use ignite_core::manifest::Manifest;
 use ignite_core::traits::{Clock, Error, Result};
 
 use crate::doctor::NativeHost;
+use crate::loop_health::LoopHealth;
 use crate::server::{Context, Server};
 use crate::update::{ExecRestart, HEALTHY_AFTER_S, Home, Startup, TreeBuilder};
 use ignite_core::time::SystemClock;
@@ -91,6 +92,7 @@ impl Daemon {
             version: base.options.version.clone(),
             feed_wait_s: base.options.feed_wait_s,
             update: Arc::new(self_update(&base)),
+            health: LoopHealth::new(base.clock.clone()),
         };
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
         Ok(Daemon {
@@ -105,6 +107,11 @@ impl Daemon {
     /// the stall check, the main checkout's fast-forward and fleet metrics.
     pub fn run_loops(&self) {
         self.parts.spawn(&self.server);
+    }
+
+    /// What each background loop has done lately, which `status` and `doctor` show.
+    pub fn loop_health(&self) -> LoopHealth {
+        self.parts.health.clone()
     }
 
     /// Verifies the integration branch's newest commit once, now, as one round of the tip loop
@@ -156,6 +163,8 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         .unwrap_or_default();
     let version = crate::update::ExecutableStore::version_of(&ignite)
         .map_or_else(|| "unknown".to_owned(), |commit| commit.to_string());
+    // From here on, a panic anywhere in the daemon leaves a record in the home folder.
+    crate::crash::install_hook(home.root.clone(), version.clone());
     let store = home.store();
     let own = Commit::new(&version).ok();
     if let Some(own) = &own

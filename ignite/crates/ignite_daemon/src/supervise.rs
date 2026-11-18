@@ -38,9 +38,8 @@
 //! job objects: the supervisor starts apart from the daemon's console, and the command's job,
 //! named after its process ID, is what the `group` file identifies.
 
-use std::fmt::Write as _;
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -49,8 +48,6 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use ignite_core::ids::TicketId;
-use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::traits::{CommandSpec, Launcher, RunResult};
 use ignite_os::Native;
@@ -59,13 +56,13 @@ use ignite_os::usage::{ProcessUsage, TreeMeter, UsageReader};
 use serde::{Deserialize, Serialize};
 
 use crate::sched::{Grant, GrantRequest, Scheduler};
-use crate::server::{Context, Verb};
 
 mod grants;
 mod hang;
 mod jobserver;
 mod peaks;
 mod retain;
+mod run_verb;
 
 pub use grants::{GrantFile, STOP_GRACE_S};
 use grants::{GrantGuard, watch_for_stop};
@@ -73,6 +70,7 @@ use hang::{Watchdog, signal_group};
 use jobserver::{Jobserver, compiles_only, read_cores};
 use peaks::Peaks;
 pub use retain::{KEEP_JUDGED_S, KEEP_S, keep};
+pub use run_verb::{DEFAULT_HANG_LIMIT_S, RunVerb};
 
 /// The line a supervisor prints on its standard output once it holds its run's lock. The
 /// launcher reads lines until it sees this one, so other output before it does no harm.
@@ -305,6 +303,53 @@ impl SupervisedLauncher {
 
 impl Launcher for SupervisedLauncher {
     fn run(&self, spec: &CommandSpec) -> RunResult {
+        self.run_with(spec, None)
+    }
+
+    fn run_until(&self, spec: &CommandSpec, cancelled: &(dyn Fn() -> bool + Sync)) -> RunResult {
+        self.run_with(spec, Some(cancelled))
+    }
+}
+
+/// How often a command whose caller may leave is checked for the caller's departure.
+const CANCEL_POLL: Duration = Duration::from_secs(1);
+/// Seconds a command has to exit after it is asked to, because its caller left, before its
+/// group is killed.
+const CANCEL_GRACE: Duration = Duration::from_secs(10);
+
+/// Ends `run`'s command once `cancelled` is true: first with `SIGTERM` (or the job object's
+/// end), then, if it is still running [`CANCEL_GRACE`] later, with `SIGKILL`. Returns when
+/// `finished` is disconnected, which happens when the command has finished.
+fn end_when_cancelled(
+    run: &Run,
+    cancelled: &(dyn Fn() -> bool + Sync),
+    finished: &mpsc::Receiver<()>,
+) {
+    loop {
+        match finished.recv_timeout(CANCEL_POLL) {
+            Err(mpsc::RecvTimeoutError::Timeout) if cancelled() => {
+                let _ = run.end();
+                if matches!(
+                    finished.recv_timeout(CANCEL_GRACE),
+                    Err(mpsc::RecvTimeoutError::Timeout)
+                ) {
+                    let _ = run.kill();
+                }
+                return;
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            _ => return,
+        }
+    }
+}
+
+impl SupervisedLauncher {
+    /// [`Launcher::run`], with the command ended when `cancelled`, if given, turns true.
+    fn run_with(
+        &self,
+        spec: &CommandSpec,
+        cancelled: Option<&(dyn Fn() -> bool + Sync)>,
+    ) -> RunResult {
         // The run directory comes before the grant, because a grant that changes keeps its size
         // in a file there from the moment it is granted.
         let dir = match self.new_run() {
@@ -340,7 +385,18 @@ impl Launcher for SupervisedLauncher {
                 if let (Class::Idle, Some(scheduler)) = (spec.class, &self.scheduler) {
                     watch_for_stop(scheduler, grant.id, started.run().clone());
                 }
-                started.wait()
+                let run = started.run().clone();
+                let (done, finished) = mpsc::channel::<()>();
+                thread::scope(|scope| {
+                    if let Some(cancelled) = cancelled {
+                        let run = &run;
+                        scope.spawn(move || end_when_cancelled(run, cancelled, &finished));
+                    }
+                    let result = started.wait();
+                    // Wakes the thread that watches for the caller to leave.
+                    drop(done);
+                    result
+                })
             }
             Err(error) => not_started(spec, &error),
         };
@@ -442,7 +498,26 @@ impl Run {
                 hung: file.hung,
             };
         }
+        let log = fs::read_to_string(self.dir.join(SUPERVISOR_LOG)).unwrap_or_default();
+        if log.contains(RESULT_NOT_WRITTEN) {
+            // The supervisor was alive and the command had finished, but the result could not
+            // be written. The command's own output is the best answer there is.
+            eprintln!(
+                "ignite: the supervisor of {} could not record its result; the exit code is lost",
+                self.dir.display()
+            );
+            return RunResult {
+                exit: None,
+                output: self.dir.join(OUTPUT),
+                usage: Usage::default(),
+                hung: false,
+            };
+        }
         // The supervisor died without a result, so nothing supervises its command any more.
+        eprintln!(
+            "ignite: the supervisor of {} ended without a result; ending its command",
+            self.dir.display()
+        );
         let _ = self.kill();
         RunResult {
             exit: None,
@@ -488,12 +563,25 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     // returns, the lock is held and the group file exists. Written straight to the file
     // descriptor, so that a test harness capturing `print!` cannot hold it back.
     let mut stdout = io::stdout().lock();
-    writeln!(stdout, "{READY}")?;
-    stdout.flush()?;
+    // The launcher may have stopped reading already. The command goes on regardless, and its
+    // result is waited for by whoever finds the run directory.
+    let _ = writeln!(stdout, "{READY}").and_then(|()| stdout.flush());
     drop(stdout);
 
     let watchdog = match (&group, spec.hang_limit_s) {
-        (Ok(group), Some(limit)) => Some(Watchdog::start(group.id, limit, output.try_clone()?)),
+        (Ok(group), Some(limit)) => {
+            match output.try_clone().or_else(|_| append_to(&output_path)) {
+                Ok(copy) => Some(Watchdog::start(group.id, limit, copy)),
+                Err(error) => {
+                    // Not worth giving up the command's result for: it runs without a limit.
+                    let _ = writeln!(
+                        &output,
+                        "ignite: its hang limit is not enforced: cannot open the output: {error}"
+                    );
+                    None
+                }
+            }
+        }
         _ => None,
     };
     let measured = group.and_then(wait_measured);
@@ -501,7 +589,7 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     let (exit, usage) = match measured {
         Ok((status, usage)) => (exit_code(status), usage),
         Err(error) => {
-            writeln!(&output, "ignite: cannot run {:?}: {error}", spec.args)?;
+            let _ = writeln!(&output, "ignite: cannot run {:?}: {error}", spec.args);
             (Some(127), ProcessUsage::default())
         }
     };
@@ -517,10 +605,50 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
         },
         hung,
     };
-    write_json(&dir.join(RESULT), &result)?;
+    if let Err(error) = write_result(dir, &result, RESULT_RETRY_PAUSE) {
+        // The command has finished, so its output says how, for whoever reads it.
+        let _ = writeln!(
+            &output,
+            "ignite: the command {}, but its result could not be recorded: {error}",
+            match result.exit {
+                Some(code) => format!("exited with code {code}"),
+                None => "was ended by a signal".to_owned(),
+            }
+        );
+        return Err(io::Error::other(format!("{RESULT_NOT_WRITTEN}: {error}")));
+    }
     // The lock is released when the process exits, after the result exists.
     drop(lock);
     Ok(())
+}
+
+/// How many times the supervisor tries to write the result, and how long it waits between
+/// tries: a full disk may have room again a moment later.
+const RESULT_ATTEMPTS: u32 = 5;
+const RESULT_RETRY_PAUSE: Duration = Duration::from_secs(2);
+/// What the supervisor's log says when it could not write the result, so that a reader can
+/// tell that apart from a supervisor that was killed.
+const RESULT_NOT_WRITTEN: &str = "could not write result.json";
+
+/// Writes `result` into `dir`, trying again after `pause` if the write fails.
+fn write_result(dir: &Path, result: &ResultFile, pause: Duration) -> io::Result<()> {
+    let mut attempt = 1;
+    loop {
+        match write_json(&dir.join(RESULT), result) {
+            Ok(()) => return Ok(()),
+            Err(error) if attempt >= RESULT_ATTEMPTS => return Err(error),
+            Err(_) => {
+                // The half-written file may be what filled the disk.
+                let _ = fs::remove_file(dir.join(RESULT).with_extension("partial"));
+                thread::sleep(pause);
+                attempt += 1;
+            }
+        }
+    }
+}
+
+fn append_to(path: &Path) -> io::Result<File> {
+    fs::OpenOptions::new().append(true).open(path)
 }
 
 /// The command's exit code, or `None` if it was ended from outside: by a signal on macOS, or
@@ -634,162 +762,5 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
     fs::rename(partial, path)
 }
 
-/// `ignite run`: runs any heavy command with cores from the daemon, and records it.
-pub struct RunVerb;
-
-/// The lines of a command's output that `ignite run` prints, from its end.
-const TAIL_LINES: usize = 30;
-
-/// `ignite run`'s arguments: `[--class C] [--ticket ID] [--cores N] [--grows] -- <command>`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct RunArgs {
-    class: Class,
-    ticket: Option<TicketId>,
-    cores: Option<u32>,
-    /// The command rereads `IGNITE_CORES_FILE` while it runs, so its grant may grow.
-    grows: bool,
-    command: Vec<String>,
-}
-
-fn parse_run_args(args: &[String]) -> Result<RunArgs, String> {
-    let mut parsed = RunArgs {
-        class: Class::Agent,
-        ticket: None,
-        cores: None,
-        grows: false,
-        command: Vec::new(),
-    };
-    let mut rest = args.iter();
-    while let Some(arg) = rest.next() {
-        let mut value = || {
-            rest.next()
-                .cloned()
-                .ok_or_else(|| format!("{arg} needs a value"))
-        };
-        match arg.as_str() {
-            "--" => {
-                parsed.command = rest.cloned().collect();
-                break;
-            }
-            "--class" => {
-                let name = value()?;
-                parsed.class = serde_json::from_value(serde_json::Value::String(name.clone()))
-                    .map_err(|_| format!("unknown class: {name}"))?;
-            }
-            "--ticket" => {
-                let id = value()?;
-                parsed.ticket = Some(TicketId::new(id).map_err(|e| e.to_string())?);
-            }
-            "--cores" => {
-                let n = value()?;
-                parsed.cores = Some(n.parse().map_err(|_| format!("not a core count: {n}"))?);
-            }
-            "--grows" => parsed.grows = true,
-            other => return Err(format!("unexpected argument: {other}")),
-        }
-    }
-    if parsed.command.is_empty() {
-        return Err(
-            "usage: ignite run [--class C] [--ticket ID] [--cores N] [--grows] -- <command>".into(),
-        );
-    }
-    Ok(parsed)
-}
-
-impl Verb for RunVerb {
-    fn name(&self) -> &'static str {
-        "run"
-    }
-
-    fn run(&self, ctx: &Context, req: &Request) -> Reply {
-        let args = match parse_run_args(&req.args) {
-            Ok(args) => args,
-            Err(message) => return Reply::text(Exit::Usage, message),
-        };
-        // The scheduler holds a command to two thirds of the machine and shares what is free,
-        // so asking for every core means "as many as I may have".
-        let cores = args.cores.unwrap_or_else(|| {
-            thread::available_parallelism().map_or(1, |n| u32::try_from(n.get()).unwrap_or(1))
-        });
-        let spec = CommandSpec {
-            args: args.command.clone(),
-            cwd: req.cwd.clone(),
-            env: Vec::new(),
-            class: args.class,
-            cores,
-            resources: Vec::new(),
-            grows: args.grows,
-            tree: None,
-            ticket: args.ticket,
-            hang_limit_s: None,
-        };
-        let result = ctx.launcher.run(&spec);
-        render(&args.command, &result)
-    }
-}
-
-/// The reply for a finished command: the verdict, the end of its output and where the rest is.
-fn render(command: &[String], result: &RunResult) -> Reply {
-    let shown = command.join(" ");
-    let shown = if shown.chars().count() > 60 {
-        format!("{}...", shown.chars().take(57).collect::<String>())
-    } else {
-        shown
-    };
-    let status = match result.exit {
-        Some(code) => format!("exit {code}"),
-        None => "ended by a signal".to_owned(),
-    };
-    let (verdict, exit) = if result.exit == Some(0) {
-        ("ran", Exit::Success)
-    } else {
-        ("failed", Exit::CheckFailed)
-    };
-    let mut text = format!(
-        "{verdict:<8} {shown} in {:.0} s: {status}\n",
-        result.usage.wall_s
-    );
-    for line in tail(&result.output, TAIL_LINES) {
-        text.push_str(&line);
-        text.push('\n');
-    }
-    let _ = writeln!(text, "output   {}", result.output.display());
-    Reply {
-        exit,
-        text,
-        json: Some(serde_json::json!({
-            "exit": result.exit,
-            "output": result.output,
-            "usage": result.usage,
-        })),
-        handle: None,
-    }
-}
-
-/// The last `lines` lines of a file, read from at most its last 64 KiB.
-fn tail(path: &Path, lines: usize) -> Vec<String> {
-    const WINDOW: u64 = 64 * 1024;
-    let Ok(mut file) = File::open(path) else {
-        return Vec::new();
-    };
-    let len = file.metadata().map_or(0, |m| m.len());
-    if file
-        .seek(SeekFrom::Start(len.saturating_sub(WINDOW)))
-        .is_err()
-    {
-        return Vec::new();
-    }
-    let mut bytes = Vec::new();
-    if file.read_to_end(&mut bytes).is_err() {
-        return Vec::new();
-    }
-    let text = String::from_utf8_lossy(&bytes);
-    let all: Vec<&str> = text.lines().collect();
-    all[all.len().saturating_sub(lines)..]
-        .iter()
-        .map(|line| (*line).to_owned())
-        .collect()
-}
-
 #[cfg(test)]
-mod tests;
+mod result_tests;

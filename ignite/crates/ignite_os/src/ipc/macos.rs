@@ -13,11 +13,35 @@ use std::os::fd::AsRawFd;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
+use std::time::Duration;
 
 use super::{Ipc, Listener, Stream};
 use crate::Native;
 
-impl Stream for UnixStream {}
+impl Stream for UnixStream {
+    fn set_read_timeout(&self, limit: Option<Duration>) -> io::Result<()> {
+        UnixStream::set_read_timeout(self, limit)
+    }
+
+    /// Peeks one byte without waiting: the end of the stream means the other end has closed.
+    fn closed_probe(&self) -> Option<Box<dyn Fn() -> bool + Send + Sync>> {
+        let own = self.try_clone().ok()?;
+        Some(Box::new(move || {
+            let mut byte = 0_u8;
+            // SAFETY: `recv` writes at most one byte into `byte`, which lives through the
+            // call, and reads the descriptor that `own` keeps open.
+            let read = unsafe {
+                libc::recv(
+                    own.as_raw_fd(),
+                    (&raw mut byte).cast(),
+                    1,
+                    libc::MSG_PEEK | libc::MSG_DONTWAIT,
+                )
+            };
+            read == 0
+        }))
+    }
+}
 
 struct SocketListener {
     socket: UnixListener,
@@ -93,6 +117,41 @@ mod tests {
         let path = std::env::temp_dir().join(format!("ign-{}-{test}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         path
+    }
+
+    #[test]
+    fn the_probe_sees_the_client_go_away() {
+        let dir = folder("probe");
+        let name = dir.join("d.sock");
+        let name = name.to_str().unwrap().to_owned();
+        let listener = Native.listen(&name).unwrap();
+        let client = Native.connect(&name).unwrap();
+        let served = listener.accept().unwrap();
+        let probe = served.closed_probe().unwrap();
+        assert!(!probe(), "the client is still connected");
+        drop(client);
+        assert!(probe(), "the client has closed its end");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stream_that_receives_nothing_times_out_its_read() {
+        let dir = folder("timeout");
+        let name = dir.join("d.sock");
+        let name = name.to_str().unwrap().to_owned();
+        let listener = Native.listen(&name).unwrap();
+        let _client = Native.connect(&name).unwrap();
+        let mut served = listener.accept().unwrap();
+        served
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .unwrap();
+        let mut byte = [0_u8; 1];
+        let error = std::io::Read::read(&mut served, &mut byte).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+        ));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

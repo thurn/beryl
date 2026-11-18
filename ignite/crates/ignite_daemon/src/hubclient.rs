@@ -184,7 +184,15 @@ fn ok(path: &str, answer: Answer) -> Result<Answer> {
             answer.status,
             message()
         ))),
-        _ => Err(Error::Invalid(format!("{} {}", answer.status, message()))),
+        // Only 400 and 422 say that what was sent is malformed, which is the one answer after
+        // which a caller may drop a queued entry. Every other refusal (a timeout, a rate limit,
+        // a proxy's 4xx) is about the hub's state, not the entry, so the entry is kept and
+        // sent again later.
+        400 | 422 => Err(Error::Invalid(format!("{} {}", answer.status, message()))),
+        status => Err(Error::Unreachable(format!(
+            "the hub answered {status}, which is no verdict on what was sent: {}",
+            message()
+        ))),
     }
 }
 

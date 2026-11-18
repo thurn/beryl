@@ -13,7 +13,7 @@ use crate::pool::PoolVerb;
 use crate::server::Verb;
 
 #[derive(Default)]
-struct FakeHost {
+pub(super) struct FakeHost {
     trees: Mutex<u32>,
     cores: Mutex<f64>,
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
@@ -22,7 +22,7 @@ struct FakeHost {
     releases: Mutex<Vec<(SessionId, TicketId)>>,
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -56,17 +56,17 @@ impl Host for FakeHost {
     }
 }
 
-struct Rig {
-    ctx: Context,
-    clock: Arc<FakeClock>,
-    hub: Arc<FakeHub>,
-    host: Arc<FakeHost>,
-    dispatcher: Arc<Dispatcher>,
+pub(super) struct Rig {
+    pub(super) ctx: Context,
+    pub(super) clock: Arc<FakeClock>,
+    pub(super) hub: Arc<FakeHub>,
+    pub(super) host: Arc<FakeHost>,
+    pub(super) dispatcher: Arc<Dispatcher>,
 }
 
 const START: i64 = 1_800_000_000_000;
 
-fn rig(workers: &[&str]) -> Rig {
+pub(super) fn rig(workers: &[&str]) -> Rig {
     let text = r#"
         [repository]
         remote = "origin"
@@ -124,7 +124,7 @@ fn rig(workers: &[&str]) -> Rig {
     rig
 }
 
-fn session(name: &str) -> SessionId {
+pub(super) fn session(name: &str) -> SessionId {
     SessionId::new(name).unwrap()
 }
 
@@ -132,7 +132,7 @@ fn ticket_id(name: &str) -> TicketId {
     TicketId::new(name).unwrap()
 }
 
-fn request(verb: &str, args: &[&str], session: Option<&str>) -> Request {
+pub(super) fn request(verb: &str, args: &[&str], session: Option<&str>) -> Request {
     Request {
         verb: verb.to_owned(),
         args: args.iter().map(|a| (*a).to_owned()).collect(),
@@ -144,7 +144,7 @@ fn request(verb: &str, args: &[&str], session: Option<&str>) -> Request {
 }
 
 /// A ticket for the fake hub, from the fields that matter here.
-fn detail(
+pub(super) fn detail(
     id: &str,
     status: &str,
     holder: Option<&str>,
@@ -167,19 +167,19 @@ impl Rig {
         PoolVerb::new(self.dispatcher.clone()).run(&self.ctx, &request("pool", args, session))
     }
 
-    fn tell(&self, args: &[&str]) -> Reply {
+    pub(super) fn tell(&self, args: &[&str]) -> Reply {
         TellVerb.run(&self.ctx, &request("tell", args, None))
     }
 
-    fn step(&self) -> Option<DispatchInstruction> {
+    pub(super) fn step(&self) -> Option<DispatchInstruction> {
         self.dispatcher.step(&self.ctx, None)
     }
 
-    fn ack(&self, id: u64, result: &str, reason: &str) -> Reply {
+    pub(super) fn ack(&self, id: u64, result: &str, reason: &str) -> Reply {
         self.dispatcher.ack(&self.ctx, id, result, reason)
     }
 
-    fn reserve(&self, ticket: &str, worker: &str, labels: &[&str]) {
+    pub(super) fn reserve(&self, ticket: &str, worker: &str, labels: &[&str]) {
         self.hub
             .insert_ticket(detail(ticket, "open", None, labels, ""));
         self.hub.queue_reservation(Reservation {
@@ -191,15 +191,15 @@ impl Rig {
         });
     }
 
-    fn hold(&self, worker: &str, ticket: &str) {
+    pub(super) fn hold(&self, worker: &str, ticket: &str) {
         lock(&self.host.holders).insert(session(worker), ticket_id(ticket));
     }
 
-    fn finish(&self, worker: &str) {
+    pub(super) fn finish(&self, worker: &str) {
         lock(&self.host.holders).remove(&session(worker));
     }
 
-    fn state_of(&self, worker: &str) -> String {
+    pub(super) fn state_of(&self, worker: &str) -> String {
         let view = self.dispatcher.view().unwrap();
         view.into_iter()
             .find(|w| w.session == session(worker))

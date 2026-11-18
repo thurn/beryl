@@ -19,10 +19,12 @@ use super::DaemonOptions;
 use super::selfupdate::SelfUpdate;
 use crate::checks::Checks;
 use crate::claim::Claims;
+use crate::crash;
 use crate::dispatchd::Dispatcher;
 use crate::hubclient::HubClient;
 use crate::idle::Idle;
 use crate::land::Landing;
+use crate::loop_health::{LoopHealth, LoopTicker};
 use crate::sched::{ClassStatus, Scheduler};
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
@@ -41,6 +43,16 @@ const METRICS_EVERY: Duration = Duration::from_secs(600);
 /// The pause after a failed round of tip verification.
 const TIP_RETRY: Duration = Duration::from_secs(10);
 
+/// How long each loop may go without finishing a round before `ignite doctor` calls it stuck.
+/// Each is far longer than the loop's own period, so that a slow hub or a long job is not
+/// reported, and only a loop that has stopped is. A round of tip verification may run for an
+/// hour, because it runs the checks.
+const SENDER_STALLS_AFTER: Duration = Duration::from_mins(10);
+const TIP_STALLS_AFTER: Duration = Duration::from_hours(3);
+const CLAIMS_STALL_AFTER: Duration = Duration::from_mins(10);
+const IDLE_STALLS_AFTER: Duration = Duration::from_mins(10);
+const METRICS_STALL_AFTER: Duration = Duration::from_hours(1);
+
 /// What the loops share, built by [`super::Daemon::start`].
 pub struct Parts {
     pub ctx: Context,
@@ -58,6 +70,8 @@ pub struct Parts {
     pub version: String,
     pub feed_wait_s: u32,
     pub update: Arc<SelfUpdate>,
+    /// What each background loop has done lately, for `status` and `doctor`.
+    pub health: LoopHealth,
 }
 
 impl Parts {
@@ -92,7 +106,7 @@ impl Parts {
             self.version.clone(),
         );
         let (scheduler, update) = (self.scheduler.clone(), self.update.clone());
-        thread::spawn(move || {
+        self.start_loop("ignite-sender", SENDER_STALLS_AFTER, move |ticker| {
             // The hub's version from the last heartbeat it answered.
             let hub_version: RefCell<Option<String>> = RefCell::new(None);
             let beat = || {
@@ -105,17 +119,33 @@ impl Parts {
                 Ok(())
             };
             loop {
-                crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
-                landing.deliver_pending(ctx.hub.as_ref());
-                let running = running_commands(&server, &scheduler);
-                let may_ask = update.after_heartbeat(hub_version.borrow().as_deref(), running);
-                dispatcher.set_draining(!may_ask);
-                // Idle work only runs on a quiet machine, so an update that waits for it would
-                // wait for as long as the machine is loaded: stop it and start none.
-                scheduler.set_draining(!may_ask);
+                ticker.round(|| {
+                    let sent = crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
+                    landing.deliver_pending(ctx.hub.as_ref());
+                    let running = running_commands(&server, &scheduler);
+                    let may_ask = update.after_heartbeat(hub_version.borrow().as_deref(), running);
+                    dispatcher.set_draining(!may_ask);
+                    // Idle work only runs on a quiet machine, so an update that waits for it
+                    // would wait for as long as the machine is loaded: stop it and start none.
+                    scheduler.set_draining(!may_ask);
+                    sent
+                });
                 thread::sleep(SEND_EVERY);
             }
         });
+    }
+
+    /// Starts the loop `name` on a thread of that name. It registers with the loop health,
+    /// which `body` reports each round to, and the daemon exits if it ever stops (see
+    /// [`crash::spawn_loop`]).
+    fn start_loop(
+        &self,
+        name: &'static str,
+        stalls_after: Duration,
+        body: impl FnOnce(LoopTicker) + Send + 'static,
+    ) {
+        let ticker = self.health.register(name, stalls_after);
+        crash::spawn_loop(name, move || body(ticker));
     }
 
     /// Verifies each new tip of the integration branch, then keeps the main checkout's
@@ -138,19 +168,23 @@ impl Parts {
         let mut verifier = self.verifier();
         let (ctx, trees, wait_s) = (self.ctx.clone(), self.trees.clone(), self.feed_wait_s);
         let update = self.update.clone();
-        thread::spawn(move || {
+        self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
-                match verifier.round(&ctx, wait_s) {
+                let round = ticker.round(|| match verifier.round(&ctx, wait_s) {
                     Ok(Some((_, TipOutcome::Verified))) => {
                         if let Err(error) = update.after_master_moved() {
                             eprintln!("ignite: the new release was not built: {error}");
                         }
+                        Ok(())
                     }
-                    Ok(_) => {}
+                    Ok(_) => Ok(()),
                     Err(error) => {
                         eprintln!("ignite: tip verification: {error}");
-                        thread::sleep(TIP_RETRY);
+                        Err(format!("tip verification: {error}"))
                     }
+                });
+                if round.is_none() {
+                    thread::sleep(TIP_RETRY);
                 }
                 if let Err(error) = trees.fast_forward_main() {
                     eprintln!("ignite: main checkout not fast-forwarded: {error}");
@@ -161,10 +195,13 @@ impl Parts {
 
     fn spawn_claims(&self) {
         let (ctx, claims) = (self.ctx.clone(), self.claims.clone());
-        thread::spawn(move || {
+        self.start_loop("ignite-claims", CLAIMS_STALL_AFTER, move |ticker| {
             loop {
                 thread::sleep(TICK_EVERY);
-                claims.tick(&ctx);
+                ticker.round(|| {
+                    claims.tick(&ctx);
+                    Ok(())
+                });
             }
         });
     }
@@ -178,34 +215,43 @@ impl Parts {
             self.trees.clone(),
             self.scheduler.clone(),
         );
-        thread::spawn(move || {
+        self.start_loop("ignite-idle", IDLE_STALLS_AFTER, move |ticker| {
             loop {
                 thread::sleep(IDLE_EVERY);
-                let status = scheduler.status();
-                if status.granted > 0 || status.outside * 2 >= status.cores {
-                    continue;
-                }
-                if let Ok(tip) = ctx.git.tip(&ctx.config.repository.staging)
-                    && let Err(error) = trees.keep_one_built(&tip)
-                {
-                    eprintln!("ignite: no tree kept built: {error}");
-                }
-                if let Some(job) = idle.next_job(&ctx)
-                    && let Err(error) = idle.run(&ctx, &job)
-                {
-                    eprintln!("ignite: idle work {job:?}: {error}");
-                }
+                ticker.round(|| {
+                    let status = scheduler.status();
+                    if status.granted > 0 || status.outside * 2 >= status.cores {
+                        return Ok(());
+                    }
+                    let mut failure = None;
+                    if let Ok(tip) = ctx.git.tip(&ctx.config.repository.staging)
+                        && let Err(error) = trees.keep_one_built(&tip)
+                    {
+                        eprintln!("ignite: no tree kept built: {error}");
+                        failure = Some(format!("no tree kept built: {error}"));
+                    }
+                    if let Some(job) = idle.next_job(&ctx)
+                        && let Err(error) = idle.run(&ctx, &job)
+                    {
+                        eprintln!("ignite: idle work {job:?}: {error}");
+                        failure = Some(format!("idle work {job:?}: {error}"));
+                    }
+                    failure.map_or(Ok(()), Err)
+                });
             }
         });
     }
 
     fn spawn_metrics(&self) {
         let (ctx, state) = (self.ctx.clone(), self.home.root.join("metrics.json"));
-        thread::spawn(move || {
+        self.start_loop("ignite-metrics", METRICS_STALL_AFTER, move |ticker| {
             loop {
-                if let Err(error) = crate::metrics::post_new_rows(&ctx, &state) {
-                    eprintln!("ignite: metrics not posted: {error}");
-                }
+                ticker.round(|| {
+                    crate::metrics::post_new_rows(&ctx, &state).map_err(|error| {
+                        eprintln!("ignite: metrics not posted: {error}");
+                        format!("metrics not posted: {error}")
+                    })
+                });
                 thread::sleep(METRICS_EVERY);
             }
         });
@@ -274,7 +320,7 @@ pub fn serve_hub(repo: &Path, listen: &str, dir: &Path, version: &str) -> Result
     // Served until the process ends.
     std::mem::forget(running);
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups"))).map_err(store)?;
-    thread::spawn(move || upkeep.run(conn, &SystemClock));
+    crash::spawn_loop("ignite-hub-upkeep", move || upkeep.run(conn, &SystemClock));
     Ok(())
 }
 

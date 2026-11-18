@@ -460,5 +460,141 @@ fn start_wait_status_and_doctor_need_no_tree_lease() {
     use crate::doctor::DoctorVerb;
     let server = Server::new(context(), Registry::default(), None).unwrap();
     assert!(!server.registry.get("wait").unwrap().needs_the_tree_lease());
-    assert!(!DoctorVerb.needs_the_tree_lease());
+    assert!(!DoctorVerb::default().needs_the_tree_lease());
+}
+
+/// A verb that finishes only when the test sends it a unit, under any name, and that says
+/// whether it blocks an update.
+struct Held {
+    name: &'static str,
+    blocks: bool,
+    go: Mutex<mpsc::Receiver<()>>,
+}
+
+impl Verb for Held {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn blocks_update(&self) -> bool {
+        self.blocks
+    }
+
+    fn run(&self, _ctx: &Context, _req: &Request) -> Reply {
+        self.go.lock().unwrap().recv().unwrap();
+        // What the verb can learn about its caller while it runs.
+        let gone = caller_probe().map(|probe| probe());
+        Reply::text(Exit::Success, format!("{gone:?}"))
+    }
+}
+
+fn held(name: &'static str, blocks: bool) -> (Box<Held>, mpsc::Sender<()>) {
+    let (send, receive) = mpsc::channel();
+    let verb = Held {
+        name,
+        blocks,
+        go: Mutex::new(receive),
+    };
+    (Box::new(verb), send)
+}
+
+#[test]
+fn a_verb_that_only_waits_does_not_hold_back_an_update() {
+    let (land, finish_land) = held("land", true);
+    let (dispatch, finish_dispatch) = held("dispatch", false);
+    let mut registry = Registry::default();
+    registry.register(land);
+    registry.register(dispatch);
+    let server = Server::new(context(), registry, None).unwrap();
+    for verb in ["dispatch", "land"] {
+        let mut req = request(verb, &[]);
+        req.wait_s = 0;
+        assert_eq!(server.handle(&req).exit, Exit::Running);
+    }
+    // Both run, and only the one that does work is waited for.
+    assert_eq!(server.running_verbs(), 1);
+    finish_dispatch.send(()).unwrap();
+    finish_land.send(()).unwrap();
+    while server.running_verbs() > 0 {
+        std::thread::yield_now();
+    }
+}
+
+#[test]
+fn a_verb_can_tell_that_its_caller_left_until_it_was_given_a_handle() {
+    let (verb, finish) = held("run", true);
+    let mut registry = Registry::default();
+    registry.register(verb);
+    let server = Server::new(context(), registry, None).unwrap();
+    let gone: CallerProbe = Arc::new(|| true);
+
+    // Still waited for: the probe says the client has gone.
+    finish.send(()).unwrap();
+    let mut req = request("run", &[]);
+    req.wait_s = 3600;
+    assert_eq!(
+        server.handle_from(&req, Some(gone.clone())).text,
+        "Some(true)"
+    );
+
+    // Handed to a handle: the client leaving is no longer news.
+    req.wait_s = 0;
+    let first = server.handle_from(&req, Some(gone));
+    let handle = first.handle.unwrap();
+    finish.send(()).unwrap();
+    let mut wait = request("wait", &[handle.as_str()]);
+    wait.wait_s = 3600;
+    assert_eq!(server.handle(&wait).text, "Some(false)");
+
+    // No probe where the connection cannot be probed.
+    finish.send(()).unwrap();
+    req.wait_s = 3600;
+    assert_eq!(server.handle(&req).text, "None");
+}
+
+/// Accepts fail twice, then one connection arrives.
+#[cfg(unix)]
+struct Flaky {
+    failures: Mutex<u32>,
+    stream: Mutex<Option<Box<dyn Stream>>>,
+}
+
+#[cfg(unix)]
+impl Listener for Flaky {
+    fn accept(&self) -> std::io::Result<Box<dyn Stream>> {
+        let mut failures = self.failures.lock().unwrap();
+        if *failures > 0 {
+            *failures -= 1;
+            return Err(std::io::Error::other("too many open files"));
+        }
+        match self.stream.lock().unwrap().take() {
+            Some(stream) => Ok(stream),
+            None => {
+                // Nothing else will connect; wait here as a real listener would.
+                loop {
+                    std::thread::park();
+                }
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_failed_accept_does_not_end_the_server() {
+    let (accepted, mut client) = std::os::unix::net::UnixStream::pair().unwrap();
+    let listener = Flaky {
+        failures: Mutex::new(2),
+        stream: Mutex::new(Some(Box::new(accepted))),
+    };
+    let mut registry = Registry::default();
+    registry.register(Box::new(Echo));
+    let server = Arc::new(Server::new(context(), registry, None).unwrap());
+    std::thread::spawn(move || serve_listener(&server, &listener));
+
+    write_line(&mut client, &request("echo", &["still", "here"])).unwrap();
+    let mut line = String::new();
+    BufReader::new(&mut client).read_line(&mut line).unwrap();
+    let reply: Reply = serde_json::from_str(&line).unwrap();
+    assert_eq!(reply.text, "still here");
 }

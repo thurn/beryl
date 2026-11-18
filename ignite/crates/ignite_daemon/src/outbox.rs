@@ -91,16 +91,29 @@ fn parse<T: serde::de::DeserializeOwned>(run: &[&rows::OutboxEntry]) -> Result<V
 }
 
 /// One round of the daemon's sender: flush the outbox, then send the machine's heartbeat with
-/// `beat`. A failure of either is reported on standard error and tried again next round.
+/// `beat`. A failure of either is reported on standard error and tried again next round, and
+/// the round's result names it.
 ///
 /// `conn` is the sender's own connection to the local database, so that a slow hub never holds
 /// up the connection that answers requests.
-pub fn tick(conn: &Connection, hub: &dyn Hub, beat: &dyn Fn() -> Result<()>) {
+pub fn tick(
+    conn: &Connection,
+    hub: &dyn Hub,
+    beat: &dyn Fn() -> Result<()>,
+) -> std::result::Result<(), String> {
+    let mut failures = Vec::new();
     if let Err(error) = flush(conn, hub) {
         eprintln!("ignite: outbox not sent: {error}");
+        failures.push(format!("outbox not sent: {error}"));
     }
     if let Err(error) = beat() {
         eprintln!("ignite: heartbeat not sent: {error}");
+        failures.push(format!("heartbeat not sent: {error}"));
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; "))
     }
 }
 
@@ -113,7 +126,7 @@ pub fn run(
     stop: &AtomicBool,
 ) {
     while !stop.load(Ordering::Relaxed) {
-        tick(conn, hub, beat);
+        let _ = tick(conn, hub, beat);
         std::thread::sleep(period);
     }
 }

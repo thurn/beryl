@@ -83,3 +83,24 @@ fn a_refused_token_keeps_the_queue_for_when_the_machine_is_registered_again() {
     let hub = FakeHttpHub::start(|_, _, _| (200, "{}".to_owned()));
     assert_eq!(flush(&conn, &hub.client()).unwrap(), 2);
 }
+
+#[test]
+fn only_a_malformed_answer_drops_entries_and_other_refusals_keep_them() {
+    for status in [401, 403, 408, 413, 429] {
+        let conn = open_in_memory().unwrap();
+        push_record(&conn, &record("test"), Timestamp::EPOCH).unwrap();
+        let hub = FakeHttpHub::start(move |_, _, _| (status, "{}".to_owned()));
+        assert!(
+            matches!(flush(&conn, &hub.client()), Err(Error::Unreachable(_))),
+            "{status}"
+        );
+        assert_eq!(store::peek(&conn, 10).unwrap().len(), 1, "{status}");
+    }
+    for status in [400, 422] {
+        let conn = open_in_memory().unwrap();
+        push_record(&conn, &record("test"), Timestamp::EPOCH).unwrap();
+        let hub = FakeHttpHub::start(move |_, _, _| (status, "{}".to_owned()));
+        assert_eq!(flush(&conn, &hub.client()).unwrap(), 0, "{status}");
+        assert!(store::peek(&conn, 10).unwrap().is_empty(), "{status}");
+    }
+}
