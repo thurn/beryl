@@ -11,8 +11,8 @@ use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    CachedResult, Claim, Landed, MachineFree, NewResult, Record, Reservation, ResultKey,
-    TicketBrief,
+    CachedResult, Claim, CompileUnit, Landed, MachineFree, NewResult, Record, Reservation,
+    ResultKey, TicketBrief,
 };
 use crate::protocol::tickets::{FeedBatch, LeaseOp, LeaseReply};
 use crate::time::Timestamp;
@@ -95,8 +95,12 @@ pub trait Launcher: Send + Sync {
 pub enum BuildResult {
     /// The tree already held the product in this state; nothing ran.
     Current,
-    /// A build ran (or was joined) and succeeded.
-    Built { usage: Usage },
+    /// A build ran (or was joined) and succeeded. `units` are the compiler processes it ran,
+    /// as the compiler wrapper recorded them.
+    Built {
+        usage: Usage,
+        units: Vec<CompileUnit>,
+    },
     /// The build failed; its output is in the file named.
     Failed { output: PathBuf, usage: Usage },
 }

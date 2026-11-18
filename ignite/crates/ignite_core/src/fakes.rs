@@ -129,6 +129,7 @@ impl Builds for FakeBuilds {
         } else {
             BuildResult::Built {
                 usage: Usage::default(),
+                units: Vec::new(),
             }
         }
     }
