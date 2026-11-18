@@ -60,6 +60,10 @@ RESULTS_ENV = "IGNITE_RESULTS"
 # The file of check names, one a line, that the scripts run exactly (selection.py's CHOSEN_ENV).
 CHOSEN_ENV = "BERYL_CHECKS"
 FAMILIES = ("ui-test", "shots", "ui-smoke", "motion", "ui-counts")
+# The scheduling class Ignite runs a command in, and the classes that may get few cores
+# (docs/ignite.md, "Cores, memory and shared resources").
+CLASS_ENV = "IGNITE_CLASS"
+SLOW_CLASSES = ("tip", "idle")
 
 KEPT_SCRIPT = "ui/scripts/kept.mjs"
 VERB_SCRIPT: str = suites.VERB_SCRIPT
@@ -140,6 +144,11 @@ def browser_env(browser: str | None = None) -> dict[str, str]:
     }
     # Ignite holds the machine's browser pages, so no run takes ui/scripts/slots.mjs' slots.
     env.pop("BERYL_BROWSER_SLOTS_DIR", None)
+    # Outside the landing gate a check may get few cores, and a shot that takes 2 s once ran
+    # past Playwright's 30 s wait on a loaded machine. Its waits are then six times as long
+    # (`WAIT_MS` in ui/scripts/hang.mjs), so that only a stuck page fails.
+    if os.environ.get(CLASS_ENV) in SLOW_CLASSES:
+        env["BERYL_LOW_PRIORITY"] = "1"
     install = subprocess.run(
         [system.npm_bin("playwright"), "install", browser],
         cwd=paths.UI,

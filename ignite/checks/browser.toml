@@ -8,6 +8,12 @@
 # and the ui-counts limits and the motion values are measured there. Each takes the
 # `browser-pages` resource, which replaces the page slots of ui/scripts/slots.mjs. The
 # `ui-deps` product is declared in ui.toml.
+#
+# Waits in the `tip` and `idle` classes: Ignite passes each command its class as `IGNITE_CLASS`,
+# and outside the landing gate a check may get few cores. A shot that takes 2 s once ran past
+# Playwright's 30 s wait on a loaded machine, passed on its rerun and was filed as flaky; under
+# Ignite a check that flakes twice is switched off. So for `tip` and `idle` the adapter sets
+# `BERYL_LOW_PRIORITY=1`, which makes every wait three minutes (`WAIT_MS` in ui/scripts/hang.mjs).
 
 # The `beryl_cli` executable, which records the game fixtures (`beryl_cli record-fixture`) and
 # serves the manual table's sessions.

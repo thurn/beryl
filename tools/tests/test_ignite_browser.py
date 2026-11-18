@@ -182,3 +182,18 @@ def test_a_place_in_a_served_module_maps_to_its_source_line() -> None:
     assert adapter.source_line(module, 2) is None
     assert adapter.source_line(module, 3) == 6
     assert adapter.source_line("no map", 1) is None
+
+
+@pytest.mark.parametrize("kind,slow", [("tip", True), ("idle", True), ("land", False)])
+def test_checks_outside_the_gate_get_long_waits(
+    monkeypatch: pytest.MonkeyPatch, kind: str, slow: bool
+) -> None:
+    monkeypatch.setenv("IGNITE_CLASS", kind)
+    monkeypatch.delenv("BERYL_LOW_PRIORITY", raising=False)
+    monkeypatch.setattr(
+        adapter.subprocess,
+        "run",
+        lambda *a, **k: adapter.subprocess.CompletedProcess([], 0, "", ""),
+    )
+    env = adapter.browser_env()
+    assert (env.get("BERYL_LOW_PRIORITY") == "1") == slow
