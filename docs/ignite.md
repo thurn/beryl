@@ -1688,8 +1688,15 @@ How the machines divide verification:
   browser, oracle and app families.
 - A daemon prefers the checks only it can run, then claims portable ones.
 
-On Windows the daemon uses a named pipe for the client, job objects to end a
-tree's processes, and CPU seconds for cost.
+On Windows the daemon uses a named pipe for the client (a client that
+disconnects ends its `ignite run`), job objects to end a tree's processes, and
+CPU seconds for cost. The login service and the monitor are scheduled tasks
+(`ignite.daemon` and `ignite.monitor`), and notifications are toasts posted
+through PowerShell.
+
+A machine lists a family it does not run only to key the checks other machines
+run. It keeps that listing, or its failure, for the family's current inputs, so
+a family it cannot build is not tried again on every tip round.
 
 ## Records and metrics
 

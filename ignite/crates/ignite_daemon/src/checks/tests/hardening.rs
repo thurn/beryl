@@ -291,3 +291,46 @@ fn the_gate_fails_when_the_changed_files_cannot_be_read() {
     );
     assert!(world.launcher.commands("runner").is_empty());
 }
+
+#[test]
+fn a_foreign_family_that_cannot_be_listed_is_not_listed_again_for_the_same_inputs() {
+    let manifest = family("win", "[\"windows\"]", "broken", "");
+    let world = world(&manifest, &[], FakeHistory::default());
+
+    let first = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    let tries = world.launcher.commands("broken").len();
+    assert!(tries > 0);
+    let second = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+
+    assert_eq!(world.launcher.commands("broken").len(), tries);
+    assert_eq!(first.unlisted.len(), 1);
+    assert_eq!(second.unlisted.len(), 1);
+    assert_eq!(second.unlisted[0].message, first.unlisted[0].message);
+}
+
+#[test]
+fn a_foreign_family_is_listed_once_and_its_checks_are_still_keyed_each_round() {
+    let manifest = family("win", "[\"windows\"]", "lister", "");
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = listing(&["win:c"]);
+
+    let first = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    let second = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+
+    assert_eq!(world.launcher.commands("lister").len(), 1);
+    assert_eq!(first.checks.len(), 1);
+    assert_eq!(second.checks.len(), 1);
+    assert_eq!(first.checks[0].key, second.checks[0].key);
+}
+
+#[test]
+fn a_family_this_machine_runs_is_tried_again_after_it_failed_to_list() {
+    let manifest = family("unit", "\"any\"", "broken", "");
+    let world = world(&manifest, &[], FakeHistory::default());
+
+    world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    let tries = world.launcher.commands("broken").len();
+    world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+
+    assert_eq!(world.launcher.commands("broken").len(), tries * 2);
+}

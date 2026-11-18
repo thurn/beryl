@@ -7,6 +7,7 @@
 pub mod fifo;
 pub mod hostcpu;
 pub mod ipc;
+pub mod notify;
 pub mod occupants;
 pub mod proc;
 pub mod service;

@@ -241,7 +241,7 @@ fn evidence(state: &MonitorState, seen: &Observation, home: &Home, now: Timestam
 }
 
 /// The real machine: the login service for the process and the kickstart, the daemon's socket
-/// for the probe and `osascript` for notifications.
+/// for the probe and the desktop for notifications.
 pub struct NativeMachine {
     pub socket: PathBuf,
 }
@@ -276,32 +276,13 @@ impl Machine for NativeMachine {
     }
 
     fn notify(&self, title: &str, text: &str) {
-        #[cfg(target_os = "macos")]
-        {
-            let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-            let script = format!(
-                "display notification \"{}\" with title \"{}\"",
-                quote(text),
-                quote(title)
-            );
-            let _ = std::process::Command::new("/usr/bin/osascript")
-                .args(["-e", &script])
-                .output();
-        }
-        #[cfg(not(target_os = "macos"))]
-        let _ = (title, text);
+        ignite_os::notify::post(title, text);
     }
 }
 
 /// `ignite monitor`: one run against this machine. Never fails: a problem it handled is
 /// reported in the text, and so is a panic.
 pub fn run() -> Reply {
-    if cfg!(windows) {
-        return Reply::text(
-            Exit::Success,
-            "monitor: not supported on Windows yet; the daemon is not watched on this machine",
-        );
-    }
     let outcome = std::panic::catch_unwind(|| {
         let home = Home::from_env();
         let machine = NativeMachine {

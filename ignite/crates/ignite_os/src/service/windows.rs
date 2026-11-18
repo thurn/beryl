@@ -1,6 +1,9 @@
 //! The Windows half of `service`: a scheduled task that starts the daemon when the user logs
 //! on, and restarts it if it fails, registered with `schtasks` from a task definition in XML.
 //!
+//! The monitor is a second task, `ignite.monitor`, that runs at logon and then every
+//! [`MONITOR_INTERVAL_S`] seconds and is not restarted when it exits.
+//!
 //! The task runs as the user who installs it, without elevation, only while they are logged
 //! on. The XML is needed because `schtasks /Create /SC ONLOGON` registers a task for every
 //! user, which needs an administrator, and has no restart setting.
@@ -11,44 +14,94 @@ use std::io;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
-use super::Service;
+use super::{MONITOR_INTERVAL_S, Service};
 use crate::Native;
 
 /// The scheduled task's name.
 const TASK: &str = "ignite.daemon";
+/// The monitor task's name.
+const MONITOR_TASK: &str = "ignite.monitor";
+
+/// How the scheduler runs a task.
+#[derive(Clone, Copy)]
+enum Schedule {
+    /// At logon, and again a minute after each failure.
+    KeepAlive,
+    /// At logon, and then every this many seconds, without restarting after a failure.
+    Interval(u32),
+}
 
 impl Service for Native {
     fn install(&self, executable: &Path, args: &[String]) -> io::Result<()> {
-        let user = current_user()?;
-        let definition = task_xml(&user, &executable.to_string_lossy(), args);
-        let path = std::env::temp_dir().join(format!("{TASK}-{}.xml", std::process::id()));
-        // `schtasks` reads a definition in UTF-16 with a byte order mark.
-        let bytes: Vec<u8> = std::iter::once(0xFEFF)
-            .chain(definition.encode_utf16())
-            .flat_map(u16::to_le_bytes)
-            .collect();
-        fs::write(&path, bytes)?;
-        // `/F` replaces an earlier registration.
-        let path_text = path.to_string_lossy().into_owned();
-        let created = schtasks(&["/Create", "/TN", TASK, "/XML", &path_text, "/F"]);
-        let _ = fs::remove_file(&path);
-        check("create", &created?)?;
-        // Start it now, as logging on would.
-        check("run", &schtasks(&["/Run", "/TN", TASK])?)
+        register(TASK, Schedule::KeepAlive, executable, args)
     }
 
     fn uninstall(&self) -> io::Result<()> {
-        if !self.is_installed()? {
-            return Ok(());
-        }
-        // Stop a running daemon first; it fails harmlessly when none is running.
-        let _ = schtasks(&["/End", "/TN", TASK]);
-        check("delete", &schtasks(&["/Delete", "/TN", TASK, "/F"])?)
+        unregister(MONITOR_TASK)?;
+        unregister(TASK)
     }
 
     fn is_installed(&self) -> io::Result<bool> {
-        Ok(schtasks(&["/Query", "/TN", TASK])?.status.success())
+        registered(TASK)
     }
+
+    fn install_monitor(&self, executable: &Path, args: &[String]) -> io::Result<()> {
+        register(
+            MONITOR_TASK,
+            Schedule::Interval(MONITOR_INTERVAL_S),
+            executable,
+            args,
+        )
+    }
+
+    fn daemon_running(&self) -> io::Result<bool> {
+        // `/FO CSV /NH` prints `"ignite.daemon","<next run>","Running"`, or `Ready` when the
+        // task is not running.
+        let output = schtasks(&["/Query", "/TN", TASK, "/FO", "CSV", "/NH"])?;
+        if !output.status.success() {
+            return Ok(false);
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).contains("\"Running\""))
+    }
+
+    fn kickstart_daemon(&self) -> io::Result<()> {
+        // Ending a task that is not running fails harmlessly.
+        let _ = schtasks(&["/End", "/TN", TASK]);
+        check(TASK, "run", &schtasks(&["/Run", "/TN", TASK])?)
+    }
+}
+
+/// Registers the scheduled task `task` and starts it now, as logging on would.
+fn register(task: &str, schedule: Schedule, executable: &Path, args: &[String]) -> io::Result<()> {
+    let user = current_user()?;
+    let definition = task_xml(&user, &executable.to_string_lossy(), args, schedule);
+    let path = std::env::temp_dir().join(format!("{task}-{}.xml", std::process::id()));
+    // `schtasks` reads a definition in UTF-16 with a byte order mark.
+    let bytes: Vec<u8> = std::iter::once(0xFEFF)
+        .chain(definition.encode_utf16())
+        .flat_map(u16::to_le_bytes)
+        .collect();
+    fs::write(&path, bytes)?;
+    // `/F` replaces an earlier registration.
+    let path_text = path.to_string_lossy().into_owned();
+    let created = schtasks(&["/Create", "/TN", task, "/XML", &path_text, "/F"]);
+    let _ = fs::remove_file(&path);
+    check(task, "create", &created?)?;
+    check(task, "run", &schtasks(&["/Run", "/TN", task])?)
+}
+
+/// Stops and deletes the task `task`, if it is registered.
+fn unregister(task: &str) -> io::Result<()> {
+    if !registered(task)? {
+        return Ok(());
+    }
+    // Stop a running task first; it fails harmlessly when none is running.
+    let _ = schtasks(&["/End", "/TN", task]);
+    check(task, "delete", &schtasks(&["/Delete", "/TN", task, "/F"])?)
+}
+
+fn registered(task: &str) -> io::Result<bool> {
+    Ok(schtasks(&["/Query", "/TN", task])?.status.success())
 }
 
 fn schtasks(args: &[&str]) -> io::Result<Output> {
@@ -58,12 +111,12 @@ fn schtasks(args: &[&str]) -> io::Result<Output> {
         .output()
 }
 
-fn check(step: &str, output: &Output) -> io::Result<()> {
+fn check(task: &str, step: &str, output: &Output) -> io::Result<()> {
     if output.status.success() {
         Ok(())
     } else {
         Err(io::Error::other(format!(
-            "schtasks could not {step} the task {TASK}: {}",
+            "schtasks could not {step} the task {task}: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         )))
     }
@@ -79,9 +132,27 @@ fn current_user() -> io::Result<String> {
     })
 }
 
-/// The task definition: a logon trigger and a principal for `user`, restarting every minute
-/// after a failure, with no time limit.
-fn task_xml(user: &str, executable: &str, args: &[String]) -> String {
+/// The task definition: a logon trigger and a principal for `user`, with no time limit. A
+/// [`Schedule::Interval`] task also repeats forever at its interval; a [`Schedule::KeepAlive`]
+/// task restarts every minute after a failure.
+fn task_xml(user: &str, executable: &str, args: &[String], schedule: Schedule) -> String {
+    let (repetition, restart, description) = match schedule {
+        Schedule::KeepAlive => (
+            String::new(),
+            "<RestartOnFailure>\n      <Interval>PT1M</Interval>\n      <Count>999</Count>\n    \
+             </RestartOnFailure>"
+                .to_owned(),
+            "Starts the Ignite daemon at logon.",
+        ),
+        Schedule::Interval(seconds) => (
+            format!(
+                "<Repetition>\n        <Interval>PT{seconds}S</Interval>\n        \
+                 <StopAtDurationEnd>false</StopAtDurationEnd>\n      </Repetition>\n      "
+            ),
+            String::new(),
+            "Checks the Ignite daemon at logon and every two minutes.",
+        ),
+    };
     let user = escape(user);
     let arguments = args
         .iter()
@@ -94,11 +165,11 @@ fn task_xml(user: &str, executable: &str, args: &[String]) -> String {
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Starts the Ignite daemon at logon.</Description>
+    <Description>{description}</Description>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
-      <Enabled>true</Enabled>
+      {repetition}<Enabled>true</Enabled>
       <UserId>{user}</UserId>
     </LogonTrigger>
   </Triggers>
@@ -114,10 +185,7 @@ fn task_xml(user: &str, executable: &str, args: &[String]) -> String {
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <RestartOnFailure>
-      <Interval>PT1M</Interval>
-      <Count>999</Count>
-    </RestartOnFailure>
+    {restart}
     <Enabled>true</Enabled>
   </Settings>
   <Actions Context="Author">
@@ -197,11 +265,25 @@ mod tests {
             r"CYGNUS\me",
             r"C:\ignite\bin\ignite.exe",
             &["daemon".to_owned(), "a & b".to_owned()],
+            Schedule::KeepAlive,
         );
         assert!(xml.contains("<LogonTrigger>"));
         assert_eq!(xml.matches(r"<UserId>CYGNUS\me</UserId>").count(), 2);
         assert!(xml.contains(r"<Command>C:\ignite\bin\ignite.exe</Command>"));
         assert!(xml.contains("<Arguments>daemon &quot;a &amp; b&quot;</Arguments>"));
         assert!(xml.contains("<RunLevel>LeastPrivilege</RunLevel>"));
+    }
+
+    #[test]
+    fn the_monitor_task_repeats_and_is_not_restarted() {
+        let xml = task_xml(
+            r"CYGNUS\me",
+            r"C:\ignite\ignite.exe",
+            &[],
+            Schedule::Interval(120),
+        );
+        assert!(xml.contains("<Interval>PT120S</Interval>"));
+        assert!(xml.contains("<StopAtDurationEnd>false</StopAtDurationEnd>"));
+        assert!(!xml.contains("RestartOnFailure"));
     }
 }

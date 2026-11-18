@@ -16,8 +16,9 @@ use std::ptr;
 use std::sync::{Mutex, OnceLock, PoisonError};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, ERROR_ACCESS_DENIED, ERROR_NO_DATA, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED,
-    GENERIC_READ, GENERIC_WRITE, GetLastError, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
+    CloseHandle, ERROR_ACCESS_DENIED, ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_BUSY,
+    ERROR_PIPE_CONNECTED, GENERIC_READ, GENERIC_WRITE, GetLastError, HANDLE, INVALID_HANDLE_VALUE,
+    LocalFree,
 };
 use windows_sys::Win32::Security::Authorization::{
     ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -32,7 +33,7 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
-    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT, PeekNamedPipe,
     WaitNamedPipeW,
 };
 use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -69,7 +70,31 @@ impl Write for PipeStream {
     }
 }
 
-impl Stream for PipeStream {}
+impl Stream for PipeStream {
+    /// Peeks the pipe without reading or waiting: `PeekNamedPipe` fails with a broken-pipe
+    /// error once the other end has closed and every byte it wrote has been read, which is the
+    /// same condition as the end of a Unix socket. A write that is blocked on this connection
+    /// (a full pipe) holds the handle's lock and delays the probe until it finishes.
+    fn closed_probe(&self) -> Option<Box<dyn Fn() -> bool + Send + Sync>> {
+        let own = self.file.try_clone().ok()?;
+        Some(Box::new(move || {
+            // SAFETY: the handle is a pipe that `own` keeps open. Null buffers and lengths
+            // ask only whether the peek succeeds.
+            let peeked = unsafe {
+                PeekNamedPipe(
+                    own.as_raw_handle(),
+                    ptr::null_mut(),
+                    0,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                )
+            };
+            // SAFETY: plain call that reads the thread's last error.
+            peeked == 0 && unsafe { GetLastError() } == ERROR_BROKEN_PIPE
+        }))
+    }
+}
 
 impl Drop for PipeStream {
     fn drop(&mut self) {
@@ -384,5 +409,17 @@ mod tests {
         // The pipe vanished with its listener, so the name is free again.
         drop(Native.listen(&name).unwrap());
         assert!(Native.connect(&self::name("missing")).is_err());
+    }
+
+    #[test]
+    fn the_probe_sees_the_client_close() {
+        let name = name("probe");
+        let listener = Native.listen(&name).unwrap();
+        let client = Native.connect(&name).unwrap();
+        let served = listener.accept().unwrap();
+        let probe = served.closed_probe().unwrap();
+        assert!(!probe(), "an open client is not closed");
+        drop(client);
+        assert!(probe(), "a closed client is");
     }
 }

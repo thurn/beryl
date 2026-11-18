@@ -181,11 +181,20 @@ type Final = (
 );
 
 /// Why a family's `list` gave no checks.
+#[derive(Clone)]
 enum ListError {
     /// A product it needs failed to build, which `CheckRun::build_failures` records.
     Build,
     /// The command failed every try; holds the last output.
     Output(PathBuf),
+}
+
+/// What listing a family this machine does not run came to.
+#[derive(Clone)]
+enum Foreign {
+    Listed(Vec<Listed>),
+    /// The failure, and the builds that failed on the way, for `CheckRun::build_failures`.
+    Failed(ListError, Vec<(String, PathBuf)>),
 }
 
 /// A listed check with its input hash.
@@ -241,6 +250,11 @@ pub struct Checks {
     /// The `jsonl` families that have listed at least one check since the daemon started. A
     /// listing that later comes back empty is taken for a broken `list` command.
     listed_before: Mutex<HashSet<String>>,
+    /// What listing each family this machine does not run last came to, by family, with the
+    /// hash of the inputs it was for. Tip verification lists such families on every round only
+    /// to key the checks other machines run, so a listing that already failed (or succeeded) for
+    /// the same inputs is not tried again.
+    foreign_listings: Mutex<HashMap<String, (InputHash, Foreign)>>,
     next_file: AtomicU64,
     hits: OnceLock<Arc<dyn HitSink>>,
 }
@@ -259,6 +273,7 @@ impl Checks {
             history,
             listings: Mutex::new(HashMap::new()),
             listed_before: Mutex::new(HashSet::new()),
+            foreign_listings: Mutex::new(HashMap::new()),
             next_file: AtomicU64::new(0),
             hits: OnceLock::new(),
         }
@@ -423,7 +438,8 @@ impl Checks {
     ) -> Vec<Prepared> {
         let mut prepared = Vec::new();
         for &(name, family) in among {
-            let listed = match self.list(ctx, tree, name, family, options, run) {
+            let listed = match self.list_remembering_foreign(ctx, tree, name, family, options, run)
+            {
                 Ok(listed) => listed,
                 // The build is already in `run.build_failures`; the family's list never ran,
                 // so it is not an incomplete family.
@@ -448,6 +464,56 @@ impl Checks {
             });
         }
         prepared
+    }
+
+    /// [`Checks::list`], except that for a family this machine does not run the outcome is kept
+    /// for the family's current inputs, and a later call with the same inputs gets it back
+    /// without building or running anything.
+    fn list_remembering_foreign(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        name: &str,
+        family: &Family,
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) -> std::result::Result<Vec<Listed>, ListError> {
+        let foreign = !self.families().any(|(own, _)| own == name);
+        let hash = if foreign {
+            self.listing_hash(ctx, tree, family).ok()
+        } else {
+            None
+        };
+        let Some(hash) = hash else {
+            return self.list(ctx, tree, name, family, options, run);
+        };
+        let remembered = self
+            .foreign_listings
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(name)
+            .filter(|(seen, _)| *seen == hash)
+            .map(|(_, outcome)| outcome.clone());
+        if let Some(outcome) = remembered {
+            return match outcome {
+                Foreign::Listed(listed) => Ok(listed),
+                Foreign::Failed(failure, builds) => {
+                    run.build_failures.extend(builds);
+                    Err(failure)
+                }
+            };
+        }
+        let before = run.build_failures.len();
+        let result = self.list(ctx, tree, name, family, options, run);
+        let outcome = match &result {
+            Ok(listed) => Foreign::Listed(listed.clone()),
+            Err(failure) => Foreign::Failed(failure.clone(), run.build_failures[before..].to_vec()),
+        };
+        self.foreign_listings
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(name.to_owned(), (hash, outcome));
+        result
     }
 
     /// The family's checks. `Err` holds the output of the last failed try.

@@ -271,7 +271,7 @@ impl Reporter {
         let mut state = self.state();
         if down && !state.notified_dispatcher_down {
             state.notified_dispatcher_down = true;
-            notify(
+            ignite_os::notify::post(
                 "Ignite's dispatcher stopped",
                 &format!(
                     "The dispatcher on {} has not carried out three hand-offs. Open its session, \
@@ -283,24 +283,6 @@ impl Reporter {
             state.notified_dispatcher_down = false;
         }
     }
-}
-
-/// Posts a desktop notification, where the operating system has them.
-fn notify(title: &str, text: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        let quote = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
-        let script = format!(
-            "display notification \"{}\" with title \"{}\"",
-            quote(text),
-            quote(title)
-        );
-        let _ = std::process::Command::new("/usr/bin/osascript")
-            .args(["-e", &script])
-            .status();
-    }
-    #[cfg(not(target_os = "macos"))]
-    eprintln!("ignite: {title}: {text}");
 }
 
 /// `ignite justiciar [--here] "<reason>"`: asks for a justiciar for an emergency that stops
