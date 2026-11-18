@@ -6,6 +6,13 @@
 remote = "origin"
 staging = "staging"
 master = "master"
+# Daemons build Ignite from this branch, not from `master`. A landing that changes Ignite moves it
+# once the `ignite` family passes there, so an Ignite fix deploys without waiting for tip
+# verification of everything else, which an Ignite bug can itself block. A push by hand deploys
+# too: daemons poll it every five minutes. Older daemons that refused unknown keys must not read
+# this; every daemon has run a build that only warns since 506508f9a.
+release = "ignite-release"
+release_family = "ignite"
 # Build trees are fixed directories that keep their rust/target between tickets: rustc ignores
 # incremental caches built at another path, and a new directory per change rebuilt every crate
 # on the changed chain from scratch (421-544 CPU-seconds of test build after a one-function
