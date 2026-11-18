@@ -45,6 +45,7 @@ mod families;
 mod meter;
 mod report;
 mod split;
+mod state;
 mod work;
 
 #[cfg(test)]
@@ -291,6 +292,9 @@ pub struct TipVerifier {
     rechecked: HashSet<ResultKey>,
     /// A tip whose last round ended waiting, and when it may be verified again.
     resting: Option<(Commit, Timestamp)>,
+    /// Where the memory above is saved between rounds (see `state`); `None` keeps it in
+    /// memory only.
+    saved: Option<state::Saved>,
 }
 
 impl TipVerifier {
@@ -312,6 +316,7 @@ impl TipVerifier {
             reported_stuck: HashSet::new(),
             rechecked: HashSet::new(),
             resting: None,
+            saved: None,
         }
     }
 
@@ -355,6 +360,7 @@ impl TipVerifier {
             }
             TipOutcome::Superseded { .. } => {}
         }
+        self.save(ctx);
         Ok(Some((tip, outcome)))
     }
 
@@ -376,6 +382,7 @@ impl TipVerifier {
         let (meter, metered) = meter::Meter::start(ctx);
         let mut tally = meter::Tally::default();
         let outcome = self.verify_round(&metered, &last, tip, &mut tally);
+        self.save(ctx);
         meter::send(ctx, &meter.finish(ctx, tip, &tally));
         outcome
     }
@@ -465,6 +472,7 @@ impl TipVerifier {
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
         self.note_incomplete(ctx, tip, &checks, &verdicts);
         self.report_unlisted(ctx, tip, &unlisted);
+        self.save(ctx);
 
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting: Vec<CheckName> = Vec::new();
@@ -498,6 +506,7 @@ impl TipVerifier {
                         check.check
                     );
                 }
+                self.save(ctx);
             }
             ctx.hub.tip_verified(&TipVerified {
                 commit: tip.clone(),
@@ -509,7 +518,9 @@ impl TipVerifier {
             });
         }
         if !waiting.is_empty() {
-            self.flag_missing_machines(ctx, tip, elsewhere)?;
+            let flagged = self.flag_missing_machines(ctx, tip, elsewhere);
+            self.save(ctx);
+            flagged?;
             waiting.sort();
             waiting.dedup();
             return Ok(TipOutcome::Waiting { checks: waiting });

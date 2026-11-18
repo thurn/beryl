@@ -164,7 +164,17 @@ impl Parts {
             checks: self.checks.clone(),
             trees: Arc::new(self.trees.clone()),
         };
-        TipVerifier::new(Arc::new(work), self.version.clone()).with_host(self.hostname.clone())
+        let verifier =
+            TipVerifier::new(Arc::new(work), self.version.clone()).with_host(self.hostname.clone());
+        // The verifier keeps its own connection, so a restarted daemon goes on from what the
+        // last one reported and held off.
+        match ignite_store::local::open(&self.home.root.join("daemon.db")) {
+            Ok(conn) => verifier.with_memory(conn),
+            Err(error) => {
+                eprintln!("ignite: the tip verifier's memory is not kept: {error}");
+                verifier
+            }
+        }
     }
 
     /// See [`super::Daemon::verify_tip`].

@@ -129,4 +129,12 @@ crate::tables! {
         output: Option<String>,
         updated_at: String,
     }
+
+    /// The tip verifier's memory between rounds: one row, `id` always 1.
+    TipMemory = "tip_state" {
+        id: i64,
+        /// JSON; see `ignite_daemon`'s `tip::state`.
+        body: String,
+        updated_at: String,
+    }
 }
