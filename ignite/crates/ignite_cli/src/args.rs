@@ -131,6 +131,11 @@ pub enum Command {
         #[arg(long)]
         now: bool,
     },
+    /// Check the check manifests against the checkout.
+    Manifest {
+        #[command(subcommand)]
+        command: ManifestCommand,
+    },
     /// Import the old systems' data into the hub's database.
     Import {
         /// The old ticket service's database file.
@@ -177,6 +182,13 @@ pub enum ClassArg {
 pub enum AckResult {
     Ok,
     Fail,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ManifestCommand {
+    /// Print every input pattern that matches no tracked file and every `crate:` that names
+    /// no workspace package; exit 1 if there is any.
+    Lint,
 }
 
 #[derive(Debug, Subcommand)]
@@ -389,6 +401,7 @@ impl Command {
             Command::Gate { .. } => "gate",
             Command::Rebuild { .. } => "rebuild",
             Command::Audit { .. } => "audit",
+            Command::Manifest { .. } => "manifest",
             Command::Import { .. } => "import",
             Command::Daemon => "daemon",
             Command::Supervise { .. } => "supervise",

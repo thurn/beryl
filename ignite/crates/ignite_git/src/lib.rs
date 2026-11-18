@@ -7,6 +7,7 @@ pub mod changed;
 pub mod push;
 pub mod rebase;
 pub mod refs;
+pub mod tracked;
 pub mod treehash;
 pub mod worktree;
 
