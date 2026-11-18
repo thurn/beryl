@@ -1,13 +1,389 @@
 //! Installing Ignite on a machine and keeping it current: building the executable from each
 //! release, restarting into it, and registering with the hub.
 //!
-//! Stub. The ticket Thrh4.34 (Install, self-update, status and doctor) owns this file
-//! and replaces the `todo!()` bodies.
-#![allow(unused_variables)]
+//! Every build is stored under the commit it was built from, at `bin/<commit>/ignite` in the
+//! machine's Ignite home, and a stored file is never replaced. A supervisor that is still running
+//! a command keeps its executable open from that path, so an update only adds a new directory and
+//! repoints `bin/current`, the path the login service starts. The daemon then restarts by
+//! replacing its own process image with the new executable ([`ExecRestart`]); supervisors are
+//! other processes and keep running the old one until their commands finish.
+//!
+//! The logic takes its collaborators as traits ([`Builder`], [`Registrar`], [`Restart`] and the
+//! core `Git` and the OS `Service`), so the tests run it against fakes.
 
-use ignite_core::protocol::client::{Reply, Request};
+use std::collections::hash_map::RandomState;
+use std::fmt::Write as _;
+use std::hash::{BuildHasher, Hasher};
+use std::io;
+use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
+use ignite_core::config::{Config, Os};
+use ignite_core::ids::{Commit, MachineId};
+use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::protocol::hub::{MachineRegister, MachineRegistered};
+use ignite_core::traits::{Error, Git, Result};
+use ignite_os::Native;
+use ignite_os::service::Service;
+use serde::{Deserialize, Serialize};
+
+use crate::doctor::{Host, NativeHost};
 use crate::server::{Context, Verb};
+
+/// The arguments the login service starts the executable with.
+pub const DAEMON_ARGS: &[&str] = &["daemon"];
+
+/// Files that belong to the machine, not to the repository: the stored executables and the
+/// machine's identity.
+#[derive(Clone, Debug)]
+pub struct Home {
+    pub root: PathBuf,
+}
+
+impl Home {
+    /// `$IGNITE_HOME`, or `~/.config/ignite`.
+    pub fn from_env() -> Home {
+        let root = std::env::var_os("IGNITE_HOME").map_or_else(
+            || {
+                let home = std::env::var_os("HOME").unwrap_or_default();
+                PathBuf::from(home).join(".config").join("ignite")
+            },
+            PathBuf::from,
+        );
+        Home { root }
+    }
+
+    pub fn store(&self) -> ExecutableStore {
+        ExecutableStore {
+            root: self.root.join("bin"),
+        }
+    }
+
+    pub fn identity(&self) -> IdentityFile {
+        IdentityFile {
+            path: self.root.join("machine.json"),
+        }
+    }
+}
+
+/// Built executables, one directory per commit.
+#[derive(Clone, Debug)]
+pub struct ExecutableStore {
+    root: PathBuf,
+}
+
+impl ExecutableStore {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    /// Where the executable built from `commit` lives.
+    pub fn path(&self, commit: &Commit) -> PathBuf {
+        self.root.join(commit.as_str()).join("ignite")
+    }
+
+    /// The symlink the login service starts; it always names the newest stored build.
+    pub fn current_link(&self) -> PathBuf {
+        self.root.join("current")
+    }
+
+    pub fn has(&self, commit: &Commit) -> bool {
+        self.path(commit).is_file()
+    }
+
+    /// Copies `built` to the commit's path and returns that path. A commit that is already
+    /// stored keeps its file: it may be running.
+    pub fn store(&self, commit: &Commit, built: &Path) -> io::Result<PathBuf> {
+        let dest = self.path(commit);
+        if dest.is_file() {
+            return Ok(dest);
+        }
+        let dir = dest.parent().expect("a stored path has a directory");
+        std::fs::create_dir_all(dir)?;
+        let partial = dir.join(format!("ignite.partial-{}", std::process::id()));
+        std::fs::copy(built, &partial)?;
+        std::fs::rename(&partial, &dest)?;
+        Ok(dest)
+    }
+
+    /// Points [`Self::current_link`] at the commit's executable, replacing the link in one step.
+    pub fn point_current_at(&self, commit: &Commit) -> io::Result<()> {
+        let link = self.current_link();
+        let partial = self
+            .root
+            .join(format!("current.partial-{}", std::process::id()));
+        // A partial link left by a crash would make `symlink` fail.
+        let _ = std::fs::remove_file(&partial);
+        std::os::unix::fs::symlink(self.path(commit), &partial)?;
+        std::fs::rename(&partial, &link)
+    }
+
+    /// The commit an executable path was stored under, following symlinks.
+    pub fn version_of(executable: &Path) -> Option<Commit> {
+        let real = executable.canonicalize().ok()?;
+        let name = real.parent()?.file_name()?.to_str()?;
+        Commit::new(name).ok()
+    }
+}
+
+/// Makes the executable for a commit.
+pub trait Builder {
+    /// Builds the executable that `commit` contains and returns the path of the built file.
+    fn build(&self, commit: &Commit) -> Result<PathBuf>;
+}
+
+/// The directory that `cargo` is found in when the service's minimal `PATH` lacks it.
+fn cargo_command() -> Command {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let cargo = home
+        .map(|h| h.join(".cargo").join("bin").join("cargo"))
+        .filter(|p| p.is_file());
+    Command::new(cargo.unwrap_or_else(|| PathBuf::from("cargo")))
+}
+
+/// Runs `cargo build --release` for the `ignite` executable in the workspace at `tree/ignite`.
+fn cargo_build(tree: &Path) -> Result<PathBuf> {
+    let workspace = tree.join("ignite");
+    let target = workspace.join("target");
+    let output = cargo_command()
+        .args([
+            "build",
+            "--release",
+            "--package",
+            "ignite_cli",
+            "--manifest-path",
+        ])
+        .arg(workspace.join("Cargo.toml"))
+        .arg("--target-dir")
+        .arg(&target)
+        .output()
+        .map_err(|e| Error::Io(format!("cannot run cargo: {e}")))?;
+    if !output.status.success() {
+        let text = String::from_utf8_lossy(&output.stderr);
+        let tail: Vec<&str> = text.lines().rev().take(15).collect();
+        let tail: Vec<&str> = tail.into_iter().rev().collect();
+        return Err(Error::Io(format!(
+            "cargo build failed in {}:\n{}",
+            workspace.display(),
+            tail.join("\n")
+        )));
+    }
+    Ok(target.join("release").join("ignite"))
+}
+
+/// Builds in the checkout that `ignite install` runs from.
+pub struct CheckoutBuilder {
+    pub repo: PathBuf,
+}
+
+impl Builder for CheckoutBuilder {
+    fn build(&self, _commit: &Commit) -> Result<PathBuf> {
+        cargo_build(&self.repo)
+    }
+}
+
+/// Builds each release in one tree of its own, reset to the commit being built, so that
+/// the next update starts from the last one's compiled output and never touches a build tree.
+pub struct TreeBuilder {
+    pub repo: PathBuf,
+    /// The directory that holds the update tree.
+    pub work: PathBuf,
+}
+
+impl TreeBuilder {
+    const BRANCH: &'static str = "ignite-update";
+    const KEEP: &'static [&'static str] = &["ignite/target"];
+
+    fn tree(&self) -> PathBuf {
+        self.work.join("update-tree")
+    }
+}
+
+impl Builder for TreeBuilder {
+    fn build(&self, commit: &Commit) -> Result<PathBuf> {
+        let tree = self.tree();
+        if tree.join(".git").exists() {
+            let keep: Vec<String> = Self::KEEP.iter().map(|s| (*s).to_owned()).collect();
+            ignite_git::worktree::reset(&tree, Self::BRANCH, commit, &keep)?;
+        } else {
+            std::fs::create_dir_all(&self.work)?;
+            ignite_git::worktree::add(&self.repo, &tree, Self::BRANCH, commit)?;
+        }
+        cargo_build(&tree)
+    }
+}
+
+/// The hub's side of `ignite install`.
+pub trait Registrar {
+    fn register(&self, request: &MachineRegister) -> Result<MachineRegistered>;
+}
+
+/// Registers over HTTP: `POST <url>/<project>/api/machines/register`.
+pub struct HttpRegistrar {
+    pub url: String,
+    pub project: String,
+}
+
+impl Registrar for HttpRegistrar {
+    fn register(&self, request: &MachineRegister) -> Result<MachineRegistered> {
+        let url = format!(
+            "{}/{}/api/machines/register",
+            self.url.trim_end_matches('/'),
+            self.project
+        );
+        let body = serde_json::to_string(request).map_err(|e| Error::Invalid(e.to_string()))?;
+        let mut response = ureq::post(&url)
+            .header("Content-Type", "application/json")
+            .send(body)
+            .map_err(|e| Error::Unreachable(format!("{url}: {e}")))?;
+        let text = response
+            .body_mut()
+            .read_to_string()
+            .map_err(|e| Error::Unreachable(format!("{url}: {e}")))?;
+        serde_json::from_str(&text).map_err(|e| {
+            Error::Invalid(format!(
+                "the hub's answer to {url} is not a registration: {e}"
+            ))
+        })
+    }
+}
+
+/// What the machine remembers about itself between runs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Identity {
+    pub machine: MachineId,
+    /// The write token the hub issued; `None` until the machine has registered.
+    pub token: Option<String>,
+}
+
+/// The file that holds the [`Identity`], readable by its user only.
+#[derive(Clone, Debug)]
+pub struct IdentityFile {
+    pub path: PathBuf,
+}
+
+impl IdentityFile {
+    pub fn load(&self) -> Result<Option<Identity>> {
+        match std::fs::read_to_string(&self.path) {
+            Ok(text) => serde_json::from_str(&text).map(Some).map_err(|e| {
+                Error::Invalid(format!(
+                    "{} is not a machine identity: {e}",
+                    self.path.display()
+                ))
+            }),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn save(&self, identity: &Identity) -> Result<()> {
+        use std::io::Write;
+        if let Some(dir) = self.path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let text =
+            serde_json::to_string_pretty(identity).map_err(|e| Error::Invalid(e.to_string()))?;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&self.path)?;
+        file.write_all(text.as_bytes())?;
+        Ok(())
+    }
+
+    /// The stored identity, or a new one that this call saves.
+    pub fn load_or_create(&self) -> Result<Identity> {
+        if let Some(identity) = self.load()? {
+            return Ok(identity);
+        }
+        let identity = Identity {
+            machine: new_machine_id(),
+            token: None,
+        };
+        self.save(&identity)?;
+        Ok(identity)
+    }
+}
+
+/// A fresh ID such as `m-7f3a91c2`, from the operating system's randomness through the standard
+/// library's hasher seed.
+fn new_machine_id() -> MachineId {
+    let mut hasher = RandomState::new().build_hasher();
+    hasher.write_u32(std::process::id());
+    let id = format!("m-{:08x}", hasher.finish() as u32);
+    MachineId::new(id).expect("a hex ID is a valid machine ID")
+}
+
+/// Everything `ignite install` touches.
+pub struct InstallDeps<'a> {
+    pub host: &'a dyn Host,
+    pub builder: &'a dyn Builder,
+    pub store: &'a ExecutableStore,
+    pub identity: &'a IdentityFile,
+    pub registrar: &'a dyn Registrar,
+    pub service: &'a dyn Service,
+}
+
+/// What a finished install did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Installed {
+    pub machine: MachineId,
+    pub version: Commit,
+    pub executable: PathBuf,
+}
+
+/// Builds the executable of the checkout at `head`, stores it, registers the machine with the hub
+/// and installs the login service. The service goes last, so a failed install leaves no daemon.
+pub fn install(deps: &InstallDeps, config: &Config, head: &Commit) -> Result<Installed> {
+    let name = deps.host.hostname();
+    let declared = config.machine(&name).ok_or_else(|| {
+        Error::Invalid(format!(
+            "this machine is called {name:?} but ignite.toml declares no [machine.{name}]; \
+             add one and run `ignite install` again"
+        ))
+    })?;
+    let built = deps.builder.build(head)?;
+    let executable = deps.store.store(head, &built)?;
+    deps.store.point_current_at(head)?;
+
+    let mut identity = deps.identity.load_or_create()?;
+    let registered = deps.registrar.register(&MachineRegister {
+        machine: identity.machine.clone(),
+        name,
+        os: declared
+            .os
+            .or_else(Os::current)
+            .ok_or_else(|| Error::Invalid("this operating system is not supported".to_owned()))?,
+        cores: deps.host.cores(),
+        memory_mb: deps.host.memory_mb(),
+        families: declared.families.clone().unwrap_or_default(),
+        version: head.as_str().to_owned(),
+    })?;
+    identity.token = Some(registered.token);
+    deps.identity.save(&identity)?;
+
+    let args: Vec<String> = DAEMON_ARGS.iter().map(|s| (*s).to_owned()).collect();
+    deps.service.install(&deps.store.current_link(), &args)?;
+    Ok(Installed {
+        machine: identity.machine,
+        version: head.clone(),
+        executable,
+    })
+}
+
+/// How an exit code and a message answer a failed operation.
+fn failure(error: &Error) -> Reply {
+    let exit = match error {
+        Error::Unreachable(_) => Exit::Unreachable,
+        Error::Conflict(_) => Exit::Conflict,
+        _ => Exit::Usage,
+    };
+    Reply::text(exit, error.to_string())
+}
 
 /// `ignite install`: builds the executable, registers the machine and starts the daemon at login.
 pub struct InstallVerb;
@@ -17,7 +393,154 @@ impl Verb for InstallVerb {
         "install"
     }
 
-    fn run(&self, ctx: &Context, req: &Request) -> Reply {
-        todo!("Thrh4.34 (Install, self-update, status and doctor)")
+    fn run(&self, ctx: &Context, _req: &Request) -> Reply {
+        let home = Home::from_env();
+        let head = match ignite_git::refs::head(&ctx.repo) {
+            Ok(head) => head,
+            Err(error) => return failure(&error),
+        };
+        let store = home.store();
+        let identity = home.identity();
+        let deps = InstallDeps {
+            host: &NativeHost,
+            builder: &CheckoutBuilder {
+                repo: ctx.repo.clone(),
+            },
+            store: &store,
+            identity: &identity,
+            registrar: &HttpRegistrar {
+                url: ctx.config.hub.url.clone(),
+                project: ctx.config.hub.project.clone(),
+            },
+            service: &Native,
+        };
+        match install(&deps, &ctx.config, &head) {
+            Ok(done) => {
+                let mut text = String::new();
+                let _ = writeln!(text, "installed  {}", done.version);
+                let _ = writeln!(text, "machine    {}", done.machine);
+                let _ = writeln!(text, "binary     {}", done.executable.display());
+                let _ = write!(
+                    text,
+                    "daemon     starts at login; `ignite doctor` checks it"
+                );
+                Reply::text(Exit::Success, text)
+            }
+            Err(error) => failure(&error),
+        }
     }
 }
+
+/// How the running daemon relates to the hub's version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VersionAction {
+    /// The versions match.
+    Current,
+    /// The hub is on another version and commands are still running: finish them, and ask for no
+    /// new work.
+    Drain,
+    /// The hub is on another version and nothing is running: update and reconnect now.
+    UpdateNow,
+}
+
+impl VersionAction {
+    /// Whether the daemon may ask the hub for work.
+    pub fn may_ask_for_work(self) -> bool {
+        self == VersionAction::Current
+    }
+}
+
+/// Compares the daemon's version with the hub's, as the hub reports it in a heartbeat reply.
+pub fn version_action(own: &Commit, hub_version: &str, running_commands: usize) -> VersionAction {
+    if own.as_str() == hub_version {
+        VersionAction::Current
+    } else if running_commands > 0 {
+        VersionAction::Drain
+    } else {
+        VersionAction::UpdateNow
+    }
+}
+
+/// Replaces the running daemon with the executable of a newer version.
+pub trait Restart {
+    /// Starts `executable args` in place of this process. Returns only if it could not.
+    fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()>;
+}
+
+/// Restarts with `exec`: the process keeps its ID, so the login service sees no exit, and
+/// supervisors it started stay its children.
+pub struct ExecRestart;
+
+impl Restart for ExecRestart {
+    fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()> {
+        Err(Command::new(executable).args(args).exec())
+    }
+}
+
+/// What a check for a newer release found.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UpdateCheck {
+    /// `master` has not moved.
+    UpToDate,
+    /// `master` moved but nothing under `ignite/` changed, so the executable stays.
+    NotNeeded { tip: Commit },
+    /// The executable of `to` is built and stored, and is what a restart starts.
+    Ready {
+        from: Commit,
+        to: Commit,
+        executable: PathBuf,
+    },
+}
+
+/// Builds and stores new releases.
+pub struct Updater<'a> {
+    pub git: &'a dyn Git,
+    pub builder: &'a dyn Builder,
+    pub store: &'a ExecutableStore,
+    /// The branch releases come from.
+    pub master: &'a str,
+    /// Where Ignite's own source lives in the repository.
+    pub source: &'a str,
+}
+
+impl Updater<'_> {
+    /// Builds the new executable if `master` moved and files under the source directory changed.
+    pub fn check(&self, current: &Commit) -> Result<UpdateCheck> {
+        let tip = self.git.tip(self.master)?;
+        if &tip == current {
+            return Ok(UpdateCheck::UpToDate);
+        }
+        let prefix = format!("{}/", self.source.trim_end_matches('/'));
+        let changed = self.git.changed(current, &tip)?;
+        if !changed.iter().any(|path| path.starts_with(&prefix)) {
+            return Ok(UpdateCheck::NotNeeded { tip });
+        }
+        self.prepare(current, &tip)
+    }
+
+    /// Builds and stores `target`, the version the hub runs, unless it is stored already.
+    pub fn prepare(&self, current: &Commit, target: &Commit) -> Result<UpdateCheck> {
+        if !self.store.has(target) {
+            let built = self.builder.build(target)?;
+            self.store.store(target, &built)?;
+        }
+        self.store.point_current_at(target)?;
+        Ok(UpdateCheck::Ready {
+            from: current.clone(),
+            to: target.clone(),
+            executable: self.store.path(target),
+        })
+    }
+}
+
+/// Restarts the daemon into a prepared release. Does not return on success.
+pub fn restart_into(restart: &dyn Restart, executable: &Path) -> Error {
+    let args: Vec<String> = DAEMON_ARGS.iter().map(|s| (*s).to_owned()).collect();
+    match restart.restart(executable, &args) {
+        Ok(()) => Error::Io("restarted".to_owned()),
+        Err(e) => Error::Io(format!("cannot start {}: {e}", executable.display())),
+    }
+}
+
+#[cfg(test)]
+mod tests;
