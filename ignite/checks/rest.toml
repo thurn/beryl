@@ -196,8 +196,8 @@ kind = "regression"
 adapter = "nextest"
 platforms = ["macos"]
 needs = ["rust-tests"]
-list = "cargo nextest list --manifest-path rust/Cargo.toml --locked --cargo-quiet -p beryl_link_iroh --message-format json"
-run = "cargo nextest run --manifest-path rust/Cargo.toml --locked --cargo-quiet -p beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail -E {checks}"
+list = "cargo nextest list --locked --cargo-quiet -p beryl_link_iroh --message-format json"
+run = "cargo nextest run --locked --cargo-quiet -p beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 
 # Ignite's own workspace: formatting, clippy and every test, as `ignite:fmt`, `ignite:clippy` and

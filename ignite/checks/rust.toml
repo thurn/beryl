@@ -21,16 +21,22 @@
 # Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
 # it and the workspace packages it depends on. Tests marked #[ignore] are the fuzzer's and
 # belong to an exploration family; nextest runs none of them by default. The harness-less
-# `allocations` targets, which nextest cannot run, are the `allocations` family. The run's
-# results are nextest's JUnit report, target/nextest/ignite/junit.xml (rust/.config/nextest.toml),
-# and `{checks}` stands for a nextest filterset naming the tests to run.
+# `allocations` targets, which nextest cannot run, are the `allocations` family.
+#
+# Ignite splits these commands on whitespace and runs them without a shell, so a filterset is
+# written without spaces or quotes (`!binary(allocations)`). The run command names no tests:
+# Ignite appends `-E <filterset>` for the tests it chose, and reads each test's outcome from the
+# libtest JSON that `--message-format libtest-json-plus` prints (see "Reporting results" in
+# docs/ignite.md). A `nextest` family's commands run in the directory of the first product it
+# needs, here rust/ (`rust-tests`), not the checkout's root. tools/tests/test_ignite_commands.py
+# checks these rules.
 [family.rust]
 kind = "regression"
 adapter = "nextest"
 platforms = "any"
 needs = ["rust-tests"]
-list = "cargo nextest list --manifest-path rust/Cargo.toml --locked --cargo-quiet --workspace --exclude beryl_link_iroh --message-format json -E 'not binary(allocations)'"
-run = "cargo nextest run --manifest-path rust/Cargo.toml --locked --cargo-quiet --workspace --exclude beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail -E {checks}"
+list = "cargo nextest list --locked --cargo-quiet --workspace --exclude beryl_link_iroh --message-format json -E !binary(allocations)"
+run = "cargo nextest run --locked --cargo-quiet --workspace --exclude beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = [
   "crate-closure",
   "rust/Cargo.toml",

@@ -297,6 +297,40 @@ def counts_gate(root: Path) -> dict[str, Any]:
     return json.loads((root / COUNTS_FILE).read_text())
 
 
+# The families whose `list` reads a build product: `ui-test` records its fixtures with the
+# `cli` product's `beryl_cli` and imports Playwright from the `ui-deps` product, and `shots`
+# imports Playwright too.
+LIST_NEEDS_DEPS = ("ui-test", "shots")
+LIST_NEEDS_CLI = ("ui-test",)
+
+
+def ensure_list_needs(family: str, root: Path) -> None:
+    """Builds the products the family's `list` reads when they are missing. An Ignite daemon
+    builds a family's `needs` before its `list`, but daemons older than that ran `list` first,
+    and a freshly leased tree holds no `ui/node_modules`: there `list ui-test` and `list shots`
+    failed with `ERR_MODULE_NOT_FOUND` for Playwright. Each command prints to stderr, so the
+    listing on stdout stays clean. A product that is present is left alone, because the daemon's
+    own `npm ci` writes no stamp that `deps.ensure_node_modules` could compare."""
+    if family in LIST_NEEDS_DEPS and not (root / "ui" / "node_modules").is_dir():
+        print("npm ci", file=sys.stderr)
+        subprocess.run(
+            ["npm", "ci", "--no-audit", "--no-fund", "--loglevel=error"],
+            cwd=root / "ui",
+            stdin=subprocess.DEVNULL,
+            stdout=sys.stderr,
+            check=True,
+        )
+    cli = system.exe(paths.RUN_TARGET / "debug" / "beryl_cli")
+    if family in LIST_NEEDS_CLI and not cli.is_file():
+        subprocess.run(
+            paths.CLI_BUILD,
+            cwd=paths.RUST,
+            stdin=subprocess.DEVNULL,
+            stdout=sys.stderr,
+            check=True,
+        )
+
+
 def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
     """The family's checks with the inputs of their own."""
     if family == "ui-test":
@@ -637,6 +671,7 @@ def main(argv: Sequence[str]) -> int:
     verb, family, rest = argv[0], argv[1], list(argv[2:])
     try:
         if verb == "list":
+            ensure_list_needs(family, root)
             for line in list_checks(family, root):
                 print(json.dumps(line))
             return 0

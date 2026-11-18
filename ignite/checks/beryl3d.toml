@@ -208,15 +208,15 @@ inputs = [
 # Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
 # it and the Beryl 3D packages it depends on, and over the main workspace, which `crate-closure`
 # does not follow into. The tests read the recordings, so they need the `b3d` product, whose
-# shared build is the one nextest would make. Results are nextest's JUnit report,
-# rust/beryl3d/target/nextest/ignite/junit.xml (rust/beryl3d/.config/nextest.toml).
+# shared build is the one nextest would make. As for the `rust` family (rust.toml), Ignite
+# appends the filterset of the tests to run and reads their outcomes from the libtest JSON.
 [family.b3d-test]
 kind = "regression"
 adapter = "nextest"
 platforms = ["macos"]
 needs = ["b3d"]
 list = "cargo nextest list --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --message-format json"
-run = "cargo nextest run --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail -E {checks}"
+run = "cargo nextest run --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = [
   "crate-closure",
   "rust/beryl3d/.config/nextest.toml",

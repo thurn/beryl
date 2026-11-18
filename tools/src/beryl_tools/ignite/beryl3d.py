@@ -89,14 +89,17 @@ def run_out(
     )
 
 
-def build() -> int:
+def build(to_stderr: bool = False) -> int:
     """Makes the `b3d` product: the shared build, then the recordings pack for the present
-    sources, which `record` builds only when it is missing and whose path it prints."""
-    built = subprocess.run(SHARED_BUILD, cwd=WORKSPACE, check=False).returncode
-    if built != 0:
-        return built
+    sources, which `record` builds only when it is missing and whose path it prints. With
+    `to_stderr`, what they print goes to stderr, so that a listing on stdout stays clean.
+    """
+    out = sys.stderr if to_stderr else None
+    built = subprocess.run(SHARED_BUILD, cwd=WORKSPACE, stdout=out, check=False)
+    if built.returncode != 0:
+        return built.returncode
     return subprocess.run(
-        [str(DEBUG / "record")], cwd=WORKSPACE, check=False
+        [str(DEBUG / "record")], cwd=WORKSPACE, stdout=out, check=False
     ).returncode
 
 
@@ -644,6 +647,15 @@ def source_run(checks: list[str]) -> list[Result]:
 # The command line.
 
 
+# The families whose `list` runs `record` or reads the recordings pack, which the `b3d` product
+# makes. An Ignite daemon builds a family's `needs` before its `list`, but daemons older than
+# that ran `list` first, and in a freshly leased tree it failed because
+# rust/beryl3d/target/debug/record did not exist. So `main` makes the product first when
+# `record` is missing.
+LIST_NEEDS_BUILD: frozenset[str] = frozenset(
+    {"b3d-interface", "b3d-every-tick", "b3d-gate", "b3d-timeline", "b3d-frame-counts"}
+)
+
 LISTS: dict[str, Callable[[], list[Listed]]] = {
     "b3d-format": lambda: [
         Listed(f"b3d-format:{n}", [f"{d}/**"]) for n, d in package_dirs().items()
@@ -676,6 +688,10 @@ def main(args: list[str]) -> int:
         case ["build"]:
             return build()
         case [family, "list"] if family in LISTS:
+            if family in LIST_NEEDS_BUILD and not (DEBUG / "record").is_file():
+                built = build(to_stderr=True)
+                if built != 0:
+                    return built
             listed(LISTS[family]())
             return 0
         case [family, "run", *checks] if family in RUNS:
