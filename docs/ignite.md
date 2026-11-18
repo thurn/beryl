@@ -602,22 +602,24 @@ How a restart is survived:
   daemon ends the commands it left.
 - For a verb that ran on the previous daemon's threads, or whose verb process
   died, the daemon runs `test`, `check`, `land` and a waiting `start` again
-  under the same handle. Finished checks come from the result cache. Each command still running
-  is taken over from its supervisor, found by the handle in its `spec.json`,
-  instead of being started again, and the files it writes through its
-  environment, such as a check's results file, are handed to the rerun. So
-  results are stored once, and trees, cores and leases are given back as the old
-  daemon would have. A landing finds where it got to from its record on disk.
+  under the same handle. Finished checks come from the result cache. Each
+  command still running is taken over from its supervisor, found by the handle
+  in its `spec.json`, instead of being started again, and the files it writes
+  through its environment, such as a check's results file, are handed to the
+  rerun. So results are stored once, and trees, cores and leases are given back
+  as the old daemon would have. A landing finds where it got to from its record
+  on disk.
 - Any other verb cut off by a restart ends its handle `incomplete`, with the
   reason.
 - A landing tree records the handle of the landing that leased it. A restarted
   daemon keeps a landing tree whose landing still runs in its verb process, or
-  that it runs again, with the commands running in it. The rerun gets the same tree back, untouched if it is still at
-  the commit the landing asks for and reset otherwise. Every other landing tree,
-  and every tree left being prebuilt or reset, is reset at start and its
-  commands are ended. Each command of a verb with a handle records its
-  checkout's commit as `IGNITE_TREE_COMMIT`; a previous command is taken over
-  only while the checkout is still at that commit.
+  that it runs again, with the commands running in it. The rerun gets the same
+  tree back, untouched if it is still at the commit the landing asks for and
+  reset otherwise. Every other landing tree, and every tree left being prebuilt
+  or reset, is reset at start and its commands are ended. Each command of a verb
+  with a handle records its checkout's commit as `IGNITE_TREE_COMMIT`; a
+  previous command is taken over only while the checkout is still at that
+  commit.
 - The daemon serves its socket right after it takes the machine's lock, before
   it reads its configuration, takes over runs or builds its parts. A request
   that arrives meanwhile waits until the daemon is ready and is then answered;
@@ -630,9 +632,9 @@ How a restart is survived:
 - A client whose connection drops after it was told the handle waits on it as
   `ignite wait` does, for up to five minutes, prints the verb's steps as they
   start, as the first request did, and prints the reply as if nothing had
-  happened. A read cut off earlier is sent again. Other work answers that
-  its outcome is unknown and to check `ignite status`. A refused connection, or
-  a missing socket or pipe while a process holds `daemon.lock` or a start was
+  happened. A read cut off earlier is sent again. Other work answers that its
+  outcome is unknown and to check `ignite status`. A refused connection, or a
+  missing socket or pipe while a process holds `daemon.lock` or a start was
   logged in the last minute, means a daemon that is starting, and is retried for
   five minutes.
 
