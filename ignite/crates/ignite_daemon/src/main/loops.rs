@@ -229,11 +229,17 @@ impl Parts {
             loop {
                 thread::sleep(IDLE_EVERY);
                 ticker.round(|| {
+                    // Holding the disk is not idle work: it deletes files and costs a walk of
+                    // the trees, and the machine is the most likely to need it while busy.
+                    let mut failure = None;
+                    if let Err(error) = idle.hold_disk() {
+                        eprintln!("ignite: trees not held under their disk limit: {error}");
+                        failure = Some(format!("trees not held under their disk limit: {error}"));
+                    }
                     let status = scheduler.status();
                     if status.granted > 0 || status.outside * 2 >= status.cores {
-                        return Ok(());
+                        return failure.map_or(Ok(()), Err);
                     }
-                    let mut failure = None;
                     crate::steps::step("keeping a free tree built at the tip");
                     if let Ok(tip) = ctx.git.tip(&ctx.config.repository.staging)
                         && let Err(error) = trees.keep_one_built(&tip)

@@ -78,7 +78,7 @@ impl Trees {
             return Ok(report);
         }
         for row in self.free_rows()? {
-            let Some(row) = self.take_for_sweep(row)? else {
+            let Some(row) = self.take_for_sweep(&row.id)? else {
                 continue;
             };
             let path = self.inner.config.path(&id_of(&row)?);
@@ -87,17 +87,18 @@ impl Trees {
             }
             self.put_back(&row)?;
         }
-        report.after = self.disk_usage().iter().map(|(_, bytes)| bytes).sum();
-        let usage: BTreeMap<TreeId, u64> = self.disk_usage().into_iter().collect();
+        let mut usage: BTreeMap<TreeId, u64> = self.disk_usage().into_iter().collect();
+        report.after = usage.values().sum();
         for row in self.free_rows()? {
             if report.after <= limit {
                 break;
             }
             let id = id_of(&row)?;
-            if usage.get(&id).copied().unwrap_or(0) == 0 {
+            let used = usage.get(&id).copied().unwrap_or(0);
+            if used == 0 {
                 continue;
             }
-            let Some(mut row) = self.take_for_sweep(row)? else {
+            let Some(mut row) = self.take_for_sweep(&row.id)? else {
                 continue;
             };
             let path = self.inner.config.path(&id);
@@ -106,12 +107,13 @@ impl Trees {
             }
             row.built_commit = None;
             self.put_back(&row)?;
-            report.after = report
-                .after
-                .saturating_sub(usage.get(&id).copied().unwrap_or(0));
+            usage.insert(id.clone(), 0);
+            report.after = report.after.saturating_sub(used);
             report.cleared.push(id);
         }
-        report.after = self.disk_usage().iter().map(|(_, bytes)| bytes).sum();
+        if !report.cleared.is_empty() {
+            report.after = self.disk_usage().iter().map(|(_, bytes)| bytes).sum();
+        }
         self.serve_waiters();
         Ok(report)
     }
@@ -127,13 +129,21 @@ impl Trees {
         Ok(free)
     }
 
-    /// Marks a free tree `resetting` for a sweep. Returns its row as it was, or `None` if a
-    /// lease took it first.
-    fn take_for_sweep(&self, row: rows::Tree) -> Result<Option<rows::Tree>> {
+    /// Marks a free tree `resetting` for a sweep. Returns its row as it was when it was taken,
+    /// or `None` if a lease took it first. The row is read in the same lock as the change of
+    /// state, so a lease and release since the caller listed the free trees cannot leave it
+    /// writing back a stale `built_commit` or `last_used`.
+    fn take_for_sweep(&self, id: &str) -> Result<Option<rows::Tree>> {
         let locked = self.lock();
+        let Some(row) = store::get(&locked.db, id).map_err(|e| store_error(&e))? else {
+            return Ok(None);
+        };
+        if row.state != store::State::Free.as_str() {
+            return Ok(None);
+        }
         let taken = store::lease(
             &locked.db,
-            &row.id,
+            id,
             store::State::Resetting,
             None,
             None,

@@ -580,6 +580,58 @@ fn replaced_builds_are_swept_and_then_the_free_trees_used_longest_ago_are_cleare
 }
 
 #[test]
+fn trees_over_the_limit_are_brought_under_it_and_a_leased_tree_is_left_alone() {
+    let f = Fixture::new(3, 1);
+    for tree in ["tree-01", "tree-02", "tree-03"] {
+        write(
+            &f.repo.join(".worktrees").join(tree),
+            "out/big",
+            &"x".repeat(200_000),
+        );
+    }
+    let one_tree = f
+        .trees
+        .disk_usage()
+        .into_iter()
+        .map(|(_, b)| b)
+        .max()
+        .unwrap();
+
+    let mut config = f.trees.config().clone();
+    // Room for two and a half trees' builds, with three holding them.
+    config.disk_limit = Some(one_tree * 2 + one_tree / 2);
+    let limited = Trees::new(
+        config,
+        open_in_memory().unwrap(),
+        Arc::new(FakeClock::new(
+            Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
+        )),
+        f.builds.clone(),
+    );
+    limited.setup(&f.tip()).unwrap();
+    let leased = match limited.lease(f.request("T.1", false)).unwrap() {
+        Lease::Ready(lease) => lease,
+        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
+    };
+
+    let report = limited.hold_disk().unwrap();
+
+    assert!(report.before > report.limit.unwrap());
+    assert!(report.after <= report.limit.unwrap(), "{report:?}");
+    assert!(!report.cleared.is_empty());
+    assert!(!report.cleared.contains(&leased.tree));
+    assert!(leased.path.join("out/big").exists());
+    let states: Vec<String> = limited
+        .status()
+        .unwrap()
+        .trees
+        .into_iter()
+        .map(|t| t.state)
+        .collect();
+    assert!(!states.iter().any(|s| s == "resetting"), "{states:?}");
+}
+
+#[test]
 fn setup_frees_a_landing_tree_left_landing_by_a_stopped_daemon() {
     let f = Fixture::new(1, 1);
     let leased = f

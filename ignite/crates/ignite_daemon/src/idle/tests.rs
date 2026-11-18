@@ -25,9 +25,12 @@ use super::{AuditVerb, Idle, IdleHost, IdleJob, IdleSettings, RebuildVerb, Reran
 use crate::checks::HitSink;
 use crate::server::{Context, Verb};
 use crate::testhub::SpyHub;
+use crate::trees::DiskReport;
 
 #[path = "backoff_tests.rs"]
 mod backoff;
+#[path = "disk_tests.rs"]
+mod disk;
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 
@@ -88,6 +91,8 @@ struct Host {
     dir: PathBuf,
     busy: AtomicBool,
     between: AtomicUsize,
+    /// How many times the disk was held.
+    held: AtomicUsize,
     leased: Mutex<Vec<Commit>>,
     released: Mutex<Vec<(TreeId, Option<Commit>)>>,
 }
@@ -111,6 +116,11 @@ impl IdleHost for Arc<Host> {
 
     fn commits_between(&self, _from: &Commit, _to: &Commit) -> Result<usize> {
         Ok(self.between.load(Ordering::SeqCst))
+    }
+
+    fn hold_disk(&self) -> Result<DiskReport> {
+        self.held.fetch_add(1, Ordering::SeqCst);
+        Ok(DiskReport::default())
     }
 }
 
@@ -253,6 +263,7 @@ impl Fixture {
             dir: tree.clone(),
             busy: AtomicBool::new(false),
             between: AtomicUsize::new(0),
+            held: AtomicUsize::new(0),
             leased: Mutex::new(Vec::new()),
             released: Mutex::new(Vec::new()),
         });

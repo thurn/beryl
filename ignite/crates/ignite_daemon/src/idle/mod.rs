@@ -16,9 +16,13 @@
 //! Reports for the hub wait in the state file until the hub takes them. A job that fails waits
 //! longer before each new attempt, and is reported to the hub after a few failures (see
 //! [`backoff`]).
+//!
+//! Holding the trees under their disk limit is not a job: the idle loop calls
+//! [`Idle::hold_disk`] every round, which measures at most every ten minutes.
 
 mod audit;
 mod backoff;
+mod disk;
 mod explore;
 mod rebuild;
 mod state;
@@ -33,13 +37,15 @@ use ignite_core::ids::{CheckName, Commit, RecordId, TreeId};
 use ignite_core::manifest::{Kind, Manifest, Platforms};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::{Class, Outcome};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Result};
 
 use crate::checks::{Checks, RunOptions};
 use crate::server::{Context, Verb};
-use crate::trees::Trees;
+use crate::trees::{DiskReport, Trees};
 
 pub use audit::AuditSummary;
+pub use disk::DISK_EVERY;
 pub use rebuild::RebuildCount;
 use state::{Report, State};
 
@@ -60,6 +66,8 @@ pub trait IdleHost: Send + Sync {
     fn release(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
     /// How many commits `to` has that `from` does not.
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize>;
+    /// Deletes build directories until the trees are under their disk limit.
+    fn hold_disk(&self) -> Result<DiskReport>;
 }
 
 /// Runs one check again in a tree without asking the cache. [`Checks`] is the real one.
@@ -123,6 +131,10 @@ impl IdleHost for LiveHost {
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize> {
         Ok(ignite_git::refs::commits_between(&self.repo, from, to)?.len())
     }
+
+    fn hold_disk(&self) -> Result<DiskReport> {
+        self.trees.hold_disk()
+    }
 }
 
 /// What the idle work is configured with.
@@ -157,6 +169,8 @@ pub struct Idle {
     /// Held while a job runs, so that `ignite rebuild` and the idle loop never edit one tree
     /// at once.
     work: Mutex<()>,
+    /// When the trees' disk use was last measured, which [`Idle::hold_disk`] limits.
+    disk_held: Mutex<Option<Timestamp>>,
 }
 
 /// The number of commits the verified commit moves before each rebuild edit is measured again.
@@ -188,6 +202,7 @@ impl Idle {
             state: Mutex::new(state),
             shares: Mutex::new(Vec::new()),
             work: Mutex::new(()),
+            disk_held: Mutex::new(None),
         })
     }
 
