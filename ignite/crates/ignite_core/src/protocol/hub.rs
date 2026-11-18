@@ -111,6 +111,11 @@ pub struct MachineFree {
     /// from the machine's registration.
     #[serde(default)]
     pub name: Option<String>,
+    /// Offer only justiciar tickets. A daemon asks this way for its last idle worker while its
+    /// pool has more than one, so a pool whose other workers all hold stuck tickets still has
+    /// a worker for the justiciar ticket that would free them.
+    #[serde(default)]
+    pub justiciar_only: bool,
 }
 
 /// A ticket reserved for one machine and session until `expires_at`.

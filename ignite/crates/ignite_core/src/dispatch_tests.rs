@@ -31,6 +31,7 @@ fn machine(workers: Vec<IdleWorker>) -> MachineFree {
         free_cores: 8.0,
         families: Vec::new(),
         name: None,
+        justiciar_only: false,
     }
 }
 
@@ -76,6 +77,20 @@ fn a_regression_goes_first_and_skips_the_cores_test() {
     let ready = [ticket("To1", None), regression];
     let answer = next_for(&free, &ready, &ALL, Some(Unit::Dollars), &[]);
     assert_eq!(ticket_of(answer), Some("Tr1".to_owned()));
+}
+
+#[test]
+fn a_worker_kept_for_the_justiciar_takes_nothing_else() {
+    let mut free = everyone();
+    free.justiciar_only = true;
+    let mut regression = ticket("Tr1", None);
+    regression.kind = TicketKind::Regression;
+    let ready = [regression.clone(), ticket("To1", None)];
+    assert_eq!(next_for(&free, &ready, &ALL, None, &[]), None);
+    let justiciar = with_labels(ticket("Tj1", None), &["justiciar"]);
+    let ready = [regression, ticket("To1", None), justiciar];
+    let answer = next_for(&free, &ready, &ALL, None, &[]);
+    assert_eq!(ticket_of(answer), Some("Tj1".to_owned()));
 }
 
 #[test]

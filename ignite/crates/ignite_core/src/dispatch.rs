@@ -189,6 +189,17 @@ pub fn next_for(
         .filter(|t| t.labels.iter().any(|l| l == JUSTICIAR))
         .collect();
     justiciar.sort_by(|a, b| queue_order(a, b));
+    if free.justiciar_only {
+        return justiciar
+            .into_iter()
+            .filter(|ticket| machine_fits(free, ticket))
+            .find_map(|ticket| {
+                pick_worker(free, ticket, last_files).map(|session| Handoff {
+                    ticket: ticket.id.clone(),
+                    session,
+                })
+            });
+    }
     let mut regressions: Vec<&ReadyTicket> = ready
         .iter()
         .filter(|t| t.kind == TicketKind::Regression)

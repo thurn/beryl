@@ -14,6 +14,7 @@ use ignite_core::time::Timestamp;
 use super::{Dispatcher, Purpose, Reserved, State, label, model_for};
 use crate::pool::Member;
 use crate::server::Context;
+use ignite_core::protocol::hub::WorkerRole;
 
 /// A ticket the hub reserved for a worker, with the ticket's details if they could be read.
 type Offer = (Reservation, String, Option<TicketDetail>);
@@ -22,6 +23,8 @@ type Offer = (Reservation, String, Option<TicketDetail>);
 struct Asking {
     idle: Vec<Member>,
     trees: u32,
+    /// The pool's workers that are not down, idle or not.
+    workers: usize,
 }
 
 /// Clears the flag that says a step is asking the hub, however the step ends.
@@ -160,7 +163,15 @@ impl Dispatcher {
             return None;
         }
         state.asking_hub = true;
-        Some(Asking { idle, trees })
+        let workers = members
+            .iter()
+            .filter(|m| m.role == WorkerRole::Worker && !m.down)
+            .count();
+        Some(Asking {
+            idle,
+            trees,
+            workers,
+        })
     }
 
     /// Asks the hub for tickets while workers are idle and ticket trees are free, and reads
@@ -169,6 +180,7 @@ impl Dispatcher {
         let Asking {
             mut idle,
             mut trees,
+            workers,
         } = asking;
         let mut offers = Vec::new();
         while !idle.is_empty() && trees > 0 {
@@ -187,6 +199,8 @@ impl Dispatcher {
                 free_cores: self.host.free_cores(),
                 families: self.setup.families.clone(),
                 name: None,
+                // The last idle worker of a pool of several is kept for justiciar tickets.
+                justiciar_only: idle.len() == 1 && workers > 1,
             };
             let Ok(Some(reservation)) = ctx.hub.next(&free) else {
                 break;
