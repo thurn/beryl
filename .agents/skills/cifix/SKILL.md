@@ -1,6 +1,6 @@
 ---
 name: cifix
-description: Beryl's guide to working a ticket about a check — a regression that tip verification found on staging, a flaky or hung check, or a check that costs much and never catches anything. Adds what is Beryl's to `ignite guide regression` and `ignite guide checks`: where to reproduce, what a fix must add, the order of remedies, protected checks and what must still cover a deleted browser check. Use when working such a ticket, or when asked to fix a failing, flaky or costly check, or to run /cifix.
+description: Beryl's guide to working a ticket about a check — a regression that tip verification found on staging, a flaky or hung check, or a check that costs much and never catches anything. Adds what is Beryl's to `ignite guide regression` and `ignite guide flaky-checks`: where to reproduce, what a fix must add, the order of remedies, protected checks and what must still cover a deleted browser check. Use when working such a ticket, or when asked to fix a failing, flaky or costly check, or to run /cifix.
 ---
 
 # Fixing a check or what it caught
@@ -9,9 +9,9 @@ Ignite files tickets about checks by itself: a regression ticket when tip
 verification finds a check failing on `staging`, naming the commit or range it
 blames, and an improvement ticket for a check that flakes, hangs or costs much
 and never catches anything. `ignite start` on such a ticket names the guide to
-read first. `ignite guide regression` and `ignite guide checks` hold the general
-rules, and `ignite why <check>` prints a check's record: its runs, costs,
-failures and where it runs. This skill adds only what is Beryl's.
+read first. `ignite guide regression` and `ignite guide flaky-checks` hold the
+general rules, and `ignite why <check>` prints a check's record: its runs,
+costs, failures and where it runs. This skill adds only what is Beryl's.
 
 Each check family is declared in `ignite/checks/*.toml`, with the reason for
 each setting in a comment beside it. Read the family's declaration before

@@ -47,7 +47,7 @@ pub const TOPICS: &[Topic] = &[
         text: include_str!("regression.txt"),
     },
     Topic {
-        name: "checks",
+        name: "flaky-checks",
         summary: "a flaky, hung or never-catching check",
         text: include_str!("checks.txt"),
     },
@@ -73,8 +73,15 @@ pub const TOPICS: &[Topic] = &[
     },
 ];
 
-/// The topic called `name`.
+/// Names that older instructions still use for a topic, as (old name, current name).
+const ALIASES: &[(&str, &str)] = &[("checks", "flaky-checks")];
+
+/// The topic called `name`, or whose alias in [`ALIASES`] is `name`.
 pub fn topic(name: &str) -> Option<&'static Topic> {
+    let name = ALIASES
+        .iter()
+        .find(|(old, _)| *old == name)
+        .map_or(name, |(_, current)| current);
     TOPICS.iter().find(|topic| topic.name == name)
 }
 

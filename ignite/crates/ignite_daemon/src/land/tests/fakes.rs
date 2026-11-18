@@ -18,7 +18,9 @@ use ignite_core::protocol::hub::{
     RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
     TipClaimReply, TipVerified,
 };
-use ignite_core::protocol::tickets::{FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply};
+use ignite_core::protocol::tickets::{
+    FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, TicketDetail,
+};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Push, Rebase, Result};
 
@@ -286,6 +288,9 @@ impl Hub for LeaseHub {
     }
     fn claim(&self, claim: &Claim) -> Result<TicketBrief> {
         self.hub.claim(claim)
+    }
+    fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
+        self.hub.ticket(id)
     }
     fn landed(&self, landed: &Landed) -> Result<()> {
         if self.landed_down.load(Ordering::SeqCst) {

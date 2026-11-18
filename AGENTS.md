@@ -140,8 +140,8 @@ situation, and a command names the topic when it applies.
 Ignite's checks are declared in `ignite/checks/*.toml`, one family per kind of
 check, with the reason for each setting in a comment beside it. `ignite test`
 runs the checks you name, and `ignite check` runs what the landing gate would.
-`ignite guide checks` holds the general rules for a ticket about a check, and
-the `cifix` skill adds Beryl's.
+`ignite guide flaky-checks` holds the general rules for a ticket about a check,
+and the `cifix` skill adds Beryl's.
 
 A phone UI state is a shot in `ui/shots.json` with `?phone` in its route at both
 393×759 and 375×647. The shot checks include `phoneFaults` for text and touch

@@ -52,8 +52,11 @@ pub fn prime(config: &Config) -> String {
     let mut text = format!(
         "\
 # Ignite workflow
-Claim with `ignite start <ticket>`, edit in the tree it prints, land to `{staging}` with
-`ignite land -m <note>`. Every command prints a verdict first and a `next` line last.
+Claim with `ignite start <ticket>`, edit in the tree it prints, commit there (`land` refuses
+uncommitted files), run `ignite check`, then land to `{staging}` with `ignite land -m <note>`.
+`ignite check` is all a plain change needs before landing; `ignite guide flaky-checks` is for a
+flaky, hung or never-catching check. Every command prints a verdict first and a `next` line
+last.
 
 ## Rules
 - Nobody answers questions. Decide, act, and record the choice and its reason on the

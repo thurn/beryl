@@ -642,10 +642,7 @@ impl Landing {
             lines.push(release);
         }
         lines.extend(problems);
-        lines.push(line(
-            "title",
-            format!("✅ [{ticket}] and the summary that ignite start gave"),
-        ));
+        lines.push(line("title", done_title(ctx, ticket)));
         lines.push(line("next", "nothing; wait for your next ticket"));
         let budget = summary.and_then(|s| s.gated.budget.as_ref());
         Reply {
@@ -758,5 +755,18 @@ fn failed_gate(staging: &str, rebased: &Rebased, gated: &GateRun, gate_path: &Pa
             })).collect::<Vec<_>>(),
         })),
         handle: None,
+    }
+}
+
+/// The session title for a landed ticket: `✅ [<ticket>] <ticket title>`, the title that
+/// `ignite start` printed with its working emoji. When the hub cannot be asked, only the ticket
+/// ID follows the emoji.
+fn done_title(ctx: &Context, ticket: &TicketId) -> String {
+    match ctx.hub.ticket(ticket) {
+        Ok(detail) => {
+            let title = detail.ticket.title.lines().next().unwrap_or("").trim();
+            format!("✅ [{ticket}] {title}")
+        }
+        Err(_) => format!("✅ [{ticket}]"),
     }
 }

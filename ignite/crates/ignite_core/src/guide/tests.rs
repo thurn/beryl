@@ -56,3 +56,10 @@ fn topic_names_are_unique() {
         );
     }
 }
+
+#[test]
+fn the_old_name_of_the_flaky_checks_topic_still_prints_it() {
+    let old = reply(Some("checks"));
+    assert_eq!(old.exit, Exit::Success);
+    assert_eq!(old.text, reply(Some("flaky-checks")).text);
+}

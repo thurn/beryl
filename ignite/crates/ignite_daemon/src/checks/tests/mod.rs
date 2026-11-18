@@ -323,7 +323,7 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
         families: None,
         toolchain: "1.0".to_owned(),
         outputs: dir.join("results"),
-        cores: 1,
+        cores: 4,
         ignite: "test".to_owned(),
         ignite_exe: PathBuf::from("/bin/ignite"),
         shims: dir.join("shims"),

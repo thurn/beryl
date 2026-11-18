@@ -196,3 +196,31 @@ fn a_nextest_run_records_its_test_processes_one_by_one() {
         ("core", "run")
     );
 }
+
+/// A landing waited for a full grant of cores before every command, even the `list` command
+/// that only prints a family's checks.
+#[test]
+fn a_list_command_asks_for_one_core_and_a_run_for_the_settings_cores() {
+    let world = jsonl_world();
+    assert!(run(&world, &["unit:a"]).passed());
+    let runs = world.launcher.runs.lock().unwrap().clone();
+    let cores_of = |program: &str| -> Vec<u32> {
+        runs.iter()
+            .filter(|s| s.args[0] == program)
+            .map(|s| s.cores)
+            .collect()
+    };
+    assert_eq!(cores_of("lister"), [1]);
+    assert_eq!(cores_of("runner"), [world.checks.settings.cores]);
+}
+
+#[test]
+fn a_gate_run_that_is_entirely_cached_launches_no_command() {
+    let world = jsonl_world();
+    assert!(run(&world, &["unit:a"]).passed());
+    let launched = world.launcher.runs.lock().unwrap().len();
+    let again = run(&world, &["unit:a"]);
+    assert!(again.passed());
+    assert_eq!(again.from_cache, 1, "{again:?}");
+    assert_eq!(world.launcher.runs.lock().unwrap().len(), launched);
+}

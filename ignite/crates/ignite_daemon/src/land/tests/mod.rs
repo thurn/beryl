@@ -602,3 +602,51 @@ fn a_malformed_record_is_moved_aside_and_the_others_are_still_delivered() {
     assert!(!world.records.join("a.1.json").exists());
     assert!(world.landing.records.all().unwrap().is_empty());
 }
+
+/// The ticket as the hub stores it, with `title`.
+fn ticket_titled(id: &str, title: &str) -> ignite_core::protocol::tickets::TicketDetail {
+    serde_json::from_value(serde_json::json!({
+        "id": id, "parent": null, "next_child": 1, "title": title,
+        "body": "", "type": "task", "status": "in_progress", "priority": 2,
+        "assignee": null, "labels": [], "defer_until": null, "close_reason": null,
+        "created_at": "2027-01-01T00:00:00.000Z", "created_by": "test",
+        "updated_at": "2027-01-01T00:00:00.000Z", "closed_at": null, "version": 1,
+        "session": null, "edges": [], "children": [], "ready": false, "blocked_by": [],
+    }))
+    .unwrap()
+}
+
+#[test]
+fn a_landing_prints_the_tickets_title_in_its_title_line() {
+    let world = world();
+    world
+        .hub
+        .hub
+        .insert_ticket(ticket_titled("t.1", "Fix the thing"));
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "a by t.1")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    let title = reply
+        .text
+        .lines()
+        .find(|l| l.trim_start().starts_with("title"))
+        .unwrap();
+    assert!(title.ends_with("✅ [t.1] Fix the thing"), "{title}");
+}
+
+#[test]
+fn a_landing_with_the_hub_unable_to_name_the_ticket_prints_only_its_id() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "a by t.1")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    let title = reply
+        .text
+        .lines()
+        .find(|l| l.trim_start().starts_with("title"))
+        .unwrap();
+    assert!(title.ends_with("✅ [t.1]"), "{title}");
+}
