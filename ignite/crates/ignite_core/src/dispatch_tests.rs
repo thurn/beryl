@@ -79,6 +79,16 @@ fn a_regression_goes_first_and_skips_the_cores_test() {
 }
 
 #[test]
+fn a_justiciar_ticket_goes_before_a_regression() {
+    let mut regression = ticket("Tr1", None);
+    regression.kind = TicketKind::Regression;
+    let justiciar = with_labels(ticket("Tj1", None), &["justiciar"]);
+    let ready = [regression, ticket("To1", None), justiciar];
+    let answer = next_for(&everyone(), &ready, &ALL, None, &[]);
+    assert_eq!(ticket_of(answer), Some("Tj1".to_owned()));
+}
+
+#[test]
 fn an_improvement_goes_next_only_while_under_its_share() {
     let mut improvement = ticket("Ti1", None);
     improvement.kind = TicketKind::Improvement;

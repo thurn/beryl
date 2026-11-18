@@ -102,10 +102,17 @@ pub fn diagnostic(output: &str, host: &str) -> String {
         }
         i += 1;
     }
-    let chosen = if selected.is_empty() { lines } else { selected };
+    // Output in no recognized format is kept whole, so it is also normalized: a number, a
+    // temporary path or an ID in it would otherwise make every repeat of the fault look new.
+    let chosen: Vec<String> = if selected.is_empty() {
+        lines.into_iter().map(normalize_noise).collect()
+    } else {
+        selected.into_iter().map(str::to_owned).collect()
+    };
     let mut seen = std::collections::HashSet::new();
     let unique: Vec<&str> = chosen
-        .into_iter()
+        .iter()
+        .map(String::as_str)
         .filter(|line| seen.insert(*line))
         .collect();
     let mut text = unique.join("\n").trim().to_owned();
@@ -148,6 +155,76 @@ fn strip_colour(text: &str) -> String {
         }
     }
     out.push_str(rest);
+    out
+}
+
+/// The prefixes of paths that differ on every run.
+const TEMPORARY_PATHS: [&str; 5] = [
+    "/tmp/",
+    "/private/tmp/",
+    "/var/folders/",
+    "/private/var/",
+    "/var/tmp/",
+];
+
+/// A line of output in no recognized format with what changes between runs replaced:
+/// temporary paths become `<tmp>`, runs of more than three digits become `<n>`, hexadecimal
+/// words of seven or more characters that contain a digit become `<hex>`, and the number after
+/// `pid` or `seed` becomes `<n>`.
+fn normalize_noise(line: &str) -> String {
+    let mut previous = String::new();
+    let words: Vec<String> = line
+        .split(' ')
+        .map(|word| {
+            let key = word.trim_end_matches(['=', ':']).to_ascii_lowercase();
+            let bare = word.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '/');
+            let lower = word.to_ascii_lowercase();
+            let after_name = matches!(previous.as_str(), "pid" | "seed")
+                && bare.chars().all(|c| c.is_ascii_alphanumeric());
+            let replaced = if TEMPORARY_PATHS.iter().any(|p| bare.starts_with(p)) {
+                "<tmp>".to_owned()
+            } else if after_name {
+                "<n>".to_owned()
+            } else if let Some(name) = ["pid", "seed"].iter().find(|n| {
+                lower.starts_with(&format!("{n}=")) || lower.starts_with(&format!("{n}:"))
+            }) {
+                format!("{name}=<n>")
+            } else if bare.len() >= 7
+                && bare.chars().all(|c| c.is_ascii_hexdigit())
+                && bare.chars().any(|c| c.is_ascii_digit())
+            {
+                word.replacen(bare, "<hex>", 1)
+            } else {
+                long_numbers(word)
+            };
+            previous = key;
+            replaced
+        })
+        .collect();
+    words.join(" ")
+}
+
+/// Each run of more than three digits becomes `<n>`.
+fn long_numbers(word: &str) -> String {
+    let mut out = String::with_capacity(word.len());
+    let mut digits = String::new();
+    let flush = |out: &mut String, digits: &mut String| {
+        if digits.len() > 3 {
+            out.push_str("<n>");
+        } else {
+            out.push_str(digits);
+        }
+        digits.clear();
+    };
+    for c in word.chars() {
+        if c.is_ascii_digit() {
+            digits.push(c);
+        } else {
+            flush(&mut out, &mut digits);
+            out.push(c);
+        }
+    }
+    flush(&mut out, &mut digits);
     out
 }
 
@@ -286,6 +363,31 @@ mod tests {
             diagnostic(output, ""),
             "FAULT shots:x overlap\n  at <address> and <address>\nOVER budget"
         );
+    }
+
+    #[test]
+    fn output_in_no_known_format_matches_across_runs() {
+        let run = |pid: u32, dir: &str, seed: u32, id: &str, ms: u32| {
+            diagnostic(
+                &format!(
+                    "starting pid {pid} in {dir}/work\nseed={seed} session {id}\n\
+                     took {ms}1234 ms, step 7 of 12 failed\n"
+                ),
+                "",
+            )
+        };
+        let first = run(81723, "/tmp/.tmpAbC123", 99, "3f9a1c7e2b", 5);
+        let second = run(
+            4412,
+            "/var/folders/zz/xy/T/.tmpQwE987",
+            123_456,
+            "0b8d4e6a1f",
+            6,
+        );
+        assert_eq!(first, second);
+        assert!(first.contains("step 7 of 12 failed"), "{first}");
+        let other = diagnostic("starting pid 1 in /tmp/x/work\nstep 8 of 12 failed", "");
+        assert_ne!(first, other);
     }
 
     #[test]

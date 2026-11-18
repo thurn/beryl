@@ -7,7 +7,8 @@
 //!   `version`, with a history row of `{field: [old, new]}`. Comments and edges take a position
 //!   too but leave the version alone, as in the ticket service.
 //! - An operation's `id` may be `$<index>`, the ticket that the create at that index made.
-//! - Closing a ticket closes each ancestor left with no live descendant.
+//! - Closing a ticket closes each ancestor left with no live descendant, and marks the finding
+//!   filed for any of them closed.
 //! - At the end, `meta.seq` moves to the last position used, and the feed gets one change per
 //!   ticket touched, at that position.
 
@@ -25,7 +26,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 
-use crate::hub::{cycles, edges, feed, tickets};
+use crate::hub::{cycles, edges, feed, findings, tickets};
 use crate::{Result, StoreError};
 
 /// The outcome of a batch: applied, or refused at one precondition or operation.
@@ -597,6 +598,10 @@ impl<'a> Run<'a> {
             .collect();
         self.history(before.id.as_str(), &change)?;
         self.changed.insert(before.id.to_string());
+        if patch.get("status") == Some(&json!(Status::Closed)) {
+            // Whoever closes the ticket, an improvement's finding for it is then closed too.
+            findings::close_ticket(self.conn, before.id.as_str(), self.now)?;
+        }
         Ok(())
     }
 

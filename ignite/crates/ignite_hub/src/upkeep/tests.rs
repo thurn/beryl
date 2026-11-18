@@ -345,7 +345,7 @@ fn two_finds_with_one_signature_give_one_ticket_and_one_comment() {
 
     let filed = ticket(&conn, &first.ticket);
     assert_eq!(filed.priority, 2);
-    assert_eq!(filed.labels, vec!["found-by:fuzz"]);
+    assert_eq!(filed.labels, vec!["found-by:fuzz", "hub"]);
     assert!(filed.body.contains("replay: ignite test fuzz:seed-17"));
     assert_eq!(comment_count(&conn, &first.ticket), 1);
     assert_eq!(all_tickets(&conn, clock.now()).len(), 1);

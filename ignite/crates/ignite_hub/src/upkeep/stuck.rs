@@ -6,7 +6,11 @@
 //! - a tip that has waited an hour while a machine has not reported, or for checks that only
 //!   machines of another operating system can run;
 //! - an epic with open tickets of which none is ready or in progress, nor waits directly on a
-//!   ticket that is.
+//!   ticket that is. A ready ticket that no machine can take (its `needs:` label names no
+//!   registered machine or operating system, or is `needs:person`) does not count as ready;
+//! - a loop of tickets that wait on one another and are under no epic;
+//! - a ticket held in progress for more than six hours, which is reported for the justiciar to
+//!   look at.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,7 +20,9 @@ use ignite_core::ids::{CheckName, TicketId};
 use ignite_core::protocol::hub::{
     AuditReport, CheckState, IncompleteReason, IncompleteReport, TipWaiting,
 };
-use ignite_core::protocol::tickets::{Graph, GraphTicket, Status, TicketFields, TicketType};
+use ignite_core::protocol::tickets::{
+    EdgeKind, Graph, GraphTicket, Status, TicketFields, TicketType,
+};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{checks, fleet, tickets};
@@ -104,7 +110,6 @@ pub fn audit(
     now: Timestamp,
 ) -> Result<Filed> {
     let check = report.key.check.as_str();
-    checks::set_state(conn, check, CheckState::Uncached)?;
     let platform = report.key.platform.map_or("any platform", |os| os.as_str());
     let body = format!(
         "A rerun of a cache hit disagreed with the cache, so caching is switched off for \
@@ -140,7 +145,10 @@ pub fn audit(
         },
         deps: Vec::new(),
     };
-    filing::file(conn, author, &filing, now)
+    // The ticket comes first, so a failure to file never leaves caching off with nobody told.
+    let filed = filing::file(conn, author, &filing, now)?;
+    checks::set_state(conn, check, CheckState::Uncached)?;
+    Ok(filed)
 }
 
 /// Files one ticket for each machine that has not reported since a tip that has now waited an
@@ -279,14 +287,36 @@ pub fn tip_waiting(
     Ok(filed)
 }
 
-/// Files one ticket for each epic whose open tickets are all blocked. Of nested stuck epics,
-/// only the innermost is reported, since the outer one waits on it.
+/// How long a ticket may stay in progress before a ticket reports it, in seconds.
+pub const HELD_SECONDS: f64 = 6.0 * 3_600.0;
+
+/// The label on a ticket for the justiciar to look at.
+const JUSTICIAR: &str = ignite_core::dispatch::JUSTICIAR;
+
+/// The names that a `needs:` label can ask for and some registered machine has: each machine's
+/// operating system and name.
+fn machine_names(conn: &Connection) -> Result<BTreeSet<String>> {
+    let mut known = BTreeSet::new();
+    for machine in fleet::machines(conn)? {
+        known.insert(machine.os);
+        known.insert(machine.name);
+    }
+    Ok(known)
+}
+
+/// Files one ticket for each epic whose open tickets are all blocked, one for each loop of
+/// tickets under no epic that wait on one another, and one for each ticket held in progress for
+/// more than six hours. Of nested stuck epics, only the innermost is reported, since the outer
+/// one waits on it.
 pub fn stuck_epics(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let graph = tickets::graph(conn, false, now)?;
-    let filings: Vec<Filing> = find_stuck(&graph, now)
+    let known = machine_names(conn)?;
+    let mut filings: Vec<Filing> = find_stuck(&graph, now, &known)
         .into_iter()
         .map(|(epic, lines)| epic_filing(&epic, &lines))
         .collect();
+    filings.extend(find_cycles(&graph).iter().map(|cycle| cycle_filing(cycle)));
+    filings.extend(find_held(&graph, now).iter().map(held_filing));
     let mut filed = Vec::with_capacity(filings.len());
     for filing in &filings {
         filed.push(filing::file(conn, UPKEEP, filing, now)?);
@@ -294,8 +324,34 @@ pub fn stuck_epics(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> 
     Ok(filed)
 }
 
+/// Whether some registered machine could take a ticket with these labels: every `needs:` label
+/// names a known machine or operating system, and none is `needs:person`.
+fn takeable(labels: &[String], known: &BTreeSet<String>) -> bool {
+    labels
+        .iter()
+        .filter_map(|label| label.strip_prefix("needs:"))
+        .all(|need| need != "person" && known.contains(need))
+}
+
+/// The `needs:` labels of a ticket that no registered machine meets.
+fn unmet(labels: &[String], known: &BTreeSet<String>) -> Vec<String> {
+    labels
+        .iter()
+        .filter(|label| {
+            label
+                .strip_prefix("needs:")
+                .is_some_and(|need| need == "person" || !known.contains(need))
+        })
+        .cloned()
+        .collect()
+}
+
 /// Each innermost stuck epic, with a line per waiting ticket saying what it waits on.
-fn find_stuck(graph: &Graph, now: Timestamp) -> Vec<(String, Vec<String>)> {
+fn find_stuck(
+    graph: &Graph,
+    now: Timestamp,
+    known: &BTreeSet<String>,
+) -> Vec<(String, Vec<String>)> {
     let parents: BTreeMap<&str, Option<&str>> = graph
         .tickets
         .iter()
@@ -312,11 +368,14 @@ fn find_stuck(graph: &Graph, now: Timestamp) -> Vec<(String, Vec<String>)> {
         })
     };
     // A ticket can move when it is ready, in progress, or waits directly on one that is: a
-    // ticket outside the epic that someone is working on unblocks it in time.
+    // ticket outside the epic that someone is working on unblocks it in time. A ready ticket
+    // that no machine can take, or that waits for a person, does not move.
     let active: BTreeSet<&str> = graph
         .tickets
         .iter()
-        .filter(|t| t.ready || t.ticket.status == Status::InProgress)
+        .filter(|t| {
+            t.ticket.status == Status::InProgress || (t.ready && takeable(&t.ticket.labels, known))
+        })
         .map(|t| t.ticket.id.as_str())
         .collect();
     // For each ancestor: its waiting tickets, and whether any of its tickets can move.
@@ -360,8 +419,15 @@ fn find_stuck(graph: &Graph, now: Timestamp) -> Vec<(String, Vec<String>)> {
             let lines = waiting[epic]
                 .iter()
                 .map(|entry| {
-                    let by: Vec<String> =
+                    let mut by: Vec<String> =
                         entry.blocked_by.iter().map(|b| b.id.to_string()).collect();
+                    by.extend(unmet(&entry.ticket.labels, known).into_iter().map(|label| {
+                        if label == "needs:person" {
+                            "a person (needs:person)".to_owned()
+                        } else {
+                            format!("{label}, which no registered machine has")
+                        }
+                    }));
                     let by = if by.is_empty() {
                         "nothing listed".to_owned()
                     } else {
@@ -392,6 +458,174 @@ fn epic_filing(epic: &str, lines: &[String]) -> Filing {
             ticket_type: Some(TicketType::Task),
             priority: Some(1),
             labels: Some(vec!["graph-repair".to_owned()]),
+            ..TicketFields::default()
+        },
+        deps: Vec::new(),
+    }
+}
+
+/// Each loop of live tickets that wait on one another through `blocks`, `conditional-blocks` or
+/// `waits-for` edges, among tickets none of which has an epic above it (an epic's own graph is
+/// reported with the epic). Each loop is its tickets in order of ID.
+fn find_cycles(graph: &Graph) -> Vec<Vec<String>> {
+    let parents: BTreeMap<&str, Option<&str>> = graph
+        .tickets
+        .iter()
+        .map(|t| {
+            (
+                t.ticket.id.as_str(),
+                t.ticket.parent.as_ref().map(TicketId::as_str),
+            )
+        })
+        .collect();
+    let types: BTreeMap<&str, TicketType> = graph
+        .tickets
+        .iter()
+        .map(|t| (t.ticket.id.as_str(), t.ticket.ticket_type))
+        .collect();
+    let under_epic = |id: &str| {
+        std::iter::successors(parents.get(id).copied().flatten(), |up| {
+            parents.get(up).copied().flatten()
+        })
+        .any(|up| types.get(up) == Some(&TicketType::Epic))
+    };
+    let mut forward: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    let mut backward: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for edge in &graph.edges {
+        let blocks = matches!(
+            edge.kind,
+            EdgeKind::Blocks | EdgeKind::ConditionalBlocks | EdgeKind::WaitsFor
+        );
+        let (src, dst) = (edge.src.as_str(), edge.dst.as_str());
+        if blocks && parents.contains_key(src) && parents.contains_key(dst) {
+            forward.entry(src).or_default().push(dst);
+            backward.entry(dst).or_default().push(src);
+        }
+    }
+    // Kosaraju's algorithm, with explicit stacks so that a long chain cannot overflow.
+    let mut order: Vec<&str> = Vec::new();
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for &start in forward.keys() {
+        if !seen.insert(start) {
+            continue;
+        }
+        let mut stack = vec![(start, 0_usize)];
+        while let Some((node, next)) = stack.pop() {
+            let nexts = forward.get(node).map_or(&[][..], Vec::as_slice);
+            if let Some(&child) = nexts.get(next) {
+                stack.push((node, next + 1));
+                if seen.insert(child) {
+                    stack.push((child, 0));
+                }
+            } else {
+                order.push(node);
+            }
+        }
+    }
+    let mut assigned: BTreeSet<&str> = BTreeSet::new();
+    let mut loops: Vec<Vec<String>> = Vec::new();
+    for &root in order.iter().rev() {
+        if !assigned.insert(root) {
+            continue;
+        }
+        let mut component = vec![root];
+        let mut stack = vec![root];
+        while let Some(node) = stack.pop() {
+            for &before in backward.get(node).into_iter().flatten() {
+                if assigned.insert(before) {
+                    component.push(before);
+                    stack.push(before);
+                }
+            }
+        }
+        let alone =
+            component.len() == 1 && !forward.get(root).is_some_and(|nexts| nexts.contains(&root));
+        if !alone && !component.iter().any(|id| under_epic(id)) {
+            let mut ids: Vec<String> = component.into_iter().map(str::to_owned).collect();
+            ids.sort();
+            loops.push(ids);
+        }
+    }
+    loops.sort();
+    loops
+}
+
+fn cycle_filing(cycle: &[String]) -> Filing {
+    let names = cycle.join(", ");
+    Filing {
+        signature: Signature::of_subject(&names, "stuck-cycle"),
+        evidence: "cycle".to_owned(),
+        fields: TicketFields {
+            title: Some(format!("Repair the graph: {names} wait on one another")),
+            body: Some(format!(
+                "These tickets are under no epic and wait on one another in a loop, so none of                  them can ever become ready: {names}. Remove an edge that need not hold, or                  close or split a ticket in the loop."
+            )),
+            ticket_type: Some(TicketType::Task),
+            priority: Some(1),
+            labels: Some(vec!["graph-repair".to_owned()]),
+            ..TicketFields::default()
+        },
+        deps: Vec::new(),
+    }
+}
+
+/// A ticket in progress for more than [`HELD_SECONDS`].
+struct Held {
+    ticket: String,
+    title: String,
+    hours: u64,
+    session: String,
+    machine: String,
+}
+
+fn find_held(graph: &Graph, now: Timestamp) -> Vec<Held> {
+    graph
+        .tickets
+        .iter()
+        .filter(|entry| entry.ticket.status == Status::InProgress)
+        .filter_map(|entry| {
+            let ticket = &entry.ticket;
+            let held = now.seconds_since(ticket.claimed_at?);
+            (held > HELD_SECONDS).then(|| Held {
+                ticket: ticket.id.to_string(),
+                title: ticket.title.clone(),
+                hours: (held / 3_600.0) as u64,
+                session: ticket
+                    .session
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .or_else(|| ticket.assignee.clone())
+                    .unwrap_or_else(|| "unknown".to_owned()),
+                machine: ticket
+                    .machine
+                    .as_ref()
+                    .map_or_else(|| "unknown".to_owned(), ToString::to_string),
+            })
+        })
+        .collect()
+}
+
+fn held_filing(held: &Held) -> Filing {
+    let Held {
+        ticket,
+        title,
+        hours,
+        session,
+        machine,
+    } = held;
+    Filing {
+        signature: Signature::of_subject(ticket, "held"),
+        evidence: "held".to_owned(),
+        fields: TicketFields {
+            title: Some(format!(
+                "Ticket {ticket} has been in progress for {hours} hours"
+            )),
+            body: Some(format!(
+                "{ticket} ({title}) is held for {hours} hours by session {session} on machine                  {machine}. A session that stopped, a worker that lost the ticket or a ticket                  too large for one session leaves it so. Find out which, and release, split or                  finish the ticket."
+            )),
+            ticket_type: Some(TicketType::Task),
+            priority: Some(1),
+            labels: Some(vec![JUSTICIAR.to_owned()]),
             ..TicketFields::default()
         },
         deps: Vec::new(),

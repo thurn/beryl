@@ -34,8 +34,21 @@ use ignite_store::{Result, StoreError};
 use crate::rules;
 
 /// The labels of tickets the hub files itself, which are offered whether or not an epic is
-/// active: regressions, improvements and repairs to a machine.
-const HUB_FILED: [&str; 3] = ["regression", "improvement", "machine"];
+/// active. `hub` is on everything the hub files today (`upkeep::filing::HUB_LABEL`); the other
+/// labels are the ones tickets filed before it carry, and `justiciar` marks the judge's
+/// reports of faults in the system itself.
+const HUB_FILED: [&str; 10] = [
+    crate::upkeep::filing::HUB_LABEL,
+    "regression",
+    "improvement",
+    "machine",
+    "incomplete",
+    "cache-audit",
+    "graph-repair",
+    "fleet",
+    "flaky",
+    dispatch::JUSTICIAR,
+];
 
 /// The prefix of a label naming what a ticket needs: an operating system, a machine's name, or
 /// `person`.
@@ -52,8 +65,16 @@ pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Opt
     if fleet::paused(conn, machine)? {
         return Ok(None);
     }
+    // A worker of this machine that already holds a reservation is asking again because the
+    // reply to its earlier request was lost; it gets the same reservation, not another ticket
+    // and not nothing for ten minutes.
+    for worker in &free.idle_workers {
+        if let Some(held) = fleet::reservation_for_worker(conn, machine, worker.session.as_str())? {
+            return Ok(Some(held));
+        }
+    }
     let snapshot = Snapshot::load(conn, now)?;
-    // A worker already holding a reservation is waiting for its hand-off, so it is not idle.
+    // A worker holding a reservation for another machine is not idle.
     let waiting: HashSet<String> = snapshot.reserved.values().cloned().collect();
     let mut free = free.clone();
     free.idle_workers
@@ -223,6 +244,15 @@ impl Snapshot {
         shares::group_of(&ancestors)
     }
 
+    /// The cap on a group's workers: the smallest `max_workers` of the group's own ticket and
+    /// all its ancestors, so a cap on an outer epic limits the epics inside it.
+    fn cap(&self, id: &TicketId) -> Option<u32> {
+        std::iter::once(id.clone())
+            .chain(self.ancestors(id))
+            .filter_map(|id| self.nodes.get(&id).and_then(|node| node.max_workers))
+            .min()
+    }
+
     /// The longest chain of live tickets waiting behind `id`.
     fn chain(&self, id: &str, memo: &mut HashMap<String, u32>, path: &mut HashSet<String>) -> u32 {
         if let Some(&known) = memo.get(id) {
@@ -365,12 +395,13 @@ impl Snapshot {
         for ticket in ready {
             let group = ticket.epic.clone();
             let node = group.as_ref().and_then(|id| self.nodes.get(id));
+            let cap = group.as_ref().and_then(|id| self.cap(id));
             groups
                 .entry(group.clone())
                 .or_insert_with(|| EpicDemand {
                     epic: group,
                     workers: node.and_then(|n| n.workers),
-                    max_workers: node.and_then(|n| n.max_workers),
+                    max_workers: cap,
                     ready: 0,
                     held: 0,
                 })

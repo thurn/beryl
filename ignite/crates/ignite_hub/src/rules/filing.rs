@@ -84,7 +84,9 @@ pub fn evaluate(
     now: Timestamp,
 ) -> Result<Evaluation> {
     let mut evaluation = Evaluation::default();
-    conn.execute("DELETE FROM findings WHERE ticket IS NULL", [])?;
+    // The findings without a ticket are rebuilt at the end in one transaction, so a failure
+    // part way leaves the dashboard's earlier rows in place instead of a half-built set.
+    let mut unticketed: Vec<rows::Finding> = Vec::new();
     for rule in rules {
         for finding in rule.find(conn, now)? {
             let report_only = rule.report_only() || config.report_only.contains(&finding.rule);
@@ -97,7 +99,7 @@ pub fn evaluate(
             }
             let enough = minimum(&finding.unit).is_some_and(|least| finding.saving >= least);
             if report_only || !enough {
-                findings::upsert(conn, &row(&finding, None, None))?;
+                unticketed.push(row(&finding, None, None));
                 evaluation.reported.push(finding);
                 continue;
             }
@@ -106,6 +108,12 @@ pub fn evaluate(
             evaluation.filed.push(ticket);
         }
     }
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    tx.execute("DELETE FROM findings WHERE ticket IS NULL", [])?;
+    for finding in &unticketed {
+        findings::upsert(&tx, finding)?;
+    }
+    tx.commit()?;
     evaluation.measured = follow_up(conn, rules, now)?;
     Ok(evaluation)
 }
