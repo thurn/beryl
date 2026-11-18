@@ -356,6 +356,8 @@ on each later request:
 - No command needs polling. A command that would outlive the agent's tool
   timeout returns before it with a handle, a short name for the operation still
   running. `ignite wait <handle>` blocks until it finishes.
+  `ignite stop <handle>` ends a running command of the session's own. See
+  [Steering work in flight](#steering-work-in-flight).
 
 ```text
 $ ignite land -m "..."
@@ -684,13 +686,13 @@ replaces the Python token pool, the browser page slots and Enact's locks.
 A command asks for cores in one of five classes. A lower class starts nothing
 while a higher one waits:
 
-| Class   | Used by                                             |
-| ------- | --------------------------------------------------- |
-| `land`  | Landing gates                                       |
-| `agent` | Commands a worker runs itself, and tree prebuilds   |
-| `tip`   | Tip verification and finding a regression's culprit |
-| `batch` | Long experiments, such as AI tournaments            |
-| `idle`  | Exploration checks, cache audits, rebuild counts    |
+| Class   | Used by                                                                      |
+| ------- | ---------------------------------------------------------------------------- |
+| `land`  | Landing gates                                                                |
+| `agent` | Commands a worker runs itself, and the prebuild of a tree leased to a ticket |
+| `tip`   | Tip verification and finding a regression's culprit                          |
+| `batch` | Long experiments, such as AI tournaments                                     |
+| `idle`  | Exploration checks, cache audits, rebuild counts, keeping a free tree built  |
 
 Rules for cores:
 
@@ -1691,6 +1693,29 @@ Seeing that a worker is stuck:
   minutes, and a worker with no command for over 10 minutes, are both marked.
   The stall rule above acts only at 30 minutes of silence, and a session that
   sits in `ignite wait` is never silent.
+- Every running command records its current step: rebasing, listing a family,
+  building a product, running a number of checks, or waiting for the lease,
+  cores or another build. `ignite wait` prints the step and how long it has
+  lasted whenever it returns still running, and `ignite land` prints each step
+  as it starts. `ignite status` lists the running commands with handle, verb,
+  ticket, tree, class, age and step. It also lists what each background loop's
+  round is doing or waiting for. `ignite doctor` names that, and advises a
+  restart only for a round that names nothing.
+- Builds run in the class of the work that asked for them and are charged to its
+  ticket. A landing's builds are `land` work and tip verification's are `tip`
+  work. The free tree the idle loop keeps built is `idle` work.
+
+Stopping a command:
+
+- `ignite stop <handle>` ends a command the session started. Its processes are
+  ended, a wait for cores is withdrawn, and its cores, landing tree and lease
+  are given back. The handle ends `stopped` with exit code 3.
+- A landing whose push has begun refuses, because a cut-short push may or may
+  not have reached the remote.
+- `ignite close` and `ignite release` first stop every command still running
+  from the tree and wait for them. If one refuses or does not end, the tree
+  stays leased and the command says why.
+- A person stops a session's command by telling the session.
 
 Correcting a ticket so that it lasts:
 
