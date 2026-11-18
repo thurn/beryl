@@ -15,11 +15,12 @@ project = "by"
 # The old dashboard also answered at /beryl/; those page addresses redirect to /by/.
 aliases = ["beryl"]
 
-# Placeholder values until the switch replays 14 days of history to set them (docs/ignite.md,
-# "The threshold and the cap"). Only a commit changes them.
+# From `ignite gate replay` over the 14 days of history before 2026-11-17 (docs/ignite.md, "The
+# threshold and the cap"): this threshold keeps 6304 of the 6635 catches in that history. Only a
+# commit changes them.
 [gate]
-threshold = 0.004 # expected failures per billion instructions
-cap = 400         # billions of instructions per landing
+threshold = 9.99e-4 # expected failures per billion instructions
+cap = 6158          # billions of instructions per landing
 
 [improvement]
 min_share = 0.15
