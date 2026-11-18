@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::jobserver::read_cores;
 use super::{CORES, Run, SpecFile, SupervisedLauncher};
-use crate::sched::{Grant, Scheduler};
+use crate::sched::{Follow, Grant, Scheduler};
 
 /// Seconds an `idle` command has to exit after it is asked to, before its group is killed.
 pub const STOP_GRACE_S: f64 = 10.0;
@@ -25,6 +25,16 @@ pub struct GrantFile {
     /// `cores` file, which is read first.
     pub cores: u32,
     pub resources: Vec<String>,
+    /// The cores the command asked for, which a grant that follows its cores file grows to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asked: Option<u32>,
+    /// The grant kept its size in the run's `cores` file, which the command's jobserver
+    /// follows, so a restarted daemon must keep resizing it.
+    #[serde(default)]
+    pub follows: bool,
+    /// The command gives cores back while a higher class waits.
+    #[serde(default)]
+    pub shrinks: bool,
 }
 
 /// A grant that is released when this value is dropped, so that a panic between asking for
@@ -78,8 +88,16 @@ impl SupervisedLauncher {
             let held = self.scheduler.as_ref().and_then(|scheduler| {
                 let spec = run.spec()?;
                 let file = spec.grant?;
-                let cores = read_cores(&run.dir().join(CORES)).unwrap_or(file.cores);
-                let grant = scheduler.adopt(file.class, cores, file.resources, None);
+                let cores_file = run.dir().join(CORES);
+                let cores = read_cores(&cores_file).unwrap_or(file.cores);
+                // A grant that followed its cores file keeps growing and shrinking after the
+                // restart; without the file the command's jobserver would stay at this size.
+                let follow = file.follows.then(|| Follow {
+                    cores_file,
+                    asked: file.asked.unwrap_or(cores),
+                    shrinks: file.shrinks,
+                });
+                let grant = scheduler.adopt(file.class, cores, file.resources, None, follow);
                 if file.class == Class::Idle {
                     watch_for_stop(scheduler, grant.id, run.clone(), self.stop_grace_s);
                 }

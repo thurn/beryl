@@ -127,6 +127,8 @@ impl Ledger {
         cores: u32,
         resources: Vec<String>,
         memory_mb: Option<u64>,
+        grows_to: Option<u32>,
+        shrinks: bool,
     ) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -137,8 +139,8 @@ impl Ledger {
                 cores: cores.max(1),
                 resources,
                 memory_mb,
-                grows_to: None,
-                shrinks: false,
+                grows_to,
+                shrinks,
                 unseen_memory: false,
                 stopping: false,
             },

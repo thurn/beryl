@@ -89,6 +89,15 @@ pub struct GrantRequest {
     pub cores_file: Option<PathBuf>,
 }
 
+/// How an adopted grant keeps following its command after a daemon restart: the cores file its
+/// jobserver reads, the cores it asked for, and whether it gives cores back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Follow {
+    pub cores_file: PathBuf,
+    pub asked: u32,
+    pub shrinks: bool,
+}
+
 /// Cores and resources held until released with [`Scheduler::release`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Grant {
@@ -350,17 +359,32 @@ impl Scheduler {
         cores: u32,
         resources: Vec<String>,
         memory_mb: Option<u64>,
+        follow: Option<Follow>,
     ) -> Grant {
         let mut state = self.lock();
-        let id = state
-            .ledger
-            .adopt(class, cores, resources.clone(), memory_mb);
+        let grows_to = follow
+            .as_ref()
+            .map(|f| f.asked.clamp(1, state.ledger.limits().max_per_command()));
+        let shrinks = follow.as_ref().is_some_and(|f| f.shrinks);
+        let id = state.ledger.adopt(
+            class,
+            cores,
+            resources.clone(),
+            memory_mb,
+            grows_to,
+            shrinks,
+        );
+        let cores_file = follow.map(|f| f.cores_file);
+        if let Some(file) = &cores_file {
+            state.files.insert(id, file.clone());
+        }
+        self.advance(&mut state);
         Grant {
             id,
             cores: cores.max(1),
             resources,
             queued_s: 0,
-            cores_file: None,
+            cores_file,
         }
     }
 

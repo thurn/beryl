@@ -718,8 +718,9 @@ while a higher one waits:
 
 Rules for cores:
 
-- A command runs with as many threads as it was granted (`CARGO_BUILD_JOBS`,
-  `NEXTEST_TEST_THREADS`, `RUST_TEST_THREADS`, `IGNITE_CORES`).
+- A command starts with as many threads as it was granted
+  (`NEXTEST_TEST_THREADS`, `RUST_TEST_THREADS`, `IGNITE_CORES`). Where there is
+  no jobserver (on Windows), `CARGO_BUILD_JOBS` is the grant too.
 - One command takes at most two thirds of the machine's cores. Waiting commands
   of one class share what is free evenly.
 - The daemon reads the machine's total CPU use from the operating system about
@@ -750,11 +751,18 @@ Rules for cores:
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
   CPU for hours.
-- A grant can change while its command runs. A Cargo build that only compiles
-  runs under a jobserver its supervisor keeps at the grant's size, so it gives
-  cores back, one per second, while a higher class waits, and takes them again
-  afterwards. A command that can use more threads is told when its grant grows,
-  through the file `IGNITE_CORES_FILE` names.
+- A grant can change while its command runs. Every command runs under a
+  jobserver its supervisor keeps at the grant's size, whatever its first word,
+  so a Cargo build started inside `uv`, `just` or a script follows the grant
+  too. `CARGO_BUILD_JOBS` is then set to the most one command may hold, so the
+  jobserver, not the starting grant, limits the build. The grant grows to what
+  the command asked for as cores free up. Only a Cargo command that only
+  compiles gives cores back, one per second, while a higher class waits, and
+  takes them again afterwards. Test threads stay at the grant's first size. A
+  command that can use more threads is told when its grant grows, through the
+  file `IGNITE_CORES_FILE` names. A restarted daemon keeps resizing the grants
+  of the commands it takes over. Windows has no jobserver, so there a grant
+  keeps its first size.
 
 The daemon also records each command's peak memory, and delays a command whose
 usual peak (the median of its last nine runs) is more than the free memory,
@@ -1759,8 +1767,9 @@ Seeing that a worker is stuck:
 Stopping a command:
 
 - `ignite stop <handle>` ends a command the session started. Its processes are
-  ended, a wait for cores is withdrawn, and its cores, landing tree and lease
-  are given back. The handle ends `stopped` with exit code 3.
+  ended, a wait for cores or for another build is withdrawn (the build it waited
+  on runs on), and its cores, landing tree and lease are given back. The handle
+  ends `stopped` with exit code 3.
 - A landing whose push has begun refuses, because a cut-short push may or may
   not have reached the remote.
 - `ignite close` and `ignite release` first stop every command still running

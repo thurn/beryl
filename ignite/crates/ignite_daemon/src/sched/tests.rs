@@ -424,7 +424,14 @@ fn draining_stops_idle_work_and_starts_none() {
 #[test]
 fn an_adopted_grant_holds_its_cores_and_resources() {
     let mut ledger = Ledger::new(limits());
-    let adopted = ledger.adopt(Class::Agent, 4, vec!["oracle".to_owned()], None);
+    let adopted = ledger.adopt(
+        Class::Agent,
+        4,
+        vec!["oracle".to_owned()],
+        None,
+        None,
+        false,
+    );
     assert_eq!(granted_cores(&ledger), 4);
     ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), T0);
     assert!(ledger.step(T0).granted.is_empty(), "oracle has capacity 1");

@@ -384,6 +384,7 @@ impl SupervisedLauncher {
         // Released when this function ends, however it ends.
         let held = GrantGuard::new(self.scheduler.clone(), grant);
         let grant = held.grant();
+        let follows = cores_file.is_some();
         let jobserver = cores_file
             .filter(|_| fifo::AVAILABLE)
             .zip(self.scheduler.as_ref())
@@ -392,6 +393,9 @@ impl SupervisedLauncher {
             class: spec.class,
             cores: grant.cores,
             resources: grant.resources.clone(),
+            asked: Some(spec.cores),
+            follows,
+            shrinks,
         };
         let result = match self.start_in(
             dir,

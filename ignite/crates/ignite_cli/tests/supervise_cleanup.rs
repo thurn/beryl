@@ -155,6 +155,9 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
         class: Class::Agent,
         cores: 3,
         resources: vec!["oracle".to_owned()],
+        asked: None,
+        follows: false,
+        shrinks: false,
     };
     fs::write(
         run_dir.join("spec.json"),
@@ -187,6 +190,55 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
     assert_eq!(oracle.held, 1);
 
     // The command ends: its supervisor's lock is released and the grant with it.
+    drop(lock);
+    while scheduler.status().granted != 0 {
+        thread::yield_now();
+    }
+    fs::remove_dir_all(&root).unwrap();
+}
+
+/// A command whose jobserver followed its grant's cores file stayed at its size after a daemon
+/// restart: the restarted daemon registered the grant without the file, so it never grew again.
+/// An adopted grant that followed its file keeps growing to what the command asked for.
+#[test]
+fn an_adopted_grant_keeps_growing_through_its_cores_file() {
+    let root = scratch("adopt-grows");
+    let run_dir = root.join("runs").join("00000000000000000001-1-0");
+    fs::create_dir_all(&run_dir).unwrap();
+    let grant = GrantFile {
+        class: Class::Agent,
+        cores: 1,
+        resources: Vec::new(),
+        asked: Some(4),
+        follows: true,
+        shrinks: true,
+    };
+    fs::write(
+        run_dir.join("spec.json"),
+        serde_json::to_vec(&spec_file(Some(grant))).unwrap(),
+    )
+    .unwrap();
+    fs::write(run_dir.join("cores"), "1").unwrap();
+    let lock = File::create(run_dir.join("lock")).unwrap();
+    lock.lock().unwrap();
+
+    let limits = Limits {
+        cores: 12,
+        floor: Floor::default(),
+        resources: BTreeMap::new(),
+    };
+    let scheduler = Arc::new(Scheduler::new(
+        limits,
+        Arc::new(FakeClock::new(Timestamp::EPOCH)),
+        Arc::new(IdleHost),
+    ));
+    let launcher = launcher(&root).with_scheduler(scheduler.clone());
+    launcher.adopt_unfinished();
+
+    assert_eq!(scheduler.status().granted, 4);
+    let file = fs::read_to_string(run_dir.join("cores")).unwrap();
+    assert_eq!(file.trim(), "4");
+
     drop(lock);
     while scheduler.status().granted != 0 {
         thread::yield_now();
