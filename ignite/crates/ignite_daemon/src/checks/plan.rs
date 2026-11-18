@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ignite_core::config::Gate;
 use ignite_core::gate::{self, GateCheck, GateInput, GatePlan, History, Planned, Why};
-use ignite_core::ids::CheckName;
+use ignite_core::ids::{CheckName, TicketId};
 use ignite_core::inputs::{self, CrateGraph};
 use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::hub::{CachedResult, CheckState, CheckStats, CheckStatsReply};
@@ -35,17 +35,21 @@ pub(crate) struct GateView {
     pub checks: Vec<GateCheck>,
     /// The hub's record of each check, where it has one.
     pub stats: BTreeMap<CheckName, CheckStats>,
+    /// The ticket being landed, whose own regression's check must run in this gate.
+    pub landing: Option<TicketId>,
 }
 
 impl GateView {
     /// The gate checks of the regression families in `prepared`, with `hits` in the same order
     /// as their checks. A check the hub has switched off is left out, and a cached result of an
-    /// uncached check is ignored.
+    /// uncached check is ignored. A check in `regressions` has an open regression ticket, so the
+    /// gate leaves it out unless the ticket being landed is that ticket.
     pub(crate) fn new<'a>(
         prepared: &[Prepared],
         hits: &[Option<CachedResult>],
         family: impl Fn(&str) -> Option<&'a Family>,
         stats: &BTreeMap<String, CheckStatsReply>,
+        regressions: &BTreeMap<CheckName, TicketId>,
         changed: &[String],
         areas: Vec<String>,
     ) -> GateView {
@@ -53,6 +57,7 @@ impl GateView {
             areas,
             checks: Vec::new(),
             stats: BTreeMap::new(),
+            landing: None,
         };
         let mut hits = hits.iter();
         for prepared in prepared {
@@ -80,7 +85,7 @@ impl GateView {
                     family_median_cost: family_median,
                     needs: declared.needs.clone(),
                     group: None,
-                    regression: None,
+                    regression: regressions.get(check).cloned(),
                 });
                 if let Some(record) = record {
                     view.stats.insert(check.clone(), record.clone());
@@ -97,7 +102,7 @@ impl GateView {
                 areas: &self.areas,
                 checks: &self.checks,
                 missing_builds: &missing,
-                landing: None,
+                landing: self.landing.as_ref(),
                 billions_per_cpu_second: score::BILLIONS_PER_CPU_SECOND,
             },
             gate,

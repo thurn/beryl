@@ -261,7 +261,8 @@ fn tip_verification_lists_the_regression_checks_the_hub_has_not_switched_off() {
     let listed = world
         .checks
         .regression_checks(&world.ctx, &TreeId::new("tree-01").unwrap())
-        .unwrap();
+        .unwrap()
+        .checks;
 
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].check, name("unit:a"));

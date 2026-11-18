@@ -11,8 +11,8 @@ use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, Landed,
-    LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
+    AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
+    Landed, LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
     RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply,
     TipVerified, TipWaiting, TipWaitingFiled,
 };
@@ -188,6 +188,13 @@ pub trait Hub: Send + Sync {
     fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
         let _ = commits;
         Err(not_supported("look up landings"))
+    }
+
+    /// Reports a check that stayed incomplete, or a family that cannot be listed; the hub files
+    /// one ticket per signature (`POST /incomplete`).
+    fn incomplete(&self, report: &IncompleteReport) -> Result<ReportFiled> {
+        let _ = report;
+        Err(not_supported("report an incomplete check"))
     }
 
     /// Reports a tip that has waited an hour on another platform's checks; the hub files a

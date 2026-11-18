@@ -14,9 +14,9 @@ use ignite_core::config::HubConfig;
 use ignite_core::ids::{Commit, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
-    HeartbeatReply, Landed, LandedCommit, LandingsReply, LandingsRequest, LookupReply,
-    LookupRequest, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
-    Pause, Record, RecordBatch, RegressionFiled, RegressionReport, Release, ReportFiled,
+    HeartbeatReply, IncompleteReport, Landed, LandedCommit, LandingsReply, LandingsRequest,
+    LookupReply, LookupRequest, MachineFree, MachineRegister, MachineRegistered, MetricsImport,
+    NewResult, Pause, Record, RecordBatch, RegressionFiled, RegressionReport, Release, ReportFiled,
     Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim, TipClaimReply, TipVerified,
     TipWaiting, TipWaitingFiled,
 };
@@ -288,6 +288,10 @@ impl Hub for HubClient {
 
     fn find(&self, find: &ExplorationFind) -> Result<ReportFiled> {
         self.post("/finds", find)
+    }
+
+    fn incomplete(&self, report: &IncompleteReport) -> Result<ReportFiled> {
+        self.post("/incomplete", report)
     }
 
     fn pause(&self, pause: &Pause) -> Result<()> {

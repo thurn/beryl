@@ -12,10 +12,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, LandedCommit,
-    MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport,
-    ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply, TipVerified,
-    TipWaiting, TipWaitingFiled,
+    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport, Landed,
+    LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
+    RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply,
+    TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
@@ -149,9 +149,16 @@ pub struct FakeGit {
     tips: Mutex<HashMap<String, Commit>>,
     rebase: Mutex<Option<Rebase>>,
     pushes: Mutex<Vec<(PathBuf, Commit, String)>>,
+    rejection: Mutex<Option<String>>,
 }
 
 impl FakeGit {
+    /// Makes every later push come back rejected for `reason`, as a push that is not a
+    /// fast-forward does. `None` accepts pushes again.
+    pub fn reject_pushes(&self, reason: Option<&str>) {
+        *lock(&self.rejection) = reason.map(str::to_owned);
+    }
+
     pub fn set_object(&self, path: &str, oid: Oid) {
         lock(&self.objects).insert(path.to_owned(), oid);
     }
@@ -204,6 +211,9 @@ impl Git for FakeGit {
     }
 
     fn push(&self, tree: &Path, commit: &Commit, branch: &str) -> Result<Push> {
+        if let Some(reason) = lock(&self.rejection).clone() {
+            return Ok(Push::Rejected { reason });
+        }
         lock(&self.pushes).push((tree.to_path_buf(), commit.clone(), branch.to_owned()));
         lock(&self.tips).insert(branch.to_owned(), commit.clone());
         Ok(Push::Pushed {
@@ -224,6 +234,7 @@ impl Git for FakeGit {
 #[derive(Debug, Default)]
 pub struct FakeHub {
     unreachable: AtomicBool,
+    records_down: AtomicBool,
     results: Mutex<HashMap<ResultKey, CachedResult>>,
     reservations: Mutex<VecDeque<Reservation>>,
     briefs: Mutex<HashMap<TicketId, TicketBrief>>,
@@ -244,6 +255,7 @@ pub struct FakeHub {
     asked: Mutex<Vec<MachineFree>>,
     audits: Mutex<Vec<AuditReport>>,
     finds: Mutex<Vec<ExplorationFind>>,
+    incompletes: Mutex<Vec<IncompleteReport>>,
 }
 
 impl FakeHub {
@@ -265,6 +277,11 @@ impl FakeHub {
     /// What each call to `next` said the machine had free, in order.
     pub fn asked(&self) -> Vec<MachineFree> {
         lock(&self.asked).clone()
+    }
+
+    /// Makes `records` alone fail, as a hub that refuses telemetry does.
+    pub fn set_records_down(&self, down: bool) {
+        self.records_down.store(down, Ordering::SeqCst);
     }
 
     pub fn set_unreachable(&self, unreachable: bool) {
@@ -338,6 +355,11 @@ impl FakeHub {
 
     pub fn audit_reports(&self) -> Vec<AuditReport> {
         lock(&self.audits).clone()
+    }
+
+    /// Every incomplete-check report sent so far, in order.
+    pub fn incomplete_reports(&self) -> Vec<IncompleteReport> {
+        lock(&self.incompletes).clone()
     }
 
     pub fn exploration_finds(&self) -> Vec<ExplorationFind> {
@@ -463,6 +485,9 @@ impl Hub for FakeHub {
 
     fn records(&self, batch: &[Record]) -> Result<()> {
         self.reachable()?;
+        if self.records_down.load(Ordering::SeqCst) {
+            return Err(Error::Unreachable("records are refused".to_owned()));
+        }
         lock(&self.records).extend_from_slice(batch);
         Ok(())
     }
@@ -606,6 +631,13 @@ impl Hub for FakeHub {
         let mut audits = lock(&self.audits);
         audits.push(report.clone());
         Ok(Self::filed(audits.len()))
+    }
+
+    fn incomplete(&self, report: &IncompleteReport) -> Result<ReportFiled> {
+        self.reachable()?;
+        let mut reports = lock(&self.incompletes);
+        reports.push(report.clone());
+        Ok(Self::filed(reports.len()))
     }
 
     fn find(&self, find: &ExplorationFind) -> Result<ReportFiled> {

@@ -2,6 +2,7 @@
 //! builds and git, and a tree in a temporary directory.
 
 mod costs;
+mod hardening;
 mod plan;
 mod verdicts;
 
@@ -81,6 +82,11 @@ impl Launcher for ScriptLauncher {
             "lister" => {
                 exit = Some(*self.list_exit.lock().unwrap());
                 self.listing.lock().unwrap().clone()
+            }
+            // A `list` command that always fails.
+            "broken" => {
+                exit = Some(1);
+                String::new()
             }
             "runner" => {
                 if let Some(hook) = self.on_run.lock().unwrap().as_ref() {
@@ -168,6 +174,10 @@ impl TreeSource for FakeTrees {
     }
 
     fn changed(&self, _path: &Path, _base: &str) -> Result<Vec<String>> {
+        // A first path of `<error>` stands for a tree git cannot compare with the base.
+        if self.changed.first().is_some_and(|p| p == "<error>") {
+            return Err(ignite_core::traits::Error::Io("git failed".to_owned()));
+        }
         Ok(self.changed.clone())
     }
 }
@@ -310,8 +320,10 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
 
 fn jsonl_world() -> World {
     let world = world(MANIFEST, &[], FakeHistory::default());
+    // The listing also holds a cargo-nextest listing, for the manifest's Rust family, which
+    // must list at least one test.
     *world.launcher.listing.lock().unwrap() =
-        "{\"check\": \"unit:a\"}\n{\"check\": \"unit:b\"}\n".to_owned();
+        format!("{{\"check\": \"unit:a\"}}\n{{\"check\": \"unit:b\"}}\n{NEXTEST_LISTING}\n");
     world
 }
 

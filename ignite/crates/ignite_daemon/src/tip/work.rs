@@ -3,10 +3,11 @@
 use std::sync::Arc;
 
 use ignite_core::ids::{CheckName, Commit, TreeId};
+use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::traits::{Error, Result};
 
-use super::{TipCheck, TipLanding, TipRun, TipWork, ticketed_landings};
+use super::{TipLanding, TipRun, TipSet, TipWork, ticketed_landings};
 use crate::checks::{Checks, RunOptions};
 use crate::server::Context;
 use crate::trees::Trees;
@@ -32,7 +33,7 @@ impl CheckTipWork {
 }
 
 impl TipWork for CheckTipWork {
-    fn checks(&self, ctx: &Context, commit: &Commit) -> Result<Vec<TipCheck>> {
+    fn checks(&self, ctx: &Context, commit: &Commit) -> Result<TipSet> {
         self.at(commit, |tree| self.checks.regression_checks(ctx, tree))?
     }
 
@@ -55,15 +56,21 @@ impl TipWork for CheckTipWork {
                 .outcomes
                 .into_iter()
                 .map(|(check, outcome)| {
-                    let output = run
-                        .failures
-                        .iter()
-                        .find(|f| f.check == check)
-                        .and_then(|f| f.output.clone());
+                    let failure = run.failures.iter().find(|f| f.check == check);
+                    let mut output = failure.and_then(|f| f.output.clone());
+                    // An incomplete check always has a reason for the hub's ticket; one that
+                    // never got to run, for a failed build say, was not reported by a command.
+                    let reason = (outcome == Outcome::Incomplete).then(|| {
+                        output = output.take().or(failure.and_then(|f| f.message.clone()));
+                        failure
+                            .and_then(|f| f.reason)
+                            .unwrap_or(IncompleteReason::Unreported)
+                    });
                     TipRun {
                         check,
                         outcome,
                         output,
+                        reason,
                     }
                 })
                 .collect(),
@@ -73,6 +80,7 @@ impl TipWork for CheckTipWork {
                     check: check.clone(),
                     outcome: Outcome::Incomplete,
                     output: Some(error.to_string()),
+                    reason: None,
                 })
                 .collect(),
         }

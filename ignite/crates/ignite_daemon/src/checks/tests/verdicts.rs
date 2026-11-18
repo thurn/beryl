@@ -37,7 +37,11 @@ fn a_hung_command_leaves_its_unreported_checks_incomplete_and_is_not_run_again()
     let run = run(&world, &["unit:a", "unit:b"]);
     assert_eq!(outcome(&run, "unit:a"), Outcome::Pass);
     assert_eq!(outcome(&run, "unit:b"), Outcome::Incomplete);
-    assert_eq!(world.launcher.commands("runner").len(), 1, "not run again");
+    // The hung command ended right after `unit:a`'s line, which might have been the first of
+    // several steps, so `unit:a` ran again alone and passed. `unit:b` was not run again.
+    let commands = world.launcher.commands("runner");
+    assert_eq!(commands.len(), 2);
+    assert_eq!(commands[1][1..], ["unit:a"]);
     let failure = failure(&run, "unit:b");
     assert_eq!(failure.reason, Some(IncompleteReason::Hung));
     let output = PathBuf::from(failure.output.as_deref().unwrap());
