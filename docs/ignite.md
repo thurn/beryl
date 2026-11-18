@@ -230,11 +230,13 @@ The expected values are estimates from those measurements, not promises.
 - **Repair share**, the repair tickets as a share of all tickets: 38% today.
   Expected: under 10%.
 - **`master` lag**, the minutes from a landing until `master` reaches it. Today
-  `master` is behind `staging` for 1,728 minutes a week. Expected: a median
-  under 10 minutes per landing. A landing that changes inputs nearly every check
-  reads, such as the kernel crate, takes as long as the build and the checks
-  take when run as few commands. That figure is recorded once measured. See
-  [How long a round takes](#how-long-a-round-takes).
+  `master` is behind `staging` for 1,728 minutes a week. Expected: `master`
+  trails a landing by the tip budget plus the gate, about six minutes on an idle
+  machine. A tip round runs its best-scored checks for `[tip] seconds` (300) of
+  running checks before `master` moves, and the rest afterwards, so a landing
+  that changes inputs nearly every check reads, such as the kernel crate, no
+  longer holds `master` for the whole suite. See
+  [Tip verification](#tip-verification).
 - **Dispatch cost**: $591 a week today. Expected: under $60.
 - **Fleet coverage**: one machine of two measured today. Required: both.
 
@@ -1092,8 +1094,35 @@ guards against that with reruns, which need no tracing of file access:
 ## Where regression checks run
 
 A regression check runs in one of three places: on every landing its inputs
-touch, on landings where its record justifies its cost, or once per tip. This
-section gives the rule.
+touch, on landings where its record justifies its cost within the gate's budget,
+or in tip verification, either before `master` moves (within the tip's budget)
+or after. There are two budgets, both stated in seconds of running checks and
+spent in instructions:
+
+- **The gate's budget**, `[gate] seconds = 60`: what one landing spends on
+  checks chosen by score before it reaches `staging`.
+- **The tip's budget**, `[tip] seconds = 300`: what a tip verification round
+  spends on its best-scored checks before `master` moves to the tip.
+
+Seconds convert to instructions at the rate the class's check commands really
+achieve on the machine's average load, not at a full grant of cores on a quiet
+machine. The hub computes each class's rate once a day (`GET /rates`): the
+median, over the seven whole days before, of each day's instructions retired per
+second of wall time by that class's check commands. On 2026-11-18, landing
+commands retired 17.5 billion instructions a second and tip commands 39.5, so
+the gate's budget was about 1,050 billion and the tip's about 11,850 billion.
+Those figures stand in until the hub has a week of its own. Because the rate is
+fixed for the day, the same checks are chosen whatever the load of the moment;
+under load the seconds stretch.
+
+Building is outside both budgets. The gate runs checks on what its tree has
+already compiled, as Enact's worktrees did: a product the tree has built before
+is simply rebuilt incrementally, and its build time is printed on its own line.
+A product the tree has never built is not built for the gate, and the checks
+that need it are left to tip verification, unless they are in the always set,
+the change edits them, or the landing fixes their regression. A tree has built a
+product when the daemon built it there, or when the product's output directories
+are in the tree and not empty.
 
 ### The always set
 
@@ -1110,8 +1139,8 @@ These are ordinary checks with inputs, so they are cached like any other: a
 change to documentation does not rerun clippy. They differ from other checks in
 two ways:
 
-- They are outside the threshold and the cap described below. Nothing leaves one
-  out.
+- They are outside the threshold and both budgets. Nothing leaves one out, and a
+  product one of them needs is built even when the tree has never built it.
 - They are looked up or run for the exact commit that lands, so a tip that does
   not compile cannot be produced.
 
@@ -1126,7 +1155,6 @@ score(check, change) = P(fail | areas the change touches) / cost(check)
 P     = (failures after changes to these areas + 20 x family rate)
         / (runs after changes to these areas + 20)
 cost  = median instructions of its last 20 runs, in billions
-        + the builds it needs that nothing chosen so far has paid for
 ```
 
 The parts:
@@ -1134,11 +1162,8 @@ The parts:
 - An **area** is a workspace package, or a second-level directory outside the
   Rust workspaces. A change's areas come from its paths. For a change that
   touches several areas, P is computed for each and the largest is used.
-- Checks are chosen one at a time, highest score first. The first chosen check
-  that needs a build the tree does not hold is charged that build's estimated
-  cost, from the compile records of the crates that are out of date. Checks
-  chosen after it use the build for nothing, so their scores are worked out
-  again without it.
+- The cost is what running the check takes: its command's instructions divided
+  among the checks it ran. Builds are not part of it (see above).
 - A failure counts when a later change made the check pass again, whether that
   change fixed product code or updated the check. Either way the landing needed
   another edit. Flaky failures do not count.
@@ -1146,7 +1171,7 @@ The parts:
   in for 20 runs, so a check with few runs starts from its family's record.
 - A check that has never run scores as certain to fail, at its family's median
   cost, so new checks run first.
-- A check whose own file the change edits always runs, outside the cap. The
+- A check whose own file the change edits always runs, outside the budget. The
   agent's new regression test is never skipped.
 - Checks that have failed in exactly the same runs are scored as one check, with
   their summed cost.
@@ -1161,53 +1186,66 @@ Two checks after a change to one function in `beryl_rules`, with a threshold of
 script:aura/enters-attached/you    9 failures in 74 runs, family rate 0.02
   P = (9 + 0.4) / 94 = 0.10       cost 0.8 billion     score 0.125    runs
 rust:beryl_session::replay::*      1 failure in 310 runs, family rate 0.01
-  P = (1 + 0.2) / 330 = 0.004     cost 95 billion      score 0.00004  at the tip
+  P = (1 + 0.2) / 330 = 0.004     cost 5 billion       score 0.0007   at the tip
 ```
 
-The second check costs 95 billion mostly because the tree has not built
-`beryl_session`'s test binary. The score leaves that build to the tip, where it
-happens once for everyone.
+The second check scores below the threshold. Had it scored above, and the tree
+had never built `beryl_session`'s test binary, it would still go to the tip,
+where that build happens once for everyone.
 
-### The threshold and the cap
+### The threshold and the gate's budget
 
 Only families the change can affect are scored (see [Landing](#landing)). A
 family it cannot affect has the same inputs as at the tip, so its result there
 stands.
 
 The landing gate runs every check whose score is at or above a threshold, in
-score order, until their summed cost reaches a cap:
+score order, until their summed cost would pass the gate's budget:
 
 ```toml
 [gate]                 # example values
 threshold = 0.004      # expected failures per billion instructions
-cap = 400              # billions of instructions per landing
+seconds = 60           # of running checks per landing, builds not counted
 ```
 
-- Checks above the threshold but past the cap are listed in the landing's output
-  and run in tip verification.
-- The cap counts only checks chosen by score. The always set and the checks the
-  change edits are outside it.
-- The same checks run at any load. Seconds stretch; the set does not shrink.
-- The values are set at the switch by replaying history: the largest threshold
-  at which the gate would still have run 95% of the regression checks that
-  caught something, in the fast check or slow CI, in the previous 14 days.
-  Exploration finds are left out of that count. `ignite gate replay` repeats the
-  calculation from Ignite's own records in the hub's database, which it opens
-  read-only: failures in the result cache that were fixed before their ticket
-  landed, and regressions that were fixed after tip verification found them.
+- Checks above the threshold but past the budget, and checks that need a product
+  the tree has never built, are counted in the landing's output with their
+  instructions and run in tip verification. So is a family whose listing needs
+  such a product when no listing of it is kept: it is not listed at all.
+- The budget counts only checks chosen by score. The always set, the checks the
+  change edits and the regression being fixed are outside it.
+- The budget is a ceiling, not a target: the threshold stops a landing from
+  spending its 60 seconds on checks unlikely to find anything, so a small change
+  lands in a few seconds.
+- The threshold is set by replaying history: the largest threshold at which the
+  gate would still have run 95% of the regression checks that caught something
+  in the previous 14 days. `ignite gate replay` repeats the calculation from
+  Ignite's own records in the hub's database, which it opens read-only, and also
+  prints what 95% of those gates would have spent, to compare with the budget.
   Only a commit changes the values.
 - A check's score changes as its record does, so checks move across the
   threshold by themselves. No ticket is filed to move one.
 
-`ignite check` prints what the gate would run and why:
+`ignite check --plan` prints what the gate would run and why:
 
 ```text
 $ ignite check --plan
 always   4 checks (clippy, fmt, card-names, file-length)
+budget   60 s of checks at 17.5 billion/s = 1,050 billion
 gate     61 checks above 0.004; 44 cached, 17 to run, about 96 billion
 tip      1,204 affected checks below the threshold
 top      rust:beryl_rules::tests::entering::*      0.91  edited by this change
          script:aura/enters-attached/you           0.13  9 of 74 runs failed
+```
+
+The gate's own output puts running checks and building on separate lines, so a
+landing that was slow because it compiled shows as that:
+
+```text
+gate     65 checks: 48 from cache, 17 run, all passed in 41 s of running checks
+budget   60 s at 17.5 billion/s = 1,050 billion: 15 checks (94 billion) within it, 2 checks (2 billion) outside it, 48 checks (48 billion) cached
+build    12 s building 1 product
+tip      1,204 checks left to tip verification: 1,204 checks (1,204 billion) below the threshold
 ```
 
 ## Landing
@@ -1300,31 +1338,70 @@ runs on a timer.
 How a daemon verifies a tip:
 
 - It learns of a new tip from the hub's change feed.
+
 - It lists every regression check whose inputs changed since the last verified
   commit and that has no cached result for the tip, among the families this
   machine can run.
+
+- It scores those checks as the gate scores them, over the areas the landings
+  since `master` touched, with no threshold, and splits them by the tip's
+  budget, `[tip] seconds` of running checks at the `tip` class's rate:
+
+  - **Before `master` moves:** the best-scored checks within the budget, plus,
+    whatever the budget, cached failures being run again and checks with an open
+    regression ticket.
+  - **After `master` moves:** the rest.
+
+  Builds are outside the budget, and a tip round builds what it needs, cold
+  builds included.
+
 - It claims those checks from the hub in batches, so two machines do not run the
   same ones, then runs them in the `tip` class. Each family is listed once per
   round and its batches run from that listing. Several families run at once,
   each in its own landing tree, leaving one landing tree free for landings. See
   [How long a round takes](#how-long-a-round-takes) for how large a batch is.
+
 - A build that fails keeps its family's checks from running. The hub hears of it
   once, as `<family>:build`, not once for each check.
+
 - A tip left waiting (for incomplete checks, or checks another machine holds) is
   verified again after ten minutes, or at once when a newer tip arrives.
+
 - A round that has started runs to its end. When a newer tip arrives meanwhile,
   the round is not restarted: its results are cached by input, and the next
   round verifies the newest tip. Checks whose inputs did not change again are
   cache hits. Tips in between are not verified one by one.
-- When every regression check for a tip has a pass on a platform that satisfies
-  it, the daemon that completed the set moves `master` to that tip. A check that
-  is switched off as flaky is not part of the set. An `incomplete` check or one
-  with a cached failure is part of it and holds `master`.
+
+- When every check before the move has a pass, and every check answered from the
+  cache passed, the daemon moves `master` to the tip. A check switched off as
+  flaky is not part of the set. An `incomplete` check, or one with a cached
+  failure, holds `master`. So do checks only another platform's machines can
+  run, and families that cannot be listed: after the move no round would run
+  them.
+
+- The same round then runs the checks past the budget, in the `tip` class, on
+  whatever cores are free. A failure among them is reported as a regression,
+  which files its ticket; `master` has already moved and stays. From then on the
+  check runs before `master` moves on every round, because its regression ticket
+  is open and its cached failure is run again, so it holds `master` as any
+  cached failure does, until the fix lands. When a newer tip arrives before any
+  of their batches has run, those checks are in the newer tip's set instead.
+
+- When nothing can be scored (git or the hub cannot be read), every check runs
+  before `master` moves.
+
+- Each round's record says how it split its checks: the budget, the rate used,
+  and the checks before the move (within the budget and forced) and after it,
+  each with their instructions, and when `master` moved. `ignite status` shows
+  it with the round's minutes.
+
 - A tip that has waited an hour for checks that only an unreachable machine can
   run files one P1 ticket naming the machine. `master` waits for those checks.
+
 - A cached failure stands for every later tip that leaves the check's inputs
   unchanged, so `master` cannot move past a broken check. It moves again at the
   first tip where the check passes, which is the tip that holds the fix.
+
 - A regression is reported only for a check that fails at the newest tip, or
   whose inputs have not changed since the tip where it failed. A failure that a
   later landing already repaired files nothing.
