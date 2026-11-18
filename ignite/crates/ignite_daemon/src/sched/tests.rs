@@ -32,6 +32,9 @@ fn ask(class: Class, cores: u32) -> GrantRequest {
         cores,
         resources: Vec::new(),
         memory_mb: None,
+        shrinks: false,
+        grows: false,
+        cores_file: None,
     }
 }
 
@@ -276,6 +279,7 @@ fn a_grant_sets_the_thread_counts() {
         cores: 6,
         resources: Vec::new(),
         queued_s: 0,
+        cores_file: Some("/runs/1/cores".into()),
     };
     let env = grant.env();
     for name in [
@@ -286,6 +290,8 @@ fn a_grant_sets_the_thread_counts() {
     ] {
         assert!(env.contains(&(name.to_owned(), "6".to_owned())), "{name}");
     }
+    let file = ("IGNITE_CORES_FILE".to_owned(), "/runs/1/cores".to_owned());
+    assert!(env.contains(&file));
 }
 
 /// A host whose CPU and memory readings the test sets.
@@ -368,3 +374,5 @@ fn sample_reads_load_from_outside_ignite() {
     assert_eq!(scheduler.acquire(&ask(Class::Agent, 24)).cores, 16);
     assert_eq!(scheduler.acquire(&ask(Class::Agent, 24)).cores, 2);
 }
+
+mod elastic;

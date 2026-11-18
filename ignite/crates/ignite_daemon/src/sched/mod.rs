@@ -21,6 +21,15 @@
 //!   when a higher class waits. Stopping ends the command, so idle work must be safe to restart.
 //! - A request whose family usually needs more memory than is free waits while something else
 //!   runs.
+//! - A grant can change while its command runs. One that shrinks (a Cargo build that only
+//!   compiles) gives a core back on each step, down to one, while a higher class waits. One that
+//!   grows takes cores as they free up, to what it asked for, and the scheduler writes its
+//!   current size to its cores file (`IGNITE_CORES_FILE`), which the command rereads.
+//! - A request that would start short of what it wants, while lower classes hold cores that
+//!   shrink, waits up to [`RECLAIM_SECONDS`] for them before it takes what is free. A short
+//!   growing grant of `land` counts as a waiter, so freed cores go to it first.
+//! - Classes are enforced by grants only. Nothing here changes a process's priority: work run
+//!   at low priority on a loaded machine once got almost no CPU for hours.
 
 mod ledger;
 
@@ -28,6 +37,9 @@ mod ledger;
 mod tests;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 use ignite_core::config::{Floor, Machine};
@@ -36,7 +48,7 @@ use ignite_core::traits::Clock;
 use ignite_os::hostcpu::HostCpu;
 use serde::Serialize;
 
-pub use ledger::{Ledger, Step};
+pub use ledger::{Ledger, RECLAIM_SECONDS, Step};
 
 /// What a command asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -47,16 +59,28 @@ pub struct GrantRequest {
     pub resources: Vec<String>,
     /// The family's usual peak memory, if known.
     pub memory_mb: Option<u64>,
+    /// The command can run on fewer cores than it started with, and gives them back while a
+    /// higher class waits: a Cargo build that only compiles, whose jobs end within seconds.
+    pub shrinks: bool,
+    /// The command rereads its cores file while it runs and starts more threads as its grant
+    /// grows. Only a grant with a `cores_file` grows.
+    pub grows: bool,
+    /// The file the scheduler keeps the grant's current size in, as a plain integer, from the
+    /// moment it is granted. Named to the command by `IGNITE_CORES_FILE`.
+    pub cores_file: Option<PathBuf>,
 }
 
 /// Cores and resources held until released with [`Scheduler::release`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Grant {
     pub id: u64,
+    /// The size when granted. A grant that shrinks or grows keeps its current size in its
+    /// cores file.
     pub cores: u32,
     pub resources: Vec<String>,
     /// Seconds spent waiting for the grant, recorded apart from the command's own time.
     pub queued_s: u64,
+    pub cores_file: Option<PathBuf>,
 }
 
 impl Grant {
@@ -71,6 +95,11 @@ impl Grant {
         ]
         .into_iter()
         .map(|name| (name.to_owned(), cores.clone()))
+        .chain(
+            self.cores_file
+                .iter()
+                .map(|file| ("IGNITE_CORES_FILE".to_owned(), file.display().to_string())),
+        )
         .collect()
     }
 }
@@ -153,6 +182,8 @@ struct State {
     ready: BTreeMap<u64, Grant>,
     /// Grants asked to stop and not yet released.
     stop: BTreeSet<u64>,
+    /// The cores file of each grant that has one, until it is released.
+    files: BTreeMap<u64, PathBuf>,
 }
 
 impl Scheduler {
@@ -166,6 +197,7 @@ impl Scheduler {
                 ledger: Ledger::new(limits),
                 ready: BTreeMap::new(),
                 stop: BTreeSet::new(),
+                files: BTreeMap::new(),
             }),
             changed: Condvar::new(),
             clock,
@@ -191,6 +223,7 @@ impl Scheduler {
         let mut state = self.lock();
         state.ledger.release(grant.id);
         state.stop.remove(&grant.id);
+        state.files.remove(&grant.id);
         self.advance(&mut state);
     }
 
@@ -225,11 +258,23 @@ impl Scheduler {
 
     fn advance(&self, state: &mut State) {
         let step = state.ledger.step(self.clock.now());
-        if step.granted.is_empty() && step.stop.is_empty() {
+        if step.granted.is_empty() && step.stop.is_empty() && step.resized.is_empty() {
             return;
         }
         for grant in step.granted {
+            if let Some(file) = &grant.cores_file {
+                write_cores(file, grant.cores);
+                state.files.insert(grant.id, file.clone());
+            }
             state.ready.insert(grant.id, grant);
+        }
+        for (id, cores) in step.resized {
+            if let Some(grant) = state.ready.get_mut(&id) {
+                grant.cores = cores;
+            }
+            if let Some(file) = state.files.get(&id) {
+                write_cores(file, cores);
+            }
         }
         state.stop.extend(step.stop);
         self.changed.notify_all();
@@ -243,5 +288,19 @@ impl Scheduler {
         self.changed
             .wait(guard)
             .unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// Writes a grant's size to its cores file by rename, so the command never reads a partial
+/// number. A failed write leaves the command on its previous size, which is reported.
+fn write_cores(path: &Path, cores: u32) {
+    let partial = path.with_extension("partial");
+    let written: io::Result<()> =
+        fs::write(&partial, format!("{cores}\n")).and_then(|()| fs::rename(&partial, path));
+    if let Err(error) = written {
+        eprintln!(
+            "ignite: cannot write the grant size to {}: {error}",
+            path.display()
+        );
     }
 }

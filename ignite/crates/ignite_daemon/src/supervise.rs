@@ -199,12 +199,16 @@ impl SupervisedLauncher {
                 cores: spec.cores,
                 resources: spec.resources.clone(),
                 memory_mb: None,
+                shrinks: false,
+                grows: false,
+                cores_file: None,
             }),
             None => Grant {
                 id: 0,
                 cores: spec.cores.max(1),
                 resources: spec.resources.clone(),
                 queued_s: 0,
+                cores_file: None,
             },
         }
     }
