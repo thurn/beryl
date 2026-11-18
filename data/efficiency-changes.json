@@ -289,5 +289,10 @@
     "label": "Tip verification lists each family once per round, runs families in parallel landing trees, builds the whole workspace when a subset's features differ, and leaves a waiting tip for ten minutes",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Kept listings (memory, local, hub) and the landing gate deciding which families a change can affect before it lists or builds anything",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]
