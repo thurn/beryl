@@ -230,7 +230,7 @@ The expected values are estimates from those measurements, not promises.
 - **`master` lag**, the minutes `master` is behind `staging`: 1,728 a week
   today. Expected: under 300.
 - **Dispatch cost**: $591 a week today. Expected: under $60.
-- **Fleet coverage**: one machine of three measured today. Required: all three.
+- **Fleet coverage**: one machine of two measured today. Required: both.
 
 Throughput is the first goal. Test fidelity is a constraint: every check that
 runs today still runs somewhere unless its record shows it catches nothing.
@@ -319,6 +319,13 @@ The verbs an agent uses while working:
 - `ignite status` and `ignite doctor` print the machine's state and health.
 - `ignite tell <ticket | session | --all> "<text>"` sends a correction to work
   that is under way. See [Steering work in flight](#steering-work-in-flight).
+- `ignite close -m "<reason>"` closes the ticket without landing anything, for a
+  ticket that is obsolete, already done or needs no change to the repository,
+  and releases the tree.
+- `ignite release -m "<note>"` gives the ticket back unfinished and keeps its
+  work. See [Releasing work](#releasing-work).
+- `ignite guide <topic>` prints the guidance for one situation. See
+  [Guidance for agents](#guidance-for-agents).
 
 `ignite prime` prints the whole workflow in under 60 lines. A worker's first
 prompt is one sentence that names `ignite start`, so the role files that every
@@ -520,8 +527,51 @@ Rules for trees:
 - To hold the machine under `trees_disk_gb`, the daemon deletes builds that a
   newer build of the same unit replaced, then the build directories of the free
   trees used longest ago.
-- Releasing a tree resets it to a clean checkout and keeps its build
-  directories.
+- Releasing a tree first saves what it holds, then resets it to a clean checkout
+  and keeps its build directories. See [Releasing work](#releasing-work).
+- Releasing also ends every process whose working directory or executable is
+  inside the tree, whether or not Ignite started it, except the caller and its
+  ancestors. A server that an agent started by hand and forgot is the usual
+  case.
+- Only the session that holds a tree's lease may use it. Every `ignite` verb and
+  the tree's `cargo` shim refuse any other session with exit code 3, so a
+  session that was replaced cannot go on working in a tree that now belongs to
+  someone else.
+- The daemon keeps the main checkout's local `staging` and `master`
+  fast-forwarded to the remote, and only while that checkout has no local
+  changes. Sessions start there and read its instruction files, and nobody works
+  in it.
+
+### Releasing work
+
+A ticket can leave a session unfinished: the worker releases it, or the daemon
+releases it for a worker that has gone. Either way the work is kept, because
+work lost at release has to be done again from nothing.
+
+- Release commits whatever the tree holds that is not committed, as one commit
+  marked as saved at release, and pushes the ticket's branch to the remote as
+  `ignite/<ticket>`. If that push fails, the release fails and the session keeps
+  the ticket.
+- The next `ignite start` of the ticket, on any machine, checks that branch out
+  and says so in the brief: how many commits it holds, who made them, and
+  whether the last one is unfinished work saved at release.
+- The branch is deleted when the ticket lands or closes.
+- `ignite release --needs <what>` also records why the ticket was given back.
+  `--needs macos`, or the name of a machine, keeps it for a machine that has
+  what it needs. `--needs person` sets it aside for the person: no worker is
+  handed it, the dashboard lists it, and the note must state the exact need and
+  what was tried.
+- A ticket that waits on another ticket's work is released with a dependency on
+  that ticket, never held while its session watches `staging`. It is handed out
+  again when the other ticket closes.
+
+```text
+$ ignite release --needs person -m "Needs the App Store Connect key. Tried the
+  keychain and the CI secrets; neither holds it."
+saved    2 commits and 3 uncommitted files as ignite/Tq44s.7.12
+released Tq44s.7.12; tree-04 is free; do not use this path again
+title    ⛔ [Tq44s.7.12] Sign the iOS build
+```
 
 ### Builds
 
@@ -592,6 +642,12 @@ Rules for cores:
 - `idle` work starts only while the machine is under 70% busy, and is the first
   thing stopped when a higher class waits.
 - Time spent waiting for cores is recorded apart from a command's own time.
+- Classes are enforced by what the daemon grants, never by the operating
+  system's priority. Work run at low priority on this machine once got almost no
+  CPU for hours.
+- A grant can change while its command runs. A Cargo build gives cores back, one
+  at a time, while a higher class waits, and a command that can use more threads
+  is told when its grant grows.
 
 The daemon also records each command's peak memory. It delays a command whose
 family usually needs more memory than is free.
@@ -728,6 +784,20 @@ Some runs produce no verdict, and Ignite never guesses one:
 - An `incomplete` check is run again, at most twice more. If it is still
   incomplete, the hub files a P1 ticket that quotes the output, and a landing or
   a tip that needs the check waits for it.
+- A command that says it cannot run on this machine, because a tool, a virtual
+  machine or a download is missing, is `incomplete` with that reason and is not
+  run again there. The ticket names the machine.
+- A command that runs past its hang limit is ended with everything it started
+  and is `incomplete` as hung. It is not run again, because a hung command hangs
+  again, and its output lists the processes it left. The limit is four times the
+  command's slowest pass in 30 days, at least 15 minutes and at most 40, and 30
+  minutes for a command with no pass on record. Time spent waiting for cores
+  does not count.
+- A failure to file a ticket or to reach the hub never changes a check's
+  outcome.
+
+Ignite keeps the whole output of every command in a file. The output of a
+failed, flaky or incomplete run is kept for 14 days, and other output for a day.
 
 ### Input hashes
 
@@ -761,8 +831,12 @@ one global view save work:
 
 - A pass is reused everywhere. The gate, tip verification and `ignite check` all
   look up before they run.
-- A failure is reused too, with a pointer to its saved output. `--rerun` forces
-  a fresh run.
+- A failure is reused on the machine that produced it, with a pointer to its
+  saved output. `--rerun` forces a fresh run.
+- A failure from another machine is not trusted to block. The check runs once
+  here first. If it passes here, the failure belongs to that machine's own
+  state, such as a stale cache or a broken tool: the pass is stored, and the hub
+  files a P1 ticket for that machine.
 - A check is run a second time at once when it fails. Passing the second time
   makes it flaky, not failed. See [Flaky checks](#flaky-checks).
 - An exploration check that was played on the same inputs is never played again.
@@ -934,6 +1008,16 @@ Rules:
 
 - A ticket closes when it lands. The session does not wait for tip verification.
 - A failed gate exits with code 2 and leaves the ticket tree as it is, rebased.
+- `ignite land` refuses a tree whose branch is not the ticket's, and a tree with
+  files that are neither committed nor ignored, naming them. Scratch output
+  belongs in the session's scratch folder.
+- The daemon writes a record of the landing to its own disk before it pushes. If
+  the push succeeds and the hub cannot be told, the record stays queued and the
+  ticket is closed when the hub returns. A record whose push was rejected is
+  dropped. A landing is never pushed twice.
+- Paths in a failed gate's output are relative to the repository, because the
+  gate may have run in a landing tree that the next landing reuses. The rerun
+  command works in the ticket tree.
 - The landing tree that ran a gate already holds the new tip's build when the
   landing succeeds.
 - A check with an open regression ticket is left out of other tickets' gates and
@@ -967,6 +1051,9 @@ How a daemon verifies a tip:
 - A cached failure stands for every later tip that leaves the check's inputs
   unchanged, so `master` cannot move past a broken check. It moves again at the
   first tip where the check passes, which is the tip that holds the fix.
+- A regression is reported only for a check that fails at the newest tip, or
+  whose inputs have not changed since the tip where it failed. A failure that a
+  later landing already repaired files nothing.
 
 Because results are cached by input, a check that only the sweeps ran every
 three hours now runs exactly when something it reads changes.
@@ -1025,6 +1112,16 @@ soon as the evidence is in, without waiting for an agent.
 - A run that could not complete, because a tool was missing or a process was
   killed, is `incomplete`. It is never flaky, never a regression and never a
   culprit, and it is not stored in the result cache.
+- A check in the always set is never switched off. A formatter or a lint that
+  flakes is almost always the machine: a file another process changed, a shared
+  temporary path, a download. The hub files a P1 ticket to fix the step.
+- A flaky record does not count toward switching a check off when three or more
+  unrelated checks flaked in the same command. That is one fault of the machine,
+  such as a full disk or a stuck browser page, and it gets one ticket.
+- Checks that run outside the landing gate may get few cores. Each command is
+  told its class, and a family whose checks wait on a browser or another slow
+  tool uses longer waits outside the gate. A screenshot that takes two seconds
+  once ran past a 30-second wait on a loaded machine and was filed as flaky.
 
 ## Exploration checks
 
@@ -1077,6 +1174,13 @@ What Ignite adds to a ticket:
   next ticket's `ignite start` prints.
 - For an improvement ticket, the rule that filed it and its estimated saving.
 
+A ticket that the hub files by itself is matched against open ones by a
+signature of the check, the kind of failure and its message. Host names, thread
+numbers and source line numbers are left out of the signature, and the values in
+a failed assertion are kept, so two different faults of one check stay two
+tickets. A repeat adds a comment. A fault that returns after its ticket closed
+gets a new ticket that names the old one.
+
 ```sh
 ignite ticket create "Split beryl_session's replay code" -p P2 \
   --parent Tig9a --labels tier:opus --deps Tig9a.1 --body-file body.txt
@@ -1096,7 +1200,10 @@ with the label `adhoc`, claims it and leases a tree in one command.
 The hub also serves the dashboard, the one page meant for a person. It keeps the
 current ticket views and adds each machine's cores and trees, the pool with what
 each worker holds and what it is running, the landing queue, the state of tip
-verification, open regressions and each exploration family's finds.
+verification, open regressions and each exploration family's finds. Its first
+line says what needs a person: tickets marked `needs:person`, a machine with no
+dispatcher or with a paused pool, an open regression that no worker can take,
+and a ticket that no machine is able to run.
 
 The hub backs up its database hourly and exports it daily, as the service does
 now. While the hub cannot be reached:
@@ -1115,11 +1222,18 @@ machine's daemon holds work back while that machine is full.
 
 ### The pool
 
-Each machine has one standing pool that serves every epic and every stray
-ticket.
+Each machine has one standing pool that serves every active epic.
 
-- A person adds workers in a turn they start, because the desktop app lets only
-  such a turn start sessions, at most ten per message: `/ignite pool 8`.
+- A person adds workers in a turn they start in the dispatcher's own session, at
+  most ten per message: `/ignite pool 8`. The desktop app lets only such a turn
+  start sessions, and its tools for clearing and prompting a session are only
+  known to work on sessions the caller started.
+- Workers must run in a permission mode that never prompts. A permission prompt
+  stalls a worker nobody is watching, so `/ignite pool` refuses to start workers
+  in any other mode.
+- `ignite pool pause` stops new hand-offs on a machine, or on every machine with
+  `--all`, and `ignite pool resume` starts them again. Workers that are running
+  finish. Nothing but a person's `resume` ends a pause.
 - The pool outlives epics. Nothing is rebuilt when a plan starts or ends.
 - Claude Code workers are cleared and prompted again for each ticket. Codex has
   no clear operation, so a Codex worker is a new chat per ticket.
@@ -1147,13 +1261,28 @@ $ ignite dispatch --wait 540
 ```json
 {"id": 4812, "do": "handoff", "session": "local_c8470108",
  "clear": true, "model": "opus", "effort": "high",
- "prompt": "Run `ignite start Tq44s.9.48` and follow what it prints."}
+ "prompt": "Run `ignite start Tq44s.9.48 --reservation 7f3a` and follow it."}
 ```
 
-The dispatcher clears that session, sets its model and sends the prompt, each as
-one call, then reports `ignite dispatch ack 4812 ok` and waits again. The other
-instructions are `message`, which sends text to a live session, and `idle`,
-which means the wait ended with nothing to do.
+The dispatcher carries out a hand-off as separate calls, in this order, and
+reports `ignite dispatch ack 4812 ok`, or `failed` with the reason:
+
+1. Clear the session. A session that refuses is still finishing a turn. The
+   hand-off fails, the daemon tries another worker, and it comes back to this
+   one after a minute.
+2. Set the model and effort, then read the session back to confirm them. The app
+   can ignore a model without saying so. A model that cannot be set fails the
+   hand-off: a ticket is never run on a model other than the one it names.
+3. Send the prompt. It carries a reservation code that only this hand-off's
+   `ignite start` can use, so a hand-off that arrives late, after the ticket
+   went elsewhere, claims nothing.
+
+The other instructions are `message`, which sends text to a live session,
+`check`, which asks whether a session is running, idle or gone, and `idle`,
+which means the wait ended with nothing to do. Every instruction ends with one
+line that restates the loop, so the dispatcher still knows its job after its
+context is compacted. Its title stays `🔮 dispatcher <machine>` while it waits,
+which is how a person sees that hand-offs are alive.
 
 ### What the daemon hands off, and when
 
@@ -1181,6 +1310,17 @@ A machine can take a ticket when all of these hold:
   there. See [Light and heavy tickets](#light-and-heavy-tickets).
 - The machine can run every check family that the ticket's named files could
   bring into its gate.
+
+Not every open ticket is offered:
+
+- An epic is worked only once it is active, which means it has a `--workers`
+  number. `/ignite` sets one when it files an epic or is given one. Until then
+  the epic's tickets wait, however ready they are, so the pool never starts on a
+  backlog that nobody asked for.
+- Tickets that the hub files itself are always offered: regressions,
+  improvements and repairs to a machine. So is a ticket that a session starts by
+  name.
+- A ticket marked `needs:person` is never offered.
 
 The hub reserves the ticket for that machine in the same request, so two
 machines never take one ticket. What happens next:
@@ -1283,9 +1423,14 @@ leased for nothing.
 - Any `ignite` command from a tree renews its ticket's lease, and a command
   still running keeps it renewed however long it takes.
 - After 30 minutes in which no command started or ran, the daemon has the
-  dispatcher send the session one message asking it to continue or release.
-- When 15 more minutes pass without a command, the daemon releases the ticket,
-  resets the tree and comments on the ticket with what the tree held.
+  dispatcher look at the session. Silence proves nothing: a healthy worker can
+  read and think for a long time, and an app that cannot find a session has not
+  shown that the session is gone.
+- A session that is still running is left alone. An idle one is sent one message
+  asking it to continue or release.
+- The daemon releases the ticket only when the app confirms that the session is
+  gone, or that it is idle and has stayed idle for 15 minutes after the message.
+  Releasing keeps the work, as [Releasing work](#releasing-work) describes.
 
 ### Steering work in flight
 
@@ -1346,6 +1491,10 @@ The `/ignite` skill is how a person starts work. It replaces `/enact` and
   and its tickets in one `ignite ticket batch`, runs `ignite plan check`, fixes
   what it reports, and stops. The pool takes the tickets. The planning session
   runs no loop, which is what removes today's orchestration cost.
+- Given `sweep`, the session triages the open tickets that nothing is working.
+  For each it decides whether the work is done, obsolete, still wanted or in
+  need of a person, with a line of evidence. It shows the table, closes the
+  first two kinds and activates what is left.
 
 `ignite plan check` reports the shape of an epic, since dependency chains are
 56% of lead time:
@@ -1481,6 +1630,10 @@ Rules for filing:
   often enough to clear the minimum.
 - A rule can be listed as report-only. `tier-gap`, which compares model tiers,
   is report-only, because the choice of model stays with people.
+- `never-caught` never names a check on the protected list in `ignite.toml`: the
+  app starting, the browser smoke checks, clippy, the type checks and the source
+  rules. They are cheap, and what they guard is too basic to give up for want of
+  a recent failure.
 
 Rules for the share:
 
@@ -1558,6 +1711,132 @@ kernel-body  412 billion  14 crates
   beryl_search          41 billion   (+11 more)
 ```
 
+## Guidance for agents
+
+Enact's role files, skills and design notes, with `docs/checks.md` and the
+`cifix` skill, hold about 800 rules and lessons. Most were written after
+something went wrong. Ignite keeps them in less text that is read less often: a
+rule lives where it is needed.
+
+- **`ignite prime`**, under 60 lines, is the only text every worker reads. It
+  holds the rules that apply to every ticket.
+- **A guide topic** holds the rules for one situation. `ignite guide <topic>`
+  prints one in under 50 lines, and a command names the topic at the moment it
+  applies, so a worker reads it only then.
+- **The `/ignite` skill** holds the rules for planning, for sweeping stale
+  tickets and for the dispatcher.
+- **`AGENTS.md` and the project's skills** hold the rules that are about Beryl
+  and not about Ignite.
+- **Ignite itself** does what a rule used to ask of an agent, wherever a program
+  can.
+
+```text
+$ ignite start Tk3fc
+ticket   Tk3fc  Regression: family_corpora_never_change
+tree     /Users/dthurn/beryl/.worktrees/tree-02  at staging 91d07be
+guide    ignite guide regression   (read it before you change anything)
+```
+
+### What every worker reads
+
+`ignite prime` holds these rules, each in a line or two:
+
+- Nobody answers questions. Decide, act, and record the choice and its reason on
+  the ticket.
+- The ticket may be days old. Check it against the code as it is. Where they
+  disagree, the code and the epic's intent win, and the difference goes on the
+  ticket.
+- Read the files the ticket names before searching for others, and send reads
+  together.
+- Make the smallest change that meets the acceptance criteria. Run the focused
+  tests, exercise the change by hand, and read the whole diff as a reviewer
+  before landing. A check that could not run is not a pass.
+- Tests go through public behavior and never depend on the machine's speed.
+- Ordinary difficulty is the job: failing tests, confusing code, conflicts.
+  Never wait for a person, for another ticket, for another machine or for
+  verification.
+- Never end a turn on work that nothing will report. Never leave a ticket held
+  when stopping for good: release it with its exact state.
+- Never work in another session's tree, take over its ticket or change another
+  ticket's scope.
+- A `changed` line is an instruction about the ticket. Read it before going on.
+- The landing note says what changed, what was decided and what a reviewer
+  should look at.
+- The title shows the state: working, done, stopped unfinished, or waiting on a
+  person's answer.
+
+### The guide topics
+
+Each topic is printed by the command that makes it relevant.
+
+- `follow-ups`, when a session creates a ticket while it holds one. File only
+  what is essential. A gap in verifying your own ticket is never optional. No
+  ticket's acceptance may need time to pass: measure what can be measured now,
+  and defer an observation ticket to the day its data will exist.
+- `release`, on `ignite release` or when a command fails for a reason outside
+  the ticket. Waiting on another ticket, on another machine or on a person, and
+  one fault that blocks several tickets.
+- `review`, on `ignite start` of a review ticket or one labeled `review:inline`.
+  What a review looks for, when to rewrite, what is not a finding, and that the
+  reviewer fixes what it finds.
+- `regression`, on `ignite start` of a regression ticket. Reproduce it first and
+  read the ticket that caused it. Fix forward. A fault of the product is fixed
+  in the product, and a test that fails while the product is right is probably
+  worthless.
+- `checks`, on a ticket about a flaky, hung or never-catching check. The order
+  of remedies: fix the product, fix the machine, replace the check with a
+  cheaper deterministic one, delete it. Loosening a threshold, adding a retry
+  and raising a limit are not remedies.
+- `audit`, on `ignite start` of an audit ticket. What an audit of the
+  architecture or of the process looks for, and what is worth filing.
+- `docs`, on `ignite start` of a documentation ticket. Describe the shipped
+  state, edit before adding, and retire the plan after moving what is durable.
+- `machine`, when `ignite doctor` reports a fault. What counts as a fault of the
+  machine, what an agent may repair, and what goes to a person.
+
+### Lessons that became behavior
+
+Where a program can do what a rule asked, Ignite does it:
+
+- Released work is saved and travels. Enact added this after two tickets
+  released on one machine were redone from nothing on another.
+- A worker is released only when the app confirms that it is idle or gone. A
+  dozen workers once sat idle for hours, and a healthy one was once taken for
+  dead.
+- A hand-off carries a code that only it can use, because a delayed hand-off
+  once claimed a ticket that had moved on.
+- A command past its hang limit is ended and not run again. A hung check once
+  held every push on the machine.
+- A tree's processes are ended at release. A fuzz run once kept a core busy for
+  four hours after its ticket closed.
+- One fault files one ticket, matched by signature. A day of failures usually
+  has far fewer causes than tickets.
+- An epic is worked only once a person activates it, and a paused pool stays
+  paused until a person resumes it.
+
+### Dropped on purpose
+
+These go, because Ignite removes what each existed for:
+
+- Roles as prompt files, and the Steward, Justiciar, Mason, Sage, Archivist and
+  Marshal roles. Their rules are in the `regression`, `machine`, `audit` and
+  `docs` topics. What a Justiciar did by hand, the daemon does or
+  `ignite doctor` reports.
+- Runs: registering, pruning and finishing them, orchestrator leases, and the
+  `watch_ci` notice. A pool has no runs.
+- The merge queue, delivery receipts and check trees. The landing gate, the
+  landing record and landing trees replace them.
+- Wall-clock budgets, the load-adjusted clock, tickets that cut checks to fit a
+  budget, and deferring unfinished steps to a sweep. Costs in instructions and
+  scores replace them.
+- The sweeps, the nightly run and the hourly full run. Checks run when their
+  inputs change, and the cache audit catches a wrong declaration.
+- Choosing browser checks by coverage data. Scores choose them, and
+  `just coverage` stays as a tool.
+- Quarantining a test. The project's rule is to delete or replace it.
+- Light runs. A planner files the reviews a plan needs, and nothing else is
+  automatic.
+
 ## The switch from Enact
 
 Ignite replaces Enact in one switch, with every other kind of work halted until
@@ -1587,9 +1866,9 @@ What the switch imports:
 
 What the switch deletes, in the same change:
 
-- `.enact.toml`, the `/enact`, `/enact-plan`, `/enact-sweep` and `cifix` skills,
-  and every reference to `enact`, `tk` and Enact's roles (Vizier, Executor,
-  Warden, Steward and the rest).
+- `.enact.toml`, the `/enact`, `/enact-plan` and `/enact-sweep` skills, and
+  every reference to `enact`, `tk` and Enact's roles (Vizier, Executor, Warden,
+  Steward and the rest).
 - The orchestration modules in `tools/` and their tests: the token pool, the
   lanes, test selection, the run log, verdicts, budgets, hang limits, flaky
   handling, bisection, slow CI, the sweeps, the nightly run, the build-cache
@@ -1601,14 +1880,24 @@ What the switch deletes, in the same change:
 
 What the switch rewrites:
 
-- The root `AGENTS.md` sections on Enact and on checks become one short section
-  that names `ignite prime`.
-- `docs/checks.md` is deleted. This document and `ignite help` replace it.
+- The root `AGENTS.md` sections on Enact and on checks are rewritten for Ignite.
+  Rules about how to use Enact go. Rules about the project's own checks stay: a
+  UI bug fix adds its broken state as a fixture, the counts in an allowlist only
+  go down, a phone screen is a shot at both sizes, and an agent runs only the
+  browser checks its change needs.
+- The `cifix` skill is rewritten as the project's guide to working a ticket
+  about a check, keeping its order of remedies and dropping its orchestration.
+- `docs/checks.md` is deleted once each lesson in it has a home. A lesson that
+  explains a setting moves into a comment beside that setting in the family's
+  declaration. This document holds the rest, and
+  [Guidance for agents](#guidance-for-agents) lists what was dropped on purpose.
+- Every epic that is open at the switch starts inactive. Nothing in the old
+  backlog is worked until a person activates it.
 - The efficiency dashboard's sources change as described under
   [Records and metrics](#records-and-metrics).
 
-The switch happens when the checks under [Manual QA](#manual-qa) pass on all
-three machines in a rehearsal:
+The switch happens when the checks under [Manual QA](#manual-qa) pass on both
+machines in a rehearsal:
 
 - Each machine has a second clone of the repository, with its own build trees.
 - A rehearsal hub on jarvis serves a copy of the ticket database on its own
@@ -1709,7 +1998,7 @@ These show that each kind of failure goes where the design sends it.
   no new ticket. Expect the dispatcher to send the regression to that session.
 - **A flaky check.** Add a check that fails every other run. Expect the first
   flake recorded and passed over, the second on a later commit to switch the
-  check off on all three machines, and one P3 ticket quoting both failures.
+  check off on both machines, and one P3 ticket quoting both failures.
 - **An exploration find.** Seed a generated oracle scenario that fails. Expect
   an ordinary P2 bug ticket with replay steps, no regression ticket, and
   `master` still moving.
@@ -1745,6 +2034,33 @@ These show that cores, trees and workers go where the rules say.
   at once with the text, the session to receive it as a message, and the text to
   be a comment on the ticket. Run `ignite tell --all` with two workers busy on
   two machines and expect both to receive it.
+- **Closing without landing.** Start a ticket and run
+  `ignite close -m "obsolete: ..."`. Expect the ticket closed with the reason,
+  the tree free and nothing on `staging`.
+- **Released work travels.** Start a ticket on jarvis, commit once, leave one
+  file edited and uncommitted, and run `ignite release`. Start the same ticket
+  on multivac. Expect the commit and the uncommitted edit there, and a brief
+  that says what it resumed from.
+- **A ticket that needs a person.** Release a ticket with `--needs person`.
+  Expect it on the dashboard's first line, never handed off, and handed off
+  again once the label is removed.
+- **An inactive epic.** File an epic with ready tickets and no `--workers`.
+  Expect no hand-off from it. Set `--workers 1` and expect one.
+- **A pause.** Run `ignite pool pause` with two workers busy and tickets ready.
+  Expect both to finish, no new hand-off, and hand-offs again after
+  `ignite pool resume`.
+- **A worker that only looks stalled.** Leave a worker reading for 31 minutes
+  with no `ignite` command. Expect the dispatcher to look at it, find it
+  running, and send nothing.
+- **A hung command.** Add a check that never returns, with its hang limit set to
+  one minute in the rehearsal. Expect it ended with its child processes, marked
+  `incomplete` as hung, not run again, and a P1 ticket listing the processes.
+- **A machine's own failure.** Make a portable check fail on multivac only, by
+  breaking a tool there. Expect jarvis to run it again and pass, landings on
+  jarvis not blocked, and a P1 ticket for multivac.
+- **A late hand-off.** Give a hand-off's prompt to a session after its
+  reservation has lapsed. Expect `ignite start` to exit with code 3 and claim
+  nothing.
 - **Improvement share.** File several improvement tickets and twenty product
   tickets. Expect at least three of the next twenty hand-offs to be improvement
   tickets, largest saving first.
@@ -1776,5 +2092,5 @@ These show that the system survives its own failures and measures itself.
   loops. Expect counts within 1% of each other. Add a dependency from a core
   crate to a large one, measure again, and expect a larger count that names the
   added crate and files no ticket.
-- **Fleet metrics.** After tickets have run on all three machines, expect
+- **Fleet metrics.** After tickets have run on both machines, expect
   `just efficiency coverage` on jarvis to list rows for each of them.
