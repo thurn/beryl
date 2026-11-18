@@ -45,7 +45,7 @@ use crate::server::{Context, Verb};
 use crate::trees::{DiskReport, Trees};
 
 pub use audit::AuditSummary;
-pub use disk::DISK_EVERY;
+pub use disk::{DISK_EVERY, ROOM_GB};
 pub use rebuild::RebuildCount;
 use state::{Report, State};
 
@@ -68,6 +68,10 @@ pub trait IdleHost: Send + Sync {
     fn commits_between(&self, from: &Commit, to: &Commit) -> Result<usize>;
     /// Deletes build directories until the trees are under their disk limit.
     fn hold_disk(&self) -> Result<DiskReport>;
+    /// Gigabytes free on the disk that holds the trees, when it can be read.
+    fn disk_free_gb(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// Runs one check again in a tree without asking the cache. [`Checks`] is the real one.
@@ -134,6 +138,11 @@ impl IdleHost for LiveHost {
 
     fn hold_disk(&self) -> Result<DiskReport> {
         self.trees.hold_disk()
+    }
+
+    fn disk_free_gb(&self) -> Option<u64> {
+        use crate::doctor::Host as _;
+        crate::doctor::NativeHost.disk_free_gb(&self.repo)
     }
 }
 

@@ -634,9 +634,11 @@ Rules for trees:
   newer build of the same unit replaced, then the build directories of the free
   trees used longest ago.
 - The idle loop checks this limit every round, including while the machine is
-  busy, and measures the trees at most once every 30 minutes. Only free trees
-  are swept, so a tree that is leased or has a running command keeps its build
-  directories. The daemon logs what it deleted and how much it freed.
+  busy, and measures the trees at most once every 30 minutes, and not at all
+  while the disk has 150 GB free, since a measurement walks every build
+  directory. Only free trees are swept, so a tree that is leased or has a
+  running command keeps its build directories. The daemon logs what it deleted
+  and how much it freed.
 - Releasing a tree first saves what it holds, then resets it to a clean checkout
   and keeps its build directories. See [Releasing work](#releasing-work).
 - Releasing also ends every process whose working directory or executable is

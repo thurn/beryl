@@ -20,11 +20,19 @@ use crate::trees::DiskReport;
 /// file of every build directory, about 290 GB on jarvis, so it is kept rare on a busy machine.
 pub const DISK_EVERY: Duration = Duration::from_mins(30);
 
+/// Free disk space at which the trees are not measured at all. A measurement walked about
+/// 290 GB of build directories for over ten minutes on jarvis, holding the idle loop in one
+/// round, while 255 GB of the disk was free; with that much room nothing needs deleting.
+pub const ROOM_GB: u64 = 150;
+
 impl Idle {
     /// Brings the trees under their disk limit if they are over it, unless they were measured
     /// less than [`DISK_EVERY`] ago. Returns the report of a measurement made, which is also
     /// printed when it deleted anything.
     pub fn hold_disk(&self) -> Result<Option<DiskReport>> {
+        if self.host.disk_free_gb().is_some_and(|free| free >= ROOM_GB) {
+            return Ok(None);
+        }
         let now = self.clock.now();
         {
             let mut last = super::lock(&self.disk_held);
