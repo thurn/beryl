@@ -1,13 +1,14 @@
 //! The result cache, check and record routes: `/results/lookup`, `/results/store`, `/flaky`,
-//! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/regressions`, `/records`,
-//! `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits` and `/finds`.
+//! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`,
+//! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
+//! `/finds` and `/tips/waiting`.
 //!
 //! The tickets a report files are written by `crate::upkeep`, which also matches them against
 //! earlier tickets.
 //!
 //! Each route decodes its body with the types of `ignite_core::protocol::hub`, calls the store in
-//! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup` and
-//! `/checks/stats` changes the database, so it needs an authorized writer (HTTP 401 otherwise).
+//! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup`,
+//! `/landings/lookup` and `/checks/stats` changes the database, so it needs an authorized writer (HTTP 401 otherwise).
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::de::DeserializeOwned;
@@ -15,9 +16,9 @@ use serde_json::json;
 
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    AuditReport, ExplorationFind, FlakyReport, IncompleteReport, LookupReply, LookupRequest,
-    MetricsImport, NewResult, RecordBatch, RegressionReport, ReportFiled, StoreRequest, TipClaim,
-    TipVerified,
+    AuditReport, ExplorationFind, FlakyReport, IncompleteReport, LandingsReply, LandingsRequest,
+    LookupReply, LookupRequest, MetricsImport, NewResult, RecordBatch, RegressionReport,
+    ReportFiled, StoreRequest, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -33,10 +34,11 @@ const BILLION: f64 = 1e9;
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let (method, writes) = match request.path.as_str() {
-        "/results/lookup" => ("POST", false),
+        "/results/lookup" | "/landings/lookup" => ("POST", false),
         "/checks/stats" => ("GET", false),
         "/results/store" | "/flaky" | "/tips/claim" | "/tips/verified" | "/regressions"
-        | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds" => ("POST", true),
+        | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds"
+        | "/tips/waiting" => ("POST", true),
         _ => return None,
     };
     if request.method != method {
@@ -68,6 +70,13 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             tips::verified(conn, &verified, now).map_err(|e| store_failure(&e))?;
             Ok(done())
         }
+        "/landings/lookup" => {
+            let request: LandingsRequest = body(request)?;
+            let commits =
+                tips::landed_commits(conn, &request.commits).map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!(LandingsReply { commits })))
+        }
+        "/tips/waiting" => tip_waiting(conn, request, &body(request)?, now),
         "/regressions" => regression(conn, request, &body(request)?, now),
         "/records" => {
             let batch: RecordBatch = body(request)?;
@@ -203,6 +212,30 @@ fn regression(
         other => store_failure(&other),
     })?;
     filed_reply(&ticket)
+}
+
+/// Files the tickets naming the machines a tip has waited an hour for.
+fn tip_waiting(
+    conn: &mut Connection,
+    request: &Request,
+    waiting: &TipWaiting,
+    now: Timestamp,
+) -> Result<Response, Response> {
+    let writer = request.writer.as_ref().expect("checked in handle");
+    let author = Author {
+        actor: &writer.actor,
+        machine: writer.machine.as_str(),
+    };
+    let filed = stuck::tip_waiting(conn, author, waiting, now).map_err(|e| store_failure(&e))?;
+    let tickets = filed
+        .iter()
+        .map(|f| {
+            f.ticket
+                .parse()
+                .map_err(|error| failure(500, &format!("ticket ID {:?}: {error}", f.ticket)))
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(Response::json(200, &json!(TipWaitingFiled { tickets })))
 }
 
 /// Files the ticket for an incomplete check, a cache audit that disagreed or an exploration

@@ -11,13 +11,13 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use ignite_core::config::HubConfig;
-use ignite_core::ids::Seq;
+use ignite_core::ids::{Commit, Seq};
 use ignite_core::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Heartbeat, HeartbeatReply,
-    Landed, LookupReply, LookupRequest, MachineFree, MachineRegister, MachineRegistered,
-    MetricsImport, NewResult, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
-    ReportFiled, Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim, TipClaimReply,
-    TipVerified,
+    Landed, LandedCommit, LandingsReply, LandingsRequest, LookupReply, LookupRequest, MachineFree,
+    MachineRegister, MachineRegistered, MetricsImport, NewResult, Pause, Record, RecordBatch,
+    RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey, StoreRequest,
+    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use ignite_core::traits::{Error, Hub, Result};
@@ -254,6 +254,18 @@ impl Hub for HubClient {
     fn pause(&self, pause: &Pause) -> Result<()> {
         let _: serde_json::Value = self.post("/pause", pause)?;
         Ok(())
+    }
+
+    fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
+        let request = LandingsRequest {
+            commits: commits.to_vec(),
+        };
+        let reply: LandingsReply = self.post("/landings/lookup", &request)?;
+        Ok(reply.commits)
+    }
+
+    fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {
+        self.post("/tips/waiting", waiting)
     }
 }
 

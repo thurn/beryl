@@ -6,7 +6,7 @@ use ignite_core::ids::{CheckName, Commit, TreeId};
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::traits::{Error, Result};
 
-use super::{TipCheck, TipLanding, TipRun, TipWork};
+use super::{TipCheck, TipLanding, TipRun, TipWork, ticketed_landings};
 use crate::checks::{Checks, RunOptions};
 use crate::server::Context;
 use crate::trees::Trees;
@@ -78,17 +78,9 @@ impl TipWork for CheckTipWork {
         }
     }
 
-    /// Each commit counts as its own landing with no ticket: the hub has no route yet that
-    /// says which commits each ticket landed, so a search may name a single commit of a
-    /// landing and cannot name its ticket.
+    /// The first-parent commits between the two, grouped by the ticket whose landing the hub
+    /// recorded for each.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
-        Ok(ignite_git::changed::commits(&ctx.repo, from, to)?
-            .into_iter()
-            .map(|entry| TipLanding {
-                ticket: None,
-                commits: vec![entry.commit],
-                paths: entry.paths,
-            })
-            .collect())
+        ticketed_landings(ctx, ignite_git::changed::commits(&ctx.repo, from, to)?)
     }
 }

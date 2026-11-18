@@ -93,10 +93,16 @@ pub fn commits(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<CommitPath
 /// ignored. A landing runs from the commit after the previous end up to its own end. Commits
 /// after the last end in the range form one more landing, so no commit is ever left out.
 pub fn landings(repo: &Path, from: &Commit, to: &Commit, ends: &[Commit]) -> Result<Vec<Landing>> {
+    Ok(group(commits(repo, from, to)?, ends))
+}
+
+/// Groups commits, oldest first as [`commits`] lists them, into landings by the last commit of
+/// each, by the same rule as [`landings`].
+pub fn group(commits: Vec<CommitPaths>, ends: &[Commit]) -> Vec<Landing> {
     let mut result = Vec::new();
     let mut commits_so_far = Vec::new();
     let mut paths = BTreeSet::new();
-    for entry in commits(repo, from, to)? {
+    for entry in commits {
         let is_end = ends.iter().any(|end| same_commit(end, &entry.commit));
         paths.extend(entry.paths);
         commits_so_far.push(entry.commit);
@@ -113,7 +119,7 @@ pub fn landings(repo: &Path, from: &Commit, to: &Commit, ends: &[Commit]) -> Res
             paths: paths.into_iter().collect(),
         });
     }
-    Ok(result)
+    result
 }
 
 /// Whether two commit IDs name the same commit, allowing either to be abbreviated.

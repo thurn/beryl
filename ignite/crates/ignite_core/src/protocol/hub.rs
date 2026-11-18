@@ -4,7 +4,8 @@
 //! - Hand-offs: `POST /next`, `POST /claims`, `POST /landed`, `POST /release`.
 //! - The result cache: `POST /results/lookup`, `POST /results/store`, `POST /flaky`,
 //!   `GET /checks/stats?family=`.
-//! - Tips: `POST /tips/claim`, `POST /tips/verified`, `POST /regressions`.
+//! - Tips: `POST /tips/claim`, `POST /tips/verified`, `POST /tips/waiting`, `POST /regressions`,
+//!   `POST /landings/lookup`.
 //! - Records: `POST /records`, `POST /metrics/import`.
 
 use serde::{Deserialize, Serialize};
@@ -322,6 +323,45 @@ pub struct TipVerified {
     pub commit: Commit,
     pub machine: MachineId,
     pub state: TipState,
+}
+
+/// `POST /tips/waiting`: a tip has waited an hour for checks that only a machine running
+/// `platform` can run. The hub files one P1 ticket naming each such machine.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TipWaiting {
+    pub commit: Commit,
+    /// The machine that is waiting.
+    pub machine: MachineId,
+    pub platform: Os,
+    /// The checks the tip waits for.
+    pub checks: Vec<CheckName>,
+    /// How long the tips since the last verified commit have waited on `platform`.
+    pub waited_s: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TipWaitingFiled {
+    pub tickets: Vec<TicketId>,
+}
+
+/// `POST /landings/lookup`: which ticket landed each of these commits.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LandingsRequest {
+    pub commits: Vec<Commit>,
+}
+
+/// One commit and the ticket whose landing recorded it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LandedCommit {
+    pub commit: Commit,
+    pub ticket: TicketId,
+}
+
+/// The requested commits that a ticket's landing recorded; a commit no landing recorded, such
+/// as one pushed by hand, is left out.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LandingsReply {
+    pub commits: Vec<LandedCommit>,
 }
 
 /// `POST /regressions`: a check that passed at `last_good` fails from `first_bad`.

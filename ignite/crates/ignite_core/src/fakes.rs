@@ -12,9 +12,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, MachineFree,
-    MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport, ReportFiled,
-    Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, LandedCommit,
+    MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport,
+    ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
@@ -235,6 +236,7 @@ pub struct FakeHub {
     tip_claims: Mutex<Vec<TipClaim>>,
     tip_states: Mutex<Vec<TipVerified>>,
     regressions: Mutex<Vec<RegressionReport>>,
+    tips_waiting: Mutex<Vec<TipWaiting>>,
     tickets: Mutex<BTreeMap<TicketId, TicketDetail>>,
     batches: Mutex<Vec<BatchRequest>>,
     pauses: Mutex<Vec<Pause>>,
@@ -326,6 +328,11 @@ impl FakeHub {
     /// Every regression reported so far, in order.
     pub fn regressions(&self) -> Vec<RegressionReport> {
         lock(&self.regressions).clone()
+    }
+
+    /// Every waiting tip reported so far, in order.
+    pub fn tips_waiting(&self) -> Vec<TipWaiting> {
+        lock(&self.tips_waiting).clone()
     }
 
     pub fn audit_reports(&self) -> Vec<AuditReport> {
@@ -605,6 +612,35 @@ impl Hub for FakeHub {
         let mut finds = lock(&self.finds);
         finds.push(find.clone());
         Ok(Self::filed(finds.len()))
+    }
+
+    /// Answered from the landings recorded with [`Hub::landed`]; a later landing of the same
+    /// commit wins.
+    fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
+        self.reachable()?;
+        let landings = lock(&self.landings);
+        Ok(commits
+            .iter()
+            .filter_map(|commit| {
+                landings
+                    .iter()
+                    .rev()
+                    .find(|landed| landed.work.commits.contains(commit))
+                    .map(|landed| LandedCommit {
+                        commit: commit.clone(),
+                        ticket: landed.ticket.clone(),
+                    })
+            })
+            .collect())
+    }
+
+    fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {
+        self.reachable()?;
+        let mut reports = lock(&self.tips_waiting);
+        reports.push(waiting.clone());
+        Ok(TipWaitingFiled {
+            tickets: vec![Self::filed(reports.len()).ticket],
+        })
     }
 }
 

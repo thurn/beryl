@@ -1,12 +1,14 @@
-//! Tips: each new `staging` commit, its verification claims and its state, and regressions.
+//! Tips: each new `staging` commit, its verification claims and its state, regressions, and
+//! which ticket landed each commit a culprit search looks at.
 //!
 //! A claim names one batch of one family's checks at one tip. It expires, so a machine that
 //! stops (or is shut down) does not hold a batch forever, and another machine can take it.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
+use ignite_core::ids::Commit;
 use ignite_core::protocol::hub::{
-    RegressionReport, TipClaim, TipClaimReply, TipState, TipVerified,
+    LandedCommit, RegressionReport, TipClaim, TipClaimReply, TipState, TipVerified,
 };
 use ignite_core::time::Timestamp;
 
@@ -157,6 +159,36 @@ pub fn regression_fixed(conn: &Connection, check: &str) -> Result<()> {
     Ok(())
 }
 
+/// The ticket whose landing recorded each of `commits`, in the order asked, leaving out commits
+/// no landing recorded. A commit recorded by two landings belongs to the later one.
+pub fn landed_commits(conn: &Connection, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
+    let wanted: Vec<&str> = commits.iter().map(Commit::as_str).collect();
+    let wanted = serde_json::to_string(&wanted).map_err(|e| StoreError::Invalid(e.to_string()))?;
+    let mut statement = conn.prepare(
+        "SELECT landed_commit.value, tickets.id
+         FROM tickets, json_each(tickets.landed, '$.commits') AS landed_commit
+         WHERE tickets.landed IS NOT NULL
+           AND landed_commit.value IN (SELECT value FROM json_each(?1))
+         ORDER BY tickets.landed_at, tickets.id",
+    )?;
+    let mut owner: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for row in statement.query_map(params![wanted], |row| Ok((row.get(0)?, row.get(1)?)))? {
+        let (commit, ticket): (String, String) = row?;
+        owner.insert(commit, ticket);
+    }
+    commits
+        .iter()
+        .filter_map(|commit| {
+            owner.get(commit.as_str()).map(|ticket| {
+                Ok(LandedCommit {
+                    commit: commit.clone(),
+                    ticket: parse("ticket", ticket)?,
+                })
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +236,45 @@ mod tests {
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .unwrap()
+    }
+
+    fn land(conn: &Connection, ticket: &str, at: &str, commits: &[&str]) {
+        conn.execute(
+            "INSERT INTO tickets (id, title, status, created_at, created_by, updated_at, version,
+                                  landed_at, landed)
+             VALUES (?1, ?1, 'closed', ?2, 't', ?2, 0, ?2, ?3)",
+            params![
+                ticket,
+                at,
+                serde_json::json!({ "commits": commits, "files": [], "note": "" }).to_string()
+            ],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn each_commit_is_named_by_the_ticket_that_landed_it() {
+        let conn = hub::open_in_memory().unwrap();
+        land(&conn, "t.1", "2026-11-01T00:00:00.000Z", &["aaaa", "bbbb"]);
+        land(&conn, "t.2", "2026-11-02T00:00:00.000Z", &["cccc"]);
+        // A commit landed again by a later ticket belongs to the later one.
+        land(&conn, "t.3", "2026-11-03T00:00:00.000Z", &["bbbb"]);
+        let asked: Vec<Commit> = ["cccc", "dddd", "aaaa", "bbbb"]
+            .iter()
+            .map(|c| Commit::new(*c).unwrap())
+            .collect();
+
+        let found: Vec<(String, String)> = landed_commits(&conn, &asked)
+            .unwrap()
+            .into_iter()
+            .map(|l| (l.commit.to_string(), l.ticket.to_string()))
+            .collect();
+
+        let expected = [("cccc", "t.2"), ("aaaa", "t.1"), ("bbbb", "t.3")];
+        assert_eq!(
+            found,
+            expected.map(|(c, t)| (c.to_owned(), t.to_owned())).to_vec()
+        );
     }
 
     #[test]

@@ -308,6 +308,47 @@ fn a_regression_that_is_already_open_returns_its_ticket_and_changes_nothing() {
 }
 
 #[test]
+fn landed_commits_are_read_without_a_token_and_a_waiting_tip_files_a_ticket() {
+    let hub = TestHub::start("landings");
+    hub.conn
+        .lock()
+        .unwrap()
+        .execute(
+            "INSERT INTO tickets (id, title, status, created_at, created_by, updated_at, version,
+                                  landed_at, landed)
+             VALUES ('tk.1', 't', 'closed', 'x', 't', 'x', 0, 'x',
+                     '{\"commits\":[\"abcd\"],\"files\":[],\"note\":\"\"}')",
+            [],
+        )
+        .unwrap();
+    let (status, reply) = hub.send(
+        "POST",
+        "/landings/lookup",
+        Some(&json!({"commits": ["ef01", "abcd"]})),
+        false,
+    );
+    assert_eq!(status, 200);
+    assert_eq!(
+        reply,
+        json!({"commits": [{"commit": "abcd", "ticket": "tk.1"}]})
+    );
+
+    let waiting = json!({"commit": "abcd", "machine": "m-1", "platform": "windows",
+                         "checks": ["rust:w"], "waited_s": 3600.0});
+    assert_eq!(
+        hub.send("POST", "/tips/waiting", Some(&waiting), false).0,
+        401
+    );
+    assert_eq!(
+        hub.post("/tips/waiting", &waiting)["tickets"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
 fn metrics_rows_are_stored_once_per_machine_and_source() {
     let hub = TestHub::start("metrics");
     let rows = json!({"machine": "m-1", "source": "claude",

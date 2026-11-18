@@ -8,7 +8,7 @@ use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, Ticket
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     AuditReport, CheckState, ExplorationFind, FlakyReport, IncompleteReason, IncompleteReport,
-    MachineRegister, NewResult, RegressionReport, ResultKey,
+    MachineRegister, NewResult, RegressionReport, ResultKey, TipWaiting,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, Operation, Status, Ticket, TicketFields, TicketQuery, TicketType,
@@ -492,6 +492,51 @@ fn a_tip_that_waits_an_hour_names_the_silent_machine_once() {
             .tickets_filed
             .is_empty()
     );
+}
+
+#[test]
+fn a_tip_waiting_on_another_platform_names_its_machine_on_one_ticket() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let register = |name: &str, id: &str, os: Os| MachineRegister {
+        machine: MachineId::new(id).unwrap(),
+        name: name.to_owned(),
+        os,
+        cores: 16,
+        memory_mb: 65_536,
+        families: Vec::new(),
+        version: "v".to_owned(),
+    };
+    let waiting = |commit: &str| TipWaiting {
+        commit: Commit::new(commit).unwrap(),
+        machine: MachineId::new("m-1").unwrap(),
+        platform: Os::Windows,
+        checks: vec![CheckName::new("rust:windows_paths").unwrap()],
+        waited_s: 3_600.0,
+    };
+
+    // With no Windows machine registered, the ticket says so.
+    let filed = stuck::tip_waiting(&mut conn, UPKEEP, &waiting("abcd"), clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    let none = ticket(&conn, &filed[0].ticket);
+    assert!(none.title.contains("No windows machine"));
+
+    fleet::register(&conn, &register("jarvis", "m-1", Os::Macos), clock.now()).unwrap();
+    fleet::register(&conn, &register("cygnus", "m-3", Os::Windows), clock.now()).unwrap();
+    let filed = stuck::tip_waiting(&mut conn, UPKEEP, &waiting("abcd"), clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+    assert_eq!(filed[0].change, Change::Created);
+    let named = ticket(&conn, &filed[0].ticket);
+    assert!(named.title.contains("cygnus"), "{}", named.title);
+    assert!(named.body.contains("rust:windows_paths") && named.body.contains("abcd"));
+    assert_eq!(named.priority, 1);
+    assert!(named.labels.contains(&"needs:windows".to_owned()));
+
+    // A later tip waiting on the same machine adds to its ticket.
+    clock.advance(600.0);
+    let again = stuck::tip_waiting(&mut conn, UPKEEP, &waiting("ef01"), clock.now()).unwrap();
+    assert_eq!(again[0].ticket, filed[0].ticket);
+    assert_ne!(again[0].change, Change::Created);
 }
 
 #[test]

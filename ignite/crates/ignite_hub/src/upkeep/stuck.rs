@@ -3,7 +3,8 @@
 //! - a check still `incomplete` after its last attempt, or one that cannot run on a machine;
 //! - a cache audit whose rerun disagreed with the cache, which also switches off caching for
 //!   that check;
-//! - a tip that has waited an hour while a machine has not reported;
+//! - a tip that has waited an hour while a machine has not reported, or for checks that only
+//!   machines of another operating system can run;
 //! - an epic with open tickets of which none is ready or in progress, nor waits directly on a
 //!   ticket that is.
 
@@ -11,8 +12,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, params};
 
-use ignite_core::ids::TicketId;
-use ignite_core::protocol::hub::{AuditReport, CheckState, IncompleteReason, IncompleteReport};
+use ignite_core::ids::{CheckName, TicketId};
+use ignite_core::protocol::hub::{
+    AuditReport, CheckState, IncompleteReason, IncompleteReport, TipWaiting,
+};
 use ignite_core::protocol::tickets::{Graph, GraphTicket, Status, TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
@@ -192,6 +195,86 @@ pub fn tips_waiting(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>>
             deps: Vec::new(),
         };
         filed.push(filing::file(conn, UPKEEP, &filing, now)?);
+    }
+    Ok(filed)
+}
+
+/// How many of a waiting tip's checks its ticket lists by name.
+const LISTED_CHECKS: usize = 20;
+
+/// Files one ticket for each machine running the platform a tip has waited an hour for, or one
+/// saying no such machine is registered. A machine shares its ticket with [`tips_waiting`], so
+/// a machine that is silent and needed has one ticket.
+pub fn tip_waiting(
+    conn: &mut Connection,
+    author: Author,
+    report: &TipWaiting,
+    now: Timestamp,
+) -> Result<Vec<Filed>> {
+    let os = report.platform.as_str();
+    let mut checks: Vec<&str> = report.checks.iter().map(CheckName::as_str).collect();
+    let more = checks.len().saturating_sub(LISTED_CHECKS);
+    checks.truncate(LISTED_CHECKS);
+    let mut listed = checks.join("\n- ");
+    if more > 0 {
+        listed = format!("{listed}\n- and {more} more");
+    }
+    let waited = format!(
+        "Tip {} has waited {:.0} minutes for checks that only a {os} machine can run, and \
+         `master` stays where it is until they pass. Machine {} is waiting.",
+        report.commit,
+        report.waited_s / 60.0,
+        report.machine
+    );
+    let labels = vec!["fleet".to_owned(), format!("needs:{os}")];
+    let machines: Vec<_> = fleet::machines(conn)?
+        .into_iter()
+        .filter(|machine| machine.os == os)
+        .collect();
+    let filings: Vec<Filing> = if machines.is_empty() {
+        vec![Filing {
+            signature: Signature::of_subject(&format!("os:{os}"), "unreachable"),
+            evidence: report.commit.to_string(),
+            fields: TicketFields {
+                title: Some(format!("No {os} machine is registered to run its checks")),
+                body: Some(format!(
+                    "{waited}\nNo {os} machine is registered with the hub.\n\nchecks:\n- {listed}"
+                )),
+                ticket_type: Some(TicketType::Bug),
+                priority: Some(1),
+                labels: Some(labels),
+                ..TicketFields::default()
+            },
+            deps: Vec::new(),
+        }]
+    } else {
+        machines
+            .iter()
+            .map(|machine| Filing {
+                signature: Signature::of_subject(&machine.id, "unreachable"),
+                evidence: format!("{}@{}", report.commit, machine.last_seen),
+                fields: TicketFields {
+                    title: Some(format!(
+                        "Tip verification has waited an hour on machine {}",
+                        machine.name
+                    )),
+                    body: Some(format!(
+                        "{waited}\nMachine {} ({}) runs {os} and last reported at {}.\n\n\
+                         checks:\n- {listed}",
+                        machine.name, machine.id, machine.last_seen
+                    )),
+                    ticket_type: Some(TicketType::Bug),
+                    priority: Some(1),
+                    labels: Some(labels.clone()),
+                    ..TicketFields::default()
+                },
+                deps: Vec::new(),
+            })
+            .collect()
+    };
+    let mut filed = Vec::with_capacity(filings.len());
+    for filing in &filings {
+        filed.push(filing::file(conn, author, filing, now)?);
     }
     Ok(filed)
 }

@@ -14,7 +14,12 @@
 //!   run once here before it holds `master`.
 //! - A failure's candidates are the landings since the last verified commit that changed one
 //!   of the check's inputs. One candidate is the culprit with nothing run; several are searched
-//!   by running that check between them, at most [`MAX_RUNS`] times.
+//!   by running that check between them, at most [`MAX_RUNS`] times. A landing is one
+//!   ticket's commits, as the hub recorded them when the ticket landed, so a report names the
+//!   ticket whose landing caused the failure.
+//! - When the tips since the last verified commit have waited [`MACHINE_WAIT_S`] for checks
+//!   only another platform's machines can run, the hub is told once per tip and platform, and
+//!   files a P1 ticket naming those machines. `master` keeps waiting.
 
 mod work;
 
@@ -25,12 +30,15 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::sync::Arc;
 
+use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Seq, TicketId};
 use ignite_core::protocol::hub::{
-    Record, RegressionReport, ResultKey, TipClaim, TipState, TipVerified,
+    Record, RegressionReport, ResultKey, TipClaim, TipState, TipVerified, TipWaiting,
 };
 use ignite_core::protocol::{Class, Outcome};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Push, Result};
+use ignite_git::changed::CommitPaths;
 
 use crate::server::Context;
 
@@ -41,6 +49,10 @@ pub const BATCH: usize = 50;
 
 /// The most runs one culprit search may make before it reports a range.
 pub const MAX_RUNS: u32 = 10;
+
+/// How long tips may wait for checks only another platform's machines can run before the hub
+/// files a ticket naming those machines.
+pub const MACHINE_WAIT_S: f64 = 3_600.0;
 
 /// How many lines of a failure's output a regression report carries.
 const OUTPUT_LINES: usize = 40;
@@ -138,6 +150,11 @@ pub struct TipVerifier {
     /// Failures already reported, so a cached failure that stands for later tips is reported
     /// once.
     reported: HashSet<ResultKey>,
+    /// When the tips since the last verified commit first waited on each other platform. The
+    /// wait spans tips, because on a busy day a new tip arrives well within the hour.
+    waiting_since: BTreeMap<Os, Timestamp>,
+    /// The tips and platforms already reported as waiting.
+    flagged: HashSet<(Commit, Os)>,
 }
 
 impl TipVerifier {
@@ -148,6 +165,8 @@ impl TipVerifier {
             since: Seq(0),
             settled: None,
             reported: HashSet::new(),
+            waiting_since: BTreeMap::new(),
+            flagged: HashSet::new(),
         }
     }
 
@@ -229,11 +248,17 @@ impl TipVerifier {
 
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting: Vec<CheckName> = Vec::new();
+        let mut elsewhere: BTreeMap<Os, Vec<CheckName>> = BTreeMap::new();
         for check in &checks {
             match verdicts.get(&check.key).map(|v| v.outcome) {
                 Some(Outcome::Pass | Outcome::Flaky) => {}
                 Some(Outcome::Fail) => failed.push(check),
-                Some(Outcome::Incomplete) | None => waiting.push(check.check.clone()),
+                Some(Outcome::Incomplete) | None => {
+                    waiting.push(check.check.clone());
+                    if let (false, Some(os)) = (check.runnable, check.key.platform) {
+                        elsewhere.entry(os).or_default().push(check.check.clone());
+                    }
+                }
             }
         }
         if !failed.is_empty() {
@@ -251,10 +276,17 @@ impl TipVerifier {
             });
         }
         if !waiting.is_empty() {
+            self.flag_missing_machines(ctx, tip, elsewhere)?;
             waiting.sort();
             waiting.dedup();
             return Ok(TipOutcome::Waiting { checks: waiting });
         }
+        self.move_master(ctx, tip)
+    }
+
+    /// Moves `master` to a tip whose every check passed and records it as verified.
+    fn move_master(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
+        let repository = &ctx.config.repository;
         match ctx.git.push(&ctx.repo, tip, &repository.master)? {
             Push::Pushed { .. } => {}
             Push::Rejected { reason } => {
@@ -269,7 +301,41 @@ impl TipVerifier {
             machine: ctx.machine.clone(),
             state: TipState::Verified,
         })?;
+        self.waiting_since.clear();
+        self.flagged.clear();
         Ok(TipOutcome::Verified)
+    }
+
+    /// Starts the wait for each platform `tip` waits on that no earlier tip was waiting on,
+    /// forgets platforms it no longer waits on, and reports each platform waited on for
+    /// [`MACHINE_WAIT_S`], once per tip.
+    fn flag_missing_machines(
+        &mut self,
+        ctx: &Context,
+        tip: &Commit,
+        elsewhere: BTreeMap<Os, Vec<CheckName>>,
+    ) -> Result<()> {
+        let now = ctx.clock.now();
+        self.waiting_since
+            .retain(|os, _| elsewhere.contains_key(os));
+        for (platform, mut checks) in elsewhere {
+            let since = *self.waiting_since.entry(platform).or_insert(now);
+            let waited_s = now.seconds_since(since);
+            if waited_s < MACHINE_WAIT_S || self.flagged.contains(&(tip.clone(), platform)) {
+                continue;
+            }
+            checks.sort();
+            checks.dedup();
+            ctx.hub.tip_waiting(&TipWaiting {
+                commit: tip.clone(),
+                machine: ctx.machine.clone(),
+                platform,
+                checks,
+                waited_s,
+            })?;
+            self.flagged.insert((tip.clone(), platform));
+        }
+        Ok(())
     }
 
     /// The landing between `good` and `bad` that made `check` fail, or the range of landings a
@@ -450,6 +516,31 @@ impl TipVerifier {
         }
         ctx.hub.records(&records)
     }
+}
+
+/// Groups `commits`, oldest first, into landings by the ticket the hub says landed each one.
+/// A run of commits no landing recorded, such as a push by hand, is a landing with no ticket.
+pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec<TipLanding>> {
+    let shas: Vec<Commit> = commits.iter().map(|c| c.commit.clone()).collect();
+    let owners: HashMap<Commit, TicketId> = ctx
+        .hub
+        .landed_commits(&shas)?
+        .into_iter()
+        .map(|landed| (landed.commit, landed.ticket))
+        .collect();
+    let owner = |i: usize| owners.get(&shas[i]);
+    let ends: Vec<Commit> = (0..shas.len())
+        .filter(|&i| i + 1 == shas.len() || owner(i) != owner(i + 1))
+        .map(|i| shas[i].clone())
+        .collect();
+    Ok(ignite_git::changed::group(commits, &ends)
+        .into_iter()
+        .map(|landing| TipLanding {
+            ticket: landing.commits.last().and_then(|c| owners.get(c)).cloned(),
+            commits: landing.commits,
+            paths: landing.paths,
+        })
+        .collect())
 }
 
 fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun {

@@ -2,13 +2,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use ignite_core::config::Config;
+use ignite_core::config::{Config, Os};
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
-use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, TicketId};
+use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, SessionId, TicketId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{NewResult, ResultKey, TipClaim};
+use ignite_core::protocol::hub::{Landed, NewResult, ResultKey, TipClaim};
+use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Git, Hub, Result};
+use ignite_git::changed::CommitPaths;
 
 use super::*;
 
@@ -69,6 +71,9 @@ struct FakeWork {
     checks: Mutex<HashMap<Commit, Vec<TipCheck>>>,
     outcomes: Mutex<HashMap<(Commit, CheckName), Outcome>>,
     landings: Mutex<Vec<TipLanding>>,
+    /// Commits between the commits a test passes, grouped into landings as
+    /// [`CheckTipWork`] groups them, when no landing is scripted.
+    commits: Mutex<Vec<CommitPaths>>,
     runs: Mutex<Vec<Run>>,
 }
 
@@ -88,6 +93,13 @@ impl FakeWork {
         self.landings.lock().unwrap().push(TipLanding {
             ticket: Some(ticket(ticket_id)),
             commits: commits.iter().map(|c| commit(c)).collect(),
+            paths: paths.iter().map(|p| (*p).to_owned()).collect(),
+        });
+    }
+
+    fn add_commit(&self, sha: &str, paths: &[&str]) {
+        self.commits.lock().unwrap().push(CommitPaths {
+            commit: commit(sha),
             paths: paths.iter().map(|p| (*p).to_owned()).collect(),
         });
     }
@@ -144,14 +156,20 @@ impl TipWork for FakeWork {
         runs
     }
 
-    fn landings(&self, _ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
-        // The scripted landings all lie between the commits a test passes.
+    fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>> {
+        // The scripted landings and commits all lie between the commits a test passes.
         assert_ne!(from, to);
-        Ok(self.landings.lock().unwrap().clone())
+        let commits = self.commits.lock().unwrap().clone();
+        if commits.is_empty() {
+            Ok(self.landings.lock().unwrap().clone())
+        } else {
+            ticketed_landings(ctx, commits)
+        }
     }
 }
 
 struct World {
+    clock: Arc<FakeClock>,
     hub: Arc<FakeHub>,
     git: Arc<FakeGit>,
     work: Arc<FakeWork>,
@@ -160,6 +178,7 @@ struct World {
 impl World {
     fn new() -> World {
         let world = World {
+            clock: Arc::new(FakeClock::new(Timestamp::EPOCH)),
             hub: Arc::new(FakeHub::default()),
             git: Arc::new(FakeGit::default()),
             work: Arc::new(FakeWork::default()),
@@ -173,7 +192,7 @@ impl World {
             config: Config::parse("ignite.toml", CONFIG).unwrap(),
             repo: PathBuf::from("/repo"),
             machine: MachineId::new(machine).unwrap(),
-            clock: Arc::new(FakeClock::new(Timestamp::EPOCH)),
+            clock: self.clock.clone(),
             hub: self.hub.clone(),
             git: self.git.clone(),
             launcher: Arc::new(FakeLauncher::default()),
@@ -201,6 +220,23 @@ impl World {
 
     fn master(&self) -> Commit {
         self.git.tip("master").unwrap()
+    }
+
+    /// Records at the hub that `ticket_id` landed `commits`.
+    fn record_landing(&self, ticket_id: &str, commits: &[&str]) {
+        self.hub
+            .landed(&Landed {
+                ticket: ticket(ticket_id),
+                machine: MachineId::new("m-1").unwrap(),
+                session: SessionId::new("s-1").unwrap(),
+                work: LandedWork {
+                    commits: commits.iter().map(|c| commit(c)).collect(),
+                    files: Vec::new(),
+                    note: String::new(),
+                },
+                fresh: false,
+            })
+            .unwrap();
     }
 
     /// Makes `at` the newest `staging` commit.
@@ -517,4 +553,106 @@ fn a_newer_tip_supersedes_the_round_between_batches() {
     assert_eq!(outcome, TipOutcome::Superseded { by: newer });
     assert_eq!(world.work.runs().len(), 1);
     assert_eq!(world.master(), commit("aaaa000"));
+}
+
+/// Two landings by tickets and one commit pushed by hand, recorded at the hub as `ignite land`
+/// records them: `tk.1` landed `bbbb000` and `bbbb111`, `tk.2` landed `cccc000`, and `dddd000`
+/// has no ticket. Each commit changes the paths given.
+fn landed_world(paths: [&[&str]; 4]) -> World {
+    let world = World::new();
+    world.record_landing("tk.1", &["bbbb000", "bbbb111"]);
+    world.record_landing("tk.2", &["cccc000"]);
+    for (sha, paths) in ["bbbb000", "bbbb111", "cccc000", "dddd000"]
+        .iter()
+        .zip(paths)
+    {
+        world.work.add_commit(sha, paths);
+    }
+    world
+}
+
+#[test]
+fn a_regression_names_the_ticket_whose_landing_introduced_it() {
+    // tk.1's first commit touched the check's inputs; its second did not.
+    let world = landed_world([&["src/a/lib.rs"], &["docs/x"], &["docs/y"], &["docs/z"]]);
+    let ctx = world.ctx("m-1");
+    let tip = commit("dddd000");
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'a')]);
+    world.work.set_outcome(&tip, &name("unit:a"), Outcome::Fail);
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    let report = &world.hub.regressions()[0];
+    assert_eq!(report.caused_by, Some(ticket("tk.1")));
+    assert!(report.suspects.is_empty());
+    // The whole landing is blamed, so the first bad commit is its last.
+    assert_eq!(report.first_bad, commit("bbbb111"));
+    assert_eq!(report.last_good, commit("aaaa000"));
+    assert_eq!(world.work.runs().len(), 1);
+}
+
+#[test]
+fn a_range_lists_every_ticket_in_it() {
+    let world = landed_world([&["src/a"], &["src/a"], &["src/a"], &["src/a"]]);
+    let ctx = world.ctx("m-1");
+    let tip = commit("dddd000");
+    world.land(&tip);
+    let failing = check("a", 'a');
+    world.work.set_checks(&tip, vec![failing.clone()]);
+    world.work.set_outcome(&tip, &failing.check, Outcome::Fail);
+    // The first run of the search says nothing, so it ends with the whole range.
+    world
+        .work
+        .set_outcome(&commit("bbbb111"), &failing.check, Outcome::Incomplete);
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    let report = &world.hub.regressions()[0];
+    assert_eq!(report.caused_by, None);
+    // The commit pushed by hand is a suspect too, but has no ticket to name.
+    assert_eq!(report.suspects, vec![ticket("tk.1"), ticket("tk.2")]);
+    assert_eq!(report.first_bad, tip);
+}
+
+#[test]
+fn an_hour_waiting_on_another_platform_reports_it_once_and_master_waits() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let here = check("a", 'a');
+    let mut elsewhere = check("w", 'e');
+    elsewhere.runnable = false;
+    elsewhere.key.platform = Some(Os::Windows);
+    let mut verifier = world.verifier();
+    let verify_at = |sha: &str, verifier: &mut TipVerifier| {
+        let tip = commit(sha);
+        world.land(&tip);
+        world
+            .work
+            .set_checks(&tip, vec![here.clone(), elsewhere.clone()]);
+        verifier.verify(&ctx, &tip).unwrap()
+    };
+
+    assert!(matches!(
+        verify_at("bbbb000", &mut verifier),
+        TipOutcome::Waiting { .. }
+    ));
+    // A newer tip does not restart the wait.
+    world.clock.advance(MACHINE_WAIT_S - 1.0);
+    verify_at("cccc000", &mut verifier);
+    assert!(world.hub.tips_waiting().is_empty());
+
+    world.clock.advance(1.0);
+    verify_at("cccc000", &mut verifier);
+    world.clock.advance(600.0);
+    verify_at("cccc000", &mut verifier);
+
+    let reports = world.hub.tips_waiting();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].commit, commit("cccc000"));
+    assert_eq!(reports[0].platform, Os::Windows);
+    assert_eq!(reports[0].checks, vec![name("unit:w")]);
+    assert!((reports[0].waited_s - MACHINE_WAIT_S).abs() < f64::EPSILON);
+    assert_eq!(world.master(), commit("aaaa000"));
+    assert!(world.git.pushes().is_empty());
 }

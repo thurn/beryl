@@ -12,8 +12,9 @@ use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, Landed,
-    MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport,
-    ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
+    RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply,
+    TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
@@ -173,6 +174,20 @@ pub trait Hub: Send + Sync {
     fn audit(&self, report: &AuditReport) -> Result<ReportFiled>;
     /// Reports a failed exploration check (`POST /finds`).
     fn find(&self, find: &ExplorationFind) -> Result<ReportFiled>;
+
+    /// Which ticket landed each of `commits`, leaving out commits no landing recorded
+    /// (`POST /landings/lookup`).
+    fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
+        let _ = commits;
+        Err(not_supported("look up landings"))
+    }
+
+    /// Reports a tip that has waited an hour on another platform's checks; the hub files a
+    /// ticket naming each machine that runs it (`POST /tips/waiting`).
+    fn tip_waiting(&self, waiting: &TipWaiting) -> Result<TipWaitingFiled> {
+        let _ = waiting;
+        Err(not_supported("report a waiting tip"))
+    }
 
     /// One ticket with its comments (`GET /tickets/<id>`).
     fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
