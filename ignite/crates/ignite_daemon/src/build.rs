@@ -36,6 +36,9 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
+mod flight;
+use flight::{Flight, FlightGuard, STOP_RECHECK};
+
 use ignite_core::hash::{HashParts, input_hash};
 use ignite_core::ids::{InputHash, TreeId};
 use ignite_core::inputs::{self, CrateGraph};
@@ -185,102 +188,6 @@ struct State {
     joined: usize,
     /// Requests waiting for an output directory to be free.
     queued: usize,
-}
-
-/// One running build that other requests can wait for.
-#[derive(Default)]
-struct Flight {
-    result: Mutex<Option<BuildResult>>,
-    done: Condvar,
-}
-
-impl Flight {
-    fn wait(&self) -> BuildResult {
-        let mut result = lock(&self.result);
-        loop {
-            if let Some(result) = result.as_ref() {
-                return result.clone();
-            }
-            result = self
-                .done
-                .wait(result)
-                .unwrap_or_else(PoisonError::into_inner);
-        }
-    }
-
-    fn finish(&self, result: BuildResult) {
-        *lock(&self.result) = Some(result);
-        self.done.notify_all();
-    }
-}
-
-/// A build in progress: the output directories it holds and the flight that joiners wait on.
-/// [`FlightGuard::finish`] ends it with the build's result. Dropped without that call, as when
-/// the build panics, it frees the directories and ends the flight with a failure, so that no
-/// later request waits on a build that no longer runs.
-struct FlightGuard<'a> {
-    manager: &'a BuildManager,
-    plan: &'a Plan,
-    dirs: Vec<(TreeId, String)>,
-    flight_key: (Request, InputHash),
-    flight: Arc<Flight>,
-    finished: bool,
-}
-
-impl FlightGuard<'_> {
-    fn release(&self) {
-        let mut state = lock(&self.manager.state);
-        for dir in &self.dirs {
-            state.busy.remove(dir);
-        }
-        state.flights.remove(&self.flight_key);
-    }
-
-    /// Ends the build with `result`. `remember` says whether a failure is one the same inputs
-    /// would repeat, so that later requests get it without building.
-    fn finish(mut self, result: &BuildResult, remember: bool) {
-        self.finished = true;
-        let mut state = lock(&self.manager.state);
-        for dir in &self.dirs {
-            state.busy.remove(dir);
-        }
-        state.flights.remove(&self.flight_key);
-        let request = &self.plan.request;
-        match result {
-            BuildResult::Built { .. } => {
-                state.failed.remove(request);
-                state.held.insert(request.clone(), self.plan.hash.clone());
-            }
-            BuildResult::Failed { output, .. } => {
-                // A failed build may have rewritten part of its outputs, so the tree no longer
-                // holds the last state that was built.
-                state.held.remove(request);
-                if remember {
-                    let failure = (self.plan.hash.clone(), output.clone());
-                    state.failed.insert(request.clone(), failure);
-                }
-            }
-            BuildResult::Current => {}
-        }
-        drop(state);
-        self.flight.finish(result.clone());
-        self.manager.ended.notify_all();
-    }
-}
-
-impl Drop for FlightGuard<'_> {
-    fn drop(&mut self) {
-        if self.finished {
-            return;
-        }
-        self.release();
-        let failed = self.manager.failure(
-            &self.plan.request.product,
-            "the build stopped without a result",
-        );
-        self.flight.finish(failed);
-        self.manager.ended.notify_all();
-    }
 }
 
 /// Everything a build of one request needs, worked out before any lock is taken.
@@ -474,6 +381,17 @@ impl BuildManager {
         }
     }
 
+    /// The result of a request whose work was asked to stop while it waited for another build.
+    fn stopped_waiting(&self, plan: &Plan) -> BuildResult {
+        self.failure(
+            &plan.request.product,
+            &format!(
+                "stopped waiting for a build of {} in {}: its work was asked to stop",
+                plan.request.product, plan.request.tree
+            ),
+        )
+    }
+
     /// The shared dependencies whose features the subset's build would enable differently
     /// from the whole workspace's, compared once per state of the Cargo files. Empty when the
     /// product reads no crates or builds the whole workspace. `Err` when `cargo tree` fails.
@@ -553,6 +471,10 @@ impl BuildManager {
             .iter()
             .map(|dir| (plan.request.tree.clone(), dir.clone()))
             .collect();
+        // The work that asked for the build. Once it is asked to stop, a wait for another build
+        // gives up instead of lasting until that build ends.
+        let activity = crate::steps::current();
+        let stop_requested = || activity.as_ref().is_some_and(|a| a.stop_requested());
         let mut state = lock(&self.state);
         loop {
             if state.held.get(&plan.request) == Some(&plan.hash) {
@@ -574,22 +496,29 @@ impl BuildManager {
                     "the build of {} in {} that another command started",
                     plan.request.product, plan.request.tree
                 ));
-                let result = flight.wait();
+                let result = flight.wait(&stop_requested);
                 lock(&self.state).joined -= 1;
-                return result;
+                return result.unwrap_or_else(|| self.stopped_waiting(plan));
             }
             if dirs.iter().all(|dir| !state.busy.contains(dir)) {
                 break;
+            }
+            if stop_requested() {
+                drop(state);
+                return self.stopped_waiting(plan);
             }
             state.queued += 1;
             let waiting = crate::steps::waiting(format!(
                 "another build writing the outputs of {} in {}",
                 plan.request.product, plan.request.tree
             ));
+            // Woken when a build ends, and every `STOP_RECHECK` to see whether the work that
+            // asked for this build was stopped, as `ignite stop` does.
             state = self
                 .ended
-                .wait(state)
-                .unwrap_or_else(PoisonError::into_inner);
+                .wait_timeout(state, STOP_RECHECK)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
             drop(waiting);
             state.queued -= 1;
         }
@@ -601,14 +530,7 @@ impl BuildManager {
         drop(state);
 
         // The guard frees the directories and wakes the joiners even if `run` panics.
-        let guard = FlightGuard {
-            manager: self,
-            plan,
-            dirs,
-            flight_key,
-            flight,
-            finished: false,
-        };
+        let guard = FlightGuard::new(self, plan, dirs, flight_key, flight);
         let (result, remember) = self.run(plan);
         guard.finish(&result, remember);
         result
