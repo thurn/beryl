@@ -340,7 +340,7 @@ pub enum PlanCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum GateCommand {
-    /// Recompute the threshold and the cap from the last days of history. Changes nothing.
+    /// Recompute the gate's threshold from the last days of history. Changes nothing.
     Replay {
         #[arg(long, default_value_t = 14)]
         days: u32,
