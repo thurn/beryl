@@ -139,6 +139,8 @@ pub struct SupervisedLauncher {
     pruned: AtomicU64,
     /// The memory each command line usually needs, for the scheduler's memory gate.
     peaks: Peaks,
+    /// Seconds an `idle` command has to exit after the scheduler stops it, before it is killed.
+    stop_grace_s: f64,
 }
 
 impl SupervisedLauncher {
@@ -160,7 +162,16 @@ impl SupervisedLauncher {
             scheduler: None,
             next: AtomicU64::new(0),
             pruned: AtomicU64::new(0),
+            stop_grace_s: STOP_GRACE_S,
         }
+    }
+
+    /// Gives a stopped `idle` command `seconds` (of the scheduler's clock) to exit instead of
+    /// [`STOP_GRACE_S`]. For tests of the kill that follows the grace.
+    #[must_use]
+    pub fn with_stop_grace(mut self, seconds: f64) -> Self {
+        self.stop_grace_s = seconds;
+        self
     }
 
     /// Takes cores and resources from `scheduler` before each run, and has it read the machine
@@ -383,7 +394,12 @@ impl SupervisedLauncher {
                 // The scheduler stops `idle` work when a higher class waits or holds what it
                 // needs; stopping ends the command. The thread ends when the grant is released.
                 if let (Class::Idle, Some(scheduler)) = (spec.class, &self.scheduler) {
-                    watch_for_stop(scheduler, grant.id, started.run().clone());
+                    watch_for_stop(
+                        scheduler,
+                        grant.id,
+                        started.run().clone(),
+                        self.stop_grace_s,
+                    );
                 }
                 let run = started.run().clone();
                 let (done, finished) = mpsc::channel::<()>();

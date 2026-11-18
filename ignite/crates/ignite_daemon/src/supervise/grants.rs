@@ -54,14 +54,14 @@ impl Drop for GrantGuard {
 }
 
 /// Starts the thread that ends `run`'s command when the scheduler asks grant `id` to stop: first
-/// `SIGTERM` (or the job object's end), then, if the grant is still held [`STOP_GRACE_S`] later
-/// by the scheduler's clock, `SIGKILL`. The thread ends when the grant is released.
-pub(super) fn watch_for_stop(scheduler: &Arc<Scheduler>, id: u64, run: Run) {
+/// `SIGTERM` (or the job object's end), then, if the grant is still held `grace_s` later (normally
+/// [`STOP_GRACE_S`]) by the scheduler's clock, `SIGKILL`. The thread ends when the grant is released.
+pub(super) fn watch_for_stop(scheduler: &Arc<Scheduler>, id: u64, run: Run, grace_s: f64) {
     let scheduler = Arc::clone(scheduler);
     thread::spawn(move || {
         if scheduler.wait_stop(id) {
             let _ = run.end();
-            if !scheduler.wait_released(id, STOP_GRACE_S) {
+            if !scheduler.wait_released(id, grace_s) {
                 let _ = run.kill();
             }
         }
@@ -81,7 +81,7 @@ impl SupervisedLauncher {
                 let cores = read_cores(&run.dir().join(CORES)).unwrap_or(file.cores);
                 let grant = scheduler.adopt(file.class, cores, file.resources, None);
                 if file.class == Class::Idle {
-                    watch_for_stop(scheduler, grant.id, run.clone());
+                    watch_for_stop(scheduler, grant.id, run.clone(), self.stop_grace_s);
                 }
                 Some(GrantGuard::new(Some(Arc::clone(scheduler)), grant))
             });

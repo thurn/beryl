@@ -9,6 +9,9 @@ use std::thread;
 use super::{HostCpu, NATIVE_WINDOW, no_reading};
 use crate::Native;
 
+/// How many times `Native::busy` doubles its window when no tick passed.
+const WINDOW_DOUBLINGS: u32 = 3;
+
 /// A CPU reader that remembers its own previous reading: the tick counters at the previous
 /// call to `busy` (user, system, idle and nice). Each meter has its own, so two meters never
 /// take each other's baseline.
@@ -34,8 +37,15 @@ impl HostCpu for HostMeter {
             .previous
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let before = previous.replace(now).ok_or_else(no_reading)?;
-        busy_fraction(before, now).ok_or_else(no_reading)
+        let Some(before) = *previous else {
+            *previous = Some(now);
+            return Err(no_reading());
+        };
+        let busy = busy_fraction(before, now).ok_or_else(no_reading)?;
+        // When no tick passed, the older reading stays the baseline, so the next call measures
+        // over the longer interval instead of reporting zero.
+        *previous = Some(now);
+        Ok(busy)
     }
 
     fn free_memory_mb(&self) -> io::Result<u64> {
@@ -49,11 +59,20 @@ impl HostCpu for Native {
     }
 
     /// Reads the counters twice, [`NATIVE_WINDOW`] apart, because `Native` keeps no state.
-    /// A caller that reads repeatedly uses a [`HostMeter`].
+    /// The kernel refreshes its counters on its own schedule, so the two readings may see no
+    /// tick; the window is then doubled and tried again, up to [`WINDOW_DOUBLINGS`] times,
+    /// measuring from the first reading. A caller that reads repeatedly uses a [`HostMeter`].
     fn busy(&self) -> io::Result<f64> {
         let before = cpu_ticks()?;
-        thread::sleep(NATIVE_WINDOW);
-        busy_fraction(before, cpu_ticks()?).ok_or_else(no_reading)
+        let mut window = NATIVE_WINDOW;
+        for _ in 0..=WINDOW_DOUBLINGS {
+            thread::sleep(window);
+            if let Some(busy) = busy_fraction(before, cpu_ticks()?) {
+                return Ok(busy);
+            }
+            window *= 2;
+        }
+        Err(no_reading())
     }
 
     fn free_memory_mb(&self) -> io::Result<u64> {
@@ -78,9 +97,11 @@ impl HostCpu for Native {
         let info = unsafe { info.assume_init() };
         // SAFETY: `sysconf` only reads its argument.
         let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
-        // Free pages and inactive pages, which the kernel takes back without paging out
-        // anything in use. `free_count` includes the speculative pages.
-        let pages = u64::from(info.free_count) + u64::from(info.inactive_count);
+        // Free pages plus purgeable ones, which the kernel drops on demand without writing them
+        // anywhere. `free_count` includes the speculative pages. Inactive pages are left out:
+        // they hold data that was used recently and must be compressed or paged out to be
+        // reused, so counting them as free would hide memory pressure.
+        let pages = u64::from(info.free_count) + u64::from(info.purgeable_count);
         Ok(pages * page.max(0) as u64 / (1024 * 1024))
     }
 }

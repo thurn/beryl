@@ -423,3 +423,97 @@ fn old_run_directories_are_deleted_and_judged_ones_are_kept_longer() {
     assert!(!alive(&judged));
     fs::remove_dir_all(&root).unwrap();
 }
+
+/// An `idle` command that ignores `SIGTERM` when the scheduler stops it for a landing is killed
+/// once the grace has passed. The grace is shortened to a second, on the real clock.
+#[cfg(unix)]
+mod stop_grace {
+    use std::collections::BTreeMap;
+    use std::io;
+    use std::process::Command;
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    use ignite_core::config::Floor;
+    use ignite_core::time::SystemClock;
+    use ignite_daemon::sched::{GrantRequest, Limits, Scheduler};
+    use ignite_os::hostcpu::HostCpu;
+
+    use super::*;
+
+    struct IdleHost;
+
+    impl HostCpu for IdleHost {
+        fn cores(&self) -> u32 {
+            6
+        }
+
+        fn busy(&self) -> io::Result<f64> {
+            Ok(0.0)
+        }
+
+        fn free_memory_mb(&self) -> io::Result<u64> {
+            Err(io::Error::other("not read"))
+        }
+    }
+
+    #[test]
+    fn idle_work_that_ignores_sigterm_is_killed_after_the_grace() {
+        let root = scratch("stop-grace");
+        let scheduler = Arc::new(Scheduler::new(
+            Limits {
+                cores: 6,
+                floor: Floor::default(),
+                resources: BTreeMap::new(),
+            },
+            Arc::new(SystemClock),
+            Arc::new(IdleHost),
+        ));
+        let started = root.join("started");
+        assert!(
+            Command::new("mkfifo")
+                .arg(&started)
+                .status()
+                .unwrap()
+                .success()
+        );
+        let mut spec = shell(
+            &root,
+            r#"trap '' TERM; echo go > "$STARTED"; while :; do sleep 1; done"#,
+        );
+        spec.env
+            .push(("STARTED".to_owned(), started.display().to_string()));
+        spec.class = Class::Idle;
+        spec.cores = 4;
+        let launcher = launcher(&root)
+            .with_scheduler(Arc::clone(&scheduler))
+            .with_stop_grace(1.0);
+        let run = thread::spawn(move || launcher.run(&spec));
+        // Blocks until the command is running, with `SIGTERM` already ignored.
+        fs::read_to_string(&started).unwrap();
+        let begun = Instant::now();
+        let ask = |class, cores| GrantRequest {
+            class,
+            cores,
+            resources: Vec::new(),
+            memory_mb: None,
+            shrinks: false,
+            grows: false,
+            cores_file: None,
+        };
+        // An agent takes the two cores the idle command left, so a landing has no cores free
+        // and the scheduler stops the idle command for it.
+        let agent = scheduler.acquire(&ask(Class::Agent, 2));
+        let land = scheduler.acquire(&ask(Class::Land, 4));
+        scheduler.release(&agent);
+        let result = run.join().unwrap();
+        scheduler.release(&land);
+        assert_eq!(result.exit, None, "ended by a signal, not an exit");
+        assert!(
+            begun.elapsed() < Duration::from_secs(8),
+            "killed long before the default grace"
+        );
+        fs::remove_dir_all(&root).unwrap();
+    }
+}

@@ -11,6 +11,11 @@
 //! back at its second start ([`ExecutableStore::startup`]): `current` points at the previous
 //! release again, the reason goes to `bin/rollbacks.log`, and the commit is added to
 //! `bin/rejected` so the daemon does not update to it again.
+//!
+//! Known limit: a start is recorded whether the previous run crashed or a person stopped it, so
+//! a person who restarts the daemon twice within [`CRASH_WINDOW_S`] during a trial rolls the
+//! release back. Telling the two apart needs a clean-exit marker, and the daemon has no
+//! shutdown path to write one: it ends on a signal with no handler.
 
 use std::fs;
 use std::io;
