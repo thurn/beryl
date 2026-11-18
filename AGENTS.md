@@ -322,6 +322,11 @@ possible, pixel for pixel, use the `arena-pixel-match` skill.
 - Do not directly reference planning documents or tickets in code (e.g. "plan
   K16"), this gets stale fast. If you touch code with such references, delete
   them.
+- Never put a ticket number (an Ignite ticket ID such as `cjhb`, or an epic's
+  ID) in code, comments or documentation, including `docs/`, the `AGENTS.md`
+  files and skills. A ticket closes and its number then tells a reader nothing,
+  so say what the ticket would have said. Ticket numbers belong in commit
+  messages, landing notes and other tickets.
 - Timeouts only catch hangs: a slow test or run never fails a check for being
   slow. Tests fail deterministically; delete flaky ones. Avoid slow integration
   tests: prefer a fast test that keeps most of their value.
