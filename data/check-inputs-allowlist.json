@@ -1,0 +1,10 @@
+{
+  "rust/beryl3d/crates/beryl_3d/src/audio/files.rs": 3,
+  "rust/beryl3d/crates/beryl_3d/src/options.rs": 1,
+  "rust/beryl3d/crates/beryl_inspect/tests/all/furniture.rs": 1,
+  "rust/beryl3d/crates/beryl_scene/build.rs": 2,
+  "rust/beryl3d/crates/beryl_scene/tests/all/sound.rs": 1,
+  "rust/crates/beryl_card_build/src/generate.rs": 1,
+  "rust/crates/beryl_card_build/src/tests/complete.rs": 3,
+  "rust/crates/beryl_cli/src/blunders.rs": 1
+}

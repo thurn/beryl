@@ -18,7 +18,9 @@ inputs = [
 ]
 
 # Conflict markers outside Markdown, file length, the rules that keep card names, a second
-# player, the board and discarded pushes out of generic code, and the citations of the rules.
+# player, the board and discarded pushes out of generic code, the citations of the rules, and
+# check-inputs, which holds the Rust tests' reads of repository files to the inputs their check
+# families declare.
 # The citations, rule-ownership and divergences checks need the pinned Comprehensive Rules in
 # the machine's cache, and rulings the Scryfall rulings; without them they report incomplete.
 [family.source]
