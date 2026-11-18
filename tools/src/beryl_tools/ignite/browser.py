@@ -167,7 +167,8 @@ def browser_env(browser: str | None = None) -> dict[str, str]:
 
 def record_fixtures(into: Path, only: Sequence[str] = ()) -> None:
     """Plays the seeded games of ui/fixtures.json (those named in `only`, or all) and records
-    them into `into` with the `beryl_cli` the `cli` build product made."""
+    them into `into` with the `beryl_cli` of the `cli` build product (ignite/checks/rust.toml).
+    """
     shutil.rmtree(into, ignore_errors=True)
     cli = system.exe(paths.RUN_TARGET / "debug" / "beryl_cli")
     done = subprocess.run(
