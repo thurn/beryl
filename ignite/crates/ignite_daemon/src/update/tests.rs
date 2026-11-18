@@ -52,10 +52,15 @@ impl Builder for FakeBuilder {
 struct FakeService {
     installed: RefCell<Vec<(PathBuf, Vec<String>)>>,
     monitors: RefCell<Vec<(PathBuf, Vec<String>)>>,
+    /// Fail every daemon install, as `launchctl bootstrap` does when launchd refuses the agent.
+    refuse: bool,
 }
 
 impl Service for FakeService {
     fn install(&self, executable: &Path, args: &[String]) -> io::Result<()> {
+        if self.refuse {
+            return Err(io::Error::other("launchctl bootstrap: Bootstrap failed: 5"));
+        }
         self.installed
             .borrow_mut()
             .push((executable.to_owned(), args.to_vec()));
@@ -383,6 +388,39 @@ fn install_stops_before_the_service_when_the_hub_is_down() {
     assert_eq!(failure(&error).exit, Exit::Unreachable);
     assert!(service.installed.borrow().is_empty());
     assert!(identity.load().unwrap().unwrap().token.is_none());
+}
+
+#[test]
+fn install_fails_with_a_nonzero_exit_when_the_service_does_not_load() {
+    let home = tempdir("refused");
+    let store = ExecutableStore::new(home.join("bin"));
+    let identity = IdentityFile {
+        path: home.join("machine.json"),
+    };
+    let builder = FakeBuilder {
+        out: home.join("build").join("ignite"),
+        built: RefCell::default(),
+    };
+    let registrar = FakeRegistrar {
+        requests: RefCell::default(),
+        tokens: RefCell::default(),
+        down: false,
+    };
+    let service = FakeService {
+        refuse: true,
+        ..FakeService::default()
+    };
+    let deps = InstallDeps {
+        host: &FakeHost,
+        builder: &builder,
+        store: &store,
+        identity: &identity,
+        registrar: &registrar,
+        service: &service,
+    };
+    let error = install(&deps, &config(), &commit("1234abc")).unwrap_err();
+    assert!(error.to_string().contains("Bootstrap failed"), "{error}");
+    assert_ne!(failure(&error).exit, Exit::Success);
 }
 
 #[test]

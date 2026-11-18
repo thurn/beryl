@@ -5,7 +5,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
+use std::time::Duration;
 
 use super::Service;
 use crate::Native;
@@ -39,44 +40,128 @@ fn install_agent(
     executable: &Path,
     args: &[String],
 ) -> io::Result<()> {
-    {
-        let path = plist_path(label)?;
-        let logs = home()?.join("Library").join("Logs");
-        fs::create_dir_all(path.parent().expect("the agent's path has a folder"))?;
-        fs::create_dir_all(&logs)?;
-        let mut program = vec![executable.to_string_lossy().into_owned()];
-        program.extend(args.iter().cloned());
-        let environment: Vec<(String, String)> = KEPT_VARIABLES
-            .iter()
-            .filter_map(|name| Some(((*name).to_owned(), std::env::var(name).ok()?)))
-            .collect();
-        fs::write(
-            &path,
-            plist(
-                label,
-                launch,
-                &program,
-                &environment,
-                &logs.join(format!("{label}.log")),
-            ),
-        )?;
-        // Unload an earlier registration first; it fails harmlessly when there is none.
-        let _ = launchctl(&["bootout", &format!("{}/{label}", domain())]);
-        let loaded = launchctl(&["bootstrap", &domain(), &path.to_string_lossy()])?;
-        if loaded.status.success() {
-            Ok(())
-        } else {
-            Err(io::Error::other(format!(
-                "launchctl bootstrap {}: {}",
-                path.display(),
-                String::from_utf8_lossy(&loaded.stderr).trim()
-            )))
-        }
+    let path = plist_path(label)?;
+    let logs = home()?.join("Library").join("Logs");
+    fs::create_dir_all(path.parent().expect("the agent's path has a folder"))?;
+    fs::create_dir_all(&logs)?;
+    let mut program = vec![executable.to_string_lossy().into_owned()];
+    program.extend(args.iter().cloned());
+    let environment: Vec<(String, String)> = KEPT_VARIABLES
+        .iter()
+        .filter_map(|name| Some(((*name).to_owned(), std::env::var(name).ok()?)))
+        .collect();
+    fs::write(
+        &path,
+        plist(
+            label,
+            launch,
+            &program,
+            &environment,
+            &logs.join(format!("{label}.log")),
+        ),
+    )?;
+    reload(&SystemLaunchctl, &domain(), label, &path)
+}
+
+/// How often and how long to wait for launchd while it replaces a job.
+const POLL: Duration = Duration::from_millis(100);
+/// `launchctl bootout` returns as soon as it has sent the job SIGTERM, and launchd keeps the job
+/// until its process exits, which it gives 20 seconds (`ExitTimeOut`) before SIGKILL. This many
+/// polls of `launchctl print` (30 seconds in all) wait for it to go.
+const GONE_POLLS: u32 = 300;
+/// Attempts at `launchctl bootstrap` that fail with error 5 before install gives up.
+const BOOTSTRAP_ATTEMPTS: u32 = 5;
+
+/// Runs `launchctl` and waits; the tests replace it.
+trait Launchctl {
+    fn run(&self, args: &[&str]) -> io::Result<Output>;
+    fn sleep(&self, duration: Duration);
+}
+
+struct SystemLaunchctl;
+
+impl Launchctl for SystemLaunchctl {
+    fn run(&self, args: &[&str]) -> io::Result<Output> {
+        launchctl(args)
+    }
+
+    fn sleep(&self, duration: Duration) {
+        std::thread::sleep(duration);
     }
 }
 
+/// Replaces the job `label` in `domain` with the property list at `path`, and fails unless
+/// launchd has the new job loaded afterwards.
+///
+/// `launchctl bootout` returns while launchd is still tearing the old job down, and a
+/// `launchctl bootstrap` sent in that window fails with "Bootstrap failed: 5: Input/output
+/// error". So this waits until `launchctl print` no longer finds the job, and retries a
+/// bootstrap that fails with error 5, waiting longer each time.
+fn reload(launchctl: &dyn Launchctl, domain: &str, label: &str, path: &Path) -> io::Result<()> {
+    let target = format!("{domain}/{label}");
+    let path_text = path.to_string_lossy();
+    // Unload an earlier registration first; it fails harmlessly when there is none.
+    let _ = launchctl.run(&["bootout", &target]);
+    let mut backoff = POLL * 5;
+    let mut attempt = 1;
+    loop {
+        wait_until_gone(launchctl, &target)?;
+        let loaded = launchctl.run(&["bootstrap", domain, &path_text])?;
+        if loaded.status.success() {
+            break;
+        }
+        let stderr = String::from_utf8_lossy(&loaded.stderr);
+        if !is_busy(&loaded) || attempt == BOOTSTRAP_ATTEMPTS {
+            return Err(io::Error::other(format!(
+                "launchctl bootstrap {} failed after {attempt} attempt(s): {}",
+                path.display(),
+                stderr.trim()
+            )));
+        }
+        launchctl.sleep(backoff);
+        backoff *= 2;
+        attempt += 1;
+    }
+    if is_loaded(launchctl, &target)? {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "launchctl bootstrap {} succeeded but launchd has no job {target}",
+            path.display()
+        )))
+    }
+}
+
+/// Polls until launchd has no job `target`, for at most [`GONE_POLLS`] polls. A job still there
+/// afterwards is left to the bootstrap, whose failure names it.
+fn wait_until_gone(launchctl: &dyn Launchctl, target: &str) -> io::Result<()> {
+    for _ in 0..GONE_POLLS {
+        if !is_loaded(launchctl, target)? {
+            return Ok(());
+        }
+        launchctl.sleep(POLL);
+    }
+    Ok(())
+}
+
+/// Whether launchd has the job `target` loaded: `launchctl print` fails for one it does not
+/// know.
+fn is_loaded(launchctl: &dyn Launchctl, target: &str) -> io::Result<bool> {
+    Ok(launchctl.run(&["print", target])?.status.success())
+}
+
+/// Whether a failed bootstrap is launchd's error 5, which it answers while the old job is still
+/// being removed, and which a later attempt gets past.
+fn is_busy(output: &Output) -> bool {
+    output.status.code() == Some(5)
+        || String::from_utf8_lossy(&output.stderr).contains("Bootstrap failed: 5:")
+}
+
 fn uninstall_agent(label: &str) -> io::Result<()> {
-    let _ = launchctl(&["bootout", &format!("{}/{label}", domain())]);
+    let target = format!("{}/{label}", domain());
+    let _ = launchctl(&["bootout", &target]);
+    // So that an install straight after this one finds the job gone.
+    wait_until_gone(&SystemLaunchctl, &target)?;
     match fs::remove_file(plist_path(label)?) {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
@@ -150,6 +235,15 @@ fn launchctl(args: &[&str]) -> io::Result<std::process::Output> {
 
 /// The agent's property list: run `program` with `environment` at load and login, and then as
 /// `launch` says.
+///
+/// Both agents are `ProcessType` `Standard`. Every supervisor and build the daemon starts
+/// inherits its agent's process type, and with `Background` macOS gives them low CPU and I/O
+/// priority and keeps them mostly on the efficiency cores. On a Mac with 6 performance and 12
+/// efficiency cores at load 20 to 35, a cold `cargo build -p ignite_daemon -j 6` took 205 s and
+/// 213 s of wall time (0.7 cores busy) under a `Background` agent, 28 s and 15 s (2.2 and 3.7
+/// cores) under a `Standard` one, and 13 s (3.7 cores) from a shell. The monitor is
+/// `Standard` too, so that it still runs on time when the machine is busy, which is when the
+/// daemon is most likely to stop answering.
 fn plist(
     label: &str,
     launch: Launch,
@@ -193,7 +287,7 @@ fn plist(
   <key>RunAtLoad</key>
   <true/>
 {schedule}  <key>ProcessType</key>
-  <string>Background</string>
+  <string>Standard</string>
   <key>StandardOutPath</key>
   <string>{log}</string>
   <key>StandardErrorPath</key>
@@ -212,7 +306,138 @@ fn escape(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
     use super::*;
+
+    /// A `launchctl` that answers each subcommand from a script of exit codes, records every
+    /// call and sleep, and answers `print` with the last scripted code once its script runs out.
+    #[derive(Default)]
+    struct ScriptedLaunchctl {
+        prints: RefCell<VecDeque<i32>>,
+        bootstraps: RefCell<VecDeque<i32>>,
+        calls: RefCell<Vec<String>>,
+        slept: RefCell<Duration>,
+    }
+
+    impl ScriptedLaunchctl {
+        fn new(prints: &[i32], bootstraps: &[i32]) -> Self {
+            Self {
+                prints: RefCell::new(prints.iter().copied().collect()),
+                bootstraps: RefCell::new(bootstraps.iter().copied().collect()),
+                ..Self::default()
+            }
+        }
+
+        fn count(&self, verb: &str) -> usize {
+            self.calls
+                .borrow()
+                .iter()
+                .filter(|call| call.as_str() == verb)
+                .count()
+        }
+    }
+
+    impl Launchctl for ScriptedLaunchctl {
+        fn run(&self, args: &[&str]) -> io::Result<Output> {
+            self.calls.borrow_mut().push(args[0].to_owned());
+            let (code, stderr) = match args[0] {
+                "print" => {
+                    let mut prints = self.prints.borrow_mut();
+                    let code = if prints.len() > 1 {
+                        prints.pop_front().unwrap()
+                    } else {
+                        prints.front().copied().unwrap_or(113)
+                    };
+                    (code, "")
+                }
+                "bootstrap" => match self.bootstraps.borrow_mut().pop_front().unwrap() {
+                    0 => (0, ""),
+                    5 => (5, "Bootstrap failed: 5: Input/output error"),
+                    code => (code, "Bootstrap failed: 37: Operation already in progress"),
+                },
+                _ => (0, ""),
+            };
+            Ok(Output {
+                status: ExitStatus::from_raw(code << 8),
+                stdout: Vec::new(),
+                stderr: stderr.as_bytes().to_vec(),
+            })
+        }
+
+        fn sleep(&self, duration: Duration) {
+            *self.slept.borrow_mut() += duration;
+        }
+    }
+
+    fn reload_with(launchctl: &ScriptedLaunchctl) -> io::Result<()> {
+        reload(
+            launchctl,
+            "gui/501",
+            LABEL,
+            Path::new("/tmp/ignite.daemon.plist"),
+        )
+    }
+
+    #[test]
+    fn reload_waits_for_the_old_job_to_go_before_bootstrapping() {
+        // The old job is still listed for three polls after bootout, then gone, then the new
+        // one is loaded.
+        let launchctl = ScriptedLaunchctl::new(&[0, 0, 0, 113, 0], &[0]);
+        reload_with(&launchctl).unwrap();
+        assert_eq!(
+            *launchctl.calls.borrow(),
+            [
+                "bootout",
+                "print",
+                "print",
+                "print",
+                "print",
+                "bootstrap",
+                "print"
+            ]
+        );
+        assert_eq!(*launchctl.slept.borrow(), POLL * 3);
+    }
+
+    #[test]
+    fn reload_retries_a_bootstrap_that_fails_with_error_5() {
+        let launchctl = ScriptedLaunchctl::new(&[113, 113, 113, 0], &[5, 5, 0]);
+        reload_with(&launchctl).unwrap();
+        assert_eq!(launchctl.count("bootstrap"), 3);
+    }
+
+    #[test]
+    fn reload_fails_when_bootstrap_keeps_failing_with_error_5() {
+        let launchctl = ScriptedLaunchctl::new(&[113], &[5; BOOTSTRAP_ATTEMPTS as usize]);
+        let error = reload_with(&launchctl).unwrap_err();
+        assert!(error.to_string().contains("Input/output error"), "{error}");
+        assert_eq!(launchctl.count("bootstrap"), BOOTSTRAP_ATTEMPTS as usize);
+    }
+
+    #[test]
+    fn reload_does_not_retry_other_bootstrap_errors() {
+        let launchctl = ScriptedLaunchctl::new(&[113], &[37]);
+        let error = reload_with(&launchctl).unwrap_err();
+        assert!(error.to_string().contains("37"), "{error}");
+        assert_eq!(launchctl.count("bootstrap"), 1);
+    }
+
+    #[test]
+    fn reload_fails_when_the_job_is_not_loaded_after_bootstrap() {
+        let launchctl = ScriptedLaunchctl::new(&[113], &[0]);
+        assert!(reload_with(&launchctl).is_err());
+    }
+
+    #[test]
+    fn waiting_for_a_job_that_never_goes_is_bounded() {
+        let launchctl = ScriptedLaunchctl::new(&[0], &[]);
+        wait_until_gone(&launchctl, "gui/501/ignite.daemon").unwrap();
+        assert_eq!(launchctl.count("print"), GONE_POLLS as usize);
+    }
 
     #[test]
     fn the_agent_runs_the_program_and_is_a_valid_property_list() {
@@ -233,6 +458,7 @@ mod tests {
             Path::new("/tmp/ignite.log"),
         );
         assert!(text.contains("<key>KeepAlive</key>"));
+        assert!(text.contains("<key>ProcessType</key>\n  <string>Standard</string>"));
         assert!(text.contains("<string>daemon</string>"));
         assert!(text.contains("<string>a&lt;&amp;b&gt;</string>"));
 
@@ -286,6 +512,7 @@ mod tests {
         assert!(text.contains("<key>StartInterval</key>\n  <integer>120</integer>"));
         assert!(text.contains("<key>RunAtLoad</key>\n  <true/>"));
         assert!(!text.contains("KeepAlive"));
+        assert!(!text.contains("Background"));
         let path = std::env::temp_dir().join(format!("ignite-mon-{}.plist", std::process::id()));
         fs::write(&path, &text).unwrap();
         let lint = Command::new("/usr/bin/plutil")
