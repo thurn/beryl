@@ -30,6 +30,10 @@ pub const SIGNATURE_KEY: &str = "ignite_signature";
 /// The ticket metadata key that holds the evidence of each sighting already recorded.
 pub const SIGHTINGS_KEY: &str = "ignite_sightings";
 
+/// The label on every ticket the hub files by itself. A ticket with it is offered to workers
+/// whether or not an epic is active, so a fault report is never left with nobody to take it.
+pub const HUB_LABEL: &str = "hub";
+
 /// How many sightings a ticket remembers.
 const SIGHTINGS_KEPT: usize = 50;
 
@@ -157,6 +161,11 @@ fn create(filing: &Filing, key: &str, previous: Option<&str>) -> Operation {
         ));
     }
     fields.metadata = Some(metadata);
+    let mut labels = fields.labels.take().unwrap_or_default();
+    if !labels.iter().any(|label| label == HUB_LABEL) {
+        labels.push(HUB_LABEL.to_owned());
+    }
+    fields.labels = Some(labels);
     Operation::Create {
         fields,
         parent: None,

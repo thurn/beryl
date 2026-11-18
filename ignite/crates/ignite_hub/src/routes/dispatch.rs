@@ -38,7 +38,7 @@ use ignite_core::protocol::hub::{
     MachineFree, MachineRegister, MachineRegistered, Pause, Release, TicketBrief,
 };
 use ignite_core::protocol::tickets::{
-    BatchRequest, Operation, OperationResult, Precondition, Status, Ticket, TicketFields,
+    BatchRequest, Operation, OperationResult, Status, Ticket, TicketFields,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -263,7 +263,9 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
 
 /// Claims `claim.ticket` for its session and tree: a reserved ticket with its reservation's code
 /// from the machine it was reserved for, or, with no code, a ticket nobody else holds or has
-/// reserved. A wrong code, or a code whose reservation lapsed, is refused. The checks, the claim
+/// reserved. A wrong code, or a code whose reservation lapsed, is refused. A session that
+/// already holds the ticket in progress gets its brief again, so a claim whose reply was lost
+/// can be retried. The checks, the claim
 /// and the record of session and tree are one `IMMEDIATE` transaction, so no other session can
 /// take or drop the reservation in between.
 fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
@@ -275,6 +277,15 @@ fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
     let ticket = load(&tx, id)?;
     if ticket.status == Status::Closed {
         return Err(conflict(&format!("{id} is closed"), Some(&ticket)));
+    }
+    if ticket.status == Status::InProgress
+        && ticket.assignee.as_deref() == Some(claim.session.as_str())
+    {
+        // A retry after a lost reply: the first claim already succeeded and took the
+        // reservation, so answer as it did.
+        let brief = brief(&tx, id)?;
+        tx.commit().map_err(sql_failure)?;
+        return Ok(Response::json(200, &json!(brief)));
     }
     let reservation = fleet::reservation_of(&tx, id).map_err(|e| store_failure(&e))?;
     let refused = match (&reservation, &claim.code) {
@@ -375,44 +386,41 @@ fn brief(conn: &Connection, id: &str) -> Result<TicketBrief, Response> {
 }
 
 /// Records what landed, closes the ticket, frees the worker and reserves the next ticket of
-/// its chain for the same session. A repeat of a landing that already happened answers as the
-/// first did, without the reservation, so a daemon may resend it.
+/// its chain for the same session, all in one `IMMEDIATE` transaction, so an interruption
+/// leaves nothing half done. A repeat of a landing that already happened answers as the first
+/// did, without the reservation, so a daemon may resend it; it also frees the worker and marks
+/// the ticket's finding closed again, which does nothing when they are already done.
 fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
     let id = landed.ticket.as_str();
-    {
-        let tx = conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(sql_failure)?;
-        let ticket = load(&tx, id)?;
-        if ticket.status == Status::Closed && ticket.session.as_ref() == Some(&landed.session) {
-            return Ok(Response::json(200, &json!(LandedReply { next: None })));
-        }
-        holds(&ticket, &landed.session)?;
-        let work = serde_json::to_value(&landed.work).map_err(|e| failure(500, &e.to_string()))?;
-        set_columns(
-            &tx,
-            id,
-            landed.session.as_str(),
-            &[("landed", work), ("landed_at", json!(now))],
-            now,
-        )
-        .map_err(|e| store_failure(&e))?;
-        tx.commit().map_err(sql_failure)?;
-    }
-    let reason = landed.work.note.lines().next().unwrap_or("").trim();
-    let reason = if reason.is_empty() { "landed" } else { reason };
-    let ops = closing(&load(conn, id)?, reason);
-    apply(
-        conn,
-        held_by(&landed.ticket, &landed.session),
-        ops,
-        &landed.session,
-        &landed.machine,
-        now,
-    )?;
-    let tx = conn
+    let mut tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sql_failure)?;
+    let ticket = load(&tx, id)?;
+    if ticket.status == Status::Closed && ticket.session.as_ref() == Some(&landed.session) {
+        free_worker(
+            &tx,
+            &landed.machine,
+            &landed.session,
+            Some(&landed.work.files),
+        )?;
+        findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
+        tx.commit().map_err(sql_failure)?;
+        return Ok(Response::json(200, &json!(LandedReply { next: None })));
+    }
+    holds(&ticket, &landed.session)?;
+    let work = serde_json::to_value(&landed.work).map_err(|e| failure(500, &e.to_string()))?;
+    set_columns(
+        &tx,
+        id,
+        landed.session.as_str(),
+        &[("landed", work), ("landed_at", json!(now))],
+        now,
+    )
+    .map_err(|e| store_failure(&e))?;
+    let reason = landed.work.note.lines().next().unwrap_or("").trim();
+    let reason = if reason.is_empty() { "landed" } else { reason };
+    let ops = closing(&load(&tx, id)?, reason);
+    apply_in(&mut tx, ops, &landed.session, &landed.machine, now)?;
     free_worker(
         &tx,
         &landed.machine,
@@ -430,28 +438,27 @@ fn landed(conn: &mut Connection, landed: &Landed, now: Timestamp) -> Answer {
     Ok(Response::json(200, &json!(LandedReply { next })))
 }
 
-/// Closes a ticket that needs no landing (`ignite close`) and frees its worker. A repeat of a
-/// close that already happened answers as the first did.
+/// Closes a ticket that needs no landing (`ignite close`) and frees its worker, in one
+/// transaction. A repeat of a close that already happened answers as the first did, and
+/// completes whatever an interrupted first one left undone.
 fn close(conn: &mut Connection, close: &Close, now: Timestamp) -> Answer {
     let id = close.ticket.as_str();
-    let ticket = load(conn, id)?;
-    if ticket.status == Status::Closed && ticket.session.as_ref() == Some(&close.session) {
-        return Ok(done());
-    }
-    holds(&ticket, &close.session)?;
-    let reason = close.reason.trim();
-    let reason = if reason.is_empty() { "closed" } else { reason };
-    apply(
-        conn,
-        held_by(&close.ticket, &close.session),
-        closing(&ticket, reason),
-        &close.session,
-        &close.machine,
-        now,
-    )?;
-    let tx = conn
+    let mut tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sql_failure)?;
+    let ticket = load(&tx, id)?;
+    if !(ticket.status == Status::Closed && ticket.session.as_ref() == Some(&close.session)) {
+        holds(&ticket, &close.session)?;
+        let reason = close.reason.trim();
+        let reason = if reason.is_empty() { "closed" } else { reason };
+        apply_in(
+            &mut tx,
+            closing(&ticket, reason),
+            &close.session,
+            &close.machine,
+            now,
+        )?;
+    }
     free_worker(&tx, &close.machine, &close.session, None)?;
     findings::close_ticket(&tx, id, now).map_err(|e| store_failure(&e))?;
     tx.commit().map_err(sql_failure)?;
@@ -485,15 +492,19 @@ fn closing(ticket: &Ticket, reason: &str) -> Vec<Operation> {
 /// A session may also give back a reservation it has not claimed yet.
 fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
     let id = release.ticket.as_str();
-    let ticket = load(conn, id)?;
+    let mut tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sql_failure)?;
+    let ticket = load(&tx, id)?;
     if ticket.assignee.as_deref() != Some(release.session.as_str()) {
-        let dropped = conn
+        let dropped = tx
             .execute(
                 "DELETE FROM reservations WHERE ticket = ?1 AND session = ?2",
                 params![id, release.session.as_str()],
             )
             .map_err(sql_failure)?;
         if dropped > 0 {
+            tx.commit().map_err(sql_failure)?;
             return Ok(done());
         }
     }
@@ -534,17 +545,7 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
             text: format!("Released: {}", release.reason),
         },
     ];
-    apply(
-        conn,
-        held_by(&release.ticket, &release.session),
-        ops,
-        &release.session,
-        &release.machine,
-        now,
-    )?;
-    let tx = conn
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(sql_failure)?;
+    apply_in(&mut tx, ops, &release.session, &release.machine, now)?;
     let cleared = ["session", "tree", "machine", "claimed_at"].map(|column| (column, Value::Null));
     set_columns(&tx, id, release.session.as_str(), &cleared, now).map_err(|e| store_failure(&e))?;
     free_worker(&tx, &release.machine, &release.session, None)?;
@@ -564,13 +565,6 @@ fn holds(ticket: &Ticket, session: &SessionId) -> Result<(), Response> {
     ))
 }
 
-fn held_by(ticket: &TicketId, session: &SessionId) -> Vec<Precondition> {
-    vec![Precondition::Assignee {
-        id: ticket.clone(),
-        assignee: Some(session.as_str().to_owned()),
-    }]
-}
-
 /// Marks the worker idle with no ticket, and remembers the files its ticket touched.
 fn free_worker(
     conn: &Connection,
@@ -588,30 +582,8 @@ fn free_worker(
     Ok(())
 }
 
-/// Applies a batch as `session` on `machine`, mapping a conflict to 409 and an unknown ticket to
-/// 404.
-fn apply(
-    conn: &mut Connection,
-    preconditions: Vec<Precondition>,
-    ops: Vec<Operation>,
-    session: &SessionId,
-    machine: &MachineId,
-    now: Timestamp,
-) -> Result<Vec<OperationResult>, Response> {
-    let request = BatchRequest { preconditions, ops };
-    match batch::apply(conn, &request, session.as_str(), machine.as_str(), now) {
-        Ok(BatchOutcome::Applied(reply)) => Ok(reply.results),
-        Ok(BatchOutcome::Conflict(found)) => Err(conflict(
-            "another session holds the ticket",
-            found.current.as_ref(),
-        )),
-        Err(StoreError::NotFound(message)) => Err(failure(404, &message)),
-        Err(StoreError::Rejected(message)) => Err(failure(400, &message)),
-        Err(other) => Err(store_failure(&other)),
-    }
-}
-
-/// Like [`apply`], inside a transaction the caller holds. A failure leaves the batch undone and
+/// Applies a batch as `session` on `machine` inside a transaction the caller holds, mapping a
+/// conflict to 409 and an unknown ticket to 404. A failure leaves the batch undone and
 /// the caller drops the transaction.
 fn apply_in(
     tx: &mut Transaction,
@@ -744,3 +716,7 @@ mod tests;
 #[cfg(test)]
 #[path = "dispatch_security_tests.rs"]
 mod security_tests;
+
+#[cfg(test)]
+#[path = "dispatch_hardening_tests.rs"]
+mod hardening_tests;

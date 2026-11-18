@@ -171,6 +171,41 @@ pub fn reservation_of(conn: &Connection, ticket: &str) -> Result<Option<(String,
         .optional()?)
 }
 
+/// The live reservation that `machine` holds for `session`, if any. The caller runs [`lapse`]
+/// first.
+pub fn reservation_for_worker(
+    conn: &Connection,
+    machine: &str,
+    session: &str,
+) -> Result<Option<Reservation>> {
+    let row: Option<(String, String, String)> = conn
+        .query_row(
+            "SELECT ticket, expires_at, code FROM reservations
+             WHERE machine = ?1 AND session = ?2 ORDER BY expires_at LIMIT 1",
+            params![machine, session],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()?;
+    let Some((ticket, expires_at, code)) = row else {
+        return Ok(None);
+    };
+    let invalid =
+        |what: &str, error: String| StoreError::Invalid(format!("reservation {what}: {error}"));
+    Ok(Some(Reservation {
+        ticket: ticket
+            .parse()
+            .map_err(|e: ignite_core::ids::IdError| invalid("ticket", e.to_string()))?,
+        machine: machine
+            .parse()
+            .map_err(|e: ignite_core::ids::IdError| invalid("machine", e.to_string()))?,
+        session: session
+            .parse()
+            .map_err(|e: ignite_core::ids::IdError| invalid("session", e.to_string()))?,
+        expires_at: Timestamp::parse(&expires_at).map_err(|e| invalid("expiry", e.to_string()))?,
+        code,
+    }))
+}
+
 /// The `machine` value of the pause that holds every machine.
 pub const ALL_MACHINES: &str = "*";
 

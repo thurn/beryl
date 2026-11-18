@@ -3,11 +3,13 @@
 //!
 //! The hub answers with the first ticket, in this order, that the machine can take:
 //!
-//! 1. An open regression ticket. It skips the test of expected cores.
-//! 2. An improvement ticket, when improvements are under their share
+//! 1. A ticket labeled `justiciar`, which the integrator's judge files to report a fault in the
+//!    system itself. Then:
+//! 2. An open regression ticket. It skips the test of expected cores.
+//! 3. An improvement ticket, when improvements are under their share
 //!    ([`crate::shares::improvements_due`]). The largest saving goes first, taking the three
 //!    units in turn.
-//! 3. A ready ticket from the group furthest below its share of workers
+//! 4. A ready ticket from the group furthest below its share of workers
 //!    ([`crate::shares::epic_order`]). Within a group, the highest priority goes first, then the
 //!    longest chain of tickets waiting behind it, then the oldest.
 //!
@@ -26,6 +28,9 @@ use crate::ids::{SessionId, TicketId};
 use crate::protocol::hub::{IdleWorker, MachineFree};
 use crate::shares::{Group, Unit};
 use crate::time::Timestamp;
+
+/// The label of a ticket filed by the justiciar, which goes before every other ticket.
+pub const JUSTICIAR: &str = "justiciar";
 
 /// What kind of work a ready ticket is, which sets its place in the order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -179,6 +184,11 @@ pub fn next_for(
     improvements: Option<Unit>,
     last_files: &[(SessionId, Vec<String>)],
 ) -> Option<Handoff> {
+    let mut justiciar: Vec<&ReadyTicket> = ready
+        .iter()
+        .filter(|t| t.labels.iter().any(|l| l == JUSTICIAR))
+        .collect();
+    justiciar.sort_by(|a, b| queue_order(a, b));
     let mut regressions: Vec<&ReadyTicket> = ready
         .iter()
         .filter(|t| t.kind == TicketKind::Regression)
@@ -193,8 +203,9 @@ pub fn next_for(
         tickets.sort_by(|a, b| queue_order(a, b));
         tickets
     });
-    regressions
+    justiciar
         .into_iter()
+        .chain(regressions)
         .chain(improvements)
         .chain(groups)
         .filter(|ticket| machine_fits(free, ticket))

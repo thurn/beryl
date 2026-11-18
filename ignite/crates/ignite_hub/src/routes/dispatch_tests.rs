@@ -62,7 +62,7 @@ pub(super) fn file(conn: &mut Connection, specs: &[(&str, &[&str], &[usize])]) -
 
 /// Where [`file_under`] files its tickets.
 #[derive(Clone, Copy)]
-enum Parent {
+pub(super) enum Parent {
     /// Under a new epic with this `workers` number, or with none.
     Epic(Option<u32>),
     /// With no parent.
@@ -70,7 +70,7 @@ enum Parent {
 }
 
 /// Files the tickets under `parent`. Returns the epic, if one was filed, and the tickets.
-fn file_under(
+pub(super) fn file_under(
     conn: &mut Connection,
     parent: Parent,
     specs: &[(&str, &[&str], &[usize])],
@@ -126,13 +126,13 @@ fn file_under(
 }
 
 /// Registers the machine `m-1`, which every request in these tests is written as.
-fn register(conn: &mut Connection) {
+pub(super) fn register(conn: &mut Connection) {
     let register = json!({"machine": "m-1", "name": "jarvis", "os": "macos", "cores": 18,
                           "memory_mb": 65536, "families": [], "version": "d97ed0e"});
     assert_eq!(post(conn, "/machines/register", &register, start()).0, 200);
 }
 
-fn free(machine: &str, sessions: &[&str]) -> Value {
+pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
     json!(MachineFree {
         machine: machine.parse().unwrap(),
         os: Os::Macos,
@@ -156,18 +156,18 @@ pub(super) fn claim(ticket: &str, session: &str) -> Value {
 }
 
 /// A claim of a reservation with its code, as the hand-off's `ignite start` sends it.
-fn claim_reserved(reservation: &Value, session: &str) -> Value {
+pub(super) fn claim_reserved(reservation: &Value, session: &str) -> Value {
     let mut body = claim(reservation["ticket"].as_str().unwrap(), session);
     body["code"] = reservation["code"].clone();
     body
 }
 
-fn landed(ticket: &str, session: &str, note: &str) -> Value {
+pub(super) fn landed(ticket: &str, session: &str, note: &str) -> Value {
     json!({"ticket": ticket, "machine": "m-1", "session": session,
            "work": {"commits": ["3a9e4c1"], "files": ["src/a.rs"], "note": note}})
 }
 
-fn release(ticket: &str, session: &str) -> Value {
+pub(super) fn release(ticket: &str, session: &str) -> Value {
     json!({"ticket": ticket, "machine": "m-1", "session": session, "reason": "blocked"})
 }
 
@@ -258,13 +258,17 @@ fn a_lapsed_reservation_is_offered_again() {
 }
 
 #[test]
-fn a_worker_with_a_reservation_is_not_offered_another() {
+fn a_worker_asking_again_gets_its_reservation_back_not_another() {
     let mut conn = hub::open_in_memory().unwrap();
     file(&mut conn, &[("one", &[], &[]), ("two", &[], &[])]);
     let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert!(first["ticket"].is_string());
+    // The reply to the first request may have been lost, so the same worker asking again gets
+    // the same reservation, and no second ticket.
     let (_, second) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(1.0));
-    assert_eq!(second, Value::Null);
+    assert_eq!(second, first);
+    let (_, other) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(2.0));
+    assert_ne!(other["ticket"], first["ticket"]);
 }
 
 #[test]
@@ -546,7 +550,7 @@ fn an_open_regression_goes_before_older_work() {
 }
 
 /// Sets the epic's `workers` number.
-fn set_workers(conn: &mut Connection, epic: &TicketId, workers: u32) {
+pub(super) fn set_workers(conn: &mut Connection, epic: &TicketId, workers: u32) {
     let request = BatchRequest {
         preconditions: Vec::new(),
         ops: vec![Operation::Update {
