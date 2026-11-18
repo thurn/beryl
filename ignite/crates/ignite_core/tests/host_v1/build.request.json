@@ -1,0 +1,15 @@
+{
+  "first_asked_at": "2026-11-18T16:10:38.000Z",
+  "for": {
+    "class": "land",
+    "session": "local_c8470108",
+    "ticket": "Tq44s.9.48"
+  },
+  "handle": "L-6",
+  "packages": [
+    "engine"
+  ],
+  "product": "rust-tests",
+  "request_id": "L-6#18",
+  "tree": "landing-2"
+}

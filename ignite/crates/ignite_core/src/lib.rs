@@ -10,6 +10,7 @@ pub mod fakes;
 pub mod gate;
 pub mod guide;
 pub mod hash;
+pub mod host;
 pub mod ids;
 pub mod inputs;
 pub mod manifest;

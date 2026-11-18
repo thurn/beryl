@@ -27,9 +27,11 @@ use crate::traits::{Clock, CommandSpec, Error, Hub, Launcher, Result, RunResult}
 
 mod builds;
 mod git;
+mod host;
 mod tips;
 pub use builds::FakeBuilds;
 pub use git::FakeGit;
+pub use host::FakeHost;
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex

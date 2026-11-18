@@ -1,0 +1,19 @@
+{
+  "state": "built",
+  "units": [
+    {
+      "cpu_s": 3.5,
+      "crate": "engine",
+      "instructions": 1500000000.0,
+      "mode": "test",
+      "rebuilt": true
+    }
+  ],
+  "usage": {
+    "cpu_s": 112.25,
+    "instructions": 9000000000,
+    "peak_mb": 812,
+    "queued_s": 1.5,
+    "wall_s": 28.0
+  }
+}

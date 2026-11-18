@@ -1,0 +1,11 @@
+{
+  "output": "/home/.config/ignite/runs/b/output.log",
+  "state": "failed",
+  "usage": {
+    "cpu_s": 112.25,
+    "instructions": 9000000000,
+    "peak_mb": 812,
+    "queued_s": 1.5,
+    "wall_s": 28.0
+  }
+}

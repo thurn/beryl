@@ -1,0 +1,10 @@
+{
+  "args": [
+    "{\"handle\":\"L-6\"}"
+  ],
+  "cwd": "/trees/tree-07",
+  "pid": null,
+  "session": null,
+  "verb": "host-poll",
+  "wait_s": 0
+}
