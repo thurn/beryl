@@ -383,9 +383,22 @@ impl Verb for StatusVerb {
     }
 }
 
+/// The version recorded by [`remember_running_version`] when the daemon started.
+static RUNNING: std::sync::OnceLock<Option<Commit>> = std::sync::OnceLock::new();
+
+/// Records the commit the daemon was started from. Called once at startup, because the
+/// launch path, `bin/current`, is a link that a prepared update repoints while the old
+/// executable still runs; reading it later reports the next version, not this one.
+pub fn remember_running_version(version: Option<Commit>) {
+    let _ = RUNNING.set(version);
+}
+
 /// The commit the running executable was stored under.
 fn running_version() -> Option<Commit> {
-    let exe = std::env::current_exe().ok()?;
+    if let Some(version) = RUNNING.get() {
+        return version.clone();
+    }
+    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
     ExecutableStore::version_of(&exe)
 }
 

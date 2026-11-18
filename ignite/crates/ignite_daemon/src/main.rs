@@ -184,6 +184,7 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     crate::crash::install_hook(home.root.clone(), version.clone());
     let store = home.store();
     let own = Commit::new(&version).ok();
+    crate::doctor::remember_running_version(own.clone());
     if let Some(own) = &own
         && let Startup::RollBack { to, reason } = store.startup(own, SystemClock.now())
     {

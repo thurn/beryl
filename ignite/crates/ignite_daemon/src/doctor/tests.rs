@@ -321,3 +321,12 @@ fn git_trees_lists_the_visible_directories_under_the_trees_folder() {
     assert_eq!(names, ["slot-01", "tree-01"]);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_version_recorded_at_startup_is_reported_after_the_link_moves() {
+    // `bin/current` is repointed when an update is prepared, before the daemon restarts, so
+    // the version must come from what was recorded at startup, not from the link.
+    let started = Commit::new("1234567").unwrap();
+    super::remember_running_version(Some(started.clone()));
+    assert_eq!(super::running_version(), Some(started));
+}
