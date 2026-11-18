@@ -15,7 +15,6 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
         "audit",
         "Idle work: exploration, cache audits and rebuild counts",
     ),
-    ("check", "Check runner and the result cache client"),
     (
         "daemon",
         "Assemble the daemon and prove one ticket end to end",
@@ -34,9 +33,7 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
     ("start", "Starting and releasing tickets"),
     ("status", "Install, self-update, status and doctor"),
     ("sync", "Landing"),
-    ("test", "Check runner and the result cache client"),
     ("ticket", "Ticket commands"),
-    ("why", "Check runner and the result cache client"),
 ];
 
 /// How long the daemon may hold a reply before answering with a handle, below the agents'

@@ -11,8 +11,8 @@ use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    CachedResult, Claim, CompileUnit, Landed, MachineFree, MetricsImport, NewResult, Record,
-    Reservation, ResultKey, TicketBrief,
+    CachedResult, Claim, CompileUnit, FlakyReport, Landed, MachineFree, MetricsImport, NewResult,
+    Record, Reservation, ResultKey, TicketBrief,
 };
 use crate::protocol::tickets::{FeedBatch, LeaseOp, LeaseReply};
 use crate::time::Timestamp;
@@ -157,4 +157,6 @@ pub trait Hub: Send + Sync {
     fn records(&self, batch: &[Record]) -> Result<()>;
     /// Sends one machine's new efficiency rows (`POST /metrics/import`).
     fn metrics(&self, import: &MetricsImport) -> Result<()>;
+    /// Reports a check that failed, then passed at once on the same inputs (`POST /flaky`).
+    fn flaky(&self, report: &FlakyReport) -> Result<()>;
 }

@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    CachedResult, Claim, Landed, MachineFree, MetricsImport, NewResult, Record, Reservation,
-    ResultKey, TicketBrief,
+    CachedResult, Claim, FlakyReport, Landed, MachineFree, MetricsImport, NewResult, Record,
+    Reservation, ResultKey, TicketBrief,
 };
 use crate::protocol::tickets::{FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use crate::time::Timestamp;
@@ -227,6 +227,7 @@ pub struct FakeHub {
     feed: Mutex<Vec<FeedChange>>,
     records: Mutex<Vec<Record>>,
     metrics: Mutex<Vec<MetricsImport>>,
+    flaky: Mutex<Vec<FlakyReport>>,
 }
 
 impl FakeHub {
@@ -272,6 +273,10 @@ impl FakeHub {
     /// Every efficiency import sent so far, in order.
     pub fn metrics_imports(&self) -> Vec<MetricsImport> {
         lock(&self.metrics).clone()
+    }
+
+    pub fn flaky_reports(&self) -> Vec<FlakyReport> {
+        lock(&self.flaky).clone()
     }
 
     fn reachable(&self) -> Result<()> {
@@ -392,6 +397,12 @@ impl Hub for FakeHub {
     fn metrics(&self, import: &MetricsImport) -> Result<()> {
         self.reachable()?;
         lock(&self.metrics).push(import.clone());
+        Ok(())
+    }
+
+    fn flaky(&self, report: &FlakyReport) -> Result<()> {
+        self.reachable()?;
+        lock(&self.flaky).push(report.clone());
         Ok(())
     }
 }

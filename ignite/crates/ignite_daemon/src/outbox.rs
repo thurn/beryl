@@ -8,13 +8,14 @@ use std::time::Duration;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use ignite_core::protocol::hub::{NewResult, Record};
+use ignite_core::protocol::hub::{FlakyReport, NewResult, Record};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Hub, Result};
 use ignite_store::local::{outbox as store, rows};
 
 const RECORD: &str = "record";
 const RESULT: &str = "result";
+const FLAKY: &str = "flaky";
 
 /// How many entries one flush reads at a time.
 const BATCH: u32 = 200;
@@ -25,6 +26,10 @@ pub fn push_record(conn: &Connection, record: &Record, at: Timestamp) -> Result<
 
 pub fn push_result(conn: &Connection, result: &NewResult, at: Timestamp) -> Result<()> {
     push(conn, RESULT, result, at)
+}
+
+pub fn push_flaky(conn: &Connection, report: &FlakyReport, at: Timestamp) -> Result<()> {
+    push(conn, FLAKY, report, at)
 }
 
 fn push(conn: &Connection, kind: &str, body: &impl Serialize, at: Timestamp) -> Result<()> {
@@ -69,6 +74,9 @@ fn send(hub: &dyn Hub, kind: &str, run: &[&rows::OutboxEntry]) -> Result<()> {
     match kind {
         RECORD => hub.records(&parse::<Record>(run)?),
         RESULT => hub.store(&parse::<NewResult>(run)?),
+        FLAKY => parse::<FlakyReport>(run)?
+            .iter()
+            .try_for_each(|report| hub.flaky(report)),
         other => Err(Error::Invalid(format!("unknown outbox kind {other:?}"))),
     }
 }

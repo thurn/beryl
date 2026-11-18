@@ -13,9 +13,9 @@ use serde::de::DeserializeOwned;
 use ignite_core::config::HubConfig;
 use ignite_core::ids::Seq;
 use ignite_core::protocol::hub::{
-    CachedResult, Claim, Heartbeat, HeartbeatReply, Landed, LookupReply, LookupRequest,
-    MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult, Record, RecordBatch,
-    Reservation, ResultKey, StoreRequest, TicketBrief,
+    CachedResult, Claim, FlakyReport, Heartbeat, HeartbeatReply, Landed, LookupReply,
+    LookupRequest, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
+    Record, RecordBatch, Reservation, ResultKey, StoreRequest, TicketBrief,
 };
 use ignite_core::protocol::tickets::{FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use ignite_core::traits::{Error, Hub, Result};
@@ -220,6 +220,11 @@ impl Hub for HubClient {
 
     fn metrics(&self, import: &MetricsImport) -> Result<()> {
         let _: serde_json::Value = self.post("/metrics/import", import)?;
+        Ok(())
+    }
+
+    fn flaky(&self, report: &FlakyReport) -> Result<()> {
+        let _: serde_json::Value = self.post("/flaky", report)?;
         Ok(())
     }
 }
