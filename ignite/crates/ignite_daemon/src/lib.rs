@@ -22,6 +22,7 @@ pub mod land;
 pub mod machine_lock;
 pub mod main;
 pub mod metrics;
+pub mod monitor;
 pub mod outbox;
 pub mod pool;
 pub mod sched;

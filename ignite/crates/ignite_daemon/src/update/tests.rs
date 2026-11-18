@@ -51,11 +51,18 @@ impl Builder for FakeBuilder {
 #[derive(Default)]
 struct FakeService {
     installed: RefCell<Vec<(PathBuf, Vec<String>)>>,
+    monitors: RefCell<Vec<(PathBuf, Vec<String>)>>,
 }
 
 impl Service for FakeService {
     fn install(&self, executable: &Path, args: &[String]) -> io::Result<()> {
         self.installed
+            .borrow_mut()
+            .push((executable.to_owned(), args.to_vec()));
+        Ok(())
+    }
+    fn install_monitor(&self, executable: &Path, args: &[String]) -> io::Result<()> {
+        self.monitors
             .borrow_mut()
             .push((executable.to_owned(), args.to_vec()));
         Ok(())
@@ -326,6 +333,12 @@ fn install_stores_the_build_registers_and_starts_the_service() {
     assert_eq!(
         *service.installed.borrow(),
         [(store.current_link(), vec!["daemon".to_owned()])]
+    );
+    // No build has stayed up yet, so the monitor runs the current one.
+    assert!(done.monitor);
+    assert_eq!(
+        *service.monitors.borrow(),
+        [(store.current_link(), vec!["monitor".to_owned()])]
     );
     let saved = identity.load().unwrap().unwrap();
     assert_eq!(saved.token.as_deref(), Some("write-token"));
