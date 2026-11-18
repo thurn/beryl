@@ -101,9 +101,41 @@ def test_every_lane_includes_it_and_slow_ci_can_make_it() -> None:
     for project in standalone.PROJECTS:
         assert project.name in LANES
         lane = slow_ci.lanes_for(None)[project.name]()
-        assert [s.name for s in lane.steps] == ["black", "pyre", "pytest"]
+        expected = (
+            ["fmt", "clippy", "tests"] if project.rust else ["black", "pyre", "pytest"]
+        )
+        assert [s.name for s in lane.steps] == expected
         assert all(s.cwd == project.folder for s in lane.steps)
         assert project.name in {lane.name for lane in checks.fast_lanes(None)}
+
+
+IGNITE: list[str] = [
+    "ignite/Cargo.toml",
+    "ignite/crates/ignite_core/src/lib.rs",
+    "ignite/checks/rust.toml",
+    "ignite.toml",
+]
+
+
+def test_ignite_paths_run_only_its_lane_and_repo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert fast(monkeypatch, IGNITE) == {"repo", "ignite"}
+    for path in IGNITE:
+        assert fast(monkeypatch, [path]) == {"repo", "ignite"}, path
+        plan = slow([path])
+        assert set(plan.why) == {"repo", "names", "ignite"}, path
+        assert not plan.whole and not set(plan.why) & MAIN - {"names"}, path
+    # Windows chooses the same lanes.
+    monkeypatch.setattr(checks.system, "WINDOWS", True)
+    assert {lane.name for lane in checks.fast_lanes(IGNITE)} == {"repo", "ignite"}
+
+
+def test_no_other_path_runs_the_ignite_lane(monkeypatch: pytest.MonkeyPatch) -> None:
+    for changed in [*ELSEWHERE, DASHBOARD]:
+        assert "ignite" not in fast(monkeypatch, changed), changed
+        assert "ignite" not in slow(changed).why, changed
+    assert "ignite" not in fast(monkeypatch, ["ignitex/a", "docs/ignite.md"])
 
 
 def test_split() -> None:
@@ -112,3 +144,6 @@ def test_split() -> None:
     )
     assert own == {"efficiency": DASHBOARD}
     assert rest == ["data/efficiency.txt", "efficiencyx/a", "statusx/a"]
+    own, rest = standalone.split([*IGNITE, "ignitex/a", "ignite.toml.bak"])
+    assert own == {"ignite": IGNITE}
+    assert rest == ["ignitex/a", "ignite.toml.bak"]

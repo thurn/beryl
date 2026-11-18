@@ -164,6 +164,8 @@ HEAVY_STEPS: frozenset[str] = frozenset(
     {
         "rust:clippy",
         "rust:tests",
+        "ignite:clippy",
+        "ignite:tests",
         "app:smoke",
         "shots:ui-shots",
         "ui-test:ui-test",

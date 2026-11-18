@@ -85,7 +85,8 @@ QUIET: re.Pattern[str] = re.compile(
 # The paths the rules of `lane_reason` place; a change to any other runs every lane it reaches
 # in full.
 PLACED: re.Pattern[str] = re.compile(
-    r"^(rust|ui|tools|data|efficiency)/|^justfile$|^\.enact\.toml$|^rust-toolchain\.toml$"
+    r"^(rust|ui|tools|data|efficiency|ignite)/|^justfile$|^\.enact\.toml$|^ignite\.toml$"
+    r"|^rust-toolchain\.toml$"
 )
 # The data files that Rust crates embed or their tests and the card-text step read, and the
 # toolchain's pin: these run the rust lane on the whole workspace.
@@ -125,6 +126,7 @@ LANES: tuple[str, ...] = (
     "oracle",
     "counts",
     "efficiency",
+    "ignite",
 )
 # The lanes the browser sweep runs in full every few hours (sweep.py) instead of slow CI, which
 # `by ci` still runs when named.
@@ -405,6 +407,7 @@ def lanes_for(packages: list[str] | None) -> dict[str, Callable[[], checks.Lane]
         "mobile": mobile.lane,
         "pytest": checks.pytest_lane,
         "efficiency": standalone.EFFICIENCY.lane,
+        "ignite": standalone.IGNITE.lane,
     }
     return {name: without_fast_only(make) for name, make in made.items()}
 

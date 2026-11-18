@@ -124,6 +124,10 @@ The lanes:
   Only `efficiency/` and `data/efficiency-*.json` select this lane. These paths
   select no other fast lane except `repo`. Slow CI runs the lane when one of its
   paths changes.
+- `ignite`: `cargo fmt --check`, clippy and `cargo test` in `ignite/`, a Cargo
+  workspace of its own with its own `target` directory. Only `ignite/` and
+  `ignite.toml` select this lane, and these paths select no other fast lane
+  except `repo`. Slow CI runs the lane when one of its paths changes.
 
 For a change to `ui/` or `rust/`, it also runs as many of the `ui-test` and
 `shots` browser checks as fit in the time left, choosing those the change could

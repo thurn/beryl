@@ -543,8 +543,8 @@ def fast_lanes(changed: list[str] | None) -> list[Lane]:
     """The fast check's lanes for the paths changed since the branch base; None: every lane.
 
     Beryl 3D's paths (beryl3d/paths.py) select the `beryl3d` lanes and, like any path, `repo`
-    and `names`; a standalone project's (standalone.py: the efficiency dashboard) select that project's lane and `repo`. Every other lane is chosen from the rest of the
-    paths alone, so a change to Beryl 3D or a standalone project runs none of the main project's
+    and `names`; a standalone project's (standalone.py: the efficiency dashboard and Ignite) select that
+    project's lane and `repo`. Every other lane is chosen from the rest of the paths alone, so a change to Beryl 3D or a standalone project runs none of the main project's
     lanes and a change elsewhere never runs theirs.
     """
     every: bool = changed is None

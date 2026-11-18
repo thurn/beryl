@@ -1,0 +1,10 @@
+[package]
+name = "ignite_core"
+version = "0.1.0"
+description = "Ignite's core types and traits"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true

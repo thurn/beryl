@@ -19,6 +19,7 @@
 /tools/.pytest_cache/
 /efficiency/.venv/
 /efficiency/.pyre/
+/ignite/target/
 __pycache__/
 *.egg-info/
 

@@ -407,7 +407,7 @@ check:
 precheck:
     cd tools && uv run --quiet python -m beryl_tools.hygiene
 
-# Slow CI: the lanes what changed since each last passed can affect, every lane hourly; or the lanes named, in full: repo, python, scale, rust, script, ui, names, app, ui-smoke, oracle, counts, and the sweep's shots, ui-test, mobile (budget 300 s, 450 s on Windows)
+# Slow CI: the lanes what changed since each last passed can affect, every lane hourly; or the lanes named, in full: repo, python, scale, rust, script, ui, names, app, ui-smoke, oracle, counts, efficiency, ignite, and the sweep's shots, ui-test, mobile (budget 300 s, 450 s on Windows)
 [group('checks')]
 ci *lanes:
     {{ by }} ci "$@"
