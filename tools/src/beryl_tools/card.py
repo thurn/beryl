@@ -1,5 +1,7 @@
 """`card`: the tools a card is written with.
 
+See `.agents/skills/card-writing/SKILL.md` for the card-writing procedure.
+
 `card brief <name>` shows the Oracle text, a Rust draft, its render status and rulings.
 For clauses the draft cannot cover, it looks up vocabulary, nearby card files and the
 XMage class for the card writer.
@@ -16,9 +18,11 @@ and reads nothing under Forge's checkout. A part whose source is missing (offlin
 rulings cached, no XMage checkout) says so and the brief goes on. A name the store lacks exits
 1, naming the closest names it has.
 
-`card new <name>` starts a card's file (card_new.py), and `card check <name>` builds the card and
-plays its scenarios in Beryl, XMage and Forge (card_check.py). `card diverge` records that one
-oracle is wrong about a scenario, when the other agrees with Beryl (card_diverge.py).
+`card new <name>` writes the draft and reports its render status (card_new.py).
+`card check <name>` builds the card, reports generated mutation coverage, plays
+its scenarios in Beryl, XMage and Forge, and checks rendered text (card_check.py).
+`card diverge` records a verified oracle fault when the other oracle agrees
+with Beryl (card_diverge.py).
 
 `card rulings <name> [--add]` shows each ruling with its ledger entry and can add drafts.
 

@@ -48,10 +48,9 @@ heavy command.
 ## Testing rules and cards
 
 - `just test-rust` runs the workspace's tests.
-- Each card's test scenarios live in its own file. `just oracle <card names>`
-  runs those scenarios against XMage and Forge, two existing Magic engines we
-  use as "oracles" to check our rules. It needs `just oracle-setup` once per
-  machine.
+- `just oracle <card names>` plays a card's generated, rules-library and
+  hand-written scenarios against XMage and Forge. It needs `just oracle-setup`
+  once per machine.
 - `just citations` checks every Comprehensive Rules citation and quote in the
   code against the rules release pinned in `data/rules-version.json`.
   `just citations migrate <date>` moves the code to a newer rules release: it
@@ -61,21 +60,21 @@ heavy command.
   each comment.
 - `just fuzz` plays long random games, and `just exhaust` tries every sequence
   of decisions near the end positions of the scenarios.
-- To start a new card, run `just card brief <name>`. It shows the card's Oracle
-  text, rulings, matching vocabulary entries, the most similar cards already
-  implemented and the XMage class. `just card new <name>` writes the card's file
-  with its header and an empty definition, and `just card check <name>` builds
-  its set crate, plays its scenarios in Beryl, XMage and Forge (`--no-oracles`
-  for a fast loop), and compares the rules text its definition renders to with
-  its Oracle text. `just card render <name>` prints that comparison, and
-  `just card render --all` the match rate over every card file.
-  `just card diverge <name> <scenario> <xmage|forge> --cr <rule> --reason <text>`
-  records that one oracle is wrong about a scenario; it writes
-  `data/oracle-divergences.json` only when the other oracle passes the scenario
-  and the rule is in the pinned release, and refuses otherwise. A card the
-  vocabulary cannot yet express is recorded in `data/card-escalations.json`, and
-  its brief says what it is waiting for. The `card-writing` skill is the whole
-  procedure.
+- Follow the [card-writing skill](../.agents/skills/card-writing/SKILL.md) to
+  add a card. `just card brief <name>` shows its Oracle text, a Rust draft,
+  rulings and references for unresolved clauses. `just card new <name>` writes
+  the generated header and draft and reports how it renders.
+- `just card check <name>` builds the card, checks its scenarios and compares
+  the rendered text with Oracle text. Use `--no-oracles` for a fast pass. The
+  `generated` line names any mutants that generated scenarios miss. When
+  generation kills every mutant and passes the oracle bar, the card needs a
+  hand-written scenario only for a card-specific ruling. The `card render`
+  subcommand prints the text comparison for one card or the match rate over
+  every card file with `--all`.
+- `just card rulings <name> --add` drafts ledger entries for a card audit.
+  Complete each in `data/rulings-ledger.json` with a scenario, existing coverage
+  or a reason the ruling is untestable. The `rulings` step in the names lane
+  checks every entry for a listed card.
 - Two checks hold a definition to its card. The `card-text` step of the rust
   lane renders every card file and fails on any difference from its Oracle text
   that `data/card-text-allowlist.json` doesn't pin exactly. The mutation check
