@@ -673,5 +673,6 @@ mod culprit;
 mod memory;
 mod more;
 mod process;
+mod products;
 mod rounds;
 mod speed;

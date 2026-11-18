@@ -39,6 +39,14 @@ impl CheckTipWork {
         Ok(value)
     }
 
+    /// The products each family needs, by family name, to tell which build a check waits on.
+    fn family_needs(&self) -> HashMap<String, Vec<String>> {
+        self.checks
+            .families()
+            .map(|(name, family)| (name.to_owned(), family.needs.clone()))
+            .collect()
+    }
+
     /// [`CheckTipWork::at_for`] for one lease at a time, as listing and single runs take.
     fn at<T>(&self, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
         self.at_for(&format!("tip {commit}"), commit, f)
@@ -59,7 +67,7 @@ impl TipWork for CheckTipWork {
     ) -> Vec<TipRun> {
         let options = options(rerun);
         match self.at(commit, |tree| self.checks.run(ctx, tree, checks, &options)) {
-            Ok(run) => tip_runs(run),
+            Ok(run) => tip_runs(&run, &self.family_needs()),
             Err(error) => not_run(checks.iter(), &error),
         }
     }
@@ -79,7 +87,7 @@ impl TipWork for CheckTipWork {
                 .run_batches(ctx, tree, family, batches, &options, claim)
         });
         match ran {
-            Ok((run, ran)) => (tip_runs(run), ran),
+            Ok((run, ran)) => (tip_runs(&run, &self.family_needs()), ran),
             Err(error) => (
                 not_run(batches.iter().flat_map(|(_, names)| names), &error),
                 0,
@@ -171,26 +179,36 @@ fn options(rerun: bool) -> RunOptions {
 }
 
 /// Each check's outcome from a run. A check that a failed build kept from running names the
-/// product, so the round reports the build once instead of once for each of its checks.
-fn tip_runs(run: CheckRun) -> Vec<TipRun> {
-    let build = run
-        .build_failures
-        .first()
-        .map(|(product, output)| (product.clone(), output.to_string_lossy().into_owned()));
+/// product its own family needs that failed, so the round reports each build once instead of
+/// once for each of its checks. `needs` lists the products of each family.
+pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> Vec<TipRun> {
+    let build_of = |check: &CheckName| -> Option<(String, String)> {
+        let products = needs
+            .get(check.family())
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let found = products
+            .iter()
+            .find_map(|p| run.build_failures.iter().find(|(failed, _)| failed == p));
+        // A family the manifest no longer names still waits on a failed build.
+        let found = found.or_else(|| run.build_failures.first().filter(|_| products.is_empty()));
+        found.map(|(product, output)| (product.clone(), output.to_string_lossy().into_owned()))
+    };
     run.outcomes
-        .into_iter()
-        .map(|(check, outcome)| {
+        .iter()
+        .map(|&(ref check, outcome)| {
+            let check = check.clone();
             let failure = run.failures.iter().find(|f| f.check == check);
             let mut output = failure.and_then(|f| f.output.clone());
             let unbuilt = outcome == Outcome::Incomplete
                 && failure.is_some_and(|f| f.message.as_deref() == Some(BUILD_FAILED));
-            if unbuilt && let Some((product, build_output)) = &build {
+            if unbuilt && let Some((product, build_output)) = build_of(&check) {
                 return TipRun {
                     check,
                     outcome,
-                    output: Some(build_output.clone()),
+                    output: Some(build_output),
                     reason: None,
-                    build: Some(product.clone()),
+                    build: Some(product),
                 };
             }
             // An incomplete check always has a reason for the hub's ticket; one that never got
