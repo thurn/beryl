@@ -56,6 +56,21 @@ pub fn dependencies(hub: &Hub, id: &str) -> Result<Reply> {
     Ok(reply(value, render::dependencies))
 }
 
+/// The ticket with a `next` instruction when it is still pending approval. A session shown a
+/// pending ticket is usually one a person asked to look into it, which is the person's
+/// approval, so it claims the ticket first: the claim assigns it to that session, and the pool
+/// may take it if the session gives it back unfinished.
+fn with_next(mut ticket: Value) -> Value {
+    if ticket["status"] == "pending_approval" {
+        let id = text(&ticket, "id").to_owned();
+        ticket["next"] = json!(format!(
+            "pending approval: run `ignite start {}` before investigating it",
+            super::ids::spelled(&id)
+        ));
+    }
+    ticket
+}
+
 /// `ignite ticket show <id> <id>...`: one detail for one ID, as before; an array for several.
 pub fn show(hub: &Hub, ids: &[String], comments: bool, history: bool) -> Result<Reply> {
     let mut query = vec![];
@@ -63,7 +78,7 @@ pub fn show(hub: &Hub, ids: &[String], comments: bool, history: bool) -> Result<
     flag(&mut query, "history", history);
     let mut details = ids
         .iter()
-        .map(|id| read(hub, &["tickets", id], &query))
+        .map(|id| read(hub, &["tickets", id], &query).map(with_next))
         .collect::<Result<Vec<_>>>()?;
     if details.len() == 1 {
         return Ok(reply(details.remove(0), render::detail));

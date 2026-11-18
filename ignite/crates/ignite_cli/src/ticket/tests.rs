@@ -207,6 +207,24 @@ fn tickets_can_be_created_shown_listed_linked_claimed_and_closed() {
 }
 
 #[test]
+fn show_tells_a_session_to_start_a_pending_ticket_before_investigating_it() {
+    let hub = Fixture::new("pending");
+    let id = |reply: Value| reply["results"][0]["id"].as_str().unwrap().to_owned();
+    let pending = id(hub.json("create Slow"));
+    let released = id(hub.json("create Fast --release"));
+    assert_eq!(
+        hub.json(&format!("show {pending}"))["next"],
+        format!("pending approval: run `ignite start {pending}` before investigating it")
+    );
+    assert!(
+        hub.run(&format!("show {pending}"))
+            .text
+            .ends_with("before investigating it")
+    );
+    assert!(hub.json(&format!("show {released}")).get("next").is_none());
+}
+
+#[test]
 fn a_batch_file_makes_an_epic_with_three_children_and_two_edges_in_one_request() {
     let hub = Fixture::new("batch");
     let file = hub.dir.join("plan.json");

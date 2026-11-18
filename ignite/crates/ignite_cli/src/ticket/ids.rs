@@ -86,6 +86,13 @@ pub fn display(value: &mut Value) {
     }
 }
 
+/// One ticket ID spelled with its `T`.
+pub fn spelled(id: &str) -> String {
+    let mut value = Value::String(id.to_owned());
+    prefix(&mut value);
+    value.as_str().unwrap_or(id).to_owned()
+}
+
 fn prefix(value: &mut Value) {
     if let Value::String(id) = value
         && !id.starts_with('T')

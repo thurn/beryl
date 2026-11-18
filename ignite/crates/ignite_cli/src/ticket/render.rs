@@ -102,6 +102,9 @@ pub fn detail(ticket: &Value) -> String {
             ));
         }
     }
+    if let Some(next) = ticket["next"].as_str() {
+        out.push(format!("next     {next}"));
+    }
     out.join("\n")
 }
 
@@ -244,6 +247,17 @@ mod tests {
         );
         let children = json!([waiting]);
         assert!(open_children(&children).contains("    blocked by: Tc"));
+    }
+
+    #[test]
+    fn a_ticket_with_an_instruction_ends_with_its_next_line() {
+        let ticket = json!({"id": "Ta", "priority": 1, "status": "pending_approval",
+                            "title": "Look", "body": "Why is it slow?",
+                            "next": "pending approval: run `ignite start Ta` before investigating it"});
+        assert_eq!(
+            detail(&ticket).lines().last(),
+            Some("next     pending approval: run `ignite start Ta` before investigating it")
+        );
     }
 
     #[test]
