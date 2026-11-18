@@ -12,10 +12,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, LandedCommit,
-    MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport,
-    ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply, TipVerified,
-    TipWaiting, TipWaitingFiled,
+    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, JusticiarReport, Landed,
+    LandedCommit, MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled,
+    RegressionReport, ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply,
+    TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
@@ -244,6 +244,7 @@ pub struct FakeHub {
     asked: Mutex<Vec<MachineFree>>,
     audits: Mutex<Vec<AuditReport>>,
     finds: Mutex<Vec<ExplorationFind>>,
+    justiciars: Mutex<Vec<JusticiarReport>>,
 }
 
 impl FakeHub {
@@ -342,6 +343,10 @@ impl FakeHub {
 
     pub fn exploration_finds(&self) -> Vec<ExplorationFind> {
         lock(&self.finds).clone()
+    }
+
+    pub fn justiciar_reports(&self) -> Vec<JusticiarReport> {
+        lock(&self.justiciars).clone()
     }
 
     /// The ticket a report filed: one per report, numbered in the order they arrived.
@@ -613,6 +618,13 @@ impl Hub for FakeHub {
         let mut finds = lock(&self.finds);
         finds.push(find.clone());
         Ok(Self::filed(finds.len()))
+    }
+
+    fn justiciar(&self, report: &JusticiarReport) -> Result<ReportFiled> {
+        self.reachable()?;
+        let mut reports = lock(&self.justiciars);
+        reports.push(report.clone());
+        Ok(Self::filed(reports.len()))
     }
 
     /// Answered from the landings recorded with [`Hub::landed`]; a later landing of the same

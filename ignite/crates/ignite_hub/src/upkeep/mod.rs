@@ -35,6 +35,8 @@ pub mod stuck;
 #[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
+mod justiciar_tests;
+#[cfg(test)]
 mod stuck_tests;
 #[cfg(test)]
 mod tests;
@@ -121,6 +123,7 @@ impl Upkeep {
         }));
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
+        keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));
         if let Some(dir) = self.backups.clone() {
             keep(self.backups_due(conn, &dir, now, &mut report));
         }

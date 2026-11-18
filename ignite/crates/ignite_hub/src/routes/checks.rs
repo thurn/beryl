@@ -17,9 +17,10 @@ use serde_json::json;
 
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    AuditReport, ExplorationFind, FlakyReport, IncompleteReport, LandingsReply, LandingsRequest,
-    LookupReply, LookupRequest, MetricsImport, NewResult, RecordBatch, RegressionReport,
-    ReportFiled, StoreRequest, TipClaim, TipVerified, TipWaiting, TipWaitingFiled,
+    AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarReport, LandingsReply,
+    LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult, RecordBatch,
+    RegressionReport, ReportFiled, StoreRequest, TipClaim, TipVerified, TipWaiting,
+    TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -27,7 +28,7 @@ use ignite_store::hub::{checks, records, results, tips};
 
 use super::{Request, Response};
 use crate::upkeep::filing::Author;
-use crate::upkeep::{explore, machines, regressions, stuck};
+use crate::upkeep::{explore, justiciar, machines, regressions, stuck};
 
 /// Instructions are stored one by one; checks are costed in billions of them.
 const BILLION: f64 = 1e9;
@@ -38,7 +39,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         "/results/lookup" | "/landings/lookup" => ("POST", false),
         "/checks/stats" => ("GET", false),
         "/results/store" | "/flaky" | "/tips/claim" | "/tips/verified" | "/regressions"
-        | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds"
+        | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds" | "/justiciar"
         | "/tips/waiting" => ("POST", true),
         _ => return None,
     };
@@ -85,7 +86,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(Response::json(200, &json!({ "ids": ids })))
         }
         "/metrics/import" => import_metrics(conn, &body(request)?, now),
-        "/incomplete" | "/audits" | "/finds" => report(conn, request, now),
+        "/incomplete" | "/audits" | "/finds" | "/justiciar" => report(conn, request, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }
@@ -320,6 +321,7 @@ fn report(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Re
     let filed = match request.path.as_str() {
         "/incomplete" => stuck::incomplete(conn, author, &body::<IncompleteReport>(request)?, now),
         "/audits" => stuck::audit(conn, author, &body::<AuditReport>(request)?, now),
+        "/justiciar" => justiciar::report(conn, author, &body::<JusticiarReport>(request)?, now),
         _ => explore::find(conn, author, &body::<ExplorationFind>(request)?, now),
     }
     .map_err(|e| store_failure(&e))?;
