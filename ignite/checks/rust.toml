@@ -1,0 +1,186 @@
+# The Rust workspace in rust/: its tests, clippy, formatting, doctests, the `allocations`
+# binaries and the card-text check, with the build products they need. See docs/ignite.md,
+# "Declaring a family" and "Builds".
+#
+# Commands run from the checkout's root. The `python-env` product is in python.toml. A `jsonl` family's `list` prints one JSON object per
+# check, {"check": "<family>:<name>", "inputs": [...]}, where `inputs` holds the check's own
+# entries in the syntax of a family's `inputs`. Its `run` gets the checks' names as separate
+# arguments in place of `{checks}` and appends one JSON line per check to $IGNITE_RESULTS. The
+# adapter for every `jsonl` family here is tools/src/beryl_tools/ignite/rust.py.
+#
+# `{packages}` in a product's build stands for `-p <package>` for each package whose checks
+# will run. The package beryl_link_iroh is left to another family: the cold build of its iroh
+# dependency alone outlasts a check.
+#
+# Inputs outside the crates' own directories: the workspace's manifest (lints, profiles,
+# dependency versions), and the files crates embed or their tests read at run time, which
+# `crate-closure` cannot see: the card store and set groups (beryl_card_store, beryl_card_build),
+# the table commands (beryl_table), the save breaks, UI conventions and generated TypeScript
+# (beryl_session, beryl_protocol) and the sample decks (beryl_app, beryl_cli).
+
+# Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
+# it and the workspace packages it depends on. Tests marked #[ignore] are the fuzzer's and
+# belong to an exploration family; nextest runs none of them by default. The harness-less
+# `allocations` targets, which nextest cannot run, are the `allocations` family. The run's
+# results are nextest's JUnit report, target/nextest/ignite/junit.xml (rust/.config/nextest.toml),
+# and `{checks}` stands for a nextest filterset naming the tests to run.
+[family.rust]
+kind = "regression"
+adapter = "nextest"
+platforms = "any"
+needs = ["rust-tests"]
+list = "cargo nextest list --manifest-path rust/Cargo.toml --locked --cargo-quiet --workspace --exclude beryl_link_iroh --message-format json -E 'not binary(allocations)'"
+run = "cargo nextest run --manifest-path rust/Cargo.toml --locked --cargo-quiet --workspace --exclude beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail -E {checks}"
+inputs = [
+  "crate-closure",
+  "rust/Cargo.toml",
+  "rust/.config/nextest.toml",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
+]
+
+# The doctests of each package whose library has any, which cargo-nextest does not run. They
+# are where a `compile_fail` block holds that one index type cannot pass for another.
+[family.doctests]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctests list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctests run {checks}"
+inputs = [
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+]
+
+# The harness-less `allocations` binaries, which count the allocations of hot paths. They are
+# built with the test binaries.
+[family.allocations]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env", "rust-tests"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust allocations list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust allocations run {checks}"
+inputs = [
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+]
+
+# Clippy over the whole workspace, one check per package, hashed over the package and every
+# workspace package it depends on. It is also the type check, so it blocks every landing that
+# touches its inputs.
+[family.clippy]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env", "clippy"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy run {checks}"
+inputs = [
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+]
+
+# rustfmt over each package's Rust files, the card files included, which no crate root reaches.
+# One check per package, hashed over the package's directory alone.
+[family.rust-format]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env"]
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust rust-format list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust rust-format run {checks}"
+inputs = [
+  "rust/rustfmt.toml",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+]
+
+# Each card file's rendered rules text against its Oracle text (tools/src/beryl_tools/card_text.py
+# says why), one check per card file and `card-text:allowlist` for allowlist entries that name
+# no card file. One render covers every card, so every check reads the whole renderer.
+[family.card-text]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["python-env", "scenario-dump"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust card-text list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust card-text run {checks}"
+inputs = [
+  "crate:beryl_scenario",
+  "rust/Cargo.toml",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/card-text-allowlist.json",
+  "data/card-escalations.json",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+]
+
+# The test binaries of the packages named, in the `test` profile.
+[product.rust-tests]
+build = "cargo nextest run --no-run --locked --cargo-quiet {packages}"
+dir = "rust"
+inputs = ["crate-closure", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+outputs = ["rust/target"]
+
+# Clippy's pass over the workspace in its own target directory, so that it never waits on
+# Cargo's lock of rust/target while a test build holds it. Lints are capped at warnings so that
+# every unit's result is kept and the `clippy` family's run replays them (rust.py, `CLIPPY`).
+[product.clippy]
+build = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy build"
+inputs = [
+  "rust/crates/**",
+  "rust/cards/**",
+  "rust/Cargo.toml",
+  "rust/Cargo.lock",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "tools/src/beryl_tools/ignite/rust.py",
+]
+outputs = ["rust/target/clippy"]
+
+# The command-line tool, which the script, browser and oracle checks run. Built over the whole
+# workspace's libraries in the `test` profile, as the test binaries are, so that neither build
+# compiles a library the other did (tools/src/beryl_tools/paths.py, `CLI_BUILD`, says why). The
+# binary lands in rust/target/debug.
+[product.cli]
+build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli"
+dir = "rust"
+inputs = ["crate:beryl_cli", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+outputs = ["rust/target"]
+
+# `beryl_scenario`, which dumps the oracle scenarios and renders the cards' rules text, built
+# the same way as `cli`.
+[product.scenario-dump]
+build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_scenario"
+dir = "rust"
+inputs = ["crate:beryl_scenario", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+outputs = ["rust/target"]

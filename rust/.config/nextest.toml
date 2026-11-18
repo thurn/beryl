@@ -2,3 +2,8 @@
 # outcome and time as JUnit XML, which the run log reads.
 [profile.check.junit]
 path = "junit.xml"
+
+# Ignite's `rust` family (ignite/checks/rust.toml): the same JUnit report in its own directory,
+# target/nextest/ignite/junit.xml, so that a run of it never overwrites the rust lane's.
+[profile.ignite.junit]
+path = "junit.xml"
