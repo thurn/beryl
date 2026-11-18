@@ -299,6 +299,7 @@ impl Checks {
             class: options.class,
             cores: self.settings.cores,
             resources: family.resources.clone(),
+            grows: family.grows,
             tree: Some(tree.id.clone()),
             ticket: options.ticket.clone(),
         });

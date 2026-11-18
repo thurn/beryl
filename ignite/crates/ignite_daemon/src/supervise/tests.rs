@@ -68,6 +68,12 @@ fn run_args_take_class_ticket_and_cores_before_the_command() {
     assert_eq!(args.ticket.unwrap().as_str(), "Tix1t.12");
     assert_eq!(args.cores, Some(4));
     assert_eq!(args.command, strings(&["just", "--games", "2000"]));
+    assert!(!args.grows);
+    assert!(
+        parse_run_args(&strings(&["--grows", "--", "record"]))
+            .unwrap()
+            .grows
+    );
 
     let plain = parse_run_args(&strings(&["--", "cargo", "build"])).unwrap();
     assert_eq!(

@@ -3,8 +3,8 @@
 //! counts load from outside Ignite (docs/ignite.md, "Cores, memory and shared resources").
 //!
 //! [`Ledger`] is the state machine and holds every rule. [`Scheduler`] wraps it for threads:
-//! [`Scheduler::acquire`] blocks until a request is granted, and the daemon calls
-//! [`Scheduler::sample`] every few seconds to read the machine's CPU and memory.
+//! [`Scheduler::acquire`] blocks until a request is granted, and [`Scheduler::sample_every`]
+//! reads the machine's CPU and memory about once a second ([`SAMPLE_EVERY`]).
 //!
 //! The rules:
 //!
@@ -40,7 +40,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
+use std::thread;
+use std::time::Duration;
 
 use ignite_core::config::{Floor, Machine};
 use ignite_core::protocol::Class;
@@ -49,6 +51,11 @@ use ignite_os::hostcpu::HostCpu;
 use serde::Serialize;
 
 pub use ledger::{Ledger, RECLAIM_SECONDS, Step};
+
+/// How often [`Scheduler::sample_every`] reads the machine. Each reading is also a step, and a
+/// shrinking grant gives back one core per step, so a waiting landing gets a 12-core build's
+/// cores within about 12 s.
+pub const SAMPLE_EVERY: Duration = Duration::from_secs(1);
 
 /// What a command asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -227,14 +234,29 @@ impl Scheduler {
         self.advance(&mut state);
     }
 
-    /// Reads the machine's CPU use and free memory, and starts or stops what that changes. The
-    /// daemon calls this every few seconds. A failed reading keeps the previous one.
+    /// Reads the machine's CPU use and free memory, and starts or stops what that changes. A
+    /// failed reading keeps the previous one.
     pub fn sample(&self) {
         let busy = self.host.busy().ok();
         let memory = self.host.free_memory_mb().ok();
         let mut state = self.lock();
         state.ledger.observe(busy, memory);
         self.advance(&mut state);
+    }
+
+    /// Starts a thread that calls [`Self::sample`] every [`SAMPLE_EVERY`] for as long as the
+    /// scheduler exists.
+    pub fn sample_every(scheduler: &Arc<Self>) {
+        let weak: Weak<Self> = Arc::downgrade(scheduler);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(SAMPLE_EVERY);
+                match weak.upgrade() {
+                    Some(scheduler) => scheduler.sample(),
+                    None => break,
+                }
+            }
+        });
     }
 
     /// Blocks until grant `id` is asked to stop (true) or is released (false). The supervisor of

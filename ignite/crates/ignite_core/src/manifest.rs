@@ -107,6 +107,10 @@ pub struct Family {
     /// Shared resources the checks hold while they run.
     #[serde(default)]
     pub resources: Vec<String>,
+    /// The `run` command rereads the file `IGNITE_CORES_FILE` names while it runs and starts
+    /// more threads as its grant grows, so the scheduler gives it cores as they free up.
+    #[serde(default)]
+    pub grows: bool,
     /// Prints the family's checks, each with any inputs of its own.
     pub list: Option<String>,
     /// Runs the checks named in `{checks}`.
@@ -131,6 +135,10 @@ pub struct Product {
     pub inputs: Vec<InputPattern>,
     /// The directories the command writes, which a build tree keeps between tickets.
     pub outputs: Vec<String>,
+    /// The build command rereads the file `IGNITE_CORES_FILE` names while it runs and starts
+    /// more threads as its grant grows, as `grows` on a family.
+    #[serde(default)]
+    pub grows: bool,
 }
 
 /// An `[[rebuild]]` entry of `ignite.toml`: an edit whose rebuild cost is measured.

@@ -5,6 +5,10 @@
 //!
 //! - `spec.json`: what to run ([`SpecFile`]), written by the daemon before it starts the
 //!   supervisor.
+//! - `cores`: for a grant that shrinks or grows, its current size, which the scheduler rewrites
+//!   when it changes and the command finds in `IGNITE_CORES_FILE`.
+//! - `jobserver`: for a Cargo build that only compiles, the FIFO its job slots come from, kept
+//!   at the size in `cores` (see `jobserver`).
 //! - `lock`: held exclusively by the supervisor for as long as it lives. Whoever wants the
 //!   result takes a shared lock on it, which blocks until the supervisor exits. This works for
 //!   a daemon that started the supervisor and for one that restarted since and is no longer its
@@ -44,11 +48,16 @@ use serde::{Deserialize, Serialize};
 use crate::sched::{Grant, GrantRequest, Scheduler};
 use crate::server::{Context, Verb};
 
+mod jobserver;
+
+use jobserver::{Jobserver, compiles_only, read_cores};
+
 /// The line a supervisor prints on its standard output once it holds its run's lock. The
 /// launcher reads lines until it sees this one, so other output before it does no harm.
 pub const READY: &str = "ignite-supervisor-ready";
 
 const SPEC: &str = "spec.json";
+const CORES: &str = "cores";
 const LOCK: &str = "lock";
 const OUTPUT: &str = "output.log";
 const RESULT: &str = "result.json";
@@ -72,6 +81,10 @@ pub struct SpecFile {
     pub env: Vec<(String, String)>,
     /// Seconds the command waited for its grant, copied into its usage.
     pub queued_s: f64,
+    /// For a Cargo build that only compiles, the grant's cores file: the supervisor runs the
+    /// build under a jobserver of its own that follows the file.
+    #[serde(default)]
+    pub jobserver: Option<PathBuf>,
 }
 
 /// How a supervised command ended: the `result.json` of a run directory.
@@ -112,10 +125,12 @@ impl SupervisedLauncher {
         }
     }
 
-    /// Takes cores and resources from `scheduler` before each run. Without one, a command gets
-    /// the cores it asked for.
+    /// Takes cores and resources from `scheduler` before each run, and has it read the machine
+    /// about once a second, which is also how often a shrinking grant gives back a core. Without
+    /// one, a command gets the cores it asked for.
     #[must_use]
     pub fn with_scheduler(mut self, scheduler: Arc<Scheduler>) -> Self {
+        Scheduler::sample_every(&scheduler);
         self.scheduler = Some(scheduler);
         self
     }
@@ -128,8 +143,27 @@ impl SupervisedLauncher {
         env: Vec<(String, String)>,
         queued_s: f64,
     ) -> io::Result<Started> {
+        let dir = self.new_run()?;
+        self.start_in(dir, spec, env, queued_s, None)
+    }
+
+    /// Makes a new, empty run directory.
+    fn new_run(&self) -> io::Result<PathBuf> {
         let dir = self.runs.join(self.run_name());
         fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+
+    /// [`Self::start`] in run directory `dir`, made already, with the cores file a jobserver
+    /// follows, if any.
+    fn start_in(
+        &self,
+        dir: PathBuf,
+        spec: &CommandSpec,
+        env: Vec<(String, String)>,
+        queued_s: f64,
+        jobserver: Option<PathBuf>,
+    ) -> io::Result<Started> {
         let mut all_env = spec.env.clone();
         all_env.extend(env);
         let file = SpecFile {
@@ -137,6 +171,7 @@ impl SupervisedLauncher {
             cwd: spec.cwd.clone(),
             env: all_env,
             queued_s,
+            jobserver,
         };
         write_json(&dir.join(SPEC), &file)?;
         let (program, rest) = self
@@ -192,16 +227,19 @@ impl SupervisedLauncher {
         format!("{nanos:020}-{}-{count}", std::process::id())
     }
 
-    fn grant(&self, spec: &CommandSpec) -> Grant {
+    /// Asks the scheduler for the command's cores. A Cargo build that only compiles shrinks
+    /// while a higher class waits and grows back, through its jobserver; a command that rereads
+    /// its cores file grows. Either keeps its size in `cores_file`.
+    fn grant(&self, spec: &CommandSpec, shrinks: bool, cores_file: Option<PathBuf>) -> Grant {
         match &self.scheduler {
             Some(scheduler) => scheduler.acquire(&GrantRequest {
                 class: spec.class,
                 cores: spec.cores,
                 resources: spec.resources.clone(),
                 memory_mb: None,
-                shrinks: false,
-                grows: false,
-                cores_file: None,
+                shrinks,
+                grows: cores_file.is_some(),
+                cores_file,
             }),
             None => Grant {
                 id: 0,
@@ -216,8 +254,18 @@ impl SupervisedLauncher {
 
 impl Launcher for SupervisedLauncher {
     fn run(&self, spec: &CommandSpec) -> RunResult {
-        let grant = self.grant(spec);
-        let result = match self.start(spec, grant.env(), grant.queued_s as f64) {
+        // The run directory comes before the grant, because a grant that changes keeps its size
+        // in a file there from the moment it is granted.
+        let dir = match self.new_run() {
+            Ok(dir) => dir,
+            Err(error) => return not_started(spec, &error),
+        };
+        let shrinks = compiles_only(&spec.args);
+        let cores_file =
+            (self.scheduler.is_some() && (shrinks || spec.grows)).then(|| dir.join(CORES));
+        let grant = self.grant(spec, shrinks, cores_file.clone());
+        let jobserver = cores_file.filter(|_| shrinks);
+        let result = match self.start_in(dir, spec, grant.env(), grant.queued_s as f64, jobserver) {
             Ok(started) => {
                 // The scheduler stops `idle` work when a higher class waits; stopping ends the
                 // command. The thread ends when the grant is released below.
@@ -233,22 +281,25 @@ impl Launcher for SupervisedLauncher {
                 }
                 started.wait()
             }
-            Err(error) => {
-                eprintln!(
-                    "ignite: cannot start a supervisor for {:?}: {error}",
-                    spec.args
-                );
-                RunResult {
-                    exit: None,
-                    output: PathBuf::new(),
-                    usage: Usage::default(),
-                }
-            }
+            Err(error) => not_started(spec, &error),
         };
         if let Some(scheduler) = &self.scheduler {
             scheduler.release(&grant);
         }
         result
+    }
+}
+
+/// The result of a command whose supervisor could not be started.
+fn not_started(spec: &CommandSpec, error: &io::Error) -> RunResult {
+    eprintln!(
+        "ignite: cannot start a supervisor for {:?}: {error}",
+        spec.args
+    );
+    RunResult {
+        exit: None,
+        output: PathBuf::new(),
+        usage: Usage::default(),
     }
 }
 
@@ -347,7 +398,15 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     let output_path = dir.join(OUTPUT);
     let output = File::create(&output_path)?;
     let started = Instant::now();
-    let group = start_command(&spec, &output, dir);
+    let jobserver = spec
+        .jobserver
+        .as_deref()
+        .and_then(|cores_file| open_jobserver(&spec, cores_file, dir, &output));
+    let group = start_command(&spec, jobserver.as_ref().map(Jobserver::env), &output, dir);
+    // Dropping the sender stops the thread that keeps the jobserver at the grant's size.
+    let _follow = jobserver
+        .zip(spec.jobserver.clone())
+        .map(|(jobserver, cores_file)| jobserver::follow(jobserver, cores_file));
     // Announced once the command has started (or failed to), so when the launcher's `start`
     // returns, the lock is held and the group file exists. Written straight to the file
     // descriptor, so that a test harness capturing `print!` cannot hold it back.
@@ -380,8 +439,44 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// The jobserver for a Cargo build, with room for the grant's size when it started: the number
+/// in its cores file, or else `IGNITE_CORES`. Where none can be made (Windows has no FIFOs) the
+/// build runs on `CARGO_BUILD_JOBS`, and the reason is in its output.
+fn open_jobserver(
+    spec: &SpecFile,
+    cores_file: &Path,
+    dir: &Path,
+    output: &File,
+) -> Option<Jobserver> {
+    let cores = read_cores(cores_file)
+        .or_else(|| {
+            spec.env
+                .iter()
+                .find(|(name, _)| name == "IGNITE_CORES")
+                .and_then(|(_, value)| value.parse().ok())
+        })
+        .unwrap_or(1);
+    match Jobserver::open(dir, cores) {
+        Ok(jobserver) => Some(jobserver),
+        Err(error) => {
+            let _ = writeln!(
+                &*output,
+                "ignite: running without a jobserver, on the grant's first size: {error}"
+            );
+            None
+        }
+    }
+}
+
 /// Starts the command as the leader of a group of its own and records the group's ID in `dir`.
-fn start_command(spec: &SpecFile, output: &File, dir: &Path) -> io::Result<Group> {
+/// Under a jobserver, `CARGO_BUILD_JOBS` is removed, because Cargo ignores the jobserver while
+/// it is set.
+fn start_command(
+    spec: &SpecFile,
+    jobserver: Option<(String, String)>,
+    output: &File,
+    dir: &Path,
+) -> io::Result<Group> {
     let (program, rest) = spec
         .args
         .split_first()
@@ -394,6 +489,9 @@ fn start_command(spec: &SpecFile, output: &File, dir: &Path) -> io::Result<Group
         .stdin(Stdio::null())
         .stdout(output.try_clone()?)
         .stderr(output.try_clone()?);
+    if let Some((name, value)) = jobserver {
+        command.env_remove("CARGO_BUILD_JOBS").env(name, value);
+    }
     let group = Native.spawn_group(&mut command)?;
     fs::write(dir.join(GROUP), group.id.to_string())?;
     Ok(group)
@@ -440,12 +538,14 @@ pub struct RunVerb;
 /// The lines of a command's output that `ignite run` prints, from its end.
 const TAIL_LINES: usize = 30;
 
-/// `ignite run`'s arguments: `[--class C] [--ticket ID] [--cores N] -- <command>`.
+/// `ignite run`'s arguments: `[--class C] [--ticket ID] [--cores N] [--grows] -- <command>`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct RunArgs {
     class: Class,
     ticket: Option<TicketId>,
     cores: Option<u32>,
+    /// The command rereads `IGNITE_CORES_FILE` while it runs, so its grant may grow.
+    grows: bool,
     command: Vec<String>,
 }
 
@@ -454,6 +554,7 @@ fn parse_run_args(args: &[String]) -> Result<RunArgs, String> {
         class: Class::Agent,
         ticket: None,
         cores: None,
+        grows: false,
         command: Vec::new(),
     };
     let mut rest = args.iter();
@@ -481,11 +582,14 @@ fn parse_run_args(args: &[String]) -> Result<RunArgs, String> {
                 let n = value()?;
                 parsed.cores = Some(n.parse().map_err(|_| format!("not a core count: {n}"))?);
             }
+            "--grows" => parsed.grows = true,
             other => return Err(format!("unexpected argument: {other}")),
         }
     }
     if parsed.command.is_empty() {
-        return Err("usage: ignite run [--class C] [--ticket ID] [--cores N] -- <command>".into());
+        return Err(
+            "usage: ignite run [--class C] [--ticket ID] [--cores N] [--grows] -- <command>".into(),
+        );
     }
     Ok(parsed)
 }
@@ -512,6 +616,7 @@ impl Verb for RunVerb {
             class: args.class,
             cores,
             resources: Vec::new(),
+            grows: args.grows,
             tree: None,
             ticket: args.ticket,
         };

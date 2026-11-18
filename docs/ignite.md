@@ -634,8 +634,8 @@ Rules for cores:
   `NEXTEST_TEST_THREADS`, `RUST_TEST_THREADS`, `IGNITE_CORES`).
 - One command takes at most two thirds of the machine's cores. Waiting commands
   of one class share what is free evenly.
-- The daemon reads the machine's total CPU use from the operating system every
-  few seconds. What its own commands do not account for belongs to processes
+- The daemon reads the machine's total CPU use from the operating system about
+  once a second. What its own commands do not account for belongs to processes
   outside Ignite, such as the desktop app, and it grants only what is left.
 - `tip` and `batch` each have a floor of cores per machine that higher classes
   cannot take, so `master` keeps moving and an experiment is slowed but never
@@ -646,9 +646,11 @@ Rules for cores:
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
   CPU for hours.
-- A grant can change while its command runs. A Cargo build gives cores back, one
-  at a time, while a higher class waits, and a command that can use more threads
-  is told when its grant grows.
+- A grant can change while its command runs. A Cargo build that only compiles
+  runs under a jobserver its supervisor keeps at the grant's size, so it gives
+  cores back, one per second, while a higher class waits, and takes them again
+  afterwards. A command that can use more threads is told when its grant grows,
+  through the file `IGNITE_CORES_FILE` names.
 
 The daemon also records each command's peak memory. It delays a command whose
 family usually needs more memory than is free.
@@ -761,6 +763,10 @@ The fields:
   hash. `run` runs the checks named.
 - `always = true` marks a family that blocks every landing its inputs touch. See
   [Where regression checks run](#where-regression-checks-run).
+- `grows = true` marks a family whose `run` rereads the file `IGNITE_CORES_FILE`
+  names and starts more threads when it rises, so its grant grows as cores free
+  up. A build product takes the same field, and `ignite run --grows` does the
+  same for one command.
 
 The domain tools in `tools/` stay as they are: the oracle exporters, the motion
 capture, the card tools. They become commands that families run. What leaves

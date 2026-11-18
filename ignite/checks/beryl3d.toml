@@ -16,7 +16,9 @@
 # `IGNITE_CORES` when they start, and the file `IGNITE_CORES_FILE` names while they run
 # (`runner::threads` and `runner::granted` in rust/beryl3d/crates/beryl_inspect/src/runner.rs).
 # A grant fixed when such a program started made it run on one or two threads after the cores
-# freed up: `b3d test` took 150 s instead of 11-13 s.
+# freed up: `b3d test` took 150 s instead of 11-13 s. So the `b3d` product, whose build ends with
+# `record`, and the families that run `b3d test` say `grows = true`, and the scheduler gives
+# them cores as they free up.
 #
 # Inputs outside Beryl 3D's own crates. Beryl 3D's crates depend on main-workspace crates by
 # path, which `crate:` does not follow out of its own workspace, so the families name those
@@ -36,6 +38,7 @@
 # $BERYL_CACHE/b3d, named for a hash of what a recording reads, and is built only when missing.
 [product.b3d]
 build = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d build"
+grows = true
 inputs = [
   "rust/beryl3d/**",
   "rust/crates/**",
@@ -238,6 +241,7 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
+grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface run {checks}"
 inputs = [
@@ -313,6 +317,7 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
+grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-every-tick list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-every-tick run {checks}"
 inputs = [

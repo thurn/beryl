@@ -4,6 +4,7 @@
 //!
 //! This is the only crate where `unsafe` is allowed.
 
+pub mod fifo;
 pub mod hostcpu;
 pub mod ipc;
 pub mod occupants;

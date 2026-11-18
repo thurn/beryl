@@ -75,6 +75,9 @@ pub struct CommandSpec {
     pub cores: u32,
     /// Shared resources held while it runs.
     pub resources: Vec<String>,
+    /// The command rereads the file `IGNITE_CORES_FILE` names while it runs and starts more
+    /// threads as its grant grows (`grows` on a family or product).
+    pub grows: bool,
     pub tree: Option<TreeId>,
     pub ticket: Option<TicketId>,
 }

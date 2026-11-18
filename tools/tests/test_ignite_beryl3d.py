@@ -50,6 +50,16 @@ def test_each_jsonl_family_is_listed_and_run_by_its_own_name() -> None:
         assert str(family["run"]).endswith(f"beryl3d {name} run {{checks}}")
 
 
+def test_the_programs_that_reread_their_grant_ask_for_one_that_grows() -> None:
+    """`record` (the end of the `b3d` build) and `b3d test` start more threads when the file
+    `IGNITE_CORES_FILE` names rises, so they ask for grants that grow; the others do not.
+    """
+    loaded = manifest()
+    assert loaded["product"]["b3d"].get("grows") is True
+    growing = {n for n, f in loaded["family"].items() if f.get("grows")}
+    assert growing == {"b3d-interface", "b3d-every-tick"}
+
+
 def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_built_from() -> (
     None
 ):

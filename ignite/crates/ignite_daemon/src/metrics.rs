@@ -121,6 +121,7 @@ fn run(ctx: &Context, args: Vec<String>) -> Result<PathBuf> {
         class: Class::Idle,
         cores: 1,
         resources: Vec::new(),
+        grows: false,
         tree: None,
         ticket: None,
     });

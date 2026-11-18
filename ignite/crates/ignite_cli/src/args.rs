@@ -77,6 +77,10 @@ pub enum Command {
         /// Cores wanted; the grant may be smaller.
         #[arg(long)]
         cores: Option<u32>,
+        /// The command rereads the file `IGNITE_CORES_FILE` names while it runs, so its grant
+        /// may grow as cores free up.
+        #[arg(long)]
+        grows: bool,
         /// The command, after `--`.
         #[arg(last = true, required = true)]
         command: Vec<String>,

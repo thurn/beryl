@@ -328,6 +328,7 @@ impl BuildManager {
             class: self.settings.class,
             cores,
             resources: Vec::new(),
+            grows: plan.product.grows,
             tree: Some(plan.request.tree.clone()),
             ticket: None,
         }

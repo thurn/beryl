@@ -748,6 +748,7 @@ mod tests {
             class: crate::protocol::Class::Agent,
             cores: 1,
             resources: Vec::new(),
+            grows: false,
             tree: None,
             ticket: None,
         };

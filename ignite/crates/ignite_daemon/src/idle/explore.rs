@@ -221,6 +221,7 @@ impl Idle {
             class: Class::Idle,
             cores: self.settings.cores,
             resources: family.resources.clone(),
+            grows: family.grows,
             tree: Some(tree.clone()),
             ticket: None,
         }

@@ -167,6 +167,7 @@ fn product(build: &str, inputs: &[&str]) -> Product {
             .map(|i| InputPattern::from((*i).to_owned()))
             .collect(),
         outputs: vec!["target".to_owned()],
+        grows: false,
     }
 }
 
