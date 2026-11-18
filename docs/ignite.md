@@ -476,8 +476,12 @@ survive each other's restarts.
   runs one command. It is the command's parent: it waits for it, collects its
   resource use from the operating system and writes the result to a file. The
   daemon watches supervisors, so it can restart while commands keep running.
-- **The hub** is the daemon on jarvis with one more duty: serving the shared
-  database over HTTPS on the Tailscale network.
+- **The hub** runs on jarvis as a login service of its own, `ignite hub`,
+  started from `bin/current`. It serves the shared database over HTTPS on the
+  Tailscale network (`IGNITE_HUB_LISTEN`), and a read-only copy for the public
+  address (`IGNITE_HUB_PUBLIC_LISTEN`), and does nothing else. So a daemon
+  restart or crash loop on jarvis never takes the hub away from the other
+  machines, and the hub's own restart takes well under a second.
 
 How the executable is installed and kept current:
 
@@ -491,10 +495,15 @@ How the executable is installed and kept current:
   the services its own way. It records the repository's main checkout for the
   daemon, even when run in a linked worktree, and links `~/.local/bin/ignite` to
   the current build when that directory is on `PATH`, or says where to link it.
-- On the hub's machine (`IGNITE_HUB_LISTEN` set), the daemon that serves the hub
-  is the one install sets up. When the hub cannot be reached, install serves it
-  itself for the length of the registration, then stops before the login service
-  starts the daemon.
+- On the hub's machine, install also writes the hub's login service,
+  `ignite.hub`, which runs `bin/current hub` with the hub's listen addresses.
+  Install takes them from its environment, or from the services already
+  installed (the hub's, else the daemon's), so running it again keeps them. The
+  daemon's service never carries them. A daemon that still has
+  `IGNITE_HUB_LISTEN` on a machine without the hub service serves the hub itself
+  until install moves it. When the hub cannot be reached, install serves it
+  itself for the length of the registration, then stops before the hub's service
+  starts.
 - After that the daemon runs the executable built from the release branch,
   `repository.release` in `ignite.toml`, or `master` when that is unset. When
   the branch moves and Ignite's own source changed, each daemon builds the new
@@ -538,8 +547,14 @@ How the executable is installed and kept current:
   Ignite bug can itself be blocking.
 - Each build is stored under its commit, so a new executable never replaces a
   file that is running. Supervisors finish under the version that started them.
-- The hub updates first. A daemon whose version differs from the hub's builds or
-  finds the hub's version and restarts into it at once.
+- The hub updates first. Before the daemon on jarvis restarts into a release, it
+  kickstarts the hub's service, which comes back on the new `bin/current` and
+  reports its version in every heartbeat reply. A daemon whose version differs
+  from the hub's builds or finds the hub's version and restarts into it at once.
+  On jarvis a hub that reports another build than the daemon (a failed restart,
+  a rollback) is kickstarted again, at most every five minutes, rather than
+  followed. Daemons retry refused connections and 502, 503 and 504 answers from
+  the hub for 15 seconds, so a hub restart is invisible to them.
 - Each record names the Ignite commit that produced it.
 
 How a restart is survived:
@@ -595,8 +610,9 @@ How a broken build or a crash is survived:
   `ignite monitor` from the last-good build every two minutes. It restarts a
   daemon that does not answer, rolls back a build that crash-loops, and when
   neither helps for 15 minutes, writes `justiciar-needed.json` in the Ignite
-  home and posts a notification. The monitor has no agent logic and makes no hub
-  calls.
+  home and posts a notification. On the hub's machine it also kickstarts a hub
+  that has not answered an HTTP request in two runs in a row. The monitor has no
+  agent logic and makes no hub calls.
 - The daemon reports each crash record, and a loop that keeps failing, to the
   hub as a justiciar report. See [The justiciar](#the-justiciar).
 
