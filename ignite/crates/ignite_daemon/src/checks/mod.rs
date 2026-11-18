@@ -457,15 +457,43 @@ impl Checks {
             };
             let mut keyed = Vec::new();
             let mut broken = Vec::new();
+            // Each check's input paths first, then the object IDs of all of them from one
+            // reading of the tree. Reading per check ran two git commands per check, which
+            // for the thousands of checks in a round took most of an hour under load.
+            let mut resolved = Vec::new();
             for listed in listed {
                 if let Some(why) = &listed.refused {
                     eprintln!("ignite: {why}");
                     broken.push(incomplete(&listed.check, &Error::Invalid(why.clone())));
                     continue;
                 }
-                match self.key(ctx, tree, family, listed.clone()) {
-                    Ok(k) => keyed.push(k),
+                match self.key_paths(tree, family, &listed) {
+                    Ok(paths) => resolved.push((listed, paths)),
                     Err(error) => broken.push(incomplete(&listed.check, &error)),
+                }
+            }
+            let mut every: Vec<String> = resolved
+                .iter()
+                .flat_map(|(_, paths)| paths.iter().cloned())
+                .collect();
+            every.sort();
+            every.dedup();
+            match inputs::object_ids(ctx.git.as_ref(), &tree.path, &every) {
+                Ok(ids) => {
+                    let ids: std::collections::HashMap<String, Oid> = ids.into_iter().collect();
+                    for (listed, paths) in resolved {
+                        let mut own: Vec<(String, Oid)> = paths
+                            .iter()
+                            .filter_map(|p| ids.get(p).map(|oid| (p.clone(), oid.clone())))
+                            .collect();
+                        own.sort();
+                        keyed.push(self.keyed(family, listed, own));
+                    }
+                }
+                Err(error) => {
+                    for (listed, _) in resolved {
+                        broken.push(incomplete(&listed.check, &error));
+                    }
                 }
             }
             prepared.push(Prepared {
@@ -667,36 +695,33 @@ impl Checks {
         })
     }
 
-    /// The check's input hash over its family's inputs, the family's `package_inputs` for the
-    /// package that holds the check, and the check's own inputs.
-    pub(crate) fn key(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        family: &Family,
-        listed: Listed,
-    ) -> Result<Keyed> {
+    /// The paths a check's input hash covers: its family's inputs, the family's
+    /// `package_inputs` for the check's package, and the check's own inputs.
+    fn key_paths(&self, tree: &OpenTree, family: &Family, listed: &Listed) -> Result<Vec<String>> {
         let mut patterns = hash::input_patterns(family, &self.settings.manifest);
         patterns.extend_from_slice(family.package_patterns(listed.package.as_deref()));
         patterns.extend(listed.inputs.iter().cloned().map(InputPattern::from));
-        let paths = inputs::resolve(
+        inputs::resolve(
             &patterns,
             listed.package.as_deref(),
             &tree.graph,
             &tree.tracked,
         )
-        .map_err(|e| Error::Invalid(e.to_string()))?;
-        let ids = inputs::object_ids(ctx.git.as_ref(), &tree.path, &paths)?;
+        .map_err(|e| Error::Invalid(e.to_string()))
+    }
+
+    /// The check's key from the object IDs of its paths, sorted by path.
+    fn keyed(&self, family: &Family, listed: Listed, ids: Vec<(String, Oid)>) -> Keyed {
         let key = ResultKey {
             check: listed.check.clone(),
             hash: self.hash(family, &ids, listed.digest.as_deref()),
             platform: hash::platform(&family.platforms, self.settings.os),
         };
-        Ok(Keyed {
+        Keyed {
             listed,
             key,
             inputs: ids,
-        })
+        }
     }
 }
 

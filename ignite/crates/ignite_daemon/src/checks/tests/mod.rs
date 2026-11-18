@@ -379,6 +379,21 @@ fn cached(world: &World, check: &str) -> Option<Outcome> {
 }
 
 #[test]
+fn a_family_reads_the_tree_once_to_hash_all_its_checks() {
+    // Reading the tree runs git; one reading per check made a round of thousands of checks
+    // take most of an hour.
+    let world = jsonl_world();
+    let tree = world.checks.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let before = world.git.object_id_calls();
+    let mut probe = CheckRun::default();
+    let prepared = world
+        .checks
+        .prepare(&world.ctx, &tree, &["unit"], &options(false), &mut probe);
+    assert!(prepared[0].keyed.len() >= 2, "{}", prepared[0].keyed.len());
+    assert_eq!(world.git.object_id_calls() - before, 1);
+}
+
+#[test]
 fn a_cached_pass_runs_nothing_and_builds_nothing() {
     let world = jsonl_world();
     let first = run(&world, &["unit:a", "unit:b"]);

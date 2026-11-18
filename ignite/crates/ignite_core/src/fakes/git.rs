@@ -20,6 +20,8 @@ pub struct FakeGit {
     rejection: Mutex<Option<String>>,
     /// Pairs `(ancestor, descendant)` that are not related; every other pair is.
     unrelated: Mutex<HashSet<(Commit, Commit)>>,
+    /// How many times `object_ids` was called.
+    object_id_calls: std::sync::atomic::AtomicUsize,
 }
 
 impl FakeGit {
@@ -53,6 +55,12 @@ impl FakeGit {
         *lock(&self.rebase) = Some(result);
     }
 
+    /// How many times `object_ids` has been called, each of which reads the whole tree.
+    pub fn object_id_calls(&self) -> usize {
+        self.object_id_calls
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Every push so far: tree, commit and branch.
     pub fn pushes(&self) -> Vec<(PathBuf, Commit, String)> {
         lock(&self.pushes).clone()
@@ -61,6 +69,8 @@ impl FakeGit {
 
 impl Git for FakeGit {
     fn object_ids(&self, _tree: &Path, paths: &[String]) -> Result<Vec<(String, Oid)>> {
+        self.object_id_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let objects = lock(&self.objects);
         paths
             .iter()
