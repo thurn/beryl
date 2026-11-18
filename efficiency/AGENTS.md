@@ -89,6 +89,22 @@ store" and "Isolation" before changing anything here.
   finished. `failures.py` is the `failures` query: per Steward ticket
   (`enact_ci_range`) its sessions' cost, bisection's CPU and the minutes
   `master` stayed behind.
+- `ignite.py`: Ignite's hub as a source, read only on the machine whose cache
+  holds the hub's database (`$IGNITE_HUB_DB`, else `<cache>/ignite/hub.sqlite`).
+  Its records, one per command on any machine, stand in for the run log, the
+  token pool's leases and the CPU sampler: each becomes an `ignite_records` row,
+  a `leases` row, `cpu` and `cpu_minutes` rows over the minutes it ran and, for
+  a check family, `checks` and `lane_runs` rows (the gate as script `check`, tip
+  verification as `ci`); compile units become `compile_timings`. The efficiency
+  rows other machines' daemons posted (`metrics`, one export line per row) are
+  imported as `import` imports a file. Tickets, tips, hand-offs and workers are
+  copied into the `ignite_*` tables. A machine is named by the first host seen
+  for its ID (`ignite_machines`), so a rename does not split it, and hub ticket
+  IDs are resolved with `ticket_ids.stored`. `ignite_metrics.py` registers the
+  `ignite.*` series: cycle time, waiting for a worker, repair share, `master`
+  lag, dispatch dollars, escapes per 100 landings, cache hits and the gate's
+  instructions, seconds and wait. These sit beside `cilog.py`, `cpu.py` and
+  `locks.py` until the switch from Enact removes those readers.
 - `commits.py`: the commits source, `git log` of `staging` and `master` run in
   the main checkout, with `master`'s reflog in `ref_moves` (kept after git
   expires it), which says when each commit reached `master`. `History` gives
@@ -126,17 +142,18 @@ store" and "Isolation" before changing anything here.
   prints as `-`.
 - `exchange.py`: moving rows between machines.
   `just efficiency export --since <date> [--out FILE]` writes this host's rows
-  from every table with a `host` column as one gzip-compressed JSON-lines file
-  (a header line, then `{"table", "row"}` lines; `ingests` is left out).
-  `just efficiency import <file>` adds them in one transaction: a row already
-  present is left alone, so importing a file twice, or two overlapping exports,
-  changes nothing, except that `checks` and `lane_runs`, whose rows are growing
-  totals, take the newer row. Table and column names in a file are checked
-  against the schema, and a file from this host or a newer schema is refused. An
-  export holds commands and paths, so it is copied between your own machines
-  (`scp`, a USB drive) and never committed or published. `coverage` lists each
-  host's newest row's date and the CPU tables that hold nothing for it, because
-  Windows has no sampler or lease log.
+  from every table with a `host` column as one JSON-lines file, gzip-compressed
+  unless its name ends in `.jsonl` (a header line, then `{"table", "row"}`
+  lines; `ingests` is left out). Ignite's daemons post the plain form to the
+  hub. `just efficiency import <file>` adds them in one transaction: a row
+  already present is left alone, so importing a file twice, or two overlapping
+  exports, changes nothing, except that `checks` and `lane_runs`, whose rows are
+  growing totals, take the newer row. Table and column names in a file are
+  checked against the schema, and a file from this host or a newer schema is
+  refused. An export holds commands and paths, so it is copied between your own
+  machines (`scp`, a USB drive) and never committed or published. `coverage`
+  lists each host's newest row's date and the CPU tables that hold nothing for
+  it, because Windows has no sampler or lease log.
 - Windows: `paths.py` finds the providers' directories from the home directory
   (`%USERPROFILE%\.claude\projects`, `%USERPROFILE%\.codex\sessions`),
   `paths.project_name` builds a provider's project folder from the checkout path

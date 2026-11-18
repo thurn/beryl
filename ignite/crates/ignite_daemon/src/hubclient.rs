@@ -6,8 +6,8 @@
 
 use ignite_core::ids::Seq;
 use ignite_core::protocol::hub::{
-    CachedResult, Claim, Landed, MachineFree, NewResult, Record, Reservation, ResultKey,
-    TicketBrief,
+    CachedResult, Claim, Landed, MachineFree, MetricsImport, NewResult, Record, Reservation,
+    ResultKey, TicketBrief,
 };
 use ignite_core::protocol::tickets::{FeedBatch, LeaseOp, LeaseReply};
 use ignite_core::traits::{Hub, Result};
@@ -50,6 +50,10 @@ impl Hub for HubClient {
     }
 
     fn records(&self, batch: &[Record]) -> Result<()> {
+        todo!("Thrh4.23 (Daemon core: requests, handles and the hub client)")
+    }
+
+    fn metrics(&self, import: &MetricsImport) -> Result<()> {
         todo!("Thrh4.23 (Daemon core: requests, handles and the hub client)")
     }
 }

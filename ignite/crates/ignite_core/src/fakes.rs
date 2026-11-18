@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    CachedResult, Claim, Landed, MachineFree, NewResult, Record, Reservation, ResultKey,
-    TicketBrief,
+    CachedResult, Claim, Landed, MachineFree, MetricsImport, NewResult, Record, Reservation,
+    ResultKey, TicketBrief,
 };
 use crate::protocol::tickets::{FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use crate::time::Timestamp;
@@ -226,6 +226,7 @@ pub struct FakeHub {
     leases: Mutex<HashMap<String, Lease>>,
     feed: Mutex<Vec<FeedChange>>,
     records: Mutex<Vec<Record>>,
+    metrics: Mutex<Vec<MetricsImport>>,
 }
 
 impl FakeHub {
@@ -266,6 +267,11 @@ impl FakeHub {
 
     pub fn stored_records(&self) -> Vec<Record> {
         lock(&self.records).clone()
+    }
+
+    /// Every efficiency import sent so far, in order.
+    pub fn metrics_imports(&self) -> Vec<MetricsImport> {
+        lock(&self.metrics).clone()
     }
 
     fn reachable(&self) -> Result<()> {
@@ -380,6 +386,12 @@ impl Hub for FakeHub {
     fn records(&self, batch: &[Record]) -> Result<()> {
         self.reachable()?;
         lock(&self.records).extend_from_slice(batch);
+        Ok(())
+    }
+
+    fn metrics(&self, import: &MetricsImport) -> Result<()> {
+        self.reachable()?;
+        lock(&self.metrics).push(import.clone());
         Ok(())
     }
 }

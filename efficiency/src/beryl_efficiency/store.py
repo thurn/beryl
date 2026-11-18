@@ -523,6 +523,63 @@ MIGRATIONS: tuple[str, ...] = (
     );
     CREATE INDEX compile_timings_time ON compile_timings(time);
     """,
+    """
+    -- Ignite's hub (ignite.py). `ignite_machines` names each machine ID by the first host
+    -- seen for it, so that a renamed machine keeps one name. `ignite_records` holds one row
+    -- per command Ignite ran on any machine; `at` is when the command ended. The other
+    -- tables are copies of the hub's tables of the same meaning, replaced at each ingest.
+    CREATE TABLE ignite_machines (
+        id TEXT PRIMARY KEY,
+        host TEXT NOT NULL
+    );
+    CREATE TABLE ignite_records (
+        host TEXT NOT NULL,
+        machine TEXT NOT NULL,
+        id INTEGER NOT NULL,
+        ticket TEXT,
+        session TEXT,
+        tree TEXT,
+        verb TEXT NOT NULL,
+        class TEXT NOT NULL,
+        family TEXT,
+        queued_seconds REAL NOT NULL,
+        wall_seconds REAL NOT NULL,
+        cpu_seconds REAL NOT NULL,
+        instructions REAL,
+        peak_mb INTEGER NOT NULL,
+        outcome TEXT,
+        "commit" TEXT,
+        at TEXT NOT NULL,
+        PRIMARY KEY (machine, id)
+    );
+    CREATE INDEX ignite_records_at ON ignite_records (at);
+    CREATE TABLE ignite_tickets (
+        id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        claimed_at TEXT,
+        landed_at TEXT,
+        repair INTEGER NOT NULL
+    );
+    CREATE TABLE ignite_tips (
+        "commit" TEXT PRIMARY KEY,
+        seen TEXT NOT NULL,
+        verified TEXT,
+        state TEXT NOT NULL
+    );
+    CREATE TABLE ignite_handoffs (
+        seq INTEGER PRIMARY KEY,
+        machine TEXT NOT NULL,
+        ticket TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        at TEXT NOT NULL
+    );
+    CREATE TABLE ignite_workers (
+        machine TEXT NOT NULL,
+        session TEXT NOT NULL,
+        role TEXT NOT NULL,
+        PRIMARY KEY (machine, session)
+    );
+    """,
 )
 
 

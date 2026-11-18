@@ -45,6 +45,12 @@ TABLES = {
     "ticket_session_events",
     "ticket_ci_events",
     "tool_results",
+    "ignite_machines",
+    "ignite_records",
+    "ignite_tickets",
+    "ignite_tips",
+    "ignite_handoffs",
+    "ignite_workers",
 }
 
 

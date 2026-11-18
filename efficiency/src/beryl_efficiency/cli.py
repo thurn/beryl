@@ -28,6 +28,8 @@ from . import (
     facts,
     failures,
     findings,
+    ignite,
+    ignite_metrics,  # registers its series
     ingest,
     kinds,
     locks,
@@ -74,6 +76,7 @@ def sources() -> list[ingest.Source]:
         timings.Timings(paths.cache_root()),
         verdicts,
         commits.Commits.here(checkout),
+        *ignite.sources(paths.cache_root(), host),
     ]
 
 

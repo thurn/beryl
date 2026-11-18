@@ -1,7 +1,7 @@
 """Moving rows between machines (docs/efficiency-dashboard.md, "Other machines").
 
-`export` writes this host's rows from every table that carries a host as one gzip-compressed
-JSON-lines file: a header line, then one `{"table": ..., "row": {...}}` line per row. `import`
+`export` writes this host's rows from every table that carries a host as one JSON-lines file,
+gzip-compressed unless its name ends in `.jsonl`: a header line, then one `{"table": ..., "row": {...}}` line per row. `import`
 adds the rows of such a file to this store. Every table is keyed by host and source, so a row
 already present is left alone and importing a file twice, or two overlapping exports, changes
 nothing after the first. The aggregated tables `checks` and `lane_runs` are the exception: a
@@ -16,6 +16,7 @@ from __future__ import annotations
 import gzip
 import json
 import sqlite3
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -41,6 +42,7 @@ TIME_COLUMNS: dict[str, str] = {
     "checks": "first",
     "lane_runs": "start",
     "verdicts": "time",
+    "ignite_records": "at",
 }
 # Tables that hold per-host bookkeeping rather than data: not exported.
 SKIPPED = {"ingests"}
@@ -73,7 +75,12 @@ def export(
     counts: dict[str, int] = {}
     temporary = out.with_name(out.name + ".part")
     out.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(temporary, "wt", encoding="utf-8") as handle:
+    plain = out.suffix == ".jsonl"
+    with (
+        open(temporary, "w", encoding="utf-8")
+        if plain
+        else gzip.open(temporary, "wt", encoding="utf-8")
+    ) as handle:
         header = {
             "export": FORMAT,
             "host": host,
@@ -108,78 +115,97 @@ class Imported:
     seen: dict[str, int] = field(default_factory=dict)
 
 
-def read_header(handle: gzip.GzipFile | object) -> dict[str, object]:
-    line = handle.readline()  # type: ignore[attr-defined]
-    try:
-        header = json.loads(line)
-    except ValueError:
-        raise ExchangeError("not an efficiency export: the first line is not JSON")
-    if not isinstance(header, dict) or header.get("export") != FORMAT:
-        raise ExchangeError("not an efficiency export of a format this code reads")
-    return header
-
-
 def import_file(db: sqlite3.Connection, path: Path, host: str) -> Imported:
-    """Adds the rows of the export at `path` to `db`, in one transaction. Rows of this
-    machine's own `host` are refused: ingest is the authority on them. Table and column names
-    come from the file, so each is checked against this store's schema before it is used.
-    """
-    found = Imported()
+    """Adds the rows of the export at `path` (gzip-compressed or plain) to `db`, in one
+    transaction. Rows of this machine's own `host` are refused: ingest is the authority on
+    them."""
     try:
-        handle = gzip.open(path, "rt", encoding="utf-8")
-        header = read_header(handle)
-    except (OSError, EOFError) as e:
+        with open(path, "rb") as probe:
+            compressed = probe.read(2) == b"\x1f\x8b"
+        handle = (
+            gzip.open(path, "rt", encoding="utf-8")
+            if compressed
+            else open(path, encoding="utf-8")
+        )
+    except OSError as e:
         raise ExchangeError(f"cannot read {path}: {e}") from e
     with handle:
-        schema = header.get("schema")
-        if not isinstance(schema, int) or schema > store.version():
-            raise ExchangeError(
-                f"the export has schema {schema}, newer than this code's "
-                f"{store.version()}: update this machine first"
-            )
-        source = str(header.get("host") or "")
-        if not source:
-            raise ExchangeError("the export names no host")
-        if source == host:
-            raise ExchangeError(
-                f"the export is from this host ({host}); ingest is the source of its rows"
-            )
-        found.host = source
-        tables = host_tables(db)
         try:
             db.execute("BEGIN")
-            for line in handle:
-                record = json.loads(line)
-                name, row = record["table"], record["row"]
-                if name not in tables or not isinstance(row, dict):
-                    raise ExchangeError(f"unknown table {name!r} in the export")
-                if row.get("host") != source:
-                    raise ExchangeError(f"a row of {name} is not from {source}")
-                columns = [str(c) for c in row]
-                unknown = [c for c in columns if c not in tables[name]]
-                if unknown:
-                    raise ExchangeError(f"{name} has no column {unknown[0]!r}")
-                found.seen[name] = found.seen.get(name, 0) + 1
-                same = " AND ".join(f'"{c}" IS ?' for c in columns)
-                values = [row[c] for c in columns]
-                if db.execute(
-                    f'SELECT 1 FROM "{name}" WHERE {same}', values
-                ).fetchone():
-                    continue
-                verb = "REPLACE" if name in REPLACED else "IGNORE"
-                quoted = ", ".join(f'"{c}"' for c in columns)
-                marks = ", ".join("?" for _ in columns)
-                cursor = db.execute(
-                    f'INSERT OR {verb} INTO "{name}" ({quoted}) VALUES ({marks})',
-                    values,
-                )
-                if cursor.rowcount > 0:
-                    found.added[name] = found.added.get(name, 0) + 1
+            found = import_lines(db, handle, host)
             db.execute("COMMIT")
-        except (ValueError, KeyError, TypeError, EOFError) as e:
-            db.execute("ROLLBACK")
-            raise ExchangeError(f"damaged export: {e}") from e
         except ExchangeError:
             db.execute("ROLLBACK")
             raise
+        except (OSError, EOFError) as e:
+            db.execute("ROLLBACK")
+            raise ExchangeError(f"cannot read {path}: {e}") from e
+    return found
+
+
+def import_lines(
+    db: sqlite3.Connection,
+    lines: Iterable[str],
+    host: str,
+    rename: Callable[[str], str] | None = None,
+) -> Imported:
+    """Adds the rows of an export's lines, header first, to `db` inside the caller's
+    transaction. `rename` turns the export's host into the name its rows are stored under
+    (Ignite names a machine by the first host seen for its ID); a file whose host, so named,
+    is this machine's `host` is refused. Table and column names come from the file, so each
+    is checked against this store's schema before it is used."""
+    found = Imported()
+    iterator = iter(lines)
+    try:
+        header = json.loads(next(iterator))
+    except (StopIteration, ValueError):
+        raise ExchangeError("not an efficiency export: the first line is not JSON")
+    if not isinstance(header, dict) or header.get("export") != FORMAT:
+        raise ExchangeError("not an efficiency export of a format this code reads")
+    schema = header.get("schema")
+    if not isinstance(schema, int) or schema > store.version():
+        raise ExchangeError(
+            f"the export has schema {schema}, newer than this code's "
+            f"{store.version()}: update this machine first"
+        )
+    source = str(header.get("host") or "")
+    if not source:
+        raise ExchangeError("the export names no host")
+    named = rename(source) if rename else source
+    if named == host:
+        raise ExchangeError(
+            f"the export is from this host ({host}); ingest is the source of its rows"
+        )
+    found.host = named
+    tables = host_tables(db)
+    try:
+        for line in iterator:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            name, row = record["table"], record["row"]
+            if name not in tables or not isinstance(row, dict):
+                raise ExchangeError(f"unknown table {name!r} in the export")
+            if row.get("host") != source:
+                raise ExchangeError(f"a row of {name} is not from {source}")
+            row = {**row, "host": named}
+            columns = [str(c) for c in row]
+            unknown = [c for c in columns if c not in tables[name]]
+            if unknown:
+                raise ExchangeError(f"{name} has no column {unknown[0]!r}")
+            found.seen[name] = found.seen.get(name, 0) + 1
+            same = " AND ".join(f'"{c}" IS ?' for c in columns)
+            values = [row[c] for c in columns]
+            if db.execute(f'SELECT 1 FROM "{name}" WHERE {same}', values).fetchone():
+                continue
+            verb = "REPLACE" if name in REPLACED else "IGNORE"
+            quoted = ", ".join(f'"{c}"' for c in columns)
+            marks = ", ".join("?" for _ in columns)
+            cursor = db.execute(
+                f'INSERT OR {verb} INTO "{name}" ({quoted}) VALUES ({marks})', values
+            )
+            if cursor.rowcount > 0:
+                found.added[name] = found.added.get(name, 0) + 1
+    except (ValueError, KeyError, TypeError) as e:
+        raise ExchangeError(f"damaged export: {e}") from e
     return found

@@ -60,3 +60,10 @@ products = ["clippy", "rust-tests"]
 name = "one-card"
 edit = "append a no-op statement to one card file"
 products = ["clippy", "rust-tests"]
+
+# The efficiency dashboard's commands. Each daemon runs them when the session transcripts grow and
+# posts the export to the hub (docs/ignite.md, "Records and metrics").
+[metrics]
+watch = ["~/.claude/projects", "~/.codex/sessions"]
+ingest = ["just", "efficiency", "ingest"]
+export = ["just", "efficiency", "export", "--no-ingest", "--since", "{since}", "--out", "{out}"]

@@ -57,6 +57,24 @@ pub struct Config {
     /// Edits whose rebuild cost `ignite rebuild` measures.
     #[serde(default)]
     pub rebuild: Vec<RebuildEdit>,
+    /// How each daemon sends its machine's efficiency rows to the hub; none sends nothing.
+    #[serde(default)]
+    pub metrics: Option<Metrics>,
+}
+
+/// The efficiency dashboard's commands, which each daemon runs for its own machine when the
+/// session transcripts it reads have grown (see `ignite_daemon::metrics`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Metrics {
+    /// Directories whose files growing means there is something new to ingest. A leading `~`
+    /// is the user's home directory.
+    pub watch: Vec<String>,
+    /// The ingest, as a program and its arguments, run from the main checkout.
+    pub ingest: Vec<String>,
+    /// The export of this machine's rows as JSON lines. `{since}` is replaced by the UTC date
+    /// of the last export sent (or `all`) and `{out}` by the file to write.
+    pub export: Vec<String>,
 }
 
 /// The repository Ignite delivers to.
@@ -235,6 +253,14 @@ impl Config {
         }
         if share.window == 0 {
             return fail("improvement.window", "must be above zero");
+        }
+        if let Some(metrics) = &self.metrics {
+            if metrics.ingest.is_empty() {
+                return fail("metrics.ingest", "must name a program");
+            }
+            if !metrics.export.iter().any(|arg| arg.contains("{out}")) {
+                return fail("metrics.export", "must contain {out}");
+            }
         }
         if self.machine.is_empty() {
             return fail("machine", "declares no machine");
