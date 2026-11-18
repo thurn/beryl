@@ -105,7 +105,7 @@ impl Ipc for Native {
 
 #[cfg(test)]
 mod tests {
-    use std::io::{BufRead, BufReader, Write};
+    use std::io::{BufRead, BufReader, Read, Write};
     use std::os::unix::fs::MetadataExt;
     use std::path::PathBuf;
     use std::thread;
@@ -130,6 +130,11 @@ mod tests {
         let probe = served.closed_probe().unwrap();
         assert!(!probe(), "the client is still connected");
         drop(client);
+        // The close reaches the served end asynchronously; a blocking read returns at the end
+        // of the stream, after which the probe must see it.
+        let mut rest = Vec::new();
+        let mut served = served;
+        served.read_to_end(&mut rest).unwrap();
         assert!(probe(), "the client has closed its end");
         let _ = fs::remove_dir_all(&dir);
     }
