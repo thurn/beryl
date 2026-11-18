@@ -24,3 +24,6 @@ pub trait UsageReader {
     /// Waits for `child` and returns its exit status with its final use.
     fn reap(&self, child: &mut Child) -> io::Result<(ExitStatus, ProcessUsage)>;
 }
+
+#[cfg(target_os = "macos")]
+pub use macos::TreeMeter;
