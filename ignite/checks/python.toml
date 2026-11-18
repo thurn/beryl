@@ -21,6 +21,9 @@ inputs = [
   "tools/uv.lock",
   "efficiency/pyproject.toml",
   "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/names.py",
 ]
 
 # Types: one check per project. Pyre has no Windows build, so only macOS runs it.
@@ -37,6 +40,9 @@ inputs = [
   "tools/uv.lock",
   "efficiency/pyproject.toml",
   "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/names.py",
 ]
 
 # Tests: one check per test. A test's own inputs are its file, the modules it imports
@@ -56,4 +62,7 @@ inputs = [
   "data/card-store.tsv",
   "data/catalogs.json",
   "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/names.py",
 ]
