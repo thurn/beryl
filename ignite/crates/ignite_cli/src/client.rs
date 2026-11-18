@@ -64,16 +64,25 @@ pub fn request(verb: &str, raw: &[String], cwd: PathBuf, session: Option<Session
 /// Sends the request to the machine's daemon over its socket and reads its reply. A daemon
 /// that cannot be reached is a configuration error.
 pub fn send(request: &Request) -> Reply {
+    send_or(request, |_| None)
+}
+
+/// [`send`], but a daemon that cannot be reached is first offered to `fallback`, whose reply,
+/// if it gives one, is the answer.
+pub fn send_or(request: &Request, fallback: impl FnOnce(&Request) -> Option<Reply>) -> Reply {
     let socket = ignite_daemon::server::default_socket();
-    ignite_daemon::server::send(&socket.to_string_lossy(), request).unwrap_or_else(|error| {
-        Reply::text(
-            Exit::Usage,
-            format!(
-                "failed   the daemon at {} did not answer: {error}\nnext     ignite doctor",
-                socket.display()
-            ),
-        )
-    })
+    match ignite_daemon::server::send(&socket.to_string_lossy(), request) {
+        Ok(reply) => reply,
+        Err(error) => fallback(request).unwrap_or_else(|| {
+            Reply::text(
+                Exit::Usage,
+                format!(
+                    "failed   the daemon at {} did not answer: {error}\nnext     ignite doctor",
+                    socket.display()
+                ),
+            )
+        }),
+    }
 }
 
 #[cfg(test)]

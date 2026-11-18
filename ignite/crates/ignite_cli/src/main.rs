@@ -3,6 +3,7 @@
 
 mod args;
 mod client;
+mod fallback;
 mod import;
 mod manifest;
 mod plan;
@@ -66,7 +67,15 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Runner(pass) => exit_reply(ignite_daemon::wrap::runner(&pass.args)),
         _ => {
             let session = client::session_from_env(|name| std::env::var(name).ok());
-            client::send(&client::request(verb, raw, current_dir(), session))
+            let request = client::request(verb, raw, current_dir(), session);
+            if verb == "dispatch" {
+                // The dispatcher keeps calling while the daemon is down; see `fallback`.
+                let home = ignite_daemon::update::Home::from_env().root;
+                let now = ignite_core::traits::Clock::now(&ignite_core::time::SystemClock);
+                client::send_or(&request, |r| fallback::dispatch(r, &home, now))
+            } else {
+                client::send(&request)
+            }
         }
     }
 }
