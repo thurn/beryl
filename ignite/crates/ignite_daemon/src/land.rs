@@ -35,7 +35,8 @@
 //!
 //! Each step is recorded as it starts (see [`crate::steps`]), so `ignite wait`, `ignite status`
 //! and the client of `ignite land` can say what the landing is doing. `ignite stop` ends a
-//! landing up to the moment its push begins, and is refused after it.
+//! landing up to the moment its push begins, and is refused while the push runs and after it
+//! succeeds. A push the remote rejects lets the landing be stopped again.
 
 pub mod env;
 mod lease;
@@ -506,7 +507,10 @@ impl Landing {
                     record.state = RecordState::Pushed;
                     self.records.write(&record).map_err(fail)?;
                 }
+                // Nothing was pushed, so the landing may be stopped again while it goes back
+                // to rebase.
                 Ok(Push::Rejected { reason }) => {
+                    steps::allow_stop();
                     last_cause = reason;
                     self.records
                         .remove_if(&ticket, &record.commit)

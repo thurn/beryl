@@ -30,6 +30,8 @@
 //! - [`refuse_stop`]`(reason)` makes every later request to stop fail with `reason`, as for a
 //!   landing whose push has begun. It returns false if a stop was already asked for, so the
 //!   caller can give up instead of starting what may not be interrupted.
+//! - [`allow_stop`] lifts that refusal once the part that may not be interrupted is over, as
+//!   when the remote rejected a landing's push and the landing goes back to rebase.
 //! - [`current`] returns the entered activity, so that a thread spawned for part of the work can
 //!   enter it as well:
 //!
@@ -283,6 +285,20 @@ impl Activity {
         }
         state.stop = Stop::Refused(reason.to_owned());
         true
+    }
+
+    /// See [`allow_stop`].
+    pub fn allow_stop(&self) {
+        let mut state = lock(&self.state);
+        if matches!(state.stop, Stop::Refused(_)) {
+            state.stop = Stop::Running;
+        }
+    }
+
+    /// Whether stopping is refused now (see [`refuse_stop`]): the work is in a part that may
+    /// not be interrupted, such as a push.
+    pub fn refusing_stop(&self) -> bool {
+        matches!(lock(&self.state).stop, Stop::Refused(_))
     }
 
     /// Names the handle the work's reply will go to, once its caller stopped waiting.
@@ -580,6 +596,15 @@ pub fn stop_requested() -> bool {
 /// and refuses nothing, if a stop was already asked for. True on a thread with no activity.
 pub fn refuse_stop(reason: &str) -> bool {
     current().is_none_or(|activity| activity.refuse_stop(reason))
+}
+
+/// Lets the calling thread's work be stopped again after [`refuse_stop`], once the part that
+/// may not be interrupted is over. Does nothing on a thread with no activity, or to work that
+/// refused nothing.
+pub fn allow_stop() {
+    if let Some(activity) = current() {
+        activity.allow_stop();
+    }
 }
 
 #[cfg(test)]

@@ -350,3 +350,27 @@ fn a_landing_refuses_to_stop_once_its_push_has_begun() {
         activity.view()
     );
 }
+
+#[test]
+fn a_landing_whose_push_was_rejected_can_be_stopped_on_its_next_pass() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.git.push_always_rejected.store(true, Ordering::SeqCst);
+    let activity = landing_activity();
+    let _entered = activity.enter();
+    // The first pass's gate does nothing; the second pass's, after the rejected push, asks the
+    // landing to stop.
+    world.queue_hook(|| {});
+    let asked = activity.clone();
+    let answer = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let slot = answer.clone();
+    world.queue_hook(move || *slot.lock().unwrap() = Some(asked.request_stop()));
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(*answer.lock().unwrap(), Some(Ok(())));
+    assert_eq!(reply.exit, Exit::Conflict, "{}", reply.text);
+    assert_eq!(world.gate.passes.lock().unwrap().len(), 2, "{}", reply.text);
+    assert!(world.git.pushes().is_empty());
+    assert_eq!(world.hub.holder("staging"), None);
+}

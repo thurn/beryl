@@ -463,6 +463,24 @@ fn start_wait_status_and_doctor_need_no_tree_lease() {
     assert!(!DoctorVerb::default().needs_the_tree_lease());
 }
 
+#[test]
+fn stop_and_wait_are_answered_from_a_tree_being_reset() {
+    let conn = ignite_store::local::open_in_memory().unwrap();
+    trees::upsert(&conn, &tree("tree-01", "resetting")).unwrap();
+    let db = Arc::new(Mutex::new(conn));
+    let server = Server::new(context(), Registry::default(), Some(db)).unwrap();
+    for verb in ["stop", "wait"] {
+        let reply = server.handle(&from(
+            request(verb, &["T-9"]),
+            "/repo/trees/tree-01",
+            "local_a",
+        ));
+        // The verb itself answers; the lease check refuses nothing.
+        assert_eq!(reply.exit, Exit::Usage, "{verb}: {}", reply.text);
+        assert_eq!(reply.text, "unknown handle: T-9", "{verb}");
+    }
+}
+
 /// A verb that finishes only when the test sends it a unit, under any name, and that says
 /// whether it blocks an update.
 struct Held {
