@@ -9,7 +9,7 @@ use ignite_core::ids::{Commit, SessionId, TicketId, TreeId};
 use ignite_core::traits::{Error, Result};
 use ignite_git::{push, refs, save};
 
-use crate::checks::{Checks, GateRun, RunOptions};
+use crate::checks::{CheckRun, Checks, GateRun, RunOptions};
 use crate::server::Context;
 use crate::trees::{self, Trees};
 
@@ -59,6 +59,15 @@ pub trait LandTrees: Send + Sync {
 pub trait LandGate: Send + Sync {
     /// Runs the always set and the gate in `tree` as it is.
     fn run(&self, ctx: &Context, tree: &GateTree, options: &RunOptions) -> GateRun;
+    /// Runs every check of one family in `tree` as it is, each from the result cache where it
+    /// can be. A family the manifests do not declare is incomplete.
+    fn run_family(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        family: &str,
+        options: &RunOptions,
+    ) -> CheckRun;
 }
 
 /// [`LandTrees`] over the machine's [`Trees`] and `git`.
@@ -146,5 +155,37 @@ pub struct ChecksGate {
 impl LandGate for ChecksGate {
     fn run(&self, ctx: &Context, tree: &GateTree, options: &RunOptions) -> GateRun {
         self.checks.gate(ctx, &tree.tree, options)
+    }
+
+    fn run_family(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        family: &str,
+        options: &RunOptions,
+    ) -> CheckRun {
+        let mut run = CheckRun::default();
+        if !self.checks.families().any(|(name, _)| name == family) {
+            run.incomplete_families
+                .push((format!("no check family {family}"), PathBuf::new()));
+            return run;
+        }
+        let open = match self.checks.open(&tree.tree) {
+            Ok(open) => open,
+            Err(error) => {
+                run.incomplete_families
+                    .push((format!("tree {}: {error}", tree.tree), PathBuf::new()));
+                return run;
+            }
+        };
+        let mut prepared = self
+            .checks
+            .prepare(ctx, &open, &[family], options, &mut run);
+        for listed in &mut prepared {
+            listed.keep(|_| true, &mut run);
+        }
+        self.checks
+            .run_prepared(ctx, &open, prepared, options, &mut run);
+        run
     }
 }

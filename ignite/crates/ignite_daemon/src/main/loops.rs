@@ -106,7 +106,7 @@ impl Parts {
             };
             loop {
                 crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
-                landing.deliver_pending(ctx.hub.as_ref());
+                landing.deliver_pending(&ctx);
                 let running = running_commands(&server, &scheduler);
                 let may_ask = update.after_heartbeat(hub_version.borrow().as_deref(), running);
                 dispatcher.set_draining(!may_ask);

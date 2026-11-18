@@ -13,30 +13,37 @@
 //! 5. The hub's lease on the integration branch is taken (180 seconds, renewed while held). If
 //!    the tip moved since step 2, the lease is let go and the landing goes back to step 2. A
 //!    landing that loses this race three times takes the lease before its next pass and holds
-//!    it through the gate, so it cannot lose again.
+//!    it through the gate, so it cannot lose again. The lease is renewed once more just before
+//!    the push; if the hub says another landing holds it now, the landing starts over.
 //! 6. A record of the landing is written to disk, and the rebased commit is pushed from the
 //!    gate's tree. A push the remote refuses because the tip moved deletes the record and goes
 //!    back to step 2. A remote that cannot be reached exits with code 4 and keeps the record,
 //!    because the push may have landed before the connection failed; the next landing tells
 //!    which from whether the record's commit is in the tip's history. A refusal that the tip
-//!    moving does not explain (a hook, a protected branch) fails the landing at once, and a
-//!    landing gives up after [`MAX_PASSES`] passes.
-//! 7. The hub is told what landed, which closes the ticket. If it cannot be reached, the record
+//!    moving does not explain (a hook, a protected branch) fails the landing at once, deletes
+//!    its record and releases the lease, and a landing gives up after [`MAX_PASSES`] passes.
+//!    Records that a landing left `pushing` are settled by the daemon's sender (see
+//!    [`resolve`]).
+//! 7. If the release branch is configured and the landed commits changed Ignite's own source,
+//!    the commit also moves the release branch once its family's checks have passed (see
+//!    [`release`]). This never fails the landing.
+//! 8. The hub is told what landed, which closes the ticket. If it cannot be reached, the record
 //!    stays on disk and the ticket closes when the hub returns (see [`records`]). The ticket
 //!    tree is released and the branch its work was saved to at a release is deleted.
 //!
 //! `ignite sync` does step 1's checks and step 2 alone.
 
 pub mod env;
+mod lease;
 pub mod records;
+mod release;
+mod resolve;
 
 #[cfg(test)]
 mod tests;
 
 use std::path::Path;
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
-use std::thread::JoinHandle;
-use std::time::Duration;
+use std::sync::Arc;
 
 use serde_json::json;
 
@@ -45,18 +52,15 @@ use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::Landed;
 use ignite_core::protocol::tickets::{LandedWork, LeaseOp, LeaseReply};
-use ignite_core::traits::{Error, Hub, Push, Rebase};
+use ignite_core::traits::{Error, Push, Rebase};
 
 use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use env::{GateTree, LandGate, LandTrees, TicketTree};
+use lease::{HeldLease, LEASE_TTL_S};
 use records::{LandingRecord, RecordState, Records};
 
-/// How long the hub keeps the integration branch's lease without a renewal.
-const LEASE_TTL_S: u64 = 180;
-/// How often a held lease is renewed.
-const RENEW_EVERY: Duration = Duration::from_secs(60);
 /// The longest wait between two tries for a busy lease.
 const BUSY_WAIT_S: f64 = 10.0;
 /// Races lost before a landing holds the lease through its gate.
@@ -156,14 +160,15 @@ fn short(commit: &Commit) -> &str {
 impl Landing {
     /// Tells the hub about landings it has not heard of. The daemon's sender calls this each
     /// round; every `ignite land` calls it first.
-    pub fn deliver_pending(&self, hub: &dyn Hub) {
-        if let Err(error) = self.records.deliver_all(hub) {
+    pub fn deliver_pending(&self, ctx: &Context) {
+        self.resolve_pushing(ctx);
+        if let Err(error) = self.records.deliver_all(ctx.hub.as_ref()) {
             eprintln!("ignite: landings not recorded at the hub: {error}");
         }
     }
 
     fn land(&self, ctx: &Context, req: &Request, args: &LandArgs) -> Reply {
-        self.deliver_pending(ctx.hub.as_ref());
+        self.deliver_pending(ctx);
         self.land_checked(ctx, req, args)
             .unwrap_or_else(|stop| *stop)
     }
@@ -430,6 +435,14 @@ impl Landing {
             if lease.is_none() {
                 lease = Some(self.acquire(ctx, &holder, &ticket).map_err(fail)?);
             }
+            // A lease that expired while the gate ran, or that another landing took over, is not
+            // this landing's any more: pushing now could race the new holder.
+            if lease.as_ref().is_some_and(|held| !held.still_held()) {
+                free_landing(None);
+                last_cause = format!("the {staging} lease was lost to another landing");
+                lease = None;
+                continue;
+            }
             let now = ctx.git.tip(&staging).map_err(fail)?;
             if now != tip {
                 free_landing(None);
@@ -462,6 +475,7 @@ impl Landing {
                 },
                 commit: rebased.head.clone(),
                 state: RecordState::Pushing,
+                written_at: Some(ctx.clock.now()),
             };
             self.records.write(&record).map_err(fail)?;
             match ctx.git.push(&gate_tree.path, &rebased.head, &staging) {
@@ -471,7 +485,9 @@ impl Landing {
                 }
                 Ok(Push::Rejected { reason }) => {
                     last_cause = reason;
-                    self.records.remove(&ticket).map_err(fail)?;
+                    self.records
+                        .remove_if(&ticket, &record.commit)
+                        .map_err(fail)?;
                     free_landing(None);
                     losses += 1;
                     if losses < LOSSES_BEFORE_HOLDING {
@@ -479,18 +495,39 @@ impl Landing {
                     }
                     continue;
                 }
+                // The remote answered that it refuses the commit (a hook, a protected branch, a
+                // file over its size limit), so nothing was pushed and the record is dropped.
+                // The lease is released as the error returns.
+                Err(error @ Error::Conflict(_)) => {
+                    self.records
+                        .remove_if(&ticket, &record.commit)
+                        .map_err(fail)?;
+                    return Err(fail(error));
+                }
                 // The push may have reached the remote before the error, so the record stays
-                // `pushing`: the next landing finds the branch empty if it did, and closes the
-                // ticket without pushing again, or drops the record and starts over if not.
+                // `pushing`: the next landing, or the daemon's sender, finds the commit on the
+                // branch if it did, and closes the ticket without pushing again, or drops the
+                // record and starts over if not.
                 Err(error) => return Err(fail(error)),
             }
             drop(lease);
+            let release = self.move_release(
+                ctx,
+                &release::Landed {
+                    tree: &gate_tree,
+                    commit: &rebased.head,
+                    files: &record.landed.work.files,
+                    gated: &gated,
+                    options: &options,
+                },
+            );
             free_landing(Some(&rebased.head));
             let summary = Summary {
                 tip,
                 landed_since: first_landed_since.unwrap_or(0),
                 passes,
                 gated,
+                release,
             };
             return Ok(self.finish(ctx, req, &held, &record, Some(&summary), Some(&args.note)));
         }
@@ -563,6 +600,9 @@ impl Landing {
                 short(&record.commit)
             ),
         ));
+        if let Some(release) = summary.and_then(|summary| summary.release.clone()) {
+            lines.push(release);
+        }
         lines.extend(problems);
         lines.push(line(
             "title",
@@ -626,6 +666,8 @@ struct Summary {
     landed_since: u32,
     passes: u32,
     gated: GateRun,
+    /// The `release` line, when the landing called for a move of the release branch.
+    release: Option<(String, String)>,
 }
 
 /// The reply to a gate that failed: exit code 2, the failures with paths relative to the
@@ -657,72 +699,5 @@ fn failed_gate(staging: &str, rebased: &Rebased, gated: &GateRun, gate_path: &Pa
             })).collect::<Vec<_>>(),
         })),
         handle: None,
-    }
-}
-
-/// The integration branch's lease while this landing holds it. A thread renews it every
-/// [`RENEW_EVERY`]; dropping the guard stops the thread and releases the lease.
-struct HeldLease {
-    hub: Arc<dyn Hub>,
-    name: String,
-    holder: String,
-    stop: Arc<(Mutex<bool>, Condvar)>,
-    renewer: Option<JoinHandle<()>>,
-}
-
-impl HeldLease {
-    fn start(hub: Arc<dyn Hub>, name: String, holder: String) -> HeldLease {
-        let stop = Arc::new((Mutex::new(false), Condvar::new()));
-        let renewer = {
-            let (hub, name, holder, stop) =
-                (hub.clone(), name.clone(), holder.clone(), stop.clone());
-            std::thread::spawn(move || {
-                let (stopped, wake) = &*stop;
-                let mut guard = stopped.lock().unwrap_or_else(PoisonError::into_inner);
-                loop {
-                    let (next, _) = wake
-                        .wait_timeout_while(guard, RENEW_EVERY, |stopped| !*stopped)
-                        .unwrap_or_else(PoisonError::into_inner);
-                    guard = next;
-                    if *guard {
-                        return;
-                    }
-                    let op = LeaseOp::Renew {
-                        holder: holder.clone(),
-                        ttl_s: LEASE_TTL_S,
-                        payload: None,
-                        if_revision: None,
-                    };
-                    if let Err(error) = hub.lease(&name, op) {
-                        eprintln!("ignite: the {name} lease was not renewed: {error}");
-                    }
-                }
-            })
-        };
-        HeldLease {
-            hub,
-            name,
-            holder,
-            stop,
-            renewer: Some(renewer),
-        }
-    }
-}
-
-impl Drop for HeldLease {
-    fn drop(&mut self) {
-        let (stopped, wake) = &*self.stop;
-        *stopped.lock().unwrap_or_else(PoisonError::into_inner) = true;
-        wake.notify_all();
-        if let Some(renewer) = self.renewer.take() {
-            let _ = renewer.join();
-        }
-        let op = LeaseOp::Release {
-            holder: self.holder.clone(),
-            if_revision: None,
-        };
-        if let Err(error) = self.hub.lease(&self.name, op) {
-            eprintln!("ignite: the {} lease was not released: {error}", self.name);
-        }
     }
 }

@@ -40,6 +40,10 @@ mod rollback;
 
 pub use rollback::{CRASH_WINDOW_S, HEALTHY_AFTER_S, KEEP_EXTRA, Startup};
 
+/// The directory of Ignite's own source in the repository; a change under it means a new build,
+/// and a landing that touches it may move the release branch.
+pub const SOURCE: &str = "ignite";
+
 /// The arguments the login service starts the executable with.
 pub const DAEMON_ARGS: &[&str] = &["daemon"];
 

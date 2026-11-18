@@ -23,12 +23,9 @@ use ignite_core::ids::Commit;
 use ignite_core::traits::{Git, Result};
 
 use crate::update::{
-    Builder, ExecutableStore, Restart, UpdateCheck, Updater, VersionAction, restart_into,
+    Builder, ExecutableStore, Restart, SOURCE, UpdateCheck, Updater, VersionAction, restart_into,
     version_action,
 };
-
-/// The directory of Ignite's own source in the repository; a change under it means a new build.
-pub const SOURCE: &str = "ignite";
 
 /// The daemon's view of its own version and the release it should run.
 pub struct SelfUpdate {
