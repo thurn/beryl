@@ -2109,6 +2109,12 @@ Stopping a command:
 - `ignite close` and `ignite release` first stop every command still running
   from the tree and wait for them. If one refuses or does not end, the tree
   stays leased and the command says why.
+- If the ticket was already closed at the hub (for example with
+  `ignite ticket close`), `ignite release` and `ignite close` still free the
+  tree, after saving its work, and say "<ticket> was already closed; <tree>
+  freed". The daemon's tick, about once a minute, frees the tree of any held
+  ticket that is closed at the hub, so a session that never retries loses
+  nothing.
 - A person stops a session's command by telling the session.
 
 Correcting a ticket so that it lasts:
