@@ -968,6 +968,10 @@ The fields:
   listing with no checks, with a digest, or with refused checks is never kept,
   so `list` must read nothing beyond the family's inputs, the products it needs
   and what its checks print as their own inputs.
+- `digest_inputs` names the files a check's `digest` is computed from, beyond
+  `inputs` and the inputs of the products in `needs`. With them declared, the
+  family's listing is kept under a hash that covers them, and a landing that
+  touches none of them leaves the family out of scope.
 - `always = true` marks a family that blocks every landing its inputs touch. See
   [Where regression checks run](#where-regression-checks-run).
 - `covered_by` names a family whose checks find every fault this family's checks
@@ -1196,8 +1200,13 @@ The parts:
 - An **area** is a workspace package, or a second-level directory outside the
   Rust workspaces. A change's areas come from its paths. For a change that
   touches several areas, P is computed for each and the largest is used.
-- The cost is what running the check takes: its command's instructions divided
-  among the checks it ran. Builds are not part of it (see above).
+- The cost is what running the check takes: its equal share of the command it
+  ran in, after the family's start-up is taken out. Builds are not part of it
+  (see above). The hub estimates a family's start-up from its recent commands of
+  different sizes: where the line of a command's cost against its number of
+  checks meets zero checks, kept between zero and what the cheapest tenth of its
+  commands cost. The gate charges a family's start-up once, when it first runs
+  one of the family's checks; a check chosen by score pays it out of the budget.
 - A failure counts when a later change made the check pass again, whether that
   change fixed product code or updated the check. Either way the landing needed
   another edit. Flaky failures do not count.
@@ -1481,9 +1490,9 @@ single listing and the families run at once above, prevent it:
 
 How these work:
 
-- A claim's cost is measured in CPU seconds. Each check uses the lowest of its
-  last 20 recorded costs, because each recorded cost is an equal share of a
-  command that also paid its program's start-up.
+- A claim's cost is measured in CPU seconds. A claim holds about `claim_seconds`
+  less the family's start-up of recorded cost, each check counted at the median
+  of its recent costs with the start-up taken out.
 - The hub fixes the costs and `claim_seconds` for each tip and family the first
   time any machine asks (`POST /tips/costs`). Each machine cuts batches over
   every check of the family it lists at the tip, including checks switched off

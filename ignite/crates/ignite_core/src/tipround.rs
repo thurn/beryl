@@ -55,10 +55,9 @@ pub struct TipCostsRequest {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TipCosts {
     pub claim_seconds: f64,
-    /// Each check of the family the hub has a recorded cost for, in CPU seconds: the lowest of
-    /// its recent costs. Each recorded cost is an equal share of one command, which also paid
-    /// the program's start-up, so the lowest share comes from the largest batch and is the
-    /// closest to what one more check adds.
+    /// Each check of the family the hub has a recorded cost for, in CPU seconds: the median of
+    /// its recent costs, each an equal share of one command with the family's start-up taken
+    /// out. The hub shortens `claim_seconds` by the start-up.
     pub costs: BTreeMap<String, f64>,
 }
 
