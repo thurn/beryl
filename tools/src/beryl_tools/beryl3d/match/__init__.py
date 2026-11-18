@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from ..command import Command
-from . import boxes, motion, pixels, snapshot
+from . import boxes, gaps, motion, pixels, snapshot, styles
 
 SNAPSHOT = Command(
     "snapshot",
@@ -83,9 +83,44 @@ MOTION = Command(
     motion.motion_arguments,
 )
 
+STYLES = Command(
+    "styles",
+    "the style properties each paired element draws differently on the two sides",
+    (
+        (
+            "just b3d match styles opening-play --at prompt:1",
+            "the play-or-draw prompt, desktop, at scale 2",
+        ),
+        (
+            "just b3d match styles b3d:opening-play/you/393x759 --at end",
+            "a phone window at the recording's end",
+        ),
+    ),
+    styles.run,
+    styles.style_arguments,
+)
+
+GAPS = Command(
+    "gaps",
+    "the web style values Beryl 3D's Style cannot express, grouped by shape and ranked by "
+    "screen area",
+    (
+        (
+            "just b3d match gaps opening-play --at prompt:1",
+            "one target's unsupported values",
+        ),
+        (
+            "just b3d match gaps --all",
+            "every desktop and phone test target at its end, into gaps.json",
+        ),
+    ),
+    gaps.run,
+    gaps.gap_arguments,
+)
+
 # Each subcommand, in the order `just b3d match --help` lists them. A module adds one by writing
 # its `Command` and adding it here.
-SUBCOMMANDS: tuple[Command, ...] = (SNAPSHOT, BOXES, PIXELS, MOTION)
+SUBCOMMANDS: tuple[Command, ...] = (SNAPSHOT, BOXES, PIXELS, MOTION, STYLES, GAPS)
 
 
 def arguments(parser: argparse.ArgumentParser) -> None:

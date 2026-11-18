@@ -167,52 +167,7 @@ export function records({ roles, only, light = false }) {
         out.push(text.slice(start).trim());
         return out.filter(Boolean);
     };
-    /** The color at the start of `text` and the rest of it. */
-    const leadingColor = (text) => {
-        const m = text.match(/^(rgba?\([^)]*\)|color\([^)]*\)|transparent)\s*/);
-        if (m) return [color(m[1]), text.slice(m[0].length)];
-        const tail = text.match(/\s*(rgba?\([^)]*\)|color\([^)]*\))$/);
-        if (tail) return [color(tail[1]), text.slice(0, -tail[0].length)];
-        return [null, text];
-    };
     const px = (text) => round(parseFloat(text));
-    /** One `box-shadow` or `drop-shadow` as {inset, x, y, blur, spread, color}. */
-    const shadow = (text) => {
-        const inset = /\binset\b/.test(text);
-        const [c, rest] = leadingColor(text.replace(/\binset\b/, "").trim());
-        const lengths = rest.trim().split(/\s+/).filter(Boolean).map(px);
-        const [x = 0, y = 0, blur = 0, spread = 0] = lengths;
-        return { inset, x, y, blur, spread, color: c };
-    };
-    /** A gradient or image of `background-image` or `mask-image`. */
-    const image = (text) => {
-        const m = text.match(/^([a-z-]+)\((.*)\)$/s);
-        if (!m) return { kind: "unknown", raw: text };
-        const [, fn, inner] = m;
-        if (fn === "url") return { kind: "url", url: inner.replace(/^["']|["']$/g, "") };
-        const kind = fn.replace(/^-webkit-/, "").replace(/-gradient$/, "");
-        const parts = commas(inner);
-        const out = { kind, repeating: kind.startsWith("repeating-") };
-        if (parts.length && !leadingColor(parts[0])[0]) out.shape = parts.shift();
-        out.stops = parts.map((part) => {
-            const [c, rest] = leadingColor(part);
-            const at = rest.trim().split(/\s+/).filter(Boolean);
-            return { color: c, at: at.length ? at : null };
-        });
-        return out;
-    };
-    const filter = (text) => {
-        const out = [];
-        for (const m of text.matchAll(/([a-z-]+)\(((?:[^()]|\([^()]*\))*)\)/g)) {
-            const [, fn, args] = m;
-            out.push(
-                fn === "drop-shadow"
-                    ? { fn, shadow: shadow(args) }
-                    : { fn, value: args.trim() },
-            );
-        }
-        return out;
-    };
     /** Four sides' values as one when they are equal. */
     const sides = (values) =>
         values.every((v) => JSON.stringify(v) === JSON.stringify(values[0]))
@@ -223,12 +178,26 @@ export function records({ roles, only, light = false }) {
             ?.replace(/^["']|["']$/g, "")
             .replace(/ Variable$/, "") ?? text;
 
+    /**
+     * A corner's radius as drawn, in points: a percentage of the element's size, and no more
+     * than half its shorter side, as CSS scales radii that do not fit down (so the usual
+     * `999px` of a pill is half its height). Of an elliptical corner, the horizontal radius.
+     */
+    const radius = (text, [width, height]) => {
+        const first = text.trim().split(/\s+/)[0] ?? "0";
+        const shorter = Math.min(width, height);
+        const value = first.endsWith("%")
+            ? (parseFloat(first) / 100) * shorter
+            : parseFloat(first) || 0;
+        return round(Math.min(value, shorter / 2));
+    };
     // `opacity` is the element's with its ancestors', the opacity it is seen at, as Beryl 3D
     // resolves it.
-    const styleOf = (s, opacity) => ({
+    // `size` is the element's laid-out width and height, before any transform.
+    const styleOf = (s, opacity, size) => ({
         "background-color": color(s.backgroundColor),
-        "background-image":
-            s.backgroundImage === "none" ? "none" : commas(s.backgroundImage).map(image),
+        // WebKit's text of the four layered properties, which css.py parses into structures.
+        "background-image": s.backgroundImage,
         "border-width": sides(
             [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].map(
                 px,
@@ -245,25 +214,27 @@ export function records({ roles, only, light = false }) {
                 s.borderTopRightRadius,
                 s.borderBottomRightRadius,
                 s.borderBottomLeftRadius,
-            ].map(px),
+            ].map((r) => radius(r, size)),
         ),
-        "box-shadow": s.boxShadow === "none" ? "none" : commas(s.boxShadow).map(shadow),
-        filter: s.filter === "none" ? "none" : filter(s.filter),
+        "box-shadow": s.boxShadow,
+        filter: s.filter,
         opacity: round(opacity, 3),
         color: color(s.color),
         "font-family": family(s.fontFamily),
         "font-size": px(s.fontSize),
         "font-weight": Number(s.fontWeight),
-        "mask-image": (() => {
-            const mask = s.maskImage ?? s.webkitMaskImage ?? "none";
-            return !mask || mask === "none" ? "none" : commas(mask).map(image);
-        })(),
+        "mask-image": s.maskImage || s.webkitMaskImage || "none",
         transform:
             s.transform === "none"
                 ? "none"
-                : (s.transform.match(/-?[\d.e+-]+/g) ?? []).map((n) => round(Number(n), 4)),
+                : // The numbers inside `matrix(...)` or `matrix3d(...)`, without the name's "3".
+                  (s.transform.replace(/^[a-z0-9]+\(/i, "").match(/-?[\d.e+-]+/g) ?? []).map(
+                      (n) => round(Number(n), 4),
+                  ),
     });
 
+    const laidOut = (el, rect) =>
+        el instanceof HTMLElement ? [el.offsetWidth, el.offsetHeight] : [rect.width, rect.height];
     const visible = (el, s, rect) =>
         s.display !== "none" &&
         s.visibility !== "hidden" &&
@@ -405,7 +376,7 @@ export function records({ roles, only, light = false }) {
                 box: [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 z: here,
                 parent,
-                style: styleOf(s, opacity),
+                style: styleOf(s, opacity, laidOut(el, rect)),
                 text,
                 ...(light ? { track: trackOf(el) } : {}),
             });

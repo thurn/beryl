@@ -26,6 +26,7 @@ are unchanged, unless `--fresh`.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -35,16 +36,20 @@ import subprocess
 import sys
 import tempfile
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import TypeVar
 
 from ... import paths as repo_paths
 from ... import shots
 from .. import compare
-from . import fonts, joined, records
+from . import css, fonts, joined, records
 from .target import Target, arguments, only_argument, target
+
+# What a `--all` command measures on each target's snapshot.
+R = TypeVar("R")
 
 HERE: Path = Path(__file__).resolve().parent
 ROLES: Path = repo_paths.REPO / "data" / "beryl3d" / "match" / "roles.json"
@@ -64,6 +69,9 @@ APP_SCANS: Path = Path.home() / "Library" / "Caches" / "ca.thurn.beryl"
 # `b3d-render png`'s line naming the file it wrote.
 WROTE: re.Pattern[str] = re.compile(r"^wrote (?P<path>\S+\.png)", re.MULTILINE)
 
+
+# The moment `--all` takes each target at, unless `--at` gives another.
+ALL_AT = "end"
 
 # The `cargo build` arguments of the two programs a snapshot runs.
 B3D_BUILD = ["build", "-q", "-p", "beryl_inspect", "--bin", "b3d"]
@@ -253,7 +261,15 @@ def dump_web(
         "json": str(out / "web.json"),
         "only": only,
     }
-    return run_page("dump.mjs", job, out, serving)
+    lines, failure = run_page("dump.mjs", job, out, serving)
+    if failure is None:
+        # dump.mjs writes the layered properties as WebKit's text; the records hold structures.
+        written = out / "web.json"
+        document = json.loads(written.read_text())
+        for element in document["elements"]:
+            element["style"] = css.normalized(element["style"])
+        written.write_text(json.dumps(document, indent=1) + "\n")
+    return lines, failure
 
 
 def report(t: Target, moment: dict[str, object], warnings: list[str], out: Path) -> str:
@@ -447,6 +463,72 @@ def ensure(
     (out / "report.txt").write_text(report(t, moment, warnings, out))
     stamp.write_text(digest)
     return out
+
+
+def test_targets(prefix: str, at: str) -> list[Target] | None:
+    """Every desktop and phone test target whose name starts with `prefix`, at `at`, as
+    `just b3d test --list` names them; None after printing why they could not be listed.
+    """
+    names: list[str] = []
+    for phone in ([], ["--phone-only"]):
+        printed = compare.b3d(["test", *([prefix] if prefix else []), "--list", *phone])
+        if printed is None:
+            return None
+        names += printed.split()
+    return [
+        target(
+            argparse.Namespace(
+                recording=name, at=at, seat=None, layout=None, size=None, scale=None
+            )
+        )
+        for name in names
+    ]
+
+
+def every(
+    recording: str | None,
+    at: str | None,
+    fresh: bool,
+    art: bool,
+    measure: Callable[[Target, Path], R],
+) -> Iterator[tuple[Target, R | None]] | None:
+    """`measure` run on the snapshot of every test target whose name starts with `recording`
+    (all of them when it is None), at `at` or `ALL_AT`, yielding each target with what it
+    measured, or None where the snapshot failed, in the order they finish; None after printing
+    why the targets could not be listed. `match boxes --all` and `match gaps --all` are this.
+    """
+    prefix = recording or ""
+    if prefix and not prefix.startswith("b3d:"):
+        prefix = f"b3d:{prefix}"
+    targets = test_targets(prefix, at or ALL_AT)
+    if targets is None:
+        return None
+    return measured(targets, fresh, art, measure)
+
+
+def measured(
+    targets: list[Target],
+    fresh: bool,
+    art: bool,
+    measure: Callable[[Target, Path], R],
+) -> Iterator[tuple[Target, R | None]]:
+    # Each target's snapshot runs three programs and a browser page, so the targets run on as
+    # many threads as the machine's cores; the pages also wait for the machine's browser page
+    # slots (ui/scripts/slots.mjs).
+    workers = max(1, int(os.environ.get("IGNITE_CORES") or os.cpu_count() or 1))
+    with shared() as given:
+        if given is None:
+            return
+        serving: Shared = given
+
+        def one(t: Target) -> R | None:
+            directory = ensure(t, fresh, art, serving)
+            return None if directory is None else measure(t, directory)
+
+        with concurrent.futures.ThreadPoolExecutor(workers) as pool:
+            jobs = {pool.submit(one, t): t for t in targets}
+            for job in concurrent.futures.as_completed(jobs):
+                yield jobs[job], job.result()
 
 
 def run(args: argparse.Namespace) -> int:

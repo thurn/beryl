@@ -4295,8 +4295,14 @@ reference is the web interface as WebKit draws it, at scale 2.
   of lines (an element's lines include those of its unpaired descendants, as the
   web puts a button's label on a span inside it), the unpaired elements on each
   side, and text overlaps only one side has; `--all` runs every test target.
-  Differing style values and web style values `Style` cannot express are each
-  listed worst first.
+  `just b3d match styles` lists each paired element's differing style values,
+  largest element first, compared normalized (colors within one level, lengths
+  within a quarter point, and shadows, gradients and filters parsed from
+  WebKit's computed text and compared field by field). A web value whose shape
+  `Style` cannot express, by `data/beryl3d/match/supported.json`, is not a
+  difference: `just b3d match gaps` groups those values by property and shape
+  and ranks the groups by the screen area of the elements that use them, which
+  is the order the style vocabulary is taught in.
 - **Effects.** A conformance suite draws single elements with the box shadows,
   gradients, drop shadows, filters and masks the web interface uses, in WebKit
   and in Beryl 3D's renderer, and holds each within a small tolerance.

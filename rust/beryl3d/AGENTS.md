@@ -136,6 +136,17 @@ through the client with no window or GPU (the `b3d` skill has the details):
   (PNG). `--only <locator>` picks one element, moving or not; the span must lie
   within one view. Beryl 3D's frames alone are
   `just b3d tree <name> --at <moment> --to <moment> --records`.
+- `just b3d match styles <name> --at <moment>` prints each paired element's
+  differing style properties as `<element>  <property>  <web>  <Beryl 3D>`,
+  largest element first: colors within one level per channel, lengths within a
+  quarter point, shadows, gradients and filters field by field. A web value
+  `Style` cannot express is counted at the end instead of listed.
+- `just b3d match gaps <name> --at <moment>` (or `--all [prefix]`) lists every
+  web style value `Style` cannot express, grouped by property and shape (such as
+  "box-shadow, 2 layers, 1 inset"), ranked by the screen area of the elements
+  using it, with three examples each. It writes the snapshot's `gaps.json`, or
+  `$BERYL_CACHE/b3d/match/gaps.json` with `--all`. A change that teaches `Style`
+  a new shape adds it to `data/beryl3d/match/supported.json` in the same commit.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you

@@ -19,15 +19,12 @@ totals.
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import json
-import os
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import compare
 from . import joined, snapshot
 from .target import Target, arguments, target
 
@@ -44,8 +41,6 @@ EXACT = 0.5
 SLACK = 1.0
 # How many unpaired elements each side lists before giving a count of the rest.
 LISTED = 30
-# The moment `--all` takes each target at, unless `--at` gives another.
-ALL_AT = "end"
 
 
 def box_arguments(parser: argparse.ArgumentParser) -> None:
@@ -328,60 +323,20 @@ def printout(t: Target, found: Found, limit: int) -> str:
     return "\n".join(out) + "\n"
 
 
-def test_targets(prefix: str, at: str) -> list[Target] | None:
-    """Every desktop and phone test target whose name starts with `prefix`, at `at`, as
-    `just b3d test --list` names them; None after printing why they could not be listed.
-    """
-    names: list[str] = []
-    for phone in ([], ["--phone-only"]):
-        printed = compare.b3d(["test", *([prefix] if prefix else []), "--list", *phone])
-        if printed is None:
-            return None
-        names += printed.split()
-    return [
-        target(
-            argparse.Namespace(
-                recording=name, at=at, seat=None, layout=None, size=None, scale=None
-            )
-        )
-        for name in names
-    ]
-
-
-def one(t: Target, fresh: bool, art: bool, serving: snapshot.Shared) -> str:
-    """`--all`'s line for `t`: its totals, or that its snapshot failed."""
-    directory = snapshot.ensure(t, fresh, art, serving)
-    if directory is None:
-        return "failed (the snapshot could not be taken)"
-    return find(directory).total()
-
-
 def run_all(args: argparse.Namespace) -> int:
-    prefix = args.recording or ""
-    if prefix and not prefix.startswith("b3d:"):
-        prefix = f"b3d:{prefix}"
-    targets = test_targets(prefix, args.at or ALL_AT)
-    if targets is None:
+    results = snapshot.every(
+        args.recording, args.at, args.fresh, args.art, lambda _, d: find(d).total()
+    )
+    if results is None:
         return 1
-    # Each target's snapshot runs three programs and a browser page, so the targets run on as
-    # many threads as the machine's cores; the pages also wait for the machine's browser page
-    # slots (ui/scripts/slots.mjs).
-    workers = max(1, int(os.environ.get("IGNITE_CORES") or os.cpu_count() or 1))
-    failed = 0
-    with snapshot.shared() as serving:
-        if serving is None:
-            return 1
-
-        with concurrent.futures.ThreadPoolExecutor(workers) as pool:
-            jobs = {
-                pool.submit(one, t, args.fresh, args.art, serving): t for t in targets
-            }
-            for job in concurrent.futures.as_completed(jobs):
-                result = job.result()
-                failed += result.startswith("failed")
-                print(f"{jobs[job].test_name()}: {result}", flush=True)
-    print(f"{len(targets)} targets at {args.at or ALL_AT}, {failed} failed")
-    return 1 if failed else 0
+    count = failed = 0
+    for t, result in results:
+        count += 1
+        failed += result is None
+        line = result or "failed (the snapshot could not be taken)"
+        print(f"{t.test_name()}: {line}", flush=True)
+    print(f"{count} targets at {args.at or snapshot.ALL_AT}, {failed} failed")
+    return 1 if failed or not count else 0
 
 
 def run(args: argparse.Namespace) -> int:

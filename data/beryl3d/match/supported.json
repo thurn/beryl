@@ -1,0 +1,18 @@
+{
+  "supported": {
+    "background-color": ["color"],
+    "background-image": [],
+    "border-width": ["uniform"],
+    "border-color": ["color"],
+    "border-radius": ["uniform"],
+    "box-shadow": [],
+    "filter": [],
+    "opacity": ["*"],
+    "color": ["color"],
+    "font-family": ["*"],
+    "font-size": ["*"],
+    "font-weight": ["*"],
+    "mask-image": [],
+    "transform": []
+  }
+}

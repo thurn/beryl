@@ -154,6 +154,16 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   of different shape. Start the span after the view arrives (the `step:` lines
   of `just b3d info` give the times); `--only '<locator>'` picks one element and
   `--layout phone` the phone layout.
+- `just b3d match styles <recording> --at <moment>` prints each paired
+  element's style properties that differ (`<element>  <property>  <web>
+  <Beryl 3D>`), compared normalized: colors within one level, lengths within a
+  quarter point, shadows, gradients and filters field by field. Values `Style`
+  cannot express are only counted.
+- `just b3d match gaps <recording> --at <moment>` (or `--all`) lists the web
+  style values `Style` cannot express, grouped by property and shape and ranked
+  by screen area, with three example elements each, and writes them to
+  `gaps.json`. Start a style-vocabulary change from it, and add each shape you
+  teach `Style` to `data/beryl3d/match/supported.json`.
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>` (1600x900 by default),
