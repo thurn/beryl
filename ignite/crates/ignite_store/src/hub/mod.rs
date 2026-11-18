@@ -43,6 +43,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 5,
         sql: include_str!("dispatch_rules.sql"),
     },
+    Migration {
+        version: 6,
+        sql: include_str!("flaky_details.sql"),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

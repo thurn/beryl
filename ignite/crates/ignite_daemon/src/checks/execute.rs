@@ -81,7 +81,7 @@ impl Checks {
         }
         run.ran += u32::try_from(pending.len()).unwrap_or(u32::MAX);
         let finals = self.attempts(ctx, tree, name, family, pending, options, run);
-        self.settle(ctx, tree, finals, run);
+        self.settle(ctx, tree, family, finals, run);
     }
 
     /// Runs `pending` until each has a verdict: a failure runs once more at once, and a check
@@ -108,14 +108,13 @@ impl Checks {
                 let check = keyed.listed.check.clone();
                 let report = reported.iter().find(|r| r.check == check);
                 match report.map(|r| r.outcome) {
-                    Some(Outcome::Pass | Outcome::Flaky) => {
-                        let outcome = if failed.contains_key(&check) {
-                            Outcome::Flaky
-                        } else {
-                            Outcome::Pass
-                        };
-                        finals.push((keyed, outcome, None, None));
-                    }
+                    Some(Outcome::Pass | Outcome::Flaky) => match failed.remove(&check) {
+                        // A flaky check carries the failed run's output.
+                        Some((_, first_output)) => {
+                            finals.push((keyed, Outcome::Flaky, None, Some(first_output)));
+                        }
+                        None => finals.push((keyed, Outcome::Pass, None, None)),
+                    },
                     Some(Outcome::Fail) if failed.contains_key(&check) => {
                         let (report, first_output) = failed
                             .remove(&check)
@@ -160,10 +159,15 @@ impl Checks {
     }
 
     /// Stores passes and failures, reports flaky checks and adds every outcome to `run`.
+    ///
+    /// A flaky report names its command by the machine and the path of the failed run's saved
+    /// output, which is the same for every check that failed in that run, so the hub can tell
+    /// one fault of the machine that made many checks flake from flaky checks.
     pub(super) fn settle(
         &self,
         ctx: &Context,
         tree: &OpenTree,
+        family: &Family,
         finals: Vec<Final>,
         run: &mut CheckRun,
     ) {
@@ -186,6 +190,11 @@ impl Checks {
                             hash: keyed.key.hash.clone(),
                             commit,
                             machine: ctx.machine.clone(),
+                            always: family.always,
+                            command: output.as_ref().map_or_else(String::new, |o| {
+                                format!("{}:{}", ctx.machine, o.display())
+                            }),
+                            output: output.as_deref().map(output_tail).unwrap_or_default(),
                         };
                         self.cache.flaky(&report);
                     }
@@ -350,4 +359,14 @@ impl Checks {
         };
         self.cache.record(&record);
     }
+}
+
+/// How many lines of a failed run's output a flaky report carries.
+const FLAKY_OUTPUT_LINES: usize = 40;
+
+/// The last lines of a saved output; empty if it cannot be read.
+fn output_tail(path: &Path) -> String {
+    let text = fs::read_to_string(path).unwrap_or_default();
+    let lines: Vec<&str> = text.lines().collect();
+    lines[lines.len().saturating_sub(FLAKY_OUTPUT_LINES)..].join("\n")
 }

@@ -182,27 +182,49 @@ pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
     })
 }
 
+/// When this many different checks flaked in one command run, the cause is the machine, such
+/// as a full disk or a stuck browser page, and none of those records counts toward switching a
+/// check off.
+pub const MACHINE_FAULT_CHECKS: i64 = 3;
+
+/// The SQL condition on a `flaky` row for it to count toward switching its check off: no
+/// ticket was filed for it yet, and it is not from a command in which [`MACHINE_FAULT_CHECKS`]
+/// or more checks flaked.
+pub fn counting_flaky() -> String {
+    format!(
+        "filed IS NULL AND (command = '' OR command NOT IN (
+           SELECT command FROM flaky WHERE command != ''
+           GROUP BY command HAVING COUNT(DISTINCT check_name) >= {MACHINE_FAULT_CHECKS}))"
+    )
+}
+
 /// Records that `check` failed and then passed on the same input hash at `report.commit`.
 /// Reporting the same (check, hash, commit) again changes nothing.
 pub fn record_flaky(conn: &Connection, report: &FlakyReport, now: Timestamp) -> Result<()> {
     conn.execute(
-        "INSERT OR IGNORE INTO flaky (check_name, hash, commit_sha, machine, at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT OR IGNORE INTO flaky (check_name, hash, commit_sha, machine, at, always, command, output)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             report.check.as_str(),
             report.hash.as_str(),
             report.commit.as_str(),
             report.machine.as_str(),
-            now.to_string()
+            now.to_string(),
+            report.always,
+            report.command,
+            report.output,
         ],
     )?;
     Ok(())
 }
 
-/// Whether `check` has two flaky records on different commits no more than 7 days apart.
+/// Whether `check` has two flaky records that count ([`counting_flaky`]) on different commits
+/// no more than 7 days apart.
 pub fn flaky_repeated(conn: &Connection, check: &str) -> Result<bool> {
-    let mut select =
-        conn.prepare_cached("SELECT commit_sha, at FROM flaky WHERE check_name = ?1 ORDER BY at")?;
+    let mut select = conn.prepare_cached(&format!(
+        "SELECT commit_sha, at FROM flaky WHERE check_name = ?1 AND {} ORDER BY at",
+        counting_flaky()
+    ))?;
     let records = select
         .query_map(params![check], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -242,6 +264,9 @@ mod tests {
             hash: InputHash::new("1".repeat(64)).unwrap(),
             commit: Commit::new(commit).unwrap(),
             machine: MachineId::new("m-1").unwrap(),
+            always: false,
+            command: String::new(),
+            output: String::new(),
         }
     }
 

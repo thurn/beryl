@@ -140,6 +140,11 @@ crate::tables! {
         commit_sha: String,
         machine: String,
         at: String,
+        always: i64,
+        command: String,
+        output: String,
+        /// The ticket filed for this record; a filed record no longer counts.
+        filed: Option<String>,
     }
 
     Regression = "regressions" {

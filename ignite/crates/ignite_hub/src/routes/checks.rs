@@ -2,6 +2,7 @@
 //! `/checks/stats`, `/tips/claim`, `/tips/verified`, `/landings/lookup`, `/regressions`,
 //! `/records`, `/metrics/import`, and the reports that file tickets: `/incomplete`, `/audits`,
 //! `/finds` and `/tips/waiting`.
+//! `/results/store` also files a ticket when a pass replaces another machine's failure.
 //!
 //! The tickets a report files are written by `crate::upkeep`, which also matches them against
 //! earlier tickets.
@@ -26,7 +27,7 @@ use ignite_store::hub::{checks, records, results, tips};
 
 use super::{Request, Response};
 use crate::upkeep::filing::Author;
-use crate::upkeep::{explore, regressions, stuck};
+use crate::upkeep::{explore, machines, regressions, stuck};
 
 /// Instructions are stored one by one; checks are costed in billions of them.
 const BILLION: f64 = 1e9;
@@ -53,7 +54,7 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
 fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Response, Response> {
     match request.path.as_str() {
         "/results/lookup" => lookup(conn, &body(request)?, now),
-        "/results/store" => store(conn, &body(request)?, now),
+        "/results/store" => store(conn, request, &body(request)?, now),
         "/flaky" => {
             let report: FlakyReport = body(request)?;
             checks::record_flaky(conn, &report, now).map_err(|e| store_failure(&e))?;
@@ -120,22 +121,49 @@ fn lookup(
 
 /// Stores the results, then counts each new pass or failure as a run in the request's areas and
 /// adds its cost. A result already stored from the same record (a batch sent twice) counts once.
+/// A pass that replaces another machine's failure files a ticket for that machine (see
+/// `upkeep::machines`); failing to file it never changes what was stored.
 fn store(
     conn: &mut Connection,
+    http: &Request,
     request: &StoreRequest,
     now: Timestamp,
 ) -> Result<Response, Response> {
     let mut fresh: Vec<&NewResult> = Vec::new();
+    let mut replaced: Vec<(&NewResult, Stored)> = Vec::new();
     for result in &request.results {
         if !matches!(result.outcome, Outcome::Pass | Outcome::Fail) {
             continue;
         }
-        let stored = stored_record(conn, result).map_err(|e| store_failure(&e))?;
-        if stored != Some(result.record.0) {
+        let stored = stored(conn, result).map_err(|e| store_failure(&e))?;
+        if stored.as_ref().map(|s| s.record) != Some(result.record.0) {
             fresh.push(result);
+        }
+        if let Some(stored) = stored
+            && result.outcome == Outcome::Pass
+            && stored.outcome == "fail"
+            && stored.machine != result.machine.as_str()
+        {
+            replaced.push((result, stored));
         }
     }
     results::store(conn, &request.results, now).map_err(|e| store_failure(&e))?;
+    let writer = http.writer.as_ref().expect("checked in handle");
+    let author = Author {
+        actor: &writer.actor,
+        machine: writer.machine.as_str(),
+    };
+    for (result, stored) in replaced {
+        let seen = machines::Disagreement {
+            key: &result.key,
+            failed_on: &stored.machine,
+            failed_output: stored.output.as_deref(),
+            passed_on: result.machine.as_str(),
+        };
+        if let Err(error) = machines::disagreement(conn, author, &seen, now) {
+            eprintln!("ignite hub: filing a machine disagreement: {error}");
+        }
+    }
     for result in fresh {
         let check = result.key.check.as_str();
         let failed = result.outcome == Outcome::Fail;
@@ -147,21 +175,37 @@ fn store(
     Ok(done())
 }
 
-/// The record behind the cached entry for this key, if there is one.
-fn stored_record(conn: &Connection, result: &NewResult) -> Result<Option<u64>, StoreError> {
+/// The cached entry for a result's key.
+struct Stored {
+    record: u64,
+    outcome: String,
+    machine: String,
+    output: Option<String>,
+}
+
+/// The cached entry for this result's key, if there is one.
+fn stored(conn: &Connection, result: &NewResult) -> Result<Option<Stored>, StoreError> {
     let platform = result.key.platform.map_or("", |os| os.as_str());
-    let record: Option<i64> = conn
+    let stored = conn
         .query_row(
-            "SELECT record FROM results WHERE check_name = ?1 AND hash = ?2 AND platform = ?3",
+            "SELECT record, outcome, machine, output FROM results
+             WHERE check_name = ?1 AND hash = ?2 AND platform = ?3",
             params![
                 result.key.check.as_str(),
                 result.key.hash.as_str(),
                 platform
             ],
-            |row| row.get(0),
+            |row| {
+                Ok(Stored {
+                    record: u64::try_from(row.get::<_, i64>(0)?).unwrap_or(u64::MAX),
+                    outcome: row.get(1)?,
+                    machine: row.get(2)?,
+                    output: row.get(3)?,
+                })
+            },
         )
         .optional()?;
-    Ok(record.and_then(|id| u64::try_from(id).ok()))
+    Ok(stored)
 }
 
 /// What the result's record says the check cost: billions of instructions where the machine

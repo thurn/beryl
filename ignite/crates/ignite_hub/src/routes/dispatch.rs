@@ -167,7 +167,13 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sql_failure)?;
     fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
-    let reservation = queue::next(&tx, free, now).map_err(|e| store_failure(&e))?;
+    let mut free = free.clone();
+    if free.name.is_none() {
+        let name = crate::upkeep::machines::name(&tx, free.machine.as_str())
+            .map_err(|e| store_failure(&e))?;
+        free.name = Some(name);
+    }
+    let reservation = queue::next(&tx, &free, now).map_err(|e| store_failure(&e))?;
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(200, &json!(reservation)))
 }

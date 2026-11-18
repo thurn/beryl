@@ -5,14 +5,17 @@
 //! - lapses expired reservations;
 //! - marks a regression fixed once its ticket closed and its check has passed since
 //!   ([`regressions`]);
-//! - switches off each check with a second flaky record and files its P3 ticket ([`flaky`]);
+//! - switches off each check with a second flaky record and files its P3 ticket, or a P1 one
+//!   for a check in the always set or a command in which many checks flaked ([`flaky`]);
 //! - files a P1 ticket for a tip that has waited an hour on a machine that has not reported,
 //!   and one for an epic in which nothing can start ([`stuck`]);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
 //! The routes call the rest as reports arrive: a regression ([`regressions::file`]), a check
 //! still incomplete after its attempts ([`stuck::incomplete`]), a cache audit that disagreed
-//! ([`stuck::audit`]) and an exploration find ([`explore::find`]).
+//! ([`stuck::audit`]), an exploration find ([`explore::find`]) and a pass that replaced another
+//! machine's failure ([`machines::disagreement`]). The dashboard asks [`machines::unassignable`]
+//! for tickets that no machine can take.
 //!
 //! Every ticket the hub files by itself is matched against earlier ones by a signature
 //! ([`signature`], [`filing`]), so a repeated fault adds a comment and never a second ticket.
@@ -21,10 +24,13 @@ pub mod backup;
 pub mod explore;
 pub mod filing;
 pub mod flaky;
+pub mod machines;
 pub mod regressions;
 pub mod signature;
 pub mod stuck;
 
+#[cfg(test)]
+mod guard_tests;
 #[cfg(test)]
 mod tests;
 
@@ -98,11 +104,12 @@ impl Upkeep {
             report.lapsed_reservations = u32::try_from(lapsed.len()).unwrap_or(u32::MAX);
         }));
         keep(regressions::mark_fixed(conn).map(|fixed| report.regressions_fixed = fixed));
-        keep(flaky::switch_off_repeated(conn, now).map(|switched| {
-            for (check, filed) in switched {
+        keep(flaky::switch_off_repeated(conn, now).map(|flaky| {
+            for (check, filed) in flaky.switched_off {
                 report.checks_switched_off.push(check);
                 report.tickets_filed.push(filed.ticket);
             }
+            note(&mut report, flaky.filed);
         }));
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));

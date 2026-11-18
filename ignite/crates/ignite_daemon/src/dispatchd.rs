@@ -565,6 +565,7 @@ impl Dispatcher {
                 free_ticket_trees: trees,
                 free_cores: self.host.free_cores(),
                 families: self.setup.families.clone(),
+                name: None,
             };
             let Ok(Some(reservation)) = ctx.hub.next(&free) else {
                 return;

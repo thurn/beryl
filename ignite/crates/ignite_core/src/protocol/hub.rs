@@ -107,6 +107,10 @@ pub struct MachineFree {
     pub free_cores: f64,
     /// The families the machine can run; empty means every family.
     pub families: Vec<String>,
+    /// The machine's registered name, which a `needs:<name>` label asks for. The hub fills it
+    /// from the machine's registration.
+    #[serde(default)]
+    pub name: Option<String>,
 }
 
 /// A ticket reserved for one machine and session until `expires_at`.
@@ -251,6 +255,17 @@ pub struct FlakyReport {
     pub hash: InputHash,
     pub commit: Commit,
     pub machine: MachineId,
+    /// The check's family is in the always set, so the check is never switched off.
+    #[serde(default)]
+    pub always: bool,
+    /// Names the command run in which the check failed, the same for every check that failed
+    /// in that run; empty when unknown. The hub uses it to tell one fault of the machine, which
+    /// makes many checks flake at once, from flaky checks.
+    #[serde(default)]
+    pub command: String,
+    /// The last lines of the failed run's output.
+    #[serde(default)]
+    pub output: String,
 }
 
 /// Whether a check is run and cached.

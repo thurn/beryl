@@ -399,6 +399,10 @@ fn a_failure_then_a_pass_is_flaky_and_passes() {
     let flaky = world.hub.flaky_reports();
     assert_eq!(flaky.len(), 1);
     assert_eq!(flaky[0].check.as_str(), "unit:b");
+    assert!(
+        !flaky[0].command.is_empty() && !flaky[0].always,
+        "the report names the command the check failed in"
+    );
     assert_eq!(
         cached(&world, "unit:b"),
         None,

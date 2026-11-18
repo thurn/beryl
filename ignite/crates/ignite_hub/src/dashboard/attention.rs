@@ -207,50 +207,42 @@ fn regression_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>
     Ok(found)
 }
 
-/// Ready tickets that only an operating system or app no machine has can run.
+/// Live tickets that no registered machine can take (see `upkeep::machines::unassignable`),
+/// and ready tickets that only an app no worker uses can run.
 fn stranded_items(
     conn: &Connection,
     root: &str,
     now: Timestamp,
 ) -> Result<Vec<(Tone, String)>, ReadError> {
-    let mut found = Vec::new();
-    let mut machines = conn.prepare("SELECT os FROM machines")?;
-    let oses = machines
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
-    let oses: Vec<&str> = oses.iter().map(String::as_str).collect();
-    // A ready ticket that only an operating system or app no machine has can run.
-    let ids = tickets::ready(conn, now)?;
+    let link = |id: &str| c::link(&ticket_url(root, id), &esc(&display_id(id)), None, "");
+    let mut found: Vec<(Tone, String)> = crate::upkeep::machines::unassignable(conn)?
+        .into_iter()
+        .map(|(id, reason)| {
+            (
+                Tone::Orange,
+                format!("No machine can run {}: {}", link(&id), esc(&reason)),
+            )
+        })
+        .collect();
     let mut apps = conn.prepare("SELECT DISTINCT app FROM workers WHERE role = 'worker'")?;
     let apps = apps
         .query_map([], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
-    for id in ids {
+    for id in tickets::ready(conn, now)? {
         let Some(ticket) = tickets::load(conn, id.as_str())? else {
             continue;
         };
-        let labels: Vec<&str> = ticket.labels.iter().map(String::as_str).collect();
-        let stranded = labels.iter().find_map(|label| {
-            let wanted = label.strip_prefix("needs:").filter(|os| *os != "person");
-            if wanted.is_some_and(|os| !oses.contains(&os)) {
-                return Some(format!("an operating system no machine has ({label})"));
-            }
+        let missing = ticket.labels.iter().find(|label| {
             label
                 .strip_prefix("provider:")
-                .filter(|app| !apps.iter().any(|a| a == app))
-                .map(|_| format!("an app no worker uses ({label})"))
+                .is_some_and(|app| !apps.iter().any(|a| a == app))
         });
-        if let Some(reason) = stranded {
+        if let Some(label) = missing {
             found.push((
                 Tone::Orange,
                 format!(
-                    "No machine can run {}: it needs {reason}",
-                    c::link(
-                        &ticket_url(root, id.as_str()),
-                        &esc(&display_id(id.as_str())),
-                        None,
-                        ""
-                    )
+                    "No machine can run {}: it needs an app no worker uses ({label})",
+                    link(id.as_str())
                 ),
             ));
         }

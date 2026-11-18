@@ -92,7 +92,13 @@ pub fn suits(worker: &IdleWorker, ticket: &ReadyTicket) -> bool {
 fn machine_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
     let families =
         free.families.is_empty() || ticket.families.iter().all(|f| free.families.contains(f));
-    let os = label(&ticket.labels, "needs:").is_none_or(|needed| needed == free.os.as_str());
+    // Every `needs:` label names the machine's operating system or its name; `needs:person`
+    // tickets are never ready for a worker.
+    let os = ticket
+        .labels
+        .iter()
+        .filter_map(|l| l.strip_prefix("needs:"))
+        .all(|needed| needed == free.os.as_str() || free.name.as_deref() == Some(needed));
     let cores = ticket.kind == TicketKind::Regression
         || admission::fits(free.free_cores, ticket.expected_cores);
     free.free_ticket_trees > 0 && families && os && cores

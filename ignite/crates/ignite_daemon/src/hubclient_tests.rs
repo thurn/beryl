@@ -251,6 +251,7 @@ fn next_reads_nothing_as_no_reservation() {
         free_ticket_trees: 1,
         free_cores: 4.0,
         families: Vec::new(),
+        name: None,
     };
     assert_eq!(hub.client().next(&free).unwrap(), None);
 }

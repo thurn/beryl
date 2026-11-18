@@ -30,6 +30,7 @@ fn machine(workers: Vec<IdleWorker>) -> MachineFree {
         free_ticket_trees: 4,
         free_cores: 8.0,
         families: Vec::new(),
+        name: None,
     }
 }
 
@@ -223,6 +224,18 @@ fn a_ticket_needs_a_suitable_worker_a_tree_and_its_families() {
     assert_eq!(next_for(&free, &[other_os], &ALL, None, &[]), None);
     let mac_only = with_labels(sonnet.clone(), &["needs:macos"]);
     assert!(next_for(&free, &[mac_only], &ALL, None, &[]).is_some());
+
+    // A ticket for one machine names it, and every `needs:` label must be met.
+    let on_jarvis = with_labels(sonnet.clone(), &["needs:macos", "needs:jarvis"]);
+    assert_eq!(
+        next_for(&free, std::slice::from_ref(&on_jarvis), &ALL, None, &[]),
+        None
+    );
+    let mut named = free.clone();
+    named.name = Some("jarvis".to_owned());
+    assert!(next_for(&named, &[on_jarvis], &ALL, None, &[]).is_some());
+    let on_cygnus = with_labels(sonnet.clone(), &["needs:cygnus"]);
+    assert_eq!(next_for(&named, &[on_cygnus], &ALL, None, &[]), None);
 }
 
 #[test]

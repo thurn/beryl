@@ -17,8 +17,9 @@ const PANIC_LINES: usize = 4;
 pub struct Signature {
     /// The check, or another subject such as an epic or a machine.
     pub subject: String,
-    /// The kind of failure: `regression`, `flaky`, `incomplete`, `cannot-run`, `audit`,
-    /// `found`, `unreachable` or `stuck-epic`.
+    /// The kind of failure: `regression`, `flaky`, `flaky-always`, `machine-flaky`,
+    /// `disagreement`, `incomplete`, `cannot-run`, `audit`, `found`, `unreachable` or
+    /// `stuck-epic`.
     pub category: String,
     /// The operating system, empty for a portable check.
     pub platform: String,

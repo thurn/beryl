@@ -21,11 +21,11 @@ use ignite_store::hub::{self, checks, fleet, results, rows, tickets, tips};
 use super::filing::{Change, UPKEEP};
 use super::{Upkeep, backup, explore, regressions, stuck};
 
-fn start() -> FakeClock {
+pub(super) fn start() -> FakeClock {
     FakeClock::new(Timestamp::parse("2026-11-17T12:00:00Z").unwrap())
 }
 
-fn apply(conn: &mut Connection, ops: Vec<Operation>, now: Timestamp) -> Vec<String> {
+pub(super) fn apply(conn: &mut Connection, ops: Vec<Operation>, now: Timestamp) -> Vec<String> {
     let request = BatchRequest {
         preconditions: Vec::new(),
         ops,
@@ -36,7 +36,12 @@ fn apply(conn: &mut Connection, ops: Vec<Operation>, now: Timestamp) -> Vec<Stri
     }
 }
 
-fn create(title: &str, ticket_type: TicketType, parent: Option<&str>, deps: &[&str]) -> Operation {
+pub(super) fn create(
+    title: &str,
+    ticket_type: TicketType,
+    parent: Option<&str>,
+    deps: &[&str],
+) -> Operation {
     Operation::Create {
         fields: TicketFields {
             title: Some(title.to_owned()),
@@ -64,7 +69,7 @@ fn close(conn: &mut Connection, id: &str, now: Timestamp) {
     apply(conn, vec![op], now);
 }
 
-fn all_tickets(conn: &Connection, now: Timestamp) -> Vec<Ticket> {
+pub(super) fn all_tickets(conn: &Connection, now: Timestamp) -> Vec<Ticket> {
     let query = TicketQuery {
         all: true,
         ..TicketQuery::default()
@@ -72,11 +77,11 @@ fn all_tickets(conn: &Connection, now: Timestamp) -> Vec<Ticket> {
     tickets::list(conn, &query, now).unwrap()
 }
 
-fn ticket(conn: &Connection, id: &str) -> Ticket {
+pub(super) fn ticket(conn: &Connection, id: &str) -> Ticket {
     tickets::load(conn, id).unwrap().unwrap()
 }
 
-fn comment_count(conn: &Connection, id: &str) -> usize {
+pub(super) fn comment_count(conn: &Connection, id: &str) -> usize {
     tickets::comments(conn, id).unwrap().len()
 }
 
@@ -92,7 +97,7 @@ fn regression(first_bad: &str, output: &str) -> RegressionReport {
     }
 }
 
-fn list_check(conn: &mut Connection, name: &str) {
+pub(super) fn list_check(conn: &mut Connection, name: &str) {
     let check = rows::Check {
         name: name.to_owned(),
         family: name.split(':').next().unwrap().to_owned(),
@@ -103,7 +108,7 @@ fn list_check(conn: &mut Connection, name: &str) {
     checks::upsert(conn, &[check]).unwrap();
 }
 
-fn check_state(conn: &Connection, name: &str) -> String {
+pub(super) fn check_state(conn: &Connection, name: &str) -> String {
     conn.query_row("SELECT state FROM checks WHERE name = ?1", [name], |row| {
         row.get(0)
     })
@@ -273,6 +278,9 @@ fn a_check_is_switched_off_on_its_second_flaky_record_and_not_its_first() {
         hash: InputHash::new("1".repeat(64)).unwrap(),
         commit: Commit::new(commit).unwrap(),
         machine: MachineId::new("m-1").unwrap(),
+        always: false,
+        command: format!("m-1:{commit}.out"),
+        output: format!("timed out waiting at {commit}"),
     };
 
     checks::record_flaky(&conn, &flaky("aaaa"), clock.now()).unwrap();
@@ -288,6 +296,11 @@ fn a_check_is_switched_off_on_its_second_flaky_record_and_not_its_first() {
     let filed = ticket(&conn, &report.tickets_filed[0]);
     assert_eq!(filed.priority, 3);
     assert!(filed.body.contains("commit aaaa") && filed.body.contains("commit bbbb"));
+    assert!(
+        filed.body.contains("timed out waiting at aaaa")
+            && filed.body.contains("timed out waiting at bbbb"),
+        "the ticket quotes both failures' output"
+    );
 
     // Later passes leave the switched-off check and its ticket alone.
     clock.advance(60.0);
