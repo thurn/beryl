@@ -1,0 +1,34 @@
+CHECKS: a flaky, hung or never-catching check
+
+Such a check costs every agent that meets it. Take the first remedy that
+fits, and record on the ticket which one and why:
+1. Fix the product, when the cause is a race or nondeterminism in the
+   product. Users meet it too.
+2. Fix the machine or the step, when a step that should be deterministic
+   misbehaved because of a shared file, a timeout, the disk or the
+   network. Keep the step. Never delete a formatter or a lint.
+3. Replace the check, when a fast deterministic test keeps most of what it
+   protects: a unit test, a test with no browser, a check against a
+   recorded fixture, a browser check on a paused clock that waits for an
+   event. Write the new one, then delete the old. Count work instead of
+   timing it.
+4. Delete it, when it has never caught anything.
+
+Never loosen a threshold, add a retry, raise a limit, keep a test for
+manual runs or set one aside to be fixed later. None of these is a remedy.
+
+Reproducing:
+- Run the check 10 to 20 times beside a heavy test run. Load is the
+  machine's normal state, and a check must pass under it.
+- A flake you cannot reproduce may still have a cause visible in the code.
+- Common causes. Timing: a wall-clock threshold, a sleep, the first
+  animation frame. Order: iteration over a hash map, two processes
+  writing one file. The machine: free disk, a port, a browser page.
+- Several flaky checks in one feature: suspect one race in the product,
+  or in that feature's test helper, before suspecting each check.
+
+Verifying:
+- A changed or replacement check needs 10 passes under the same load. A
+  deleted check needs none.
+- When you delete a check, make sure what it showed is still covered, and
+  leave no fixture unused.

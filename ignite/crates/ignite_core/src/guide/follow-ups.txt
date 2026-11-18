@@ -1,0 +1,40 @@
+FOLLOW-UPS: filing a ticket while you hold one
+
+Every ticket costs a whole session. File only what is essential:
+- A real bug, a missing test for risky behavior, a design problem that will
+  bite soon, or tooling that is broken or badly slow.
+- Nice-to-haves, style cleanups and ideas go in the landing note at most.
+
+A gap in verifying your own ticket is never optional:
+- If a defect stops a check your acceptance relies on, fix it in your
+  ticket when it is within reach, even across several call sites.
+- Otherwise file a ticket whose acceptance includes running the checks it
+  unblocks, and record on your ticket which checks did not run and why.
+- Never leave a verification gap only in a note: nothing acts on notes.
+
+Time cannot pass inside a session:
+- Never file a ticket whose acceptance needs time to pass ("measure a day
+  of landings"). Ship with a measurement you can take now: existing
+  records, a replay, a benchmark.
+- If later observation is still wanted, file an observation ticket: no
+  parent, the label "observe", the exact query and threshold in its
+  acceptance, deferred to the date the data will exist.
+- If your own ticket's acceptance needs time, make the change, measure
+  what you can now, file the rest as an observation ticket, record its ID
+  on yours and land.
+
+Before you file:
+- If a review ticket that has not started will review the affected code,
+  comment on that ticket instead of filing a new one.
+- Never file a ticket that needs a person, or one whose bar is perfection
+  on a handful of samples.
+
+Every ticket stands alone:
+- A description, acceptance an agent can check on the day it is worked,
+  the files it needs by path, and a tier label.
+- A dependency only where it needs another ticket's result.
+
+Stay in scope:
+- Do not start unrelated refactors.
+- Do not change another ticket's scope or dependencies, except to add an
+  edge for a ticket you filed.

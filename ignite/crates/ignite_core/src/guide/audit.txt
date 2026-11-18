@@ -1,0 +1,46 @@
+AUDIT: finding what to improve, and filing it
+
+An audit files tickets and implements nothing. Audit the code at the tip,
+starting from what the milestone landed and following its contracts
+outward as far as needed. Recent changes are where you start, not the edge
+of what you look at.
+
+An audit of the architecture asks: how could the project be more type
+safe, and what refactoring would make the design substantially simpler?
+- The model: duplicated or derivable state; impossible combinations of
+  state that are representable; primitive IDs and units that could be
+  distinct types; nullable fields and flags that should be tagged unions;
+  validation that belongs at the boundary.
+- Responsibilities: modules that mix concerns (past about 500 lines),
+  feature logic in shared layers, near-duplicates of canonical helpers,
+  logic in the wrong package, ad hoc conditionals bolted onto unrelated
+  flows, repeated chains of conditions that mark a missing concept, thin
+  wrappers, updates that can leave state half applied.
+- Each bug fixed in the milestone: what permissive type or API admitted
+  it, and what would make it impossible?
+- The tests: suites that would break under a refactor that keeps
+  behavior, tests kept for manual runs, checks whose cost is setup and not
+  behavior, checks that depend on machine speed. Each regression ticket
+  closed as a flake or as already passing points at one.
+- The next milestone's plan: what refactor would make it markedly easier
+  or safer?
+
+An audit of the process asks why these tickets took so long and how the
+next could be faster. Evidence: the project's efficiency report for the
+epic, tickets released or reopened, regression tickets and how long the
+main branch waited, commands agents repeated, instructions agents misread,
+files that conflicted between parallel tickets.
+
+What to file:
+- For each candidate, compare a concrete alternative with the current
+  design and demand a net reduction in complexity. Moving code or adding a
+  generic framework does not count. Filing nothing is a valid outcome: say
+  plainly when the design is fine.
+- One ticket per coherent improvement, grouping related findings: the
+  current design, the proposed one (a small type sketch helps), what it
+  eliminates, the behavior that must not change, and the smallest
+  black-box acceptance test.
+- A process ticket states the measured problem, the change and the
+  expected gain, with acceptance that can be checked on the day it is
+  worked.
+- Lower-value ideas go in your summary and are not filed.

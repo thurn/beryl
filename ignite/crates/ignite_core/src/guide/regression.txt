@@ -1,0 +1,32 @@
+REGRESSION: a check that passed fails at the tip
+
+This is the most urgent work there is: the main branch waits on it.
+
+Before you change anything:
+- See whether the check still fails at the tip. If someone already fixed
+  it, close the ticket with the commit.
+- Read the ticket that caused it, which this ticket links, to understand
+  its intent before you change its work.
+- A pass on another machine does not prove the failure was transient. Look
+  for this machine's own state (caches, vendored files, tools) before you
+  close it as already fixed.
+
+Fixing it:
+- Fix forward with a new commit. Do not revert someone's feature unless a
+  fix is impractical, and if you revert, file a ticket to redo it
+  properly.
+- When the cause is in the product (a race, nondeterminism, a broken edge
+  case), fix the product.
+- When the product is right and only the test is wrong (a timing threshold
+  tripping under load, a sleep, a brittle assertion on incidental output),
+  seriously consider deleting the test. A false alarm is strong evidence
+  that it is worthless: it took a worker off real work and caught nothing.
+- Repair such a test only if it guards behavior nothing else covers, by
+  replacing the timing with a deterministic check. Never loosen a
+  threshold or add a retry.
+- Say on the ticket which tests you deleted and why.
+- When the ticket's comments show more failures that your fix does not
+  cover, fix them too or file a ticket with the evidence.
+- Run the failing check yourself before landing.
+
+A failure of the machine itself is not a regression: ignite guide machine.

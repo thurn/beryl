@@ -1,0 +1,49 @@
+REVIEW: a fresh, demanding look at landed work, then fixing what you find
+
+You own the outcome now, not the original author. Start from the landed
+commits the brief lists and review the code as it is now: later commits
+may have touched it. A fresh context is for independent judgment, not for
+rediscovering the codebase: read the touched files and what they call, and
+widen only where a finding leads. Confirm each lead that implementers left
+as a comment on your ticket.
+
+What to look for:
+- Correctness: is the acceptance met? Edge cases, error handling,
+  concurrency, security. Run it.
+- Tests that catch bugs: prune change detectors (assertions on internals,
+  exact wording or call order), heavy mocking of internals and duplicated
+  coverage, for fewer black-box tests through public behavior. Add the
+  missing test for the riskiest behavior. Every test runs in the checks,
+  never by hand or in an opt-in suite: make it cheaper or delete it.
+- Tests that survive load: block any test whose verdict depends on machine
+  speed (wall-clock thresholds, sleeps that wait for something, timeouts
+  near the expected duration, benchmarks as pass or fail, time budgets on
+  a suite). Count work and wait on events; keep a timeout only as a hang
+  guard at about ten times the loaded duration. Loosening a threshold or
+  retrying until it passes is not a fix. When unsure, run the test several
+  times on a saturated machine. Report performance, never gate on it.
+- A long measurement: reproduce it only where it gates acceptance, and on
+  fresh inputs. Otherwise check its method and inputs.
+- Design: would a different model make whole categories of checks
+  unnecessary? Duplicated or derivable state, illegal states the types
+  allow, nullable modes, boolean flags, responsibilities in the wrong
+  module, thin wrappers. Prefer a change that deletes branches, layers or
+  concepts. Redesign beyond the ticket when it makes the code much
+  cleaner, as one refactor you can finish and verify in the session.
+
+Style nits and taste are not findings. Fix confirmed problems at the same
+bar as any change, and if the work is fundamentally wrong, rewrite it.
+Record what you found, changed and left on purpose; "looks good" with no
+change needs its reason on the ticket. A problem too large for the
+session, or outside the reviewed change, becomes a ticket. If your fixes
+fully cover a ticket nobody holds, claim it and close it as obsolete,
+naming yours. Never take over a held ticket: leave the evidence on it.
+
+review:inline, by the implementer before landing:
+- Run one cold-review subagent with a fresh context, on a cheaper model
+  unless the change is risky (data loss, concurrency, security). Give it
+  the ticket's text and acceptance, the tree's path, the diff range and
+  the touched files, and ask for confirmed problems only. Never give it
+  your reasoning or your opinion of the change.
+- Verify each finding yourself, fix the real ones, and record what was
+  found and what you changed or rejected. One round is enough.

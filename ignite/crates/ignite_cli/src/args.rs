@@ -108,6 +108,11 @@ pub enum Command {
     Doctor,
     /// Print the whole workflow.
     Prime,
+    /// List the guide topics, or print one: the rules for one situation.
+    Guide {
+        /// The topic, such as `review`.
+        topic: Option<String>,
+    },
     /// Build the executable, register the machine with the hub and start the daemon at login.
     Install,
     /// Wait for the dispatcher's next instruction, or acknowledge one.
@@ -485,6 +490,7 @@ impl Command {
             Command::Status { .. } => "status",
             Command::Doctor => "doctor",
             Command::Prime => "prime",
+            Command::Guide { .. } => "guide",
             Command::Install => "install",
             Command::Dispatch { .. } => "dispatch",
             Command::Pool { .. } => "pool",

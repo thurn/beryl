@@ -46,6 +46,8 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Manifest { command } => manifest::run(command, &current_dir()),
         Command::Import { .. } => import::run(&cli.command, &current_dir()),
         Command::Gate { command } => replay::run(command),
+        // Answered here, so a worker can read the `machine` topic while the daemon is down.
+        Command::Guide { topic } => ignite_core::guide::reply(topic.as_deref()),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
         Command::Supervise { spec } => exit_reply(ignite_daemon::supervise::supervise(spec)),
         Command::RustcWrap(pass) => exit_reply(ignite_daemon::wrap::rustc_wrap(&pass.args)),

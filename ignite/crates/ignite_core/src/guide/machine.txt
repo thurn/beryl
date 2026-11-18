@@ -1,0 +1,30 @@
+MACHINE: something is broken for everyone on this machine
+
+A fault of the machine: the hub cannot be reached, the remote rejects
+every push, the disk is full, a core tool is broken or missing. Failing
+tests are never one. A ticket that needs another machine or a person is
+not one either: set it aside with ignite release --needs, so the rest
+moves. Waiting on another machine or a person is not a repair.
+
+Reporting:
+- Run ignite doctor and put its output in a ticket labeled "machine" at
+  P0, unless an open ticket has the same fault: then comment on that one.
+
+Repairing:
+- You may free disk space, reinstall or repair a tool, repair git state,
+  and fix a remote or a credentials file you already have access to.
+- Prefer a tool's own recovery to editing its state by hand.
+- Before any destructive step, take a backup you can restore: an export
+  of the tickets and the affected commit IDs.
+- When Ignite itself is broken and its fix cannot land through it, the
+  session working the machine ticket may push that fix directly. Record
+  on the ticket the commit that was replaced, the reason, and every check
+  that was skipped. This is the only case in which anything reaches the
+  integration or main branch around the gate.
+
+An epic with open tickets of which none can ever become ready:
+- Trace the blocking edges. The usual causes: a prerequisite outside the
+  epic that nobody owns, a cancelled prerequisite, a cycle, a ticket held
+  by a session that is gone.
+- Bring the prerequisite in, remove the stale edge, or release the
+  ticket. A decision about the graph is never a reason to ask a person.

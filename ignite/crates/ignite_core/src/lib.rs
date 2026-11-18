@@ -7,6 +7,7 @@ pub mod dispatch;
 pub mod explore;
 pub mod fakes;
 pub mod gate;
+pub mod guide;
 pub mod hash;
 pub mod ids;
 pub mod inputs;

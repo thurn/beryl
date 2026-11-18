@@ -1,0 +1,28 @@
+DOCS: keeping the documentation true
+
+Documentation is a cost, because every line must be kept true. Write only
+what a future agent needs and cannot quickly learn from the code: the
+architecture and how the parts fit, invariants and contracts, decisions
+that are not obvious and why, and the commands to build, test and run.
+
+- Describe the shipped state only: no history, no changelog, no plans, no
+  list of things to do. Tickets track open work.
+- Edit before adding: update and delete stale statements first. Prefer one
+  accurate sentence to a section, and deleting a wrong paragraph to fixing
+  one that nobody needs. Work that changed nothing worth documenting gets
+  no edits.
+- Gather in this order: the epic, which names the plan and the decisions;
+  its closed tickets with their notes and commits; the plan and the
+  existing documentation; then the code, where they disagree. The code
+  wins.
+- Follow the documentation structure the project already has, in its
+  voice, and add no layer beside it.
+- Keep one short code map for agents, under about 40 lines: each major
+  module in a line with what it owns, its entry points, where its tests
+  live and how to run them alone.
+- Retire the plan. Before deleting a plan document tracked in the
+  repository, move anything durable in it that the code does not say into
+  the documentation, and fix every link that would dangle. Never touch a
+  file outside the repository.
+- Change documentation only. A real bug found while documenting becomes a
+  ticket.
