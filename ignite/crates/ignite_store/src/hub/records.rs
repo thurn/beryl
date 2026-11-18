@@ -259,7 +259,7 @@ mod tests {
             ignite: "d97ed0e".into(),
             at: "2026-11-17T14:12:00.000Z".parse().unwrap(),
             compile_units: vec![CompileUnit {
-                crate_name: "beryl_kernel".into(),
+                crate_name: "crate_b".into(),
                 mode: "check".into(),
                 instructions: Some(5.0e9),
                 cpu_s: 3.5,

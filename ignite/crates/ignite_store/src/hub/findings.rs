@@ -163,7 +163,7 @@ mod tests {
     fn finding(ticket: Option<&str>, closed_at: Option<&str>) -> rows::Finding {
         rows::Finding {
             rule: "slow-crate".into(),
-            subject: "beryl_session".into(),
+            subject: "crate_a".into(),
             unit: "core-hours".into(),
             cost: 38.2,
             saving: 15.3,
@@ -180,11 +180,11 @@ mod tests {
     fn a_new_subject_may_be_filed_and_an_open_ticket_blocks_it() {
         let conn = hub::open_in_memory().unwrap();
         let now = at("2026-11-17T00:00:00.000Z");
-        assert!(may_file(&conn, "slow-crate", "beryl_session", now).unwrap());
+        assert!(may_file(&conn, "slow-crate", "crate_a", now).unwrap());
         upsert(&conn, &finding(None, None)).unwrap();
-        assert!(may_file(&conn, "slow-crate", "beryl_session", now).unwrap());
+        assert!(may_file(&conn, "slow-crate", "crate_a", now).unwrap());
         upsert(&conn, &finding(Some("Tm41q"), None)).unwrap();
-        assert!(!may_file(&conn, "slow-crate", "beryl_session", now).unwrap());
+        assert!(!may_file(&conn, "slow-crate", "crate_a", now).unwrap());
         assert_eq!(open(&conn).unwrap().len(), 1);
     }
 
@@ -194,7 +194,7 @@ mod tests {
         upsert(&conn, &finding(Some("Tm41q"), None)).unwrap();
         close_ticket(&conn, "Tm41q", at("2026-11-01T12:00:00.000Z")).unwrap();
         assert!(open(&conn).unwrap().is_empty());
-        let blocked = |now| may_file(&conn, "slow-crate", "beryl_session", at(now)).unwrap();
+        let blocked = |now| may_file(&conn, "slow-crate", "crate_a", at(now)).unwrap();
         assert!(!blocked("2026-11-01T12:00:00.000Z"));
         assert!(!blocked("2026-12-01T11:59:59.999Z"));
         assert!(blocked("2026-12-01T12:00:00.000Z"));
@@ -203,7 +203,7 @@ mod tests {
             may_file(
                 &conn,
                 "slow-crate",
-                "beryl_kernel",
+                "crate_b",
                 at("2026-11-02T00:00:00.000Z")
             )
             .unwrap()
@@ -242,7 +242,7 @@ mod tests {
             name: "kernel-body".into(),
             commit_sha: commit.into(),
             instructions,
-            crates: r#"{"beryl_kernel": 1.0}"#.into(),
+            crates: r#"{"crate_b": 1.0}"#.into(),
         };
         record_rebuild(&conn, &rebuild("aaaa", 1.0e12)).unwrap();
         record_rebuild(&conn, &rebuild("bbbb", 2.0e12)).unwrap();
