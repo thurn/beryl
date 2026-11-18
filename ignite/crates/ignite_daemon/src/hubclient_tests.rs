@@ -232,6 +232,34 @@ fn a_body_too_large_is_a_verdict_that_is_not_tried_again() {
 }
 
 #[test]
+fn a_read_only_listener_is_named_once_and_never_retried() {
+    let hub =
+        FakeHttpHub::start(|_, _, _| (405, r#"{"error":"this listener is read-only"}"#.to_owned()));
+    let client = hub.client();
+    let log = FailureLog::default();
+    let mut said = 0;
+    for _ in 0..4 {
+        let error = client.records(&[record("test")]).unwrap_err();
+        assert!(read_only(&error), "{error}");
+        assert!(error.to_string().contains("point [hub] url"), "{error}");
+        assert!(error.to_string().contains(&client.base), "{error}");
+        said += usize::from(log.worth_saying(&error));
+    }
+    assert_eq!(said, 1);
+    // One request per round: a 405 is not tried again.
+    assert_eq!(hub.seen().len(), 4);
+    // After a write succeeds, the next read-only answer is said again.
+    log.succeeded();
+    assert!(log.worth_saying(&Error::Unreachable(format!("{READ_ONLY}again"))));
+    // Other failures are always said, and a 405 from elsewhere is not a read-only listener.
+    let other = Error::Unreachable("the hub answered 502".to_owned());
+    assert!(log.worth_saying(&other) && log.worth_saying(&other));
+    let proxy = FakeHttpHub::start(|_, _, _| (405, "method not allowed".to_owned()));
+    let error = proxy.client().records(&[record("test")]).unwrap_err();
+    assert!(!read_only(&error), "{error}");
+}
+
+#[test]
 fn a_busy_lease_is_an_answer_not_an_error() {
     let hub = FakeHttpHub::start(|_, _, _| {
         (

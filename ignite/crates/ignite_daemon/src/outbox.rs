@@ -158,12 +158,14 @@ pub fn tick(
 ) -> std::result::Result<(), String> {
     let mut failures = Vec::new();
     if let Err(error) = flush(conn, hub) {
-        eprintln!("ignite: outbox not sent: {error}");
+        crate::hubclient::HUB_WRITES.failed("outbox not sent", &error);
         failures.push(format!("outbox not sent: {error}"));
     }
     if let Err(error) = beat() {
-        eprintln!("ignite: heartbeat not sent: {error}");
+        crate::hubclient::HUB_WRITES.failed("heartbeat not sent", &error);
         failures.push(format!("heartbeat not sent: {error}"));
+    } else {
+        crate::hubclient::HUB_WRITES.succeeded();
     }
     if failures.is_empty() {
         Ok(())

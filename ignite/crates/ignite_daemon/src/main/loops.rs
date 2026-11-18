@@ -277,7 +277,7 @@ impl Parts {
             loop {
                 ticker.round(|| {
                     crate::metrics::post_new_rows(&ctx, &state).map_err(|error| {
-                        eprintln!("ignite: metrics not posted: {error}");
+                        crate::hubclient::HUB_WRITES.failed("metrics not posted", &error);
                         format!("metrics not posted: {error}")
                     })
                 });
