@@ -22,13 +22,20 @@ pub enum StoreError {
     Sqlite(rusqlite::Error),
     /// The database holds something the code does not accept, such as a newer schema.
     Invalid(String),
+    /// A request named a ticket or other row that does not exist (a 404 at the hub).
+    NotFound(String),
+    /// A request the store refuses as malformed, such as a ticket without a title or a parent
+    /// that would make a cycle (a 400 at the hub).
+    Rejected(String),
 }
 
 impl fmt::Display for StoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             StoreError::Sqlite(error) => write!(f, "sqlite: {error}"),
-            StoreError::Invalid(message) => f.write_str(message),
+            StoreError::Invalid(message)
+            | StoreError::NotFound(message)
+            | StoreError::Rejected(message) => f.write_str(message),
         }
     }
 }

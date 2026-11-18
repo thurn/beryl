@@ -23,6 +23,9 @@ serde_json = "1.0.154"
 toml = "1.2.0"
 # SHA-256 for input hashes; replaces shelling out to `shasum`.
 sha2 = "0.10.9"
+# The operating system's random numbers for write tokens and ticket IDs; replaces reading
+# /dev/urandom and calling BCryptGenRandom by hand. Already in the lock file through ureq.
+getrandom = "0.2.17"
 # The hub's and the daemon's databases, with SQLite compiled in; replaces the ticket service's
 # own SQLite binding and the Python run log.
 rusqlite = { version = "0.40.2", features = ["bundled"] }

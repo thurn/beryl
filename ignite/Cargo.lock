@@ -389,10 +389,12 @@ dependencies = [
 name = "ignite_store"
 version = "0.1.0"
 dependencies = [
+ "getrandom",
  "ignite_core",
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

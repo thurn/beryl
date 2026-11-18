@@ -238,8 +238,9 @@ pub struct History {
     pub change: serde_json::Value,
 }
 
-/// Why a ticket is not ready, by the readiness rule that holds it: 1 its own blocker, 2 an
-/// ancestor's blocker, 3 an open child, 4 deferred, 5 not open.
+/// Why a ticket is not ready, by the readiness rule that holds it: 1 the ticket itself is not
+/// open or is deferred, 2 its own dependency, 3 an ancestor's dependency, 4 a sibling that must
+/// finish before a `last` ticket, 5 a live child. See `crate::ready`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Blocker {
     pub id: TicketId,

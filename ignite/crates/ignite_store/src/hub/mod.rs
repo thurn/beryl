@@ -31,6 +31,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 2,
         sql: include_str!("schema_metrics.sql"),
     },
+    Migration {
+        version: 3,
+        sql: include_str!("feed.sql"),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

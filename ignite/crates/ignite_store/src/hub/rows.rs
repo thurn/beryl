@@ -203,4 +203,7 @@ crate::tables! {
     }
 
     Metric = "metrics" { machine: String, source: String, data: String, at: String }
+
+    /// One change in the feed's journal, which keeps only the most recent positions.
+    FeedChange = "feed" { id: i64, seq: i64, kind: String, ticket: Option<String>, name: Option<String> }
 }
