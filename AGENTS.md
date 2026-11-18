@@ -108,9 +108,11 @@ situation, and a command names the topic when it applies.
   `ignite land`. Work only in the build tree it prints. Never edit or commit in
   the main checkout, and never push to `master` or `staging` yourself.
 - **Session titles show status**: `⚒️ [<ticket>] <short summary>` while working,
-  `🔍` while waiting on the person's answer (only when a person is there), `✅`
-  when done and `⛔` when stopped unfinished. Every final turn ends on one of the
-  last three (Claude Desktop: `set_session_title` on `self`; Codex:
+  `🚒` instead while working a regression ticket (a check that tip verification
+  found failing, which holds `master` back), `🔍` while waiting on the person's
+  answer (only when a person is there), `✅` when done and `⛔` when stopped
+  unfinished. `ignite start` prints the title to set. Every final turn ends on
+  one of the last three (Claude Desktop: `set_session_title` on `self`; Codex:
   `set_thread_title`).
 - File tickets freely and in parallel with `ignite ticket create`, and record
   plans, designs and decisions on their tickets. Merge conflicts are cheap:

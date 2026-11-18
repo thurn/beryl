@@ -19,9 +19,10 @@ Pick the mode from the argument:
 | `sweep [older than N days] [dry]`      | [Sweep](#sweep)              |
 | `pool <n>` or `dispatch`               | [Staffing](#staffing)        |
 
-Titles, for every session: `⚒️` while working, `🔍` while waiting on the
-person's answer (only when a person is there), `✅` done, `⛔` stopped
-unfinished. Every final turn ends on one of the last three.
+Titles, for every session: `⚒️` while working (`🚒` while working a regression
+ticket), `🔍` while waiting on the person's answer (only when a person is there),
+`✅` done, `⛔` stopped unfinished. Every final turn ends on one of the last
+three.
 
 ## Do it here
 

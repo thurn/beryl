@@ -27,6 +27,9 @@ use super::{Resumed, Saved};
 
 /// The emoji of a session's title while it works its ticket.
 const WORKING: &str = "⚒️";
+/// The emoji while it works a regression ticket: a check that tip verification found failing,
+/// which holds `master` back until it is fixed.
+const FIREFIGHTING: &str = "🚒";
 /// The emoji once its ticket is landed or closed.
 const DONE: &str = "✅";
 /// The emoji once it has given its ticket back unfinished.
@@ -98,6 +101,15 @@ pub fn title_of(brief: Option<&TicketBrief>, ticket: &TicketId) -> String {
     match brief {
         Some(brief) => format!("[{ticket}] {}", first_line(&brief.ticket.title)),
         None => format!("[{ticket}]"),
+    }
+}
+
+/// The emoji of the title while `ticket` is worked: 🚒 for a regression ticket, else ⚒️.
+fn working(ticket: &Ticket) -> &'static str {
+    if ticket.labels.iter().any(|l| l == "regression") {
+        FIREFIGHTING
+    } else {
+        WORKING
     }
 }
 
@@ -184,7 +196,7 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
     }
     rows.push((
         "title",
-        format!("{WORKING} {}", title_of(Some(brief), &ticket.id)),
+        format!("{} {}", working(ticket), title_of(Some(brief), &ticket.id)),
     ));
     let files = named_files(ticket);
     for (i, file) in files.iter().take(MAX_FILES).enumerate() {
@@ -235,7 +247,11 @@ pub fn json(brief: &TicketBrief, tree: &TreeView) -> Value {
         })),
         "files": named_files(&brief.ticket),
         "guide": guide(&brief.ticket),
-        "title": format!("{WORKING} {}", title_of(Some(brief), &brief.ticket.id)),
+        "title": format!(
+            "{} {}",
+            working(&brief.ticket),
+            title_of(Some(brief), &brief.ticket.id)
+        ),
     })
 }
 

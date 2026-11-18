@@ -284,3 +284,19 @@ fn a_review_ticket_names_its_guide() {
         reply.text
     );
 }
+
+#[test]
+fn a_regression_ticket_is_titled_with_the_fire_engine() {
+    let world = World::new();
+    let mut regression = ticket("Tq.51", "Regression: copied face aura", "");
+    regression.labels = vec!["regression".to_owned()];
+    world.desk.add(regression);
+    let reply = start(&world, &["Tq.51"], WORKER);
+    assert!(
+        reply
+            .text
+            .contains("title    🚒 [Tq.51] Regression: copied face aura"),
+        "{}",
+        reply.text
+    );
+}
