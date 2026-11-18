@@ -1759,6 +1759,10 @@ machines never take one ticket. What happens next:
 - A hand-off the dispatcher has not acknowledged in 2 minutes is given again.
   After three failures the daemon stops handing off, and the dashboard shows the
   dispatcher as down. Workers already running are unaffected.
+- The dispatcher's queue (pending and given hand-offs, reservations, refusals,
+  stalls and the next instruction ID) is kept in the daemon's database, so a
+  restart loses none of it; a hand-off given and not acknowledged before a
+  restart is given again at once.
 - A reservation that no `ignite start` has claimed in 10 minutes lapses. The
   ticket returns to the queue, and the worker is treated as stalled.
 - A session that runs a command for a ticket whose lease expired, and that
@@ -1854,7 +1858,9 @@ leased for nothing.
 - After 30 minutes in which no command started or ran, the daemon has the
   dispatcher look at the session. Silence proves nothing: a healthy worker can
   read and think for a long time, and an app that cannot find a session has not
-  shown that the session is gone.
+  shown that the session is gone. The silence clock survives a restart: each
+  held tree's last activity and its place in this procedure are kept in the
+  daemon's database.
 - A session that is still running is left alone. An idle one is sent one message
   asking it to continue or release.
 - The daemon releases the ticket only when the app confirms that the session is
