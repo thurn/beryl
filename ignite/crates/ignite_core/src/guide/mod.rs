@@ -66,6 +66,11 @@ pub const TOPICS: &[Topic] = &[
         summary: "a fault that breaks the machine for everyone on it",
         text: include_str!("machine.txt"),
     },
+    Topic {
+        name: "justiciar",
+        summary: "emergency authority to unblock the fleet",
+        text: include_str!("justiciar.txt"),
+    },
 ];
 
 /// The topic called `name`.
