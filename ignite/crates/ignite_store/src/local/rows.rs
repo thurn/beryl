@@ -63,4 +63,12 @@ crate::tables! {
         models: String,
         added_at: String,
     }
+
+    /// The newest change to a leased tree's ticket that its session has been shown.
+    Shown = "shown" {
+        tree: String,
+        ticket: String,
+        comment: i64,
+        history: i64,
+    }
 }

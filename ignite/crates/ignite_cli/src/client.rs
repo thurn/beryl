@@ -29,8 +29,6 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
         "rebuild",
         "Idle work: exploration, cache audits and rebuild counts",
     ),
-    ("release", "Starting and releasing tickets"),
-    ("start", "Starting and releasing tickets"),
     ("status", "Install, self-update, status and doctor"),
     ("sync", "Landing"),
 ];

@@ -22,7 +22,12 @@ pub enum Command {
     Start {
         /// A ticket ID, or a summary for a new ticket.
         ticket: String,
+        /// The code of the reservation a hand-off made for this session.
+        #[arg(long)]
+        reservation: Option<String>,
     },
+    /// Print the ticket's brief again.
+    Brief,
     /// Run the named checks in this tree.
     Test {
         #[arg(required = true)]
@@ -47,10 +52,21 @@ pub enum Command {
         #[arg(short = 'm', long = "message")]
         note: String,
     },
-    /// Give the ticket back without landing it, and release the tree.
+    /// Give the ticket back unfinished: save the tree's work as `ignite/<ticket>` and release
+    /// the tree.
     Release {
+        /// The ticket's exact state, for whoever starts it next.
+        #[arg(short = 'm', long = "message")]
+        note: Option<String>,
+        /// What the ticket needs: a machine's name, `macos`, or `person` (which needs a note).
         #[arg(long)]
-        reason: Option<String>,
+        needs: Option<String>,
+    },
+    /// Close the ticket without landing anything, and release the tree.
+    Close {
+        /// Why it needs no landing: obsolete, already done, or no change to the repository.
+        #[arg(short = 'm', long = "message")]
+        reason: String,
     },
     /// Run any other heavy command with cores from the daemon, and record it.
     Run {
@@ -416,6 +432,8 @@ impl Command {
     pub fn verb(&self) -> &'static str {
         match self {
             Command::Start { .. } => "start",
+            Command::Brief => "brief",
+            Command::Close { .. } => "close",
             Command::Test { .. } => "test",
             Command::Check { .. } => "check",
             Command::Sync => "sync",
@@ -481,6 +499,17 @@ mod tests {
                 .command
         };
         assert!(matches!(parse("ignite land -m note"), Command::Land { note } if note == "note"));
+        assert!(matches!(
+            parse("ignite start Tq44s.9.48 --reservation 7f3a"),
+            Command::Start { ticket, reservation: Some(code) } if ticket == "Tq44s.9.48" && code == "7f3a"
+        ));
+        assert!(matches!(
+            parse("ignite release -m blocked --needs person"),
+            Command::Release { note: Some(_), needs: Some(needs) } if needs == "person"
+        ));
+        assert!(
+            matches!(parse("ignite close -m obsolete"), Command::Close { reason } if reason == "obsolete")
+        );
         let Command::Run {
             class,
             ticket,

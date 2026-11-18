@@ -7,6 +7,7 @@ pub mod outbox;
 pub mod pool;
 pub mod results;
 pub mod rows;
+pub mod shown;
 pub mod trees;
 
 use std::path::Path;
@@ -25,6 +26,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 2,
         sql: include_str!("schema_2.sql"),
+    },
+    Migration {
+        version: 3,
+        sql: include_str!("schema_3.sql"),
     },
 ];
 
