@@ -93,7 +93,11 @@ impl SelfUpdate {
     /// [`SelfUpdate::after_master_moved`] does. This is what deploys a push made straight to
     /// the release branch. A commit recorded as bad is never built.
     pub fn poll_release(&self) -> Result<()> {
-        if self.rounds.fetch_add(1, Ordering::Relaxed) % POLL_EVERY_ROUNDS != 0 {
+        if !self
+            .rounds
+            .fetch_add(1, Ordering::Relaxed)
+            .is_multiple_of(POLL_EVERY_ROUNDS)
+        {
             return Ok(());
         }
         self.after_master_moved()
