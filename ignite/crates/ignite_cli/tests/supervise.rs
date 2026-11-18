@@ -1,24 +1,18 @@
 //! Supervisors started from the real `ignite` executable: the result file they write, a command
 //! that outlives the daemon side that started it, and grants that grow and shrink while their
 //! command runs.
+//!
+//! Commands are shell scripts: `/bin/sh` scripts on macOS and `cmd` scripts on Windows. Tests
+//! whose scripts need a POSIX shell, FIFOs or signals run on macOS only.
 
-use std::collections::BTreeMap;
 use std::fs;
-use std::io;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::sync::Arc;
-use std::thread;
 
-use ignite_core::config::Floor;
-use ignite_core::fakes::FakeClock;
 use ignite_core::protocol::Class;
-use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Launcher};
-use ignite_daemon::sched::{GrantRequest, Limits, Scheduler};
-use ignite_daemon::supervise::{ResultFile, SupervisedLauncher};
-use ignite_os::hostcpu::HostCpu;
+#[cfg(unix)]
+use ignite_daemon::supervise::ResultFile;
+use ignite_daemon::supervise::SupervisedLauncher;
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("ignite-supervise-{name}-{}", std::process::id()));
@@ -33,7 +27,16 @@ fn launcher(root: &Path) -> SupervisedLauncher {
 
 fn shell(cwd: &Path, script: &str) -> CommandSpec {
     CommandSpec {
-        args: vec!["/bin/sh".to_owned(), "-c".to_owned(), script.to_owned()],
+        args: if cfg!(windows) {
+            vec![
+                "cmd".to_owned(),
+                "/d".to_owned(),
+                "/c".to_owned(),
+                script.to_owned(),
+            ]
+        } else {
+            vec!["/bin/sh".to_owned(), "-c".to_owned(), script.to_owned()]
+        },
         cwd: cwd.to_path_buf(),
         env: vec![("GREETING".to_owned(), "hello".to_owned())],
         class: Class::Agent,
@@ -46,6 +49,7 @@ fn shell(cwd: &Path, script: &str) -> CommandSpec {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_supervised_command_leaves_a_result_file_with_its_exit_output_and_usage() {
     let root = scratch("result");
@@ -80,6 +84,7 @@ fn a_supervised_command_leaves_a_result_file_with_its_exit_output_and_usage() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn a_command_outlives_the_daemon_side_and_its_result_is_picked_up_afterwards() {
     let root = scratch("restart");
@@ -131,6 +136,7 @@ fn a_command_that_cannot_start_reports_why_in_its_output() {
     fs::remove_dir_all(&root).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn ending_a_run_ends_its_command_and_every_process_it_started() {
     let root = scratch("end");
@@ -146,153 +152,194 @@ fn ending_a_run_ends_its_command_and_every_process_it_started() {
     fs::remove_dir_all(&root).unwrap();
 }
 
-/// A host that reads as idle, so the scheduler grants every core.
-struct IdleHost;
-
-impl HostCpu for IdleHost {
-    fn cores(&self) -> u32 {
-        6
-    }
-
-    fn busy(&self) -> io::Result<f64> {
-        Ok(0.0)
-    }
-
-    fn free_memory_mb(&self) -> io::Result<u64> {
-        Err(io::Error::other("not read"))
-    }
-}
-
-/// A scheduler for six cores, so one command takes at most four, whose clock never moves: a
-/// request that waits for shrinking grants waits until they have shrunk.
-fn six_cores() -> Arc<Scheduler> {
-    let limits = Limits {
-        cores: 6,
-        floor: Floor::default(),
-        resources: BTreeMap::new(),
-    };
-    Arc::new(Scheduler::new(
-        limits,
-        Arc::new(FakeClock::new(Timestamp::EPOCH)),
-        Arc::new(IdleHost),
-    ))
-}
-
-fn ask(class: Class, cores: u32) -> GrantRequest {
-    GrantRequest {
-        class,
-        cores,
-        resources: Vec::new(),
-        memory_mb: None,
-        shrinks: false,
-        grows: false,
-        cores_file: None,
-    }
-}
-
-/// A FIFO the command writes a line to when it reaches a point, and the test reads, which
-/// blocks until then.
-fn signal(root: &Path, name: &str) -> PathBuf {
-    let path = root.join(name);
-    let made = Command::new("mkfifo").arg(&path).status().unwrap();
-    assert!(made.success());
-    path
-}
-
-/// A command started with a growing grant reads `IGNITE_CORES_FILE` and sees it rise when
-/// another grant is released.
+/// On Windows the command and a second process it started both wait forever, in the command's
+/// job object; ending the run ends the job, and the run reads as ended from outside.
+#[cfg(windows)]
 #[test]
-fn a_growing_command_sees_its_cores_file_rise_when_cores_free_up() {
-    let root = scratch("grows");
-    let scheduler = six_cores();
-    let holder = scheduler.acquire(&ask(Class::Agent, 4));
-    let started = signal(&root, "started");
-    let mut spec = shell(
+fn ending_a_run_ends_its_command_and_every_process_it_started() {
+    let root = scratch("end");
+    let spec = shell(
         &root,
-        r#"echo "first $(cat "$IGNITE_CORES_FILE")"; echo go > "$STARTED"
-        i=0; while [ "$(cat "$IGNITE_CORES_FILE")" != 4 ] && [ $i -lt 3000 ]; do sleep 0.01; i=$((i+1)); done
-        echo "last $(cat "$IGNITE_CORES_FILE")""#,
+        "start /b ping -n 100000 127.0.0.1 >nul & ping -n 100000 127.0.0.1 >nul",
     );
-    spec.cores = 4;
-    spec.grows = true;
-    spec.env
-        .push(("STARTED".to_owned(), started.display().to_string()));
-    let launcher = launcher(&root).with_scheduler(Arc::clone(&scheduler));
-    let run = thread::spawn(move || launcher.run(&spec));
-
-    fs::read_to_string(&started).unwrap();
-    scheduler.release(&holder);
-    let result = run.join().unwrap();
-
-    assert_eq!(result.exit, Some(0));
-    let output = fs::read_to_string(&result.output).unwrap();
-    assert!(output.contains("first 2\n"), "{output}");
-    assert!(output.contains("last 4\n"), "{output}");
+    let started = launcher(&root).start(&spec, Vec::new(), 0.0).unwrap();
+    let run = started.run().clone();
+    assert!(run.dir().join("group").exists());
+    run.end().unwrap();
+    let result = started.wait();
+    assert_eq!(result.exit, None);
     fs::remove_dir_all(&root).unwrap();
 }
 
-/// A Cargo build that only compiles runs under the supervisor's jobserver, without
-/// `CARGO_BUILD_JOBS`. Its job slots grow when another grant is released, and it gives cores
-/// back while a landing waits, so the landing gets them before the build ends.
-#[test]
-fn a_cargo_build_takes_job_slots_as_its_grant_grows_and_shrinks_for_a_landing() {
-    let root = scratch("cargo");
-    let scheduler = six_cores();
-    let holder = scheduler.acquire(&ask(Class::Agent, 4));
-    let started = signal(&root, "started");
-    let grew = signal(&root, "grew");
-    let go = signal(&root, "go");
-    // A stand-in for Cargo that takes slots from the jobserver as a compiler job would: each
-    // read of a byte blocks until the FIFO holds one.
-    let cargo = root.join("cargo");
-    fs::write(
-        &cargo,
-        r#"#!/bin/sh
-[ -z "$CARGO_BUILD_JOBS" ] || { echo "CARGO_BUILD_JOBS is $CARGO_BUILD_JOBS"; exit 1; }
-exec 3<>"${CARGO_MAKEFLAGS#*fifo:}"
-dd bs=1 count=1 <&3 >/dev/null 2>&1
-echo go > "$STARTED"
-dd bs=1 count=2 <&3 >/dev/null 2>&1
-echo "took 3 slots"
-printf '+++' >&3
-echo go > "$GREW"
-read _ < "$GO"
-echo "cores $(cat "$IGNITE_CORES_FILE")"
-"#,
-    )
-    .unwrap();
-    fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
-    let mut spec = shell(&root, "");
-    spec.args = vec![cargo.display().to_string(), "build".to_owned()];
-    spec.cores = 4;
-    spec.env.extend([
-        ("STARTED".to_owned(), started.display().to_string()),
-        ("GREW".to_owned(), grew.display().to_string()),
-        ("GO".to_owned(), go.display().to_string()),
-        ("CARGO_BUILD_JOBS".to_owned(), "9".to_owned()),
-    ]);
-    let launcher = launcher(&root).with_scheduler(Arc::clone(&scheduler));
-    let run = thread::spawn(move || launcher.run(&spec));
+/// Commands whose grants grow and shrink while they run. They need FIFOs, so macOS only.
+#[cfg(unix)]
+mod grants {
+    use std::collections::BTreeMap;
+    use std::io;
+    use std::process::Command;
+    use std::sync::Arc;
+    use std::thread;
 
-    // Granted two cores: one slot of its own and one byte in the FIFO.
-    fs::read_to_string(&started).unwrap();
-    scheduler.release(&holder);
-    // Grown to four: the supervisor wrote two more bytes, which the build took.
-    fs::read_to_string(&grew).unwrap();
-    // The landing waits for the build's cores and gets them one per scheduler step.
-    let land = scheduler.acquire(&ask(Class::Land, 4));
-    assert_eq!(land.cores, 4);
-    fs::write(&go, "go\n").unwrap();
-    let result = run.join().unwrap();
-    scheduler.release(&land);
+    use ignite_core::config::Floor;
+    use ignite_core::fakes::FakeClock;
+    use ignite_core::time::Timestamp;
+    use ignite_daemon::sched::{GrantRequest, Limits, Scheduler};
+    use ignite_os::hostcpu::HostCpu;
 
-    let output = fs::read_to_string(&result.output).unwrap();
-    assert_eq!(result.exit, Some(0), "{output}");
-    assert!(output.contains("took 3 slots\n"), "{output}");
-    assert!(output.contains("cores 2\n"), "{output}");
-    fs::remove_dir_all(&root).unwrap();
+    use super::*;
+
+    /// A host that reads as idle, so the scheduler grants every core.
+    struct IdleHost;
+
+    impl HostCpu for IdleHost {
+        fn cores(&self) -> u32 {
+            6
+        }
+
+        fn busy(&self) -> io::Result<f64> {
+            Ok(0.0)
+        }
+
+        fn free_memory_mb(&self) -> io::Result<u64> {
+            Err(io::Error::other("not read"))
+        }
+    }
+
+    /// A scheduler for six cores, so one command takes at most four, whose clock never moves: a
+    /// request that waits for shrinking grants waits until they have shrunk.
+    fn six_cores() -> Arc<Scheduler> {
+        let limits = Limits {
+            cores: 6,
+            floor: Floor::default(),
+            resources: BTreeMap::new(),
+        };
+        Arc::new(Scheduler::new(
+            limits,
+            Arc::new(FakeClock::new(Timestamp::EPOCH)),
+            Arc::new(IdleHost),
+        ))
+    }
+
+    fn ask(class: Class, cores: u32) -> GrantRequest {
+        GrantRequest {
+            class,
+            cores,
+            resources: Vec::new(),
+            memory_mb: None,
+            shrinks: false,
+            grows: false,
+            cores_file: None,
+        }
+    }
+
+    /// A FIFO the command writes a line to when it reaches a point, and the test reads, which
+    /// blocks until then.
+    fn signal(root: &Path, name: &str) -> PathBuf {
+        let path = root.join(name);
+        let made = Command::new("mkfifo").arg(&path).status().unwrap();
+        assert!(made.success());
+        path
+    }
+
+    /// A command started with a growing grant reads `IGNITE_CORES_FILE` and sees it rise when
+    /// another grant is released.
+    #[test]
+    fn a_growing_command_sees_its_cores_file_rise_when_cores_free_up() {
+        let root = scratch("grows");
+        let scheduler = six_cores();
+        let holder = scheduler.acquire(&ask(Class::Agent, 4));
+        let started = signal(&root, "started");
+        let mut spec = shell(
+            &root,
+            r#"echo "first $(cat "$IGNITE_CORES_FILE")"; echo go > "$STARTED"
+            i=0; while [ "$(cat "$IGNITE_CORES_FILE")" != 4 ] && [ $i -lt 3000 ]; do sleep 0.01; i=$((i+1)); done
+            echo "last $(cat "$IGNITE_CORES_FILE")""#,
+        );
+        spec.cores = 4;
+        spec.grows = true;
+        spec.env
+            .push(("STARTED".to_owned(), started.display().to_string()));
+        let launcher = launcher(&root).with_scheduler(Arc::clone(&scheduler));
+        let run = thread::spawn(move || launcher.run(&spec));
+
+        fs::read_to_string(&started).unwrap();
+        scheduler.release(&holder);
+        let result = run.join().unwrap();
+
+        assert_eq!(result.exit, Some(0));
+        let output = fs::read_to_string(&result.output).unwrap();
+        assert!(output.contains("first 2\n"), "{output}");
+        assert!(output.contains("last 4\n"), "{output}");
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A Cargo build that only compiles runs under the supervisor's jobserver, without
+    /// `CARGO_BUILD_JOBS`. Its job slots grow when another grant is released, and it gives cores
+    /// back while a landing waits, so the landing gets them before the build ends.
+    #[test]
+    fn a_cargo_build_takes_job_slots_as_its_grant_grows_and_shrinks_for_a_landing() {
+        let root = scratch("cargo");
+        let scheduler = six_cores();
+        let holder = scheduler.acquire(&ask(Class::Agent, 4));
+        let started = signal(&root, "started");
+        let grew = signal(&root, "grew");
+        let go = signal(&root, "go");
+        // A stand-in for Cargo that takes slots from the jobserver as a compiler job would: each
+        // read of a byte blocks until the FIFO holds one.
+        let cargo = root.join("cargo");
+        fs::write(
+            &cargo,
+            r#"#!/bin/sh
+    [ -z "$CARGO_BUILD_JOBS" ] || { echo "CARGO_BUILD_JOBS is $CARGO_BUILD_JOBS"; exit 1; }
+    exec 3<>"${CARGO_MAKEFLAGS#*fifo:}"
+    dd bs=1 count=1 <&3 >/dev/null 2>&1
+    echo go > "$STARTED"
+    dd bs=1 count=2 <&3 >/dev/null 2>&1
+    echo "took 3 slots"
+    printf '+++' >&3
+    echo go > "$GREW"
+    read _ < "$GO"
+    echo "cores $(cat "$IGNITE_CORES_FILE")"
+    "#,
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let mut spec = shell(&root, "");
+        spec.args = vec![cargo.display().to_string(), "build".to_owned()];
+        spec.cores = 4;
+        spec.env.extend([
+            ("STARTED".to_owned(), started.display().to_string()),
+            ("GREW".to_owned(), grew.display().to_string()),
+            ("GO".to_owned(), go.display().to_string()),
+            ("CARGO_BUILD_JOBS".to_owned(), "9".to_owned()),
+        ]);
+        let launcher = launcher(&root).with_scheduler(Arc::clone(&scheduler));
+        let run = thread::spawn(move || launcher.run(&spec));
+
+        // Granted two cores: one slot of its own and one byte in the FIFO.
+        fs::read_to_string(&started).unwrap();
+        scheduler.release(&holder);
+        // Grown to four: the supervisor wrote two more bytes, which the build took.
+        fs::read_to_string(&grew).unwrap();
+        // The landing waits for the build's cores and gets them one per scheduler step.
+        let land = scheduler.acquire(&ask(Class::Land, 4));
+        assert_eq!(land.cores, 4);
+        fs::write(&go, "go\n").unwrap();
+        let result = run.join().unwrap();
+        scheduler.release(&land);
+
+        let output = fs::read_to_string(&result.output).unwrap();
+        assert_eq!(result.exit, Some(0), "{output}");
+        assert!(output.contains("took 3 slots\n"), "{output}");
+        assert!(output.contains("cores 2\n"), "{output}");
+        fs::remove_dir_all(&root).unwrap();
+    }
 }
 
+#[cfg(unix)]
 #[test]
 fn a_command_past_its_hang_limit_is_ended_with_its_children_and_reads_as_hung() {
     let root = scratch("hung");

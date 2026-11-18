@@ -9,6 +9,12 @@ mod macos;
 #[cfg(windows)]
 pub(crate) mod windows;
 
+/// The exit code of every process that Ignite ends on Windows, where a process ended from
+/// outside still exits with a code: `STATUS_CONTROL_C_EXIT`, the code of a console process
+/// ended by Ctrl+C. Ignite reads it as macOS's "ended by a signal", with no exit code.
+#[cfg(windows)]
+pub const ENDED_EXIT_CODE: u32 = 0xC000_013A;
+
 /// A started command and the group that holds its descendants.
 #[derive(Debug)]
 pub struct Group {
@@ -23,4 +29,7 @@ pub trait Processes {
     fn spawn_group(&self, command: &mut Command) -> io::Result<Group>;
     /// Ends every process in the group.
     fn end_group(&self, group: &mut Group) -> io::Result<()>;
+    /// Makes `command` start apart from this process, so that ending this process with its
+    /// process group (macOS) or its console (Windows) leaves the command running.
+    fn detach(&self, command: &mut Command);
 }

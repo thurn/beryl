@@ -39,6 +39,10 @@ impl Processes for Native {
         group.child.wait()?;
         Ok(())
     }
+
+    fn detach(&self, command: &mut Command) {
+        command.process_group(0);
+    }
 }
 
 impl Native {

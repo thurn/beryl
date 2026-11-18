@@ -8,6 +8,12 @@
 //! replacing its own process image with the new executable ([`ExecRestart`]); supervisors are
 //! other processes and keep running the old one until their commands finish.
 //!
+//! Windows differs in three ways. The executable is `ignite.exe`. Symbolic links need a
+//! privilege most users lack, so the service starts `bin/current.cmd`, a batch file that never
+//! changes and runs the executable named in the text file `bin/current`; an update replaces
+//! that text file. And Windows has no `exec`, so a restart starts the new executable as a new
+//! process and exits.
+//!
 //! The logic takes its collaborators as traits ([`Builder`], [`Registrar`], [`Restart`] and the
 //! core `Git` and the OS `Service`), so the tests run it against fakes.
 
@@ -15,8 +21,6 @@ use std::collections::hash_map::RandomState;
 use std::fmt::Write as _;
 use std::hash::{BuildHasher, Hasher};
 use std::io;
-use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -81,12 +85,18 @@ impl ExecutableStore {
 
     /// Where the executable built from `commit` lives.
     pub fn path(&self, commit: &Commit) -> PathBuf {
-        self.root.join(commit.as_str()).join("ignite")
+        self.root
+            .join(commit.as_str())
+            .join(format!("ignite{}", std::env::consts::EXE_SUFFIX))
     }
 
-    /// The symlink the login service starts; it always names the newest stored build.
+    /// What the login service starts; it always runs the newest stored build. A symbolic link
+    /// to it, or on Windows the launcher `CURRENT_CMD`.
     pub fn current_link(&self) -> PathBuf {
-        self.root.join("current")
+        #[cfg(unix)]
+        return self.root.join("current");
+        #[cfg(windows)]
+        return self.root.join("current.cmd");
     }
 
     pub fn has(&self, commit: &Commit) -> bool {
@@ -110,23 +120,43 @@ impl ExecutableStore {
 
     /// Points [`Self::current_link`] at the commit's executable, replacing the link in one step.
     pub fn point_current_at(&self, commit: &Commit) -> io::Result<()> {
-        let link = self.current_link();
         let partial = self
             .root
             .join(format!("current.partial-{}", std::process::id()));
-        // A partial link left by a crash would make `symlink` fail.
+        // A partial file left by a crash would make `symlink` fail.
         let _ = std::fs::remove_file(&partial);
+        #[cfg(unix)]
         std::os::unix::fs::symlink(self.path(commit), &partial)?;
-        std::fs::rename(&partial, &link)
+        #[cfg(windows)]
+        {
+            let launcher = self.current_link();
+            if std::fs::read_to_string(&launcher).ok().as_deref() != Some(CURRENT_CMD) {
+                std::fs::write(&launcher, CURRENT_CMD)?;
+            }
+            std::fs::write(&partial, self.path(commit).display().to_string())?;
+        }
+        std::fs::rename(&partial, self.root.join("current"))
     }
 
-    /// The commit an executable path was stored under, following symlinks.
+    /// The commit an executable path was stored under, following symlinks and, on Windows, the
+    /// launcher's pointer file.
     pub fn version_of(executable: &Path) -> Option<Commit> {
-        let real = executable.canonicalize().ok()?;
+        let mut real = executable.canonicalize().ok()?;
+        if cfg!(windows) && real.extension().is_some_and(|e| e == "cmd") {
+            let pointer = std::fs::read_to_string(real.with_extension("")).ok()?;
+            real = PathBuf::from(pointer.trim());
+        }
         let name = real.parent()?.file_name()?.to_str()?;
         Commit::new(name).ok()
     }
 }
+
+/// The Windows launcher at `bin/current.cmd`: it runs the executable whose path is the text of
+/// `bin/current`, beside it, with the launcher's arguments. It never changes once written, which
+/// matters because `cmd` rereads a batch file line by line while running it.
+#[cfg(windows)]
+pub const CURRENT_CMD: &str = "@for /f \"usebackq delims=\" %%E in (\"%~dp0current\") do @\"%%E\" %*\r\n\
+                               @exit /b %ERRORLEVEL%\r\n";
 
 /// Makes the executable for a commit.
 pub trait Builder {
@@ -285,12 +315,13 @@ impl IdentityFile {
         }
         let text =
             serde_json::to_string_pretty(identity).map_err(|e| Error::Invalid(e.to_string()))?;
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&self.path)?;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        // Only this user may read the write token. On Windows the file inherits the user
+        // profile folder's permissions, which already allow only this user.
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        let mut file = options.open(&self.path)?;
         file.write_all(text.as_bytes())?;
         Ok(())
     }
@@ -469,11 +500,27 @@ pub trait Restart {
 
 /// Restarts with `exec`: the process keeps its ID, so the login service sees no exit, and
 /// supervisors it started stay its children.
+///
+/// Windows has no `exec`, so there the new daemon starts as a process of its own, apart from
+/// this one's console, and this process exits. Supervisors keep running, as they do on macOS.
+/// The new daemon may start before this process has exited and freed the machine's daemon
+/// lock.
 pub struct ExecRestart;
 
 impl Restart for ExecRestart {
+    #[cfg(unix)]
     fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()> {
+        use std::os::unix::process::CommandExt;
         Err(Command::new(executable).args(args).exec())
+    }
+
+    #[cfg(windows)]
+    fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()> {
+        use ignite_os::proc::Processes;
+        let mut command = Command::new(executable);
+        Native.detach(&mut command);
+        command.args(args).spawn()?;
+        std::process::exit(0)
     }
 }
 

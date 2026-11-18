@@ -9,12 +9,12 @@
 //!
 //! Cargo runs `RUSTC_WRAPPER` and the runner as one program path with no arguments of its own,
 //! so [`write_shims`] writes a small script for each beside the `cargo` shim, and
-//! [`cargo_env`] points Cargo at them.
+//! [`cargo_env`] points Cargo at them. The scripts are POSIX shell scripts, or `.cmd` batch
+//! files on Windows.
 
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -32,9 +32,17 @@ pub const UNITS_ENV: &str = "IGNITE_UNITS";
 pub const SHIM_MARKER: &str = ".ignite-shims";
 
 /// The compiler wrapper script's name in a shim directory.
+#[cfg(unix)]
 pub const RUSTC_WRAP_SCRIPT: &str = "rustc-wrap";
 /// The test runner script's name in a shim directory.
+#[cfg(unix)]
 pub const RUNNER_SCRIPT: &str = "test-runner";
+/// The compiler wrapper script's name in a shim directory.
+#[cfg(windows)]
+pub const RUSTC_WRAP_SCRIPT: &str = "rustc-wrap.cmd";
+/// The test runner script's name in a shim directory.
+#[cfg(windows)]
+pub const RUNNER_SCRIPT: &str = "test-runner.cmd";
 
 /// The mode recorded for a test process run by `ignite runner`.
 pub const RUN_MODE: &str = "run";
@@ -44,8 +52,19 @@ pub const RUN_MODE: &str = "run";
 pub fn write_shims(dir: &Path, ignite: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)?;
     fs::write(dir.join(SHIM_MARKER), "")?;
-    let ignite = shell_quote(&ignite.display().to_string());
-    let scripts = [
+    for (name, text) in scripts(&ignite.display().to_string()) {
+        let path = dir.join(name);
+        fs::write(&path, text)?;
+        make_executable(&path)?;
+    }
+    Ok(())
+}
+
+/// The three scripts' names and texts, each calling the `ignite` executable at `ignite`.
+#[cfg(unix)]
+fn scripts(ignite: &str) -> [(&'static str, String); 3] {
+    let ignite = shell_quote(ignite);
+    [
         ("cargo", CARGO_SHIM.replace("@IGNITE@", &ignite)),
         (
             RUSTC_WRAP_SCRIPT,
@@ -55,12 +74,36 @@ pub fn write_shims(dir: &Path, ignite: &Path) -> io::Result<()> {
             RUNNER_SCRIPT,
             format!("#!/bin/sh\nexec {ignite} runner \"$@\"\n"),
         ),
-    ];
-    for (name, text) in scripts {
-        let path = dir.join(name);
-        fs::write(&path, text)?;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
-    }
+    ]
+}
+
+/// The three scripts' names and texts, each calling the `ignite` executable at `ignite`.
+#[cfg(windows)]
+fn scripts(ignite: &str) -> [(&'static str, String); 3] {
+    let ignite = batch_quote(ignite);
+    let call = |verb: &str| format!("@{ignite} {verb} %*\r\n@exit /b %ERRORLEVEL%\r\n");
+    [
+        (
+            "cargo.cmd",
+            CARGO_SHIM_CMD
+                .replace("@IGNITE@", &ignite)
+                .replace('\n', "\r\n"),
+        ),
+        (RUSTC_WRAP_SCRIPT, call("rustc-wrap")),
+        (RUNNER_SCRIPT, call("runner")),
+    ]
+}
+
+#[cfg(unix)]
+fn make_executable(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+}
+
+/// Windows runs a `.cmd` file by its name, so it needs no permission bits.
+#[cfg(windows)]
+#[allow(clippy::unnecessary_wraps)]
+fn make_executable(_path: &Path) -> io::Result<()> {
     Ok(())
 }
 
@@ -92,12 +135,21 @@ fn runner_variable() -> String {
 }
 
 /// Quotes `text` for a POSIX shell.
+#[cfg(unix)]
 fn shell_quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
 }
 
+/// Quotes a path for a batch file. A Windows path cannot hold `"`, but a `%` would start a
+/// variable, so it is doubled.
+#[cfg(windows)]
+fn batch_quote(text: &str) -> String {
+    format!("\"{}\"", text.replace('%', "%%"))
+}
+
 /// The `cargo` shim. Inside a command that already holds a grant (`IGNITE_CORES` is set), or
 /// with `IGNITE_SHIM=0`, it runs the real `cargo` as it is.
+#[cfg(unix)]
 const CARGO_SHIM: &str = r#"#!/bin/sh
 # Sends a plain `cargo` call through `ignite run`, so it runs with cores from the daemon.
 real=""
@@ -121,6 +173,29 @@ if [ -n "$IGNITE_CORES" ] || [ "$IGNITE_SHIM" = "0" ]; then
     exec "$real" "$@"
 fi
 exec @IGNITE@ run -- "$real" "$@"
+"#;
+
+/// The `cargo` shim on Windows, `cargo.cmd`, which does what [`CARGO_SHIM`] does on macOS. It
+/// takes the first `cargo.exe` on `PATH` outside the shim directories.
+#[cfg(windows)]
+const CARGO_SHIM_CMD: &str = r#"@echo off
+rem Sends a plain `cargo` call through `ignite run`, so it runs with cores from the daemon.
+setlocal
+set "real="
+for %%D in ("%PATH:;=" "%") do (
+    if not defined real if not exist "%%~D\.ignite-shims" if exist "%%~D\cargo.exe" set "real=%%~D\cargo.exe"
+)
+if not defined real (
+    echo ignite cargo shim: no cargo on PATH outside the shim directories 1>&2
+    exit /b 127
+)
+if defined IGNITE_CORES goto plain
+if "%IGNITE_SHIM%"=="0" goto plain
+@IGNITE@ run -- "%real%" %*
+exit /b %ERRORLEVEL%
+:plain
+"%real%" %*
+exit /b %ERRORLEVEL%
 "#;
 
 /// The hidden `ignite rustc-wrap <rustc> <args...>` subcommand.
@@ -176,14 +251,24 @@ pub fn runner(args: &[String]) -> i32 {
 /// Runs a program with this process's standard streams, which Cargo reads, and returns its exit
 /// code with its use. A program ended by a signal returns 128 plus the signal, as a shell does.
 fn run_measured(program: &str, args: &[String]) -> io::Result<(i32, ProcessUsage)> {
-    use std::os::unix::process::ExitStatusExt;
     let mut child = Command::new(program).args(args).spawn()?;
     let (status, usage) = Native.reap(&mut child)?;
-    let code = status
+    Ok((exit_code(status), usage))
+}
+
+#[cfg(unix)]
+fn exit_code(status: std::process::ExitStatus) -> i32 {
+    use std::os::unix::process::ExitStatusExt;
+    status
         .code()
         .or_else(|| status.signal().map(|s| 128 + s))
-        .unwrap_or(1);
-    Ok((code, usage))
+        .unwrap_or(1)
+}
+
+/// Every Windows process exits with a code.
+#[cfg(windows)]
+fn exit_code(status: std::process::ExitStatus) -> i32 {
+    status.code().unwrap_or(1)
 }
 
 /// Appends one unit line to the file `IGNITE_UNITS` names. A failed write loses the line and

@@ -13,7 +13,6 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -159,7 +158,7 @@ pub(super) fn size(path: &Path) -> u64 {
     let Ok(meta) = fs::symlink_metadata(path) else {
         return 0;
     };
-    let own = meta.blocks() * 512;
+    let own = allocated(&meta);
     if !meta.is_dir() {
         return own;
     }
@@ -170,6 +169,20 @@ pub(super) fn size(path: &Path) -> u64 {
         .filter_map(io::Result::ok)
         .map(|entry| size(&entry.path()))
         .sum::<u64>()
+}
+
+/// The bytes a file's blocks take on disk.
+#[cfg(unix)]
+fn allocated(meta: &fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    meta.blocks() * 512
+}
+
+/// The file's length. Windows reports no block count without opening the file, so a sparse or
+/// compressed file counts at its full length.
+#[cfg(windows)]
+fn allocated(meta: &fs::Metadata) -> u64 {
+    meta.len()
 }
 
 fn remove(path: &Path) {

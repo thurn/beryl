@@ -3,7 +3,9 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(unix)]
+use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -321,6 +323,9 @@ fn a_waiter_that_gives_up_leaves_the_queue() {
     assert_eq!(f.state("tree-01"), "free");
 }
 
+/// macOS only: Windows finds a process inside a tree by its executable alone, which a test
+/// would have to copy into the tree; `ignite_os`'s Windows test covers that.
+#[cfg(unix)]
 #[test]
 fn a_release_ends_a_server_left_in_the_tree_but_not_the_caller() {
     let f = Fixture::new(1, 1);

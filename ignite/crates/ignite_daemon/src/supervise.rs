@@ -29,12 +29,13 @@
 //!
 //! The supervisor starts in a process group of its own, so ending the daemon (or its group)
 //! leaves the command running. The command runs in a second group, led by itself, so that
-//! everything it starts can be ended at once and measured together.
+//! everything it starts can be ended at once and measured together. On Windows the groups are
+//! job objects: the supervisor starts apart from the daemon's console, and the command's job,
+//! named after its process ID, is what the `group` file identifies.
 
 use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -199,10 +200,11 @@ impl SupervisedLauncher {
             .supervisor
             .split_first()
             .ok_or_else(|| io::Error::other("no supervisor command"))?;
-        let mut child = Command::new(program)
+        let mut command = Command::new(program);
+        Native.detach(&mut command);
+        let mut child = command
             .args(rest)
             .arg(dir.join(SPEC))
-            .process_group(0)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(File::create(dir.join(SUPERVISOR_LOG))?)
@@ -356,7 +358,8 @@ impl Run {
         &self.dir
     }
 
-    /// Ends the command and every process in its group, with `SIGTERM`. Its supervisor then
+    /// Ends the command and every process in its group, with `SIGTERM` (on Windows, by ending
+    /// its job object, which stops its processes at once). Its supervisor then
     /// writes a result with no exit code. Does nothing to a run whose command has not started.
     pub fn end(&self) -> io::Result<()> {
         let Ok(group) = fs::read_to_string(self.dir.join(GROUP)) else {
@@ -443,7 +446,7 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     let measured = group.and_then(wait_measured);
     let hung = watchdog.is_some_and(Watchdog::finish);
     let (exit, usage) = match measured {
-        Ok((status, usage)) => (status.code(), usage),
+        Ok((status, usage)) => (exit_code(status), usage),
         Err(error) => {
             writeln!(&output, "ignite: cannot run {:?}: {error}", spec.args)?;
             (Some(127), ProcessUsage::default())
@@ -465,6 +468,16 @@ fn supervise_run(spec_file: &Path) -> io::Result<()> {
     // The lock is released when the process exits, after the result exists.
     drop(lock);
     Ok(())
+}
+
+/// The command's exit code, or `None` if it was ended from outside: by a signal on macOS, or
+/// on Windows with [`ignite_os::proc::ENDED_EXIT_CODE`].
+fn exit_code(status: ExitStatus) -> Option<i32> {
+    #[cfg(windows)]
+    if status.code() == Some(ignite_os::proc::ENDED_EXIT_CODE as i32) {
+        return None;
+    }
+    status.code()
 }
 
 /// The jobserver for a Cargo build, with room for the grant's size when it started: the number

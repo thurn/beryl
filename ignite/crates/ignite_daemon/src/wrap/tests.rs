@@ -1,6 +1,7 @@
 //! What the wrapper reads from compiler arguments, and the `cargo` shim's choice of `cargo`.
 //! A real build through the wrapper is tested in `ignite_cli`'s `tests/wrap.rs`.
 
+#[cfg(unix)]
 use std::process::Output;
 
 use super::*;
@@ -94,6 +95,7 @@ fn a_test_binary_is_named_by_its_crate() {
 }
 
 /// Runs the `cargo` shim in `shims` with `PATH` set to `path` and the given extra variables.
+#[cfg(unix)]
 fn run_shim(shims: &Path, path: &[&Path], env: &[(&str, &str)]) -> Output {
     let path = std::env::join_paths(path).unwrap();
     let mut command = Command::new(shims.join("cargo"));
@@ -107,11 +109,14 @@ fn run_shim(shims: &Path, path: &[&Path], env: &[(&str, &str)]) -> Output {
     command.output().unwrap()
 }
 
+#[cfg(unix)]
 fn script(path: &Path, text: &str) {
+    use std::os::unix::fs::PermissionsExt;
     fs::write(path, format!("#!/bin/sh\n{text}\n")).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn the_cargo_shim_sends_cargo_through_ignite_run_unless_a_grant_is_held() {
     let root = scratch("shim");
@@ -149,10 +154,17 @@ fn the_cargo_shim_sends_cargo_through_ignite_run_unless_a_grant_is_held() {
 #[test]
 fn cargo_env_points_cargo_at_the_scripts() {
     let env = cargo_env(Path::new("/s"), Path::new("/u/units.jsonl"));
-    assert!(env.contains(&("RUSTC_WRAPPER".to_owned(), "/s/rustc-wrap".to_owned())));
+    let wrapper = Path::new("/s")
+        .join(RUSTC_WRAP_SCRIPT)
+        .display()
+        .to_string();
+    assert!(env.contains(&("RUSTC_WRAPPER".to_owned(), wrapper)));
     assert!(env.contains(&(UNITS_ENV.to_owned(), "/u/units.jsonl".to_owned())));
     let (runner, value) = &env[1];
     assert!(runner.starts_with("CARGO_TARGET_") && runner.ends_with("_RUNNER"));
     assert_eq!(runner, &runner.to_uppercase());
-    assert_eq!(value, "/s/test-runner");
+    assert_eq!(
+        value,
+        &Path::new("/s").join(RUNNER_SCRIPT).display().to_string()
+    );
 }

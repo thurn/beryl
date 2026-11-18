@@ -34,10 +34,11 @@ use windows_sys::Win32::System::JobObjects::{
     QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_SUSPENDED, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME,
+    CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, OpenThread, ResumeThread,
+    THREAD_SUSPEND_RESUME,
 };
 
-use super::{Group, Processes};
+use super::{ENDED_EXIT_CODE, Group, Processes};
 use crate::Native;
 
 /// The right to read a job's information. `windows-sys` has it only in its large
@@ -155,7 +156,7 @@ impl Job {
     /// Ends every process in the job and waits up to [`KILLED`] for them to exit.
     fn terminate(&self) -> io::Result<()> {
         // SAFETY: the handle is open with `JOB_OBJECT_TERMINATE`.
-        if unsafe { TerminateJobObject(self.0, 1) } == 0 {
+        if unsafe { TerminateJobObject(self.0, ENDED_EXIT_CODE) } == 0 {
             return Err(io::Error::last_os_error());
         }
         let start = Instant::now();
@@ -215,6 +216,14 @@ impl Processes for Native {
         }
         group.child.wait()?;
         Ok(())
+    }
+
+    /// Starts `command` in a process group of its own, so console control events sent to this
+    /// process's group miss it, with a console of its own that has no window. This sets the
+    /// command's creation flags, replacing any it had. A process that `spawn_group` starts
+    /// from the command inherits that hidden console instead of opening a window.
+    fn detach(&self, command: &mut Command) {
+        command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
     }
 }
 

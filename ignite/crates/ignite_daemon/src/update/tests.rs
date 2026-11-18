@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+#[cfg(unix)]
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -22,12 +23,16 @@ fn commit(hex: &str) -> Commit {
     Commit::new(hex).unwrap()
 }
 
-/// Writes an executable shell script that sleeps, as stand-in for a built `ignite`.
+/// Writes a shell script, as stand-in for a built `ignite`. It is executable only on macOS,
+/// where one test runs it.
 fn script(path: &Path, body: &str) {
-    use std::os::unix::fs::PermissionsExt;
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
 }
 
 struct FakeBuilder {
@@ -81,11 +86,13 @@ impl Registrar for FakeRegistrar {
     }
 }
 
+#[cfg(unix)]
 #[derive(Default)]
 struct FakeRestart {
     started: RefCell<Vec<(PathBuf, Vec<String>)>>,
 }
 
+#[cfg(unix)]
 impl Restart for FakeRestart {
     fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()> {
         self.started
@@ -144,6 +151,7 @@ fn config() -> Config {
     .unwrap()
 }
 
+#[cfg(unix)]
 #[test]
 fn an_update_leaves_running_supervisors_on_the_old_executable() {
     let home = tempdir("update");
