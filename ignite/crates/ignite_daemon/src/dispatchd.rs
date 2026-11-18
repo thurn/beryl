@@ -319,7 +319,7 @@ impl Dispatcher {
                 effort: None,
                 prompt: Some(
                     "Your context has grown. Open a new chat as this machine's dispatcher \
-                     with `/ignite dispatcher`, then stop."
+                     with `/ignite dispatch`, then stop."
                         .to_owned(),
                 ),
             });
