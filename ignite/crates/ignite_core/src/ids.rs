@@ -94,8 +94,16 @@ fn ticket_shape(value: &str) -> Result<(), &'static str> {
     if value.split('.').any(str::is_empty) {
         return Err("has an empty dotted part");
     }
-    if !value.chars().all(|c| c.is_ascii_alphanumeric() || c == '.') {
-        return Err("may hold only letters, digits and dots");
+    // Root IDs from earlier trackers may hold dashes (`ci-00031ced38`); a part never starts with
+    // one, so a dash cannot be mistaken for an option on a command line.
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    {
+        return Err("may hold only letters, digits, dots and dashes");
+    }
+    if value.split('.').any(|part| part.starts_with('-')) {
+        return Err("has a dotted part starting with a dash");
     }
     Ok(())
 }
@@ -235,6 +243,8 @@ mod tests {
         assert!("".parse::<TicketId>().is_err());
         assert!("a..b".parse::<TicketId>().is_err());
         assert!("a b".parse::<TicketId>().is_err());
+        assert!("ci-00031ced38".parse::<TicketId>().is_ok());
+        assert!("a.-1".parse::<TicketId>().is_err());
         assert!("ABC".parse::<Commit>().is_err());
         assert!("3a9e4c1".parse::<Commit>().is_ok());
         assert!("rust".parse::<CheckName>().is_err());

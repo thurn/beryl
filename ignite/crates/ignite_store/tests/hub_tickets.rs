@@ -519,3 +519,38 @@ fn a_dependent_stays_blocked_until_the_last_child_of_its_prerequisite_closes() {
     assert_eq!(hub.show(parent).ticket.status, Status::Closed);
     assert!(hub.show(dependent).ready);
 }
+
+#[test]
+fn a_root_id_with_a_dash_from_an_earlier_tracker_is_read_found_and_listed() {
+    // Thousands of the ticket service's closed tickets have IDs such as `ci-00031ced38`, with an
+    // alias carrying the project prefix.
+    let mut hub = Hub::new();
+    hub.conn
+        .execute_batch(
+            "INSERT INTO tickets (id, title, status, created_at, created_by, updated_at, version)
+               VALUES ('ci-0003', 'CI run', 'closed', '2026-11-01T00:00:00Z', 'tk',
+                       '2026-11-01T00:00:00Z', 1);
+             INSERT INTO aliases VALUES ('pj-ci-0003', 'ci-0003');",
+        )
+        .unwrap();
+    for name in ["ci-0003", "Tci-0003", "pj-ci-0003"] {
+        assert_eq!(hub.show(name).ticket.id.as_str(), "ci-0003", "{name}");
+    }
+    assert_eq!(hub.list(json!({"all": true})), ["ci-0003"]);
+    let id = hub
+        .ids(json!([{"op": "comment", "id": "ci-0003", "text": "still here"}]))
+        .remove(0);
+    assert_eq!(id, "ci-0003");
+}
+
+#[test]
+fn a_null_parent_detaches_a_ticket() {
+    let mut hub = Hub::new();
+    let epic = hub.ids(json!([create("Epic", None, json!({}))])).remove(0);
+    let child = hub
+        .ids(json!([create("Child", Some(&epic), json!({}))]))
+        .remove(0);
+    hub.batch(json!([{"op": "update", "id": child, "set": {"parent": null}}]));
+    assert_eq!(hub.show(&child).ticket.parent, None);
+    assert!(hub.show(&epic).children.is_empty());
+}

@@ -456,14 +456,21 @@ impl<'a> Run<'a> {
         metadata: Option<BTreeMap<String, Value>>,
     ) -> Step<OperationResult> {
         let mut changes = Self::field_changes(fields)?;
-        if let Some(Some(parent)) = &fields.parent {
-            let parent = self.ticket(parent.as_str())?.id.to_string();
-            if parent == ticket.id.as_str()
-                || self.ancestors(&parent)?.contains(&ticket.id.to_string())
-            {
-                return rejected("A ticket cannot become its own ancestor");
+        match &fields.parent {
+            Some(Some(parent)) => {
+                let parent = self.ticket(parent.as_str())?.id.to_string();
+                if parent == ticket.id.as_str()
+                    || self.ancestors(&parent)?.contains(&ticket.id.to_string())
+                {
+                    return rejected("A ticket cannot become its own ancestor");
+                }
+                changes.insert("parent".to_owned(), json!(parent));
             }
-            changes.insert("parent".to_owned(), json!(parent));
+            // `"parent": null` detaches the ticket from its parent.
+            Some(None) => {
+                changes.insert("parent".to_owned(), Value::Null);
+            }
+            None => {}
         }
         if let Some(labels) = labels {
             changes.insert("labels".to_owned(), json!(labels));

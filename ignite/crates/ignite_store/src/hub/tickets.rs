@@ -221,13 +221,24 @@ pub fn resolve(conn: &Connection, id_or_alias: &str) -> Result<Option<TicketId>>
 }
 
 /// The ID a name refers to, whether or not that ticket exists: the name without its `T`, the
-/// ticket an alias points to, or the name without a project prefix.
+/// name itself when it is a ticket's ID, the ticket an alias points to, or the name without a
+/// project prefix.
 pub(crate) fn candidate_id(conn: &Connection, name: &str) -> Result<String> {
     // Ticket IDs are lowercase, so an uppercase `T` can only be the displayed prefix.
     if let Some(id) = name.strip_prefix('T') {
         return Ok(id.to_owned());
     }
-    // IDs never hold a dash, so one marks an imported name with its project prefix.
+    // Root IDs carried over from earlier trackers hold dashes (`ci-00031ced38`), so a name that
+    // is a ticket's ID is taken as it is before any dash is read as a project prefix.
+    let is_ticket: Option<i64> = conn
+        .query_row("SELECT 1 FROM tickets WHERE id = ?1", [name], |row| {
+            row.get(0)
+        })
+        .optional()?;
+    if is_ticket.is_some() {
+        return Ok(name.to_owned());
+    }
+    // Otherwise a dash marks an imported name with its project prefix (`by-q44s.7`).
     let stripped = name.split_once('-').map_or(name, |(_, rest)| rest);
     let alias: Option<String> = conn
         .query_row(
