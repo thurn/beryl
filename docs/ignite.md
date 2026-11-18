@@ -1310,7 +1310,11 @@ now. While the hub cannot be reached:
 
 - Sessions keep working in their trees. `ignite test` and `ignite check` use the
   machine's copy of the result cache and run whatever it does not hold.
-- Records queue on each machine and are sent when the hub returns.
+- Records queue on each machine and are sent when the hub returns. A queued
+  record the hub refuses as too large (413) holds back nothing behind it: the
+  daemon sends its run again in halves, and moves one record too large on its
+  own into a `.bad` file in the `outbox` directory beside the daemon's database
+  and reports it in the daemon's log.
 - Claims and landings exit with code 4, because both need the hub.
 
 ## Workers, the pool and the dispatcher
@@ -1732,7 +1736,11 @@ to the hub as they are made:
 - The model's tokens and dollars still come from each provider's session
   transcripts, which the efficiency dashboard reads. Each daemon runs that
   ingest for its own machine and posts the new rows to the hub, so the hub's
-  store covers every machine with no manual export.
+  store covers every machine with no manual export. The ingest and export run
+  in the `batch` class, because the scheduler stops `idle` work whenever other
+  work waits. The export goes in parts of about 4 MB, each with its own header,
+  because a machine's first export holds its whole history (426 MB on jarvis),
+  more than the hub reads in one request.
 
 The measures under [What Ignite must achieve](#what-ignite-must-achieve) are
 named series in that store, each by machine, provider and ticket label. Three

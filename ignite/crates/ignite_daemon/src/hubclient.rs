@@ -4,6 +4,10 @@
 //! `X-Actor`. A request that cannot reach the hub, or that the hub answers with a server error,
 //! is tried again a few times; after that it fails with [`Error::Unreachable`], which verbs
 //! report with exit code 4.
+//!
+//! A body larger than the hub reads ([`MAX_BODY_BYTES`]), or one the hub answers with 413, fails
+//! with [`Error::Invalid`] whose message starts with [`TOO_LARGE`] (see [`too_large`]), so that a
+//! caller can send the same content again in smaller pieces.
 
 use std::time::Duration;
 
@@ -15,16 +19,26 @@ use ignite_core::ids::{Commit, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
     HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandingsReply,
-    LandingsRequest, LookupReply, LookupRequest, MachineFree, MachineRegister, MachineRegistered,
-    MetricsImport, NewResult, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
-    Release, ReportFiled, Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    LandingsRequest, LookupReply, LookupRequest, MAX_BODY_BYTES, MachineFree, MachineRegister,
+    MachineRegistered, MetricsImport, NewResult, Pause, Record, RecordBatch, RegressionFiled,
+    RegressionReport, Release, ReportFiled, Reservation, ResultKey, StoreRequest, TicketBrief,
+    TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, Ticket,
     TicketDetail, TicketQuery,
 };
 use ignite_core::traits::{Error, Hub, Result};
+
+/// How an error for a body too large for the hub begins; see [`too_large`].
+pub const TOO_LARGE: &str = "413 ";
+
+/// Whether `error` says that a request's body was too large for the hub: the hub answered 413,
+/// or the body was over [`MAX_BODY_BYTES`] and was not sent. Sending the same body again can
+/// never succeed, but sending its content in smaller pieces can.
+pub fn too_large(error: &Error) -> bool {
+    matches!(error, Error::Invalid(message) if message.starts_with(TOO_LARGE))
+}
 
 /// How long an ordinary request may take before it counts as unreachable.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -118,6 +132,16 @@ impl HubClient {
 
     fn post_raw<B: Serialize>(&self, path: &str, body: &B) -> Result<Answer> {
         let bytes = serde_json::to_vec(body).map_err(|e| Error::Invalid(e.to_string()))?;
+        // The hub answers an oversized body with 413 and closes the connection before reading
+        // it, so the client, still writing, sees a broken pipe instead of the 413. Checking the
+        // size first gives the caller the verdict without sending the body.
+        if bytes.len() as u64 > MAX_BODY_BYTES {
+            return Err(Error::Invalid(format!(
+                "{TOO_LARGE}{path}: the body is {} bytes, over the hub's limit of \
+                 {MAX_BODY_BYTES}; it was not sent",
+                bytes.len()
+            )));
+        }
         let url = format!("{}{path}", self.base);
         self.with_retries(path, || {
             self.authorized(self.agent.post(&url))
@@ -185,10 +209,13 @@ fn ok(path: &str, answer: Answer) -> Result<Answer> {
             message()
         ))),
         // Only 400 and 422 say that what was sent is malformed, which is the one answer after
-        // which a caller may drop a queued entry. Every other refusal (a timeout, a rate limit,
-        // a proxy's 4xx) is about the hub's state, not the entry, so the entry is kept and
-        // sent again later.
+        // which a caller may drop a queued entry, and 413 says that it is too large. Every
+        // other refusal (a timeout, a rate limit, a proxy's 4xx) is about the hub's state, not
+        // the entry, so the entry is kept and sent again later.
         400 | 422 => Err(Error::Invalid(format!("{} {}", answer.status, message()))),
+        // A body too large is a verdict on what was sent, but not that it is malformed: the
+        // same content may go in smaller pieces (see `too_large`).
+        413 => Err(Error::Invalid(format!("{TOO_LARGE}{}", message()))),
         status => Err(Error::Unreachable(format!(
             "the hub answered {status}, which is no verdict on what was sent: {}",
             message()

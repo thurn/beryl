@@ -86,7 +86,7 @@ fn a_refused_token_keeps_the_queue_for_when_the_machine_is_registered_again() {
 
 #[test]
 fn only_a_malformed_answer_drops_entries_and_other_refusals_keep_them() {
-    for status in [401, 403, 408, 413, 429] {
+    for status in [401, 403, 408, 429] {
         let conn = open_in_memory().unwrap();
         push_record(&conn, &record("test"), Timestamp::EPOCH).unwrap();
         let hub = FakeHttpHub::start(move |_, _, _| (status, "{}".to_owned()));
@@ -103,4 +103,90 @@ fn only_a_malformed_answer_drops_entries_and_other_refusals_keep_them() {
         assert_eq!(flush(&conn, &hub.client()).unwrap(), 0, "{status}");
         assert!(store::peek(&conn, 10).unwrap().is_empty(), "{status}");
     }
+}
+
+/// A file database in a fresh directory of its own, removed when dropped.
+struct FileDatabase {
+    dir: std::path::PathBuf,
+    conn: Connection,
+}
+
+impl FileDatabase {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("ignite-outbox-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let conn = ignite_store::local::open(&dir.join("daemon.db")).unwrap();
+        FileDatabase { dir, conn }
+    }
+}
+
+impl Drop for FileDatabase {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+#[test]
+fn an_entry_too_large_for_the_hub_is_moved_aside_and_the_rest_are_sent() {
+    let db = FileDatabase::new("too-large");
+    push_record(&db.conn, &record("before"), Timestamp::EPOCH).unwrap();
+    push_record(&db.conn, &record("huge"), Timestamp::EPOCH).unwrap();
+    push_record(&db.conn, &record("after"), Timestamp::EPOCH).unwrap();
+    let huge = store::peek(&db.conn, 10).unwrap()[1].clone();
+
+    // The hub refuses any request that carries the huge record, as it would refuse a body over
+    // its limit.
+    let hub = FakeHttpHub::start(|_, _, body| {
+        if verbs(body).iter().any(|verb| verb == "huge") {
+            (
+                413,
+                r#"{"error": "the request body is too large"}"#.to_owned(),
+            )
+        } else {
+            (200, "{}".to_owned())
+        }
+    });
+    assert_eq!(flush(&db.conn, &hub.client()).unwrap(), 2);
+    assert!(store::peek(&db.conn, 10).unwrap().is_empty());
+
+    let accepted: Vec<Vec<String>> = hub
+        .seen()
+        .iter()
+        .map(|seen| verbs(&seen.body))
+        .filter(|verbs| !verbs.iter().any(|verb| verb == "huge"))
+        .collect();
+    assert_eq!(accepted, [vec!["before"], vec!["after"]]);
+
+    let bad = db
+        .dir
+        .join("outbox")
+        .join(format!("{}-record.bad", huge.seq));
+    assert_eq!(std::fs::read_to_string(bad).unwrap(), huge.body);
+}
+
+#[test]
+fn a_run_too_large_as_a_whole_is_sent_in_halves() {
+    let conn = open_in_memory().unwrap();
+    for n in 0..8 {
+        push_record(&conn, &record(&format!("r{n}")), Timestamp::EPOCH).unwrap();
+    }
+    // The hub takes at most three records a request.
+    let hub = FakeHttpHub::start(|_, _, body| {
+        if verbs(body).len() > 3 {
+            (413, "{}".to_owned())
+        } else {
+            (200, "{}".to_owned())
+        }
+    });
+    assert_eq!(flush(&conn, &hub.client()).unwrap(), 8);
+    let sent: Vec<String> = hub
+        .seen()
+        .iter()
+        .map(|seen| verbs(&seen.body))
+        .filter(|verbs| verbs.len() <= 3)
+        .flatten()
+        .collect();
+    let expected: Vec<String> = (0..8).map(|n| format!("r{n}")).collect();
+    assert_eq!(sent, expected, "every record arrives once, in order");
 }

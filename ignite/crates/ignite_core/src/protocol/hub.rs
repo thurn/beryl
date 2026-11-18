@@ -16,6 +16,11 @@ use crate::config::Os;
 use crate::ids::{CheckName, Commit, InputHash, MachineId, RecordId, SessionId, TicketId, TreeId};
 use crate::time::Timestamp;
 
+/// The largest request body the hub reads from a machine with a token, as the ticket service
+/// allowed. The hub answers a larger one with 413 before reading it, so a client checks a body
+/// against this before sending it.
+pub const MAX_BODY_BYTES: u64 = 100 * 1024 * 1024;
+
 /// `POST /machines/register`, sent once by `ignite install`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MachineRegister {

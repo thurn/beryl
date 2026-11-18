@@ -37,8 +37,8 @@ use crate::dashboard;
 use crate::routes::{self, Request, Response};
 use crate::rules;
 
-/// The largest request body the hub reads, as the ticket service allowed.
-const MAX_BODY: u64 = 100 * 1024 * 1024;
+/// The largest request body the hub reads, which its clients check before sending.
+const MAX_BODY: u64 = ignite_core::protocol::hub::MAX_BODY_BYTES;
 
 /// The most requests answered at the same time, each on its own thread.
 pub const MAX_REQUEST_THREADS: usize = 64;

@@ -6,15 +6,23 @@
 //! does nothing until a file under one of the watched directories (the session transcripts) has
 //! been added, has grown or has changed. Then it runs the ingest, runs the export of this
 //! machine's rows since the day of the last export it sent, and posts the export's lines to
-//! `POST /metrics/import` with the machine's ID. The hub stores each row once, and the
+//! `POST /metrics/import` with the machine's ID, in parts of a few megabytes ([`CHUNK_BYTES`]).
+//! A first export holds the machine's whole history, which can be hundreds of megabytes, more
+//! than the hub reads in one request; reading it a part at a time also keeps the daemon's memory
+//! small. The hub stores each row once, and the
 //! efficiency dashboard on the hub's machine imports them, naming the machine by the first host name it saw
 //! for that ID, so that renaming a machine does not split its history.
+//!
+//! The commands run in the `batch` class. They are bookkeeping that has to finish, and the
+//! scheduler stops `idle` commands whenever a higher class waits for cores, which on a busy
+//! machine is within seconds: an `idle` export never got to finish.
 //!
 //! What was sent is kept in a small JSON file, so a restarted daemon carries on from it. An
 //! export overlaps the last one by up to a day, which costs nothing: importing a row twice
 //! changes nothing.
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -23,9 +31,14 @@ use serde::{Deserialize, Serialize};
 use ignite_core::config::Metrics;
 use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::MetricsImport;
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{CommandSpec, Error, Result};
 
 use crate::server::Context;
+
+/// The most bytes of export lines one `POST /metrics/import` carries. The hub reads bodies up
+/// to 100 MB, and the client gives a request 30 seconds; a few megabytes stay far inside both.
+const CHUNK_BYTES: usize = 4 * 1024 * 1024;
 
 /// What the last successful post left behind, kept in the state file.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,21 +75,7 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
         })
         .collect();
     run(ctx, export)?;
-    let rows = read_export(&out)?;
-    let source = rows[0]
-        .get("host")
-        .and_then(serde_json::Value::as_str)
-        .filter(|host| !host.is_empty())
-        .ok_or_else(|| Error::Invalid(format!("{} names no host", out.display())))?
-        .to_owned();
-    let count = u32::try_from(rows.len() - 1).unwrap_or(u32::MAX);
-    if count > 0 {
-        ctx.hub.metrics(&MetricsImport {
-            machine: ctx.machine.clone(),
-            source,
-            rows,
-        })?;
-    }
+    let count = post_export(ctx, &out, started, CHUNK_BYTES)?;
     if !metrics.findings.is_empty() {
         post_findings(ctx, metrics.findings.clone())?;
     }
@@ -110,15 +109,15 @@ fn post_findings(ctx: &Context, args: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-/// Runs one of the dashboard's commands from the main checkout, as idle work, and returns the
-/// file that holds its output.
+/// Runs one of the dashboard's commands from the main checkout in the `batch` class, which the
+/// scheduler never stops for other work, and returns the file that holds its output.
 fn run(ctx: &Context, args: Vec<String>) -> Result<PathBuf> {
     let name = args.join(" ");
     let result = ctx.launcher.run(&CommandSpec {
         args,
         cwd: ctx.repo.clone(),
         env: Vec::new(),
-        class: Class::Idle,
+        class: Class::Batch,
         cores: 1,
         resources: Vec::new(),
         grows: false,
@@ -135,22 +134,90 @@ fn run(ctx: &Context, args: Vec<String>) -> Result<PathBuf> {
     }
 }
 
-/// The export's lines, header first. An export with no header is refused.
-fn read_export(path: &Path) -> Result<Vec<serde_json::Value>> {
-    let text = fs::read_to_string(path)
-        .map_err(|error| Error::Io(format!("reading {}: {error}", path.display())))?;
-    let rows = text
+/// Posts the export at `path` in parts whose rows take about `chunk_bytes` of its lines each,
+/// and returns how many rows it held. An export with no header is refused, and one with no rows
+/// posts nothing. The file is read a line at a time, so only one part is held in memory.
+///
+/// Each part starts with the export's header, so that the hub's machine can import any part
+/// on its own. The hub stores an identical line once, so each part's header is marked with
+/// `part`: when `started` and its number in this export. Without the mark, every part after
+/// the first, and every export on the same day as the last, would arrive with no header of its
+/// own, and the dashboard would skip its rows if it read them apart from the first.
+fn post_export(ctx: &Context, path: &Path, started: Timestamp, chunk_bytes: usize) -> Result<u32> {
+    let reading = |error: std::io::Error| Error::Io(format!("reading {}: {error}", path.display()));
+    let invalid = |error: serde_json::Error| Error::Invalid(format!("{}: {error}", path.display()));
+    let mut lines = BufReader::new(File::open(path).map_err(reading)?)
         .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(serde_json::from_str)
-        .collect::<std::result::Result<Vec<serde_json::Value>, _>>()
-        .map_err(|error| Error::Invalid(format!("{}: {error}", path.display())))?;
-    match rows.first() {
-        Some(header) if header.get("export").is_some() => Ok(rows),
-        _ => Err(Error::Invalid(format!(
+        .filter(|line| line.as_ref().map_or(true, |line| !line.trim().is_empty()));
+    let header: serde_json::Value = match lines.next() {
+        Some(line) => serde_json::from_str(&line.map_err(reading)?).map_err(invalid)?,
+        None => serde_json::Value::Null,
+    };
+    if header.get("export").is_none() {
+        return Err(Error::Invalid(format!(
             "{} is not an efficiency export",
             path.display()
-        ))),
+        )));
+    }
+    let source = header
+        .get("host")
+        .and_then(serde_json::Value::as_str)
+        .filter(|host| !host.is_empty())
+        .ok_or_else(|| Error::Invalid(format!("{} names no host", path.display())))?
+        .to_owned();
+    let mut part = Part {
+        ctx,
+        header,
+        source,
+        started,
+        number: 0,
+    };
+    let (mut count, mut rows, mut bytes) = (0u32, Vec::new(), 0usize);
+    for line in lines {
+        let line = line.map_err(reading)?;
+        bytes += line.len();
+        rows.push(serde_json::from_str(&line).map_err(invalid)?);
+        count = count.saturating_add(1);
+        if bytes >= chunk_bytes {
+            part.post(std::mem::take(&mut rows))?;
+            bytes = 0;
+        }
+    }
+    if !rows.is_empty() {
+        part.post(rows)?;
+    }
+    Ok(count)
+}
+
+/// The parts of one export as [`post_export`] posts them.
+struct Part<'a> {
+    ctx: &'a Context,
+    header: serde_json::Value,
+    source: String,
+    started: Timestamp,
+    /// The next part's number.
+    number: u32,
+}
+
+impl Part<'_> {
+    /// Posts `rows` after a copy of the header marked with this part's number.
+    fn post(&mut self, rows: Vec<serde_json::Value>) -> Result<()> {
+        let mut header = self.header.clone();
+        if let Some(fields) = header.as_object_mut() {
+            fields.insert(
+                "part".to_owned(),
+                serde_json::Value::String(format!("{} {}", self.started, self.number)),
+            );
+        }
+        self.number += 1;
+        let mut lines = Vec::with_capacity(rows.len() + 1);
+        lines.push(header);
+        lines.extend(rows);
+        self.ctx.hub.metrics(&MetricsImport {
+            machine: self.ctx.machine.clone(),
+            source: self.source.clone(),
+            rows: lines,
+        })
     }
 }
 
@@ -353,13 +420,74 @@ mod tests {
                 &*out.to_string_lossy()
             ]
         );
-        assert!(runs.iter().all(|r| r.class == Class::Idle));
+        assert!(runs.iter().all(|r| r.class == Class::Batch));
         let imports = s.hub.metrics_imports();
         assert_eq!(imports.len(), 1);
         assert_eq!(imports[0].machine.as_str(), "m-7f3a");
         assert_eq!(imports[0].source, "multivac");
         assert_eq!(imports[0].rows.len(), 3);
         assert!(!out.exists(), "the export is removed once sent");
+    }
+
+    #[test]
+    fn a_large_export_is_posted_in_parts_that_each_start_with_their_own_header() {
+        let scratch = Scratch::new("parts");
+        let s = setup(&scratch, true);
+        write_export(&s, 10);
+        let out = s.state.with_extension("export.jsonl");
+        let row_bytes = fs::read_to_string(&out)
+            .unwrap()
+            .lines()
+            .nth(1)
+            .unwrap()
+            .len();
+        // Each part takes rows until they reach three rows' worth of bytes.
+        let count = post_export(&s.ctx, &out, s.ctx.clock.now(), 3 * row_bytes).unwrap();
+        assert_eq!(count, 10);
+
+        let imports = s.hub.metrics_imports();
+        let sizes: Vec<usize> = imports.iter().map(|import| import.rows.len() - 1).collect();
+        assert_eq!(sizes, [3, 3, 3, 1]);
+        let parts: Vec<&str> = imports
+            .iter()
+            .map(|import| {
+                let header = &import.rows[0];
+                assert_eq!(header["export"], 1);
+                assert_eq!(header["host"], "multivac");
+                assert_eq!(import.source, "multivac");
+                header["part"].as_str().unwrap()
+            })
+            .collect();
+        assert_eq!(
+            parts,
+            [
+                "2026-11-17T14:12:00.000Z 0",
+                "2026-11-17T14:12:00.000Z 1",
+                "2026-11-17T14:12:00.000Z 2",
+                "2026-11-17T14:12:00.000Z 3"
+            ],
+            "each part's header differs, so the hub stores every one"
+        );
+        let numbers: Vec<u64> = imports
+            .iter()
+            .flat_map(|import| import.rows[1..].iter())
+            .map(|row| row["row"]["n"].as_u64().unwrap())
+            .collect();
+        assert_eq!(numbers, (0..10).collect::<Vec<u64>>());
+    }
+
+    #[test]
+    fn a_file_that_is_not_an_export_posts_nothing() {
+        let scratch = Scratch::new("not-export");
+        let s = setup(&scratch, true);
+        let out = s.state.with_extension("export.jsonl");
+        fs::create_dir_all(out.parent().unwrap()).unwrap();
+        fs::write(&out, "{\"table\": \"requests\", \"row\": {}}\n").unwrap();
+        assert!(matches!(
+            post_export(&s.ctx, &out, s.ctx.clock.now(), CHUNK_BYTES),
+            Err(Error::Invalid(_))
+        ));
+        assert!(s.hub.metrics_imports().is_empty());
     }
 
     #[test]

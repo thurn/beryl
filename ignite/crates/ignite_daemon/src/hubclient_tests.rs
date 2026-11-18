@@ -210,6 +210,18 @@ fn statuses_become_the_shared_errors() {
 }
 
 #[test]
+fn a_body_too_large_is_a_verdict_that_is_not_tried_again() {
+    let hub = FakeHttpHub::start(|_, _, _| (413, r#"{"error": "too large"}"#.to_owned()));
+    let error = hub.client().records(&[record("test")]).unwrap_err();
+    assert!(too_large(&error), "{error}");
+    assert_eq!(hub.seen().len(), 1);
+    // A malformed body is not too large.
+    assert!(!too_large(&Error::Invalid(
+        "400 bad request body".to_owned()
+    )));
+}
+
+#[test]
 fn a_busy_lease_is_an_answer_not_an_error() {
     let hub = FakeHttpHub::start(|_, _, _| {
         (
