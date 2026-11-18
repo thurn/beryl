@@ -4,6 +4,7 @@
 mod args;
 mod client;
 mod fallback;
+mod flaky;
 mod import;
 mod manifest;
 mod plan;
@@ -49,6 +50,8 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Manifest { command } => manifest::run(command, &current_dir()),
         Command::Import { .. } => import::run(&cli.command, &current_dir()),
         Command::Gate { command } => replay::run(command, &current_dir()),
+        // Answered here from the hub, like the ticket verbs.
+        Command::Flaky { command } => flaky::run(command),
         // Answered here, so a worker can read the `machine` topic while the daemon is down.
         Command::Guide { topic } => ignite_core::guide::reply(topic.as_deref()),
         // Answered here from the nearest `ignite.toml`, so it works while the daemon is down.

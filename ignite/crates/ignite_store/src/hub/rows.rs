@@ -227,6 +227,19 @@ crate::tables! {
         at: String,
     }
 
+    /// A check switched on or off by hand.
+    CheckStateChange = "check_state_changes" {
+        id: i64,
+        check_name: String,
+        state: String,
+        previous: String,
+        actor: String,
+        machine: String,
+        note: String,
+        ticket: Option<String>,
+        at: String,
+    }
+
     Metric = "metrics" { machine: String, source: String, data: String, at: String }
 
     /// One change in the feed's journal, which keeps only the most recent positions.

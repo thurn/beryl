@@ -15,7 +15,7 @@ const COSTS_KEPT: usize = 20;
 /// A second flaky record on a different commit within this many days switches a check off.
 pub const FLAKY_WINDOW_DAYS: f64 = 7.0;
 
-fn state_text(state: CheckState) -> &'static str {
+pub(crate) fn state_text(state: CheckState) -> &'static str {
     match state {
         CheckState::On => "on",
         CheckState::Off => "off",
@@ -23,7 +23,7 @@ fn state_text(state: CheckState) -> &'static str {
     }
 }
 
-fn state_from(text: &str) -> Result<CheckState> {
+pub(crate) fn state_from(text: &str) -> Result<CheckState> {
     match text {
         "on" => Ok(CheckState::On),
         "off" => Ok(CheckState::Off),
@@ -201,8 +201,14 @@ pub const MACHINE_FAULT_CHECKS: i64 = 3;
 /// ticket was filed for it yet, and it is not from a command in which [`MACHINE_FAULT_CHECKS`]
 /// or more checks flaked.
 pub fn counting_flaky() -> String {
+    format!("filed IS NULL AND {}", not_machine_fault())
+}
+
+/// The SQL condition on a `flaky` row for it to be about its own check rather than about the
+/// machine: it is not from a command in which [`MACHINE_FAULT_CHECKS`] or more checks flaked.
+pub fn not_machine_fault() -> String {
     format!(
-        "filed IS NULL AND (command = '' OR command NOT IN (
+        "(command = '' OR command NOT IN (
            SELECT command FROM flaky WHERE command != ''
            GROUP BY command HAVING COUNT(DISTINCT check_name) >= {MACHINE_FAULT_CHECKS}))"
     )

@@ -1218,6 +1218,15 @@ soon as the evidence is in, without waiting for an agent.
   switches the check off on every machine. An off check does not run.
 - The hub files one P3 ticket to delete the check or replace it with a
   deterministic test. The ticket quotes both failures.
+- `ignite flaky on <check> -m "<why>"` switches a check back on once the ticket
+  is fixed, and `ignite flaky off <check> -m "<why>"` switches one off on every
+  machine by hand. Each needs the machine's write token. The hub records who
+  switched the check, from which machine and why, and comments on the check's
+  flaky ticket if it has one. A check switched back on goes off again only after
+  two new flaky records, because the records that switched it off already have
+  their ticket.
+- `ignite flaky list` lists every check that is off, has flaked or was switched
+  by hand, with its flaky records, its ticket and the last switch by hand.
 - A run that could not complete, because a tool was missing or a process was
   killed, is `incomplete`. It is never flaky, never a regression and never a
   culprit, and it is not stored in the result cache.

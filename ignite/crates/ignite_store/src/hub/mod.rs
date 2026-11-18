@@ -2,6 +2,7 @@
 
 pub mod batch;
 pub mod catches;
+pub mod check_state;
 pub mod checks;
 pub mod cycles;
 pub mod edges;
@@ -53,6 +54,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 7,
         sql: include_str!("rejected_commands.sql"),
+    },
+    Migration {
+        version: 8,
+        sql: include_str!("check_state_changes.sql"),
     },
 ];
 

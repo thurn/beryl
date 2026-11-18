@@ -163,6 +163,11 @@ pub enum Command {
         #[command(subcommand)]
         command: GateCommand,
     },
+    /// List flaky checks, or switch a check on or off by hand.
+    Flaky {
+        #[command(subcommand)]
+        command: crate::flaky::FlakyCommand,
+    },
     /// Measure the rebuild cost of a named edit.
     Rebuild {
         name: Option<String>,
@@ -539,6 +544,7 @@ impl Command {
             Command::Justiciar { .. } => "justiciar",
             Command::Plan { .. } => "plan",
             Command::Gate { .. } => "gate",
+            Command::Flaky { .. } => "flaky",
             Command::Rebuild { .. } => "rebuild",
             Command::Audit { .. } => "audit",
             Command::Manifest { .. } => "manifest",

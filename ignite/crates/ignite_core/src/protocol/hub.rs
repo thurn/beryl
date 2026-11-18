@@ -364,6 +364,59 @@ pub struct CheckStatsReply {
     pub checks: Vec<CheckStats>,
 }
 
+/// `POST /checks/state`: switches a check on or off by hand (`ignite flaky on|off`). The hub
+/// records who did it, and comments on the check's flaky ticket if it has one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckStateChange {
+    pub check: CheckName,
+    /// `on` or `off`; `uncached` is refused, because only an audit sets it.
+    pub state: CheckState,
+    /// Why, in the words of whoever switched it.
+    #[serde(default)]
+    pub note: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckStateChanged {
+    pub check: CheckName,
+    pub previous: CheckState,
+    pub state: CheckState,
+    /// The flaky ticket the change was recorded on, if the check has one.
+    pub ticket: Option<String>,
+}
+
+/// One switch of a check's state by hand.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HandSwitch {
+    pub state: CheckState,
+    pub actor: String,
+    pub machine: String,
+    pub at: Timestamp,
+    pub note: String,
+}
+
+/// One check in `GET /checks/flaky`: a check that is switched off, has flaked or was switched
+/// by hand.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlakyCheck {
+    pub check: CheckName,
+    pub family: String,
+    pub state: CheckState,
+    /// Flaky records of the check, not counting those from a command in which many checks
+    /// flaked at once (a fault of the machine).
+    pub flaky_records: u32,
+    pub last_flaky: Option<Timestamp>,
+    /// The newest ticket filed for the check's flaky records.
+    pub ticket: Option<String>,
+    /// The last time someone switched it by hand.
+    pub switched: Option<HandSwitch>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FlakyChecksReply {
+    pub checks: Vec<FlakyCheck>,
+}
+
 /// `POST /tips/claim`: one batch of one family's checks at one tip.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TipClaim {

@@ -30,5 +30,7 @@ Reproducing:
 Verifying:
 - A changed or replacement check needs 10 passes under the same load. A
   deleted check needs none.
+- A check the hub switched off as flaky stays off until you run
+  `ignite flaky on <check> -m "<what you changed>"` after landing the fix.
 - When you delete a check, make sure what it showed is still covered, and
   leave no fixture unused.
