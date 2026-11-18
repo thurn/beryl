@@ -48,30 +48,32 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use ignite_core::protocol::{Class, Usage};
+use ignite_core::protocol::Usage;
 use ignite_core::traits::{CommandSpec, Launcher, RunResult};
 use ignite_os::Native;
-use ignite_os::fifo;
 use ignite_os::proc::{Group, Processes};
 use ignite_os::usage::{ProcessUsage, TreeMeter, UsageReader};
 use serde::{Deserialize, Serialize};
 
-use crate::sched::{Grant, GrantRequest, Scheduler};
+use crate::sched::Scheduler;
 
+mod begin;
 mod cancel;
 mod grants;
 mod hang;
 mod jobserver;
 mod peaks;
+mod requests;
 mod retain;
 mod run_verb;
 
+use begin::Launch;
 use cancel::{end_when_cancelled, not_started, stopped};
 pub use grants::{GrantFile, STOP_GRACE_S};
-use grants::{GrantGuard, watch_for_stop};
 use hang::{Watchdog, signal_group};
-use jobserver::{Jobserver, compiles_only, read_cores};
+use jobserver::{Jobserver, read_cores};
 use peaks::Peaks;
+pub use requests::{request_of, requests_in, unfinished_of_in};
 pub use retain::{KEEP_JUDGED_S, KEEP_S, keep};
 pub use run_verb::{DEFAULT_HANG_LIMIT_S, RunVerb};
 
@@ -295,41 +297,6 @@ impl SupervisedLauncher {
         let count = self.next.fetch_add(1, Ordering::Relaxed);
         format!("{nanos:020}-{}-{count}", std::process::id())
     }
-
-    /// Asks the scheduler for the command's cores. A grant with a `cores_file` keeps its size
-    /// there and grows as cores free up, which the command's jobserver follows. A Cargo build
-    /// that only compiles also shrinks while a higher class waits.
-    fn grant(
-        &self,
-        spec: &CommandSpec,
-        shrinks: bool,
-        cores_file: Option<PathBuf>,
-        cancelled: &dyn Fn() -> bool,
-    ) -> Option<Grant> {
-        match &self.scheduler {
-            Some(scheduler) => scheduler.acquire_until(
-                &GrantRequest {
-                    class: spec.class,
-                    cores: spec.cores,
-                    resources: spec.resources.clone(),
-                    // The median peak of the command's recent runs, so that the scheduler holds a
-                    // command back while less than that is free.
-                    memory_mb: self.usual_memory(&spec.args),
-                    shrinks,
-                    grows: spec.grows,
-                    cores_file,
-                },
-                cancelled,
-            ),
-            None => Some(Grant {
-                id: 0,
-                cores: spec.cores.max(1),
-                resources: spec.resources.clone(),
-                queued_s: 0,
-                cores_file: None,
-            }),
-        }
-    }
 }
 
 impl Launcher for SupervisedLauncher {
@@ -360,65 +327,11 @@ impl SupervisedLauncher {
         if stop_asked() {
             return stopped(spec);
         }
-        // The run directory comes before the grant, because a grant that changes keeps its size
-        // in a file there from the moment it is granted.
-        let dir = match self.new_run() {
-            Ok(dir) => dir,
-            Err(error) => return not_started(spec, &error),
-        };
-        // Every command gets a jobserver, whatever its first word, so that the Cargo builds a
-        // script, `just` or `uv` starts follow the grant as it grows. Only a Cargo command that
-        // only compiles shrinks: what other commands run besides Cargo, such as tests, keeps
-        // the thread count it started with. Where there are no FIFOs, a command without a
-        // jobserver keeps the size it started with, unless it rereads its cores file.
-        let shrinks = compiles_only(&spec.args);
-        let cores_file = self
-            .scheduler
-            .as_ref()
-            .filter(|_| fifo::AVAILABLE || shrinks || spec.grows)
-            .map(|_| dir.join(CORES));
-        let Some(grant) = self.grant(spec, shrinks, cores_file.clone(), &either) else {
-            let _ = fs::remove_dir_all(&dir);
-            return stopped(spec);
-        };
-        // Released when this function ends, however it ends.
-        let held = GrantGuard::new(self.scheduler.clone(), grant);
-        let grant = held.grant();
-        let follows = cores_file.is_some();
-        let jobserver = cores_file
-            .filter(|_| fifo::AVAILABLE)
-            .zip(self.scheduler.as_ref())
-            .map(|(file, scheduler)| (file, scheduler.status().max_per_command));
-        let file = GrantFile {
-            class: spec.class,
-            cores: grant.cores,
-            resources: grant.resources.clone(),
-            asked: Some(spec.cores),
-            follows,
-            shrinks,
-        };
-        let result = match self.start_in(
-            dir,
-            spec,
-            grant.env(),
-            grant.queued_s as f64,
-            jobserver,
-            Some(file),
-        ) {
-            Ok(started) => {
-                // The scheduler stops `idle` work when a higher class waits or holds what it
-                // needs; stopping ends the command. The thread ends when the grant is released.
-                if let (Class::Idle, Some(scheduler)) = (spec.class, &self.scheduler) {
-                    watch_for_stop(
-                        scheduler,
-                        grant.id,
-                        started.run().clone(),
-                        self.stop_grace_s,
-                    );
-                }
+        let result = match self.launch(spec, None, &either) {
+            Launch::Started(started, held) => {
                 let run = started.run().clone();
                 let (done, finished) = mpsc::channel::<()>();
-                thread::scope(|scope| {
+                let result = thread::scope(|scope| {
                     if let Some(cancelled) = cancelled {
                         let run = &run;
                         scope.spawn(move || end_when_cancelled(run, cancelled, &finished));
@@ -427,16 +340,14 @@ impl SupervisedLauncher {
                     // Wakes the thread that watches for the caller to leave.
                     drop(done);
                     result
-                })
+                });
+                drop(held);
+                result
             }
-            Err(error) => not_started(spec, &error),
+            Launch::Cancelled => return stopped(spec),
+            Launch::Failed(error) => not_started(spec, &error),
         };
-        drop(held);
-        if result.exit.is_some() && !result.hung {
-            self.peaks
-                .record(&peaks::key(&spec.args), result.usage.peak_mb);
-        }
-        self.prune_now_and_then();
+        self.finished(&spec.args, &result);
         result
     }
 }

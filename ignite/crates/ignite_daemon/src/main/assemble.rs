@@ -31,6 +31,7 @@ use crate::doctor::{
     self, AdmissionSection, CoresSection, DoctorVerb, GitTrees, LoopsSection, NativeHost,
     StatusSection, StatusVerb, TreesSection,
 };
+use crate::host::{Host, HostParts, SupervisedStarter, TreesLanding};
 use crate::hubclient::HubClient;
 use crate::idle::{AuditVerb, Idle, IdleSettings, LiveHost, RebuildVerb};
 use crate::land::env::{ChecksGate, MachineTrees};
@@ -130,6 +131,9 @@ impl Base {
 pub struct Machinery {
     pub scheduler: Arc<Scheduler>,
     pub launcher: Arc<dyn Launcher>,
+    /// The launcher under `launcher`, which starts the commands of verb processes (see
+    /// `crate::host`) without the adoption a verb run again needs.
+    pub supervised: Arc<SupervisedLauncher>,
     pub builds: Arc<BuildManager>,
     pub trees: Trees,
 }
@@ -146,8 +150,10 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         Arc::new(ignite_os::hostcpu::HostMeter::new()),
     ));
     Scheduler::sample_every(&scheduler);
-    let supervised = SupervisedLauncher::new(&base.options.ignite, base.home("runs"))
-        .with_scheduler(scheduler.clone());
+    let supervised = Arc::new(
+        SupervisedLauncher::new(&base.options.ignite, base.home("runs"))
+            .with_scheduler(scheduler.clone()),
+    );
     loops::collect_unfinished(&supervised);
     // Commands that a verb cut off by the restart had running are handed back to the verb when
     // it runs again (see `crate::adopt`), except those in trees `Trees::setup` resets below: trees
@@ -158,7 +164,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     // manager skips those runs itself.
     let unfinished = supervised.unfinished();
     let launcher: Arc<dyn Launcher> = Arc::new(AdoptingLauncher::over_supervised(
-        Arc::new(supervised),
+        supervised.clone(),
         &reset,
     ));
     let builds = Arc::new(
@@ -204,6 +210,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     Ok(Machinery {
         scheduler,
         launcher,
+        supervised,
         builds,
         trees,
     })
@@ -268,6 +275,8 @@ pub fn checking(base: &Base, trees: &Trees) -> Result<(Arc<Checks>, Arc<Landing>
 
 /// The claims, the dispatcher, and the late links both need to the server.
 pub struct Desks {
+    /// The launcher that starts the commands of verb processes, passed on to the server.
+    pub supervised: Arc<SupervisedLauncher>,
     pub claims: Arc<Claims>,
     pub dispatcher: Arc<Dispatcher>,
     pub tree_desk: Arc<desk::TreeDeskOver>,
@@ -306,6 +315,7 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
         setup,
     ));
     Ok(Desks {
+        supervised: machinery.supervised.clone(),
         claims,
         dispatcher,
         tree_desk,
@@ -365,11 +375,28 @@ pub fn server(
         loops: Some(parts.health.clone()),
     }));
     registry.register(Box::new(StatusVerb::new(status_sections(base, parts))));
+    // The calls of verb processes, which run long verbs outside the daemon (see `crate::host`).
+    let host = Host::new(HostParts {
+        starter: Arc::new(SupervisedStarter::new(
+            desks.supervised.clone(),
+            Some(parts.scheduler.clone()),
+        )),
+        builds: ctx.builds.clone(),
+        landing: Arc::new(TreesLanding {
+            trees: parts.trees.clone(),
+            db: Arc::new(Mutex::new(base.open()?)),
+        }),
+        db: Arc::new(Mutex::new(base.open()?)),
+        steps: crate::steps::global(),
+        clock: base.clock.clone(),
+    });
+    host.register(&mut registry);
 
     let local: Arc<Mutex<Connection>> = Arc::new(Mutex::new(base.open()?));
     let mut server = Server::new(ctx.clone(), registry, Some(local))?;
     server.add_hook(Box::new(ClaimHook(claims.clone())));
     let server = Arc::new(server);
+    host.set_handles(server.handles().clone());
     claims.watch_commands(server.clone());
     let _ = desks.host.server.set(Arc::downgrade(&server));
     let _ = desks.tree_desk.handles.set(server.handles().clone());

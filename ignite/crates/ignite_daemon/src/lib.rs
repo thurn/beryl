@@ -18,6 +18,7 @@ pub mod crash;
 pub mod dispatchd;
 pub mod doctor;
 pub mod handles;
+pub mod host;
 pub mod hubclient;
 pub mod idle;
 pub mod justiciar;

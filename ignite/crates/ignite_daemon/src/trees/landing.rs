@@ -39,7 +39,7 @@ impl Trees {
 
     /// Leases the landing tree `owner` already holds, or else the free landing tree built
     /// nearest `tip` if more than `keep_free` are free.
-    fn lease_landing_keeping(
+    pub(crate) fn lease_landing_keeping(
         &self,
         holder: &str,
         owner: Option<&Handle>,

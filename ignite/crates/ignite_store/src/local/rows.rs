@@ -137,4 +137,14 @@ crate::tables! {
         body: String,
         updated_at: String,
     }
+
+    /// The stop state of a verb that runs in a process of its own.
+    HandleStop = "handle_stops" {
+        handle: String,
+        /// A stop was asked.
+        asked: bool,
+        /// Why stopping is refused, while it is.
+        refused: Option<String>,
+        at: String,
+    }
 }

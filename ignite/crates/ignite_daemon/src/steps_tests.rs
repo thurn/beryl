@@ -132,3 +132,42 @@ fn a_subscriber_hears_each_step_and_wait_as_it_starts() {
         ["rebasing onto staging", "waiting for the staging lease"]
     );
 }
+
+/// A verb process sends its whole state with each `host-step`, and again after a failed call.
+/// What did not change keeps its age, and only what is new reaches the client.
+#[test]
+fn a_remote_report_replaces_the_state_and_keeps_the_ages_of_what_stayed() {
+    let (clock, steps) = registry();
+    let activity = steps.begin(Kind::Verb("land".to_owned()), Work::default());
+    let heard = activity.subscribe();
+    let ticket = TicketId::new("Tq44s.9").unwrap();
+    activity.report(
+        Some("running the gate"),
+        &["8 cores".to_owned()],
+        Some(Class::Land),
+        Some(&ticket),
+    );
+    clock.advance(60.0);
+    activity.report(
+        Some("running the gate"),
+        &["8 cores".to_owned()],
+        None,
+        None,
+    );
+    let view = activity.view();
+    assert_eq!(view.step_age_s, Some(60.0));
+    assert_eq!(view.waiting_s, Some(60.0));
+    assert_eq!(view.class, Some("land"));
+    assert_eq!(view.ticket.as_deref(), Some("Tq44s.9"));
+    activity.report(Some("pushing"), &[], None, None);
+    let view = activity.view();
+    assert_eq!(
+        (view.step.as_deref(), view.step_age_s, view.waiting_for),
+        (Some("pushing"), Some(0.0), None)
+    );
+    let lines: Vec<String> = heard.try_iter().collect();
+    assert_eq!(
+        lines,
+        ["running the gate", "waiting for 8 cores", "pushing"]
+    );
+}

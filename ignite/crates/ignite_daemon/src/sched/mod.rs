@@ -251,8 +251,21 @@ impl Scheduler {
         request: &GrantRequest,
         cancelled: &dyn Fn() -> bool,
     ) -> Option<Grant> {
+        self.acquire_since(request, self.clock.now(), cancelled)
+    }
+
+    /// [`Self::acquire_until`] for a request first asked for at `since`, which places it in the
+    /// queue (see [`Ledger::enqueue`]) and counts toward its queued time. A verb process that
+    /// asks again for a command after the daemon restarted passes the moment it first asked, so
+    /// it keeps its place.
+    pub fn acquire_since(
+        &self,
+        request: &GrantRequest,
+        since: ignite_core::time::Timestamp,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Option<Grant> {
         let mut state = self.lock();
-        let id = state.ledger.enqueue(request.clone(), self.clock.now());
+        let id = state.ledger.enqueue(request.clone(), since);
         self.advance(&mut state);
         let mut waiting = None;
         loop {
@@ -398,6 +411,12 @@ impl Scheduler {
 
     pub fn status(&self) -> Status {
         self.lock().ledger.status()
+    }
+
+    /// What `request` would wait for now, such as `8 cores for land work (2 land commands
+    /// running, 3 waiting)`.
+    pub fn describe(&self, request: &GrantRequest) -> String {
+        waiting_for(request, &self.status())
     }
 
     fn advance(&self, state: &mut State) {

@@ -450,3 +450,29 @@ fn a_stopped_grant_is_killed_when_it_is_still_held_after_the_grace() {
 }
 
 mod elastic;
+
+/// A verb process asks again for a command after the daemon restarted, passing the moment it
+/// first asked. The new daemon's queue puts it ahead of a request first asked for later, even
+/// one that reached the new daemon first.
+#[test]
+fn a_request_asked_again_keeps_its_place_by_when_it_was_first_asked() {
+    let mut ledger = Ledger::new(limits());
+    let holder = ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), at(10.0));
+    assert_eq!(ledger.step(at(10.0)).granted.len(), 1);
+    let later = ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), at(5.0));
+    let earlier = ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), at(1.0));
+    let fresh = ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), at(11.0));
+    assert!(ledger.step(at(11.0)).granted.is_empty());
+    assert!(ledger.release(holder));
+    let step = ledger.step(at(12.0));
+    let ids: Vec<u64> = step.granted.iter().map(|g| g.id).collect();
+    assert_eq!(ids, [earlier]);
+    // Its queued time counts from when it was first asked for.
+    assert_eq!(step.granted[0].queued_s, 11);
+    assert!(ledger.release(earlier));
+    let ids: Vec<u64> = ledger.step(at(13.0)).granted.iter().map(|g| g.id).collect();
+    assert_eq!(ids, [later]);
+    assert!(ledger.release(later));
+    let ids: Vec<u64> = ledger.step(at(14.0)).granted.iter().map(|g| g.id).collect();
+    assert_eq!(ids, [fresh]);
+}

@@ -9,6 +9,12 @@
 //!
 //! `ignite close` and `ignite release` stop the running commands of the tree they free in the
 //! same way (see [`crate::trees`]).
+//!
+//! A verb that runs in a process of its own (see [`crate::host`]) has an activity in the same
+//! registry, fed by its calls, so it is stopped, and refuses to stop, in the same way. Its
+//! commands are not on a daemon thread, so the daemon ends them itself once the stop is asked:
+//! every unfinished run whose request ID names the handle. The process sees the stop on its next
+//! `host-poll`, and the handle ends `stopped` when it has written its reply.
 
 use std::sync::Arc;
 use std::time::Duration;

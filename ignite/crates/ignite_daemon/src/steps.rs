@@ -370,6 +370,54 @@ impl Activity {
         lock(&self.state).waits.retain(|(n, _, _)| *n != id);
     }
 
+    /// Puts in place everything a verb running in a process of its own says it is doing (the
+    /// host protocol's `host-step`, see `crate::host`): its step, what it waits for (outermost
+    /// first), and its class and ticket once it knows them. A step or wait that is the same as
+    /// before keeps its age, so a verb process that sends its whole state again after a failed
+    /// call does not restart the clocks `ignite status` shows. Observers hear each step and wait
+    /// that is new.
+    pub fn report(
+        &self,
+        step: Option<&str>,
+        waiting: &[String],
+        class: Option<Class>,
+        ticket: Option<&TicketId>,
+    ) {
+        let now = self.clock.now();
+        let mut state = lock(&self.state);
+        let state = &mut *state;
+        let mut heard = Vec::new();
+        match step {
+            Some(text) if state.step.as_ref().is_some_and(|(old, _)| old == text) => {}
+            Some(text) => {
+                state.step = Some((text.to_owned(), now));
+                heard.push(text.to_owned());
+            }
+            None => state.step = None,
+        }
+        let mut old = std::mem::take(&mut state.waits);
+        for what in waiting {
+            let wait = if let Some(at) = old.iter().position(|(_, text, _)| text == what) {
+                old.remove(at)
+            } else {
+                let id = state.next_wait;
+                state.next_wait += 1;
+                heard.push(format!("waiting for {what}"));
+                (id, what.clone(), now)
+            };
+            state.waits.push(wait);
+        }
+        if let Some(class) = class {
+            state.work.class = Some(class);
+        }
+        if let Some(ticket) = ticket {
+            state.work.ticket = Some(ticket.clone());
+        }
+        for line in heard {
+            state.observers.retain(|o| o.send(line.clone()).is_ok());
+        }
+    }
+
     fn update(&self, change: impl FnOnce(&mut Work)) {
         change(&mut lock(&self.state).work);
     }

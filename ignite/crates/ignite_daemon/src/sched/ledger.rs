@@ -64,7 +64,7 @@ pub struct Ledger {
     /// Free memory at the last reading; `None` until one succeeds.
     free_memory_mb: Option<u64>,
     next_id: u64,
-    /// In arrival order.
+    /// In the order the requests were first asked for (see [`Ledger::enqueue`]).
     waiting: Vec<Waiter>,
     held: BTreeMap<u64, Held>,
     /// An update waits for the daemon's commands to finish: no `idle` work starts, and what
@@ -89,15 +89,20 @@ impl Ledger {
         &self.limits
     }
 
-    /// Adds a request to the queue and returns the ID its grant will carry.
-    pub fn enqueue(&mut self, request: GrantRequest, now: Timestamp) -> u64 {
+    /// Adds a request to the queue, first asked for at `since`, and returns the ID its grant
+    /// will carry. The queue is ordered by when each request was first asked for, not by when
+    /// it was enqueued: a verb process that asks again after the daemon restarted passes the
+    /// moment it first asked (see `crate::host`), so it keeps its place ahead of requests asked
+    /// for later. A request enqueued now goes behind every request already waiting.
+    pub fn enqueue(&mut self, request: GrantRequest, since: Timestamp) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
-        self.waiting.push(Waiter {
-            id,
-            request,
-            since: now,
-        });
+        let at = self
+            .waiting
+            .iter()
+            .position(|waiter| waiter.since > since)
+            .unwrap_or(self.waiting.len());
+        self.waiting.insert(at, Waiter { id, request, since });
         id
     }
 
@@ -321,7 +326,7 @@ impl Ledger {
         }
     }
 
-    /// The waiters of `class` that can start now, by ID in arrival order, at most `usable` of
+    /// The waiters of `class` that can start now, by ID in queue order, at most `usable` of
     /// them (each needs at least one core), and the IDs of those that could start but found no
     /// core. A request whose resources are all held, or whose memory is not free, is neither.
     fn pick(&self, class: Class, usable: u32) -> (Vec<u64>, Vec<u64>) {
