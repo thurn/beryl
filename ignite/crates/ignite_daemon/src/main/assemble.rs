@@ -27,8 +27,8 @@ use crate::checks::{CheckSettings, Checks};
 use crate::claim::{BriefVerb, ClaimHook, Claims, CloseVerb, ReleaseVerb, StartVerb};
 use crate::dispatchd::{DispatchVerb, Dispatcher, Setup, TellVerb};
 use crate::doctor::{
-    self, AdmissionSection, CoresSection, DoctorVerb, GitTrees, NativeHost, StatusSection,
-    StatusVerb, TreesSection,
+    self, AdmissionSection, CoresSection, DoctorVerb, GitTrees, LoopsSection, NativeHost,
+    StatusSection, StatusVerb, TreesSection,
 };
 use crate::hubclient::HubClient;
 use crate::idle::{AuditVerb, Idle, IdleSettings, LiveHost, RebuildVerb};
@@ -319,7 +319,9 @@ pub fn server(
     registry.register(Box::new(PoolVerb::new(parts.dispatcher.clone())));
     registry.register(Box::new(TellVerb));
     registry.register(Box::new(InstallVerb));
-    registry.register(Box::new(DoctorVerb));
+    registry.register(Box::new(DoctorVerb {
+        loops: Some(parts.health.clone()),
+    }));
     registry.register(Box::new(StatusVerb::new(status_sections(base, parts))));
 
     let local: Arc<Mutex<Connection>> = Arc::new(Mutex::new(base.open()?));
@@ -350,6 +352,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
             configured,
             host: Arc::new(NativeHost),
         }),
+        Box::new(LoopsSection(parts.health.clone())),
     ]
 }
 

@@ -10,34 +10,56 @@ use ignite_core::time::Timestamp;
 use super::{CONTINUE, Dispatcher, IDLE_AFTER_MESSAGE_S, Purpose, SILENT_S, Stall, State};
 use crate::server::Context;
 
+/// A ticket to give back once the dispatcher's state is unlocked.
+pub(super) struct DueRelease {
+    session: SessionId,
+    ticket: TicketId,
+    reason: &'static str,
+}
+
+impl DueRelease {
+    fn new(session: &SessionId, ticket: TicketId, reason: &'static str) -> Self {
+        Self {
+            session: session.clone(),
+            ticket,
+            reason,
+        }
+    }
+}
+
 impl Dispatcher {
-    /// Acts on a `check` answer for `session`.
+    /// Acts on a `check` answer for `session`. Returns what to add to the acknowledgement and,
+    /// when the session's ticket is to be given back, the release for the caller to carry out
+    /// with the state unlocked (it asks the hub).
     pub(super) fn checked(
         &self,
         state: &mut State,
         ctx: &Context,
         session: &SessionId,
         answer: &str,
-    ) -> String {
+    ) -> (String, Option<DueRelease>) {
         let now = ctx.clock.now();
         let holding = self.host.holders().get(session).cloned();
         match answer {
             "running" => {
                 state.stalls.remove(session);
-                format!("; {session} is running")
+                (format!("; {session} is running"), None)
             }
             "gone" => {
                 let _ = self.pool.update(session, |m| m.down = true);
                 state.stalls.remove(session);
                 state.reserved.remove(session);
                 match holding {
-                    Some(ticket) => self.release(session, &ticket, "the session is gone"),
-                    None => format!("; {session} is down"),
+                    Some(ticket) => (
+                        String::new(),
+                        Some(DueRelease::new(session, ticket, "the session is gone")),
+                    ),
+                    None => (format!("; {session} is down"), None),
                 }
             }
             "idle" => {
                 let Some(ticket) = holding else {
-                    return format!("; {session} is idle");
+                    return (format!("; {session} is idle"), None);
                 };
                 let stall = state.stalls.entry(session.clone()).or_insert(Stall {
                     checked_at: now,
@@ -53,21 +75,27 @@ impl Dispatcher {
                             CONTINUE,
                             Purpose::Message,
                         );
-                        format!("; asked {session} to continue or release")
+                        (format!("; asked {session} to continue or release"), None)
                     }
                     Some(at) if now.seconds_since(at) >= IDLE_AFTER_MESSAGE_S => {
                         state.stalls.remove(session);
-                        self.release(session, &ticket, "the session stayed idle after a reminder")
+                        let reason = "the session stayed idle after a reminder";
+                        (
+                            String::new(),
+                            Some(DueRelease::new(session, ticket, reason)),
+                        )
                     }
-                    Some(_) => String::new(),
+                    Some(_) => (String::new(), None),
                 }
             }
             // `unknown`, `ok` or `failed`: a lookup that failed proves nothing.
-            _ => String::new(),
+            _ => (String::new(), None),
         }
     }
 
-    fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> String {
+    /// Gives a ticket back, and says what happened for the acknowledgement's text.
+    pub(super) fn release(&self, due: &DueRelease) -> String {
+        let (session, ticket, reason) = (&due.session, &due.ticket, due.reason);
         match self.host.release(session, ticket, reason) {
             Ok(()) => format!("; released {ticket} from {session}: {reason}"),
             Err(error) => format!("; could not release {ticket} from {session}: {error}"),

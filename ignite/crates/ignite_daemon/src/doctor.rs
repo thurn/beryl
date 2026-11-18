@@ -18,9 +18,14 @@ use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::traits::Result;
 use serde_json::json;
 
+use crate::loop_health::LoopHealth;
 use crate::sched;
 use crate::server::{Context, Verb};
 use crate::update::ExecutableStore;
+
+mod loops;
+
+pub use loops::LoopsSection;
 
 /// The most lines `status` and `doctor` print.
 const MAX_LINES: usize = 40;
@@ -341,6 +346,10 @@ impl Verb for StatusVerb {
         false
     }
 
+    fn blocks_update(&self) -> bool {
+        false
+    }
+
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let version = running_version();
         self.render(ctx.machine.as_str(), version.as_ref(), &req.args)
@@ -658,7 +667,11 @@ fn read_manifest(repo: &Path, dir: &Path) -> std::result::Result<Manifest, Strin
 }
 
 /// `ignite doctor`: checks the machine's health and says what to fix.
-pub struct DoctorVerb;
+#[derive(Default)]
+pub struct DoctorVerb {
+    /// The daemon's background loops; `None` where there are none, as in a test.
+    pub loops: Option<LoopHealth>,
+}
 
 impl Verb for DoctorVerb {
     fn name(&self) -> &'static str {
@@ -666,6 +679,10 @@ impl Verb for DoctorVerb {
     }
 
     fn needs_the_tree_lease(&self) -> bool {
+        false
+    }
+
+    fn blocks_update(&self) -> bool {
         false
     }
 
@@ -683,7 +700,11 @@ impl Verb for DoctorVerb {
             manifest: read_manifest(&ctx.repo, &ctx.config.repository.checks),
             version: running_version(),
         };
-        report(&diagnose(&input))
+        let mut findings = diagnose(&input);
+        if let Some(health) = &self.loops {
+            findings.extend(loops::findings(health));
+        }
+        report(&findings)
     }
 }
 

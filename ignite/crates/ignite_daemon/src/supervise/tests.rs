@@ -1,8 +1,11 @@
 //! `ignite run`'s arguments and reply, against the fake launcher. The supervisor itself is
 //! tested through the `ignite` executable in `ignite_cli`'s `tests/supervise.rs`.
 
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use ignite_core::protocol::Usage;
 
 use ignite_core::config::Config;
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
@@ -145,4 +148,36 @@ fn a_failed_command_replies_check_failed_with_its_exit_and_the_end_of_its_output
     assert!(text.len() <= 40);
     let json = reply.json.unwrap();
     assert_eq!(json["exit"], 101);
+}
+
+#[test]
+fn a_run_has_a_hang_limit_unless_asked_for_another() {
+    let launcher = Arc::new(FakeLauncher::default());
+    let ctx = context(Arc::clone(&launcher));
+    RunVerb.run(&ctx, &request(&["--", "cargo", "test"]));
+    RunVerb.run(
+        &ctx,
+        &request(&["--hang-limit", "60", "--", "cargo", "test"]),
+    );
+    let limits: Vec<Option<u64>> = launcher.runs().iter().map(|r| r.hang_limit_s).collect();
+    assert_eq!(limits, [Some(DEFAULT_HANG_LIMIT_S), Some(60)]);
+    assert!(parse_run_args(&strings(&["--hang-limit", "0", "--", "x"])).is_err());
+    assert!(parse_run_args(&strings(&["--hang-limit", "soon", "--", "x"])).is_err());
+}
+
+#[test]
+fn a_command_ended_as_hung_is_reported_as_failed() {
+    let result = RunResult {
+        exit: None,
+        output: PathBuf::from("/runs/1/output.log"),
+        usage: Usage::default(),
+        hung: true,
+    };
+    let reply = render(&strings(&["cargo", "test"]), &result);
+    assert_eq!(reply.exit, Exit::CheckFailed);
+    assert!(
+        reply.text.starts_with("failed   cargo test in 0 s: hung"),
+        "{}",
+        reply.text
+    );
 }

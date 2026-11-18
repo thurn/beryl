@@ -157,7 +157,16 @@ impl Idle {
         host: Box<dyn IdleHost>,
         rerun: Arc<dyn Rerun>,
     ) -> Result<Idle> {
-        let state = State::load(&settings.state)?;
+        let state = State::load(&settings.state).unwrap_or_else(|error| {
+            // A state file that cannot be read (cut off by a full disk, say) must not keep
+            // the daemon from starting: it would exit and be started again by the login
+            // service, over and over. The idle work starts over, and the file is kept aside.
+            eprintln!("ignite: idle state not read, starting with none: {error}");
+            let mut aside = settings.state.as_os_str().to_owned();
+            aside.push(".unreadable");
+            let _ = std::fs::rename(&settings.state, aside);
+            State::default()
+        });
         Ok(Idle {
             settings,
             clock,
@@ -247,7 +256,8 @@ impl Idle {
         Ok(value)
     }
 
-    /// Sends the waiting reports, oldest first, until the hub refuses one.
+    /// Sends the waiting reports, oldest first, until the hub cannot be reached or does not
+    /// answer. A report that the hub rejects as malformed is dropped.
     fn send_reports(&self, ctx: &Context) {
         loop {
             let Some(report) = self.state().unsent.first().cloned() else {
@@ -257,8 +267,14 @@ impl Idle {
                 Report::Audit(audit) => ctx.hub.audit(audit),
                 Report::Find(find) => ctx.hub.find(find),
             };
-            if sent.is_err() {
-                return;
+            match sent {
+                Ok(_) => {}
+                Err(Error::Invalid(reason)) => {
+                    // The hub will never take this report as it is, and every later report
+                    // waits behind it, so it goes.
+                    eprintln!("ignite: a report the hub rejects is dropped: {reason}");
+                }
+                Err(_) => return,
             }
             let removed = self.update(|state| {
                 if state.unsent.first() == Some(&report) {

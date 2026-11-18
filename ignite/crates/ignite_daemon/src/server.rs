@@ -12,10 +12,11 @@
 //! working in a tree that now belongs to someone else. A verb that does not act on the tree it
 //! is asked from opts out with [`Verb::needs_the_tree_lease`].
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
@@ -83,6 +84,28 @@ pub trait Verb: Send + Sync {
     fn needs_the_tree_lease(&self) -> bool {
         true
     }
+    /// False for a verb that only waits for something or only reads, so that a daemon waiting
+    /// to update does not wait for it: the dispatcher's `dispatch --wait` and a worker's `wait`
+    /// are always running, and an update that waited for them would never start.
+    fn blocks_update(&self) -> bool {
+        true
+    }
+}
+
+/// Tells whether the client of the request that the current verb answers has closed its
+/// connection before the verb replied.
+pub type CallerProbe = Arc<dyn Fn() -> bool + Send + Sync>;
+
+thread_local! {
+    /// The probe of the request the verb on this thread is answering, if it can be made.
+    static CALLER: RefCell<Option<CallerProbe>> = const { RefCell::new(None) };
+}
+
+/// The probe for the request that the calling verb is answering, or `None` where the
+/// connection cannot be probed. It reports true only until the request is handed off to a
+/// handle, because a client that leaves after its wait ended has done nothing wrong.
+pub fn caller_probe() -> Option<CallerProbe> {
+    CALLER.with(|caller| caller.borrow().clone())
 }
 
 /// The verbs the daemon answers, by name.
@@ -149,7 +172,8 @@ pub struct Server {
     db: Option<Arc<Mutex<Connection>>>,
     hooks: Vec<Box<dyn Hook>>,
     commands: Mutex<BTreeMap<SessionId, CurrentCommand>>,
-    /// Verbs running on threads of their own, including those handed off to a handle.
+    /// Verbs running on threads of their own, including those handed off to a handle, except
+    /// those that do not [block an update](Verb::blocks_update).
     running: Arc<AtomicUsize>,
 }
 
@@ -193,14 +217,20 @@ impl Server {
         lock(&self.commands).get(session).cloned()
     }
 
-    /// The number of verbs still running, whether or not their callers still wait. `wait`
-    /// itself is not counted: it only waits on another verb.
+    /// The number of verbs still running that an update has to wait for, whether or not their
+    /// callers still wait. `wait` itself is not counted: it only waits on another verb, and
+    /// neither is any verb that [does not block an update](Verb::blocks_update).
     pub fn running_verbs(&self) -> usize {
         self.running.load(Ordering::SeqCst)
     }
 
     /// Answers one request.
     pub fn handle(&self, req: &Request) -> Reply {
+        self.handle_from(req, None)
+    }
+
+    /// Answers one request whose client's connection `caller` probes, if it can.
+    pub fn handle_from(&self, req: &Request, caller: Option<CallerProbe>) -> Reply {
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
         ctx.tree = ctx.tree_of(&req.cwd);
@@ -224,7 +254,7 @@ impl Server {
         let mut reply = match verb {
             None => unknown_verb(&req.verb),
             Some(verb) if verb.keeps_its_own_wait() => verb.run(&ctx, req),
-            Some(verb) => self.run_or_hand_off(verb, &ctx, req),
+            Some(verb) => self.run_or_hand_off(verb, &ctx, req, caller),
         };
         self.run_hooks(&ctx, req, &mut reply);
         if let Some(session) = &req.session
@@ -237,9 +267,24 @@ impl Server {
 
     /// Runs the verb on a thread of its own. If it has not finished when the caller's wait
     /// ends, the reply names a handle, and the verb's reply goes to the handle when it finishes.
-    fn run_or_hand_off(&self, verb: Arc<dyn Verb>, ctx: &Context, req: &Request) -> Reply {
+    fn run_or_hand_off(
+        &self,
+        verb: Arc<dyn Verb>,
+        ctx: &Context,
+        req: &Request,
+        caller: Option<CallerProbe>,
+    ) -> Reply {
         let slot = Arc::new((Mutex::new(Slot::Pending), Condvar::new()));
-        self.running.fetch_add(1, Ordering::SeqCst);
+        let counted = verb.blocks_update();
+        if counted {
+            self.running.fetch_add(1, Ordering::SeqCst);
+        }
+        // Set once the caller has been given a handle and may leave.
+        let handed_off = Arc::new(AtomicBool::new(false));
+        let probe: Option<CallerProbe> = caller.map(|gone| {
+            let handed_off = handed_off.clone();
+            Arc::new(move || !handed_off.load(Ordering::SeqCst) && gone()) as CallerProbe
+        });
         let worker = {
             let (slot, handles, ctx, req, running) = (
                 slot.clone(),
@@ -249,6 +294,7 @@ impl Server {
                 self.running.clone(),
             );
             move || {
+                CALLER.with(|caller| *caller.borrow_mut() = probe);
                 let reply =
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| verb.run(&ctx, &req)))
                         .unwrap_or_else(|_| {
@@ -262,11 +308,22 @@ impl Server {
                     Slot::HandedOff(handle) => handles.finish(handle, reply),
                     _ => *state = Slot::Done(reply),
                 }
-                running.fetch_sub(1, Ordering::SeqCst);
+                if counted {
+                    running.fetch_sub(1, Ordering::SeqCst);
+                }
                 slot.1.notify_all();
             }
         };
-        std::thread::spawn(worker);
+        let name = format!("ignite-verb-{}", req.verb);
+        if let Err(error) = std::thread::Builder::new().name(name).spawn(worker) {
+            if counted {
+                self.running.fetch_sub(1, Ordering::SeqCst);
+            }
+            return Reply::text(
+                Exit::Usage,
+                format!("failed   cannot start a thread: {error}"),
+            );
+        }
 
         let (state, finished) = &*slot;
         let guard = lock(state);
@@ -281,6 +338,7 @@ impl Server {
             .handles
             .create(&req.verb, ctx.session.as_ref(), ctx.tree.as_ref());
         *guard = Slot::HandedOff(handle.clone());
+        handed_off.store(true, Ordering::SeqCst);
         still_running(&req.verb, &handle)
     }
 
@@ -390,23 +448,49 @@ pub fn serve(server: &Arc<Server>, socket: &str) -> std::io::Result<()> {
     serve_listener(server, listener.as_ref())
 }
 
-/// [`serve`] on a listener that is already open.
+/// How long a client that has connected has to send its request. A client that sends nothing
+/// would otherwise hold its thread for as long as it stays connected.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+/// The longest pause after failed accepts in a row.
+const ACCEPT_PAUSE_MAX: Duration = Duration::from_secs(2);
+
+/// [`serve`] on a listener that is already open. A failed accept (as when the process has run
+/// out of file descriptors for a moment) is reported and tried again after a pause that grows
+/// while they continue; it never ends the daemon.
 pub fn serve_listener(server: &Arc<Server>, listener: &dyn Listener) -> std::io::Result<()> {
+    let mut pause = Duration::from_millis(50);
     loop {
-        let stream = listener.accept()?;
+        let stream = match listener.accept() {
+            Ok(stream) => stream,
+            Err(error) => {
+                eprintln!("ignite: cannot accept a connection: {error}");
+                std::thread::sleep(pause);
+                pause = (pause * 2).min(ACCEPT_PAUSE_MAX);
+                continue;
+            }
+        };
+        pause = Duration::from_millis(50);
         let server = server.clone();
-        std::thread::spawn(move || answer(&server, stream));
+        let spawned = std::thread::Builder::new()
+            .name("ignite-connection".to_owned())
+            .spawn(move || answer(&server, stream));
+        if let Err(error) = spawned {
+            eprintln!("ignite: cannot start a thread for a connection: {error}");
+        }
     }
 }
 
 /// Reads one request line from `stream` and writes the reply line.
 fn answer(server: &Server, mut stream: Box<dyn Stream>) {
+    let _ = stream.set_read_timeout(Some(REQUEST_TIMEOUT));
     let mut line = String::new();
     if BufReader::new(&mut stream).read_line(&mut line).is_err() {
         return;
     }
+    let _ = stream.set_read_timeout(None);
+    let caller: Option<CallerProbe> = stream.closed_probe().map(Arc::from);
     let reply = match serde_json::from_str::<Request>(&line) {
-        Ok(req) => server.handle(&req),
+        Ok(req) => server.handle_from(&req, caller),
         Err(error) => Reply::text(Exit::Usage, format!("failed   unreadable request: {error}")),
     };
     // The client may have gone away, as when its tool call was interrupted; nothing is lost,

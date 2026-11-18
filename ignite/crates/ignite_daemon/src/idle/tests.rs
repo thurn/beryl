@@ -17,12 +17,14 @@ use ignite_core::protocol::client::{Exit, Request};
 use ignite_core::protocol::hub::{CachedResult, CompileUnit, ResultKey};
 use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{BuildResult, Builds, CommandSpec, Launcher, Result, RunResult};
+use ignite_core::traits::{BuildResult, Builds, CommandSpec, Error, Launcher, Result, RunResult};
 
 use super::rebuild::RebuildCount;
+use super::state::State;
 use super::{AuditVerb, Idle, IdleHost, IdleJob, IdleSettings, RebuildVerb, Rerun};
 use crate::checks::HitSink;
 use crate::server::{Context, Verb};
+use crate::testhub::SpyHub;
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 
@@ -446,6 +448,62 @@ fn exploration_reports_wait_for_the_hub() {
     f.hub.set_unreachable(false);
     f.seeds.next.lock().unwrap().clear();
     f.idle().run(&f.ctx, &job).unwrap();
+    assert_eq!(f.hub.exploration_finds().len(), 1);
+}
+
+#[test]
+fn a_state_file_that_cannot_be_read_starts_the_idle_work_over() {
+    let f = Fixture::new();
+    let state = f.dir.join("state/idle.json");
+    fs::create_dir_all(state.parent().unwrap()).unwrap();
+    fs::write(&state, "{\"played\": {\"seeds\": [").unwrap();
+    // Building the idle work does not fail, so the daemon starts.
+    let idle = f.idle();
+    assert_eq!(*idle.state(), State::default());
+    assert!(
+        state.with_file_name("idle.json.unreadable").exists(),
+        "the unreadable file is kept aside"
+    );
+    // An empty file is as unreadable as a cut-off one.
+    fs::write(&state, "").unwrap();
+    f.idle();
+}
+
+#[test]
+fn a_report_the_hub_rejects_is_dropped_and_the_next_one_is_sent() {
+    let f = Fixture::new();
+    let job = IdleJob::Explore {
+        family: "seeds".to_owned(),
+    };
+    *f.seeds.next.lock().unwrap() =
+        next_lines(&[r#"{"check": "seeds:s1"}"#, r#"{"check": "seeds:s2"}"#]);
+    for check in ["seeds:s1", "seeds:s2"] {
+        f.seeds
+            .outcomes
+            .lock()
+            .unwrap()
+            .insert(check.to_owned(), Outcome::Fail);
+    }
+    f.hub.set_unreachable(true);
+    let idle = f.idle();
+    idle.run(&f.ctx, &job).unwrap();
+    assert_eq!(idle.state().unsent.len(), 2);
+    f.hub.set_unreachable(false);
+
+    // The hub finds the first report malformed and takes the second.
+    let sent = Arc::new(AtomicUsize::new(0));
+    let hub = {
+        let sent = sent.clone();
+        SpyHub::new(f.hub.clone()).refusing(move |name| {
+            (name == "find" && sent.fetch_add(1, Ordering::SeqCst) == 0)
+                .then(|| Error::Invalid("422 not a find".to_owned()))
+        })
+    };
+    let mut ctx = f.ctx.clone();
+    ctx.hub = Arc::new(hub);
+    f.seeds.next.lock().unwrap().clear();
+    idle.run(&ctx, &job).unwrap();
+    assert!(idle.state().unsent.is_empty());
     assert_eq!(f.hub.exploration_finds().len(), 1);
 }
 

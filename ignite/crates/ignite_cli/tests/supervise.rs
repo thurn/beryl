@@ -86,6 +86,32 @@ fn a_supervised_command_leaves_a_result_file_with_its_exit_output_and_usage() {
 
 #[cfg(unix)]
 #[test]
+fn a_command_is_ended_when_the_caller_that_asked_for_it_goes_away() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    let root = scratch("cancel");
+    let started = root.join("started");
+    let spec = shell(&root, &format!("touch '{}'; sleep 600", started.display()));
+    let launcher = launcher(&root);
+    let gone = AtomicBool::new(false);
+    let result = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while !started.exists() {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            gone.store(true, Ordering::SeqCst);
+        });
+        launcher.run_until(&spec, &|| gone.load(Ordering::SeqCst))
+    });
+    // Ended by a signal long before the 600 seconds were up.
+    assert_eq!(result.exit, None);
+    assert!(result.usage.wall_s < 60.0, "{}", result.usage.wall_s);
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
 fn a_command_outlives_the_daemon_side_and_its_result_is_picked_up_afterwards() {
     let root = scratch("restart");
     let go = root.join("go");

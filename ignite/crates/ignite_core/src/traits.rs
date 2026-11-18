@@ -100,6 +100,14 @@ pub struct RunResult {
 pub trait Launcher: Send + Sync {
     /// Runs one command under a supervisor and waits for it.
     fn run(&self, spec: &CommandSpec) -> RunResult;
+
+    /// [`Launcher::run`], except that the command is ended once `cancelled` returns true, as
+    /// when the client that asked for it has gone away. A launcher that cannot end a command
+    /// runs it to the end.
+    fn run_until(&self, spec: &CommandSpec, cancelled: &(dyn Fn() -> bool + Sync)) -> RunResult {
+        let _ = cancelled;
+        self.run(spec)
+    }
 }
 
 /// How a request for a build product was answered.

@@ -326,6 +326,10 @@ impl Verb for WaitVerb {
         false
     }
 
+    fn blocks_update(&self) -> bool {
+        false
+    }
+
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let [name] = req.args.as_slice() else {
             return Reply::text(Exit::Usage, "usage    ignite wait <handle>");

@@ -469,14 +469,42 @@ How the executable is installed and kept current:
   start at login. Registering stores a write token in the user's configuration.
   The hub accepts only requests that come over the Tailscale network with a
   registered token.
-- After that the daemon runs the executable built from `master`. When `master`
-  moves and Ignite's own source changed, each daemon builds the new executable
-  in a tree of its own and restarts itself.
+- After that the daemon runs the executable built from the release branch,
+  `repository.release` in `ignite.toml`, or `master` when that is unset. When
+  the branch moves and Ignite's own source changed, each daemon builds the new
+  executable in a tree of its own and restarts itself. Daemons look at the
+  branch every five minutes, so a fix pushed to it by hand deploys too.
+- A landing that changed Ignite's own source moves the release branch to the
+  landed commit once `repository.release_family` (the `ignite` family) has
+  passed on it. A fix to Ignite therefore reaches every machine minutes after it
+  lands, without waiting for tip verification of everything else, which an
+  Ignite bug can itself be blocking.
 - Each build is stored under its commit, so a new executable never replaces a
   file that is running. Supervisors finish under the version that started them.
 - The hub updates first. A daemon whose version differs from the hub's finishes
-  its running commands, updates and reconnects before it asks for new work.
+  the commands that need it, updates and reconnects before it asks for new work.
+  Verbs that only wait, such as `ignite dispatch` and `ignite wait`, do not hold
+  an update back.
 - Each record names the Ignite commit that produced it.
+
+How a broken build or a crash is survived:
+
+- A panic in any of the daemon's loops writes a crash record to the Ignite
+  home's `crash` folder and ends the process, so that the login service starts
+  it again. A loop that died while the process lived on would stop that part of
+  Ignite without anyone noticing. A panic in a verb fails only that verb, and
+  leaves a crash record too.
+- A daemon that has run for ten minutes marks its build last-good
+  (`bin/last-good`). A build that starts three times in five minutes is rolled
+  back to the last-good build and is never installed again.
+- `ignite install` also installs a monitor, a second login service that runs
+  `ignite monitor` from the last-good build every two minutes. It restarts a
+  daemon that does not answer, rolls back a build that crash-loops, and when
+  neither helps for 15 minutes, writes `justiciar-needed.json` in the Ignite
+  home and posts a notification. The monitor has no agent logic and makes no hub
+  calls.
+- The daemon reports each crash record, and a loop that keeps failing, to the
+  hub as a justiciar report. See [The justiciar](#the-justiciar).
 
 How a command knows who is asking:
 
@@ -1546,6 +1574,42 @@ ignite tell --all "The oracle engines are down until noon. Skip oracle checks."
 waits on another machine or on tip verification. When its ticket needs something
 outside itself, it finishes what it can and lands, or releases the ticket with a
 note.
+
+### The justiciar
+
+Some faults stop work for everyone and no ordinary ticket fixes them: Ignite
+crashed, a loop of the daemon keeps failing, `master` has not moved for hours, a
+plan waits on a clock or on a machine that is off, an epic is deadlocked. The
+justiciar is the role that ends such an emergency. It is an ordinary worker
+session given a ticket labelled `justiciar`, which brings with it the authority
+in `ignite guide justiciar`: to repair the ticket graph, release or rewrite any
+ticket, repair the machine, and fix Ignite itself, deploying the fix through the
+release branch when Ignite blocks its own landing.
+
+- The hub files justiciar tickets at P0 with `tier:opus`, matched by signature
+  so a repeated sighting adds a comment and never a second ticket. They come
+  from upkeep, when the oldest landing since the last verified tip has waited
+  three hours or a ticket has been held for six, and from `POST /justiciar`,
+  which daemons send for a crash record or a loop that keeps failing, and which
+  `ignite justiciar "<reason>"` sends for a session that meets an emergency.
+- A report about one machine, such as its daemon's crash, is labelled
+  `needs:<machine>`, so only that machine's pool works it.
+- Justiciar tickets are offered before every other ticket, whether or not an
+  epic is active. So are all the other tickets the hub files by itself, which
+  carry the label `hub`.
+- A daemon keeps one worker free for justiciar tickets while its pool has more
+  than one worker, so a pool full of stuck tickets cannot starve the ticket that
+  would free them.
+- When the hub cannot be reached for 15 minutes, a daemon hands a justiciar
+  prompt to its own idle worker directly, since the hub is what would have filed
+  the ticket.
+- When the daemon itself is down, the dispatcher's `ignite dispatch` cannot
+  reach it. If the monitor has written `justiciar-needed.json`, the client
+  answers with a hand-off of a justiciar prompt to a worker of the pool, which
+  it reads from the daemon's database.
+- The one fault nothing automatic repairs is a missing dispatcher: only a turn a
+  person started can start sessions. The daemon posts a notification when the
+  dispatcher stops answering.
 
 ### Planning
 

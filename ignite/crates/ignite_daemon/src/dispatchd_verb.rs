@@ -19,9 +19,31 @@ impl DispatchVerb {
     }
 }
 
+/// Seconds before the request's own wait ends at which `dispatch` gives up waiting and
+/// answers idle. The server hands the verb to a handle when the request's wait ends, and the
+/// dispatcher loop would then have no caller to give an instruction to, so the verb has to
+/// finish first, with room for the hub request it may be in the middle of.
+pub const CALLER_MARGIN_S: u32 = 5;
+
+/// How long `dispatch` may wait, in seconds: what `--wait` asked for, but no longer than the
+/// request's own wait less [`CALLER_MARGIN_S`]. A request with no wait (`wait_s` of 0), such as
+/// one run directly rather than through the server, is not limited.
+fn waiting_limit_s(asked: u32, request_wait_s: u32) -> u32 {
+    if request_wait_s == 0 {
+        asked
+    } else {
+        asked.min(request_wait_s.saturating_sub(CALLER_MARGIN_S))
+    }
+}
+
 impl Verb for DispatchVerb {
     fn name(&self) -> &'static str {
         "dispatch"
+    }
+
+    /// The dispatcher's loop is always inside `dispatch --wait`.
+    fn blocks_update(&self) -> bool {
+        false
     }
 
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
@@ -46,8 +68,15 @@ impl Verb for DispatchVerb {
                 );
             }
         };
-        let deadline = ctx.clock.now().plus_seconds(f64::from(wait));
+        let started = ctx.clock.now();
+        let deadline = started.plus_seconds(f64::from(waiting_limit_s(wait, req.wait_s)));
+        // After this the server has handed the verb to a handle and nobody is listening: an
+        // instruction given now would be lost until it is given again two minutes later.
+        let caller_leaves = (req.wait_s > 0).then(|| started.plus_seconds(f64::from(req.wait_s)));
         loop {
+            if caller_leaves.is_some_and(|at| ctx.clock.now() >= at) {
+                return render(&idle());
+            }
             if let Some(instruction) = self.dispatcher.step(ctx, req.session.as_ref()) {
                 return render(&instruction);
             }
