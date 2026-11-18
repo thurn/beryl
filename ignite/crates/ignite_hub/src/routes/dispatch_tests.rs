@@ -35,6 +35,7 @@ fn post(conn: &mut Connection, path: &str, body: &Value, now: Timestamp) -> (u16
             actor: "test".into(),
         }),
         body: serde_json::to_vec(body).unwrap(),
+        headers: Vec::new(),
     };
     let response = handle(conn, &request, now).expect("a dispatch route");
     (
@@ -365,6 +366,7 @@ fn writes_need_a_writer_and_other_paths_are_not_ours() {
         query: Vec::new(),
         writer: None,
         body: b"{}".to_vec(),
+        headers: Vec::new(),
     };
     let status = |conn: &mut Connection, path: &str, method: &str| {
         handle(conn, &request(path, method), start()).map(|r| r.status)
