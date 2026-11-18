@@ -61,8 +61,10 @@ fn the_public_listener_serves_reads_and_refuses_writes_and_export() {
     let register = r#"{"machine":"intruder"}"#;
 
     assert_eq!(status(public.address(), "GET", "/pj/api/tickets", ""), 200);
-    assert_eq!(status(public.address(), "HEAD", "/pj/", ""), 200);
-    assert_eq!(status(public.address(), "GET", "/pj/", ""), 200);
+    assert_eq!(status(public.address(), "HEAD", "/", ""), 200);
+    assert_eq!(status(public.address(), "GET", "/", ""), 200);
+    // The project's old page address redirects to the root.
+    assert_eq!(status(public.address(), "GET", "/pj/", ""), 308);
     for (method, path) in [
         ("POST", "/pj/api/machines/register"),
         ("POST", "/pj/api/batch"),
