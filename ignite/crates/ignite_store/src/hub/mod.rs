@@ -39,6 +39,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 4,
         sql: include_str!("workers_command.sql"),
     },
+    Migration {
+        version: 5,
+        sql: include_str!("dispatch_rules.sql"),
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

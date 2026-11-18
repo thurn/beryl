@@ -29,7 +29,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use ignite_core::config::Os;
 use ignite_core::ids::{Seq, SessionId, TicketId};
 use ignite_core::protocol::client::{DispatchAction, DispatchInstruction, Exit, Reply};
-use ignite_core::protocol::hub::{IdleWorker, MachineFree, WorkerRole, WorkerState};
+use ignite_core::protocol::hub::{IdleWorker, MachineFree, Reservation, WorkerRole, WorkerState};
 use ignite_core::protocol::tickets::{Status, TicketDetail};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
@@ -112,6 +112,9 @@ pub struct Setup {
 struct Reserved {
     ticket: TicketId,
     expires_at: Timestamp,
+    /// The hub's one-time code for the reservation, which the hand-off's `ignite start` sends.
+    /// `None` for a ticket the daemon points a worker at without a hub reservation.
+    code: Option<String>,
     model: Option<String>,
     effort: String,
     app: String,
@@ -157,7 +160,7 @@ struct State {
     /// Hand-offs whose worker refused them, waiting for another idle worker.
     orphans: Vec<Reserved>,
     /// Reservations whose ticket could not be read yet, to try again on the next tick.
-    unread: Vec<(SessionId, TicketId, Timestamp, String)>,
+    unread: Vec<(Reservation, String)>,
     refused: BTreeMap<SessionId, Timestamp>,
     stalls: BTreeMap<SessionId, Stall>,
     /// Who held a tree at the last look, to notice who finished.
@@ -277,21 +280,15 @@ impl Dispatcher {
     }
 
     /// A landing's next chain ticket with `--fresh`: hand it to the same session, cleared first.
-    pub fn chain(
-        &self,
-        ctx: &Context,
-        session: &SessionId,
-        ticket: &TicketId,
-        expires_at: Timestamp,
-    ) {
+    pub fn chain(&self, ctx: &Context, reservation: &Reservation) {
         let app = self
             .pool
-            .member(session)
+            .member(&reservation.session)
             .ok()
             .flatten()
             .map_or_else(|| "claude".to_owned(), |m| m.app);
         let mut state = self.state();
-        Self::queue_handoff(ctx, &mut state, session, ticket, expires_at, &app);
+        Self::queue_handoff(ctx, &mut state, reservation, &app);
     }
 
     /// Brings the state up to date and gives the next instruction for the dispatcher `asking`,
@@ -460,9 +457,9 @@ impl Dispatcher {
     fn tick(&self, ctx: &Context, state: &mut State, members: &[Member]) {
         let now = ctx.clock.now();
         self.notice_holders(ctx, state, now);
-        for (session, ticket, expires_at, app) in std::mem::take(&mut state.unread) {
-            if expires_at > now && state.reserved.contains_key(&session) {
-                Self::queue_handoff(ctx, state, &session, &ticket, expires_at, &app);
+        for (reservation, app) in std::mem::take(&mut state.unread) {
+            if reservation.expires_at > now && state.reserved.contains_key(&reservation.session) {
+                Self::queue_handoff(ctx, state, &reservation, &app);
             }
         }
         Self::expire_given(state, now);
@@ -577,45 +574,35 @@ impl Dispatcher {
             };
             let worker = idle.remove(index);
             trees -= 1;
-            Self::queue_handoff(
-                ctx,
-                state,
-                &reservation.session,
-                &reservation.ticket,
-                reservation.expires_at,
-                &worker.app,
-            );
+            Self::queue_handoff(ctx, state, &reservation, &worker.app);
         }
     }
 
-    fn queue_handoff(
-        ctx: &Context,
-        state: &mut State,
-        session: &SessionId,
-        ticket: &TicketId,
-        expires_at: Timestamp,
-        app: &str,
-    ) {
+    fn queue_handoff(ctx: &Context, state: &mut State, reservation: &Reservation, app: &str) {
+        let session = &reservation.session;
+        let ticket = &reservation.ticket;
+        let expires_at = reservation.expires_at;
+        let code = Some(reservation.code.clone());
         // The model comes from the ticket's labels. Until they can be read the worker stays
         // reserved and nothing is sent, so a ticket never runs on a model it does not name.
         let Ok(detail) = ctx.hub.ticket(ticket) else {
             let placeholder = Reserved {
                 ticket: ticket.clone(),
                 expires_at,
+                code,
                 model: None,
                 effort: String::new(),
                 app: app.to_owned(),
             };
             state.reserved.insert(session.clone(), placeholder);
-            state
-                .unread
-                .push((session.clone(), ticket.clone(), expires_at, app.to_owned()));
+            state.unread.push((reservation.clone(), app.to_owned()));
             return;
         };
         let labels = detail.ticket.labels;
         let reserved = Reserved {
             ticket: ticket.clone(),
             expires_at,
+            code,
             model: model_for(&labels, app),
             effort: label(&labels, "effort:").unwrap_or("high").to_owned(),
             app: app.to_owned(),
@@ -635,8 +622,13 @@ impl Dispatcher {
                 model: reserved.model.clone(),
                 effort: Some(reserved.effort.clone()),
                 prompt: Some(format!(
-                    "Run `ignite start {}` and follow what it prints.",
-                    reserved.ticket
+                    "Run `ignite start {}{}` and follow what it prints.",
+                    reserved.ticket,
+                    reserved
+                        .code
+                        .as_ref()
+                        .map(|code| format!(" --reservation {code}"))
+                        .unwrap_or_default(),
                 )),
             },
             purpose: Purpose::Handoff(reserved),
@@ -749,6 +741,7 @@ impl Dispatcher {
             Reserved {
                 ticket: ticket.id.clone(),
                 expires_at: now.plus_seconds(600.0),
+                code: None,
                 model: None,
                 effort: "high".to_owned(),
                 app: String::new(),

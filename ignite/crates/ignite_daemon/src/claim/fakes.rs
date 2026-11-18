@@ -144,6 +144,7 @@ impl FakeDesk {
         Ok(TicketBrief {
             ticket: detail.ticket.clone(),
             needs: lock(&self.needs).get(ticket).cloned().unwrap_or_default(),
+            saved_branch: None,
         })
     }
 }

@@ -47,6 +47,7 @@ impl Verb for Start {
             machine: ctx.machine.clone(),
             session: ctx.session.clone().unwrap(),
             tree: ctx.tree.clone().unwrap(),
+            code: None,
         };
         match ctx.hub.claim(&claim) {
             Ok(_) => Reply::text(Exit::Success, "claimed"),

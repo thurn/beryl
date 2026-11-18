@@ -95,9 +95,13 @@ crate::tables! {
         machine: String,
         session: String,
         expires_at: String,
+        code: String,
     }
 
     Handoff = "handoffs" { seq: i64, machine: String, ticket: String, kind: String, at: String }
+
+    /// A machine's ID, or `*` for every machine.
+    Pause = "pauses" { machine: String, at: String }
 
     CachedResult = "results" {
         check_name: String,

@@ -15,8 +15,9 @@ use ignite_core::ids::Seq;
 use ignite_core::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Heartbeat, HeartbeatReply,
     Landed, LookupReply, LookupRequest, MachineFree, MachineRegister, MachineRegistered,
-    MetricsImport, NewResult, Record, RecordBatch, RegressionFiled, RegressionReport, ReportFiled,
-    Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    MetricsImport, NewResult, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
+    ReportFiled, Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim, TipClaimReply,
+    TipVerified,
 };
 use ignite_core::protocol::tickets::{FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use ignite_core::traits::{Error, Hub, Result};
@@ -248,6 +249,11 @@ impl Hub for HubClient {
 
     fn find(&self, find: &ExplorationFind) -> Result<ReportFiled> {
         self.post("/finds", find)
+    }
+
+    fn pause(&self, pause: &Pause) -> Result<()> {
+        let _: serde_json::Value = self.post("/pause", pause)?;
+        Ok(())
     }
 }
 

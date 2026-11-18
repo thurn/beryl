@@ -9,7 +9,9 @@ use serde_json::{Value, json};
 use ignite_core::config::Os;
 use ignite_core::ids::{MachineId, TicketId};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree};
-use ignite_core::protocol::tickets::{BatchRequest, Dependency, Operation, TicketFields};
+use ignite_core::protocol::tickets::{
+    BatchRequest, Dependency, Operation, TicketFields, TicketType,
+};
 use ignite_core::time::Timestamp;
 use ignite_store::hub::{self, batch, tickets, tokens};
 
@@ -44,35 +46,82 @@ fn post(conn: &mut Connection, path: &str, body: &Value, now: Timestamp) -> (u16
     )
 }
 
-/// Files one ticket per `(title, labels, deps)`, with deps naming earlier entries by index.
+/// Files one ticket per `(title, labels, deps)` under an active epic, with deps naming earlier
+/// entries by index.
 fn file(conn: &mut Connection, specs: &[(&str, &[&str], &[usize])]) -> Vec<TicketId> {
-    let ops = specs
-        .iter()
-        .map(|(title, labels, deps)| Operation::Create {
+    file_under(conn, Parent::Epic(Some(2)), specs).1
+}
+
+/// Where [`file_under`] files its tickets.
+#[derive(Clone, Copy)]
+enum Parent {
+    /// Under a new epic with this `workers` number, or with none.
+    Epic(Option<u32>),
+    /// With no parent.
+    Loose,
+}
+
+/// Files the tickets under `parent`. Returns the epic, if one was filed, and the tickets.
+fn file_under(
+    conn: &mut Connection,
+    parent: Parent,
+    specs: &[(&str, &[&str], &[usize])],
+) -> (Option<TicketId>, Vec<TicketId>) {
+    let workers = match parent {
+        Parent::Epic(workers) => Some(workers),
+        Parent::Loose => None,
+    };
+    let offset = usize::from(workers.is_some());
+    let mut ops: Vec<Operation> = workers
+        .map(|workers| Operation::Create {
+            fields: TicketFields {
+                title: Some("epic".to_owned()),
+                ticket_type: Some(TicketType::Epic),
+                workers: Some(workers),
+                ..TicketFields::default()
+            },
+            parent: None,
+            deps: Vec::new(),
+            request_key: None,
+        })
+        .into_iter()
+        .collect();
+    ops.extend(specs.iter().map(|(title, labels, deps)| {
+        Operation::Create {
             fields: TicketFields {
                 title: Some((*title).to_owned()),
                 labels: Some(labels.iter().map(|l| (*l).to_owned()).collect()),
                 ..TicketFields::default()
             },
-            parent: None,
+            parent: workers.map(|_| "$0".to_owned()),
             deps: deps
                 .iter()
                 .map(|i| Dependency {
-                    on: format!("${i}"),
+                    on: format!("${}", i + offset),
                     kind: None,
                 })
                 .collect(),
             request_key: None,
-        })
-        .collect();
+        }
+    }));
     let request = BatchRequest {
         preconditions: Vec::new(),
         ops,
     };
-    match batch::apply(conn, &request, "planner", "", start()).unwrap() {
+    let mut ids: Vec<TicketId> = match batch::apply(conn, &request, "planner", "", start()).unwrap()
+    {
         batch::BatchOutcome::Applied(reply) => reply.results.into_iter().map(|r| r.id).collect(),
         batch::BatchOutcome::Conflict(_) => panic!("filing conflicted"),
-    }
+    };
+    let epic = (offset == 1).then(|| ids.remove(0));
+    (epic, ids)
+}
+
+/// Registers the machine `m-1`, which every request in these tests is written as.
+fn register(conn: &mut Connection) {
+    let register = json!({"machine": "m-1", "name": "jarvis", "os": "macos", "cores": 18,
+                          "memory_mb": 65536, "families": [], "version": "d97ed0e"});
+    assert_eq!(post(conn, "/machines/register", &register, start()).0, 200);
 }
 
 fn free(machine: &str, sessions: &[&str]) -> Value {
@@ -95,6 +144,13 @@ fn free(machine: &str, sessions: &[&str]) -> Value {
 
 fn claim(ticket: &str, session: &str) -> Value {
     json!({"ticket": ticket, "machine": "m-1", "session": session, "tree": "tree-01"})
+}
+
+/// A claim of a reservation with its code, as the hand-off's `ignite start` sends it.
+fn claim_reserved(reservation: &Value, session: &str) -> Value {
+    let mut body = claim(reservation["ticket"].as_str().unwrap(), session);
+    body["code"] = reservation["code"].clone();
+    body
 }
 
 fn landed(ticket: &str, session: &str, note: &str) -> Value {
@@ -175,12 +231,17 @@ fn a_lapsed_reservation_is_offered_again() {
         at(601.0),
     );
     assert_eq!(status, 409);
-    let (status, brief) = post(
+    // So does a claim with the lapsed reservation's code.
+    let (status, _) = post(
         &mut conn,
         "/claims",
-        &claim(id.as_str(), "local_b"),
-        at(602.0),
+        &claim_reserved(&first, "local_a"),
+        at(601.0),
     );
+    assert_eq!(status, 409);
+    let mut on_m2 = claim_reserved(&again, "local_b");
+    on_m2["machine"] = json!("m-2");
+    let (status, brief) = post(&mut conn, "/claims", &on_m2, at(602.0));
     assert_eq!(status, 200, "{brief}");
     assert_eq!(brief["ticket"]["session"], "local_b");
     assert_eq!(brief["ticket"]["tree"], "tree-01");
@@ -200,6 +261,7 @@ fn a_worker_with_a_reservation_is_not_offered_another() {
 #[test]
 fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
     let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
     let ids = file(
         &mut conn,
         &[("first", &["lane:x"], &[]), ("second", &["lane:x"], &[0])],
@@ -209,7 +271,7 @@ fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
     let (status, _) = post(
         &mut conn,
         "/claims",
-        &claim(ids[0].as_str(), "local_a"),
+        &claim_reserved(&reservation, "local_a"),
         at(5.0),
     );
     assert_eq!(status, 200);
@@ -229,7 +291,7 @@ fn landing_reserves_the_chain_and_its_brief_carries_the_note() {
     let (status, brief) = post(
         &mut conn,
         "/claims",
-        &claim(ids[1].as_str(), "local_a"),
+        &claim_reserved(&reply["next"], "local_a"),
         at(61.0),
     );
     assert_eq!(status, 200, "{brief}");
@@ -348,13 +410,14 @@ fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
 fn a_released_ticket_returns_to_the_queue_with_a_comment() {
     let mut conn = hub::open_in_memory().unwrap();
     let id = file(&mut conn, &[("given back", &[], &[])]).remove(0);
-    post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
-    post(
+    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    let (status, _) = post(
         &mut conn,
         "/claims",
-        &claim(id.as_str(), "local_a"),
+        &claim_reserved(&reservation, "local_a"),
         at(1.0),
     );
+    assert_eq!(status, 200);
     let (status, _) = post(
         &mut conn,
         "/release",
@@ -471,4 +534,222 @@ fn an_open_regression_goes_before_older_work() {
         .query_row("SELECT kind FROM handoffs", [], |row| row.get(0))
         .unwrap();
     assert_eq!(kind, "regression");
+}
+
+/// Sets the epic's `workers` number.
+fn set_workers(conn: &mut Connection, epic: &TicketId, workers: u32) {
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Update {
+            id: epic.as_str().to_owned(),
+            set: Some(TicketFields {
+                workers: Some(Some(workers)),
+                ..TicketFields::default()
+            }),
+            add_labels: Vec::new(),
+            remove_labels: Vec::new(),
+            set_meta: std::collections::BTreeMap::new(),
+            unset_meta: Vec::new(),
+        }],
+    };
+    assert!(matches!(
+        batch::apply(conn, &request, "person", "", start()).unwrap(),
+        batch::BatchOutcome::Applied(_)
+    ));
+}
+
+#[test]
+fn only_an_active_epic_or_the_hub_s_own_tickets_are_offered() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let (epic, waiting) = file_under(&mut conn, Parent::Epic(None), &[("backlog", &[], &[])]);
+    let (_, stopped) = file_under(&mut conn, Parent::Epic(Some(0)), &[("stopped", &[], &[])]);
+    file_under(&mut conn, Parent::Loose, &[("loose", &[], &[])]);
+    // A new idle worker each time, since a worker holding a reservation is offered nothing.
+    let ask = |conn: &mut Connection, seconds: f64| {
+        let session = format!("local_{seconds}");
+        post(conn, "/next", &free("m-1", &[&session]), at(seconds)).1
+    };
+    assert_eq!(ask(&mut conn, 1.0), Value::Null);
+    // Tickets the hub files itself are offered with no epic at all.
+    let (_, repair) = file_under(
+        &mut conn,
+        Parent::Loose,
+        &[("repair jarvis", &["machine"], &[])],
+    );
+    assert_eq!(ask(&mut conn, 2.0)["ticket"], repair[0].as_str());
+    set_workers(&mut conn, &epic.unwrap(), 1);
+    assert_eq!(ask(&mut conn, 3.0)["ticket"], waiting[0].as_str());
+    // The epic set to 0 workers still holds its ticket back.
+    assert_eq!(ask(&mut conn, 4.0), Value::Null);
+    assert!(tickets::load(&conn, stopped[0].as_str()).unwrap().is_some());
+}
+
+#[test]
+fn a_ticket_needing_a_person_or_another_machine_is_not_offered() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let ids = file(
+        &mut conn,
+        &[
+            ("sign the build", &["needs:person", "machine"], &[]),
+            ("on cygnus", &["needs:cygnus"], &[]),
+            ("on jarvis", &["needs:jarvis"], &[]),
+        ],
+    );
+    let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(first["ticket"], ids[2].as_str());
+    let (_, second) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1.0));
+    assert_eq!(second, Value::Null);
+}
+
+#[test]
+fn a_reserved_ticket_is_claimed_only_with_its_code_from_its_machine() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let id = file(&mut conn, &[("reserved", &[], &[])]).remove(0);
+    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    let code = reservation["code"].as_str().unwrap();
+    assert_eq!(code.len(), 8);
+    let mut wrong = claim_reserved(&reservation, "local_a");
+    wrong["code"] = json!("00000000");
+    let mut elsewhere = claim_reserved(&reservation, "local_x");
+    elsewhere["machine"] = json!("m-2");
+    for body in [claim(id.as_str(), "local_a"), wrong, elsewhere] {
+        let (status, reply) = post(&mut conn, "/claims", &body, at(1.0));
+        assert_eq!(status, 409, "{body}: {reply}");
+    }
+    // The hand-off moved to another worker on the same machine, which claims with the code.
+    let (status, brief) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&reservation, "local_b"),
+        at(2.0),
+    );
+    assert_eq!(status, 200, "{brief}");
+    assert_eq!(brief["ticket"]["assignee"], "local_b");
+}
+
+#[test]
+fn a_code_whose_reservation_lapsed_claims_nothing() {
+    let mut conn = hub::open_in_memory().unwrap();
+    file(&mut conn, &[("late", &[], &[])]);
+    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    let (status, _) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&reservation, "local_a"),
+        at(600.0),
+    );
+    assert_eq!(status, 409);
+}
+
+#[test]
+fn a_paused_machine_gets_nothing_while_another_still_does() {
+    let mut conn = hub::open_in_memory().unwrap();
+    file(
+        &mut conn,
+        &[("a", &[], &[]), ("b", &[], &[]), ("c", &[], &[])],
+    );
+    let pause = |machine: Value, paused: bool| json!({"machine": machine, "paused": paused});
+    assert_eq!(
+        post(&mut conn, "/pause", &pause(json!("m-1"), true), start()).0,
+        200
+    );
+    let (_, paused) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(1.0));
+    assert_eq!(paused, Value::Null);
+    let (_, other) = post(&mut conn, "/next", &free("m-2", &["local_b"]), at(2.0));
+    assert!(other["ticket"].is_string(), "{other}");
+    // A pause of every machine outlasts resuming one; resuming every machine ends both.
+    post(&mut conn, "/pause", &pause(Value::Null, true), at(3.0));
+    post(&mut conn, "/pause", &pause(json!("m-1"), false), at(4.0));
+    let (_, still) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(5.0));
+    assert_eq!(still, Value::Null);
+    post(&mut conn, "/pause", &pause(Value::Null, false), at(6.0));
+    let (_, resumed) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(7.0));
+    assert!(resumed["ticket"].is_string(), "{resumed}");
+}
+
+#[test]
+fn a_release_saves_its_branch_note_and_need_for_the_next_claim() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let id = file(&mut conn, &[("half done", &[], &[])]).remove(0);
+    let (_, reservation) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&reservation, "local_a"),
+        at(1.0),
+    );
+    let mut body = release(id.as_str(), "local_a");
+    body["needs"] = json!("macos");
+    body["branch"] = json!(format!("ignite/{id}"));
+    let (status, reply) = post(&mut conn, "/release", &body, at(2.0));
+    assert_eq!(status, 200, "{reply}");
+    let ticket = tickets::load(&conn, id.as_str()).unwrap().unwrap();
+    assert_eq!(ticket.labels, vec!["needs:macos"]);
+    assert_eq!(
+        tickets::comments(&conn, id.as_str()).unwrap()[0].text,
+        "Released: blocked"
+    );
+    let (_, again) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(3.0));
+    assert_eq!(again["ticket"], id.as_str());
+    let (status, brief) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&again, "local_b"),
+        at(4.0),
+    );
+    assert_eq!(status, 200, "{brief}");
+    assert_eq!(brief["saved_branch"], format!("ignite/{id}"));
+    // Released for a person, it is offered to nobody.
+    body["session"] = json!("local_b");
+    body["needs"] = json!("person");
+    post(&mut conn, "/release", &body, at(5.0));
+    let ticket = tickets::load(&conn, id.as_str()).unwrap().unwrap();
+    assert_eq!(ticket.labels, vec!["needs:person"]);
+    let (_, none) = post(&mut conn, "/next", &free("m-1", &["local_c"]), at(6.0));
+    assert_eq!(none, Value::Null);
+}
+
+#[test]
+fn a_close_with_no_landing_closes_the_ticket_and_frees_the_worker() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let id = file(&mut conn, &[("obsolete", &[], &[])]).remove(0);
+    let id = id.as_str();
+    post(&mut conn, "/claims", &claim(id, "local_a"), start());
+    let beat = json!({"machine": "m-1", "version": "d97ed0e", "workers": [
+        {"session": "local_a", "app": "claude", "role": "worker", "state": "working",
+         "ticket": id}]});
+    assert_eq!(
+        post(&mut conn, "/machines/heartbeat", &beat, at(1.0)).0,
+        200
+    );
+    let close = |session: &str| {
+        json!({"ticket": id, "machine": "m-1", "session": session,
+               "reason": "obsolete: the code moved on"})
+    };
+    assert_eq!(post(&mut conn, "/close", &close("local_b"), at(2.0)).0, 409);
+    let (status, reply) = post(&mut conn, "/close", &close("local_a"), at(3.0));
+    assert_eq!(status, 200, "{reply}");
+    let ticket = tickets::load(&conn, id).unwrap().unwrap();
+    assert_eq!(
+        ticket.status,
+        ignite_core::protocol::tickets::Status::Closed
+    );
+    assert_eq!(
+        ticket.close_reason.as_deref(),
+        Some("obsolete: the code moved on")
+    );
+    assert!(ticket.landed.is_none());
+    let (state, held): (String, Option<String>) = conn
+        .query_row(
+            "SELECT state, ticket FROM workers WHERE session = 'local_a'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!((state.as_str(), held), ("idle", None));
+    // A resent close answers as the first did.
+    assert_eq!(post(&mut conn, "/close", &close("local_a"), at(4.0)).0, 200);
 }

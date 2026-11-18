@@ -1,6 +1,6 @@
 //! The fleet: machines, their workers, reservations and hand-offs.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use ignite_core::protocol::hub::{Heartbeat, MachineRegister, Reservation};
 use ignite_core::time::Timestamp;
@@ -138,16 +138,83 @@ pub fn workers(conn: &Connection, machine: &str) -> Result<Vec<rows::Worker>> {
 /// first so an expired reservation does not block it.
 pub fn reserve(conn: &Connection, reservation: &Reservation) -> Result<()> {
     conn.execute(
-        "INSERT INTO reservations (ticket, machine, session, expires_at)
-         VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO reservations (ticket, machine, session, expires_at, code)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
         params![
             reservation.ticket.as_str(),
             reservation.machine.as_str(),
             reservation.session.as_str(),
             reservation.expires_at.to_string(),
+            reservation.code,
         ],
     )?;
     Ok(())
+}
+
+/// A new one-time code for a reservation: 8 random hexadecimal digits.
+pub fn reservation_code() -> Result<String> {
+    let mut bytes = [0_u8; 4];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|error| StoreError::Invalid(format!("no random numbers: {error}")))?;
+    Ok(format!("{:08x}", u32::from_be_bytes(bytes)))
+}
+
+/// The machine and code of the live reservation of `ticket`, if it has one. The caller runs
+/// [`lapse`] first.
+pub fn reservation_of(conn: &Connection, ticket: &str) -> Result<Option<(String, String)>> {
+    Ok(conn
+        .query_row(
+            "SELECT machine, code FROM reservations WHERE ticket = ?1",
+            [ticket],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?)
+}
+
+/// The `machine` value of the pause that holds every machine.
+pub const ALL_MACHINES: &str = "*";
+
+/// Pauses or resumes hand-offs to `machine`, or to every machine when it is `None`. Resuming
+/// every machine also ends each machine's own pause; resuming one machine leaves a pause of
+/// every machine in force.
+pub fn set_paused(
+    conn: &Connection,
+    machine: Option<&str>,
+    paused: bool,
+    now: Timestamp,
+) -> Result<()> {
+    let key = machine.unwrap_or(ALL_MACHINES);
+    if paused {
+        conn.execute(
+            "INSERT INTO pauses (machine, at) VALUES (?1, ?2) ON CONFLICT(machine) DO NOTHING",
+            params![key, now.to_string()],
+        )?;
+    } else if machine.is_none() {
+        conn.execute("DELETE FROM pauses", [])?;
+    } else {
+        conn.execute("DELETE FROM pauses WHERE machine = ?1", [key])?;
+    }
+    Ok(())
+}
+
+/// Whether hand-offs to `machine` are paused, by its own pause or a pause of every machine.
+pub fn paused(conn: &Connection, machine: &str) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM pauses WHERE machine IN (?1, ?2))",
+        params![machine, ALL_MACHINES],
+        |row| row.get(0),
+    )?)
+}
+
+/// The machine's hostname, if it has registered.
+pub fn name_of(conn: &Connection, machine: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT name FROM machines WHERE id = ?1",
+            [machine],
+            |row| row.get(0),
+        )
+        .optional()?)
 }
 
 /// Turns a reservation into a claim by deleting it; returns whether it existed.
@@ -249,6 +316,7 @@ mod tests {
             machine: "m-7f3a".parse().unwrap(),
             session: "local_1".parse().unwrap(),
             expires_at,
+            code: "7f3a0001".into(),
         }
     }
 

@@ -115,6 +115,10 @@ pub struct Reservation {
     pub machine: MachineId,
     pub session: SessionId,
     pub expires_at: Timestamp,
+    /// The one-time code that the hand-off's `ignite start --reservation <code>` must send to
+    /// claim the ticket, so that a hand-off arriving after the ticket went elsewhere claims
+    /// nothing.
+    pub code: String,
 }
 
 /// `POST /claims`: `ignite start` turning a reservation (or nothing) into a claim.
@@ -124,6 +128,10 @@ pub struct Claim {
     pub machine: MachineId,
     pub session: SessionId,
     pub tree: TreeId,
+    /// The reservation's code. A reserved ticket is claimed only with it, by any session of the
+    /// machine it was reserved for; a claim with a code but no live reservation is refused.
+    #[serde(default)]
+    pub code: Option<String>,
 }
 
 /// What a dependency left behind, printed by `ignite start`.
@@ -140,6 +148,9 @@ pub struct DependencyNote {
 pub struct TicketBrief {
     pub ticket: Ticket,
     pub needs: Vec<DependencyNote>,
+    /// The branch on the remote where an earlier release saved the ticket's unfinished work.
+    #[serde(default)]
+    pub saved_branch: Option<String>,
 }
 
 /// `POST /landed`.
@@ -158,6 +169,23 @@ pub struct Landed {
 /// `POST /release`: a session gives a ticket back without landing it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Release {
+    pub ticket: TicketId,
+    pub machine: MachineId,
+    pub session: SessionId,
+    /// The note: why the ticket was given back and the exact state it was left in.
+    pub reason: String,
+    /// What the ticket needs that this session lacks, such as `macos`, a machine's name or
+    /// `person`; the hub labels the ticket `needs:<needs>`.
+    #[serde(default)]
+    pub needs: Option<String>,
+    /// The branch on the remote where the release saved the tree's work.
+    #[serde(default)]
+    pub branch: Option<String>,
+}
+
+/// `POST /close`: `ignite close` closes a ticket that needs no landing and frees its worker.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Close {
     pub ticket: TicketId,
     pub machine: MachineId,
     pub session: SessionId,

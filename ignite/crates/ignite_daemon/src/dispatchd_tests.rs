@@ -187,6 +187,7 @@ impl Rig {
             machine: self.ctx.machine.clone(),
             session: session(worker),
             expires_at: self.clock.now().plus_seconds(600.0),
+            code: "7f3a".to_owned(),
         });
     }
 
@@ -210,11 +211,11 @@ impl Rig {
 fn handoff_to(instruction: &DispatchInstruction) -> (&str, &str) {
     assert_eq!(instruction.action, DispatchAction::Handoff);
     let prompt = instruction.prompt.as_deref().unwrap();
-    let ticket = prompt
-        .split('`')
-        .nth(1)
-        .unwrap()
-        .trim_start_matches("ignite start ");
+    let command = prompt.split('`').nth(1).unwrap();
+    let words: Vec<&str> = command.split_whitespace().collect();
+    assert_eq!(words[..2], ["ignite", "start"]);
+    assert_eq!(words[3..], ["--reservation", "7f3a"], "{command}");
+    let ticket = words[2];
     (instruction.session.as_ref().unwrap().as_str(), ticket)
 }
 
@@ -357,6 +358,7 @@ fn a_handoff_waits_until_its_tickets_model_can_be_read() {
         machine: rig.ctx.machine.clone(),
         session: session("local_w1"),
         expires_at: rig.clock.now().plus_seconds(600.0),
+        code: "7f3a".to_owned(),
     });
     assert!(rig.step().is_none(), "the ticket cannot be read yet");
     assert_eq!(rig.state_of("local_w1"), "reserved");

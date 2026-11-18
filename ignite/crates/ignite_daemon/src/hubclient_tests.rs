@@ -144,6 +144,7 @@ fn claim() -> Claim {
         machine: MachineId::new("m-1").unwrap(),
         session: SessionId::new("local_a").unwrap(),
         tree: TreeId::new("tree-01").unwrap(),
+        code: None,
     }
 }
 
