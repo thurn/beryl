@@ -1,16 +1,19 @@
-//! The compiler wrapper, the test runner and the `cargo` shim.
+//! The compiler wrapper and the test runner.
 //!
 //! - `ignite rustc-wrap`, set as Cargo's `RUSTC_WRAPPER`, runs the compiler and appends one
 //!   JSON line per compile unit to the build's units file: crate, mode, instructions, CPU
 //!   seconds and whether the unit was rebuilt.
 //! - `ignite runner`, set as Cargo's target runner, does the same for each test process.
-//! - The `cargo` shim, on each build tree's `PATH`, sends a plain `cargo` call through
-//!   `ignite run`, so it runs with cores from the daemon.
 //!
 //! Cargo runs `RUSTC_WRAPPER` and the runner as one program path with no arguments of its own,
-//! so [`write_shims`] writes a small script for each beside the `cargo` shim, and
-//! [`cargo_env`] points Cargo at them. The scripts are POSIX shell scripts, or `.cmd` batch
-//! files on Windows.
+//! so [`write_shims`] writes a small script for each into a shim directory, and [`cargo_env`]
+//! points Cargo at them. The scripts are POSIX shell scripts, or `.cmd` batch files on Windows.
+//!
+//! The shim directory holds no `cargo` and never goes on a session's `PATH`. A `cargo` that
+//! sent each call through `ignite run` would break the cargo calls agents and recipes make: the
+//! daemon runs the command with its own environment (so `RUSTFLAGS` and the like are lost), no
+//! standard input, and a reply that holds only the end of the output and Ignite's exit code, or
+//! a handle once the call outlives the client's wait.
 
 use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
@@ -26,10 +29,9 @@ use ignite_os::usage::{ProcessUsage, UsageReader};
 /// when it is unset.
 pub const UNITS_ENV: &str = "IGNITE_UNITS";
 
-/// A file in a shim directory that marks it as one, so a shim skips every shim directory on
-/// `PATH` (another tree's included) when it looks for the real `cargo`. Two shims that each
-/// took the other for the real one would start each other forever.
-pub const SHIM_MARKER: &str = ".ignite-shims";
+/// Files that earlier releases wrote into a shim directory, for a `cargo` shim that is gone.
+/// [`write_shims`] deletes them, so no `cargo` is left in a shim directory to divert a call.
+const RETIRED: [&str; 3] = [".ignite-shims", "cargo", "cargo.cmd"];
 
 /// The compiler wrapper script's name in a shim directory.
 #[cfg(unix)]
@@ -47,12 +49,17 @@ pub const RUNNER_SCRIPT: &str = "test-runner.cmd";
 /// The mode recorded for a test process run by `ignite runner`.
 pub const RUN_MODE: &str = "run";
 
-/// Writes the `cargo` shim, the compiler wrapper script and the test runner script into `dir`,
-/// each calling the `ignite` executable at `ignite`. A script that already holds the same text
-/// is left alone, and one that changes is replaced whole, so this is safe while they run.
+/// Writes the compiler wrapper script and the test runner script into `dir`, each calling the
+/// `ignite` executable at `ignite`. A script that already holds the same text is left alone,
+/// and one that changes is replaced whole, so this is safe while they run.
 pub fn write_shims(dir: &Path, ignite: &Path) -> io::Result<()> {
     fs::create_dir_all(dir)?;
-    fs::write(dir.join(SHIM_MARKER), "")?;
+    for name in RETIRED {
+        match fs::remove_file(dir.join(name)) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+    }
     for (name, text) in scripts(&ignite.display().to_string()) {
         // Written beside the script and renamed over it, so a build that starts the script
         // while it is being rewritten runs either the old text or the new, never a part.
@@ -68,12 +75,11 @@ pub fn write_shims(dir: &Path, ignite: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// The three scripts' names and texts, each calling the `ignite` executable at `ignite`.
+/// The two scripts' names and texts, each calling the `ignite` executable at `ignite`.
 #[cfg(unix)]
-fn scripts(ignite: &str) -> [(&'static str, String); 3] {
+fn scripts(ignite: &str) -> [(&'static str, String); 2] {
     let ignite = shell_quote(ignite);
     [
-        ("cargo", CARGO_SHIM.replace("@IGNITE@", &ignite)),
         (
             RUSTC_WRAP_SCRIPT,
             format!("#!/bin/sh\nexec {ignite} rustc-wrap \"$@\"\n"),
@@ -85,18 +91,12 @@ fn scripts(ignite: &str) -> [(&'static str, String); 3] {
     ]
 }
 
-/// The three scripts' names and texts, each calling the `ignite` executable at `ignite`.
+/// The two scripts' names and texts, each calling the `ignite` executable at `ignite`.
 #[cfg(windows)]
-fn scripts(ignite: &str) -> [(&'static str, String); 3] {
+fn scripts(ignite: &str) -> [(&'static str, String); 2] {
     let ignite = batch_quote(ignite);
     let call = |verb: &str| format!("@{ignite} {verb} %*\r\n@exit /b %ERRORLEVEL%\r\n");
     [
-        (
-            "cargo.cmd",
-            CARGO_SHIM_CMD
-                .replace("@IGNITE@", &ignite)
-                .replace('\n', "\r\n"),
-        ),
         (RUSTC_WRAP_SCRIPT, call("rustc-wrap")),
         (RUNNER_SCRIPT, call("runner")),
     ]
@@ -154,57 +154,6 @@ fn shell_quote(text: &str) -> String {
 fn batch_quote(text: &str) -> String {
     format!("\"{}\"", text.replace('%', "%%"))
 }
-
-/// The `cargo` shim. Inside a command that already holds a grant (`IGNITE_CORES` is set), or
-/// with `IGNITE_SHIM=0`, it runs the real `cargo` as it is.
-#[cfg(unix)]
-const CARGO_SHIM: &str = r#"#!/bin/sh
-# Sends a plain `cargo` call through `ignite run`, so it runs with cores from the daemon.
-real=""
-old_ifs=$IFS
-IFS=:
-for dir in $PATH; do
-    if [ -e "$dir/.ignite-shims" ]; then
-        continue
-    fi
-    if [ -x "$dir/cargo" ]; then
-        real="$dir/cargo"
-        break
-    fi
-done
-IFS=$old_ifs
-if [ -z "$real" ]; then
-    echo "ignite cargo shim: no cargo on PATH outside the shim directories" >&2
-    exit 127
-fi
-if [ -n "$IGNITE_CORES" ] || [ "$IGNITE_SHIM" = "0" ]; then
-    exec "$real" "$@"
-fi
-exec @IGNITE@ run -- "$real" "$@"
-"#;
-
-/// The `cargo` shim on Windows, `cargo.cmd`, which does what [`CARGO_SHIM`] does on macOS. It
-/// takes the first `cargo.exe` on `PATH` outside the shim directories.
-#[cfg(windows)]
-const CARGO_SHIM_CMD: &str = r#"@echo off
-rem Sends a plain `cargo` call through `ignite run`, so it runs with cores from the daemon.
-setlocal
-set "real="
-for %%D in ("%PATH:;=" "%") do (
-    if not defined real if not exist "%%~D\.ignite-shims" if exist "%%~D\cargo.exe" set "real=%%~D\cargo.exe"
-)
-if not defined real (
-    echo ignite cargo shim: no cargo on PATH outside the shim directories 1>&2
-    exit /b 127
-)
-if defined IGNITE_CORES goto plain
-if "%IGNITE_SHIM%"=="0" goto plain
-@IGNITE@ run -- "%real%" %*
-exit /b %ERRORLEVEL%
-:plain
-"%real%" %*
-exit /b %ERRORLEVEL%
-"#;
 
 /// The hidden `ignite rustc-wrap <rustc> <args...>` subcommand.
 pub fn rustc_wrap(args: &[String]) -> i32 {

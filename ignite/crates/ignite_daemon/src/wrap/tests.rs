@@ -1,8 +1,5 @@
-//! What the wrapper reads from compiler arguments, and the `cargo` shim's choice of `cargo`.
+//! What the wrapper reads from compiler arguments, and what a shim directory holds.
 //! A real build through the wrapper is tested in `ignite_cli`'s `tests/wrap.rs`.
-
-#[cfg(unix)]
-use std::process::Output;
 
 use super::*;
 
@@ -94,61 +91,32 @@ fn a_test_binary_is_named_by_its_crate() {
     assert_eq!(test_binary_crate(Path::new("/t/deps/plain")), "plain");
 }
 
-/// Runs the `cargo` shim in `shims` with `PATH` set to `path` and the given extra variables.
-#[cfg(unix)]
-fn run_shim(shims: &Path, path: &[&Path], env: &[(&str, &str)]) -> Output {
-    let path = std::env::join_paths(path).unwrap();
-    let mut command = Command::new(shims.join("cargo"));
-    command
-        .args(["build", "--release"])
-        .env_clear()
-        .env("PATH", path);
-    for (k, v) in env {
-        command.env(k, v);
-    }
-    command.output().unwrap()
-}
-
-#[cfg(unix)]
-fn script(path: &Path, text: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    fs::write(path, format!("#!/bin/sh\n{text}\n")).unwrap();
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-}
-
-#[cfg(unix)]
+/// A shim directory holds the two scripts and no `cargo`, and writing it deletes the `cargo`
+/// shim an earlier release left there, so nothing in it can divert a plain `cargo` call.
 #[test]
-fn the_cargo_shim_sends_cargo_through_ignite_run_unless_a_grant_is_held() {
-    let root = scratch("shim");
-    let real = root.join("toolchain");
-    fs::create_dir_all(&real).unwrap();
-    script(&real.join("cargo"), r#"echo "real cargo $*""#);
-    // Every shell utility the shims use is a shell builtin, except what PATH supplies.
-    let ignite = root.join("bin with space").join("ignite");
-    fs::create_dir_all(ignite.parent().unwrap()).unwrap();
-    script(&ignite, r#"echo "ignite $*""#);
-    let ours = root.join("tree-01-shims");
-    let other = root.join("tree-02-shims");
-    write_shims(&ours, &ignite).unwrap();
-    write_shims(&other, &ignite).unwrap();
-
-    // The other tree's shim directory comes first on PATH and is skipped too.
-    let output = run_shim(&ours, &[&other, &ours, &real], &[]);
-    let stdout = String::from_utf8(output.stdout).unwrap();
+fn a_shim_directory_holds_no_cargo() {
+    let dir = scratch("no-cargo");
+    for retired in [".ignite-shims", "cargo", "cargo.cmd"] {
+        fs::write(dir.join(retired), "old").unwrap();
+    }
+    write_shims(&dir, Path::new("/opt/ignite")).unwrap();
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    let mut expected = vec![RUNNER_SCRIPT.to_owned(), RUSTC_WRAP_SCRIPT.to_owned()];
+    expected.sort();
+    assert_eq!(names, expected);
+    let wrapper = fs::read_to_string(dir.join(RUSTC_WRAP_SCRIPT)).unwrap();
+    assert!(wrapper.contains("/opt/ignite") && wrapper.contains("rustc-wrap"));
+    // Writing again over unchanged scripts succeeds and changes nothing.
+    write_shims(&dir, Path::new("/opt/ignite")).unwrap();
     assert_eq!(
-        stdout.trim(),
-        format!("ignite run -- {}/cargo build --release", real.display())
+        fs::read_to_string(dir.join(RUSTC_WRAP_SCRIPT)).unwrap(),
+        wrapper
     );
-
-    let inside = run_shim(&ours, &[&ours, &real], &[("IGNITE_CORES", "4")]);
-    assert_eq!(
-        String::from_utf8(inside.stdout).unwrap().trim(),
-        "real cargo build --release"
-    );
-
-    let none = run_shim(&ours, &[&ours], &[]);
-    assert_eq!(none.status.code(), Some(127));
-    fs::remove_dir_all(&root).unwrap();
+    fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
