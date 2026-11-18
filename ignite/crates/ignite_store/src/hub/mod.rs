@@ -1,6 +1,7 @@
 //! The hub's shared database. Each submodule owns the queries over its tables.
 
 pub mod batch;
+pub mod catches;
 pub mod checks;
 pub mod cycles;
 pub mod edges;
@@ -18,7 +19,7 @@ pub mod tokens;
 
 use std::path::Path;
 
-use rusqlite::Connection;
+use rusqlite::{Connection, OpenFlags};
 
 use crate::Result;
 use crate::migrate::{self, Migration};
@@ -60,6 +61,19 @@ pub fn open(path: &Path) -> Result<Connection> {
     migrate::open(path, MIGRATIONS)
 }
 
+/// Opens an existing hub database for reading only: no migration, no write-ahead log setting,
+/// nothing created. A tool run against the live hub's file, such as `ignite gate replay` built
+/// from a newer commit, must not migrate it under the running hub.
+pub fn open_read_only(path: &Path) -> Result<Connection> {
+    let conn = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    conn.busy_timeout(std::time::Duration::from_secs(10))?;
+    conn.pragma_update(None, "query_only", true)?;
+    Ok(conn)
+}
+
 /// A migrated in-memory hub database, for tests.
 pub fn open_in_memory() -> Result<Connection> {
     migrate::open_in_memory(MIGRATIONS)
@@ -79,6 +93,37 @@ mod tests {
     fn the_row_structs_match_the_schema() {
         let conn = open_in_memory().unwrap();
         crate::test_support::assert_rows_match_schema(&conn, rows::TABLES);
+    }
+
+    #[test]
+    fn a_read_only_open_neither_migrates_nor_writes() {
+        let dir = std::env::temp_dir().join(format!("ignite-hub-ro-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("hub.sqlite");
+        let _ = std::fs::remove_file(&path);
+        // A database one migration behind this build, as the live hub's is when a newer
+        // binary reads it.
+        let behind = MIGRATIONS.len() - 1;
+        let mut old = rusqlite::Connection::open(&path).unwrap();
+        migrate::apply(&mut old, &MIGRATIONS[..behind]).unwrap();
+        drop(old);
+        let conn = open_read_only(&path).unwrap();
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'schema_version'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, behind.to_string());
+        assert!(
+            conn.execute("INSERT INTO aliases VALUES ('a', 'b.1')", [])
+                .is_err()
+        );
+        drop(conn);
+        assert!(open_read_only(&dir.join("missing.sqlite")).is_err());
+        assert!(!dir.join("missing.sqlite").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

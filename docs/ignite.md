@@ -1061,7 +1061,10 @@ cap = 400              # billions of instructions per landing
   at which the gate would still have run 95% of the regression checks that
   caught something, in the fast check or slow CI, in the previous 14 days.
   Exploration finds are left out of that count. `ignite gate replay` repeats the
-  calculation. Only a commit changes the values.
+  calculation from Ignite's own records in the hub's database, which it opens
+  read-only: failures in the result cache that were fixed before their ticket
+  landed, and regressions that were fixed after tip verification found them.
+  Only a commit changes the values.
 - A check's score changes as its record does, so checks move across the
   threshold by themselves. No ticket is filed to move one.
 

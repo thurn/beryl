@@ -323,16 +323,10 @@ pub enum GateCommand {
     Replay {
         #[arg(long, default_value_t = 14)]
         days: u32,
-        /// The hub's database file, which holds the check records and the verdicts.
+        /// The hub's database file, which holds the check records, results, regressions and
+        /// landings. It is opened read-only.
         #[arg(long)]
         hub: PathBuf,
-        /// The folder of the old run log's `*.jsonl` files, which says when and after which
-        /// change each check failed.
-        #[arg(long, alias = "runlog")]
-        run_log: PathBuf,
-        /// An old lane whose checks are exploration, left out of the catches; repeatable.
-        #[arg(long)]
-        exploration: Vec<String>,
     },
 }
 
