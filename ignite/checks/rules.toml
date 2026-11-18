@@ -1,0 +1,48 @@
+# Source rules and repository checks. Each family's `list` prints its checks with the inputs
+# each reads beyond the family's own; `run` reports them (tools/src/beryl_tools/ignite/rules.py).
+# Every check here is in the always set (docs/ignite.md, "The always set").
+
+# The commit subject's format. It reads the commit messages since the commit named by
+# IGNITE_BASE, which no tree ID covers, so Ignite must look it up or run it for the exact
+# commit that lands.
+[family.commit]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list commit"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run commit {checks}"
+inputs = ["tools/src/beryl_tools/ignite/rules.py"]
+
+# Conflict markers outside Markdown, file length, the rules that keep card names, a second
+# player, the board and discarded pushes out of generic code, and the citations of the rules.
+# The citations, rule-ownership and divergences checks need the pinned Comprehensive Rules in
+# the machine's cache, and rulings the Scryfall rulings; without them they report incomplete.
+[family.source]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list source"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run source {checks}"
+inputs = ["tools/src/beryl_tools/ignite/rules.py", "tools/src/beryl_tools/paths.py"]
+
+# Everything that reads Markdown, so that a change to documentation reruns only these.
+[family.markdown]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list markdown"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run markdown {checks}"
+inputs = ["tools/src/beryl_tools/ignite/rules.py", "tools/src/beryl_tools/paths.py"]
+
+# The justfile's format, and the two generated files held to their data.
+[family.repository]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+always = true
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rules list repository"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rules run repository {checks}"
+inputs = ["tools/src/beryl_tools/ignite/rules.py", "tools/src/beryl_tools/paths.py"]
