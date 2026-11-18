@@ -24,8 +24,10 @@
 //! enables on the dependencies they share with the whole workspace, or the subset build would
 //! rebuild those dependencies and the next whole build would rebuild them again. Whenever the
 //! tree's Cargo manifests, lock files or toolchain files differ from any state already checked,
-//! the manager compares `cargo tree -e features` for the subset with the whole workspace's and
-//! fails the request, naming the crates that differ.
+//! the manager compares `cargo tree -e features` for the subset with the whole workspace's.
+//! When they differ, it builds the whole workspace instead of the subset. Failing the request
+//! instead would fail every check that needs the product, because a large workspace enables
+//! different features for almost every subset.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
@@ -470,11 +472,12 @@ impl BuildManager {
         }
     }
 
-    /// Compares the features of the subset's dependencies with the whole workspace's, once per
-    /// state of the Cargo files. Returns a failure when they differ or `cargo tree` fails.
-    fn check_features(&self, plan: &Plan) -> Option<BuildResult> {
+    /// The shared dependencies whose features the subset's build would enable differently
+    /// from the whole workspace's, compared once per state of the Cargo files. Empty when the
+    /// product reads no crates or builds the whole workspace. `Err` when `cargo tree` fails.
+    fn differing_features(&self, plan: &Plan) -> std::result::Result<Vec<String>, BuildResult> {
         if !plan.reads_crates || plan.request.packages.is_empty() {
-            return None;
+            return Ok(Vec::new());
         }
         let dir = plan.product.dir.clone().unwrap_or_default();
         let key = (
@@ -482,34 +485,14 @@ impl BuildManager {
             plan.cargo_state.clone(),
             plan.request.packages.clone(),
         );
-        let known = lock(&self.state).features.get(&key).cloned();
-        let differing = if let Some(differing) = known {
-            differing
-        } else {
-            let whole = match self.whole_feature_tree(plan, dir) {
-                Ok(tree) => tree,
-                Err(result) => return Some(result),
-            };
-            let subset = match self.feature_tree(plan, &plan.request.packages) {
-                Ok(tree) => tree,
-                Err(result) => return Some(result),
-            };
-            let differing = feature_differences(&whole, &subset);
-            lock(&self.state).features.insert(key, differing.clone());
-            differing
-        };
-        if differing.is_empty() {
-            return None;
+        if let Some(differing) = lock(&self.state).features.get(&key).cloned() {
+            return Ok(differing);
         }
-        Some(self.failure(
-            &plan.request.product,
-            &format!(
-                "building {} for {} enables different features than the whole workspace on: {}",
-                plan.request.product,
-                plan.request.packages.join(", "),
-                differing.join(", ")
-            ),
-        ))
+        let whole = self.whole_feature_tree(plan, dir)?;
+        let subset = self.feature_tree(plan, &plan.request.packages)?;
+        let differing = feature_differences(&whole, &subset);
+        lock(&self.state).features.insert(key, differing.clone());
+        Ok(differing)
     }
 
     /// The whole workspace's `cargo tree -e features`, run once per state of the Cargo files.
@@ -659,10 +642,18 @@ impl Builds for BuildManager {
                 return self.failure(product, &format!("cannot build {product}: {error}"));
             }
         };
-        if let Some(failed) = self.check_features(&plan) {
-            return failed;
+        match self.differing_features(&plan) {
+            Ok(differing) if differing.is_empty() => self.build(&plan),
+            // Building the subset would enable other features on shared dependencies than the
+            // whole workspace does, so Cargo would rebuild them, and the next whole build would
+            // rebuild them back. The whole workspace is built instead: it holds the subset's
+            // binaries, built with the workspace's own features.
+            Ok(_) => match self.plan(tree, product, &[]) {
+                Ok(whole) => self.build(&whole),
+                Err(error) => self.failure(product, &format!("cannot build {product}: {error}")),
+            },
+            Err(failed) => failed,
         }
-        self.build(&plan)
     }
 }
 

@@ -661,7 +661,9 @@ The daemon runs builds so that sessions do not compete inside one tree:
 Building a subset of packages must not change the features of the dependencies
 they share, or Cargo would rebuild those. Ignite checks this whenever a manifest
 or the lock file changes, by comparing `cargo tree -e features` for each subset
-it uses with the whole workspace's, and fails the landing if they differ.
+it uses with the whole workspace's. When they differ, Ignite builds the whole
+workspace instead of the subset, because almost every subset of Beryl's
+workspace enables different features.
 
 Every compiler process runs through Ignite as Cargo's `RUSTC_WRAPPER`, which
 records each unit's cost and whether it was rebuilt.

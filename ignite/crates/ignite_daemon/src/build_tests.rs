@@ -348,23 +348,26 @@ fn products_sharing_a_target_directory_never_overlap() {
     );
 }
 
+/// Every tip round's Rust batches failed with "enables different features than the whole
+/// workspace", because a batch builds a few packages and the repository's workspace enables different
+/// features for nearly every subset. Such a subset now builds the whole workspace instead.
 #[test]
-fn a_subset_that_changes_shared_features_fails_naming_the_crate() {
+fn a_subset_that_changes_shared_features_builds_the_whole_workspace() {
     let f = fixture("features", false);
     f.launcher.with(|s| {
         s.subset_tree = "a v0.1.0 (/t/a)|\nserde v1.0.0|default,std (*)\nlibc v0.2.0|\n".into();
         s.whole_tree = "a v0.1.0 (/t/a)|\nserde v1.0.0|default,derive,std\nlibc v0.2.0|\n".into();
     });
     let result = f.manager.ensure(&tree(), "tests", &names(&["a"]));
-    let BuildResult::Failed { output, .. } = result else {
-        panic!("expected a failure, got {result:?}");
-    };
-    let text = fs::read_to_string(output).unwrap();
-    assert!(text.contains("on: serde\n"), "{text}");
-    assert!(f.launcher.builds().is_empty());
-    // The comparison is remembered until a Cargo file changes.
+    assert!(matches!(result, BuildResult::Built { .. }), "{result:?}");
+    let builds = f.launcher.builds();
+    assert_eq!(builds.len(), 1);
+    assert!(builds[0].contains(&"--workspace".to_owned()), "{builds:?}");
+    assert!(!builds[0].contains(&"-p".to_owned()), "{builds:?}");
+    // The comparison is remembered until a Cargo file changes, and the whole build is current.
     f.manager.ensure(&tree(), "tests", &names(&["a"]));
     assert_eq!(f.launcher.tree_runs(), 2);
+    assert_eq!(f.launcher.builds().len(), 1);
     f.git.set_object("Cargo.lock", oid('2'));
     f.manager.ensure(&tree(), "tests", &names(&["a"]));
     assert_eq!(f.launcher.tree_runs(), 4);
