@@ -317,6 +317,8 @@ The verbs an agent uses while working:
 - `ignite why <check>` prints a check's record: its cost, its failures, where it
   runs and why.
 - `ignite status` and `ignite doctor` print the machine's state and health.
+- `ignite tell <ticket | session | --all> "<text>"` sends a correction to work
+  that is under way. See [Steering work in flight](#steering-work-in-flight).
 
 `ignite prime` prints the whole workflow in under 60 lines. A worker's first
 prompt is one sentence that names `ignite start`, so the role files that every
@@ -341,6 +343,18 @@ on each later request:
 $ ignite land -m "..."
 waiting  gate is queued behind 2 landings (9 minutes so far)
 next     ignite wait L-5521
+```
+
+- A comment or edit that someone else made to the session's ticket since its
+  last command is printed first, as `changed` lines, at most five. This is how a
+  correction reaches work that has already started.
+
+```text
+$ ignite test badges_manual
+changed  comment by derek: Do not wait for verification on another machine.
+         Land when the gate passes.
+built    b3d-tests in 12 s (1 crate recompiled)
+ran      12 checks: all passed
 ```
 
 Exit codes are the same for every verb:
@@ -1080,9 +1094,9 @@ that cheap for a session that was handed a task directly: it files the ticket
 with the label `adhoc`, claims it and leases a tree in one command.
 
 The hub also serves the dashboard, the one page meant for a person. It keeps the
-current ticket views and adds each machine's cores and trees, the pool and what
-each worker holds, the landing queue, the state of tip verification, open
-regressions and each exploration family's finds.
+current ticket views and adds each machine's cores and trees, the pool with what
+each worker holds and what it is running, the landing queue, the state of tip
+verification, open regressions and each exploration family's finds.
 
 The hub backs up its database hourly and exports it daily, as the service does
 now. While the hub cannot be reached:
@@ -1272,6 +1286,54 @@ leased for nothing.
   dispatcher send the session one message asking it to continue or release.
 - When 15 more minutes pass without a command, the daemon releases the ticket,
   resets the tree and comments on the ticket with what the tree held.
+
+### Steering work in flight
+
+A person sometimes needs to correct work that is already running: a session that
+waits on something it should not, or an instruction in a ticket that turned out
+to be wrong. Typing into the session in the desktop app always works, but it
+corrects one session and leaves no trace. Ignite adds three things, so that a
+correction is noticed, lasts, and can reach every worker.
+
+Seeing that a worker is stuck:
+
+- Each daemon reports, with every heartbeat, the `ignite` command each of its
+  workers is running or last ran, and when that command started or ended.
+- The dashboard's pool view shows it. A command that has run for over 10
+  minutes, and a worker with no command for over 10 minutes, are both marked.
+  The stall rule above acts only at 30 minutes of silence, and a session that
+  sits in `ignite wait` is never silent.
+
+Correcting a ticket so that it lasts:
+
+- A comment on a ticket, or an edit to its text, is the durable correction. It
+  stays with the ticket for whoever works it next.
+- Every `ignite` command from a tree prints, as `changed` lines, the comments
+  and edits made to its ticket since the session's previous command, leaving out
+  the session's own. A worker therefore hears of a change on its next command,
+  without anyone messaging it.
+
+Correcting it now:
+
+```sh
+ignite tell Tq44s.9.48 "Do not wait for multivac. Land when the gate passes."
+ignite tell --all "The oracle engines are down until noon. Skip oracle checks."
+```
+
+- `ignite tell <ticket>` records the text as a comment on the ticket and marks
+  it for delivery. The daemon of the machine where the ticket is being worked
+  has its dispatcher send the text to that session as a message.
+- A session that is inside `ignite wait` gets its wait ended at once, with the
+  message as the reply, so it does not sit out the rest of the wait.
+- `ignite tell <session>` does the same for the ticket that session holds, and
+  `--all` for every ticket in progress, on every machine.
+- Another session can use it too. A worker that learns something the holder of
+  another ticket needs says so with `ignite tell`.
+
+`ignite prime` carries the rule that prevents the commonest case: a worker never
+waits on another machine or on tip verification. When its ticket needs something
+outside itself, it finishes what it can and lands, or releases the ticket with a
+note.
 
 ### Planning
 
@@ -1672,6 +1734,17 @@ These show that cores, trees and workers go where the rules say.
   request with more than about 130,000 tokens of context.
 - **A stalled worker.** Stop a worker mid-ticket. Expect one message after 30
   minutes, then the ticket released, the tree reset and a comment on the ticket.
+- **A waiting worker.** Have a worker run `ignite wait` on a landing that is
+  held behind a lease. Expect the dashboard's pool view to show the command and
+  to mark it once it has run for 10 minutes.
+- **A correction on the ticket.** While a worker is mid-ticket, comment on its
+  ticket from another session. Expect the worker's next `ignite` command to
+  print the comment as a `changed` line, once, and never its own comments.
+- **A correction now.** While that worker is inside `ignite wait`, run
+  `ignite tell <ticket> "..."` from another session. Expect the wait to return
+  at once with the text, the session to receive it as a message, and the text to
+  be a comment on the ticket. Run `ignite tell --all` with two workers busy on
+  two machines and expect both to receive it.
 - **Improvement share.** File several improvement tickets and twenty product
   tickets. Expect at least three of the next twenty hand-offs to be improvement
   tickets, largest saving first.
