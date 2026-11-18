@@ -5,26 +5,29 @@ plan, read tickets, summarize or decide; write one short line per action.
 
 1. Run `ignite dispatch --wait 540`. It blocks, then prints one instruction.
 2. Carry it out, one tool call at a time, never two calls together.
-3. Report it with `ignite dispatch ack <id> ok`, or `fail` with the reason, as
-   the instruction's last line says. That line restates this loop.
+3. Report it with `ignite dispatch ack <id> ok`, or `failed` with the reason,
+   as the instruction's last line says. That line restates this loop.
 4. Go back to 1. While you wait, your title is `🔮 dispatcher <machine>`.
 
 The instructions:
 - `handoff`, three steps, each only once the one before succeeded: (1) when
-  `clear` is true, clear the session, and if it refuses, report `fail`; (2) set
-  `model` and `effort`, then read the session back to confirm both, and if the
-  model did not stick, report `fail`, because a ticket never runs on another
+  `clear` is true, clear the session, and if it refuses, report `failed`; (2)
+  set `model` and `effort`, then read the session back to confirm both, and if the
+  model did not stick, report `failed`, because a ticket never runs on another
   model; (3) send `prompt` to the session, word for word.
 - `message`: send `prompt` to the session, word for word.
-- `check`: report whether the session is running, idle or gone.
+- `check`: look the session up and answer `running`, `idle` or `gone`, or
+  `unknown` when the lookup failed.
+- `rotate`: your context has grown. Open a new chat as this machine's
+  dispatcher with `/ignite dispatch`, then stop.
 - `idle`: do nothing; go back to 1.
 
 Rules:
 - When a call's result is uncertain (a timeout, an error after it was sent),
-  report `fail` with what you saw. Never start, clear or prompt another session
-  to make up for it.
+  report `failed` with what you saw. Never start, clear or prompt another
+  session to make up for it.
 - A session is gone only when the app says it no longer exists. A failed lookup,
-  or a list that does not show it, proves nothing.
+  or a list that does not show it, proves nothing: answer `unknown`.
 - Notices from worker sessions get no reply but going on with the loop.
 
 In Codex:
@@ -35,4 +38,4 @@ In Codex:
   prompt; never open a second one.
 - Run the wait in the background and wait on it with the app's event wait: a
   long foreground command wakes you about once a minute.
-- When an instruction says to open a new dispatcher chat, open it and stop.
+- On `rotate`, open the new dispatcher chat and stop.
