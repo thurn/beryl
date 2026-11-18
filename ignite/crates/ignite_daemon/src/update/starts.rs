@@ -1,10 +1,20 @@
 //! The start log: one line in `starts.jsonl` for each time a daemon started, which is how a
 //! crash loop is seen. The log is written at the very top of `ignite daemon`, before anything
 //! of the new build's own code can fail.
+//!
+//! A daemon that is asked to stop records a clean stop on its own line before it exits
+//! ([`record_clean_stop`]): on `SIGTERM` (`launchctl kickstart -k`, `bootout`, an install) and
+//! before it restarts into another build. The record goes into `bin/trial` too, and neither
+//! crash-loop guard counts a run that stopped cleanly, so restarting the daemon on purpose never
+//! rolls its build back. A run that ended with no record (a crash, `SIGKILL`, a machine that lost
+//! power, or on Windows a stop of the scheduled task, which ends the process outright) still
+//! counts. So does a run the monitor kickstarted because it stopped answering: the monitor marks
+//! it hung first ([`StartLog::mark_hung`]), and a hung run records no clean stop.
 
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use ignite_core::ids::Commit;
@@ -24,6 +34,29 @@ pub struct StartRecord {
     pub at: Timestamp,
     pub commit: String,
     pub pid: u32,
+    /// When this run stopped because it was asked to; `None` for a run that is still up or that
+    /// ended any other way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stopped: Option<Timestamp>,
+    /// Whether the monitor kickstarted this run because it did not answer.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub hung: bool,
+}
+
+impl StartRecord {
+    /// Whether this start counts towards a crash loop: its run did not stop cleanly.
+    pub fn counts(&self) -> bool {
+        self.stopped.is_none()
+    }
+}
+
+/// When this process started, as recorded in the start log.
+static RUN_START: OnceLock<Timestamp> = OnceLock::new();
+
+/// The time this process recorded its start at, which names its run in the start log and in
+/// `bin/trial`.
+pub fn started_at() -> Timestamp {
+    *RUN_START.get_or_init(|| SystemClock.now())
 }
 
 /// The file `<home>/starts.jsonl`.
@@ -55,7 +88,39 @@ impl StartLog {
             at: now,
             commit: commit.to_string(),
             pid,
+            stopped: None,
+            hung: false,
         });
+        self.write(&records)
+    }
+
+    /// Records that the run of process `pid` that started at `started` stopped cleanly at
+    /// `now`. Returns `false`, and records nothing, when the monitor marked that run hung.
+    pub fn mark_stopped(&self, pid: u32, started: Timestamp, now: Timestamp) -> io::Result<bool> {
+        let mut records = self.read();
+        let Some(record) = records
+            .iter_mut()
+            .rev()
+            .find(|record| record.pid == pid && record.at == started)
+        else {
+            return Ok(true);
+        };
+        if record.hung {
+            return Ok(false);
+        }
+        record.stopped = Some(now);
+        self.write(&records)?;
+        Ok(true)
+    }
+
+    /// Marks the newest run as hung, before the monitor kickstarts a daemon that does not
+    /// answer: the `SIGTERM` of the kickstart then records no clean stop, and the run counts.
+    pub fn mark_hung(&self) -> io::Result<()> {
+        let mut records = self.read();
+        let Some(record) = records.last_mut() else {
+            return Ok(());
+        };
+        record.hung = true;
         self.write(&records)
     }
 
@@ -94,14 +159,44 @@ fn own_commit() -> Option<Commit> {
 /// code if the daemon should stop here, which is only when the restart into the last-good build
 /// failed.
 pub fn guard_start(home: &Home) -> Option<i32> {
+    let now = started_at();
     let own = own_commit()?;
-    guard(
-        home,
-        &own,
-        SystemClock.now(),
-        std::process::id(),
-        &ExecRestart,
-    )
+    guard(home, &own, now, std::process::id(), &ExecRestart)
+}
+
+/// Records that this daemon stopped because it was asked to, in the start log and in
+/// `bin/trial`, so that neither crash-loop guard counts this run. Called on `SIGTERM` and just
+/// before the daemon restarts into another build.
+pub fn record_clean_stop(home: &Home) {
+    if let Some(own) = own_commit() {
+        clean_stop(
+            home,
+            &own,
+            started_at(),
+            std::process::id(),
+            SystemClock.now(),
+        );
+    }
+}
+
+/// [`record_clean_stop`] for the home that holds `store`, for a caller that has only the store:
+/// the daemon's restart into a new release.
+pub fn record_clean_stop_from(store: &ExecutableStore) {
+    if let Some(root) = store.root.parent() {
+        record_clean_stop(&Home {
+            root: root.to_owned(),
+        });
+    }
+}
+
+fn clean_stop(home: &Home, own: &Commit, started: Timestamp, pid: u32, now: Timestamp) {
+    // A run whose start was not logged still records its stop in the trial.
+    let clean = start_log(home)
+        .mark_stopped(pid, started, now)
+        .unwrap_or(true);
+    if clean {
+        home.store().record_stop(own, started);
+    }
 }
 
 fn guard(

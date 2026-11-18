@@ -26,13 +26,12 @@ use std::sync::{Arc, Mutex};
 use ignite_core::config::Config;
 use ignite_core::ids::Commit;
 use ignite_core::manifest::Manifest;
-use ignite_core::traits::{Clock, Error, Result};
+use ignite_core::traits::{Error, Result};
 
 use crate::doctor::NativeHost;
 use crate::loop_health::LoopHealth;
 use crate::server::{Context, Server};
 use crate::update::{ExecRestart, Home, ReleaseBuilder, Startup, TreeBuilder};
-use ignite_core::time::SystemClock;
 
 /// What one daemon is started with.
 #[derive(Clone, Debug)]
@@ -230,6 +229,14 @@ pub fn run_hub(cwd: &Path) -> i32 {
     let repo = checkout(cwd, &home);
     let version = running_version();
     crate::crash::install_hook(home.root.clone(), version.clone());
+    // A daemon asked to stop (`launchctl kickstart -k`, `bootout`, an install) records a clean
+    // stop before it ends, so that neither crash-loop guard counts the restart.
+    let stop_home = home.clone();
+    if let Err(error) = ignite_os::terminate::on_terminate(Box::new(move || {
+        crate::update::record_clean_stop(&stop_home);
+    })) {
+        eprintln!("ignite: a stop will count as a crash: {error}");
+    }
     let dir = home.root.join("hub");
     if let Err(error) = loops::serve_hub_at(&repo, &addresses, &dir, &version, HUB_BIND_WINDOW) {
         eprintln!("ignite: the hub did not start: {error}");
@@ -288,11 +295,19 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     let (ignite, version) = running_executable();
     // From here on, a panic anywhere in the daemon leaves a record in the home folder.
     crate::crash::install_hook(home.root.clone(), version.clone());
+    // A daemon asked to stop (`launchctl kickstart -k`, `bootout`, an install) records a clean
+    // stop before it ends, so that neither crash-loop guard counts the restart.
+    let stop_home = home.clone();
+    if let Err(error) = ignite_os::terminate::on_terminate(Box::new(move || {
+        crate::update::record_clean_stop(&stop_home);
+    })) {
+        eprintln!("ignite: a stop will count as a crash: {error}");
+    }
     let store = home.store();
     let own = Commit::new(&version).ok();
     crate::doctor::remember_running_version(own.clone());
     if let Some(own) = &own
-        && let Startup::RollBack { to, reason } = store.startup(own, SystemClock.now())
+        && let Startup::RollBack { to, reason } = store.startup(own, crate::update::started_at())
     {
         eprintln!("ignite: rolling back: {reason}");
         let error = crate::update::restart_into(&ExecRestart, &store.path(&to));

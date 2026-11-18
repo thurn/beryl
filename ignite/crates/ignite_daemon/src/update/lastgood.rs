@@ -3,7 +3,8 @@
 //! A daemon that has stayed up for [`LAST_GOOD_AFTER_S`] marks its own build with `bin/last-good`
 //! ([`ExecutableStore::mark_last_good`]), a link of the same kind as `bin/current`. Every start
 //! of a daemon is appended to `starts.jsonl` (see `starts`). A build that starts
-//! [`CRASH_STARTS`] times within [`CRASH_WINDOW_S`] is in a crash loop: the login service keeps
+//! [`CRASH_STARTS`] times within [`CRASH_WINDOW_S`], not counting starts whose run stopped
+//! cleanly because it was asked to, is in a crash loop: the login service keeps
 //! restarting it, so it is replaced by the last-good build ([`roll_back`]), recorded as bad so
 //! that no update installs that exact commit again, and described in a record in `crash/`.
 //! Both the starting daemon and the monitor make this decision, so it works whichever of them
@@ -76,12 +77,12 @@ impl ExecutableStore {
 pub struct CrashLoop {
     pub bad: Commit,
     pub to: Commit,
-    /// How many starts of `bad` fall in the window.
+    /// How many starts of `bad` that did not stop cleanly fall in the window.
     pub starts: usize,
 }
 
 /// Whether `bad`, the build the login service starts, crash-looped at `now` according to the
-/// recorded `starts`, and the last-good build to go back to. There is nothing to go back to
+/// recorded `starts` whose runs did not stop cleanly, and the last-good build to go back to. There is nothing to go back to
 /// when no build is marked or the marked one is `bad` itself.
 pub fn detect_crash_loop(
     starts: &[StartRecord],
@@ -92,7 +93,7 @@ pub fn detect_crash_loop(
     let to = last_good.filter(|good| good != bad)?;
     let count = starts
         .iter()
-        .filter(|start| start.commit == bad.as_str())
+        .filter(|start| start.commit == bad.as_str() && start.counts())
         .filter(|start| {
             let age = (now.millis() - start.at.millis()) as f64 / 1000.0;
             (0.0..CRASH_WINDOW_S).contains(&age)

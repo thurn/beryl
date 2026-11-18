@@ -11,6 +11,7 @@ pub mod notify;
 pub mod occupants;
 pub mod proc;
 pub mod service;
+pub mod terminate;
 pub mod usage;
 
 /// The running operating system's implementation of every trait in this crate.

@@ -7,15 +7,16 @@
 //! - `bin/trial`: the new release and the times it started, until it has run for
 //!   [`HEALTHY_AFTER_S`] ([`ExecutableStore::mark_healthy`]).
 //!
-//! A release that starts twice within [`CRASH_WINDOW_S`] without becoming healthy is rolled
-//! back at its second start ([`ExecutableStore::startup`]): `current` points at the previous
-//! release again, the reason goes to `bin/rollbacks.log`, and the commit is added to
-//! `bin/rejected` so the daemon does not update to it again.
+//! A release that starts again within [`CRASH_WINDOW_S`] of a start whose run neither became
+//! healthy nor stopped cleanly is rolled back ([`ExecutableStore::startup`]): `current` points
+//! at the previous release again, the reason goes to `bin/rollbacks.log`, and the commit is added
+//! to `bin/rejected` so the daemon does not update to it again.
 //!
-//! Known limit: a start is recorded whether the previous run crashed or a person stopped it, so
-//! a person who restarts the daemon twice within [`CRASH_WINDOW_S`] during a trial rolls the
-//! release back. Telling the two apart needs a clean-exit marker, and the daemon has no
-//! shutdown path to write one: it ends on a signal with no handler.
+//! A run stops cleanly when the daemon is asked to stop (`SIGTERM`) or restarts into another
+//! build: it then adds its start time to the trial's `stops` ([`ExecutableStore::record_stop`],
+//! called from `starts::record_clean_stop`). So a person or a drill that restarts the daemon
+//! twice in a minute leaves the release in place, while a release that exits on its own is
+//! still rolled back.
 
 use std::fs;
 use std::io;
@@ -44,6 +45,19 @@ struct Trial {
     commit: String,
     /// Seconds since the Unix epoch of each start of this release.
     starts: Vec<f64>,
+    /// The starts, from `starts`, whose runs stopped cleanly because they were asked to.
+    #[serde(default)]
+    stops: Vec<f64>,
+}
+
+/// Seconds since the Unix epoch, as the trial records a start.
+fn seconds(at: Timestamp) -> f64 {
+    at.millis() as f64 / 1000.0
+}
+
+/// Whether two recorded times are the same start.
+fn same_start(a: f64, b: f64) -> bool {
+    (a - b).abs() < 0.0005
 }
 
 /// What a starting daemon should do about its release.
@@ -106,6 +120,7 @@ impl ExecutableStore {
         let trial = Trial {
             commit: new.to_string(),
             starts: Vec::new(),
+            stops: Vec::new(),
         };
         let _ = self.save_trial(&trial);
     }
@@ -119,17 +134,22 @@ impl ExecutableStore {
     }
 
     /// Records that release `own` is starting at `now`. If it is a release on trial that
-    /// already started within [`CRASH_WINDOW_S`] and never became healthy, goes back to the
-    /// previous release (when one is stored).
+    /// already started within [`CRASH_WINDOW_S`], and that run neither became healthy nor
+    /// stopped cleanly, goes back to the previous release (when one is stored).
     pub fn startup(&self, own: &Commit, now: Timestamp) -> Startup {
         let Some(mut trial) = self.trial().filter(|t| t.commit == own.as_str()) else {
             return Startup::Proceed;
         };
-        let seconds = now.millis() as f64 / 1000.0;
+        let seconds = seconds(now);
         trial
             .starts
             .retain(|&start| seconds - start < CRASH_WINDOW_S);
-        let before = trial.starts.len();
+        let Trial { starts, stops, .. } = &mut trial;
+        stops.retain(|&stop| starts.iter().any(|&start| same_start(start, stop)));
+        let before = starts
+            .iter()
+            .filter(|&&start| !stops.iter().any(|&stop| same_start(start, stop)))
+            .count();
         trial.starts.push(seconds);
         let _ = self.save_trial(&trial);
         if before == 0 {
@@ -160,6 +180,21 @@ impl ExecutableStore {
             .open(self.root.join(name));
         if let Ok(mut file) = file {
             let _ = writeln!(file, "{line}");
+        }
+    }
+
+    /// Records that the run of release `own` that started at `started` stopped cleanly, so that
+    /// [`Self::startup`] does not count it. Does nothing when `own` is not on trial.
+    pub fn record_stop(&self, own: &Commit, started: Timestamp) {
+        let Some(mut trial) = self.trial().filter(|t| t.commit == own.as_str()) else {
+            return;
+        };
+        let started = seconds(started);
+        if trial.starts.iter().any(|&start| same_start(start, started))
+            && !trial.stops.iter().any(|&stop| same_start(stop, started))
+        {
+            trial.stops.push(started);
+            let _ = self.save_trial(&trial);
         }
     }
 

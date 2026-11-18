@@ -178,11 +178,17 @@ fn a_crash_loop_rolls_back_whether_or_not_the_daemon_answers() {
 #[test]
 fn a_run_records_its_state_and_kickstarts_after_three_missed_probes() {
     let home = home();
+    start_log(&home).record(at(0.0), &commit(BAD), 5).unwrap();
     let machine = FakeMachine::new(true, false);
     for run in 0..3 {
         run_once(&home, &machine, at(f64::from(run) * 120.0));
     }
     assert_eq!(machine.log(), ["kickstart"]);
+    // The run that did not answer is hung: the kickstart's SIGTERM records no clean stop.
+    let log = start_log(&home);
+    assert!(log.read()[0].hung);
+    assert!(!log.mark_stopped(5, at(0.0), at(250.0)).unwrap());
+    assert!(log.read()[0].counts());
     let state: MonitorState =
         serde_json::from_slice(&fs::read(home.root.join("monitor.json")).unwrap()).unwrap();
     assert_eq!(state.consecutive_failures, 3);

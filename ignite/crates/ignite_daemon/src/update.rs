@@ -45,7 +45,10 @@ pub use install::{
 };
 pub use lastgood::{CRASH_STARTS, CrashLoop, LAST_GOOD_AFTER_S, detect_crash_loop, roll_back};
 pub use rollback::{CRASH_WINDOW_S, HEALTHY_AFTER_S, KEEP_EXTRA, Startup};
-pub use starts::{StartRecord, forget_start, guard_start, spawn_health_marks, start_log};
+pub use starts::{
+    StartRecord, forget_start, guard_start, record_clean_stop, record_clean_stop_from,
+    spawn_health_marks, start_log, started_at,
+};
 
 /// The argument the monitor's login service entry starts the executable with.
 pub const MONITOR_VERB: &str = "monitor";

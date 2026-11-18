@@ -83,6 +83,44 @@ fn a_release_that_ran_long_enough_or_restarts_much_later_stays() {
     assert!(!slow.is_rejected(&new));
 }
 
+#[cfg(unix)]
+#[test]
+fn a_release_restarted_on_purpose_stays_and_one_that_then_crashes_is_rolled_back() {
+    let new = commit("bbbbbbb");
+    let store = store_with("aaaaaaa", "bbbbbbb");
+    // An install, then a `kickstart -k` 20 seconds later: the first run stopped cleanly.
+    assert_eq!(store.startup(&new, at(0.0)), Startup::Proceed);
+    store.record_stop(&new, at(0.0));
+    assert_eq!(store.startup(&new, at(20.0)), Startup::Proceed);
+    store.record_stop(&new, at(20.0));
+    // A stop of a start the trial never saw, or of another release, changes nothing.
+    store.record_stop(&new, at(25.0));
+    store.record_stop(&commit("aaaaaaa"), at(30.0));
+    assert_eq!(store.startup(&new, at(40.0)), Startup::Proceed);
+    assert!(!store.is_rejected(&new));
+    assert_eq!(store.current_commit(), Some(new.clone()));
+    // The run that started at 40 s exits on its own: the next start rolls back.
+    let Startup::RollBack { reason, .. } = store.startup(&new, at(50.0)) else {
+        panic!("a start after a run with no clean stop rolls back");
+    };
+    assert!(reason.contains("started 2 times"), "{reason}");
+    assert!(store.is_rejected(&new));
+}
+
+#[test]
+fn a_trial_written_before_stops_were_recorded_still_reads() {
+    let new = commit("bbbbbbb");
+    let store = store_with("aaaaaaa", "bbbbbbb");
+    let seconds = at(0.0).millis() as f64 / 1000.0;
+    fs::write(
+        store.root.join("trial"),
+        format!("{{\"commit\":\"bbbbbbb\",\"starts\":[{seconds}]}}"),
+    )
+    .unwrap();
+    store.record_stop(&new, at(0.0));
+    assert_eq!(store.startup(&new, at(5.0)), Startup::Proceed);
+}
+
 #[test]
 fn pruning_keeps_the_current_previous_and_two_other_releases() {
     let store = store_with("aaaaaaa", "bbbbbbb");

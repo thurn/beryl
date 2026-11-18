@@ -605,7 +605,20 @@ How a broken build or a crash is survived:
   leaves a crash record too.
 - A daemon that has run for ten minutes marks its build last-good
   (`bin/last-good`). A build that starts three times in five minutes is rolled
-  back to the last-good build and is never installed again.
+  back to the last-good build and is never installed again. A new release is on
+  trial (`bin/trial`) until it has run for a minute: if it starts again within
+  five minutes of a start that never reached that minute, it goes back to the
+  release before it and is never installed again either.
+- Both guards count only runs that crashed or hung. A daemon that is asked to
+  stop, by `SIGTERM` (`launchctl kickstart -k`, `bootout`, an install) or by
+  restarting itself into another build, records a clean stop on its line in
+  `starts.jsonl` and in `bin/trial` before it ends, and that run is not counted,
+  so restarting the daemon by hand or in a drill never rolls it back. A run that
+  ends with no record still counts, as does one the monitor kickstarts because
+  it stopped answering: the monitor marks that run hung first. On Windows,
+  stopping the scheduled task ends the process with no chance to record
+  anything, so such a stop still counts as a crash. `ignite install` starts a
+  fresh trial for the build it installs.
 - `ignite install` also installs a monitor, a second login service that runs
   `ignite monitor` from the last-good build every two minutes. It restarts a
   daemon that does not answer, rolls back a build that crash-loops, and when

@@ -8,6 +8,8 @@ use ignite_core::ids::Commit;
 use ignite_core::time::Timestamp;
 
 use super::*;
+#[cfg(unix)]
+use crate::update::Startup;
 use crate::update::lastgood::{CRASH_STARTS, CrashLoop, detect_crash_loop, roll_back};
 
 const GOOD: &str = "aaaaaaa";
@@ -50,6 +52,8 @@ fn records(commit_hex: &str, seconds: &[f64]) -> Vec<StartRecord> {
             at: at(s),
             commit: commit_hex.to_owned(),
             pid: 1,
+            stopped: None,
+            hung: false,
         })
         .collect()
 }
@@ -155,6 +159,71 @@ fn the_third_start_rolls_back_and_the_bad_build_is_never_installed_again() {
     assert_eq!(record["location"], "");
     assert_eq!(record["backtrace"], "");
     assert!(record["at"].as_str().is_some());
+}
+
+/// Two `launchctl kickstart -k` restarts in quick succession: each run stops cleanly on
+/// `SIGTERM`, so the third start is no crash loop and the build stays.
+#[cfg(unix)]
+#[test]
+fn starts_after_clean_stops_are_not_a_crash_loop() {
+    let home = home();
+    let restart = FakeRestart::default();
+    for (i, pid) in [(0.0, 10), (20.0, 11), (40.0, 12), (60.0, 13)] {
+        assert_eq!(guard(&home, &commit(BAD), at(i), pid, &restart), None);
+        assert_eq!(home.store().startup(&commit(BAD), at(i)), Startup::Proceed);
+        clean_stop(&home, &commit(BAD), at(i), pid, at(i + 10.0));
+    }
+    let store = home.store();
+    assert!(restart.started.borrow().is_empty());
+    assert_eq!(store.current_commit(), Some(commit(BAD)));
+    assert!(!store.is_rejected(&commit(BAD)));
+    let log = start_log(&home).read();
+    assert_eq!(log[0].stopped, Some(at(10.0)));
+    assert!(log.iter().all(|record| !record.counts()));
+}
+
+/// A build that exits on its own, with no clean stop recorded, is still rolled back, also when
+/// clean restarts came before.
+#[cfg(unix)]
+#[test]
+fn starts_after_crashes_still_roll_back_among_clean_stops() {
+    let home = home();
+    let restart = FakeRestart::default();
+    // A clean stop, then two crashes: the third start that did not follow a clean stop rolls
+    // back.
+    assert_eq!(guard(&home, &commit(BAD), at(0.0), 10, &restart), None);
+    clean_stop(&home, &commit(BAD), at(0.0), 10, at(5.0));
+    assert_eq!(guard(&home, &commit(BAD), at(10.0), 11, &restart), None);
+    assert_eq!(guard(&home, &commit(BAD), at(20.0), 12, &restart), None);
+    assert_eq!(guard(&home, &commit(BAD), at(30.0), 13, &restart), Some(1));
+    let store = home.store();
+    assert_eq!(store.current_commit(), Some(commit(GOOD)));
+    assert!(store.is_rejected(&commit(BAD)));
+}
+
+#[test]
+fn a_clean_stop_marks_only_its_own_run_and_old_lines_still_read() {
+    let home = home();
+    let log = start_log(&home);
+    // A line written before records carried a stop.
+    std::fs::write(
+        home.root.join("starts.jsonl"),
+        format!(
+            "{{\"at\":\"{}\",\"commit\":\"{BAD}\",\"pid\":7}}\n",
+            at(0.0)
+        ),
+    )
+    .unwrap();
+    // The same process ID after an exec into another build is another run.
+    log.record(at(30.0), &commit(BAD), 7).unwrap();
+    assert!(log.mark_stopped(7, at(30.0), at(40.0)).unwrap());
+    let records = log.read();
+    assert_eq!(records.len(), 2);
+    assert!(records[0].counts());
+    assert_eq!(records[1].stopped, Some(at(40.0)));
+    let text = std::fs::read_to_string(home.root.join("starts.jsonl")).unwrap();
+    assert!(!text.lines().next().unwrap().contains("stopped"));
+    assert!(!text.contains("hung"));
 }
 
 #[test]

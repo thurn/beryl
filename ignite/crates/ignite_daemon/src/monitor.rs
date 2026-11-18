@@ -5,7 +5,9 @@
 //! only thing it uses the daemon's socket for), remembers the answer in `monitor.json` in the
 //! home folder and, using only files and the login service:
 //!
-//! - kickstarts the daemon when its process is gone or three runs in a row got no answer;
+//! - kickstarts the daemon when its process is gone or three runs in a row got no answer, and
+//!   marks a run that did not answer hung in `starts.jsonl`, so that it still counts as a crash
+//!   although the kickstart stops it with `SIGTERM`;
 //! - goes back to the last-good build when `starts.jsonl` shows the current build crash-looping
 //!   (the same decision a starting daemon makes, in [`crate::update::detect_crash_loop`]);
 //! - after 15 minutes of failing in spite of kickstarts, writes `justiciar-needed.json` and
@@ -215,7 +217,14 @@ pub fn run_once(home: &Home, machine: &dyn Machine, now: Timestamp) -> Vec<Strin
                 }
                 done.push(kickstart(machine));
             }
-            Action::Kickstart => done.push(kickstart(machine)),
+            Action::Kickstart => {
+                if seen.running {
+                    // A daemon that runs and does not answer is hung: its run counts towards a
+                    // crash loop even though the kickstart's `SIGTERM` asks it to stop.
+                    let _ = start_log(home).mark_hung();
+                }
+                done.push(kickstart(machine));
+            }
             Action::AskForRepair => {
                 let evidence = evidence(&state, &seen, home, now);
                 let reason = "the daemon does not answer and kickstarting it did not help";
