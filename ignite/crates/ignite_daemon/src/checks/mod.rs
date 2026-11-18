@@ -30,11 +30,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU64;
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use ignite_core::config::Os;
 use ignite_core::hash::{self, HashParts};
-use ignite_core::ids::{CheckName, InputHash, Oid, SessionId, TicketId, TreeId};
+use ignite_core::ids::{CheckName, Commit, InputHash, Oid, SessionId, TicketId, TreeId};
 use ignite_core::inputs::{self, CrateGraph};
 use ignite_core::manifest::{Adapter, Family, InputPattern, Manifest, Platforms};
 use ignite_core::protocol::hub::{CachedResult, ResultKey};
@@ -178,6 +178,12 @@ impl Prepared {
     }
 }
 
+/// Told of every cache hit the runner answers a check with, and the commit of the tree it was
+/// used in. The idle work's cache audits rerun a sample of these.
+pub trait HitSink: Send + Sync {
+    fn hit(&self, cached: &CachedResult, commit: &Commit);
+}
+
 /// Runs checks in build trees. See the module documentation.
 pub struct Checks {
     settings: CheckSettings,
@@ -187,6 +193,7 @@ pub struct Checks {
     /// `nextest` listings by family and the hash of everything the family can read.
     listings: Mutex<HashMap<(String, InputHash), Vec<Listed>>>,
     next_file: AtomicU64,
+    hits: OnceLock<Arc<dyn HitSink>>,
 }
 
 impl Checks {
@@ -203,7 +210,14 @@ impl Checks {
             history,
             listings: Mutex::new(HashMap::new()),
             next_file: AtomicU64::new(0),
+            hits: OnceLock::new(),
         }
+    }
+
+    /// Tells `sink` of every cache hit from now on. Set after construction, because the idle
+    /// work that listens also reruns checks through this runner. Only the first call counts.
+    pub fn set_hit_sink(&self, sink: Arc<dyn HitSink>) {
+        let _ = self.hits.set(sink);
     }
 
     pub fn cache(&self) -> &ResultCache {

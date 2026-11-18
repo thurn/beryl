@@ -12,9 +12,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    CachedResult, Claim, FlakyReport, Landed, MachineFree, MetricsImport, NewResult, Pause, Record,
-    RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified,
+    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, MachineFree,
+    MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport, ReportFiled,
+    Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply, TipVerified,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
@@ -239,6 +239,8 @@ pub struct FakeHub {
     batches: Mutex<Vec<BatchRequest>>,
     pauses: Mutex<Vec<Pause>>,
     asked: Mutex<Vec<MachineFree>>,
+    audits: Mutex<Vec<AuditReport>>,
+    finds: Mutex<Vec<ExplorationFind>>,
 }
 
 impl FakeHub {
@@ -324,6 +326,21 @@ impl FakeHub {
     /// Every regression reported so far, in order.
     pub fn regressions(&self) -> Vec<RegressionReport> {
         lock(&self.regressions).clone()
+    }
+
+    pub fn audit_reports(&self) -> Vec<AuditReport> {
+        lock(&self.audits).clone()
+    }
+
+    pub fn exploration_finds(&self) -> Vec<ExplorationFind> {
+        lock(&self.finds).clone()
+    }
+
+    /// The ticket a report filed: one per report, numbered in the order they arrived.
+    fn filed(number: usize) -> ReportFiled {
+        ReportFiled {
+            ticket: TicketId::new(format!("T.{number}")).unwrap_or_else(|_| unreachable!()),
+        }
     }
 
     fn reachable(&self) -> Result<()> {
@@ -574,6 +591,20 @@ impl Hub for FakeHub {
         self.reachable()?;
         lock(&self.pauses).push(pause.clone());
         Ok(())
+    }
+
+    fn audit(&self, report: &AuditReport) -> Result<ReportFiled> {
+        self.reachable()?;
+        let mut audits = lock(&self.audits);
+        audits.push(report.clone());
+        Ok(Self::filed(audits.len()))
+    }
+
+    fn find(&self, find: &ExplorationFind) -> Result<ReportFiled> {
+        self.reachable()?;
+        let mut finds = lock(&self.finds);
+        finds.push(find.clone());
+        Ok(Self::filed(finds.len()))
     }
 }
 

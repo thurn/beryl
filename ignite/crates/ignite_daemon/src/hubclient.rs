@@ -13,10 +13,10 @@ use serde::de::DeserializeOwned;
 use ignite_core::config::HubConfig;
 use ignite_core::ids::Seq;
 use ignite_core::protocol::hub::{
-    CachedResult, Claim, FlakyReport, Heartbeat, HeartbeatReply, Landed, LookupReply,
-    LookupRequest, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
-    Record, RecordBatch, RegressionFiled, RegressionReport, Reservation, ResultKey, StoreRequest,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Heartbeat, HeartbeatReply,
+    Landed, LookupReply, LookupRequest, MachineFree, MachineRegister, MachineRegistered,
+    MetricsImport, NewResult, Record, RecordBatch, RegressionFiled, RegressionReport, ReportFiled,
+    Reservation, ResultKey, StoreRequest, TicketBrief, TipClaim, TipClaimReply, TipVerified,
 };
 use ignite_core::protocol::tickets::{FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply};
 use ignite_core::traits::{Error, Hub, Result};
@@ -240,6 +240,14 @@ impl Hub for HubClient {
 
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
         self.post("/regressions", report)
+    }
+
+    fn audit(&self, report: &AuditReport) -> Result<ReportFiled> {
+        self.post("/audits", report)
+    }
+
+    fn find(&self, find: &ExplorationFind) -> Result<ReportFiled> {
+        self.post("/finds", find)
     }
 }
 

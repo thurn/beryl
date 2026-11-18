@@ -6,7 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
-use ignite_core::ids::{CheckName, RecordId};
+use ignite_core::ids::{CheckName, Commit, RecordId};
 use ignite_core::manifest::{Adapter, Family};
 use ignite_core::protocol::hub::{CachedResult, FlakyReport, NewResult, Record};
 use ignite_core::protocol::{Outcome, Usage};
@@ -35,10 +35,18 @@ impl Checks {
         };
         let mut pending: Vec<Keyed> = Vec::new();
         let listed = items.len();
+        // The tree's commit, read once and only when a hit needs it.
+        let mut head: Option<Option<Commit>> = None;
         for (keyed, hit) in items {
             match hit {
                 Some(hit) => {
                     run.from_cache += 1;
+                    if let Some(sink) = self.hits.get()
+                        && let Some(commit) =
+                            head.get_or_insert_with(|| ignite_git::refs::head(&tree.path).ok())
+                    {
+                        sink.hit(&hit, commit);
+                    }
                     let failure = (hit.outcome == Outcome::Fail).then(|| Failure {
                         check: keyed.listed.check.clone(),
                         outcome: Outcome::Fail,

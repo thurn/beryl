@@ -322,6 +322,12 @@ impl Config {
                     "must be present and unique",
                 );
             }
+            if edit.file.is_empty() || edit.append.is_empty() {
+                return fail(
+                    &format!("rebuild[{index}].file"),
+                    "an edit needs a file and the text it appends",
+                );
+            }
             if edit.products.is_empty() {
                 return fail(
                     &format!("rebuild[{index}].products"),
@@ -378,11 +384,15 @@ floor = { batch = 8, tip = 2 }
 
 [[rebuild]]
 name = "kernel-body"
-edit = "append a no-op statement to one function in the kernel crate"
+edit = "append a no-op item to a module of the kernel crate"
+file = "rust/crates/kernel/src/counters.rs"
+append = "\nconst _: () = ();\n"
 products = ["clippy", "rust-tests"]
 [[rebuild]]
 name = "one-card"
-edit = "append a no-op statement to one card file"
+edit = "append a no-op item to one card file"
+file = "rust/cards/one_card.rs"
+append = "\nconst _: () = ();\n"
 products = ["clippy", "rust-tests"]
 "#;
 

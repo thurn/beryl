@@ -212,6 +212,18 @@ impl LeaseHub {
 }
 
 impl Hub for LeaseHub {
+    fn audit(
+        &self,
+        report: &ignite_core::protocol::hub::AuditReport,
+    ) -> Result<ignite_core::protocol::hub::ReportFiled> {
+        self.hub.audit(report)
+    }
+    fn find(
+        &self,
+        find: &ignite_core::protocol::hub::ExplorationFind,
+    ) -> Result<ignite_core::protocol::hub::ReportFiled> {
+        self.hub.find(find)
+    }
     fn lookup(&self, keys: &[ResultKey]) -> Result<Vec<Option<CachedResult>>> {
         self.hub.lookup(keys)
     }

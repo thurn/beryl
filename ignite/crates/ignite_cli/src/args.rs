@@ -155,6 +155,9 @@ pub enum Command {
         /// List the named edits.
         #[arg(long)]
         list: bool,
+        /// Print the stored counts instead of measuring.
+        #[arg(long)]
+        last: bool,
     },
     /// Rerun a sample of cache hits to check the cache.
     Audit {

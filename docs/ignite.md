@@ -1671,12 +1671,16 @@ one fixed, scripted edit, in a tree that had built the state before the edit.
 ```toml
 [[rebuild]]
 name = "kernel-body"
-edit = "append a no-op statement to one function in beryl_kernel"
+edit = "append a no-op item to a module of beryl_kernel"
+file = "rust/crates/beryl_kernel/src/counters.rs"
+append = "\nconst _: () = ();\n"
 products = ["clippy", "rust-tests"]
 
 [[rebuild]]
 name = "one-card"
-edit = "append a no-op statement to one card file"
+edit = "append a no-op item to one card file"
+file = "rust/cards/cards_1993/lea/animate_dead.rs"
+append = "\nconst _: () = ();\n"
 products = ["clippy", "rust-tests"]
 ```
 

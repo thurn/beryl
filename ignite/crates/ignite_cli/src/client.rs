@@ -12,19 +12,11 @@ use ignite_core::protocol::client::{Exit, Reply, Request};
 /// The verbs nobody has built yet, with the owning ticket's title.
 pub const NOT_BUILT: &[(&str, &str)] = &[
     (
-        "audit",
-        "Idle work: exploration, cache audits and rebuild counts",
-    ),
-    (
         "daemon",
         "Assemble the daemon and prove one ticket end to end",
     ),
     ("gate", "Gate replay"),
     ("prime", "Command output and the workflow text"),
-    (
-        "rebuild",
-        "Idle work: exploration, cache audits and rebuild counts",
-    ),
     ("status", "Install, self-update, status and doctor"),
 ];
 

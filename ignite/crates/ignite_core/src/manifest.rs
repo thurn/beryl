@@ -138,8 +138,13 @@ pub struct Product {
 #[serde(deny_unknown_fields)]
 pub struct RebuildEdit {
     pub name: String,
-    /// What the edit does, in words; the idle work that makes it reads this.
+    /// What the edit does, in words, for people reading the counts.
     pub edit: String,
+    /// The file the edit changes, relative to the checkout's root.
+    pub file: String,
+    /// The text the edit appends to `file`, such as a no-op item. The edit is undone by writing
+    /// the file's old contents back.
+    pub append: String,
     /// The build products whose rebuild is counted.
     pub products: Vec<String>,
 }

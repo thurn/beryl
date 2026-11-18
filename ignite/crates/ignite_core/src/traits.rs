@@ -11,9 +11,9 @@ use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
-    CachedResult, Claim, CompileUnit, FlakyReport, Landed, MachineFree, MetricsImport, NewResult,
-    Pause, Record, RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief,
-    TipClaim, TipClaimReply, TipVerified,
+    AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, Landed,
+    MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport,
+    ReportFiled, Reservation, ResultKey, TicketBrief, TipClaim, TipClaimReply, TipVerified,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
@@ -169,6 +169,10 @@ pub trait Hub: Send + Sync {
     fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
     /// Reports a regression; the hub files or reopens its ticket (`POST /regressions`).
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled>;
+    /// Reports a cache audit whose rerun disagreed with the cached result (`POST /audits`).
+    fn audit(&self, report: &AuditReport) -> Result<ReportFiled>;
+    /// Reports a failed exploration check (`POST /finds`).
+    fn find(&self, find: &ExplorationFind) -> Result<ReportFiled>;
 
     /// One ticket with its comments (`GET /tickets/<id>`).
     fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {
