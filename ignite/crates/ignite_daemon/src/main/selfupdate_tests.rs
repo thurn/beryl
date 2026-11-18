@@ -71,6 +71,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         master: "master".to_owned(),
         restart: Box::new(restart.clone()),
         ready: Mutex::new(None),
+        rounds: AtomicU32::new(0),
     };
     (update, git, restart)
 }
@@ -140,4 +141,78 @@ fn an_unstored_daemon_never_updates() {
     assert!(update.after_heartbeat(Some(NEW), 0));
     update.after_master_moved().unwrap();
     assert!(restart.started().is_empty());
+}
+
+/// Calls `poll_release` until it does its check, which is every `POLL_EVERY_ROUNDS`th call.
+fn poll(update: &SelfUpdate) {
+    update.rounds.store(0, Ordering::Relaxed);
+    update.poll_release().unwrap();
+}
+
+#[test]
+fn a_push_straight_to_the_release_branch_deploys() {
+    let (mut update, git, restart) = daemon(OLD);
+    update.master = "release".to_owned();
+    git.set_tip("release", commit(NEW));
+    git.set_changed(
+        &commit(OLD),
+        &commit(NEW),
+        &["ignite/crates/x.rs", "docs/a.md"],
+    );
+
+    poll(&update);
+    assert!(update.store.has(&commit(NEW)));
+    assert!(!update.after_heartbeat(Some(OLD), 0));
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+}
+
+#[test]
+fn a_release_branch_that_has_not_moved_builds_nothing() {
+    let (update, _git, restart) = daemon(OLD);
+    poll(&update);
+    assert!(update.after_heartbeat(Some(OLD), 0));
+    assert!(restart.started().is_empty());
+    assert!(!update.store.has(&commit(NEW)));
+}
+
+#[test]
+fn a_release_move_without_ignite_changes_builds_nothing() {
+    let (update, git, restart) = daemon(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &["docs/readme.md"]);
+    poll(&update);
+    assert!(update.after_heartbeat(Some(OLD), 0));
+    assert!(restart.started().is_empty());
+    assert!(!update.store.has(&commit(NEW)));
+}
+
+#[test]
+fn a_build_recorded_as_bad_is_never_installed_again_but_a_newer_one_is() {
+    let (update, git, restart) = daemon(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/a.rs"]);
+    update.store.reject(&commit(NEW));
+
+    poll(&update);
+    assert!(!update.store.has(&commit(NEW)));
+    // Not by the hub's version either.
+    assert!(update.after_heartbeat(Some(NEW), 0));
+    assert!(restart.started().is_empty());
+
+    let newer = "f00dfee";
+    git.set_tip("master", commit(newer));
+    git.set_changed(&commit(OLD), &commit(newer), &["ignite/a.rs"]);
+    poll(&update);
+    assert!(update.store.has(&commit(newer)));
+}
+
+#[test]
+fn the_release_branch_is_fetched_at_most_every_thirty_rounds() {
+    let (update, git, _restart) = daemon(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/a.rs"]);
+    update.rounds.store(1, Ordering::Relaxed);
+    for _ in 1..POLL_EVERY_ROUNDS {
+        update.poll_release().unwrap();
+    }
+    assert!(!update.store.has(&commit(NEW)));
+    update.poll_release().unwrap();
+    assert!(update.store.has(&commit(NEW)));
 }

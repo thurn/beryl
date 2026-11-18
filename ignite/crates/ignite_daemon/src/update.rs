@@ -36,9 +36,13 @@ use serde::{Deserialize, Serialize};
 use crate::doctor::{Host, NativeHost};
 use crate::server::{Context, Verb};
 
+mod lastgood;
 mod rollback;
+mod starts;
 
+pub use lastgood::{CRASH_STARTS, CrashLoop, LAST_GOOD_AFTER_S, detect_crash_loop};
 pub use rollback::{CRASH_WINDOW_S, HEALTHY_AFTER_S, KEEP_EXTRA, Startup};
+pub use starts::{StartRecord, forget_start, guard_start, spawn_health_marks, start_log};
 
 /// The arguments the login service starts the executable with.
 pub const DAEMON_ARGS: &[&str] = &["daemon"];
@@ -159,27 +163,42 @@ impl ExecutableStore {
     /// The release it pointed at stays stored as the previous one, and the new release starts
     /// on trial (see `rollback`).
     pub fn point_current_at(&self, commit: &Commit) -> io::Result<()> {
+        if !self.has(commit) {
+            // A link to a build that is not stored would leave the login service with nothing
+            // to start.
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("the build of {commit} is not stored"),
+            ));
+        }
         self.begin_trial(commit);
         self.flip(commit)
     }
 
     fn flip(&self, commit: &Commit) -> io::Result<()> {
-        let partial = self
-            .root
-            .join(format!("current.partial-{}", std::process::id()));
-        // A partial file left by a crash would make `symlink` fail.
-        let _ = std::fs::remove_file(&partial);
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(self.path(commit), &partial)?;
         #[cfg(windows)]
         {
             let launcher = self.current_link();
             if std::fs::read_to_string(&launcher).ok().as_deref() != Some(CURRENT_CMD) {
                 std::fs::write(&launcher, CURRENT_CMD)?;
             }
-            std::fs::write(&partial, self.path(commit).display().to_string())?;
         }
-        std::fs::rename(&partial, self.root.join("current"))
+        self.link("current", commit)
+    }
+
+    /// Makes `bin/<name>` point at the commit's executable, replacing it in one step: a symbolic
+    /// link, or on Windows a text file holding the path, as `current` is.
+    fn link(&self, name: &str, commit: &Commit) -> io::Result<()> {
+        let partial = self
+            .root
+            .join(format!("{name}.partial-{}", std::process::id()));
+        // A partial file left by a crash would make `symlink` fail.
+        let _ = std::fs::remove_file(&partial);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(self.path(commit), &partial)?;
+        #[cfg(windows)]
+        std::fs::write(&partial, self.path(commit).display().to_string())?;
+        std::fs::rename(&partial, self.root.join(name))
     }
 
     /// The commit an executable path was stored under, following symlinks and, on Windows, the
@@ -633,7 +652,7 @@ impl Updater<'_> {
     /// Builds the new executable if `master` moved and files under the source directory changed.
     pub fn check(&self, current: &Commit) -> Result<UpdateCheck> {
         let tip = self.git.tip(self.master)?;
-        if &tip == current {
+        if &tip == current || self.store.is_rejected(&tip) {
             return Ok(UpdateCheck::UpToDate);
         }
         let prefix = format!("{}/", self.source.trim_end_matches('/'));

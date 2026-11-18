@@ -27,7 +27,7 @@ use ignite_core::traits::{Clock, Error, Result};
 
 use crate::doctor::NativeHost;
 use crate::server::{Context, Server};
-use crate::update::{ExecRestart, HEALTHY_AFTER_S, Home, Startup, TreeBuilder};
+use crate::update::{ExecRestart, Home, Startup, TreeBuilder};
 use ignite_core::time::SystemClock;
 
 /// What one daemon is started with.
@@ -131,9 +131,10 @@ fn self_update(base: &assemble::Base) -> selfupdate::SelfUpdate {
             work: options.home.root.join("update"),
         }),
         store: options.home.store(),
-        master: base.config.repository.master.clone(),
+        master: base.config.repository.release_branch().to_owned(),
         restart: Box::new(ExecRestart),
         ready: Mutex::new(None),
+        rounds: std::sync::atomic::AtomicU32::new(0),
     }
 }
 
@@ -142,11 +143,17 @@ fn self_update(base: &assemble::Base) -> selfupdate::SelfUpdate {
 /// `ignite install` recorded. Returns the exit code.
 pub fn run_daemon(cwd: &Path) -> i32 {
     let home = Home::from_env();
+    // First, before anything this build could fail at: records the start, and goes back to the
+    // last-good build if this one crash-loops.
+    if let Some(code) = crate::update::guard_start(&home) {
+        return code;
+    }
     let repo = checkout(cwd, &home);
     // Held for the life of the process: one daemon per machine.
     let _lock = match crate::machine_lock::hold(&home) {
         Ok(lock) => lock,
         Err(error) => {
+            crate::update::forget_start(&home);
             eprintln!("ignite: {error}");
             return 1;
         }
@@ -167,11 +174,9 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         return 1;
     }
     if let Some(own) = own {
-        // A release that is still up after this long has come up: its trial ends.
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs_f64(HEALTHY_AFTER_S));
-            store.mark_healthy(&own);
-        });
+        // A release that is still up after a while has come up: its trial ends, and later it
+        // becomes the last-good build.
+        crate::update::spawn_health_marks(store, own);
     }
     let options = DaemonOptions {
         repo,

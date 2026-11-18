@@ -1,10 +1,14 @@
 //! Keeps the running daemon on the current release of Ignite.
 //!
-//! Two things make the daemon restart into another executable:
+//! Three things make the daemon restart into another executable:
 //!
-//! - `master` moves and files under Ignite's own source directory changed. The tip loop calls
+//! - The release branch (`master`, unless the repository names a `release` branch) moves and
+//!   files under Ignite's own source directory changed. The tip loop calls
 //!   [`SelfUpdate::after_master_moved`], which builds the new executable in the update tree and
 //!   stores it under its commit. The daemon restarts into it once no command runs.
+//! - Someone pushes straight to the release branch, which tip verification never sees. The
+//!   sender loop calls [`SelfUpdate::poll_release`] every round, and every
+//!   [`POLL_EVERY_ROUNDS`]th call fetches the branch's tip and prepares the build the same way.
 //! - The hub reports, in its heartbeat reply, a version other than the daemon's. The sender loop
 //!   calls [`SelfUpdate::after_heartbeat`]: while commands run, the daemon asks for no new work;
 //!   once none runs, it builds the hub's version (or finds it stored) and restarts into it.
@@ -17,6 +21,7 @@
 //! leaves them running until their commands finish.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use ignite_core::ids::Commit;
@@ -30,6 +35,9 @@ use crate::update::{
 /// The directory of Ignite's own source in the repository; a change under it means a new build.
 pub const SOURCE: &str = "ignite";
 
+/// The sender loop runs every 10 seconds, so this many of its rounds are 5 minutes.
+pub const POLL_EVERY_ROUNDS: u32 = 30;
+
 /// The daemon's view of its own version and the release it should run.
 pub struct SelfUpdate {
     /// The commit this daemon was built from, or `None` for an executable that is not in the
@@ -38,11 +46,13 @@ pub struct SelfUpdate {
     pub git: Arc<dyn Git>,
     pub builder: Box<dyn Builder + Send + Sync>,
     pub store: ExecutableStore,
-    /// The branch releases come from.
+    /// The branch releases come from: the repository's release branch, `master` by default.
     pub master: String,
     pub restart: Box<dyn Restart + Send + Sync>,
     /// A stored build of a newer `master`, waiting for running commands to finish.
     pub ready: Mutex<Option<PathBuf>>,
+    /// How many times [`SelfUpdate::poll_release`] has been called.
+    pub rounds: AtomicU32,
 }
 
 impl SelfUpdate {
@@ -66,10 +76,27 @@ impl SelfUpdate {
         let Some(own) = &self.own else {
             return Ok(());
         };
+        if self.ready().is_some() {
+            // A newer build already waits; once the daemon runs it, the next check goes on
+            // from there.
+            return Ok(());
+        }
         if let UpdateCheck::Ready { executable, .. } = self.updater().check(own)? {
             *self.ready() = Some(executable);
         }
         Ok(())
+    }
+
+    /// Called once per round of the sender loop. Every [`POLL_EVERY_ROUNDS`]th call (the first
+    /// one included) fetches the release branch's tip and, if it moved past this daemon's own
+    /// commit and files under Ignite's source changed, builds and stores it exactly as
+    /// [`SelfUpdate::after_master_moved`] does. This is what deploys a push made straight to
+    /// the release branch. A commit recorded as bad is never built.
+    pub fn poll_release(&self) -> Result<()> {
+        if self.rounds.fetch_add(1, Ordering::Relaxed) % POLL_EVERY_ROUNDS != 0 {
+            return Ok(());
+        }
+        self.after_master_moved()
     }
 
     /// After each heartbeat, with the hub's version from the last reply that arrived and the

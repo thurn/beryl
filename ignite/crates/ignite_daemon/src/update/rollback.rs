@@ -31,8 +31,8 @@ pub const KEEP_EXTRA: usize = 2;
 
 const PREVIOUS: &str = "previous";
 const TRIAL: &str = "trial";
-const REJECTED: &str = "rejected";
-const LOG: &str = "rollbacks.log";
+pub(super) const REJECTED: &str = "rejected";
+pub(super) const LOG: &str = "rollbacks.log";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Trial {
@@ -75,7 +75,7 @@ impl ExecutableStore {
             .is_ok_and(|text| text.lines().any(|line| line.trim() == commit.as_str()))
     }
 
-    fn read_commit(&self, name: &str) -> Option<Commit> {
+    pub(super) fn read_commit(&self, name: &str) -> Option<Commit> {
         Commit::new(fs::read_to_string(self.root.join(name)).ok()?.trim()).ok()
     }
 
@@ -134,7 +134,7 @@ impl ExecutableStore {
         Startup::RollBack { to, reason }
     }
 
-    fn append(&self, name: &str, line: &str) {
+    pub(super) fn append(&self, name: &str, line: &str) {
         use std::io::Write;
         let file = fs::OpenOptions::new()
             .create(true)
@@ -152,7 +152,7 @@ impl ExecutableStore {
         }
     }
 
-    /// Deletes stored releases other than `keep`, the current and previous ones and the
+    /// Deletes stored releases other than `keep`, the current, previous and last-good ones and the
     /// [`KEEP_EXTRA`] newest of the rest. A release a supervisor still runs keeps working on
     /// macOS, which holds a deleted file open; Windows refuses to delete it, which is ignored.
     pub fn prune(&self, keep: &[&Commit]) {
@@ -162,6 +162,8 @@ impl ExecutableStore {
         let mut kept: Vec<String> = keep.iter().map(ToString::to_string).collect();
         kept.extend(self.current_commit().map(|c| c.to_string()));
         kept.extend(self.previous().map(|c| c.to_string()));
+        // The build a rollback or the monitor falls back to must survive.
+        kept.extend(self.last_good().map(|c| c.to_string()));
         let mut others: Vec<(std::time::SystemTime, std::path::PathBuf)> = entries
             .filter_map(Result::ok)
             .filter(|e| {
