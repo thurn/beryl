@@ -687,3 +687,94 @@ fn a_tree_held_for_a_waiter_that_never_came_is_freed_for_the_next_lease() {
     assert_eq!(f.state("tree-01"), "free");
     f.lease("T.3", false);
 }
+
+/// A verb running from `tree`, as the server lists it (see `crate::steps`).
+fn running_verb(verb: &str, tree: &str) -> Arc<crate::steps::Activity> {
+    crate::steps::global().begin(
+        crate::steps::Kind::Verb(verb.to_owned()),
+        crate::steps::Work {
+            tree: Some(id(tree)),
+            ..crate::steps::Work::default()
+        },
+    )
+}
+
+#[test]
+fn closing_a_ticket_stops_its_running_landing_before_the_tree_is_freed() {
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    let landing = running_verb("land", "tree-01");
+    let (trees, seen) = (f.trees.clone(), landing.clone());
+    let unwinding = std::thread::spawn(move || {
+        assert!(seen.wait_stop_requested(std::time::Duration::from_secs(60)));
+        let state = trees
+            .status()
+            .unwrap()
+            .trees
+            .into_iter()
+            .find(|t| t.tree.as_str() == "tree-01")
+            .unwrap()
+            .state;
+        seen.finish();
+        state
+    });
+
+    f.trees
+        .release_unsaved(&lease.tree, &f.tip(), None)
+        .unwrap();
+
+    assert_eq!(
+        unwinding.join().unwrap(),
+        "resetting",
+        "stopped before it was freed"
+    );
+    assert!(landing.is_finished());
+    assert_eq!(f.state("tree-01"), "free");
+}
+
+#[test]
+fn a_landing_whose_push_began_keeps_its_tree_leased_and_the_release_says_why() {
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    let landing = running_verb("land", "tree-01");
+    landing.attach_handle(&ignite_core::ids::Handle::new("L-2").unwrap());
+    assert!(landing.refuse_stop("its push to staging has begun"));
+
+    let error = f
+        .trees
+        .release_unsaved(&lease.tree, &f.tip(), None)
+        .unwrap_err();
+
+    assert_eq!(
+        error,
+        Error::Conflict(
+            "tree-01 is not freed: `ignite land` (L-2) cannot be stopped: its push to staging \
+             has begun"
+                .to_owned()
+        )
+    );
+    assert_eq!(f.state("tree-01"), "leased");
+    landing.finish();
+    f.trees
+        .release_unsaved(&lease.tree, &f.tip(), None)
+        .unwrap();
+    assert_eq!(f.state("tree-01"), "free");
+}
+
+#[test]
+fn a_verb_in_another_daemons_tree_of_the_same_name_is_left_running() {
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    let elsewhere = crate::steps::global().begin(
+        crate::steps::Kind::Verb("test".to_owned()),
+        crate::steps::Work {
+            tree: Some(id("tree-01")),
+            tree_path: Some(PathBuf::from("/another/daemon/trees/tree-01")),
+            ..crate::steps::Work::default()
+        },
+    );
+    f.trees
+        .release_unsaved(&lease.tree, &f.tip(), None)
+        .unwrap();
+    assert!(!elsewhere.stop_requested());
+}

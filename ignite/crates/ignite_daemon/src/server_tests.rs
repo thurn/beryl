@@ -598,3 +598,60 @@ fn a_failed_accept_does_not_end_the_server() {
     let reply: Reply = serde_json::from_str(&line).unwrap();
     assert_eq!(reply.text, "still here");
 }
+
+/// A verb that records two steps and then answers.
+struct Steps2;
+
+impl Verb for Steps2 {
+    fn name(&self) -> &'static str {
+        "land"
+    }
+
+    fn run(&self, _ctx: &Context, _req: &Request) -> Reply {
+        crate::steps::step("rebasing onto staging");
+        let _lease = crate::steps::waiting("the staging lease");
+        crate::steps::step("pushing to staging");
+        Reply::text(Exit::Success, "landed")
+    }
+}
+
+#[test]
+fn a_client_that_asks_for_progress_hears_each_step_before_the_reply() {
+    let mut registry = Registry::default();
+    registry.register(Box::new(Steps2));
+    let server = Server::new(context(), registry, None).unwrap();
+    let mut heard = Vec::new();
+    let mut pass = |line: &str| {
+        heard.push(line.to_owned());
+        true
+    };
+    let reply = server.handle_streaming(&request("land", &[]), None, Some(&mut pass));
+    assert_eq!(reply.text, "landed");
+    assert_eq!(
+        heard,
+        [
+            "rebasing onto staging",
+            "waiting for the staging lease",
+            "pushing to staging"
+        ]
+    );
+}
+
+#[test]
+fn the_client_prints_progress_lines_and_returns_the_reply_line() {
+    let reply = Reply::text(Exit::Success, "landed");
+    let text = format!(
+        "{}\n{}\n{}\n",
+        serde_json::json!({"progress": "rebasing onto staging"}),
+        serde_json::json!({"progress": "running the gate in \"landing-3\""}),
+        serde_json::to_string(&reply).unwrap()
+    );
+    let mut heard = Vec::new();
+    let mut show = |line: &str| heard.push(line.to_owned());
+    let read = read_reply(std::io::Cursor::new(text), Some(&mut show)).unwrap();
+    assert_eq!(read, reply);
+    assert_eq!(
+        heard,
+        ["rebasing onto staging", "running the gate in \"landing-3\""]
+    );
+}

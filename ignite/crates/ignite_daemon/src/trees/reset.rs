@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::sync::Arc;
 
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::traits::{Error, Result};
@@ -41,7 +42,10 @@ impl Trees {
         // A release that fails after the tree is marked `resetting` goes back to `leased`, so
         // the caller can retry it; nothing else would move a `resetting` tree until the daemon
         // restarts.
-        let reset = Self::end_processes(&path, caller).and_then(|ended| {
+        let reset = self
+            .stop_work(tree)
+            .and_then(|()| Self::end_processes(&path, caller));
+        let reset = reset.and_then(|ended| {
             worktree::reset(&path, &park_branch(tree), park_at, &config.keep)?;
             Ok(ended)
         });
@@ -66,6 +70,52 @@ impl Trees {
         }
         self.serve_waiters();
         Ok(ended)
+    }
+
+    /// Asks every verb still running from `tree` to stop, except the caller's own, and waits for
+    /// each to end. A verb that refuses, or that has not ended within the wait, is an error, and
+    /// the tree must not be freed: the next ticket would share it with that verb.
+    fn stop_work(&self, tree: &TreeId) -> Result<()> {
+        let own = crate::steps::current();
+        let running: Vec<_> = self
+            .inner
+            .steps
+            .in_tree(tree, &self.inner.config.path(tree))
+            .into_iter()
+            .filter(|activity| own.as_ref().is_none_or(|own| !Arc::ptr_eq(own, activity)))
+            .collect();
+        let name = |activity: &crate::steps::Activity| {
+            let view = activity.view();
+            match view.handle {
+                Some(handle) => format!("`ignite {}` ({handle})", view.name),
+                None => format!("`ignite {}`", view.name),
+            }
+        };
+        let mut problems = Vec::new();
+        for activity in &running {
+            if let Err(reason) = activity.request_stop() {
+                problems.push(format!("{} cannot be stopped: {reason}", name(activity)));
+            }
+        }
+        for activity in &running {
+            if !activity.stop_requested() {
+                continue;
+            }
+            if !activity.wait_finished(self.inner.stop_wait) {
+                problems.push(format!(
+                    "{} did not end within {} s of being stopped",
+                    name(activity),
+                    self.inner.stop_wait.as_secs()
+                ));
+            }
+        }
+        if problems.is_empty() {
+            return Ok(());
+        }
+        Err(Error::Conflict(format!(
+            "{tree} is not freed: {}",
+            problems.join("; ")
+        )))
     }
 
     /// Puts a tree that a failed release left `resetting` back to `leased`.

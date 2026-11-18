@@ -32,6 +32,10 @@
 //!    tree is released and the branch its work was saved to at a release is deleted.
 //!
 //! `ignite sync` does step 1's checks and step 2 alone.
+//!
+//! Each step is recorded as it starts (see [`crate::steps`]), so `ignite wait`, `ignite status`
+//! and the client of `ignite land` can say what the landing is doing. `ignite stop` ends a
+//! landing up to the moment its push begins, and is refused after it.
 
 pub mod env;
 mod lease;
@@ -57,6 +61,7 @@ use ignite_core::traits::{Error, Push, Rebase};
 use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
+use crate::steps;
 use env::{GateTree, LandGate, LandTrees, TicketTree};
 use lease::{HeldLease, LEASE_TTL_S};
 use records::{LandingRecord, RecordState, Records};
@@ -328,6 +333,9 @@ impl Landing {
         let staging = ctx.config.repository.staging.clone();
         let holder = format!("{}:{ticket}", ctx.machine);
         let io = |e: Error| Box::new(error_reply(&e));
+        // What the landing builds and runs is `land` work for its ticket (see `crate::steps`).
+        steps::set_class(Class::Land);
+        steps::set_ticket(&ticket, Some(&session));
 
         // A landing already pushed but not yet told to the hub is never pushed again.
         let mut interrupted = None;
@@ -377,6 +385,7 @@ impl Landing {
                 // The interrupted push never landed: start again from nothing.
                 self.records.remove(&record.landed.ticket).map_err(io)?;
             }
+            steps::step(format!("rebasing onto {staging} {}", short(&tip)));
             let rebased = Self::rebase(ctx, &held, &tip)?;
             first_landed_since.get_or_insert(rebased.landed_since);
             if rebased.head == rebased.onto {
@@ -395,6 +404,7 @@ impl Landing {
             let landing_tree = if rebased.landed_since == 0 {
                 None
             } else {
+                steps::step("taking a landing tree");
                 self.trees
                     .lease_landing(&holder, &rebased.head)
                     .map_err(io)?
@@ -410,6 +420,7 @@ impl Landing {
                 ticket: Some(ticket.clone()),
                 session: Some(session.clone()),
             };
+            steps::step(format!("running the gate in {}", gate_tree.tree));
             let gated = self.gate.run(ctx, &gate_tree, &options);
             let free_landing = |built: Option<&Commit>| {
                 if let Some(tree) = &landing_tree
@@ -422,6 +433,10 @@ impl Landing {
                 free_landing(None);
                 io(error)
             };
+            if steps::stop_requested() {
+                free_landing(None);
+                return Err(stopped());
+            }
             if !gated.run.passed() {
                 free_landing(None);
                 return Err(Box::new(failed_gate(
@@ -478,7 +493,14 @@ impl Landing {
                 written_at: Some(ctx.clock.now()),
                 tree: Some(held.tree.clone()),
             };
+            // A push cut short may or may not have reached the remote, so from here on the
+            // landing refuses `ignite stop`, `ignite close` and `ignite release`.
+            if !steps::refuse_stop(&format!("its push to {staging} has begun")) {
+                free_landing(None);
+                return Err(stopped());
+            }
             self.records.write(&record).map_err(fail)?;
+            steps::step(format!("pushing {} to {staging}", short(&rebased.head)));
             match ctx.git.push(&gate_tree.path, &rebased.head, &staging) {
                 Ok(Push::Pushed { .. }) => {
                     record.state = RecordState::Pushed;
@@ -631,7 +653,11 @@ impl Landing {
     /// that died is waited out: its lease expires within [`LEASE_TTL_S`] seconds.
     fn acquire(&self, ctx: &Context, holder: &str, ticket: &TicketId) -> Result<HeldLease, Error> {
         let name = ctx.config.repository.staging.clone();
+        steps::step(format!("taking the {name} lease"));
         loop {
+            if steps::stop_requested() {
+                return Err(Error::Conflict("the landing was stopped".to_owned()));
+            }
             let op = LeaseOp::Acquire {
                 holder: holder.to_owned(),
                 ttl_s: LEASE_TTL_S,
@@ -646,11 +672,23 @@ impl Landing {
                     let wait = busy.expires_at.map_or(BUSY_WAIT_S, |at| {
                         at.seconds_since(ctx.clock.now()).clamp(1.0, BUSY_WAIT_S)
                     });
+                    let _waiting =
+                        steps::waiting(format!("the {name} lease, which another landing holds"));
                     (self.pause)(wait);
                 }
             }
         }
     }
+}
+
+/// The reply of a landing that stopped because someone asked it to (see `crate::stop`); the
+/// server replaces it with the stopped reply.
+#[allow(clippy::unnecessary_box_returns)]
+fn stopped() -> Stop {
+    stop(
+        Exit::Conflict,
+        &[line("stopped", "the landing was stopped")],
+    )
 }
 
 /// A clean rebase.

@@ -18,7 +18,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,8 @@ use ignite_os::ipc::{Ipc, Listener, Stream};
 use ignite_store::local::{rows, trees};
 
 use crate::handles::{Handles, WaitVerb, lock};
+use crate::steps::{self, Activity, Kind, Steps, Work};
+use crate::stop::StopVerb;
 
 /// What every verb may use. Tests build one from the fakes in `ignite_core::fakes`.
 #[derive(Clone)]
@@ -172,6 +174,8 @@ pub struct Server {
     db: Option<Arc<Mutex<Connection>>>,
     hooks: Vec<Box<dyn Hook>>,
     commands: Mutex<BTreeMap<SessionId, CurrentCommand>>,
+    /// What each running verb is doing (see [`crate::steps`]).
+    steps: Arc<Steps>,
     /// Verbs running on threads of their own, including those handed off to a handle, except
     /// those that do not [block an update](Verb::blocks_update).
     running: Arc<AtomicUsize>,
@@ -183,14 +187,26 @@ impl Server {
     /// Without it, handles live in memory and no tree counts as leased.
     pub fn new(
         ctx: Context,
+        registry: Registry,
+        db: Option<Arc<Mutex<Connection>>>,
+    ) -> ignite_core::traits::Result<Server> {
+        Self::with_steps(ctx, registry, db, steps::global())
+    }
+
+    /// [`Server::new`], with the running verbs listed in `steps` instead of the daemon's
+    /// registry. `wait` and `stop` are added.
+    pub fn with_steps(
+        ctx: Context,
         mut registry: Registry,
         db: Option<Arc<Mutex<Connection>>>,
+        steps: Arc<Steps>,
     ) -> ignite_core::traits::Result<Server> {
         let handles = Arc::new(match &db {
             Some(db) => Handles::open(ctx.clock.clone(), db.clone())?,
             None => Handles::new(ctx.clock.clone()),
         });
-        registry.register(Box::new(WaitVerb::new(handles.clone())));
+        registry.register(Box::new(WaitVerb::new(handles.clone(), steps.clone())));
+        registry.register(Box::new(StopVerb::new(handles.clone(), steps.clone())));
         Ok(Server {
             ctx,
             registry,
@@ -198,8 +214,39 @@ impl Server {
             db,
             hooks: Vec::new(),
             commands: Mutex::new(BTreeMap::new()),
+            steps,
             running: Arc::new(AtomicUsize::new(0)),
         })
+    }
+
+    /// What each running verb is doing.
+    pub fn steps(&self) -> &Arc<Steps> {
+        &self.steps
+    }
+
+    /// The step of the verb `session` is running, or of the handle its `ignite wait` waits on,
+    /// such as `building rust-tests in landing-3 (4 min)`, for the dashboard's "current command".
+    pub fn current_step(&self, session: &SessionId) -> Option<String> {
+        let command = self.current_command(session)?;
+        if command.ended_at.is_some() {
+            return None;
+        }
+        let live = self.steps.live();
+        let waited = command
+            .arg
+            .as_deref()
+            .filter(|_| command.verb == "wait")
+            .and_then(|arg| Handle::new(arg).ok());
+        let activity = match waited {
+            Some(handle) => live
+                .into_iter()
+                .find(|a| a.handle() == Some(handle.clone())),
+            None => live
+                .into_iter()
+                .rev()
+                .find(|a| a.work().session.as_ref() == Some(session)),
+        }?;
+        Some(activity.view().doing())
     }
 
     /// Adds a hook. Hooks run in the order they were added.
@@ -231,6 +278,18 @@ impl Server {
 
     /// Answers one request whose client's connection `caller` probes, if it can.
     pub fn handle_from(&self, req: &Request, caller: Option<CallerProbe>) -> Reply {
+        self.handle_streaming(req, caller, None)
+    }
+
+    /// [`Server::handle_from`], also passing each step of the verb to `progress` as it starts,
+    /// until the reply or the handle. `progress` returns false once its client has gone; no
+    /// step is passed after that.
+    pub fn handle_streaming(
+        &self,
+        req: &Request,
+        caller: Option<CallerProbe>,
+        progress: Option<&mut dyn FnMut(&str) -> bool>,
+    ) -> Reply {
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
         ctx.tree = ctx.tree_of(&req.cwd);
@@ -254,7 +313,7 @@ impl Server {
         let mut reply = match verb {
             None => unknown_verb(&req.verb),
             Some(verb) if verb.keeps_its_own_wait() => verb.run(&ctx, req),
-            Some(verb) => self.run_or_hand_off(verb, &ctx, req, caller),
+            Some(verb) => self.run_or_hand_off(verb, &ctx, req, caller, progress),
         };
         self.run_hooks(&ctx, req, &mut reply);
         if let Some(session) = &req.session
@@ -273,7 +332,26 @@ impl Server {
         ctx: &Context,
         req: &Request,
         caller: Option<CallerProbe>,
+        mut progress: Option<&mut dyn FnMut(&str) -> bool>,
     ) -> Reply {
+        let activity = self.steps.begin(
+            Kind::Verb(req.verb.clone()),
+            Work {
+                class: None,
+                ticket: self
+                    .leased_tree(ctx)
+                    .and_then(|tree| tree.ticket)
+                    .and_then(|ticket| ignite_core::ids::TicketId::new(ticket).ok()),
+                session: ctx.session.clone(),
+                tree: ctx.tree.clone(),
+                tree_path: ctx.tree.as_ref().map(|tree| {
+                    ctx.repo
+                        .join(&ctx.config.repository.trees)
+                        .join(tree.as_str())
+                }),
+            },
+        );
+        let steps_heard = progress.is_some().then(|| activity.subscribe());
         let slot = Arc::new((Mutex::new(Slot::Pending), Condvar::new()));
         let counted = verb.blocks_update();
         if counted {
@@ -286,16 +364,18 @@ impl Server {
             Arc::new(move || !handed_off.load(Ordering::SeqCst) && gone()) as CallerProbe
         });
         let worker = {
-            let (slot, handles, ctx, req, running) = (
+            let (slot, handles, ctx, req, running, activity) = (
                 slot.clone(),
                 self.handles.clone(),
                 ctx.clone(),
                 req.clone(),
                 self.running.clone(),
+                activity.clone(),
             );
             move || {
                 CALLER.with(|caller| *caller.borrow_mut() = probe);
-                let reply =
+                let entered = activity.enter();
+                let mut reply =
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| verb.run(&ctx, &req)))
                         .unwrap_or_else(|_| {
                             Reply::text(
@@ -303,8 +383,14 @@ impl Server {
                                 format!("failed   `{}` panicked in the daemon", req.verb),
                             )
                         });
+                drop(entered);
+                let stopped = activity.stop_requested();
+                if stopped {
+                    reply = stopped_reply(&req.verb, activity.handle().as_ref());
+                }
                 let mut state = lock(&slot.0);
                 match &*state {
+                    Slot::HandedOff(handle) if stopped => handles.finish_stopped(handle, reply),
                     Slot::HandedOff(handle) => handles.finish(handle, reply),
                     _ => *state = Slot::Done(reply),
                 }
@@ -312,6 +398,9 @@ impl Server {
                     running.fetch_sub(1, Ordering::SeqCst);
                 }
                 slot.1.notify_all();
+                drop(state);
+                // After the reply is kept, so that whoever waits for the work to end finds it.
+                activity.finish();
             }
         };
         let name = format!("ignite-verb-{}", req.verb);
@@ -325,9 +414,12 @@ impl Server {
             );
         }
 
+        let wait = Duration::from_secs(u64::from(req.wait_s));
+        if let (Some(heard), Some(progress)) = (steps_heard, progress.as_mut()) {
+            pass_steps(&slot, &activity, &heard, wait, &mut **progress);
+        }
         let (state, finished) = &*slot;
         let guard = lock(state);
-        let wait = Duration::from_secs(u64::from(req.wait_s));
         let (mut guard, _) = finished
             .wait_timeout_while(guard, wait, |s| matches!(s, Slot::Pending))
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -337,9 +429,11 @@ impl Server {
         let handle = self
             .handles
             .create(&req.verb, ctx.session.as_ref(), ctx.tree.as_ref());
+        activity.attach_handle(&handle);
+        activity.unsubscribe_all();
         *guard = Slot::HandedOff(handle.clone());
         handed_off.store(true, Ordering::SeqCst);
-        still_running(&req.verb, &handle)
+        still_running_at(&req.verb, &handle, Some(&activity.view()))
     }
 
     fn run_hooks(&self, ctx: &Context, req: &Request, reply: &mut Reply) {
@@ -407,6 +501,57 @@ impl Server {
     }
 }
 
+/// Passes each step `heard` from the verb's thread to `progress` until the verb has replied or
+/// `wait` has passed. The wait for the reply itself follows.
+fn pass_steps(
+    slot: &(Mutex<Slot>, Condvar),
+    activity: &Activity,
+    heard: &std::sync::mpsc::Receiver<String>,
+    wait: Duration,
+    progress: &mut dyn FnMut(&str) -> bool,
+) {
+    let deadline = Instant::now() + wait;
+    loop {
+        if !matches!(*lock(&slot.0), Slot::Pending) {
+            // The verb has replied; pass on the steps it recorded before that.
+            for line in heard.try_iter() {
+                if !progress(&line) {
+                    break;
+                }
+            }
+            return;
+        }
+        let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+            return;
+        };
+        match heard.recv_timeout(left) {
+            Ok(line) => {
+                if !progress(&line) {
+                    activity.unsubscribe_all();
+                    return;
+                }
+            }
+            // The verb has finished (or the deadline came); the reply is in the slot.
+            Err(_) => return,
+        }
+    }
+}
+
+/// The reply of a verb that was stopped (see [`crate::stop`]).
+pub fn stopped_reply(verb: &str, handle: Option<&Handle>) -> Reply {
+    let name = handle.map_or_else(String::new, |h| format!(" ({h})"));
+    Reply {
+        exit: Exit::Conflict,
+        text: format!(
+            "stopped  `ignite {verb}`{name} was stopped before it finished; its processes were \
+             ended and its cores, trees and lease given back\nnext     run it again when you \
+             want it"
+        ),
+        json: Some(serde_json::json!({ "verb": verb, "handle": handle, "stopped": true })),
+        handle: None,
+    }
+}
+
 /// Where a verb running on its own thread leaves its reply.
 enum Slot {
     Pending,
@@ -416,10 +561,31 @@ enum Slot {
 
 /// The reply to a request whose verb is still running when the caller's wait ends.
 pub fn still_running(verb: &str, handle: &Handle) -> Reply {
+    still_running_at(verb, handle, None)
+}
+
+/// [`still_running`], with what the verb is doing now, when known.
+pub fn still_running_at(verb: &str, handle: &Handle, doing: Option<&steps::View>) -> Reply {
+    let doing = doing.filter(|view| view.step.is_some() || view.waiting_for.is_some());
+    let step = doing.map_or_else(String::new, |view| {
+        format!(
+            "\nstep     {} (started {} ago)",
+            view.doing(),
+            crate::loop_health::span(view.age_s)
+        )
+    });
     Reply {
         exit: Exit::Running,
-        text: format!("waiting  `ignite {verb}` is still running\nnext     ignite wait {handle}"),
-        json: Some(serde_json::json!({ "verb": verb, "handle": handle })),
+        text: format!(
+            "waiting  `ignite {verb}` is still running{step}\nnext     ignite wait {handle}"
+        ),
+        json: Some(serde_json::json!({
+            "verb": verb,
+            "handle": handle,
+            "step": doing.and_then(|view| view.step.clone()),
+            "step_age_s": doing.and_then(|view| view.step_age_s),
+            "waiting_for": doing.and_then(|view| view.waiting_for.clone()),
+        })),
         handle: Some(handle.clone()),
     }
 }
@@ -489,7 +655,16 @@ fn answer(server: &Server, mut stream: Box<dyn Stream>) {
     }
     let _ = stream.set_read_timeout(None);
     let caller: Option<CallerProbe> = stream.closed_probe().map(Arc::from);
+    let wants = serde_json::from_str::<Wants>(&line).unwrap_or_default();
     let reply = match serde_json::from_str::<Request>(&line) {
+        Ok(req) if wants.progress => {
+            let mut open = true;
+            let mut pass = |text: &str| {
+                open = open && write_line(&mut stream, &Progress { progress: text }).is_ok();
+                open
+            };
+            server.handle_streaming(&req, caller, Some(&mut pass))
+        }
         Ok(req) => server.handle_from(&req, caller),
         Err(error) => Reply::text(Exit::Usage, format!("failed   unreadable request: {error}")),
     };
@@ -505,13 +680,68 @@ fn write_line(stream: &mut dyn Write, value: &impl Serialize) -> std::io::Result
     stream.flush()
 }
 
+/// What a client asks for beside its [`Request`], read from the same JSON line. A daemon that
+/// does not know a field ignores it, and a client that sends none gets one reply line.
+#[derive(Default, Deserialize)]
+struct Wants {
+    /// Send each step of the verb as a [`Progress`] line before the reply.
+    #[serde(default)]
+    progress: bool,
+}
+
+/// A line sent before the reply to a client that asked for progress: a step of the verb.
+#[derive(Serialize)]
+struct Progress<'a> {
+    progress: &'a str,
+}
+
+/// A [`Progress`] line as the client reads it.
+#[derive(Deserialize)]
+struct ProgressLine {
+    progress: String,
+}
+
 /// The client's side: sends `req` to the daemon listening on `socket` and reads its reply.
 pub fn send(socket: &str, req: &Request) -> std::io::Result<Reply> {
+    send_reading(socket, req, None)
+}
+
+/// [`send`], asking the daemon for each step of the verb as it starts and passing it to
+/// `progress` before the reply comes.
+pub fn send_reading(
+    socket: &str,
+    req: &Request,
+    progress: Option<&mut dyn FnMut(&str)>,
+) -> std::io::Result<Reply> {
     let mut stream = ignite_os::Native.connect(socket)?;
-    write_line(&mut stream, req)?;
-    let mut line = String::new();
-    BufReader::new(&mut stream).read_line(&mut line)?;
-    serde_json::from_str(&line).map_err(std::io::Error::other)
+    let mut value = serde_json::to_value(req).map_err(std::io::Error::other)?;
+    if progress.is_some()
+        && let Some(object) = value.as_object_mut()
+    {
+        object.insert("progress".to_owned(), serde_json::Value::Bool(true));
+    }
+    write_line(&mut stream, &value)?;
+    read_reply(BufReader::new(&mut stream), progress)
+}
+
+/// Reads [`Progress`] lines, passing each to `progress`, until the reply line.
+fn read_reply(
+    mut reader: impl BufRead,
+    mut progress: Option<&mut dyn FnMut(&str)>,
+) -> std::io::Result<Reply> {
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 {
+            return Err(std::io::Error::other("the daemon closed the connection"));
+        }
+        if let Ok(step) = serde_json::from_str::<ProgressLine>(&line) {
+            if let Some(progress) = progress.as_mut() {
+                progress(&step.progress);
+            }
+            continue;
+        }
+        return serde_json::from_str(&line).map_err(std::io::Error::other);
+    }
 }
 
 #[cfg(test)]

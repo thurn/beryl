@@ -57,6 +57,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::sched::{Grant, GrantRequest, Scheduler};
 
+mod cancel;
 mod grants;
 mod hang;
 mod jobserver;
@@ -64,6 +65,7 @@ mod peaks;
 mod retain;
 mod run_verb;
 
+use cancel::{end_when_cancelled, not_started, stopped};
 pub use grants::{GrantFile, STOP_GRACE_S};
 use grants::{GrantGuard, watch_for_stop};
 use hang::{Watchdog, signal_group};
@@ -288,26 +290,35 @@ impl SupervisedLauncher {
     /// Asks the scheduler for the command's cores. A Cargo build that only compiles shrinks
     /// while a higher class waits and grows back, through its jobserver; a command that rereads
     /// its cores file grows. Either keeps its size in `cores_file`.
-    fn grant(&self, spec: &CommandSpec, shrinks: bool, cores_file: Option<PathBuf>) -> Grant {
+    fn grant(
+        &self,
+        spec: &CommandSpec,
+        shrinks: bool,
+        cores_file: Option<PathBuf>,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Option<Grant> {
         match &self.scheduler {
-            Some(scheduler) => scheduler.acquire(&GrantRequest {
-                class: spec.class,
-                cores: spec.cores,
-                resources: spec.resources.clone(),
-                // The median peak of the command's recent runs, so that the scheduler holds a
-                // command back while less than that is free.
-                memory_mb: self.usual_memory(&spec.args),
-                shrinks,
-                grows: cores_file.is_some(),
-                cores_file,
-            }),
-            None => Grant {
+            Some(scheduler) => scheduler.acquire_until(
+                &GrantRequest {
+                    class: spec.class,
+                    cores: spec.cores,
+                    resources: spec.resources.clone(),
+                    // The median peak of the command's recent runs, so that the scheduler holds a
+                    // command back while less than that is free.
+                    memory_mb: self.usual_memory(&spec.args),
+                    shrinks,
+                    grows: cores_file.is_some(),
+                    cores_file,
+                },
+                cancelled,
+            ),
+            None => Some(Grant {
                 id: 0,
                 cores: spec.cores.max(1),
                 resources: spec.resources.clone(),
                 queued_s: 0,
                 cores_file: None,
-            },
+            }),
         }
     }
 }
@@ -322,38 +333,6 @@ impl Launcher for SupervisedLauncher {
     }
 }
 
-/// How often a command whose caller may leave is checked for the caller's departure.
-const CANCEL_POLL: Duration = Duration::from_secs(1);
-/// Seconds a command has to exit after it is asked to, because its caller left, before its
-/// group is killed.
-const CANCEL_GRACE: Duration = Duration::from_secs(10);
-
-/// Ends `run`'s command once `cancelled` is true: first with `SIGTERM` (or the job object's
-/// end), then, if it is still running [`CANCEL_GRACE`] later, with `SIGKILL`. Returns when
-/// `finished` is disconnected, which happens when the command has finished.
-fn end_when_cancelled(
-    run: &Run,
-    cancelled: &(dyn Fn() -> bool + Sync),
-    finished: &mpsc::Receiver<()>,
-) {
-    loop {
-        match finished.recv_timeout(CANCEL_POLL) {
-            Err(mpsc::RecvTimeoutError::Timeout) if cancelled() => {
-                let _ = run.end();
-                if matches!(
-                    finished.recv_timeout(CANCEL_GRACE),
-                    Err(mpsc::RecvTimeoutError::Timeout)
-                ) {
-                    let _ = run.kill();
-                }
-                return;
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
-            _ => return,
-        }
-    }
-}
-
 impl SupervisedLauncher {
     /// [`Launcher::run`], with the command ended when `cancelled`, if given, turns true.
     fn run_with(
@@ -361,6 +340,17 @@ impl SupervisedLauncher {
         spec: &CommandSpec,
         cancelled: Option<&(dyn Fn() -> bool + Sync)>,
     ) -> RunResult {
+        // The work this command is part of (see `crate::steps`). Once someone asks that work to
+        // stop, as `ignite stop` does, its commands are ended like those of a caller that left,
+        // and no new one starts.
+        let activity = crate::steps::current();
+        let stop_asked = || activity.as_ref().is_some_and(|a| a.stop_requested());
+        let either = || cancelled.is_some_and(|c| c()) || stop_asked();
+        let cancelled: Option<&(dyn Fn() -> bool + Sync)> =
+            (cancelled.is_some() || activity.is_some()).then_some(&either);
+        if stop_asked() {
+            return stopped(spec);
+        }
         // The run directory comes before the grant, because a grant that changes keeps its size
         // in a file there from the moment it is granted.
         let dir = match self.new_run() {
@@ -370,11 +360,12 @@ impl SupervisedLauncher {
         let shrinks = compiles_only(&spec.args);
         let cores_file =
             (self.scheduler.is_some() && (shrinks || spec.grows)).then(|| dir.join(CORES));
+        let Some(grant) = self.grant(spec, shrinks, cores_file.clone(), &either) else {
+            let _ = fs::remove_dir_all(&dir);
+            return stopped(spec);
+        };
         // Released when this function ends, however it ends.
-        let held = GrantGuard::new(
-            self.scheduler.clone(),
-            self.grant(spec, shrinks, cores_file.clone()),
-        );
+        let held = GrantGuard::new(self.scheduler.clone(), grant);
         let grant = held.grant();
         let jobserver = cores_file.filter(|_| shrinks);
         let file = GrantFile {
@@ -423,20 +414,6 @@ impl SupervisedLauncher {
         }
         self.prune_now_and_then();
         result
-    }
-}
-
-/// The result of a command whose supervisor could not be started.
-fn not_started(spec: &CommandSpec, error: &io::Error) -> RunResult {
-    eprintln!(
-        "ignite: cannot start a supervisor for {:?}: {error}",
-        spec.args
-    );
-    RunResult {
-        exit: None,
-        output: PathBuf::new(),
-        usage: Usage::default(),
-        hung: false,
     }
 }
 

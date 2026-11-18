@@ -31,6 +31,7 @@ pub const VERB_HELP: &[(&str, &str)] = &[
         "run any other heavy command with daemon cores",
     ),
     ("wait <handle>", "block until a running operation finishes"),
+    ("stop <handle>", "end a running command of yours"),
     (
         "ticket <verb>",
         "create, show, list, link, comment on tickets",

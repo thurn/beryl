@@ -112,6 +112,69 @@ fn a_command_is_ended_when_the_caller_that_asked_for_it_goes_away() {
 
 #[cfg(unix)]
 #[test]
+fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use ignite_core::config::Floor;
+    use ignite_core::time::SystemClock;
+    use ignite_daemon::sched::{Limits, Scheduler};
+    use ignite_daemon::steps::{Kind, Steps, Work};
+
+    struct IdleHost;
+    impl ignite_os::hostcpu::HostCpu for IdleHost {
+        fn cores(&self) -> u32 {
+            6
+        }
+        fn busy(&self) -> std::io::Result<f64> {
+            Ok(0.0)
+        }
+        fn free_memory_mb(&self) -> std::io::Result<u64> {
+            Err(std::io::Error::other("not read"))
+        }
+    }
+
+    let root = scratch("stop");
+    let started = root.join("started");
+    let spec = shell(&root, &format!("touch '{}'; sleep 600", started.display()));
+    let scheduler = Arc::new(Scheduler::new(
+        Limits {
+            cores: 6,
+            floor: Floor::default(),
+            resources: BTreeMap::new(),
+        },
+        Arc::new(SystemClock),
+        Arc::new(IdleHost),
+    ));
+    let launcher = launcher(&root).with_scheduler(Arc::clone(&scheduler));
+    let steps = Steps::new(Arc::new(SystemClock));
+    let test = steps.begin(Kind::Verb("test".to_owned()), Work::default());
+    let result = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while !started.exists() {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            assert_eq!(scheduler.status().granted, 3);
+            test.request_stop().unwrap();
+        });
+        let _entered = test.enter();
+        launcher.run(&spec)
+    });
+    // Ended by a signal long before the 600 seconds were up, with its cores back.
+    assert_eq!(result.exit, None);
+    assert!(result.usage.wall_s < 60.0, "{}", result.usage.wall_s);
+    assert_eq!(scheduler.status().granted, 0);
+    // Nothing more starts for work that was asked to stop.
+    let _entered = test.enter();
+    let again = launcher.run(&spec);
+    assert_eq!(again.exit, None);
+    assert_eq!(again.output, PathBuf::new(), "no supervisor was started");
+    fs::remove_dir_all(&root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
 fn a_command_outlives_the_daemon_side_and_its_result_is_picked_up_afterwards() {
     let root = scratch("restart");
     let go = root.join("go");

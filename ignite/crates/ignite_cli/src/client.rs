@@ -67,6 +67,38 @@ pub fn send(request: &Request) -> Reply {
     send_or(request, |_| None)
 }
 
+/// The verbs whose client prints each step as it starts, before the reply.
+pub const SHOWS_STEPS: &[&str] = &["land"];
+
+/// [`send`], printing each step of the verb on its own `step` line as the daemon reports it.
+/// Once a line cannot be written (the reader of a pipe has gone), no more are printed, and the
+/// reply is still awaited.
+pub fn send_showing_steps(request: &Request) -> Reply {
+    use std::io::Write as _;
+    let mut open = true;
+    let mut show = |text: &str| {
+        if open {
+            let mut out = std::io::stdout().lock();
+            open = writeln!(out, "step     {text}")
+                .and_then(|()| out.flush())
+                .is_ok();
+        }
+    };
+    let socket = ignite_daemon::server::default_socket();
+    ignite_daemon::server::send_reading(&socket.to_string_lossy(), request, Some(&mut show))
+        .unwrap_or_else(|error| unreachable_daemon(&socket, &error))
+}
+
+fn unreachable_daemon(socket: &std::path::Path, error: &std::io::Error) -> Reply {
+    Reply::text(
+        Exit::Usage,
+        format!(
+            "failed   the daemon at {} did not answer: {error}\nnext     ignite doctor",
+            socket.display()
+        ),
+    )
+}
+
 /// [`send`], but a daemon that cannot be reached is first offered to `fallback`, whose reply,
 /// if it gives one, is the answer.
 pub fn send_or(request: &Request, fallback: impl FnOnce(&Request) -> Option<Reply>) -> Reply {

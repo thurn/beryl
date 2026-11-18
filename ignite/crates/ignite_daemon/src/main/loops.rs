@@ -153,7 +153,10 @@ impl Parts {
         stalls_after: Duration,
         body: impl FnOnce(LoopTicker) + Send + 'static,
     ) {
-        let ticker = self.health.register(name, stalls_after);
+        let mut ticker = self.health.register(name, stalls_after);
+        if let Some(class) = loop_class(name) {
+            ticker = ticker.with_class(class);
+        }
         crash::spawn_loop(name, move || body(ticker));
     }
 
@@ -179,17 +182,20 @@ impl Parts {
         let update = self.update.clone();
         self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
-                let round = ticker.round(|| match verifier.round(&ctx, wait_s) {
-                    Ok(Some((_, TipOutcome::Verified))) => {
-                        if let Err(error) = update.after_master_moved() {
-                            eprintln!("ignite: the new release was not built: {error}");
+                let round = ticker.round(|| {
+                    crate::steps::step("waiting for a new tip, then verifying it");
+                    match verifier.round(&ctx, wait_s) {
+                        Ok(Some((_, TipOutcome::Verified))) => {
+                            if let Err(error) = update.after_master_moved() {
+                                eprintln!("ignite: the new release was not built: {error}");
+                            }
+                            Ok(())
                         }
-                        Ok(())
-                    }
-                    Ok(_) => Ok(()),
-                    Err(error) => {
-                        eprintln!("ignite: tip verification: {error}");
-                        Err(format!("tip verification: {error}"))
+                        Ok(_) => Ok(()),
+                        Err(error) => {
+                            eprintln!("ignite: tip verification: {error}");
+                            Err(format!("tip verification: {error}"))
+                        }
                     }
                 });
                 if round.is_none() {
@@ -233,14 +239,19 @@ impl Parts {
                         return Ok(());
                     }
                     let mut failure = None;
+                    crate::steps::step("keeping a free tree built at the tip");
                     if let Ok(tip) = ctx.git.tip(&ctx.config.repository.staging)
                         && let Err(error) = trees.keep_one_built(&tip)
                     {
                         eprintln!("ignite: no tree kept built: {error}");
                         failure = Some(format!("no tree kept built: {error}"));
                     }
+                    crate::steps::step("choosing idle work");
                     if let Some(job) = idle.next_job(&ctx)
-                        && let Err(error) = idle.run(&ctx, &job)
+                        && let Err(error) = {
+                            crate::steps::step(format!("idle work {job:?}"));
+                            idle.run(&ctx, &job)
+                        }
                     {
                         eprintln!("ignite: idle work {job:?}: {error}");
                         failure = Some(format!("idle work {job:?}: {error}"));
@@ -264,6 +275,19 @@ impl Parts {
                 thread::sleep(METRICS_EVERY);
             }
         });
+    }
+}
+
+/// The class of the work a loop's rounds do. Builds a round starts run in it, so tip
+/// verification's builds are `tip` work and the free tree the idle loop keeps built is built as
+/// `idle` work, which yields to everything else. Before, both ran as `agent` work: the tip and
+/// idle loops sat in rounds for over half an hour while `ignite status --admission` showed `tip`
+/// and `idle` with nothing running, their builds queued behind the agents' own.
+fn loop_class(name: &str) -> Option<Class> {
+    match name {
+        "ignite-tip" => Some(Class::Tip),
+        "ignite-idle" => Some(Class::Idle),
+        _ => None,
     }
 }
 
@@ -345,6 +369,13 @@ mod tests {
             cores: running,
             waiting,
         }
+    }
+
+    #[test]
+    fn the_tip_and_idle_loops_do_their_work_in_their_own_classes() {
+        assert_eq!(loop_class("ignite-tip"), Some(Class::Tip));
+        assert_eq!(loop_class("ignite-idle"), Some(Class::Idle));
+        assert_eq!(loop_class("ignite-sender"), None);
     }
 
     #[test]

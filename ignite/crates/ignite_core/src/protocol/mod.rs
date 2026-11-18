@@ -20,13 +20,13 @@ use serde::{Deserialize, Serialize};
 pub enum Class {
     /// Landing gates.
     Land,
-    /// Commands a worker runs itself, and tree prebuilds.
+    /// Commands a worker runs itself, and the prebuild of a tree leased to a ticket.
     Agent,
     /// Tip verification and finding a regression's culprit.
     Tip,
     /// Long experiments.
     Batch,
-    /// Exploration checks, cache audits and rebuild counts.
+    /// Exploration checks, cache audits, rebuild counts, and keeping a free tree built.
     Idle,
 }
 

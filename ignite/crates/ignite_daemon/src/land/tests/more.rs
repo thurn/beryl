@@ -290,3 +290,63 @@ fn a_landing_outside_ignites_source_or_without_a_release_branch_leaves_it_alone(
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert!(released(&plain.git).is_empty());
 }
+
+/// An activity for a landing (see `crate::steps`), entered on the test's thread.
+fn landing_activity() -> std::sync::Arc<crate::steps::Activity> {
+    let steps = crate::steps::Steps::new(std::sync::Arc::new(ignite_core::time::SystemClock));
+    steps.begin(
+        crate::steps::Kind::Verb("land".to_owned()),
+        crate::steps::Work::default(),
+    )
+}
+
+#[test]
+fn a_landing_stopped_during_its_gate_pushes_nothing_and_gives_back_its_tree_and_lease() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.git.land_other(&[("c.txt", "meanwhile")]);
+    let activity = landing_activity();
+    let _entered = activity.enter();
+    let asked = activity.clone();
+    world.queue_hook(move || asked.request_stop().unwrap());
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Conflict, "{}", reply.text);
+    assert!(world.git.pushes().is_empty());
+    assert!(world.landings().is_empty());
+    assert_eq!(world.hub.holder("staging"), None);
+    assert_eq!(
+        world.trees.landing.lock().unwrap().len(),
+        1,
+        "the landing tree is free"
+    );
+    assert!(world.landing.records.all().unwrap().is_empty());
+    let work = activity.work();
+    assert_eq!(work.class, Some(ignite_core::protocol::Class::Land));
+    assert_eq!(work.ticket.map(|t| t.to_string()).as_deref(), Some("t.1"));
+}
+
+#[test]
+fn a_landing_refuses_to_stop_once_its_push_has_begun() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    let activity = landing_activity();
+    let _entered = activity.enter();
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(
+        activity.request_stop(),
+        Err("its push to staging has begun".to_owned())
+    );
+    assert!(
+        activity
+            .view()
+            .step
+            .is_some_and(|step| step.starts_with("pushing ")),
+        "{:?}",
+        activity.view()
+    );
+}

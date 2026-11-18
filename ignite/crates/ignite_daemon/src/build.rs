@@ -414,12 +414,14 @@ impl BuildManager {
             args,
             cwd: Self::cwd(plan),
             env,
-            class: self.settings.class,
+            // A build runs in the class of the work that asked for it and is charged to its
+            // ticket: a landing's builds are `land` work, tip verification's are `tip` work.
+            class: crate::steps::class().unwrap_or(self.settings.class),
             cores,
             resources: Vec::new(),
             grows: plan.product.grows,
             tree: Some(plan.request.tree.clone()),
-            ticket: None,
+            ticket: crate::steps::ticket(),
             hang_limit_s: Some(BUILD_HANG_LIMIT_S),
         }
     }
@@ -540,6 +542,10 @@ impl BuildManager {
 
     /// Runs the build, or joins or skips it, holding each output directory for one build.
     fn build(&self, plan: &Plan) -> BuildResult {
+        let _step = crate::steps::during(format!(
+            "building {} in {}",
+            plan.request.product, plan.request.tree
+        ));
         let flight_key = (plan.request.clone(), plan.hash.clone());
         let dirs: Vec<(TreeId, String)> = plan
             .product
@@ -564,6 +570,10 @@ impl BuildManager {
             if let Some(flight) = state.flights.get(&flight_key).cloned() {
                 state.joined += 1;
                 drop(state);
+                let _waiting = crate::steps::waiting(format!(
+                    "the build of {} in {} that another command started",
+                    plan.request.product, plan.request.tree
+                ));
                 let result = flight.wait();
                 lock(&self.state).joined -= 1;
                 return result;
@@ -572,10 +582,15 @@ impl BuildManager {
                 break;
             }
             state.queued += 1;
+            let waiting = crate::steps::waiting(format!(
+                "another build writing the outputs of {} in {}",
+                plan.request.product, plan.request.tree
+            ));
             state = self
                 .ended
                 .wait(state)
                 .unwrap_or_else(PoisonError::into_inner);
+            drop(waiting);
             state.queued -= 1;
         }
         let flight = Arc::new(Flight::default());

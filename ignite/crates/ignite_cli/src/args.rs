@@ -87,6 +87,8 @@ pub enum Command {
     },
     /// Block until a running operation finishes.
     Wait { handle: String },
+    /// End a running command of this session's, such as a landing before its push begins.
+    Stop { handle: String },
     /// Create, show, list, link and comment on tickets.
     Ticket {
         #[command(subcommand)]
@@ -531,6 +533,7 @@ impl Command {
             Command::Release { .. } => "release",
             Command::Run { .. } => "run",
             Command::Wait { .. } => "wait",
+            Command::Stop { .. } => "stop",
             Command::Ticket { .. } => "ticket",
             Command::Why { .. } => "why",
             Command::Status { .. } => "status",
@@ -594,6 +597,7 @@ mod tests {
                 .command
         };
         assert!(matches!(parse("ignite land -m note"), Command::Land { note } if note == "note"));
+        assert!(matches!(parse("ignite stop L-2"), Command::Stop { handle } if handle == "L-2"));
         assert!(matches!(
             parse("ignite start Tq44s.9.48 --reservation 7f3a"),
             Command::Start { ticket, reservation: Some(code) } if ticket == "Tq44s.9.48" && code == "7f3a"

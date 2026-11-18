@@ -7,7 +7,9 @@ use ignite_core::ids::{Oid, TreeId};
 use ignite_core::inputs::{CrateGraph, Package};
 use ignite_core::manifest::{InputPattern, Manifest, Product};
 use ignite_core::protocol::Usage;
-use ignite_core::traits::{BuildResult, Builds, CommandSpec, Launcher, Result, RunResult};
+use ignite_core::traits::{
+    BuildResult, Builds, Clock as _, CommandSpec, Launcher, Result, RunResult,
+};
 
 use super::*;
 
@@ -544,4 +546,101 @@ fn a_failed_build_leaves_the_tree_holding_no_built_state() {
     let back = f.manager.ensure(&tree(), "tests", &names(&["b"]));
     assert!(matches!(back, BuildResult::Built { .. }), "{back:?}");
     assert_eq!(f.launcher.builds().len(), 3);
+}
+
+#[test]
+fn a_build_runs_in_the_class_of_the_work_that_asked_and_names_itself_as_its_step() {
+    // A landing's listing needs a build. Before, every build ran in the class of the build
+    // manager's settings (`agent`), so `ignite status --admission` counted a landing's builds
+    // under `agent` and showed `land` with nothing running.
+    let fixture = fixture("class", true);
+    let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
+    let ticket = ignite_core::ids::TicketId::new("Tqtj2").unwrap();
+    let landing = steps.begin(
+        crate::steps::Kind::Verb("land".to_owned()),
+        crate::steps::Work {
+            class: Some(Class::Land),
+            ticket: Some(ticket.clone()),
+            ..crate::steps::Work::default()
+        },
+    );
+    let worker = {
+        let (manager, landing) = (fixture.manager.clone(), landing.clone());
+        thread::spawn(move || {
+            let _entered = landing.enter();
+            crate::steps::step("listing family rust");
+            manager.ensure(&tree(), "tests", &names(&["a"]))
+        })
+    };
+    fixture.launcher.wait_for(|s| s.active == 1);
+    assert_eq!(
+        landing.view().step.as_deref(),
+        Some("building tests in tree-01")
+    );
+    fixture.launcher.release_one();
+    assert!(matches!(worker.join().unwrap(), BuildResult::Built { .. }));
+    let build = fixture
+        .launcher
+        .with(|s| s.runs.iter().rfind(|r| r.args[1] == "test").cloned())
+        .unwrap();
+    assert_eq!(build.class, Class::Land);
+    assert_eq!(build.ticket, Some(ticket));
+    assert_eq!(
+        landing.view().step.as_deref(),
+        Some("listing family rust"),
+        "the listing's step comes back once the build is done"
+    );
+    // Work that entered no activity keeps the settings' class.
+    fixture.launcher.release_one();
+    fixture.manager.ensure(&tree(), "lint", &[]);
+    let lint = fixture
+        .launcher
+        .with(|s| s.runs.iter().rfind(|r| r.args[1] == "clippy").cloned());
+    assert!(lint.is_none_or(|run| run.class == Class::Agent));
+}
+
+#[test]
+fn the_idle_loop_builds_its_free_tree_as_idle_work_and_status_names_the_build() {
+    // On jarvis the idle loop sat 35 minutes in one round, prebuilding a free tree, while
+    // `ignite status --admission` showed `idle` with nothing running: the prebuild's builds ran
+    // as `agent` work, queued behind the agents' own, and nothing said what the round did.
+    let fixture = fixture("idle-loop", true);
+    let clock = Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::EPOCH,
+    ));
+    let health = crate::loop_health::LoopHealth::new(clock.clone());
+    let ticker = health
+        .register("ignite-idle", std::time::Duration::from_secs(600))
+        .with_class(Class::Idle);
+    let round = {
+        let manager = fixture.manager.clone();
+        thread::spawn(move || {
+            ticker.round(|| {
+                crate::steps::step("keeping a free tree built at the tip");
+                manager.ensure(&tree(), "tests", &[]);
+                Ok::<_, String>(())
+            })
+        })
+    };
+    fixture.launcher.wait_for(|s| s.active == 1);
+    clock.advance(21.0 * 60.0);
+    let report = &health.reports()[0];
+    assert!(
+        report
+            .line(clock.now())
+            .contains("in a round for 21 min: building tests in tree-01 (21 min)"),
+        "{}",
+        report.line(clock.now())
+    );
+    assert!(
+        report.accounted_for(),
+        "a round that names its build is not called stuck"
+    );
+    fixture.launcher.release_one();
+    round.join().unwrap();
+    let build = fixture
+        .launcher
+        .with(|s| s.runs.iter().rfind(|r| r.args[1] == "test").cloned())
+        .unwrap();
+    assert_eq!(build.class, Class::Idle);
 }

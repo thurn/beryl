@@ -11,9 +11,11 @@
 //! `prebuilding`, `leased`, `landing` or `resetting`. Only a free tree is ever leased.
 //!
 //! Releasing a ticket tree saves its work first ([`ignite_git::save`]) and fails, leaving the
-//! tree leased and untouched, if that push fails. It then ends every process inside the tree
+//! tree leased and untouched, if that push fails. It then stops every verb still running from
+//! the tree (a landing, a test) and waits for each to end, ends every process inside the tree
 //! except the caller and its ancestors, resets the tree to a clean checkout that keeps the build
-//! directories, and serves the first waiter.
+//! directories, and serves the first waiter. A verb that refuses to stop (a landing whose push
+//! began) or does not end in time leaves the tree leased, and the release says why.
 
 mod disk;
 mod landing;
@@ -233,6 +235,10 @@ struct Inner {
     config: TreeConfig,
     clock: Arc<dyn Clock>,
     builds: Arc<dyn Builds>,
+    /// The running verbs, which are stopped before their tree is freed (see `crate::steps`).
+    steps: Arc<crate::steps::Steps>,
+    /// How long freeing a tree waits for its running verbs to end once asked to stop.
+    stop_wait: Duration,
     /// The store and the waiters, under one lock so a release cannot slip between a lease
     /// finding no free tree and its waiter joining the queue.
     locked: Mutex<Locked>,
@@ -272,6 +278,8 @@ impl Trees {
                 config,
                 clock,
                 builds,
+                steps: crate::steps::global(),
+                stop_wait: crate::stop::STOP_WAIT,
                 locked: Mutex::new(Locked {
                     db,
                     waiters: VecDeque::new(),
@@ -646,6 +654,7 @@ impl Trees {
             }
             TreeId::new(id).map_err(|e| Error::Invalid(e.to_string()))?
         };
+        crate::steps::step(format!("prebuilding {tree} at {}", &tip.as_str()[..7]));
         let path = self.inner.config.path(&tree);
         let reset = worktree::reset(&path, &park_branch(&tree), tip, &self.inner.config.keep);
         let built = reset.is_ok() && self.build(&tree, tip);

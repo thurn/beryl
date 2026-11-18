@@ -40,6 +40,7 @@ mod ledger;
 mod tests;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -61,6 +62,8 @@ pub use ledger::{Ledger, RECLAIM_SECONDS, Step};
 /// cores within about 12 s.
 pub const SAMPLE_EVERY: Duration = Duration::from_secs(1);
 
+/// How often a request waiting for its grant asks whether it was cancelled.
+pub const CANCEL_RECHECK: Duration = Duration::from_secs(1);
 /// How long [`Scheduler::wait_released`] sleeps between looks at the clock.
 const RECHECK: Duration = Duration::from_millis(100);
 
@@ -225,14 +228,42 @@ impl Scheduler {
 
     /// Blocks until the request can be granted.
     pub fn acquire(&self, request: &GrantRequest) -> Grant {
+        self.acquire_until(request, &|| false)
+            .expect("a request that is never cancelled is granted")
+    }
+
+    /// Blocks until the request can be granted, or until `cancelled` returns true, which is
+    /// asked about once every [`CANCEL_RECHECK`]; a cancelled request is withdrawn and gets
+    /// `None`. While it waits, the calling thread's step (see [`crate::steps`]) says what for.
+    pub fn acquire_until(
+        &self,
+        request: &GrantRequest,
+        cancelled: &dyn Fn() -> bool,
+    ) -> Option<Grant> {
         let mut state = self.lock();
         let id = state.ledger.enqueue(request.clone(), self.clock.now());
         self.advance(&mut state);
+        let mut waiting = None;
         loop {
             if let Some(grant) = state.ready.remove(&id) {
-                return grant;
+                return Some(grant);
             }
-            state = self.wait(state);
+            if cancelled() {
+                state.ledger.release(id);
+                self.advance(&mut state);
+                return None;
+            }
+            if waiting.is_none() {
+                waiting = Some(crate::steps::waiting(waiting_for(
+                    request,
+                    &state.ledger.status(),
+                )));
+            }
+            state = self
+                .changed
+                .wait_timeout(state, CANCEL_RECHECK)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
         }
     }
 
@@ -376,6 +407,26 @@ impl Scheduler {
             .wait(guard)
             .unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+/// What a waiting request waits for, such as `8 cores for tip work (2 tip commands running, 3
+/// waiting)`, for the step of the work that asked.
+fn waiting_for(request: &GrantRequest, status: &Status) -> String {
+    let class = request.class;
+    let mut text = format!("{} cores for {} work", request.cores.max(1), class.as_str());
+    if let Some(c) = status.classes.iter().find(|c| c.class == class) {
+        let _ = write!(
+            text,
+            " ({} {} commands running, {} waiting)",
+            c.running,
+            class.as_str(),
+            c.waiting
+        );
+    }
+    if !request.resources.is_empty() {
+        let _ = write!(text, " and {}", request.resources.join(", "));
+    }
+    text
 }
 
 /// Writes a grant's size to its cores file by rename, so the command never reads a partial

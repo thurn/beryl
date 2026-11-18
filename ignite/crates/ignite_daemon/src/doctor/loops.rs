@@ -20,31 +20,47 @@ impl StatusSection for LoopsSection {
     }
 }
 
-/// The `loops` findings of `doctor`: one problem for each loop that is stuck or failing, or one
-/// line saying all are well. Nothing for a daemon that has started no loops.
+/// The `loops` findings of `doctor`: one for each loop that is stuck or failing, or one line
+/// saying all are well. Nothing for a daemon that has started no loops.
+///
+/// A loop whose round is slow but names what it is doing or waiting for, such as a build or
+/// the cores it waits for, is a warning that names it: restarting the daemon would only start
+/// that again. Only a loop that names nothing gets the advice to restart.
 pub fn findings(health: &LoopHealth) -> Vec<Finding> {
-    let loops = health.reports().len();
-    if loops == 0 {
+    let reports = health.reports();
+    if reports.is_empty() {
         return Vec::new();
     }
-    let problems = health.problems();
-    if problems.is_empty() {
+    let now = health.now();
+    let findings: Vec<Finding> = reports
+        .iter()
+        .filter_map(|report| {
+            let problem = report.problem(now)?;
+            Some(if report.accounted_for() {
+                Finding::warning(
+                    "loops",
+                    format!("{problem}."),
+                    "look at what the round names; `ignite status` shows its step and \
+                     `ignite status --admission` what holds the cores. Restarting the daemon \
+                     would only start the round again",
+                )
+            } else {
+                Finding::problem(
+                    "loops",
+                    format!("{problem}."),
+                    "restart the daemon, and if it happens again read its log and the crash \
+                     records in the `crash` folder of the Ignite home",
+                )
+            })
+        })
+        .collect();
+    if findings.is_empty() {
         return vec![Finding::ok(
             "loops",
-            format!("{loops} background loops are making progress."),
+            format!("{} background loops are making progress.", reports.len()),
         )];
     }
-    problems
-        .into_iter()
-        .map(|problem| {
-            Finding::problem(
-                "loops",
-                format!("{problem}."),
-                "restart the daemon, and if it happens again read its log and the crash records \
-                 in the `crash` folder of the Ignite home",
-            )
-        })
-        .collect()
+    findings
 }
 
 #[cfg(test)]
@@ -78,6 +94,45 @@ mod tests {
             "{stuck:?}"
         );
         assert!(stuck[0].line().starts_with("PROBLEM  loops"));
+    }
+
+    #[test]
+    fn a_slow_round_that_names_what_it_waits_for_is_a_warning_without_a_restart() {
+        let clock = Arc::new(FakeClock::new(Timestamp::EPOCH));
+        let health = LoopHealth::new(clock.clone());
+        let idle = health.register("ignite-idle", Duration::from_mins(10));
+        let (entered, release) = (
+            Arc::new(std::sync::Barrier::new(2)),
+            Arc::new(std::sync::Barrier::new(2)),
+        );
+        let round = {
+            let (entered, release) = (entered.clone(), release.clone());
+            std::thread::spawn(move || {
+                idle.round(|| {
+                    crate::steps::step("prebuilding tree-03 at 7322d14");
+                    let _cores = crate::steps::waiting("8 cores for idle work");
+                    entered.wait();
+                    release.wait();
+                    Ok::<_, String>(())
+                })
+            })
+        };
+        entered.wait();
+        clock.advance(21.0 * 60.0);
+        let found = findings(&health);
+        release.wait();
+        round.join().unwrap();
+        assert_eq!(found.len(), 1, "{found:?}");
+        let line = found[0].line();
+        assert!(line.starts_with("WARNING  loops"), "{line}");
+        assert!(
+            line.contains(
+                "a round is still running: prebuilding tree-03 at 7322d14 (21 min), waiting for \
+                 8 cores for idle work (21 min)"
+            ),
+            "{line}"
+        );
+        assert!(!line.contains("restart the daemon,"), "{line}");
     }
 
     #[test]

@@ -5,6 +5,10 @@
 //! answers `wait` for a handle from before the restart. An operation that was still running when
 //! the daemon stopped cannot finish any more: its handle answers that it was lost.
 //!
+//! A wait that ends before its operation does prints what the operation is doing now and for
+//! how long (see [`crate::steps`]). An operation that was stopped (see [`crate::stop`]) is kept
+//! as `stopped`.
+//!
 //! A session inside `ignite wait` can be interrupted: [`Handles::interrupt`] ends every wait of
 //! that session at once with the reply it is given, such as a message from a person.
 
@@ -20,7 +24,8 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Result};
 use ignite_store::local::{handles as store, rows};
 
-use crate::server::{Context, Verb, still_running};
+use crate::server::{Context, Verb, still_running_at};
+use crate::steps::Steps;
 
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -155,9 +160,19 @@ impl Handles {
 
     /// Records the reply of a finished operation and wakes everyone waiting on it.
     pub fn finish(&self, handle: &Handle, reply: Reply) {
+        self.finish_as(handle, reply, "done");
+    }
+
+    /// [`Handles::finish`] for an operation that `ignite stop`, `ignite close` or `ignite
+    /// release` stopped: the database keeps it as `stopped`.
+    pub fn finish_stopped(&self, handle: &Handle, reply: Reply) {
+        self.finish_as(handle, reply, "stopped");
+    }
+
+    fn finish_as(&self, handle: &Handle, reply: Reply, how: &str) {
         let mut state = lock(&self.state);
         if let Some(mut row) = self.stored(handle) {
-            "done".clone_into(&mut row.state);
+            how.clone_into(&mut row.state);
             row.exit = Some(i64::from(reply.exit.code()));
             row.reply = serde_json::to_string(&reply).ok();
             row.finished_at = Some(self.clock.now().to_string());
@@ -305,11 +320,13 @@ fn lost(verb: &str, handle: &str) -> Reply {
 /// request's `wait_s`, then answers with the operation's reply.
 pub struct WaitVerb {
     handles: Arc<Handles>,
+    steps: Arc<Steps>,
 }
 
 impl WaitVerb {
-    pub fn new(handles: Arc<Handles>) -> WaitVerb {
-        WaitVerb { handles }
+    /// `steps` holds what each running operation is doing, which a wait that ends first prints.
+    pub fn new(handles: Arc<Handles>, steps: Arc<Steps>) -> WaitVerb {
+        WaitVerb { handles, steps }
     }
 }
 
@@ -339,7 +356,10 @@ impl Verb for WaitVerb {
         };
         match self.handles.wait(&handle, req.wait_s, ctx.session.as_ref()) {
             Waited::Done(reply) | Waited::Interrupted(reply) => reply,
-            Waited::Running(verb) => still_running(&verb, &handle),
+            Waited::Running(verb) => {
+                let doing = self.steps.by_handle(&handle).map(|a| a.view());
+                still_running_at(&verb, &handle, doing.as_ref())
+            }
             Waited::Unknown => Reply::text(Exit::Usage, format!("unknown handle: {name}")),
         }
     }

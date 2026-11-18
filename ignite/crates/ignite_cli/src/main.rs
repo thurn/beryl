@@ -76,6 +76,8 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
                 let home = ignite_daemon::update::Home::from_env().root;
                 let now = ignite_core::traits::Clock::now(&ignite_core::time::SystemClock);
                 client::send_or(&request, |r| fallback::dispatch(r, &home, now))
+            } else if !cli.json && client::SHOWS_STEPS.contains(&verb) {
+                client::send_showing_steps(&request)
             } else {
                 client::send(&request)
             }

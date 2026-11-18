@@ -4,13 +4,20 @@
 //! Each loop registers once with [`LoopHealth::register`] and wraps every round of its work
 //! in [`LoopTicker::round`]. The daemon's `Parts` holds the [`LoopHealth`]; clones share the
 //! same record.
+//!
+//! Each round is an activity (see [`crate::steps`]) entered on the loop's thread, so what the
+//! round does is recorded as it goes, down to the build or the cores it waits for, and a loop
+//! given a class with [`LoopTicker::with_class`] runs its builds in that class.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
+
+use crate::steps::{Activity, Kind, Steps, View, Work};
 
 /// A loop whose last rounds all failed is unhealthy from this many failures in a row.
 pub const MAX_CONSECUTIVE_ERRORS: u32 = 20;
@@ -31,6 +38,8 @@ pub struct LoopReport {
     /// Finished rounds, failed ones included.
     pub rounds: u64,
     pub consecutive_errors: u32,
+    /// What the round in progress is doing, if one is.
+    pub doing: Option<View>,
 }
 
 impl LoopReport {
@@ -45,10 +54,11 @@ impl LoopReport {
                 self.name,
                 span(quiet),
                 span(self.stall_after_s),
-                if self.in_round {
-                    ", and a round is still running"
-                } else {
-                    ""
+                match (self.in_round, &self.doing) {
+                    (true, Some(doing)) =>
+                        format!(", and a round is still running: {}", doing.doing()),
+                    (true, None) => ", and a round is still running".to_owned(),
+                    (false, _) => String::new(),
                 }
             ));
         }
@@ -69,7 +79,13 @@ impl LoopReport {
             || "no round finished yet".to_owned(),
             |at| format!("last round {} ago", span(now.seconds_since(at))),
         );
-        let running = if self.in_round { ", in a round" } else { "" };
+        let running = match (self.in_round, &self.doing) {
+            (true, Some(doing)) => {
+                format!(", in a round for {}: {}", span(doing.age_s), doing.doing())
+            }
+            (true, None) => ", in a round".to_owned(),
+            (false, _) => String::new(),
+        };
         let errors = match (&self.last_error, self.consecutive_errors) {
             (Some(error), n) if n > 0 => format!("; {n} failed in a row, last: {error}"),
             _ => String::new(),
@@ -81,8 +97,21 @@ impl LoopReport {
     }
 }
 
+impl LoopReport {
+    /// Whether a round in progress names what it is doing or waiting for, such as a build or
+    /// the cores it waits for. Restarting the daemon would only start that again; what the round
+    /// names is what to look at.
+    pub fn accounted_for(&self) -> bool {
+        self.in_round
+            && self
+                .doing
+                .as_ref()
+                .is_some_and(|doing| doing.waiting_for.is_some() || doing.step.is_some())
+    }
+}
+
 /// A duration in the largest unit that keeps it short.
-fn span(seconds: f64) -> String {
+pub(crate) fn span(seconds: f64) -> String {
     let seconds = seconds.max(0.0);
     if seconds < 120.0 {
         format!("{seconds:.0} s")
@@ -98,13 +127,18 @@ fn span(seconds: f64) -> String {
 pub struct LoopHealth {
     clock: Arc<dyn Clock>,
     loops: Arc<Mutex<BTreeMap<String, LoopReport>>>,
+    steps: Arc<Steps>,
+    /// The round each loop is in, by loop name.
+    rounds: Arc<Mutex<BTreeMap<String, Arc<Activity>>>>,
 }
 
 impl LoopHealth {
     pub fn new(clock: Arc<dyn Clock>) -> Self {
         Self {
+            steps: Arc::new(Steps::new(clock.clone())),
             clock,
             loops: Arc::new(Mutex::new(BTreeMap::new())),
+            rounds: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -124,17 +158,36 @@ impl LoopHealth {
             last_error: None,
             rounds: 0,
             consecutive_errors: 0,
+            doing: None,
         };
         self.lock().insert(name.to_owned(), report);
         LoopTicker {
             health: self.clone(),
             name: name.to_owned(),
+            class: None,
         }
+    }
+
+    /// The time on the loops' clock.
+    pub fn now(&self) -> Timestamp {
+        self.clock.now()
     }
 
     /// Every loop, by name.
     pub fn reports(&self) -> Vec<LoopReport> {
-        self.lock().values().cloned().collect()
+        let rounds = self
+            .rounds
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let mut reports: Vec<LoopReport> = self.lock().values().cloned().collect();
+        for report in &mut reports {
+            report.doing = rounds
+                .get(&report.name)
+                .filter(|_| report.in_round)
+                .map(|round| round.view());
+        }
+        reports
     }
 
     /// The problems with the loops now, one sentence each; empty when all are healthy.
@@ -165,16 +218,40 @@ impl LoopHealth {
 pub struct LoopTicker {
     health: LoopHealth,
     name: String,
+    class: Option<Class>,
 }
 
 impl LoopTicker {
+    /// The ticker of a loop whose rounds are work of `class`: the builds and commands they start
+    /// without a class of their own run in it (see [`crate::steps::class`]).
+    #[must_use]
+    pub fn with_class(mut self, class: Class) -> Self {
+        self.class = Some(class);
+        self
+    }
+
     /// Runs one round of the loop, which says what went wrong as text, and records it.
     pub fn round<T>(&self, work: impl FnOnce() -> Result<T, String>) -> Option<T> {
+        let round = self.health.steps.begin(
+            Kind::Loop(self.name.clone()),
+            Work {
+                class: self.class,
+                ..Work::default()
+            },
+        );
+        self.health
+            .rounds
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(self.name.clone(), round.clone());
         self.health.update(&self.name, |report, now| {
             report.in_round = true;
             report.last_started = Some(now);
         });
+        let entered = round.enter();
         let outcome = work();
+        drop(entered);
+        round.finish();
         self.health.update(&self.name, |report, now| {
             report.in_round = false;
             report.last_finished = Some(now);
