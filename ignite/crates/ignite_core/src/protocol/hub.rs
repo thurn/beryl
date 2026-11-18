@@ -352,6 +352,24 @@ pub struct MetricsImport {
     pub rows: Vec<serde_json::Value>,
 }
 
+/// `POST /claims` from `ignite start "<summary>"`, for a session handed a task and no ticket:
+/// the hub files a ticket titled with the summary and labelled `adhoc`, and claims it, in one
+/// request. The reply is a [`TicketBrief`], as for a [`Claim`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdhocClaim {
+    pub summary: String,
+    pub machine: MachineId,
+    pub session: SessionId,
+    pub tree: TreeId,
+}
+
+/// The reply to `POST /landed`: the next ticket of the landed ticket's `lane:` chain, already
+/// reserved for the same session, which takes it without being cleared.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LandedReply {
+    pub next: Option<Reservation>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
