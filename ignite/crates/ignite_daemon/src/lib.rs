@@ -19,6 +19,7 @@ pub mod handles;
 pub mod hubclient;
 pub mod idle;
 pub mod land;
+pub mod machine_lock;
 pub mod main;
 pub mod metrics;
 pub mod outbox;

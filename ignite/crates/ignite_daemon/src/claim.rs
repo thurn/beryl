@@ -705,6 +705,10 @@ impl Verb for StartVerb {
         "start"
     }
 
+    fn needs_the_tree_lease(&self) -> bool {
+        false
+    }
+
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         self.0.start(ctx, req)
     }

@@ -266,6 +266,10 @@ impl Verb for WaitVerb {
         true
     }
 
+    fn needs_the_tree_lease(&self) -> bool {
+        false
+    }
+
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let [name] = req.args.as_slice() else {
             return Reply::text(Exit::Usage, "usage    ignite wait <handle>");

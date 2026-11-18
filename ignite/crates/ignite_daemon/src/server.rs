@@ -5,6 +5,12 @@
 //! builds each request's [`Context`], runs the verb, turns a verb that outlives the caller's wait
 //! into a handle (see [`crate::handles`]), runs the [`Hook`]s for requests from a leased tree and
 //! remembers the command each session ran last.
+//!
+//! Only the session that holds a build tree's lease may use the tree. A request whose working
+//! directory is inside a tree that the local database has not leased to the asking session is
+//! refused with exit code 3 before its verb runs, so a session that was replaced cannot go on
+//! working in a tree that now belongs to someone else. A verb that does not act on the tree it
+//! is asked from opts out with [`Verb::needs_the_tree_lease`].
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
@@ -69,6 +75,12 @@ pub trait Verb: Send + Sync {
     /// runs such a verb directly instead of handing it a handle when the wait ends.
     fn keeps_its_own_wait(&self) -> bool {
         false
+    }
+    /// False for a verb that any session may run from inside a tree it does not hold, because
+    /// the verb does not act on that tree: `start` (it leases a tree of the daemon's choosing),
+    /// `wait` (it reads a handle's reply), and `status` and `doctor` (they only read).
+    fn needs_the_tree_lease(&self) -> bool {
+        true
     }
 }
 
@@ -182,6 +194,12 @@ impl Server {
         let mut ctx = self.ctx.clone();
         ctx.session.clone_from(&req.session);
         ctx.tree = ctx.tree_of(&req.cwd);
+        let verb = self.registry.get(&req.verb);
+        if verb.as_ref().is_none_or(|verb| verb.needs_the_tree_lease())
+            && let Some(refusal) = self.refuse_without_lease(&ctx)
+        {
+            return refusal;
+        }
         if let Some(session) = &req.session {
             lock(&self.commands).insert(
                 session.clone(),
@@ -193,7 +211,7 @@ impl Server {
                 },
             );
         }
-        let mut reply = match self.registry.get(&req.verb) {
+        let mut reply = match verb {
             None => unknown_verb(&req.verb),
             Some(verb) if verb.keeps_its_own_wait() => verb.run(&ctx, req),
             Some(verb) => self.run_or_hand_off(verb, &ctx, req),
@@ -269,6 +287,40 @@ impl Server {
             }
             reply.text = text;
         }
+    }
+
+    /// The refusal for a request from inside a tree that the local database knows and has not
+    /// leased to the asking session: free, being reset, landing, or held by another session.
+    /// A tree the database has no row for, or a server without a database, refuses nothing.
+    fn refuse_without_lease(&self, ctx: &Context) -> Option<Reply> {
+        let id = ctx.tree.as_ref()?;
+        let db = self.db.as_ref()?;
+        let tree = match trees::get(&lock(db), id.as_str()) {
+            Ok(tree) => tree?,
+            Err(error) => {
+                let text = format!("failed   cannot read the lease of {id}: {error}");
+                return Some(Reply::text(Exit::Usage, text));
+            }
+        };
+        let asking = ctx.session.as_ref().map(SessionId::as_str);
+        if tree.state == trees::State::Leased.as_str()
+            && asking.is_some()
+            && tree.session.as_deref() == asking
+        {
+            return None;
+        }
+        let now = match (tree.state.as_str(), tree.session.as_deref()) {
+            ("leased", Some(holder)) => format!("leased to {holder}"),
+            (state, _) => state.to_owned(),
+        };
+        let asker = asking.unwrap_or("a client no session started");
+        Some(Reply::text(
+            Exit::Conflict,
+            format!(
+                "conflict {id} is not leased to {asker} (it is {now}); only the session that \
+                 holds a tree may use it"
+            ),
+        ))
     }
 
     /// The request's tree, when the local database has it leased to someone.

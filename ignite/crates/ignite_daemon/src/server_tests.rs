@@ -347,3 +347,118 @@ fn hooks_run_once_per_request_from_a_leased_tree() {
     server.handle(&from(request("echo", &[]), "/repo", "local_a"));
     assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
+
+/// A verb that counts its runs; `exempt` makes it one that needs no tree lease.
+struct Counted {
+    name: &'static str,
+    exempt: bool,
+    runs: Arc<AtomicUsize>,
+}
+
+impl Verb for Counted {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn run(&self, _ctx: &Context, _req: &Request) -> Reply {
+        self.runs.fetch_add(1, Ordering::SeqCst);
+        Reply::text(Exit::Success, "ran")
+    }
+
+    fn needs_the_tree_lease(&self) -> bool {
+        !self.exempt
+    }
+}
+
+#[test]
+fn only_the_session_holding_a_tree_may_use_it() {
+    let conn = ignite_store::local::open_in_memory().unwrap();
+    trees::upsert(&conn, &tree("tree-01", "leased")).unwrap();
+    trees::upsert(&conn, &tree("tree-02", "free")).unwrap();
+    let db = Arc::new(Mutex::new(conn));
+    let runs = Arc::new(AtomicUsize::new(0));
+    let mut registry = Registry::default();
+    for (name, exempt) in [("check", false), ("status", true)] {
+        registry.register(Box::new(Counted {
+            name,
+            exempt,
+            runs: runs.clone(),
+        }));
+    }
+    let mut server = Server::new(context(), registry, Some(db)).unwrap();
+    let hooks = Arc::new(AtomicUsize::new(0));
+    server.add_hook(Box::new(Changed(hooks.clone())));
+
+    let holder = server.handle(&from(
+        request("check", &[]),
+        "/repo/trees/tree-01/src",
+        "local_a",
+    ));
+    assert_eq!(
+        (holder.exit, runs.load(Ordering::SeqCst)),
+        (Exit::Success, 1)
+    );
+
+    let other = server.handle(&from(
+        request("check", &[]),
+        "/repo/trees/tree-01",
+        "local_b",
+    ));
+    assert_eq!(other.exit, Exit::Conflict);
+    assert_eq!(
+        other.text,
+        "conflict tree-01 is not leased to local_b (it is leased to local_a); \
+         only the session that holds a tree may use it"
+    );
+    let mut anonymous = request("check", &[]);
+    anonymous.cwd = PathBuf::from("/repo/trees/tree-01");
+    assert_eq!(server.handle(&anonymous).exit, Exit::Conflict);
+    let free = server.handle(&from(
+        request("check", &[]),
+        "/repo/trees/tree-02",
+        "local_a",
+    ));
+    assert_eq!(free.exit, Exit::Conflict);
+    assert!(
+        free.text
+            .starts_with("conflict tree-02 is not leased to local_a (it is free); "),
+        "{}",
+        free.text
+    );
+    // Refused before the verb, the hooks (which renew the lease) or the record of the command.
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+    assert_eq!(hooks.load(Ordering::SeqCst), 1);
+    assert!(
+        server
+            .current_command(&SessionId::new("local_b").unwrap())
+            .is_none()
+    );
+
+    // An exempt verb runs for anyone, and an unknown verb from a held tree is still refused.
+    let status = server.handle(&from(
+        request("status", &[]),
+        "/repo/trees/tree-01",
+        "local_b",
+    ));
+    assert_eq!(
+        (status.exit, runs.load(Ordering::SeqCst)),
+        (Exit::Success, 2)
+    );
+    let unknown = server.handle(&from(
+        request("nope", &[]),
+        "/repo/trees/tree-01",
+        "local_b",
+    ));
+    assert_eq!(unknown.exit, Exit::Conflict);
+    // Outside any tree nothing is checked.
+    let outside = server.handle(&from(request("check", &[]), "/repo", "local_b"));
+    assert_eq!(outside.exit, Exit::Success);
+}
+
+#[test]
+fn start_wait_status_and_doctor_need_no_tree_lease() {
+    use crate::doctor::DoctorVerb;
+    let server = Server::new(context(), Registry::default(), None).unwrap();
+    assert!(!server.registry.get("wait").unwrap().needs_the_tree_lease());
+    assert!(!DoctorVerb.needs_the_tree_lease());
+}

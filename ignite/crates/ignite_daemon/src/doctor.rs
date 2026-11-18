@@ -314,6 +314,10 @@ impl Verb for StatusVerb {
         "status"
     }
 
+    fn needs_the_tree_lease(&self) -> bool {
+        false
+    }
+
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let version = running_version();
         self.render(ctx.machine.as_str(), version.as_ref(), &req.args)
@@ -629,6 +633,10 @@ pub struct DoctorVerb;
 impl Verb for DoctorVerb {
     fn name(&self) -> &'static str {
         "doctor"
+    }
+
+    fn needs_the_tree_lease(&self) -> bool {
+        false
     }
 
     fn run(&self, ctx: &Context, _req: &Request) -> Reply {
