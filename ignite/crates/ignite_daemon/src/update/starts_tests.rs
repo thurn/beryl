@@ -1,4 +1,6 @@
+#[cfg(unix)]
 use std::cell::RefCell;
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -52,11 +54,13 @@ fn records(commit_hex: &str, seconds: &[f64]) -> Vec<StartRecord> {
         .collect()
 }
 
+#[cfg(unix)]
 #[derive(Default)]
 struct FakeRestart {
     started: RefCell<Vec<PathBuf>>,
 }
 
+#[cfg(unix)]
 impl Restart for FakeRestart {
     fn restart(&self, executable: &Path, _args: &[String]) -> std::io::Result<()> {
         self.started.borrow_mut().push(executable.to_owned());

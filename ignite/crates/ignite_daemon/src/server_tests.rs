@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::io::{BufRead, BufReader};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
@@ -7,9 +8,13 @@ use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::hub::Claim;
 
-use super::wire::{read_reply, write_line};
+use super::wire::read_reply;
+#[cfg(unix)]
+use super::wire::write_line;
 use crate::hubclient::tests::stopped_hub;
-use ignite_os::ipc::{Ipc, Listener, Stream};
+use ignite_os::ipc::Ipc;
+#[cfg(unix)]
+use ignite_os::ipc::{Listener, Stream};
 
 struct Echo;
 

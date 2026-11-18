@@ -40,7 +40,7 @@ pub struct DaemonOptions {
     pub home: Home,
     /// The machine's name, which names its table in `ignite.toml`.
     pub hostname: String,
-    /// The `ignite` executable that supervisors and the cargo shim run.
+    /// The `ignite` executable that supervisors and the compiler wrapper scripts run.
     pub ignite: PathBuf,
     /// The Ignite commit this daemon runs, which records name.
     pub version: String,

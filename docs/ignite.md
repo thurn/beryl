@@ -516,6 +516,18 @@ How the executable is installed and kept current:
   at the build only after it passes. A build that fails is added to
   `bin/rejected`, so no daemon updates to it, and is reported once to the
   justiciar; the daemon stays on its own build until the release branch moves.
+- A restart on Windows starts the new executable with `IGNITE_RESTART_FROM` set
+  to the old daemon's process ID, and the old daemon exits once the new one has
+  logged its start in `starts.jsonl`. The new daemon waits up to 30 seconds for
+  the old one to free `daemon.lock` and its pipe, instead of exiting because the
+  lock is held. Every other start waits 2 seconds for the lock.
+- Each database records `min_reader_version`: the lowest schema version a build
+  must know to use it. A migration that only creates tables or indexes, or adds
+  nullable or defaulted columns, is additive and leaves it alone; any other
+  carries a `-- breaking:` line, which raises it, and a test enforces the rule.
+  A build opens a database newer than its last migration, applying nothing, when
+  its last migration is at least that value, so a rollback to `bin/last-good`
+  still starts after a release that added a table or column.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it. A fix to Ignite therefore reaches every machine minutes after it
@@ -549,12 +561,22 @@ How a restart is survived:
   commands are ended. Each command of a verb with a handle records its
   checkout's commit as `IGNITE_TREE_COMMIT`; a previous command is taken over
   only while the checkout is still at that commit.
-- The daemon's loops start their round over.
+- The daemon serves its socket right after it takes the machine's lock, before
+  it reads its configuration, takes over runs or builds its parts. A request
+  that arrives meanwhile waits until the daemon is ready and is then answered;
+  `status` and `doctor` answer at once that it is starting. Trees left being
+  prebuilt, reset or landed without a live owner are marked `resetting` before
+  the socket is served and are reset by a background thread afterwards; a lease
+  that needs one waits for it.
+- The daemon's loops start their round over, except fleet metrics, whose first
+  round waits until ten minutes have passed since the last ingest.
 - A client whose connection drops after it was told the handle waits on it as
   `ignite wait` does, for up to five minutes, and prints the reply as if nothing
   had happened. A read cut off earlier is sent again. Other work answers that
-  its outcome is unknown and to check `ignite status`. A refused connection,
-  meaning a daemon that is starting, is retried for five minutes.
+  its outcome is unknown and to check `ignite status`. A refused connection, or
+  a missing socket or pipe while a process holds `daemon.lock` or a start was
+  logged in the last minute, means a daemon that is starting, and is retried for
+  five minutes.
 
 How a broken build or a crash is survived:
 
@@ -652,10 +674,9 @@ Rules for trees:
   ancestors and the rest of its process group (the other side of a pipe such as
   `ignite close -m ... | tail`). A server that an agent started by hand and
   forgot is the usual case.
-- Only the session that holds a tree's lease may use it. Every `ignite` verb and
-  the tree's `cargo` shim refuse any other session with exit code 3, so a
-  session that was replaced cannot go on working in a tree that now belongs to
-  someone else.
+- Only the session that holds a tree's lease may use it. Every `ignite` verb
+  refuses any other session with exit code 3, so a session that was replaced
+  cannot go on working in a tree that now belongs to someone else.
 - The daemon keeps the main checkout's local `staging` and `master`
   fast-forwarded to the remote, and only while that checkout has no local
   changes. Sessions start there and read its instruction files, and nobody works
