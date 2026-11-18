@@ -301,10 +301,20 @@ pub enum PlanCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum GateCommand {
-    /// Recompute the threshold from the last days of history.
+    /// Recompute the threshold and the cap from the last days of history. Changes nothing.
     Replay {
         #[arg(long, default_value_t = 14)]
         days: u32,
+        /// The hub's database file, which holds the check records and the verdicts.
+        #[arg(long)]
+        hub: PathBuf,
+        /// The folder of the old run log's `*.jsonl` files, which says when and after which
+        /// change each check failed.
+        #[arg(long, alias = "runlog")]
+        run_log: PathBuf,
+        /// An old lane whose checks are exploration, left out of the catches; repeatable.
+        #[arg(long)]
+        exploration: Vec<String>,
     },
 }
 

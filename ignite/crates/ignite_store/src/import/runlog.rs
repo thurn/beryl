@@ -116,18 +116,8 @@ struct Run {
 
 pub fn import(hub: &Connection, source: &RunLogSource) -> Result<ImportReport> {
     let mut report = ImportReport::new(&format!("run log ({})", source.folder.display()));
-    let files = log_files(&source.folder)?;
     let exploration: HashSet<&str> = source.exploration.iter().map(String::as_str).collect();
-    let mut log = Log::default();
-    read_lines(
-        &files,
-        &exploration,
-        &mut report,
-        &mut |line, time, failed| {
-            log.intern(line, time, failed);
-        },
-    )?;
-    find_areas(&mut log, source, &mut report);
+    let (files, mut log) = read_log(source, &exploration, &mut report)?;
     // The second read counts each run in its change's areas, which only the first read could
     // work out. It reports nothing new about the lines.
     let mut stats: HashMap<(u32, u32), (u32, u32)> = HashMap::new();
@@ -144,6 +134,67 @@ pub fn import(hub: &Connection, source: &RunLogSource) -> Result<ImportReport> {
     write_stats(hub, &log, &stats, &mut report)?;
     write_costs(hub, &mut log, &mut report)?;
     Ok(report)
+}
+
+/// One failure that a later change made pass again (a `stale`, `catch` or `mixed` verdict): a
+/// check that caught something.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Catch {
+    pub check: String,
+    /// When the change that failed was first seen in the log.
+    pub at: Timestamp,
+    /// The areas of that change; `[""]` when they are unknown.
+    pub areas: Vec<String>,
+}
+
+/// Every catch in the run log since `since`, oldest first, read the way [`import`] counts
+/// failures: verdicts from the hub, matched to the failing run in the log, leaving out flaky
+/// failures and exploration lanes. Writes nothing.
+pub fn catches(
+    hub: &Connection,
+    source: &RunLogSource,
+    since: Timestamp,
+) -> Result<(Vec<Catch>, ImportReport)> {
+    let mut report = ImportReport::new(&format!("run log ({})", source.folder.display()));
+    let exploration: HashSet<&str> = source.exploration.iter().map(String::as_str).collect();
+    let (_, log) = read_log(source, &exploration, &mut report)?;
+    let mut found = Vec::new();
+    for verdict in verdicts::read(hub)? {
+        let Some((check, change)) = counted_failure(&log, &exploration, &verdict) else {
+            continue;
+        };
+        let change = &log.changes[change as usize];
+        if change.first < since {
+            continue;
+        }
+        found.push(Catch {
+            check: log.checks[check as usize].name.clone(),
+            at: change.first,
+            areas: change
+                .areas
+                .iter()
+                .map(|&area| log.areas[area as usize].clone())
+                .collect(),
+        });
+    }
+    found.sort_by(|a, b| (a.at, &a.check).cmp(&(b.at, &b.check)));
+    report.kind("catches").read = found.len() as u64;
+    Ok((found, report))
+}
+
+/// The first read of the log: every counted run interned, and each change's areas.
+fn read_log(
+    source: &RunLogSource,
+    exploration: &HashSet<&str>,
+    report: &mut ImportReport,
+) -> Result<(Vec<PathBuf>, Log)> {
+    let files = log_files(&source.folder)?;
+    let mut log = Log::default();
+    read_lines(&files, exploration, report, &mut |line, time, failed| {
+        log.intern(line, time, failed);
+    })?;
+    find_areas(&mut log, source, report);
+    Ok((files, log))
 }
 
 /// The `*.jsonl` files in the folder, in name order, which is time order for hour files.
@@ -377,11 +428,7 @@ fn count_verdicts(
     )?;
     for verdict in verdicts {
         report.kind("verdicts").read += 1;
-        let check = log.check_index.get(&verdict.check).copied();
-        let lane = check.map_or(verdict.lane.as_str(), |c| {
-            log.checks[c as usize].lane.as_str()
-        });
-        if exploration.contains(lane) || exploration.contains(verdict.lane.as_str()) {
+        if in_exploration(log, exploration, verdict) {
             report.kind("verdicts").skipped += 1;
             continue;
         }
@@ -409,13 +456,7 @@ fn count_verdicts(
             }
             continue;
         }
-        let failed_change = check.and_then(|check| {
-            (FAILURE_VERDICTS.contains(&verdict.kind.as_str()))
-                .then(|| log.failed_at.get(&(check, verdict.commit.clone())))
-                .flatten()
-                .map(|&change| (check, change))
-        });
-        let Some((check, change)) = failed_change else {
+        let Some((check, change)) = counted_failure(log, exploration, verdict) else {
             report.kind("verdicts").skipped += 1;
             continue;
         };
@@ -424,6 +465,34 @@ fn count_verdicts(
         }
     }
     Ok(())
+}
+
+/// Whether a verdict is on a check of an exploration lane.
+fn in_exploration(log: &Log, exploration: &HashSet<&str>, verdict: &Verdict) -> bool {
+    let lane = log
+        .check_index
+        .get(&verdict.check)
+        .map_or(verdict.lane.as_str(), |&c| {
+            log.checks[c as usize].lane.as_str()
+        });
+    exploration.contains(lane) || exploration.contains(verdict.lane.as_str())
+}
+
+/// The check and the change of the failing run of a verdict that counts as a failure: one of
+/// [`FAILURE_VERDICTS`], outside the exploration lanes, whose failing run is in the log.
+fn counted_failure(
+    log: &Log,
+    exploration: &HashSet<&str>,
+    verdict: &Verdict,
+) -> Option<(u32, u32)> {
+    if !FAILURE_VERDICTS.contains(&verdict.kind.as_str())
+        || in_exploration(log, exploration, verdict)
+    {
+        return None;
+    }
+    let check = *log.check_index.get(&verdict.check)?;
+    let change = *log.failed_at.get(&(check, verdict.commit.clone()))?;
+    Some((check, change))
 }
 
 /// The family of a check: the part of its name before the first `:`.

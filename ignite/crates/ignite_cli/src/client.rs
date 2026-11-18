@@ -10,7 +10,7 @@ use ignite_core::ids::SessionId;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 
 /// The verbs nobody has built yet, with the owning ticket's title.
-pub const NOT_BUILT: &[(&str, &str)] = &[("gate", "Gate replay")];
+pub const NOT_BUILT: &[(&str, &str)] = &[];
 
 /// How long the daemon may hold a reply before answering with a handle, below the agents'
 /// tool timeout.
@@ -85,10 +85,8 @@ mod tests {
     }
 
     #[test]
-    fn unbuilt_verbs_name_their_ticket() {
-        let reply = not_built("gate").unwrap();
-        assert_eq!(reply.exit, Exit::Usage);
-        assert_eq!(reply.text, "not implemented: Gate replay");
+    fn every_verb_is_built() {
+        assert!(not_built("gate").is_none());
         assert!(not_built("nonsense").is_none());
     }
 

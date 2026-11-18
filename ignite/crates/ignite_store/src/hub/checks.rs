@@ -124,6 +124,16 @@ pub fn add_cost(conn: &Connection, check: &str, cost: f64, unit: &str) -> Result
     Ok(())
 }
 
+/// The families that hold regression checks, in name order.
+pub fn regression_families(conn: &Connection) -> Result<Vec<String>> {
+    let mut select = conn
+        .prepare("SELECT DISTINCT family FROM checks WHERE kind = 'regression' ORDER BY family")?;
+    let families = select
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()?;
+    Ok(families)
+}
+
 /// Every check of `family` with its state, area counts and median cost, and the family's
 /// failure rate over all those counts (zero before any run).
 pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {

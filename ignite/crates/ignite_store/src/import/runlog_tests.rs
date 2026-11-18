@@ -7,6 +7,7 @@ use ignite_core::ids::Commit;
 use ignite_core::inputs::{CrateGraph, Package};
 
 use crate::hub;
+use crate::import::runlog::{Catch, catches};
 use crate::import::verdicts::tests::add_verdict_ticket;
 use crate::import::{ImportReport, RunLogSource, Sources, run};
 
@@ -294,4 +295,33 @@ fn a_change_git_cannot_resolve_counts_in_the_unknown_area() {
     let changes = report.get("changes").unwrap();
     assert_eq!((changes.read, changes.skipped), (4, 4));
     assert_eq!(area_counts(&hub, "rust:x::y"), vec![(String::new(), 4, 0)]);
+}
+
+#[test]
+fn catches_are_the_counted_failures_since_a_time_with_their_areas() {
+    let folder = write_log("catches");
+    let git = git();
+    let hub = hub::open_in_memory().unwrap();
+    add_verdicts(&hub);
+    let source = RunLogSource {
+        folder,
+        git: &git,
+        graph: graph(),
+        staging: "staging".to_owned(),
+        exploration: vec!["fuzz".to_owned()],
+    };
+    let at = ignite_core::time::Timestamp::parse("2026-11-10T02:00:00Z").unwrap();
+    // Only the `catch` on C3 counts: the `stale` has no run in the log, `miss` is a note, the
+    // flaky verdict is not a failure and `fuzz` is exploration.
+    let (found, _) = catches(&hub, &source, at).unwrap();
+    assert_eq!(
+        found,
+        vec![Catch {
+            check: "rust:x::y".to_owned(),
+            at,
+            areas: vec!["web/src/".to_owned()],
+        }]
+    );
+    let (later, _) = catches(&hub, &source, at.plus_seconds(1.0)).unwrap();
+    assert!(later.is_empty());
 }

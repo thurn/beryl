@@ -46,7 +46,7 @@ fn lint(dir: &Path) -> Result<Reply, String> {
 }
 
 /// Every `*.toml` file in the manifest directory, in name order.
-fn read_manifest(dir: &Path) -> Result<Manifest, String> {
+pub(crate) fn read_manifest(dir: &Path) -> Result<Manifest, String> {
     let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let mut paths: Vec<_> = entries
         .filter_map(Result::ok)

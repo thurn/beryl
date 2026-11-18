@@ -45,7 +45,7 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Plan { command } => plan::run(command),
         Command::Manifest { command } => manifest::run(command, &current_dir()),
         Command::Import { .. } => import::run(&cli.command, &current_dir()),
-        Command::Gate { command } => replay::run(command),
+        Command::Gate { command } => replay::run(command, &current_dir()),
         // Answered here, so a worker can read the `machine` topic while the daemon is down.
         Command::Guide { topic } => ignite_core::guide::reply(topic.as_deref()),
         // Answered here from the nearest `ignite.toml`, so it works while the daemon is down.
