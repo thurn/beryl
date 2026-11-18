@@ -1,0 +1,88 @@
+# The script checks, the desktop app's smoke test and the phone builds. Their adapter is
+# tools/src/beryl_tools/ignite/script.py, which lists each family's checks (with the inputs of
+# their own) and reports results as JSON lines. See docs/ignite.md, "Declaring a family".
+
+# `beryl_cli` in a debug build, where the script checks are assertions. `cargo build` here
+# shares `rust/target` with the Rust tests' products.
+[product.script-cli]
+build = "cargo build --quiet -p beryl_cli"
+dir = "rust"
+inputs = ["crate:beryl_cli"]
+outputs = ["rust/target"]
+
+# One check per card, moment and seat (`script:<card>/<moment>/<seat>`), and one per UI fixture
+# recording (`script:fixtures/<fixture>/<seat>`). A card's check reads the card's own file,
+# which the adapter lists; the card files are therefore left out of the family's inputs below.
+# `crate:beryl_cli` would pull in every card, so the crates `beryl_cli` builds on are named
+# instead, with the card crates' manifests and build scripts but none of their cards. Regenerate
+# the list with `cargo metadata` when `beryl_cli` gains a dependency.
+[family.script]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["script-cli", "python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list script"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run script {checks}"
+inputs = [
+  "rust/Cargo.toml",
+  "rust/Cargo.lock",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "data/card-store.tsv",
+  "docs/sample-decks/**",
+  "ui/fixtures.json",
+  "tools/src/beryl_tools/ignite/script.py",
+]
+
+# `just smoke`: builds the debug app and launches it headless until the UI reports that it
+# loaded. It builds for itself, and a desktop window system exists only on a Mac.
+[family.app]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "ui-deps"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list app"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run app {checks}"
+inputs = [
+  "crate:beryl_app",
+  "ui/**",
+  "data/**",
+  "justfile",
+  "tools/src/beryl_tools/app.py",
+  "tools/src/beryl_tools/ignite/script.py",
+]
+
+# `cargo check` of the app for the iOS Simulator and for Android, one check each. The phone
+# toolchains exist only on the Mac.
+[family.mobile]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list mobile"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run mobile {checks}"
+inputs = [
+  "crate:beryl_app",
+  "crate:beryl_mobile",
+  "tools/src/beryl_tools/ignite/script.py",
+]
