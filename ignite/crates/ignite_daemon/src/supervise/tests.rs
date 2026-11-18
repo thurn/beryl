@@ -54,6 +54,7 @@ fn request(args: &[&str]) -> Request {
         cwd: PathBuf::from("/trees/tree-01"),
         session: None,
         wait_s: 540,
+        pid: None,
     }
 }
 

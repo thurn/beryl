@@ -24,11 +24,11 @@ fn help_lists_the_agent_verbs() {
 
 #[test]
 fn an_unbuilt_verb_names_its_ticket_and_exits_1() {
-    let output = ignite(&["land", "-m", "note"]);
+    let output = ignite(&["status"]);
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        "not implemented: Landing\n"
+        "not implemented: Install, self-update, status and doctor\n"
     );
 }
 

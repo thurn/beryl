@@ -20,14 +20,12 @@ pub const NOT_BUILT: &[(&str, &str)] = &[
         "Assemble the daemon and prove one ticket end to end",
     ),
     ("gate", "Gate replay"),
-    ("land", "Landing"),
     ("prime", "Command output and the workflow text"),
     (
         "rebuild",
         "Idle work: exploration, cache audits and rebuild counts",
     ),
     ("status", "Install, self-update, status and doctor"),
-    ("sync", "Landing"),
 ];
 
 /// How long the daemon may hold a reply before answering with a handle, below the agents'
@@ -75,6 +73,7 @@ pub fn request(verb: &str, raw: &[String], cwd: PathBuf, session: Option<Session
         cwd,
         session,
         wait_s: DEFAULT_WAIT_S,
+        pid: Some(std::process::id()),
     }
 }
 
@@ -103,9 +102,9 @@ mod tests {
 
     #[test]
     fn unbuilt_verbs_name_their_ticket() {
-        let reply = not_built("land").unwrap();
+        let reply = not_built("gate").unwrap();
         assert_eq!(reply.exit, Exit::Usage);
-        assert_eq!(reply.text, "not implemented: Landing");
+        assert_eq!(reply.text, "not implemented: Gate replay");
         assert!(not_built("nonsense").is_none());
     }
 

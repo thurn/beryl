@@ -139,6 +139,7 @@ fn request(verb: &str, args: &[&str], session: Option<&str>) -> Request {
         cwd: PathBuf::from("/repo"),
         session: session.map(|s| SessionId::new(s).unwrap()),
         wait_s: 0,
+        pid: None,
     }
 }
 

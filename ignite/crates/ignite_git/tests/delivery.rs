@@ -193,3 +193,33 @@ fn changed_lists_paths_overall_and_per_landing() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_branch_is_read_and_a_remote_branch_deleted_once() {
+    let scratch = Scratch::new("branch-delete");
+    let (remote, clone) = remote_and_clone(&scratch);
+    assert_eq!(refs::branch(&clone).unwrap().as_deref(), Some("main"));
+    git(
+        &clone,
+        &["push", "--quiet", "origin", "HEAD:refs/heads/ignite/a.1"],
+    );
+    ignite_git::push::delete(&clone, "origin", "ignite/a.1").unwrap();
+    assert_eq!(git(&remote, &["branch", "--list", "ignite/a.1"]).trim(), "");
+    ignite_git::push::delete(&clone, "origin", "ignite/a.1").unwrap();
+    git(&clone, &["checkout", "--quiet", "--detach"]);
+    assert_eq!(refs::branch(&clone).unwrap(), None);
+}
+
+#[test]
+fn uncommitted_lists_edits_and_untracked_files_but_not_ignored_ones() {
+    let scratch = Scratch::new("uncommitted");
+    let (_, clone) = remote_and_clone(&scratch);
+    write(&clone, ".gitignore", "out/\n");
+    commit_all(&clone, "ignore out");
+    write(&clone, "out/build.log", "x\n");
+    write(&clone, "notes.txt", "x\n");
+    write(&clone, ".gitignore", "out/\nmore/\n");
+    let mut paths = ignite_git::save::uncommitted(&clone).unwrap();
+    paths.sort();
+    assert_eq!(paths, [".gitignore", "notes.txt"]);
+}

@@ -434,6 +434,7 @@ impl World {
             cwd: PathBuf::from(cwd),
             session: Some(session(who)),
             wait_s: 540,
+            pid: None,
         }
     }
 }

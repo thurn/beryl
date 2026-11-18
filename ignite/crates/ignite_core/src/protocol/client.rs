@@ -66,6 +66,10 @@ pub struct Request {
     pub session: Option<SessionId>,
     /// How long the daemon may hold the reply before answering with a handle.
     pub wait_s: u32,
+    /// The client's process ID. A verb that ends the processes inside a tree, such as a release
+    /// or a landing, spares this process and its ancestors (the agent's shell and app).
+    #[serde(default)]
+    pub pid: Option<u32>,
 }
 
 /// The daemon's answer.

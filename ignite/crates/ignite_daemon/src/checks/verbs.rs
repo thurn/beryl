@@ -110,6 +110,12 @@ impl Verb for CheckVerb {
             Ok(tree) => tree,
             Err(reply) => return reply,
         };
+        if !flags.contains(&"--plan") {
+            let gated = self.checks.gate_in(ctx, &tree, &options);
+            let mut lines = built_lines(&gated.run);
+            lines.extend(gate_lines(&gated));
+            return reply(&gated.run, render(&lines));
+        }
         let families: Vec<&str> = self
             .checks
             .families()
@@ -126,23 +132,63 @@ impl Verb for CheckVerb {
         let hits = self.checks.lookup(&prepared, &options);
         let view = self.view(ctx, &tree, &prepared, &hits);
         let gate_plan = view.plan(&ctx.config.gate);
-        if flags.contains(&"--plan") {
-            let mut lines = plan::plan_lines(&view, &gate_plan, &ctx.config.gate);
-            lines.extend(failure_lines(&run));
-            return Reply {
-                exit: Exit::Success,
-                text: render(&lines),
-                json: Some(json!({
-                    "run": gate_plan.run.iter().map(|p| p.check.as_str()).collect::<Vec<_>>(),
-                    "cached": gate_plan.cached.iter().map(|p| p.check.as_str()).collect::<Vec<_>>(),
-                    "past_cap": gate_plan.past_cap.len(),
-                    "tip": gate_plan.tip.len(),
-                    "scored_cost": gate_plan.scored_cost,
-                    "forced_cost": gate_plan.forced_cost,
-                })),
-                handle: None,
-            };
+        let mut lines = plan::plan_lines(&view, &gate_plan, &ctx.config.gate);
+        lines.extend(failure_lines(&run));
+        Reply {
+            exit: Exit::Success,
+            text: render(&lines),
+            json: Some(json!({
+                "run": gate_plan.run.iter().map(|p| p.check.as_str()).collect::<Vec<_>>(),
+                "cached": gate_plan.cached.iter().map(|p| p.check.as_str()).collect::<Vec<_>>(),
+                "past_cap": gate_plan.past_cap.len(),
+                "tip": gate_plan.tip.len(),
+                "scored_cost": gate_plan.scored_cost,
+                "forced_cost": gate_plan.forced_cost,
+            })),
+            handle: None,
         }
+    }
+}
+
+/// What the landing gate ran: the checks it chose, and how many it left to tip verification.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GateRun {
+    pub run: CheckRun,
+    /// Checks past the cap or below the threshold, which tip verification runs.
+    pub left: usize,
+}
+
+impl Checks {
+    /// Runs what the landing gate runs on `tree` as it is: the always set and the checks whose
+    /// score passes the threshold, within the cap, each from the cache where it can be.
+    pub fn gate(&self, ctx: &Context, tree: &TreeId, options: &RunOptions) -> GateRun {
+        match self.open(tree) {
+            Ok(tree) => self.gate_in(ctx, &tree, options),
+            Err(error) => {
+                let mut gated = GateRun::default();
+                gated
+                    .run
+                    .incomplete_families
+                    .push((format!("tree {tree}: {error}"), std::path::PathBuf::new()));
+                gated
+            }
+        }
+    }
+
+    fn gate_in(&self, ctx: &Context, tree: &OpenTree, options: &RunOptions) -> GateRun {
+        let families: Vec<&str> = self
+            .families()
+            .filter(|(_, f)| f.kind == Kind::Regression)
+            .map(|(name, _)| name)
+            .collect();
+        let mut run = CheckRun::default();
+        let mut prepared = self.prepare(ctx, tree, &families, options, &mut run);
+        for family in &mut prepared {
+            family.keep(|_| true, &mut run);
+        }
+        let hits = self.lookup(&prepared, options);
+        let view = gate_view(self, ctx, tree, &prepared, &hits);
+        let gate_plan = view.plan(&ctx.config.gate);
         let to_run: Vec<&CheckName> = gate_plan.run.iter().map(|p| &p.check).collect();
         let cached: Vec<&CheckName> = gate_plan.cached.iter().map(|p| &p.check).collect();
         let mut hits = hits.into_iter();
@@ -159,33 +205,42 @@ impl Verb for CheckVerb {
                     (k, hit)
                 })
                 .collect();
-            self.checks
-                .execute(ctx, &tree, &family.family, items, &options, &mut run);
+            self.execute(ctx, tree, &family.family, items, options, &mut run);
         }
-        let total = run.outcomes.len();
-        let verdict = if run.passed() {
-            "all passed".to_owned()
-        } else {
-            counts(&run)
-        };
-        let mut lines = built_lines(&run);
+        GateRun {
+            run,
+            left: gate_plan.past_cap.len() + gate_plan.tip.len(),
+        }
+    }
+}
+
+/// The `gate` line, the failures and the `tip` line of a gate's output.
+pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
+    let run = &gated.run;
+    let total = run.outcomes.len();
+    let verdict = if run.passed() {
+        "all passed".to_owned()
+    } else {
+        counts(run)
+    };
+    let mut lines = vec![(
+        "gate".to_owned(),
+        format!(
+            "{total} checks: {} from cache, {} run, {verdict} in {:.0} s",
+            run.from_cache, run.ran, run.wall_s
+        ),
+    )];
+    lines.extend(failure_lines(run));
+    if gated.left > 0 {
         lines.push((
-            "gate".to_owned(),
+            "tip".to_owned(),
             format!(
-                "{total} checks: {} from cache, {} run, {verdict} in {:.0} s",
-                run.from_cache, run.ran, run.wall_s
+                "{} checks left to tip verification",
+                plan::thousands(gated.left)
             ),
         ));
-        lines.extend(failure_lines(&run));
-        let left = gate_plan.past_cap.len() + gate_plan.tip.len();
-        if left > 0 {
-            lines.push((
-                "tip".to_owned(),
-                format!("{} checks left to tip verification", plan::thousands(left)),
-            ));
-        }
-        reply(&run, render(&lines))
     }
+    lines
 }
 
 /// `ignite why <check> [--inputs]`: prints a check's record (its cost, its failures, where it
@@ -298,24 +353,34 @@ trait TreeVerb {
         prepared: &[Prepared],
         hits: &[Option<CachedResult>],
     ) -> GateView {
-        let checks = self.checks();
-        let base = format!(
-            "{}/{}",
-            ctx.config.repository.remote, ctx.config.repository.staging
-        );
-        let changed = checks.trees.changed(&tree.path, &base).unwrap_or_default();
-        let areas = plan::areas(&changed, &tree.graph);
-        let stats: BTreeMap<String, _> = prepared
-            .iter()
-            .filter_map(|p| {
-                let reply = checks.history.stats(&p.family).ok()?;
-                Some((p.family.clone(), reply))
-            })
-            .collect();
-        let manifest = &checks.settings.manifest;
-        let family = |name: &str| manifest.families.get(name).map(|d| &d.family);
-        GateView::new(prepared, hits, family, &stats, &changed, areas)
+        gate_view(self.checks(), ctx, tree, prepared, hits)
     }
+}
+
+/// What the gate plan reads: the tree's changed paths and areas, and each family's record.
+fn gate_view(
+    checks: &Checks,
+    ctx: &Context,
+    tree: &OpenTree,
+    prepared: &[Prepared],
+    hits: &[Option<CachedResult>],
+) -> GateView {
+    let base = format!(
+        "{}/{}",
+        ctx.config.repository.remote, ctx.config.repository.staging
+    );
+    let changed = checks.trees.changed(&tree.path, &base).unwrap_or_default();
+    let areas = plan::areas(&changed, &tree.graph);
+    let stats: BTreeMap<String, _> = prepared
+        .iter()
+        .filter_map(|p| {
+            let reply = checks.history.stats(&p.family).ok()?;
+            Some((p.family.clone(), reply))
+        })
+        .collect();
+    let manifest = &checks.settings.manifest;
+    let family = |name: &str| manifest.families.get(name).map(|d| &d.family);
+    GateView::new(prepared, hits, family, &stats, &changed, areas)
 }
 
 impl TreeVerb for TestVerb {
@@ -405,7 +470,7 @@ fn reply(run: &CheckRun, text: String) -> Reply {
     }
 }
 
-fn built_lines(run: &CheckRun) -> Vec<(String, String)> {
+pub(crate) fn built_lines(run: &CheckRun) -> Vec<(String, String)> {
     run.builds
         .iter()
         .map(|b| {

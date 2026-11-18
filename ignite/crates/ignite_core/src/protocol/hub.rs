@@ -146,6 +146,10 @@ pub struct Landed {
     pub machine: MachineId,
     pub session: SessionId,
     pub work: LandedWork,
+    /// `ignite land --fresh`: the session's context is already heavy, so the next ticket of
+    /// its chain goes to a cleared session instead of continuing in this one.
+    #[serde(default)]
+    pub fresh: bool,
 }
 
 /// `POST /release`: a session gives a ticket back without landing it.

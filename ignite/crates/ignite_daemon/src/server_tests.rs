@@ -107,6 +107,7 @@ fn request(verb: &str, args: &[&str]) -> Request {
         cwd: PathBuf::from("/repo"),
         session: None,
         wait_s: 1,
+        pid: None,
     }
 }
 

@@ -21,7 +21,7 @@ mod execute;
 mod plan;
 mod regression;
 pub mod sources;
-mod verbs;
+pub(crate) mod verbs;
 
 #[cfg(test)]
 mod tests;
@@ -46,7 +46,7 @@ use crate::server::Context;
 
 pub use adapters::{Listed, Reported, Target};
 pub use sources::{CheckHistory, HubHistory, TreeSource};
-pub use verbs::{CheckVerb, TestVerb, WhyVerb};
+pub use verbs::{CheckVerb, GateRun, TestVerb, WhyVerb};
 
 /// How many times one check or one family listing is tried while it comes back incomplete.
 const TRIES: u32 = 3;

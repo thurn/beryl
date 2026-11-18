@@ -69,7 +69,7 @@ pub fn save(tree: &Path, remote: &str, branch: &str, message: &str) -> Result<Sa
 }
 
 /// The paths `git status` lists, untracked files included and ignored ones left out.
-fn uncommitted(tree: &Path) -> Result<Vec<String>> {
+pub fn uncommitted(tree: &Path) -> Result<Vec<String>> {
     // `--no-optional-locks` stops status from refreshing and rewriting the real index.
     let status = cmd::run(
         tree,

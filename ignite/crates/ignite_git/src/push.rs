@@ -31,6 +31,20 @@ pub fn push(tree: &Path, remote: &str, commit: &Commit, branch: &str) -> Result<
     }
 }
 
+/// Deletes `branch` on `remote`. A branch the remote does not have is not an error. A remote
+/// that cannot be reached is [`Error::Unreachable`].
+pub fn delete(tree: &Path, remote: &str, branch: &str) -> Result<()> {
+    let target = format!("refs/heads/{branch}");
+    let refspec = format!(":{target}");
+    let mut command = cmd::git(tree, ["push", "--porcelain", remote, &refspec]);
+    let out = cmd::output(&mut command)?;
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if out.status.success() || stderr.contains("remote ref does not exist") {
+        return Ok(());
+    }
+    Err(Error::Unreachable(cmd::failure(&command, &out)))
+}
+
 /// Whether a porcelain line reports on `target`. Such a line reads
 /// `<flag>\t<from>:<to>\t<summary>`.
 fn ref_line_for(line: &str, target: &str) -> bool {

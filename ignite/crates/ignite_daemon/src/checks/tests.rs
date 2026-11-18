@@ -470,6 +470,7 @@ fn test_resolves_names_by_substring_and_pattern() {
         cwd: world.dir.join("sub"),
         session: None,
         wait_s: 1,
+        pid: None,
     };
     let verb = TestVerb {
         checks: world.checks.clone(),
@@ -612,6 +613,7 @@ fn check_plan_prints_the_documented_example() {
             cwd: world.dir.clone(),
             session: None,
             wait_s: 1,
+            pid: None,
         },
     );
     assert_eq!(reply.exit, Exit::Success);
@@ -645,6 +647,7 @@ fn check_runs_the_gate_and_answers_the_rest_from_the_cache() {
             cwd: world.dir.clone(),
             session: None,
             wait_s: 1,
+            pid: None,
         },
     );
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
@@ -674,6 +677,7 @@ fn why_prints_the_record_and_the_inputs() {
         cwd: world.dir.clone(),
         session: None,
         wait_s: 1,
+        pid: None,
     };
     let reply = verb.run(&world.ctx, &request(&["script:aura/enters-attached/you"]));
     assert_eq!(

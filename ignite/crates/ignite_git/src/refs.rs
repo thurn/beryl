@@ -35,6 +35,17 @@ pub fn head(tree: &Path) -> Result<Commit> {
     cmd::commit(&cmd::run(tree, ["rev-parse", "--verify", "HEAD^{commit}"])?)
 }
 
+/// The branch a tree has checked out, or `None` for a detached `HEAD`.
+pub fn branch(tree: &Path) -> Result<Option<String>> {
+    let mut command = cmd::git(tree, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+    let out = cmd::output(&mut command)?;
+    if out.status.success() {
+        Ok(Some(String::from_utf8_lossy(&out.stdout).trim().to_owned()))
+    } else {
+        Ok(None)
+    }
+}
+
 /// The commits after `from` up to and including `to`, oldest first.
 pub fn commits_between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<Commit>> {
     let range = format!("{from}..{to}");

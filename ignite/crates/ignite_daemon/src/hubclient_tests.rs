@@ -200,6 +200,7 @@ fn statuses_become_the_shared_errors() {
         machine: MachineId::new("m-1").unwrap(),
         session: SessionId::new("local_a").unwrap(),
         work: ignite_core::protocol::tickets::LandedWork::default(),
+        fresh: false,
     };
     assert!(matches!(client.landed(&landed), Err(Error::NotFound(_))));
     assert!(matches!(client.records(&[]), Err(Error::Invalid(m)) if m.contains("token")));
