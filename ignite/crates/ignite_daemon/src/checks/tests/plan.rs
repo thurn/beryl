@@ -221,6 +221,43 @@ runs     in the gate: score 0.1266, threshold 0.004
 }
 
 #[test]
+fn why_outside_a_tree_prints_the_record() {
+    let world = seeded();
+    let verb = WhyVerb {
+        checks: world.checks.clone(),
+    };
+    let request = |args: &[&str]| Request {
+        verb: "why".to_owned(),
+        args: args.iter().map(|s| (*s).to_owned()).collect(),
+        // The main checkout, which holds no build tree.
+        cwd: std::env::temp_dir().join("ignite-main-checkout"),
+        session: None,
+        wait_s: 1,
+        pid: None,
+    };
+    let launched = world.launcher.runs.lock().unwrap().len();
+    let reply = verb.run(&world.ctx, &request(&["script:aura/enters-attached/you"]));
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(
+        reply.text,
+        "\
+check    script:aura/enters-attached/you
+family   script (regression, any platform)
+record   9 failures in 74 runs; median cost 0.79 billion
+state    on
+runs     depends on the change: run ignite why in a build tree to see the gate's choice
+"
+    );
+    // Nothing was listed or built to answer it.
+    assert_eq!(world.launcher.runs.lock().unwrap().len(), launched);
+    let reply = verb.run(&world.ctx, &request(&["script:s/run-"]));
+    assert_eq!(reply.exit, Exit::Usage);
+    assert!(reply.text.starts_with("14 checks match"), "{}", reply.text);
+    let reply = verb.run(&world.ctx, &request(&["lint:fmt", "--inputs"]));
+    assert_eq!(reply.exit, Exit::Usage);
+}
+
+#[test]
 fn a_check_whose_inputs_cannot_be_resolved_only_affects_runs_that_name_it() {
     let world = jsonl_world();
     *world.launcher.listing.lock().unwrap() =

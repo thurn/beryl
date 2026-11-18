@@ -418,22 +418,69 @@ impl Snapshot {
     }
 }
 
-/// The paths a ticket names: backquoted words that contain a `/` and end in a file name with an
-/// extension, in order and without repeats.
+/// The paths a ticket names, in order and without repeats:
+///
+/// - backquoted words that contain a `/` and end in a file name with an extension;
+/// - on a line that starts with `Files:` (after any list marker or emphasis), each word that
+///   contains a `/` and ends in such a file name, backquoted or not, such as
+///   `Files: game_scene/src/a.rs, tools/b.py (the parser)`. Tickets imported from the old
+///   service list their files this way.
+///
+/// A path may be short, relative to a directory below the repository's root;
+/// [`resolve_named_file`] finds the file it means.
 pub fn named_files(text: &str) -> Vec<String> {
     let mut files: Vec<String> = Vec::new();
-    for word in text.split('`').skip(1).step_by(2) {
-        let name = word.rsplit('/').next().unwrap_or("");
-        let is_path = word.contains('/')
-            && !word.contains(char::is_whitespace)
-            && !word.contains("://")
-            && name.contains('.')
-            && !name.starts_with('.');
-        if is_path && !files.iter().any(|f| f == word) {
+    let mut add = |word: &str| {
+        if is_named_path(word) && !files.iter().any(|f| f == word) {
             files.push(word.to_owned());
+        }
+    };
+    for word in text.split('`').skip(1).step_by(2) {
+        add(word);
+    }
+    for line in text.lines() {
+        let line = line.trim_start_matches(|c: char| c.is_whitespace() || "-*+>_".contains(c));
+        let Some(rest) = line
+            .get(..6)
+            .filter(|head| head.eq_ignore_ascii_case("files:"))
+            .map(|_| &line[6..])
+        else {
+            continue;
+        };
+        let rest = rest.trim_start_matches(['*', '_']);
+        for word in rest.split(|c: char| c.is_whitespace() || c == ',' || c == ';') {
+            let word = word.trim_start_matches(|c: char| "`'\"([*_".contains(c));
+            add(word.trim_end_matches(|c: char| "`'\")]*_.:".contains(c)));
         }
     }
     files
+}
+
+/// Whether a word names a file: it contains a `/`, no space and no URL scheme, and its last
+/// part has an extension and is not a dotfile.
+fn is_named_path(word: &str) -> bool {
+    let name = word.rsplit('/').next().unwrap_or("");
+    word.contains('/')
+        && !word.contains(char::is_whitespace)
+        && !word.contains("://")
+        && name.contains('.')
+        && !name.starts_with('.')
+        && !name.ends_with('.')
+}
+
+/// The tracked file a named path means: the path itself when `tracked` (paths relative to the
+/// repository's root) holds it, or else the one tracked file that ends in `/<path>`, such as
+/// `rust/client/crates/game_scene/src/a.rs` for `game_scene/src/a.rs`. `None` when no
+/// tracked file matches or several do.
+pub fn resolve_named_file(path: &str, tracked: &[String]) -> Option<String> {
+    let path = path.trim_start_matches("./");
+    if tracked.iter().any(|t| t == path) {
+        return Some(path.to_owned());
+    }
+    let suffix = format!("/{path}");
+    let mut matching = tracked.iter().filter(|t| t.ends_with(&suffix));
+    let first = matching.next()?;
+    matching.next().is_none().then(|| first.clone())
 }
 
 fn areas(files: &[String]) -> Vec<String> {
@@ -533,4 +580,50 @@ fn pairs(conn: &Connection, sql: &str) -> Result<Vec<(String, String)>> {
 fn parse_id(id: &str) -> Result<TicketId> {
     id.parse()
         .map_err(|_| StoreError::Invalid(format!("bad ticket ID {id}")))
+}
+
+#[cfg(test)]
+mod named_file_tests {
+    use super::{named_files, resolve_named_file};
+
+    #[test]
+    fn a_ticket_names_the_paths_on_its_files_line() {
+        let text = "Fix the parser.\n\n\
+                    Files: game_scene/src/element/style.rs, `tools/b.py` (the parser), \
+                    docs/a.md, `e/f.rs`.\n\
+                    - **Files:** ui/src/x.ts; the `why` command in ignite/crates/ignite_cli\n\
+                    Not a files line: c/d.rs";
+        assert_eq!(
+            named_files(text),
+            vec![
+                "tools/b.py",
+                "e/f.rs",
+                "game_scene/src/element/style.rs",
+                "docs/a.md",
+                "ui/src/x.ts",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_short_path_resolves_to_the_one_tracked_file_it_ends() {
+        let tracked: Vec<String> = [
+            "rust/client/crates/game_scene/src/style.rs",
+            "rust/a/src/lib.rs",
+            "rust/b/src/lib.rs",
+            "docs/a.md",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        let resolve = |path: &str| resolve_named_file(path, &tracked);
+        assert_eq!(resolve("docs/a.md").as_deref(), Some("docs/a.md"));
+        assert_eq!(
+            resolve("game_scene/src/style.rs").as_deref(),
+            Some("rust/client/crates/game_scene/src/style.rs")
+        );
+        // Two crates hold a `src/lib.rs`, and nothing holds `scene/src/style.rs` as a whole part.
+        assert_eq!(resolve("src/lib.rs"), None);
+        assert_eq!(resolve("scene/src/style.rs"), None);
+        assert_eq!(resolve("docs/missing.md"), None);
+    }
 }

@@ -50,7 +50,7 @@ use super::{Request, Response};
 #[path = "dispatch_queue.rs"]
 mod queue;
 
-pub use queue::named_files;
+pub use queue::{named_files, resolve_named_file};
 
 /// The label on a ticket filed by `ignite start "<summary>"`.
 const ADHOC: &str = "adhoc";

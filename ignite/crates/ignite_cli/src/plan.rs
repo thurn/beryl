@@ -1,7 +1,7 @@
 //! `ignite plan check <epic>`: the shape of an epic's ticket graph. It reports the ticket count
 //! and how many are ready at the start, the longest chain, dependencies between tickets that
-//! name no file in common, tickets that name no files, `lane:` groups that are not chains, and
-//! four problems that stall a run: a ticket no registered machine can take, a dependency placed
+//! name no file in common, tickets that name no files, paths a ticket names that the repository
+//! does not hold, `lane:` groups that are not chains, and four problems that stall a run: a ticket no registered machine can take, a dependency placed
 //! on an epic, a `report` ticket with dependents and a ticket moved in from another open epic.
 //!
 //! The command only reports and always exits with code 0.
@@ -13,6 +13,8 @@ use ignite_core::ids::TicketId;
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::tickets::{Edge, EdgeKind, Graph, Status, Ticket};
 use serde_json::{Value, json};
+
+use ignite_hub::routes::dispatch::{named_files, resolve_named_file};
 
 use crate::args::PlanCommand;
 use crate::ticket::{Failure, Hub, find_config};
@@ -44,6 +46,14 @@ fn load(epic: &str) -> Result<Reply, Failure> {
         .collect();
     let everything: Vec<Ticket> = graph.tickets.into_iter().map(|t| t.ticket).collect();
     let machines = machine_names(&config);
+    // The repository's files, which short paths are resolved against. Without them every named
+    // path is taken as it is written.
+    let repository = ignite_git::tracked::toplevel(&cwd)
+        .and_then(|root| {
+            let tracked = ignite_git::tracked::files(&root)?;
+            Ok(Repository { root, tracked })
+        })
+        .ok();
     let report = Graphs {
         epic: &epic_id,
         tickets: &tickets,
@@ -51,6 +61,7 @@ fn load(epic: &str) -> Result<Reply, Failure> {
         edges: &graph.edges,
         ready: &ready,
         machines: &machines,
+        repository: repository.as_ref(),
     }
     .report();
     let lines = report.join("\n");
@@ -101,6 +112,15 @@ struct Graphs<'a> {
     edges: &'a [Edge],
     ready: &'a HashSet<String>,
     machines: &'a BTreeSet<String>,
+    /// The repository the named paths are in; `None` when unknown.
+    repository: Option<&'a Repository>,
+}
+
+/// The checkout `plan check` runs in.
+struct Repository {
+    root: std::path::PathBuf,
+    /// Every file git tracks, relative to the root.
+    tracked: Vec<String>,
 }
 
 impl Graphs<'_> {
@@ -112,9 +132,16 @@ impl Graphs<'_> {
             .collect();
         let ids: HashSet<&str> = live.iter().map(|t| t.id.as_str()).collect();
         let deps = self.dependencies(&ids);
+        let mut missing: Vec<(&str, Vec<String>)> = Vec::new();
         let files: HashMap<&str, Vec<String>> = live
             .iter()
-            .map(|ticket| (ticket.id.as_str(), paths(ticket)))
+            .map(|ticket| {
+                let (found, absent) = resolve(&paths(ticket), self.repository);
+                if !absent.is_empty() {
+                    missing.push((ticket.id.as_str(), absent));
+                }
+                (ticket.id.as_str(), found)
+            })
             .collect();
 
         let mut lines = Vec::new();
@@ -129,6 +156,17 @@ impl Graphs<'_> {
         lines.push(row("longest chain", &self.chain(&live, &deps)));
         lines.extend(self.suspect_edges(&deps, &files));
         lines.extend(self.nameless(&live, &files));
+        lines.extend(missing.iter().map(|(id, absent)| {
+            let verb = if absent.len() == 1 { "does" } else { "do" };
+            row(
+                "missing file",
+                &format!(
+                    "{} names {}, which {verb} not exist",
+                    self.short(id),
+                    absent.join(", ")
+                ),
+            )
+        }));
         lines.extend(self.lanes(&live, &deps));
         lines.extend(self.unplaceable(&live));
         lines.extend(self.epic_edges(&ids));
@@ -425,7 +463,8 @@ fn reaches(from: &str, to: &str, deps: &BTreeMap<&str, Vec<&str>>) -> bool {
 }
 
 /// The paths a ticket names: backticked text without spaces that has a directory or an
-/// extension, with a trailing `:line` removed.
+/// extension, with a trailing `:line` removed, and the paths on a `Files:` line (see
+/// [`named_files`]).
 fn paths(ticket: &Ticket) -> Vec<String> {
     let mut found = Vec::new();
     for text in [&ticket.body, &ticket.design] {
@@ -436,10 +475,58 @@ fn paths(ticket: &Ticket) -> Vec<String> {
                 found.push(path);
             }
         }
+        found.extend(named_files(text));
     }
     found.sort();
     found.dedup();
     found
+}
+
+/// The named paths as the repository holds them, and the paths of files, with a directory, that
+/// it does not hold. A path is kept as written when it is a tracked file, a directory that holds one,
+/// or something on disk under the root (such as a file behind a tracked symbolic link), or when
+/// several tracked files end in it; a short path that one tracked file ends in becomes that
+/// file's path. A plain name the repository does not hold, such as `ticket.body`, is dropped,
+/// since it is more likely code than a file. A path holding a pattern, a placeholder or a
+/// variable (`*`, `<target>`, `$CACHE`) is kept but never reported. With the repository
+/// unknown, every path is kept as written.
+fn resolve(named: &[String], repository: Option<&Repository>) -> (Vec<String>, Vec<String>) {
+    let Some(Repository { root, tracked }) = repository else {
+        return (named.to_vec(), Vec::new());
+    };
+    let mut found = Vec::new();
+    let mut absent = Vec::new();
+    for path in named {
+        let directory = format!("{path}/");
+        let suffix = format!("/{path}");
+        let literal = !path.contains(['*', '?', '<', '>', '{', '$', '~']);
+        if !literal || tracked.iter().any(|t| t.starts_with(&directory)) || root.join(path).exists()
+        {
+            found.push(path.clone());
+        } else if let Some(file) = resolve_named_file(path, tracked) {
+            found.push(file);
+        } else if tracked.iter().any(|t| t.ends_with(&suffix)) {
+            found.push(path.clone());
+        } else if path.contains('/') {
+            found.push(path.clone());
+            // Only a path that looks like a file is reported: one without an extension, such
+            // as `origin/staging`, is as likely a branch or an ignored folder.
+            let file = path
+                .rsplit('/')
+                .next()
+                .and_then(|name| name.rsplit_once('.'));
+            if file.is_some_and(|(stem, extension)| {
+                !stem.trim_matches('.').is_empty()
+                    && !extension.is_empty()
+                    && extension.chars().all(char::is_alphanumeric)
+            }) {
+                absent.push(path.clone());
+            }
+        }
+    }
+    found.sort();
+    found.dedup();
+    (found, absent)
 }
 
 fn as_path(span: &str) -> Option<String> {

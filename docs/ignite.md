@@ -320,7 +320,9 @@ The verbs an agent uses while working:
   their assignees, blockers and last comments, and `ignite ticket dep list <id>`
   shows what a ticket waits on and what waits on it.
 - `ignite why <check>` prints a check's record: its cost, its failures, where it
-  runs and why.
+  runs and why. Outside a build tree, such as in the main checkout, it prints
+  only the hub's record, since the cache and the gate's choice depend on a
+  tree's change.
 - `ignite status` and `ignite doctor` print the machine's state and health.
 - `ignite tell <ticket | session | --all> "<text>"` sends a correction to work
   that is under way. See [Steering work in flight](#steering-work-in-flight).
@@ -1669,8 +1671,14 @@ tickets        41, ready at the start 17
 longest chain  6: Tig9a.1 > .4 > .9 > .15 > .22 > .30
 suspect edge   .12 depends on .7, and they name no file in common
 no files       .19, .27 name no files to read
+missing file   .21 names tools/old.py, which does not exist
 lane           lane:replay holds .31 and .33, which do not depend on each other
 ```
+
+A ticket names a file in backquotes, or on a `Files:` line, where the backquotes
+are optional. A short path such as `beryl_scene/src/lib.rs` stands for the one
+tracked file whose path ends in it. A named file that does not exist is listed,
+since it is either a typo or a file the ticket creates.
 
 The command only reports. It exits with code 0 whatever it finds, and the
 planner decides what to change.

@@ -36,6 +36,7 @@ mod plan;
 mod regression;
 pub mod sources;
 pub(crate) mod verbs;
+mod why_record;
 
 #[cfg(test)]
 mod tests;

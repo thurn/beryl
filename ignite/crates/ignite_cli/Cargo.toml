@@ -15,6 +15,8 @@ getrandom.workspace = true
 ignite_core.workspace = true
 ignite_daemon.workspace = true
 ignite_git.workspace = true
+# For `named_files`, the hub's reading of the paths a ticket names, which `plan check` shares.
+ignite_hub.workspace = true
 ignite_os.workspace = true
 ignite_store.workspace = true
 serde.workspace = true
@@ -22,7 +24,6 @@ serde_json.workspace = true
 ureq.workspace = true
 
 [dev-dependencies]
-ignite_hub.workspace = true
 ignite_store.workspace = true
 
 [lints]

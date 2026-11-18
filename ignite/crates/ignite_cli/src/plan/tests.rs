@@ -38,6 +38,7 @@ fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
         edges,
         ready: &ready,
         machines: &machines,
+        repository: None,
     }
     .report()
 }
@@ -141,6 +142,7 @@ fn a_dependency_on_an_epic_a_report_with_dependents_and_a_moved_ticket_each_get_
         edges: &edges,
         ready: &ready,
         machines: &machines,
+        repository: None,
     }
     .report();
     assert_eq!(
@@ -150,5 +152,49 @@ fn a_dependency_on_an_epic_a_report_with_dependents_and_a_moved_ticket_each_get_
             "report         .2 is labeled report, and .3 and .1.1 depend on it",
             "moved in       Tother.5 was moved in from the open epic Tother",
         ]
+    );
+}
+
+#[test]
+fn a_files_line_names_files_short_paths_resolve_and_missing_paths_are_reported() {
+    let repository = super::Repository {
+        root: std::env::temp_dir().join("ignite-plan-no-such-checkout"),
+        tracked: ["rust/client/crates/game_scene/src/style.rs", "tools/b.py"]
+            .map(str::to_owned)
+            .to_vec(),
+    };
+    // .1 names its files without backquotes, one by a short path; .2 names the full path and
+    // depends on .1, so the two share a file once the short path resolves.
+    let tickets = [
+        ticket(
+            &id(1),
+            EPIC,
+            "Files: game_scene/src/style.rs, tools/b.py",
+            &[],
+        ),
+        ticket(
+            &id(2),
+            EPIC,
+            "Edit `rust/client/crates/game_scene/src/style.rs` and `tools/gone.py`, \
+             not `ticket.body`, and write `$CACHE/x.json`, `data/<target>.json` and `game_scene/src/...`.",
+            &[],
+        ),
+    ];
+    let edges = [edge(&id(2), &id(1))];
+    let ready: HashSet<String> = [id(1)].into_iter().collect();
+    let machines = BTreeSet::new();
+    let lines = Graphs {
+        epic: EPIC,
+        tickets: &tickets,
+        everything: &tickets,
+        edges: &edges,
+        ready: &ready,
+        machines: &machines,
+        repository: Some(&repository),
+    }
+    .report();
+    assert_eq!(
+        lines[2..],
+        ["missing file   .2 names tools/gone.py, which does not exist"]
     );
 }

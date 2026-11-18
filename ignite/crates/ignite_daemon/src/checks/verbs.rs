@@ -14,6 +14,7 @@ use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::protocol::{Class, Outcome};
 
 use super::plan::{self, GateView};
+use super::why_record;
 use super::{CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
 use crate::server::{Context, Verb};
 
@@ -277,6 +278,11 @@ impl Verb for WhyVerb {
             return Reply::text(Exit::Usage, "usage: ignite why <check> [--inputs]");
         };
         let options = options("why", req, false);
+        // Outside every build tree there is nothing to list or hash, but the record can
+        // still be read.
+        if ctx.tree.is_none() && self.checks.trees.tree_of(&req.cwd).is_none() {
+            return why_record::outside_a_tree(&self.checks, wanted, flags.contains(&"--inputs"));
+        }
         let tree = match self.tree(ctx, req) {
             Ok(tree) => tree,
             Err(reply) => return reply,
@@ -652,50 +658,8 @@ fn record_lines(
     hit: Option<&CachedResult>,
 ) -> Vec<(String, String)> {
     let check = &keyed.listed.check;
-    let mut lines = vec![("check".to_owned(), check.to_string())];
-    if let Some(declared) = checks.settings.manifest.families.get(family_name) {
-        let family = &declared.family;
-        let kind = match family.kind {
-            Kind::Regression => "regression",
-            Kind::Exploration => "exploration",
-        };
-        let platforms = if family.platforms.is_any() {
-            "any platform".to_owned()
-        } else {
-            format!("on {}", checks.settings.os.as_str())
-        };
-        let always = if family.always { ", always set" } else { "" };
-        lines.push((
-            "family".to_owned(),
-            format!("{family_name} ({kind}, {platforms}{always})"),
-        ));
-    }
     let stats = view.stats.get(check);
-    let record = match stats {
-        Some(s) => {
-            let runs: u32 = s.areas.iter().map(|a| a.runs).sum();
-            let failures: u32 = s.areas.iter().map(|a| a.failures).sum();
-            let cost = s.median_cost.map_or_else(String::new, |c| {
-                let unit = if s.unit == "cpu_s" {
-                    "CPU s"
-                } else {
-                    "billion"
-                };
-                format!("; median cost {c} {unit}")
-            });
-            format!("{failures} failures in {runs} runs{cost}")
-        }
-        None => "never run".to_owned(),
-    };
-    lines.push(("record".to_owned(), record));
-    if let Some(s) = stats {
-        let state_text = match s.state {
-            ignite_core::protocol::hub::CheckState::On => "on",
-            ignite_core::protocol::hub::CheckState::Off => "off: switched off as flaky",
-            ignite_core::protocol::hub::CheckState::Uncached => "uncached: an audit disagreed",
-        };
-        lines.push(("state".to_owned(), state_text.to_owned()));
-    }
+    let mut lines = why_record::head_lines(checks, check.as_str(), family_name, stats);
     lines.push(("cache".to_owned(), cache_text(hit)));
     let gate_plan = view.plan(&ctx.config.gate);
     let threshold = ctx.config.gate.threshold;
