@@ -143,6 +143,16 @@ pub enum Command {
         #[arg(required = true, num_args = 1..=2)]
         words: Vec<String>,
     },
+    /// Ask for a justiciar, for an emergency that stops work and no ordinary ticket fixes:
+    /// `ignite justiciar [--here] "<what is broken, and the evidence>"`.
+    Justiciar {
+        /// Only this machine can work it, such as for its disk or its tools.
+        #[arg(long)]
+        here: bool,
+        /// What is broken, and the evidence.
+        #[arg(required = true)]
+        reason: Vec<String>,
+    },
     /// Check an epic's ticket graph.
     Plan {
         #[command(subcommand)]
@@ -532,6 +542,7 @@ impl Command {
             Command::Dispatch { .. } => "dispatch",
             Command::Pool { .. } => "pool",
             Command::Tell { .. } => "tell",
+            Command::Justiciar { .. } => "justiciar",
             Command::Plan { .. } => "plan",
             Command::Gate { .. } => "gate",
             Command::Rebuild { .. } => "rebuild",

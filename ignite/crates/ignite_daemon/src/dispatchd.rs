@@ -39,6 +39,8 @@ use crate::server::Context;
 
 #[path = "dispatchd_feed.rs"]
 mod feed;
+#[path = "dispatchd_justiciar.rs"]
+mod justiciar;
 #[path = "dispatchd_stall.rs"]
 mod stall;
 #[path = "dispatchd_tell.rs"]
@@ -166,6 +168,8 @@ struct State {
     /// Reservations whose ticket could not be read yet, to try again on the next tick.
     unread: Vec<(Reservation, String)>,
     refused: BTreeMap<SessionId, Timestamp>,
+    /// The worker given a justiciar prompt without a ticket, and when (see `justiciar`).
+    justiciar: Option<(SessionId, Timestamp)>,
     stalls: BTreeMap<SessionId, Stall>,
     /// Who held a tree at the last look, to notice who finished.
     held: BTreeMap<SessionId, TicketId>,
@@ -482,6 +486,7 @@ impl Dispatcher {
             .filter(|m| {
                 !holders.contains_key(&m.session) && !state.reserved.contains_key(&m.session)
             })
+            .filter(|m| !justiciar::holds(state, &m.session, now))
             .filter(|m| {
                 state
                     .refused
@@ -706,6 +711,9 @@ impl Dispatcher {
 #[cfg(test)]
 #[path = "dispatchd_hub_tests.rs"]
 mod hub_tests;
+#[cfg(test)]
+#[path = "dispatchd_justiciar_tests.rs"]
+mod justiciar_tests;
 #[cfg(test)]
 #[path = "dispatchd_tests.rs"]
 mod tests;

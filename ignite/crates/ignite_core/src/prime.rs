@@ -36,6 +36,10 @@ pub const VERB_HELP: &[(&str, &str)] = &[
         "create, show, list, link, comment on tickets",
     ),
     ("tell <to> <text>", "correct work in flight"),
+    (
+        "justiciar <reason>",
+        "an emergency that stops everyone's work",
+    ),
     ("why <check>", "a check's cost, failures and where it runs"),
     ("status, doctor", "this machine's state and health"),
     ("guide <topic>", "the rules for one situation"),

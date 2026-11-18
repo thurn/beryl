@@ -72,6 +72,8 @@ pub struct Parts {
     pub update: Arc<SelfUpdate>,
     /// What each background loop has done lately, for `status` and `doctor`.
     pub health: LoopHealth,
+    /// Sends crash records and stuck loops to the hub as justiciar reports.
+    pub reporter: Arc<crate::justiciar::Reporter>,
 }
 
 impl Parts {
@@ -106,6 +108,7 @@ impl Parts {
             self.version.clone(),
         );
         let (scheduler, update) = (self.scheduler.clone(), self.update.clone());
+        let reporter = self.reporter.clone();
         self.start_loop("ignite-sender", SENDER_STALLS_AFTER, move |ticker| {
             // The hub's version from the last heartbeat it answered.
             let hub_version: RefCell<Option<String>> = RefCell::new(None);
@@ -131,6 +134,7 @@ impl Parts {
                     // Idle work only runs on a quiet machine, so an update that waits for it
                     // would wait for as long as the machine is loaded: stop it and start none.
                     scheduler.set_draining(!may_ask);
+                    reporter.tick(&ctx, sent.is_ok());
                     sent
                 });
                 thread::sleep(SEND_EVERY);

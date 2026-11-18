@@ -318,6 +318,11 @@ pub fn server(
     registry.register(Box::new(DispatchVerb::new(parts.dispatcher.clone())));
     registry.register(Box::new(PoolVerb::new(parts.dispatcher.clone())));
     registry.register(Box::new(TellVerb));
+    registry.register(Box::new(crate::justiciar::JusticiarVerb {
+        home: parts.home.root.clone(),
+        host: parts.reporter.host.clone(),
+        dispatcher: parts.dispatcher.clone(),
+    }));
     registry.register(Box::new(InstallVerb));
     registry.register(Box::new(DoctorVerb {
         loops: Some(parts.health.clone()),

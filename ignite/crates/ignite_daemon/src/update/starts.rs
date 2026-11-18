@@ -146,6 +146,18 @@ pub fn spawn_health_marks(store: ExecutableStore, own: Commit) {
         if !store.is_rejected(&own) {
             let _ = store.mark_last_good(&own);
         }
+        // A machine installed before the monitor existed, or whose monitor still runs an
+        // older build, gets it (re)installed here, pointed at the build just marked good.
+        let monitor = ignite_os::service::Service::install_monitor(
+            &ignite_os::Native,
+            &store.monitor_program(),
+            &[crate::update::MONITOR_VERB.to_owned()],
+        );
+        if let Err(error) = monitor
+            && error.kind() != std::io::ErrorKind::Unsupported
+        {
+            eprintln!("ignite: the monitor was not installed: {error}");
+        }
     });
 }
 

@@ -19,6 +19,7 @@ pub mod doctor;
 pub mod handles;
 pub mod hubclient;
 pub mod idle;
+pub mod justiciar;
 pub mod land;
 pub mod loop_health;
 pub mod machine_lock;

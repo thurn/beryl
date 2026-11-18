@@ -77,6 +77,7 @@ impl Daemon {
             tree: None,
         };
         let desks = assemble::desks(&base, &ctx, &machinery)?;
+        let health = LoopHealth::new(base.clock.clone());
         let parts = loops::Parts {
             ctx: ctx.clone(),
             client: base.client.clone(),
@@ -92,7 +93,14 @@ impl Daemon {
             version: base.options.version.clone(),
             feed_wait_s: base.options.feed_wait_s,
             update: Arc::new(self_update(&base)),
-            health: LoopHealth::new(base.clock.clone()),
+            health: health.clone(),
+            reporter: Arc::new(crate::justiciar::Reporter::new(
+                base.options.home.root.clone(),
+                crate::doctor::Host::hostname(&crate::doctor::NativeHost),
+                base.options.version.clone(),
+                health,
+                desks.dispatcher.clone(),
+            )),
         };
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
         Ok(Daemon {

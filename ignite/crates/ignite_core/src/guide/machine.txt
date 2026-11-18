@@ -7,8 +7,10 @@ not one either: set it aside with ignite release --needs, so the rest
 moves. Waiting on another machine or a person is not a repair.
 
 Reporting:
-- Run ignite doctor and put its output in a ticket labeled "machine" at
-  P0, unless an open ticket has the same fault: then comment on that one.
+- Run ignite justiciar --here "<the fault, with ignite doctor's output>".
+  It files a P0 justiciar ticket, offered before every other ticket, or
+  comments on the open one for the same fault. Then carry on with what
+  you can, or release your ticket with a note; never wait for the repair.
 
 Repairing:
 - You may free disk space, reinstall or repair a tool, repair git state,
