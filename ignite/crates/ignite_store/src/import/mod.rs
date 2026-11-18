@@ -14,7 +14,7 @@ mod verdicts;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 
 use ignite_core::inputs::CrateGraph;
 use ignite_core::time::Timestamp;
@@ -138,7 +138,7 @@ pub struct Sources<'a> {
 
 /// Imports every source given, tickets first, in one transaction that a dry run rolls back.
 pub fn run(hub: &mut Connection, sources: &Sources, dry_run: bool) -> Result<Vec<ImportReport>> {
-    let tx = hub.transaction()?;
+    let tx = hub.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let mut reports = Vec::new();
     if let Some(path) = &sources.tickets {
         reports.push(tickets::import(&tx, path)?);

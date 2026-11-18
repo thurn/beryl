@@ -48,6 +48,11 @@ inputs = [
   "rust/Cargo.lock",
   "rust-toolchain.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
   "data/set-groups.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/bench.py",
@@ -79,6 +84,11 @@ inputs = [
   "crate:beryl_session",
   "rust/Cargo.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
   "data/set-groups.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/rest.py",
@@ -122,6 +132,12 @@ inputs = [
   "rust/cards/*/build.rs",
   "rust/cards/*/lib.rs",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/rest.py",
   "tools/src/beryl_tools/__init__.py",
@@ -154,6 +170,12 @@ inputs = [
   "rust/crates/beryl_card_store/**",
   "rust/crates/beryl_cards/**",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/rest.py",
   "tools/src/beryl_tools/__init__.py",
@@ -207,14 +229,14 @@ inputs = [
 [product.fuzz-tests]
 build = "env CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release --locked --no-run -p beryl_search -p beryl_session"
 dir = "rust"
-inputs = ["crate:beryl_search", "crate:beryl_session", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+inputs = ["crate:beryl_search", "crate:beryl_session", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
 
 # The exhaustive search's test binary, built the same way.
 [product.exhaust-tests]
 build = "env CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true cargo test --release --locked --no-run -p beryl_cards --test exhaust"
 dir = "rust"
-inputs = ["crate:beryl_cards", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+inputs = ["crate:beryl_cards", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
 
 # The test binaries of Ignite's workspace, which has its own lock file and target directory.

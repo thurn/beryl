@@ -19,21 +19,29 @@ use super::queue::named_files;
 use super::{Request, handle};
 use crate::auth::Writer;
 
-fn start() -> Timestamp {
+pub(super) fn start() -> Timestamp {
     "2026-11-17T14:00:00.000Z".parse().unwrap()
 }
 
-fn at(seconds: f64) -> Timestamp {
+pub(super) fn at(seconds: f64) -> Timestamp {
     start().plus_seconds(seconds)
 }
 
-fn post(conn: &mut Connection, path: &str, body: &Value, now: Timestamp) -> (u16, Value) {
+/// Posts as the machine the body names (the hub refuses a body that names another machine than
+/// the token's), or as `m-1` when it names none.
+pub(super) fn post(
+    conn: &mut Connection,
+    path: &str,
+    body: &Value,
+    now: Timestamp,
+) -> (u16, Value) {
+    let machine = body["machine"].as_str().unwrap_or("m-1");
     let request = Request {
         method: "POST".into(),
         path: path.into(),
         query: Vec::new(),
         writer: Some(Writer {
-            machine: MachineId::new("m-1").unwrap(),
+            machine: MachineId::new(machine).unwrap(),
             actor: "test".into(),
         }),
         body: serde_json::to_vec(body).unwrap(),
@@ -48,7 +56,7 @@ fn post(conn: &mut Connection, path: &str, body: &Value, now: Timestamp) -> (u16
 
 /// Files one ticket per `(title, labels, deps)` under an active epic, with deps naming earlier
 /// entries by index.
-fn file(conn: &mut Connection, specs: &[(&str, &[&str], &[usize])]) -> Vec<TicketId> {
+pub(super) fn file(conn: &mut Connection, specs: &[(&str, &[&str], &[usize])]) -> Vec<TicketId> {
     file_under(conn, Parent::Epic(Some(2)), specs).1
 }
 
@@ -143,7 +151,7 @@ fn free(machine: &str, sessions: &[&str]) -> Value {
     })
 }
 
-fn claim(ticket: &str, session: &str) -> Value {
+pub(super) fn claim(ticket: &str, session: &str) -> Value {
     json!({"ticket": ticket, "machine": "m-1", "session": session, "tree": "tree-01"})
 }
 

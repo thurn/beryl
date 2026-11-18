@@ -9,11 +9,41 @@ use windows_sys::Win32::Foundation::FILETIME;
 use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 use windows_sys::Win32::System::Threading::GetSystemTimes;
 
-use super::HostCpu;
+use super::{HostCpu, NATIVE_WINDOW, no_reading};
 use crate::Native;
 
-/// The times at the previous call to `busy`: idle, kernel and user, in 100-nanosecond units.
-static PREVIOUS: Mutex<Option<Times>> = Mutex::new(None);
+/// A CPU reader that remembers its own previous reading: the times at the previous call to
+/// `busy`. Each meter has its own, so two meters never take each other's baseline.
+#[derive(Debug, Default)]
+pub struct HostMeter {
+    previous: Mutex<Option<Times>>,
+}
+
+impl HostMeter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl HostCpu for HostMeter {
+    fn cores(&self) -> u32 {
+        Native.cores()
+    }
+
+    fn busy(&self) -> io::Result<f64> {
+        let now = system_times()?;
+        let mut previous = self
+            .previous
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = previous.replace(now).ok_or_else(no_reading)?;
+        busy_fraction(before, now).ok_or_else(no_reading)
+    }
+
+    fn free_memory_mb(&self) -> io::Result<u64> {
+        Native.free_memory_mb()
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Times {
@@ -28,14 +58,12 @@ impl HostCpu for Native {
         thread::available_parallelism().map_or(1, |cores| cores.get() as u32)
     }
 
+    /// Reads the times twice, [`NATIVE_WINDOW`] apart, because `Native` keeps no state.
+    /// A caller that reads repeatedly uses a [`HostMeter`].
     fn busy(&self) -> io::Result<f64> {
-        let now = system_times()?;
-        let mut previous = PREVIOUS
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        // The first call compares against boot, when every time was zero.
-        let before = previous.replace(now).unwrap_or_default();
-        Ok(busy_fraction(before, now))
+        let before = system_times()?;
+        thread::sleep(NATIVE_WINDOW);
+        busy_fraction(before, system_times()?).ok_or_else(no_reading)
     }
 
     fn free_memory_mb(&self) -> io::Result<u64> {
@@ -73,16 +101,12 @@ pub(crate) fn ticks(time: FILETIME) -> u64 {
     (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime)
 }
 
-/// The fraction of time between two readings that was not idle. Kernel time includes idle
-/// time, so the total is kernel plus user.
-fn busy_fraction(before: Times, now: Times) -> f64 {
+/// The fraction of time between two readings that was not idle, or `None` if no time passed.
+/// Kernel time includes idle time, so the total is kernel plus user.
+fn busy_fraction(before: Times, now: Times) -> Option<f64> {
     let idle = now.idle.saturating_sub(before.idle);
     let total = now.kernel.saturating_sub(before.kernel) + now.user.saturating_sub(before.user);
-    if total == 0 {
-        0.0
-    } else {
-        (total.saturating_sub(idle)) as f64 / total as f64
-    }
+    (total != 0).then(|| (total.saturating_sub(idle)) as f64 / total as f64)
 }
 
 #[cfg(test)]
@@ -91,10 +115,16 @@ mod tests {
 
     #[test]
     fn busy_is_a_fraction() {
-        let busy = Native.busy().unwrap();
-        assert!((0.0..=1.0).contains(&busy), "{busy}");
-        let busy = Native.busy().unwrap();
-        assert!((0.0..=1.0).contains(&busy), "{busy}");
+        // No reading is possible when the counters did not move between the two readings.
+        if let Ok(busy) = Native.busy() {
+            assert!((0.0..=1.0).contains(&busy), "{busy}");
+        }
+    }
+
+    #[test]
+    fn a_meter_has_no_reading_on_its_first_call() {
+        let meter = HostMeter::new();
+        assert_eq!(meter.busy().unwrap_err().kind(), io::ErrorKind::WouldBlock);
     }
 
     #[test]
@@ -110,8 +140,8 @@ mod tests {
             kernel: 260,
             user: 320,
         };
-        assert!((busy_fraction(before, now) - 0.5).abs() < 1e-9);
-        assert!(busy_fraction(now, now).abs() < 1e-9);
+        assert!((busy_fraction(before, now).unwrap() - 0.5).abs() < 1e-9);
+        assert_eq!(busy_fraction(now, now), None);
     }
 
     #[test]

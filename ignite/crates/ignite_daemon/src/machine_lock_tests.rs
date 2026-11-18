@@ -1,3 +1,4 @@
+use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::process::{Command, Stdio};
 
@@ -82,4 +83,29 @@ fn a_second_daemon_is_refused_until_the_first_dies() {
     assert_eq!(identity(&path), before, "the lock file was replaced");
     drop(second);
     fs::remove_dir_all(root).unwrap();
+}
+
+/// The home folder holds the daemon's socket and the machine's write token, so only its user
+/// may enter it, whether it is new or was made with wider permissions before.
+#[cfg(unix)]
+#[test]
+fn the_home_folder_is_private_to_its_user() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let base = std::env::temp_dir().join(format!("ignite-home-mode-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    let mode = |path: &std::path::Path| fs::metadata(path).unwrap().mode() & 0o777;
+
+    let fresh = base.join("fresh");
+    let _lock = hold(&Home {
+        root: fresh.clone(),
+    })
+    .unwrap();
+    assert_eq!(mode(&fresh), 0o700);
+
+    let old = base.join("old");
+    fs::create_dir_all(&old).unwrap();
+    fs::set_permissions(&old, fs::Permissions::from_mode(0o755)).unwrap();
+    let _lock = hold(&Home { root: old.clone() }).unwrap();
+    assert_eq!(mode(&old), 0o700);
+    fs::remove_dir_all(&base).unwrap();
 }

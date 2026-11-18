@@ -12,8 +12,9 @@
 //!   it depends on, transitively, development and build dependencies included.
 //! - `crate-closure`: the same, starting from the package that holds the check.
 //!
-//! A family that reads a Cargo package also reads its workspace's lock file and the nearest
-//! toolchain file, so both are added whenever a crate pattern is resolved. A family that reads
+//! A family that reads a Cargo package also reads its workspace's manifest (which holds the
+//! shared dependency versions, lints and profiles), its lock file and the nearest toolchain
+//! file, so all three are added whenever a crate pattern is resolved. A family that reads
 //! only paths has no use for a Cargo lock file, so none is added for it.
 //!
 //! The crate graph comes from `cargo metadata --format-version 1 --no-deps`, passed in as text,
@@ -31,6 +32,9 @@ use crate::traits::{Git, Result as GitResult};
 
 /// The lock file name Cargo writes at a workspace's root.
 const LOCK_FILE: &str = "Cargo.lock";
+
+/// The manifest at a workspace's root.
+const WORKSPACE_MANIFEST: &str = "Cargo.toml";
 
 /// The toolchain file names rustup looks for, in the order it prefers them.
 const TOOLCHAIN_FILES: &[&str] = &["rust-toolchain.toml", "rust-toolchain"];
@@ -175,9 +179,11 @@ pub fn resolve(
         workspaces.insert(package.workspace.as_str());
     }
     for workspace in workspaces {
-        let lock = join(workspace, LOCK_FILE);
-        if tracked.contains(&lock) {
-            paths.insert(lock);
+        for name in [LOCK_FILE, WORKSPACE_MANIFEST] {
+            let file = join(workspace, name);
+            if tracked.contains(&file) {
+                paths.insert(file);
+            }
         }
         if let Some(toolchain) = toolchain_file(workspace, tracked) {
             paths.insert(toolchain);
@@ -239,9 +245,16 @@ pub fn area(path: &str, graph: &CrateGraph) -> Area {
     if let Some(package) = package {
         return Area::Package(package.name.clone());
     }
+    Area::Directory(directory_area(path))
+}
+
+/// The area name of a path outside every package: its first two directories, or its first
+/// directory when it is directly inside one, or the file's own name when it is at the top.
+/// Admission and scores both group by this, so they agree on every path.
+pub fn directory_area(path: &str) -> String {
     let segments: Vec<&str> = path.split('/').collect();
     let depth = if segments.len() > 2 { 2 } else { 1 };
-    Area::Directory(segments[..depth].join("/"))
+    segments[..depth].join("/")
 }
 
 /// One problem `lint` found: the manifest key and the pattern at fault.

@@ -49,7 +49,7 @@ pub struct Evaluation {
     pub measured: Vec<String>,
 }
 
-/// Evaluates every rule if the last evaluation was an hour or more ago.
+/// Evaluates every rule if the last successful evaluation was an hour or more ago.
 pub fn evaluate_if_due(
     conn: &mut Connection,
     config: &config::Rules,
@@ -65,11 +65,14 @@ pub fn evaluate_if_due(
     {
         return Ok(None);
     }
+    // The time is recorded only after a successful evaluation, so a failed one is tried again
+    // when the next records arrive instead of waiting an hour.
+    let evaluation = evaluate(conn, &super::all(config), config, now)?;
     conn.execute(
         "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
         params![LAST_KEY, now.to_string()],
     )?;
-    evaluate(conn, &super::all(config), config, now).map(Some)
+    Ok(Some(evaluation))
 }
 
 /// Evaluates `rules` now: files tickets, stores the other findings and takes the measures of

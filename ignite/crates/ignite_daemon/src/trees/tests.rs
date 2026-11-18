@@ -523,3 +523,50 @@ fn replaced_builds_are_swept_and_then_the_free_trees_used_longest_ago_are_cleare
     assert_eq!(report.cleared, [id("tree-01"), id("tree-02")]);
     assert!(!f.repo.join(".worktrees/tree-02/out").exists());
 }
+
+#[test]
+fn setup_frees_a_landing_tree_left_landing_by_a_stopped_daemon() {
+    let f = Fixture::new(1, 1);
+    let leased = f
+        .trees
+        .lease_landing("machine:T.1", &f.tip())
+        .unwrap()
+        .unwrap();
+    assert_eq!(f.state(leased.tree.as_str()), "landing");
+    assert!(
+        f.trees
+            .lease_landing("machine:T.2", &f.tip())
+            .unwrap()
+            .is_none()
+    );
+
+    // The daemon restarts: the holder is gone, so `setup` must free the tree.
+    f.trees.setup(&f.tip()).unwrap();
+
+    assert_eq!(f.state(leased.tree.as_str()), "free");
+    assert!(
+        f.trees
+            .lease_landing("machine:T.2", &f.tip())
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn a_failed_reset_in_a_release_leaves_the_tree_leased_for_a_retry() {
+    let f = Fixture::new(1, 1);
+    let lease = f.lease("T.1", false);
+    let missing = Commit::new("1234567890abcdef1234567890abcdef12345678").unwrap();
+
+    let error = f
+        .trees
+        .release_unsaved(&lease.tree, &missing, None)
+        .unwrap_err();
+
+    assert!(!matches!(error, Error::Conflict(_)), "{error:?}");
+    assert_eq!(f.state("tree-01"), "leased");
+    f.trees
+        .release_unsaved(&lease.tree, &f.tip(), None)
+        .unwrap();
+    assert_eq!(f.state("tree-01"), "free");
+}

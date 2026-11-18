@@ -114,6 +114,16 @@ impl Hub {
         self.send("GET", &format!("/pj/api{path}"), None, &[])
     }
 
+    /// A read that carries the machine's token, which long polls need.
+    fn get_authed(&self, path: &str) -> Reply {
+        self.send(
+            "GET",
+            &format!("/pj/api{path}"),
+            None,
+            &self.write_headers(),
+        )
+    }
+
     fn write_headers(&self) -> Vec<String> {
         vec![
             format!("Authorization: Bearer {}", self.token),
@@ -284,20 +294,23 @@ fn the_feed_answers_at_once_with_changes_and_empty_when_the_wait_ends() {
     let seq = created["seq"].as_u64().unwrap();
     let id = created["results"][0]["id"].as_str().unwrap().to_owned();
 
-    let behind = hub.get(&format!("/feed?since={}&wait=60", seq - 1)).json();
+    let behind = hub
+        .get_authed(&format!("/feed?since={}&wait=60", seq - 1))
+        .json();
     assert_eq!(behind["seq"], seq);
     assert_eq!(behind["changes"][0]["ticket"], id.as_str());
 
-    let idle = hub.get(&format!("/feed?since={seq}&wait=1")).json();
+    let idle = hub.get_authed(&format!("/feed?since={seq}&wait=1")).json();
     assert_eq!(idle, json!({"seq": seq, "changes": []}));
 
     // A long wait ends with the change as soon as the write lands. Had it waited the whole
     // minute instead, the test would still pass, but only after a minute; it cannot return
     // empty, since its wait outlasts the write.
     let address = hub.address;
+    let headers = hub.write_headers();
     let waiting = thread::spawn(move || {
         let path = format!("/pj/api/feed?since={seq}&wait=60");
-        send(address, "GET", &path, None, &[]).json()
+        send(address, "GET", &path, None, &headers).json()
     });
     hub.post(
         "/batch",
@@ -308,11 +321,25 @@ fn the_feed_answers_at_once_with_changes_and_empty_when_the_wait_ends() {
     assert_eq!(woken["changes"][0]["ticket"], id.as_str());
 
     let restored = hub
-        .get(&format!("/feed?since={}&wait=60", seq + 100))
+        .get_authed(&format!("/feed?since={}&wait=60", seq + 100))
         .json();
     assert_eq!(restored["changes"][0]["kind"], "resync");
     assert_eq!(hub.get("/feed").status, 400);
     assert_eq!(hub.get("/feed?since=x").status, 400);
+}
+
+#[test]
+fn a_feed_request_without_a_token_never_waits_and_a_big_unauthenticated_body_is_refused() {
+    let fixture = Fixture::new("unauth");
+    let hub = fixture.start();
+    // With a token this would hold a thread and a connection for a minute; without one it
+    // answers at once, empty.
+    let idle = hub.get("/feed?since=0&wait=60").json();
+    assert_eq!(idle["changes"], json!([]));
+    // The body is refused before it is read, whatever the route.
+    let big = json!({"text": "x".repeat(100 * 1024)});
+    let refused = hub.send("POST", "/pj/api/batch", Some(&big), &[]);
+    assert_eq!(refused.status, 413);
 }
 
 #[test]

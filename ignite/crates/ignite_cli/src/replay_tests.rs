@@ -47,7 +47,7 @@ fn enough(kept: usize, total: usize) -> bool {
 
 #[test]
 fn twenty_catches_keep_nineteen_and_the_cap_covers_their_gates() {
-    // Check `c{f}` failed f times in 100 runs, so the scores are 1/120 .. 20/120 per billion.
+    // Check `c{f}` failed f times in 100 runs, so the scores, with the catch itself left out, are 0/119 .. 19/119 per billion.
     let checks: Vec<GateCheck> = (1..=20)
         .map(|f| check(&format!("rust:c{f:02}"), &["a"], 100, f, 1.0))
         .collect();
@@ -56,7 +56,7 @@ fn twenty_catches_keep_nineteen_and_the_cap_covers_their_gates() {
         .collect();
     let found = replay(&catches, &checks).unwrap();
     assert_eq!(found.catches, 20);
-    assert!((found.chosen().threshold - 2.0 / 120.0).abs() < 1e-12);
+    assert!((found.chosen().threshold - 1.0 / 119.0).abs() < 1e-12);
     assert_eq!(found.chosen().kept, 19);
     // Every catch touched the same area, so each gate runs the same 19 one-billion checks.
     assert!((found.chosen().cap - 19.0).abs() < 1e-9);
@@ -162,5 +162,29 @@ fn hub_records_become_gate_checks_without_switched_off_checks_or_left_out_famili
             runs: 4,
             failures: 1
         }
+    );
+}
+
+#[test]
+fn a_catch_is_scored_without_its_own_failure() {
+    // The hub counts 10 failures in 100 runs, one of them this catch's: the gate could only have
+    // known 9 in 99.
+    let checks = [check("rust:c", &["a"], 100, 10, 1.0)];
+    let found = replay(&[catch("rust:c", &["a"])], &checks).unwrap();
+    assert!((found.chosen().threshold - 9.0 / (99.0 + 20.0 * 0.0)).abs() > 1e-9);
+    assert!((found.chosen().threshold - 9.0 / 119.0).abs() < 1e-12);
+}
+
+#[test]
+fn the_cap_costs_only_checks_the_change_could_affect() {
+    let checks = [
+        check("rust:near", &["a"], 100, 50, 2.0),
+        check("rust:far", &["b"], 100, 50, 1000.0),
+    ];
+    let found = replay(&[catch("rust:near", &["a"])], &checks).unwrap();
+    assert!(
+        (found.chosen().cap - 2.0).abs() < 1e-9,
+        "{:?}",
+        found.chosen()
     );
 }

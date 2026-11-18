@@ -184,3 +184,31 @@ def test_app_and_mobile_list_one_check_per_target(repo: Path) -> None:
         "mobile:aarch64-apple-ios-sim",
         "mobile:aarch64-linux-android",
     ]
+
+
+def test_a_card_whose_scenarios_use_another_card_lists_that_cards_file_too(
+    repo: Path,
+) -> None:
+    alpha = repo / "rust/cards/cards_1/set/alpha.rs"
+    alpha.write_text(
+        alpha.read_text() + "Scenario::new(\"steals\").hand(P1, &[Card::Beta]);\n"
+    )
+    listed = adapter.list_checks("script", repo, ["Alpha"])
+    assert listed[0]["inputs"] == [
+        "rust/cards/cards_1/set/alpha.rs",
+        "rust/cards/cards_1/set/beta.rs",
+    ]
+    # Beta's checks do not read Alpha's file.
+    assert adapter.list_checks("script", repo, ["Beta"])[0]["inputs"] == [
+        "rust/cards/cards_1/set/beta.rs"
+    ]
+
+
+def test_card_references_match_names_variants_and_constants() -> None:
+    assert adapter.letters("Jace, Vryn's Prodigy") == adapter.letters("JaceVrynsProdigy")
+    assert adapter.letters("MANA_CRYPT") == adapter.letters("Mana Crypt")
+
+
+def test_a_fixture_check_reads_every_card_file(repo: Path) -> None:
+    checks = {c["check"]: c for c in adapter.list_checks("script", repo, [])}
+    assert "rust/cards" in checks["script:fixtures/table-opening/yours"]["inputs"]

@@ -164,8 +164,23 @@ impl CheckRun {
     }
 }
 
-/// A check's verdict: the check, its outcome, what to report and the output a failure keeps.
-type Final = (Keyed, Outcome, Option<Failure>, Option<PathBuf>);
+/// A check's verdict: the check, its outcome, what to report, the output a failure keeps and
+/// what its runs cost.
+type Final = (
+    Keyed,
+    Outcome,
+    Option<Failure>,
+    Option<PathBuf>,
+    ignite_core::protocol::hub::ResultCost,
+);
+
+/// Why a family's `list` gave no checks.
+enum ListError {
+    /// A product it needs failed to build, which `CheckRun::build_failures` records.
+    Build,
+    /// The command failed every try; holds the last output.
+    Output(PathBuf),
+}
 
 /// A listed check with its input hash.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -382,7 +397,10 @@ impl Checks {
         for (name, family) in self.families().filter(|(n, _)| families.contains(n)) {
             let listed = match self.list(ctx, tree, name, family, options, run) {
                 Ok(listed) => listed,
-                Err(output) => {
+                // The build is already in `run.build_failures`; the family's list never ran,
+                // so it is not an incomplete family.
+                Err(ListError::Build) => continue,
+                Err(ListError::Output(output)) => {
                     run.incomplete_families.push((name.to_owned(), output));
                     continue;
                 }
@@ -413,20 +431,25 @@ impl Checks {
         family: &Family,
         options: &RunOptions,
         run: &mut CheckRun,
-    ) -> std::result::Result<Vec<Listed>, PathBuf> {
+    ) -> std::result::Result<Vec<Listed>, ListError> {
+        // `list` may read what a product builds, so it waits for the products it needs.
+        let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
         let memo = match family.adapter {
-            Adapter::Jsonl => None,
+            Adapter::Jsonl => {
+                Self::build_products(ctx, tree, needs, &[], run).map_err(|_| ListError::Build)?;
+                None
+            }
             Adapter::Nextest => {
                 let hash = self
                     .listing_hash(ctx, tree, family)
-                    .map_err(|_| PathBuf::new())?;
+                    .map_err(|_| ListError::Output(PathBuf::new()))?;
                 let memo = (name.to_owned(), hash);
                 let listings = self.listings.lock().unwrap_or_else(PoisonError::into_inner);
                 if let Some(listed) = listings.get(&memo) {
                     return Ok(listed.clone());
                 }
                 drop(listings);
-                Self::build(ctx, tree, family, &[], run)?;
+                Self::build_products(ctx, tree, needs, &[], run).map_err(|_| ListError::Build)?;
                 Some(memo)
             }
         };
@@ -476,14 +499,13 @@ impl Checks {
             }
             return Ok(listed);
         }
-        Err(output)
+        Err(ListError::Output(output))
     }
 
     /// The hash of everything a `nextest` family can read: its inputs with `crate-closure`
     /// standing for every workspace package. Its tests cannot change while this holds.
     fn listing_hash(&self, ctx: &Context, tree: &OpenTree, family: &Family) -> Result<InputHash> {
-        let patterns: Vec<InputPattern> = family
-            .inputs
+        let patterns: Vec<InputPattern> = hash::input_patterns(family, &self.settings.manifest)
             .iter()
             .flat_map(|pattern| match pattern {
                 InputPattern::CrateClosure => tree
@@ -520,7 +542,7 @@ impl Checks {
         family: &Family,
         listed: Listed,
     ) -> Result<Keyed> {
-        let mut patterns = family.inputs.clone();
+        let mut patterns = hash::input_patterns(family, &self.settings.manifest);
         patterns.extend(listed.inputs.iter().cloned().map(InputPattern::from));
         let paths = inputs::resolve(
             &patterns,

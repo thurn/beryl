@@ -245,6 +245,8 @@ fn a_pass_after_the_fix_closed_marks_the_regression_fixed() {
             machine: MachineId::new("m-1").unwrap(),
             record: RecordId(1),
             output: None,
+            cost: ignite_core::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
         };
         results::store(conn, &[result], now).unwrap();
     };

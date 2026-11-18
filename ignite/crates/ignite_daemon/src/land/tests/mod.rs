@@ -9,15 +9,15 @@ use std::sync::{Arc, Mutex};
 
 use ignite_core::config::Config;
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeHub, FakeLauncher};
-use ignite_core::ids::{MachineId, SessionId, TicketId, TreeId};
+use ignite_core::ids::{Commit, MachineId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::Landed;
-use ignite_core::protocol::tickets::{LeaseOp, LeaseReply};
+use ignite_core::protocol::tickets::{LandedWork, LeaseOp, LeaseReply};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Hub};
 
 use super::env::{GateTree, TicketTree};
-use super::records::{RecordState, Records};
+use super::records::{LandingRecord, RecordState, Records};
 use super::{LandVerb, Landing, SyncVerb};
 use crate::server::{Context, Verb};
 use fakes::{CacheGate, LeaseHub, TestGit, TestTrees};
@@ -474,4 +474,112 @@ fn sync_rebases_the_branch_onto_the_tip() {
     );
     let again = sync.run(&ctx, &req);
     assert!(again.text.starts_with("current"), "{}", again.text);
+}
+
+#[test]
+fn a_refusal_that_is_not_a_moved_tip_fails_the_landing_at_once() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.git.push_refused.store(true, Ordering::SeqCst);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_ne!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("hook declined"), "{}", reply.text);
+    assert_eq!(world.gate.passes.lock().unwrap().len(), 1);
+    assert!(world.landings().is_empty());
+}
+
+#[test]
+fn a_landing_whose_pushes_are_always_rejected_gives_up_after_ten_passes() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.git.push_always_rejected.store(true, Ordering::SeqCst);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Conflict, "{}", reply.text);
+    assert!(
+        reply.text.contains("gave up after 10 passes"),
+        "{}",
+        reply.text
+    );
+    assert!(reply.text.contains("fetch first"), "{}", reply.text);
+    assert_eq!(world.gate.passes.lock().unwrap().len(), 10);
+    assert!(world.landings().is_empty());
+    assert_eq!(world.hub.holder("staging"), None);
+}
+
+#[test]
+fn an_empty_rebase_does_not_close_a_ticket_whose_push_never_reached_the_remote() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    let path = PathBuf::from("/trees/tree-01");
+    // The ticket's commits are on the branch already, so the rebase leaves nothing to land,
+    // but the record's commit was never pushed.
+    let tip = world.git.tip_now();
+    world.git.check_out(&path, &tip);
+    let never_pushed = Commit::new("f".repeat(40)).unwrap();
+    let held = world.trees.tickets.lock().unwrap()[&TreeId::new("tree-01").unwrap()].clone();
+    let record = LandingRecord {
+        landed: Landed {
+            ticket: held.ticket.clone(),
+            machine: world.ctx.machine.clone(),
+            session: held.session.clone().unwrap(),
+            work: LandedWork {
+                commits: vec![never_pushed.clone()],
+                files: Vec::new(),
+                note: "the note".to_owned(),
+            },
+            fresh: false,
+        },
+        commit: never_pushed,
+        state: RecordState::Pushing,
+    };
+    world.landing.records.write(&record).unwrap();
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
+    assert!(reply.text.contains("nothing to land"), "{}", reply.text);
+    assert!(world.landings().is_empty());
+    assert!(world.landing.records.all().unwrap().is_empty());
+}
+
+#[test]
+fn a_malformed_record_is_moved_aside_and_the_others_are_still_delivered() {
+    let world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    let held = world.trees.tickets.lock().unwrap()[&TreeId::new("tree-01").unwrap()].clone();
+    let commit = Commit::new("e".repeat(40)).unwrap();
+    let record = LandingRecord {
+        landed: Landed {
+            ticket: held.ticket.clone(),
+            machine: world.ctx.machine.clone(),
+            session: held.session.clone().unwrap(),
+            work: LandedWork {
+                commits: vec![commit.clone()],
+                files: Vec::new(),
+                note: "the note".to_owned(),
+            },
+            fresh: false,
+        },
+        commit,
+        state: RecordState::Pushed,
+    };
+    world.landing.records.write(&record).unwrap();
+    // "a.1" sorts before "t.1", so the bad file is read first.
+    std::fs::write(world.records.join("a.1.json"), "{ not json").unwrap();
+
+    let delivered = world
+        .landing
+        .records
+        .deliver_all(world.hub.as_ref())
+        .unwrap();
+
+    assert_eq!(delivered, [held.ticket]);
+    assert_eq!(world.landings().len(), 1);
+    assert!(world.records.join("a.1.json.bad").exists());
+    assert!(!world.records.join("a.1.json").exists());
+    assert!(world.landing.records.all().unwrap().is_empty());
 }

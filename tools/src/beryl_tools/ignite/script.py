@@ -17,8 +17,9 @@ The families:
 - `script`: `beryl_cli script-check`, in a debug build (the `script-cli` product), where every
   script the session builds is held to the replay check and the rule invariants. One check per
   card, moment and seat, and one per UI fixture. The moments of a card are what `beryl_cli
-  specs-check <card>` lists, which plays them. A check's own input is its card's file, so that
-  editing one card leaves every other card's checks as they were.
+  specs-check <card>` lists, which plays them. A check's own inputs are its card's file and
+  the file of every card that file names, so that editing a card leaves the checks of cards that
+  do not use it as they were.
 - `app`: `just smoke`, one check, `app:smoke`.
 - `mobile`: `cargo check` of the app for the iOS Simulator and for Android, one check per target.
 """
@@ -87,6 +88,32 @@ def card_files(root: Path) -> dict[str, str]:
     return files
 
 
+# How a card's file names another card: an enum variant of the table's `Card` or of `Printed`
+# (`Card::ManaCrypt`), or a constant of `beryl_cards::names` (`names::MANA_CRYPT`).
+CARD_REFERENCE: re.Pattern[str] = re.compile(
+    r"\b(?:Card|Printed)::([A-Z][A-Za-z0-9]*)\b|\bnames::([A-Z][A-Z0-9_]*)\b"
+)
+
+
+def letters(name: str) -> str:
+    """A card name, a variant or a constant with everything but its letters and digits removed
+    and lower-cased, which the three spellings of one card share."""
+    return "".join(c.lower() for c in name if c.isascii() and c.isalnum())
+
+
+def used_files(root: Path, own: str, files: dict[str, str]) -> list[str]:
+    """The card files a card's scenarios read: its own, and the file of every other card its file
+    names (a card it steals, a spell that targets it, a permanent on the battlefield). The
+    scenarios sit in the card's file, so its references are the cards they use."""
+    by_letters = {letters(slug_): path for slug_, path in files.items()}
+    used = {files[own]}
+    for variant, constant in CARD_REFERENCE.findall((root / files[own]).read_text()):
+        path = by_letters.get(letters(variant or constant))
+        if path:
+            used.add(path)
+    return sorted(used)
+
+
 def binary(root: Path) -> Path:
     """The debug `beryl_cli` the `script-cli` product builds."""
     target = Path(os.environ.get("CARGO_TARGET_DIR", root / "rust" / "target"))
@@ -113,7 +140,11 @@ def moments(root: Path, cards: Sequence[str]) -> list[tuple[str, str]]:
 
 
 def fixture_checks(root: Path) -> list[dict[str, Any]]:
-    """One check for each UI fixture's recording, from the seat its human sits in."""
+    """One check for each UI fixture's recording, from the seat its human sits in.
+
+    A fixture plays whole decks, so any card file can change what it records: each fixture
+    check reads every card file (`CARDS`, a directory whose git tree ID covers them all).
+    """
     fixtures = json.loads((root / FIXTURES).read_text())["fixtures"]
     out: list[dict[str, Any]] = []
     for fixture in fixtures:
@@ -121,7 +152,7 @@ def fixture_checks(root: Path) -> list[dict[str, Any]]:
         seat = re.search(r"seat (\d+)", fixture.get("until") or "")
         view = SEATS[1] if seat and seat[1] != "0" else SEATS[0]
         out.append(
-            {"check": f"script:fixtures/{fixture['name']}/{view}", "inputs": [FIXTURES]}
+            {"check": f"script:fixtures/{fixture['name']}/{view}", "inputs": [FIXTURES, CARDS]}
         )
     return out
 
@@ -140,7 +171,7 @@ def script_checks(root: Path, cards: Sequence[str]) -> list[dict[str, Any]]:
                 out.append(
                     {
                         "check": f"script:{card}/{moment}/{seat}",
-                        "inputs": [files[card]],
+                        "inputs": used_files(root, card, files),
                     }
                 )
     if not wanted or "fixtures" in wanted:

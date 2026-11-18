@@ -1,0 +1,178 @@
+//! Claims held by a machine that has gone offline.
+//!
+//! A machine that stops reporting (powered off, asleep, off the network) cannot release its
+//! tickets. Without this step they stay `in_progress` for good and count against their epic's
+//! share of workers. [`release_claims`] gives back every claim of a machine whose last
+//! heartbeat is more than [`OFFLINE_SECONDS`] old. The ticket returns to the queue with a
+//! comment, and a daemon that comes back finds its claim lost, which `/landed` and `/release`
+//! answer with 409 (exit code 3).
+
+use rusqlite::{Connection, TransactionBehavior};
+use serde_json::Value;
+
+use ignite_core::protocol::tickets::{BatchRequest, Operation, Precondition, Status, TicketFields};
+use ignite_core::time::Timestamp;
+use ignite_store::hub::batch::{self, BatchOutcome};
+use ignite_store::{Result, StoreError};
+
+use super::parse_time;
+use crate::routes::dispatch::set_columns;
+
+/// How long a machine may go without a heartbeat before its claims are released: 2 hours.
+pub const OFFLINE_SECONDS: f64 = 7_200.0;
+
+/// The actor that the release is recorded as.
+const ACTOR: &str = super::filing::UPKEEP.actor;
+
+/// Releases the claims of machines silent for [`OFFLINE_SECONDS`]. Returns the tickets released.
+pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<String>> {
+    let held = {
+        let mut select = conn.prepare(
+            "SELECT t.id, t.assignee, t.tree, m.id, m.name, m.last_seen
+             FROM tickets t JOIN machines m ON m.id = t.machine
+             WHERE t.status != 'closed' AND t.assignee IS NOT NULL ORDER BY t.id",
+        )?;
+        select
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let mut released = Vec::new();
+    for (id, assignee, tree, machine, name, last_seen) in held {
+        let silent = parse_time(&last_seen)?;
+        if now.seconds_since(silent) < OFFLINE_SECONDS {
+            continue;
+        }
+        let tree = tree.map_or(String::new(), |tree| format!(" ({tree})"));
+        let text = format!(
+            "Released by the hub: machine {name} ({machine}) has not reported since {last_seen}. \
+             Any unsaved work stays in that machine's tree{tree}, and on its `ignite/{id}` \
+             branch if one was pushed. The ticket is back in the queue."
+        );
+        let ops = vec![
+            Operation::Update {
+                id: id.clone(),
+                set: Some(TicketFields {
+                    status: Some(Status::Open),
+                    assignee: Some(None),
+                    ..TicketFields::default()
+                }),
+                add_labels: Vec::new(),
+                remove_labels: Vec::new(),
+                set_meta: std::collections::BTreeMap::new(),
+                unset_meta: Vec::new(),
+            },
+            Operation::Comment {
+                id: id.clone(),
+                text,
+            },
+        ];
+        let request = BatchRequest {
+            preconditions: vec![Precondition::Assignee {
+                id: id
+                    .parse()
+                    .map_err(|e| StoreError::Invalid(format!("{e}")))?,
+                assignee: Some(assignee.clone()),
+            }],
+            ops,
+        };
+        let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        match batch::apply_in(&mut tx, &request, ACTOR, super::filing::UPKEEP.machine, now)? {
+            BatchOutcome::Applied(_) => {}
+            // Someone changed the ticket since it was read; the next pass looks again.
+            BatchOutcome::Conflict(_) => continue,
+        }
+        let cleared = ["session", "tree", "machine", "claimed_at"].map(|c| (c, Value::Null));
+        set_columns(&tx, &id, ACTOR, &cleared, now)?;
+        tx.execute(
+            "UPDATE workers SET ticket = NULL, state = 'idle' WHERE machine = ?1 AND ticket = ?2",
+            rusqlite::params![machine, id],
+        )?;
+        tx.commit()?;
+        released.push(id);
+    }
+    Ok(released)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::upkeep::tests::apply;
+    use ignite_core::config::Os;
+    use ignite_core::ids::MachineId;
+    use ignite_core::protocol::hub::MachineRegister;
+    use ignite_store::hub::{self, fleet, tickets};
+
+    fn at(seconds: f64) -> Timestamp {
+        Timestamp::parse("2026-11-17T12:00:00Z")
+            .unwrap()
+            .plus_seconds(seconds)
+    }
+
+    #[test]
+    fn a_claim_of_a_machine_silent_for_two_hours_returns_to_the_queue_with_a_comment() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let register = MachineRegister {
+            machine: MachineId::new("m-1").unwrap(),
+            name: "jarvis".to_owned(),
+            os: Os::Macos,
+            cores: 16,
+            memory_mb: 65_536,
+            families: Vec::new(),
+            version: "v".to_owned(),
+        };
+        fleet::register(&conn, &register, at(0.0)).unwrap();
+        let ids = apply(
+            &mut conn,
+            vec![
+                crate::upkeep::tests::create(
+                    "work",
+                    ignite_core::protocol::tickets::TicketType::Task,
+                    None,
+                    &[],
+                ),
+                Operation::Claim { id: "$0".into() },
+            ],
+            at(0.0),
+        );
+        conn.execute(
+            "UPDATE tickets SET session = 'local_a', tree = 'tree-03' WHERE id = ?1",
+            [&ids[0]],
+        )
+        .unwrap();
+
+        // Under two hours since the last heartbeat: nothing happens.
+        assert!(release_claims(&mut conn, at(7_199.0)).unwrap().is_empty());
+        let held = tickets::load(&conn, &ids[0]).unwrap().unwrap();
+        assert_eq!(held.status, Status::InProgress);
+
+        // A heartbeat keeps the claim.
+        fleet::register(&conn, &register, at(3_600.0)).unwrap();
+        assert!(release_claims(&mut conn, at(10_000.0)).unwrap().is_empty());
+
+        let released = release_claims(&mut conn, at(3_600.0 + 7_200.0)).unwrap();
+        assert_eq!(released, [ids[0].clone()]);
+        let ticket = tickets::load(&conn, &ids[0]).unwrap().unwrap();
+        assert_eq!(ticket.status, Status::Open);
+        assert_eq!(ticket.assignee, None);
+        assert_eq!(ticket.session, None);
+        assert_eq!(ticket.tree, None);
+        let comments = tickets::comments(&conn, &ids[0]).unwrap();
+        assert!(comments[0].text.contains("jarvis"), "{}", comments[0].text);
+        assert!(
+            comments[0].text.contains("unsaved work"),
+            "{}",
+            comments[0].text
+        );
+        // Nothing is left to release on the next pass.
+        assert!(release_claims(&mut conn, at(20_000.0)).unwrap().is_empty());
+    }
+}

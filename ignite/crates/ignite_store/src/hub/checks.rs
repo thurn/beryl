@@ -1,6 +1,6 @@
 //! Checks: their state, their record of runs and failures by area, and their costs.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, TransactionBehavior, params};
 
 use ignite_core::protocol::hub::{AreaStats, CheckState, CheckStats, CheckStatsReply, FlakyReport};
 use ignite_core::time::Timestamp;
@@ -35,7 +35,7 @@ fn state_from(text: &str) -> Result<CheckState> {
 /// Adds or updates the checks a family lists. An existing check keeps its state, so listing a
 /// family again never switches back on a check that was switched off.
 pub fn upsert(conn: &mut Connection, checks: &[rows::Check]) -> Result<()> {
-    let tx = conn.transaction()?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     {
         let mut insert = tx.prepare_cached(
             "INSERT INTO checks (name, family, kind, state, check_group)
@@ -67,7 +67,7 @@ pub fn set_state(conn: &Connection, check: &str, state: CheckState) -> Result<()
 
 /// Counts one run (and maybe a failure) after a change to each of `areas`.
 pub fn count_run(conn: &mut Connection, check: &str, areas: &[String], failed: bool) -> Result<()> {
-    let tx = conn.transaction()?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     {
         let mut count = tx.prepare_cached(
             "INSERT INTO check_stats (check_name, area, runs, failures) VALUES (?1, ?2, 1, ?3)

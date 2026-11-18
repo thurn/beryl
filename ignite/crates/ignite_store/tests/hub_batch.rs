@@ -134,7 +134,7 @@ fn a_failed_batch_rolls_back_every_row_and_request_keys_deduplicate_creates() {
         json!([
             create_with("Child", Some(&parent), json!({}), json!({"request_key": "child-1"})),
             {"op": "comment", "id": parent, "text": "Rollback"},
-            {"op": "dep_add", "id": parent, "on": "$0"},
+            {"op": "dep_add", "id": parent, "on": claimed},
             {"op": "claim", "id": claimed},
         ]),
         json!([]),

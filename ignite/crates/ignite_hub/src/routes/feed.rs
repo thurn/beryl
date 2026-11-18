@@ -6,6 +6,7 @@
 //! looks at the database again at least once a second, so that a write made outside a request
 //! (by upkeep, say) is seen too.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -21,6 +22,32 @@ use super::{Request, Response};
 
 /// The longest wait a client may ask for, in seconds. A longer one is shortened to this.
 pub const MAX_WAIT_S: u64 = 120;
+
+/// The most requests that may wait at once. Each holds a thread and a database connection, so a
+/// request beyond this, and any request without a valid token, is answered at once without
+/// waiting.
+pub const MAX_WAITERS: usize = 16;
+
+static WAITERS: AtomicUsize = AtomicUsize::new(0);
+
+/// A place among the waiting requests, given back when dropped.
+struct Waiter;
+
+impl Waiter {
+    fn take() -> Option<Waiter> {
+        if WAITERS.fetch_add(1, Ordering::SeqCst) >= MAX_WAITERS {
+            WAITERS.fetch_sub(1, Ordering::SeqCst);
+            return None;
+        }
+        Some(Waiter)
+    }
+}
+
+impl Drop for Waiter {
+    fn drop(&mut self) {
+        WAITERS.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 /// The most changes one reply carries (one position's changes always come whole).
 const LIMIT: u32 = 1000;
@@ -69,6 +96,12 @@ pub fn handle(conn: &mut Connection, request: &Request, _now: Timestamp) -> Opti
         Some(Ok(wait_s)) => wait_s.min(MAX_WAIT_S),
         Some(Err(_)) => return Some(failure(400, "wait must be a number of seconds")),
     };
+    let waiter = if wait_s > 0 && request.writer.is_some() {
+        Waiter::take()
+    } else {
+        None
+    };
+    let wait_s = if waiter.is_some() { wait_s } else { 0 };
     Some(match poll(conn, since, Duration::from_secs(wait_s)) {
         Ok(batch) => Response::json(200, &json!(batch)),
         Err(error) => failure(500, &error.to_string()),

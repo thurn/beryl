@@ -59,6 +59,10 @@ impl Records {
                 .map(Some)
                 .map_err(|e| Error::Invalid(format!("landing record of {ticket}: {e}"))),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            // A file that is not UTF-8 is as bad as one that is not JSON.
+            Err(error) if error.kind() == std::io::ErrorKind::InvalidData => Err(Error::Invalid(
+                format!("landing record of {ticket}: {error}"),
+            )),
             Err(error) => Err(error.into()),
         }
     }
@@ -85,7 +89,9 @@ impl Records {
         }
     }
 
-    /// Every record on disk, in the order of their file names.
+    /// Every readable record on disk, in the order of their file names. A file that is not a
+    /// valid record is moved aside to `<name>.json.bad` and reported on standard error, so one
+    /// bad file cannot stop the delivery of the others.
     pub fn all(&self) -> Result<Vec<LandingRecord>> {
         let entries = match fs::read_dir(&self.dir) {
             Ok(entries) => entries,
@@ -100,10 +106,33 @@ impl Records {
         names.sort();
         let mut records = Vec::new();
         for name in names {
-            let ticket = TicketId::new(name).map_err(|e| Error::Invalid(e.to_string()))?;
-            records.extend(self.get(&ticket)?);
+            let parsed = TicketId::new(name.clone())
+                .map_err(|e| Error::Invalid(e.to_string()))
+                .and_then(|ticket| self.get(&ticket));
+            match parsed {
+                Ok(record) => records.extend(record),
+                Err(Error::Io(error)) => return Err(Error::Io(error)),
+                Err(error) => self.set_aside(&name, &error),
+            }
         }
         Ok(records)
+    }
+
+    /// Renames `<name>.json` to `<name>.json.bad` so it is read no more but stays for a person
+    /// to look at.
+    fn set_aside(&self, name: &str, error: &Error) {
+        let from = self.dir.join(format!("{name}.json"));
+        let to = self.dir.join(format!("{name}.json.bad"));
+        match fs::rename(&from, &to) {
+            Ok(()) => eprintln!(
+                "ignite: landing record {name}.json is unreadable ({error}); moved to {}",
+                to.display()
+            ),
+            Err(rename) => eprintln!(
+                "ignite: landing record {name}.json is unreadable ({error}) and could not be \
+                 moved aside: {rename}"
+            ),
+        }
     }
 
     /// Tells the hub about one pushed landing, and deletes its record once the hub accepts it.

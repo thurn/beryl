@@ -22,6 +22,11 @@
 //! - `output.keep`: written by whoever judged the run failed, flaky or incomplete ([`keep`]), so
 //!   its output is kept for [`KEEP_JUDGED_S`] instead of [`KEEP_S`] ([`SupervisedLauncher::prune`]).
 //!
+//! When the command's leader exits, the supervisor ends every process still in the command's
+//! group, as the job object does on Windows, so a background process a build leaves behind does
+//! not outlive it. A supervisor that dies without writing a result leaves its command running;
+//! the daemon that waits for it ends the group.
+//!
 //! A command with a hang limit that runs past it is ended by its supervisor with everything it
 //! started, after the supervisor has written the processes still running to its output. Its
 //! result says it hung. The limit counts from the command's start, so time spent waiting for
@@ -56,12 +61,17 @@ use serde::{Deserialize, Serialize};
 use crate::sched::{Grant, GrantRequest, Scheduler};
 use crate::server::{Context, Verb};
 
+mod grants;
 mod hang;
 mod jobserver;
+mod peaks;
 mod retain;
 
+pub use grants::{GrantFile, STOP_GRACE_S};
+use grants::{GrantGuard, watch_for_stop};
 use hang::{Watchdog, signal_group};
 use jobserver::{Jobserver, compiles_only, read_cores};
+use peaks::Peaks;
 pub use retain::{KEEP_JUDGED_S, KEEP_S, keep};
 
 /// The line a supervisor prints on its standard output once it holds its run's lock. The
@@ -81,8 +91,11 @@ const GROUP: &str = "group";
 const SUPERVISOR_LOG: &str = "supervisor.log";
 
 /// How often a supervisor reads the command's descendants while it runs. The operating system
-/// totals only a direct child exactly, so a descendant is counted up to its last reading.
-const SAMPLE_EVERY: Duration = Duration::from_secs(1);
+/// totals only a direct child exactly, so a descendant is counted up to its last reading, and
+/// one that starts and ends between two readings is not counted ("Cost in instructions" in
+/// `docs/ignite.md`). A reading lists the group and reads each process's record, which costs
+/// well under a millisecond, so it is taken often.
+const SAMPLE_EVERY: Duration = Duration::from_millis(250);
 
 /// What a supervisor runs: the `spec.json` of a run directory.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -100,6 +113,9 @@ pub struct SpecFile {
     /// Seconds after which the supervisor ends the command; `None` for no limit.
     #[serde(default)]
     pub hang_limit_s: Option<u64>,
+    /// The grant the command runs under, so a restarted daemon can register it again.
+    #[serde(default)]
+    pub grant: Option<GrantFile>,
 }
 
 /// How a supervised command ended: the `result.json` of a run directory.
@@ -123,6 +139,8 @@ pub struct SupervisedLauncher {
     next: AtomicU64,
     /// When old run directories were last deleted, in seconds since the Unix epoch.
     pruned: AtomicU64,
+    /// The memory each command line usually needs, for the scheduler's memory gate.
+    peaks: Peaks,
 }
 
 impl SupervisedLauncher {
@@ -139,6 +157,7 @@ impl SupervisedLauncher {
     pub fn with_command(command: Vec<String>, runs: PathBuf) -> Self {
         Self {
             supervisor: command,
+            peaks: Peaks::load(runs.join("peaks.json")),
             runs,
             scheduler: None,
             next: AtomicU64::new(0),
@@ -165,7 +184,7 @@ impl SupervisedLauncher {
         queued_s: f64,
     ) -> io::Result<Started> {
         let dir = self.new_run()?;
-        self.start_in(dir, spec, env, queued_s, None)
+        self.start_in(dir, spec, env, queued_s, None, None)
     }
 
     /// Makes a new, empty run directory.
@@ -184,6 +203,7 @@ impl SupervisedLauncher {
         env: Vec<(String, String)>,
         queued_s: f64,
         jobserver: Option<PathBuf>,
+        grant: Option<GrantFile>,
     ) -> io::Result<Started> {
         let mut all_env = spec.env.clone();
         all_env.extend(env);
@@ -194,6 +214,7 @@ impl SupervisedLauncher {
             queued_s,
             jobserver,
             hang_limit_s: spec.hang_limit_s,
+            grant,
         };
         write_json(&dir.join(SPEC), &file)?;
         let (program, rest) = self
@@ -241,6 +262,11 @@ impl SupervisedLauncher {
         runs
     }
 
+    /// The memory in megabytes that runs of `args` usually peak at, for the scheduler.
+    fn usual_memory(&self, args: &[String]) -> Option<u64> {
+        self.peaks.usual(&peaks::key(args))
+    }
+
     /// A run directory name that sorts by start time and is unique across daemon restarts.
     fn run_name(&self) -> String {
         let nanos = SystemTime::now()
@@ -259,7 +285,9 @@ impl SupervisedLauncher {
                 class: spec.class,
                 cores: spec.cores,
                 resources: spec.resources.clone(),
-                memory_mb: None,
+                // The median peak of the command's recent runs, so that the scheduler holds a
+                // command back while less than that is free.
+                memory_mb: self.usual_memory(&spec.args),
                 shrinks,
                 grows: cores_file.is_some(),
                 cores_file,
@@ -286,28 +314,40 @@ impl Launcher for SupervisedLauncher {
         let shrinks = compiles_only(&spec.args);
         let cores_file =
             (self.scheduler.is_some() && (shrinks || spec.grows)).then(|| dir.join(CORES));
-        let grant = self.grant(spec, shrinks, cores_file.clone());
+        // Released when this function ends, however it ends.
+        let held = GrantGuard::new(
+            self.scheduler.clone(),
+            self.grant(spec, shrinks, cores_file.clone()),
+        );
+        let grant = held.grant();
         let jobserver = cores_file.filter(|_| shrinks);
-        let result = match self.start_in(dir, spec, grant.env(), grant.queued_s as f64, jobserver) {
+        let file = GrantFile {
+            class: spec.class,
+            cores: grant.cores,
+            resources: grant.resources.clone(),
+        };
+        let result = match self.start_in(
+            dir,
+            spec,
+            grant.env(),
+            grant.queued_s as f64,
+            jobserver,
+            Some(file),
+        ) {
             Ok(started) => {
-                // The scheduler stops `idle` work when a higher class waits; stopping ends the
-                // command. The thread ends when the grant is released below.
+                // The scheduler stops `idle` work when a higher class waits or holds what it
+                // needs; stopping ends the command. The thread ends when the grant is released.
                 if let (Class::Idle, Some(scheduler)) = (spec.class, &self.scheduler) {
-                    let scheduler = Arc::clone(scheduler);
-                    let id = grant.id;
-                    let run = started.run().clone();
-                    thread::spawn(move || {
-                        if scheduler.wait_stop(id) {
-                            let _ = run.end();
-                        }
-                    });
+                    watch_for_stop(scheduler, grant.id, started.run().clone());
                 }
                 started.wait()
             }
             Err(error) => not_started(spec, &error),
         };
-        if let Some(scheduler) = &self.scheduler {
-            scheduler.release(&grant);
+        drop(held);
+        if result.exit.is_some() && !result.hung {
+            self.peaks
+                .record(&peaks::key(&spec.args), result.usage.peak_mb);
         }
         self.prune_now_and_then();
         result
@@ -362,6 +402,16 @@ impl Run {
     /// its job object, which stops its processes at once). Its supervisor then
     /// writes a result with no exit code. Does nothing to a run whose command has not started.
     pub fn end(&self) -> io::Result<()> {
+        self.signal("TERM")
+    }
+
+    /// Kills the command and every process in its group at once, with `SIGKILL`. Does nothing
+    /// to a run whose command has not started.
+    pub fn kill(&self) -> io::Result<()> {
+        self.signal("KILL")
+    }
+
+    fn signal(&self, signal: &str) -> io::Result<()> {
         let Ok(group) = fs::read_to_string(self.dir.join(GROUP)) else {
             return Ok(());
         };
@@ -369,12 +419,13 @@ impl Run {
             .trim()
             .parse()
             .map_err(|_| io::Error::other("the group file holds no process group ID"))?;
-        signal_group(group, "TERM")
+        signal_group(group, signal)
     }
 
     /// Blocks until the run's supervisor has exited, then returns the result it wrote and marks
     /// the run collected. A supervisor that died without writing one gives a result with no
-    /// exit code, whose output names the supervisor's own log.
+    /// exit code, whose output names the supervisor's own log; its command, which nobody
+    /// supervises any more, is killed with everything it started.
     pub fn wait(&self) -> RunResult {
         if let Ok(lock) = File::open(self.dir.join(LOCK)) {
             let _ = lock.lock_shared();
@@ -383,19 +434,21 @@ impl Run {
             .ok()
             .and_then(|bytes| serde_json::from_slice::<ResultFile>(&bytes).ok());
         let _ = File::create(self.dir.join(COLLECTED));
-        match result {
-            Some(file) => RunResult {
+        if let Some(file) = result {
+            return RunResult {
                 exit: file.exit,
                 output: file.output,
                 usage: file.usage,
                 hung: file.hung,
-            },
-            None => RunResult {
-                exit: None,
-                output: self.dir.join(SUPERVISOR_LOG),
-                usage: Usage::default(),
-                hung: false,
-            },
+            };
+        }
+        // The supervisor died without a result, so nothing supervises its command any more.
+        let _ = self.kill();
+        RunResult {
+            exit: None,
+            output: self.dir.join(SUPERVISOR_LOG),
+            usage: Usage::default(),
+            hung: false,
         }
     }
 }
@@ -557,6 +610,14 @@ fn wait_measured(mut group: Group) -> io::Result<(ExitStatus, ProcessUsage)> {
     let reaped = Native.reap(&mut group.child);
     drop(stop);
     let _ = sampler.join();
+    // The leader has exited. Read what else is in its group one last time, then end it, as the
+    // job object does on Windows: a process the command left running in the background must not
+    // outlive it (and keep its files and cores busy).
+    let _ = meter
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .sample();
+    let _ = Native.end_group(&mut group);
     let (status, leader) = reaped?;
     let total = meter
         .lock()

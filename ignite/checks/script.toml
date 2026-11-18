@@ -7,7 +7,17 @@
 [product.script-cli]
 build = "cargo build --quiet -p beryl_cli"
 dir = "rust"
-inputs = ["crate:beryl_cli"]
+inputs = [
+  "crate:beryl_cli",
+  "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
+]
 outputs = ["rust/target"]
 
 # One check per card, moment and seat (`script:<card>/<moment>/<seat>`), and one per UI fixture
@@ -49,6 +59,12 @@ inputs = [
   "rust/cards/*/build.rs",
   "rust/cards/*/lib.rs",
   "data/card-store.tsv",
+  "data/set-groups.json",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
   "docs/sample-decks/**",
   "ui/fixtures.json",
   "tools/src/beryl_tools/ignite/script.py",
@@ -84,5 +100,8 @@ run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run mo
 inputs = [
   "crate:beryl_app",
   "crate:beryl-mobile",
+  "data/**",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/script.py",
 ]

@@ -54,6 +54,10 @@ pub struct TestGit {
     /// Makes the next push reach the remote and then fail as if the connection dropped
     /// before the remote's answer arrived.
     pub push_lands_then_fails: AtomicBool,
+    /// Makes every push answer that the tip moved, whatever the tip is.
+    pub push_always_rejected: AtomicBool,
+    /// Makes every push fail as a hook or a protected branch would refuse it.
+    pub push_refused: AtomicBool,
 }
 
 impl Repo {
@@ -180,8 +184,16 @@ impl Git for TestGit {
         if self.push_unreachable.load(Ordering::SeqCst) {
             return Err(Error::Unreachable("remote down".to_owned()));
         }
+        if self.push_refused.load(Ordering::SeqCst) {
+            return Err(Error::Conflict(
+                "the remote refused the push to staging: [remote rejected] (hook declined)"
+                    .to_owned(),
+            ));
+        }
         let mut repo = self.repo.lock().unwrap();
-        if repo.parent.get(commit) != Some(&repo.tip()) {
+        if self.push_always_rejected.load(Ordering::SeqCst)
+            || repo.parent.get(commit) != Some(&repo.tip())
+        {
             return Ok(Push::Rejected {
                 reason: "[rejected] (fetch first)".to_owned(),
             });
@@ -349,6 +361,10 @@ impl LandTrees for TestTrees {
     fn commits(&self, _path: &Path, _from: &Commit, to: &Commit) -> Result<Vec<Commit>> {
         Ok(vec![to.clone()])
     }
+    fn is_ancestor(&self, _path: &Path, ancestor: &Commit, _descendant: &Commit) -> Result<bool> {
+        // The integration branch is linear, so its history is the commits that reached it.
+        Ok(self.git.repo.lock().unwrap().history.contains(ancestor))
+    }
     fn lease_landing(&self, _holder: &str, at: &Commit) -> Result<Option<GateTree>> {
         let tree = self.landing.lock().unwrap().pop();
         if let Some(tree) = &tree {
@@ -436,6 +452,8 @@ impl LandGate for CacheGate {
                     machine: ctx.machine.clone(),
                     record: RecordId(0),
                     output: None,
+                    cost: ignite_core::protocol::hub::ResultCost::default(),
+                    areas: Vec::new(),
                 };
                 ctx.hub.store(&[new]).unwrap();
                 run.outcomes.push((key.check, Outcome::Pass));

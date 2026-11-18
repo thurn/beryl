@@ -16,6 +16,7 @@ use rusqlite::Connection;
 
 use ignite_core::ids::{Handle, SessionId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Result};
 use ignite_store::local::{handles as store, rows};
 
@@ -38,6 +39,10 @@ pub enum Waited {
     Unknown,
 }
 
+/// Seconds a finished operation's reply stays in memory. After a read it is dropped at once when
+/// the local database keeps it; without a database it stays this long.
+pub const KEEP_REPLY_S: f64 = 24.0 * 60.0 * 60.0;
+
 /// Operations still running, and the replies of those that finished.
 pub struct Handles {
     clock: Arc<dyn Clock>,
@@ -51,10 +56,30 @@ struct State {
     /// The number the next handle tries first.
     next: u64,
     /// Every handle this process created or read: its verb, and its reply once finished.
-    replies: HashMap<Handle, (String, Option<Reply>)>,
+    replies: HashMap<Handle, Entry>,
     /// Waits in progress, by a number of their own, with the interrupt each has been given.
     waiters: BTreeMap<u64, Waiter>,
     next_waiter: u64,
+}
+
+/// One handle in memory.
+struct Entry {
+    verb: String,
+    reply: Option<Reply>,
+    finished_at: Option<Timestamp>,
+    /// A wait has returned the reply.
+    read: bool,
+}
+
+impl Entry {
+    fn running(verb: &str) -> Entry {
+        Entry {
+            verb: verb.to_owned(),
+            reply: None,
+            finished_at: None,
+            read: false,
+        }
+    }
 }
 
 struct Waiter {
@@ -112,9 +137,8 @@ impl Handles {
                 break handle;
             }
         };
-        state
-            .replies
-            .insert(handle.clone(), (verb.to_owned(), None));
+        self.prune(&mut state);
+        state.replies.insert(handle.clone(), Entry::running(verb));
         self.save(&rows::Handle {
             id: handle.to_string(),
             verb: verb.to_owned(),
@@ -140,8 +164,10 @@ impl Handles {
             self.save(&row);
         }
         if let Some(entry) = state.replies.get_mut(handle) {
-            entry.1 = Some(reply);
+            entry.reply = Some(reply);
+            entry.finished_at = Some(self.clock.now());
         }
+        self.prune(&mut state);
         drop(state);
         self.changed.notify_all();
     }
@@ -150,13 +176,6 @@ impl Handles {
     /// waiting, which [`Handles::interrupt`] names.
     pub fn wait(&self, handle: &Handle, wait_s: u32, session: Option<&SessionId>) -> Waited {
         let mut state = lock(&self.state);
-        if !state.replies.contains_key(handle) {
-            let Some(row) = self.stored(handle) else {
-                return Waited::Unknown;
-            };
-            let reply = row.reply.and_then(|text| serde_json::from_str(&text).ok());
-            state.replies.insert(handle.clone(), (row.verb, reply));
-        }
         let id = state.next_waiter;
         state.next_waiter += 1;
         state.waiters.insert(
@@ -171,13 +190,35 @@ impl Handles {
             if let Some(reply) = state.waiters.get_mut(&id).and_then(|w| w.interrupt.take()) {
                 break Waited::Interrupted(reply);
             }
-            let (verb, reply) = &state.replies[handle];
-            if let Some(reply) = reply {
-                break Waited::Done(reply.clone());
+            // A handle pruned from memory while this wait slept is read again from the database.
+            if !state.replies.contains_key(handle) {
+                let Some(row) = self.stored(handle) else {
+                    break Waited::Unknown;
+                };
+                let reply = row.reply.and_then(|text| serde_json::from_str(&text).ok());
+                let finished_at = reply.as_ref().map(|_| self.clock.now());
+                state.replies.insert(
+                    handle.clone(),
+                    Entry {
+                        verb: row.verb,
+                        reply,
+                        finished_at,
+                        read: false,
+                    },
+                );
             }
+            let entry = state
+                .replies
+                .get_mut(handle)
+                .expect("the handle was just inserted");
+            if let Some(reply) = entry.reply.clone() {
+                entry.read = true;
+                break Waited::Done(reply);
+            }
+            let verb = entry.verb.clone();
             let now = Instant::now();
             if now >= deadline {
-                break Waited::Running(verb.clone());
+                break Waited::Running(verb);
             }
             state = self
                 .changed
@@ -187,6 +228,21 @@ impl Handles {
         };
         state.waiters.remove(&id);
         waited
+    }
+
+    /// Drops finished replies from memory: those older than [`KEEP_REPLY_S`], and those a wait
+    /// has read when the database still has them. A handle dropped here is read from the
+    /// database by the next wait on it.
+    fn prune(&self, state: &mut State) {
+        let now = self.clock.now();
+        let stored = self.db.is_some();
+        state.replies.retain(|_, entry| {
+            let Some(finished) = entry.finished_at else {
+                return true;
+            };
+            let old = now.seconds_since(finished) > KEEP_REPLY_S;
+            !(old || (entry.read && stored))
+        });
     }
 
     /// How many waits `session` is in now.

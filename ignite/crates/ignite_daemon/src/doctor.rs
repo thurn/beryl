@@ -232,10 +232,21 @@ impl StatusSection for AdmissionSection {
     }
 }
 
-/// How many of the declared trees exist, and which are gone.
+/// The names of the trees a machine declares: `tree-01`… for its ticket trees and `landing-1`…
+/// for its landing trees.
+pub fn configured_tree_names(ticket_trees: u32, landing_trees: u32) -> Vec<String> {
+    (1..=ticket_trees)
+        .map(|n| format!("tree-{n:02}"))
+        .chain((1..=landing_trees).map(|n| format!("landing-{n}")))
+        .collect()
+}
+
+/// How many of the declared trees exist, which are gone, and which directories under the trees
+/// folder are not declared.
 pub struct TreesSection {
     pub source: Arc<dyn TreeSource>,
-    pub declared: u32,
+    /// The declared trees' names ([`configured_tree_names`]); only these are counted.
+    pub configured: Vec<String>,
     pub host: Arc<dyn Host + Send + Sync>,
 }
 
@@ -248,20 +259,28 @@ impl StatusSection for TreesSection {
         match self.source.trees() {
             Err(error) => vec![format!("cannot list trees: {error}")],
             Ok(trees) => {
-                let missing: Vec<&TreeInfo> = trees
+                let (declared, extra): (Vec<&TreeInfo>, Vec<&TreeInfo>) = trees
                     .iter()
+                    .partition(|t| self.configured.contains(&t.name));
+                let missing: Vec<&TreeInfo> = declared
+                    .iter()
+                    .copied()
                     .filter(|t| !self.host.path_exists(&t.path))
                     .collect();
                 let mut lines = vec![format!(
                     "{} of {} present",
-                    trees.len() - missing.len(),
-                    self.declared
+                    declared.len() - missing.len(),
+                    self.configured.len()
                 )];
                 lines.extend(
                     missing
                         .iter()
                         .map(|t| format!("{}: directory is missing", t.name)),
                 );
+                if !extra.is_empty() {
+                    let names: Vec<&str> = extra.iter().map(|t| t.name.as_str()).collect();
+                    lines.push(format!("not in ignite.toml: {}", names.join(", ")));
+                }
                 lines
             }
         }
@@ -489,6 +508,13 @@ fn trees_findings(input: &DoctorInput, machine: &Machine, findings: &mut Vec<Fin
             ),
         )),
         Ok(trees) => {
+            let configured = configured_tree_names(machine.ticket_trees, machine.landing_trees);
+            // A directory under the trees folder that ignite.toml does not declare is not one
+            // of the machine's trees: it is not counted.
+            let trees: Vec<TreeInfo> = trees
+                .into_iter()
+                .filter(|t| configured.contains(&t.name))
+                .collect();
             let mut missing = 0;
             for tree in &trees {
                 if !input.host.path_exists(&tree.path) {

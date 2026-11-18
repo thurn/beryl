@@ -54,3 +54,69 @@ pub fn commits_between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<Co
         .map(cmd::commit)
         .collect()
 }
+
+/// Whether `ancestor` is `descendant` or one of its ancestors (`git merge-base --is-ancestor`).
+///
+/// Exit status 0 means yes and 1 means no. A commit this repository does
+/// not have cannot be in the history of one it has fetched, so an unknown `ancestor` is "no".
+/// Any other failure is an error.
+pub fn is_ancestor(repo: &Path, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
+    let mut command = cmd::git(
+        repo,
+        [
+            "merge-base",
+            "--is-ancestor",
+            ancestor.as_str(),
+            descendant.as_str(),
+        ],
+    );
+    let out = cmd::output(&mut command)?;
+    match out.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ if String::from_utf8_lossy(&out.stderr).contains("Not a valid commit name") => Ok(false),
+        _ => Err(Error::Io(cmd::failure(&command, &out))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::process::Command;
+
+    use super::*;
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .current_dir(dir)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    }
+
+    #[test]
+    fn an_ancestor_is_found_and_a_side_branch_or_unknown_commit_is_not() {
+        let dir = std::env::temp_dir().join(format!("ignite-git-ancestor-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        git(&dir, &["init", "--quiet", "-b", "main"]);
+        git(&dir, &["commit", "--quiet", "--allow-empty", "-m", "one"]);
+        let one = Commit::new(git(&dir, &["rev-parse", "HEAD"])).unwrap();
+        git(&dir, &["commit", "--quiet", "--allow-empty", "-m", "two"]);
+        let two = Commit::new(git(&dir, &["rev-parse", "HEAD"])).unwrap();
+        git(&dir, &["switch", "--quiet", "-c", "side", one.as_str()]);
+        git(&dir, &["commit", "--quiet", "--allow-empty", "-m", "side"]);
+        let side = Commit::new(git(&dir, &["rev-parse", "HEAD"])).unwrap();
+        let unknown = Commit::new("1234567890abcdef1234567890abcdef12345678").unwrap();
+
+        assert!(is_ancestor(&dir, &one, &two).unwrap());
+        assert!(is_ancestor(&dir, &two, &two).unwrap());
+        assert!(!is_ancestor(&dir, &two, &one).unwrap());
+        assert!(!is_ancestor(&dir, &side, &two).unwrap());
+        assert!(!is_ancestor(&dir, &unknown, &two).unwrap());
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

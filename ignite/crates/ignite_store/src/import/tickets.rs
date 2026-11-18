@@ -3,9 +3,17 @@
 //!
 //! The hub's ticket tables have the old service's columns under the same names (`tickets` adds
 //! columns of its own, which an import leaves alone), so each table is copied column for column.
-//! A row is written only when the hub has no row with its key or holds different values, which
-//! makes a second import write nothing. The old service's `events` and `leases` are not
-//! imported: events were its own log of sessions and CI, and leases are locks held by processes
+//! A row is written only when the hub has no row with its key, so a second import writes
+//! nothing and an import run after the hub went live never reverts newer hub data:
+//!
+//! - A ticket the hub already holds is overwritten only when the imported row's `updated_at` is
+//!   later than the hub's.
+//! - An edge, alias or history row the hub already holds is left as it is.
+//! - A comment whose `(ticket, n)` the hub holds with another text is appended to the ticket as
+//!   its next comment (unless the ticket already has that text, as from an earlier import), and
+//!   the report says so.
+//!
+//! The old service's `events` and `leases` are not imported: events were its own log of sessions and CI, and leases are locks held by processes
 //! that stop at the switch. The global change counter `seq` moves up to the old service's, so
 //! changes after the import number above every imported ticket's `version`.
 
@@ -26,6 +34,18 @@ struct Table {
     kind: &'static str,
     key: &'static [&'static str],
     columns: &'static [&'static str],
+    /// What to do with a row whose key the hub already holds.
+    existing: Existing,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Existing {
+    /// Overwrite when the imported row's `updated_at` is later.
+    IfNewer,
+    /// Leave the hub's row.
+    Keep,
+    /// A comment: append the imported one if the text differs.
+    AppendComment,
 }
 
 const TABLES: &[Table] = &[
@@ -56,30 +76,35 @@ const TABLES: &[Table] = &[
             "closed_at",
             "version",
         ],
+        existing: Existing::IfNewer,
     },
     Table {
         name: "edges",
         kind: "edges",
         key: &["src", "dst"],
         columns: &["kind"],
+        existing: Existing::Keep,
     },
     Table {
         name: "comments",
         kind: "comments",
         key: &["ticket", "n"],
         columns: &["author", "at", "text", "legacy_id"],
+        existing: Existing::AppendComment,
     },
     Table {
         name: "history",
         kind: "history",
         key: &["ticket", "seq"],
         columns: &["actor", "at", "change"],
+        existing: Existing::Keep,
     },
     Table {
         name: "aliases",
         kind: "aliases",
         key: &["alias"],
         columns: &["id"],
+        existing: Existing::Keep,
     },
 ];
 
@@ -130,22 +155,33 @@ fn copy(
         .iter()
         .map(|c| format!("\"{c}\" IS NOT excluded.\"{c}\""))
         .collect();
+    let on_conflict = match table.existing {
+        Existing::IfNewer => format!(
+            "DO UPDATE SET {} WHERE excluded.updated_at > {}.updated_at AND ({})",
+            updates.join(", "),
+            table.name,
+            differs.join(" OR ")
+        ),
+        Existing::Keep | Existing::AppendComment => "DO NOTHING".to_owned(),
+    };
     let mut upsert = hub.prepare(&format!(
         "INSERT INTO {} ({}) VALUES ({})
-         ON CONFLICT({}) DO UPDATE SET {} WHERE {}",
+         ON CONFLICT({}) {}",
         table.name,
         quoted.join(", "),
         placeholders.join(", "),
         table.key.join(", "),
-        updates.join(", "),
-        differs.join(" OR ")
+        on_conflict
     ))?;
     let mut rows = select.query([])?;
     while let Some(row) = rows.next()? {
         let values = (0..all.len())
             .map(|i| row.get::<_, Value>(i))
             .collect::<rusqlite::Result<Vec<Value>>>()?;
-        let changed = upsert.execute(params_from_iter(values))?;
+        let mut changed = upsert.execute(params_from_iter(values.iter()))?;
+        if changed == 0 && table.existing == Existing::AppendComment {
+            changed = append_comment(hub, &values, report)?;
+        }
         let count = report.kind(table.kind);
         count.read += 1;
         if changed > 0 {
@@ -155,6 +191,34 @@ fn copy(
         }
     }
     Ok(())
+}
+
+/// Appends an imported comment whose `(ticket, n)` the hub holds with another text, as the
+/// ticket's next comment. Returns 1 if it was appended, 0 if the hub's comment is the same or
+/// the ticket already has the imported text. `values` are the comment's key columns, then
+/// `author`, `at`, `text` and `legacy_id`.
+fn append_comment(hub: &Connection, values: &[Value], report: &mut ImportReport) -> Result<usize> {
+    let (Value::Text(ticket), Value::Integer(n)) = (&values[0], &values[1]) else {
+        return Ok(0);
+    };
+    let already: i64 = hub.query_row(
+        "SELECT count(*) FROM comments WHERE ticket = ?1 AND text = ?2 AND author = ?3 AND at = ?4",
+        params_from_iter([&values[0], &values[4], &values[2], &values[3]]),
+        |row| row.get(0),
+    )?;
+    if already > 0 {
+        return Ok(0);
+    }
+    hub.execute(
+        "INSERT INTO comments (ticket, n, author, at, text, legacy_id)
+         SELECT ?1, COALESCE(MAX(n), 0) + 1, ?2, ?3, ?4, ?5 FROM comments WHERE ticket = ?1",
+        params_from_iter([&values[0], &values[2], &values[3], &values[4], &values[5]]),
+    )?;
+    report.problem(format!(
+        "comment {n} of {ticket} differs from the hub's comment {n}; the imported one was \
+         appended as a new comment and the hub's was kept"
+    ));
+    Ok(1)
 }
 
 /// Moves the hub's `seq` up to the old service's, which it stored as text that may read
@@ -305,7 +369,8 @@ mod tests {
         Connection::open(&path)
             .unwrap()
             .execute(
-                "UPDATE tickets SET title = 'Renamed' WHERE id = 'ab1.2'",
+                "UPDATE tickets SET title = 'Renamed', updated_at = '2026-11-03T00:00:00.000Z'
+                 WHERE id = 'ab1.2'",
                 [],
             )
             .unwrap();
@@ -315,6 +380,50 @@ mod tests {
             hub::tickets::load(&hub, "ab1.2").unwrap().unwrap().title,
             "Renamed"
         );
+    }
+
+    #[test]
+    fn a_rerun_after_the_hub_went_live_keeps_newer_hub_data() {
+        let path = old_database("live");
+        let mut hub = hub::open_in_memory().unwrap();
+        import_tickets(&mut hub, &path, false);
+        // The hub changes a ticket, adds an edge kind and a comment that shares an imported key.
+        hub.execute(
+            "UPDATE tickets SET title = 'Hub title', status = 'closed',
+               updated_at = '2026-11-20T00:00:00.000Z' WHERE id = 'ab1.2'",
+            [],
+        )
+        .unwrap();
+        hub.execute("UPDATE edges SET kind = 'waits-for'", [])
+            .unwrap();
+        hub.execute(
+            "UPDATE comments SET text = 'hub text' WHERE ticket = 'ab1.1' AND n = 2",
+            [],
+        )
+        .unwrap();
+        let again = import_tickets(&mut hub, &path, false);
+        let ticket = hub::tickets::load(&hub, "ab1.2").unwrap().unwrap();
+        assert_eq!(ticket.title, "Hub title");
+        assert_eq!(
+            ticket.status,
+            ignite_core::protocol::tickets::Status::Closed
+        );
+        let kind: String = hub
+            .query_row("SELECT kind FROM edges", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(kind, "waits-for");
+        let texts: Vec<String> = hub
+            .prepare("SELECT text FROM comments WHERE ticket = 'ab1.1' ORDER BY n")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert_eq!(texts, ["hi", "hub text", "bye"]);
+        assert!(again.to_string().contains("appended"), "{again}");
+        // Running it once more adds nothing.
+        import_tickets(&mut hub, &path, false);
+        assert_eq!(count(&hub, "comments"), 3);
     }
 
     #[test]

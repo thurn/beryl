@@ -1,6 +1,6 @@
 //! The fleet: machines, their workers, reservations and hand-offs.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use ignite_core::protocol::hub::{Heartbeat, MachineRegister, Reservation};
 use ignite_core::time::Timestamp;
@@ -44,7 +44,7 @@ pub fn register(conn: &Connection, machine: &MachineRegister, now: Timestamp) ->
 /// Marks the machine seen and replaces its workers with the ones it reports, so a worker the
 /// machine no longer lists disappears.
 pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -> Result<()> {
-    let tx = conn.transaction()?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let machine = heartbeat.machine.as_str();
     let seen = tx.execute(
         "UPDATE machines SET last_seen = ?2, version = ?3 WHERE id = ?1",

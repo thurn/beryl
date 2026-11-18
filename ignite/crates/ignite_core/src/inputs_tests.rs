@@ -92,6 +92,7 @@ fn crate_closure_adds_package_dirs_the_lock_file_and_the_toolchain() {
         [
             "rust-toolchain.toml",
             "ws/Cargo.lock",
+            "ws/Cargo.toml",
             "ws/crates/base",
             "ws/crates/core"
         ]
@@ -133,7 +134,13 @@ fn paths_inside_a_named_directory_are_dropped() {
     .unwrap();
     assert_eq!(
         resolved,
-        ["rust-toolchain.toml", "web", "ws/Cargo.lock", "ws/crates"]
+        [
+            "rust-toolchain.toml",
+            "web",
+            "ws/Cargo.lock",
+            "ws/Cargo.toml",
+            "ws/crates"
+        ]
     );
 }
 
@@ -251,5 +258,23 @@ outputs = ["ws/target"]
             "family.f.inputs[3]: crate:ghost: names no workspace package",
             "product.p.inputs[1]: ws/*.json: matches no tracked file",
         ]
+    );
+}
+
+#[test]
+fn a_crate_pattern_adds_the_workspace_manifest() {
+    let resolved = resolve(&patterns(&["crate:lonely"]), None, &graph(), &tracked()).unwrap();
+    assert!(resolved.contains(&"ws/Cargo.toml".to_owned()));
+}
+
+#[test]
+fn a_top_level_file_is_the_same_area_for_scores_and_admission() {
+    assert_eq!(
+        area("justfile", &graph()),
+        Area::Directory("justfile".into())
+    );
+    assert_eq!(
+        crate::admission::area_of("justfile", &[]),
+        directory_area("justfile")
     );
 }

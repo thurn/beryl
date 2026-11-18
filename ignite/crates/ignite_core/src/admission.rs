@@ -32,7 +32,8 @@ pub struct Worked {
 }
 
 /// The area of a repository path: the longest of `packages` (workspace package directories)
-/// that holds it, or else its first two directories.
+/// that holds it, or else its first two directories (a top-level file is its own area, as in
+/// [`crate::inputs::area`]).
 pub fn area_of(path: &str, packages: &[String]) -> String {
     let inside = |root: &&String| {
         let root = root.trim_end_matches('/');
@@ -42,9 +43,7 @@ pub fn area_of(path: &str, packages: &[String]) -> String {
     if let Some(root) = packages.iter().filter(inside).max_by_key(|root| root.len()) {
         return root.trim_end_matches('/').to_owned();
     }
-    let directories: Vec<&str> = path.split('/').collect();
-    let depth = directories.len().saturating_sub(1).min(2);
-    directories[..depth].join("/")
+    crate::inputs::directory_area(path)
 }
 
 /// The median, averaging the middle two of an even count; `None` for no values.
@@ -206,6 +205,10 @@ mod tests {
         );
         assert_eq!(area_of("tools/src/by/checks.py", &packages), "tools/src");
         assert_eq!(area_of("tools/x.py", &packages), "tools");
-        assert_eq!(area_of("justfile", &packages), "");
+        assert_eq!(area_of("justfile", &packages), "justfile");
+        assert_eq!(
+            area_of("justfile", &packages),
+            crate::inputs::directory_area("justfile")
+        );
     }
 }

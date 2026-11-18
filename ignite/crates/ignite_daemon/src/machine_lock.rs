@@ -10,7 +10,7 @@
 //! when the daemon starts listening, after it has opened its database and started its threads,
 //! and it is named after the socket's path rather than the machine's home.
 
-use std::fs::{self, File, OpenOptions, TryLockError};
+use std::fs::{File, OpenOptions, TryLockError};
 use std::io;
 use std::path::PathBuf;
 
@@ -31,7 +31,7 @@ pub struct DaemonLock {
 /// missing. Fails with [`io::ErrorKind::AddrInUse`], and a message saying so, while another
 /// process holds it.
 pub fn hold(home: &Home) -> io::Result<DaemonLock> {
-    fs::create_dir_all(&home.root)?;
+    home.create()?;
     let path = home.root.join(LOCK_FILE);
     let file = OpenOptions::new()
         .create(true)

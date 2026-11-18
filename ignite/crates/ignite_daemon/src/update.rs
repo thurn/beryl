@@ -36,6 +36,10 @@ use serde::{Deserialize, Serialize};
 use crate::doctor::{Host, NativeHost};
 use crate::server::{Context, Verb};
 
+mod rollback;
+
+pub use rollback::{CRASH_WINDOW_S, HEALTHY_AFTER_S, KEEP_EXTRA, Startup};
+
 /// The arguments the login service starts the executable with.
 pub const DAEMON_ARGS: &[&str] = &["daemon"];
 
@@ -59,6 +63,12 @@ impl Home {
         Home { root }
     }
 
+    /// Creates the home folder, readable by its user only: it holds the daemon's socket and
+    /// the machine's write token. An existing folder is made private too.
+    pub fn create(&self) -> io::Result<()> {
+        create_private_dir(&self.root)
+    }
+
     pub fn store(&self) -> ExecutableStore {
         ExecutableStore {
             root: self.root.join("bin"),
@@ -75,6 +85,27 @@ impl Home {
         IdentityFile {
             path: self.root.join("machine.json"),
         }
+    }
+}
+
+/// Creates `dir` and any missing parents; `dir` itself gets mode 0700 on macOS.
+pub fn create_private_dir(dir: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        if let Some(parent) = dir.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        match std::fs::DirBuilder::new().mode(0o700).create(dir) {
+            Err(error) if error.kind() != io::ErrorKind::AlreadyExists => return Err(error),
+            _ => {}
+        }
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+    }
+    #[cfg(windows)]
+    {
+        // The folder inherits the user profile's permissions, which allow only this user.
+        std::fs::create_dir_all(dir)
     }
 }
 
@@ -120,12 +151,19 @@ impl ExecutableStore {
         std::fs::create_dir_all(dir)?;
         let partial = dir.join(format!("ignite.partial-{}", std::process::id()));
         std::fs::copy(built, &partial)?;
-        std::fs::rename(&partial, &dest)?;
+        Self::sync_rename(&partial, &dest)?;
         Ok(dest)
     }
 
     /// Points [`Self::current_link`] at the commit's executable, replacing the link in one step.
+    /// The release it pointed at stays stored as the previous one, and the new release starts
+    /// on trial (see `rollback`).
     pub fn point_current_at(&self, commit: &Commit) -> io::Result<()> {
+        self.begin_trial(commit);
+        self.flip(commit)
+    }
+
+    fn flip(&self, commit: &Commit) -> io::Result<()> {
         let partial = self
             .root
             .join(format!("current.partial-{}", std::process::id()));
@@ -253,7 +291,10 @@ impl Builder for TreeBuilder {
 
 /// The hub's side of `ignite install`.
 pub trait Registrar {
-    fn register(&self, request: &MachineRegister) -> Result<MachineRegistered>;
+    /// Registers the machine. `token` is the write token the machine already holds, if any: the
+    /// hub refuses to register again a machine that has one unless it is sent.
+    fn register(&self, request: &MachineRegister, token: Option<&str>)
+    -> Result<MachineRegistered>;
 }
 
 /// Registers over HTTP: `POST <url>/<project>/api/machines/register`.
@@ -263,17 +304,27 @@ pub struct HttpRegistrar {
 }
 
 impl Registrar for HttpRegistrar {
-    fn register(&self, request: &MachineRegister) -> Result<MachineRegistered> {
+    fn register(
+        &self,
+        request: &MachineRegister,
+        token: Option<&str>,
+    ) -> Result<MachineRegistered> {
         let url = format!(
             "{}/{}/api/machines/register",
             self.url.trim_end_matches('/'),
             self.project
         );
         let body = serde_json::to_string(request).map_err(|e| Error::Invalid(e.to_string()))?;
-        let mut response = ureq::post(&url)
-            .header("Content-Type", "application/json")
-            .send(body)
-            .map_err(|e| Error::Unreachable(format!("{url}: {e}")))?;
+        let mut post = ureq::post(&url).header("Content-Type", "application/json");
+        if let Some(token) = token {
+            post = post.header("Authorization", format!("Bearer {token}"));
+        }
+        let mut response = post.send(body).map_err(|e| match e {
+            ureq::Error::StatusCode(status @ (401 | 403)) => Error::Unreachable(format!(
+                "{url}: the hub refused this machine's token ({status}); {RECOVER}"
+            )),
+            e => Error::Unreachable(format!("{url}: {e}")),
+        })?;
         let text = response
             .body_mut()
             .read_to_string()
@@ -285,6 +336,12 @@ impl Registrar for HttpRegistrar {
         })
     }
 }
+
+/// How to get a machine registered again when the hub holds a token for its ID that this
+/// machine does not have, or the other way round.
+pub const RECOVER: &str = "the hub already holds a token for this machine's ID. Restore \
+    `machine.json` in the Ignite home (it holds the token), or delete it to register as a new \
+    machine, then run `ignite install` again";
 
 /// What the machine remembers about itself between runs.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -388,18 +445,21 @@ pub fn install(deps: &InstallDeps, config: &Config, head: &Commit) -> Result<Ins
     deps.store.point_current_at(head)?;
 
     let mut identity = deps.identity.load_or_create()?;
-    let registered = deps.registrar.register(&MachineRegister {
-        machine: identity.machine.clone(),
-        name,
-        os: declared
-            .os
-            .or_else(Os::current)
-            .ok_or_else(|| Error::Invalid("this operating system is not supported".to_owned()))?,
-        cores: deps.host.cores(),
-        memory_mb: deps.host.memory_mb(),
-        families: declared.families.clone().unwrap_or_default(),
-        version: head.as_str().to_owned(),
-    })?;
+    let known_token = identity.token.clone();
+    let registered = deps.registrar.register(
+        &MachineRegister {
+            machine: identity.machine.clone(),
+            name,
+            os: declared.os.or_else(Os::current).ok_or_else(|| {
+                Error::Invalid("this operating system is not supported".to_owned())
+            })?,
+            cores: deps.host.cores(),
+            memory_mb: deps.host.memory_mb(),
+            families: declared.families.clone().unwrap_or_default(),
+            version: head.as_str().to_owned(),
+        },
+        known_token.as_deref(),
+    )?;
     identity.token = Some(registered.token);
     deps.identity.save(&identity)?;
 
@@ -444,7 +504,8 @@ pub fn install_checkout(repo: &Path, config: &Config) -> Reply {
         Ok(head) => head,
         Err(error) => return failure(&error),
     };
-    let recorded = std::fs::create_dir_all(&home.root)
+    let recorded = home
+        .create()
         .and_then(|()| std::fs::write(home.checkout_file(), repo.to_string_lossy().as_bytes()));
     if let Err(error) = recorded {
         return failure(&Error::from(error));
@@ -585,11 +646,16 @@ impl Updater<'_> {
 
     /// Builds and stores `target`, the version the hub runs, unless it is stored already.
     pub fn prepare(&self, current: &Commit, target: &Commit) -> Result<UpdateCheck> {
+        if self.store.is_rejected(target) {
+            // A release that failed to start is not tried again.
+            return Ok(UpdateCheck::UpToDate);
+        }
         if !self.store.has(target) {
             let built = self.builder.build(target)?;
             self.store.store(target, &built)?;
         }
         self.store.point_current_at(target)?;
+        self.store.prune(&[target, current]);
         Ok(UpdateCheck::Ready {
             from: current.clone(),
             to: target.clone(),

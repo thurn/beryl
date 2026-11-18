@@ -33,6 +33,11 @@ pub fn issue(conn: &Connection, machine: &MachineId) -> Result<String> {
     Ok(token)
 }
 
+/// Whether `machine` already holds a token, so that registering it again needs that token.
+pub fn has_token(conn: &Connection, machine: &MachineId) -> Result<bool> {
+    Ok(load(conn)?.values().any(|owner| owner == machine.as_str()))
+}
+
 /// The machine a token belongs to, or `None` for a token the hub never issued or has replaced.
 pub fn verify(conn: &Connection, token: &str) -> Result<Option<MachineId>> {
     let Some(machine) = load(conn)?.remove(&hash(token)) else {
@@ -110,6 +115,15 @@ mod tests {
         let new = issue(&conn, &machine("m-1")).unwrap();
         assert_eq!(verify(&conn, &old).unwrap(), None);
         assert_eq!(verify(&conn, &new).unwrap(), Some(machine("m-1")));
+    }
+
+    #[test]
+    fn has_token_is_true_only_for_machines_that_were_issued_one() {
+        let conn = open_in_memory().unwrap();
+        assert!(!has_token(&conn, &machine("m-1")).unwrap());
+        issue(&conn, &machine("m-1")).unwrap();
+        assert!(has_token(&conn, &machine("m-1")).unwrap());
+        assert!(!has_token(&conn, &machine("m-2")).unwrap());
     }
 
     #[test]

@@ -155,6 +155,9 @@ pub struct TipVerifier {
     waiting_since: BTreeMap<Os, Timestamp>,
     /// The tips and platforms already reported as waiting.
     flagged: HashSet<(Commit, Os)>,
+    /// The output references that runs on this machine returned in this round. Only these are
+    /// opened to quote a failure's last lines.
+    own_outputs: HashSet<String>,
 }
 
 impl TipVerifier {
@@ -167,6 +170,7 @@ impl TipVerifier {
             reported: HashSet::new(),
             waiting_since: BTreeMap::new(),
             flagged: HashSet::new(),
+            own_outputs: HashSet::new(),
         }
     }
 
@@ -195,6 +199,7 @@ impl TipVerifier {
         if last == *tip {
             return Ok(TipOutcome::Verified);
         }
+        self.own_outputs.clear();
         let checks = self.work.checks(ctx, tip)?;
         let keys: Vec<ResultKey> = checks.iter().map(|c| c.key.clone()).collect();
         let cached = ctx.hub.lookup(&keys)?;
@@ -237,12 +242,12 @@ impl TipVerifier {
                 continue;
             }
             let runs = self.work.run(ctx, tip, &names, false);
-            settle_runs(&checks, runs, &mut verdicts);
+            settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         }
         if !recheck.is_empty() {
             let names: Vec<CheckName> = recheck.iter().map(|c| c.check.clone()).collect();
             let runs = self.work.run(ctx, tip, &names, true);
-            settle_runs(&checks, runs, &mut verdicts);
+            settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
 
@@ -424,25 +429,38 @@ impl TipVerifier {
         if newest != *tip && touches(&ctx.git.changed(tip, &newest)?, &check.inputs) {
             return Ok(());
         }
-        let Some(culprit) = self.find_culprit(ctx, check, last, tip)? else {
-            return Ok(());
-        };
-        let tickets: Vec<TicketId> = culprit
-            .suspects
-            .iter()
-            .filter_map(|l| l.ticket.clone())
-            .collect();
-        let (caused_by, suspects) = if culprit.suspects.len() == 1 {
-            (tickets.into_iter().next(), Vec::new())
-        } else {
-            (None, tickets)
-        };
+        // A failing check at a tip is always reported. With no landing to blame (the hub
+        // recorded none between the commits), the report names the whole range since the last
+        // verified commit and no ticket.
+        let (first_bad, last_good, caused_by, suspects) =
+            match self.find_culprit(ctx, check, last, tip)? {
+                Some(culprit) => {
+                    let tickets: Vec<TicketId> = culprit
+                        .suspects
+                        .iter()
+                        .filter_map(|l| l.ticket.clone())
+                        .collect();
+                    if culprit.suspects.len() == 1 {
+                        (
+                            culprit.first_bad,
+                            culprit.last_good,
+                            tickets.into_iter().next(),
+                            Vec::new(),
+                        )
+                    } else {
+                        (culprit.first_bad, culprit.last_good, None, tickets)
+                    }
+                }
+                None => (tip.clone(), last.clone(), None, Vec::new()),
+            };
         ctx.hub.regression(&RegressionReport {
             check: check.check.clone(),
-            first_bad: culprit.first_bad,
-            last_good: culprit.last_good,
+            first_bad,
+            last_good,
             caused_by,
-            output: output.map(tail).unwrap_or_default(),
+            output: output
+                .map(|o| tail(o, &self.own_outputs))
+                .unwrap_or_default(),
             suspects,
             platform: check.key.platform,
         })?;
@@ -556,8 +574,15 @@ fn verdict(check: &TipCheck, outcome: Outcome, output: Option<String>) -> TipRun
 }
 
 /// Files each run's outcome under the key of the runnable check it names.
-fn settle_runs(checks: &[TipCheck], runs: Vec<TipRun>, verdicts: &mut HashMap<ResultKey, TipRun>) {
+/// The outputs of these runs are files this machine wrote, so `own` remembers them for [`tail`].
+fn settle_runs(
+    checks: &[TipCheck],
+    runs: Vec<TipRun>,
+    verdicts: &mut HashMap<ResultKey, TipRun>,
+    own: &mut HashSet<String>,
+) {
     for run in runs {
+        own.extend(run.output.clone());
         if let Some(check) = checks.iter().find(|c| c.runnable && c.check == run.check) {
             verdicts.insert(check.key.clone(), run);
         }
@@ -609,10 +634,17 @@ fn names_of(checks: &[&TipCheck]) -> Vec<CheckName> {
     names
 }
 
-/// The last lines of a failure's output: the file's, when `output` names a readable file, and
-/// otherwise the reference itself.
-fn tail(output: &str) -> String {
-    let Ok(text) = fs::read_to_string(output) else {
+/// The last lines of a failure's output: the file's, when `output` is a file that a run on this
+/// machine wrote (one of `own`), and otherwise the reference itself.
+///
+/// A cached result carries the reference that the machine that ran it stored, which on another
+/// machine can be any path, so it is printed and never opened.
+fn tail(output: &str, own: &HashSet<String>) -> String {
+    let text = own
+        .contains(output)
+        .then(|| fs::read_to_string(output).ok())
+        .flatten();
+    let Some(text) = text else {
         return output.to_owned();
     };
     let lines: Vec<&str> = text.lines().collect();

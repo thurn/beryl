@@ -395,6 +395,24 @@ fn evaluation_runs_at_most_once_an_hour() {
 }
 
 #[test]
+fn a_failed_evaluation_is_not_stamped_so_the_next_arrival_retries() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let config = config::Rules::default();
+    conn.execute("ALTER TABLE findings RENAME TO findings_away", [])
+        .unwrap();
+    assert!(filing::evaluate_if_due(&mut conn, &config, now()).is_err());
+    conn.execute("ALTER TABLE findings_away RENAME TO findings", [])
+        .unwrap();
+    // A minute later is well inside the hour, yet the evaluation runs because none succeeded.
+    let soon = now().plus_seconds(60.0);
+    assert!(
+        filing::evaluate_if_due(&mut conn, &config, soon)
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
 fn backlog_ratios_take_the_largest_unit() {
     let conn = hub::open_in_memory().unwrap();
     // 100 core-hours and $1,000 last week.

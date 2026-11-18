@@ -6,10 +6,13 @@
 //! reaped, while the zombie still holds it. That is how `/usr/bin/time -l` gets the same
 //! figures.
 //!
-//! The record covers one process. Its child fields total CPU time, but not instructions, of
-//! the children it reaped. So for a command that starts processes of its own, [`TreeMeter`]
-//! reads every process in the command's process group about once a second while it runs and
-//! keeps the last reading of each one that goes away.
+//! The record covers one process. Its child fields (`ri_child_*`, in every version of the
+//! record) total CPU time, wakeups and page-ins of the children it reaped, but have no field
+//! for their instructions, so the leader's record does not hold its descendants' instructions.
+//! So for a command that starts processes of its own, [`TreeMeter`] reads every process in the
+//! command's process group a few times a second while it runs and
+//! keeps the last reading of each one that goes away. A descendant that starts and exits between
+//! two readings is not counted at all; see "Cost in instructions" in `docs/ignite.md`.
 
 use std::collections::HashMap;
 use std::io;

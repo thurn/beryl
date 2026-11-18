@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use rusqlite::Connection;
 
+use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::Heartbeat;
 use ignite_core::time::SystemClock;
 use ignite_core::traits::{Error, Result};
@@ -22,7 +23,7 @@ use crate::dispatchd::Dispatcher;
 use crate::hubclient::HubClient;
 use crate::idle::Idle;
 use crate::land::Landing;
-use crate::sched::Scheduler;
+use crate::sched::{ClassStatus, Scheduler};
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
 use crate::tip::{CheckTipWork, TipOutcome, TipVerifier};
@@ -109,6 +110,9 @@ impl Parts {
                 let running = running_commands(&server, &scheduler);
                 let may_ask = update.after_heartbeat(hub_version.borrow().as_deref(), running);
                 dispatcher.set_draining(!may_ask);
+                // Idle work only runs on a quiet machine, so an update that waits for it would
+                // wait for as long as the machine is loaded: stop it and start none.
+                scheduler.set_draining(!may_ask);
                 thread::sleep(SEND_EVERY);
             }
         });
@@ -209,24 +213,33 @@ impl Parts {
 }
 
 /// The commands an update waits for: verbs still running in the server, and commands that
-/// hold or wait for cores, such as the checks of tip verification and idle work.
+/// hold cores or wait for them, such as the checks of tip verification. `idle` requests that
+/// still wait are left out, because they start only while the machine is under 70% busy, which
+/// may be never: waiting for them would hold the update back forever. `idle` work that runs is
+/// counted, and the update stops it.
 fn running_commands(server: &Server, scheduler: &Scheduler) -> usize {
-    let held: u32 = scheduler
-        .status()
-        .classes
-        .iter()
-        .map(|class| class.running + class.waiting)
-        .sum();
-    server.running_verbs() + held as usize
+    commands_in(&scheduler.status().classes) + server.running_verbs()
 }
 
-/// Collects the runs a stopped daemon left, each on a thread that waits for its supervisor.
+fn commands_in(classes: &[ClassStatus]) -> usize {
+    classes
+        .iter()
+        .map(|class| {
+            let waiting = if class.class == Class::Idle {
+                0
+            } else {
+                class.waiting
+            };
+            (class.running + waiting) as usize
+        })
+        .sum()
+}
+
+/// Takes over the runs a stopped daemon left: each is registered with the scheduler under the
+/// cores and resources it was granted, so nothing else is granted them while it runs, and
+/// released when its supervisor has exited.
 pub fn collect_unfinished(launcher: &SupervisedLauncher) {
-    for run in launcher.unfinished() {
-        thread::spawn(move || {
-            run.wait();
-        });
-    }
+    launcher.adopt_unfinished();
 }
 
 /// On the hub's machine (`IGNITE_HUB_LISTEN` set), serves the hub and runs its upkeep for the
@@ -263,4 +276,31 @@ pub fn serve_hub(repo: &Path, listen: &str, dir: &Path, version: &str) -> Result
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups"))).map_err(store)?;
     thread::spawn(move || upkeep.run(conn, &SystemClock));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn class(class: Class, running: u32, waiting: u32) -> ClassStatus {
+        ClassStatus {
+            class,
+            running,
+            cores: running,
+            waiting,
+        }
+    }
+
+    #[test]
+    fn an_update_does_not_wait_for_idle_requests_that_have_not_started() {
+        let classes = [
+            class(Class::Land, 0, 0),
+            class(Class::Agent, 1, 2),
+            class(Class::Idle, 1, 3),
+        ];
+        // The agent's running and waiting commands and the one idle command that runs; not the
+        // three idle requests that wait for a quiet machine.
+        assert_eq!(commands_in(&classes), 1 + 2 + 1);
+        assert_eq!(commands_in(&[class(Class::Idle, 0, 5)]), 0);
+    }
 }

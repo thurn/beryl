@@ -94,6 +94,8 @@ fn hub_failure(world: &World, check: &str, machine: &str) {
             machine: MachineId::new(machine).unwrap(),
             record: RecordId(7),
             output: Some("/elsewhere/output.log".to_owned()),
+            cost: ignite_core::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
         }])
         .unwrap();
 }

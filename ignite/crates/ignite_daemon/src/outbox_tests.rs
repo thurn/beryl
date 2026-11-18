@@ -66,3 +66,20 @@ fn an_entry_the_hub_rejects_does_not_hold_back_the_rest() {
     assert_eq!(flush(&conn, &hub.client()).unwrap(), 1);
     assert!(store::peek(&conn, 10).unwrap().is_empty());
 }
+
+#[test]
+fn a_refused_token_keeps_the_queue_for_when_the_machine_is_registered_again() {
+    let conn = open_in_memory().unwrap();
+    push_record(&conn, &record("test"), Timestamp::EPOCH).unwrap();
+    push_record(&conn, &record("land"), Timestamp::EPOCH).unwrap();
+
+    let refusing = FakeHttpHub::start(|_, _, _| (401, "{}".to_owned()));
+    assert!(matches!(
+        flush(&conn, &refusing.client()),
+        Err(Error::Unreachable(_))
+    ));
+    assert_eq!(store::peek(&conn, 10).unwrap().len(), 2);
+
+    let hub = FakeHttpHub::start(|_, _, _| (200, "{}".to_owned()));
+    assert_eq!(flush(&conn, &hub.client()).unwrap(), 2);
+}

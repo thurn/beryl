@@ -1,6 +1,12 @@
 //! The hub's HTTP server, on `tiny_http`, with one thread per request and a pool of database
 //! connections that the threads share.
 //!
+//! Load is bounded: at most [`MAX_REQUEST_THREADS`] requests are answered at once (the next
+//! gets 503), at most [`MAX_CONNECTIONS`] database connections are open (a request waits a few
+//! seconds for one, then gets 503), and a request without a valid token may send only
+//! [`MAX_UNAUTHENTICATED_BODY`] bytes. `tiny_http` offers no socket timeouts, so a client that
+//! stalls mid-body holds one of the request threads until it disconnects.
+//!
 //! The server listens on the address it is given, normally the loopback address, and Tailscale
 //! publishes it on the private network, as it did the ticket service. API requests live under
 //! `/<project>/api`; other requests under `/<project>` are the dashboard's pages. The project is
@@ -12,8 +18,10 @@ use std::io::{self, Read};
 use std::net::SocketAddr;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use serde_json::json;
@@ -31,6 +39,20 @@ use crate::rules;
 
 /// The largest request body the hub reads, as the ticket service allowed.
 const MAX_BODY: u64 = 100 * 1024 * 1024;
+
+/// The most requests answered at the same time, each on its own thread.
+pub const MAX_REQUEST_THREADS: usize = 64;
+
+/// The most database connections open at once. The long-poll waiters of `/feed` hold some of
+/// them (`routes::feed::MAX_WAITERS`), so this stays well above that.
+pub const MAX_CONNECTIONS: usize = 32;
+
+/// How long a request waits for a free database connection before it gets 503.
+const CONNECTION_WAIT: Duration = Duration::from_secs(5);
+
+/// The largest body the hub reads from a request that carries no valid token, enough for a
+/// machine's first registration.
+pub const MAX_UNAUTHENTICATED_BODY: u64 = 64 * 1024;
 
 /// Where and how the hub serves.
 #[derive(Clone, Debug)]
@@ -62,13 +84,28 @@ impl HubServer {
             aliases: self.config.hub.aliases.clone(),
             rules: self.config.rules.clone(),
             database: self.database.clone(),
-            pool: Mutex::new(vec![first]),
+            pool: Mutex::new(Pool {
+                idle: vec![first],
+                open: 1,
+            }),
+            returned: Condvar::new(),
+            active: AtomicUsize::new(0),
         });
         let accepting = Arc::clone(&server);
         let thread = thread::spawn(move || {
             for request in accepting.incoming_requests() {
+                if shared.active.fetch_add(1, Ordering::SeqCst) >= MAX_REQUEST_THREADS {
+                    shared.active.fetch_sub(1, Ordering::SeqCst);
+                    let busy = tiny_http::Response::from_string("{\"error\":\"the hub is busy\"}")
+                        .with_status_code(503);
+                    let _ = request.respond(busy);
+                    continue;
+                }
                 let shared = Arc::clone(&shared);
-                thread::spawn(move || answer(&shared, request));
+                thread::spawn(move || {
+                    answer(&shared, request);
+                    shared.active.fetch_sub(1, Ordering::SeqCst);
+                });
             }
         });
         Ok(RunningHub {
@@ -110,20 +147,45 @@ struct Shared {
     /// The improvement rules' settings, evaluated when records or efficiency rows arrive.
     rules: Rules,
     database: PathBuf,
-    /// Idle connections; a request takes one or opens a new one, and gives it back.
-    pool: Mutex<Vec<Connection>>,
+    /// Idle connections and how many are open; a request takes one, opens a new one while
+    /// fewer than [`MAX_CONNECTIONS`] are open, and gives it back.
+    pool: Mutex<Pool>,
+    /// Signalled when a connection comes back or closes.
+    returned: Condvar,
+    /// Requests being answered now.
+    active: AtomicUsize,
+}
+
+struct Pool {
+    idle: Vec<Connection>,
+    open: usize,
 }
 
 impl Shared {
     fn connection(&self) -> Result<Connection, Response> {
-        let idle = self
-            .pool
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .pop();
-        match idle {
-            Some(conn) => Ok(conn),
-            None => hub::open(&self.database).map_err(|e| failure(500, &e.to_string())),
+        let deadline = Instant::now() + CONNECTION_WAIT;
+        let mut pool = self.pool.lock().unwrap_or_else(PoisonError::into_inner);
+        loop {
+            if let Some(conn) = pool.idle.pop() {
+                return Ok(conn);
+            }
+            if pool.open < MAX_CONNECTIONS {
+                pool.open += 1;
+                drop(pool);
+                return hub::open(&self.database).map_err(|e| {
+                    self.discard();
+                    failure(500, &e.to_string())
+                });
+            }
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(failure(503, "the hub is busy"));
+            }
+            pool = self
+                .returned
+                .wait_timeout(pool, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
         }
     }
 
@@ -131,7 +193,17 @@ impl Shared {
         self.pool
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
+            .idle
             .push(conn);
+        self.returned.notify_one();
+    }
+
+    /// Records that a connection was closed instead of given back.
+    fn discard(&self) {
+        let mut pool = self.pool.lock().unwrap_or_else(PoisonError::into_inner);
+        pool.open = pool.open.saturating_sub(1);
+        drop(pool);
+        self.returned.notify_one();
     }
 }
 
@@ -191,18 +263,6 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     else {
         return failure(404, "Unknown route");
     };
-    let mut body = Vec::new();
-    if http
-        .as_reader()
-        .take(MAX_BODY + 1)
-        .read_to_end(&mut body)
-        .is_err()
-    {
-        return failure(400, "could not read the request body");
-    }
-    if body.len() as u64 > MAX_BODY {
-        return failure(413, "the request body is too large");
-    }
     let headers: Vec<(String, String)> = http
         .headers()
         .iter()
@@ -224,7 +284,35 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
             .find(|(k, _)| k == name)
             .map(|(_, v)| v.as_str())
     };
+    // The token is checked before any body is read, so a request without one cannot make the
+    // hub buffer more than a small body.
     let writer = auth::authorize(&conn, header("authorization"), header("x-actor")).ok();
+    let limit = if writer.is_some() {
+        MAX_BODY
+    } else {
+        MAX_UNAUTHENTICATED_BODY
+    };
+    let mut body = Vec::new();
+    if http
+        .body_length()
+        .is_some_and(|length| length as u64 > limit)
+    {
+        shared.give_back(conn);
+        return failure(413, "the request body is too large");
+    }
+    if http
+        .as_reader()
+        .take(limit + 1)
+        .read_to_end(&mut body)
+        .is_err()
+    {
+        shared.give_back(conn);
+        return failure(400, "could not read the request body");
+    }
+    if body.len() as u64 > limit {
+        shared.give_back(conn);
+        return failure(413, "the request body is too large");
+    }
     let mut request = Request {
         method,
         path: String::new(),
@@ -240,8 +328,9 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         rest.clone_into(&mut request.path);
         caught(conn, |conn| page(conn, &request, &shared.project, now))
     };
-    if let Some(conn) = conn {
-        shared.give_back(conn);
+    match conn {
+        Some(conn) => shared.give_back(conn),
+        None => shared.discard(),
     }
     if request.method != "GET" && request.method != "HEAD" {
         routes::feed::notify();

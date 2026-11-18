@@ -11,7 +11,7 @@
 //! `ignite_store::hub` and encodes the reply. Every route except `/results/lookup`,
 //! `/landings/lookup` and `/checks/stats` changes the database, so it needs an authorized writer (HTTP 401 otherwise).
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
@@ -113,7 +113,9 @@ fn lookup(
     request: &LookupRequest,
     now: Timestamp,
 ) -> Result<Response, Response> {
-    let tx = conn.transaction().map_err(|e| store_failure(&e.into()))?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| store_failure(&e.into()))?;
     let found = results::lookup(&tx, &request.keys, now).map_err(|e| store_failure(&e))?;
     tx.commit().map_err(|e| store_failure(&e.into()))?;
     Ok(Response::json(200, &json!(LookupReply { results: found })))
@@ -136,7 +138,12 @@ fn store(
             continue;
         }
         let stored = stored(conn, result).map_err(|e| store_failure(&e))?;
-        if stored.as_ref().map(|s| s.record) != Some(result.record.0) {
+        // A batch sent twice repeats the outcome and machine of the entry it already stored;
+        // a different outcome or machine is a new run.
+        let repeat = stored.as_ref().is_some_and(|s| {
+            s.outcome == outcome_text(result.outcome) && s.machine == result.machine.as_str()
+        });
+        if !repeat {
             fresh.push(result);
         }
         if let Some(stored) = stored
@@ -167,7 +174,12 @@ fn store(
     for result in fresh {
         let check = result.key.check.as_str();
         let failed = result.outcome == Outcome::Fail;
-        checks::count_run(conn, check, &request.areas, failed).map_err(|e| store_failure(&e))?;
+        let areas = if result.areas.is_empty() {
+            &request.areas
+        } else {
+            &result.areas
+        };
+        checks::count_run(conn, check, areas, failed).map_err(|e| store_failure(&e))?;
         if let Some((cost, unit)) = record_cost(conn, result).map_err(|e| store_failure(&e))? {
             checks::add_cost(conn, check, cost, unit).map_err(|e| store_failure(&e))?;
         }
@@ -177,18 +189,25 @@ fn store(
 
 /// The cached entry for a result's key.
 struct Stored {
-    record: u64,
     outcome: String,
     machine: String,
     output: Option<String>,
 }
 
 /// The cached entry for this result's key, if there is one.
+fn outcome_text(outcome: Outcome) -> &'static str {
+    if outcome == Outcome::Pass {
+        "pass"
+    } else {
+        "fail"
+    }
+}
+
 fn stored(conn: &Connection, result: &NewResult) -> Result<Option<Stored>, StoreError> {
     let platform = result.key.platform.map_or("", |os| os.as_str());
     let stored = conn
         .query_row(
-            "SELECT record, outcome, machine, output FROM results
+            "SELECT outcome, machine, output FROM results
              WHERE check_name = ?1 AND hash = ?2 AND platform = ?3",
             params![
                 result.key.check.as_str(),
@@ -197,10 +216,9 @@ fn stored(conn: &Connection, result: &NewResult) -> Result<Option<Stored>, Store
             ],
             |row| {
                 Ok(Stored {
-                    record: u64::try_from(row.get::<_, i64>(0)?).unwrap_or(u64::MAX),
-                    outcome: row.get(1)?,
-                    machine: row.get(2)?,
-                    output: row.get(3)?,
+                    outcome: row.get(0)?,
+                    machine: row.get(1)?,
+                    output: row.get(2)?,
                 })
             },
         )
@@ -208,12 +226,21 @@ fn stored(conn: &Connection, result: &NewResult) -> Result<Option<Stored>, Store
     Ok(stored)
 }
 
-/// What the result's record says the check cost: billions of instructions where the machine
-/// counts them, otherwise CPU seconds. `None` when the hub holds no such record.
+/// What the result says the check cost: billions of instructions where the machine counts
+/// them, otherwise CPU seconds. A result with no cost of its own falls back to the hub's record
+/// it names, if there is one; `None` when neither says.
 fn record_cost(
     conn: &Connection,
     result: &NewResult,
 ) -> Result<Option<(f64, &'static str)>, StoreError> {
+    #[allow(clippy::cast_precision_loss)]
+    if let Some(count) = result.cost.instructions {
+        return Ok(Some((count as f64 / BILLION, "instructions")));
+    }
+    #[allow(clippy::cast_precision_loss)]
+    if result.cost.cpu_ms > 0 {
+        return Ok(Some((result.cost.cpu_ms as f64 / 1000.0, "cpu_s")));
+    }
     let id = i64::try_from(result.record.0).unwrap_or(i64::MAX);
     let cost: Option<(Option<f64>, f64)> = conn
         .query_row(
@@ -312,7 +339,9 @@ fn import_metrics(
     request: &MetricsImport,
     now: Timestamp,
 ) -> Result<Response, Response> {
-    let tx = conn.transaction().map_err(|e| store_failure(&e.into()))?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|e| store_failure(&e.into()))?;
     let mut stored = 0_usize;
     {
         let mut insert = tx

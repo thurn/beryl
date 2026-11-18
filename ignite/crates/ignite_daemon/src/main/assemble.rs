@@ -78,7 +78,7 @@ impl Base {
             .os
             .or_else(Os::current)
             .ok_or_else(|| Error::Invalid("this operating system is not supported".into()))?;
-        std::fs::create_dir_all(&options.home.root)?;
+        options.home.create()?;
         let (machine, token) = identity(&options, &config, os, declared.families.as_deref())?;
         let client = Arc::new(HubClient::new(&config.hub, &token, machine.as_str()));
         let hub: Arc<dyn Hub> = client.clone();
@@ -138,7 +138,9 @@ pub fn machinery(base: &Base) -> Result<Machinery> {
     let scheduler = Arc::new(Scheduler::new(
         base.limits.clone(),
         base.clock.clone(),
-        Arc::new(ignite_os::Native),
+        // One meter, read by the one sampler thread: a second reading microseconds after the
+        // first would see no CPU ticks.
+        Arc::new(ignite_os::hostcpu::HostMeter::new()),
     ));
     Scheduler::sample_every(&scheduler);
     let supervised = SupervisedLauncher::new(&base.options.ignite, base.home("runs"))
@@ -335,7 +337,8 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         let scheduler = parts.scheduler.clone();
         Arc::new(move || scheduler.status())
     };
-    let declared = base.declared.ticket_trees + base.declared.landing_trees;
+    let configured =
+        doctor::configured_tree_names(base.declared.ticket_trees, base.declared.landing_trees);
     vec![
         Box::new(CoresSection(status.clone())),
         Box::new(AdmissionSection(status)),
@@ -344,7 +347,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
                 repo: base.options.repo.clone(),
                 dir: base.trees_dir.clone(),
             }),
-            declared,
+            configured,
             host: Arc::new(NativeHost),
         }),
     ]
@@ -364,18 +367,34 @@ fn identity(
         return Ok((identity.machine, token.clone()));
     }
     let registrar = HubClient::new(&config.hub, "", identity.machine.as_str());
-    let registered = registrar.register(&MachineRegister {
-        machine: identity.machine.clone(),
-        name: options.hostname.clone(),
-        os,
-        cores: doctor::Host::cores(&NativeHost),
-        memory_mb: doctor::Host::memory_mb(&NativeHost),
-        families: families.map(<[String]>::to_vec).unwrap_or_default(),
-        version: options.version.clone(),
-    })?;
+    let registered = registrar
+        .register(&MachineRegister {
+            machine: identity.machine.clone(),
+            name: options.hostname.clone(),
+            os,
+            cores: doctor::Host::cores(&NativeHost),
+            memory_mb: doctor::Host::memory_mb(&NativeHost),
+            families: families.map(<[String]>::to_vec).unwrap_or_default(),
+            version: options.version.clone(),
+        })
+        .map_err(explain_refused_registration)?;
     identity.token = Some(registered.token.clone());
     file.save(&identity)?;
     Ok((identity.machine, registered.token))
+}
+
+/// A registration the hub refused with 401 or 403: this machine has no token, and the hub holds
+/// one for its ID. The hub's own message says to run `ignite install`, which cannot help here.
+fn explain_refused_registration(error: Error) -> Error {
+    match error {
+        Error::Unreachable(message) if message.contains("refused this machine's token") => {
+            Error::Invalid(format!(
+                "the hub refused to register this machine without its token. {}",
+                crate::update::RECOVER
+            ))
+        }
+        other => other,
+    }
 }
 
 /// The Rust toolchain every input hash includes: `rustc --version`, run in the checkout so that
@@ -389,4 +408,28 @@ fn toolchain(repo: &Path) -> String {
         .filter(|out| out.status.success())
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_refused_registration_says_the_hub_holds_a_token_and_how_to_recover() {
+        let refused = Error::Unreachable(
+            "the hub refused this machine's token (401); run `ignite install` to register it \
+             again: /machines/register"
+                .to_owned(),
+        );
+        let Error::Invalid(text) = explain_refused_registration(refused) else {
+            panic!("a clear error is expected");
+        };
+        assert!(text.contains("already holds a token"), "{text}");
+        assert!(text.contains("machine.json"), "{text}");
+        let down = Error::Unreachable("connection refused".to_owned());
+        assert!(matches!(
+            explain_refused_registration(down),
+            Error::Unreachable(_)
+        ));
+    }
 }

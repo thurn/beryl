@@ -71,6 +71,8 @@ struct FakeWork {
     checks: Mutex<HashMap<Commit, Vec<TipCheck>>>,
     outcomes: Mutex<HashMap<(Commit, CheckName), Outcome>>,
     landings: Mutex<Vec<TipLanding>>,
+    /// The output a failing run returns for a check, in place of the default message.
+    outputs: Mutex<HashMap<CheckName, String>>,
     /// Commits between the commits a test passes, grouped into landings as
     /// [`CheckTipWork`] groups them, when no landing is scripted.
     commits: Mutex<Vec<CommitPaths>>,
@@ -102,6 +104,13 @@ impl FakeWork {
             commit: commit(sha),
             paths: paths.iter().map(|p| (*p).to_owned()).collect(),
         });
+    }
+
+    fn set_output(&self, check: &CheckName, output: &str) {
+        self.outputs
+            .lock()
+            .unwrap()
+            .insert(check.clone(), output.to_owned());
     }
 
     fn runs(&self) -> Vec<Run> {
@@ -144,13 +153,18 @@ impl TipWork for FakeWork {
                         machine: ctx.machine.clone(),
                         record: RecordId(1),
                         output,
+                        cost: ignite_core::protocol::hub::ResultCost::default(),
+                        areas: Vec::new(),
                     }])
                     .unwrap();
             }
             runs.push(TipRun {
                 check: check.clone(),
                 outcome,
-                output: (outcome == Outcome::Fail).then(|| format!("{check} failed")),
+                output: (outcome == Outcome::Fail).then(|| {
+                    let scripted = self.outputs.lock().unwrap().get(check).cloned();
+                    scripted.unwrap_or_else(|| format!("{check} failed"))
+                }),
             });
         }
         runs
@@ -214,6 +228,8 @@ impl World {
                 machine: MachineId::new(machine).unwrap(),
                 record: RecordId(1),
                 output: None,
+                cost: ignite_core::protocol::hub::ResultCost::default(),
+                areas: Vec::new(),
             }])
             .unwrap();
     }
@@ -689,4 +705,84 @@ fn a_failure_only_another_platform_can_run_holds_master_and_is_not_searched_here
     // This machine's version of the check would pass everywhere and blame tk.3.
     assert!(world.work.runs().is_empty());
     assert!(world.hub.regressions().is_empty());
+}
+
+#[test]
+fn a_failure_with_no_landing_between_the_commits_still_reports_the_range() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("cccc000");
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'a')]);
+    world.work.set_outcome(&tip, &name("unit:a"), Outcome::Fail);
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert!(matches!(outcome, TipOutcome::Failed { .. }));
+    let reports = world.hub.regressions();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].first_bad, tip);
+    assert_eq!(reports[0].last_good, commit("aaaa000"));
+    assert_eq!(reports[0].caused_by, None);
+    assert!(reports[0].suspects.is_empty());
+}
+
+fn scratch_file(text: &str) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path =
+        std::env::temp_dir().join(format!("ignite-tip-output-{}-{n}.txt", std::process::id()));
+    std::fs::write(&path, text).unwrap();
+    path
+}
+
+#[test]
+fn a_failure_quotes_the_output_file_this_machine_wrote() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("cccc000");
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'a')]);
+    world.work.set_outcome(&tip, &name("unit:a"), Outcome::Fail);
+    let file = scratch_file("first line\nlast line\n");
+    world
+        .work
+        .set_output(&name("unit:a"), file.to_str().unwrap());
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert_eq!(world.hub.regressions()[0].output, "first line\nlast line");
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
+fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("cccc000");
+    world.land(&tip);
+    let failing = check("a", 'a');
+    world.work.set_checks(&tip, vec![failing.clone()]);
+    // A cached failure names a path. On the machine that reads it, that path can be any file.
+    let private = scratch_file("contents of a file on this machine");
+    world
+        .hub
+        .store(&[NewResult {
+            key: failing.key.clone(),
+            outcome: Outcome::Fail,
+            machine: MachineId::new("m-1").unwrap(),
+            record: RecordId(1),
+            output: Some(private.display().to_string()),
+            cost: ignite_core::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
+        }])
+        .unwrap();
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert_eq!(
+        world.hub.regressions()[0].output,
+        private.display().to_string()
+    );
+    let _ = std::fs::remove_file(private);
 }

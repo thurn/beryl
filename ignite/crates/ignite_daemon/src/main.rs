@@ -23,11 +23,12 @@ use std::sync::{Arc, Mutex};
 use ignite_core::config::Config;
 use ignite_core::ids::Commit;
 use ignite_core::manifest::Manifest;
-use ignite_core::traits::{Error, Result};
+use ignite_core::traits::{Clock, Error, Result};
 
 use crate::doctor::NativeHost;
 use crate::server::{Context, Server};
-use crate::update::{ExecRestart, Home, TreeBuilder};
+use crate::update::{ExecRestart, HEALTHY_AFTER_S, Home, Startup, TreeBuilder};
+use ignite_core::time::SystemClock;
 
 /// What one daemon is started with.
 #[derive(Clone, Debug)]
@@ -155,6 +156,23 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         .unwrap_or_default();
     let version = crate::update::ExecutableStore::version_of(&ignite)
         .map_or_else(|| "unknown".to_owned(), |commit| commit.to_string());
+    let store = home.store();
+    let own = Commit::new(&version).ok();
+    if let Some(own) = &own
+        && let Startup::RollBack { to, reason } = store.startup(own, SystemClock.now())
+    {
+        eprintln!("ignite: rolling back: {reason}");
+        let error = crate::update::restart_into(&ExecRestart, &store.path(&to));
+        eprintln!("ignite: {error}");
+        return 1;
+    }
+    if let Some(own) = own {
+        // A release that is still up after this long has come up: its trial ends.
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs_f64(HEALTHY_AFTER_S));
+            store.mark_healthy(&own);
+        });
+    }
     let options = DaemonOptions {
         repo,
         home: home.clone(),

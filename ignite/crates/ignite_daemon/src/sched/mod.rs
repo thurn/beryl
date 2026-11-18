@@ -18,7 +18,10 @@
 //!   machine does not declare has capacity 1.
 //! - CPU busy beyond what Ignite granted belongs to processes outside Ignite and is not granted.
 //! - `idle` work starts only while the machine is under 70% busy, and is the first thing stopped
-//!   when a higher class waits. Stopping ends the command, so idle work must be safe to restart.
+//!   when a higher class waits for cores or for a resource the idle work holds. Stopping ends
+//!   the command, so idle work must be safe to restart.
+//! - `land`, and a class with a floor, always get one core while they hold none, even when
+//!   processes outside Ignite fill the machine: their work must make progress.
 //! - A request whose family usually needs more memory than is free waits while something else
 //!   runs.
 //! - A grant can change while its command runs. One that shrinks (a Cargo build that only
@@ -40,6 +43,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, Weak};
 use std::thread;
 use std::time::Duration;
@@ -56,6 +60,9 @@ pub use ledger::{Ledger, RECLAIM_SECONDS, Step};
 /// shrinking grant gives back one core per step, so a waiting landing gets a 12-core build's
 /// cores within about 12 s.
 pub const SAMPLE_EVERY: Duration = Duration::from_secs(1);
+
+/// How long [`Scheduler::wait_released`] sleeps between looks at the clock.
+const RECHECK: Duration = Duration::from_millis(100);
 
 /// What a command asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -181,6 +188,9 @@ pub struct Scheduler {
     changed: Condvar,
     clock: Arc<dyn Clock>,
     host: Arc<dyn HostCpu + Send + Sync>,
+    /// A sampler thread runs. One host reading serves every sample, and two samplers would each
+    /// see the counters microseconds after the other's reading.
+    sampling: AtomicBool,
 }
 
 struct State {
@@ -209,6 +219,7 @@ impl Scheduler {
             changed: Condvar::new(),
             clock,
             host,
+            sampling: AtomicBool::new(false),
         }
     }
 
@@ -245,8 +256,11 @@ impl Scheduler {
     }
 
     /// Starts a thread that calls [`Self::sample`] every [`SAMPLE_EVERY`] for as long as the
-    /// scheduler exists.
+    /// scheduler exists. A scheduler has one such thread: a second call does nothing.
     pub fn sample_every(scheduler: &Arc<Self>) {
+        if scheduler.sampling.swap(true, Ordering::SeqCst) {
+            return;
+        }
         let weak: Weak<Self> = Arc::downgrade(scheduler);
         thread::spawn(move || {
             loop {
@@ -272,6 +286,57 @@ impl Scheduler {
             }
             state = self.wait(state);
         }
+    }
+
+    /// Blocks until grant `id` is released (true) or `grace_s` seconds of the scheduler's clock
+    /// have passed since the call (false). The supervisor of a stopped `idle` command waits on
+    /// this after asking its command to exit, and kills it when the grace runs out.
+    pub fn wait_released(&self, id: u64, grace_s: f64) -> bool {
+        let start = self.clock.now();
+        let mut state = self.lock();
+        loop {
+            if !state.ledger.holds(id) {
+                return true;
+            }
+            if self.clock.now().seconds_since(start) >= grace_s {
+                return false;
+            }
+            state = self
+                .changed
+                .wait_timeout(state, RECHECK)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+    }
+
+    /// Records a grant a previous daemon made to a command that still runs (see
+    /// [`Ledger::adopt`]). Release it with [`Self::release`] when the command ends.
+    pub fn adopt(
+        &self,
+        class: Class,
+        cores: u32,
+        resources: Vec<String>,
+        memory_mb: Option<u64>,
+    ) -> Grant {
+        let mut state = self.lock();
+        let id = state
+            .ledger
+            .adopt(class, cores, resources.clone(), memory_mb);
+        Grant {
+            id,
+            cores: cores.max(1),
+            resources,
+            queued_s: 0,
+            cores_file: None,
+        }
+    }
+
+    /// While draining, no `idle` work starts and what runs is told to stop, so that an update
+    /// waiting for the daemon's commands does not wait for it.
+    pub fn set_draining(&self, draining: bool) {
+        let mut state = self.lock();
+        state.ledger.set_draining(draining);
+        self.advance(&mut state);
     }
 
     pub fn status(&self) -> Status {

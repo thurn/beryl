@@ -204,7 +204,7 @@ fn statuses_become_the_shared_errors() {
         fresh: false,
     };
     assert!(matches!(client.landed(&landed), Err(Error::NotFound(_))));
-    assert!(matches!(client.records(&[]), Err(Error::Invalid(m)) if m.contains("token")));
+    assert!(matches!(client.records(&[]), Err(Error::Unreachable(m)) if m.contains("token")));
     // A client error is not tried again.
     assert_eq!(hub.seen().len(), 3);
 }

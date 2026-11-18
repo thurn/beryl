@@ -13,7 +13,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params, params_from_iter};
+use rusqlite::{
+    Connection, OptionalExtension, Transaction, TransactionBehavior, params, params_from_iter,
+};
 use serde_json::{Map, Value, json};
 
 use ignite_core::ids::{Seq, TicketId};
@@ -23,7 +25,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 
-use crate::hub::{edges, feed, tickets};
+use crate::hub::{cycles, edges, feed, tickets};
 use crate::{Result, StoreError};
 
 /// The outcome of a batch: applied, or refused at one precondition or operation.
@@ -51,21 +53,41 @@ pub fn apply(
     machine: &str,
     now: Timestamp,
 ) -> Result<BatchOutcome> {
-    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let mut transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let outcome = apply_in(&mut transaction, batch, actor, machine, now)?;
+    if matches!(outcome, BatchOutcome::Applied(_)) {
+        transaction.commit()?;
+    }
+    Ok(outcome)
+}
+
+/// Applies `batch` inside a transaction the caller started, so that the caller can do more
+/// reads and writes in the same transaction. The batch runs in a savepoint: a conflict or an
+/// error undoes the whole batch and leaves the caller's earlier changes in place. The caller
+/// commits, or drops the transaction to undo everything.
+pub fn apply_in(
+    transaction: &mut Transaction,
+    batch: &BatchRequest,
+    actor: &str,
+    machine: &str,
+    now: Timestamp,
+) -> Result<BatchOutcome> {
+    let mut savepoint = transaction.savepoint()?;
     let outcome = {
-        let mut run = Run::new(&transaction, actor, machine, now)?;
+        let mut run = Run::new(&savepoint, actor, machine, now)?;
         run.batch(batch)
             .and_then(|results| Ok((run.finish()?, results)))
     };
     match outcome {
         Ok((seq, results)) => {
-            transaction.commit()?;
+            savepoint.commit()?;
             Ok(BatchOutcome::Applied(BatchReply { seq, results }))
         }
         Err(Stop::Conflict { failed, id }) => {
-            transaction.rollback()?;
+            savepoint.rollback()?;
+            savepoint.finish()?;
             let current = match id {
-                Some(id) => tickets::load(conn, &id)?,
+                Some(id) => tickets::load(transaction, &id)?,
                 None => None,
             };
             Ok(BatchOutcome::Conflict(Box::new(BatchConflict {
@@ -658,6 +680,12 @@ impl<'a> Run<'a> {
             let kind = kind.unwrap_or_default();
             if existing == Some(kind) {
                 return Ok(());
+            }
+            if id == dst {
+                return rejected(format!("{id} cannot depend on itself"));
+            }
+            if !matches!(kind, EdgeKind::Related | EdgeKind::DiscoveredFrom) {
+                cycles::check(self.conn, id, &dst)?;
             }
             edges::add(self.conn, id, &dst, kind)?;
         }

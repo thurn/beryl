@@ -2,14 +2,17 @@
 //! retries of an unreported check, the rerun of another machine's cached failure, and storing
 //! and recording what the runs said.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 
 use ignite_core::ids::{CheckName, Commit, RecordId};
+use ignite_core::inputs;
 use ignite_core::manifest::{Adapter, Family};
-use ignite_core::protocol::hub::{CachedResult, FlakyReport, IncompleteReason, NewResult, Record};
+use ignite_core::protocol::hub::{
+    CachedResult, FlakyReport, IncompleteReason, NewResult, Record, ResultCost,
+};
 use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::traits::{BuildResult, CommandSpec, Error, RunResult};
 
@@ -25,6 +28,17 @@ use crate::supervise;
 pub const CLASS_ENV: &str = "IGNITE_CLASS";
 
 impl Checks {
+    /// The areas of the change in `tree`: what its branch changed since it left `staging`.
+    /// Empty at the tip, and when the change cannot be read, so nothing is counted wrongly.
+    pub(super) fn change_areas(&self, ctx: &Context, tree: &OpenTree) -> Vec<String> {
+        let base = format!(
+            "{}/{}",
+            ctx.config.repository.remote, ctx.config.repository.staging
+        );
+        let changed = self.trees.changed(&tree.path, &base).unwrap_or_default();
+        super::plan::areas(&changed, &tree.graph)
+    }
+
     /// Answers each check from its cached result or runs it, with the rerun of a failure and
     /// the retries of an incomplete run, and stores what it learns.
     pub(crate) fn execute(
@@ -101,7 +115,7 @@ impl Checks {
     /// left unreported runs at most [`TRIES`] times. A check its command says cannot run on this
     /// machine, and every check a hung command left unreported, is incomplete at once, because
     /// running it again here would end the same way.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(super) fn attempts(
         &self,
         ctx: &Context,
@@ -114,24 +128,45 @@ impl Checks {
     ) -> Vec<Final> {
         let mut failed: BTreeMap<CheckName, (Reported, PathBuf)> = BTreeMap::new();
         let mut tries: BTreeMap<CheckName, u32> = BTreeMap::new();
+        // What each check's runs have cost so far: an equal share of every run it was in.
+        let mut costs: BTreeMap<CheckName, ResultCost> = BTreeMap::new();
         let mut finals: Vec<Final> = Vec::new();
         while !pending.is_empty() {
             let (reported, output) = self.run_family(ctx, tree, name, family, &pending, options);
             run.wall_s += output.usage.wall_s;
             let mut judged = output.hung;
             let mut again = Vec::new();
+            let shares = pending.len();
             for keyed in pending {
                 let check = keyed.listed.check.clone();
+                let cost = {
+                    let total = costs.entry(check.clone()).or_default();
+                    *total = total.plus(ResultCost::share_of(&output.usage, shares));
+                    *total
+                };
                 let report = reported.iter().find(|r| r.check == check);
                 let gave_up = match report.map(|r| (r.outcome, r.reason)) {
-                    Some((Outcome::Pass | Outcome::Flaky, _)) => {
+                    Some((Outcome::Pass, _)) => {
                         match failed.remove(&check) {
                             // A flaky check carries the failed run's output.
                             Some((_, first_output)) => {
-                                finals.push((keyed, Outcome::Flaky, None, Some(first_output)));
+                                finals.push((
+                                    keyed,
+                                    Outcome::Flaky,
+                                    None,
+                                    Some(first_output),
+                                    cost,
+                                ));
                             }
-                            None => finals.push((keyed, Outcome::Pass, None, None)),
+                            None => finals.push((keyed, Outcome::Pass, None, None, cost)),
                         }
+                        continue;
+                    }
+                    // The adapter says the check flaked inside one run. That is reported as
+                    // flaky and never cached, whether or not an earlier run failed.
+                    Some((Outcome::Flaky, _)) => {
+                        let first_output = failed.remove(&check).map(|(_, output)| output);
+                        finals.push((keyed, Outcome::Flaky, None, first_output, cost));
                         continue;
                     }
                     Some((Outcome::Fail, _)) if failed.contains_key(&check) => {
@@ -139,7 +174,13 @@ impl Checks {
                             .remove(&check)
                             .unwrap_or_else(|| unreachable!("a failed check is in the map"));
                         let failure = failure(&report, &first_output);
-                        finals.push((keyed, Outcome::Fail, Some(failure), Some(first_output)));
+                        finals.push((
+                            keyed,
+                            Outcome::Fail,
+                            Some(failure),
+                            Some(first_output),
+                            cost,
+                        ));
                         judged = true;
                         continue;
                     }
@@ -169,7 +210,13 @@ impl Checks {
                 if let Some((report, first_output)) = failed.remove(&check) {
                     // It failed on these inputs and no later run said otherwise.
                     let failure = failure(&report, &first_output);
-                    finals.push((keyed, Outcome::Fail, Some(failure), Some(first_output)));
+                    finals.push((
+                        keyed,
+                        Outcome::Fail,
+                        Some(failure),
+                        Some(first_output),
+                        cost,
+                    ));
                     continue;
                 }
                 let said = report.and_then(|r| r.message.clone());
@@ -181,7 +228,7 @@ impl Checks {
                     output: Some(output.output.display().to_string()),
                     reason: Some(gave_up),
                 };
-                finals.push((keyed, Outcome::Incomplete, Some(failure), None));
+                finals.push((keyed, Outcome::Incomplete, Some(failure), None, cost));
             }
             if judged {
                 // The output of a failed, flaky or incomplete run is kept longer.
@@ -206,16 +253,24 @@ impl Checks {
         run: &mut CheckRun,
     ) {
         let mut stored = Vec::new();
-        for (keyed, outcome, failure, output) in finals {
+        let moved = moved_inputs(ctx, tree, &finals);
+        let areas = self.change_areas(ctx, tree);
+        for (keyed, outcome, failure, output, cost) in finals {
             match outcome {
+                // A result whose inputs changed while the check ran says nothing about the
+                // hash it was keyed by, so it is reported to the caller but not stored.
+                Outcome::Pass | Outcome::Fail
+                    if keyed.inputs.iter().any(|(path, _)| moved.contains(path)) => {}
                 Outcome::Pass | Outcome::Fail => stored.push(NewResult {
                     key: keyed.key.clone(),
                     outcome,
                     machine: ctx.machine.clone(),
-                    // The hub links costs through records, whose IDs the `Hub` trait does not
-                    // return; 0 stands for an unknown record.
+                    // The hub's record IDs are not returned through the `Hub` trait, so the
+                    // result carries the check's measured cost itself.
                     record: RecordId(0),
                     output: output.map(|o| o.display().to_string()),
+                    cost,
+                    areas: areas.clone(),
                 }),
                 Outcome::Flaky => {
                     if let Ok(commit) = self.trees.head(&tree.path) {
@@ -248,7 +303,18 @@ impl Checks {
         packages: &[String],
         run: &mut CheckRun,
     ) -> std::result::Result<(), PathBuf> {
-        for product in &family.needs {
+        Self::build_products(ctx, tree, &family.needs, packages, run)
+    }
+
+    /// Makes each of `products` current. `Err` holds a failed build's output.
+    pub(super) fn build_products(
+        ctx: &Context,
+        tree: &OpenTree,
+        products: &[String],
+        packages: &[String],
+        run: &mut CheckRun,
+    ) -> std::result::Result<(), PathBuf> {
+        for product in products {
             match ctx.builds.ensure(&tree.id, product, packages) {
                 BuildResult::Current => {}
                 BuildResult::Built { usage, units } => run.builds.push(Built {
@@ -402,6 +468,26 @@ impl Checks {
             compile_units: Vec::new(),
         };
         self.cache.record(&record);
+    }
+}
+
+/// The input paths of `finals` whose git object IDs differ from the ones their hashes were
+/// computed from: the tree was edited while the checks ran. The inputs are read again in one
+/// request; if that fails, every input counts as moved, because nothing can be vouched for.
+fn moved_inputs(ctx: &Context, tree: &OpenTree, finals: &[Final]) -> BTreeSet<String> {
+    let before: BTreeMap<&str, &str> = finals
+        .iter()
+        .flat_map(|(keyed, ..)| &keyed.inputs)
+        .map(|(path, oid)| (path.as_str(), oid.as_str()))
+        .collect();
+    let paths: Vec<String> = before.keys().map(|p| (*p).to_owned()).collect();
+    match inputs::object_ids(ctx.git.as_ref(), &tree.path, &paths) {
+        Ok(now) => now
+            .into_iter()
+            .filter(|(path, oid)| before.get(path.as_str()) != Some(&oid.as_str()))
+            .map(|(path, _)| path)
+            .collect(),
+        Err(_) => paths.into_iter().collect(),
     }
 }
 

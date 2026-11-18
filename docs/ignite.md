@@ -641,12 +641,21 @@ Rules for cores:
   of one class share what is free evenly.
 - The daemon reads the machine's total CPU use from the operating system about
   once a second. What its own commands do not account for belongs to processes
-  outside Ignite, such as the desktop app, and it grants only what is left.
+  outside Ignite, such as the desktop app, and it grants only what is left. The
+  reading compares the operating system's counters with the previous reading,
+  and reports no reading, not zero, when none of them moved. The daemon counts
+  every granted core as used by its own commands, so when a command leaves its
+  cores idle the outside load shown by `ignite status` is a lower bound.
+- `land`, and a class with a floor, always get one core while they hold none,
+  even when processes outside Ignite fill the machine, so a landing and `master`
+  always make progress.
 - `tip` and `batch` each have a floor of cores per machine that higher classes
   cannot take, so `master` keeps moving and an experiment is slowed but never
   stopped.
 - `idle` work starts only while the machine is under 70% busy, and is the first
-  thing stopped when a higher class waits.
+  thing stopped when a higher class waits for cores, or for a resource the idle
+  work holds. Stopping sends `SIGTERM`, then `SIGKILL` ten seconds later. While
+  an update waits for commands to finish, idle work is stopped and none starts.
 - Time spent waiting for cores is recorded apart from a command's own time.
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
@@ -657,8 +666,12 @@ Rules for cores:
   afterwards. A command that can use more threads is told when its grant grows,
   through the file `IGNITE_CORES_FILE` names.
 
-The daemon also records each command's peak memory. It delays a command whose
-family usually needs more memory than is free.
+The daemon also records each command's peak memory, and delays a command whose
+usual peak (the median of its last nine runs) is more than the free memory,
+while something else runs.
+
+A daemon that restarts while commands run registers their cores and resources
+again, so an exclusive resource is not handed out twice.
 
 Some things are scarce in other ways: headless browser pages, the oracle
 engines, the benchmark virtual machines. A check family names the **resources**
@@ -699,14 +712,27 @@ How Ignite uses this:
 - Each supervisor reads its command's instructions, CPU seconds and peak memory
   from the operating system when the command exits. The operating system gives
   an exact total for a direct child only, so for a command that starts processes
-  of its own the supervisor also reads those descendants about once a second
+  of its own the supervisor also reads those descendants four times a second
   while they run.
+- The undercount that remains: `rusage_info` (every version through V6) has
+  child fields for CPU time, wakeups and page-ins of reaped children, but none
+  for their instructions, so no total for a command's finished descendants
+  exists to read. A descendant is counted up to its last reading, and one that
+  starts and exits between two readings (a 100 ms `cc` run, say) is not counted
+  at all. Commands made of long compiler runs lose little; one that starts
+  thousands of tiny processes can read a few percent low. The CPU seconds of the
+  same command are exact, so a count that is low against its CPU seconds shows
+  this error.
+- When the command's leader exits, the supervisor reads the group one last time
+  and ends every process still in it, as Windows does through the job object.
 - Each compiler process is counted by the `RUSTC_WRAPPER`, and each Rust test
   process by a Cargo target runner, so costs are known per crate and per test.
 - Where one process runs many checks, as pytest does, the process's instructions
   are divided among its checks by the seconds each reports.
 - Windows reports no instruction count. Cygnus records CPU seconds, and a
-  check's cost for scoring comes from the Macs' records.
+  check's cost for scoring comes from the Macs' records. A machine that cannot
+  count instructions never measures or records a rebuild count, because a total
+  over uncounted compiler units would read as a rebuild that costs nothing.
 
 ## Checks
 

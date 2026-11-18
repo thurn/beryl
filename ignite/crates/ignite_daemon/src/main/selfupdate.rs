@@ -81,7 +81,10 @@ impl SelfUpdate {
         };
         // A hub that reports no commit, such as one run from an unstored executable, asks for
         // no update.
-        let hub = hub_version.and_then(|v| Commit::new(v).ok());
+        // A release that was rolled back for failing to start is not updated to again.
+        let hub = hub_version
+            .and_then(|v| Commit::new(v).ok())
+            .filter(|hub| !self.store.is_rejected(hub));
         let action = hub.as_ref().map_or(VersionAction::Current, |hub| {
             version_action(own, hub.as_str(), running)
         });

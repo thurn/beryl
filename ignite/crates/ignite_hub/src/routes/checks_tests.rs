@@ -227,6 +227,34 @@ fn storing_results_counts_each_run_and_its_cost_once_however_often_it_is_sent() 
 }
 
 #[test]
+fn a_result_with_its_own_cost_adds_it_though_it_names_no_record() {
+    let hub = TestHub::start("own-cost");
+    list_check(&hub, "rust:a", "rust");
+    let mut result = new_result("rust:a", 1, "pass", 0);
+    result["cost"] = json!({"instructions": 5_000_000_000_u64, "cpu_ms": 1500});
+    let store = json!({"results": [result], "areas": ["kernel"]});
+    hub.post("/results/store", &store);
+    hub.post("/results/store", &store);
+
+    let (_, reply) = hub.send("GET", "/checks/stats?family=rust", None, false);
+    let a = &reply["checks"][0];
+    assert_eq!(a["areas"][0]["runs"], 1, "the repeat counts once");
+    assert_eq!(
+        (a["median_cost"].as_f64(), a["unit"].as_str()),
+        (Some(5.0), Some("instructions"))
+    );
+    // The same key failing afterwards, as a new outcome, is a new run.
+    let mut failed = new_result("rust:a", 1, "fail", 0);
+    failed["cost"] = json!({"instructions": null, "cpu_ms": 2000});
+    hub.post(
+        "/results/store",
+        &json!({"results": [failed], "areas": ["kernel"]}),
+    );
+    let (_, reply) = hub.send("GET", "/checks/stats?family=rust", None, false);
+    assert_eq!(reply["checks"][0]["areas"][0]["runs"], 2);
+}
+
+#[test]
 fn a_record_batch_sent_twice_is_stored_once_with_the_same_ids() {
     let hub = TestHub::start("records");
     let batch = json!({"records": [record(1.0, &Value::Null), record(2.0, &json!(1.0e9))]});

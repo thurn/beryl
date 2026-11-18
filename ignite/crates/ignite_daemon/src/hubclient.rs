@@ -175,8 +175,13 @@ fn ok(path: &str, answer: Answer) -> Result<Answer> {
         200..=299 => Ok(answer),
         404 => Err(Error::NotFound(message())),
         409 => Err(Error::Conflict(message())),
-        401 | 403 => Err(Error::Invalid(format!(
-            "the hub refused this machine's token: {}",
+        // A refused token is the machine's problem to fix (`ignite install` registers it again),
+        // not a fault of what was sent, so it is reported like an unreachable hub: callers that
+        // queue work keep it queued instead of dropping it as malformed.
+        401 | 403 => Err(Error::Unreachable(format!(
+            "the hub refused this machine's token ({}); run `ignite install` to register it \
+             again: {}",
+            answer.status,
             message()
         ))),
         _ => Err(Error::Invalid(format!("{} {}", answer.status, message()))),

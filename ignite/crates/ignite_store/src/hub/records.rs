@@ -5,7 +5,7 @@
 //! about the command, which is fixed once the record is made, so an identical record is stored
 //! once and keeps its first ID.
 
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -18,7 +18,7 @@ use crate::{Result, StoreError};
 /// Inserts the records and their compile units; returns their IDs in order. A record the hub
 /// already holds is not stored again, and its existing ID is returned.
 pub fn insert(conn: &mut Connection, records: &[Record]) -> Result<Vec<RecordId>> {
-    let tx = conn.transaction()?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let mut ids = Vec::with_capacity(records.len());
     for record in records {
         ids.push(insert_one(&tx, record)?);

@@ -104,6 +104,10 @@ pub struct Family {
     /// Build products that must be current before the checks run.
     #[serde(default)]
     pub needs: Vec<String>,
+    /// The products that must be current before `list` runs, when that is fewer than `needs`
+    /// (a `list` that reads no build output). Without it, `list` waits for all of `needs`.
+    #[serde(default)]
+    pub list_needs: Option<Vec<String>>,
     /// Shared resources the checks hold while they run.
     #[serde(default)]
     pub resources: Vec<String>,
@@ -261,11 +265,18 @@ impl Manifest {
             }
         }
         for (name, declared) in &manifest.families {
-            for (index, product) in declared.family.needs.iter().enumerate() {
+            let list_needs = declared.family.list_needs.iter().flatten();
+            let named = declared
+                .family
+                .needs
+                .iter()
+                .map(|p| ("needs", p))
+                .chain(list_needs.map(|p| ("list_needs", p)));
+            for (index, (field, product)) in named.enumerate() {
                 if !manifest.products.contains_key(product) {
                     return Err(ManifestError {
                         file: origin[&format!("family.{name}")].to_path_buf(),
-                        key: format!("family.{name}.needs[{index}]"),
+                        key: format!("family.{name}.{field}[{index}]"),
                         message: format!("no product named {product:?} is declared"),
                     });
                 }
@@ -367,6 +378,23 @@ outputs = ["ui/node_modules"]
         assert_eq!(shots.platforms, Platforms::Each(vec![Os::Macos]));
         assert_eq!(shots.inputs[2], InputPattern::Crate("game_cli".to_owned()));
         assert_eq!(manifest.products["rust-tests"].outputs, ["rust/target"]);
+    }
+
+    #[test]
+    fn list_needs_names_declared_products_only() {
+        let text = |list_needs: &str| {
+            format!(
+                "[family.f]\nkind = \"regression\"\nadapter = \"jsonl\"\nplatforms = \"any\"\n\
+                 list_needs = {list_needs}\nlist = \"l\"\nrun = \"r\"\ninputs = [\"x\"]\n\
+                 [product.a]\nbuild = \"b\"\ninputs = [\"x\"]\noutputs = [\"o\"]\n"
+            )
+        };
+        let load = |t: String| Manifest::from_files(&[("f.toml".into(), t)]);
+        assert!(load(text("[\"a\"]")).is_ok());
+        assert_eq!(
+            load(text("[\"zzz\"]")).unwrap_err().key,
+            "family.f.list_needs[0]"
+        );
     }
 
     #[test]

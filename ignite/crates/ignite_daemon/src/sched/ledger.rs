@@ -67,6 +67,9 @@ pub struct Ledger {
     /// In arrival order.
     waiting: Vec<Waiter>,
     held: BTreeMap<u64, Held>,
+    /// An update waits for the daemon's commands to finish: no `idle` work starts, and what
+    /// runs is stopped.
+    draining: bool,
 }
 
 impl Ledger {
@@ -78,6 +81,7 @@ impl Ledger {
             next_id: 1,
             waiting: Vec::new(),
             held: BTreeMap::new(),
+            draining: false,
         }
     }
 
@@ -112,9 +116,54 @@ impl Ledger {
         self.held.contains_key(&id)
     }
 
+    /// Records a grant that a previous daemon made and whose command still runs, so that its
+    /// cores and resources are not handed out a second time. It holds `cores` (at least one)
+    /// until released, never shrinks or grows, and returns the ID its release names. Nothing
+    /// is checked against the free cores or the resource capacities: the command runs either
+    /// way.
+    pub fn adopt(
+        &mut self,
+        class: Class,
+        cores: u32,
+        resources: Vec<String>,
+        memory_mb: Option<u64>,
+    ) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.held.insert(
+            id,
+            Held {
+                class,
+                cores: cores.max(1),
+                resources,
+                memory_mb,
+                grows_to: None,
+                shrinks: false,
+                unseen_memory: false,
+                stopping: false,
+            },
+        );
+        id
+    }
+
+    /// While draining, `idle` requests start nothing and every `idle` grant is asked to stop,
+    /// so an update that waits for the daemon's commands never waits for work that only runs
+    /// on an unloaded machine.
+    pub fn set_draining(&mut self, draining: bool) {
+        self.draining = draining;
+    }
+
     /// Records a reading of the machine: the fraction of all cores busy, from 0 to 1, and the
     /// free memory, each if it could be read. Whatever is busy beyond the cores Ignite granted
     /// belongs to processes outside Ignite, and is not granted until they finish.
+    ///
+    /// The ledger does not know how much of a grant its command really uses, so it counts every
+    /// granted core as used by Ignite. That only matters when a command leaves cores idle
+    /// (waiting for input or output): then the cores busy beyond the grants are fewer than the
+    /// outside load, so `outside` is a lower bound and `status` can show less outside load than
+    /// there is. What the scheduler hands out is not affected: a core is free when the machine
+    /// reads idle there, or when a grant holds it, and both cases are counted exactly. A grant
+    /// that sits idle is therefore never taken for outside load and starved of its own cores.
     pub fn observe(&mut self, busy: Option<f64>, free_memory_mb: Option<u64>) {
         if let Some(busy) = busy {
             let busy_cores = busy.clamp(0.0, 1.0) * f64::from(self.limits.cores);
@@ -165,7 +214,22 @@ impl Ledger {
                 free.saturating_sub(below)
             };
             if class == Class::Idle {
-                usable = usable.min(self.idle_room());
+                usable = if self.draining {
+                    0
+                } else {
+                    usable.min(self.idle_room())
+                };
+            }
+            // Outside load that fills the machine must not starve the classes whose work has
+            // to make progress: each of them takes one core, beyond what is free, while it
+            // holds none.
+            // Only outside load counts: when Ignite's own grants fill the machine, the class
+            // waits for them, and `idle` work is stopped for it.
+            if usable == 0
+                && self.granted_cores() < self.limits.cores
+                && self.guarantees_a_core(class)
+            {
+                usable = 1;
             }
             let (picked, mut left) = self.pick(class, usable);
             let grants = self.fill(&picked, usable);
@@ -176,7 +240,7 @@ impl Ledger {
                     continue;
                 }
                 let waiter = self.waiting.remove(index_of(&self.waiting, id));
-                free -= cores;
+                free = free.saturating_sub(cores);
                 usable -= cores;
                 if let Some(left) = reserve.get_mut(&class) {
                     *left = left.saturating_sub(cores);
@@ -184,7 +248,7 @@ impl Ledger {
                 step.granted.push(self.hold(waiter, cores, now));
             }
             for (id, cores, extra) in self.grow(class, usable.min(free)) {
-                free -= extra;
+                free = free.saturating_sub(extra);
                 if let Some(left) = reserve.get_mut(&class) {
                     *left = left.saturating_sub(extra);
                 }
@@ -207,6 +271,10 @@ impl Ledger {
             step.resized.extend(self.shrink_below(class));
         }
         step.stop = self.stop_idle(wanted_by_blocked.saturating_sub(free));
+        step.stop.extend(self.stop_idle_holding_wanted_resources());
+        if self.draining {
+            step.stop.extend(self.stop_all_idle());
+        }
         step
     }
 
@@ -426,6 +494,68 @@ impl Ledger {
             if held.class == Class::Idle && !held.stopping {
                 held.stopping = true;
                 freeing += held.cores;
+                stopped.push(id);
+            }
+        }
+        stopped
+    }
+
+    /// Whether `class` always gets a core when it holds none: `land`, and a class with a floor
+    /// (`tip` and `batch`).
+    fn guarantees_a_core(&self, class: Class) -> bool {
+        let floor = match class {
+            Class::Land => return self.class_cores(class) == 0,
+            Class::Tip => self.limits.floor.tip,
+            Class::Batch => self.limits.floor.batch,
+            _ => 0,
+        };
+        floor > 0 && self.class_cores(class) == 0
+    }
+
+    /// Marks the newest `idle` grants that hold a resource a higher class waits for as
+    /// stopping, one for each waiter that finds the resource full, less those already
+    /// stopping. Stopping for cores does not free a resource, so a request that waits only for
+    /// a resource is not caught by [`Self::stop_idle`]. Returns the IDs newly marked.
+    fn stop_idle_holding_wanted_resources(&mut self) -> Vec<u64> {
+        let mut stopped = Vec::new();
+        let mut wanted: BTreeMap<String, u32> = BTreeMap::new();
+        for waiter in self
+            .waiting
+            .iter()
+            .filter(|w| w.request.class != Class::Idle)
+        {
+            for name in &waiter.request.resources {
+                if self.resource_held(name) >= self.limits.capacity(name) {
+                    *wanted.entry(name.clone()).or_default() += 1;
+                }
+            }
+        }
+        for (name, waiters) in wanted {
+            let holders: Vec<u64> = self
+                .held
+                .iter()
+                .filter(|(_, h)| h.class == Class::Idle && h.resources.contains(&name))
+                .map(|(&id, _)| id)
+                .collect();
+            let (stopping, running): (Vec<u64>, Vec<u64>) =
+                holders.into_iter().partition(|id| self.held[id].stopping);
+            let more = (waiters as usize).saturating_sub(stopping.len());
+            for id in running.into_iter().rev().take(more) {
+                if let Some(held) = self.held.get_mut(&id) {
+                    held.stopping = true;
+                    stopped.push(id);
+                }
+            }
+        }
+        stopped
+    }
+
+    /// Marks every `idle` grant not yet stopping as stopping, and returns their IDs.
+    fn stop_all_idle(&mut self) -> Vec<u64> {
+        let mut stopped = Vec::new();
+        for (&id, held) in &mut self.held {
+            if held.class == Class::Idle && !held.stopping {
+                held.stopping = true;
                 stopped.push(id);
             }
         }

@@ -244,6 +244,8 @@ mod tests {
             machine: MachineId::new("m-1").unwrap(),
             record: RecordId(0),
             output: None,
+            cost: ignite_core::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
         }
     }
 

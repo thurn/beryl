@@ -671,6 +671,8 @@ mod tests {
             machine,
             record: RecordId(1),
             output: None,
+            cost: crate::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
         };
         hub.store(&[new]).unwrap();
         assert_eq!(

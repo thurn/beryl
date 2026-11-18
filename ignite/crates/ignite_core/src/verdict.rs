@@ -4,7 +4,8 @@
 //! - A check that fails is run again at once. Passing the second time, on the same input hash,
 //!   makes it flaky and not failed. Failing twice makes it failed.
 //! - A run that ends without reporting the check is `Incomplete`. It is run again, at most twice
-//!   more; a third incomplete attempt gives up, and the hub files a P1 ticket.
+//!   more; a third incomplete attempt gives up, and the hub files a P1 ticket. A check that
+//!   failed earlier on the same inputs stays failed instead.
 //! - A second flaky record within 7 days of the first, on a different commit, switches the check
 //!   off ([`switch_off`]).
 //! - A failure counts toward a check's statistics only when a later change made the check pass
@@ -40,7 +41,10 @@ pub fn next(runs: &[Outcome]) -> Next {
         Outcome::Flaky => Next::Done(Outcome::Flaky),
         Outcome::Incomplete => {
             let incomplete = runs.iter().filter(|&&r| r == Outcome::Incomplete).count();
-            if incomplete >= MAX_INCOMPLETE {
+            if incomplete >= MAX_INCOMPLETE && runs.contains(&Outcome::Fail) {
+                // It failed on these inputs and nothing later said otherwise.
+                Next::Done(Outcome::Fail)
+            } else if incomplete >= MAX_INCOMPLETE {
                 Next::GiveUp
             } else {
                 Next::Rerun
@@ -127,6 +131,14 @@ mod tests {
         assert_eq!(next(&[Incomplete]), Next::Rerun);
         assert_eq!(next(&[Incomplete, Incomplete]), Next::Rerun);
         assert_eq!(next(&[Incomplete, Incomplete, Incomplete]), Next::GiveUp);
+    }
+
+    #[test]
+    fn a_failure_followed_by_giving_up_is_a_failure() {
+        assert_eq!(
+            next(&[Fail, Incomplete, Incomplete, Incomplete]),
+            Next::Done(Fail)
+        );
     }
 
     #[test]

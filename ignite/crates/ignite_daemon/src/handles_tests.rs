@@ -85,3 +85,35 @@ fn an_interrupt_ends_only_that_sessions_waits_with_its_reply() {
     assert_eq!(waiter.join().unwrap(), Waited::Interrupted(message));
     assert_eq!(handles.waits_of(&session("local_a")), 0);
 }
+
+#[test]
+fn a_reply_that_was_read_leaves_memory_but_the_database_still_answers() {
+    let path = temp_db("prune-read");
+    let handles = open(&path);
+    let handle = handles.create("land", None, None);
+    let reply = Reply::text(Exit::Success, "landed");
+    handles.finish(&handle, reply.clone());
+    assert_eq!(handles.wait(&handle, 0, None), Waited::Done(reply.clone()));
+    // The next handle's creation drops the reply that was read.
+    let next = handles.create("land", None, None);
+    let in_memory: Vec<Handle> = lock(&handles.state).replies.keys().cloned().collect();
+    assert_eq!(in_memory, [next]);
+    assert_eq!(handles.wait(&handle, 0, None), Waited::Done(reply));
+    std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn a_finished_reply_nobody_read_is_dropped_after_a_day_without_a_database() {
+    let clock = Arc::new(FakeClock::new(Timestamp::EPOCH));
+    let handles = Handles::new(clock.clone());
+    let kept = handles.create("land", None, None);
+    handles.finish(&kept, Reply::text(Exit::Success, "landed"));
+    // A read does not drop it: with no database it would be gone for good.
+    assert!(matches!(handles.wait(&kept, 0, None), Waited::Done(_)));
+    handles.create("land", None, None);
+    assert!(lock(&handles.state).replies.contains_key(&kept));
+    clock.advance(KEEP_REPLY_S + 1.0);
+    handles.create("land", None, None);
+    assert!(!lock(&handles.state).replies.contains_key(&kept));
+    assert_eq!(handles.wait(&kept, 0, None), Waited::Unknown);
+}

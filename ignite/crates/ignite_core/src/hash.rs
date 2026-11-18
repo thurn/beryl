@@ -14,7 +14,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::Os;
 use crate::ids::{InputHash, Oid};
-use crate::manifest::{Family, Manifest, Platforms};
+use crate::manifest::{Family, InputPattern, Manifest, Platforms};
 
 /// Written first, so that a change to the layout below gives every check a new hash.
 const LAYOUT: &str = "ignite input hash 2";
@@ -93,6 +93,17 @@ pub fn commands(family: &Family, manifest: &Manifest) -> Vec<String> {
             .map(|product| product.build.clone()),
     );
     commands
+}
+
+/// The input patterns a family's hash covers: its own, then those of each product it needs, so
+/// that a change to what a product is built from (a lock file, say) changes the hash of every
+/// check that needs it, not only the build command's text.
+pub fn input_patterns(family: &Family, manifest: &Manifest) -> Vec<InputPattern> {
+    let mut patterns = family.inputs.clone();
+    for product in family.needs.iter().filter_map(|n| manifest.products.get(n)) {
+        patterns.extend(product.inputs.iter().cloned());
+    }
+    patterns
 }
 
 fn count(hasher: &mut Sha256, n: usize) {
@@ -192,6 +203,35 @@ mod tests {
         assert_ne!(
             hash(&inputs, platform(&any, Os::Macos)),
             hash(&inputs, platform(&each, Os::Macos))
+        );
+    }
+
+    #[test]
+    fn a_family_covers_the_inputs_of_the_products_it_needs() {
+        let text = r#"
+[family.f]
+kind = "regression"
+adapter = "jsonl"
+platforms = "any"
+needs = ["a"]
+list = "list"
+run = "run {checks}"
+inputs = ["x"]
+
+[product.a]
+build = "build a"
+inputs = ["lock.json", "crate:p"]
+outputs = ["out"]
+"#;
+        let manifest = Manifest::from_files(&[("f.toml".into(), text.to_owned())]).unwrap();
+        let family = &manifest.families["f"].family;
+        assert_eq!(
+            input_patterns(family, &manifest),
+            [
+                InputPattern::Path("x".into()),
+                InputPattern::Path("lock.json".into()),
+                InputPattern::Crate("p".into())
+            ]
         );
     }
 

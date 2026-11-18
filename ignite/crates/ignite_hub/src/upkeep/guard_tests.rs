@@ -129,6 +129,8 @@ fn store(conn: &mut Connection, machine: &str, outcome: Outcome, now: Timestamp)
             machine: MachineId::new(machine).unwrap(),
             record: RecordId(0),
             output: (outcome == Outcome::Fail).then(|| "/outputs/run-7.log".to_owned()),
+            cost: ignite_core::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
         }],
         areas: Vec::new(),
     };

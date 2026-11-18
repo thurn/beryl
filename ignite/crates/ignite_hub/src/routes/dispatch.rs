@@ -27,7 +27,7 @@
 
 use std::collections::BTreeMap;
 
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 
@@ -65,7 +65,8 @@ pub const HUB_VERSION: &str = "hub_version";
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let writes = match request.path.as_str() {
-        // A machine registering has no token yet; registration is how it gets one.
+        // A machine registering for the first time has no token yet; registration is how it
+        // gets one. One that already has a token must present it (see `register`).
         "/machines/register" => false,
         "/machines/heartbeat"
         | "/next"
@@ -85,6 +86,26 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
     Some(route(conn, request, now).unwrap_or_else(|response| response))
 }
 
+/// The ticket's ID, whichever form it was named in: with or without the leading `T`, or by an
+/// alias, as `GET /tickets/<name>` accepts. 404 for a name that is no ticket.
+fn canonical(conn: &Connection, name: &TicketId) -> Result<TicketId, Response> {
+    tickets::resolve(conn, name.as_str())
+        .map_err(|e| store_failure(&e))?
+        .ok_or_else(|| failure(404, &format!("Unknown ticket {name}")))
+}
+
+/// 403 unless the machine a request names in its body is the machine whose token signed it, so
+/// that one machine cannot claim, or act, as another.
+fn same_machine(request: &Request, named: &MachineId) -> Result<(), Response> {
+    match &request.writer {
+        Some(writer) if &writer.machine == named => Ok(()),
+        _ => Err(failure(
+            403,
+            &format!("this token does not belong to machine {named}"),
+        )),
+    }
+}
+
 /// Records the Ignite commit the hub runs, for heartbeat replies.
 pub fn set_hub_version(conn: &Connection, version: &str) -> Result<(), StoreError> {
     conn.execute(
@@ -99,28 +120,90 @@ type Answer = Result<Response, Response>;
 
 fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
     match request.path.as_str() {
-        "/machines/register" => register(conn, &body(request)?, now),
-        "/machines/heartbeat" => heartbeat(conn, &body(request)?, now),
-        "/next" => next(conn, &body(request)?, now),
+        "/machines/register" => register(conn, request, &body(request)?, now),
+        "/machines/heartbeat" => {
+            let parsed: Heartbeat = body(request)?;
+            same_machine(request, &parsed.machine)?;
+            heartbeat(conn, &parsed, now)
+        }
+        "/next" => {
+            let parsed: MachineFree = body(request)?;
+            same_machine(request, &parsed.machine)?;
+            next(conn, &parsed, now)
+        }
         "/claims" => {
             let value: Value = body(request)?;
             if value.get("summary").is_some() {
-                adhoc(conn, &parse(value)?, now)
+                let adhoc_claim: AdhocClaim = parse(value)?;
+                same_machine(request, &adhoc_claim.machine)?;
+                adhoc(conn, &adhoc_claim, now)
             } else {
-                claim(conn, &parse(value)?, now)
+                let mut ticket_claim: Claim = parse(value)?;
+                same_machine(request, &ticket_claim.machine)?;
+                ticket_claim.ticket = canonical(conn, &ticket_claim.ticket)?;
+                claim(conn, &ticket_claim, now)
             }
         }
-        "/landed" => landed(conn, &body(request)?, now),
-        "/release" => release(conn, &body(request)?, now),
-        "/close" => close(conn, &body(request)?, now),
+        "/landed" => {
+            let mut parsed: Landed = body(request)?;
+            same_machine(request, &parsed.machine)?;
+            parsed.ticket = canonical(conn, &parsed.ticket)?;
+            landed(conn, &parsed, now)
+        }
+        "/release" => {
+            let mut parsed: Release = body(request)?;
+            same_machine(request, &parsed.machine)?;
+            parsed.ticket = canonical(conn, &parsed.ticket)?;
+            release(conn, &parsed, now)
+        }
+        "/close" => {
+            let mut parsed: Close = body(request)?;
+            same_machine(request, &parsed.machine)?;
+            parsed.ticket = canonical(conn, &parsed.ticket)?;
+            close(conn, &parsed, now)
+        }
         "/pause" => pause(conn, &body(request)?, now),
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }
 
-/// Adds or updates the machine and issues it a new write token.
-fn register(conn: &mut Connection, machine: &MachineRegister, now: Timestamp) -> Answer {
-    let tx = conn.transaction().map_err(sql_failure)?;
+/// Adds or updates the machine and issues it a new write token. A machine ID that already has a
+/// token registers again only with that token as the bearer, so that nobody who can reach the
+/// hub can replace another machine's token; a new machine ID needs no token.
+fn register(
+    conn: &mut Connection,
+    request: &Request,
+    machine: &MachineRegister,
+    now: Timestamp,
+) -> Answer {
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sql_failure)?;
+    if tokens::has_token(&tx, &machine.machine).map_err(|e| store_failure(&e))? {
+        let bearer = request
+            .headers
+            .iter()
+            .find(|(name, _)| name == "authorization")
+            .and_then(|(_, value)| value.split_once(' '))
+            .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+            .map(|(_, token)| token.trim());
+        // `writer` is set when the request carried a valid token and an `X-Actor`; a client
+        // that sends only the bearer (`ignite install`) is checked here.
+        let owner = match (&request.writer, bearer) {
+            (Some(writer), _) => Some(writer.machine.clone()),
+            (None, Some(token)) => tokens::verify(&tx, token).map_err(|e| store_failure(&e))?,
+            (None, None) => None,
+        };
+        if owner.as_ref() != Some(&machine.machine) {
+            return Err(failure(
+                401,
+                &format!(
+                    "{} is already registered; send its current token as the bearer",
+                    machine.machine
+                ),
+            ));
+        }
+    }
     fleet::register(&tx, machine, now).map_err(|e| store_failure(&e))?;
     let token = tokens::issue(&tx, &machine.machine).map_err(|e| store_failure(&e))?;
     tx.commit().map_err(sql_failure)?;
@@ -180,38 +263,38 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
 
 /// Claims `claim.ticket` for its session and tree: a reserved ticket with its reservation's code
 /// from the machine it was reserved for, or, with no code, a ticket nobody else holds or has
-/// reserved. A wrong code, or a code whose reservation lapsed, is refused.
+/// reserved. A wrong code, or a code whose reservation lapsed, is refused. The checks, the claim
+/// and the record of session and tree are one `IMMEDIATE` transaction, so no other session can
+/// take or drop the reservation in between.
 fn claim(conn: &mut Connection, claim: &Claim, now: Timestamp) -> Answer {
     let id = claim.ticket.as_str();
-    {
-        let tx = conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(sql_failure)?;
-        fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
-        let ticket = load(&tx, id)?;
-        if ticket.status == Status::Closed {
-            return Err(conflict(&format!("{id} is closed"), Some(&ticket)));
-        }
-        let reservation = fleet::reservation_of(&tx, id).map_err(|e| store_failure(&e))?;
-        let refused = match (&reservation, &claim.code) {
-            (Some((machine, code)), Some(sent)) => (machine != claim.machine.as_str()
-                || code != sent)
-                .then_some("is reserved under another code"),
-            (Some(_), None) => Some("is reserved; claim it with its reservation's code"),
-            (None, Some(_)) => Some("has no live reservation with that code"),
-            (None, None) => None,
-        };
-        if let Some(refused) = refused {
-            return Err(conflict(&format!("{id} {refused}"), Some(&ticket)));
-        }
-        tx.commit().map_err(sql_failure)?;
+    let mut tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sql_failure)?;
+    fleet::lapse(&tx, now).map_err(|e| store_failure(&e))?;
+    let ticket = load(&tx, id)?;
+    if ticket.status == Status::Closed {
+        return Err(conflict(&format!("{id} is closed"), Some(&ticket)));
+    }
+    let reservation = fleet::reservation_of(&tx, id).map_err(|e| store_failure(&e))?;
+    let refused = match (&reservation, &claim.code) {
+        (Some((machine, code)), Some(sent)) => (machine != claim.machine.as_str() || code != sent)
+            .then_some("is reserved under another code"),
+        (Some(_), None) => Some("is reserved; claim it with its reservation's code"),
+        (None, Some(_)) => Some("has no live reservation with that code"),
+        (None, None) => None,
+    };
+    if let Some(refused) = refused {
+        return Err(conflict(&format!("{id} {refused}"), Some(&ticket)));
     }
     let ops = vec![Operation::Claim { id: id.to_owned() }];
-    apply(conn, Vec::new(), ops, &claim.session, &claim.machine, now)?;
-    take(conn, &claim.ticket, claim, now)
+    apply_in(&mut tx, ops, &claim.session, &claim.machine, now)?;
+    let brief = take(&tx, &claim.ticket, claim, now)?;
+    tx.commit().map_err(sql_failure)?;
+    Ok(Response::json(200, &json!(brief)))
 }
 
-/// Files a ticket from the summary, labelled `adhoc`, and claims it in the same batch.
+/// Files a ticket from the summary, labelled `adhoc`, and claims it in the same transaction.
 fn adhoc(conn: &mut Connection, request: &AdhocClaim, now: Timestamp) -> Answer {
     let fields = TicketFields {
         title: Some(request.summary.clone()),
@@ -227,14 +310,10 @@ fn adhoc(conn: &mut Connection, request: &AdhocClaim, now: Timestamp) -> Answer 
         },
         Operation::Claim { id: "$0".into() },
     ];
-    let results = apply(
-        conn,
-        Vec::new(),
-        ops,
-        &request.session,
-        &request.machine,
-        now,
-    )?;
+    let mut tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sql_failure)?;
+    let results = apply_in(&mut tx, ops, &request.session, &request.machine, now)?;
     let claim = Claim {
         ticket: results[0].id.clone(),
         machine: request.machine.clone(),
@@ -242,15 +321,21 @@ fn adhoc(conn: &mut Connection, request: &AdhocClaim, now: Timestamp) -> Answer 
         tree: request.tree.clone(),
         code: None,
     };
-    take(conn, &claim.ticket, &claim, now)
+    let brief = take(&tx, &claim.ticket, &claim, now)?;
+    tx.commit().map_err(sql_failure)?;
+    Ok(Response::json(200, &json!(brief)))
 }
 
 /// After the batch claimed the ticket: records the session and tree working it, drops its
-/// reservation and answers with its brief.
-fn take(conn: &mut Connection, id: &TicketId, claim: &Claim, now: Timestamp) -> Answer {
-    let tx = conn.transaction().map_err(sql_failure)?;
+/// reservation and returns its brief. Runs in the claim's transaction.
+fn take(
+    tx: &Connection,
+    id: &TicketId,
+    claim: &Claim,
+    now: Timestamp,
+) -> Result<TicketBrief, Response> {
     set_columns(
-        &tx,
+        tx,
         id.as_str(),
         claim.session.as_str(),
         &[
@@ -260,10 +345,8 @@ fn take(conn: &mut Connection, id: &TicketId, claim: &Claim, now: Timestamp) -> 
         now,
     )
     .map_err(|e| store_failure(&e))?;
-    fleet::release_reservation(&tx, id.as_str()).map_err(|e| store_failure(&e))?;
-    let brief = brief(&tx, id.as_str())?;
-    tx.commit().map_err(sql_failure)?;
-    Ok(Response::json(200, &json!(brief)))
+    fleet::release_reservation(tx, id.as_str()).map_err(|e| store_failure(&e))?;
+    brief(tx, id.as_str())
 }
 
 /// The ticket and what each ticket it depends on left behind.
@@ -459,7 +542,9 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
         &release.machine,
         now,
     )?;
-    let tx = conn.transaction().map_err(sql_failure)?;
+    let tx = conn
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sql_failure)?;
     let cleared = ["session", "tree", "machine", "claimed_at"].map(|column| (column, Value::Null));
     set_columns(&tx, id, release.session.as_str(), &cleared, now).map_err(|e| store_failure(&e))?;
     free_worker(&tx, &release.machine, &release.session, None)?;
@@ -515,6 +600,31 @@ fn apply(
 ) -> Result<Vec<OperationResult>, Response> {
     let request = BatchRequest { preconditions, ops };
     match batch::apply(conn, &request, session.as_str(), machine.as_str(), now) {
+        Ok(BatchOutcome::Applied(reply)) => Ok(reply.results),
+        Ok(BatchOutcome::Conflict(found)) => Err(conflict(
+            "another session holds the ticket",
+            found.current.as_ref(),
+        )),
+        Err(StoreError::NotFound(message)) => Err(failure(404, &message)),
+        Err(StoreError::Rejected(message)) => Err(failure(400, &message)),
+        Err(other) => Err(store_failure(&other)),
+    }
+}
+
+/// Like [`apply`], inside a transaction the caller holds. A failure leaves the batch undone and
+/// the caller drops the transaction.
+fn apply_in(
+    tx: &mut Transaction,
+    ops: Vec<Operation>,
+    session: &SessionId,
+    machine: &MachineId,
+    now: Timestamp,
+) -> Result<Vec<OperationResult>, Response> {
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops,
+    };
+    match batch::apply_in(tx, &request, session.as_str(), machine.as_str(), now) {
         Ok(BatchOutcome::Applied(reply)) => Ok(reply.results),
         Ok(BatchOutcome::Conflict(found)) => Err(conflict(
             "another session holds the ticket",
@@ -630,3 +740,7 @@ fn parse<T: DeserializeOwned>(value: Value) -> Result<T, Response> {
 #[cfg(test)]
 #[path = "dispatch_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "dispatch_security_tests.rs"]
+mod security_tests;

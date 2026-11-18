@@ -228,6 +228,44 @@ pub struct LookupReply {
     pub results: Vec<Option<CachedResult>>,
 }
 
+/// What running one check cost, measured by the machine that ran it. A run of several checks
+/// at once gives each an equal share of the run's usage.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResultCost {
+    /// Instructions retired; `None` where the machine does not count them.
+    #[serde(default)]
+    pub instructions: Option<u64>,
+    /// CPU time in milliseconds.
+    #[serde(default)]
+    pub cpu_ms: u64,
+}
+
+impl ResultCost {
+    /// An equal share of `usage` among `shares` checks (at least one).
+    #[must_use]
+    pub fn share_of(usage: &super::Usage, shares: usize) -> Self {
+        let shares = u64::try_from(shares.max(1)).unwrap_or(u64::MAX);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let cpu_ms = (usage.cpu_s.max(0.0) * 1000.0 / shares as f64).round() as u64;
+        Self {
+            instructions: usage.instructions.map(|n| n / shares),
+            cpu_ms,
+        }
+    }
+
+    /// The sum of two costs; instructions are known only when both know them (or one is empty).
+    #[must_use]
+    pub fn plus(self, other: Self) -> Self {
+        Self {
+            instructions: match (self.instructions, other.instructions) {
+                (Some(a), Some(b)) => Some(a.saturating_add(b)),
+                (a, b) => a.or(b),
+            },
+            cpu_ms: self.cpu_ms.saturating_add(other.cpu_ms),
+        }
+    }
+}
+
 /// One result to store.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NewResult {
@@ -236,6 +274,15 @@ pub struct NewResult {
     pub machine: MachineId,
     pub record: RecordId,
     pub output: Option<String>,
+    /// What the check cost on this run. The hub adds it to the check's cost history, so scores
+    /// follow live runs and not only the imported history.
+    #[serde(default)]
+    pub cost: ResultCost,
+    /// The areas of the change the check ran on (see `score`). The hub counts a stored pass or
+    /// failure as one run, and a failure as one failure, in each of them, so a check's failure
+    /// rate per area follows live runs. Empty for a run at the tip, which is no one change.
+    #[serde(default)]
+    pub areas: Vec<String>,
 }
 
 /// `POST /results/store`.

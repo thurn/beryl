@@ -216,7 +216,7 @@ fn nothing_is_granted_beyond_what_processes_outside_ignite_leave() {
     // half of it ours.
     ledger.observe(Some(1.0), None);
     assert_eq!(ledger.status().outside, 12);
-    ledger.enqueue(ask(Class::Land, 4), at(1.0));
+    ledger.enqueue(ask(Class::Agent, 4), at(1.0));
     assert!(ledger.step(at(1.0)).granted.is_empty());
 
     // The outside processes finish.
@@ -373,6 +373,73 @@ fn sample_reads_load_from_outside_ignite() {
     assert_eq!(status.free_memory_mb, None);
     assert_eq!(scheduler.acquire(&ask(Class::Agent, 24)).cores, 16);
     assert_eq!(scheduler.acquire(&ask(Class::Agent, 24)).cores, 2);
+}
+
+#[test]
+fn land_and_a_floor_class_get_a_core_when_outside_load_fills_the_machine() {
+    let mut ledger = Ledger::new(limits());
+    ledger.observe(Some(1.0), None);
+    assert_eq!(ledger.status().outside, 24);
+    let agent = ledger.enqueue(ask(Class::Agent, 4), T0);
+    let land = ledger.enqueue(ask(Class::Land, 16), T0);
+    let tip = ledger.enqueue(ask(Class::Tip, 4), T0);
+    let step = ledger.step(T0);
+    let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    assert_eq!(granted, [(land, 1), (tip, 1)]);
+    assert!(ledger.holds(land) && ledger.holds(tip) && !ledger.holds(agent));
+    // A second land request waits for the first one's core instead of taking another.
+    ledger.enqueue(ask(Class::Land, 1), at(1.0));
+    assert!(ledger.step(at(1.0)).granted.is_empty());
+}
+
+#[test]
+fn an_idle_command_holding_a_resource_is_stopped_for_a_higher_class_that_needs_it() {
+    let mut ledger = Ledger::new(limits());
+    let idle = ledger.enqueue(with_resource(Class::Idle, 2, "oracle"), T0);
+    assert_eq!(ledger.step(T0).granted[0].id, idle);
+    // Plenty of cores are free: only the resource is missing.
+    let agent = ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), T0);
+    let step = ledger.step(T0);
+    assert!(step.granted.is_empty());
+    assert_eq!(step.stop, [idle]);
+    assert!(ledger.step(at(1.0)).stop.is_empty(), "asked once");
+    ledger.release(idle);
+    assert_eq!(ledger.step(at(2.0)).granted[0].id, agent);
+}
+
+#[test]
+fn draining_stops_idle_work_and_starts_none() {
+    let mut ledger = Ledger::new(limits());
+    let idle = ledger.enqueue(ask(Class::Idle, 2), T0);
+    ledger.step(T0);
+    ledger.set_draining(true);
+    assert_eq!(ledger.step(at(1.0)).stop, [idle]);
+    ledger.release(idle);
+    ledger.enqueue(ask(Class::Idle, 2), at(2.0));
+    assert!(ledger.step(at(2.0)).granted.is_empty());
+    ledger.set_draining(false);
+    assert_eq!(ledger.step(at(3.0)).granted.len(), 1);
+}
+
+#[test]
+fn an_adopted_grant_holds_its_cores_and_resources() {
+    let mut ledger = Ledger::new(limits());
+    let adopted = ledger.adopt(Class::Agent, 4, vec!["oracle".to_owned()], None);
+    assert_eq!(granted_cores(&ledger), 4);
+    ledger.enqueue(with_resource(Class::Agent, 2, "oracle"), T0);
+    assert!(ledger.step(T0).granted.is_empty(), "oracle has capacity 1");
+    ledger.release(adopted);
+    assert_eq!(ledger.step(at(1.0)).granted.len(), 1);
+}
+
+#[test]
+fn a_stopped_grant_is_killed_when_it_is_still_held_after_the_grace() {
+    let (scheduler, _, _) = scheduler();
+    let grant = scheduler.acquire(&ask(Class::Idle, 2));
+    // The clock never moves, so only a grace of nothing has run out.
+    assert!(!scheduler.wait_released(grant.id, 0.0));
+    scheduler.release(&grant);
+    assert!(scheduler.wait_released(grant.id, 10.0));
 }
 
 mod elastic;

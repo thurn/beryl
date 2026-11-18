@@ -70,11 +70,18 @@ impl Service for FakeService {
 
 struct FakeRegistrar {
     requests: RefCell<Vec<MachineRegister>>,
+    /// The token each registration sent.
+    tokens: RefCell<Vec<Option<String>>>,
     down: bool,
 }
 
 impl Registrar for FakeRegistrar {
-    fn register(&self, request: &MachineRegister) -> Result<MachineRegistered> {
+    fn register(
+        &self,
+        request: &MachineRegister,
+        token: Option<&str>,
+    ) -> Result<MachineRegistered> {
+        self.tokens.borrow_mut().push(token.map(str::to_owned));
         if self.down {
             return Err(Error::Unreachable("hub is down".to_owned()));
         }
@@ -289,6 +296,7 @@ fn install_stores_the_build_registers_and_starts_the_service() {
     };
     let registrar = FakeRegistrar {
         requests: RefCell::default(),
+        tokens: RefCell::default(),
         down: false,
     };
     let service = FakeService::default();
@@ -325,6 +333,11 @@ fn install_stores_the_build_registers_and_starts_the_service() {
     // A second install keeps the machine's ID.
     let again = install(&deps, &config(), &head).unwrap();
     assert_eq!(again.machine, done.machine);
+    // The first registration had no token to send; the second sends the one it was given.
+    assert_eq!(
+        *registrar.tokens.borrow(),
+        [None, Some("write-token".to_owned())]
+    );
 }
 
 #[test]
@@ -340,6 +353,7 @@ fn install_stops_before_the_service_when_the_hub_is_down() {
     };
     let registrar = FakeRegistrar {
         requests: RefCell::default(),
+        tokens: RefCell::default(),
         down: true,
     };
     let service = FakeService::default();
@@ -392,6 +406,7 @@ fn install_refuses_a_machine_that_ignite_toml_does_not_declare() {
     };
     let registrar = FakeRegistrar {
         requests: RefCell::default(),
+        tokens: RefCell::default(),
         down: false,
     };
     let service = FakeService::default();

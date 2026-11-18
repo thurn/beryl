@@ -36,6 +36,9 @@ inputs = [
   "rust/Cargo.toml",
   "rust/.config/nextest.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/blunders.json",
+  "data/blunders/**",
   "data/set-groups.json",
   "data/table-commands.json",
   "data/save-breaks.json",
@@ -56,6 +59,12 @@ run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust doctests
 inputs = [
   "rust/Cargo.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
@@ -93,6 +102,12 @@ run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust allocati
 inputs = [
   "rust/Cargo.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
@@ -132,6 +147,7 @@ run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust clippy r
 inputs = [
   "rust/Cargo.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
   "data/set-groups.json",
   "data/table-commands.json",
   "data/save-breaks.json",
@@ -212,6 +228,12 @@ inputs = [
   "crate:beryl_scenario",
   "rust/Cargo.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
   "data/set-groups.json",
   "data/card-text-allowlist.json",
   "data/card-escalations.json",
@@ -243,7 +265,7 @@ inputs = [
 [product.rust-tests]
 build = "cargo nextest run --no-run --locked --cargo-quiet {packages}"
 dir = "rust"
-inputs = ["crate-closure", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+inputs = ["crate-closure", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
 
 # Clippy's pass over the workspace in its own target directory, rust/target/clippy. Cargo holds
@@ -260,6 +282,12 @@ inputs = [
   "rust/Cargo.toml",
   "rust/Cargo.lock",
   "data/card-store.tsv",
+  "data/catalogs.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/src/generated/**",
+  "docs/sample-decks/**",
   "data/set-groups.json",
   "tools/src/beryl_tools/ignite/rust.py",
 ]
@@ -274,7 +302,7 @@ outputs = ["rust/target/clippy"]
 [product.cli]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_cli"
 dir = "rust"
-inputs = ["crate:beryl_cli", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+inputs = ["crate:beryl_cli", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
 
 # `beryl_scenario`, which dumps the oracle scenarios and renders the cards' rules text, built
@@ -283,5 +311,5 @@ outputs = ["rust/target"]
 [product.scenario-dump]
 build = "cargo build --locked --quiet --profile test --workspace --exclude beryl_link_iroh --lib --bin beryl_scenario"
 dir = "rust"
-inputs = ["crate:beryl_scenario", "rust/Cargo.toml", "data/card-store.tsv", "data/set-groups.json"]
+inputs = ["crate:beryl_scenario", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]

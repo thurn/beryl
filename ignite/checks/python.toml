@@ -54,5 +54,6 @@ inputs = [
   "tools/tests/fixtures",
   "efficiency/pyproject.toml",
   "data/card-store.tsv",
+  "data/catalogs.json",
   "tools/src/beryl_tools/ignite/python.py",
 ]

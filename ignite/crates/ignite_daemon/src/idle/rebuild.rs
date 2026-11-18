@@ -12,6 +12,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use ignite_core::config::Os;
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::manifest::RebuildEdit;
 use ignite_core::protocol::Class;
@@ -43,7 +44,17 @@ pub struct RebuildCount {
 }
 
 impl RebuildCount {
-    fn from_units(name: &str, commit: Commit, at: Timestamp, units: &[CompileUnit]) -> Self {
+    /// The count of `units`, or `None` if there are none or one carries no instruction count: a
+    /// total over units that were not counted would read as a cheaper rebuild than it was.
+    pub(super) fn from_units(
+        name: &str,
+        commit: Commit,
+        at: Timestamp,
+        units: &[CompileUnit],
+    ) -> Option<Self> {
+        if units.is_empty() || units.iter().any(|unit| unit.instructions.is_none()) {
+            return None;
+        }
         let mut crates: Vec<(String, f64)> = Vec::new();
         for unit in units {
             let instructions = unit.instructions.unwrap_or(0.0);
@@ -53,13 +64,13 @@ impl RebuildCount {
             }
         }
         crates.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-        RebuildCount {
+        Some(RebuildCount {
             name: name.to_owned(),
             commit,
             at,
             instructions: crates.iter().map(|(_, n)| n).sum(),
             crates,
-        }
+        })
     }
 
     /// The count as `ignite rebuild` prints it: the total, then the largest crates.
@@ -81,6 +92,12 @@ impl RebuildCount {
         }
         text
     }
+}
+
+/// Whether this operating system's compiler runs are measured in instructions. Windows has no
+/// instruction counter, and a rebuild count without one is not a count.
+fn counts_instructions(os: Os) -> bool {
+    os == Os::Macos
 }
 
 fn billions(instructions: f64) -> String {
@@ -108,7 +125,7 @@ impl Idle {
     /// The first edit due a measurement: never tried, or tried at a commit the verified commit
     /// has since moved [`REBUILD_EVERY`] commits past.
     pub(super) fn rebuild_due(&self, ctx: &Context) -> Option<String> {
-        if ctx.config.rebuild.is_empty() {
+        if ctx.config.rebuild.is_empty() || !counts_instructions(self.settings.os) {
             return None;
         }
         let verified = Self::verified(ctx).ok()?;
@@ -133,6 +150,13 @@ impl Idle {
     /// landing tree is busy.
     pub(super) fn rebuild(&self, ctx: &Context, name: &str) -> Result<Option<RebuildCount>> {
         self.undo_unfinished()?;
+        if !counts_instructions(self.settings.os) {
+            return Err(Error::Invalid(format!(
+                "{} cannot count instructions, so a rebuild count measured here would be wrong; \
+                 run `ignite rebuild` on a macOS machine",
+                self.settings.os
+            )));
+        }
         let edit = ctx
             .config
             .rebuild
@@ -152,7 +176,11 @@ impl Idle {
         let released = self.host.release(&tree, None);
         let units = measured?;
         released?;
-        let count = RebuildCount::from_units(name, commit, self.clock.now(), &units);
+        let Some(count) = RebuildCount::from_units(name, commit, self.clock.now(), &units) else {
+            return Err(Error::Io(format!(
+                "the compiler units of {name} carry no instruction counts; no count was stored"
+            )));
+        };
         self.update(|state| {
             state.counts.push(count.clone());
             let of_name = state.counts.iter().filter(|c| c.name == name).count();

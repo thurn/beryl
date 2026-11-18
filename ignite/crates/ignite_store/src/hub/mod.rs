@@ -2,6 +2,7 @@
 
 pub mod batch;
 pub mod checks;
+pub mod cycles;
 pub mod edges;
 pub mod feed;
 pub mod findings;

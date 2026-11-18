@@ -223,10 +223,16 @@ fn choose<'a>(
     paid: &mut BTreeSet<&'a str>,
     plan: &mut GatePlan,
 ) {
+    // Once the cap would be passed, only units that cost nothing remain eligible: a unit whose
+    // members are all cached spends no instructions, so the cap has no reason to leave it out.
+    let mut capped = false;
     loop {
         let best = units
             .iter()
             .enumerate()
+            .filter(|(_, unit)| {
+                !capped || unit.run_cost + unit.unpaid(input.missing_builds, paid) <= 0.0
+            })
             .map(|(index, unit)| (index, unit.score(input.missing_builds, paid)))
             .max_by(|(a, a_score), (b, b_score)| {
                 a_score
@@ -240,7 +246,8 @@ fn choose<'a>(
         let unit = &units[index];
         let spend = unit.run_cost + unit.unpaid(input.missing_builds, paid);
         if plan.scored_cost + spend > gate.cap {
-            break;
+            capped = true;
+            continue;
         }
         let unit = units.swap_remove(index);
         plan.scored_cost += spend;

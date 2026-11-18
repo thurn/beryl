@@ -234,6 +234,19 @@ fn a_cached_check_is_answered_from_the_cache_without_spending_the_cap() {
 }
 
 #[test]
+fn a_cached_result_is_used_after_the_cap_is_reached() {
+    let mut cached = likely("script:cached", 900.0);
+    cached.cached = true;
+    let checks = [likely("script:a", 100.0), likely("script:b", 400.0), cached];
+
+    let plan = plan_for(&checks, &BTreeMap::new(), &gate(0.0001, 150.0));
+
+    assert_eq!(names(&plan.run), ["script:a"]);
+    assert_eq!(names(&plan.cached), ["script:cached"]);
+    assert_eq!(left_names(&plan.past_cap), ["script:b"]);
+}
+
+#[test]
 fn a_check_with_an_open_regression_is_left_out_unless_its_fix_is_landing() {
     let ticket = TicketId::new("Thrh4.90").unwrap();
     let mut broken = likely("script:broken", 1.0);

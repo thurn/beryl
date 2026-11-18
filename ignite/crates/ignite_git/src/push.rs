@@ -10,9 +10,12 @@ use crate::cmd;
 /// Pushes `commit` from `tree` to `branch` on `remote`, without force.
 ///
 /// The outcome is read from `git push --porcelain`, which prints one line per ref the remote
-/// answered for. A ref line flagged `!` means the remote refused the update, usually because
-/// the branch moved: [`Push::Rejected`]. A failure with no ref line means the conversation with
-/// the remote never got that far: [`Error::Unreachable`].
+/// answered for. A ref line flagged `!` means the remote refused the update. If the branch
+/// moved (`[rejected] (fetch first)` or `(non-fast-forward)`), that is [`Push::Rejected`], and
+/// the caller rebases and tries again. Any other refusal, such as `[remote rejected]` from a
+/// hook or a protected branch, would be refused again, so it is [`Error::Conflict`]. A failure
+/// with no ref line means the conversation with the remote never got that far:
+/// [`Error::Unreachable`].
 pub fn push(tree: &Path, remote: &str, commit: &Commit, branch: &str) -> Result<Push> {
     let target = format!("refs/heads/{branch}");
     let refspec = format!("{commit}:{target}");
@@ -21,9 +24,13 @@ pub fn push(tree: &Path, remote: &str, commit: &Commit, branch: &str) -> Result<
     let stdout = String::from_utf8_lossy(&out.stdout);
     let line = stdout.lines().find(|line| ref_line_for(line, &target));
     match line {
-        Some(line) if line.starts_with('!') => Ok(Push::Rejected {
+        Some(line) if line.starts_with('!') && tip_moved(summary(line)) => Ok(Push::Rejected {
             reason: summary(line).to_owned(),
         }),
+        Some(line) if line.starts_with('!') => Err(Error::Conflict(format!(
+            "the remote refused the push to {branch}: {}",
+            summary(line)
+        ))),
         Some(_) if out.status.success() => Ok(Push::Pushed {
             commit: commit.clone(),
         }),
@@ -54,6 +61,16 @@ fn ref_line_for(line: &str, target: &str) -> bool {
         .is_some_and(|(_, to)| to == target)
 }
 
+/// Whether a porcelain summary says the branch moved since it was fetched, which a rebase fixes.
+/// Git words these `[rejected] (fetch first)`, `[rejected] (non-fast-forward)` and
+/// `[rejected] (stale info)`; `[remote rejected]` is the remote's own refusal.
+fn tip_moved(summary: &str) -> bool {
+    summary.starts_with("[rejected]")
+        && ["fetch first", "non-fast-forward", "stale info"]
+            .iter()
+            .any(|reason| summary.contains(reason))
+}
+
 fn summary(line: &str) -> &str {
     line.split('\t').nth(2).unwrap_or(line)
 }
@@ -69,5 +86,16 @@ mod tests {
         assert!(!ref_line_for(line, "refs/heads/other"));
         assert!(!ref_line_for("To /some/remote", "refs/heads/main"));
         assert_eq!(summary(line), "[rejected] (fetch first)");
+    }
+
+    #[test]
+    fn only_a_moved_branch_is_worth_retrying() {
+        assert!(tip_moved("[rejected] (fetch first)"));
+        assert!(tip_moved("[rejected] (non-fast-forward)"));
+        assert!(!tip_moved("[remote rejected] (pre-receive hook declined)"));
+        assert!(!tip_moved(
+            "[remote rejected] (protected branch hook declined)"
+        ));
+        assert!(!tip_moved("[rejected] (already exists)"));
     }
 }

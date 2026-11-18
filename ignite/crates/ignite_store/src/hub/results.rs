@@ -11,7 +11,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{CachedResult, NewResult, ResultKey};
@@ -94,7 +94,7 @@ pub fn lookup(
 
 /// Stores each result that is a pass or a failure, replacing an entry with the same key.
 pub fn store(conn: &mut Connection, results: &[NewResult], now: Timestamp) -> Result<()> {
-    let tx = conn.transaction()?;
+    let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
     {
         let mut insert = tx.prepare_cached(
             "INSERT OR REPLACE INTO results
@@ -159,6 +159,8 @@ mod tests {
             machine: MachineId::new("m-1").unwrap(),
             record: RecordId(7),
             output: (outcome == Outcome::Fail).then(|| "out/1.log".to_owned()),
+            cost: ignite_core::protocol::hub::ResultCost::default(),
+            areas: Vec::new(),
         }
     }
 

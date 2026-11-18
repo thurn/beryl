@@ -99,7 +99,7 @@ fn healthy_host() -> FakeHost {
             "/repo/trees",
             "/repo/trees/tree-01",
             "/repo/trees/tree-02",
-            "/repo/trees/land-01",
+            "/repo/trees/landing-1",
         ]
         .map(PathBuf::from)
         .to_vec(),
@@ -121,7 +121,7 @@ fn diagnose_with(host: &FakeHost, hub: &FakeHub, trees: &FakeTrees) -> Vec<Findi
 }
 
 fn all_trees() -> FakeTrees {
-    FakeTrees(vec![tree("tree-01"), tree("tree-02"), tree("land-01")])
+    FakeTrees(vec![tree("tree-01"), tree("tree-02"), tree("landing-1")])
 }
 
 #[test]
@@ -228,5 +228,26 @@ fn status_shows_the_sections_its_flags_ask_for() {
             .as_object()
             .unwrap()
             .contains_key("admission")
+    );
+}
+
+#[test]
+fn status_counts_only_the_declared_trees_and_names_the_others() {
+    let host = healthy_host();
+    let mut existing = host.existing.clone();
+    existing.push(PathBuf::from("/repo/trees/switch-rebase"));
+    let section = TreesSection {
+        source: Arc::new(FakeTrees(vec![
+            tree("tree-01"),
+            tree("tree-02"),
+            tree("landing-1"),
+            tree("switch-rebase"),
+        ])),
+        configured: configured_tree_names(2, 1),
+        host: Arc::new(FakeHost { existing, ..host }),
+    };
+    assert_eq!(
+        section.lines(),
+        ["3 of 3 present", "not in ignite.toml: switch-rebase"]
     );
 }

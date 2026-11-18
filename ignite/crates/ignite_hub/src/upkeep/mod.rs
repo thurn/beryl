@@ -3,6 +3,7 @@
 //! Each pass of [`Upkeep::pass`]:
 //!
 //! - lapses expired reservations;
+//! - releases the claims of a machine that has not sent a heartbeat for 2 hours ([`offline`]);
 //! - marks a regression fixed once its ticket closed and its check has passed since
 //!   ([`regressions`]);
 //! - switches off each check with a second flaky record and files its P3 ticket, or a P1 one
@@ -25,6 +26,7 @@ pub mod explore;
 pub mod filing;
 pub mod flaky;
 pub mod machines;
+pub mod offline;
 pub mod regressions;
 pub mod signature;
 pub mod stuck;
@@ -54,6 +56,8 @@ pub const PASS_SECONDS: u64 = 60;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UpkeepReport {
     pub lapsed_reservations: u32,
+    /// Tickets whose claim was released because their machine went offline.
+    pub released_claims: Vec<String>,
     /// Tickets created or commented on.
     pub tickets_filed: Vec<String>,
     pub regressions_fixed: Vec<String>,
@@ -103,6 +107,7 @@ impl Upkeep {
         keep(fleet::lapse(conn, now).map(|lapsed| {
             report.lapsed_reservations = u32::try_from(lapsed.len()).unwrap_or(u32::MAX);
         }));
+        keep(offline::release_claims(conn, now).map(|released| report.released_claims = released));
         keep(regressions::mark_fixed(conn).map(|fixed| report.regressions_fixed = fixed));
         keep(flaky::switch_off_repeated(conn, now).map(|flaky| {
             for (check, filed) in flaky.switched_off {

@@ -42,6 +42,8 @@ pub trait LandTrees: Send + Sync {
     fn uncommitted(&self, path: &Path) -> Result<Vec<String>>;
     /// The commits after `from` up to `to`, oldest first.
     fn commits(&self, path: &Path, from: &Commit, to: &Commit) -> Result<Vec<Commit>>;
+    /// Whether `ancestor` is in the history of `descendant`, as `path`'s repository sees it.
+    fn is_ancestor(&self, path: &Path, ancestor: &Commit, descendant: &Commit) -> Result<bool>;
     /// Leases a free landing tree checked out at `at`; `None` when every one is busy.
     fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>>;
     /// Frees a landing tree; `built_at` is the commit its builds now match.
@@ -105,6 +107,10 @@ impl LandTrees for MachineTrees {
 
     fn commits(&self, path: &Path, from: &Commit, to: &Commit) -> Result<Vec<Commit>> {
         refs::commits_between(path, from, to)
+    }
+
+    fn is_ancestor(&self, path: &Path, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
+        refs::is_ancestor(path, ancestor, descendant)
     }
 
     fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>> {

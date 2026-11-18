@@ -6,13 +6,20 @@
 //!   lanes and families, families in the always set and checks that are switched off are left
 //!   out.
 //! - Each catch is scored as the gate would have scored its check for the change that failed,
-//!   from the check records the hub holds now. The threshold is the largest of those scores at
+//!   from the check records the hub holds now, less the catch itself: the hub's counts include
+//!   the failure being replayed, which would make every catch look likelier than the gate could
+//!   have known. The run and the failure of the catch are taken out of its check's counts for
+//!   the catch's areas (leave-one-out). Other checks' counts keep their own failures of the
+//!   same change, which the log does not link to this one. The threshold is the largest of those scores at
 //!   which the gate still keeps [`KEEP`] of the catches: a catch is kept when its check's score
 //!   is at or above the threshold.
 //! - The cap is the [`KEEP`] quantile (nearest rank) of what the gate would have spent on the
 //!   checks chosen by score, at that threshold and with no cap, for the changes that were caught.
-//! - The replay knows neither which builds each tree held nor what the result cache held, so it
-//!   charges no builds and counts every chosen check as run.
+//!   Only the checks the change could affect are costed: the catch's own check and the checks
+//!   with a record after changes to one of the catch's areas. The others' inputs were not
+//!   touched, so on a real landing the result cache answers them for nothing.
+//! - The replay knows neither which builds each tree held nor what the result cache held beyond
+//!   that, so it charges no builds and counts every affected chosen check as run.
 //!
 //! It prints the two values, the share of catches each nearby threshold keeps, and the `[gate]`
 //! lines for `ignite.toml`. It writes nothing.
@@ -140,7 +147,8 @@ pub fn replay(catches: &[Catch], checks: &[GateCheck]) -> Option<Replay> {
 }
 
 /// For each catch, the gate's score and cost for each of `checks` (in order), each planned
-/// alone. Planning all of them together costs time quadratic in their number, and with no
+/// alone, with the catch itself taken out of its own check's record (see [`without_catch`]) and
+/// a check the change could not affect left out (score of negative infinity, no cost). Planning all of them together costs time quadratic in their number, and with no
 /// builds to charge and no groups (see [`gate_checks`]) a check's score does not depend on
 /// the others. A check the gate would not score gets a score of negative infinity.
 fn solo_scores(catches: &[Catch], checks: &[GateCheck]) -> Vec<Vec<(f64, f64)>> {
@@ -152,6 +160,17 @@ fn solo_scores(catches: &[Catch], checks: &[GateCheck]) -> Vec<Vec<(f64, f64)>> 
         checks
             .iter()
             .map(|check| {
+                let own = check.check.as_str() == catch.check;
+                if !own && !affected(catch, check) {
+                    return (f64::NEG_INFINITY, 0.0);
+                }
+                let adjusted;
+                let check = if own {
+                    adjusted = without_catch(check, catch);
+                    &adjusted
+                } else {
+                    check
+                };
                 let gate = plan_for(&catch.areas, std::slice::from_ref(check), &everything);
                 gate.run
                     .iter()
@@ -173,6 +192,32 @@ fn solo_scores(catches: &[Catch], checks: &[GateCheck]) -> Vec<Vec<(f64, f64)>> 
             .flat_map(|handle| handle.join().expect("a replay thread panicked"))
             .collect()
     })
+}
+
+/// Whether a change to the catch's areas could affect `check`: it has a record after changes to
+/// one of them.
+fn affected(catch: &Catch, check: &GateCheck) -> bool {
+    check
+        .history
+        .as_ref()
+        .is_some_and(|h| catch.areas.iter().any(|a| h.areas.contains_key(a)))
+}
+
+/// `check` as the gate would have known it before `catch`: one run and one failure fewer in each
+/// of the catch's areas.
+pub fn without_catch(check: &GateCheck, catch: &Catch) -> GateCheck {
+    let mut check = check.clone();
+    if let Some(history) = &mut check.history {
+        for area in &catch.areas {
+            if let Some(record) = history.areas.get_mut(area)
+                && record.failures > 0
+            {
+                record.runs = record.runs.saturating_sub(1);
+                record.failures -= 1;
+            }
+        }
+    }
+    check
 }
 
 /// The gate's plan for a change to `areas`, with every build current and nothing cached.

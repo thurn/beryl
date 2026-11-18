@@ -19,6 +19,7 @@ use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{BuildResult, Builds, CommandSpec, Launcher, Result, RunResult};
 
+use super::rebuild::RebuildCount;
 use super::{AuditVerb, Idle, IdleHost, IdleJob, IdleSettings, RebuildVerb, Rerun};
 use crate::checks::HitSink;
 use crate::server::{Context, Verb};
@@ -286,12 +287,16 @@ impl Fixture {
 
     /// The idle work as a daemon that has just started would build it, from the state file.
     fn idle(&self) -> Idle {
+        self.idle_on(Os::Macos)
+    }
+
+    fn idle_on(&self, os: Os) -> Idle {
         let manifest =
             Manifest::from_files(&[(PathBuf::from("checks/seeds.toml"), EXPLORE.to_owned())])
                 .unwrap();
         let settings = IdleSettings {
             manifest,
-            os: Os::Macos,
+            os,
             families: None,
             state: self.dir.join("state/idle.json"),
             outputs: self.dir.join("outputs"),
@@ -643,6 +648,43 @@ fn a_rebuild_is_measured_again_after_a_hundred_commits() {
     assert_ne!(idle.next_job(&ctx), Some(job.clone()));
     f.host.between.store(100, Ordering::SeqCst);
     assert_eq!(idle.next_job(&ctx), Some(job));
+}
+
+#[test]
+fn a_machine_that_cannot_count_instructions_measures_no_rebuild() {
+    let f = Fixture::new();
+    let idle = Arc::new(f.idle_on(Os::Windows));
+    assert_eq!(
+        idle.next_job(&f.ctx)
+            .map(|j| matches!(j, IdleJob::Rebuild { .. })),
+        Some(false)
+    );
+    let reply = RebuildVerb { idle: idle.clone() }.run(&f.ctx, &request("rebuild", &["core-body"]));
+    assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
+    assert!(
+        reply.text.contains("cannot count instructions"),
+        "{}",
+        reply.text
+    );
+    assert!(f.hub.stored_records().is_empty());
+    assert!(idle.state().counts.is_empty());
+}
+
+#[test]
+fn units_without_instruction_counts_make_no_rebuild_count() {
+    let unit = |instructions| CompileUnit {
+        crate_name: "core".to_owned(),
+        mode: "build".to_owned(),
+        instructions,
+        cpu_s: 1.0,
+        rebuilt: true,
+    };
+    let at = Timestamp::EPOCH;
+    let counted = [unit(Some(5.0))];
+    assert!(RebuildCount::from_units("e", commit("aaaaaaa"), at, &counted).is_some());
+    let mixed = [unit(Some(5.0)), unit(None)];
+    assert!(RebuildCount::from_units("e", commit("aaaaaaa"), at, &mixed).is_none());
+    assert!(RebuildCount::from_units("e", commit("aaaaaaa"), at, &[]).is_none());
 }
 
 #[test]

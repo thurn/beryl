@@ -18,7 +18,9 @@
 //!    gate's tree. A push the remote refuses because the tip moved deletes the record and goes
 //!    back to step 2. A remote that cannot be reached exits with code 4 and keeps the record,
 //!    because the push may have landed before the connection failed; the next landing tells
-//!    which from whether the rebased branch is empty.
+//!    which from whether the record's commit is in the tip's history. A refusal that the tip
+//!    moving does not explain (a hook, a protected branch) fails the landing at once, and a
+//!    landing gives up after [`MAX_PASSES`] passes.
 //! 7. The hub is told what landed, which closes the ticket. If it cannot be reached, the record
 //!    stays on disk and the ticket closes when the hub returns (see [`records`]). The ticket
 //!    tree is released and the branch its work was saved to at a release is deleted.
@@ -59,6 +61,10 @@ const RENEW_EVERY: Duration = Duration::from_secs(60);
 const BUSY_WAIT_S: f64 = 10.0;
 /// Races lost before a landing holds the lease through its gate.
 const LOSSES_BEFORE_HOLDING: u32 = 3;
+
+/// The passes after which a landing gives up, so a branch that never gets a push through
+/// (the tip keeps moving, or the remote keeps answering that it moved) ends with a message.
+const MAX_PASSES: u32 = 10;
 
 /// The landing machinery that `ignite land` and `ignite sync` share.
 pub struct Landing {
@@ -331,19 +337,44 @@ impl Landing {
         let mut lease: Option<HeldLease> = None;
         let mut losses = 0;
         let mut passes = 0;
+        let mut last_cause = String::new();
         let mut first_landed_since = None;
         loop {
+            if passes >= MAX_PASSES {
+                return Err(stop(
+                    Exit::Conflict,
+                    &[
+                        line(
+                            "failed",
+                            format!(
+                                "gave up after {MAX_PASSES} passes: {staging} moved or refused the \
+                                 push every time (last: {last_cause})"
+                            ),
+                        ),
+                        line("next", "wait a minute, then run ignite land again"),
+                    ],
+                ));
+            }
             let tip = ctx.git.tip(&staging).map_err(io)?;
-            let rebased = Self::rebase(ctx, &held, &tip)?;
-            first_landed_since.get_or_insert(rebased.landed_since);
-            if rebased.head == rebased.onto {
-                // Nothing is left to land. A push that the daemon began before it stopped may
-                // have reached the remote, which the empty branch shows.
-                if let Some(mut record) = interrupted.take() {
+            if let Some(mut record) = interrupted.take() {
+                // A push that the daemon began before it stopped landed only if its commit is
+                // in the tip's history. An empty rebase does not show that: it is as empty when
+                // the ticket's changes reached the branch some other way and the push never did.
+                if self
+                    .trees
+                    .is_ancestor(&held.path, &record.commit, &tip)
+                    .map_err(io)?
+                {
                     record.state = RecordState::Pushed;
                     self.records.write(&record).map_err(io)?;
                     return Ok(self.finish(ctx, req, &held, &record, None, None));
                 }
+                // The interrupted push never landed: start again from nothing.
+                self.records.remove(&record.landed.ticket).map_err(io)?;
+            }
+            let rebased = Self::rebase(ctx, &held, &tip)?;
+            first_landed_since.get_or_insert(rebased.landed_since);
+            if rebased.head == rebased.onto {
                 return Err(stop(
                     Exit::Usage,
                     &[
@@ -354,10 +385,6 @@ impl Landing {
                         line("next", "ignite close -m \"<reason>\" closes the ticket"),
                     ],
                 ));
-            }
-            if let Some(record) = interrupted.take() {
-                // The interrupted push never landed: start again from nothing.
-                self.records.remove(&record.landed.ticket).map_err(io)?;
             }
             passes += 1;
             let landing_tree = if rebased.landed_since == 0 {
@@ -406,6 +433,7 @@ impl Landing {
             let now = ctx.git.tip(&staging).map_err(fail)?;
             if now != tip {
                 free_landing(None);
+                last_cause = format!("the tip moved from {} to {}", short(&tip), short(&now));
                 losses += 1;
                 if losses < LOSSES_BEFORE_HOLDING {
                     lease = None;
@@ -441,7 +469,8 @@ impl Landing {
                     record.state = RecordState::Pushed;
                     self.records.write(&record).map_err(fail)?;
                 }
-                Ok(Push::Rejected { .. }) => {
+                Ok(Push::Rejected { reason }) => {
+                    last_cause = reason;
                     self.records.remove(&ticket).map_err(fail)?;
                     free_landing(None);
                     losses += 1;
