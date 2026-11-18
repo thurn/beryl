@@ -201,4 +201,6 @@ crate::tables! {
         /// JSON: instructions by crate.
         crates: String,
     }
+
+    Metric = "metrics" { machine: String, source: String, data: String, at: String }
 }

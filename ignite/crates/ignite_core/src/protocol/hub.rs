@@ -195,6 +195,10 @@ pub struct NewResult {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoreRequest {
     pub results: Vec<NewResult>,
+    /// The areas of the change the checks ran on (see `score`). Each stored pass or failure is
+    /// counted as one run, and a failure as one failure, in each of these areas.
+    #[serde(default)]
+    pub areas: Vec<String>,
 }
 
 /// `POST /flaky`: a check failed, then passed at once on the same inputs.

@@ -22,10 +22,16 @@ use crate::Result;
 use crate::migrate::{self, Migration};
 
 /// The hub's schema, oldest step first. A later change appends a step; it never edits one.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: include_str!("schema.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: include_str!("schema.sql"),
+    },
+    Migration {
+        version: 2,
+        sql: include_str!("schema_metrics.sql"),
+    },
+];
 
 /// Opens (creating if needed) and migrates the hub's database.
 pub fn open(path: &Path) -> Result<Connection> {
