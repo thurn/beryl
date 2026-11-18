@@ -198,15 +198,27 @@ impl Service for Native {
     }
 
     fn kickstart_daemon(&self) -> io::Result<()> {
-        let kicked = launchctl(&["kickstart", "-k", &format!("{}/{LABEL}", domain())])?;
-        if kicked.status.success() {
-            Ok(())
-        } else {
-            Err(io::Error::other(format!(
-                "launchctl kickstart: {}",
-                String::from_utf8_lossy(&kicked.stderr).trim()
-            )))
-        }
+        revive(&SystemLaunchctl, &domain(), LABEL, &plist_path(LABEL)?)
+    }
+}
+
+/// Starts the job `label` again: `launchctl kickstart -k` when launchd has it loaded, and
+/// otherwise loads its property list at `path` with [`reload`]. A job that was booted out, by a
+/// person or by an install that failed half way, is not loaded, and kickstart alone answered
+/// "Could not find service" every time, so the monitor could never bring the daemon back.
+fn revive(launchctl: &dyn Launchctl, domain: &str, label: &str, path: &Path) -> io::Result<()> {
+    let target = format!("{domain}/{label}");
+    if !is_loaded(launchctl, &target)? {
+        return reload(launchctl, domain, label, path);
+    }
+    let kicked = launchctl.run(&["kickstart", "-k", &target])?;
+    if kicked.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "launchctl kickstart: {}",
+            String::from_utf8_lossy(&kicked.stderr).trim()
+        )))
     }
 }
 
@@ -380,6 +392,35 @@ mod tests {
             LABEL,
             Path::new("/tmp/ignite.daemon.plist"),
         )
+    }
+
+    #[test]
+    fn revive_bootstraps_a_job_that_is_not_loaded() {
+        // Not loaded: print fails, bootout is harmless, bootstrap loads it, print finds it.
+        let launchctl = ScriptedLaunchctl::new(&[113, 113, 0], &[0]);
+        revive(
+            &launchctl,
+            "gui/501",
+            LABEL,
+            Path::new("/tmp/ignite.daemon.plist"),
+        )
+        .unwrap();
+        let calls = launchctl.calls.borrow();
+        assert!(calls.contains(&"bootstrap".to_owned()), "{calls:?}");
+        assert!(!calls.contains(&"kickstart".to_owned()), "{calls:?}");
+    }
+
+    #[test]
+    fn revive_kickstarts_a_loaded_job() {
+        let launchctl = ScriptedLaunchctl::new(&[0], &[]);
+        revive(
+            &launchctl,
+            "gui/501",
+            LABEL,
+            Path::new("/tmp/ignite.daemon.plist"),
+        )
+        .unwrap();
+        assert_eq!(*launchctl.calls.borrow(), ["print", "kickstart"]);
     }
 
     #[test]
