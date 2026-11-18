@@ -148,3 +148,58 @@ fn a_ticket_held_for_over_six_hours_is_reported_once_for_the_justiciar() {
         .collect();
     assert_eq!(labelled.len(), 1);
 }
+
+#[test]
+fn an_epic_waiting_on_a_moving_epic_is_not_stuck() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let milestone = apply(
+        &mut conn,
+        vec![create("Milestone", TicketType::Epic, None, &[])],
+        clock.now(),
+    );
+    let phase = apply(
+        &mut conn,
+        vec![create("Phase", TicketType::Epic, None, &[&milestone[0]])],
+        clock.now(),
+    );
+    let last = apply(
+        &mut conn,
+        vec![create("Last phase", TicketType::Epic, None, &[&phase[0]])],
+        clock.now(),
+    );
+    let work = apply(
+        &mut conn,
+        vec![
+            create("Work", TicketType::Task, Some(&milestone[0]), &[]),
+            create("Later", TicketType::Task, Some(&phase[0]), &[]),
+            create("Last", TicketType::Task, Some(&last[0]), &[]),
+        ],
+        clock.now(),
+    );
+    // Later waits on the milestone epic, whose own ticket is ready, so the phase moves; Last
+    // waits on the phase, so the last phase moves too.
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+    // Once nothing under the milestone can move, all three epics are stuck.
+    apply(
+        &mut conn,
+        vec![label(&work[0], "needs:person")],
+        clock.now(),
+    );
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    let titles: Vec<String> = report
+        .tickets_filed
+        .iter()
+        .map(|id| ticket(&conn, id).title)
+        .collect();
+    assert!(titles.iter().any(|t| t.contains(&phase[0])), "{titles:?}");
+    assert!(titles.iter().any(|t| t.contains(&milestone[0])), "{titles:?}");
+    assert!(titles.iter().any(|t| t.contains(&last[0])), "{titles:?}");
+}

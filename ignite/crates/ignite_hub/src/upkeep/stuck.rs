@@ -5,9 +5,10 @@
 //!   that check;
 //! - a tip that has waited an hour while a machine has not reported, or for checks that only
 //!   machines of another operating system can run;
-//! - an epic with open tickets of which none is ready or in progress, nor waits directly on a
-//!   ticket that is. A ready ticket that no machine can take (its `needs:` label names no
-//!   registered machine or operating system, or is `needs:person`) does not count as ready;
+//! - an epic with open tickets of which none is ready or in progress, nor waits (through any
+//!   chain of dependencies and epics) on a ticket that is. A ready ticket that no machine can
+//!   take (its `needs:` label names no registered machine or operating system, or is
+//!   `needs:person`) does not count as ready;
 //! - a loop of tickets that wait on one another and are under no epic;
 //! - a ticket held in progress for more than six hours, which is reported for the justiciar to
 //!   look at.
@@ -367,10 +368,10 @@ fn find_stuck(
             parents.get(up).copied().flatten()
         })
     };
-    // A ticket can move when it is ready, in progress, or waits directly on one that is: a
-    // ticket outside the epic that someone is working on unblocks it in time. A ready ticket
-    // that no machine can take, or that waits for a person, does not move.
-    let active: BTreeSet<&str> = graph
+    // A ticket can move when it is ready or in progress. A ready ticket that no machine can
+    // take, or that waits for a person, does not move.
+    let mut moves: BTreeSet<&str> = BTreeSet::new();
+    let mut queue: Vec<&str> = graph
         .tickets
         .iter()
         .filter(|t| {
@@ -378,6 +379,26 @@ fn find_stuck(
         })
         .map(|t| t.ticket.id.as_str())
         .collect();
+    // It also moves when it waits on a ticket that moves, since that ticket unblocks it in
+    // time, and an epic (or any parent) moves when a ticket somewhere under it moves. So a phase
+    // epic that waits on an earlier milestone epic, which in turn waits on one whose children
+    // are being worked on, is not stuck.
+    let mut waiters: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for entry in &graph.tickets {
+        for blocker in &entry.blocked_by {
+            waiters
+                .entry(blocker.id.as_str())
+                .or_default()
+                .push(entry.ticket.id.as_str());
+        }
+    }
+    while let Some(id) = queue.pop() {
+        if !moves.insert(id) {
+            continue;
+        }
+        queue.extend(ancestors(id));
+        queue.extend(waiters.get(id).into_iter().flatten().copied());
+    }
     // For each ancestor: its waiting tickets, and whether any of its tickets can move.
     let mut waiting: BTreeMap<&str, Vec<&GraphTicket>> = BTreeMap::new();
     let mut moving: BTreeSet<&str> = BTreeSet::new();
@@ -388,11 +409,7 @@ fn find_stuck(
         }
         let deferred =
             ticket.status == Status::Deferred || ticket.defer_until.is_some_and(|t| t > now);
-        let moves = active.contains(ticket.id.as_str())
-            || entry
-                .blocked_by
-                .iter()
-                .any(|b| active.contains(b.id.as_str()));
+        let moves = moves.contains(ticket.id.as_str());
         for id in ancestors(ticket.id.as_str()) {
             if moves {
                 moving.insert(id);
@@ -558,7 +575,9 @@ fn cycle_filing(cycle: &[String]) -> Filing {
         fields: TicketFields {
             title: Some(format!("Repair the graph: {names} wait on one another")),
             body: Some(format!(
-                "These tickets are under no epic and wait on one another in a loop, so none of                  them can ever become ready: {names}. Remove an edge that need not hold, or                  close or split a ticket in the loop."
+                "These tickets are under no epic and wait on one another in a loop, so none of \
+                 them can ever become ready: {names}. Remove an edge that need not hold, or \
+                 close or split a ticket in the loop."
             )),
             ticket_type: Some(TicketType::Task),
             priority: Some(1),
@@ -621,7 +640,9 @@ fn held_filing(held: &Held) -> Filing {
                 "Ticket {ticket} has been in progress for {hours} hours"
             )),
             body: Some(format!(
-                "{ticket} ({title}) is held for {hours} hours by session {session} on machine                  {machine}. A session that stopped, a worker that lost the ticket or a ticket                  too large for one session leaves it so. Find out which, and release, split or                  finish the ticket."
+                "{ticket} ({title}) is held for {hours} hours by session {session} on machine \
+                 {machine}. A session that stopped, a worker that lost the ticket or a ticket \
+                 too large for one session leaves it so. Find out which, and release, split or                  finish the ticket."
             )),
             ticket_type: Some(TicketType::Task),
             priority: Some(1),
