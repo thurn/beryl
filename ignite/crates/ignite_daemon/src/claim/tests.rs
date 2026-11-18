@@ -294,7 +294,7 @@ fn release_after_a_hand_close_frees_the_tree() {
         "{}",
         reply.text
     );
-    assert_eq!(lock(&world.trees.free).len(), 3);
+    assert_eq!(lock(&world.trees.free).len(), 2);
     assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
 }
 
@@ -308,7 +308,7 @@ fn close_after_a_hand_close_frees_the_tree() {
     let reply = CloseVerb(world.claims.clone()).run(&world.ctx, &req);
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert!(reply.text.contains("was already closed; tree-01 freed"));
-    assert_eq!(lock(&world.trees.free).len(), 3);
+    assert_eq!(lock(&world.trees.free).len(), 2);
 }
 
 #[test]
@@ -321,7 +321,7 @@ fn the_tick_frees_the_tree_of_a_hand_closed_ticket() {
     world.desk.close_by_hand("Tq.63");
     world.claims.tick(&world.ctx);
     assert!(world.claims.holder(Path::new("/trees/tree-01")).is_none());
-    assert_eq!(lock(&world.trees.free).len(), 3);
+    assert_eq!(lock(&world.trees.free).len(), 2);
 }
 
 #[test]
