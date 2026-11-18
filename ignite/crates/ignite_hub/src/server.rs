@@ -141,7 +141,11 @@ impl RunningHub {
         let _ = self.thread.join();
     }
 
-    fn wait(self) {
+    /// Blocks until the accept loop ends. That happens after [`RunningHub::stop`], and also on
+    /// its own: `tiny_http` ends its accept thread at the first accept error, such as running
+    /// out of file descriptors, and never accepts again, so a caller that expects the hub to
+    /// serve forever treats a return from this as a failure.
+    pub fn wait(self) {
         let _ = self.thread.join();
     }
 }
@@ -435,5 +439,38 @@ mod tests {
             ]
         );
         assert_eq!(percent_decode("/tickets/a%2E1%zz"), "/tickets/a.1%zz");
+    }
+
+    #[test]
+    fn wait_returns_when_the_accept_loop_ends_by_itself() {
+        let dir = std::env::temp_dir().join(format!("ignite-hub-wait-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let hub = HubServer {
+            config: Config::parse(
+                "ignite.toml",
+                "[repository]\nremote = \"origin\"\nstaging = \"staging\"\n\
+                 master = \"master\"\ntrees = \"trees\"\nchecks = \"checks\"\n\
+                 [hub]\nurl = \"http://localhost:1\"\nproject = \"test\"\n\
+                 [gate]\nthreshold = 0.01\ncap = 10\n\
+                 [machine.local]\nticket_trees = 4\nlanding_trees = 1\n",
+            )
+            .unwrap(),
+            listen: "127.0.0.1:0".to_owned(),
+            database: dir.join("hub.db"),
+        }
+        .start()
+        .unwrap();
+        // `unblock` ends `incoming_requests` the way a failed accept does.
+        let server = Arc::clone(&hub.server);
+        let (ended, ends) = std::sync::mpsc::channel();
+        thread::spawn(move || {
+            hub.wait();
+            let _ = ended.send(());
+        });
+        assert!(ends.recv_timeout(Duration::from_millis(200)).is_err());
+        server.unblock();
+        ends.recv_timeout(Duration::from_secs(10))
+            .expect("wait returns once the accept loop has ended");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

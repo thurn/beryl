@@ -326,8 +326,9 @@ pub fn serve_hub(repo: &Path, listen: &str, dir: &Path, version: &str) -> Result
         database,
     }
     .start()?;
-    // Served until the process ends.
-    std::mem::forget(running);
+    // Served until the process ends. The accept loop ends only when `tiny_http` has failed to
+    // accept for good, so its end stops the daemon and the login service restarts it.
+    crash::spawn_loop("ignite-hub-accept", move || running.wait());
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups"))).map_err(store)?;
     crash::spawn_loop("ignite-hub-upkeep", move || upkeep.run(conn, &SystemClock));
     Ok(())
