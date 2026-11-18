@@ -471,6 +471,15 @@ How the executable is installed and kept current:
   start at login. Registering stores a write token in the user's configuration.
   The hub accepts only requests that come over the Tailscale network with a
   registered token.
+- Install runs the steps after the build (registering and writing the login
+  services) in the executable it just built, so an older `ignite` never writes
+  the services its own way. It records the repository's main checkout for the
+  daemon, even when run in a linked worktree, and links `~/.local/bin/ignite` to
+  the current build when that directory is on `PATH`, or says where to link it.
+- On the hub's machine (`IGNITE_HUB_LISTEN` set), the daemon that serves the hub
+  is the one install sets up. When the hub cannot be reached, install serves it
+  itself for the length of the registration, then stops before the login
+  service starts the daemon.
 - After that the daemon runs the executable built from the release branch,
   `repository.release` in `ignite.toml`, or `master` when that is unset. When
   the branch moves and Ignite's own source changed, each daemon builds the new

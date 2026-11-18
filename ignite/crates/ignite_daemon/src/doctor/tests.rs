@@ -251,3 +251,73 @@ fn status_counts_only_the_declared_trees_and_names_the_others() {
         ["3 of 3 present", "not in ignite.toml: switch-rebase"]
     );
 }
+
+/// Git's trees, and directories under the trees folder that git may not know.
+struct TreesAndDirectories(Vec<TreeInfo>, Vec<&'static str>);
+
+impl TreeSource for TreesAndDirectories {
+    fn trees(&self) -> Result<Vec<TreeInfo>> {
+        Ok(self.0.clone())
+    }
+    fn directories(&self) -> Vec<String> {
+        self.1.iter().map(|name| (*name).to_owned()).collect()
+    }
+}
+
+#[test]
+fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
+    let mut trees = all_trees().0;
+    // A worktree git knows, and a plain directory it does not.
+    trees.push(tree("switch-rebase"));
+    let source = TreesAndDirectories(
+        trees,
+        vec![
+            "tree-01",
+            "tree-02",
+            "landing-1",
+            "switch-rebase",
+            "slot-01",
+        ],
+    );
+    let findings = diagnose(&DoctorInput {
+        config: &config(),
+        repo: Path::new("/repo"),
+        host: &healthy_host(),
+        trees: &source,
+        hub: &FakeHub::default(),
+        manifest: Ok(manifest()),
+        version: Commit::new("abc1234").ok(),
+    });
+    let warning = findings.iter().find(|f| f.warning).expect("a warning");
+    let line = warning.line();
+    assert!(line.starts_with("WARNING  trees"), "{line}");
+    assert!(line.contains("slot-01, switch-rebase."), "{line}");
+    assert!(line.contains("To fix: remove them"), "{line}");
+    // The declared trees are all there, so the machine is still healthy.
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.line() == "ok       trees     3 trees present.")
+    );
+    let reply = report(&findings);
+    assert_eq!(reply.exit, Exit::Success);
+    assert!(reply.text.ends_with("healthy, 1 warning"), "{}", reply.text);
+}
+
+#[test]
+fn git_trees_lists_the_visible_directories_under_the_trees_folder() {
+    let dir = std::env::temp_dir().join(format!("ignite-doctor-dirs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    for name in ["tree-01", "slot-01", ".pytest_cache"] {
+        std::fs::create_dir_all(dir.join(name)).unwrap();
+    }
+    std::fs::write(dir.join("notes.txt"), "").unwrap();
+    let source = GitTrees {
+        repo: dir.clone(),
+        dir: dir.clone(),
+    };
+    let mut names = source.directories();
+    names.sort();
+    assert_eq!(names, ["slot-01", "tree-01"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}

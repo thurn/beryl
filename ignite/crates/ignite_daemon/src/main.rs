@@ -155,8 +155,8 @@ fn self_update(base: &assemble::Base) -> selfupdate::SelfUpdate {
 }
 
 /// The hidden `ignite daemon` subcommand: runs the daemon until the process ends, for the
-/// checkout at `cwd` or, outside one (the login service starts it in `/`), for the checkout
-/// `ignite install` recorded. Returns the exit code.
+/// main checkout of the repository at `cwd` or, outside one (the login service starts it in
+/// `/`), for the checkout `ignite install` recorded. Returns the exit code.
 pub fn run_daemon(cwd: &Path) -> i32 {
     let home = Home::from_env();
     // First, before anything this build could fail at: records the start, and goes back to the
@@ -225,10 +225,12 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     }
 }
 
-/// `cwd` if it holds an `ignite.toml`, else the checkout recorded in the home folder.
+/// The main checkout of the repository at `cwd` if `cwd` holds an `ignite.toml`, else the
+/// checkout recorded in the home folder. A daemon started in a linked worktree serves the main
+/// checkout, as one started by the login service does.
 fn checkout(cwd: &Path, home: &Home) -> PathBuf {
     if cwd.join("ignite.toml").is_file() {
-        return cwd.to_path_buf();
+        return crate::update::main_checkout(cwd);
     }
     std::fs::read_to_string(home.checkout_file())
         .map_or_else(|_| cwd.to_path_buf(), |text| PathBuf::from(text.trim()))

@@ -18,28 +18,28 @@
 //! core `Git` and the OS `Service`), so the tests run it against fakes.
 
 use std::collections::hash_map::RandomState;
-use std::fmt::Write as _;
 use std::hash::{BuildHasher, Hasher};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ignite_core::config::{Config, Os};
 use ignite_core::ids::{Commit, MachineId};
-use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{MachineRegister, MachineRegistered};
 use ignite_core::traits::{Error, Git, Result};
+#[cfg(windows)]
 use ignite_os::Native;
-use ignite_os::service::Service;
 use serde::{Deserialize, Serialize};
 
-use crate::doctor::{Host, NativeHost};
-use crate::server::{Context, Verb};
-
+mod install;
 mod lastgood;
 mod rollback;
 mod starts;
 
+pub use install::{
+    BUILT_VARIABLE, Handoff, HubFallback, InstallDeps, InstallVerb, Installed, LocalHub, Outcome,
+    PathLink, ProcessHandoff, ServedHub, finish_install, install, install_checkout, link_onto_path,
+    main_checkout,
+};
 pub use lastgood::{CRASH_STARTS, CrashLoop, LAST_GOOD_AFTER_S, detect_crash_loop, roll_back};
 pub use rollback::{CRASH_WINDOW_S, HEALTHY_AFTER_S, KEEP_EXTRA, Startup};
 pub use starts::{StartRecord, forget_start, guard_start, spawn_health_marks, start_log};
@@ -436,156 +436,6 @@ fn new_machine_id() -> MachineId {
     hasher.write_u32(std::process::id());
     let id = format!("m-{:08x}", hasher.finish() as u32);
     MachineId::new(id).expect("a hex ID is a valid machine ID")
-}
-
-/// Everything `ignite install` touches.
-pub struct InstallDeps<'a> {
-    pub host: &'a dyn Host,
-    pub builder: &'a dyn Builder,
-    pub store: &'a ExecutableStore,
-    pub identity: &'a IdentityFile,
-    pub registrar: &'a dyn Registrar,
-    pub service: &'a dyn Service,
-}
-
-/// What a finished install did.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Installed {
-    pub machine: MachineId,
-    pub version: Commit,
-    pub executable: PathBuf,
-    /// Whether the monitor was registered; it is not on a platform without one.
-    pub monitor: bool,
-}
-
-/// Builds the executable of the checkout at `head`, stores it, registers the machine with the hub
-/// and installs the login service. The service goes last, so a failed install leaves no daemon.
-pub fn install(deps: &InstallDeps, config: &Config, head: &Commit) -> Result<Installed> {
-    let name = deps.host.hostname();
-    let declared = config.machine(&name).ok_or_else(|| {
-        Error::Invalid(format!(
-            "this machine is called {name:?} but ignite.toml declares no [machine.{name}]; \
-             add one and run `ignite install` again"
-        ))
-    })?;
-    let built = deps.builder.build(head)?;
-    let executable = deps.store.store(head, &built)?;
-    deps.store.point_current_at(head)?;
-
-    let mut identity = deps.identity.load_or_create()?;
-    let known_token = identity.token.clone();
-    let registered = deps.registrar.register(
-        &MachineRegister {
-            machine: identity.machine.clone(),
-            name,
-            os: declared.os.or_else(Os::current).ok_or_else(|| {
-                Error::Invalid("this operating system is not supported".to_owned())
-            })?,
-            cores: deps.host.cores(),
-            memory_mb: deps.host.memory_mb(),
-            families: declared.families.clone().unwrap_or_default(),
-            version: head.as_str().to_owned(),
-        },
-        known_token.as_deref(),
-    )?;
-    identity.token = Some(registered.token);
-    deps.identity.save(&identity)?;
-
-    let args: Vec<String> = DAEMON_ARGS.iter().map(|s| (*s).to_owned()).collect();
-    deps.service.install(&deps.store.current_link(), &args)?;
-    // The monitor runs the last-good build, so that it works when the newest one does not.
-    let monitor = match deps
-        .service
-        .install_monitor(&deps.store.monitor_program(), &[MONITOR_VERB.to_owned()])
-    {
-        Ok(()) => true,
-        Err(error) if error.kind() == io::ErrorKind::Unsupported => false,
-        Err(error) => return Err(error.into()),
-    };
-    Ok(Installed {
-        monitor,
-        machine: identity.machine,
-        version: head.clone(),
-        executable,
-    })
-}
-
-/// How an exit code and a message answer a failed operation.
-fn failure(error: &Error) -> Reply {
-    let exit = match error {
-        Error::Unreachable(_) => Exit::Unreachable,
-        Error::Conflict(_) => Exit::Conflict,
-        _ => Exit::Usage,
-    };
-    Reply::text(exit, error.to_string())
-}
-
-/// `ignite install`: builds the executable, registers the machine and starts the daemon at login.
-pub struct InstallVerb;
-
-impl Verb for InstallVerb {
-    fn name(&self) -> &'static str {
-        "install"
-    }
-
-    fn run(&self, ctx: &Context, _req: &Request) -> Reply {
-        install_checkout(&ctx.repo, &ctx.config)
-    }
-}
-
-/// `ignite install` for the checkout at `repo`, run by the client itself, since no daemon runs
-/// before the first install. It also records the checkout in the home folder, where the daemon
-/// that the login service starts finds it.
-pub fn install_checkout(repo: &Path, config: &Config) -> Reply {
-    let home = Home::from_env();
-    let head = match ignite_git::refs::head(repo) {
-        Ok(head) => head,
-        Err(error) => return failure(&error),
-    };
-    let recorded = home
-        .create()
-        .and_then(|()| std::fs::write(home.checkout_file(), repo.to_string_lossy().as_bytes()));
-    if let Err(error) = recorded {
-        return failure(&Error::from(error));
-    }
-    let store = home.store();
-    let identity = home.identity();
-    let deps = InstallDeps {
-        host: &NativeHost,
-        builder: &CheckoutBuilder {
-            repo: repo.to_path_buf(),
-        },
-        store: &store,
-        identity: &identity,
-        registrar: &HttpRegistrar {
-            url: config.hub.url.clone(),
-            project: config.hub.project.clone(),
-        },
-        service: &Native,
-    };
-    match install(&deps, config, &head) {
-        Ok(done) => {
-            let mut text = String::new();
-            let _ = writeln!(text, "installed  {}", done.version);
-            let _ = writeln!(text, "machine    {}", done.machine);
-            let _ = writeln!(text, "binary     {}", done.executable.display());
-            let _ = writeln!(
-                text,
-                "daemon     starts at login; `ignite doctor` checks it"
-            );
-            let _ = write!(
-                text,
-                "monitor    {}",
-                if done.monitor {
-                    "checks the daemon every 2 minutes"
-                } else {
-                    "not supported on Windows yet; the daemon is not watched"
-                }
-            );
-            Reply::text(Exit::Success, text)
-        }
-        Err(error) => failure(&error),
-    }
 }
 
 /// How the running daemon relates to the hub's version.

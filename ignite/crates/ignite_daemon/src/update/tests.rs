@@ -7,7 +7,7 @@ use ignite_core::fakes::FakeGit;
 
 use super::*;
 
-fn tempdir(name: &str) -> PathBuf {
+pub(super) fn tempdir(name: &str) -> PathBuf {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let dir = std::env::temp_dir().join(format!(
         "ignite-update-{}-{}-{name}",
@@ -19,13 +19,13 @@ fn tempdir(name: &str) -> PathBuf {
     dir
 }
 
-fn commit(hex: &str) -> Commit {
+pub(super) fn commit(hex: &str) -> Commit {
     Commit::new(hex).unwrap()
 }
 
 /// Writes a shell script, as stand-in for a built `ignite`. It is executable only on macOS,
 /// where one test runs it.
-fn script(path: &Path, body: &str) {
+pub(super) fn script(path: &Path, body: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
     #[cfg(unix)]
@@ -35,9 +35,9 @@ fn script(path: &Path, body: &str) {
     }
 }
 
-struct FakeBuilder {
-    out: PathBuf,
-    built: RefCell<Vec<Commit>>,
+pub(super) struct FakeBuilder {
+    pub(super) out: PathBuf,
+    pub(super) built: RefCell<Vec<Commit>>,
 }
 
 impl Builder for FakeBuilder {
@@ -45,63 +45,6 @@ impl Builder for FakeBuilder {
         self.built.borrow_mut().push(commit.clone());
         script(&self.out, &format!("# built from {commit}\nexit 0"));
         Ok(self.out.clone())
-    }
-}
-
-#[derive(Default)]
-struct FakeService {
-    installed: RefCell<Vec<(PathBuf, Vec<String>)>>,
-    monitors: RefCell<Vec<(PathBuf, Vec<String>)>>,
-    /// Fail every daemon install, as `launchctl bootstrap` does when launchd refuses the agent.
-    refuse: bool,
-}
-
-impl Service for FakeService {
-    fn install(&self, executable: &Path, args: &[String]) -> io::Result<()> {
-        if self.refuse {
-            return Err(io::Error::other("launchctl bootstrap: Bootstrap failed: 5"));
-        }
-        self.installed
-            .borrow_mut()
-            .push((executable.to_owned(), args.to_vec()));
-        Ok(())
-    }
-    fn install_monitor(&self, executable: &Path, args: &[String]) -> io::Result<()> {
-        self.monitors
-            .borrow_mut()
-            .push((executable.to_owned(), args.to_vec()));
-        Ok(())
-    }
-    fn uninstall(&self) -> io::Result<()> {
-        Ok(())
-    }
-    fn is_installed(&self) -> io::Result<bool> {
-        Ok(!self.installed.borrow().is_empty())
-    }
-}
-
-struct FakeRegistrar {
-    requests: RefCell<Vec<MachineRegister>>,
-    /// The token each registration sent.
-    tokens: RefCell<Vec<Option<String>>>,
-    down: bool,
-}
-
-impl Registrar for FakeRegistrar {
-    fn register(
-        &self,
-        request: &MachineRegister,
-        token: Option<&str>,
-    ) -> Result<MachineRegistered> {
-        self.tokens.borrow_mut().push(token.map(str::to_owned));
-        if self.down {
-            return Err(Error::Unreachable("hub is down".to_owned()));
-        }
-        self.requests.borrow_mut().push(request.clone());
-        Ok(MachineRegistered {
-            machine: request.machine.clone(),
-            token: "write-token".to_owned(),
-        })
     }
 }
 
@@ -119,55 +62,6 @@ impl Restart for FakeRestart {
             .push((executable.to_owned(), args.to_vec()));
         Ok(())
     }
-}
-
-struct FakeHost;
-
-impl Host for FakeHost {
-    fn hostname(&self) -> String {
-        "testbox".to_owned()
-    }
-    fn cores(&self) -> u32 {
-        8
-    }
-    fn memory_mb(&self) -> u64 {
-        16384
-    }
-    fn disk_free_gb(&self, _path: &Path) -> Option<u64> {
-        Some(500)
-    }
-    fn tool_path(&self, _name: &str) -> Option<PathBuf> {
-        None
-    }
-    fn path_exists(&self, path: &Path) -> bool {
-        path.exists()
-    }
-}
-
-fn config() -> Config {
-    Config::parse(
-        "ignite.toml",
-        r#"
-        [repository]
-        remote = "origin"
-        staging = "staging"
-        master = "master"
-        trees = "trees"
-        checks = "checks"
-        [hub]
-        url = "http://localhost:1"
-        project = "test"
-        [gate]
-        threshold = 0.01
-        cap = 10
-        [machine.testbox]
-        os = "macos"
-        ticket_trees = 2
-        landing_trees = 1
-        families = ["rust"]
-        "#,
-    )
-    .unwrap()
 }
 
 #[cfg(unix)]
@@ -293,185 +187,6 @@ fn a_daemon_on_another_version_drains_then_updates() {
     assert!(VersionAction::Current.may_ask_for_work());
     assert!(!VersionAction::Drain.may_ask_for_work());
     assert!(!VersionAction::UpdateNow.may_ask_for_work());
-}
-
-#[test]
-fn install_stores_the_build_registers_and_starts_the_service() {
-    let home = tempdir("install");
-    let store = ExecutableStore::new(home.join("bin"));
-    let identity = IdentityFile {
-        path: home.join("machine.json"),
-    };
-    let builder = FakeBuilder {
-        out: home.join("build").join("ignite"),
-        built: RefCell::default(),
-    };
-    let registrar = FakeRegistrar {
-        requests: RefCell::default(),
-        tokens: RefCell::default(),
-        down: false,
-    };
-    let service = FakeService::default();
-    let deps = InstallDeps {
-        host: &FakeHost,
-        builder: &builder,
-        store: &store,
-        identity: &identity,
-        registrar: &registrar,
-        service: &service,
-    };
-    let head = commit("1234abc");
-    let done = install(&deps, &config(), &head).unwrap();
-
-    assert!(store.has(&head));
-    assert_eq!(done.executable, store.path(&head));
-    let request = registrar.requests.borrow()[0].clone();
-    assert_eq!(
-        (
-            request.name.as_str(),
-            request.cores,
-            request.version.as_str()
-        ),
-        ("testbox", 8, "1234abc")
-    );
-    assert_eq!(request.families, ["rust"]);
-    assert_eq!(
-        *service.installed.borrow(),
-        [(store.current_link(), vec!["daemon".to_owned()])]
-    );
-    // No build has stayed up yet, so the monitor runs the current one.
-    assert!(done.monitor);
-    assert_eq!(
-        *service.monitors.borrow(),
-        [(store.current_link(), vec!["monitor".to_owned()])]
-    );
-    let saved = identity.load().unwrap().unwrap();
-    assert_eq!(saved.token.as_deref(), Some("write-token"));
-    assert_eq!(saved.machine, done.machine);
-    // A second install keeps the machine's ID.
-    let again = install(&deps, &config(), &head).unwrap();
-    assert_eq!(again.machine, done.machine);
-    // The first registration had no token to send; the second sends the one it was given.
-    assert_eq!(
-        *registrar.tokens.borrow(),
-        [None, Some("write-token".to_owned())]
-    );
-}
-
-#[test]
-fn install_stops_before_the_service_when_the_hub_is_down() {
-    let home = tempdir("hubdown");
-    let store = ExecutableStore::new(home.join("bin"));
-    let identity = IdentityFile {
-        path: home.join("machine.json"),
-    };
-    let builder = FakeBuilder {
-        out: home.join("build"),
-        built: RefCell::default(),
-    };
-    let registrar = FakeRegistrar {
-        requests: RefCell::default(),
-        tokens: RefCell::default(),
-        down: true,
-    };
-    let service = FakeService::default();
-    let deps = InstallDeps {
-        host: &FakeHost,
-        builder: &builder,
-        store: &store,
-        identity: &identity,
-        registrar: &registrar,
-        service: &service,
-    };
-    let error = install(&deps, &config(), &commit("1234abc")).unwrap_err();
-    assert!(matches!(error, Error::Unreachable(_)));
-    assert_eq!(failure(&error).exit, Exit::Unreachable);
-    assert!(service.installed.borrow().is_empty());
-    assert!(identity.load().unwrap().unwrap().token.is_none());
-}
-
-#[test]
-fn install_fails_with_a_nonzero_exit_when_the_service_does_not_load() {
-    let home = tempdir("refused");
-    let store = ExecutableStore::new(home.join("bin"));
-    let identity = IdentityFile {
-        path: home.join("machine.json"),
-    };
-    let builder = FakeBuilder {
-        out: home.join("build").join("ignite"),
-        built: RefCell::default(),
-    };
-    let registrar = FakeRegistrar {
-        requests: RefCell::default(),
-        tokens: RefCell::default(),
-        down: false,
-    };
-    let service = FakeService {
-        refuse: true,
-        ..FakeService::default()
-    };
-    let deps = InstallDeps {
-        host: &FakeHost,
-        builder: &builder,
-        store: &store,
-        identity: &identity,
-        registrar: &registrar,
-        service: &service,
-    };
-    let error = install(&deps, &config(), &commit("1234abc")).unwrap_err();
-    assert!(error.to_string().contains("Bootstrap failed"), "{error}");
-    assert_ne!(failure(&error).exit, Exit::Success);
-}
-
-#[test]
-fn install_refuses_a_machine_that_ignite_toml_does_not_declare() {
-    struct Other;
-    impl Host for Other {
-        fn hostname(&self) -> String {
-            "stranger".to_owned()
-        }
-        fn cores(&self) -> u32 {
-            1
-        }
-        fn memory_mb(&self) -> u64 {
-            1
-        }
-        fn disk_free_gb(&self, _: &Path) -> Option<u64> {
-            None
-        }
-        fn tool_path(&self, _: &str) -> Option<PathBuf> {
-            None
-        }
-        fn path_exists(&self, _: &Path) -> bool {
-            false
-        }
-    }
-    let home = tempdir("stranger");
-    let store = ExecutableStore::new(home.join("bin"));
-    let identity = IdentityFile {
-        path: home.join("machine.json"),
-    };
-    let builder = FakeBuilder {
-        out: home.join("build"),
-        built: RefCell::default(),
-    };
-    let registrar = FakeRegistrar {
-        requests: RefCell::default(),
-        tokens: RefCell::default(),
-        down: false,
-    };
-    let service = FakeService::default();
-    let deps = InstallDeps {
-        host: &Other,
-        builder: &builder,
-        store: &store,
-        identity: &identity,
-        registrar: &registrar,
-        service: &service,
-    };
-    let error = install(&deps, &config(), &commit("1234abc")).unwrap_err();
-    assert!(error.to_string().contains("[machine.stranger]"), "{error}");
-    assert!(builder.built.borrow().is_empty());
 }
 
 #[test]

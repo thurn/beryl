@@ -24,6 +24,7 @@ use crate::server::{Context, Verb};
 use crate::update::ExecutableStore;
 
 mod loops;
+mod trees;
 
 pub use loops::LoopsSection;
 
@@ -113,6 +114,12 @@ pub struct TreeInfo {
 /// The build trees that exist.
 pub trait TreeSource: Send + Sync {
     fn trees(&self) -> Result<Vec<TreeInfo>>;
+
+    /// The names of the directories directly under the trees folder, hidden ones left out,
+    /// whether or not git knows them as trees.
+    fn directories(&self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// The trees git has registered under the repository's tree directory. A tree whose directory
@@ -136,6 +143,18 @@ impl TreeSource for GitTrees {
                 head: tree.head,
             })
             .collect())
+    }
+
+    fn directories(&self) -> Vec<String> {
+        let Ok(entries) = std::fs::read_dir(&self.dir) else {
+            return Vec::new();
+        };
+        entries
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|t| t.is_dir()))
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| !name.starts_with('.'))
+            .collect()
     }
 }
 
@@ -264,9 +283,17 @@ impl StatusSection for TreesSection {
         match self.source.trees() {
             Err(error) => vec![format!("cannot list trees: {error}")],
             Ok(trees) => {
-                let (declared, extra): (Vec<&TreeInfo>, Vec<&TreeInfo>) = trees
+                let declared: Vec<&TreeInfo> = trees
                     .iter()
-                    .partition(|t| self.configured.contains(&t.name));
+                    .filter(|t| self.configured.contains(&t.name))
+                    .collect();
+                // Directories git does not know as trees are named too.
+                let extra: BTreeSet<String> = trees
+                    .iter()
+                    .map(|t| t.name.clone())
+                    .chain(self.source.directories())
+                    .filter(|name| !self.configured.contains(name))
+                    .collect();
                 let missing: Vec<&TreeInfo> = declared
                     .iter()
                     .copied()
@@ -283,7 +310,7 @@ impl StatusSection for TreesSection {
                         .map(|t| format!("{}: directory is missing", t.name)),
                 );
                 if !extra.is_empty() {
-                    let names: Vec<&str> = extra.iter().map(|t| t.name.as_str()).collect();
+                    let names: Vec<&str> = extra.iter().map(String::as_str).collect();
                     lines.push(format!("not in ignite.toml: {}", names.join(", ")));
                 }
                 lines
@@ -366,6 +393,9 @@ fn running_version() -> Option<Commit> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
     pub ok: bool,
+    /// Something worth attention that does not stop the machine's work; such a finding is
+    /// `ok` and has a fix.
+    pub warning: bool,
     pub label: String,
     pub text: String,
     /// What to do, for a problem.
@@ -376,15 +406,27 @@ impl Finding {
     fn ok(label: &str, text: impl Into<String>) -> Self {
         Self {
             ok: true,
+            warning: false,
             label: label.to_owned(),
             text: text.into(),
             fix: None,
         }
     }
 
+    fn warning(label: &str, text: impl Into<String>, fix: impl Into<String>) -> Self {
+        Self {
+            ok: true,
+            warning: true,
+            label: label.to_owned(),
+            text: text.into(),
+            fix: Some(fix.into()),
+        }
+    }
+
     fn problem(label: &str, text: impl Into<String>, fix: impl Into<String>) -> Self {
         Self {
             ok: false,
+            warning: false,
             label: label.to_owned(),
             text: text.into(),
             fix: Some(fix.into()),
@@ -393,9 +435,16 @@ impl Finding {
 
     /// The line `doctor` prints.
     pub fn line(&self) -> String {
+        let level = if self.warning {
+            "WARNING"
+        } else if self.ok {
+            "ok"
+        } else {
+            "PROBLEM"
+        };
         match &self.fix {
-            None => format!("ok       {:<9} {}", self.label, self.text),
-            Some(fix) => format!("PROBLEM  {:<9} {} To fix: {fix}", self.label, self.text),
+            None => format!("{level:<8} {:<9} {}", self.label, self.text),
+            Some(fix) => format!("{level:<8} {:<9} {} To fix: {fix}", self.label, self.text),
         }
     }
 }
@@ -490,89 +539,9 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
         ),
     ));
 
-    trees_findings(input, machine, &mut findings);
+    trees::findings(input, machine, &mut findings);
     family_findings(input, machine, &mut findings);
     findings
-}
-
-fn trees_findings(input: &DoctorInput, machine: &Machine, findings: &mut Vec<Finding>) {
-    let dir = input.repo.join(&input.config.repository.trees);
-    let restart = "restart the daemon, which creates the trees it is missing";
-    if !input.host.path_exists(&dir) {
-        findings.push(Finding::problem(
-            "trees",
-            format!("the tree directory {} is missing.", dir.display()),
-            restart,
-        ));
-        return;
-    }
-    let declared = machine.ticket_trees + machine.landing_trees;
-    match input.trees.trees() {
-        Err(error) => findings.push(Finding::problem(
-            "trees",
-            format!("cannot list the trees: {error}."),
-            format!(
-                "run `git worktree list` in {} and fix what it reports",
-                input.repo.display()
-            ),
-        )),
-        Ok(trees) => {
-            let configured = configured_tree_names(machine.ticket_trees, machine.landing_trees);
-            // A directory under the trees folder that ignite.toml does not declare is not one
-            // of the machine's trees: it is not counted.
-            let trees: Vec<TreeInfo> = trees
-                .into_iter()
-                .filter(|t| configured.contains(&t.name))
-                .collect();
-            let mut missing = 0;
-            for tree in &trees {
-                if !input.host.path_exists(&tree.path) {
-                    missing += 1;
-                    findings.push(Finding::problem(
-                        &tree.name,
-                        format!("the tree directory {} is missing.", tree.path.display()),
-                        format!(
-                            "run `git worktree prune` in {}, then {restart}",
-                            input.repo.display()
-                        ),
-                    ));
-                }
-            }
-            let present = trees.len() - missing;
-            if present < usize::try_from(declared).unwrap_or(usize::MAX) && missing == 0 {
-                findings.push(Finding::problem(
-                    "trees",
-                    format!("{present} of the {declared} trees in ignite.toml exist."),
-                    restart,
-                ));
-            } else if missing == 0 {
-                findings.push(Finding::ok("trees", format!("{present} trees present.")));
-            }
-        }
-    }
-
-    let probe = std::iter::successors(Some(dir.as_path()), |p| p.parent())
-        .find(|p| input.host.path_exists(p))
-        .unwrap_or(&dir);
-    findings.push(
-        match (input.host.disk_free_gb(probe), machine.trees_disk_gb) {
-            (Some(free), Some(budget)) if free < u64::from(budget) => Finding::problem(
-                "disk",
-                format!("{free} GB free, less than the {budget} GB the trees may use."),
-                "free disk space, or lower trees_disk_gb for this machine in ignite.toml",
-            ),
-            (Some(free), Some(budget)) => Finding::ok(
-                "disk",
-                format!("{free} GB free; the trees may use {budget} GB."),
-            ),
-            (Some(free), None) => Finding::ok("disk", format!("{free} GB free; no budget is set.")),
-            (None, _) => Finding::problem(
-                "disk",
-                "cannot read the free disk space.",
-                "run `df -k` in the tree directory and check that the disk is mounted",
-            ),
-        },
-    );
 }
 
 fn family_findings(input: &DoctorInput, machine: &Machine, findings: &mut Vec<Finding>) {
@@ -711,6 +680,7 @@ impl Verb for DoctorVerb {
 /// The reply for a list of findings: the exit code says whether any is a problem.
 pub fn report(findings: &[Finding]) -> Reply {
     let problems = findings.iter().filter(|f| !f.ok).count();
+    let warnings = findings.iter().filter(|f| f.warning).count();
     let mut text = findings
         .iter()
         .map(Finding::line)
@@ -719,10 +689,11 @@ pub fn report(findings: &[Finding]) -> Reply {
     let _ = write!(
         text,
         "\n{}",
-        if problems == 0 {
-            "healthy".to_owned()
-        } else {
-            format!("{problems} problems")
+        match (problems, warnings) {
+            (0, 0) => "healthy".to_owned(),
+            (0, 1) => "healthy, 1 warning".to_owned(),
+            (0, _) => format!("healthy, {warnings} warnings"),
+            _ => format!("{problems} problems"),
         }
     );
     let unreachable = findings.iter().any(|f| !f.ok && f.label == "hub");
@@ -734,7 +705,7 @@ pub fn report(findings: &[Finding]) -> Reply {
         },
         text: cut(&text),
         json: Some(json!({"findings": findings.iter().map(|f| json!({
-            "ok": f.ok, "label": f.label, "text": f.text, "fix": f.fix,
+            "ok": f.ok, "warning": f.warning, "label": f.label, "text": f.text, "fix": f.fix,
         })).collect::<Vec<_>>()})),
         handle: None,
     }
