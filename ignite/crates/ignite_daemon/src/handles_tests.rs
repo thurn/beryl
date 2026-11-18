@@ -175,3 +175,23 @@ fn a_wait_on_a_running_operation_blocks_for_its_whole_wait() {
     assert!(started.elapsed() >= Duration::from_secs(1));
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+/// A landing the daemon was running when it stopped still holds its tree after the restart,
+/// until it is resumed and finishes.
+#[test]
+fn a_handle_found_running_after_a_restart_still_names_its_tree() {
+    let db = Arc::new(Mutex::new(ignite_store::local::open_in_memory().unwrap()));
+    let clock: Arc<dyn Clock> = Arc::new(FakeClock::new(Timestamp::EPOCH));
+    let tree = TreeId::new("tree-05").unwrap();
+    let before = Handles::open(clock.clone(), db.clone()).unwrap();
+    let handle = before.create("land", None, Some(&tree));
+    drop(before);
+
+    let after = Handles::open(clock, db).unwrap();
+    assert_eq!(
+        after.running_in(&tree),
+        [(handle.clone(), "land".to_owned())]
+    );
+    after.finish(&handle, Reply::text(Exit::Success, "landed"));
+    assert!(after.running_in(&tree).is_empty());
+}

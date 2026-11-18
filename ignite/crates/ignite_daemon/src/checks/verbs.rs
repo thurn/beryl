@@ -178,6 +178,11 @@ impl Verb for WhyVerb {
         "why"
     }
 
+    /// It only reads, so it may explain a check while the tree is landing.
+    fn waits_for_a_held_tree(&self) -> bool {
+        false
+    }
+
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let (words, flags) = split_args(&req.args);
         let [wanted] = words.as_slice() else {

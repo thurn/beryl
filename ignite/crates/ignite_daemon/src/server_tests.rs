@@ -690,3 +690,83 @@ fn the_client_prints_progress_lines_keeps_the_handle_and_returns_the_reply_line(
     assert_eq!(cut.unwrap_err().kind(), std::io::ErrorKind::UnexpectedEof);
     assert_eq!(named.unwrap().as_str(), "T-9");
 }
+
+/// A `land` that holds its tree and finishes only when the test sends it a unit.
+struct HeldLanding(Mutex<mpsc::Receiver<()>>);
+
+impl Verb for HeldLanding {
+    fn name(&self) -> &'static str {
+        "land"
+    }
+
+    fn holds_the_tree(&self) -> bool {
+        true
+    }
+
+    fn run(&self, _ctx: &Context, _req: &Request) -> Reply {
+        self.0.lock().unwrap().recv().unwrap();
+        Reply::text(Exit::Success, "landed")
+    }
+}
+
+/// A second `ignite land` of one ticket started in its tree while the landing the daemon had
+/// resumed after a restart was still running there, and both rebased and built the tree. A
+/// verb that acts on the tree is now refused while a landing runs in it, and the refusal names
+/// the running landing.
+#[test]
+fn nothing_changes_a_tree_while_a_landing_runs_in_it() {
+    let conn = ignite_store::local::open_in_memory().unwrap();
+    trees::upsert(&conn, &tree("tree-01", "leased")).unwrap();
+    trees::upsert(&conn, &tree("tree-02", "leased")).unwrap();
+    let db = Arc::new(Mutex::new(conn));
+    let (finish, receive) = mpsc::channel();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let mut registry = Registry::default();
+    registry.register(Box::new(HeldLanding(Mutex::new(receive))));
+    registry.register(Box::new(Counted {
+        name: "check",
+        exempt: false,
+        runs: runs.clone(),
+    }));
+    let server = Server::new(context(), registry, Some(db)).unwrap();
+    let in_tree = |verb: &str, tree: &str| {
+        let mut req = from(
+            request(verb, &[]),
+            &format!("/repo/trees/{tree}"),
+            "local_a",
+        );
+        // The landing hands its handle back at once; the others answer within the wait.
+        req.wait_s = if verb == "land" { 0 } else { 60 };
+        server.handle(&req)
+    };
+
+    let first = in_tree("land", "tree-01");
+    assert_eq!(first.exit, Exit::Running);
+    let handle = first.handle.clone().unwrap();
+
+    let second = in_tree("land", "tree-01");
+    assert_eq!(second.exit, Exit::Conflict);
+    assert_eq!(
+        second.text,
+        format!(
+            "conflict land {handle} is still running in tree-01; `ignite land` waits until it \
+             ends\nnext     ignite wait {handle} (or ignite stop {handle} to end it)"
+        )
+    );
+    assert_eq!(in_tree("check", "tree-01").exit, Exit::Conflict);
+    assert_eq!(runs.load(Ordering::SeqCst), 0);
+    // Another tree, and waiting on the landing itself, are not held back.
+    assert_eq!(in_tree("check", "tree-02").exit, Exit::Success);
+    let mut wait = from(
+        request("wait", &[handle.as_str()]),
+        "/repo/trees/tree-01",
+        "local_a",
+    );
+    wait.wait_s = 0;
+    assert_eq!(server.handle(&wait).exit, Exit::Running);
+
+    finish.send(()).unwrap();
+    wait.wait_s = 3600;
+    assert_eq!(server.handle(&wait).exit, Exit::Success);
+    assert_eq!(in_tree("check", "tree-01").exit, Exit::Success);
+}

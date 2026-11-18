@@ -95,6 +95,8 @@ struct State {
 /// One handle in memory.
 struct Entry {
     verb: String,
+    /// The build tree the operation was asked from, if any.
+    tree: Option<TreeId>,
     reply: Option<Reply>,
     finished_at: Option<Timestamp>,
     /// A wait has returned the reply.
@@ -102,9 +104,10 @@ struct Entry {
 }
 
 impl Entry {
-    fn running(verb: &str) -> Entry {
+    fn running(verb: &str, tree: Option<TreeId>) -> Entry {
         Entry {
             verb: verb.to_owned(),
+            tree,
             reply: None,
             finished_at: None,
             read: false,
@@ -137,6 +140,7 @@ impl Handles {
     /// `incomplete`.
     pub fn open(clock: Arc<dyn Clock>, db: Arc<Mutex<Connection>>) -> Result<Handles> {
         let mut orphans = Vec::new();
+        let mut trees = Vec::new();
         for row in store::running(&lock(&db)).map_err(|e| store_error(&e))? {
             let Ok(handle) = Handle::new(row.id.as_str()) else {
                 continue;
@@ -146,6 +150,8 @@ impl Handles {
                 .as_deref()
                 .and_then(|text| serde_json::from_str::<Running>(text).ok())
                 .map(|running| running.request);
+            let tree = row.tree.as_deref().and_then(|t| TreeId::new(t).ok());
+            trees.push(tree);
             orphans.push(Orphan {
                 handle,
                 verb: row.verb,
@@ -158,10 +164,10 @@ impl Handles {
             .state
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner);
-        for orphan in &orphans {
+        for (orphan, tree) in orphans.iter().zip(trees) {
             state
                 .replies
-                .insert(orphan.handle.clone(), Entry::running(&orphan.verb));
+                .insert(orphan.handle.clone(), Entry::running(&orphan.verb, tree));
         }
         state.orphans = orphans;
         Ok(handles)
@@ -201,7 +207,9 @@ impl Handles {
             }
         };
         self.prune(&mut state);
-        state.replies.insert(handle.clone(), Entry::running(verb));
+        state
+            .replies
+            .insert(handle.clone(), Entry::running(verb, tree.cloned()));
         self.save(&rows::Handle {
             id: handle.to_string(),
             verb: verb.to_owned(),
@@ -219,6 +227,21 @@ impl Handles {
             finished_at: None,
         });
         handle
+    }
+
+    /// The operations still running that were asked from `tree`, with their verbs, by handle.
+    /// A handle a restarted daemon found running counts until it is resumed and finishes, or
+    /// is ended `incomplete`.
+    pub fn running_in(&self, tree: &TreeId) -> Vec<(Handle, String)> {
+        let state = lock(&self.state);
+        let mut running: Vec<(Handle, String)> = state
+            .replies
+            .iter()
+            .filter(|(_, entry)| entry.reply.is_none() && entry.tree.as_ref() == Some(tree))
+            .map(|(handle, entry)| (handle.clone(), entry.verb.clone()))
+            .collect();
+        running.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
+        running
     }
 
     /// Records the reply of a finished operation and wakes everyone waiting on it.
@@ -299,6 +322,7 @@ impl Handles {
                     handle.clone(),
                     Entry {
                         verb: row.verb,
+                        tree: row.tree.as_deref().and_then(|t| TreeId::new(t).ok()),
                         reply,
                         finished_at,
                         read: false,

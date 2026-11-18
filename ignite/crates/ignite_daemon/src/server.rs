@@ -99,6 +99,18 @@ pub trait Verb: Send + Sync {
     fn blocks_update(&self) -> bool {
         true
     }
+    /// True for a verb that holds its tree while it runs, such as `land`, which rebases, builds
+    /// and pushes it. While one runs, the verbs that [wait for it](Verb::waits_for_a_held_tree)
+    /// are refused in that tree.
+    fn holds_the_tree(&self) -> bool {
+        false
+    }
+    /// True for a verb that must not run in a tree while a verb that
+    /// [holds it](Verb::holds_the_tree) is running there: by default every verb that acts on
+    /// its tree and does work. A verb that only reads, such as `why`, opts out.
+    fn waits_for_a_held_tree(&self) -> bool {
+        self.needs_the_tree_lease() && self.blocks_update()
+    }
 }
 
 /// Tells whether the client of the request that the current verb answers has closed its
@@ -335,6 +347,13 @@ impl Server {
         let verb = self.registry.get(&req.verb);
         if verb.as_ref().is_none_or(|verb| verb.needs_the_tree_lease())
             && let Some(refusal) = self.refuse_without_lease(&ctx)
+        {
+            return refusal;
+        }
+        if verb
+            .as_ref()
+            .is_some_and(|verb| verb.waits_for_a_held_tree())
+            && let Some(refusal) = self.refuse_while_held(&ctx, &req.verb)
         {
             return refusal;
         }
@@ -582,6 +601,31 @@ impl Server {
             format!(
                 "conflict {id} is not leased to {asker} (it is {now}); only the session that \
                  holds a tree may use it"
+            ),
+        ))
+    }
+
+    /// Refuses `verb` from a tree in which a verb that holds the tree, such as `land`, is
+    /// still running. A daemon that restarted into a new release resumes a landing on its own,
+    /// so the session that started it may not know it is still running; a second landing
+    /// started beside it would rebase, build and push over the first.
+    fn refuse_while_held(&self, ctx: &Context, verb: &str) -> Option<Reply> {
+        let tree = ctx.tree.as_ref()?;
+        let (handle, running) =
+            self.handles
+                .running_in(tree)
+                .into_iter()
+                .find(|(_, running)| {
+                    self.registry
+                        .get(running)
+                        .is_some_and(|v| v.holds_the_tree())
+                })?;
+        Some(Reply::text(
+            Exit::Conflict,
+            format!(
+                "conflict {running} {handle} is still running in {tree}; `ignite {verb}` waits \
+                 until it ends\n\
+                 next     ignite wait {handle} (or ignite stop {handle} to end it)"
             ),
         ))
     }

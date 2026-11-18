@@ -96,6 +96,12 @@ impl Verb for LandVerb {
         "land"
     }
 
+    /// A landing rebases, builds and pushes its tree, so nothing else may change the tree
+    /// while it runs, and a second landing of it is refused.
+    fn holds_the_tree(&self) -> bool {
+        true
+    }
+
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let Some(args) = LandArgs::parse(&req.args) else {
             return Reply::text(Exit::Usage, "usage: ignite land -m \"<note>\" [--fresh]");
