@@ -11,7 +11,7 @@
 //! lease can take it half swept, and its row is put back as it was afterwards, so the order of
 //! last use survives the sweep.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -24,6 +24,9 @@ use serde::Serialize;
 
 use super::{Trees, store_error};
 
+#[cfg(test)]
+mod tests;
+
 /// The folder of per-unit fingerprints in each profile directory of a Cargo target directory,
 /// which is how such a directory is recognised among a product's outputs.
 const FINGERPRINTS: &str = ".fingerprint";
@@ -31,7 +34,7 @@ const FINGERPRINTS: &str = ".fingerprint";
 /// optional prefixes and extensions, beside its fingerprint folder.
 const UNIT_FOLDERS: [&str; 2] = ["deps", "build"];
 /// The fields of a fingerprint's JSON that tell two units of one crate apart, besides their
-/// dependencies: two builds that differ only in dependencies are one unit built twice.
+/// dependencies: two top-level builds that differ only in dependencies are one unit built twice.
 const UNIT_FIELDS: [&str; 5] = ["features", "profile", "target", "compile_kind", "rustflags"];
 
 /// What [`Trees::hold_disk`] found and deleted.
@@ -234,47 +237,183 @@ fn remove(path: &Path) {
 ///
 /// A target directory has profile directories (`<target>/<profile>`, or
 /// `<target>/<triple>/<profile>` for a cross build), each with a fingerprint folder per unit.
-/// Units of the same crate, kind and settings are one unit built against other dependencies;
-/// of those, all but the one written last are deleted.
+/// A unit that no other unit depends on is a top-level build, such as a test binary or a
+/// program. Top-level units of the same crate, kind and settings are one build made against
+/// other dependencies, and of those only the one written last is kept. Every unit that a kept
+/// top-level unit depends on, directly or through others, is kept too, and the rest are deleted.
+///
+/// Comparing only units of the same crate and settings, at every level, deleted builds that
+/// were still in use. A unit that runs a build script records 0 for its profile, target and
+/// features, so a crate's build-script runs for the `dev` and `test` profiles looked like one
+/// unit built twice and one of them was deleted; the next build of that profile then rebuilt the
+/// crate and everything above it. Two builds of one library with other features in their
+/// dependencies, which two commands resolving features differently both use, went the same way.
 pub(super) fn sweep_superseded(target: &Path) -> Vec<PathBuf> {
     let mut deleted = Vec::new();
     for profile in profile_dirs(target) {
-        let mut by_kind: BTreeMap<String, Vec<(SystemTime, String)>> = BTreeMap::new();
         let Ok(entries) = fs::read_dir(profile.join(FINGERPRINTS)) else {
             continue;
         };
-        for entry in entries.filter_map(io::Result::ok) {
-            let folder = entry.path();
-            if !folder.is_dir() {
-                continue;
-            }
-            let name = entry.file_name().to_string_lossy().into_owned();
-            by_kind
-                .entry(unit_kind(&folder, &name))
-                .or_default()
-                .push((newest_write(&folder), name));
-        }
-        for mut builds in by_kind.into_values() {
-            builds.sort();
-            builds.pop();
-            for (_, unit) in builds {
-                for folder in UNIT_FOLDERS {
-                    let Ok(files) = fs::read_dir(profile.join(folder)) else {
-                        continue;
-                    };
-                    for file in files.filter_map(io::Result::ok) {
-                        if belongs(&file.file_name().to_string_lossy(), &unit) {
-                            remove(&file.path());
-                        }
+        let units: Vec<Unit> = entries
+            .filter_map(io::Result::ok)
+            .filter(|entry| entry.path().is_dir())
+            .map(|entry| Unit::read(&entry.path(), &entry.file_name().to_string_lossy()))
+            .collect();
+        for unit in replaced(&units) {
+            for folder in UNIT_FOLDERS {
+                let Ok(files) = fs::read_dir(profile.join(folder)) else {
+                    continue;
+                };
+                for file in files.filter_map(io::Result::ok) {
+                    if belongs(&file.file_name().to_string_lossy(), &unit.name) {
+                        remove(&file.path());
                     }
                 }
-                let folder = profile.join(FINGERPRINTS).join(&unit);
-                remove(&folder);
-                deleted.push(folder);
             }
+            let folder = profile.join(FINGERPRINTS).join(&unit.name);
+            remove(&folder);
+            deleted.push(folder);
         }
     }
     deleted
+}
+
+/// One unit of a profile directory, as its fingerprint folder describes it.
+#[derive(Debug)]
+struct Unit {
+    /// The folder's name, `<crate>-<hash>`.
+    name: String,
+    /// What it builds apart from its dependencies ([`unit_kind`]).
+    kind: String,
+    written: SystemTime,
+    /// The fingerprints Cargo recorded for it, as its dependents record them.
+    fingerprints: Vec<u64>,
+    /// Its dependencies: each one's name as the unit refers to it and its fingerprint.
+    deps: Vec<(String, u64)>,
+}
+
+impl Unit {
+    fn read(folder: &Path, name: &str) -> Unit {
+        let mut fingerprints = Vec::new();
+        let mut deps = Vec::new();
+        if let Ok(files) = fs::read_dir(folder) {
+            for file in files.filter_map(io::Result::ok) {
+                let file_name = file.file_name().to_string_lossy().into_owned();
+                if Path::new(&file_name)
+                    .extension()
+                    .is_some_and(|e| e == "json")
+                {
+                    deps = read_deps(&file.path());
+                } else if !skipped(&file_name) {
+                    // Cargo writes a fingerprint as the hex of its little-endian bytes and
+                    // records it in a dependent's `deps` as the number itself.
+                    let text = fs::read_to_string(file.path()).unwrap_or_default();
+                    if let Ok(value) = u64::from_str_radix(text.trim(), 16) {
+                        fingerprints.push(value.swap_bytes());
+                    }
+                }
+            }
+        }
+        Unit {
+            name: name.to_owned(),
+            kind: unit_kind(folder, name),
+            written: newest_write(folder),
+            fingerprints,
+            deps,
+        }
+    }
+
+    /// The crate's name with `_` for `-`, as a dependent names it.
+    fn crate_name(&self) -> String {
+        self.name
+            .rsplit_once('-')
+            .map_or(self.name.as_str(), |(c, _)| c)
+            .replace('-', "_")
+    }
+}
+
+/// The `deps` of a fingerprint's JSON: entries of `[package hash, name, public, fingerprint]`.
+fn read_deps(path: &Path) -> Vec<(String, u64)> {
+    let record: serde_json::Value = fs::read_to_string(path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
+    record
+        .get("deps")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|dep| {
+            let dep = dep.as_array()?;
+            Some((dep.get(1)?.as_str()?.to_owned(), dep.get(3)?.as_u64()?))
+        })
+        .collect()
+}
+
+/// The units of one profile directory that no kept build uses ([`sweep_superseded`]).
+///
+/// A dependency whose fingerprint matches no unit (its unit was rebuilt in place since its
+/// dependent was built) keeps every unit of that crate, since which one the dependent will use
+/// cannot be told. A build script's own build is named `build_script_build` by the unit that
+/// runs it, so that name stands for the dependent's own crate.
+fn replaced(units: &[Unit]) -> Vec<&Unit> {
+    let by_fingerprint: HashMap<u64, usize> = units
+        .iter()
+        .enumerate()
+        .flat_map(|(i, unit)| unit.fingerprints.iter().map(move |&f| (f, i)))
+        .collect();
+    let mut depended = vec![false; units.len()];
+    let mut unmatched: HashSet<String> = HashSet::new();
+    for unit in units {
+        for (name, fingerprint) in &unit.deps {
+            match by_fingerprint.get(fingerprint) {
+                Some(&i) => depended[i] = true,
+                None if name == "build_script_build" => {
+                    unmatched.insert(unit.crate_name());
+                }
+                None => {
+                    unmatched.insert(name.clone());
+                }
+            }
+        }
+    }
+    let mut newest: BTreeMap<&str, usize> = BTreeMap::new();
+    for (i, unit) in units.iter().enumerate() {
+        if depended[i] {
+            continue;
+        }
+        let best = newest.entry(unit.kind.as_str()).or_insert(i);
+        if (units[*best].written, &units[*best].name) < (unit.written, &unit.name) {
+            *best = i;
+        }
+    }
+    let mut kept = vec![false; units.len()];
+    let mut stack: Vec<usize> = newest.into_values().collect();
+    stack.extend((0..units.len()).filter(|&i| unmatched.contains(&units[i].crate_name())));
+    while let Some(i) = stack.pop() {
+        if std::mem::replace(&mut kept[i], true) {
+            continue;
+        }
+        stack.extend(
+            units[i]
+                .deps
+                .iter()
+                .filter_map(|(_, fingerprint)| by_fingerprint.get(fingerprint).copied()),
+        );
+    }
+    let mut gone: Vec<&Unit> = (0..units.len())
+        .filter(|&i| !kept[i])
+        .map(|i| &units[i])
+        .collect();
+    gone.sort_by(|a, b| a.name.cmp(&b.name));
+    gone
+}
+
+/// Files of a fingerprint folder that are neither its JSON nor a fingerprint.
+fn skipped(file_name: &str) -> bool {
+    ["dep-", "output-", "invoked."]
+        .iter()
+        .any(|prefix| file_name.starts_with(prefix))
 }
 
 /// The directories one or two levels under `target` that hold a fingerprint folder.
@@ -327,10 +466,7 @@ fn unit_kind(folder: &Path, name: &str) -> String {
                     .iter()
                     .map(|key| record.get(key).map(ToString::to_string).unwrap_or_default())
                     .collect();
-            } else if !["dep-", "output-", "invoked."]
-                .iter()
-                .any(|prefix| file_name.starts_with(prefix))
-            {
+            } else if !skipped(&file_name) {
                 kinds.push(file_name);
             }
         }

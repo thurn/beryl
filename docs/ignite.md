@@ -755,7 +755,9 @@ Rules for trees:
   ticket expected to compile Rust, it starts the usual builds at once, and the
   agent reads the ticket while the tree builds.
 - The choice of tree follows the ticket. A ticket expected to compile Rust gets
-  the free tree whose last build is nearest the tip. Any other ticket gets the
+  the free tree that holds the build directories beside the files the ticket
+  names (`rust/beryl3d/target` for a file under `rust/beryl3d/`), and among
+  those the one whose last build is nearest the tip. Any other ticket gets the
   free tree with the oldest build, so that it does not take a prebuilt tree from
   a ticket that needs one. See
   [Light and heavy tickets](#light-and-heavy-tickets).
@@ -768,7 +770,11 @@ Rules for trees:
   little disk.
 - To hold the machine under `trees_disk_gb`, the daemon deletes builds that a
   newer build of the same unit replaced, then the build directories of the free
-  trees used longest ago. While the disk has less than 50 GB free, it also holds
+  trees used longest ago. A replaced build is a top-level unit (a test binary or
+  program) with a newer unit of the same crate and settings, together with every
+  unit only it depends on, followed through the dependency fingerprints that
+  Cargo records. A unit that a kept build depends on is never deleted, however
+  alike it looks to another. While the disk has less than 50 GB free, it also holds
   the trees under their current size less what the disk lacks, since the limit
   was set for the disk as it was then.
 - The daemon's disk loop checks this every minute, in a loop of its own so that
@@ -946,12 +952,13 @@ Rules for cores:
   too. `CARGO_BUILD_JOBS` is then set to the most one command may hold, so the
   jobserver, not the starting grant, limits the build. The grant grows to what
   the command asked for as cores free up. Only a Cargo command that only
-  compiles gives cores back, one per second, while a higher class waits, and
-  takes them again afterwards. Test threads stay at the grant's first size. A
-  command that can use more threads is told when its grant grows, through the
-  file `IGNITE_CORES_FILE` names. A restarted daemon keeps resizing the grants
-  of the commands it takes over. Windows has no jobserver, so there a grant
-  keeps its first size.
+  compiles gives cores back, one per second, while a higher class waits, or
+  while a request of its own class waits and it holds more than its share of the
+  machine, and takes them again afterwards. Test threads stay at the grant's
+  first size. A command that can use more threads is told when its grant grows,
+  through the file `IGNITE_CORES_FILE` names. A restarted daemon keeps resizing
+  the grants of the commands it takes over. Windows has no jobserver, so there a
+  grant keeps its first size.
 
 The daemon also records each command's peak memory, and delays a command whose
 usual peak (the median of its last nine runs) is more than the free memory,

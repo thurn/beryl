@@ -208,6 +208,7 @@ impl TreeDesk for TreeDeskOver {
         session: &SessionId,
         tip: &Commit,
         compiles: bool,
+        files: &[String],
         start: &ignite_core::protocol::client::Request,
     ) -> Result<claim::Lease> {
         let saved = self.saved_head(ticket)?;
@@ -226,6 +227,7 @@ impl TreeDesk for TreeDeskOver {
             at: saved.clone().unwrap_or_else(|| tip.clone()),
             tip: tip.clone(),
             compiles,
+            files: files.to_vec(),
         };
         let waiter = match self.trees.lease(request)? {
             trees::Lease::Ready(lease) => {

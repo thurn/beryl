@@ -25,6 +25,7 @@
 //! directories, and serves the first waiter. A verb that refuses to stop (a landing whose push
 //! began) or does not end in time leaves the tree leased, and the release says why.
 
+mod choice;
 mod disk;
 pub mod head;
 mod landing;
@@ -186,6 +187,9 @@ pub struct LeaseRequest {
     pub tip: Commit,
     /// Whether the ticket is expected to compile, which picks the tree and starts its builds.
     pub compiles: bool,
+    /// The files the ticket names, relative to the checkout's root: a compiling ticket prefers
+    /// a tree that holds the build directories beside them ([`choice`]).
+    pub files: Vec<String>,
 }
 
 /// How [`Trees::lease`] answered.
@@ -394,7 +398,8 @@ impl Trees {
     fn take_free(&self, locked: &Locked, request: &LeaseRequest) -> Result<Option<TreeId>> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         let configured = self.inner.config.configured();
-        let mut free: Vec<(Option<usize>, &rows::Tree)> = rows
+        let wanted = choice::wanted(&self.inner.config.keep, &request.files);
+        let mut free: Vec<(usize, Option<usize>, &rows::Tree)> = rows
             .iter()
             .filter(|row| {
                 row.state == store::State::Free.as_str()
@@ -403,15 +408,18 @@ impl Trees {
                         .any(|(id, kind)| id.as_str() == row.id && *kind == Kind::Ticket)
             })
             .map(|row| {
+                let path = self.inner.config.dir.join(&row.id);
                 (
+                    choice::missing(&path, &wanted),
                     self.distance(row.built_commit.as_deref(), &request.tip),
                     row,
                 )
             })
             .collect();
-        // `None` (never built) sorts after every distance.
-        let key = |(distance, row): &(Option<usize>, &rows::Tree)| {
-            (distance.unwrap_or(usize::MAX), row.id.clone())
+        // Fewest wanted build directories missing first; `None` (never built) sorts after every
+        // distance.
+        let key = |(missing, distance, row): &(usize, Option<usize>, &rows::Tree)| {
+            (*missing, distance.unwrap_or(usize::MAX), row.id.clone())
         };
         free.sort_by_key(key);
         let chosen = if request.compiles {
@@ -419,12 +427,12 @@ impl Trees {
         } else {
             free.iter().max_by_key(|entry| {
                 (
-                    entry.0.unwrap_or(usize::MAX),
-                    std::cmp::Reverse(&entry.1.id),
+                    entry.1.unwrap_or(usize::MAX),
+                    std::cmp::Reverse(&entry.2.id),
                 )
             })
         };
-        let Some((_, row)) = chosen else {
+        let Some((_, _, row)) = chosen else {
             return Ok(None);
         };
         let taken = store::lease(

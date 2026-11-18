@@ -192,7 +192,8 @@ impl Ledger {
     /// the class's short growing grants share what is left. A class with a request left waiting
     /// for cores, or a short growing grant of `land`, stops every lower class from starting
     /// anything, except that `tip` and `batch` may still take their floors, and makes each
-    /// shrinking grant of a lower class give back one core.
+    /// shrinking grant of a lower class give back one core. A request left waiting also makes
+    /// each shrinking grant of its own class that holds more than its share give back one core.
     pub fn step(&mut self, now: Timestamp) -> Step {
         let mut step = Step::default();
         let mut reserve: BTreeMap<Class, u32> = Class::ALL
@@ -209,6 +210,9 @@ impl Ledger {
         let mut wanted_by_blocked = 0;
         // The highest class left waiting; shrinking grants of lower classes give a core back.
         let mut highest_blocked = None;
+        // The highest class with a request left waiting for cores; its own shrinking grants
+        // that hold more than their share give a core back too.
+        let mut highest_waiting = None;
         for class in Class::ALL {
             let below: u32 = reserve
                 .iter()
@@ -266,6 +270,9 @@ impl Ledger {
             } else {
                 0
             };
+            if !left.is_empty() {
+                highest_waiting.get_or_insert(class);
+            }
             if !left.is_empty() || short > 0 {
                 blocked = true;
                 highest_blocked.get_or_insert(class);
@@ -276,6 +283,9 @@ impl Ledger {
         }
         if let Some(class) = highest_blocked {
             step.resized.extend(self.shrink_below(class));
+        }
+        if let Some(class) = highest_waiting {
+            step.resized.extend(self.shrink_to_share(class));
         }
         step.stop = self.stop_idle(wanted_by_blocked.saturating_sub(free));
         step.stop.extend(self.stop_idle_holding_wanted_resources());
@@ -447,6 +457,29 @@ impl Ledger {
         let mut shrunk = Vec::new();
         for (&id, held) in &mut self.held {
             if held.shrinks && held.class > class && held.cores > 1 {
+                held.cores -= 1;
+                shrunk.push((id, held.cores));
+            }
+        }
+        shrunk
+    }
+
+    /// Takes one core from each shrinking grant of `class` that holds more than its share: the
+    /// machine's cores divided among the class's grants and waiters, at least one. A build that
+    /// started alone on twelve cores kept them while fifteen requests of its own class arrived,
+    /// and those waited 150 to 165 seconds for it to finish; now the build gives a core back on
+    /// each step, as it does for a higher class, until each waiter can start.
+    fn shrink_to_share(&mut self, class: Class) -> Vec<(u64, u32)> {
+        let held = self.held.values().filter(|h| h.class == class).count();
+        let waiting = self
+            .waiting
+            .iter()
+            .filter(|w| w.request.class == class)
+            .count();
+        let share = (self.limits.cores / u32::try_from(held + waiting).unwrap_or(u32::MAX)).max(1);
+        let mut shrunk = Vec::new();
+        for (&id, held) in &mut self.held {
+            if held.shrinks && held.class == class && !held.stopping && held.cores > share {
                 held.cores -= 1;
                 shrunk.push((id, held.cores));
             }

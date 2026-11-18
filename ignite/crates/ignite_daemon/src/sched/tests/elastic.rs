@@ -165,3 +165,33 @@ fn a_grant_followed_through_the_jobserver_grows_and_still_waits_to_reclaim() {
     ledger.enqueue(under_jobserver(Class::Land, 4, "/runs/l/cores".into()), T0);
     assert!(ledger.step(T0).granted.is_empty());
 }
+
+#[test]
+fn a_compiling_build_gives_cores_back_to_requests_of_its_own_class() {
+    let mut ledger = Ledger::new(limits());
+    let build = ledger.enqueue(compile(Class::Agent, 16), T0);
+    let other = ledger.enqueue(ask(Class::Agent, 8), T0);
+    assert_eq!(ledger.step(T0).granted.len(), 2);
+    assert_eq!(agent_cores(&ledger), 24);
+
+    // Two more agent requests: four grants and waiters share 24 cores, six each, so the build
+    // gives back one core per step down to six, and the other command, which does not shrink,
+    // keeps its eight.
+    let late: Vec<u64> = (0..2)
+        .map(|_| ledger.enqueue(ask(Class::Agent, 8), at(1.0)))
+        .collect();
+    let mut granted = Vec::new();
+    let mut now = 1.0;
+    while granted.len() < 2 {
+        let step = ledger.step(at(now));
+        assert!(
+            step.resized
+                .iter()
+                .all(|(id, _)| *id == build && *id != other)
+        );
+        granted.extend(step.granted.iter().map(|g| g.id));
+        now += 0.25;
+        assert!(now < 30.0, "the late requests never started");
+    }
+    assert_eq!(granted, late);
+}

@@ -292,6 +292,7 @@ impl TreeDesk for FakeTrees {
         _session: &SessionId,
         tip: &Commit,
         compiles: bool,
+        _files: &[String],
         _start: &ignite_core::protocol::client::Request,
     ) -> Result<Lease> {
         lock(&self.leases).push((ticket.clone(), compiles));

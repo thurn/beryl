@@ -158,6 +158,7 @@ impl Fixture {
             at: self.tip(),
             tip: self.tip(),
             compiles,
+            files: Vec::new(),
         }
     }
 
@@ -182,6 +183,24 @@ impl Fixture {
 
 fn id(tree: &str) -> TreeId {
     TreeId::new(tree).unwrap()
+}
+
+#[test]
+fn a_compiling_ticket_prefers_a_tree_holding_the_build_directory_beside_its_files() {
+    let f = Fixture::new(2, 2);
+    // tree-01 last built at the tip, tree-02 one commit behind; only tree-02 holds `out`.
+    f.trees.record_build(&id("tree-01"), &f.commits[1]).unwrap();
+    f.trees.record_build(&id("tree-02"), &f.commits[0]).unwrap();
+    write(&f.repo.join(".worktrees/tree-02"), "out/built", "x");
+
+    let mut request = f.request("T.1", true);
+    request.files = vec!["src/lib.rs".to_owned()];
+    let Lease::Ready(lease) = f.trees.lease(request).unwrap() else {
+        panic!("a tree is free");
+    };
+    assert_eq!(lease.tree.as_str(), "tree-02");
+    // A compiling ticket that names no file still gets the tree nearest the tip.
+    assert_eq!(f.lease("T.2", true).tree.as_str(), "tree-01");
 }
 
 #[test]

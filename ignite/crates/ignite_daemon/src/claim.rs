@@ -154,7 +154,8 @@ pub enum Lease {
 /// The build trees as this module needs them.
 pub trait TreeDesk: Send + Sync {
     /// Leases a free ticket tree to the ticket and session at `tip`, checking out the ticket's
-    /// saved branch if the remote has one. With `compiles`, the tree built nearest the tip is
+    /// saved branch if the remote has one. With `compiles`, the tree that holds the build
+    /// directories beside `files` (the files the ticket names) and is built nearest the tip is
     /// chosen and its usual builds start at once. A lease that waits records `start`, the
     /// request of the `ignite start` that asked, with its handle, so that a daemon that restarts
     /// meanwhile runs that `start` again under the handle instead of ending it.
@@ -164,6 +165,7 @@ pub trait TreeDesk: Send + Sync {
         session: &SessionId,
         tip: &Commit,
         compiles: bool,
+        files: &[String],
         start: &Request,
     ) -> Result<Lease>;
     /// Commits whatever the tree holds as one commit marked as saved at release and pushes the
@@ -391,7 +393,14 @@ impl Claims {
             // a name before that.
             Target::Adhoc(_) => adhoc_branch_name(now),
         };
-        let leased = match self.trees.lease(&lease_id, &session, &tip, compiles, req) {
+        let files = detail
+            .as_ref()
+            .map(|detail| brief::named_files(&detail.ticket))
+            .unwrap_or_default();
+        let leased = match self
+            .trees
+            .lease(&lease_id, &session, &tip, compiles, &files, req)
+        {
             Ok(Lease::Leased(leased)) => leased,
             Ok(Lease::Waiting(handle)) => return brief::waiting_for_tree(handle),
             Err(error) => return failure(&error, "cannot lease a tree"),

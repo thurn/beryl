@@ -314,5 +314,15 @@
     "label": "`just b3d cargo-test -p` filters the shared workspace build instead of building the named crates again: 74 crates and 689 CPU-s (310 s wall) after the shared build, now 0 crates and 1 CPU-s",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Compiling grants give cores back to waiters of their own class past a fair share: 15 agent requests had queued 148-164 s behind one 12-core build",
+    "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
+  },
+  {
+    "label": "Tree sweep keeps every unit a kept build reaches (it deleted 35 live build-script runs of 23 crates in one tree), and compiling tickets prefer a tree holding the build directory beside their files",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
