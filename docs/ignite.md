@@ -1424,6 +1424,12 @@ How a daemon verifies a tip:
 - When nothing can be scored (git or the hub cannot be read), every check runs
   before `master` moves.
 
+- The verifier's memory survives a restart: the feed position, the last settled
+  tip, what it already reported, the checks held off, the cached failures
+  already run again, each platform's wait and the tip waiting to be retried are
+  kept as one row in the daemon's database and saved after each report and at
+  the end of each round.
+
 - Each round's record says how it split its checks: the budget, the rate used,
   and the checks before the move (within the budget and forced) and after it,
   each with their instructions, and when `master` moved. `ignite status` shows
