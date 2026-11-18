@@ -1948,8 +1948,10 @@ A machine can take a ticket when all of these hold:
 Not every ticket is offered:
 
 - Nothing is scheduled until a person releases it. Every ticket is filed with
-  the status `pending_approval`, the hub's own regressions, improvements and
-  fault reports included, and the pool is never offered a pending ticket.
+  the status `pending_approval`, the hub's own improvements and fault reports
+  included, and the pool is never offered a pending ticket. The one exception is
+  a regression, a check that tip verification found failing on `staging`: it
+  holds `master` back, so the hub files it already released.
   `ignite ticket update <id> --release` makes the ticket and every descendant
   still pending `open`; `ignite ticket create --release` files a ticket already
   released. A session may still start a pending ticket by name.

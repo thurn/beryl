@@ -138,8 +138,9 @@ fn create(report: &RegressionReport) -> Operation {
     Operation::Create {
         fields: TicketFields {
             title: Some(format!("Regression: {}", report.check)),
-            // Nothing is scheduled until a person releases it, regressions included.
-            status: Some(Status::PendingApproval),
+            // Filed released, unlike every other ticket: a regression holds `master` back, so it
+            // must not wait for a person to approve it.
+            status: Some(Status::Open),
             body: Some(details(report)),
             ticket_type: Some(TicketType::Bug),
             priority: Some(0),
