@@ -40,9 +40,12 @@ mod lastgood;
 mod rollback;
 mod starts;
 
-pub use lastgood::{CRASH_STARTS, CrashLoop, LAST_GOOD_AFTER_S, detect_crash_loop};
+pub use lastgood::{CRASH_STARTS, CrashLoop, LAST_GOOD_AFTER_S, detect_crash_loop, roll_back};
 pub use rollback::{CRASH_WINDOW_S, HEALTHY_AFTER_S, KEEP_EXTRA, Startup};
 pub use starts::{StartRecord, forget_start, guard_start, spawn_health_marks, start_log};
+
+/// The argument the monitor's login service entry starts the executable with.
+pub const MONITOR_VERB: &str = "monitor";
 
 /// The arguments the login service starts the executable with.
 pub const DAEMON_ARGS: &[&str] = &["daemon"];
@@ -447,6 +450,8 @@ pub struct Installed {
     pub machine: MachineId,
     pub version: Commit,
     pub executable: PathBuf,
+    /// Whether the monitor was registered; it is not on a platform without one.
+    pub monitor: bool,
 }
 
 /// Builds the executable of the checkout at `head`, stores it, registers the machine with the hub
@@ -484,7 +489,17 @@ pub fn install(deps: &InstallDeps, config: &Config, head: &Commit) -> Result<Ins
 
     let args: Vec<String> = DAEMON_ARGS.iter().map(|s| (*s).to_owned()).collect();
     deps.service.install(&deps.store.current_link(), &args)?;
+    // The monitor runs the last-good build, so that it works when the newest one does not.
+    let monitor = match deps
+        .service
+        .install_monitor(&deps.store.monitor_program(), &[MONITOR_VERB.to_owned()])
+    {
+        Ok(()) => true,
+        Err(error) if error.kind() == io::ErrorKind::Unsupported => false,
+        Err(error) => return Err(error.into()),
+    };
     Ok(Installed {
+        monitor,
         machine: identity.machine,
         version: head.clone(),
         executable,
@@ -550,9 +565,18 @@ pub fn install_checkout(repo: &Path, config: &Config) -> Reply {
             let _ = writeln!(text, "installed  {}", done.version);
             let _ = writeln!(text, "machine    {}", done.machine);
             let _ = writeln!(text, "binary     {}", done.executable.display());
-            let _ = write!(
+            let _ = writeln!(
                 text,
                 "daemon     starts at login; `ignite doctor` checks it"
+            );
+            let _ = write!(
+                text,
+                "monitor    {}",
+                if done.monitor {
+                    "checks the daemon every 2 minutes"
+                } else {
+                    "not supported on Windows yet; the daemon is not watched"
+                }
             );
             Reply::text(Exit::Success, text)
         }

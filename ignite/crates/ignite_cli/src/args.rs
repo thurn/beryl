@@ -196,6 +196,8 @@ pub enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Check once that the daemon answers; kick it, or go back to the last-good build, if not.
+    Monitor,
     /// Run the daemon.
     #[command(hide = true)]
     Daemon,
@@ -536,6 +538,7 @@ impl Command {
             Command::Audit { .. } => "audit",
             Command::Manifest { .. } => "manifest",
             Command::Import { .. } => "import",
+            Command::Monitor => "monitor",
             Command::Daemon => "daemon",
             Command::Supervise { .. } => "supervise",
             Command::RustcWrap(_) => "rustc-wrap",

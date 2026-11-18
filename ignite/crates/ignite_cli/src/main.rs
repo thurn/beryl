@@ -58,6 +58,8 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Pool {
             command: PoolCommand::Init { dir },
         } => pool_init(dir.as_deref(), &current_dir()),
+        // Answered here, without the daemon: it is what looks after a daemon that is down.
+        Command::Monitor => ignite_daemon::monitor::run(),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
         Command::Supervise { spec } => exit_reply(ignite_daemon::supervise::supervise(spec)),
         Command::RustcWrap(pass) => exit_reply(ignite_daemon::wrap::rustc_wrap(&pass.args)),
