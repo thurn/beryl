@@ -468,7 +468,7 @@ fn the_driver_is_only_in_a_build_with_its_feature() {
         .expect("lib.rs declares the driver");
     assert_eq!(lines[at - 1], "#[cfg(feature = \"driver\")]");
     let manifest = include_str!("../../Cargo.toml");
-    assert!(manifest.contains("driver = [\"dep:serde\", \"dep:serde_json\"]"));
+    assert!(manifest.contains("driver = [\"dep:serde\"]"));
     assert!(
         !manifest.contains("default ="),
         "the driver is never on by default"
