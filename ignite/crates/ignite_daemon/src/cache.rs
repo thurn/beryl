@@ -121,11 +121,14 @@ impl ResultCache {
         }
     }
 
-    /// Sends a command's record to the hub, or queues it when the hub cannot take it.
-    pub fn record(&self, record: &Record) {
-        if self.hub.records(std::slice::from_ref(record)).is_err() {
-            let _ = outbox::push_record(&self.conn(), record, self.clock.now());
+    /// Sends a command's record to the hub, or queues it when the hub cannot take it. Returns
+    /// the ID the hub gave it, or `None` when it was queued.
+    pub fn record(&self, record: &Record) -> Option<RecordId> {
+        if let Ok(ids) = self.hub.numbered_records(std::slice::from_ref(record)) {
+            return ids.first().copied();
         }
+        let _ = outbox::push_record(&self.conn(), record, self.clock.now());
+        None
     }
 
     /// Reports a flaky check to the hub, or queues the report when the hub cannot take it.

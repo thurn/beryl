@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ignite_core::config::Os;
-use ignite_core::ids::{CheckName, Commit, TreeId};
+use ignite_core::ids::{CheckName, Commit, RecordId, TreeId};
 use ignite_core::manifest::{Kind, Manifest, Platforms};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::{Class, Outcome};
@@ -64,12 +64,16 @@ pub trait IdleHost: Send + Sync {
 
 /// Runs one check again in a tree without asking the cache. [`Checks`] is the real one.
 pub trait Rerun: Send + Sync {
-    /// The check's outcome, and its saved output or failure message if it said anything.
-    fn rerun(&self, ctx: &Context, tree: &TreeId, check: &CheckName) -> (Outcome, Option<String>);
+    /// The check's outcome, its saved output or failure message if it said anything, and the
+    /// hub's ID for the record of the run that gave the outcome, when the hub took it.
+    fn rerun(&self, ctx: &Context, tree: &TreeId, check: &CheckName) -> Reran;
 }
 
+/// What [`Rerun::rerun`] returns.
+pub type Reran = (Outcome, Option<String>, Option<RecordId>);
+
 impl Rerun for Checks {
-    fn rerun(&self, ctx: &Context, tree: &TreeId, check: &CheckName) -> (Outcome, Option<String>) {
+    fn rerun(&self, ctx: &Context, tree: &TreeId, check: &CheckName) -> Reran {
         let options = RunOptions {
             verb: "audit".to_owned(),
             class: Class::Idle,
@@ -88,7 +92,12 @@ impl Rerun for Checks {
             .iter()
             .find(|f| f.check == *check)
             .and_then(|f| f.output.clone().or_else(|| f.message.clone()));
-        (outcome, said)
+        let record = run
+            .records
+            .iter()
+            .find(|(name, _)| name == check)
+            .map(|(_, id)| *id);
+        (outcome, said, record)
     }
 }
 

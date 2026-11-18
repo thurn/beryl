@@ -126,13 +126,16 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Final> {
-        let mut failed: BTreeMap<CheckName, (Reported, PathBuf)> = BTreeMap::new();
+        // A first failure, with its run's output and record.
+        let mut failed: BTreeMap<CheckName, (Reported, PathBuf, Option<RecordId>)> =
+            BTreeMap::new();
         let mut tries: BTreeMap<CheckName, u32> = BTreeMap::new();
         // What each check's runs have cost so far: an equal share of every run it was in.
         let mut costs: BTreeMap<CheckName, ResultCost> = BTreeMap::new();
         let mut finals: Vec<Final> = Vec::new();
         while !pending.is_empty() {
-            let (reported, output) = self.run_family(ctx, tree, name, family, &pending, options);
+            let (reported, output, record) =
+                self.run_family(ctx, tree, name, family, &pending, options);
             run.wall_s += output.usage.wall_s;
             let mut judged = output.hung;
             let mut again = Vec::new();
@@ -151,28 +154,38 @@ impl Checks {
                     Some((Outcome::Pass, _)) => {
                         match failed.remove(&check) {
                             // A flaky check carries the failed run's output.
-                            Some((_, first_output)) => {
+                            Some((_, first_output, first_record)) => {
                                 finals.push((
                                     keyed,
                                     Outcome::Flaky,
                                     None,
                                     Some(first_output),
                                     cost,
+                                    first_record,
                                 ));
                             }
-                            None => finals.push((keyed, Outcome::Pass, None, None, cost)),
+                            None => finals.push((keyed, Outcome::Pass, None, None, cost, record)),
                         }
                         continue;
                     }
                     // The adapter says the check flaked inside one run. That is reported as
                     // flaky and never cached, whether or not an earlier run failed.
                     Some((Outcome::Flaky, _)) => {
-                        let first_output = failed.remove(&check).map(|(_, output)| output);
-                        finals.push((keyed, Outcome::Flaky, None, first_output, cost));
+                        let first = failed.remove(&check);
+                        let first_record = first.as_ref().map_or(record, |(_, _, r)| *r);
+                        let first_output = first.map(|(_, output, _)| output);
+                        finals.push((
+                            keyed,
+                            Outcome::Flaky,
+                            None,
+                            first_output,
+                            cost,
+                            first_record,
+                        ));
                         continue;
                     }
                     Some((Outcome::Fail, _)) if failed.contains_key(&check) => {
-                        let (report, first_output) = failed
+                        let (report, first_output, first_record) = failed
                             .remove(&check)
                             .unwrap_or_else(|| unreachable!("a failed check is in the map"));
                         let failure = failure(&report, &first_output);
@@ -182,13 +195,14 @@ impl Checks {
                             Some(failure),
                             Some(first_output),
                             cost,
+                            first_record,
                         ));
                         judged = true;
                         continue;
                     }
                     Some((Outcome::Fail, _)) => {
                         let report = report.cloned().unwrap_or_else(|| unreachable!());
-                        failed.insert(check, (report, output.output.clone()));
+                        failed.insert(check, (report, output.output.clone(), record));
                         again.push(keyed);
                         judged = true;
                         continue;
@@ -211,7 +225,7 @@ impl Checks {
                     }
                 };
                 judged = true;
-                if let Some((report, first_output)) = failed.remove(&check) {
+                if let Some((report, first_output, first_record)) = failed.remove(&check) {
                     // It failed on these inputs and no later run said otherwise.
                     let failure = failure(&report, &first_output);
                     finals.push((
@@ -220,6 +234,7 @@ impl Checks {
                         Some(failure),
                         Some(first_output),
                         cost,
+                        first_record,
                     ));
                     continue;
                 }
@@ -232,7 +247,14 @@ impl Checks {
                     output: Some(output.output.display().to_string()),
                     reason: Some(gave_up),
                 };
-                finals.push((keyed, Outcome::Incomplete, Some(failure), None, cost));
+                finals.push((
+                    keyed,
+                    Outcome::Incomplete,
+                    Some(failure),
+                    None,
+                    cost,
+                    record,
+                ));
             }
             if judged {
                 // The output of a failed, flaky or incomplete run is kept longer.
@@ -259,7 +281,12 @@ impl Checks {
         let mut stored = Vec::new();
         let moved = moved_inputs(ctx, tree, &finals);
         let areas = self.change_areas(ctx, tree);
-        for (keyed, outcome, failure, output, cost) in finals {
+        for (keyed, outcome, failure, output, cost, record) in finals {
+            if let Some(id) = record
+                && outcome != Outcome::Incomplete
+            {
+                run.records.push((keyed.listed.check.clone(), id));
+            }
             match outcome {
                 // A result whose inputs changed while the check ran says nothing about the
                 // hash it was keyed by, so it is reported to the caller but not stored.
@@ -269,9 +296,8 @@ impl Checks {
                     key: keyed.key.clone(),
                     outcome,
                     machine: ctx.machine.clone(),
-                    // The hub's record IDs are not returned through the `Hub` trait, so the
-                    // result carries the check's measured cost itself.
-                    record: RecordId(0),
+                    // 0 when the hub has not numbered the run's record: it was queued.
+                    record: record.unwrap_or(RecordId(0)),
                     output: output.map(|o| o.display().to_string()),
                     cost,
                     areas: areas.clone(),
@@ -339,7 +365,8 @@ impl Checks {
         Ok(())
     }
 
-    /// Runs the family's `run` command once for `checks` and reads what it reported.
+    /// Runs the family's `run` command once for `checks` and reads what it reported, with the
+    /// ID the hub gave the run's record if it took it.
     pub(super) fn run_family(
         &self,
         ctx: &Context,
@@ -348,7 +375,7 @@ impl Checks {
         family: &Family,
         checks: &[Keyed],
         options: &RunOptions,
-    ) -> (Vec<Reported>, RunResult) {
+    ) -> (Vec<Reported>, RunResult, Option<RecordId>) {
         match family.adapter {
             Adapter::Jsonl => {
                 let file = self.settings.outputs.join(format!(
@@ -362,8 +389,8 @@ impl Checks {
                 let args = adapters::jsonl_run(family.run.as_deref().unwrap_or_default(), &names);
                 let mut env = vec![(adapters::RESULTS_ENV.to_owned(), path_text(&file))];
                 env.extend(base_env(ctx));
-                let result =
-                    self.launch(ctx, tree, name, family, RUN, args, &tree.path, env, options);
+                let (result, record) = self
+                    .launch_recorded(ctx, tree, name, family, RUN, args, &tree.path, env, options);
                 let text = fs::read_to_string(&file).unwrap_or_default();
                 let _ = fs::remove_file(&file);
                 let reported = adapters::jsonl_results(&text);
@@ -371,9 +398,9 @@ impl Checks {
                     || (result.exit != Some(0)
                         && !reported.iter().any(|r| r.outcome == Outcome::Fail));
                 if cut_short {
-                    return (adapters::jsonl_results_cut_short(&text), result);
+                    return (adapters::jsonl_results_cut_short(&text), result, record);
                 }
-                (reported, result)
+                (reported, result, record)
             }
             Adapter::Nextest => {
                 let targets: Vec<&Target> = checks
@@ -386,10 +413,11 @@ impl Checks {
                     adapters::NEXTEST_JSON_ENV.1.to_owned(),
                 )];
                 let cwd = self.nextest_dir(tree, family);
-                let result = self.launch(ctx, tree, name, family, RUN, args, &cwd, env, options);
+                let (result, record) =
+                    self.launch_recorded(ctx, tree, name, family, RUN, args, &cwd, env, options);
                 let text = fs::read_to_string(&result.output).unwrap_or_default();
                 let listed: Vec<Listed> = checks.iter().map(|k| k.listed.clone()).collect();
-                (adapters::nextest_results(&text, &listed), result)
+                (adapters::nextest_results(&text, &listed), result, record)
             }
         }
     }
@@ -417,9 +445,27 @@ impl Checks {
         command: &str,
         args: Vec<String>,
         cwd: &Path,
-        mut env: Vec<(String, String)>,
+        env: Vec<(String, String)>,
         options: &RunOptions,
     ) -> RunResult {
+        self.launch_recorded(ctx, tree, name, family, command, args, cwd, env, options)
+            .0
+    }
+
+    /// [`Checks::launch`], with the ID the hub gave the command's record, if it took it.
+    #[allow(clippy::too_many_arguments)]
+    fn launch_recorded(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        name: &str,
+        family: &Family,
+        command: &str,
+        args: Vec<String>,
+        cwd: &Path,
+        mut env: Vec<(String, String)>,
+        options: &RunOptions,
+    ) -> (RunResult, Option<RecordId>) {
         env.push((CLASS_ENV.to_owned(), options.class.as_str().to_owned()));
         let slowest = self.cache.slowest_pass(name, command);
         let result = ctx.launcher.run(&CommandSpec {
@@ -438,7 +484,7 @@ impl Checks {
         if outcome.is_some() {
             self.cache.note_pass(name, command, result.usage.wall_s);
         }
-        self.record(
+        let record = self.record(
             ctx,
             tree,
             name,
@@ -447,10 +493,11 @@ impl Checks {
             &options.verb,
             outcome,
         );
-        result
+        (result, record)
     }
 
     /// Sends a record of one command to the hub, or queues it when the hub cannot take it.
+    /// Returns the ID the hub gave the record, if it took it.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn record(
         &self,
@@ -461,7 +508,7 @@ impl Checks {
         usage: &Usage,
         verb: &str,
         outcome: Option<Outcome>,
-    ) {
+    ) -> Option<RecordId> {
         #[allow(clippy::cast_precision_loss)]
         let record = Record {
             machine: ctx.machine.clone(),
@@ -482,7 +529,7 @@ impl Checks {
             at: ctx.clock.now(),
             compile_units: Vec::new(),
         };
-        self.cache.record(&record);
+        self.cache.record(&record)
     }
 }
 

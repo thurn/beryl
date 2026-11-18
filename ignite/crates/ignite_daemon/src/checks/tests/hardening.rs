@@ -111,6 +111,38 @@ fn a_check_whose_inputs_cannot_be_resolved_is_unlisted_and_the_rest_are_kept() {
 }
 
 #[test]
+fn a_check_name_ignite_refuses_makes_the_family_listing_an_incomplete_check() {
+    let manifest = family("unit", "\"any\"", "lister", "");
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"unit:a\"}\n{\"check\": \"unit:a land is played\"}\n".to_owned();
+
+    // Tip verification names it among the checks it cannot run.
+    let set = world.checks.regression_checks(&world.ctx, &tree()).unwrap();
+    assert_eq!(set.checks.len(), 1);
+    assert_eq!(set.unlisted.len(), 1);
+    assert_eq!(set.unlisted[0].name, name("unit:listing"));
+    assert!(
+        set.unlisted[0].message.contains("unit:a land is played"),
+        "{}",
+        set.unlisted[0].message
+    );
+
+    // A run of the whole family, as the gate runs it, does not pass.
+    let mut run = CheckRun::default();
+    let open = world.checks.open(&tree()).unwrap();
+    let mut prepared =
+        world
+            .checks
+            .prepare(&world.ctx, &open, &["unit"], &options(false), &mut run);
+    for family in &mut prepared {
+        family.keep(|_| true, &mut run);
+    }
+    assert_eq!(outcome(&run, "unit:listing"), Outcome::Incomplete);
+    assert!(!run.passed());
+}
+
+#[test]
 fn an_empty_nextest_listing_is_a_failed_listing_and_is_not_remembered() {
     let world = world(MANIFEST, &[], FakeHistory::default());
     *world.launcher.listing.lock().unwrap() = "{\"rust-suites\": {}}\n".to_owned();

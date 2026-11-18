@@ -15,7 +15,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use ignite_core::config::HubConfig;
-use ignite_core::ids::{Commit, Seq, TicketId};
+use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
     HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandingsReply,
@@ -287,11 +287,21 @@ impl Hub for HubClient {
     }
 
     fn records(&self, batch: &[Record]) -> Result<()> {
+        self.numbered_records(batch).map(drop)
+    }
+
+    fn numbered_records(&self, batch: &[Record]) -> Result<Vec<RecordId>> {
+        // A reply without IDs still means the records were taken.
+        #[derive(serde::Deserialize)]
+        struct Numbered {
+            #[serde(default)]
+            ids: Vec<RecordId>,
+        }
         let request = RecordBatch {
             records: batch.to_vec(),
         };
-        let _: serde_json::Value = self.post("/records", &request)?;
-        Ok(())
+        let numbered: Numbered = self.post("/records", &request)?;
+        Ok(numbered.ids)
     }
 
     fn metrics(&self, import: &MetricsImport) -> Result<()> {

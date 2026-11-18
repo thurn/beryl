@@ -879,6 +879,14 @@ Some runs produce no verdict, and Ignite never guesses one:
 - A command that ends without reporting a check it was asked to run leaves that
   check `incomplete`, which is never a pass and never a failure.
 - A `list` command that fails leaves the whole family `incomplete` for that run.
+- A `list` line that names a check of the family that Ignite refuses, such as a
+  name with a space in it, adds the check `<family>:listing`, which is
+  `incomplete` and names the refused lines, so a family that loses checks this
+  way never passes.
+- A tool that judges a check in several steps may write a line per step, and
+  marks each line but the last `"partial": true`. A check whose last line is a
+  partial pass is `incomplete`, because its later steps never reported. A
+  failure in any step stands.
 - An `incomplete` check is run again, at most twice more. If it is still
   incomplete, the hub files a P1 ticket that quotes the output, and a landing or
   a tip that needs the check waits for it.
@@ -970,8 +978,13 @@ guards against that with reruns, which need no tracing of file access:
   in a landing tree at the commit that produced the hit. `ignite audit --now`
   runs a sample at once.
 - A rerun that disagrees with the cache switches caching off for that check and
-  files a P1 ticket naming both runs. The cause is an undeclared input or a
-  check that is not deterministic.
+  files a P1 ticket naming both runs, the cached run's record and the rerun's.
+  The cause is an undeclared input or a check that is not deterministic.
+- Because the sample is small, a repository can also lint its manifests. Beryl's
+  `check-inputs` source rule compares the repository paths its Rust tests and
+  build scripts read through a literal (`include_str!`, `fs::read`, a `join` on
+  `CARGO_MANIFEST_DIR`) with the inputs of each `crate-closure` family that runs
+  them.
 
 ## Where regression checks run
 

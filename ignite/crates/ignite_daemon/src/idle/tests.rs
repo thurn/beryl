@@ -21,7 +21,7 @@ use ignite_core::traits::{BuildResult, Builds, CommandSpec, Error, Launcher, Res
 
 use super::rebuild::RebuildCount;
 use super::state::State;
-use super::{AuditVerb, Idle, IdleHost, IdleJob, IdleSettings, RebuildVerb, Rerun};
+use super::{AuditVerb, Idle, IdleHost, IdleJob, IdleSettings, RebuildVerb, Reran, Rerun};
 use crate::checks::HitSink;
 use crate::server::{Context, Verb};
 use crate::testhub::SpyHub;
@@ -218,12 +218,7 @@ struct Reruns {
 }
 
 impl Rerun for Reruns {
-    fn rerun(
-        &self,
-        _ctx: &Context,
-        _tree: &TreeId,
-        check: &CheckName,
-    ) -> (Outcome, Option<String>) {
+    fn rerun(&self, _ctx: &Context, _tree: &TreeId, check: &CheckName) -> Reran {
         assert!(!self.stop.load(Ordering::SeqCst), "stopped");
         self.runs.lock().unwrap().push(check.clone());
         let outcome = self.outcomes.lock().unwrap().get(check.as_str()).copied();
@@ -231,6 +226,7 @@ impl Rerun for Reruns {
         (
             outcome,
             (outcome == Outcome::Fail).then(|| "assertion failed".to_owned()),
+            Some(RecordId(91)),
         )
     }
 }
@@ -561,6 +557,7 @@ fn an_audit_that_disagrees_is_reported_with_both_runs() {
     assert_eq!(report.cached_record, RecordId(77));
     assert_eq!(report.cached_machine, MachineId::new("m-2").unwrap());
     assert_eq!(report.rerun_machine, MachineId::new("m-1").unwrap());
+    assert_eq!(report.rerun_record, RecordId(91), "the rerun's own record");
     assert_eq!(report.commit, commit("bbbbbbb"));
     assert_eq!(report.output, "assertion failed");
     assert_eq!(f.host.leased.lock().unwrap()[0], commit("bbbbbbb"));
@@ -766,6 +763,11 @@ fn busy_landing_trees_leave_the_work_for_later() {
     idle.hit(&cached("rust:a::b", Outcome::Pass), &commit("bbbbbbb"));
     let summary = idle.audit(&f.ctx, true).unwrap();
     assert!(summary.busy);
+    assert!(
+        summary.render().contains("no spare landing tree was free"),
+        "{}",
+        summary.render()
+    );
     assert!(idle.audits_due());
     assert!(Path::new(&f.dir).exists());
 }

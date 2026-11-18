@@ -6,9 +6,11 @@
 //!   patterns the check reads beyond the family's own and the optional `digest` stands for what
 //!   it reads that no file holds (see [`Listed::digest`]). Its `run` command, with `{checks}`
 //!   replaced by the names, writes one JSON line per check to the file named by
-//!   `IGNITE_RESULTS`: `{"check", "outcome", "at", "message", "reason"}`. An `incomplete` line
-//!   may give the `reason` `cannot-run` when a tool, a virtual machine or a download this
-//!   machine lacks stops the check; the check is then not run again here.
+//!   `IGNITE_RESULTS`: `{"check", "outcome", "at", "message", "reason", "partial"}`. An
+//!   `incomplete` line may give the `reason` `cannot-run` when a tool, a virtual machine or a
+//!   download this machine lacks stops the check; the check is then not run again here. A tool
+//!   that judges a check in several steps marks each line but the last `"partial": true`, so a
+//!   check whose last line is a partial pass is `incomplete`: its later steps never reported.
 //! - `nextest`: cargo-nextest's own output. `cargo nextest list --message-format json` gives the
 //!   tests of each test binary, and `cargo nextest run --message-format libtest-json-plus` one
 //!   JSON line per test event. A test's check is named `<family>:<binary id>::<test>`, so a
@@ -53,6 +55,9 @@ pub struct Listed {
     pub package: Option<String>,
     /// How cargo-nextest names the test, for a `nextest` family.
     pub target: Option<Target>,
+    /// Why the listing is incomplete, on the one entry named `<family>:listing` that stands
+    /// for the checks a listing named but Ignite refused (see [`jsonl_list`]).
+    pub refused: Option<String>,
 }
 
 /// A test as cargo-nextest names it.
@@ -106,6 +111,11 @@ pub fn jsonl_run(run: &str, checks: &[&CheckName]) -> Vec<String> {
 
 /// The checks in a `jsonl` family's listing. Lines that are not a check of `family` are ignored,
 /// so a tool may print progress beside them.
+///
+/// A line that names a check of `family` that Ignite refuses (a name with whitespace in it, or
+/// a line that is not otherwise a check) would lose that check without a word, so the listing
+/// ends with one more entry, `<family>:listing`, whose [`Listed::refused`] names those lines.
+/// The runner counts that entry as an incomplete check.
 pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
     #[derive(Deserialize)]
     struct Line {
@@ -114,32 +124,64 @@ pub fn jsonl_list(text: &str, family: &str) -> Vec<Listed> {
         inputs: Vec<String>,
         digest: Option<String>,
     }
-    text.lines()
-        .filter_map(|line| serde_json::from_str::<Line>(line.trim()).ok())
-        .filter(|line| line.check.family() == family)
-        .map(|line| Listed {
-            check: line.check,
-            inputs: line.inputs,
-            digest: line.digest,
+    let mut listed = Vec::new();
+    let mut refused = Vec::new();
+    for text in text.lines().map(str::trim) {
+        let Ok(value) = serde_json::from_str::<Value>(text) else {
+            continue;
+        };
+        let Some(name) = value.get("check").and_then(Value::as_str) else {
+            continue;
+        };
+        if name.split_once(':').map(|(f, _)| f) != Some(family) {
+            continue;
+        }
+        match serde_json::from_value::<Line>(value.clone()) {
+            Ok(line) => listed.push(Listed {
+                check: line.check,
+                inputs: line.inputs,
+                digest: line.digest,
+                package: None,
+                target: None,
+                refused: None,
+            }),
+            Err(error) => refused.push(format!("{name:?} ({error})")),
+        }
+    }
+    if !refused.is_empty()
+        && let Ok(check) = CheckName::new(format!("{family}:listing"))
+    {
+        listed.push(Listed {
+            check,
+            inputs: Vec::new(),
+            digest: None,
             package: None,
             target: None,
-        })
-        .collect()
+            refused: Some(format!(
+                "the listing of {family} named {} check(s) Ignite refuses, which never run: {}",
+                refused.len(),
+                refused.join(", ")
+            )),
+        });
+    }
+    listed
 }
 
 /// The results a `jsonl` family's `run` command wrote. A later line for a check replaces an
 /// earlier one, except that nothing replaces a failure: a tool that judges one check in several
 /// steps, such as a page in each layout, may write a line per step, and a pass from the last
-/// step must not hide a failure from an earlier one.
+/// step must not hide a failure from an earlier one. A pass marked `partial` is not a verdict:
+/// a check whose last line is one is `incomplete` with no reason, which the runner retries.
 pub fn jsonl_results(text: &str) -> Vec<Reported> {
     parsed_results(text).0
 }
 
 /// The results of a `jsonl` run that was cut short: it hung, or ended by a signal or by an
-/// error that no failing check explains. The check of the last line written may have been in
-/// the middle of its steps, and its pass says nothing about the steps that never ran, so that
-/// line becomes `incomplete` with no reason, which the runner retries on its own. Checks that
-/// other lines followed had finished.
+/// error that no failing check explains. A check whose last line is a `partial` pass is already
+/// `incomplete` (see [`jsonl_results`]). A tool that does not mark its steps may still have been
+/// in the middle of the check of the last line written, and its pass says nothing about the
+/// steps that never ran, so that line also becomes `incomplete` with no reason, which the
+/// runner retries on its own.
 pub fn jsonl_results_cut_short(text: &str) -> Vec<Reported> {
     let (mut reported, last) = parsed_results(text);
     for r in &mut reported {
@@ -161,6 +203,9 @@ fn parsed_results(text: &str) -> (Vec<Reported>, Option<CheckName>) {
         message: Option<String>,
         #[serde(default)]
         reason: Option<IncompleteReason>,
+        /// More steps of this check follow.
+        #[serde(default)]
+        partial: bool,
     }
     let mut reported: Vec<Reported> = Vec::new();
     let mut last = None;
@@ -176,12 +221,21 @@ fn parsed_results(text: &str) -> (Vec<Reported>, Option<CheckName>) {
             continue;
         }
         reported.retain(|r| r.check != line.check);
+        let unfinished = line.partial && line.outcome == Outcome::Pass;
         reported.push(Reported {
             check: line.check,
-            outcome: line.outcome,
+            outcome: if unfinished {
+                Outcome::Incomplete
+            } else {
+                line.outcome
+            },
             at: line.at,
-            message: line.message,
-            reason: line.reason,
+            message: if unfinished {
+                Some("the command ended before this check's last step reported".to_owned())
+            } else {
+                line.message
+            },
+            reason: if unfinished { None } else { line.reason },
         });
     }
     (reported, last)
@@ -239,6 +293,7 @@ pub fn nextest_list(text: &str, family: &str) -> Vec<Listed> {
                     libtest: libtest.clone(),
                     test: test.clone(),
                 }),
+                refused: None,
             });
         }
     }
@@ -340,6 +395,21 @@ mod tests {
     }
 
     #[test]
+    fn a_refused_check_name_makes_the_listing_incomplete() {
+        let listing = "{\"check\": \"ui:a land is played\"}\n\
+            {\"check\": \"ui:fine\"}\n\
+            {\"check\": \"other:a b\"}\n\
+            {\"progress\": 3}\n";
+        let listed = jsonl_list(listing, "ui");
+        let names: Vec<&str> = listed.iter().map(|l| l.check.as_str()).collect();
+        assert_eq!(names, ["ui:fine", "ui:listing"]);
+        assert_eq!(listed[0].refused, None);
+        let why = listed[1].refused.as_deref().unwrap();
+        assert!(why.contains("\"ui:a land is played\""), "{why}");
+        assert!(!why.contains("other:"), "{why}");
+    }
+
+    #[test]
     fn a_later_pass_does_not_hide_a_failure_of_the_same_check() {
         let results = "{\"check\": \"py:a\", \"outcome\": \"fail\", \"at\": \"a.py:3\"}\n\
             {\"check\": \"py:a\", \"outcome\": \"pass\"}\n\
@@ -350,6 +420,25 @@ mod tests {
         assert_eq!(outcome("py:a").outcome, Outcome::Fail);
         assert_eq!(outcome("py:a").at.as_deref(), Some("a.py:3"));
         assert_eq!(outcome("py:b").outcome, Outcome::Pass);
+    }
+
+    #[test]
+    fn a_partial_pass_is_no_verdict_until_the_last_step_reports() {
+        // `py:a` passed its first step and the command ended; `py:b` finished both steps;
+        // `py:c` failed a partial step, which stands.
+        let results = "{\"check\": \"py:a\", \"outcome\": \"pass\", \"partial\": true}\n\
+            {\"check\": \"py:b\", \"outcome\": \"pass\", \"partial\": true}\n\
+            {\"check\": \"py:c\", \"outcome\": \"fail\", \"partial\": true}\n\
+            {\"check\": \"py:b\", \"outcome\": \"pass\"}\n";
+        for reported in [jsonl_results(results), jsonl_results_cut_short(results)] {
+            let outcome = |c: &str| reported.iter().find(|r| r.check.as_str() == c).unwrap();
+            assert_eq!(outcome("py:a").outcome, Outcome::Incomplete);
+            assert_eq!(outcome("py:a").reason, None);
+            assert_eq!(outcome("py:c").outcome, Outcome::Fail);
+        }
+        let whole = jsonl_results(results);
+        let b = whole.iter().find(|r| r.check.as_str() == "py:b").unwrap();
+        assert_eq!(b.outcome, Outcome::Pass);
     }
 
     #[test]

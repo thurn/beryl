@@ -1,6 +1,7 @@
 //! What a live run records: each check's measured cost in its stored result, an adapter's flaky
 //! report, results of a tree that changed during the run, and the build a `list` waits for.
 
+use ignite_core::ids::RecordId;
 use ignite_core::protocol::hub::NewResult;
 use ignite_core::traits::BuildResult;
 
@@ -110,4 +111,33 @@ fn list_builds_what_it_needs_before_it_runs() {
     assert!(run.passed());
     let requests = world.builds.requests();
     assert!(requests.iter().any(|(_, product, _)| product == "deps"));
+}
+
+#[test]
+fn each_stored_result_names_the_record_of_the_run_that_gave_it() {
+    let world = jsonl_world();
+    // `unit:b` fails twice: its result keeps the first failed run's output, and so its record.
+    world
+        .launcher
+        .script("unit:b", &[Some("fail"), Some("fail")]);
+    let run = run(&world, &["unit:a", "unit:b"]);
+    let records = world.hub.stored_records();
+    // The fake hub numbers records from 1 in the order they arrive.
+    let run_records: Vec<RecordId> = records
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.verb == "test")
+        .map(|(i, _)| RecordId(u64::try_from(i).unwrap() + 1))
+        .collect();
+    let lookup = |check: &str| {
+        world.checks.cache().lookup(&[key_of(&world, check)])[0]
+            .clone()
+            .unwrap()
+    };
+    // The list command's record comes first, then the two runs.
+    assert_eq!(run_records.len(), 3, "{records:?}");
+    assert_eq!(lookup("unit:a").record, run_records[1]);
+    assert_eq!(lookup("unit:b").outcome, Outcome::Fail);
+    assert_eq!(lookup("unit:b").record, run_records[1]);
+    assert!(run.records.contains(&(name("unit:a"), run_records[1])));
 }

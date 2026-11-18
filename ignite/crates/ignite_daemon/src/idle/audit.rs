@@ -33,7 +33,8 @@ pub struct AuditSummary {
     pub rerun: u32,
     /// The reruns that disagreed with the cache, as reported to the hub.
     pub disagreed: Vec<AuditReport>,
-    /// True if the audit stopped because every landing tree was busy.
+    /// True if the audit stopped because no spare landing tree was free: idle work always
+    /// leaves one landing tree free for landings and tip verification.
     pub busy: bool,
 }
 
@@ -55,7 +56,7 @@ impl AuditSummary {
             );
         }
         if self.busy {
-            text.push_str("stopped: every landing tree is busy\n");
+            text.push_str("stopped: no spare landing tree was free\n");
         }
         text
     }
@@ -136,7 +137,7 @@ impl Idle {
                 summary.busy = true;
                 break;
             };
-            let (rerun, said) = self.rerun.rerun(ctx, &tree, &hit.cached.key.check);
+            let (rerun, said, rerun_record) = self.rerun.rerun(ctx, &tree, &hit.cached.key.check);
             let released = self.host.release(&tree, Some(&hit.commit));
             let report = disagrees(hit.cached.outcome, rerun).then(|| AuditReport {
                 key: hit.cached.key.clone(),
@@ -144,8 +145,8 @@ impl Idle {
                 cached_record: hit.cached.record,
                 cached_machine: hit.cached.machine.clone(),
                 rerun,
-                // The runner sends its records to the hub, which numbers them.
-                rerun_record: RecordId(0),
+                // 0 when the hub has not numbered the rerun's record yet: it was queued.
+                rerun_record: rerun_record.unwrap_or(RecordId(0)),
                 rerun_machine: ctx.machine.clone(),
                 commit: hit.commit.clone(),
                 output: said.map(|said| output_text(&said)).unwrap_or_default(),

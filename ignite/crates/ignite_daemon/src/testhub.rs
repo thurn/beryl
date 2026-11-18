@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use ignite_core::fakes::FakeHub;
-use ignite_core::ids::{Commit, Seq, TicketId};
+use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
 use ignite_core::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, Landed, LandedCommit,
     MachineFree, MetricsImport, NewResult, Pause, Record, RegressionFiled, RegressionReport,
@@ -89,6 +89,10 @@ impl Hub for SpyHub {
     fn records(&self, batch: &[Record]) -> Result<()> {
         self.gate("records")?;
         self.inner.records(batch)
+    }
+    fn numbered_records(&self, batch: &[Record]) -> Result<Vec<RecordId>> {
+        self.gate("records")?;
+        self.inner.numbered_records(batch)
     }
     fn metrics(&self, import: &MetricsImport) -> Result<()> {
         self.gate("metrics")?;

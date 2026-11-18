@@ -148,6 +148,9 @@ pub struct CheckRun {
     pub incomplete_families: Vec<(String, PathBuf)>,
     /// Seconds the check commands ran, builds excluded.
     pub wall_s: f64,
+    /// For each check a run gave a verdict, the hub's ID for that run's record, when the hub
+    /// took it.
+    pub records: Vec<(CheckName, ignite_core::ids::RecordId)>,
 }
 
 impl CheckRun {
@@ -179,6 +182,8 @@ type Final = (
     Option<Failure>,
     Option<PathBuf>,
     ignite_core::protocol::hub::ResultCost,
+    // The hub's ID for the record of the run whose output the outcome carries, if it took it.
+    Option<ignite_core::ids::RecordId>,
 );
 
 /// Why a family's `list` gave no checks.
@@ -453,6 +458,11 @@ impl Checks {
             let mut keyed = Vec::new();
             let mut broken = Vec::new();
             for listed in listed {
+                if let Some(why) = &listed.refused {
+                    eprintln!("ignite: {why}");
+                    broken.push(incomplete(&listed.check, &Error::Invalid(why.clone())));
+                    continue;
+                }
                 match self.key(ctx, tree, family, listed.clone()) {
                     Ok(k) => keyed.push(k),
                     Err(error) => broken.push(incomplete(&listed.check, &error)),

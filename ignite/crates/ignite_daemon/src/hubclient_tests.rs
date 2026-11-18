@@ -3,7 +3,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use super::*;
-use ignite_core::ids::{MachineId, SessionId, TicketId, TreeId};
+use ignite_core::ids::{MachineId, RecordId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 
@@ -185,6 +185,16 @@ fn a_server_error_is_tried_again() {
     });
     hub.client().records(&[record("test")]).unwrap();
     assert_eq!(*calls.lock().unwrap(), 2);
+}
+
+#[test]
+fn records_come_back_with_the_ids_the_hub_gave_them() {
+    let hub = FakeHttpHub::start(|_, _, _| (200, r#"{"ids": [41, 42]}"#.to_owned()));
+    let ids = hub
+        .client()
+        .numbered_records(&[record("test"), record("land")])
+        .unwrap();
+    assert_eq!(ids, [RecordId(41), RecordId(42)]);
 }
 
 #[test]

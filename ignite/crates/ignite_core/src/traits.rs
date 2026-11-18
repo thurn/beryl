@@ -7,7 +7,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::ids::{Commit, Oid, Seq, TicketId, TreeId};
+use crate::ids::{Commit, Oid, RecordId, Seq, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
 use crate::protocol::hub::{
@@ -177,6 +177,12 @@ pub trait Hub: Send + Sync {
     fn lease(&self, name: &str, op: LeaseOp) -> Result<LeaseReply>;
     fn feed(&self, since: Seq, wait_s: u32) -> Result<FeedBatch>;
     fn records(&self, batch: &[Record]) -> Result<()>;
+    /// Sends records as [`Hub::records`] does and returns the IDs the hub gave them, in order,
+    /// so a report can name the record of a run. A hub that does not number records returns
+    /// none.
+    fn numbered_records(&self, batch: &[Record]) -> Result<Vec<RecordId>> {
+        self.records(batch).map(|()| Vec::new())
+    }
     /// Sends one machine's new efficiency rows (`POST /metrics/import`).
     fn metrics(&self, import: &MetricsImport) -> Result<()>;
     /// Reports a check that failed, then passed at once on the same inputs (`POST /flaky`).

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::ids::{Commit, Seq, TicketId, TreeId};
+use crate::ids::{Commit, RecordId, Seq, TicketId, TreeId};
 use crate::protocol::Usage;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
@@ -409,6 +409,13 @@ impl Hub for FakeHub {
         }
         lock(&self.records).extend_from_slice(batch);
         Ok(())
+    }
+
+    /// Numbers each record by its place among every record sent, from 1.
+    fn numbered_records(&self, batch: &[Record]) -> Result<Vec<RecordId>> {
+        let first = lock(&self.records).len() as u64 + 1;
+        self.records(batch)?;
+        Ok((first..).take(batch.len()).map(RecordId).collect())
     }
 
     fn metrics(&self, import: &MetricsImport) -> Result<()> {
