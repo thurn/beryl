@@ -2,6 +2,7 @@
 //! nothing.
 
 pub mod activity;
+pub mod builds;
 pub mod dispatch_queue;
 pub mod grants;
 pub mod handles;
@@ -55,6 +56,10 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 8,
         sql: include_str!("schema_8.sql"),
+    },
+    Migration {
+        version: 9,
+        sql: include_str!("schema_9.sql"),
     },
 ];
 

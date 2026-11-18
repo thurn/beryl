@@ -7,7 +7,8 @@ use std::time::Duration;
 use ignite_core::ids::{InputHash, TreeId};
 use ignite_core::traits::BuildResult;
 
-use super::{BuildManager, Plan, Request, lock};
+use super::store::Change;
+use super::{BuildManager, Request, State, lock};
 
 /// How often a request waiting on another build checks whether its own work was asked to stop.
 pub(super) const STOP_RECHECK: Duration = Duration::from_millis(250);
@@ -51,9 +52,9 @@ impl Flight {
 /// later request waits on a build that no longer runs.
 pub(super) struct FlightGuard<'a> {
     manager: &'a BuildManager,
-    plan: &'a Plan,
+    request: Request,
+    hash: InputHash,
     dirs: Vec<(TreeId, String)>,
-    flight_key: (Request, InputHash),
     flight: Arc<Flight>,
     finished: bool,
 }
@@ -61,56 +62,63 @@ pub(super) struct FlightGuard<'a> {
 impl<'a> FlightGuard<'a> {
     pub(super) fn new(
         manager: &'a BuildManager,
-        plan: &'a Plan,
+        request: Request,
+        hash: InputHash,
         dirs: Vec<(TreeId, String)>,
-        flight_key: (Request, InputHash),
         flight: Arc<Flight>,
     ) -> Self {
         Self {
             manager,
-            plan,
+            request,
+            hash,
             dirs,
-            flight_key,
             flight,
             finished: false,
         }
     }
 
-    fn release(&self) {
-        let mut state = lock(&self.manager.state);
+    /// Frees the output directories and removes the flight, in `state`.
+    fn release(&self, state: &mut State) {
         for dir in &self.dirs {
             state.busy.remove(dir);
         }
-        state.flights.remove(&self.flight_key);
+        state
+            .flights
+            .remove(&(self.request.clone(), self.hash.clone()));
     }
 
     /// Ends the build with `result`. `remember` says whether a failure is one the same inputs
-    /// would repeat, so that later requests get it without building.
+    /// would repeat, so that later requests get it without building. What the tree now holds is
+    /// stored before any joined request is woken.
     pub(super) fn finish(mut self, result: &BuildResult, remember: bool) {
         self.finished = true;
         let mut state = lock(&self.manager.state);
-        for dir in &self.dirs {
-            state.busy.remove(dir);
-        }
-        state.flights.remove(&self.flight_key);
-        let request = &self.plan.request;
-        match result {
+        self.release(&mut state);
+        let request = &self.request;
+        let change = match result {
             BuildResult::Built { .. } => {
                 state.failed.remove(request);
-                state.held.insert(request.clone(), self.plan.hash.clone());
+                state.held.insert(request.clone(), self.hash.clone());
+                Some(Change::Held)
             }
             BuildResult::Failed { output, .. } => {
                 // A failed build may have rewritten part of its outputs, so the tree no longer
                 // holds the last state that was built.
                 state.held.remove(request);
                 if remember {
-                    let failure = (self.plan.hash.clone(), output.clone());
+                    let failure = (self.hash.clone(), output.clone());
                     state.failed.insert(request.clone(), failure);
+                    Some(Change::Failed(output.clone()))
+                } else {
+                    Some(Change::NotHeld)
                 }
             }
-            BuildResult::Current => {}
-        }
+            BuildResult::Current => None,
+        };
         drop(state);
+        if let Some(change) = change {
+            self.manager.store_change(request, &self.hash, &change);
+        }
         self.flight.finish(result.clone());
         self.manager.ended.notify_all();
     }
@@ -121,11 +129,10 @@ impl Drop for FlightGuard<'_> {
         if self.finished {
             return;
         }
-        self.release();
-        let failed = self.manager.failure(
-            &self.plan.request.product,
-            "the build stopped without a result",
-        );
+        self.release(&mut lock(&self.manager.state));
+        let failed = self
+            .manager
+            .failure(&self.request.product, "the build stopped without a result");
         self.flight.finish(failed);
         self.manager.ended.notify_all();
     }

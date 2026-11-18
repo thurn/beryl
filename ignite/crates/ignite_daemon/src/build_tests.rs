@@ -196,15 +196,6 @@ fn fixture(name: &str, gated: bool) -> Fixture {
     let dir = std::env::temp_dir().join(format!("ignite-build-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
-    let mut manifest = Manifest::default();
-    manifest.products.insert(
-        "tests".to_owned(),
-        product("cargo test --no-run {packages}", &["crate-closure"]),
-    );
-    manifest.products.insert(
-        "lint".to_owned(),
-        product("cargo clippy {packages}", &["crate-closure"]),
-    );
     let git = Arc::new(FakeGit::default());
     for path in [
         "Cargo.lock",
@@ -217,6 +208,20 @@ fn fixture(name: &str, gated: bool) -> Fixture {
     ] {
         git.set_object(path, oid('1'));
     }
+    manager_in(dir, git, gated)
+}
+
+/// A manager over the tree in `dir`, with a new launcher, as a restarted daemon has.
+fn manager_in(dir: PathBuf, git: Arc<FakeGit>, gated: bool) -> Fixture {
+    let mut manifest = Manifest::default();
+    manifest.products.insert(
+        "tests".to_owned(),
+        product("cargo test --no-run {packages}", &["crate-closure"]),
+    );
+    manifest.products.insert(
+        "lint".to_owned(),
+        product("cargo clippy {packages}", &["crate-closure"]),
+    );
     let package = |name: &str, deps: &[&str]| Package {
         name: name.to_owned(),
         dir: name.to_owned(),
@@ -711,3 +716,6 @@ fn a_stopped_request_stops_waiting_for_another_build() {
     assert!(matches!(first.join().unwrap(), BuildResult::Built { .. }));
     assert_eq!(f.launcher.builds().len(), 1);
 }
+
+#[path = "build/restart_tests.rs"]
+mod restart;

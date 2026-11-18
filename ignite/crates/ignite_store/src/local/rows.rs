@@ -114,4 +114,19 @@ crate::tables! {
     }
 
     PoolSetting = "pool_settings" { key: String, value: String }
+
+    /// What the build manager knows about one build product in one tree.
+    Build = "builds" {
+        tree: String,
+        product: String,
+        /// JSON: the package names, sorted; empty for the whole workspace.
+        packages: String,
+        /// The input hash the product was last built or last failed at.
+        hash: String,
+        /// `held` or `failed`.
+        outcome: String,
+        /// The failed build's output file.
+        output: Option<String>,
+        updated_at: String,
+    }
 }

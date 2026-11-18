@@ -28,6 +28,13 @@
 //! When they differ, it builds the whole workspace instead of the subset. Failing the request
 //! instead would fail every check that needs the product, because a large workspace enables
 //! different features for almost every subset.
+//!
+//! What each tree holds and which builds failed are kept in the local database's `builds` table
+//! as well as in memory (see `store`), so a restarted daemon answers a request for a product the
+//! tree already holds without running Cargo again. Every build command's environment names its
+//! request as `IGNITE_BUILD_KEY`, which its run's `spec.json` keeps; a restarted daemon turns each
+//! unfinished run with that variable back into a running build that requests join (see
+//! `rejoin`).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
@@ -37,7 +44,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 mod flight;
+mod rejoin;
+mod store;
 use flight::{Flight, FlightGuard, STOP_RECHECK};
+pub use rejoin::BUILD_KEY_ENV;
 
 use ignite_core::hash::{HashParts, input_hash};
 use ignite_core::ids::{InputHash, TreeId};
@@ -154,6 +164,9 @@ pub struct BuildManager {
     git: Arc<dyn Git>,
     trees: Arc<dyn TreeFacts>,
     state: Mutex<State>,
+    /// The local database that keeps `held` and `failed` across restarts; `None` keeps them in
+    /// memory only.
+    store: Mutex<Option<rusqlite::Connection>>,
     /// Signalled whenever a build ends, for requests waiting on an output directory.
     ended: Condvar,
     next_file: AtomicU64,
@@ -224,6 +237,7 @@ impl BuildManager {
             git,
             trees,
             state: Mutex::default(),
+            store: Mutex::new(None),
             ended: Condvar::new(),
             next_file: AtomicU64::new(0),
         }
@@ -232,9 +246,12 @@ impl BuildManager {
     /// Drops what the manager believes `tree` holds and the failures it remembers there, for
     /// when its build directories are deleted, so the next request builds.
     pub fn forget(&self, tree: &TreeId) {
-        let mut state = lock(&self.state);
-        state.held.retain(|request, _| request.tree != *tree);
-        state.failed.retain(|request, _| request.tree != *tree);
+        {
+            let mut state = lock(&self.state);
+            state.held.retain(|request, _| request.tree != *tree);
+            state.failed.retain(|request, _| request.tree != *tree);
+        }
+        self.forget_stored(tree);
     }
 
     /// Requests waiting now: those joined to a running build, and those queued behind another
@@ -530,7 +547,7 @@ impl BuildManager {
         drop(state);
 
         // The guard frees the directories and wakes the joiners even if `run` panics.
-        let guard = FlightGuard::new(self, plan, dirs, flight_key, flight);
+        let guard = FlightGuard::new(self, plan.request.clone(), plan.hash.clone(), dirs, flight);
         let (result, remember) = self.run(plan);
         guard.finish(&result, remember);
         result
@@ -547,19 +564,26 @@ impl BuildManager {
             let message = format!("cannot create {}: {error}", units_file.display());
             return (self.failure(&plan.request.product, &message), false);
         }
-        let env = match self.wrapper_env(&units_file) {
+        let mut env = match self.wrapper_env(&units_file) {
             Ok(env) => env,
             Err(message) => return (self.failure(&plan.request.product, &message), false),
         };
+        env.push(rejoin::BuildKey::of(plan).variable());
         let spec = self.spec(plan, plan.args.clone(), self.settings.cores, env);
+        Self::outcome(self.launcher.run(&spec), &units_file)
+    }
+
+    /// The result of a build command that ended with `run`, whose compile units are in
+    /// `units_file`, which it deletes. The flag is as for [`BuildManager::run`].
+    fn outcome(run: RunResult, units_file: &Path) -> (BuildResult, bool) {
         let RunResult {
             exit,
             output,
             usage,
             hung,
-        } = self.launcher.run(&spec);
-        let units = read_units(&units_file);
-        let _ = fs::remove_file(&units_file);
+        } = run;
+        let units = read_units(units_file);
+        let _ = fs::remove_file(units_file);
         if exit == Some(0) {
             (BuildResult::Built { usage, units }, false)
         } else {
@@ -593,10 +617,10 @@ impl Builds for BuildManager {
         }
     }
 
-    /// The tree has built the product when this daemon has built it there, for any packages and
-    /// inputs, or when every directory the product writes is in the tree and not empty: those
-    /// directories survive a daemon restart and are kept between tickets, and deleting a tree's
-    /// builds deletes them. Products that write the same directory (the Rust workspace's test
+    /// The tree has built the product when the manager holds it there, for any packages and
+    /// inputs (a build this daemon ran, or one a previous daemon recorded in `builds`), or when
+    /// every directory the product writes is in the tree and not empty: those directories survive
+    /// a daemon restart and are kept between tickets, and deleting a tree's builds deletes them. Products that write the same directory (the Rust workspace's test
     /// binaries and its command-line programs share `rust/target`) count as built together; the
     /// dependencies they share are compiled already, so building the other is incremental too.
     fn has_built(&self, tree: &TreeId, product: &str) -> bool {
@@ -607,16 +631,28 @@ impl Builds for BuildManager {
         {
             return true;
         }
+        self.settings
+            .manifest
+            .products
+            .get(product)
+            .is_some_and(|declared| !declared.outputs.is_empty())
+            && self.outputs_present(tree, product)
+    }
+}
+
+impl BuildManager {
+    /// Whether `product` is declared and every directory it writes is in `tree` and not empty.
+    /// A product that writes no directory has them all.
+    fn outputs_present(&self, tree: &TreeId, product: &str) -> bool {
         let (Some(declared), Some(root)) = (
             self.settings.manifest.products.get(product),
             self.trees.path(tree),
         ) else {
             return false;
         };
-        !declared.outputs.is_empty()
-            && declared.outputs.iter().all(|output| {
-                fs::read_dir(root.join(output)).is_ok_and(|mut entries| entries.next().is_some())
-            })
+        declared.outputs.iter().all(|output| {
+            fs::read_dir(root.join(output)).is_ok_and(|mut entries| entries.next().is_some())
+        })
     }
 }
 
