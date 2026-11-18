@@ -489,8 +489,10 @@ How the executable is installed and kept current:
 - After that the daemon runs the executable built from the release branch,
   `repository.release` in `ignite.toml`, or `master` when that is unset. When
   the branch moves and Ignite's own source changed, each daemon builds the new
-  executable in a tree of its own and restarts itself. Daemons look at the
-  branch every five minutes, so a fix pushed to it by hand deploys too.
+  executable in a tree of its own and restarts into it within ten seconds,
+  without waiting for running commands. The only thing a restart waits for is a
+  landing inside its push, which lasts seconds. Daemons look at the branch every
+  five minutes, so a fix pushed to it by hand deploys too.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it. A fix to Ignite therefore reaches every machine minutes after it
@@ -498,11 +500,31 @@ How the executable is installed and kept current:
   Ignite bug can itself be blocking.
 - Each build is stored under its commit, so a new executable never replaces a
   file that is running. Supervisors finish under the version that started them.
-- The hub updates first. A daemon whose version differs from the hub's finishes
-  the commands that need it, updates and reconnects before it asks for new work.
-  Verbs that only wait, such as `ignite dispatch` and `ignite wait`, do not hold
-  an update back.
+- The hub updates first. A daemon whose version differs from the hub's builds or
+  finds the hub's version and restarts into it at once.
 - Each record names the Ignite commit that produced it.
+
+How a restart is survived:
+
+- Every command runs under its own supervisor, which outlives the daemon.
+- Every verb that does work gets its handle, with the request that started it,
+  before it begins. The client is told the handle first.
+- The restarted daemon runs `test`, `check` and `land` again under the same
+  handle. Finished checks come from the result cache. Each command still running
+  is taken over from its supervisor, found by the handle in its `spec.json`,
+  instead of being started again, and the files it writes through its
+  environment, such as a check's results file, are handed to the rerun. So
+  results are stored once, and trees, cores and leases are given back as the old
+  daemon would have. A landing finds where it got to from its record on disk.
+- Any other verb cut off by a restart ends its handle `incomplete`, with the
+  reason. Commands in landing trees, which a restarted daemon resets, are ended,
+  and their checks run again.
+- The daemon's loops start their round over.
+- A client whose connection drops after it was told the handle waits on it as
+  `ignite wait` does, for up to five minutes, and prints the reply as if nothing
+  had happened. A read cut off earlier is sent again. Other work answers that
+  its outcome is unknown and to check `ignite status`. A refused connection,
+  meaning a daemon that is starting, is retried for five minutes.
 
 How a broken build or a crash is survived:
 

@@ -210,6 +210,29 @@ pub trait StatusSection: Send + Sync {
     fn lines(&self) -> Vec<String>;
 }
 
+/// The last tip verification round any machine recorded at the hub: its tip, machine and where
+/// its time went.
+pub struct TipRoundSection(pub Arc<dyn ignite_core::traits::Hub>);
+
+impl StatusSection for TipRoundSection {
+    fn title(&self) -> &'static str {
+        "tip round"
+    }
+
+    fn lines(&self) -> Vec<String> {
+        match self.0.last_tip_round() {
+            Ok(Some(round)) => vec![format!(
+                "{} on {}: {}",
+                round.commit,
+                round.machine,
+                round.summary()
+            )],
+            Ok(None) => vec!["none recorded".to_owned()],
+            Err(error) => vec![format!("the hub did not answer: {error}")],
+        }
+    }
+}
+
 /// Cores and memory, from the scheduler.
 pub struct CoresSection(pub Arc<dyn Fn() -> sched::Status + Send + Sync>);
 

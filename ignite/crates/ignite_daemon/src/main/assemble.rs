@@ -386,6 +386,7 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
             host: Arc::new(NativeHost),
         }),
         Box::new(LoopsSection(parts.health.clone())),
+        Box::new(doctor::TipRoundSection(parts.ctx.hub.clone())),
     ]
 }
 
