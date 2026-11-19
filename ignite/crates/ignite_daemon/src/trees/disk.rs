@@ -260,8 +260,18 @@ pub(super) fn sweep_superseded(target: &Path) -> Vec<PathBuf> {
             .map(|entry| Unit::read(&entry.path(), &entry.file_name().to_string_lossy()))
             .collect();
         for unit in replaced(&units) {
-            for folder in UNIT_FOLDERS {
-                let Ok(files) = fs::read_dir(profile.join(folder)) else {
+            // The fingerprint folder goes first, and the unit's files only once it is gone. A
+            // sweep stopped partway, or a folder that cannot be deleted, then leaves either the
+            // whole unit or files that no fingerprint names, which Cargo never reads and
+            // overwrites if it builds that unit again. The other order could leave a fingerprint
+            // whose outputs were gone, which Cargo reports as `FailedToReadMetadata`.
+            let folder = profile.join(FINGERPRINTS).join(&unit.name);
+            remove(&folder);
+            if fs::symlink_metadata(&folder).is_ok() {
+                continue;
+            }
+            for files_folder in UNIT_FOLDERS {
+                let Ok(files) = fs::read_dir(profile.join(files_folder)) else {
                     continue;
                 };
                 for file in files.filter_map(io::Result::ok) {
@@ -270,8 +280,6 @@ pub(super) fn sweep_superseded(target: &Path) -> Vec<PathBuf> {
                     }
                 }
             }
-            let folder = profile.join(FINGERPRINTS).join(&unit.name);
-            remove(&folder);
             deleted.push(folder);
         }
     }

@@ -173,6 +173,7 @@ fn a_replaced_program_goes_with_the_dependencies_only_it_used() {
     t.unit_at("app-bbbb", "bin-app", 22, DEV, &[("core", 12)], 1600);
     assert_eq!(t.sweep(), ["app-aaaa", "core-aaaa"]);
     assert!(!t.profile().join("deps/libcore-aaaa.rlib").exists());
+    assert!(!t.has("core-aaaa") && !t.has("app-aaaa"));
     assert!(t.has("dep-aaaa") && t.has("core-bbbb") && t.has("app-bbbb"));
 }
 
@@ -185,4 +186,24 @@ fn every_build_of_a_dependency_rebuilt_in_place_is_kept() {
     t.unit_at("core-bbbb", "lib-core", 14, DEV, &[], 1500);
     t.unit("app-aaaa", "bin-app", 21, DEV, &[("core", 12)]);
     assert_eq!(t.sweep(), Vec::<String>::new());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_fingerprint_folder_that_cannot_be_deleted_keeps_its_outputs() {
+    use std::os::unix::fs::PermissionsExt;
+    let t = Target::new();
+    t.unit_at("app-aaaa", "bin-app", 21, DEV, &[], 600);
+    t.unit_at("app-bbbb", "bin-app", 22, DEV, &[], 1600);
+    // A folder inside the replaced unit's fingerprint folder that nothing can be deleted from
+    // stands for a sweep that stops partway through that folder.
+    let stuck = t.profile().join(".fingerprint/app-aaaa/stuck");
+    fs::create_dir(&stuck).unwrap();
+    fs::write(stuck.join("file"), "").unwrap();
+    fs::set_permissions(&stuck, fs::Permissions::from_mode(0o555)).unwrap();
+    let swept = t.sweep();
+    fs::set_permissions(&stuck, fs::Permissions::from_mode(0o755)).unwrap();
+    // Cargo reads a surviving fingerprint, so the files it names must survive with it.
+    assert_eq!(swept, Vec::<String>::new());
+    assert!(t.profile().join("deps/libapp-aaaa.rlib").exists());
 }
