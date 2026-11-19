@@ -8,6 +8,7 @@ use beryl_assets::glyphs::{
 };
 use beryl_assets::packer::{ATLAS_PAGES, PAGE_SIZE};
 use beryl_assets::{Prepared, Upload};
+use beryl_scene::widgets::icon_shadows;
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
 use beryl_scene::text::fonts::Font;
 use swash::FontRef;
@@ -253,10 +254,13 @@ fn every_icon_and_demanded_glyph_fits_the_atlas_at_every_display_scale() {
             pages.iter().all(|&page| page < ATLAS_PAGES),
             "at scale {scale} the worker sent pages {pages:?}, past the atlas's {ATLAS_PAGES}"
         );
-        // The icons, then a cell for each layer of the life orbs' art.
+        // The icons, a cell for each layer of the life orbs' art, and the cells icons' drop
+        // shadows are drawn from.
         assert_eq!(
             icons,
-            beryl_assets::icons::ALL.len() + beryl_assets::orb::cells().count(),
+            beryl_assets::icons::ALL.len()
+                + beryl_assets::orb::cells().count()
+                + icon_shadows::cells().count(),
             "every icon at scale {scale}"
         );
         for key in demanded {

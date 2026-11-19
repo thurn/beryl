@@ -62,6 +62,7 @@ fn badged(update: &GameUpdate) -> Show {
             icon: LOCK,
             size: LOCK_SIDE,
             rect: [0, 0, 48, 48],
+            shadow: 0,
         }],
     );
     show

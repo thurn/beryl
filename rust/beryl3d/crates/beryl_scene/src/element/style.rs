@@ -143,10 +143,24 @@ impl Shadow {
     }
 
     /// The standard deviation of the Gaussian a drop shadow is blurred with, in logical points.
+    ///
+    /// `WebKit` keeps a `drop-shadow()`'s blur as a whole number of CSS pixels, dropping the
+    /// fraction: the conformance samples drew the same glow for blurs of 1 and 1.5 points, and
+    /// for 2 and 2.5, so the current phase's glow of 1.5 points is drawn with a blur of 1. Its
+    /// Gaussian is also narrower than `WEBKIT_DEVIATION` alone gives, by a variance of
+    /// `DROP_VARIANCE`, which matters only for small blurs.
     #[must_use]
     pub fn drop_sigma(&self) -> f32 {
-        self.blur.max(0.0) * Self::WEBKIT_DEVIATION
+        let wide = self.blur.max(0.0).trunc() * Self::WEBKIT_DEVIATION;
+        (wide * wide - Self::DROP_VARIANCE).max(0.0).sqrt()
     }
+
+    /// The variance, in square logical points, by which `WebKit`'s Gaussian for a drop shadow is
+    /// narrower than `WEBKIT_DEVIATION` times its whole blur. Simulating a white glow on an icon
+    /// and fitting it to `WebKit`'s pictures at scale 2 gave deviations of 1.2, 3.2 and 5.0
+    /// pixels for blurs of 1, 2 and 3 points, where 0.85 times the blur gives 1.7, 3.4 and 5.1:
+    /// each is the wider Gaussian less about 1.45 square pixels, which is 0.36 square points.
+    pub const DROP_VARIANCE: f32 = 0.36;
 }
 
 /// One blurred copy of an element's text or icon that a chain of drop shadows draws under it

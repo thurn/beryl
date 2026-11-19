@@ -596,7 +596,7 @@ impl Page {
             }
         }
         if self.stub_atlas {
-            self.give(Input::Assets(glyphs::stub_icons()));
+            self.give(Input::Assets(glyphs::stub_icons(self.scale)));
         }
         for ready in self.glyphs.clone() {
             self.give(Input::Assets(ready));

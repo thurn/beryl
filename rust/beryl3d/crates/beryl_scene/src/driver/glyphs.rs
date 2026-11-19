@@ -3,7 +3,7 @@
 //! client what comes back. A page with no such host, as in every interface test, has a stub
 //! atlas instead: the driver acts as a host whose glyph worker delivers every glyph the client
 //! asks for before the frame that asked is read, and every icon at the one size the atlas holds
-//! it (`icons::atlas_size`). It rasterizes nothing: each cell has a made-up place on the page,
+//! it (`icons::atlas_size`), with the blurred copies its drop shadows need. It rasterizes nothing: each cell has a made-up place on the page,
 //! enough for the client to draw a record for it. The "drawn" check then reports what no host
 //! could deliver: text drawn with a glyph it never asked for, and an icon drawn at a size the
 //! atlas does not hold.
@@ -12,6 +12,7 @@ use super::Page;
 use crate::art::orb;
 use crate::input::{AssetReady, FaceId, GlyphCell, GlyphKey, IconCell, Input};
 use crate::widgets::IconId;
+use crate::widgets::icon_shadows;
 use crate::widgets::icons::{ORB, atlas_size};
 
 /// The atlas page the stub atlas puts every glyph and icon on. Page 0 holds the shapes of light,
@@ -81,17 +82,24 @@ fn stub_glyph(key: GlyphKey) -> GlyphCell {
     }
 }
 
-/// Every icon at its atlas size, and each layer of each life orb at its width for each of the
-/// orbs' scales, as a host's glyph worker delivers them before the first frame.
-pub(super) fn stub_icons() -> AssetReady {
-    let mut cells: Vec<IconCell> = (0..ORB)
-        .map(|id| {
-            let icon = IconId(id);
+/// Every icon at its atlas size, the cells its drop shadows are drawn from at `scale`
+/// (`icon_shadows::cells`) at the size a real one has (`icon_shadows::stage_side`), and each
+/// layer of each life orb at its width for each of the orbs' scales, as a host's glyph worker
+/// delivers them before the first frame.
+pub(super) fn stub_icons(scale: f32) -> AssetReady {
+    let sharp = (0..ORB).map(|id| (IconId(id), 0));
+    let mut cells: Vec<IconCell> = sharp
+        .chain(icon_shadows::cells())
+        .map(|(icon, shadow)| {
             let size = atlas_size(icon);
+            let texels = icon_shadows::decode(shadow).map_or(size, |(chain, stage)| {
+                icon_shadows::stage_side(size, icon_shadows::shadows(chain), stage, scale)
+            });
             IconCell {
                 icon,
                 size,
-                rect: [0, 0, size, size],
+                rect: [0, 0, texels, texels],
+                shadow,
             }
         })
         .collect();
@@ -105,6 +113,7 @@ pub(super) fn stub_icons() -> AssetReady {
                     icon: orb::icon(side, at),
                     size: width,
                     rect: [0, 0, width.max(1), height.max(1)],
+                    shadow: 0,
                 });
             }
         }

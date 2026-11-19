@@ -13,7 +13,8 @@
 //!   "border": [[r, g, b, a], width] | null, "radius": r, "opacity": o,
 //!   "box_shadow": [shadow], "drop_shadow": [shadow], "background_image": [gradient],
 //!   "mask": gradient | null, "filter": [{"fn", "value"}]},
-//!   "text": {"string", "color": [r, g, b, a], "size"} | null}]}
+//!   "text": {"string", "color": [r, g, b, a], "size"} | null,
+//!   "icon": {"id", "size", "color": [r, g, b, a]} | null}]}
 //! ```
 //!
 //! where a shadow is `{"x", "y", "blur", "spread", "color": [r, g, b, a], "inset"}`, a gradient
@@ -25,7 +26,9 @@
 //! in Open Sans at the line height of Beryl 3D's body text, centred in the box, and its glyphs
 //! are rasterized by the real glyph worker. Glyph pixels are left out of the score (decision
 //! M2): every pixel Beryl 3D's glyphs cover, found by drawing the text alone in white on black,
-//! and the pixels beside those, since the two rasterizers' antialiasing differs.
+//! and the pixels beside those, since the two rasterizers' antialiasing differs. An icon, one of
+//! `beryl_scene::widgets::icons` at its side in points, is drawn centred in the box from the real
+//! glyph worker's atlas, in its color, with the sample's drop shadows; its pixels are scored.
 //!
 //! Colors are channels from 0 to 255. For each sample it prints one line of JSON, `{"name",
 //! "max", "mean", "p995", "picture"}`: the largest and the mean difference of any color channel,
@@ -43,7 +46,7 @@ use beryl_assets::Prepared;
 use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::light;
 use beryl_scene::element::{
-    Align, Element, Extent, Filter, Gradient, Justify, Length, Position, Shadow, Shape, Stop,
+    Align, Element, Extent, Filter, Gradient, Justify, Length, Position, Shadow, Shape, Shown, Stop,
     holder, row,
 };
 use beryl_scene::frame::{Frame, FrameBuilder};
@@ -53,6 +56,7 @@ use beryl_scene::layout::Layer;
 use beryl_scene::table::{Camera, DESKTOP, Window};
 use beryl_scene::text::TypeStyle;
 use beryl_scene::text::fonts::Font;
+use beryl_scene::widgets::IconId;
 use serde_json::Value;
 
 use crate::Error;
@@ -81,6 +85,14 @@ struct Sample {
     mask: Option<Gradient>,
     filter: Vec<Filter>,
     text: Option<SampleText>,
+    icon: Option<SampleIcon>,
+}
+
+/// A sample's icon.
+struct SampleIcon {
+    icon: IconId,
+    size: u16,
+    color: [u8; 4],
 }
 
 /// A sample's text.
@@ -218,7 +230,24 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
             size: given["size"].as_f64().ok_or_else(|| bad("text size"))? as f32,
         }),
     };
+    let icon = match &value["icon"] {
+        Value::Null => None,
+        given => Some(SampleIcon {
+            icon: IconId(
+                given["id"]
+                    .as_u64()
+                    .and_then(|id| u16::try_from(id).ok())
+                    .ok_or_else(|| bad("icon id"))?,
+            ),
+            size: given["size"]
+                .as_u64()
+                .and_then(|size| u16::try_from(size).ok())
+                .ok_or_else(|| bad("icon size"))?,
+            color: color(&given["color"]).ok_or_else(|| bad("icon color"))?,
+        }),
+    };
     Ok(Sample {
+        icon,
         box_shadow,
         drop_shadow,
         background_image,
@@ -348,6 +377,11 @@ fn screen(sample: &Sample, mask: bool) -> Element {
             .clone_from(&sample.background_image);
         element.style.mask = sample.mask;
         element.style.filter.clone_from(&sample.filter);
+        if let Some(icon) = &sample.icon {
+            element.shows = Some(Shown::Icon(icon.icon, icon.size));
+            element.style.color = Some(icon.color);
+            element.style.drop_shadow.clone_from(&sample.drop_shadow);
+        }
     }
     if let Some(text) = &sample.text {
         let mut words = beryl_scene::element::text(&text.string)
@@ -580,6 +614,7 @@ mod tests {
             mask: None,
             filter: Vec::new(),
             text: None,
+            icon: None,
         };
         let (pixels, width, height) = drawer.draw(&sample, 2.0, false);
         assert_eq!((width, height), (80, 60));
@@ -632,6 +667,7 @@ mod tests {
             )),
             filter: Vec::new(),
             text: None,
+            icon: None,
         };
         let (pixels, width, _) = drawer.draw(&sample, 1.0, false);
         let at = |x: u32, y: u32| {

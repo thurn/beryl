@@ -288,6 +288,19 @@ def native_style(style: dict[str, str]) -> dict[str, object]:
     }
 
 
+def native_icon(sample: dict[str, object]) -> dict[str, object] | None:
+    """A sample's icon as `b3d-render sample` reads it: `{"id", "size", "color"}`, the icon of
+    `beryl_scene::widgets::icons` and its side in points."""
+    icon = sample.get("icon")
+    if not isinstance(icon, dict):
+        return None
+    return {
+        "id": int(icon["id"]),
+        "size": int(icon["size"]),
+        "color": color(str(icon["color"])),
+    }
+
+
 def window(sample: dict[str, object]) -> tuple[int, int]:
     width, height = sample["box"]  # pyre-ignore[23]: a pair from the JSON
     return int(width) + 2 * MARGIN, int(height) + 2 * MARGIN
@@ -296,7 +309,9 @@ def window(sample: dict[str, object]) -> tuple[int, int]:
 def html(sample: dict[str, object]) -> str:
     """The page that shows `sample` on the web: its element in the middle of the page color,
     sized with `box-sizing: border-box`, so a border takes room inside the box as Beryl 3D's
-    does."""
+    does. A sample's icon is an inline SVG of the same path data Beryl 3D's artwork copies from
+    the web (`beryl_assets/src/icons.rs`), filled in its color and centred in the element.
+    """
     style = sample["style"]
     assert isinstance(style, dict)
     width, height = sample["box"]  # pyre-ignore[23]: a pair from the JSON
@@ -319,6 +334,19 @@ def html(sample: dict[str, object]) -> str:
             f"color: {text['color']}",
         ]
         inner = str(text["string"])
+    icon = sample.get("icon")
+    if isinstance(icon, dict):
+        declarations += [
+            "display: flex",
+            "align-items: center",
+            "justify-content: center",
+        ]
+        side = int(icon["size"])
+        inner = (
+            f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='{icon['view']}' "
+            f"width='{side}' height='{side}' style='display: block; fill: {icon['color']}'>"
+            f"<path d='{icon['path']}'/></svg>"
+        )
     body = (
         f"margin: 0; background: {sample['page']}; width: 100vw; height: 100vh; "
         "display: flex; align-items: center; justify-content: center"
@@ -397,6 +425,7 @@ def drawn(
                 "web": str(pictures[str(sample["name"])]),
                 "style": native_style(sample["style"]),  # pyre-ignore[6]: CSS from JSON
                 "text": native_text(sample),
+                "icon": native_icon(sample),
             }
             for sample in samples
         ],

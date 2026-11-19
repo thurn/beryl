@@ -6,6 +6,7 @@ mod button;
 mod check;
 mod field;
 mod icon_button;
+pub mod icon_shadows;
 pub mod icons;
 mod list;
 mod menu;

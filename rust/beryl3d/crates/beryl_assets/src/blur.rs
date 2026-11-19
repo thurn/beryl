@@ -2,7 +2,7 @@
 //! web interface's look"). The Baseline shader may take one texture sample a fragment, so a drop
 //! shadow cannot blur as it draws: the glyph worker rasterizes a blurred copy of the coverage
 //! into a cell of its own, and the client draws that cell with the glyph or icon material in the
-//! shadow's color.
+//! shadow's color (`crate::icons::rasterize_shadows` for an icon's).
 
 use crate::glyphs::Bitmap;
 
@@ -14,7 +14,6 @@ pub(crate) fn blurred(bitmap: &Bitmap, sigma: f32) -> Bitmap {
     let pad = reach(sigma);
     let (width, height) = (usize::from(bitmap.width), usize::from(bitmap.height));
     let (wide, tall) = (width + 2 * pad, height + 2 * pad);
-    let kernel = kernel(sigma, pad);
     // The coverage on the grown cell, from 0 to 1.
     let mut grown = vec![0.0_f32; wide * tall];
     for y in 0..height {
@@ -22,25 +21,7 @@ pub(crate) fn blurred(bitmap: &Bitmap, sigma: f32) -> Bitmap {
             grown[(y + pad) * wide + x + pad] = f32::from(bitmap.coverage[y * width + x]) / 255.0;
         }
     }
-    let mut across = vec![0.0_f32; wide * tall];
-    for y in 0..tall {
-        for x in 0..wide {
-            across[y * wide + x] = taps(&kernel, pad, x, wide, |at| grown[y * wide + at]);
-        }
-    }
-    let mut coverage = vec![0_u8; wide * tall];
-    for y in 0..tall {
-        for x in 0..wide {
-            let value = taps(&kernel, pad, y, tall, |at| across[at * wide + x]);
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "clamped to 0 to 255 first"
-            )]
-            let level = (value * 255.0).round().clamp(0.0, 255.0) as u8;
-            coverage[y * wide + x] = level;
-        }
-    }
+    let coverage = blur_plane(&grown, wide, sigma).iter().map(|&value| level(value)).collect();
     let shift = i16::try_from(pad).unwrap_or(i16::MAX);
     Bitmap {
         width: u16::try_from(wide).unwrap_or(u16::MAX),
@@ -51,6 +32,41 @@ pub(crate) fn blurred(bitmap: &Bitmap, sigma: f32) -> Bitmap {
         ],
         coverage,
     }
+}
+
+/// `plane`, rows of `wide` values, blurred by a Gaussian of standard deviation `sigma` texels,
+/// with nothing past its edges. The blur is separable, so it runs across the rows and then down
+/// the columns.
+#[must_use]
+pub(crate) fn blur_plane(plane: &[f32], wide: usize, sigma: f32) -> Vec<f32> {
+    let tall = plane.len() / wide.max(1);
+    let pad = reach(sigma);
+    let kernel = kernel(sigma, pad);
+    let mut across = vec![0.0_f32; wide * tall];
+    for y in 0..tall {
+        for x in 0..wide {
+            across[y * wide + x] = taps(&kernel, pad, x, wide, |at| plane[y * wide + at]);
+        }
+    }
+    let mut out = vec![0.0_f32; wide * tall];
+    for y in 0..tall {
+        for x in 0..wide {
+            out[y * wide + x] = taps(&kernel, pad, y, tall, |at| across[at * wide + x]);
+        }
+    }
+    out
+}
+
+/// A coverage from 0 to 1 as a level from 0 to 255.
+#[must_use]
+pub(crate) fn level(value: f32) -> u8 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to 0 to 255 first"
+    )]
+    let level = (value * 255.0).round().clamp(0.0, 255.0) as u8;
+    level
 }
 
 /// How many texels a blur of `sigma` reaches past its shape: three deviations, past which the
@@ -114,4 +130,5 @@ mod tests {
         // The same ink, spread out: within rounding of 16 full texels.
         assert!((i64::from(total) - 16 * 255).abs() < 128, "{total}");
     }
+
 }

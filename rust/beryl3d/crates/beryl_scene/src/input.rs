@@ -283,8 +283,12 @@ pub struct IconCell {
     /// The size the icon is drawn at, in logical points: the side of its square box.
     pub size: u16,
     /// The icon's square cell in texels, `[x, y, width, height]`, rasterized at the display's
-    /// scale, so `size` times the scale texels wide.
+    /// scale, so `size` times the scale texels wide, or for a shadow's cell the size
+    /// `widgets::icon_shadows::stage_side` gives.
     pub rect: [u16; 4],
+    /// 0 for the icon itself, or which of the cells its drop shadows are drawn from this is
+    /// (`widgets::icon_shadows::code`): one shadow of one chain of `icon_shadows::CHAINS`.
+    pub shadow: u8,
 }
 
 /// Where one rasterized glyph lies in its atlas page, and where its picture sits against the

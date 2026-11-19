@@ -99,7 +99,8 @@ const fn steps(outlined: u16) -> [IconId; 12] {
 /// arrive and replace them.
 #[derive(Debug, Default)]
 pub struct Icons {
-    table: BTreeMap<(IconId, u16), Sprite>,
+    /// By icon, size and shadow (`IconCell::shadow`), 0 for the icon itself.
+    table: BTreeMap<(IconId, u16, u8), Sprite>,
 }
 
 impl Icons {
@@ -110,13 +111,20 @@ impl Icons {
                 page,
                 rect: cell.rect,
             };
-            self.table.insert((cell.icon, cell.size), sprite);
+            self.table.insert((cell.icon, cell.size, cell.shadow), sprite);
         }
     }
 
     /// Where `icon` at `size` logical points is, if a page holds it.
     #[must_use]
     pub fn get(&self, icon: IconId, size: u16) -> Option<Sprite> {
-        self.table.get(&(icon, size)).copied()
+        self.shadow(icon, size, 0)
+    }
+
+    /// Where the cell `shadow` (`IconCell::shadow`) of one of the drop shadows of `icon` at
+    /// `size` logical points is, if a page holds it.
+    #[must_use]
+    pub fn shadow(&self, icon: IconId, size: u16, shadow: u8) -> Option<Sprite> {
+        self.table.get(&(icon, size, shadow)).copied()
     }
 }

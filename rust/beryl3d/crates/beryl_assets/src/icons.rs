@@ -13,7 +13,8 @@
 use std::cell::Cell;
 
 use beryl_scene::input::IconCell;
-use beryl_scene::widgets::IconId;
+use beryl_scene::element::Shadow;
+use beryl_scene::widgets::{IconId, icon_shadows};
 use beryl_scene::widgets::icons::{
     BUG, BUTTON_SIDE, CLOSE, FULL_CONTROL, FULL_CONTROL_SIDE, GEAR, LOCK, LOCK_SIDE, LOG, MENU,
     MINUS, PASS_ON, PHASE_SIDE, PHASES, PLUS, SPEAKER, SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO,
@@ -21,6 +22,7 @@ use beryl_scene::widgets::icons::{
 };
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Pixmap, Stroke, Transform};
 
+use crate::blur;
 use crate::glyphs::Bitmap;
 use crate::svg;
 
@@ -564,6 +566,101 @@ pub fn side(artwork: &Artwork, scale: f32) -> u16 {
 /// whose path data does not parse draws nothing.
 #[must_use]
 pub(crate) fn rasterize(artwork: &Artwork, scale: f32) -> Bitmap {
+    draw(artwork, scale, false)
+}
+
+/// The cells of the drop shadows `shadows` (a chain of `icon_shadows::CHAINS`) of `artwork` at
+/// `scale`, one for each shadow, as CSS applies a chain: shadow `k`'s cell is the coverage of
+/// the icon and every shadow before it, composited, blurred by shadow `k`'s deviation
+/// (`Shadow::drop_sigma`) and moved by its offset. Each cell is the icon's square grown by
+/// `icon_shadows::stage_pad` pixels on every side, in texels of `stage_step` pixels, each the
+/// mean of the pixels it covers. A drop shadow is cast by the icon's alpha, not its colors, so
+/// every fill is drawn at full coverage first, whatever its `ink`.
+#[must_use]
+pub(crate) fn rasterize_shadows(artwork: &Artwork, scale: f32, shadows: &[Shadow]) -> Vec<Bitmap> {
+    let Some(last) = shadows.len().checked_sub(1) else {
+        return Vec::new();
+    };
+    let icon = draw(artwork, scale, true);
+    let side = usize::from(icon.width);
+    let pad = usize::from(icon_shadows::stage_pad(shadows, last, scale));
+    let wide = side + 2 * pad;
+    // The alpha of the icon and the shadows composited so far, on a canvas grown by the last
+    // shadow's pad.
+    let mut alpha = vec![0.0_f32; wide * wide];
+    for y in 0..side {
+        for x in 0..side {
+            alpha[(y + pad) * wide + x + pad] = f32::from(icon.coverage[y * side + x]) / 255.0;
+        }
+    }
+    let mut cells = Vec::with_capacity(shadows.len());
+    for (stage, shadow) in shadows.iter().enumerate() {
+        let blurred = blur::blur_plane(&alpha, wide, shadow.drop_sigma() * scale);
+        let moved = moved_by(&blurred, wide, [shadow.x * scale, shadow.y * scale]);
+        let opacity = f32::from(shadow.color[3]) / 255.0;
+        for (under, &over) in alpha.iter_mut().zip(&moved) {
+            *under += opacity * over * (1.0 - *under);
+        }
+        let reach = usize::from(icon_shadows::stage_pad(shadows, stage, scale));
+        let step = usize::from(icon_shadows::stage_step(shadows, stage, scale));
+        cells.push(cropped(&moved, wide, pad - reach, side + 2 * reach, step));
+    }
+    cells
+}
+
+/// `plane`, rows of `wide` values, moved by `by` pixels rounded to whole ones, with nothing
+/// coming in past its edges.
+fn moved_by(plane: &[f32], wide: usize, by: [f32; 2]) -> Vec<f32> {
+    #[expect(clippy::cast_possible_truncation, reason = "an offset of a few pixels")]
+    let [dx, dy] = by.map(|length| length.round() as isize);
+    let tall = plane.len() / wide.max(1);
+    let mut out = vec![0.0_f32; plane.len()];
+    for y in 0..tall {
+        for x in 0..wide {
+            let from = (y.checked_add_signed(-dy), x.checked_add_signed(-dx));
+            if let (Some(from_y), Some(from_x)) = from
+                && from_y < tall
+                && from_x < wide
+            {
+                out[y * wide + x] = plane[from_y * wide + from_x];
+            }
+        }
+    }
+    out
+}
+
+/// The square of `plane` (rows of `wide` values) `length` pixels across with its top left
+/// corner at `start` on both axes, as a cell of coverage in texels of `step` by `step` pixels,
+/// each the mean of the pixels it covers, a texel past the square's edge counting the pixels
+/// beyond as empty.
+fn cropped(plane: &[f32], wide: usize, start: usize, length: usize, step: usize) -> Bitmap {
+    let step = step.max(1);
+    let texels = length.div_ceil(step);
+    let mut coverage = vec![0_u8; texels * texels];
+    #[expect(clippy::cast_precision_loss, reason = "a small count")]
+    let block = (step * step) as f32;
+    for row in 0..texels {
+        for column in 0..texels {
+            let mut sum = 0.0;
+            for y in row * step..((row + 1) * step).min(length) {
+                for x in column * step..((column + 1) * step).min(length) {
+                    sum += plane[(start + y) * wide + start + x];
+                }
+            }
+            coverage[row * texels + column] = blur::level(sum / block);
+        }
+    }
+    let side = u16::try_from(texels).unwrap_or(u16::MAX);
+    Bitmap {
+        width: side,
+        height: side,
+        bearing: [0, 0],
+        coverage,
+    }
+}
+
+/// Draws `artwork` as `rasterize` does, or with every fill at full coverage if `solid`.
+fn draw(artwork: &Artwork, scale: f32, solid: bool) -> Bitmap {
     ICONS_RASTERIZED.with(|count| count.set(count.get() + 1));
     let side = side(artwork, scale);
     let mut pixmap = Pixmap::new(u32::from(side), u32::from(side)).expect("a cell has an area");
@@ -590,7 +687,8 @@ pub(crate) fn rasterize(artwork: &Artwork, scale: f32) -> Bitmap {
             } else {
                 FillRule::Winding
             };
-            pixmap.fill_path(&path, &paint(fill.ink), rule, transform, None);
+            let ink = if solid { 1.0 } else { fill.ink };
+            pixmap.fill_path(&path, &paint(ink), rule, transform, None);
         }
         if let Some(stroke) = shape.stroke {
             let stroke = Stroke {
@@ -622,14 +720,21 @@ fn paint(ink: f32) -> Paint<'static> {
     paint
 }
 
-/// The cell of `artwork` placed at `rect`.
+/// The cell of `artwork` placed at `rect`, or of one of its drop shadows (`IconCell::shadow`).
 #[must_use]
-pub(crate) fn cell(artwork: &Artwork, rect: [u16; 4]) -> IconCell {
+pub(crate) fn cell(artwork: &Artwork, rect: [u16; 4], shadow: u8) -> IconCell {
     IconCell {
         icon: artwork.icon,
         size: artwork.size,
         rect,
+        shadow,
     }
+}
+
+/// The artwork of `icon`, if it is one of `ALL`.
+#[must_use]
+pub(crate) fn artwork(icon: IconId) -> Option<&'static Artwork> {
+    ALL.iter().find(|artwork| artwork.icon == icon)
 }
 
 #[cfg(test)]

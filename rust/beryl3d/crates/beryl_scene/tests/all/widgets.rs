@@ -117,6 +117,7 @@ fn an_icon_button_is_44_points_square_and_passes_the_phone_sizes_check() {
             icon: icons::GEAR,
             size: 22,
             rect: [0, 0, 44, 44],
+            shadow: 0,
         }],
     );
     layer.show(Some(row().name("corner").child(

@@ -20,7 +20,7 @@ use crate::frame::Role;
 use crate::input::Rect;
 use crate::screens::{ScreenIn, Sheet};
 use crate::table::PhoneBands;
-use crate::tokens::{color, size, space, type_style};
+use crate::tokens::{color, shadow, size, space, type_style};
 use crate::widgets::{icon_button, icons};
 
 use super::log;
@@ -123,6 +123,13 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Elem
         .radius(side / 2.0)
         .background(color::ICON_BUTTON)
         .color(if yours { color::GOLD } else { color::TEXT_DIM })
+        // `.phase-current .phase-icon`'s glow while lit, else `.phase-icon`'s shadow
+        // (phase-tracker.css), as the web's `PhaseIcon` lights it.
+        .drop_shadow(if yours {
+            shadow::CURRENT_GLOW.to_vec()
+        } else {
+            shadow::PHASE_ICON.to_vec()
+        })
         .passes(true);
     phase.shows = Some(Shown::Icon(phase_icon(view.turn.step), icons::PHASE_SIDE));
     let (left, _) = phase_edges(view.stack.is_empty(), bands);
@@ -133,6 +140,7 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Elem
             .width(side)
             .height(side)
             .color(color::GOLD)
+            .drop_shadow(shadow::FULL_CONTROL.to_vec())
             .passes(true);
         mark.shows = Some(Shown::Icon(
             icons::FULL_CONTROL,

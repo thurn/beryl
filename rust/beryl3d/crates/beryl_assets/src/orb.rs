@@ -236,6 +236,7 @@ pub(crate) fn icon_cell(cell: Cell, rect: [u16; 4]) -> IconCell {
         icon: orb::icon(orb::SIDES[cell.seat], cell.at),
         size: cell.width(),
         rect,
+        shadow: 0,
     }
 }
 

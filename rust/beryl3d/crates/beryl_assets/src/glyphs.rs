@@ -3,17 +3,19 @@
 //! asks for with `swash`, once, into an 8-bit coverage bitmap, packs it into a single-channel
 //! atlas page and sends each new or changed page as a [`Prepared`]. The caller's thread only
 //! sends keys, so the frame thread never rasterizes. The same thread rasterizes the flat
-//! layer's icons into the same pages ([`GlyphWorker::icons`], [`crate::icons`]).
+//! layer's icons into the same pages ([`GlyphWorker::icons`], [`crate::icons`]), with the
+//! cells their drop shadows are drawn from.
 
 use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
 use std::thread::{self, JoinHandle};
 
-use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
+use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey, IconCell};
 use beryl_scene::text::fonts::ALL;
 use beryl_scene::text::glyph_key;
 use beryl_scene::tokens::type_style;
+use beryl_scene::widgets::icon_shadows;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;
@@ -307,50 +309,67 @@ impl Atlas {
             return Vec::new();
         }
         self.icon_scale = Some(scale);
-        let mut prepared = Vec::new();
-        let mut cells = Vec::new();
+        // Every icon, each layer of the life orbs' art at its own size, and the cells icons'
+        // drop shadows are drawn from (`widgets::icon_shadows`), packed
+        // tallest first, so that each shelf of a page holds cells of about one height: packed in
+        // the order of their ids, the orbs' layers alone left most of six pages empty at three
+        // pixels a point.
+        let mut rasterized: Vec<(Bitmap, IconCell)> = Vec::new();
         for artwork in &icons::ALL {
             let bitmap = icons::rasterize(artwork, scale);
-            let side = bitmap.width;
-            let placed = self.shelves.insert(side, side).or_else(|Full| {
-                if self.page == LAST_PAGE {
-                    return Err(Full);
-                }
-                let cells = std::mem::take(&mut cells);
-                prepared.push(self.finish_page(|page| AssetReady::Icons { page, cells }));
-                self.shelves.insert(side, side)
-            });
-            // An icon too large for an empty page, or with no room left in the atlas, is never
-            // sent, and draws nothing.
-            let Ok(corner) = placed else {
-                continue;
-            };
-            self.blit(&bitmap, corner);
-            cells.push(icons::cell(artwork, [corner[0], corner[1], side, side]));
+            rasterized.push((bitmap, icons::cell(artwork, [0; 4], 0)));
         }
-        // The layers of the life orbs' art, each a cell of its own size.
         for cell in orb::cells() {
             let bitmap = orb::rasterize(cell, scale);
-            let (width, height) = (bitmap.width, bitmap.height);
-            let placed = self.shelves.insert(width, height).or_else(|Full| {
-                if self.page == LAST_PAGE {
-                    return Err(Full);
+            rasterized.push((bitmap, orb::icon_cell(cell, [0; 4])));
+        }
+        for (chain, (drawn, _)) in icon_shadows::CHAINS.iter().enumerate() {
+            let shadows = icon_shadows::shadows(chain);
+            for artwork in drawn.iter().filter_map(|&icon| icons::artwork(icon)) {
+                let stages = icons::rasterize_shadows(artwork, scale, shadows);
+                for (stage, bitmap) in stages.into_iter().enumerate() {
+                    let code = icon_shadows::code(chain, stage);
+                    rasterized.push((bitmap, icons::cell(artwork, [0; 4], code)));
                 }
-                let cells = std::mem::take(&mut cells);
-                prepared.push(self.finish_page(|page| AssetReady::Icons { page, cells }));
-                self.shelves.insert(width, height)
-            });
-            let Ok(corner) = placed else {
-                continue;
-            };
-            self.blit(&bitmap, corner);
-            cells.push(orb::icon_cell(cell, [corner[0], corner[1], width, height]));
+            }
+        }
+        rasterized.sort_by_key(|(bitmap, _)| std::cmp::Reverse((bitmap.height, bitmap.width)));
+        let mut prepared = Vec::new();
+        let mut cells = Vec::new();
+        for (bitmap, cell) in rasterized {
+            if let Some(rect) = self.place(&bitmap, &mut cells, &mut prepared) {
+                cells.push(IconCell { rect, ..cell });
+            }
         }
         if !cells.is_empty() {
             let page = self.page;
             prepared.push(self.this_page(AssetReady::Icons { page, cells }));
         }
         prepared
+    }
+
+    /// Copies `bitmap`, an icon's cell, into room on the page being filled and returns its
+    /// rectangle. When the page has no room left it is sent, with `cells`, the icons on it not
+    /// yet sent, into `prepared`, and the next is started. An icon too large for an empty page,
+    /// or with no room left in the atlas, is never placed, and draws nothing.
+    fn place(
+        &mut self,
+        bitmap: &Bitmap,
+        cells: &mut Vec<IconCell>,
+        prepared: &mut Vec<Prepared>,
+    ) -> Option<[u16; 4]> {
+        let (width, height) = (bitmap.width, bitmap.height);
+        let placed = self.shelves.insert(width, height).or_else(|Full| {
+            if self.page == LAST_PAGE {
+                return Err(Full);
+            }
+            let cells = std::mem::take(cells);
+            prepared.push(self.finish_page(|page| AssetReady::Icons { page, cells }));
+            self.shelves.insert(width, height)
+        });
+        let corner = placed.ok()?;
+        self.blit(bitmap, corner);
+        Some([corner[0], corner[1], width, height])
     }
 
     /// The page being filled as it is now, with `ready` naming what was added to it.

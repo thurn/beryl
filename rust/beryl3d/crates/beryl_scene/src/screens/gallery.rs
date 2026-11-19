@@ -16,7 +16,7 @@ use crate::frame::Role;
 use crate::input::{FaceId, FaceSize};
 use crate::inspect::viewer::scry_sample;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
-use crate::tokens::{color, size, space, type_style};
+use crate::tokens::{color, shadow, size, space, type_style};
 use crate::widgets::{MenuGroup, MenuId, MenuRow, button, context_menu, icons, menu, primary};
 
 /// A context menu sample opened in the gallery.
@@ -260,6 +260,13 @@ fn phase_tracker() -> Element {
                                 color::GOLD
                             } else {
                                 color::TEXT_DIM
+                            })
+                            // The web gallery's tracker lights combat
+                            // (`.phase-current .phase-icon`).
+                            .drop_shadow(if label == "Combat" {
+                                shadow::CURRENT_GLOW.to_vec()
+                            } else {
+                                shadow::PHASE_ICON.to_vec()
                             });
                     sample.shows = Some(Shown::Icon(icon, icons::PHASE_SIDE));
                     sample

@@ -1371,6 +1371,26 @@
       "BANNER_TITLE": {
         "value": "0 1px 1px rgb(0 0 0 / 85%), 0 2px 5px rgb(0 0 0 / 50%)",
         "note": "The step banner title's drop shadows: `.step-banner-title`'s `filter` in `ui/src/screens/styles/step-banner.css`, a tight dark one under a soft one."
+      },
+      "STEP_ICON": {
+        "value": "0 1px 1px rgb(0 0 0 / 75%)",
+        "note": "A step icon's drop shadow: `.step-icon`'s `filter` in `ui/src/design/components/phase-tracker.css`."
+      },
+      "PHASE_ICON": {
+        "value": "0 1px 1px rgb(0 0 0 / 70%)",
+        "note": "A phase icon's drop shadow: `.phase-icon`'s `filter` in `phase-tracker.css`."
+      },
+      "CURRENT_GLOW": {
+        "value": "0 0 1.5px rgb(255 170 50), 0 0 3px rgb(255 130 20), 0 0 5px rgb(230 100 10 / 65%)",
+        "note": "The orange glow of the current phase's and the current step's icon: the three drop shadows of `.phase-current .phase-icon`'s and `.step-current .step-icon`'s `filter` in `phase-tracker.css`."
+      },
+      "FULL_CONTROL": {
+        "value": "0 1px 1px rgb(0 0 0 / 70%)",
+        "note": "Full control's mark's drop shadow: `.full-control svg`'s `filter` in `ui/src/screens/styles/controls.css`."
+      },
+      "PASS_ON": {
+        "value": "0 1px 1px rgb(70 25 4 / 75%)",
+        "note": "The pass-on button's glyph's dark brown drop shadow: `.pass-on-face > svg`'s `filter` in `controls.css`."
       }
     },
     "gradient": {

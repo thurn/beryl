@@ -141,7 +141,7 @@ impl Badges {
     pub fn add_icons(&mut self, page: u16, cells: &[IconCell]) {
         if let Some(cell) = cells
             .iter()
-            .rfind(|cell| cell.icon == LOCK && cell.size == LOCK_SIDE)
+            .rfind(|cell| cell.icon == LOCK && cell.size == LOCK_SIDE && cell.shadow == 0)
         {
             self.lock = Some(Sprite {
                 page,

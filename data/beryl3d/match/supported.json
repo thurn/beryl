@@ -6,7 +6,7 @@
     "border-color": ["color"],
     "border-radius": ["uniform"],
     "box-shadow": ["*"],
-    "filter": ["brightness", "grayscale", "saturate", "blur", "grayscale + brightness", "brightness + saturate", "blur + brightness + saturate"],
+    "filter": ["brightness", "grayscale", "saturate", "blur", "grayscale + brightness", "brightness + saturate", "blur + brightness + saturate", "drop-shadow", "drop-shadow + drop-shadow", "drop-shadow + drop-shadow + drop-shadow", "drop-shadow + drop-shadow + drop-shadow + drop-shadow"],
     "opacity": ["*"],
     "color": ["color"],
     "font-family": ["*"],

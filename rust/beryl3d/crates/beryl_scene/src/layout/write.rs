@@ -10,6 +10,7 @@ use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
 use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
+use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
 use crate::art::orb;
 use crate::element::{Display, Element, Overflow, Shown, TextAlign};
@@ -241,13 +242,26 @@ impl Layer {
                     );
                     return;
                 };
-                let side = f32::from(side);
+                let points = f32::from(side);
                 let at = Rect {
-                    x: content.x + (content.width - side) / 2.0,
-                    y: content.y + (content.height - side) / 2.0,
-                    width: side,
-                    height: side,
+                    x: content.x + (content.width - points) / 2.0,
+                    y: content.y + (content.height - points) / 2.0,
+                    width: points,
+                    height: points,
                 };
+                let shadowed = write_icon_shadows(
+                    &node.element.style.drop_shadow,
+                    &self.icons,
+                    (icon, side),
+                    at,
+                    (self.window.scale, look.opacity),
+                    clip,
+                    builder,
+                    camera,
+                );
+                if let Some(missing) = shadowed {
+                    builder.undrawn(index, missing);
+                }
                 let tint = faded(
                     look.filters.color(ink(node, state, look.tint)),
                     look.opacity,

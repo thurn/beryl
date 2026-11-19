@@ -15,7 +15,7 @@ use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
 use crate::screens::ScreenIn;
 use crate::table::{PhoneBands, phone_bands};
 use crate::text::TypeStyle;
-use crate::tokens::{color, space, type_style};
+use crate::tokens::{color, shadow, space, type_style};
 use crate::widgets::{button, icon_button, icons, primary};
 
 /// The prompt bar for `prompt`: its title, then its buttons in the order the session sent them,
@@ -355,6 +355,7 @@ fn dock(forward: Option<&PromptButton>, pass_on: Option<&PromptButton>) -> Eleme
             // `controls.css`) casts no box shadow.
             icon_button(icons::PASS_ON, &button_view.label)
                 .box_shadow(Vec::new())
+                .drop_shadow(shadow::PASS_ON.to_vec())
                 .enabled(button_view.enabled)
                 .on_press(Press::Button(button_view.id))
         }))

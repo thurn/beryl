@@ -2,15 +2,18 @@
 //! interface's look"): one `BoxShadow` record per shadow, outer ones before the element's panel
 //! and inset ones after it, as CSS paints a box's outer shadows, then its background, then its
 //! inset shadows and its border. Shadows are written last first, since CSS draws the first one
-//! on top. It allocates nothing.
+//! on top. An icon's drop shadows are written under it, one `Icon` record for each shadow from
+//! its cell (`widgets::icon_shadows`, `write_icon_shadows`). It allocates nothing.
 
 use glam::Vec2;
 
 use crate::element::Shadow;
-use crate::frame::{Band, Draw, FrameBuilder, box_shadow_reach};
+use crate::frame::{Band, Draw, FrameBuilder, Missing, box_shadow_reach};
 use crate::input::Rect;
 use crate::table::Camera;
 use crate::text::faded;
+use crate::widgets::icons::Icons;
+use crate::widgets::{IconId, icon_shadows};
 
 /// The element box the shadows of one element are cast from.
 #[derive(Clone, Copy, Debug)]
@@ -98,6 +101,62 @@ pub fn shape_radius(size: Vec2, radius: f32, spread: f32) -> f32 {
         return 0.0;
     }
     radius * ((short + 2.0 * spread).max(0.0) / short)
+}
+
+/// Writes the drop shadows `shadows` cast by `icon`, held in the atlas at `side` points and
+/// drawn over `at` in logical points of the window, bottom first: the cell of each shadow of
+/// the chain of `icon_shadows::CHAINS` that equals `shadows` (`Icons::shadow`), in the shadow's
+/// color faded by `opacity`. A cell's top left corner is `stage_pad` physical pixels at `scale`
+/// above and left of the icon's, and each of its texels is `stage_step` pixels; its offset is
+/// already in it. Returns a note of the first cell no page holds, which draws nothing, or of the
+/// chain when none is listed.
+#[expect(clippy::too_many_arguments, reason = "one icon's draw, as `write_shown` has it")]
+pub(super) fn write_icon_shadows(
+    shadows: &[Shadow],
+    icons: &Icons,
+    (icon, side): (IconId, u16),
+    at: Rect,
+    (scale, opacity): (f32, f32),
+    clip: u8,
+    builder: &mut FrameBuilder,
+    camera: &Camera,
+) -> Option<Missing> {
+    if shadows.is_empty() {
+        return None;
+    }
+    let missed = Missing::Icon {
+        icon: icon.0,
+        size: side,
+    };
+    let Some(chain) = icon_shadows::chain_of(icon, shadows) else {
+        return Some(missed);
+    };
+    let shadows = icon_shadows::shadows(chain);
+    let mut missing = None;
+    for stage in (0..shadows.len()).rev() {
+        let Some(sprite) = icons.shadow(icon, side, icon_shadows::code(chain, stage)) else {
+            missing.get_or_insert(missed);
+            continue;
+        };
+        let pad = f32::from(icon_shadows::stage_pad(shadows, stage, scale)) / scale;
+        let texel = f32::from(icon_shadows::stage_step(shadows, stage, scale)) / scale;
+        let rect = Rect {
+            x: at.x - pad,
+            y: at.y - pad,
+            width: f32::from(sprite.rect[2]) * texel,
+            height: f32::from(sprite.rect[3]) * texel,
+        };
+        let draw = Draw::icon(
+            camera.layer_transform(rect),
+            faded(shadows[stage].color, opacity),
+            sprite,
+        );
+        builder.draw(
+            Band::Layer,
+            if clip > 0 { draw.with_clip(clip) } else { draw },
+        );
+    }
+    missing
 }
 
 #[cfg(test)]

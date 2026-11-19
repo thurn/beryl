@@ -30,12 +30,12 @@ use glam::Vec2;
 
 use super::players::face_centre;
 use crate::data::space::hud::{STEP_FIXED, STEP_OFF};
-use crate::element::{Anchor, Display, Element, Press, Shown, Track, holder};
+use crate::element::{Anchor, Display, Element, Press, Shadow, Shown, Track, holder};
 use crate::frame::Role;
 use crate::manual::TablePress;
 use crate::screens::ScreenIn;
 use crate::table::Window;
-use crate::tokens::{color, size};
+use crate::tokens::{color, shadow, size};
 use crate::widgets::icons;
 
 /// One icon of the twelve: its label and the steps a stop at it stops in, or none for a step
@@ -202,6 +202,16 @@ fn row_of(at: usize) -> (i16, i16) {
     (row, row + 1)
 }
 
+/// The drop shadows of a step icon: `.step-current .step-icon`'s orange glow on the current
+/// step's (`here`), and `.step-icon`'s dark shadow on every other (phase-tracker.css).
+fn step_shadow(here: bool) -> Vec<Shadow> {
+    if here {
+        shadow::CURRENT_GLOW.to_vec()
+    } else {
+        shadow::STEP_ICON.to_vec()
+    }
+}
+
 /// The icon at `at` in `side`'s rows.
 fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>) -> Element {
     let stop = &STEP_STOPS[at];
@@ -225,6 +235,7 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
             color::STEP
         })
         .opacity(if here { 1.0 } else { opacity })
+        .drop_shadow(step_shadow(here))
         .selected(on);
     #[expect(
         clippy::cast_possible_truncation,
@@ -256,6 +267,7 @@ fn track_icon(at: usize, whose: &str, active: bool, here: bool) -> Element {
             color::STEP
         })
         .opacity(if here { 1.0 } else { STEP_OFF })
+        .drop_shadow(step_shadow(here))
         .selected(here)
         .on_press(Press::Table(TablePress::Step {
             #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]

@@ -4338,6 +4338,7 @@ reference is the web interface as WebKit draws it, at scale 2.
   report warns when a bundled font's `name` table differs from the web's WOFF2
   file of the same face. Neither side draws card scans unless `--art` is given,
   and then both read the app's scan cache.
+
 - **Boxes and styles.** Elements are paired by locator, then by role, name (or
   card) and parent, then by role and the nearest box within 24 points; the pairs
   and what is left over go to the snapshot's `joined.json`. "The same parent"
@@ -4355,6 +4356,7 @@ reference is the web interface as WebKit draws it, at scale 2.
   difference: `just b3d match gaps` groups those values by property and shape
   and ranks the groups by the screen area of the elements that use them, which
   is the order the style vocabulary is taught in.
+
 - **Effects.** `just b3d match samples` is a conformance suite: each sample in
   `data/beryl3d/match/samples.json` is one element with a box shadow, gradient,
   drop shadow, filter, mask, border or plain color the web interface uses,
@@ -4369,6 +4371,7 @@ reference is the web interface as WebKit draws it, at scale 2.
   `web-match.json`'s `samples` holds each sample's result under the ratchet
   rule. The suite's first run found that a translucent border was blended over
   what lay behind the panel, where CSS blends it over the panel's own fill.
+
 - **Shadows.** `Style::box_shadow` and `Style::drop_shadow` hold CSS's
   `box-shadow` and `drop-shadow()` filters as lists of `Shadow` (offset, blur,
   spread, color, inset). WebKit blurs both with a Gaussian about 0.85 times as
@@ -4395,6 +4398,36 @@ reference is the web interface as WebKit draws it, at scale 2.
   each other as sums. Overlapping halos of neighbouring glyphs are drawn over
   each other rather than blurred together, which the text sample's offsets of a
   point or two keep within the tolerance.
+
+  `WebKit` keeps a drop shadow's blur as a whole number of CSS pixels, so blurs
+  of 1 and 1.5 points draw the same glow, and its Gaussian for a small blur is
+  narrower than 0.85 times the blur: fitting a white glow on an icon at scale 2
+  gave deviations of 1.2, 3.2 and 5.0 pixels for blurs of 1, 2 and 3 points,
+  each 0.85 times the blur less a variance of about 1.45 square pixels
+  (`Shadow::drop_sigma`, `DROP_VARIANCE`).
+
+  Icons cast drop shadows from cells of their own too, but rasterized from a
+  fixed list rather than on request, since icons are rasterized once per scale
+  before the first frame (`Atlas::add_icons`): `widgets::icon_shadows::CHAINS`
+  lists every chain of drop shadows an icon is drawn with, beside the icons, and
+  an icon given a chain not listed draws no shadow and is noted as
+  `Missing::Icon` for the "drawn" check. Because the chains are known, the
+  worker computes each as CSS does rather than as `DropLayers`: shadow `k`'s
+  cell is the icon and every shadow before it composited, blurred by shadow
+  `k`'s deviation and moved by its offset, and drawing the cells last shadow
+  first and then the icon gives CSS's result, since compositing over is
+  associative. A chain of `n` shadows is `n` cells (`IconCell::shadow` names
+  one), each the icon's square grown by every shadow's reach up to it, stored at
+  one texel per half deviation (`icon_shadows::stage_step`), which the atlas's
+  linear filtering draws smooth. Drawn as `DropLayers` instead, the current
+  step's three-shadow glow was about 15 levels too bright beside the icon. The
+  worker packs every icon cell, the orbs' layers and the shadows' cells tallest
+  first, which keeps them to five of the atlas's seven pages at three pixels a
+  point. The step icons, the phase icons, full control's mark and the phone's
+  pass-on glyph carry the web's drop shadows. The web's sparkle (`.sparkle`) and
+  stage lines (`.stage-lines`) have drop shadows too, but Beryl 3D draws no
+  sparkle and draws its lines as light (`light::lines`), not as icons.
+
 - **Gradients, masks and filters.** `Style::background_image` holds CSS's
   `background-image` as a list of `Gradient` (linear at an angle, or radial with
   a shape, an extent and a centre, each through up to 8 color stops), drawn over
@@ -4422,7 +4455,8 @@ reference is the web interface as WebKit draws it, at scale 2.
   gradients (a blurred flat color is drawn as a gradient of one stop), by the
   closed form the box shadows use; the inside of a gradient changes too little
   under a blur of a few points to matter, which the blur sample confirms at a
-  `p995` of 3. Drop shadows of text under a filter keep their colors.
+  `p995` of 3. Drop shadows of text and icons under a filter keep their colors.
+
 - **Pixels.** What is left after boxes and styles agree is compared as pixels,
   with glyph pixels masked, because glyph antialiasing differs between WebKit
   and parley with swash. `just b3d match pixels <target> --at <moment>` takes
@@ -4449,6 +4483,7 @@ reference is the web interface as WebKit draws it, at scale 2.
   the subtree's records. A record the table writes for a card after a later
   element was added would be kept with that element instead; the flat layer
   writes each node's records right after adding it, so its subtrees are exact.
+
 - **Motion.** `just b3d match motion <recording> --from <moment> --to <moment>`
   compares each moving element's path, size and opacity frame by frame, which
   `timeline-parity` (each step's start, end and verb) does not. Beryl 3D prints
@@ -4470,6 +4505,7 @@ reference is the web interface as WebKit draws it, at scale 2.
   within one view of the page; the web's animation tends to start about a frame
   later than Beryl 3D's, because the page takes a frame to react to the views it
   is handed.
+
 - **Score.**
   `just b3d match score [prefix] [--update] [--raise] [--refresh-web]` takes the
   snapshot of each reference target (one desktop window and one phone window of
@@ -4489,12 +4525,14 @@ reference is the web interface as WebKit draws it, at scale 2.
   testing screen has no reference target, because one frame of it holds more
   records than the renderer's frame limit. `--refresh-web` takes every snapshot
   again and rewrites the committed web reference.
+
 - **The committed web reference.** `data/beryl3d/match/web/<target>.json` holds
   the web interface's element records of each reference target, without
   pictures, paint order or unread fields, and with boxes rounded to hundredths
   of a point. It is written one element to a line, so that a change to the web
   interface shows as a short diff. `just b3d match score --refresh-web` rewrites
   it.
+
 - **`b3d-web-match`, a regression family.** One check for each reference target.
   It plays the recording in Beryl 3D, pairs the elements with the committed
   reference and fails when the target's `unmatched`, `boxes`, `styles` or
@@ -4505,6 +4543,7 @@ reference is the web interface as WebKit draws it, at scale 2.
   change to the web interface runs none of Beryl 3D's checks (decision C17) and
   its result depends only on its declared inputs. The whole family takes about a
   second after the `b3d` build.
+
 - **`b3d-web-drift`, an exploration family.** One check for each reference
   target, run only in the idle class. It shoots the live web interface, compares
   it with the committed reference, and runs the full score with pixels. It fails

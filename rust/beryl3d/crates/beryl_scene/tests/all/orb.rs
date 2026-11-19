@@ -24,6 +24,7 @@ fn orb_cells() -> Vec<IconCell> {
                     icon: orb::icon(side, at),
                     size: orb::cell_width(layer.views[orb::seat(side)][2], units),
                     rect: [index, 0, 1, 1],
+                    shadow: 0,
                 });
             }
         }
