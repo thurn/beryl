@@ -63,9 +63,10 @@ fn a_release_that_fails_is_retried_at_the_next_check_without_another_reminder() 
 }
 
 #[test]
-fn the_check_tells_the_dispatcher_an_archived_session_is_gone() {
+fn the_check_asks_for_get_sessions_result_and_tells_codex_an_archived_session_is_gone() {
     let rig = silent_worker();
     let check = rig.step().unwrap();
     let prompt = check.prompt.unwrap();
-    assert!(prompt.contains("An archived session is `gone`"), "{prompt}");
+    assert!(prompt.contains("Call get_session"), "{prompt}");
+    assert!(prompt.contains("an archived session is `gone`"), "{prompt}");
 }
