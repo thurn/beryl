@@ -381,27 +381,29 @@ fn find_stuck(
         .map(|epic| {
             let lines = waiting[epic]
                 .iter()
-                .map(|entry| {
-                    let mut by: Vec<String> =
-                        entry.blocked_by.iter().map(|b| b.id.to_string()).collect();
-                    by.extend(unmet(&entry.ticket.labels, known).into_iter().map(|label| {
-                        if label == "needs:person" {
-                            "a person (needs:person)".to_owned()
-                        } else {
-                            format!("{label}, which no registered machine has")
-                        }
-                    }));
-                    let by = if by.is_empty() {
-                        "nothing listed".to_owned()
-                    } else {
-                        by.join(", ")
-                    };
-                    format!("- {} waits on {by}", entry.ticket.id)
-                })
+                .map(|entry| waiting_line(entry, known))
                 .collect();
             ((*epic).to_owned(), lines)
         })
         .collect()
+}
+
+/// One line saying what a waiting ticket waits on.
+fn waiting_line(entry: &GraphTicket, known: &BTreeSet<String>) -> String {
+    let mut by: Vec<String> = entry.blocked_by.iter().map(|b| b.id.to_string()).collect();
+    by.extend(unmet(&entry.ticket.labels, known).into_iter().map(|label| {
+        if label == "needs:person" {
+            "a person (needs:person)".to_owned()
+        } else {
+            format!("{label}, which no registered machine has")
+        }
+    }));
+    let by = if by.is_empty() {
+        "nothing listed".to_owned()
+    } else {
+        by.join(", ")
+    };
+    format!("- {} waits on {by}", entry.ticket.id)
 }
 
 fn epic_filing(epic: &str, lines: &[String]) -> Filing {
