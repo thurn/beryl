@@ -389,5 +389,10 @@
     "label": "Ignite's release build is incremental and its dev and test profiles keep only line tables: after a daemon-only edit the release rebuild took 75 s on 3 cores and now takes about 4 s, and the express commands (clippy, test build and nextest run) took 85 s and now take about 70 s",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Beryl's `.claude/settings.json` denies tools that 1,737 sessions over 14 days called at most twice (Artifact, Workflow, the built-in browser pane, Playwright and Chrome, the iOS simulator, charts, plugin suggestions, the app's panes and pull requests), and Claude Code leaves a denied tool out of every request's context",
+    "metric": "bead.dollars",
+    "expect": "down"
   }
 ]
