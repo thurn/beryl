@@ -14,6 +14,12 @@
 //!   whether the failure looks like damage to the tree's build rather than to the source (a link
 //!   error, a compiler crash, unreadable metadata). The caller clears those crates
 //!   ([`clear_crates`]) and builds once more before it reports the failure.
+//! - A link error can come from a damaged library rather than from the crate being linked. On
+//!   2026-11-19 the binary `record` failed to link in a landing tree for symbols that the library
+//!   of one of its dependencies referenced and no longer held, five times in twelve hours: each
+//!   repair cleared `record`, which was not damaged, and left the library.
+//!   So [`compile_failure`] also names each crate whose library the linker reports an object
+//!   of (`lib<crate>-<hash>.rlib[<n>](…)` on macOS, `lib<crate>-<hash>.rlib(…)` elsewhere).
 //! - A build that was ended partway marks its target directory ([`mark_suspect`]). The next build
 //!   there first clears each unit (one build of a crate, `<crate>-<hash>`) that a compile left
 //!   unfinished ([`clear_if_suspect`]): rustc names a session folder `s-…-working` until the
@@ -78,10 +84,54 @@ pub fn compile_failure(output: &str) -> Option<CompileFailure> {
             crates.push(name);
         }
     }
-    (!crates.is_empty()).then(|| CompileFailure {
-        crates,
-        damaged: DAMAGE.iter().any(|text| output.contains(text)),
-    })
+    if crates.is_empty() {
+        return None;
+    }
+    let damaged = DAMAGE.iter().any(|text| output.contains(text));
+    if damaged {
+        for name in linked_crates(output) {
+            if !crates.contains(&name) {
+                crates.push(name);
+            }
+        }
+    }
+    Some(CompileFailure { crates, damaged })
+}
+
+/// The crates whose libraries a linker's error names an object of, in the order they first
+/// appear.
+///
+/// The linkers name the member of a static library that holds a symbol or a reference as the
+/// library's file followed by the member: `libfoo-<hash>.rlib[15](foo-<hash>.cgu.rcgu.o)` (the
+/// macOS linker) or `…/libfoo-<hash>.rlib(foo-<hash>.cgu.rcgu.o)` (GNU ld, lld, MSVC). The
+/// linker's command line, which Cargo prints too, lists every library without a member, so a
+/// library is named only when a `[` or `(` follows `.rlib`.
+fn linked_crates(output: &str) -> Vec<String> {
+    let mut crates: Vec<String> = Vec::new();
+    for line in output.lines() {
+        let mut rest = line;
+        while let Some(at) = rest.find(".rlib") {
+            let (before, after) = rest.split_at(at);
+            rest = &after[".rlib".len()..];
+            if !(rest.starts_with('[') || rest.starts_with('(')) {
+                continue;
+            }
+            let file = before
+                .rsplit(|c: char| {
+                    c.is_whitespace() || matches!(c, '/' | '\\' | '"' | '(' | '{' | ',')
+                })
+                .next()
+                .unwrap_or(before);
+            let Some((krate, hash)) = file.strip_prefix("lib").and_then(|f| f.rsplit_once('-'))
+            else {
+                continue;
+            };
+            if hash.len() == 16 && hashed(hash) && !crates.iter().any(|c| c == krate) {
+                crates.push(krate.to_owned());
+            }
+        }
+    }
+    crates
 }
 
 /// The crate a `could not compile` line names, from its package and the text after it.
@@ -420,7 +470,7 @@ impl BuildManager {
             clear_crates(target, &failure.crates);
         }
         eprintln!(
-            "ignite: {} failed to build in {}; building once more after clearing {}",
+            "ignite: {} failed to build in {}; clearing {} as a damaged target directory and building once more",
             plan.request.product,
             plan.request.tree,
             failure.crates.join(", ")

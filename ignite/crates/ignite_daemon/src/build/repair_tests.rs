@@ -41,6 +41,44 @@ fn a_source_error_is_not_damage_and_an_output_without_crates_is_no_compile_failu
     assert_eq!(compile_failure("error: failed to load manifest\n"), None);
 }
 
+/// A link error names the library that holds the bad reference, which is cleared too; the
+/// libraries on the linker's command line are not.
+#[test]
+fn a_link_failure_names_the_libraries_the_linker_reports() {
+    let macos = "\
+error: linking with `cc` failed: exit status: 1
+  = note:  \"cc\" \"/t/debug/deps/{libgame_inspect-0556e3158244f6c4,libserde-1f1a41c00f3c1847}.rlib\" \"-o\" \"/t/debug/deps/record-cda05fcc31e2b356\"
+          Undefined symbols for architecture arm64:
+            \"_anon.2e5a857eea634338498684503b2aa78f.5.llvm.12721422738467408669\", referenced from:
+                __RINvXs4_10serde_json in libgame_inspect-0556e3158244f6c4.rlib[43](game_inspect-0556e3158244f6c4.41y.04s541b.rcgu.o)
+                __RINvXs5_10serde_json in libgame_inspect-0556e3158244f6c4.rlib[80](game_inspect-0556e3158244f6c4.9fo.04s541b.rcgu.o)
+          ld: symbol(s) not found for architecture arm64
+
+error: could not compile `game_record` (bin \"record\") due to 1 previous error
+";
+    assert_eq!(
+        compile_failure(macos).map(|f| f.crates),
+        Some(vec!["record".to_owned(), "game_inspect".to_owned()])
+    );
+    let linux = "\
+error: linking with `cc` failed: exit status: 1
+  = note: /usr/bin/ld: /t/debug/deps/libgame_scene-1c904d4dab1879b1.rlib(game_scene-1c904d4dab1879b1.a1.rcgu.o): in function `draw':
+          undefined reference to `_anon.e15180dca39ec90f.2.llvm.168'
+error: could not compile `game_record` (bin \"record\") due to 1 previous error
+";
+    assert_eq!(
+        compile_failure(linux).map(|f| f.crates),
+        Some(vec!["record".to_owned(), "game_scene".to_owned()])
+    );
+    // A source error leaves libraries alone, even one the output happens to name.
+    let source = "error[E0308]: mismatched types in libgame_scene-1c904d4dab1879b1.rlib(x.o)\n\
+                  error: could not compile `game_rules` (lib) due to 1 previous error\n";
+    assert_eq!(
+        compile_failure(source).map(|f| f.crates),
+        Some(vec!["game_rules".to_owned()])
+    );
+}
+
 #[test]
 fn the_units_of_a_crate_are_its_hashed_deps_files() {
     let dir = scratch("units");

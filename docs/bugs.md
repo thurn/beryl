@@ -970,3 +970,21 @@ fixed in the same session. Newest first.
   zone or a new store entry that outlasts a turn needs a line in `off_board` or
   in the checkpoint; a check that every scenario's turn-start checkpoint either
   rebuilds to the same board or says why not would find the next one.
+
+- **Ignite's build repair cleared the binary that failed to link, not the
+  damaged library it linked.** In a landing tree, the Beryl 3D product failed
+  five times in twelve hours, and tip verification held `master` back for over
+  two hours: the binary `record` failed to link for `.llvm.<n>` symbols that
+  `libberyl_inspect-<hash>.rlib` referenced but no longer held, because that
+  library held objects from two compiles. The build manager clears and rebuilds
+  a crate whose failure looks like damage to the tree's build, but it read the
+  crates only from Cargo's `could not compile` lines, which name the binary.
+  Each repair rebuilt `record` and failed again in about a second. Fixed:
+  `compile_failure` in `ignite_daemon`'s `build/repair.rs` also names each crate
+  whose library the linker reports an object of, and the repair clears those
+  too. Seeding a new tree from another tree's build did not cause the damage
+  (only ticket trees are seeded, and this was a landing tree), but it copied the
+  damaged library to the ticket tree it seeded. Prevention: the guard is the
+  test `a_link_failure_in_a_dependency_clears_the_dependency`; a repair that
+  reads a failure's output should be tested against a real output, not one
+  written for the test.

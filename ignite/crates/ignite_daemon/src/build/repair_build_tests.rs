@@ -86,6 +86,40 @@ fn a_link_failure_clears_the_crate_and_builds_once_more() {
     );
 }
 
+/// What Cargo printed when the binary `record` failed to link because its dependency's library,
+/// not `record`, held objects from two compiles, shortened.
+const DEPENDENCY_LINK_FAILURE: &str = "\
+error: linking with `cc` failed: exit status: 1
+  = note: Undefined symbols for architecture arm64:
+            \"_anon.2e5a857eea634338498684503b2aa78f.5.llvm.12721422738467408669\", referenced from:
+                __RINvXs4_serde_json in libsession_types-0123456789abcdef.rlib[43](session_types-0123456789abcdef.41y.04s541b.rcgu.o)
+          ld: symbol(s) not found for architecture arm64
+
+error: could not compile `game_record` (bin \"record\") due to 1 previous error
+";
+
+/// A link error in a dependency's library clears that library, not only the binary that failed.
+#[test]
+fn a_link_failure_in_a_dependency_clears_the_dependency() {
+    let f = fixture("repair-dependency", false);
+    let debug = damaged_target(&f);
+    f.launcher
+        .with(|s| s.fail_with.push_back(DEPENDENCY_LINK_FAILURE.to_owned()));
+    let result = f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    assert!(matches!(result, BuildResult::Built { .. }), "{result:?}");
+    assert_eq!(f.launcher.builds().len(), 2);
+    assert_eq!(
+        present(&debug.join("incremental")),
+        ["session-1imqhd34qdwcf"]
+    );
+    let deps = present(&debug.join("deps"));
+    assert!(
+        deps.iter().all(|name| !name.starts_with("session_types")),
+        "{deps:?}"
+    );
+    assert!(deps.contains(&"session-1d2e56b5d8df6699".to_owned()));
+}
+
 #[test]
 fn a_build_that_fails_twice_is_reported_and_remembered() {
     let f = fixture("repair-twice", false);
