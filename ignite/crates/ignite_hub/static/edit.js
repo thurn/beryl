@@ -282,13 +282,13 @@
         const bar = button.closest(".c-edit-actions");
         const id = context()?.dataset.ticket;
         if (!id || !bar) return;
-        if (action === "close") {
-            closeForm(bar, id);
-            return;
-        }
+        // Closing takes one click: the dashboard records no reason, so the ticket's close reason
+        // is the same placeholder the hub uses when a session closes without one.
         const ops = action === "release"
             ? [{ op: "update", id, set: { status: "open" } }]
-            : [{ op: "reopen", id }];
+            : action === "close"
+              ? [{ op: "close", id, reason: "closed" }]
+              : [{ op: "reopen", id }];
         bar.querySelectorAll("button").forEach((el) => (el.disabled = true));
         try {
             await send(ops);
@@ -307,52 +307,6 @@
             bar.append(error);
         }
         error.textContent = message;
-    }
-
-    function closeForm(bar, id) {
-        if (bar.querySelector(".c-edit-form")) return;
-        const reason = element("textarea", { rows: 3, placeholder: "Reason" });
-        reason.setAttribute("aria-label", "Close reason");
-        const error = element("div", { className: "c-edit-error", role: "alert" });
-        const form = element("form", { className: "c-edit-form" }, [reason]);
-        const done = () => {
-            form.remove();
-            bar.classList.remove("c-editing");
-            flush(false);
-        };
-        form.append(buttons("Close ticket", done), error);
-        form.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") {
-                e.preventDefault();
-                done();
-            } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                form.requestSubmit();
-            }
-        });
-        form.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            if (!reason.value.trim()) {
-                error.textContent = "Say why it is closed.";
-                reason.focus();
-                return;
-            }
-            form.querySelectorAll("button, textarea").forEach((el) => (el.disabled = true));
-            try {
-                await send([{ op: "close", id, reason: reason.value.trim() }]);
-            } catch (failure) {
-                form.querySelectorAll("button, textarea").forEach((el) => (el.disabled = false));
-                error.textContent = failure.message;
-                return;
-            }
-            form.remove();
-            bar.classList.remove("c-editing");
-            bar.classList.add("c-saving");
-            flush(true);
-        });
-        bar.classList.add("c-editing");
-        bar.append(form);
-        reason.focus();
     }
 
     // ---- Comments -------------------------------------------------------------

@@ -95,7 +95,7 @@ pub fn adders(missing: &[(&str, &str)]) -> String {
 }
 
 /// The status actions at the top of the rail: release a ticket pending approval, close an open
-/// one (the script asks for the reason) or reopen a closed one.
+/// one (in one click, with no reason) or reopen a closed one.
 pub fn actions(status: Status) -> String {
     let button = |action: &str, text: &str, primary: bool| {
         format!(
