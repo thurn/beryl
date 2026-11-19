@@ -5,6 +5,7 @@ Running the programs is left to the families' own runs, which need the `b3d` bui
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tomllib
@@ -355,8 +356,52 @@ def test_format_results_blame_the_package_that_holds_the_file() -> None:
 
 
 # What every Beryl 3D family reads under ui/: the fixtures' definitions and the generated
-# protocol types, which the recordings are made from.
-UI_READ_BY_EVERY_FAMILY = ["ui/src/generated/**", "ui/fixtures.json"]
+# protocol types, which the recordings are made from, and the audio manifests that Beryl 3D's
+# build script and `audio/files.rs` read.
+UI_READ_BY_EVERY_FAMILY = [
+    "ui/src/generated/**",
+    "ui/fixtures.json",
+    "ui/src/audio/manifest.json",
+    "ui/src/audio/loops.json",
+]
+
+
+def test_every_file_under_ui_that_beryl_3d_embeds_or_reads_is_an_input_of_every_family() -> (
+    None
+):
+    """The `check-inputs` source rule only follows `crate-closure` families, and Beryl 3D's
+    families name their inputs by hand, so this test compares them with the files under ui/
+    that its sources embed with `include_str!` or its build scripts read."""
+    pattern = re.compile(r"ui/[A-Za-z0-9_./-]+\.json")
+    read: set[str] = set()
+    for source in (paths.REPO / "rust" / "beryl3d" / "crates").rglob("*.rs"):
+        if "target" in source.parts:
+            continue
+        for line in source.read_text().splitlines():
+            if (
+                source.name == "build.rs"
+                or "include_str!" in line
+                or "include_bytes!" in line
+            ):
+                read.update(pattern.findall(line))
+    assert read, "no read of a file under ui/ found: the scan is broken"
+    families = manifest()
+    builders = [families["product"]["b3d"], *families["family"].values()]
+    # Formatting and the source rules read Rust text, never what a build embeds.
+    reads_text_only = [families["family"]["b3d-format"], families["family"]["b3d-source"]]
+    for declared in builders:
+        if declared in reads_text_only:
+            continue
+        inputs = declared.get("inputs", [])
+        assert isinstance(inputs, list)
+        if "rust/beryl3d/**" not in inputs and not any(
+            str(i).startswith("rust/beryl3d/crates/") for i in inputs
+        ):
+            continue
+        missing = sorted(
+            f for f in read if f not in inputs and not f.startswith("ui/src/generated/")
+        )
+        assert not missing, (declared.get("kind"), missing)
 
 
 def test_no_regression_family_reads_the_web_interface() -> None:

@@ -54,6 +54,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/beryl3d.py",
 ]
@@ -126,6 +128,8 @@ inputs = [
   "data/card-store.tsv",
   "data/catalogs.json",
   "ui/src/generated/**",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "data/set-groups.json",
   "data/table-commands.json",
   "data/save-breaks.json",
@@ -236,6 +240,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
 ]
 
@@ -296,6 +302,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
@@ -374,6 +382,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
@@ -451,6 +461,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/beryl3d/gate.py",
   "tools/src/beryl_tools/ignite/__init__.py",
@@ -486,7 +498,7 @@ inputs = [
 # when one of its seats differs from the web interface's timeline by more steps than
 # data/beryl3d/timeline-parity.json allows. The web side is the committed copy,
 # data/beryl3d/timeline/web/<fixture>.jsonl, so the check starts no `node` and reads no file
-# under ui/ beyond `ui/fixtures.json` and `ui/src/generated/**`, which every Beryl 3D family
+# under ui/ beyond `ui/fixtures.json`, `ui/src/generated/**` and the two audio files, which every Beryl 3D family
 # reads. A change to the web interface therefore runs none of Beryl 3D's checks (decision C17),
 # and `b3d-timeline-drift` finds when the copy no longer matches the web interface. Each check
 # reads its copy and the card files its recording plays. The card spec moments are compared by
@@ -534,6 +546,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "data/beryl3d/timeline/web/**",
   "tools/src/beryl_tools/beryl3d/timeline.py",
@@ -617,6 +631,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "data/beryl3d/timeline/web/**",
   "tools/src/beryl_tools/beryl3d/timeline.py",
@@ -661,7 +677,7 @@ inputs = [
 # data/beryl3d/web-match.json: one check per target, which fails when the target's unmatched,
 # boxes, styles or unsupported count rises above its entry. The web side is the committed
 # reference, data/beryl3d/match/web/<target>.json, so the check needs no browser and reads no
-# file under ui/ beyond `ui/fixtures.json` and `ui/src/generated/**`, which every Beryl 3D family
+# file under ui/ beyond `ui/fixtures.json`, `ui/src/generated/**` and the two audio files, which every Beryl 3D family
 # reads. A change to the web interface therefore runs none of Beryl 3D's checks (decision C17),
 # and the result is a function of the declared inputs. Pixels are left out, because they need
 # the web's picture; `b3d-web-drift` and `just b3d match score` count them. `b3d` is needed for
@@ -709,6 +725,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "data/beryl3d/web-match.json",
   "data/beryl3d/match/web/**",
@@ -796,6 +814,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "data/beryl3d/web-match.json",
   "data/beryl3d/match/web/**",
@@ -891,6 +911,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
+  "ui/src/audio/manifest.json",
+  "ui/src/audio/loops.json",
   "docs/sample-decks/**",
   "tools/src/beryl_tools/beryl3d/**",
   "tools/src/beryl_tools/bench.py",
