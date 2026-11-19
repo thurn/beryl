@@ -249,7 +249,7 @@ fn a_product_build_is_recorded_with_its_compile_units() {
             units: vec![unit("small", 2.0), unit("large", 40.0)],
         },
     );
-    let tree = world.checks.open(&tree_id).unwrap();
+    let tree = world.checks.open(&world.ctx, &tree_id).unwrap().1;
     let mut run = CheckRun::default();
     let who = execute::build_for(&options(false));
     let deps = vec!["deps".to_owned()];
