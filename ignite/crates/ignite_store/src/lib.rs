@@ -4,6 +4,7 @@
 //!   records and the fleet.
 //! - [`local`]: each daemon's own database: its trees, grants, handles, unsent records and its
 //!   copy of the result cache.
+//! - [`mirror`]: each daemon's append-only copy of every version of the hub's tickets.
 //! - [`import`]: reading the old systems' data into the hub's database at the switch.
 //!
 //! Each database's schema is SQL applied by [`migrate`], which records the schema version in the
@@ -13,6 +14,7 @@ pub mod hub;
 pub mod import;
 pub mod local;
 pub mod migrate;
+pub mod mirror;
 
 use std::fmt;
 

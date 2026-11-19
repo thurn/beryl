@@ -491,3 +491,19 @@ fn tip_costs_rounds_the_last_round_and_rates_use_their_routes() {
         ]
     );
 }
+
+#[test]
+fn an_export_names_its_tickets_and_reads_json_lines() {
+    let line = |id: &str| {
+        format!(
+            r#"{{"id":"{id}","parent":null,"next_child":1,"title":"t","type":"task","status":"open","priority":2,"assignee":null,"defer_until":null,"close_reason":null,"created_at":"2026-01-01T00:00:00.000Z","created_by":"x","updated_at":"2026-01-01T00:00:00.000Z","closed_at":null,"version":3}}"#
+        )
+    };
+    let body = format!("{}\n{}\n", line("T.1"), line("T.2"));
+    let hub = FakeHttpHub::start(move |_, _, _| (200, body.clone()));
+    let ids = [TicketId::new("T.1").unwrap(), TicketId::new("T.2").unwrap()];
+    let tickets = hub.client().export(None, &ids).unwrap();
+    let got: Vec<&str> = tickets.iter().map(|w| w.ticket.id.as_str()).collect();
+    assert_eq!(got, ["T.1", "T.2"]);
+    assert_eq!(hub.seen()[0].url, "/test/api/export?id=T.1&id=T.2");
+}

@@ -56,7 +56,15 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
         }
         "/graph" => graph(conn, request, now),
         "/leases" => ok(&leases::list(conn, now).map_err(|e| store_failure(&e))?),
-        "/export" => transfer::export(conn, request.param("after")),
+        "/export" => {
+            let ids: Vec<&str> = request
+                .query
+                .iter()
+                .filter(|(key, _)| key == "id")
+                .map(|(_, value)| value.as_str())
+                .collect();
+            transfer::export(conn, request.param("after"), &ids)
+        }
         "/batch" => apply_batch(conn, request, now),
         "/import" => transfer::import(conn, &body(request)?),
         _ => {

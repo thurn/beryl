@@ -26,8 +26,8 @@ use ignite_core::protocol::hub::{
     TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
-    BatchReply, BatchRequest, FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, Ticket,
-    TicketDetail, TicketQuery,
+    BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
+    LeaseReply, Ticket, TicketDetail, TicketQuery, WholeTicket,
 };
 use ignite_core::tipround::{LastTipRound, TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
 use ignite_core::traits::{Error, Hub, Result};
@@ -525,6 +525,31 @@ impl Hub for HubClient {
 
     fn batch(&self, request: &BatchRequest) -> Result<BatchReply> {
         self.post("/batch", request)
+    }
+
+    /// `GET /export`, whose body is JSON Lines: one whole ticket per line.
+    fn export(&self, after: Option<&TicketId>, ids: &[TicketId]) -> Result<Vec<WholeTicket>> {
+        let mut query: Vec<(&str, String)> = ids.iter().map(|id| ("id", id.to_string())).collect();
+        if let Some(after) = after {
+            query.push(("after", after.to_string()));
+        }
+        let url = format!("{}/export", self.base);
+        let answer = self.with_retries("/export", || {
+            let mut request = self.authorized(self.agent.get(&url));
+            for (key, value) in &query {
+                request = request.query(*key, value);
+            }
+            request.call()
+        })?;
+        let body = self.ok("/export", answer)?.body;
+        body.split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| decode("/export", line))
+            .collect()
+    }
+
+    fn import(&self, request: &ImportRequest) -> Result<ImportReply> {
+        self.post("/import", request)
     }
 }
 

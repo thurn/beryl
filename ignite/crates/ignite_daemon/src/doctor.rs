@@ -25,6 +25,7 @@ use crate::update::ExecutableStore;
 
 pub mod listener;
 mod loops;
+mod mirror;
 mod running;
 mod trees;
 
@@ -739,6 +740,8 @@ fn read_manifest(repo: &Path, dir: &Path) -> std::result::Result<Manifest, Strin
 pub struct DoctorVerb {
     /// The daemon's background loops; `None` where there are none, as in a test.
     pub loops: Option<LoopHealth>,
+    /// The machine's ticket mirror (see [`crate::mirror`]); `None` where there is none.
+    pub mirror: Option<PathBuf>,
 }
 
 impl Verb for DoctorVerb {
@@ -772,6 +775,9 @@ impl Verb for DoctorVerb {
         let mut findings = diagnose(&input);
         if let Some(health) = &self.loops {
             findings.extend(loops::findings(health));
+        }
+        if let Some(path) = &self.mirror {
+            findings.push(mirror::finding(path, ctx.hub.as_ref(), ctx.clock.now()));
         }
         report(&findings)
     }

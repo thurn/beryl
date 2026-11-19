@@ -539,6 +539,10 @@ pub struct WholeTicket {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImportRequest {
     pub tickets: Vec<WholeTicket>,
+    /// Replace each stored ticket even when it was updated later than the imported copy, as a
+    /// rollback to an earlier moment must. Without it, such a ticket is skipped.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub force: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

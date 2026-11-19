@@ -2,9 +2,12 @@
 //! 200 at a time, as the ticket service moved them for backups and restores.
 //!
 //! Export writes JSON Lines ordered by ID, starting after the `after` parameter, and an empty
-//! body at the end. Import applies one page in one transaction: a ticket whose stored copy was
-//! updated later than the imported one is skipped, and an imported ticket replaces the stored
-//! one's columns, edges, comments and history and adds its aliases.
+//! body at the end. Given one or more `id` parameters instead, it writes those tickets (each that
+//! exists), which is how each machine's ticket mirror fetches the tickets the feed says changed.
+//! Import applies one page in one transaction: a ticket whose stored copy was updated later than
+//! the imported one is skipped unless the request is forced, as a rollback from a mirror is, and
+//! an imported ticket replaces the stored one's columns, edges, comments and history and adds its
+//! aliases.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -26,12 +29,24 @@ const PAGE: usize = 200;
 /// Columns that hold JSON text.
 const JSON_COLUMNS: &[&str] = &["labels", "metadata", "landed", "saving"];
 
-/// One page of whole tickets after `after`, as JSON Lines.
+/// One page of whole tickets after `after`, or the tickets `ids` names, as JSON Lines.
 pub(super) fn export(
     conn: &Connection,
     after: Option<&str>,
+    ids: &[&str],
 ) -> std::result::Result<Response, Response> {
-    let page = whole_tickets(conn, after.unwrap_or_default()).map_err(|e| store_failure(&e))?;
+    if ids.len() > PAGE {
+        return Err(failure(
+            400,
+            &format!("At most {PAGE} tickets can be exported at once"),
+        ));
+    }
+    let page = if ids.is_empty() {
+        whole_tickets(conn, after.unwrap_or_default())
+    } else {
+        named_tickets(conn, ids)
+    }
+    .map_err(|e| store_failure(&e))?;
     let mut body = String::new();
     for ticket in page {
         body.push_str(&json!(ticket).to_string());
@@ -53,17 +68,33 @@ fn whole_tickets(conn: &Connection, after: &str) -> Result<Vec<WholeTicket>> {
         .collect::<rusqlite::Result<_>>()?;
     let mut page = Vec::with_capacity(ids.len());
     for id in ids {
-        let ticket = tickets::load(conn, &id)?
+        let whole = whole_ticket(conn, &id)?
             .ok_or_else(|| StoreError::Invalid(format!("ticket {id} vanished")))?;
-        page.push(WholeTicket {
-            ticket,
-            edges: edges::from(conn, &id)?,
-            comments: tickets::comments(conn, &id)?,
-            history: tickets::history(conn, &id)?,
-            aliases: aliases(conn, &id)?,
-        });
+        page.push(whole);
     }
     Ok(page)
+}
+
+/// Each ticket of `ids` that exists, in the order given.
+fn named_tickets(conn: &Connection, ids: &[&str]) -> Result<Vec<WholeTicket>> {
+    let mut page = Vec::with_capacity(ids.len());
+    for id in ids {
+        page.extend(whole_ticket(conn, id)?);
+    }
+    Ok(page)
+}
+
+fn whole_ticket(conn: &Connection, id: &str) -> Result<Option<WholeTicket>> {
+    let Some(ticket) = tickets::load(conn, id)? else {
+        return Ok(None);
+    };
+    Ok(Some(WholeTicket {
+        ticket,
+        edges: edges::from(conn, id)?,
+        comments: tickets::comments(conn, id)?,
+        history: tickets::history(conn, id)?,
+        aliases: aliases(conn, id)?,
+    }))
 }
 
 fn aliases(conn: &Connection, id: &str) -> Result<Vec<String>> {
@@ -85,7 +116,7 @@ pub(super) fn import(
     }
     let reply = (|| {
         let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let reply = import_page(&transaction, &request.tickets)?;
+        let reply = import_page(&transaction, &request.tickets, request.force)?;
         transaction.commit()?;
         Ok(reply)
     })()
@@ -93,7 +124,7 @@ pub(super) fn import(
     Ok(Response::json(200, &json!(reply)))
 }
 
-fn import_page(conn: &Connection, page: &[WholeTicket]) -> Result<ImportReply> {
+fn import_page(conn: &Connection, page: &[WholeTicket], force: bool) -> Result<ImportReply> {
     let mut seen = HashSet::new();
     for whole in page {
         let id = whole.ticket.id.as_str();
@@ -124,7 +155,7 @@ fn import_page(conn: &Connection, page: &[WholeTicket]) -> Result<ImportReply> {
     let seq = Seq(current.max(floor).0 + 1);
     let mut changed = Vec::new();
     for whole in page {
-        if import_ticket(conn, whole, seq)? {
+        if import_ticket(conn, whole, seq, force)? {
             changed.push(whole.ticket.id.clone());
         }
     }
@@ -153,8 +184,9 @@ fn import_page(conn: &Connection, page: &[WholeTicket]) -> Result<ImportReply> {
     })
 }
 
-/// Writes one ticket and its rows; whether anything changed.
-fn import_ticket(conn: &Connection, whole: &WholeTicket, seq: Seq) -> Result<bool> {
+/// Writes one ticket and its rows; whether anything changed. A stored ticket updated later than
+/// `whole` is left alone unless `force` is set.
+fn import_ticket(conn: &Connection, whole: &WholeTicket, seq: Seq, force: bool) -> Result<bool> {
     let id = whole.ticket.id.as_str();
     let collides: Option<String> = conn
         .query_row(
@@ -171,7 +203,7 @@ fn import_ticket(conn: &Connection, whole: &WholeTicket, seq: Seq) -> Result<boo
     let mut ticket = whole.ticket.clone();
     let stored = tickets::load(conn, id)?;
     if let Some(stored) = &stored {
-        if stored.updated_at > ticket.updated_at {
+        if stored.updated_at > ticket.updated_at && !force {
             return Ok(false);
         }
         ticket.next_child = ticket.next_child.max(stored.next_child);

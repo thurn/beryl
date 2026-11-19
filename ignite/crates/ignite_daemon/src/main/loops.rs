@@ -59,6 +59,13 @@ const IDLE_STALLS_AFTER: Duration = Duration::from_mins(10);
 /// A measurement walked about 290 GB of build directories for over ten minutes on jarvis.
 const DISK_STALLS_AFTER: Duration = Duration::from_hours(1);
 const METRICS_STALL_AFTER: Duration = Duration::from_hours(1);
+/// A round of the ticket mirror is one long poll of the feed or one page of a copy.
+const MIRROR_STALLS_AFTER: Duration = Duration::from_mins(30);
+/// The pause after a round of the ticket mirror that failed or found nothing, so a hub that
+/// answers the long poll at once (it has no room for another waiter) is not asked in a tight
+/// loop.
+const MIRROR_PAUSE: Duration = Duration::from_secs(1);
+const MIRROR_RETRY: Duration = Duration::from_secs(10);
 
 /// What the loops share, built by [`super::Daemon::start`].
 pub struct Parts {
@@ -103,6 +110,7 @@ impl Parts {
         self.spawn_idle(server.clone());
         self.spawn_disk();
         self.spawn_metrics();
+        self.spawn_mirror();
     }
 
     /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each
@@ -314,6 +322,42 @@ impl Parts {
                     failure.map_or(Ok(()), Err)
                 });
                 thread::sleep(DISK_EVERY);
+            }
+        });
+    }
+
+    /// Keeps this machine's append-only copy of the hub's tickets (see [`crate::mirror`]). A
+    /// mirror that cannot be opened is tried again each round, since the loop ending would stop
+    /// the daemon.
+    fn spawn_mirror(&self) {
+        let (ctx, path, wait_s) = (
+            self.ctx.clone(),
+            self.home.root.join(crate::mirror::FILE),
+            self.feed_wait_s,
+        );
+        self.start_loop("ignite-mirror", MIRROR_STALLS_AFTER, move |ticker| {
+            let mut mirror: Option<crate::mirror::Mirror> = None;
+            loop {
+                let round = ticker.round(|| {
+                    if mirror.is_none() {
+                        mirror = Some(
+                            crate::mirror::Mirror::open(&path, ctx.clock.clone())
+                                .map_err(|error| format!("ticket mirror not opened: {error}"))?,
+                        );
+                    }
+                    let Some(open) = mirror.as_mut() else {
+                        unreachable!("opened above")
+                    };
+                    open.round(ctx.hub.as_ref(), wait_s).map_err(|error| {
+                        eprintln!("ignite: ticket mirror: {error}");
+                        format!("ticket mirror: {error}")
+                    })
+                });
+                match round {
+                    Some(progress) if progress.copying => {}
+                    Some(_) => thread::sleep(MIRROR_PAUSE),
+                    None => thread::sleep(MIRROR_RETRY),
+                }
             }
         });
     }

@@ -28,6 +28,7 @@ pub mod loop_health;
 pub mod machine_lock;
 pub mod main;
 pub mod metrics;
+pub mod mirror;
 pub mod monitor;
 pub mod outbox;
 pub mod pool;

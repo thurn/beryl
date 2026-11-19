@@ -17,7 +17,8 @@ use crate::protocol::hub::{
     StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
-    BatchReply, BatchRequest, FeedBatch, LeaseOp, LeaseReply, Ticket, TicketDetail, TicketQuery,
+    BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, LeaseOp, LeaseReply, Ticket,
+    TicketDetail, TicketQuery, WholeTicket,
 };
 use crate::time::Timestamp;
 use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
@@ -325,6 +326,20 @@ pub trait Hub: Send + Sync {
     fn tickets(&self, query: &TicketQuery) -> Result<Vec<Ticket>> {
         let _ = query;
         Err(not_supported("list tickets"))
+    }
+
+    /// Whole tickets with their edges, comments, history and aliases (`GET /export`): when
+    /// `ids` is empty, the next page in ID order after `after` (empty at the end); otherwise
+    /// each of `ids` that exists, at most 200.
+    fn export(&self, after: Option<&TicketId>, ids: &[TicketId]) -> Result<Vec<WholeTicket>> {
+        let _ = (after, ids);
+        Err(not_supported("export tickets"))
+    }
+
+    /// Writes up to 200 whole tickets (`POST /import`).
+    fn import(&self, request: &ImportRequest) -> Result<ImportReply> {
+        let _ = request;
+        Err(not_supported("import tickets"))
     }
 
     /// Applies every operation or none (`POST /batch`).

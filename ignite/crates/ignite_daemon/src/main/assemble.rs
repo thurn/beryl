@@ -437,6 +437,7 @@ pub fn server(
     registry.register(Box::new(InstallVerb));
     registry.register(Box::new(DoctorVerb {
         loops: Some(parts.health.clone()),
+        mirror: Some(parts.home.root.join(crate::mirror::FILE)),
     }));
     registry.register(Box::new(
         StatusVerb::new(status_sections(base, parts)).running_under(executable_of(base)?),

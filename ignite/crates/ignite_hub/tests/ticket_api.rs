@@ -475,3 +475,45 @@ fn an_export_imports_into_an_empty_hub_once() {
         "a refused page changes nothing"
     );
 }
+
+#[test]
+fn an_export_names_tickets_and_a_forced_import_rolls_one_back() {
+    let fixture = Fixture::new("rollback");
+    let hub = fixture.start();
+    let receipt = hub.post(
+        "/batch",
+        &json!({"ops": [
+            {"op": "create", "fields": {"title": "First"}},
+            {"op": "create", "fields": {"title": "Second"}},
+        ]}),
+    );
+    let first = receipt["results"][0]["id"].as_str().unwrap().to_owned();
+    let named: Vec<Value> = hub
+        .get(&format!("/export?id={first}&id=missing"))
+        .text
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    assert_eq!(named.len(), 1, "a missing ticket is left out");
+    assert_eq!(named[0]["title"], "First");
+
+    // A bad edit made after the copy was taken, which the rollback undoes.
+    hub.post(
+        "/batch",
+        &json!({"ops": [{"op": "update", "id": first, "set": {"title": "Vandalized"}}]}),
+    );
+    let mut copy = named[0].clone();
+    copy["updated_at"] = json!("2000-01-01T00:00:00.000Z");
+    let title = |hub: &Hub| hub.get(&format!("/tickets/{first}")).json()["title"].clone();
+    assert_eq!(
+        hub.post("/import", &json!({"tickets": [copy]}))["imported"],
+        0,
+        "an ordinary import keeps the later edit"
+    );
+    assert_eq!(title(&hub), "Vandalized");
+    assert_eq!(
+        hub.post("/import", &json!({"tickets": [copy], "force": true}))["imported"],
+        1
+    );
+    assert_eq!(title(&hub), "First");
+}

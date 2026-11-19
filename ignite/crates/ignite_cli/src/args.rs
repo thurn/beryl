@@ -219,9 +219,11 @@ pub enum Command {
     #[command(hide = true)]
     Daemon,
     /// Serve the hub at `IGNITE_HUB_LISTEN` (and `IGNITE_HUB_PUBLIC_LISTEN`), as the hub's login
-    /// service does on the hub's machine.
-    #[command(hide = true)]
-    Hub,
+    /// service does on the hub's machine, or restore its tickets from this machine's mirror.
+    Hub {
+        #[command(subcommand)]
+        command: Option<HubCommand>,
+    },
     /// Run one command as its supervisor.
     #[command(hide = true)]
     Supervise { spec: PathBuf },
@@ -236,6 +238,28 @@ pub enum Command {
     Internal {
         #[command(subcommand)]
         command: InternalCommand,
+    },
+}
+
+/// The subcommands of `ignite hub`. Without one, it serves the hub.
+#[derive(Debug, Subcommand)]
+pub enum HubCommand {
+    /// Send the hub its tickets as this machine's ticket mirror recorded them: as of `--at`,
+    /// replacing later copies, or the newest of every ticket to seed a new hub.
+    Restore {
+        /// Restore from this machine's ticket mirror (`mirror.db` in the Ignite home), the only
+        /// source there is.
+        #[arg(long, required = true)]
+        from_mirror: bool,
+        /// Roll each ticket back to how it stood at this time, `YYYY-MM-DDTHH:MM:SSZ` in UTC.
+        #[arg(long)]
+        at: Option<String>,
+        /// Roll back only the tickets this actor changed after `--at`.
+        #[arg(long)]
+        actor: Option<String>,
+        /// Say what would be sent, and send nothing.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -586,7 +610,7 @@ impl Command {
             Command::Import { .. } => "import",
             Command::Monitor => "monitor",
             Command::Daemon => "daemon",
-            Command::Hub => "hub",
+            Command::Hub { .. } => "hub",
             Command::Supervise { .. } => "supervise",
             Command::RustcWrap(_) => "rustc-wrap",
             Command::Runner(_) => "runner",
@@ -621,6 +645,30 @@ mod tests {
             !help.contains("rustc-wrap"),
             "hidden subcommands stay hidden"
         );
+    }
+
+    #[test]
+    fn hub_serves_without_a_subcommand_and_restores_with_one() {
+        let parse = |line: &str| {
+            Cli::try_parse_from(line.split_whitespace())
+                .unwrap()
+                .command
+        };
+        assert!(matches!(
+            parse("ignite hub"),
+            Command::Hub { command: None }
+        ));
+        assert!(matches!(
+            parse("ignite hub restore --from-mirror --at 2026-11-18T10:00:00Z --actor rogue"),
+            Command::Hub {
+                command: Some(HubCommand::Restore {
+                    at: Some(_),
+                    actor: Some(_),
+                    ..
+                })
+            }
+        ));
+        assert!(Cli::try_parse_from(["ignite", "hub", "restore"]).is_err());
     }
 
     #[test]

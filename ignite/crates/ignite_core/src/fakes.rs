@@ -18,8 +18,9 @@ use crate::protocol::hub::{
     StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
-    BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, Lease, LeaseBusy, LeaseOp,
-    LeaseReply, Operation, OperationResult, Precondition, Ticket, TicketDetail, TicketQuery,
+    BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
+    LeaseBusy, LeaseOp, LeaseReply, Operation, OperationResult, Precondition, Ticket, TicketDetail,
+    TicketQuery, WholeTicket,
 };
 use crate::time::Timestamp;
 use crate::tipround::{TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
@@ -30,6 +31,7 @@ mod fleet;
 mod git;
 mod host;
 mod tips;
+mod whole;
 pub use builds::FakeBuilds;
 pub use git::FakeGit;
 pub use host::FakeHost;
@@ -131,6 +133,9 @@ pub struct FakeHub {
     regressions: Mutex<Vec<RegressionReport>>,
     tips_waiting: Mutex<Vec<TipWaiting>>,
     tickets: Mutex<BTreeMap<TicketId, TicketDetail>>,
+    /// Whole tickets, for `export` and `import` (see `whole`).
+    whole: Mutex<BTreeMap<TicketId, WholeTicket>>,
+    imports: Mutex<Vec<ImportRequest>>,
     batches: Mutex<Vec<BatchRequest>>,
     pauses: Mutex<Vec<Pause>>,
     asked: Mutex<Vec<MachineFree>>,
@@ -554,6 +559,14 @@ impl Hub for FakeHub {
         *tickets = changed;
         lock(&self.batches).push(request.clone());
         Ok(BatchReply { seq, results })
+    }
+
+    fn export(&self, after: Option<&TicketId>, ids: &[TicketId]) -> Result<Vec<WholeTicket>> {
+        self.export_whole(after, ids)
+    }
+
+    fn import(&self, request: &ImportRequest) -> Result<ImportReply> {
+        self.import_whole(request)
     }
 
     fn pause(&self, pause: &Pause) -> Result<()> {

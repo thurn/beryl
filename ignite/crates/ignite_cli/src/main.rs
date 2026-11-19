@@ -12,6 +12,7 @@ mod pool_init;
 mod reattach;
 mod rejected;
 mod replay;
+mod restore;
 mod ticket;
 
 use std::process::ExitCode;
@@ -20,7 +21,7 @@ use clap::Parser;
 
 use ignite_core::protocol::client::Reply;
 
-use crate::args::{Cli, Command, InternalCommand, PoolCommand};
+use crate::args::{Cli, Command, HubCommand, InternalCommand, PoolCommand};
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
@@ -67,7 +68,14 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Monitor => ignite_daemon::monitor::run(),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
         // Answered here: it is the hub, which runs beside the daemon, not in it.
-        Command::Hub => exit_reply(ignite_daemon::main::run_hub(&current_dir())),
+        Command::Hub { command: None } => exit_reply(ignite_daemon::main::run_hub(&current_dir())),
+        // Answered here from this machine's mirror, so it works while the daemon is down.
+        Command::Hub {
+            command:
+                Some(HubCommand::Restore {
+                    at, actor, dry_run, ..
+                }),
+        } => restore::run(at.as_deref(), actor.as_deref(), *dry_run),
         Command::Supervise { spec } => exit_reply(ignite_daemon::supervise::supervise(spec)),
         Command::RustcWrap(pass) => exit_reply(ignite_daemon::wrap::rustc_wrap(&pass.args)),
         Command::Runner(pass) => exit_reply(ignite_daemon::wrap::runner(&pass.args)),

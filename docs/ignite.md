@@ -2044,7 +2044,32 @@ listener shows no edit controls and refuses every write.
   other change.
 
 The hub backs up its database hourly and exports it daily, as the service does
-now. While the hub cannot be reached:
+now. Those backups sit on the hub's own disk, so every daemon also keeps a
+ticket mirror: an append-only copy of every version of every ticket, in
+`mirror.db` beside its own database.
+
+- An empty mirror notes the hub's feed position, then copies every ticket
+  through `GET /export`, one page of 200 a round. Afterwards it long-polls the
+  feed and fetches each changed ticket with `GET /export?id=<ticket>`, so it
+  follows the hub within seconds. Only tickets are mirrored; metrics, listings
+  and check records can be rebuilt from the machines' own records.
+- A version is stored only when the ticket's content differs from its newest
+  stored version, and a stored version is never changed or removed (the
+  database's triggers refuse it). A bad edit made through the hub's API reaches
+  every mirror at once, and the earlier versions are what a rollback restores.
+- When the hub's feed position drops below the mirror's, as when the hub is
+  restored from an older snapshot, the mirror keeps everything it has and copies
+  the hub again, adding versions only where they differ.
+- `ignite hub restore --from-mirror --at <time>` sends the hub each ticket as
+  this machine's mirror held it at `<time>`, through a forced `POST /import`
+  that replaces later copies. `--actor <name>` limits the rollback to the
+  tickets that actor changed after `<time>`, and `--dry-run` only says what
+  would be sent. Without `--at`, the newest version of every ticket is sent,
+  which seeds a new hub after the hub's machine is lost.
+- `ignite doctor` shows the mirror's feed position against the hub's, and warns
+  when the mirror has not caught up with the hub for over an hour.
+
+While the hub cannot be reached:
 
 - Sessions keep working in their trees. `ignite test` and `ignite check` use the
   machine's copy of the result cache and run whatever it does not hold.
