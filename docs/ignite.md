@@ -766,11 +766,10 @@ How a restart is survived:
   may not have reached the remote. One that stops gives back its cores, lease
   and tree, and once its process has ended the daemon runs it again itself under
   the same handle, with the same request, so the same note and session. A
-  landing that agreed to stop and is still running 60 seconds later has its
-  verb process ended, as `ignite stop` ends one. The
-  stopped reply never reaches the session: its `ignite wait` keeps waiting and
-  gets the new run's reply, and a wait that ends first starts with a line such
-  as
+  landing that agreed to stop and is still running 60 seconds later has its verb
+  process ended, as `ignite stop` ends one. The stopped reply never reaches the
+  session: its `ignite wait` keeps waiting and gets the new run's reply, and a
+  wait that ends first starts with a line such as
   `restart  L-128 was restarted under ignite eda21bd: it had not begun its push under ignite 87631b5`.
   A `check` or `test` started under the old build is not restarted: it only
   reports on a commit, restarting it would end its running commands, and the
