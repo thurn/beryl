@@ -64,12 +64,17 @@ Rules:
 ## In Codex
 
 - `/ignite pool <n>` only registers you, with
-  `ignite pool add <your thread ID> --app codex --dispatcher`, and starts the
-  loop. Codex keeps no standing workers: each hand-off is a new chat.
-- A hand-off opens a new chat in the project at `{checkout}`, given by its full
-  path, never matched by name. Only a ready thread ID identifies a worker. If
-  the result is unclear, find the chat and confirm its project and the
-  reservation code in its prompt; never open a second one.
+  `ignite pool add <your thread ID> --app codex --dispatcher --slots <n>`, and
+  starts the loop. Codex keeps no standing workers: each hand-off is a new chat,
+  and `n` is how many of them may run tickets at once. Sending it again with
+  another `n` changes the count; `0` keeps the count you had.
+- A hand-off names no session. Open a new chat in the project at `{checkout}`,
+  given by its full path, never matched by name, and send it `prompt`. Report
+  `ignite dispatch ack <id> ok <the new chat's thread ID>`: that thread then
+  holds the ticket, and later `check` and `message` instructions name it. Only a
+  ready thread ID identifies a worker. If the result is unclear, find the chat
+  and confirm its project and the reservation code in its prompt; never open a
+  second one.
 - Run the wait in the background and wait on it with the app's event wait: a
   long foreground command wakes you about once a minute.
 - On `rotate`, open the new dispatcher chat in this folder and stop.

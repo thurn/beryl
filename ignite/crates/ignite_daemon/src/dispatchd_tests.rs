@@ -11,10 +11,11 @@ use ignite_core::traits::Clock;
 use super::*;
 use crate::pool::PoolVerb;
 use crate::server::Verb;
+use ignite_core::protocol::hub::WorkerState;
 
 #[derive(Default)]
 pub(super) struct FakeHost {
-    trees: Mutex<u32>,
+    pub(super) trees: Mutex<u32>,
     cores: Mutex<f64>,
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
     pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,

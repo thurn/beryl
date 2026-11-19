@@ -39,6 +39,12 @@ pub struct Member {
     /// The files its last ticket touched.
     pub files: Vec<String>,
     pub added_at: Timestamp,
+    /// For a Codex dispatcher, how many tickets its chats may run at once (see `dispatchd_slots`);
+    /// 0 for every other member.
+    pub slots: u32,
+    /// A Codex chat opened for one ticket. It is never handed a second ticket, and it leaves the
+    /// pool when its ticket ends.
+    pub single_use: bool,
 }
 
 impl Member {
@@ -57,6 +63,8 @@ impl Member {
             parent: row.parent.as_deref().and_then(|p| SessionId::new(p).ok()),
             files: serde_json::from_str(&row.files).map_err(|_| invalid("files"))?,
             added_at: Timestamp::parse(&row.added_at).map_err(|_| invalid("added_at"))?,
+            slots: u32::try_from(row.slots).map_err(|_| invalid("slots"))?,
+            single_use: row.single_use != 0,
         })
     }
 
@@ -75,6 +83,8 @@ impl Member {
             added_at: self.added_at.to_string(),
             parent: self.parent.as_ref().map(|p| p.as_str().to_owned()),
             files: json_list(&self.files),
+            slots: i64::from(self.slots),
+            single_use: i64::from(self.single_use),
         }
     }
 }
@@ -176,7 +186,8 @@ impl Verb for PoolVerb {
             Some((&"pause", rest)) => self.pause(ctx, rest.contains(&"--all"), true),
             Some((&"resume", rest)) => self.pause(ctx, rest.contains(&"--all"), false),
             Some(_) => Err(Error::Invalid(
-                "usage: ignite pool list | add <session>... --app <app> | remove <session> \
+                "usage: ignite pool list | add <session>... --app <app> [--dispatcher [--slots <n>]] \
+                 | remove <session> \
                  | pause [--all] | resume [--all]"
                     .to_owned(),
             )),
@@ -217,6 +228,7 @@ impl PoolVerb {
         let mut app = None;
         let mut models = None;
         let mut dispatcher = false;
+        let mut slots = None;
         let mut rest = words.iter();
         while let Some(word) = rest.next() {
             match *word {
@@ -227,6 +239,13 @@ impl PoolVerb {
                         .map(|m| m.split(',').map(str::to_owned).collect::<Vec<_>>());
                 }
                 "--dispatcher" => dispatcher = true,
+                "--slots" => {
+                    let count = rest.next().copied().unwrap_or_default();
+                    let count = count
+                        .parse::<u32>()
+                        .map_err(|_| Error::Invalid(format!("not a slot count: {count:?}")))?;
+                    slots = Some(count);
+                }
                 session => sessions.push(
                     SessionId::new(session)
                         .map_err(|e| Error::Invalid(format!("not a session: {e}")))?,
@@ -249,6 +268,11 @@ impl PoolVerb {
         if dispatcher && sessions.len() > 1 {
             return Err(Error::Invalid("name one dispatcher".to_owned()));
         }
+        if slots.is_some() && !(dispatcher && app == "codex") {
+            return Err(Error::Invalid(
+                "--slots is only for a Codex dispatcher: --app codex --dispatcher".to_owned(),
+            ));
+        }
         let models = models.unwrap_or_else(|| match app.as_str() {
             "claude" => CLAUDE_MODELS.iter().map(|m| (*m).to_owned()).collect(),
             _ => Vec::new(),
@@ -266,6 +290,11 @@ impl PoolVerb {
             req.session.clone()
         };
         let pool = self.dispatcher.pool();
+        let slots = if dispatcher && app == "codex" {
+            self.codex_slots(&sessions[0], slots.unwrap_or(0))?
+        } else {
+            0
+        };
         let replaced = if dispatcher {
             self.replace_dispatcher(&app, &sessions[0])?
         } else {
@@ -281,6 +310,8 @@ impl PoolVerb {
                 parent: parent.clone(),
                 files: Vec::new(),
                 added_at: ctx.clock.now(),
+                slots,
+                single_use: false,
             })?;
         }
         let names: Vec<&str> = sessions.iter().map(SessionId::as_str).collect();
@@ -289,11 +320,45 @@ impl PoolVerb {
         if let Some(parent) = &parent {
             let _ = write!(text, ", parent {parent}");
         }
+        if dispatcher && app == "codex" {
+            let _ = write!(text, ", {slots} slots");
+        }
         if !replaced.is_empty() {
             let names: Vec<&str> = replaced.iter().map(SessionId::as_str).collect();
             let _ = write!(text, "\nremoved  {}", names.join(", "));
         }
         Ok(Reply::text(Exit::Success, text))
+    }
+
+    /// The slot count a Codex dispatcher registers with, given the `--slots` it `asked` for.
+    ///
+    /// A count above 0 is the new count. 0 keeps the count the machine's Codex dispatcher already
+    /// had: a Codex dispatcher whose context has grown opens a new chat whose prompt is
+    /// `/ignite pool 0`, and that new chat takes over the old one's slots. Its chats still
+    /// holding tickets are moved to the new dispatcher, so the replacement below keeps them.
+    /// A new dispatcher with a count of its own starts afresh, and the old one's chats go with it.
+    fn codex_slots(&self, new: &SessionId, asked: u32) -> Result<u32> {
+        let pool = self.dispatcher.pool();
+        let members = pool.members()?;
+        let Some(old) = members
+            .iter()
+            .filter(|m| m.role == WorkerRole::Dispatcher && m.app == "codex")
+            .max_by_key(|m| &m.session == new)
+        else {
+            return Ok(asked);
+        };
+        if asked > 0 {
+            return Ok(asked);
+        }
+        if &old.session != new {
+            for chat in members
+                .iter()
+                .filter(|m| m.parent.as_ref() == Some(&old.session))
+            {
+                pool.update(&chat.session, |m| m.parent = Some(new.clone()))?;
+            }
+        }
+        Ok(old.slots)
     }
 
     /// Removes every other dispatcher of `app` on this machine and the workers each one started,

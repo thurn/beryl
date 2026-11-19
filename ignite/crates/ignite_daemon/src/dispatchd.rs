@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use ignite_core::config::Os;
 use ignite_core::ids::{Seq, SessionId, TicketId};
 use ignite_core::protocol::client::{DispatchAction, DispatchInstruction, Exit, Reply};
-use ignite_core::protocol::hub::{Reservation, WorkerRole, WorkerState};
+use ignite_core::protocol::hub::{Reservation, WorkerRole};
 use ignite_core::protocol::tickets::{Status, TicketDetail};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
@@ -45,6 +45,8 @@ use crate::server::Context;
 mod feed;
 #[path = "dispatchd_justiciar.rs"]
 mod justiciar;
+#[path = "dispatchd_slots.rs"]
+mod slots;
 #[path = "dispatchd_stall.rs"]
 mod stall;
 #[path = "dispatchd_store.rs"]
@@ -76,8 +78,9 @@ pub const ROTATE_AFTER: u32 = 200;
 pub const FEED_WAIT_S: u32 = 30;
 
 /// The line every instruction ends with, so the dispatcher keeps its loop after compaction.
-pub const LOOP: &str = "Carry it out, report `ignite dispatch ack <id> ok` (or `failed <why>`, \
-                        or for a check `running|idle|gone|unknown`), then run \
+pub const LOOP: &str = "Carry it out, report `ignite dispatch ack <id> ok` (for a hand-off to a \
+                        new chat `ok <its thread ID>`, or `failed <why>`, or for a check \
+                        `running|idle|gone|unknown`), then run \
                         `ignite dispatch --wait 540` again. That loop is your whole job.";
 
 /// The message an idle worker gets when it has run nothing for 30 minutes.
@@ -294,48 +297,10 @@ impl Dispatcher {
         self.save();
     }
 
-    /// Every member as the hub's heartbeat and `ignite pool list` show it.
     /// Stops or resumes asking the hub for tickets while the daemon waits to update. Work
     /// already handed to workers carries on.
     pub fn set_draining(&self, draining: bool) {
         self.state().draining = draining;
-    }
-
-    pub fn view(&self) -> Result<Vec<WorkerState>> {
-        let members = self.pool.members()?;
-        let holders = self.host.holders();
-        let state = self.state();
-        Ok(members
-            .iter()
-            .map(|member| {
-                let held = holders.get(&member.session);
-                let reserved = state.reserved.get(&member.session);
-                let status = if member.down {
-                    "down"
-                } else if held.is_some() {
-                    match state.stalls.get(&member.session) {
-                        Some(stall) if stall.messaged_at.is_some() => "stalled",
-                        _ => "working",
-                    }
-                } else if reserved.is_some() {
-                    "reserved"
-                } else {
-                    "idle"
-                };
-                let command = self.host.command(&member.session);
-                WorkerState {
-                    session: member.session.clone(),
-                    app: member.app.clone(),
-                    role: member.role,
-                    state: status.to_owned(),
-                    ticket: held.or(reserved.map(|r| &r.ticket)).cloned(),
-                    files: member.files.clone(),
-                    command: command.as_ref().map(|c| c.command.clone()),
-                    command_since: command.as_ref().map(|c| c.since),
-                    command_running: command.is_some_and(|c| c.running),
-                }
-            })
-            .collect())
     }
 
     /// A landing's next chain ticket with `--fresh`: hand it to the same session, cleared first.
@@ -403,9 +368,15 @@ impl Dispatcher {
                     .map(|m| m.app.clone())
             })
         };
+        // A hand-off to a Codex slot names no session, so its app comes from its reservation.
         let index = state.pending.iter().position(|queued| {
-            asking_app.is_none()
-                || app_of(&queued.body.session).is_none_or(|a| Some(a) == asking_app)
+            let app = match &queued.purpose {
+                Purpose::Handoff(reserved) if !reserved.app.is_empty() => {
+                    Some(reserved.app.clone())
+                }
+                _ => app_of(&queued.body.session),
+            };
+            asking_app.is_none() || app.is_none_or(|a| Some(a) == asking_app)
         })?;
         let mut queued = state.pending.remove(index)?;
         queued.gives += 1;
@@ -492,7 +463,7 @@ impl Dispatcher {
                 }
             },
         };
-        let session = queued.body.session.clone();
+        let session = slots::handoff_session(&state, &queued);
         // Any acknowledgement shows the dispatcher is alive; a failed one is the worker's fault.
         state.failures = 0;
         state.down = false;
@@ -510,7 +481,8 @@ impl Dispatcher {
                     let _ = write!(text, " ({reason})");
                 }
                 let reserved = reserved.clone();
-                match Self::idle_workers(&state, &members, now)
+                let workers = slots::with_slots(&state, &members);
+                match Self::idle_workers(&state, &workers, now)
                     .into_iter()
                     .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
                 {
@@ -521,6 +493,9 @@ impl Dispatcher {
                     }
                     None => state.orphans.push(reserved),
                 }
+            }
+            (Purpose::Handoff(_), "ok", Some(slot)) if slots::is_slot(&slot) => {
+                text.push_str(&self.slot_opened(&mut state, &members, &slot, reason, now));
             }
             (Purpose::Check, answer, Some(session)) => {
                 let (note, due) = self.checked(&mut state, ctx, &session, answer);
@@ -543,7 +518,7 @@ impl Dispatcher {
         let holders = &state.held;
         members
             .iter()
-            .filter(|m| m.role == WorkerRole::Worker && !m.down)
+            .filter(|m| m.role == WorkerRole::Worker && !m.down && !m.single_use)
             .filter(|m| {
                 !holders.contains_key(&m.session) && !state.reserved.contains_key(&m.session)
             })
@@ -585,10 +560,11 @@ impl Dispatcher {
             }
             if given.queued.gives >= MAX_FAILURES {
                 justiciar::handoff_failed(state, &given.queued, now);
-                if let (Purpose::Handoff(_), Some(session)) =
-                    (&given.queued.purpose, &given.queued.body.session)
-                {
-                    state.reserved.remove(session);
+                if let (Purpose::Handoff(_), Some(session)) = (
+                    &given.queued.purpose,
+                    slots::handoff_session(state, &given.queued),
+                ) {
+                    state.reserved.remove(&session);
                 }
             } else {
                 state.pending.push_front(given.queued);
@@ -599,7 +575,8 @@ impl Dispatcher {
     fn retry_orphans(state: &mut State, members: &[Member], now: Timestamp) {
         let orphans = std::mem::take(&mut state.orphans);
         for reserved in orphans {
-            let worker = Self::idle_workers(state, members, now)
+            let workers = slots::with_slots(state, members);
+            let worker = Self::idle_workers(state, &workers, now)
                 .into_iter()
                 .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
                 .map(|m| m.session.clone());
@@ -610,15 +587,18 @@ impl Dispatcher {
         }
     }
 
+    /// Queues the hand-off of `reserved` to `session`. A Codex slot's hand-off names no session
+    /// and clears nothing: the dispatcher opens a new chat for it (see `slots`).
     fn queue_handoff_reserved(state: &mut State, session: &SessionId, reserved: Reserved) {
         state.reserved.insert(session.clone(), reserved.clone());
         let id = Self::next_id(state);
+        let slot = slots::is_slot(session);
         state.pending.push_back(Queued {
             body: DispatchInstruction {
                 id,
                 action: DispatchAction::Handoff,
-                session: Some(session.clone()),
-                clear: true,
+                session: (!slot).then(|| session.clone()),
+                clear: !slot,
                 model: reserved.model.clone(),
                 effort: Some(reserved.effort.clone()),
                 prompt: Some(format!(
@@ -783,6 +763,9 @@ mod models_tests;
 #[cfg(test)]
 #[path = "dispatchd_restart_tests.rs"]
 mod restart_tests;
+#[cfg(test)]
+#[path = "dispatchd_slots_tests.rs"]
+mod slots_tests;
 #[cfg(test)]
 #[path = "dispatchd_tests.rs"]
 mod tests;

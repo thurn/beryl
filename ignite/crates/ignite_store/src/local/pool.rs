@@ -8,8 +8,8 @@ use crate::local::rows;
 /// Every member, ordered by session ID.
 pub fn all(conn: &Connection) -> Result<Vec<rows::PoolMember>> {
     let mut statement = conn.prepare(
-        "SELECT session, app, role, state, ticket, models, added_at, parent, files FROM pool \
-         ORDER BY session",
+        "SELECT session, app, role, state, ticket, models, added_at, parent, files, slots, \
+         single_use FROM pool ORDER BY session",
     )?;
     let members = statement
         .query_map([], |row| {
@@ -23,6 +23,8 @@ pub fn all(conn: &Connection) -> Result<Vec<rows::PoolMember>> {
                 added_at: row.get(6)?,
                 parent: row.get(7)?,
                 files: row.get(8)?,
+                slots: row.get(9)?,
+                single_use: row.get(10)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -33,7 +35,7 @@ pub fn all(conn: &Connection) -> Result<Vec<rows::PoolMember>> {
 pub fn upsert(conn: &Connection, member: &rows::PoolMember) -> Result<()> {
     conn.execute(
         "INSERT OR REPLACE INTO pool (session, app, role, state, ticket, models, added_at, parent, \
-         files) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+         files, slots, single_use) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             member.session,
             member.app,
@@ -44,6 +46,8 @@ pub fn upsert(conn: &Connection, member: &rows::PoolMember) -> Result<()> {
             member.added_at,
             member.parent,
             member.files,
+            member.slots,
+            member.single_use,
         ],
     )?;
     Ok(())
@@ -91,6 +95,8 @@ mod tests {
             added_at: "2026-11-18T00:00:00.000Z".to_owned(),
             parent: Some("local_d".to_owned()),
             files: "[]".to_owned(),
+            slots: 0,
+            single_use: 0,
         }
     }
 

@@ -9,17 +9,17 @@ use super::tests::{START, detail, handoff_to, lock, rig_on, session, ticket_id};
 use super::*;
 
 /// A database file for a test that restarts the daemon, removed when the test ends.
-struct DbFile(PathBuf);
+pub(super) struct DbFile(PathBuf);
 
 impl DbFile {
-    fn new(name: &str) -> DbFile {
+    pub(super) fn new(name: &str) -> DbFile {
         let path =
             std::env::temp_dir().join(format!("ignite-dispatch-{name}-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         DbFile(path)
     }
 
-    fn open(&self) -> rusqlite::Connection {
+    pub(super) fn open(&self) -> rusqlite::Connection {
         ignite_store::local::open(&self.0).unwrap()
     }
 }

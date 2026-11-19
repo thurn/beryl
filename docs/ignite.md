@@ -2139,6 +2139,25 @@ Each machine has one standing pool that serves every active epic.
 - The pool outlives epics. Nothing is rebuilt when a plan starts or ends.
 - Claude Code workers are cleared and prompted again for each ticket. Codex has
   no clear operation, so a Codex worker is a new chat per ticket.
+- Codex capacity is counted in slots. In Codex, `/ignite pool 5` registers the
+  dispatcher with five slots
+  (`ignite pool add <thread> --app codex --dispatcher --slots 5`); sending it
+  again with another count changes the count, and `0` keeps it. Each free slot
+  counts as an idle Codex worker when the daemon asks the hub for tickets, under
+  a placeholder session `codex-slot-<k>`. The slot's hand-off names no session:
+  the dispatcher opens a new chat in the main checkout and acknowledges with its
+  thread ID (`ignite dispatch ack <id> ok <thread>`). The daemon adds that chat
+  to the pool as a single-use worker, so stall checks, messages and justiciar
+  instructions reach it like any other worker. The slot is free again when the
+  ticket lands, its lease expires, its reservation lapses unclaimed after 10
+  minutes, or the app says the chat is gone. A chat never gets a second ticket.
+- Slots belong to the dispatcher, not the machine, so a Claude pool and a Codex
+  pool on one machine stay independent; both share the machine's ticket trees
+  and cores. A Codex dispatcher that rotates (see below) keeps its slots and the
+  chats still running; a new Codex dispatcher registered with a count of its own
+  replaces the old one's slots and chats. `ignite pool list` and the dashboard
+  show each slot as a `codex` worker, idle or reserved, and each chat as a
+  worker holding its ticket.
 
 ### The dispatcher
 
@@ -2166,8 +2185,8 @@ the tool calls the daemon asks for.
 - It never plans, reads tickets or decides anything.
 - Codex has no such setting. When a Codex dispatcher's context passes the same
   size, the daemon's next instruction has it open a new chat in its folder with
-  the prompt `/ignite pool 0`, which registers the new chat as the dispatcher,
-  and stop.
+  the prompt `/ignite pool 0`, which registers the new chat as the dispatcher
+  with the old one's slot count, and stop.
 
 Its loop is one blocking command and the tool calls that command returns:
 

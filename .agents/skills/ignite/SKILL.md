@@ -177,7 +177,8 @@ started a worker can clear and prompt it. Tell the person:
 2. Open a session in `~/ignite` on Sonnet, in a permission mode that never
    prompts, and send `/ignite pool <n>` there. That session registers itself
    as the dispatcher, starts `n` workers and runs the dispatch loop. Sending it
-   again adds more workers.
+   again adds more workers. In Codex, `n` is the number of slots: how many
+   tickets may run at once, each in a new chat.
 
 `/ignite pool` sent in this project does none of this; give the person these
 steps instead.

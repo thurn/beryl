@@ -12,10 +12,9 @@ use ignite_core::protocol::hub::{IdleWorker, MachineFree, Reservation};
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
-use super::{DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, label, tier_for};
+use super::{DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, label, slots, tier_for};
 use crate::pool::Member;
 use crate::server::Context;
-use ignite_core::protocol::hub::WorkerRole;
 
 /// A ticket the hub reserved for a worker, with the ticket's details if they could be read.
 type Offer = (Reservation, String, Option<TicketDetail>);
@@ -24,7 +23,7 @@ type Offer = (Reservation, String, Option<TicketDetail>);
 struct Asking {
     idle: Vec<Member>,
     trees: u32,
-    /// The pool's workers that are not down, idle or not.
+    /// The pool's workers that are not down and its Codex slots, idle or not.
     workers: usize,
 }
 
@@ -62,6 +61,14 @@ impl Dispatcher {
                 let _ = self.pool.update(&session, |m| m.files = landed.files);
             }
         }
+        // A chat that left frees its slot in this step, so the members are read again.
+        let fresh;
+        let members = if self.end_chats() {
+            fresh = self.pool.members().unwrap_or_default();
+            &fresh
+        } else {
+            members
+        };
         let unread: Vec<Offer> = unread
             .into_iter()
             .map(|(reservation, app)| {
@@ -115,9 +122,19 @@ impl Dispatcher {
             .reserved
             .retain(|session, _| !holders.contains_key(session));
         for session in lapsed {
-            // A reservation nobody claimed: the worker is treated as stalled.
             state.reserved.remove(&session);
-            Self::queue_check(state, &session);
+            // A slot or a chat opened for this ticket is simply free again (see `slots`).
+            let chat = slots::is_slot(&session)
+                || self
+                    .pool
+                    .member(&session)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|m| m.single_use);
+            if !chat {
+                // A reservation nobody claimed: the worker is treated as stalled.
+                Self::queue_check(state, &session);
+            }
         }
         state.orphans.retain(|r| r.expires_at > now);
         state.held = holders;
@@ -154,7 +171,8 @@ impl Dispatcher {
         if state.down || state.draining || state.asking_hub || self.pool.paused().unwrap_or(true) {
             return None;
         }
-        let idle: Vec<Member> = Self::idle_workers(state, members, now)
+        let workers = slots::with_slots(state, members);
+        let idle: Vec<Member> = Self::idle_workers(state, &workers, now)
             .into_iter()
             .cloned()
             .collect();
@@ -164,14 +182,10 @@ impl Dispatcher {
             return None;
         }
         state.asking_hub = true;
-        let workers = members
-            .iter()
-            .filter(|m| m.role == WorkerRole::Worker && !m.down)
-            .count();
         Some(Asking {
             idle,
             trees,
-            workers,
+            workers: slots::capacity(members),
         })
     }
 

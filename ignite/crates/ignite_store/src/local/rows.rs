@@ -89,6 +89,10 @@ crate::tables! {
         parent: Option<String>,
         /// JSON: the files its last ticket touched.
         files: String,
+        /// A Codex dispatcher's worker slots; 0 for every other member.
+        slots: i64,
+        /// 1 for a Codex chat opened for one ticket, which leaves the pool when it ends.
+        single_use: i64,
     }
 
     /// The newest change to a leased tree's ticket that its session has been shown.

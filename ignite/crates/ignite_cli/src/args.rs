@@ -349,6 +349,10 @@ pub enum PoolCommand {
         /// `claude` and none for `codex`.
         #[arg(long, value_delimiter = ',')]
         models: Option<Vec<String>>,
+        /// For a Codex dispatcher: how many tickets it may run at once, each in a new chat.
+        /// 0 keeps the count the machine's Codex dispatcher already had.
+        #[arg(long)]
+        slots: Option<u32>,
     },
     /// Remove a session from the pool.
     Remove { session: String },
