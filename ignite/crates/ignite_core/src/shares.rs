@@ -20,6 +20,11 @@ use crate::ids::TicketId;
 /// A group of tickets that shares workers: an epic, or `None` for tickets under no epic.
 pub type Group = Option<TicketId>;
 
+/// The `--workers` share an epic gets when it is filed without one, so filing and releasing an
+/// epic is enough for the pool to work it. Shares are bounded by the pool, so this reserves
+/// nothing; `--workers 0` files an epic that waits.
+pub const DEFAULT_EPIC_WORKERS: u32 = 3;
+
 /// One group's claim on workers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EpicDemand {

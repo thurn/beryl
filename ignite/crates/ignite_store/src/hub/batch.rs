@@ -387,6 +387,7 @@ impl<'a> Run<'a> {
             return rejected("A ticket needs a title");
         };
         let mut changes = Self::field_changes(fields)?;
+        tickets::default_workers(fields, &mut changes);
         let parent_name = match parent {
             Some(parent) => Some(parent.to_owned()),
             None => fields.parent.clone().flatten().map(String::from),

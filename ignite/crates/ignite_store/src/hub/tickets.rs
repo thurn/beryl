@@ -11,17 +11,18 @@ use std::collections::HashSet;
 
 use rusqlite::types::{Value as SqlValue, ValueRef};
 use rusqlite::{Connection, OptionalExtension, Row, params_from_iter};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use ignite_core::ids::TicketId;
 use std::collections::BTreeMap;
 
 use ignite_core::ids::Seq;
 use ignite_core::protocol::tickets::{
-    Blocker, Comment, Edge, Graph, GraphTicket, History, Status, Ticket, TicketDetail, TicketQuery,
-    TicketType,
+    Blocker, Comment, Edge, Graph, GraphTicket, History, Status, Ticket, TicketDetail,
+    TicketFields, TicketQuery, TicketType,
 };
 use ignite_core::ready::Readiness;
+use ignite_core::shares;
 use ignite_core::time::Timestamp;
 
 use crate::hub::{edges, feed};
@@ -548,6 +549,15 @@ fn collect_ids(conn: &Connection, sql: &str, args: &[&str]) -> Result<Vec<Ticket
                 .map_err(|e| StoreError::Invalid(format!("ticket ID: {e}")))
         })
         .collect()
+}
+
+/// Gives an epic filed without a `workers` number the default share
+/// ([`shares::DEFAULT_EPIC_WORKERS`]), so releasing it is enough for the pool to work it. An
+/// explicit number, `0` included, is kept.
+pub(crate) fn default_workers(fields: &TicketFields, changes: &mut Map<String, Value>) {
+    if fields.ticket_type == Some(TicketType::Epic) && fields.workers.is_none() {
+        changes.insert("workers".to_owned(), json!(shares::DEFAULT_EPIC_WORKERS));
+    }
 }
 
 /// A new ticket with every field at its default, before the create's own fields apply.

@@ -110,7 +110,7 @@ never meant to touch.
    ```json
    {"ops": [
      {"op": "create", "fields": {"title": "Replay import", "type": "epic",
-       "body": "...", "acceptance": "...", "workers": 1}},
+       "body": "...", "acceptance": "..."}},
      {"op": "create", "parent": "$0", "fields": {"title": "Replay types",
        "body": "...", "acceptance": "...", "labels": ["tier:opus"]}},
      {"op": "create", "parent": "$0", "deps": [{"on": "$1"}],
@@ -123,10 +123,11 @@ never meant to touch.
    tickets that name no file in common, tickets that name no files, lanes whose
    tickets do not depend on each other. Fix what is wrong with
    `ignite ticket update` and `ignite ticket dep`, and run it again.
-4. Set the epic's share: `ignite ticket update <epic> --workers <n>`, with the
-   number the person gave, or 1. An epic with no number is never worked, so
-   this step is what starts the pool on it. Add `--max-workers` only for an
-   epic whose tickets conflict when too many run at once.
+4. An epic filed without `workers` gets a share of 3, which is enough for the
+   pool to start on it once it is released. Set
+   `ignite ticket update <epic> --workers <n>` only when the person gave a
+   number. Add `--max-workers` only for an epic whose tickets conflict when too
+   many run at once.
 5. Give a short summary: the epic, the ticket count, the milestones and what
    would stop it. Do not wait for approval.
 
@@ -136,7 +137,8 @@ never meant to touch.
 will work.
 
 - A ticket is stale when it is open and unclaimed, under an inactive epic (one
-  with no `--workers`) or under none. Age alone does not make it stale; `older
+  with `--workers 0`, or none, which epics filed before the default of 3 may
+  have) or under none. Age alone does not make it stale; `older
   than N days` only narrows the list.
 - Give each one a verdict with one line of evidence:
   - **done**: cite the commit or the code that did it;

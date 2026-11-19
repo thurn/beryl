@@ -1643,9 +1643,9 @@ express_cores = 3
 - The commands are what the `ignite` family runs, without its Python adapter.
   The family still runs in the gate when a change to Ignite lands together with
   other files, and in tip verification.
-- `ignite check` and the gate also use `paths` for scope. When every changed file
-  matches, a family with no kept listing (a fresh tree has none) is judged by
-  its declared inputs instead of being listed, so a change to Ignite alone
+- `ignite check` and the gate also use `paths` for scope. When every changed
+  file matches, a family with no kept listing (a fresh tree has none) is judged
+  by its declared inputs instead of being listed, so a change to Ignite alone
   selects the `ignite` family and the always-set families, and builds nothing
   for the game.
 - A machine whose `express_cores` is 0, or a repository with no `[express]` or
@@ -2139,9 +2139,10 @@ Not every ticket is offered:
   still pending `open`; `ignite ticket create --release` files a ticket already
   released. A session may still start a pending ticket by name.
 - An epic is worked only once it is active, which means it has a `--workers`
-  number. `/ignite` sets one when it files an epic or is given one. Until then
-  the epic's tickets wait, however ready they are, so the pool never starts on a
-  backlog that nobody asked for. A ticket under no epic has nothing to activate,
+  number above 0. An epic filed without one gets a share of 3, so releasing it
+  is enough; the share is bounded by the pool, so it reserves nothing. File it
+  with `--workers 0`, or set that later, to park a backlog: its tickets then
+  wait, however ready they are. A ticket under no epic has nothing to activate,
   so releasing it is enough.
 - Once released, tickets that the hub files itself are always offered:
   regressions, improvements and repairs to a machine. So is a ticket that a
@@ -2995,8 +2996,9 @@ These show that cores, trees and workers go where the rules say.
 - **A ticket that needs a person.** Release a ticket with `--needs person`.
   Expect it on the dashboard's first line, never handed off, and handed off
   again once the label is removed.
-- **An inactive epic.** File an epic with ready tickets and no `--workers`.
-  Expect no hand-off from it. Set `--workers 1` and expect one.
+- **An inactive epic.** File an epic with ready tickets and `--workers 0`.
+  Expect no hand-off from it. Set `--workers 1` and expect one. File another
+  with no `--workers` and expect hand-offs at once.
 - **A pause.** Run `ignite pool pause` with two workers busy and tickets ready.
   Expect both to finish, no new hand-off, and hand-offs again after
   `ignite pool resume`.
