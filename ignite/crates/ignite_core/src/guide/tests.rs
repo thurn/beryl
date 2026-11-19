@@ -63,3 +63,12 @@ fn the_old_name_of_the_flaky_checks_topic_still_prints_it() {
     assert_eq!(old.exit, Exit::Success);
     assert_eq!(old.text, reply(Some("flaky-checks")).text);
 }
+
+#[test]
+fn the_blocked_topic_exists_and_is_listed() {
+    let blocked = reply(Some("blocked"));
+    assert_eq!(blocked.exit, Exit::Success);
+    assert!(blocked.text.starts_with("BLOCKED"));
+    assert!(blocked.text.contains("known-failing"));
+    assert!(list().lines().any(|l| l.starts_with("blocked ")));
+}

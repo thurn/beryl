@@ -75,6 +75,9 @@ last.
   a person, for another ticket, for another machine or for verification. When the ticket
   needs something outside itself, finish what you can and land, or `ignite release` with
   a note.
+- When a landing is refused, the verdict says whose failure it is. Do what its `next` line
+  says (`ignite guide blocked`). Never decide yourself that a failure is unrelated or was
+  already there.
 - Never end a turn on work that nothing will report. Never leave a ticket held when
   stopping for good: release it with its exact state.
 - Never work in another session's tree, take over its ticket or change another ticket's
@@ -136,6 +139,8 @@ mod tests {
             "never depend on the machine's speed",
             "Ordinary difficulty is the job",
             "Never wait for a person, for another ticket, for another machine or for verification",
+            "the verdict says whose failure it is",
+            "Never decide yourself that a failure is unrelated",
             "nothing will report",
             "Never work in another session's tree",
             "A `changed` line is an instruction about your ticket",

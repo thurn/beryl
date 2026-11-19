@@ -14,6 +14,26 @@ use crate::checks::GateRun;
 use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::server::Context;
 
+/// The `next` line of a refused landing. The gate has already compared the failures with the
+/// tip, and `GateRun::base` records the outcome: when it says the tip could not be asked, the
+/// worker reruns the check once and then releases; otherwise the failure is the change's.
+fn refused_next(gated: &GateRun) -> String {
+    let tip_unknown = gated
+        .base
+        .as_deref()
+        .is_some_and(|base| base.starts_with("not compared with the tip"));
+    if tip_unknown {
+        "run the failing check once with `ignite test <check>`; if it passes, land again, \
+         otherwise `ignite release` with a note naming the check, the tip commit and the first \
+         lines of its output; see `ignite guide blocked`"
+            .to_owned()
+    } else {
+        "the failure is yours, even if it looks unrelated: fix it in your tree and land again; \
+         nothing landed and the tree stays rebased; see `ignite guide blocked`"
+            .to_owned()
+    }
+}
+
 /// The reply to a gate that failed: exit code 2, the failures with paths relative to the
 /// repository, and a rerun command that works in the ticket tree.
 pub(super) fn failed_gate(
@@ -33,10 +53,7 @@ pub(super) fn failed_gate(
         |failure| format!("ignite test {}", failure.check),
     );
     lines.push(line("rerun", rerun));
-    lines.push(line(
-        "next",
-        "fix it in your tree; nothing landed and the tree stays rebased",
-    ));
+    lines.push(line("next", refused_next(gated)));
     let prefix = format!("{}/", gate_path.display());
     let text = render(&lines).replace(&prefix, "");
     Reply {
@@ -141,6 +158,15 @@ impl Landing {
                 .map(|(_, r)| r.as_str()),
             &record.commit,
         );
+        // Checks left out as known-failing are not this ticket's to fix.
+        let next = if summary.is_some_and(|s| !s.gated.known_failing.is_empty()) {
+            format!(
+                "{next}; fix none of the known-failing checks and take none of their \
+                 regression tickets (`ignite guide blocked`)"
+            )
+        } else {
+            next
+        };
         lines.push(line("next", next));
         let budget = summary.and_then(|s| s.gated.budget.as_ref());
         Reply {

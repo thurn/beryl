@@ -37,6 +37,11 @@ pub const TOPICS: &[Topic] = &[
         text: include_str!("release.txt"),
     },
     Topic {
+        name: "blocked",
+        summary: "a landing that was refused, or landed past a failing check",
+        text: include_str!("blocked.txt"),
+    },
+    Topic {
         name: "review",
         summary: "reviewing landed work, and review:inline before landing",
         text: include_str!("review.txt"),

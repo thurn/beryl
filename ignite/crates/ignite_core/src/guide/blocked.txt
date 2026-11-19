@@ -1,0 +1,26 @@
+BLOCKED: a landing that was refused, or landed past a failing check
+
+The verdict of ignite land says whose failure it is. Follow its next line.
+Never decide yourself that a failure is unrelated or was already there:
+agents get that wrong both ways.
+
+Refused, and the check passes at the tip (the verdict says so):
+- The failure is yours, even if it looks unrelated. Fix it and land again.
+- Editing a manifest, an input list or an allowlist is a fix only when your
+  change really adds that read. Never edit one just to make a check pass.
+
+Landed, with a check reported known-failing:
+- Nothing to fix. The check fails at the tip too.
+- Do not fix it in your ticket and do not take its regression ticket. The
+  hub sends it first to the worker that landed the culprit, and a second
+  fixer would race that worker.
+- Mention the check in one line of the landing note.
+
+Refused, because the check's result at the tip could not be found or run
+(the tip does not build, or the run there failed to start):
+- Run ignite test <check> once. If it passes, land again.
+- Otherwise run ignite release with a note naming the check, the tip commit
+  and the first lines of its output. Do not investigate it.
+
+In none of these cases end a turn holding the ticket: land, or release it
+with its exact state.
