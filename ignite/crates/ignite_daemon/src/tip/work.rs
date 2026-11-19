@@ -2,11 +2,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ignite_core::ids::{CheckName, Commit, TicketId, TreeId};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::{Class, Outcome};
-use ignite_core::traits::{Error, Result};
+use ignite_core::traits::{Clock, Error, Result};
 
 use ignite_git::changed::CommitPaths;
 
@@ -14,6 +15,14 @@ use super::{TipCheck, TipLanding, TipRun, TipSet, TipWork};
 use crate::checks::{BUILD_FAILED, CheckRun, Checks, RunOptions, Scoring};
 use crate::land::env::LandTrees;
 use crate::server::Context;
+
+/// How long a tip round waits for a landing tree before it leaves a family's checks for a later
+/// round. Landings and a round's other families free their trees within minutes; a tree that
+/// stays busy longer is held by a run that died, which the daemon frees when it notices.
+const TREE_WAIT_S: f64 = 900.0;
+
+/// How often a tip round that waits for a landing tree asks for one again.
+const TREE_POLL: Duration = Duration::from_secs(5);
 
 /// Lists and runs checks with [`Checks`] in a landing tree leased at the commit. In the daemon
 /// the trees are the machine's own; in a tip round's verb process they are leased from the
@@ -28,12 +37,20 @@ pub struct CheckTipWork {
 impl CheckTipWork {
     /// Leases a landing tree at `commit` for `holder`, calls `f` with it and frees it again.
     /// Leases that may be held at once need holders of their own: a lease owned by a handle is
-    /// given back to the same handle and holder (see `crate::trees`).
-    fn at_for<T>(&self, holder: &str, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
-        let lease = self
-            .trees
-            .lease_landing(holder, commit)?
-            .ok_or_else(|| Error::Conflict("every landing tree is busy".to_owned()))?;
+    /// given back to the same handle and holder (see `crate::trees`). While every landing tree
+    /// is busy it waits for one (see [`wait_for_tree`]).
+    fn at_for<T>(
+        &self,
+        ctx: &Context,
+        holder: &str,
+        commit: &Commit,
+        f: impl FnOnce(&TreeId) -> T,
+    ) -> Result<T> {
+        let lease = wait_for_tree(
+            ctx.clock.as_ref(),
+            || self.trees.lease_landing(holder, commit),
+            || std::thread::sleep(TREE_POLL),
+        )?;
         let value = f(&lease.tree);
         self.trees.release_landing(&lease.tree, Some(commit))?;
         Ok(value)
@@ -48,14 +65,14 @@ impl CheckTipWork {
     }
 
     /// [`CheckTipWork::at_for`] for one lease at a time, as listing and single runs take.
-    fn at<T>(&self, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
-        self.at_for(&format!("tip {commit}"), commit, f)
+    fn at<T>(&self, ctx: &Context, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
+        self.at_for(ctx, &format!("tip {commit}"), commit, f)
     }
 }
 
 impl TipWork for CheckTipWork {
     fn checks(&self, ctx: &Context, commit: &Commit) -> Result<TipSet> {
-        self.at(commit, |tree| self.checks.regression_checks(ctx, tree))?
+        self.at(ctx, commit, |tree| self.checks.regression_checks(ctx, tree))?
     }
 
     fn run(
@@ -66,7 +83,7 @@ impl TipWork for CheckTipWork {
         rerun: bool,
     ) -> Vec<TipRun> {
         let options = options(rerun);
-        match self.at(commit, |tree| self.checks.run(ctx, tree, checks, &options)) {
+        match self.at(ctx, commit, |tree| self.checks.run(ctx, tree, checks, &options)) {
             Ok(run) => tip_runs(&run, &self.family_needs()),
             Err(error) => not_run(checks.iter(), &error),
         }
@@ -82,7 +99,7 @@ impl TipWork for CheckTipWork {
     ) -> (Vec<TipRun>, usize) {
         let options = options(false);
         // Families run at once, each in a tree of its own.
-        let ran = self.at_for(&format!("tip {commit} {family}"), commit, |tree| {
+        let ran = self.at_for(ctx, &format!("tip {commit} {family}"), commit, |tree| {
             self.checks
                 .run_batches(ctx, tree, family, batches, &options, claim)
         });
@@ -121,7 +138,7 @@ impl TipWork for CheckTipWork {
                 .iter()
                 .map(|c| (c.check.clone(), c.family.clone()))
                 .collect();
-            self.at(to, |tree| self.checks.scoring(ctx, tree, &changed, &named))?
+            self.at(ctx, to, |tree| self.checks.scoring(ctx, tree, &changed, &named))?
         });
         scored
             .inspect_err(|error| {
@@ -241,4 +258,71 @@ fn not_run<'a>(checks: impl Iterator<Item = &'a CheckName>, error: &Error) -> Ve
             build: None,
         })
         .collect()
+}
+
+/// Calls `lease` until it gives a landing tree, calling `nap` between asks, for up to
+/// [`TREE_WAIT_S`] by `clock`.
+///
+/// A family that found every landing tree busy used to give up at once, and its checks came
+/// back incomplete with no reason, so the round waited on them and rested ten minutes before
+/// it tried the tip again. After a killed tip round left two landing trees leased, the next
+/// round ran one family of six and `master` stayed put.
+fn wait_for_tree<T>(
+    clock: &dyn Clock,
+    mut lease: impl FnMut() -> Result<Option<T>>,
+    mut nap: impl FnMut(),
+) -> Result<T> {
+    let start = clock.now();
+    loop {
+        if let Some(tree) = lease()? {
+            return Ok(tree);
+        }
+        if clock.now().seconds_since(start) >= TREE_WAIT_S {
+            return Err(Error::Conflict("every landing tree is busy".to_owned()));
+        }
+        crate::steps::step("waiting for a free landing tree");
+        nap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use ignite_core::fakes::FakeClock;
+    use ignite_core::time::Timestamp;
+
+    use super::*;
+
+    #[test]
+    fn a_round_waits_for_a_busy_landing_tree() {
+        let clock = FakeClock::new(Timestamp::from_millis(0));
+        let asks = Cell::new(0);
+        let tree = wait_for_tree(
+            &clock,
+            || {
+                asks.set(asks.get() + 1);
+                Ok((asks.get() == 3).then_some("landing-2"))
+            },
+            || clock.advance(5.0),
+        );
+        assert_eq!(tree.unwrap(), "landing-2");
+        assert_eq!(asks.get(), 3);
+    }
+
+    #[test]
+    fn a_round_gives_up_on_a_tree_that_stays_busy() {
+        let clock = FakeClock::new(Timestamp::from_millis(0));
+        let naps = Cell::new(0);
+        let tree: Result<&str> = wait_for_tree(
+            &clock,
+            || Ok(None),
+            || {
+                naps.set(naps.get() + 1);
+                clock.advance(5.0);
+            },
+        );
+        assert!(matches!(tree, Err(Error::Conflict(_))));
+        assert_eq!(naps.get(), 180);
+    }
 }
