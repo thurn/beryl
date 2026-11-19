@@ -388,7 +388,10 @@ def test_every_file_under_ui_that_beryl_3d_embeds_or_reads_is_an_input_of_every_
     families = manifest()
     builders = [families["product"]["b3d"], *families["family"].values()]
     # Formatting and the source rules read Rust text, never what a build embeds.
-    reads_text_only = [families["family"]["b3d-format"], families["family"]["b3d-source"]]
+    reads_text_only = [
+        families["family"]["b3d-format"],
+        families["family"]["b3d-source"],
+    ]
     for declared in builders:
         if declared in reads_text_only:
             continue
