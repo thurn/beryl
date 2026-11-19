@@ -1,0 +1,12 @@
+# The profile for every nextest run of Ignite's workspace: the express lane's command in
+# ignite.toml and the `ignite` family in ignite/checks/rest.toml. A test that runs past `period`
+# is reported slow, and one that runs past `period` times `terminate-after` (120 s) is killed and
+# fails with its name. On 2026-11-18 one hung test held an express landing for the whole 1800 s
+# verb limit.
+#
+# Measured on 2026-11-18 with `cargo nextest run --workspace` at a load average of 12 to 16 (1454
+# tests, 43 s in all): the slowest test took 15 s and one more took 20 s, so 120 s is six times
+# the slowest run seen and still ends a hang in about two minutes.
+[profile.express.slow-timeout]
+period = "30s"
+terminate-after = 4

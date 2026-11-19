@@ -1672,7 +1672,7 @@ dir = "ignite"
 commands = [
   "cargo fmt --check",
   "cargo clippy --locked --all-targets -- -D warnings",
-  "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
+  "cargo nextest run --locked --cargo-quiet --workspace --profile express --status-level=fail --final-status-level=fail",
   "uv run --quiet --project ../tools mdformat --check ../docs/ignite.md",
 ]
 families = ["ignite", "ignite-lint"]
@@ -1737,6 +1737,12 @@ express_cores = 3
   express path and no other command reads Markdown, so a misformatted copy would
   otherwise land and fail only in tip verification. `ignite test ignite:` and
   `ignite check` run it too, so the agent sees the failure before landing.
+- The nextest command uses the `express` profile in
+  `ignite/.config/nextest.toml`, which kills a test after 120 s (30 s, four
+  times). On 2026-11-18 one hung test held a landing for the whole 1800 s verb
+  limit; now it fails in about two minutes with its name. Under a load average
+  of 12 to 16 the slowest test took 15 s. The `ignite` family uses the same
+  profile.
 - The commands are what the `ignite` family (every test, under cargo-nextest)
   and the `ignite-lint` family (`cargo fmt` and clippy) run. Those families
   still run in the gate when a change to Ignite lands together with other files,

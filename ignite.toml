@@ -44,7 +44,9 @@ dir = "ignite"
 commands = [
   "cargo fmt --check",
   "cargo clippy --locked --all-targets -- -D warnings",
-  "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
+  # The `express` profile (ignite/.config/nextest.toml) kills a test after 120 s, so a hung test
+  # fails in about two minutes with its name instead of holding the landing to the verb limit.
+  "cargo nextest run --locked --cargo-quiet --workspace --profile express --status-level=fail --final-status-level=fail",
   # `docs/ignite.md` is an express path, and none of the commands above reads Markdown, so
   # without this a misformatted copy would land and fail only in tip verification. It is the
   # command `just fmt` runs on Markdown, in check mode.

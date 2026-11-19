@@ -221,8 +221,9 @@ inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 # The tests run under cargo-nextest, which runs every test binary at once, from the build of
 # `ignite-tests`. Through `cargo test`, which runs the binaries one after another, the same 1325
 # tests took 38 to 57 s on a warm tree on 2026-11-18, against 13 s here. The command runs in
-# ignite/, the directory of the first product the family needs. The workspace has no nextest
-# configuration of its own, so the run names no profile. All crates stay in the run: testing
+# ignite/, the directory of the first product the family needs. The workspace's nextest profile
+# `express` (ignite/.config/nextest.toml) ends a test that runs past 120 s, so a hung test
+# fails by name. All crates stay in the run: testing
 # `ignite_daemon` alone once missed a failing test in `ignite_core`.
 [family.ignite]
 kind = "regression"
@@ -230,7 +231,7 @@ adapter = "nextest"
 platforms = "any"
 needs = ["ignite-tests"]
 list = "cargo nextest list --locked --cargo-quiet --workspace --message-format json"
-run = "cargo nextest run --locked --cargo-quiet --workspace --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+run = "cargo nextest run --locked --cargo-quiet --workspace --profile express --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["ignite/**", "ignite.toml"]
 
 # Formatting and clippy over Ignite's workspace, as `ignite-lint:fmt` and `ignite-lint:clippy`.
