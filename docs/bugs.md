@@ -1009,8 +1009,8 @@ fixed in the same session. Newest first.
   first run with the record found two more stale passes of the same kind:
   `test_ignite_rest.py` reads `ignite/checks/rest.toml` and `test_changes.py`
   reads `data/efficiency-changes.json`, and changes to those files had broken
-  both tests without the gate noticing.
-||||||| parent of ccfd1370a (fix: ui checks declare the data files they read)
+  both tests without the gate noticing. ||||||| parent of ccfd1370a (fix: ui
+  checks declare the data files they read)
 
 - **The UI checks could reuse a pass after a data file they read changed.** An
   audit of every check family's declared inputs, made after the gate reused a
