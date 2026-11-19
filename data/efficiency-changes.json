@@ -569,5 +569,10 @@
     "label": "The hub files one flaky-check ticket per check family and adds each later switched-off check of that family to it as a comment (on 2026-11-19 two `ignite` tests that flaked on one machine within the same hour each got their own ticket and would have each cost a session)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Rust tests that open a repository file through `beryl_test_files` or `ignite_core::test_files` are hashed over the files they were seen to open, so a data file reruns only the tests that opened it, not every test of the package that lists it in `package_inputs`",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

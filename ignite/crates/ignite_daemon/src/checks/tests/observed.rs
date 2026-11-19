@@ -1,5 +1,5 @@
-//! Observed reads: a Rust test's hash covers the files its build was observed to read, with no
-//! manifest entry naming them, and no file it did not read.
+//! Observed reads: a Rust test's hash covers the files its build was observed to read and the
+//! files it opened at run time, with no manifest entry naming them, and no file it did not read.
 
 use super::*;
 
@@ -22,6 +22,7 @@ inputs = ["crate-closure", "rust/Cargo.toml"]
 
 const TRACKED: &[&str] = &[
     "data/built-from.json",
+    "data/opened.json",
     "data/included.tsv",
     "data/unread.json",
     "rust/Cargo.lock",
@@ -155,6 +156,120 @@ fn a_change_to_an_included_file_keeps_the_family_in_scope() {
             .open(&world.ctx, &TreeId::new("tree-01").unwrap())
             .unwrap()
             .1;
+        let (affected, _) = checks.scope(&world.ctx, &tree, &families, &[changed.to_owned()]);
+        assert_eq!(!affected.is_empty(), in_scope, "{changed}");
+    }
+}
+
+/// The world of [`repository`], whose test `rust:core::a` passes and opens `data/opened.json`
+/// at run time through the helper.
+fn opening() -> World {
+    let world = repository();
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$a\"}\n".to_owned();
+    *world.launcher.nextest_reads.lock().unwrap() = "core\ta\tdata/opened.json\n".to_owned();
+    world
+}
+
+fn test_runs(world: &World) -> usize {
+    world.launcher.commands("cargo").len() - listings_made(world)
+}
+
+fn run_on(world: &World, checks: &Checks) -> CheckRun {
+    let tree = TreeId::new("tree-01").unwrap();
+    checks.run(&world.ctx, &tree, &[name("rust:core::a")], &options(false))
+}
+
+#[test]
+fn a_file_a_test_opened_enters_its_hash_and_an_unopened_one_does_not() {
+    let world = opening();
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        tree_with(&world, &[]),
+    );
+    let unknown = keyed(&world, &checks);
+    assert!(
+        !unknown.reads.may_hit(),
+        "no list is kept before the first run"
+    );
+    assert!(run_on(&world, &checks).passed());
+    assert_eq!(test_runs(&world), 1);
+
+    let known = keyed(&world, &checks);
+    let paths: Vec<&str> = known.inputs.iter().map(|(p, _)| p.as_str()).collect();
+    assert!(paths.contains(&"data/opened.json"), "{paths:?}");
+    // The run stored its result under the hash its list gives, so the next run is answered
+    // from the cache.
+    assert!(run_on(&world, &checks).passed());
+    assert_eq!(test_runs(&world), 1);
+
+    world.git.set_object("data/unread.json", oid('b'));
+    assert_eq!(keyed(&world, &checks).key, known.key);
+    world.git.set_object("data/opened.json", oid('b'));
+    assert_ne!(keyed(&world, &checks).key, known.key);
+}
+
+#[test]
+fn a_list_that_changes_replaces_the_old_one() {
+    let world = opening();
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        tree_with(&world, &[]),
+    );
+    assert!(run_on(&world, &checks).passed());
+    // The opened file now names another file to open, so the test runs on its new inputs and
+    // records both.
+    world.git.set_object("data/opened.json", oid('b'));
+    *world.launcher.nextest_reads.lock().unwrap() =
+        "core\ta\tdata/opened.json\ncore\ta\tdata/unread.json\n".to_owned();
+    assert!(run_on(&world, &checks).passed());
+    assert_eq!(test_runs(&world), 2);
+    let paths: Vec<String> = keyed(&world, &checks)
+        .inputs
+        .into_iter()
+        .map(|(p, _)| p)
+        .collect();
+    assert!(paths.contains(&"data/unread.json".to_owned()), "{paths:?}");
+    assert!(run_on(&world, &checks).passed());
+    assert_eq!(test_runs(&world), 2, "the new list's hash holds the result");
+}
+
+#[test]
+fn a_kept_read_list_serves_another_machine() {
+    let world = opening();
+    let first = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        tree_with(&world, &[]),
+    );
+    assert!(run_on(&world, &first).passed());
+    let other = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        tree_with(&world, &[]),
+    );
+    assert!(keyed(&world, &other).reads.may_hit());
+    assert!(run_on(&world, &other).passed());
+    assert_eq!(test_runs(&world), 1);
+}
+
+#[test]
+fn a_change_to_an_opened_file_keeps_the_family_in_scope() {
+    let world = opening();
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        tree_with(&world, &[]),
+    );
+    assert!(run_on(&world, &checks).passed());
+    let families = [("rust", &checks.settings.manifest.families["rust"].family)];
+    let tree = checks
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
+    for (changed, in_scope) in [("data/opened.json", true), ("data/unread.json", false)] {
         let (affected, _) = checks.scope(&world.ctx, &tree, &families, &[changed.to_owned()]);
         assert_eq!(!affected.is_empty(), in_scope, "{changed}");
     }

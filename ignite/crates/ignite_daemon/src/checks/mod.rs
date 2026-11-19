@@ -44,12 +44,14 @@ mod batches;
 mod execute;
 mod express;
 mod gate;
+mod keying;
 pub(crate) mod listings;
 mod observed;
 pub(crate) mod plan;
 mod prepare;
 mod products;
 mod regression;
+pub(crate) mod run_reads;
 mod scope;
 pub mod sources;
 mod spent;
@@ -73,8 +75,8 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use ignite_core::config::Os;
 use ignite_core::hash::{self, HashParts};
 use ignite_core::ids::{CheckName, Commit, InputHash, Oid, SessionId, TicketId, TreeId};
-use ignite_core::inputs::{self, CrateGraph};
-use ignite_core::manifest::{Family, InputPattern, Manifest, Platforms};
+use ignite_core::inputs::CrateGraph;
+use ignite_core::manifest::{Family, Manifest, Platforms};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::hub::{CachedResult, ListingKey, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
@@ -271,6 +273,8 @@ pub struct Keyed {
     pub key: ResultKey,
     /// The paths the hash covers, with their git object IDs.
     pub inputs: Vec<(String, Oid)>,
+    /// What the hash knows of the files the check opens at run time.
+    pub reads: run_reads::RunReads,
 }
 
 /// A build tree opened for one command.
@@ -330,6 +334,8 @@ pub struct Checks {
     /// threads of their own that ask for one product share its build, and each is answered
     /// with the same result; only the first reports and records it.
     builds_seen: Mutex<HashSet<(String, u64, u64)>>,
+    /// The read lists this view's runs recorded, by check, until their results are stored.
+    fresh_reads: Mutex<HashMap<CheckName, Vec<String>>>,
 }
 
 /// What every view of one runner shares: the cache, the trees, the history and what the
@@ -384,6 +390,7 @@ impl Checks {
                 hits: OnceLock::new(),
             }),
             builds_seen: Mutex::default(),
+            fresh_reads: Mutex::default(),
         }
     }
 
@@ -450,15 +457,27 @@ impl Checks {
         prepared: &[Prepared],
         options: &RunOptions,
     ) -> Vec<Option<CachedResult>> {
-        let keys: Vec<ResultKey> = prepared
-            .iter()
-            .flat_map(|p| p.keyed.iter().map(|k| k.key.clone()))
-            .collect();
+        let keyed: Vec<&Keyed> = prepared.iter().flat_map(|p| &p.keyed).collect();
         if options.rerun {
-            vec![None; keys.len()]
-        } else {
-            self.cache.lookup(&keys)
+            return vec![None; keyed.len()];
         }
+        // A check whose hash may not cover what it opens at run time is not looked up.
+        let keys: Vec<ResultKey> = keyed
+            .iter()
+            .filter(|k| k.reads.may_hit())
+            .map(|k| k.key.clone())
+            .collect();
+        let mut found = self.cache.lookup(&keys).into_iter();
+        keyed
+            .iter()
+            .map(|k| {
+                if k.reads.may_hit() {
+                    found.next().flatten()
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Opens `tree` for one command, with this runner as it runs there: a view whose families
@@ -484,6 +503,7 @@ impl Checks {
             settings,
             shared: self.shared.clone(),
             builds_seen: Mutex::default(),
+            fresh_reads: Mutex::default(),
         };
         let tree = OpenTree {
             id: tree.clone(),
@@ -511,80 +531,6 @@ impl Checks {
                 Platforms::Each(list) => list.contains(&self.settings.os),
             })
             .map(|(name, declared)| (name.as_str(), &declared.family))
-    }
-
-    /// Keys a listing's checks, and hashes its sources, from one reading of the tree. Returns
-    /// the keyed checks, the checks whose inputs cannot be resolved, and the sources hash
-    /// (`None` when the tree could not be read).
-    fn key_listing(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        family: &Family,
-        listing: &Listing,
-    ) -> (Vec<Keyed>, Vec<Failure>, Option<InputHash>) {
-        let mut keyed = Vec::new();
-        let mut broken = Vec::new();
-        // Each check's input paths first, then the object IDs of all of them from one reading
-        // of the tree. Reading per check ran two git commands per check, which for the
-        // thousands of checks in a round took most of an hour under load.
-        let mut resolved = Vec::new();
-        // Checks of one package usually share every pattern, and matching patterns against
-        // every tracked file is the costly part, so each distinct set is matched once.
-        let mut memo: HashMap<String, Vec<String>> = HashMap::new();
-        // The observed reads that are tracked in this tree: a file the build read that is gone
-        // now names no path, which changes the hash.
-        let reads = listing
-            .reads
-            .as_ref()
-            .map(|reads| observed::tracked_only(reads, &tree.tracked));
-        for listed in &listing.checks {
-            if let Some(why) = &listed.refused {
-                eprintln!("ignite: {why}");
-                broken.push(invalid_entry(&listed.check, &Error::Invalid(why.clone())));
-                continue;
-            }
-            match self.key_paths(tree, family, listed, reads.as_ref(), &mut memo) {
-                Ok(paths) => resolved.push((listed, paths)),
-                Err(error) => broken.push(invalid_entry(&listed.check, &error)),
-            }
-        }
-        let mut sources = Self::source_paths(tree, &listing.checks);
-        // A kept listing holds only while the files its build was observed to read are as they
-        // were, since a build script may generate tests from them.
-        sources.extend(reads.iter().flat_map(observed::every_path));
-        sources.sort();
-        sources.dedup();
-        let mut every: Vec<String> = resolved
-            .iter()
-            .flat_map(|(_, paths)| paths.iter().cloned())
-            .chain(sources.iter().cloned())
-            .collect();
-        every.sort();
-        every.dedup();
-        let ids = match inputs::object_ids(ctx.git.as_ref(), &tree.path, &every) {
-            Ok(ids) => ids,
-            Err(error) => {
-                for (listed, _) in resolved {
-                    broken.push(incomplete(&listed.check, &error));
-                }
-                return (keyed, broken, None);
-            }
-        };
-        let ids: HashMap<String, Oid> = ids.into_iter().collect();
-        let own_ids = |paths: &[String]| -> Vec<(String, Oid)> {
-            let mut own: Vec<(String, Oid)> = paths
-                .iter()
-                .filter_map(|p| ids.get(p).map(|oid| (p.clone(), oid.clone())))
-                .collect();
-            own.sort();
-            own
-        };
-        for (listed, paths) in resolved {
-            keyed.push(self.keyed(family, listed.clone(), own_ids(&paths)));
-        }
-        let sources = Self::sources_hash(&own_ids(&sources));
-        (keyed, broken, Some(sources))
     }
 
     /// [`Checks::list`], except that for a family this machine does not run the outcome is kept
@@ -653,80 +599,6 @@ impl Checks {
             toolchain: &self.settings.toolchain,
             platform: hash::platform(&family.platforms, self.settings.os),
         })
-    }
-
-    /// The paths a check's input hash covers: its family's inputs, the family's
-    /// `package_inputs` for the check's package, the check's own inputs and, where the listing
-    /// carries observed reads, what the packages of the check's closure were observed to read.
-    /// `memo` holds the paths already resolved for a set of patterns and a package.
-    fn key_paths(
-        &self,
-        tree: &OpenTree,
-        family: &Family,
-        listed: &Listed,
-        reads: Option<&observed::Reads>,
-        memo: &mut HashMap<String, Vec<String>>,
-    ) -> Result<Vec<String>> {
-        let mut patterns = self.check_patterns(family, reads.is_some());
-        patterns.extend_from_slice(family.package_patterns(listed.package.as_deref()));
-        patterns.extend(listed.inputs.iter().cloned().map(InputPattern::from));
-        let memo_key = format!("{:?}\0{patterns:?}", listed.package);
-        if let Some(paths) = memo.get(&memo_key) {
-            return Ok(paths.clone());
-        }
-        let mut paths = inputs::resolve(
-            &patterns,
-            listed.package.as_deref(),
-            &tree.graph,
-            &tree.tracked,
-        )
-        .map_err(|e| Error::Invalid(e.to_string()))?;
-        if let (Some(reads), Some(package)) = (reads, listed.package.as_deref()) {
-            // A package the crate graph does not hold has no compile units of its own to read.
-            let closure =
-                inputs::closure(package, &tree.graph).unwrap_or_else(|_| vec![package.to_owned()]);
-            paths.extend(observed::paths_for(reads, &closure));
-            paths.sort();
-            paths.dedup();
-        }
-        memo.insert(memo_key, paths.clone());
-        Ok(paths)
-    }
-
-    /// The patterns every check of a family hashes: its inputs and those of the products it
-    /// needs. With observed reads, a product's path patterns are left out and its crate
-    /// patterns kept: a product lists the files its build reads so that it is rebuilt when they
-    /// change, and the observed reads already name every repository file a Cargo build read.
-    fn check_patterns(&self, family: &Family, observed: bool) -> Vec<InputPattern> {
-        let manifest = &self.settings.manifest;
-        if !observed {
-            return hash::input_patterns(family, manifest);
-        }
-        let mut patterns = family.inputs.clone();
-        for product in family.needs.iter().filter_map(|n| manifest.products.get(n)) {
-            patterns.extend(
-                product
-                    .inputs
-                    .iter()
-                    .filter(|p| !matches!(p, InputPattern::Path(_)))
-                    .cloned(),
-            );
-        }
-        patterns
-    }
-
-    /// The check's key from the object IDs of its paths, sorted by path.
-    fn keyed(&self, family: &Family, listed: Listed, ids: Vec<(String, Oid)>) -> Keyed {
-        let key = ResultKey {
-            check: listed.check.clone(),
-            hash: self.hash(family, &ids, listed.digest.as_deref()),
-            platform: hash::platform(&family.platforms, self.settings.os),
-        };
-        Keyed {
-            listed,
-            key,
-            inputs: ids,
-        }
     }
 }
 

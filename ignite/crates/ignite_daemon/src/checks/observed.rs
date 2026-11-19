@@ -210,7 +210,7 @@ pub(crate) fn tracked_only(reads: &Reads, tracked: &[String]) -> Reads {
 }
 
 /// Every tracked file and every directory that holds one.
-fn known_paths(tracked: &[String]) -> HashSet<&str> {
+pub(crate) fn known_paths(tracked: &[String]) -> HashSet<&str> {
     let mut known: HashSet<&str> = HashSet::new();
     for file in tracked {
         let mut rest = file.as_str();

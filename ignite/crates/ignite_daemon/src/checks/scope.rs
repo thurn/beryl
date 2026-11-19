@@ -27,19 +27,21 @@
 //! workspaces the family reaches ([`Checks::closure_packages`]), as in its listing hash.
 //!
 //! A `nextest` family's kept listing also names what its builds were observed to read (see
-//! `observed`), which counts like an input the family declares.
+//! `observed`), and the kept read lists of its packages name what its tests opened at run time
+//! (see `run_reads`). Both count like inputs the family declares.
 //!
 //! In a family with a kept listing, `crate-closure` stands for the packages its checks belong
 //! to, with the packages each depends on, not for every package of every workspace. A change
 //! to Ignite's own crates once kept the game's Rust test families in scope, because their
 //! `crate-closure` reached every package the checkout holds.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use ignite_core::inputs;
 use ignite_core::manifest::{Adapter, Family, InputPattern};
 
-use super::{Checks, Listed, OpenTree, observed, plan};
+use super::{Checks, Listed, OpenTree, observed, plan, run_reads};
 use crate::server::Context;
 
 impl Checks {
@@ -93,6 +95,13 @@ impl Checks {
                             .flat_map(observed::every_path)
                             .map(InputPattern::Path),
                     );
+                    // What the family's tests were seen to open at run time.
+                    patterns.extend(self.run_read_paths(
+                        ctx,
+                        tree,
+                        (name, family),
+                        &listing.checks,
+                    ));
                     let mut patterns = listed_packages(patterns, &listing.checks);
                     patterns.extend(self.manifest_file(ctx, name).map(InputPattern::Path));
                     // A pattern that cannot be matched, such as a crate that is gone, says
@@ -138,6 +147,28 @@ impl Checks {
             .collect();
         patterns.extend(self.manifest_file(ctx, name).map(InputPattern::Path));
         patterns
+    }
+
+    /// Every path the kept read lists of a recording family's packages name (see
+    /// `run_reads`), as patterns; none for a family that does not record them.
+    fn run_read_paths(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        (name, family): (&str, &Family),
+        checks: &[Listed],
+    ) -> Vec<InputPattern> {
+        if !run_reads::records(family) {
+            return Vec::new();
+        }
+        let packages: BTreeSet<String> = checks.iter().filter_map(|c| c.package.clone()).collect();
+        let lists = self.read_lists(ctx, tree, (name, family), &packages);
+        let paths: BTreeSet<&String> = lists
+            .values()
+            .filter_map(|(_, lists)| lists.as_ref())
+            .flat_map(|lists| lists.values().flatten())
+            .collect();
+        paths.into_iter().cloned().map(InputPattern::Path).collect()
     }
 
     /// The manifest file that declares the family, relative to the checkout's root.

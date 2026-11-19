@@ -64,6 +64,8 @@ struct ScriptLauncher {
     /// Outputs that the next cargo-nextest runs fail with, exit code 101, one each, as when
     /// their Cargo build fails.
     nextest_failures: Mutex<VecDeque<String>>,
+    /// What a cargo-nextest run's tests record as opened, in the directory `IGNITE_READS` names.
+    nextest_reads: Mutex<String>,
     runs: Mutex<Vec<CommandSpec>>,
     files: AtomicU64,
     /// Called when a family's `run` command starts, to change the tree under it.
@@ -141,6 +143,13 @@ impl Launcher for ScriptLauncher {
                 {
                     let unit = "{\"crate\":\"core\",\"mode\":\"run\",\"instructions\":5.0e8,\"cpu_s\":0.25,\"rebuilt\":false}\n";
                     fs::write(file, unit).unwrap();
+                }
+                if let Some((_, dir)) = spec.env.iter().find(|(k, _)| k == run_reads::READS_ENV) {
+                    fs::write(
+                        Path::new(dir).join("1"),
+                        &*self.nextest_reads.lock().unwrap(),
+                    )
+                    .unwrap();
                 }
                 if let Some(failure) = self.nextest_failures.lock().unwrap().pop_front() {
                     exit = Some(101);

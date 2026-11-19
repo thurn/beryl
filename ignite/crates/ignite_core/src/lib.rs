@@ -23,6 +23,7 @@ pub mod ready;
 pub mod schedule;
 pub mod score;
 pub mod shares;
+pub mod test_files;
 pub mod time;
 pub mod tipround;
 pub mod traits;

@@ -1543,11 +1543,44 @@ process.
   family's inputs, so a landing that edits only an embedded data file still runs
   the tests that embed it.
 
+Files a test opens while it runs leave no trace in dep-info, so the test opens
+them through a helper of its workspace: `beryl_test_files` in the game's
+workspaces and `ignite_core::test_files` in Ignite's own. Each takes a path
+relative to the checkout's root.
+
+- **How a read is recorded.** For each run of a `nextest` family, Ignite sets
+  `IGNITE_READS` to a fresh directory. The helper appends one line per read,
+  `<binary id>\t<test name>\t<path>`, to a file there named after the test's
+  process, with the binary and test as cargo-nextest names them
+  (`NEXTEST_BINARY_ID`, `NEXTEST_TEST_NAME`). After the run Ignite merges the
+  files into a read list per test, which is empty for a test that reported and
+  opened nothing through the helper.
+- **Where the lists are kept.** In the listing store, locally and at the hub,
+  one entry per package, under `<family>#reads:<package>` and the package's
+  coarse hash: the hash of its `crate-closure`, the family's commands and the
+  toolchain. Code that could change which files a test opens is in the coarse
+  hash, so one machine's lists serve every tree with the same coarse hash.
+- **What a check hashes.** Two steps: the coarse hash finds the read lists of
+  the package's last run, and the check's input hash covers the tracked files
+  its list names, with everything above. A directory the test read with
+  `read_dir` enters as its git tree, so an added file changes the hash.
+- **A check with no list** is not looked up in the result cache. It runs once,
+  and its result is stored under the hash that covers the files it was seen to
+  open.
+- **A list that changes between runs**, as when a data file names other files to
+  open, is replaced by the newest run's list, and that run's result is stored
+  under the hash the new list gives. Two machines that run different tests of
+  one package at the same time may each keep only their own lists; a test whose
+  list is lost runs once more.
+- **Scope.** The landing gate counts every path the kept lists of a family's
+  packages name among the family's inputs.
+
 What observation does not see, which stays declared:
 
-- Files a test opens at run time. These go in the family's `package_inputs` for
-  the package whose tests read them, and Beryl's `check-inputs` source rule
-  holds those lists to the literals the package's Rust files read.
+- Files a test opens without the helper. These go in the family's
+  `package_inputs` for the package whose tests read them, and Beryl's
+  `check-inputs` source rule holds those lists to the literals the package's
+  Rust files read.
 - Anything a `jsonl` family reads, such as a Python adapter or a browser check.
   Those families keep their declared inputs.
 - A build that writes outside the product's first output directory: Ignite then

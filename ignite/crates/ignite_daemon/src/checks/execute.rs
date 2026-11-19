@@ -377,10 +377,12 @@ impl Checks {
         ctx: &Context,
         tree: &OpenTree,
         family: &Family,
-        finals: Vec<Final>,
+        mut finals: Vec<Final>,
         run: &mut CheckRun,
     ) {
         let mut stored = Vec::new();
+        // A run that recorded what a test opened gives the test the hash its new list says.
+        let unkeyed = self.rekey(ctx, tree, family, &mut finals);
         let moved = moved_inputs(ctx, tree, &finals);
         let areas = self.change_areas(ctx, tree);
         for (keyed, outcome, failure, output, cost, record) in finals {
@@ -394,6 +396,8 @@ impl Checks {
                 // hash it was keyed by, so it is reported to the caller but not stored.
                 Outcome::Pass | Outcome::Fail
                     if keyed.inputs.iter().any(|(path, _)| moved.contains(path)) => {}
+                // A check whose hash does not cover what it opened says nothing about it either.
+                Outcome::Pass | Outcome::Fail if unkeyed.contains(&keyed.listed.check) => {}
                 Outcome::Pass | Outcome::Fail => stored.push(NewResult {
                     key: keyed.key.clone(),
                     outcome,
@@ -544,12 +548,21 @@ impl Checks {
                     adapters::NEXTEST_JSON_ENV.1.to_owned(),
                 )];
                 env.extend(self.unit_recording_env());
+                // The tests record the repository files they open (see `run_reads`).
+                let reads = self.reads_dir();
+                if let Some(dir) = &reads {
+                    env.push((super::run_reads::READS_ENV.to_owned(), path_text(dir)));
+                }
                 let cwd = self.nextest_dir(tree, family);
                 let (result, record, _) =
                     self.launch_recorded(ctx, tree, name, family, RUN, args, &cwd, env, options);
                 let text = fs::read_to_string(&result.output).unwrap_or_default();
                 let listed: Vec<Listed> = checks.iter().map(|k| k.listed.clone()).collect();
-                (adapters::nextest_results(&text, &listed), result, record)
+                let reported = adapters::nextest_results(&text, &listed);
+                if let Some(dir) = &reads {
+                    self.note_run_reads(dir, name, checks, &reported);
+                }
+                (reported, result, record)
             }
         }
     }

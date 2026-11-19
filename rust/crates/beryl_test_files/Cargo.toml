@@ -1,0 +1,14 @@
+[package]
+name = "beryl_test_files"
+version = "0.1.0"
+description = "Opens repository files for tests and records the reads for Ignite's input hashes"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# None: tests take this crate as a dev-dependency, so the kernel, rules and card crates keep no
+# runtime dependency, and Beryl 3D's workspace takes it by path.
+[dependencies]

@@ -245,7 +245,8 @@ impl Checks {
         );
         let mut listing = Self::listed_or_noted(name, listed, run)?;
         let keying = Stopwatch::start(ctx);
-        let (mut keyed, mut broken, mut sources) = self.key_listing(ctx, tree, family, &listing);
+        let (mut keyed, mut broken, mut sources) =
+            self.key_listing(ctx, tree, (name, family), &listing);
         run.slow(ctx, format!("keying {name}"), keying);
         if let Origin::Kept {
             key: old,
@@ -259,7 +260,7 @@ impl Checks {
             let listed = self.list(ctx, tree, name, family, options, run, key, None);
             listing = Self::listed_or_noted(name, listed, run)?;
             let keying = Stopwatch::start(ctx);
-            (keyed, broken, sources) = self.key_listing(ctx, tree, family, &listing);
+            (keyed, broken, sources) = self.key_listing(ctx, tree, (name, family), &listing);
             run.slow(ctx, format!("keying {name}"), keying);
         }
         match (&listing.origin, sources) {
