@@ -10,9 +10,9 @@ use ignite_core::host::HostClient;
 use ignite_core::ids::Handle;
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::host::{
-    Ack, AllowStop, Build, BuildReply, Finished, Hello, HelloReply, HostCall, LeaseLanding,
-    LeaseLandingReply, Poll, RefuseStop, RefuseStopReply, ReleaseLanding, Run, RunReply,
-    StepUpdate, StopState, decode_reply, encode_request,
+    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
+    HostCall, LeaseLanding, LeaseLandingReply, Poll, RefuseStop, RefuseStopReply, ReleaseLanding,
+    ReturnCores, Run, RunReply, StepUpdate, StopState, decode_reply, encode_request,
 };
 use ignite_core::traits::{Error, Result};
 
@@ -70,6 +70,12 @@ impl HostClient for SocketHost {
         self.call(call)
     }
     fn finished(&self, call: &Finished) -> Result<Ack> {
+        self.call(call)
+    }
+    fn borrow_cores(&self, call: &BorrowCores) -> Result<BorrowCoresReply> {
+        self.call(call)
+    }
+    fn return_cores(&self, call: &ReturnCores) -> Result<Ack> {
         self.call(call)
     }
 }
@@ -221,6 +227,14 @@ impl Link {
 
     pub fn release_landing(&self, call: &ReleaseLanding) -> Result<Ack> {
         self.call(|host| host.release_landing(call))
+    }
+
+    pub fn borrow_cores(&self, call: &BorrowCores) -> Result<BorrowCoresReply> {
+        self.call(|host| host.borrow_cores(call))
+    }
+
+    pub fn return_cores(&self, call: &ReturnCores) -> Result<Ack> {
+        self.call(|host| host.return_cores(call))
     }
 
     /// `host-step`, which also becomes the step sent again after a failed call.

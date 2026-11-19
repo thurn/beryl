@@ -8,9 +8,9 @@
 //! again, with the same body, for up to five minutes.
 
 use crate::protocol::host::{
-    Ack, AllowStop, Build, BuildReply, Finished, Hello, HelloReply, LeaseLanding,
-    LeaseLandingReply, Poll, RefuseStop, RefuseStopReply, ReleaseLanding, Run, RunReply,
-    StepUpdate, StopState,
+    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
+    LeaseLanding, LeaseLandingReply, Poll, RefuseStop, RefuseStopReply, ReleaseLanding,
+    ReturnCores, Run, RunReply, StepUpdate, StopState,
 };
 use crate::traits::Result;
 
@@ -35,4 +35,8 @@ pub trait HostClient: Send + Sync {
     fn poll(&self, call: &Poll) -> Result<StopState>;
     /// `host-finished`.
     fn finished(&self, call: &Finished) -> Result<Ack>;
+    /// `host-borrow-cores`; never waits.
+    fn borrow_cores(&self, call: &BorrowCores) -> Result<BorrowCoresReply>;
+    /// `host-return-cores`.
+    fn return_cores(&self, call: &ReturnCores) -> Result<Ack>;
 }

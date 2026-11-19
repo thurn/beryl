@@ -24,6 +24,9 @@
 //!   build already running for it, under the same 30-second rule (`host/builds.rs`).
 //! - `host-lease-landing` and `host-release-landing` lease and free a landing tree, owned by the
 //!   handle, so a restarted daemon keeps it (`host/landing.rs`).
+//! - `host-borrow-cores` and `host-return-cores` lend a verb process the scheduler cores that are
+//!   free now, for a command it runs itself (`host/cores.rs`). A grant the process never returns
+//!   is released when its handle ends.
 //! - `host-step`, `host-refuse-stop`, `host-allow-stop` and `host-poll` keep the activity's step,
 //!   waits and stop state (`host/activity.rs`). Whether a stop was asked, and the reason stopping
 //!   is refused while it is, are also kept in the local database (`handle_stops`), so a
@@ -42,6 +45,7 @@
 
 mod activity;
 mod builds;
+mod cores;
 mod landing;
 mod runs;
 #[cfg(test)]
@@ -91,6 +95,14 @@ pub trait RunStarter: Send + Sync {
     fn kill(&self, run: &Path);
     /// What a command waiting for its grant waits for, such as `8 cores for land work`.
     fn waiting_for(&self, spec: &CommandSpec) -> String;
+    /// Grants up to `cores` of what is free now without waiting, for a command the verb process
+    /// runs itself: the grant's ID and size, or `None` when nothing is free or the starter has
+    /// no scheduler.
+    fn borrow_cores(&self, _cores: u32) -> Option<(u64, u32)> {
+        None
+    }
+    /// Gives back a grant from [`Self::borrow_cores`].
+    fn return_cores(&self, _grant: u64) {}
 }
 
 /// How the daemon leases and frees landing trees for verb processes: the machine's trees, or a
@@ -163,6 +175,8 @@ pub struct Host {
     remotes: Mutex<HashMap<Handle, Remote>>,
     runs: Mutex<HashMap<RequestId, Arc<Pending<RunReply>>>>,
     built: Mutex<HashMap<RequestId, Arc<Pending<BuildReply>>>>,
+    /// The cores granted to each verb process by `host-borrow-cores` and not yet returned.
+    borrowed: Mutex<HashMap<Handle, Vec<u64>>>,
 }
 
 /// One verb process.
@@ -207,6 +221,7 @@ impl Host {
             remotes: Mutex::new(HashMap::new()),
             runs: Mutex::new(HashMap::new()),
             built: Mutex::new(HashMap::new()),
+            borrowed: Mutex::new(HashMap::new()),
         })
     }
 

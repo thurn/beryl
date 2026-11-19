@@ -108,7 +108,7 @@ fn a_landing_that_changes_only_ignite_runs_the_express_commands_instead_of_the_g
     assert!(
         reply
             .text
-            .contains("express  1 commands passed in 12 s on 3 reserved cores"),
+            .contains("express  1 commands passed in 12 s on 3 cores"),
         "{}",
         reply.text
     );
@@ -267,7 +267,7 @@ fn an_express_pass_that_lost_the_race_to_unrelated_files_pushes_without_running_
     assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
     assert_eq!(lane.trees.lock().unwrap().len(), 1);
     assert!(
-        reply.text.contains("reserved cores, on an earlier pass"),
+        reply.text.contains("cores, on an earlier pass"),
         "{}",
         reply.text
     );

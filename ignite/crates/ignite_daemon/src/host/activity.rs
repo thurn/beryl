@@ -184,6 +184,7 @@ impl Host {
 
     /// Hands the reply in a finished handle's row to whoever waits on it, and ends its activity.
     fn settle(&self, handle: &Handle, row: &rows::Handle) {
+        self.return_all_cores(handle);
         let reply = row
             .reply
             .as_deref()
@@ -247,6 +248,7 @@ impl Host {
                         return;
                     }
                     None => {
+                        host.return_all_cores(&handle);
                         if let Some(remote) = lock(&host.remotes).remove(&handle) {
                             remote.activity.finish();
                         }

@@ -1668,6 +1668,18 @@ express_cores = 3
   a saturated or broken scheduler cannot hold them. While an express run goes,
   the scheduler also sees its CPU as load outside Ignite and hands out that much
   less.
+- When a run starts it also asks the scheduler, without waiting, for the cores
+  that are free at that moment, as a `land` grant of up to 12 cores in all
+  counting `express_cores`, and sets the four variables to the total. On
+  2026-11-18 eight landings queued behind a lane of 3 cores while the scheduler
+  had granted none of its 15 cores; a run took about 164 s on 3 cores under load
+  and about 65 s on 12. The reserved cores stay the floor: when nothing is free,
+  or the daemon cannot be asked, the run uses `express_cores` and does not wait.
+  The extra grant is released when the run ends, and the scheduler may reclaim
+  it for a higher class like any other grant. A landing runs in a verb process,
+  so it borrows through the host protocol (`host-borrow-cores` and
+  `host-return-cores`, version 2), and the daemon releases a grant its handle
+  still holds when the handle ends. The `express` line names the cores used.
 - Express runs take no lock and run side by side, each in its own tree with its
   own warm target directory. Until 2026-11-18 they all ran in one shared tree,
   `.worktrees/express`, under one file lock; that evening eight landings queued

@@ -25,9 +25,8 @@ use ignite_core::traits::{CommandSpec, Error, Launcher, Result};
 
 use super::{Home, tail};
 
-/// The versions of the host protocol this build serves. No verb process exists yet, so the only
-/// version is 1.
-pub const HOST_PROTOCOL_VERSIONS: &[u32] = &[1];
+/// The versions of the host protocol this build serves.
+pub const HOST_PROTOCOL_VERSIONS: &[u32] = &[1, 2];
 
 /// A selftest that takes longer than this is ended and counts as a failure.
 pub const HANG_LIMIT_S: u64 = 10 * 60;

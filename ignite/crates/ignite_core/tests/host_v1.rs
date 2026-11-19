@@ -353,7 +353,11 @@ fn version_1_is_unchanged() {
         present, named,
         "every golden file is checked, and only those"
     );
-    let verbs: BTreeSet<&str> = CALLS.iter().map(|(verb, _)| *verb).collect();
+    let verbs: BTreeSet<&str> = CALLS
+        .iter()
+        .filter(|(_, since)| *since == 1)
+        .map(|(verb, _)| *verb)
+        .collect();
     let pinned: BTreeSet<&str> = named
         .iter()
         .filter_map(|file| file.strip_suffix(".request.json"))
@@ -361,6 +365,7 @@ fn version_1_is_unchanged() {
         .map(|name| {
             CALLS
                 .iter()
+                .filter(|(_, since)| *since == 1)
                 .find(|(verb, _)| verb.strip_prefix("host-") == Some(name))
                 .map(|(verb, _)| *verb)
                 .unwrap()

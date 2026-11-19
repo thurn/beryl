@@ -273,7 +273,7 @@ fn a_verb_runs_to_the_end_across_dropped_calls_and_its_reply_lands_in_the_row() 
     assert_eq!(kept, reply);
     assert_eq!(stored.pid, Some(i64::from(std::process::id())));
     assert_eq!(stored.executable.as_deref(), Some("1a2b3c4"));
-    assert_eq!(stored.protocol, Some(1));
+    assert_eq!(stored.protocol, Some(i64::from(PROTOCOL_VERSION)));
 
     let started: Vec<String> = host
         .started()

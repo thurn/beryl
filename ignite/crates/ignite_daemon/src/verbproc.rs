@@ -405,8 +405,14 @@ fn assemble(
             })
         }
     };
-    let (mut ctx, verbs) =
-        crate::main::assemble::verb_side(&base, launcher, builds, landing, idle_host)?;
+    let (mut ctx, verbs) = crate::main::assemble::verb_side(
+        &base,
+        launcher,
+        builds,
+        landing,
+        Arc::new(remote::RemoteLender(remote.clone())),
+        idle_host,
+    )?;
     let verb = verbs
         .into_iter()
         .map(|(verb, _)| verb)

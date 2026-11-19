@@ -404,5 +404,10 @@
     "label": "An express landing skips the express commands when the same git tree passed them within the hour, as when `ignite land` follows `ignite check` at an unmoved tip: jarvis ran 17 express checks averaging 213 s beside 30 landings on 2026-11-18, so each Ignite change paid for the three-core lane twice",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Express runs borrow the scheduler's idle cores, up to 12 in all, instead of always running on the 3 reserved ones (about 164 s on 3 cores under load against about 65 s on 12)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

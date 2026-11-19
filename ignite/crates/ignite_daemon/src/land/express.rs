@@ -52,9 +52,12 @@ use ignite_git::{committed, worktree};
 use ignite_os::proc::Processes;
 use ignite_store::local::express_passes;
 
+use ignite_core::protocol::Class;
+
 use super::env::GateTree;
 use super::{Landing, line};
 use crate::checks::verbs::render;
+use crate::sched::{GrantRequest, Scheduler};
 use crate::server::Context;
 use crate::steps;
 
@@ -69,6 +72,11 @@ const TREE_NAME: &str = "express";
 /// target directory warm, and a cold one a few minutes.
 const HANG_LIMIT: Duration = Duration::from_mins(30);
 
+/// The most cores one express run uses in all: its reserved cores plus whatever the scheduler
+/// has free when the run starts. An express run took about 164 s on 3 cores under load and
+/// about 65 s on 12.
+pub const MOST_CORES: u32 = 12;
+
 /// How often a running command is looked at, for its exit and for `ignite stop`.
 const LOOK_EVERY: Duration = Duration::from_millis(100);
 
@@ -77,6 +85,50 @@ const TAIL_LINES: usize = 40;
 
 /// How long a passing run is remembered, in seconds.
 const REMEMBER_S: f64 = 60.0 * 60.0;
+
+/// Cores borrowed from the scheduler for one express run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Loan {
+    /// What [`CoreLender::give_back`] needs to return the cores.
+    pub grant: u64,
+    pub cores: u32,
+}
+
+/// Where an express run borrows extra cores from: the scheduler itself in the daemon
+/// ([`SchedulerLender`]), or the daemon over the host protocol in a verb process, where
+/// landings run.
+pub trait CoreLender: Send + Sync {
+    /// Takes up to `wanted` of the cores that are free now without waiting; `None` when none
+    /// are, or when the daemon cannot be asked.
+    fn borrow(&self, wanted: u32) -> Option<Loan>;
+    /// Returns the cores of a loan.
+    fn give_back(&self, loan: &Loan);
+}
+
+/// [`CoreLender`] over the scheduler, for express runs in the daemon's own process.
+pub struct SchedulerLender(pub Arc<Scheduler>);
+
+impl CoreLender for SchedulerLender {
+    fn borrow(&self, wanted: u32) -> Option<Loan> {
+        let grant = self.0.try_acquire(&GrantRequest {
+            class: Class::Land,
+            cores: wanted,
+            resources: Vec::new(),
+            memory_mb: None,
+            shrinks: false,
+            grows: false,
+            cores_file: None,
+        })?;
+        Some(Loan {
+            grant: grant.id,
+            cores: grant.cores,
+        })
+    }
+
+    fn give_back(&self, loan: &Loan) {
+        self.0.release_id(loan.grant);
+    }
+}
 
 /// The express tree and its commands, as a landing uses them. Tests replace it with a fake.
 pub trait ExpressLane: Send + Sync {
@@ -98,7 +150,7 @@ pub struct ExpressRun {
     /// The command that failed, or the step before the commands, with why: the end of its
     /// output. `None` when every command passed.
     pub failure: Option<(String, String)>,
-    /// The threads each command was given.
+    /// The threads each command was given: the reserved cores plus any borrowed.
     pub cores: u32,
     /// The run passed on an earlier pass of the landing and was carried over to this one,
     /// because the commits landed since touch nothing it depends on (see [`Expressed`]).
@@ -144,7 +196,7 @@ impl ExpressRun {
         line(
             "express",
             format!(
-                "{} commands passed in {seconds:.0} s on {} reserved cores{when}, in place of \
+                "{} commands passed in {seconds:.0} s on {} cores{when}, in place of \
                  {what}: {}",
                 self.ran.len(),
                 self.cores,
@@ -347,6 +399,8 @@ pub struct MachineExpress {
     pub cores: u32,
     /// The runs that passed, when the daemon has a database to keep them in.
     pub memory: Option<PassMemory>,
+    /// Where to ask for extra cores when a run starts, if anywhere.
+    pub lender: Option<Arc<dyn CoreLender>>,
 }
 
 impl MachineExpress {
@@ -358,6 +412,7 @@ impl MachineExpress {
         cores: u32,
         db: Option<Arc<Mutex<Connection>>>,
         clock: &Arc<dyn Clock>,
+        lender: Option<Arc<dyn CoreLender>>,
     ) -> Option<Arc<dyn ExpressLane>> {
         let express = config.express.as_ref()?;
         if cores == 0 || express.commands.is_empty() {
@@ -370,7 +425,19 @@ impl MachineExpress {
             commands: express.commands.clone(),
             cores,
             memory: db.map(|db| PassMemory::new(db, clock.clone(), express, cores)),
+            lender,
         }))
+    }
+
+    /// Asks the lender, without waiting, for the cores that are free now, up to [`MOST_CORES`]
+    /// less the reserved ones. `None` when it has none or the lane has no lender: the reserved
+    /// cores are the floor, so a saturated or broken scheduler cannot hold the run.
+    fn borrow(&self) -> Option<Loan> {
+        let wanted = MOST_CORES.saturating_sub(self.cores);
+        if wanted == 0 {
+            return None;
+        }
+        self.lender.as_ref()?.borrow(wanted)
     }
 
     /// Takes the exclusive lock on the file beside the tree, held until the file is dropped,
@@ -430,10 +497,18 @@ impl MachineExpress {
             ));
             return;
         }
+        // The grant is held for the whole run and released when it ends, however it ends.
+        let borrowed = self.borrow();
+        let cores = self.cores + borrowed.as_ref().map_or(0, |loan| loan.cores);
+        run.cores = cores;
+        let _release = borrowed.map(|loan| Release {
+            lender: self.lender.clone().expect("a loan came from a lender"),
+            loan,
+        });
         for command in &self.commands {
-            steps::step(format!("running `{command}` on the express cores"));
+            steps::step(format!("running `{command}` on {cores} cores"));
             let began = Instant::now();
-            let result = self.run_one(command, &dir, &log);
+            let result = Self::run_one(command, &dir, &log, cores);
             run.ran
                 .push((command.clone(), began.elapsed().as_secs_f64()));
             if let Err(why) = result {
@@ -444,7 +519,7 @@ impl MachineExpress {
     }
 
     /// Runs one command in `dir`, its output appended to `log`; `Err` holds why it failed.
-    fn run_one(&self, command: &str, dir: &Path, log: &Path) -> Result<(), String> {
+    fn run_one(command: &str, dir: &Path, log: &Path, cores: u32) -> Result<(), String> {
         let mut words = command.split_whitespace();
         let program = words.next().ok_or("an empty command")?;
         let mut out = OpenOptions::new()
@@ -455,7 +530,7 @@ impl MachineExpress {
         let start = out.metadata().map_or(0, |m| m.len());
         let _ = writeln!(out, "$ {command}");
         let err = out.try_clone().map_err(|e| e.to_string())?;
-        let cores = self.cores.to_string();
+        let cores = cores.to_string();
         let mut process = Command::new(program);
         process
             .args(words)
@@ -507,6 +582,18 @@ impl MachineExpress {
         } else {
             Err(tail(log, start))
         }
+    }
+}
+
+/// Gives borrowed cores back to the lender when dropped.
+struct Release {
+    lender: Arc<dyn CoreLender>,
+    loan: Loan,
+}
+
+impl Drop for Release {
+    fn drop(&mut self) {
+        self.lender.give_back(&self.loan);
     }
 }
 

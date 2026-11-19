@@ -20,9 +20,10 @@ use ignite_core::host::HostClient;
 use ignite_core::ids::{Commit, Handle, MachineId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::host::{
-    Ack, AllowStop, Build, BuildReply, Finished, Hello, HelloReply, HostCall, LeaseLanding,
-    LeaseLandingReply, Poll, REQUEST_VARIABLE, RefuseStop, RefuseStopReply, ReleaseLanding,
-    RequestId, Run, RunReply, StepUpdate, StopState, decode_reply, encode_request,
+    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
+    HostCall, LeaseLanding, LeaseLandingReply, Poll, REQUEST_VARIABLE, RefuseStop, RefuseStopReply,
+    ReleaseLanding, RequestId, ReturnCores, Run, RunReply, StepUpdate, StopState, decode_reply,
+    encode_request,
 };
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::time::Timestamp;
@@ -290,6 +291,12 @@ impl HostClient for Switch {
         self.call(call)
     }
     fn finished(&self, call: &Finished) -> Result<Ack> {
+        self.call(call)
+    }
+    fn borrow_cores(&self, call: &BorrowCores) -> Result<BorrowCoresReply> {
+        self.call(call)
+    }
+    fn return_cores(&self, call: &ReturnCores) -> Result<Ack> {
         self.call(call)
     }
 }

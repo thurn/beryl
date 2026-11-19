@@ -35,7 +35,7 @@ use crate::host::{Host, HostParts, SupervisedStarter, TreesLanding};
 use crate::hubclient::HubClient;
 use crate::idle::{AuditVerb, Idle, IdleHost, IdleJobVerb, IdleSettings, LiveHost, RebuildVerb};
 use crate::land::env::{ChecksGate, LandTrees, MachineTrees};
-use crate::land::express::MachineExpress;
+use crate::land::express::{CoreLender, MachineExpress};
 use crate::land::records::Records;
 use crate::land::{LandVerb, Landing, SyncVerb};
 use crate::pool::{Pool, PoolVerb};
@@ -224,11 +224,15 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
 }
 
 /// The check runner, with landing and idle work, which both run checks through it.
-pub fn checking(base: &Base, trees: &Trees) -> Result<(Arc<Checks>, Arc<Landing>, Arc<Idle>)> {
+pub fn checking(
+    base: &Base,
+    trees: &Trees,
+    lender: Arc<dyn CoreLender>,
+) -> Result<(Arc<Checks>, Arc<Landing>, Arc<Idle>)> {
     let landing_trees = Arc::new(MachineTrees {
         trees: trees.clone(),
     });
-    checking_with(base, landing_trees, trees, |live| Box::new(live))
+    checking_with(base, landing_trees, trees, lender, |live| Box::new(live))
 }
 
 /// [`checking`], with landing's trees and the idle host given: the machine's trees in the
@@ -238,6 +242,7 @@ pub fn checking_with(
     base: &Base,
     landing_trees: Arc<dyn LandTrees>,
     trees: &Trees,
+    lender: Arc<dyn CoreLender>,
     idle_host: impl FnOnce(LiveHost) -> Box<dyn IdleHost>,
 ) -> Result<(Arc<Checks>, Arc<Landing>, Arc<Idle>)> {
     let per_command = base.limits.max_per_command();
@@ -277,6 +282,7 @@ pub fn checking_with(
             base.declared.express_cores,
             Some(Arc::new(Mutex::new(base.open()?))),
             &base.clock,
+            Some(lender),
         ),
         pause: Arc::new(|seconds| std::thread::sleep(std::time::Duration::from_secs_f64(seconds))),
     });
@@ -313,6 +319,7 @@ pub fn verb_side(
     launcher: Arc<dyn Launcher>,
     builds: Arc<dyn Builds>,
     landing: impl FnOnce(MachineTrees) -> Arc<dyn LandTrees>,
+    lender: Arc<dyn CoreLender>,
     idle_host: impl FnOnce(LiveHost) -> Box<dyn IdleHost>,
 ) -> Result<(Context, Vec<LongVerb>)> {
     let repo = &base.options.repo;
@@ -326,7 +333,8 @@ pub fn verb_side(
     let landing_trees = landing(MachineTrees {
         trees: trees.clone(),
     });
-    let (checks, landing, idle) = checking_with(base, landing_trees.clone(), &trees, idle_host)?;
+    let (checks, landing, idle) =
+        checking_with(base, landing_trees.clone(), &trees, lender, idle_host)?;
     let ctx = Context {
         config: base.config.clone(),
         repo: repo.clone(),

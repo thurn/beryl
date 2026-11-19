@@ -11,8 +11,8 @@ use ignite_core::ids::{Commit, TicketId, TreeId};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::Usage;
 use ignite_core::protocol::host::{
-    Build, BuildReply, Command, LeaseLanding, LeaseLandingReply, ReleaseLanding, RequestIds, Run,
-    RunReply,
+    BorrowCores, Build, BuildReply, Command, LeaseLanding, LeaseLandingReply, ReleaseLanding,
+    RequestIds, ReturnCores, Run, RunReply,
 };
 use ignite_core::traits::{
     BuildFor, BuildResult, Builds, Clock, CommandSpec, Launcher, Result, RunResult,
@@ -20,6 +20,7 @@ use ignite_core::traits::{
 
 use super::link::Link;
 use crate::land::env::{GateTree, LandTrees, MachineTrees, TicketTree};
+use crate::land::express::{CoreLender, Loan};
 use crate::steps;
 use crate::supervise::Run as RunDir;
 
@@ -270,5 +271,32 @@ impl LandTrees for RemoteLandTrees {
 
     fn delete_saved(&self, ticket: &TicketId) -> Result<()> {
         self.local.delete_saved(ticket)
+    }
+}
+
+/// [`CoreLender`] over the daemon's `host-borrow-cores` and `host-return-cores`. A daemon that
+/// does not know the calls, or cannot be reached, lends nothing, and the express run keeps its
+/// reserved cores.
+pub struct RemoteLender(pub Arc<Remote>);
+
+impl CoreLender for RemoteLender {
+    fn borrow(&self, wanted: u32) -> Option<Loan> {
+        let call = BorrowCores {
+            handle: self.0.link.handle().clone(),
+            cores: wanted,
+        };
+        let reply = self.0.link.borrow_cores(&call).ok()?;
+        Some(Loan {
+            grant: reply.grant?,
+            cores: reply.cores,
+        })
+    }
+
+    fn give_back(&self, loan: &Loan) {
+        let call = ReturnCores {
+            handle: self.0.link.handle().clone(),
+            grant: loan.grant,
+        };
+        let _ = self.0.link.return_cores(&call);
     }
 }

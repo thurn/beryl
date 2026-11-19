@@ -35,6 +35,7 @@ fn lane(name: &str, commands: &[&str]) -> (PathBuf, MachineExpress, Commit) {
         commands: commands.iter().map(|c| (*c).to_owned()).collect(),
         cores: 2,
         memory: None,
+        lender: None,
     };
     (root, lane, commit)
 }
@@ -169,5 +170,73 @@ fn a_pass_older_than_an_hour_is_not_reused() {
     assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
     clock.advance(3601.0);
     assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A lender with `free` cores that records what was borrowed and returned.
+struct FakeLender {
+    free: u32,
+    log: std::sync::Mutex<Vec<String>>,
+}
+
+impl CoreLender for FakeLender {
+    fn borrow(&self, wanted: u32) -> Option<Loan> {
+        let cores = wanted.min(self.free);
+        self.log.lock().unwrap().push(format!("borrow {wanted}"));
+        (cores > 0).then_some(Loan { grant: 7, cores })
+    }
+
+    fn give_back(&self, loan: &Loan) {
+        self.log
+            .lock()
+            .unwrap()
+            .push(format!("return {}", loan.grant));
+    }
+}
+
+#[test]
+fn free_cores_are_borrowed_for_the_run_and_returned_after_it() {
+    let (root, mut lane, commit) = lane("borrow", &["env"]);
+    let lender = Arc::new(FakeLender {
+        free: 20,
+        log: std::sync::Mutex::new(Vec::new()),
+    });
+    lane.lender = Some(lender.clone());
+    let run = lane.run(&commit);
+    assert!(run.passed(), "{run:?}");
+    // 2 reserved cores, and the lender is asked for up to `MOST_CORES` in all.
+    assert_eq!(run.cores, MOST_CORES);
+    let log = fs::read_to_string(lane.tree.join("tool/target/express.log")).unwrap();
+    assert!(
+        log.contains(&format!("IGNITE_CORES={MOST_CORES}\n")),
+        "{log}"
+    );
+    assert!(
+        log.contains(&format!("CARGO_BUILD_JOBS={MOST_CORES}\n")),
+        "{log}"
+    );
+    assert_eq!(
+        *lender.log.lock().unwrap(),
+        [format!("borrow {}", MOST_CORES - 2), "return 7".to_owned()]
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn with_no_free_cores_the_run_keeps_its_reserved_cores_and_returns_nothing() {
+    let (root, mut lane, commit) = lane("no-borrow", &["true"]);
+    let lender = Arc::new(FakeLender {
+        free: 0,
+        log: std::sync::Mutex::new(Vec::new()),
+    });
+    lane.lender = Some(lender.clone());
+    let run = lane.run(&commit);
+    assert!(run.passed(), "{run:?}");
+    assert_eq!(run.cores, 2);
+    assert_eq!(
+        lender.log.lock().unwrap().len(),
+        1,
+        "asked once, nothing to return"
+    );
     let _ = fs::remove_dir_all(root);
 }

@@ -7,9 +7,9 @@ use std::sync::Mutex;
 use crate::host::HostClient;
 use crate::ids::{Commit, Handle, TreeId};
 use crate::protocol::host::{
-    Ack, AllowStop, Build, BuildReply, Finished, Hello, HelloReply, HostCall, LeaseLanding,
-    LeaseLandingReply, PROTOCOL_VERSION, Poll, RefuseStop, RefuseStopReply, ReleaseLanding,
-    RequestId, Run, RunReply, StepUpdate, StopState,
+    Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
+    HostCall, LeaseLanding, LeaseLandingReply, PROTOCOL_VERSION, Poll, RefuseStop, RefuseStopReply,
+    ReleaseLanding, RequestId, ReturnCores, Run, RunReply, StepUpdate, StopState,
 };
 use crate::traits::{Error, Result};
 
@@ -53,6 +53,10 @@ struct State {
     /// Each tree leased and not released, with the holder and commit it was leased for.
     leased: BTreeMap<TreeId, (String, Commit, LeaseLandingReply)>,
     released: Vec<ReleaseLanding>,
+    /// How many cores are free to borrow, and the grants borrowed and not returned.
+    free_cores: u32,
+    borrowed: BTreeMap<u64, u32>,
+    next_grant: u64,
     steps: Vec<StepUpdate>,
     stop: bool,
     daemon_started: Option<String>,
@@ -79,6 +83,9 @@ impl Default for FakeHost {
                 builds: BTreeMap::new(),
                 scripted_leases: VecDeque::new(),
                 leased: BTreeMap::new(),
+                free_cores: 0,
+                borrowed: BTreeMap::new(),
+                next_grant: 1,
                 released: Vec::new(),
                 steps: Vec::new(),
                 stop: false,
@@ -182,6 +189,16 @@ impl FakeHost {
     /// The landing trees leased and not yet released.
     pub fn leased(&self) -> Vec<TreeId> {
         lock(&self.state).leased.keys().cloned().collect()
+    }
+
+    /// Sets how many cores `host-borrow-cores` can grant.
+    pub fn set_free_cores(&self, cores: u32) {
+        lock(&self.state).free_cores = cores;
+    }
+
+    /// The cores of each grant borrowed and not yet returned.
+    pub fn borrowed(&self) -> Vec<u32> {
+        lock(&self.state).borrowed.values().copied().collect()
     }
 
     pub fn released(&self) -> Vec<ReleaseLanding> {
@@ -356,6 +373,33 @@ impl HostClient for FakeHost {
         let mut state = self.attempt(call)?;
         if !state.finished.contains(&call.handle) {
             state.finished.push(call.handle.clone());
+        }
+        Ok(Ack {})
+    }
+
+    fn borrow_cores(&self, call: &BorrowCores) -> Result<BorrowCoresReply> {
+        let mut state = self.attempt(call)?;
+        let cores = call.cores.min(state.free_cores);
+        if cores == 0 {
+            return Ok(BorrowCoresReply {
+                grant: None,
+                cores: 0,
+            });
+        }
+        state.free_cores -= cores;
+        let grant = state.next_grant;
+        state.next_grant += 1;
+        state.borrowed.insert(grant, cores);
+        Ok(BorrowCoresReply {
+            grant: Some(grant),
+            cores,
+        })
+    }
+
+    fn return_cores(&self, call: &ReturnCores) -> Result<Ack> {
+        let mut state = self.attempt(call)?;
+        if let Some(cores) = state.borrowed.remove(&call.grant) {
+            state.free_cores += cores;
         }
         Ok(Ack {})
     }

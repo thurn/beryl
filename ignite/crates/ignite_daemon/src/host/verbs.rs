@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use ignite_core::protocol::client::{Reply, Request};
 use ignite_core::protocol::host::{
-    Ack, AllowStop, Build, CALLS, Finished, Hello, HostCall, LeaseLanding, Poll, RefuseStop,
-    ReleaseLanding, Run, StepUpdate, decode_request, encode_reply,
+    Ack, AllowStop, BorrowCores, Build, CALLS, Finished, Hello, HostCall, LeaseLanding, Poll,
+    RefuseStop, ReleaseLanding, ReturnCores, Run, StepUpdate, decode_request, encode_reply,
 };
 use ignite_core::traits::Result;
 
@@ -81,6 +81,11 @@ pub(super) fn register(host: &Arc<Host>, registry: &mut Registry) {
     });
     add::<Finished>(host, registry, |host, _, call| {
         host.finished(&call.handle).map(|()| Ack {})
+    });
+    add::<BorrowCores>(host, registry, |host, _, call| Ok(host.borrow_cores(&call)));
+    add::<ReturnCores>(host, registry, |host, _, call| {
+        host.return_cores(&call.handle, call.grant);
+        Ok(Ack {})
     });
     debug_assert!(
         CALLS.iter().all(|(verb, _)| registry.get(verb).is_some()),

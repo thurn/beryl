@@ -119,7 +119,8 @@ trees_disk_gb = 250
 floor = { batch = 8, tip = 2 }
 # Of 18 cores: an express landing's commands took 164 s on three with the load above 25, measured
 # 2026-11-18 after a change to the daemon: fmt and clippy are fast, and the test build and run take
-# the rest. The tree's target directory was warm.
+# the rest. The tree's target directory was warm. A run also borrows the cores the scheduler has
+# free when it starts, up to 12 in all (docs/ignite.md, "Express landings"); these are its floor.
 express_cores = 3
 
 # Browser pages: at most half the cores' worth at once across every tree. Headless WebKit runs at

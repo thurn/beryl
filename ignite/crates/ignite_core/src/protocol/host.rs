@@ -68,7 +68,7 @@ use crate::time::Timestamp;
 use crate::traits::{BuildFor, BuildResult, CommandSpec, Error, Result};
 
 /// The newest version of the host protocol this build speaks.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// The longest a call that waits holds its connection before it answers `waiting`.
 pub const MAX_BLOCK_S: u32 = 30;
@@ -89,7 +89,7 @@ pub trait HostCall: Serialize + DeserializeOwned {
 }
 
 /// Every call, with the version that introduced it. A daemon registers a verb for each.
-pub const CALLS: [(&str, u32); 10] = [
+pub const CALLS: [(&str, u32); 12] = [
     (Hello::VERB, Hello::SINCE),
     (Run::VERB, Run::SINCE),
     (Build::VERB, Build::SINCE),
@@ -100,6 +100,8 @@ pub const CALLS: [(&str, u32); 10] = [
     (AllowStop::VERB, AllowStop::SINCE),
     (Poll::VERB, Poll::SINCE),
     (Finished::VERB, Finished::SINCE),
+    (BorrowCores::VERB, BorrowCores::SINCE),
+    (ReturnCores::VERB, ReturnCores::SINCE),
 ];
 
 /// Whether a verb process speaking `own` may make the call introduced in `since` to a daemon
@@ -479,6 +481,52 @@ impl HostCall for ReleaseLanding {
     }
 }
 
+/// `host-borrow-cores`: asks for the scheduler cores that are free now, without waiting, for a
+/// command the verb process runs itself on cores of its own (an express run). The daemon grants
+/// at most `cores`, none when nothing is free, and holds the grant until the verb process
+/// returns it or the handle ends.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BorrowCores {
+    pub handle: Handle,
+    /// The most cores wanted.
+    pub cores: u32,
+}
+
+/// The answer to `host-borrow-cores`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BorrowCoresReply {
+    /// The grant to return with `host-return-cores`; `None` when no core was free.
+    pub grant: Option<u64>,
+    /// The cores granted; zero when `grant` is `None`.
+    pub cores: u32,
+}
+
+impl HostCall for BorrowCores {
+    const VERB: &'static str = "host-borrow-cores";
+    const SINCE: u32 = 2;
+    type Reply = BorrowCoresReply;
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+/// `host-return-cores`: gives back a grant from `host-borrow-cores`. A grant already returned
+/// is ignored.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReturnCores {
+    pub handle: Handle,
+    pub grant: u64,
+}
+
+impl HostCall for ReturnCores {
+    const VERB: &'static str = "host-return-cores";
+    const SINCE: u32 = 2;
+    type Reply = Ack;
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
 /// `host-step`: what the verb is doing now, as a whole, so that one call after a restart puts
 /// it all back. `ignite wait`, `status` and the client's progress lines read it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -772,6 +820,8 @@ mod tests {
     fn calls_are_usable_only_when_both_sides_know_them() {
         assert!(CALLS.iter().all(|(_, since)| *since <= PROTOCOL_VERSION));
         assert!(usable(1, 1, 1));
+        assert!(usable(BorrowCores::SINCE, 2, 2));
+        assert!(!usable(BorrowCores::SINCE, 2, 1));
         assert!(!usable(2, 2, 1));
         assert!(!usable(2, 1, 2));
     }

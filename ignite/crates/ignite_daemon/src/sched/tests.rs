@@ -361,6 +361,26 @@ fn scheduler() -> (Arc<Scheduler>, Arc<FakeClock>, Arc<FakeHost>) {
 }
 
 #[test]
+fn try_acquire_grants_what_is_free_now_and_never_waits() {
+    let (scheduler, _, _) = scheduler();
+    let held = scheduler.try_acquire(&ask(Class::Land, 16)).unwrap();
+    assert_eq!(held.cores, 16, "one command may take two thirds of 24");
+    let rest = scheduler.try_acquire(&ask(Class::Land, 16)).unwrap();
+    assert_eq!(rest.cores, 8, "only what is free is granted");
+    assert!(scheduler.try_acquire(&ask(Class::Land, 4)).is_none());
+    let status = scheduler.status();
+    assert_eq!(
+        status.classes[0].waiting, 0,
+        "a refused request is withdrawn"
+    );
+    scheduler.release_id(rest.id);
+    assert_eq!(
+        scheduler.try_acquire(&ask(Class::Land, 4)).unwrap().cores,
+        4
+    );
+}
+
+#[test]
 fn acquire_blocks_until_a_holder_of_the_resource_releases_it() {
     let (scheduler, clock, _) = scheduler();
     let held = scheduler.acquire(&with_resource(Class::Agent, 2, "oracle"));

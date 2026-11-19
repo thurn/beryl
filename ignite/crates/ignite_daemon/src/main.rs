@@ -82,7 +82,13 @@ impl Daemon {
     pub fn start_with(options: DaemonOptions, setup: TreeSetup) -> Result<Daemon> {
         let base = assemble::Base::read(options)?;
         let machinery = assemble::machinery(&base, setup)?;
-        let (checks, landing, idle) = assemble::checking(&base, &machinery.trees)?;
+        let (checks, landing, idle) = assemble::checking(
+            &base,
+            &machinery.trees,
+            Arc::new(crate::land::express::SchedulerLender(
+                machinery.scheduler.clone(),
+            )),
+        )?;
         let ctx = Context {
             config: base.config.clone(),
             repo: base.options.repo.clone(),

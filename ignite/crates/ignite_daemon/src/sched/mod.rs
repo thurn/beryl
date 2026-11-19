@@ -340,6 +340,22 @@ impl Scheduler {
         }
     }
 
+    /// Asks for `request` and returns what is free now without waiting: `None` when nothing
+    /// could be granted at once, and the request is withdrawn. The grant may be smaller than
+    /// asked. Release it with [`Self::release`]; like any grant it may be shrunk or stopped for
+    /// a higher class.
+    pub fn try_acquire(&self, request: &GrantRequest) -> Option<Grant> {
+        let mut state = self.lock();
+        let id = state.ledger.enqueue(request.clone(), self.clock.now());
+        self.advance(&mut state);
+        let grant = state.ready.remove(&id);
+        if grant.is_none() {
+            state.ledger.release(id);
+            self.advance(&mut state);
+        }
+        grant
+    }
+
     /// Frees a grant's cores and resources, and starts whatever can start now.
     pub fn release(&self, grant: &Grant) {
         let mut state = self.lock();
@@ -347,6 +363,17 @@ impl Scheduler {
         state.stop.remove(&grant.id);
         state.files.remove(&grant.id);
         state.groups.remove(&grant.id);
+        self.advance(&mut state);
+    }
+
+    /// [`Self::release`] for a grant known only by its ID, such as one lent to a verb process.
+    pub fn release_id(&self, id: u64) {
+        let mut state = self.lock();
+        state.ledger.release(id);
+        state.stop.remove(&id);
+        state.files.remove(&id);
+        state.groups.remove(&id);
+        state.ready.remove(&id);
         self.advance(&mut state);
     }
 

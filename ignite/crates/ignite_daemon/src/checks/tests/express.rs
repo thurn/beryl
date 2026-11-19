@@ -78,7 +78,7 @@ fn testing_only_express_families_in_an_express_tree_runs_the_express_commands() 
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert_eq!(
         reply.text,
-        "express  1 commands passed in 12 s on 3 reserved cores, in place of the checks of \
+        "express  1 commands passed in 12 s on 3 cores, in place of the checks of \
          unit: cargo test\n"
     );
     assert_eq!(lane.ran_in.lock().unwrap().len(), 1);

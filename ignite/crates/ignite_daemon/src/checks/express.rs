@@ -89,7 +89,7 @@ fn reply(run: &ExpressRun, what: &str) -> Reply {
     let mut lines = vec![(
         "failed".to_owned(),
         format!(
-            "`{command}` failed on {} reserved cores, in place of {what}",
+            "`{command}` failed on {} cores, in place of {what}",
             run.cores
         ),
     )];
