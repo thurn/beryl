@@ -8,6 +8,8 @@
 //! whose product's output directories are missing or empty, since those directories were
 //! deleted while no daemon watched, and a `failed` row whose output file is gone.
 
+use std::collections::BTreeSet;
+use std::fs;
 use std::path::PathBuf;
 
 use ignite_core::ids::{InputHash, TreeId};
@@ -116,6 +118,67 @@ impl BuildManager {
                 request.product, request.tree
             );
         }
+    }
+
+    /// The products `tree` holds whose output directories all lie in `dirs` (see
+    /// [`ignite_core::traits::Builds::held_in`]).
+    pub(super) fn held_products(&self, tree: &TreeId, dirs: &[String]) -> BTreeSet<String> {
+        let Ok(manifest) = self.manifest(tree) else {
+            return BTreeSet::new();
+        };
+        let inside = |product: &str| {
+            manifest.products.get(product).is_some_and(|declared| {
+                !declared.outputs.is_empty()
+                    && declared.outputs.iter().all(|output| {
+                        dirs.iter()
+                            .any(|dir| output == dir || output.starts_with(&format!("{dir}/")))
+                    })
+            })
+        };
+        lock(&self.state)
+            .held
+            .keys()
+            .filter(|request| request.tree == *tree && inside(&request.product))
+            .map(|request| request.product.clone())
+            .collect()
+    }
+
+    /// Records that `to` holds what `from` holds in `dirs`, at an input hash no request matches
+    /// (see [`ignite_core::traits::Builds::copy_held`]).
+    pub(super) fn copy_held_products(&self, from: &TreeId, to: &TreeId, dirs: &[String]) {
+        let products = self.held_products(from, dirs);
+        let copied: Vec<Request> = lock(&self.state)
+            .held
+            .keys()
+            .filter(|request| request.tree == *from && products.contains(&request.product))
+            .map(|request| Request {
+                tree: to.clone(),
+                product: request.product.clone(),
+                packages: request.packages.clone(),
+            })
+            .collect();
+        // No request's inputs hash to this, so the next request for the product runs its build:
+        // the units were copied from another tree whose inputs this tree's do not have to match.
+        let hash = super::hash_of(&[], &[format!("copied from {from}")]);
+        for request in copied {
+            self.store_change(&request, &hash, &Change::Held);
+            lock(&self.state).held.insert(request, hash.clone());
+        }
+    }
+
+    /// Whether `product` is declared and every directory it writes is in `tree` and not empty.
+    /// A product that writes no directory has them all.
+    pub(super) fn outputs_present(&self, tree: &TreeId, product: &str) -> bool {
+        let Ok(manifest) = self.manifest(tree) else {
+            return false;
+        };
+        let (Some(declared), Some(root)) = (manifest.products.get(product), self.trees.path(tree))
+        else {
+            return false;
+        };
+        declared.outputs.iter().all(|output| {
+            fs::read_dir(root.join(output)).is_ok_and(|mut entries| entries.next().is_some())
+        })
     }
 
     /// Forgets the recorded builds of `tree`.

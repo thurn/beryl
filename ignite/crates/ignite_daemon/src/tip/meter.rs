@@ -190,4 +190,12 @@ impl Builds for MeteredBuilds {
     fn forget(&self, tree: &TreeId) {
         self.inner.forget(tree);
     }
+
+    fn held_in(&self, tree: &TreeId, dirs: &[String]) -> std::collections::BTreeSet<String> {
+        self.inner.held_in(tree, dirs)
+    }
+
+    fn copy_held(&self, from: &TreeId, to: &TreeId, dirs: &[String]) {
+        self.inner.copy_held(from, to, dirs);
+    }
 }

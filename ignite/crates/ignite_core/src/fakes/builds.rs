@@ -1,6 +1,6 @@
 //! [`FakeBuilds`]: builds that succeed and remember what was asked for.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Mutex;
 
 use crate::ids::TreeId;
@@ -17,6 +17,7 @@ pub struct FakeBuilds {
     whom: Mutex<Vec<(String, BuildFor)>>,
     never_built: Mutex<Vec<(TreeId, String)>>,
     forgotten: Mutex<Vec<TreeId>>,
+    held: Mutex<Vec<(TreeId, String)>>,
 }
 
 impl FakeBuilds {
@@ -29,6 +30,12 @@ impl FakeBuilds {
     /// Every other product counts as built before.
     pub fn never_built(&self, tree: &TreeId, product: &str) {
         lock(&self.never_built).push((tree.clone(), product.to_owned()));
+    }
+
+    /// Makes [`Builds::held_in`] name `product` for `tree`, whatever directories are asked
+    /// about.
+    pub fn hold(&self, tree: &TreeId, product: &str) {
+        lock(&self.held).push((tree.clone(), product.to_owned()));
     }
 
     /// Answers every later request for `product` in `tree` with `result`.
@@ -50,6 +57,21 @@ impl FakeBuilds {
 impl Builds for FakeBuilds {
     fn forget(&self, tree: &TreeId) {
         lock(&self.forgotten).push(tree.clone());
+        lock(&self.held).retain(|(t, _)| t != tree);
+    }
+
+    fn held_in(&self, tree: &TreeId, _dirs: &[String]) -> BTreeSet<String> {
+        lock(&self.held)
+            .iter()
+            .filter(|(t, _)| t == tree)
+            .map(|(_, p)| p.clone())
+            .collect()
+    }
+
+    fn copy_held(&self, from: &TreeId, to: &TreeId, dirs: &[String]) {
+        for product in self.held_in(from, dirs) {
+            self.hold(to, &product);
+        }
     }
 
     fn has_built(&self, tree: &TreeId, product: &str) -> bool {

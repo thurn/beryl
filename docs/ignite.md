@@ -878,20 +878,30 @@ Rules for trees:
   a ticket that needs one. See
   [Light and heavy tickets](#light-and-heavy-tickets).
 - A ticket expected to compile starts from a copy of the Cargo target
-  directories of the tree whose build is nearest the tip, when that build is
-  nearer than the leased tree's own. The donor is a free tree or a leased ticket
-  tree, and Cargo's own lock files are held while it is copied, so no build
-  writes it meanwhile. On macOS each file is an APFS clone, so the copy takes a
-  few seconds and almost no disk; elsewhere nothing is copied. Cargo judges a
-  unit by the modification times of the files it read and by a few absolute
-  paths. So every file of the leased tree whose content is the donor's takes the
-  donor file's time, every other file is touched, and the donor's paths in
-  Cargo's dependency files and build-script output are rewritten. The leased
-  tree's own target directories are replaced, not merged, so that none of its
-  older units looks current. Measured with two trees 14 commits apart, the
-  `cli`, test-binary and release fuzz-test builds took 5.4, 6.3 and 0.2 CPU-s
-  after the copy, against medians of 947, 1,070 and 1,390 CPU-s for a cold
-  build.
+  directories of the tree whose copy would leave the least to compile at the
+  tip, when that is less than the leased tree's own build would leave. Donors
+  are compared first by how many products they never built that another tree
+  holds (each would be a cold build in the copy), then by how many files differ
+  between their build and the tip, then by commit distance. A leased tree's
+  build is taken to match its checked-out commit and its uncommitted files,
+  since its ticket builds its own edits. Ranking by commit distance alone chose
+  donors whose copies rebuilt most of the workspace: 85 crates for Beryl 3D and
+  98 for clippy after a one-card change, because the donor had never built
+  clippy or had edits of its own that its recorded commit did not show. The
+  seeded tree then counts as holding the donor's products, so it can be a donor
+  in turn, but its next build of each still runs Cargo, which finds the copied
+  units current. The donor is a free tree or a leased ticket tree, and Cargo's
+  own lock files are held while it is copied, so no build writes it meanwhile.
+  On macOS each file is an APFS clone, so the copy takes a few seconds and
+  almost no disk; elsewhere nothing is copied. Cargo judges a unit by the
+  modification times of the files it read and by a few absolute paths. So every
+  file of the leased tree whose content is the donor's takes the donor file's
+  time, every other file is touched, and the donor's paths in Cargo's dependency
+  files and build-script output are rewritten. The leased tree's own target
+  directories are replaced, not merged, so that none of its older units looks
+  current. Measured with two trees 14 commits apart, the `cli`, test-binary and
+  release fuzz-test builds took 5.4, 6.3 and 0.2 CPU-s after the copy, against
+  medians of 947, 1,070 and 1,390 CPU-s for a cold build.
 - The copy runs after `ignite start` has replied, on the thread that then
   prebuilds the tree. Under load a copy took up to 141 s, and the session could
   do nothing while `ignite start` waited for it. Every build in the tree waits
@@ -900,8 +910,9 @@ Rules for trees:
   to be copied from tree-03". A release of the tree also waits for it. A file
   the session edits during the copy keeps its own modification time, so the
   units that read it are rebuilt. The daemon's log line for each copy names the
-  donor, the commit its build was made at, how many commits that is behind the
-  tip, and how long the copy took.
+  donor, the commit its build is taken to match, how many commits and files that
+  is behind the tip, the products the donor never built, and how long the copy
+  took.
 - While cores are idle, the daemon keeps one free ticket tree built at the tip,
   so the next lease starts with nothing to compile.
 - A tree keeps the directories that its build products declare as their output,

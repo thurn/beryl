@@ -4,6 +4,7 @@
 //! these traits, so it can be tested against the in-memory fakes in [`crate::fakes`] before the
 //! real implementation exists.
 
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -158,6 +159,23 @@ pub trait Builds: Send + Sync {
     /// request builds instead of answering that the product is current.
     fn forget(&self, tree: &TreeId) {
         let _ = tree;
+    }
+
+    /// The products `tree` holds, for any packages and inputs, whose output directories all lie
+    /// in `dirs` (paths relative to the tree's root). A lease seeding its tree prefers the donor
+    /// holding the most of them: a product the donor never built is built cold in the copy.
+    /// An implementation that cannot tell holds none.
+    fn held_in(&self, tree: &TreeId, dirs: &[String]) -> BTreeSet<String> {
+        let _ = (tree, dirs);
+        BTreeSet::new()
+    }
+
+    /// Records, after `from`'s directories `dirs` were copied into `to`, that `to` holds each
+    /// product [`Builds::held_in`] names for `from`, at inputs no request matches: the copy's
+    /// units are there, so [`Builds::has_built`] is true and `to` can be a donor in turn, but
+    /// the next request still runs the build, which finds the copied units current.
+    fn copy_held(&self, from: &TreeId, to: &TreeId, dirs: &[String]) {
+        let _ = (from, to, dirs);
     }
 }
 

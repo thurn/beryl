@@ -176,3 +176,37 @@ fn a_build_running_across_a_restart_is_joined_and_stored_once() {
     );
     assert!(unfinished().is_empty());
 }
+
+/// A seed copies a donor's build directories into another tree. That tree then holds the
+/// donor's products, so it can be a donor in turn, at an input hash that no request matches, so
+/// the next request for one still runs the build instead of trusting that the donor's inputs
+/// were the tree's.
+#[test]
+fn a_copied_build_is_held_at_inputs_no_request_matches() {
+    let f = fixture("copy-held", false);
+    let db = database(&f);
+    let f = stored(f, &db);
+    f.manager.ensure(&tree(), "tests", &names(&["b"]));
+    let target = ["target".to_owned()];
+    let held = f.manager.held_in(&tree(), &target);
+    assert_eq!(held.into_iter().collect::<Vec<_>>(), ["tests"]);
+    assert!(f.manager.held_in(&tree(), &["other".to_owned()]).is_empty());
+
+    let to = TreeId::new("tree-02").unwrap();
+    f.manager.copy_held(&tree(), &to, &target);
+
+    assert!(f.manager.has_built(&to, "tests"));
+    let stored = rows(&db);
+    let hash = |tree: &str| {
+        stored
+            .iter()
+            .find(|row| row.tree == tree && row.product == "tests")
+            .map(|row| row.hash.clone())
+            .unwrap()
+    };
+    assert_ne!(
+        hash("tree-02"),
+        hash("tree-01"),
+        "no request's inputs match the copy's"
+    );
+}

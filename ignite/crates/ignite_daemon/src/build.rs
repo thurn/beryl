@@ -688,22 +688,13 @@ impl Builds for BuildManager {
                 .is_some_and(|declared| !declared.outputs.is_empty())
         }) && self.outputs_present(tree, product)
     }
-}
 
-impl BuildManager {
-    /// Whether `product` is declared and every directory it writes is in `tree` and not empty.
-    /// A product that writes no directory has them all.
-    fn outputs_present(&self, tree: &TreeId, product: &str) -> bool {
-        let Ok(manifest) = self.manifest(tree) else {
-            return false;
-        };
-        let (Some(declared), Some(root)) = (manifest.products.get(product), self.trees.path(tree))
-        else {
-            return false;
-        };
-        declared.outputs.iter().all(|output| {
-            fs::read_dir(root.join(output)).is_ok_and(|mut entries| entries.next().is_some())
-        })
+    fn held_in(&self, tree: &TreeId, dirs: &[String]) -> BTreeSet<String> {
+        self.held_products(tree, dirs)
+    }
+
+    fn copy_held(&self, from: &TreeId, to: &TreeId, dirs: &[String]) {
+        self.copy_held_products(from, to, dirs);
     }
 }
 

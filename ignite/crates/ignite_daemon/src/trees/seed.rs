@@ -5,8 +5,9 @@
 //! 950 CPU-s) was built in seven trees at once and another (about 1,400 CPU-s) in six. A tree
 //! is leased at the tip, and another tree usually holds a build near it.
 //!
-//! So a lease for a compiling ticket first copies the build of the tree nearest the tip, when
-//! that is nearer than the leased tree's own. The copy runs after the lease has returned, on the
+//! So a lease for a compiling ticket first copies the build of the tree that leaves the least to
+//! compile at the tip, when that is less than the leased tree's own ([`Trees::take_donor`]). The
+//! copy runs after the lease has returned, on the
 //! thread that then prebuilds the tree ([`Trees::start_builds`]): a copy of large target
 //! directories under load took up to 141 s, and the session could do nothing while `ignite
 //! start` waited for it. Every build in the tree waits for the copy ([`wait_until_seeded`]),
@@ -44,7 +45,7 @@
 //!
 //! Elsewhere than macOS a copy would write every byte again, so nothing is seeded there.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -52,7 +53,7 @@ use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime};
 
 use ignite_core::ids::{Commit, TreeId};
-use ignite_core::traits::{Error, Result};
+use ignite_core::traits::Result;
 use ignite_git::{changed, refs, tracked};
 use ignite_store::local::{rows, trees as store};
 
@@ -157,20 +158,50 @@ pub fn wait_until_seeded(path: &Path) -> std::result::Result<(), String> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Seeded {
     pub donor: TreeId,
-    /// The commit the donor's build was made at, when its row records one.
-    pub built: Option<Commit>,
+    /// The commit the donor's build is taken to match ([`Candidate::base`]).
+    pub built: Commit,
     /// How many commits the leased tree's tip is ahead of `built`.
     pub behind: usize,
+    /// How many files differ between `built` (with the donor's uncommitted files) and the tip.
+    pub changed: usize,
+    /// The products another tree holds that the donor does not, which the copy builds cold.
+    pub missing: Vec<String>,
     /// The Cargo target directories copied, relative to the tree's root.
     pub dirs: Vec<String>,
+}
+
+/// What copying a tree's build would leave to compile, compared in field order: a product the
+/// tree never built is a cold build of hundreds of crates, a file that differs from the tip
+/// rebuilds the crates that read it and those that depend on them, and the commit distance only
+/// breaks ties.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Cost {
+    missing: usize,
+    changed: usize,
+    behind: usize,
+}
+
+/// A tree that could give or take a copy, measured against the tip.
+struct Candidate<'a> {
+    row: &'a rows::Tree,
+    leased: bool,
+    /// The commit its build is taken to match: a leased ticket tree's checked-out commit, since
+    /// its ticket builds what it commits and edits, and otherwise the commit its row records
+    /// (a released tree records the commit its ticket last had checked out).
+    base: Commit,
+    behind: usize,
+    changed: usize,
+    held: BTreeSet<String>,
 }
 
 /// A donor taken for the copy, and whether it was free and must be put back.
 struct Donor {
     row: rows::Tree,
     free: bool,
-    /// How many commits the tip is ahead of the donor's last build.
+    base: Commit,
     behind: usize,
+    changed: usize,
+    missing: Vec<String>,
 }
 
 impl Trees {
@@ -195,14 +226,17 @@ impl Trees {
                 match seeded {
                     Ok(Some(seeded)) => eprintln!(
                         "ignite: {tree} starts from a copy of {}'s {} (built at {}, {} commits \
-                         behind {tip}), made in {took:.1} s",
+                         and {} files behind {tip}, {}), made in {took:.1} s",
                         seeded.donor,
                         seeded.dirs.join(", "),
-                        seeded
-                            .built
-                            .as_ref()
-                            .map_or("an unknown commit", Commit::as_str),
+                        seeded.built,
                         seeded.behind,
+                        seeded.changed,
+                        if seeded.missing.is_empty() {
+                            "holding every product another tree holds".to_owned()
+                        } else {
+                            format!("never built {}", seeded.missing.join(", "))
+                        },
                     ),
                     Ok(None) => {}
                     Err(error) => {
@@ -216,8 +250,9 @@ impl Trees {
         });
     }
 
-    /// Copies the build of the tree nearest `tip` into `tree`, if one is nearer than `tree`'s
-    /// own. Returns what was copied, or `None` when nothing was.
+    /// Copies the build that leaves the least to compile at `tip` into `tree`, if one leaves
+    /// less than `tree`'s own ([`Trees::take_donor`]). Returns what was copied, or `None` when
+    /// nothing was.
     /// `seeding` marks `tree` for as long as the copy runs.
     fn seed(&self, seeding: &Seeding, tree: &TreeId, tip: &Commit) -> Result<Option<Seeded>> {
         let Some(donor) = self.take_donor(tree, tip)? else {
@@ -232,32 +267,34 @@ impl Trees {
         if dirs.is_empty() {
             return Ok(None);
         }
-        let built = match donor.row.built_commit.as_deref() {
-            Some(built) => Some(Commit::new(built).map_err(|e| Error::Invalid(e.to_string()))?),
-            None => None,
-        };
-        if let Some(built) = &built {
-            self.record_build(tree, built)?;
-        }
+        self.record_build(tree, &donor.base)?;
         Ok(Some(Seeded {
             donor: id_of(&donor.row)?,
-            built,
+            built: donor.base,
             behind: donor.behind,
+            changed: donor.changed,
+            missing: donor.missing,
             dirs,
         }))
     }
 
-    /// The tree to copy from: of the free trees and the leased ticket trees, the one whose last
-    /// build is nearest `tip` and nearer than `tree`'s, holding a Cargo target directory. A free
-    /// donor is marked `resetting` until [`Trees::put_back`].
+    /// The tree to copy from: of the free trees and the leased ticket trees holding a Cargo
+    /// target directory, the one whose copy leaves the least to compile at `tip` ([`Cost`]), and
+    /// less than `tree`'s own build would. A free donor is marked `resetting` until
+    /// [`Trees::put_back`].
+    ///
+    /// Ranking by commit distance alone chose donors whose copies rebuilt most of the workspace:
+    /// a leased tree records the commit it was leased at, so its ticket's edits were invisible,
+    /// and a tree that never built a product (one ticket's tree builds only what its checks
+    /// need) passed it on to be built cold.
     fn take_donor(&self, tree: &TreeId, tip: &Commit) -> Result<Option<Donor>> {
         let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
         let configured = self.inner.config.configured();
         let own = rows
             .iter()
             .find(|row| row.id == tree.as_str())
-            .and_then(|row| self.distance(row.built_commit.as_deref(), tip));
-        let mut candidates: Vec<(usize, bool, &rows::Tree)> = rows
+            .and_then(|row| self.candidate(row, false, tip));
+        let candidates: Vec<Candidate> = rows
             .iter()
             .filter(|row| row.id != tree.as_str())
             .filter_map(|row| {
@@ -270,36 +307,87 @@ impl Trees {
                 if !free && !leased {
                     return None;
                 }
-                let distance = self.distance(row.built_commit.as_deref(), tip)?;
-                if own.is_some_and(|own| distance >= own) {
-                    return None;
-                }
                 let path = self.inner.config.path(&id_of(row).ok()?);
-                if Seeding::contains(&path) {
+                if Seeding::contains(&path) || self.cargo_dirs(&path).is_empty() {
                     return None;
                 }
-                (!self.cargo_dirs(&path).is_empty()).then_some((distance, !free, row))
+                self.candidate(row, leased, tip)
             })
             .collect();
-        // Nearest first, and a free tree before a leased one at the same distance.
-        candidates.sort_by(|a, b| (a.0, a.1, &a.2.id).cmp(&(b.0, b.1, &b.2.id)));
-        for (behind, leased, row) in candidates {
-            if leased {
-                return Ok(Some(Donor {
-                    row: row.clone(),
-                    free: false,
-                    behind,
-                }));
-            }
-            if let Some(row) = self.take_for_sweep(&row.id)? {
+        let wanted: BTreeSet<&String> = candidates
+            .iter()
+            .chain(&own)
+            .flat_map(|c| &c.held)
+            .collect();
+        let cost = |c: &Candidate| Cost {
+            missing: wanted.iter().filter(|p| !c.held.contains(**p)).count(),
+            changed: c.changed,
+            behind: c.behind,
+        };
+        let own_cost = own.as_ref().map(cost);
+        let mut ranked: Vec<(Cost, &Candidate)> = candidates
+            .iter()
+            .map(|c| (cost(c), c))
+            .filter(|(cost, _)| own_cost.is_none_or(|own| *cost < own))
+            .collect();
+        // Cheapest first, and a free tree before a leased one at the same cost.
+        ranked.sort_by(|a, b| (a.0, a.1.leased, &a.1.row.id).cmp(&(b.0, b.1.leased, &b.1.row.id)));
+        for (_, candidate) in ranked {
+            let missing = wanted
+                .iter()
+                .filter(|p| !candidate.held.contains(**p))
+                .map(|p| (*p).clone())
+                .collect();
+            let row = if candidate.leased {
+                Some(candidate.row.clone())
+            } else {
+                self.take_for_sweep(&candidate.row.id)?
+            };
+            if let Some(row) = row {
                 return Ok(Some(Donor {
                     row,
-                    free: true,
-                    behind,
+                    free: !candidate.leased,
+                    base: candidate.base.clone(),
+                    behind: candidate.behind,
+                    changed: candidate.changed,
+                    missing,
                 }));
             }
         }
         Ok(None)
+    }
+
+    /// `row`'s tree measured against `tip`, or `None` when it holds no build or git cannot
+    /// compare its commit with the tip.
+    fn candidate<'a>(
+        &self,
+        row: &'a rows::Tree,
+        leased: bool,
+        tip: &Commit,
+    ) -> Option<Candidate<'a>> {
+        let id = id_of(row).ok()?;
+        let path = self.inner.config.path(&id);
+        let recorded = Commit::new(row.built_commit.as_deref()?).ok()?;
+        let base = if leased {
+            refs::head(&path).ok()?
+        } else {
+            recorded
+        };
+        let mut changed: HashSet<String> = changed::between(&self.inner.config.repo, &base, tip)
+            .ok()?
+            .into_iter()
+            .collect();
+        if leased {
+            changed.extend(changed::uncommitted(&path).ok()?);
+        }
+        Some(Candidate {
+            row,
+            leased,
+            behind: self.distance(Some(base.as_str()), tip)?,
+            changed: changed.len(),
+            held: self.inner.builds.held_in(&id, &self.cargo_dirs(&path)),
+            base,
+        })
     }
 
     /// The directories the products write under `root` that are Cargo target directories,
@@ -322,7 +410,8 @@ impl Trees {
     /// failure partway, `tree`'s target directories are deleted, so that it builds from nothing
     /// rather than from a copy whose files' times were never set.
     fn copy_from(&self, donor: &rows::Tree, tree: &TreeId) -> Result<Vec<String>> {
-        let from = self.inner.config.path(&id_of(donor)?);
+        let donor_id = id_of(donor)?;
+        let from = self.inner.config.path(&donor_id);
         let to = self.inner.config.path(tree);
         let dirs = self.cargo_dirs(&from);
         let Some(_locks) = cargo_locks(&from, &dirs)? else {
@@ -347,6 +436,9 @@ impl Trees {
                 clone_dir(&from.join(dir), &to.join(dir))?;
                 rewrite_target(&to.join(dir), &pairs)?;
             }
+            // While Cargo's locks in the donor are still held, so no build there changes what
+            // it holds meanwhile.
+            self.inner.builds.copy_held(&donor_id, tree, &dirs);
             for (file, time, read) in &times {
                 // The session works in the tree during the copy. A file it wrote since its time
                 // was read keeps its newer time, so the units that read it are rebuilt.

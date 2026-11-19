@@ -92,6 +92,67 @@ fn a_compiling_lease_starts_from_a_copy_of_the_build_nearest_the_tip() {
     assert_eq!(built.built_commit.as_deref(), Some(f.tip().as_str()));
 }
 
+/// A tree that never built a product another tree holds would pass it on to be built cold, so
+/// a donor that holds every product is taken although another is nearer the tip. The seeded
+/// tree then holds what its donor held, so it can be a donor in turn.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_donor_holding_every_product_is_preferred_to_one_nearer_the_tip() {
+    let (f, _) = donor_at_the_tip();
+    let landing = f.repo.join(".worktrees/landing-1");
+    fake_target(&landing);
+    write(&landing, "out/debug/deps/marker", "landing-1");
+    f.trees
+        .record_build(&id("landing-1"), &f.commits[0])
+        .unwrap();
+    f.builds.hold(&id("tree-02"), "bin");
+    f.builds.hold(&id("landing-1"), "bin");
+    f.builds.hold(&id("landing-1"), "lint");
+
+    let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
+
+    assert_eq!(lease.tree.as_str(), "tree-01");
+    assert_eq!(
+        fs::read_to_string(lease.path.join("out/debug/deps/marker")).unwrap(),
+        "landing-1"
+    );
+    let held = f.builds.held_in(&lease.tree, &[]);
+    assert_eq!(held.into_iter().collect::<Vec<_>>(), ["bin", "lint"]);
+}
+
+/// A leased tree's build was made from its ticket's edits, which the commit its row records
+/// does not show. Its uncommitted files count as differing from the tip, so a free tree built a
+/// commit behind the tip, with fewer files differing, is taken instead.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_leased_donor_whose_ticket_changed_more_files_is_passed_over() {
+    let f = Fixture::new(2, 3);
+    f.trees.record_build(&id("tree-01"), &f.commits[0]).unwrap();
+    let other = f.lease("T.1", false);
+    assert_eq!(other.tree.as_str(), "tree-02");
+    fake_target(&other.path);
+    f.trees.record_build(&other.tree, &f.tip()).unwrap();
+    for n in 0..3 {
+        write(&other.path, &format!("new-{n}.txt"), "edited\n");
+    }
+    let landing = f.repo.join(".worktrees/landing-1");
+    fake_target(&landing);
+    write(&landing, "out/debug/deps/marker", "landing-1");
+    f.trees
+        .record_build(&id("landing-1"), &f.commits[1])
+        .unwrap();
+
+    let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
+
+    assert_eq!(lease.tree.as_str(), "tree-01");
+    assert_eq!(
+        fs::read_to_string(lease.path.join("out/debug/deps/marker")).unwrap(),
+        "landing-1"
+    );
+}
+
 #[test]
 fn a_donor_whose_cargo_lock_is_held_is_passed_over() {
     let (f, donor) = donor_at_the_tip();

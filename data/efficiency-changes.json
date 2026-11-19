@@ -514,5 +514,10 @@
     "label": "Rust test listings compile nothing on a built tree, and a game change no longer lists Ignite's test family (on 2026-11-19 most `rust` listings spent 18 to 25 s recompiling `beryl-mobile` and `beryl_app`)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A seeded tree copies the build of the donor that never built the fewest products and differs from the tip in the fewest files, instead of the one nearest by commits, which after a one-card change left 85 crates to rebuild for Beryl 3D and 98 for clippy",
+    "metric": "bead.core-minutes",
+    "expect": "down"
   }
 ]
