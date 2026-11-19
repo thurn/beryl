@@ -7,14 +7,16 @@
 //! figures.
 //!
 //! The record covers one process. Its child fields (`ri_child_*`, in every version of the
-//! record) total CPU time, wakeups and page-ins of the children it reaped, but have no field
-//! for their instructions, so the leader's record does not hold its descendants' instructions.
-//! So for a command that starts processes of its own, [`TreeMeter`] reads every process in the
-//! command's process group a few times a second while it runs and
-//! keeps the last reading of each one that goes away. A descendant that starts and exits between
-//! two readings is not counted at all; see "Cost in instructions" in `docs/ignite.md`.
+//! record) total the CPU time, wakeups and page-ins of the children it reaped, each child with
+//! the children it reaped in turn. So a command whose processes all wait for their children
+//! leaves its whole tree's CPU time in the leader's record, however short-lived its
+//! descendants were. The child fields have no instructions, though, so for a command that
+//! starts processes of its own, [`TreeMeter`] reads every process in the command's process
+//! group a few times a second while it runs and keeps the last reading of each one that goes
+//! away. A descendant that starts and exits between two readings adds no instructions; see
+//! "Cost in instructions" in `docs/ignite.md`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::mem::MaybeUninit;
 use std::process::{Child, ExitStatus};
@@ -46,10 +48,11 @@ impl UsageReader for Native {
         for member in members {
             // A process that exits between the listing and the reading is skipped.
             if let Ok(reading) = read(member) {
-                // While processes run, the tree's memory is what they hold now.
+                // While processes run, the tree's memory is what they hold now. A running
+                // process holds the CPU time of the children it reaped, which are gone.
                 let usage = ProcessUsage {
                     peak_bytes: reading.current_bytes,
-                    ..reading.usage
+                    ..reading.with_children_cpu()
                 };
                 add(&mut total, usage);
             }
@@ -57,32 +60,62 @@ impl UsageReader for Native {
         Ok(total)
     }
 
+    /// The CPU time includes the children `child` reaped, and theirs in turn; the instructions
+    /// and peak memory are its own.
     fn reap(&self, child: &mut Child) -> io::Result<(ExitStatus, ProcessUsage)> {
         let pid = to_pid(child.id())?;
         wait_without_reaping(pid)?;
         let reading = read(pid as u32);
         // Reap it even if the reading failed, so no zombie is left behind.
         let status = child.wait()?;
-        Ok((status, reading?.usage))
+        Ok((status, reading?.with_children_cpu()))
     }
 }
 
 /// The resource use of a command's whole process group: the descendants it started as well
 /// as the command itself.
 ///
-/// Call [`TreeMeter::sample`] about once a second while the command runs, then
-/// [`TreeMeter::finish`] with the leader's exact use from [`UsageReader::reap`]. A
-/// descendant that exits between two samples is counted up to the earlier one, and one that
-/// leaves the group with `setsid` is not counted at all.
+/// Call [`TreeMeter::sample`] about once a second while the command runs and once more after
+/// reaping the leader, then [`TreeMeter::finish`] with the leader's use from
+/// [`UsageReader::reap`].
+///
+/// The CPU time is the leader's, which holds every descendant that was reaped by the leader or
+/// by a descendant that was itself reaped, plus the descendants whose time cannot have reached
+/// the leader: those still in the group at the last sample, and those that had lost their
+/// parent (launchd reaps them) when last read. A descendant that loses its parent and exits
+/// between two samples is not counted, and one that leaves the group with `setsid` is not
+/// counted at all.
+///
+/// The instructions are the leader's own plus the last reading of every descendant, since no
+/// record totals a reaped child's instructions. A descendant that exits between two samples
+/// adds none.
 #[derive(Debug, Default)]
 pub struct TreeMeter {
     group: u64,
     leader: u32,
     /// The last reading of each descendant, keyed by its PID and start time so that a reused
     /// PID counts as a new process.
-    last: HashMap<(u32, u64), ProcessUsage>,
+    last: HashMap<(u32, u64), Descendant>,
+    /// The descendants in the group at the latest sample.
+    present: HashSet<(u32, u64)>,
     /// The most memory the whole group held at one sample.
     peak_bytes: u64,
+}
+
+/// A descendant's last reading.
+#[derive(Clone, Copy, Debug)]
+struct Descendant {
+    usage: ProcessUsage,
+    children_cpu_s: f64,
+    /// Its parent had exited, so launchd, not a process in the tree, will reap it.
+    orphaned: bool,
+}
+
+impl Descendant {
+    /// The CPU seconds it and the children it reaped used.
+    fn tree_cpu_s(self) -> f64 {
+        self.usage.cpu_s + self.children_cpu_s
+    }
 }
 
 impl TreeMeter {
@@ -97,23 +130,46 @@ impl TreeMeter {
 
     /// Reads every process now in the group.
     pub fn sample(&mut self) -> io::Result<()> {
+        // If the group cannot be listed, no descendant is known to be present, so `finish`
+        // cannot count one that the leader has already counted.
+        self.present.clear();
         let mut held = 0;
         for pid in Native.group_members(self.group)? {
             let Ok(reading) = read(pid) else { continue };
             held += reading.current_bytes;
             if pid != self.leader {
-                self.last.insert((pid, reading.start), reading.usage);
+                let key = (pid, reading.start);
+                // The process that started it is gone, so its parent is now launchd.
+                let orphaned = parent(pid).is_ok_and(|parent| parent == LAUNCHD);
+                self.last.insert(
+                    key,
+                    Descendant {
+                        usage: reading.usage,
+                        children_cpu_s: reading.children_cpu_s,
+                        orphaned,
+                    },
+                );
+                self.present.insert(key);
             }
         }
         self.peak_bytes = self.peak_bytes.max(held);
         Ok(())
     }
 
-    /// The group's total: `leader`'s final use plus the last reading of every descendant.
+    /// The group's total. `leader` is the leader's use from [`UsageReader::reap`], whose CPU
+    /// time includes the descendants that were reaped back up to it.
     pub fn finish(&self, leader: ProcessUsage) -> ProcessUsage {
         let mut total = leader;
-        for usage in self.last.values() {
-            add(&mut total, *usage);
+        for (key, descendant) in &self.last {
+            total.instructions = total
+                .instructions
+                .zip(descendant.usage.instructions)
+                .map(|(a, b)| a + b);
+            // A descendant still present was not reaped by the leader's tree, and one that lost
+            // its parent never will be: their time is not in the leader's record.
+            if self.present.contains(key) || descendant.orphaned {
+                total.cpu_s += descendant.tree_cpu_s();
+            }
         }
         total.peak_bytes = self.peak_bytes.max(leader.peak_bytes);
         total
@@ -140,7 +196,7 @@ impl Native {
 /// they started, each counted once with the time of the children it reaped. A process that
 /// exits between the listing and its reading is skipped.
 fn descendants_cpu_seconds(start: Vec<u32>) -> f64 {
-    let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let mut seen: HashSet<u32> = HashSet::new();
     let mut pending = start;
     let mut total = 0.0;
     while let Some(pid) = pending.pop() {
@@ -152,6 +208,32 @@ fn descendants_cpu_seconds(start: Vec<u32>) -> f64 {
         pending.extend(children(pid).unwrap_or_default());
     }
     total
+}
+
+/// The PID of launchd, which becomes the parent of every process whose parent exits.
+const LAUNCHD: u32 = 1;
+
+/// The PID of `pid`'s parent.
+fn parent(pid: u32) -> io::Result<u32> {
+    let pid = to_pid(pid)?;
+    let mut info = MaybeUninit::<libc::proc_bsdshortinfo>::zeroed();
+    let size = libc::c_int::try_from(size_of::<libc::proc_bsdshortinfo>())
+        .map_err(|_| io::Error::other("record too large"))?;
+    // SAFETY: `info` is a writable record of `size` bytes, the size the flavor asks for.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid,
+            libc::PROC_PIDT_SHORTBSDINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size,
+        )
+    };
+    if written != size {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: the call filled the whole record; it was zeroed before in any case.
+    Ok(unsafe { info.assume_init() }.pbsi_ppid)
 }
 
 /// The PIDs of the processes whose parent is `pid`.
@@ -189,6 +271,16 @@ struct Reading {
     start: u64,
     /// CPU seconds of the children it has reaped.
     children_cpu_s: f64,
+}
+
+impl Reading {
+    /// Its use with the CPU time of the children it reaped added.
+    fn with_children_cpu(&self) -> ProcessUsage {
+        ProcessUsage {
+            cpu_s: self.usage.cpu_s + self.children_cpu_s,
+            ..self.usage
+        }
+    }
 }
 
 fn read(pid: u32) -> io::Result<Reading> {
@@ -342,13 +434,91 @@ mod tests {
         let (status, leader) = Native.reap(&mut group.child).unwrap();
         assert!(status.success());
 
+        meter.sample().unwrap();
         let total = meter.finish(leader);
         let descendants = total.instructions.unwrap() - leader.instructions.unwrap();
         assert!(
             descendants > 10_000_000,
             "descendant counted {descendants} instructions"
         );
-        assert!(total.cpu_s > leader.cpu_s);
+        // The leader reaped the subshell, so its record already holds the subshell's time.
+        assert!(total.cpu_s >= running.cpu_s, "{total:?} after {running:?}");
+    }
+
+    /// The `times` builtin's second line, the CPU seconds of the children a shell reaped, as
+    /// `0m1.250s 0m0.031s`.
+    fn children_seconds(line: &str) -> f64 {
+        line.split_whitespace()
+            .map(|field| {
+                let (minutes, seconds) = field.trim_end_matches('s').split_once('m').unwrap();
+                minutes.parse::<f64>().unwrap() * 60.0 + seconds.parse::<f64>().unwrap()
+            })
+            .sum()
+    }
+
+    /// cargo-nextest starts one process per test, most of which start and exit between two
+    /// samples. Their time reaches the leader through the records of the processes that reaped
+    /// them, two generations down here.
+    #[test]
+    fn the_tree_meter_counts_descendants_that_exit_between_samples() {
+        let inner = "i=0; while [ $i -lt 40 ]; do                      ( j=0; while [ $j -lt 5000 ]; do j=$((j+1)); done ); i=$((i+1)); done; times";
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", &format!("/bin/sh -c '{inner}'; true")])
+            .stdout(Stdio::piped());
+        let mut group = Native.spawn_group(&mut command).unwrap();
+        let mut meter = TreeMeter::new(group.id, group.child.id());
+        let mut lines = BufReader::new(group.child.stdout.take().unwrap()).lines();
+        let _own = lines.next().unwrap().unwrap();
+        let reaped = children_seconds(&lines.next().unwrap().unwrap());
+        assert!(reaped > 0.0, "the subshells used no time");
+
+        let (status, leader) = Native.reap(&mut group.child).unwrap();
+        assert!(status.success());
+        meter.sample().unwrap();
+        let total = meter.finish(leader);
+        assert!(
+            total.cpu_s >= reaped,
+            "recorded {} s; the subshells used {reaped} s",
+            total.cpu_s
+        );
+    }
+
+    /// A background process outlives the shell that started it, so launchd, not the leader,
+    /// reaps it: only its last reading can count its time.
+    #[test]
+    fn the_tree_meter_counts_a_descendant_that_lost_its_parent() {
+        // A background job's input is /dev/null unless redirected, so it reads the shell's from
+        // descriptor 3.
+        let script = format!("exec 3<&0; ( {WORK}; echo done; read line <&3 ) & exit 0");
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", &script])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped());
+        let mut group = Native.spawn_group(&mut command).unwrap();
+        let mut meter = TreeMeter::new(group.id, group.child.id());
+        let mut stdin = group.child.stdin.take().unwrap();
+        let mut lines = BufReader::new(group.child.stdout.take().unwrap()).lines();
+        let (status, leader) = Native.reap(&mut group.child).unwrap();
+        assert!(status.success());
+        assert_eq!(lines.next().unwrap().unwrap(), "done");
+
+        meter.sample().unwrap();
+        let worked = Native.tree_cpu_seconds_of(group.id).unwrap();
+        assert!(worked > 0.0);
+        stdin.write_all(b"\n").unwrap();
+        drop(stdin);
+        // The background process closes its output when it exits.
+        assert!(lines.next().is_none());
+        meter.sample().unwrap();
+
+        let total = meter.finish(leader);
+        assert!(
+            total.cpu_s >= worked,
+            "recorded {} s; the background process used {worked} s",
+            total.cpu_s
+        );
     }
 
     /// A process that starts a process group of its own escapes `TreeMeter`, which reads only

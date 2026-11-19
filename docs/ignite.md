@@ -1165,15 +1165,20 @@ How Ignite uses this:
   an exact total for a direct child only, so for a command that starts processes
   of its own the supervisor also reads those descendants four times a second
   while they run.
-- The undercount that remains: `rusage_info` (every version through V6) has
-  child fields for CPU time, wakeups and page-ins of reaped children, but none
-  for their instructions, so no total for a command's finished descendants
-  exists to read. A descendant is counted up to its last reading, and one that
-  starts and exits between two readings (a 100 ms `cc` run, say) is not counted
-  at all. Commands made of long compiler runs lose little; one that starts
-  thousands of tiny processes can read a few percent low. The CPU seconds of the
-  same command are exact, so a count that is low against its CPU seconds shows
-  this error.
+- The CPU seconds come from the leader's record, whose child fields total the
+  CPU time of every descendant reaped back up to it, however briefly it ran. The
+  supervisor adds the descendants that the leader's record cannot hold: those
+  still running at the last reading, and those whose parent had exited (launchd
+  reaps them). This matches `/usr/bin/time -l` for the same command.
+- The undercount that remains is in instructions: `rusage_info` (every version
+  through V6) has child fields for CPU time, wakeups and page-ins of reaped
+  children, but none for their instructions, so no total for a command's
+  finished descendants exists to read. A descendant's instructions are counted
+  up to its last reading, and one that starts and exits between two readings (a
+  100 ms `cc` run, or a cargo-nextest test process) adds none. Commands made of
+  long compiler runs lose little; one that starts thousands of tiny processes
+  can read low. A count that is low against the command's CPU seconds shows this
+  error.
 - When the command's leader exits, the supervisor reads the group one last time
   and ends every process still in it, as Windows does through the job object.
 - Each compiler process is counted by the `RUSTC_WRAPPER`, and each Rust test
