@@ -344,5 +344,10 @@
     "label": "A landing that loses the race for the tip keeps its landing tree and re-gates only the families the commits landed since touch: before, each lost race re-ran the whole gate, often in another tree that built again (2-pass landings took 28 minutes against 7 for one pass)",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "The Rust adapter imports the card modules only for the card-text family, and `allocations` lists without a build: a comment edited in card.py made a landing wait 40 minutes on a cold rust-tests build",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

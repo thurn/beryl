@@ -20,10 +20,18 @@ import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-from .. import card_files, card_store, card_text, paths, render_diff
+from .. import paths
 from . import Listed, Result, listed, report
+
+# The card-text family's modules are imported inside its functions. Imported here, they put
+# every card module among the inputs of each family this adapter serves (the input lists
+# follow the imports made when the adapter loads; tools/tests/test_ignite_inputs.py), so a
+# comment edited in card.py reran clippy, the doctests and the `allocations` binaries, and
+# rebuilt the workspace's test binaries for them.
+if TYPE_CHECKING:
+    from .. import card_store, render_diff
 
 # The package the families leave out: its iroh dependency's cold build alone outlasts a check.
 LEFT_OUT = "beryl_link_iroh"
@@ -408,10 +416,14 @@ def allocations_run(checks: list[str]) -> list[Result]:
 
 def card_check(path: Path) -> str:
     """A card file's check: `card-text:<crate>/<set>/<card>`, its path under rust/cards."""
+    from .. import card_files
+
     return "card-text:" + path.relative_to(card_files.CARDS).with_suffix("").as_posix()
 
 
 def card_text_list() -> list[Listed]:
+    from .. import card_files
+
     checks = [
         Listed(card_check(path), [path.relative_to(paths.REPO).as_posix()])
         for path in card_files.files()
@@ -430,6 +442,8 @@ def card_text_results(
     `diffs` holds each rendered card's comparison with its Oracle text, and the allowlist and
     escalations are `card_text`'s. A file whose card the store lacks or that did not render
     fails; `ALLOWLIST_CHECK` fails on entries naming no card file."""
+    from .. import card_text
+
     results: list[Result] = []
     for check in wanted:
         if check == ALLOWLIST_CHECK:
@@ -448,6 +462,8 @@ def card_text_results(
 
 
 def card_text_run(checks: list[str]) -> list[Result]:
+    from .. import card_files, card_store, card_text, render_diff
+
     wanted = [c for c in checks if c.startswith("card-text:")]
     if not wanted:
         return []

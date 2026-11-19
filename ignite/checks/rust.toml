@@ -87,34 +87,21 @@ inputs = [
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
   "tools/src/beryl_tools/__init__.py",
-  "tools/src/beryl_tools/card.py",
-  "tools/src/beryl_tools/card_crates.py",
-  "tools/src/beryl_tools/card_files.py",
-  "tools/src/beryl_tools/card_header.py",
-  "tools/src/beryl_tools/card_names.py",
-  "tools/src/beryl_tools/card_store.py",
-  "tools/src/beryl_tools/card_text.py",
-  "tools/src/beryl_tools/cards.py",
-  "tools/src/beryl_tools/catalogs.py",
-  "tools/src/beryl_tools/nearest.py",
   "tools/src/beryl_tools/paths.py",
-  "tools/src/beryl_tools/render_diff.py",
-  "tools/src/beryl_tools/rulings.py",
-  "tools/src/beryl_tools/scryfall.py",
-  "tools/src/beryl_tools/set_groups.py",
-  "tools/src/beryl_tools/store_cards.py",
-  "tools/src/beryl_tools/system.py",
-  "tools/src/beryl_tools/vocabulary.py",
-  "tools/src/beryl_tools/xmage_classes.py",
 ]
 
 # The harness-less `allocations` binaries, which count the allocations of hot paths. They are
 # built with the test binaries.
+#
+# `list` reads only `cargo metadata`, so listing waits for no build. Waiting for `rust-tests`
+# made a landing that changed one Python module these checks hash wait 40 minutes for a cold
+# build of the workspace's tests in its tree, only to list two checks.
 [family.allocations]
 kind = "regression"
 adapter = "jsonl"
 platforms = "any"
 needs = ["python-env", "rust-tests"]
+list_needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust allocations list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust allocations run {checks}"
 inputs = [
@@ -130,25 +117,7 @@ inputs = [
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
   "tools/src/beryl_tools/__init__.py",
-  "tools/src/beryl_tools/card.py",
-  "tools/src/beryl_tools/card_crates.py",
-  "tools/src/beryl_tools/card_files.py",
-  "tools/src/beryl_tools/card_header.py",
-  "tools/src/beryl_tools/card_names.py",
-  "tools/src/beryl_tools/card_store.py",
-  "tools/src/beryl_tools/card_text.py",
-  "tools/src/beryl_tools/cards.py",
-  "tools/src/beryl_tools/catalogs.py",
-  "tools/src/beryl_tools/nearest.py",
   "tools/src/beryl_tools/paths.py",
-  "tools/src/beryl_tools/render_diff.py",
-  "tools/src/beryl_tools/rulings.py",
-  "tools/src/beryl_tools/scryfall.py",
-  "tools/src/beryl_tools/set_groups.py",
-  "tools/src/beryl_tools/store_cards.py",
-  "tools/src/beryl_tools/system.py",
-  "tools/src/beryl_tools/vocabulary.py",
-  "tools/src/beryl_tools/xmage_classes.py",
 ]
 
 # Clippy over the whole workspace, one check per package, hashed over the package and every
@@ -175,25 +144,7 @@ inputs = [
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
   "tools/src/beryl_tools/__init__.py",
-  "tools/src/beryl_tools/card.py",
-  "tools/src/beryl_tools/card_crates.py",
-  "tools/src/beryl_tools/card_files.py",
-  "tools/src/beryl_tools/card_header.py",
-  "tools/src/beryl_tools/card_names.py",
-  "tools/src/beryl_tools/card_store.py",
-  "tools/src/beryl_tools/card_text.py",
-  "tools/src/beryl_tools/cards.py",
-  "tools/src/beryl_tools/catalogs.py",
-  "tools/src/beryl_tools/nearest.py",
   "tools/src/beryl_tools/paths.py",
-  "tools/src/beryl_tools/render_diff.py",
-  "tools/src/beryl_tools/rulings.py",
-  "tools/src/beryl_tools/scryfall.py",
-  "tools/src/beryl_tools/set_groups.py",
-  "tools/src/beryl_tools/store_cards.py",
-  "tools/src/beryl_tools/system.py",
-  "tools/src/beryl_tools/vocabulary.py",
-  "tools/src/beryl_tools/xmage_classes.py",
 ]
 
 # rustfmt over each package's Rust files, the card files included, which no crate root reaches.
@@ -215,25 +166,7 @@ inputs = [
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
   "tools/src/beryl_tools/__init__.py",
-  "tools/src/beryl_tools/card.py",
-  "tools/src/beryl_tools/card_crates.py",
-  "tools/src/beryl_tools/card_files.py",
-  "tools/src/beryl_tools/card_header.py",
-  "tools/src/beryl_tools/card_names.py",
-  "tools/src/beryl_tools/card_store.py",
-  "tools/src/beryl_tools/card_text.py",
-  "tools/src/beryl_tools/cards.py",
-  "tools/src/beryl_tools/catalogs.py",
-  "tools/src/beryl_tools/nearest.py",
   "tools/src/beryl_tools/paths.py",
-  "tools/src/beryl_tools/render_diff.py",
-  "tools/src/beryl_tools/rulings.py",
-  "tools/src/beryl_tools/scryfall.py",
-  "tools/src/beryl_tools/set_groups.py",
-  "tools/src/beryl_tools/store_cards.py",
-  "tools/src/beryl_tools/system.py",
-  "tools/src/beryl_tools/vocabulary.py",
-  "tools/src/beryl_tools/xmage_classes.py",
 ]
 
 # Each card file's rendered rules text against its Oracle text (tools/src/beryl_tools/card_text.py
