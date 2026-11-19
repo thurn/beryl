@@ -1278,10 +1278,10 @@ comments and its changelog, that shows the same accounting for that ticket
 without opening this page.
 
 - `just efficiency spend --since <date> --out <file>` writes each ticket window
-  of this host that ended since the date as one JSON line: the window's
-  ticket, session and times, and two lists in time order. `time` holds the
-  window's seconds split as in [Time accounting](#time-accounting), each run of
-  one category, kind and part as one segment; a tool call's queued seconds come
+  of this host that ended since the date as one JSON line: the window's ticket,
+  session and times, and two lists in time order. `time` holds the window's
+  seconds split as in [Time accounting](#time-accounting), each run of one
+  category, kind and part as one segment; a tool call's queued seconds come
   first, then its compile seconds. `dollars` holds the window's requests, each
   under the kind of the tool calls it made, or `reply` when it made none.
 - A list longer than 120 segments is coalesced: runs are gathered into buckets
@@ -1292,11 +1292,10 @@ without opening this page.
   agents, queued, and the breaks person and idle), so the hub colours segments
   without knowing this project's command kinds.
 - Ignite's daemon runs the command after each export and posts its lines to the
-  hub, which keeps the latest post of each window. The page draws the time
-  strip and the dollar strip side by side, with a timeline view, a view by
-  kind and, for an epic, a merged view of its whole subtree. Segments carry the
-  command that took most of their time; the hub shows it only on its private
-  listener.
+  hub, which keeps the latest post of each window. The page draws the time strip
+  and the dollar strip side by side, with a timeline view, a view by kind and,
+  for an epic, a merged view of its whole subtree. Segments carry the command
+  that took most of their time; the hub shows it only on its private listener.
 
 ## Other machines
 
