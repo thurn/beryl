@@ -10,6 +10,7 @@ use rusqlite::{Connection, params, params_from_iter};
 use serde_json::Value;
 
 use crate::Result;
+use crate::hub::tickets;
 
 /// The source name under which machines post spend windows to `POST /metrics/import`.
 pub const SOURCE: &str = "spend";
@@ -27,12 +28,20 @@ pub struct Window {
 
 /// Saves `window`, posted by `machine`, replacing an earlier post of the same window. Returns
 /// whether it was stored: a window that names no ticket, key or times is skipped.
+///
+/// The efficiency store keeps ticket keys without the ID's leading letter, so a machine may name
+/// the ticket `Q44S.7` without knowing whether it is `TQ44S.7` or an epic's `EQ44S.7`. The name
+/// is stored as the ID of the ticket it spells, or with a `T` when no such ticket exists.
 pub fn record(conn: &Connection, machine: &str, window: &Value, now: Timestamp) -> Result<bool> {
     let text = |key: &str| window.get(key).and_then(Value::as_str).unwrap_or("");
     let (ticket, key, start, end) = (text("ticket"), text("window"), text("start"), text("end"));
     if ticket.is_empty() || key.is_empty() || start.is_empty() || end.is_empty() {
         return Ok(false);
     }
+    let ticket = match tickets::spelled_ticket(conn, ticket)? {
+        Some(id) => id,
+        None => tickets::canonical(ticket),
+    };
     conn.execute(
         "INSERT INTO ticket_spend (machine, window, ticket, start, end, data, at) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
@@ -103,5 +112,27 @@ mod tests {
         assert_eq!(found.len(), 2);
         assert_eq!(found[0].end, "2026-11-19T05:20:00Z");
         assert!(for_tickets(&conn, &["TB".to_owned()]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_window_named_without_its_letter_is_stored_under_the_ticket_it_spells() {
+        let conn = crate::hub::open_in_memory().unwrap();
+        conn.execute(
+            "INSERT INTO tickets (id, title, created_at, created_by, updated_at, version) \
+             VALUES ('EQ44S', 'Epic', 'x', 'x', 'x', 1), ('TR2D2', 'Task', 'x', 'x', 'x', 1)",
+            [],
+        )
+        .unwrap();
+        let now = Timestamp::parse("2026-11-19T06:00:00Z").unwrap();
+        for (n, ticket) in ["Q44S", "R2D2", "ZZZZ"].into_iter().enumerate() {
+            let window = json!({"ticket": ticket, "window": format!("claude:t{n}:s"),
+                "start": "2026-11-19T05:00:00Z", "end": "2026-11-19T05:10:00Z"});
+            assert!(record(&conn, "m-1", &window, now).unwrap());
+        }
+        let ids = ["EQ44S", "TR2D2", "TZZZZ"].map(str::to_owned);
+        let found = for_tickets(&conn, &ids).unwrap();
+        let mut stored: Vec<&str> = found.iter().map(|w| w.ticket.as_str()).collect();
+        stored.sort_unstable();
+        assert_eq!(stored, ["EQ44S", "TR2D2", "TZZZZ"]);
     }
 }

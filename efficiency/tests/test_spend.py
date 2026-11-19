@@ -59,7 +59,8 @@ def test_a_window_becomes_time_and_dollar_segments_in_order(tmp_path: Path) -> N
     one_ticket(tmp_path)
     db = ingested(tmp_path)
     [window] = spend.windows(db, HOST, None)
-    assert window["ticket"] == "TA"
+    # Sent without its letter: the hub stores it under `TA` or an epic's `EA`.
+    assert window["ticket"] == "A"
     time = window["time"]
     assert isinstance(time, list)
     keys = [(s["c"], s["k"], s.get("p", "")) for s in time]

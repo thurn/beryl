@@ -12,6 +12,29 @@ use ignite_core::protocol::tickets::Status;
 use ignite_store::hub::{edges, tickets};
 
 #[test]
+fn an_epic_tree_starts_with_e_and_a_bare_root_finds_it() {
+    let mut hub = Hub::new();
+    let ids = hub.ids(json!([
+        create("Epic", None, json!({"type": "epic"})),
+        create("Milestone", Some("$0"), json!({"type": "milestone"})),
+        create("Task", None, json!({})),
+    ]));
+    let [epic, milestone, task] = [&ids[0], &ids[1], &ids[2]];
+    // An epic's root starts with `E`, and its children take its ID whatever their type.
+    assert!(epic.starts_with('E'), "{epic}");
+    assert_eq!(*milestone, format!("{epic}.1"));
+    assert!(task.starts_with('T'), "{task}");
+    // A bare root finds the epic under its `E`, as it finds a ticket under its `T`.
+    for (id, bare) in [
+        (epic, &epic[1..]),
+        (milestone, &milestone[1..]),
+        (task, &task[1..]),
+    ] {
+        assert_eq!(hub.show(&bare.to_lowercase()).ticket.id.as_str(), id);
+    }
+}
+
+#[test]
 fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
     let mut hub = Hub::new();
     let ids = hub.ids(json!([
@@ -32,7 +55,7 @@ fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
     let [epic, milestone, bug, archived] = [&ids[0], &ids[1], &ids[2], &ids[3]];
     let alphabet = "ABCDEFGHJKMNPQRSTVWXYZ";
     assert_eq!(epic.len(), 5);
-    assert!(epic.starts_with('T'), "{epic}");
+    assert!(epic.starts_with('E'), "{epic}");
     assert!(alphabet.contains(&epic[1..2]), "{epic}");
     assert!(
         epic[1..]
@@ -58,9 +81,9 @@ fn creates_nested_ids_resolves_aliases_and_lists_using_every_filter() {
     assert_eq!(hub.show("lookup-legacy").ticket.id.as_str(), bug);
     assert_eq!(hub.show(&format!("lookup-{bug}")).ticket.id.as_str(), bug);
     // The spellings from before IDs were stored in capitals still find the ticket.
-    let old = bug[1..].to_lowercase();
-    assert_eq!(hub.show(&format!("T{old}")).ticket.id.as_str(), bug);
+    let old = format!("{}{}", &bug[..1], bug[1..].to_lowercase());
     assert_eq!(hub.show(&old).ticket.id.as_str(), bug);
+    assert_eq!(hub.show(&old[1..]).ticket.id.as_str(), bug);
     assert_eq!(hub.show(&bug.to_lowercase()).ticket.id.as_str(), bug);
     assert_eq!(
         tickets::resolve(&hub.conn, "old")

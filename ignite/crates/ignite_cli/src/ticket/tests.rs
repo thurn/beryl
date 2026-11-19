@@ -104,8 +104,8 @@ fn tickets_can_be_created_shown_listed_linked_claimed_and_closed() {
     let epic = hub.json("create Epic --type epic --workers 3 --max-workers 5 -p P1");
     let epic_id = epic["results"][0]["id"].as_str().unwrap().to_owned();
     assert!(
-        epic_id.starts_with('T'),
-        "IDs print with their T: {epic_id}"
+        epic_id.starts_with('E'),
+        "An epic's ID prints with its E: {epic_id}"
     );
     let child = hub.json(&format!(
         "create Child --parent {epic_id} --labels tier:sonnet,role:executor --cores 1.5"

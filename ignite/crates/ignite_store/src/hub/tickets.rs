@@ -23,6 +23,8 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::ready::Readiness;
 use ignite_core::shares;
+
+use crate::hub::batch::roots::PREFIXES as ROOT_PREFIXES;
 use ignite_core::time::Timestamp;
 
 use crate::hub::{edges, feed};
@@ -231,7 +233,7 @@ pub fn resolve(conn: &Connection, id_or_alias: &str) -> Result<Option<TicketId>>
 }
 
 /// The ID a name refers to, whether or not that ticket exists: the ticket the name spells in
-/// any case, with or without its leading `T`, the ticket an alias points to, or the name
+/// any case, with or without its leading letter, the ticket an alias points to, or the name
 /// without a project prefix.
 pub(crate) fn candidate_id(conn: &Connection, name: &str) -> Result<String> {
     // Ticket IDs are stored in capitals with a leading `T` (`TQ44S.7`). Before that they were
@@ -264,10 +266,14 @@ pub(crate) fn candidate_id(conn: &Connection, name: &str) -> Result<String> {
     Ok(canonical(stripped))
 }
 
-/// The ticket `name` spells in any case, with or without its leading `T`.
-fn spelled_ticket(conn: &Connection, name: &str) -> Result<Option<String>> {
+/// The ticket `name` spells in any case, with or without its leading letter (`T`, `E` or `M`).
+/// A root is used under only one letter, so at most one candidate with a letter added exists.
+pub(crate) fn spelled_ticket(conn: &Connection, name: &str) -> Result<Option<String>> {
     let upper = name.to_ascii_uppercase();
-    for candidate in [upper.clone(), format!("T{upper}")] {
+    let added = ROOT_PREFIXES
+        .iter()
+        .map(|letter| format!("{letter}{upper}"));
+    for candidate in std::iter::once(upper.clone()).chain(added) {
         let found: Option<i64> = conn
             .query_row("SELECT 1 FROM tickets WHERE id = ?1", [&candidate], |row| {
                 row.get(0)
@@ -280,10 +286,11 @@ fn spelled_ticket(conn: &Connection, name: &str) -> Result<Option<String>> {
     Ok(None)
 }
 
-/// A name in the form IDs are stored in: capitals, with a leading `T`.
-fn canonical(name: &str) -> String {
+/// A name in the form IDs are stored in: capitals, with a leading `T` (or the `E` of an epic or
+/// the `M` of a meta-ticket).
+pub(crate) fn canonical(name: &str) -> String {
     let upper = name.to_ascii_uppercase();
-    if upper.starts_with('T') {
+    if upper.starts_with(ROOT_PREFIXES) {
         upper
     } else {
         format!("T{upper}")
@@ -583,18 +590,22 @@ fn search_candidates(
         return Err(StoreError::Rejected("search query is required".to_owned()));
     }
     let query = phrase.to_lowercase();
-    // IDs are stored in capitals with a leading `T`, so a phrase is compared with them in
-    // capitals, with and without its own `T`; aliases are stored in lowercase.
+    // IDs are stored in capitals with a leading letter (`T`, `E` or `M`), so a phrase is
+    // compared with them in capitals, with and without each letter; aliases are stored in
+    // lowercase.
     let upper = phrase.to_ascii_uppercase();
     let id_prefixes: Vec<String> = {
         let without_project = upper
             .split_once('-')
             .map_or(upper.as_str(), |(_, rest)| rest);
-        let mut prefixes = vec![upper.clone(), format!("T{upper}")];
-        if without_project != upper {
-            prefixes.push(format!("T{without_project}"));
+        let mut prefixes = vec![upper.clone()];
+        for letter in ROOT_PREFIXES {
+            prefixes.push(format!("{letter}{upper}"));
+            if without_project != upper {
+                prefixes.push(format!("{letter}{without_project}"));
+            }
         }
-        // Every ID starts with `T`, so a lone `T` would match them all.
+        // Every ID starts with a letter, so a lone letter would match a whole kind.
         prefixes.retain(|prefix| prefix.len() > 1);
         prefixes
     };

@@ -2189,15 +2189,23 @@ The hub takes over the ticket service that runs on jarvis today. Agents reach
 tickets only through `ignite ticket`, and every ticket operation is one request
 with no lock held across it.
 
-A ticket ID is a `T`, a root of a capital letter and three capitals or digits,
-and one dotted number for each level below the root: `TQ44S` is an epic and
-`TQ44S.7.24` a ticket two levels under it. A meta-ticket's ID starts with `M`
-instead (`MAB12`), and its copies are numbered under it (`MAB12.3`); see
-[Scheduled tickets](#scheduled-tickets). IDs are stored and printed this way.
-Lookups ignore case and accept the spelling from before IDs were stored in
-capitals (`Tq44s.7` or a bare `q44s.7`), so old commit messages and notes still
-find their tickets. Roots carried over from earlier trackers keep their dashes
-(`TCI-00031CED38`).
+A ticket ID is a letter, a root of a capital letter and three capitals or
+digits, and one dotted number for each level below the root: `EQ44S` is an epic
+and `EQ44S.7.24` a ticket two levels under it. The letter is `E` for a root
+ticket created as an epic, `M` for a meta-ticket (`MAB12`, whose copies are
+numbered under it as `MAB12.3`; see [Scheduled tickets](#scheduled-tickets)),
+and `T` for any other root ticket, such as `TR2D2`. A child takes its parent's
+ID, so every ticket in an epic's tree starts with `E`. The `E` records the type
+at creation: changing a ticket's type to or from epic later keeps its ID, and
+epics created before the `E` existed keep their `T`. IDs are stored and printed
+this way.
+
+The roots of all three letters are one space: a new root is never one already
+used under any letter, by a ticket or an alias. Lookups ignore case, accept a
+bare root without its letter (`q44s.7` finds `EQ44S.7` or `TQ44S.7`, whichever
+exists) and accept the spelling from before IDs were stored in capitals
+(`Tq44s.7`), so old commit messages and notes still find their tickets. Roots
+carried over from earlier trackers keep their dashes (`TCI-00031CED38`).
 
 What carries over unchanged from the current service:
 

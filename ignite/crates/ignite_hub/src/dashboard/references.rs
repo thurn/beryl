@@ -1,6 +1,7 @@
 //! Ticket names in prose: finding them in text and turning them into links.
 //!
-//! A ticket is shown by its ID, a `T` and then capitals (`TQ44S.7`). Text written before IDs
+//! A ticket is shown by its ID, a `T` and then capitals (`TQ44S.7`), or an `E` for a root
+//! created as an epic (`EQ44S.7`). Text written before IDs
 //! were stored in capitals names one as `Tq44s.7`. Text may also name one by its bare dotted
 //! ID, by the project prefix (`proj-q44s.7`), or by the path of its page. These functions find
 //! those names the way the old dashboard's regular expressions did, written by hand because the
@@ -103,8 +104,8 @@ fn meta_root(name: &str) -> bool {
 }
 
 /// Calls `replace` on each ticket-like word of `text` and keeps the result. Bare names are
-/// replaced only when they begin with `T`, begin with `<project>-`, are dotted IDs or have a
-/// meta-ticket's shape, because a lone root such as `fix` is an ordinary word.
+/// replaced only when they begin with `T` or `E`, begin with `<project>-`, are dotted IDs or
+/// have a meta-ticket's shape, because a lone root such as `fix` is an ordinary word.
 pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> String) -> String {
     let chars: Vec<char> = text.chars().collect();
     let prefix = format!("{project}-");
@@ -123,7 +124,11 @@ pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> Stri
                     && head.chars().all(name_char)
                     && tail.starts_with(|c: char| c.is_ascii_digit())
             });
-            if name.starts_with('T') || name.starts_with(&prefix) || dotted_id || meta_root(&name) {
+            if name.starts_with(['T', 'E'])
+                || name.starts_with(&prefix)
+                || dotted_id
+                || meta_root(&name)
+            {
                 out.push_str(&replace(&name));
             } else {
                 out.push_str(&name);
@@ -185,4 +190,19 @@ pub fn rewrite_ticket_paths(
 /// Escapes a ticket name for the places pages show it.
 pub fn escaped_display(id: &str) -> String {
     esc(&display_id(id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mentions;
+
+    #[test]
+    fn epic_ids_with_an_e_are_found_like_ids_with_a_t() {
+        let mut seen = Vec::new();
+        mentions("proj", "See EQ44S.7 and TR2D2, not fix.", &mut |name| {
+            seen.push(name.to_owned());
+            format!("<{name}>")
+        });
+        assert_eq!(seen, ["EQ44S.7", "TR2D2"]);
+    }
 }

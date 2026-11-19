@@ -1,5 +1,6 @@
-//! How ticket IDs are spelled in output. The hub stores an ID as it is printed, a `T` and then
-//! capitals (`TQ44S.7`), and accepts any case, with or without the `T`, on input. A hub from
+//! How ticket IDs are spelled in output. The hub stores an ID as it is printed, a `T` (an `E`
+//! for a root created as an epic, an `M` for a meta-ticket) and then capitals (`TQ44S.7`,
+//! `EQ44S.7`), and accepts any case, with or without the letter, on input. A hub from
 //! before that stored a bare lowercase ID (`q44s.7`), so an ID without its `T` still gets one.
 //! Aliases from earlier trackers and anything a person wrote are printed as stored.
 
@@ -86,18 +87,19 @@ pub fn display(value: &mut Value) {
     }
 }
 
-/// One ticket ID spelled with its `T`.
+/// One ticket ID spelled with its letter: `T`, or the `E` or `M` of an epic or meta-ticket.
 pub fn spelled(id: &str) -> String {
     let mut value = Value::String(id.to_owned());
     prefix(&mut value);
     value.as_str().unwrap_or(id).to_owned()
 }
 
-/// Adds the `T` an ID from before IDs were stored in capitals lacks. A meta-ticket's ID starts
-/// with a capital `M` (`MAB12`), which no such older ID does, since those were lowercase.
+/// Adds the `T` an ID from before IDs were stored in capitals lacks. An epic's ID may start
+/// with a capital `E` (`EQ44S`) and a meta-ticket's with a capital `M` (`MAB12`), which no
+/// such older ID does, since those were lowercase.
 fn prefix(value: &mut Value) {
     if let Value::String(id) = value
-        && !id.starts_with(['T', 'M'])
+        && !id.starts_with(['T', 'E', 'M'])
     {
         id.insert(0, 'T');
     }

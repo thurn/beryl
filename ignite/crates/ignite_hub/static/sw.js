@@ -29,7 +29,7 @@ self.addEventListener("fetch", (event) => {
     const path = url.pathname.slice(root.length);
     if (url.searchParams.has("fragment")) return;
     // Let other names for a ticket reach the Worker so they redirect to the canonical ID.
-    if (path === "" || /^T[^/]+$/.test(path)) {
+    if (path === "" || /^[TEM][^/]+$/.test(path)) {
         event.respondWith(staleWhileRevalidate(event, request));
     }
 });

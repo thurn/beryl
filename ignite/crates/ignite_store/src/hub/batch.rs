@@ -31,6 +31,7 @@ use crate::hub::{cycles, edges, feed, findings, tickets};
 use crate::{Result, StoreError};
 
 mod ancestors;
+pub(crate) mod roots;
 
 /// The outcome of a batch: applied, or refused at one precondition or operation.
 #[derive(Debug)]
@@ -41,10 +42,6 @@ pub enum BatchOutcome {
 
 /// How long a create's `request_key` makes a retry return the first create's ticket.
 const REQUEST_KEY_SECONDS: f64 = 86_400.0;
-
-/// The characters of a new root ID after its `T`. The first is never a digit, so a root never
-/// looks like a number, and `I`, `L`, `O` and `U` are left out as easy to misread.
-const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /// Applies `batch` for `actor` (the session writing) on `machine`. A failed precondition, or a
 /// claim of a ticket someone else holds, returns a conflict naming its index and the ticket as
@@ -414,7 +411,7 @@ impl<'a> Run<'a> {
                 self.changed.insert(parent.id.to_string());
                 format!("{}.{}", parent.id, parent.next_child)
             }
-            None => self.allocate_root(if meta { 'M' } else { 'T' })?,
+            None => roots::allocate(self.conn, roots::prefix_for(fields))?,
         };
         self.seq += 1;
         let ticket = tickets::blank(
@@ -678,40 +675,6 @@ impl<'a> Run<'a> {
         self.changed.insert(id.to_owned());
         self.changed.insert(dst);
         Ok(())
-    }
-
-    /// A new root ID: `prefix` (`T`, or `M` for a meta-ticket), a capital letter and three
-    /// capitals or digits (`TQ44S`), used by no ticket or alias. Aliases are stored in
-    /// lowercase, so they are compared in lowercase.
-    fn allocate_root(&self, prefix: char) -> Step<String> {
-        loop {
-            let mut bytes = [0_u8; 4];
-            getrandom::getrandom(&mut bytes)
-                .map_err(|e| StoreError::Invalid(format!("no random numbers: {e}")))?;
-            // Rejection sampling keeps all 22 letters equally likely as the first character.
-            if bytes[0] >= 242 {
-                continue;
-            }
-            let mut id = String::with_capacity(5);
-            id.push(prefix);
-            id.push(char::from(ALPHABET[10 + usize::from(bytes[0]) % 22]));
-            for byte in &bytes[1..] {
-                id.push(char::from(ALPHABET[usize::from(*byte) % 32]));
-            }
-            let taken: Option<i64> = self
-                .conn
-                .query_row(
-                    "SELECT 1 FROM tickets WHERE id = ?1 UNION ALL \
-                     SELECT 1 FROM aliases WHERE alias = lower(?1) OR alias LIKE '%-' || lower(?1) \
-                     LIMIT 1",
-                    [&id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if taken.is_none() {
-                return Ok(id);
-            }
-        }
     }
 }
 

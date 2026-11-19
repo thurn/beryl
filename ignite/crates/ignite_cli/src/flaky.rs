@@ -82,9 +82,9 @@ fn word(state: CheckState) -> &'static str {
     }
 }
 
-/// A ticket ID as the commands print it, with its `T`.
+/// A ticket ID as the commands print it, with its `T` (or an epic's `E`, a meta-ticket's `M`).
 fn spelled(ticket: &str) -> String {
-    if ticket.starts_with('T') {
+    if ticket.starts_with(['T', 'E', 'M']) {
         ticket.to_owned()
     } else {
         format!("T{ticket}")

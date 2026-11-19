@@ -72,9 +72,11 @@ CLASSES: tuple[str, ...] = ("input", "cache_write", "cache_read", "output")
 
 
 def hub_id(bead: str) -> str:
-    """The hub's spelling of a stored ticket key: `by-mp4b.12` is `TMP4B.12`. The store keeps
-    the lowercase keys from before Ignite (see `ticket_ids`)."""
-    return "T" + bead.removeprefix("by-").upper()
+    """The hub's spelling of a stored ticket key, without its leading letter: `by-mp4b.12` is
+    `MP4B.12`. The store keeps the lowercase keys from before Ignite (see `ticket_ids`), which
+    drop the letter, and the hub stores the window under `TMP4B.12` or an epic's `EMP4B.12`,
+    whichever exists."""
+    return bead.removeprefix("by-").upper()
 
 
 def group_of(category: str, kind: str, heavy: frozenset[str]) -> str:

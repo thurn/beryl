@@ -92,7 +92,7 @@ fn machine_names(config: &Config) -> BTreeSet<String> {
 }
 
 fn prefixed(id: &str) -> String {
-    if id.starts_with('T') {
+    if id.starts_with(['T', 'E', 'M']) {
         id.to_owned()
     } else {
         format!("T{id}")
