@@ -18,10 +18,11 @@ const STYLES: [&str; 5] = [
     include_str!("../../static/css/4-motion.css"),
     include_str!("../../static/css/5-edit.css"),
 ];
-/// The scripts, served as one file: cirrus itself, then ticket editing.
-const SCRIPTS: [&str; 2] = [
+/// The scripts, served as one file: cirrus itself, ticket editing, then the theme choice.
+const SCRIPTS: [&str; 3] = [
     include_str!("../../static/cirrus.js"),
     include_str!("../../static/edit.js"),
+    include_str!("../../static/theme.js"),
 ];
 const WORKER: &str = include_str!("../../static/sw.js");
 const FAVICON_SVG: &[u8] = include_bytes!("../../static/favicon.svg");

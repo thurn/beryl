@@ -72,8 +72,11 @@
   --tone-violet: #7a5bd1;
 }
 
+/* Dark tokens apply when the system is dark and the viewer has not chosen light in the
+   header's settings menu, or whenever they chose dark. `data-theme` on <html> holds a
+   choice; "auto" leaves it off. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f0f11;
     --surface: #17171a;
     --surface-hover: #1c1c20;
@@ -96,6 +99,38 @@
     --tone-blue: #6f97f2;
     --tone-violet: #a58cf0;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f0f11;
+  --surface: #17171a;
+  --surface-hover: #1c1c20;
+  --sunk: #1d1d21;
+  --ink: #ececee;
+  --ink-2: #a3a3aa;
+  --ink-3: #6e6e76;
+  --hairline: rgba(255, 255, 255, 0.07);
+  --accent: #52b8ad;
+  --accent-soft: rgba(82, 184, 173, 0.14);
+  --shadow-1: 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-2:
+    0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --tone-neutral: #9a9aa2;
+  --tone-muted: #5f5f66;
+  --tone-red: #f06b61;
+  --tone-orange: #f0974d;
+  --tone-amber: #d9a93b;
+  --tone-green: #5cc28a;
+  --tone-blue: #6f97f2;
+  --tone-violet: #a58cf0;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 *,

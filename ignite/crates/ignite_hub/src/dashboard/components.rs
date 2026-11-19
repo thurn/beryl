@@ -116,6 +116,33 @@ pub struct PageOptions {
     pub feed: Option<Feed>,
 }
 
+/// The settings menu at the right of the header: a gear that opens the theme choice. The
+/// script in `static/theme.js` saves the choice in the browser and marks the current one;
+/// without script the menu still opens, and the page follows the system's appearance.
+const SETTINGS: &str = "<details class=\"c-settings\">\
+<summary class=\"c-settings-button\" aria-label=\"Settings\" title=\"Settings\">\
+<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\" fill=\"none\" \
+stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">\
+<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 \
+2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 \
+19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 \
+0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 \
+2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 \
+1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 \
+1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z\"/></svg></summary>\
+<div class=\"c-settings-menu\" role=\"group\" aria-labelledby=\"c-settings-theme\">\
+<div class=\"c-settings-label\" id=\"c-settings-theme\">Theme</div>\
+<button type=\"button\" class=\"c-settings-choice\" data-theme-choice=\"auto\" aria-pressed=\"true\">Auto</button>\
+<button type=\"button\" class=\"c-settings-choice\" data-theme-choice=\"light\" aria-pressed=\"false\">Light</button>\
+<button type=\"button\" class=\"c-settings-choice\" data-theme-choice=\"dark\" aria-pressed=\"false\">Dark</button>\
+</div></details>";
+
+/// Applies the theme saved by `static/theme.js` before the first paint, so a page in a
+/// chosen light or dark theme never flashes the system's one. It runs inline because the
+/// bundled script is deferred.
+const THEME_BOOT: &str = "<script>try{var t=localStorage.getItem(\"cirrus-theme\");\
+if(t===\"light\"||t===\"dark\")document.documentElement.dataset.theme=t}catch(e){}</script>";
+
 /// The header and main regions, which the script swaps when it navigates or follows a change.
 pub fn page_regions(options: &PageOptions) -> String {
     let trail: String = options
@@ -146,8 +173,9 @@ pub fn page_regions(options: &PageOptions) -> String {
         &options.root
     };
     format!(
-        "<header class=\"c-header\" id=\"c-header\">\n<nav class=\"c-crumbs\" aria-label=\"Breadcrumbs\">\
-         <a class=\"c-brand\" href=\"{}\">{}</a>{trail}</nav>\n</header>\n\
+        "<header class=\"c-header\" id=\"c-header\">\n<div class=\"c-header-row\">\
+         <nav class=\"c-crumbs\" aria-label=\"Breadcrumbs\">\
+         <a class=\"c-brand\" href=\"{}\">{}</a>{trail}</nav>{SETTINGS}</div>\n</header>\n\
          <main class=\"c-main\" id=\"c-main\"{subscription}>\n{}\n</main>",
         esc(root),
         // The wordmark comes from a file in the repository, so it is trusted HTML.
@@ -192,7 +220,7 @@ pub fn document(options: &PageOptions, regions: &str) -> String {
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n{base}\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n\
          <title>{}</title>\n<meta name=\"description\" content=\"{}\">\n\
-         <meta name=\"cirrus-root\" content=\"{}\">{icons}\n\
+         <meta name=\"cirrus-root\" content=\"{}\">{icons}\n{THEME_BOOT}\n\
          <link rel=\"stylesheet\" href=\"{}\">\n<script src=\"{}\" defer></script>\n</head>\n<body>\n\
          <div class=\"c-progress-bar\" aria-hidden=\"true\"></div>\n{regions}\n</body>\n</html>\n",
         esc(&options.title),
