@@ -314,10 +314,16 @@ The verbs an agent uses while working:
   behind. `ignite start "<summary>"` files a ticket first, for a session that
   was given a task and no ticket.
 - `ignite test <names>` runs the checks the agent names, in its tree. A name
-  without a known `<family>:` prefix is looked up in the kept listings, and only
-  the families that match, or that have no kept listing, are listed. A name that
-  no family could hold is refused at once with a hint on how checks are named,
-  so a Rust test function name never builds every family.
+  without a known `<family>:` prefix is looked up in each family's kept listing
+  for the tree's inputs or, when it has none, in the newest listing the machine
+  keeps of it, and only the families that match, or that were never listed on
+  the machine, are listed. A change to one card file changes the inputs of most
+  Rust families, and listing them all again built every product:
+  `ignite test oust` after a one-line comment change in Oust took 39 minutes on
+  2026-11-19. A name that no listing holds may name a check added since, so then
+  every family without a kept listing for the tree's inputs is listed too. A
+  name that no family could hold is refused at once with a hint on how checks
+  are named, so a Rust test function name never builds every family.
 - `ignite check` runs what the landing gate would run on the tree as it is.
 - `ignite sync` rebases the tree's branch onto the tip.
 - `ignite land` rebases, runs the gate, lands the commits, records the note for
