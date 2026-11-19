@@ -48,6 +48,11 @@ heavy command.
 ## Testing rules and cards
 
 - `just test-rust` runs the workspace's tests.
+- A test that names a real card lives in the crate's `tests/` directory and uses
+  only its public API; a unit test under `src/` uses only
+  `beryl_card_shared::props`. Each crate's integration tests are one binary,
+  `tests/all/main.rs` with one module per file, because every test binary links
+  the crate and its dependencies again after an edit.
 - `just oracle <card names>` plays a card's generated, rules-library and
   hand-written scenarios against XMage and Forge. It needs `just oracle-setup`
   once per machine.

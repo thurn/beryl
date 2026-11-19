@@ -233,7 +233,9 @@ Use the cheapest test that covers your change. Agents never open a window;
    and AI behavior here, not through the app. `rust/AGENTS.md` lists the card
    tools: the XMage and Forge oracles, the citation check, the fuzzer and
    `just card brief <name>` for starting a new card. To write a card, follow the
-   `card-writing` skill.
+   `card-writing` skill. Prefer fast tests of what a player or caller can
+   observe (a decision, a protocol message, a saved file) over unit tests of
+   private code, which mostly detect change rather than bugs.
 2. UI: run `just ui-typecheck`, and `just ui-unit` for the tests that need no
    browser. Both first install `ui/node_modules` with `npm ci` when it is
    missing or older than `ui/package-lock.json`. `ui/AGENTS.md` lists the
