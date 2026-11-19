@@ -411,9 +411,15 @@ pub(crate) fn sql_value(column: &str, value: &Value) -> SqlValue {
 /// its updates releases (sets `open`), so that releasing an epic releases its tickets whichever
 /// client sent the update: `ignite ticket update --release` or the dashboard's Release button.
 /// A ticket created in the same batch (`$<index>`) has no descendants yet and is skipped.
+///
+/// A released epic with no `workers` number, such as one imported from Enact, also gets the
+/// default share ([`shares::DEFAULT_EPIC_WORKERS`]) unless the update sets one. The pool offers a
+/// ticket only when the nearest ancestor with a `workers` number has one above 0
+/// (`ignite_hub`'s `dispatch_queue`), so without it a released epic inside a larger project
+/// whose epics have no number either would never be worked.
 pub fn add_releases(conn: &Connection, batch: &mut BatchRequest) -> Result<()> {
     let mut released = Vec::new();
-    for operation in &batch.ops {
+    for operation in &mut batch.ops {
         let Operation::Update {
             id, set: Some(set), ..
         } = operation
@@ -426,9 +432,19 @@ pub fn add_releases(conn: &Connection, batch: &mut BatchRequest) -> Result<()> {
         let Some(id) = resolve(conn, id)? else {
             continue;
         };
-        if load(conn, id.as_str())?.is_some_and(|t| t.status == Status::PendingApproval) {
-            released.push(id);
+        let Some(ticket) = load(conn, id.as_str())? else {
+            continue;
+        };
+        if ticket.status != Status::PendingApproval {
+            continue;
         }
+        if ticket.ticket_type == TicketType::Epic
+            && ticket.workers.is_none()
+            && set.workers.is_none()
+        {
+            set.workers = Some(Some(shares::DEFAULT_EPIC_WORKERS));
+        }
+        released.push(id);
     }
     let mut added = HashSet::new();
     for id in released {

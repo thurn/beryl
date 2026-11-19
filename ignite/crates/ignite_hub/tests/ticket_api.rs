@@ -585,6 +585,43 @@ fn releasing_an_epic_by_one_update_releases_its_pending_tickets() {
     );
 }
 
+/// An epic filed under Enact has no `workers` number, and the pool works only epics whose
+/// nearest numbered ancestor has a number above 0. Releasing such an epic inside a project
+/// whose own epic has no number either gives it the default share, so its tickets are offered.
+/// An epic released with a number of its own, or with one already, keeps that number.
+#[test]
+fn releasing_an_epic_with_no_workers_number_gives_it_the_default() {
+    let fixture = Fixture::new("release-workers");
+    let hub = fixture.start();
+    let receipt = hub.post(
+        "/batch",
+        &json!({"ops": [
+            {"op": "create", "fields": {"title": "Project", "type": "epic", "status": "pending_approval", "workers": null}},
+            {"op": "create", "parent": "$0", "fields": {"title": "Milestone", "type": "epic", "status": "pending_approval", "workers": null}},
+            {"op": "create", "parent": "$1", "fields": {"title": "Inner", "type": "epic", "status": "pending_approval", "workers": null}},
+            {"op": "create", "fields": {"title": "Parked", "type": "epic", "status": "pending_approval", "workers": 0}},
+            {"op": "create", "fields": {"title": "Chosen", "type": "epic", "status": "pending_approval", "workers": null}},
+        ]}),
+    );
+    let id = |index: usize| receipt["results"][index]["id"].as_str().unwrap().to_owned();
+    hub.post(
+        "/batch",
+        &json!({"ops": [
+            {"op": "update", "id": id(1), "set": {"status": "open"}},
+            {"op": "update", "id": id(3), "set": {"status": "open"}},
+            {"op": "update", "id": id(4), "set": {"status": "open", "workers": 1}},
+        ]}),
+    );
+    let workers =
+        |index: usize| hub.get(&format!("/tickets/{}", id(index))).json()["workers"].clone();
+    assert_eq!(
+        (0..5).map(workers).collect::<Vec<_>>(),
+        vec![json!(null), json!(3), json!(null), json!(0), json!(1)],
+        "only the epic released without a number gets the default; its descendants, the \
+         project above it and epics with a number keep theirs"
+    );
+}
+
 #[test]
 fn writers_report_session_titles_that_the_hub_keeps() {
     let fixture = Fixture::new("titles");

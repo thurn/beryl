@@ -2483,10 +2483,13 @@ Not every ticket is offered:
   released. A session may still start a pending ticket by name.
 - An epic is worked only once it is active, which means it has a `--workers`
   number above 0. An epic filed without one gets a share of 3, so releasing it
-  is enough; the share is bounded by the pool, so it reserves nothing. File it
-  with `--workers 0`, or set that later, to park a backlog: its tickets then
-  wait, however ready they are. A ticket under no epic has nothing to activate,
-  so releasing it is enough.
+  is enough; the share is bounded by the pool, so it reserves nothing. An epic
+  that has no number, such as one imported from Enact, gets the same share when
+  it is released, so releasing one epic inside a larger project works it even
+  when the project's epic has no number either. File it with `--workers 0`, or
+  set that later, to park a backlog: its tickets then wait, however ready they
+  are. A ticket under no epic has nothing to activate, so releasing it is
+  enough.
 - Once released, tickets that the hub files itself are always offered:
   regressions, improvements and repairs to a machine. So is a ticket that a
   session starts by name.
