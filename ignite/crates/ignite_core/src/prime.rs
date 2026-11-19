@@ -59,8 +59,7 @@ flaky, hung or never-catching check. Every command prints a verdict first and a 
 last.
 
 ## Rules
-- Nobody answers questions. Decide, act, and record the choice and its reason on the
-  ticket.
+- Nobody answers questions. Decide, act, and record the choice and why on the ticket.
 - The ticket may be days old. Check it against the code as it is. Where they disagree, the
   code and the epic's intent win; record the difference on the ticket.
 - Read the files the ticket names first, and send reads together.
