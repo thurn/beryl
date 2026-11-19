@@ -214,7 +214,13 @@ fn a_later_pass_judges_only_the_families_the_landed_commits_touch() {
         families: gated.scoped.clone(),
         moved: vec!["data/client/layout.json".to_owned()],
     };
-    let again = first.gate_carrying(&world.ctx, &tree, &landing(), Some(&carried));
+    let again = first.gate_carrying(
+        &world.ctx,
+        &tree,
+        &landing(),
+        Some(&carried),
+        &crate::checks::Excused::new(),
+    );
     assert_eq!(again.scoped, ["client-interface", "rust"]);
     assert_eq!(again.carried, ["rust"]);
     assert!(
@@ -240,7 +246,13 @@ fn a_later_pass_judges_only_the_families_the_landed_commits_touch() {
         families: gated.scoped.clone(),
         moved: vec!["tools/unread.py".to_owned()],
     };
-    let none = first.gate_carrying(&world.ctx, &tree, &landing(), Some(&carried));
+    let none = first.gate_carrying(
+        &world.ctx,
+        &tree,
+        &landing(),
+        Some(&carried),
+        &crate::checks::Excused::new(),
+    );
     assert_eq!(none.carried, ["client-interface", "rust"]);
     assert!(none.run.outcomes.is_empty());
     assert!(none.run.passed());

@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ignite_core::budget::billions_text;
 use ignite_core::gate::cost_of;
-use ignite_core::ids::{CheckName, TreeId};
+use ignite_core::ids::{CheckName, TicketId, TreeId};
 use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::hub::CachedResult;
 
@@ -44,7 +44,19 @@ pub struct GateRun {
     /// landed since touch none of the inputs of, so they were not judged again (see
     /// [`Carried`]).
     pub carried: Vec<String>,
+    /// Checks the gate left out because they already fail at the tip, each with its regression
+    /// ticket: those the hub has an open regression ticket for, and those the landing found
+    /// failing at the tip it was rebased onto (see [`Excused`]).
+    pub known_failing: Vec<(CheckName, TicketId)>,
+    /// What comparing the gate's failures with the tip the landing was rebased onto found, when
+    /// they still refuse the landing.
+    pub base: Option<String>,
 }
+
+/// Checks a landing found failing at the tip it was rebased onto as well as in its own commit,
+/// each with the regression ticket the hub filed or joined for it. The gate leaves them out as
+/// known to fail, as it does a check with an open regression ticket.
+pub type Excused = BTreeMap<CheckName, TicketId>;
 
 /// What an earlier gate of the same landing, which passed, lets a later pass skip.
 ///
@@ -98,19 +110,21 @@ impl Checks {
     /// Runs what the landing gate runs on `tree` as it is: the always set and the checks whose
     /// score passes the threshold, within the cap, each from the cache where it can be.
     pub fn gate(&self, ctx: &Context, tree: &TreeId, options: &RunOptions) -> GateRun {
-        self.gate_carrying(ctx, tree, options, None)
+        self.gate_carrying(ctx, tree, options, None, &Excused::new())
     }
 
-    /// [`Checks::gate`], judging again only the families `carried` does not carry over.
+    /// [`Checks::gate`], judging again only the families `carried` does not carry over, and
+    /// leaving out the checks in `excused` as known to fail.
     pub fn gate_carrying(
         &self,
         ctx: &Context,
         tree: &TreeId,
         options: &RunOptions,
         carried: Option<&Carried>,
+        excused: &Excused,
     ) -> GateRun {
         match self.open(tree) {
-            Ok(tree) => self.gate_in(ctx, &tree, options, carried),
+            Ok(tree) => self.gate_in(ctx, &tree, options, carried, excused),
             Err(error) => {
                 let mut gated = GateRun::default();
                 gated
@@ -128,6 +142,7 @@ impl Checks {
         tree: &OpenTree,
         options: &RunOptions,
         carried: Option<&Carried>,
+        excused: &Excused,
     ) -> GateRun {
         let mut run = CheckRun::default();
         // Without the changed paths the gate cannot tell which checks the change edited, and
@@ -196,7 +211,7 @@ impl Checks {
         }
         let hits = self.lookup(&prepared, options);
         let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
-        view.landing.clone_from(&options.ticket);
+        landing_view(&mut view, options, excused);
         let gate_plan = view.plan(&ctx.config.gate);
         // The products never built before the gate started, so the `build` line can name a
         // cold build even when listing a family made the product.
@@ -241,6 +256,8 @@ impl Checks {
             budget: Some(budget),
             scoped,
             carried,
+            known_failing: gate_plan.known_failing,
+            base: None,
         }
     }
 
@@ -267,6 +284,17 @@ impl Checks {
             })
             .collect();
         (again, untouched)
+    }
+}
+
+/// Names the ticket being landed in `view`, and gives each check in `excused` its regression
+/// ticket, so the plan leaves it out as known to fail.
+fn landing_view(view: &mut plan::GateView, options: &RunOptions, excused: &Excused) {
+    view.landing.clone_from(&options.ticket);
+    for check in &mut view.checks {
+        if check.regression.is_none() {
+            check.regression = excused.get(&check.check).cloned();
+        }
     }
 }
 
@@ -329,11 +357,34 @@ pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
     lines.push(build_line(run, gated.budget.as_ref()));
     lines.extend(listed_line(run));
     lines.extend(failure_lines(run));
+    lines.extend(gated.base.clone().map(|base| ("base".to_owned(), base)));
     lines.extend(stopped_line(run));
     lines.extend(scope_line(run));
     lines.extend(carried_line(gated));
+    lines.extend(known_line(gated));
     lines.extend(tip_line(gated));
     lines
+}
+
+/// The `known` line: the checks left out because they already fail at the tip, with their
+/// regression tickets.
+fn known_line(gated: &GateRun) -> Option<(String, String)> {
+    let n = gated.known_failing.len();
+    let checks = if n == 1 { "check" } else { "checks" };
+    (n > 0).then(|| {
+        let named: Vec<String> = gated
+            .known_failing
+            .iter()
+            .map(|(check, ticket)| format!("{check} ({ticket})"))
+            .collect();
+        (
+            "known".to_owned(),
+            format!(
+                "{n} {checks} left out as known-failing: they fail at the tip too: {}",
+                named.join(", ")
+            ),
+        )
+    })
 }
 
 /// The `carried` line: the families an earlier pass of the landing judged, which this pass

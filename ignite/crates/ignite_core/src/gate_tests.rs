@@ -316,6 +316,30 @@ fn a_check_with_an_open_regression_is_left_out_unless_its_fix_is_landing() {
     assert!(plan.known_failing.is_empty());
 }
 
+/// On 2026-11-19 a check of the always set that an earlier landing broke refused every landing
+/// that touched its inputs. A check of the always set that already fails at the tip is known to
+/// fail like any other, and still runs for the ticket that fixes it.
+#[test]
+fn an_always_check_with_an_open_regression_is_known_to_fail() {
+    let ticket = TicketId::new("Thrh4.91").unwrap();
+    let mut broken = likely("source:broken", 1.0);
+    broken.always = true;
+    broken.regression = Some(ticket.clone());
+    let checks = [broken];
+
+    let plan = plan_for(&checks, &none(), &gate(0.004, 400.0));
+    assert!(plan.run.is_empty());
+    assert_eq!(
+        plan.known_failing,
+        [(name("source:broken"), ticket.clone())]
+    );
+
+    let plan = plan_landing(&checks, &none(), Some(&ticket), &gate(0.004, 0.0));
+    assert_eq!(names(&plan.run), ["source:broken"]);
+    assert_eq!(plan.run[0].why, Why::Always);
+    assert!(plan.known_failing.is_empty());
+}
+
 /// A family whose checks each cost 1 billion and whose command costs 10 to start.
 fn started(check_name: &str) -> GateCheck {
     GateCheck {

@@ -479,5 +479,10 @@
     "metric": "ignite.gate-seconds",
     "expect": "down",
     "commit": "daeb5d8f0910cd6abc038e5d5e9f1dd9c6ac1ee5"
+  },
+  {
+    "label": "A landing whose gate fails only on checks that also fail at the tip it was rebased onto lands with them known to fail and has their regression filed at once, instead of waiting unlanded until someone fixes the tip, as a Beryl 3D change did on 2026-11-19 behind 28 findings an earlier landing had introduced",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

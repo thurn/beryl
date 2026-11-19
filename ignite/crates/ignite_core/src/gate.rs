@@ -8,7 +8,9 @@
 //! - A check whose own file the change edits always runs, also outside the budget.
 //! - A check with an open regression ticket is left out and reported as known to fail, unless
 //!   the ticket being landed is that regression's, in which case it must run, outside the
-//!   budget.
+//!   budget. This holds in the always set too, unless the change edits the check's own file.
+//!   The landing passes a check it found failing at the tip it was rebased onto here as one
+//!   with an open regression ticket.
 //! - A check that needs a build product the tree has never built is left to tip verification
 //!   unless it must run anyway: the gate runs checks on what the tree has already compiled, and
 //!   a cold build belongs to the tip. An incremental rebuild of a product the tree has built
@@ -193,7 +195,13 @@ pub fn plan(input: &GateInput<'_>, budget: &Budget) -> GatePlan {
     let mut must_run: Vec<(&GateCheck, Why)> = Vec::new();
     let mut always: Vec<&GateCheck> = Vec::new();
     for check in checks {
-        if check.always {
+        // A check that already fails at the tip is known to fail even in the always set: the
+        // set exists so that no landing produces a tip that fails it, and this tip already does.
+        let known = check
+            .regression
+            .as_ref()
+            .is_some_and(|ticket| input.landing != Some(ticket));
+        if check.always && !known {
             always.push(check);
         } else if check.edited {
             must_run.push((check, Why::Edited));

@@ -208,7 +208,9 @@ impl Verb for CheckVerb {
             if let Some(reply) = express_reply(lane, &self.checks, ctx, &tree, Asked::Gate) {
                 return reply;
             }
-            let gated = self.checks.gate_in(ctx, &tree, &options, None);
+            let gated = self
+                .checks
+                .gate_in(ctx, &tree, &options, None, &super::Excused::new());
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
             return reply(&gated.run, render(&lines));

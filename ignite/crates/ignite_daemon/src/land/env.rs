@@ -2,14 +2,17 @@
 //! ([`LandTrees`]) and the gate ([`LandGate`]), with their real implementations over
 //! [`Trees`] and [`Checks`]. Tests replace both with fakes.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use ignite_core::ids::{Commit, SessionId, TicketId, TreeId};
+use ignite_core::config::Os;
+use ignite_core::ids::{CheckName, Commit, SessionId, TicketId, TreeId};
+use ignite_core::protocol::Outcome;
 use ignite_core::traits::{Error, Result};
 use ignite_git::{push, refs, save};
 
-use crate::checks::{Carried, CheckRun, Checks, GateRun, RunOptions};
+use crate::checks::{Carried, CheckRun, Checks, Excused, Failure, GateRun, RunOptions};
 use crate::server::Context;
 use crate::trees::{self, Trees};
 
@@ -59,17 +62,39 @@ pub trait LandTrees: Send + Sync {
     fn delete_saved(&self, ticket: &TicketId) -> Result<()>;
 }
 
+/// What one check did in [`LandGate::run_checks`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckVerdict {
+    pub check: CheckName,
+    pub outcome: Outcome,
+    /// The operating system the check's result is keyed to, for a check that is not portable.
+    pub platform: Option<Os>,
+    /// What a failure said: where, its message and the end of its output.
+    pub output: String,
+}
+
 /// The landing gate.
 pub trait LandGate: Send + Sync {
     /// Runs the always set and the gate in `tree` as it is, judging again only the families
-    /// `carried` does not carry over from an earlier pass that passed.
+    /// `carried` does not carry over from an earlier pass that passed, and leaving out the
+    /// checks in `excused` as known to fail.
     fn run(
         &self,
         ctx: &Context,
         tree: &GateTree,
         options: &RunOptions,
         carried: Option<&Carried>,
+        excused: &Excused,
     ) -> GateRun;
+    /// Runs `checks` in `tree` as it is, each from the result cache where it can be, with the
+    /// immediate rerun of a failure. A check the manifests no longer declare has no verdict.
+    fn run_checks(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        checks: &[CheckName],
+        options: &RunOptions,
+    ) -> Vec<CheckVerdict>;
     /// Runs every check of one family in `tree` as it is, each from the result cache where it
     /// can be. A family the manifests do not declare is incomplete.
     fn run_family(
@@ -181,8 +206,52 @@ impl LandGate for ChecksGate {
         tree: &GateTree,
         options: &RunOptions,
         carried: Option<&Carried>,
+        excused: &Excused,
     ) -> GateRun {
-        self.checks.gate_carrying(ctx, &tree.tree, options, carried)
+        self.checks
+            .gate_carrying(ctx, &tree.tree, options, carried, excused)
+    }
+
+    fn run_checks(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        checks: &[CheckName],
+        options: &RunOptions,
+    ) -> Vec<CheckVerdict> {
+        let Ok(open) = self.checks.open(&tree.tree) else {
+            return Vec::new();
+        };
+        let mut families: Vec<&str> = checks.iter().map(CheckName::family).collect();
+        families.sort_unstable();
+        families.dedup();
+        let mut run = CheckRun::default();
+        let mut prepared = self
+            .checks
+            .prepare(ctx, &open, &families, options, &mut run);
+        let mut platforms = BTreeMap::new();
+        for listed in &mut prepared {
+            listed.keep(|check| checks.contains(check), &mut run);
+            for keyed in &listed.keyed {
+                platforms.insert(keyed.listed.check.clone(), keyed.key.platform);
+            }
+        }
+        self.checks
+            .run_prepared(ctx, &open, prepared, options, &mut run);
+        run.outcomes
+            .iter()
+            .map(|(check, outcome)| CheckVerdict {
+                check: check.clone(),
+                outcome: *outcome,
+                platform: platforms.get(check).copied().flatten(),
+                output: run
+                    .failures
+                    .iter()
+                    .find(|failure| failure.check == *check)
+                    .map(failure_text)
+                    .unwrap_or_default(),
+            })
+            .collect()
     }
 
     fn run_family(
@@ -217,3 +286,22 @@ impl LandGate for ChecksGate {
         run
     }
 }
+
+/// The lines of a regression ticket's output a failure gives: where it failed, its message,
+/// and the end of the file that holds its whole output, when that can be read.
+fn failure_text(failure: &Failure) -> String {
+    let mut lines: Vec<String> = failure.at.iter().chain(&failure.message).cloned().collect();
+    if let Some(text) = failure
+        .output
+        .as_ref()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+    {
+        let all: Vec<&str> = text.lines().collect();
+        let start = all.len().saturating_sub(OUTPUT_LINES);
+        lines.extend(all[start..].iter().map(|line| (*line).to_owned()));
+    }
+    lines.join("\n")
+}
+
+/// The lines of a failure's output a regression ticket keeps, as the hub keeps them.
+const OUTPUT_LINES: usize = 40;

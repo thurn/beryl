@@ -80,7 +80,7 @@ use crate::server::Context;
 use listings::{Kept, Listing};
 
 pub use adapters::{Listed, Reported, Target};
-pub use gate::{Carried, GateBudget, GateRun};
+pub use gate::{Carried, Excused, GateBudget, GateRun};
 pub use plan::Scoring;
 pub use sources::{CheckHistory, HubHistory, TreeSource};
 pub use verbs::{CheckVerb, TestVerb, WhyVerb};

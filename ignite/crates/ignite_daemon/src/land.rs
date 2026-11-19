@@ -13,6 +13,8 @@
 //!    the tree the first pass chose: a landing tree stays leased to the landing until it ends
 //!    and is checked out at each new rebased commit, so it builds only what changed (see
 //!    [`passes`]).
+//!    When the gate's only faults are checks that fail at the tip too, it runs again with them
+//!    known to fail, after the hub has filed their regressions (see [`base`]).
 //! 4. The always set and the gate run there, each check from the result cache where it can be.
 //!    A pass after one whose gate passed judges again only the families whose inputs the
 //!    commits landed since touch, and pushes without running anything when they touch none.
@@ -51,6 +53,7 @@
 //! landing up to the moment its push begins, and is refused while the push runs and after it
 //! succeeds. A push the remote rejects lets the landing be stopped again.
 
+mod base;
 pub mod env;
 pub mod express;
 pub mod format;
@@ -85,7 +88,7 @@ use format::{Formatted, Formatter};
 use lease::{HeldLease, LEASE_TTL_S};
 use passes::{GateHome, Passed};
 use records::{LandingRecord, RecordState, Records};
-use replies::failed_gate;
+use replies::{failed_gate, stopped};
 
 /// The longest wait between two tries for a busy lease.
 const BUSY_WAIT_S: f64 = 10.0;
@@ -388,6 +391,8 @@ impl Landing {
         let mut last_cause = String::new();
         let mut first_landed_since = None;
         let mut formatted: Option<Formatted> = None;
+        // Checks found failing at the tip as well, left out of every later gate (see `base`).
+        let mut excused = crate::checks::Excused::new();
         loop {
             if passes >= MAX_PASSES {
                 return Err(stop(
@@ -494,12 +499,16 @@ impl Landing {
                     None => None,
                 };
                 steps::step(format!("running the gate in {}", gate_tree.tree));
-                let gated = self.gate.run(ctx, &gate_tree, &options, carried.as_ref());
-                let gated = match &last_passed {
-                    Some(earlier) if carried.is_some() => earlier.merge(gated),
-                    _ => gated,
+                let pass = base::Pass {
+                    holder: &holder,
+                    tree: &gate_tree,
+                    borrowable: gate_tree.tree != held.tree,
+                    rebased: &rebased,
+                    options: &options,
+                    carried: carried.as_ref(),
+                    earlier: last_passed.as_ref(),
                 };
-                (gated, None)
+                (self.gate_pass(ctx, &pass, &mut excused), None)
             };
             // The landing tree, if the landing holds one, stays leased while the landing goes
             // back to rebase, and is freed when `home` is dropped as the landing ends.
@@ -751,16 +760,6 @@ impl Landing {
             }
         }
     }
-}
-
-/// The reply of a landing that stopped because someone asked it to (see `crate::stop`); the
-/// server replaces it with the stopped reply.
-#[allow(clippy::unnecessary_box_returns)]
-fn stopped() -> Stop {
-    stop(
-        Exit::Conflict,
-        &[line("stopped", "the landing was stopped")],
-    )
 }
 
 /// A clean rebase.

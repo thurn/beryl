@@ -9,7 +9,7 @@ use ignite_core::ids::TicketId;
 use ignite_core::protocol::client::{Exit, Reply};
 
 use super::records::LandingRecord;
-use super::{Landing, Rebased, Settled, Summary, line, short};
+use super::{Landing, Rebased, Settled, Stop, Summary, line, short, stop};
 use crate::checks::GateRun;
 use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::server::Context;
@@ -49,6 +49,16 @@ pub(super) fn failed_gate(
         })),
         handle: None,
     }
+}
+
+/// The reply of a landing that stopped because someone asked it to (see `crate::stop`); the
+/// server replaces it with the stopped reply.
+#[allow(clippy::unnecessary_box_returns)]
+pub(super) fn stopped() -> Stop {
+    stop(
+        Exit::Conflict,
+        &[line("stopped", "the landing was stopped")],
+    )
 }
 
 /// The session title for a landed ticket: `✅ [<ticket>] <ticket title>`, the title that

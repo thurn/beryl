@@ -1505,6 +1505,12 @@ two ways:
 - They are looked up or run for the exact commit that lands, so a tip that does
   not compile cannot be produced.
 
+A check of the always set that already fails at the tip, because it has an open
+regression ticket or the landing found it failing at the tip it was rebased onto
+(see [Landing](#landing)), is `known-failing` like any other check. That tip
+already fails it, so the landing makes nothing worse. It still runs when the
+change edits its own file, and for the ticket that fixes it.
+
 ### Scores
 
 Every other regression check gets a **score** for a given change: how likely it
@@ -1721,7 +1727,24 @@ Rules:
 - A check with an open regression ticket is left out of other tickets' gates and
   reported as `known-failing`, so one broken check fails nobody else's landing.
   The ticket that fixes it must make it pass, and the check leaves that state
-  when it next passes at a tip.
+  when it next passes at a tip. The output's `known` line names these checks
+  with their tickets.
+- A check can fail at the tip before tip verification has filed its ticket. So
+  when every fault of a gate is a check failure that its rerun confirmed, the
+  landing asks whether each of those checks fails at the tip it was rebased onto
+  too. It runs them in a free landing tree checked out at that tip, or, when
+  none is free, in its own landing tree, which it then checks out at the rebased
+  commit again. Each check is answered from the result cache where that tip's
+  input hash has a result. A check that fails there too is reported to the hub
+  as a regression at once, which opens or joins a regression ticket as tip
+  verification would, naming the commits since the last verified one without a
+  culprit search. If every failure fails at the tip too, the gate runs again
+  with those checks `known-failing`, for the rest of the landing, and the checks
+  that already passed come from the cache. If any passes at the tip, the landing
+  is refused as before, and the `base` line says which check passed there. A
+  check that fails at the tip counts as known to fail even when its failure in
+  the landing says something different, such as more findings: the adapters
+  report no list of findings to compare.
 
 ### Express landings
 
@@ -2085,7 +2108,9 @@ and what each commit changed:
 ### Regression tickets
 
 The hub then files a **regression ticket**, or adds the check to one already
-open. It is an ordinary P0 ticket that any worker can take:
+open. A landing whose gate finds a check failing at the tip it was rebased onto
+reports it the same way, before tip verification reaches that tip (see
+[Landing](#landing)). It is an ordinary P0 ticket that any worker can take:
 
 ```text
 TK3FC  P0 bug  regression  check:rust

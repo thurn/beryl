@@ -24,8 +24,8 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Push, Rebase, Result};
 
-use crate::checks::{Carried, CheckRun, Failure, GateRun, RunOptions};
-use crate::land::env::{GateTree, LandGate, LandTrees, TicketTree};
+use crate::checks::{Carried, CheckRun, Excused, Failure, GateRun, RunOptions};
+use crate::land::env::{CheckVerdict, GateTree, LandGate, LandTrees, TicketTree};
 use crate::server::Context;
 
 pub fn hex(text: &str) -> String {
@@ -537,6 +537,10 @@ pub struct CacheGate {
     pub cold: Vec<&'static str>,
     /// Run at the next `run_family`, before it runs.
     pub on_family: Mutex<Option<Hook>>,
+    /// Checks that fail in a tree where a file holds the given text: check, path, text.
+    pub broken_by: Mutex<Vec<(&'static str, &'static str, &'static str)>>,
+    /// The checks each `run_checks` ran, not answered from the cache, with the tree it ran in.
+    pub checks_runs: Mutex<Vec<(PathBuf, Vec<String>)>>,
 }
 
 impl LandGate for CacheGate {
@@ -562,6 +566,7 @@ impl LandGate for CacheGate {
         tree: &GateTree,
         _options: &RunOptions,
         carried: Option<&Carried>,
+        excused: &Excused,
     ) -> GateRun {
         let mut scoped: Vec<String> = Vec::new();
         for (name, _) in &self.checks {
@@ -602,19 +607,11 @@ impl LandGate for CacheGate {
             .filter(|(name, _)| {
                 let family = CheckName::new(*name).unwrap().family().to_owned();
                 judged.contains(&family)
+                    && !excused.contains_key(&CheckName::new(*name).unwrap())
                     && !self.left.contains(name)
                     && !self.cold.contains(&family.as_str())
             })
-            .map(|(name, paths)| {
-                let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
-                let ids = ctx.git.object_ids(&tree.path, &paths).unwrap();
-                ResultKey {
-                    check: CheckName::new(*name).unwrap(),
-                    hash: InputHash::new(format!("{}{}", hex(&format!("{ids:?}")), "0".repeat(24)))
-                        .unwrap(),
-                    platform: None,
-                }
-            })
+            .map(|(name, paths)| key(ctx, &tree.path, name, paths))
             .collect();
         let hits = ctx.hub.lookup(&keys).unwrap();
         let mut run = CheckRun::default();
@@ -627,7 +624,7 @@ impl LandGate for CacheGate {
             }
             run.ran += 1;
             ran.push(key.check.to_string());
-            if self.failing.lock().unwrap().contains(key.check.as_str()) {
+            if self.fails(ctx, &tree.path, key.check.as_str()) {
                 run.failures.push(Failure {
                     check: key.check.clone(),
                     outcome: Outcome::Fail,
@@ -638,16 +635,7 @@ impl LandGate for CacheGate {
                 });
                 run.outcomes.push((key.check, Outcome::Fail));
             } else {
-                let new = NewResult {
-                    key: key.clone(),
-                    outcome: Outcome::Pass,
-                    machine: ctx.machine.clone(),
-                    record: RecordId(0),
-                    output: None,
-                    cost: ignite_core::protocol::hub::ResultCost::default(),
-                    areas: Vec::new(),
-                };
-                ctx.hub.store(&[new]).unwrap();
+                store(ctx, &key, Outcome::Pass);
                 run.outcomes.push((key.check, Outcome::Pass));
             }
         }
@@ -656,14 +644,108 @@ impl LandGate for CacheGate {
             run,
             scoped,
             carried,
+            known_failing: excused.clone().into_iter().collect(),
             ..GateRun::default()
         };
         self.leave(&judged, &mut gated);
         gated
     }
+
+    /// Answers each check from a cached result for its key in `tree`, or runs it and caches
+    /// what it did.
+    fn run_checks(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        checks: &[CheckName],
+        _options: &RunOptions,
+    ) -> Vec<CheckVerdict> {
+        let mut verdicts = Vec::new();
+        let mut ran = Vec::new();
+        for (name, paths) in &self.checks {
+            if !checks.iter().any(|c| c.as_str() == *name) {
+                continue;
+            }
+            let key = key(ctx, &tree.path, name, paths);
+            let hits = ctx.hub.lookup(std::slice::from_ref(&key)).unwrap();
+            let outcome = if let Some(hit) = &hits[0] {
+                hit.outcome
+            } else {
+                ran.push((*name).to_owned());
+                let outcome = if self.broken(ctx, &tree.path, name) {
+                    Outcome::Fail
+                } else {
+                    Outcome::Pass
+                };
+                store(ctx, &key, outcome);
+                outcome
+            };
+            verdicts.push(CheckVerdict {
+                check: key.check,
+                outcome,
+                platform: None,
+                output: format!("{name} at {}", tree.path.display()),
+            });
+        }
+        self.checks_runs
+            .lock()
+            .unwrap()
+            .push((tree.path.clone(), ran));
+        verdicts
+    }
+}
+
+/// The key of `name`, which reads `paths`, in the tree at `path`.
+pub fn key(ctx: &Context, path: &Path, name: &str, paths: &[&str]) -> ResultKey {
+    let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
+    let ids = ctx.git.object_ids(path, &paths).unwrap();
+    ResultKey {
+        check: CheckName::new(name).unwrap(),
+        hash: InputHash::new(format!("{}{}", hex(&format!("{ids:?}")), "0".repeat(24))).unwrap(),
+        platform: None,
+    }
+}
+
+/// Stores `outcome` for `key` in the hub's result cache.
+pub fn store(ctx: &Context, key: &ResultKey, outcome: Outcome) {
+    let new = NewResult {
+        key: key.clone(),
+        outcome,
+        machine: ctx.machine.clone(),
+        record: RecordId(0),
+        output: None,
+        cost: ignite_core::protocol::hub::ResultCost::default(),
+        areas: Vec::new(),
+    };
+    ctx.hub.store(&[new]).unwrap();
 }
 
 impl CacheGate {
+    /// Whether `name` fails in the gate's run in the tree at `path`: it is in `failing`, or
+    /// [`CacheGate::broken`].
+    fn fails(&self, ctx: &Context, path: &Path, name: &str) -> bool {
+        self.failing.lock().unwrap().contains(name) || self.broken(ctx, path, name)
+    }
+
+    /// Whether a file `broken_by` names for `name` holds the text given in the tree at `path`.
+    /// Only this decides `run_checks`, which the landing runs at the tip: a check in `failing`
+    /// is one the change breaks, so it passes there.
+    fn broken(&self, ctx: &Context, path: &Path, name: &str) -> bool {
+        self.broken_by
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(check, file, text)| {
+                *check == name
+                    && ctx
+                        .git
+                        .object_ids(path, &[(*file).to_owned()])
+                        .unwrap()
+                        .iter()
+                        .any(|(_, oid)| oid.as_str() == hex(text))
+            })
+    }
+
     /// Records the checks in `left` and the families in `cold` among `judged` as left to tip
     /// verification.
     fn leave(&self, judged: &[String], gated: &mut GateRun) {
