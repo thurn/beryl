@@ -98,6 +98,16 @@ impl Drop for Fixture {
     }
 }
 
+/// `--workers` is the old name of `--allocation`, kept so older scripts still work.
+#[test]
+fn workers_still_sets_an_epics_allocation() {
+    let hub = Fixture::new("allocation-alias");
+    let epic = hub.json("create Epic --type epic --allocation 3");
+    let epic_id = epic["results"][0]["id"].as_str().unwrap().to_owned();
+    hub.json(&format!("update {epic_id} --workers 4"));
+    assert_eq!(hub.json(&format!("show {epic_id}"))["workers"], 4);
+}
+
 #[test]
 fn tickets_can_be_created_shown_listed_linked_claimed_and_closed() {
     let hub = Fixture::new("flow");
@@ -120,9 +130,6 @@ fn tickets_can_be_created_shown_listed_linked_claimed_and_closed() {
         (json!(3), json!(5))
     );
     assert_eq!(shown["priority"], 1);
-    // `--workers` is the old name of `--allocation`, kept so older scripts still work.
-    hub.json(&format!("update {epic_id} --workers 4"));
-    assert_eq!(hub.json(&format!("show {epic_id}"))["workers"], 4);
     assert_eq!(hub.json(&format!("show {child_id}"))["cores"], 1.5);
 
     hub.json(&format!("dep add {other_id} {child_id}"));
