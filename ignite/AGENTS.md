@@ -15,7 +15,7 @@ owns which file. These are the contract's rules.
   HTTP server and dashboard), `ignite_daemon` (one per machine) and `ignite_cli`
   (the `ignite` executable).
 - Check it with `cd ignite && cargo nextest run -p <crate>` for one crate, or
-  `ignite test ignite ignite-lint` for every test (the `ignite` family),
+  `ignite test ignite: ignite-lint:` for every test (the `ignite` family),
   formatting and clippy (the `ignite-lint` family).
 
 ## Rules

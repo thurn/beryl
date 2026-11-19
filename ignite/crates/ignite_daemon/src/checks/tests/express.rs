@@ -102,13 +102,11 @@ fn a_failing_express_command_fails_the_verb_with_its_output() {
 }
 
 #[test]
-fn a_name_outside_the_express_families_or_a_change_outside_the_paths_uses_the_scheduler() {
+fn a_prefix_outside_the_express_families_or_a_change_outside_the_paths_uses_the_scheduler() {
     let lane = Arc::new(FakeLane::default());
     let world = express_world(&["ignite/src/lib.rs"]);
     let verb = test_verb(&world, &lane);
     let reply = verb.run(&world.ctx, &request(&world, "test", &["unit:a", "rs:"]));
-    assert!(!reply.text.contains("express"), "{}", reply.text);
-    let reply = verb.run(&world.ctx, &request(&world, "test", &["a"]));
     assert!(!reply.text.contains("express"), "{}", reply.text);
 
     let world = express_world(&["ignite/src/lib.rs", "src/main.rs"]);
@@ -117,7 +115,39 @@ fn a_name_outside_the_express_families_or_a_change_outside_the_paths_uses_the_sc
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert!(!reply.text.contains("express"), "{}", reply.text);
     assert_eq!(world.launcher.commands("runner")[0][1..], ["unit:a"]);
+    // A bare word in a tree with a non-express change still uses the scheduler.
+    let reply = verb.run(&world.ctx, &request(&world, "test", &["stuck"]));
+    assert!(!reply.text.contains("express"), "{}", reply.text);
     assert!(lane.ran_in.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_bare_family_name_takes_the_express_lane() {
+    let world = express_world(&["ignite/src/lib.rs"]);
+    let lane = Arc::new(FakeLane::default());
+    let reply = test_verb(&world, &lane).run(&world.ctx, &request(&world, "test", &["unit"]));
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply.text.contains("in place of the checks of unit"),
+        "{}",
+        reply.text
+    );
+    assert_eq!(lane.ran_in.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_bare_test_name_in_an_express_tree_takes_the_express_lane() {
+    let world = express_world(&["ignite/src/lib.rs"]);
+    let lane = Arc::new(FakeLane::default());
+    let reply = test_verb(&world, &lane).run(&world.ctx, &request(&world, "test", &["stuck"]));
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply.text.contains("the whole express command list ran"),
+        "{}",
+        reply.text
+    );
+    assert_eq!(lane.ran_in.lock().unwrap().len(), 1);
+    assert!(world.launcher.commands("runner").is_empty());
 }
 
 #[test]

@@ -1743,7 +1743,9 @@ express_cores = 3
   and in tip verification.
 - `ignite test` and `ignite check` use the express lane too, for a tree whose
   every changed file matches `paths`. `ignite test` does so when every name it
-  is given is in one of `families` (`ignite test ignite: ignite-lint:`), and
+  is given is in one of `families` (`ignite test ignite: ignite-lint:`, or the
+  bare family name), or is a bare word with no `family:` prefix, such as a test
+  name (the reply then says the whole command list ran), and
   `ignite check` does so for any such tree, because its landing would take the
   express lane. They run `commands` in the agent's own tree as it is, with no
   checkout, on the same cores, and reply with the `express` line or with the

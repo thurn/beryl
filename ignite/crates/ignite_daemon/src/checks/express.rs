@@ -8,9 +8,9 @@
 //! the tree matches `[express] paths`, the verbs run the express commands in the agent's own
 //! tree, on the machine's `express_cores`, which the scheduler never hands out. They take the
 //! express lane's lock, so a test waits for an express landing that holds it rather than going
-//! back to the scheduler. `ignite test` does so only when every name it is given is in one of
-//! those families (`ignite:...`, `ignite-lint:...`), and runs every command, whatever names it
-//! was given. `ignite check` does so for any such tree, because the landing would take the
+//! back to the scheduler. `ignite test` does so when every name it is given is in one of
+//! those families (`ignite:...`, `ignite-lint:...`, or the bare family name), or is a bare word
+//! with no `family:` prefix (a test name), and runs every command, whatever names it was given. `ignite check` does so for any such tree, because the landing would take the
 //! express lane too.
 
 use std::sync::Arc;
@@ -50,13 +50,22 @@ pub(super) fn express_reply(
     if express.families.is_empty() || express.commands.is_empty() {
         return None;
     }
-    let ours = |word: &&str| {
-        word.split_once(':')
-            .is_some_and(|(family, _)| express.families.iter().any(|f| f == family))
+    let in_families = |family: &str| express.families.iter().any(|f| f == family);
+    // A word counts as an express family when it is `<family>:...` or the family's bare name.
+    let ours = |word: &&str| match word.split_once(':') {
+        Some((family, _)) => in_families(family),
+        None => in_families(word),
     };
     let what = match asked {
         Asked::Named(words) if !words.is_empty() && words.iter().all(ours) => {
             format!("the checks of {}", express.families.join(" and "))
+        }
+        // A bare word that names no family (a test name) is still covered by the express
+        // commands in a tree that changes only Ignite, because they run every Ignite test.
+        Asked::Named(words)
+            if !words.is_empty() && words.iter().all(|w| ours(w) || !w.contains(':')) =>
+        {
+            format!("{}: the whole express command list ran", words.join(" "))
         }
         Asked::Named(_) => return None,
         Asked::Gate => "the gate's checks".to_owned(),
