@@ -90,6 +90,7 @@ impl Verb for DispatchVerb {
         match args.as_slice() {
             ["allowed", tool] => return self.dispatcher.allowed(ctx, tool, None),
             ["allowed", tool, session] => return self.dispatcher.allowed(ctx, tool, Some(session)),
+            ["cleared", session] => return self.dispatcher.cleared(ctx, session),
             _ => {}
         }
         let wait = match args.as_slice() {
@@ -102,7 +103,8 @@ impl Verb for DispatchVerb {
                 return Reply::text(
                     Exit::Usage,
                     "usage: ignite dispatch [--wait <seconds>] | ignite dispatch ack <id> <result> \
-                     | ignite dispatch allowed <tool> [<session>]",
+                     | ignite dispatch allowed <tool> [<session>] | ignite dispatch cleared \
+                     <session>",
                 );
             }
         };

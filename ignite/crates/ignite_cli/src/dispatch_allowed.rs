@@ -9,6 +9,12 @@
 //! blocks, including a daemon that cannot answer: the hook exists to stop calls nobody asked for,
 //! so it never lets one through because it could not ask. The one exception is the client's own
 //! hand-off of a justiciar prompt while the daemon is down (see `fallback`).
+//!
+//! `ignite dispatch cleared [<session>]` is the second hook, which runs after each
+//! `clear_session` that succeeded (Claude Code runs `PostToolUse` hooks only for calls that did
+//! not fail, and the app reports a refused clear as a failure). It tells the daemon, which then
+//! lets the hand-off set that worker's model and effort. It never blocks anything, so it exits 0
+//! whatever happens.
 
 use std::io::Read as _;
 
@@ -28,18 +34,23 @@ fn from_hook(json: &str) -> Option<(String, Option<String>)> {
     Some((tool, session))
 }
 
-/// Asks the daemon, falling back on the client's own hand-off while it is down.
-fn ask(tool: &str, session: Option<&str>) -> Reply {
-    let mut args = vec!["allowed".to_owned(), tool.to_owned()];
-    args.extend(session.map(str::to_owned));
+/// The request for `ignite dispatch <args>`, from the calling session.
+fn dispatch_request(args: &[&str]) -> ignite_core::protocol::client::Request {
     let raw: Vec<String> = ["ignite", "dispatch"]
-        .into_iter()
-        .map(str::to_owned)
+        .iter()
         .chain(args)
+        .map(|arg| (*arg).to_owned())
         .collect();
     let cwd = std::env::current_dir().unwrap_or_default();
     let asking = client::session_from_env(|name| std::env::var(name).ok());
-    let request = client::request("dispatch", &raw, cwd, asking);
+    client::request("dispatch", &raw, cwd, asking)
+}
+
+/// Asks the daemon, falling back on the client's own hand-off while it is down.
+fn ask(tool: &str, session: Option<&str>) -> Reply {
+    let mut args = vec!["allowed", tool];
+    args.extend(session);
+    let request = dispatch_request(&args);
     client::send_or(&request, |_| {
         let home = ignite_daemon::update::Home::from_env().root;
         let now = ignite_core::traits::Clock::now(&ignite_core::time::SystemClock);
@@ -82,6 +93,29 @@ pub fn run(tool: Option<&str>, session: Option<&str>) -> Reply {
     }
     eprintln!("{}", reply.text.trim_end());
     Reply::text(Exit::CheckFailed, "")
+}
+
+/// `ignite dispatch cleared [<session>]`: tells the daemon that `session`, or the session in
+/// the `PostToolUse` hook's JSON on stdin, was cleared. A hook's run prints nothing and exits 0
+/// even when the daemon did not answer: the hand-off then fails at its read-back instead.
+pub fn cleared(session: Option<&str>) -> Reply {
+    if let Some(session) = session {
+        return client::send(&dispatch_request(&["cleared", session]));
+    }
+    let mut input = String::new();
+    let session = std::io::stdin()
+        .read_to_string(&mut input)
+        .ok()
+        .and_then(|_| from_hook(&input))
+        .filter(|(tool, _)| tool.ends_with("clear_session"))
+        .and_then(|(_, session)| session);
+    if let Some(session) = session {
+        let reply = client::send(&dispatch_request(&["cleared", &session]));
+        if reply.exit != Exit::Success {
+            eprintln!("{}", reply.text.trim_end());
+        }
+    }
+    Reply::text(Exit::Success, "")
 }
 
 #[cfg(test)]

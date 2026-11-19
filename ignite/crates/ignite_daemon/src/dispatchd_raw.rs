@@ -162,6 +162,21 @@ impl Dispatcher {
                 ),
             );
         }
+        if body.clear
+            && state.clears_reported.is_some()
+            && !state.given.get(&id).is_some_and(|g| g.cleared)
+        {
+            drop(state);
+            let mut reply = self.ack(
+                ctx,
+                id,
+                "failed",
+                "the worker was never reported cleared: the app refused the clear, or the clear \
+                 was skipped",
+            );
+            reply.text.push_str("\nDo not send the prompt.");
+            return reply;
+        }
         if let Some(why) = readback_mismatch(&body, raw) {
             drop(state);
             let mut reply = self.ack(ctx, id, "failed", &why);
@@ -179,6 +194,7 @@ impl Dispatcher {
                     queued,
                     at: now,
                     verified: false,
+                    cleared: false,
                 },
             );
         }

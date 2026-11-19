@@ -179,6 +179,8 @@ struct Given {
     at: Timestamp,
     /// A hand-off's model and effort read back as asked (see `raw`).
     verified: bool,
+    /// The dispatcher's hook reported that this hand-off's worker was cleared (see `allowed`).
+    cleared: bool,
 }
 
 /// A working session that went silent.
@@ -222,6 +224,9 @@ struct State {
     setup_since: Option<Timestamp>,
     /// When a dispatcher was last told to `rotate` (see `allowed`).
     rotating_since: Option<Timestamp>,
+    /// When the Claude dispatcher's hook first reported a clear. From then on hand-offs wait
+    /// for one (see `allowed`).
+    clears_reported: Option<Timestamp>,
 }
 
 /// The dispatcher's state and the pool, shared by the `dispatch`, `pool` and `tell` verbs.
@@ -409,6 +414,7 @@ impl Dispatcher {
                 queued,
                 at: now,
                 verified: false,
+                cleared: false,
             },
         );
         if let Some(session) = asking {

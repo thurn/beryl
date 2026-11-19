@@ -150,3 +150,52 @@ fn a_refusal_names_the_current_instruction() {
     assert!(reply.text.contains("local_w9"), "{}", reply.text);
     assert!(reply.text.contains(r#""do":"handoff""#), "{}", reply.text);
 }
+
+#[test]
+fn once_clears_are_reported_a_refused_clear_stops_the_handoff() {
+    let rig = rig(&["local_w1", "local_w2"]);
+    rig.reserve("T.1", "local_w1", &[]);
+    let first = rig.step().unwrap();
+    assert!(first.clear);
+    assert!(
+        allows(&rig, MODEL, Some("local_w1")),
+        "a dispatcher whose hook never reported a clear is not held to it"
+    );
+    // Its hook reports the clear, and from then on every hand-off waits for one.
+    let cleared = DispatchVerb::new(rig.dispatcher.clone()).run(
+        &rig.ctx,
+        &request("dispatch", &["cleared", "local_w1"], None),
+    );
+    assert_eq!(cleared.exit, Exit::Success, "{}", cleared.text);
+    assert!(allows(&rig, MODEL, Some("local_w1")));
+    assert!(allows(&rig, EFFORT, Some("local_w1")));
+    rig.ack(first.id, "ok", "");
+
+    // The app refuses the next clear, so no hook reports it.
+    rig.reserve("T.2", "local_w2", &[]);
+    let second = rig.step().unwrap();
+    assert_eq!(handoff_to(&second).0, "local_w2");
+    assert!(allows(&rig, CLEAR, Some("local_w2")));
+    for tool in [MODEL, EFFORT] {
+        assert!(
+            !allows(&rig, tool, Some("local_w2")),
+            "{tool} on a busy worker"
+        );
+    }
+    // A read-back that happens to match still fails the hand-off.
+    let readback = format!(
+        r#"{{"sessionId":"local_w2","model":"{}","effort":"{}"}}"#,
+        second.model.as_deref().unwrap_or_default(),
+        second.effort.as_deref().unwrap_or_default()
+    );
+    let raw = DispatchVerb::new(rig.dispatcher.clone()).run(
+        &rig.ctx,
+        &request(
+            "dispatch",
+            &["ack", &second.id.to_string(), "raw", &readback],
+            None,
+        ),
+    );
+    assert!(raw.text.contains("Do not send the prompt"), "{}", raw.text);
+    assert!(!allows(&rig, SEND, Some("local_w2")));
+}

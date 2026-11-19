@@ -341,6 +341,12 @@ pub enum DispatchCommand {
         /// The session it acts on.
         session: Option<String>,
     },
+    /// Report that a `clear_session` on a session succeeded. With no session, reads a Claude
+    /// Code `PostToolUse` hook's JSON from stdin.
+    Cleared {
+        /// The session that was cleared.
+        session: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

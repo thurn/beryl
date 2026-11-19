@@ -16,8 +16,10 @@
 //!   `PreToolUse` hook that runs `ignite dispatch allowed` before each call that starts, clears,
 //!   reconfigures or messages a session, and blocks the call unless the instruction the
 //!   dispatcher holds asks for it. Before the hook, only the instructions' wording stopped a
-//!   confused dispatcher from starting duplicate workers or clearing a busy one. Other settings
-//!   and hooks already in the file are kept.
+//!   confused dispatcher from starting duplicate workers or clearing a busy one. A `PostToolUse`
+//!   hook runs `ignite dispatch cleared` after each `clear_session` that succeeded, so that the
+//!   daemon lets a hand-off set the worker's model and effort only once it was cleared. Other
+//!   settings and hooks already in the file are kept.
 //! - A skill named `ignite` for Claude and Codex, so that `/ignite pool <n>` works there.
 //!
 //! Running it again rewrites the instructions, which is how a dispatcher folder picks up a newer
@@ -140,6 +142,14 @@ const CHECKED_TOOLS: &[&str] = &[
 /// it. The dispatcher's own `ignite dispatch` calls find `ignite` on the same `PATH`.
 const HOOK_COMMAND: &str = "ignite dispatch allowed";
 
+/// The tool after which the `PostToolUse` hook runs [`CLEARED_COMMAND`].
+const CLEAR_TOOL: &str = "mcp__ccd_session_mgmt__clear_session";
+
+/// The `PostToolUse` hook's command, which tells the daemon a clear succeeded, so the hand-off
+/// may set the worker's model and effort. Claude Code runs it only after a call that did not
+/// fail.
+const CLEARED_COMMAND: &str = "ignite dispatch cleared";
+
 const SKILL: &str = "---
 name: ignite
 description: Start or add to this machine's Ignite pool with `/ignite pool <n>`, then run the dispatcher loop. Use when the person sends /ignite pool.
@@ -243,19 +253,37 @@ fn with_dispatcher_settings(existing: &str) -> String {
     text
 }
 
-/// Puts one `PreToolUse` entry in `settings.hooks` whose matcher names every tool in
-/// [`CHECKED_TOOLS`] and which runs [`HOOK_COMMAND`], replacing any earlier entry that runs it,
-/// so that running `ignite pool init` again updates the matcher instead of adding a second one.
+/// Puts the dispatcher's hooks in `settings.hooks`: a `PreToolUse` entry whose matcher names
+/// every tool in [`CHECKED_TOOLS`] and which runs [`HOOK_COMMAND`], and a `PostToolUse` entry
+/// for [`CLEAR_TOOL`] which runs [`CLEARED_COMMAND`].
 fn with_hook(settings: &mut serde_json::Map<String, serde_json::Value>) {
+    with_entry(
+        settings,
+        "PreToolUse",
+        &CHECKED_TOOLS.join("|"),
+        HOOK_COMMAND,
+    );
+    with_entry(settings, "PostToolUse", CLEAR_TOOL, CLEARED_COMMAND);
+}
+
+/// Puts one entry under `event` in `settings.hooks` whose matcher is `matcher` and which runs
+/// `command`, replacing any earlier entry that runs it, so that running `ignite pool init` again
+/// updates the matcher instead of adding a second one.
+fn with_entry(
+    settings: &mut serde_json::Map<String, serde_json::Value>,
+    event: &str,
+    matcher: &str,
+    command: &str,
+) {
     let ours = serde_json::json!({
-        "matcher": CHECKED_TOOLS.join("|"),
-        "hooks": [{"type": "command", "command": HOOK_COMMAND}],
+        "matcher": matcher,
+        "hooks": [{"type": "command", "command": command}],
     });
     let runs_ours = |entry: &serde_json::Value| {
         entry["hooks"].as_array().is_some_and(|hooks| {
             hooks
                 .iter()
-                .any(|hook| hook["command"].as_str() == Some(HOOK_COMMAND))
+                .any(|hook| hook["command"].as_str() == Some(command))
         })
     };
     let hooks = settings
@@ -266,7 +294,7 @@ fn with_hook(settings: &mut serde_json::Map<String, serde_json::Value>) {
     }
     if let serde_json::Value::Object(hooks) = hooks {
         let entries = hooks
-            .entry("PreToolUse")
+            .entry(event)
             .or_insert_with(|| serde_json::Value::Array(Vec::new()));
         if !entries.is_array() {
             *entries = serde_json::Value::Array(Vec::new());
@@ -411,13 +439,17 @@ mod tests {
         let matcher = entries[1]["matcher"].as_str().unwrap();
         assert_eq!(matcher.split('|').collect::<Vec<_>>(), CHECKED_TOOLS);
         assert_eq!(entries[1]["hooks"][0]["command"], HOOK_COMMAND);
+        let after = settings["hooks"]["PostToolUse"].as_array().unwrap();
+        assert_eq!(after.len(), 1, "{after:?}");
+        assert_eq!(after[0]["matcher"], CLEAR_TOOL);
+        assert_eq!(after[0]["hooks"][0]["command"], CLEARED_COMMAND);
         assert_eq!(settings["hooks"]["Stop"][0]["hooks"][0]["command"], "beep");
     }
 
     /// A checked tool that was also denied would never reach the hook, and a hand-off would fail.
     #[test]
     fn denies_no_checked_tool() {
-        for tool in CHECKED_TOOLS {
+        for tool in CHECKED_TOOLS.iter().chain([&CLEAR_TOOL]) {
             assert!(!DENIED_TOOLS.contains(tool), "{tool}");
         }
     }

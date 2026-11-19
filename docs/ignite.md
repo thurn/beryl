@@ -2424,6 +2424,17 @@ the tool calls the daemon asks for.
     model or effort needs a hand-off to it; sending needs a `message` to it, or
     a hand-off to it whose `raw` read-back matched, so a prompt never reaches a
     worker before the daemon has seen its model and effort stick.
+  - A hand-off with `clear` set may set the model and effort only after the
+    clear succeeded. The app refuses to clear a session that is still working,
+    and on 2026-11-19 a Haiku dispatcher set a busy worker's model anyway before
+    stopping. A `PostToolUse` hook on `clear_session` runs
+    `ignite dispatch cleared`, which tells the daemon the clear succeeded;
+    Claude Code runs it only after a call that did not fail, and the app reports
+    a refusal as a failure. A `raw` read-back of a hand-off whose worker was
+    never reported cleared fails the hand-off, so the prompt is not sent. Claude
+    Code reads hooks when a session starts, so the daemon holds hand-offs to
+    this only once a clear has been reported: a dispatcher started before the
+    hook existed carries on as before.
   - Starting a session needs a hand-off that names no session, a `rotate` in the
     last 10 minutes, or the pool setup of `/ignite pool <n>`: from
     `ignite pool add --dispatcher` until the workers are registered, at most 15

@@ -72,6 +72,11 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
             command: Some(DispatchCommand::Allowed { tool, session }),
             ..
         } => dispatch_allowed::run(tool.as_deref(), session.as_deref()),
+        // Sent to the daemon here, so that the hook reads its input from stdin.
+        Command::Dispatch {
+            command: Some(DispatchCommand::Cleared { session }),
+            ..
+        } => dispatch_allowed::cleared(session.as_deref()),
         // Answered here, without the daemon: it is what looks after a daemon that is down.
         Command::Monitor => ignite_daemon::monitor::run(),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
