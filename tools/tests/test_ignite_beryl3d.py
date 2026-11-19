@@ -369,9 +369,10 @@ UI_READ_BY_EVERY_FAMILY = [
 def test_every_file_under_ui_that_beryl_3d_embeds_or_reads_is_an_input_of_every_family() -> (
     None
 ):
-    """The `check-inputs` source rule only follows `crate-closure` families, and Beryl 3D's
-    families name their inputs by hand, so this test compares them with the files under ui/
-    that its sources embed with `include_str!` or its build scripts read."""
+    """The `check-inputs` source rule listed these audio reads in its allowlist instead of
+    failing on them, and Beryl 3D's families name their inputs by hand, so this test compares
+    them with the files under ui/ that its sources embed with `include_str!` or its build
+    scripts read."""
     pattern = re.compile(r"ui/[A-Za-z0-9_./-]+\.json")
     read: set[str] = set()
     for source in (paths.REPO / "rust" / "beryl3d" / "crates").rglob("*.rs"):
