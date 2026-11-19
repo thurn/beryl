@@ -35,8 +35,8 @@
 //! later releases with it. `starts.jsonl` lists the releases each run took on this way.
 //!
 //! A restart that is due waits for a quiet window (see [`crate::main::restart_window`]): until no
-//! newer release has appeared for `quiet_seconds`, no landing runs and no newer release is still
-//! building, but at most `cap_seconds` from the first release it waited with, so that releases
+//! newer release has appeared for `quiet_seconds`, no newer release is still building and, when
+//! the release changes the landing code, no landing runs, but at most `cap_seconds` from the first release it waited with, so that releases
 //! landing one after another cause one restart into the newest instead of one each. A release
 //! that lands while a build runs is built as soon as that build ends, and a ready release is
 //! replaced by the newer one. Each restart records its reason in `starts.jsonl`: the release and
@@ -89,7 +89,7 @@ use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 use crate::deploy::{Checked, DeployState, LocalRelease, Work};
 use crate::main::restart_window::{Decision, RestartWindow};
 use crate::server::{DRAIN_WAIT, Drain};
-use crate::update::scope::{daemon_changes, summary};
+use crate::update::scope::{affects_landing, daemon_changes, summary};
 use crate::update::selftest::Selftest;
 use crate::update::{
     Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, record_adopted_from,
@@ -111,9 +111,10 @@ pub struct Busy {
     /// A verb is in a part that may not be cut short, such as a landing's push. The restart
     /// waits for it however long it takes.
     pub critical: bool,
-    /// A landing runs, such as one whose gate is building. The restart waits for it up to the
-    /// window's cap, since a restart stops a landing that has not begun its push and runs it
-    /// again.
+    /// A landing runs, such as one whose gate is building. A restart into a release that
+    /// changes the landing code waits for it up to the window's cap, since the new daemon stops
+    /// a landing that has not begun its push and runs it again under the new build. Any other
+    /// restart leaves the landing running under its own build and does not wait.
     pub landing: bool,
 }
 
@@ -454,7 +455,8 @@ impl SelfUpdate {
     /// the daemon into a ready build of `master`, or into the hub's version when it differs,
     /// without waiting for commands. A release that changes none of the daemon's code is taken
     /// on without a restart. `busy` says what runs: the restart waits for a part that may not be
-    /// cut short (a push), and for the quiet window of [`RestartWindow`] up to its cap.
+    /// cut short (a push), and for the quiet window of [`RestartWindow`] up to its cap, which a
+    /// running landing extends only when the release changes the landing code.
     pub fn after_heartbeat(&self, hub_version: Option<&str>, busy: Busy) {
         let Some(own) = self.version() else {
             return;
@@ -518,7 +520,14 @@ impl SelfUpdate {
             );
             return;
         }
-        let Some(waited) = self.hold(busy.landing, target.as_ref()) else {
+        // A landing goes on under the build that started it unless the release changes the
+        // landing code, when the new daemon stops it and runs it again (see
+        // `server/outdated.rs`): only then is a running landing worth waiting for.
+        let landing = busy.landing
+            && changes
+                .as_ref()
+                .is_none_or(|changes| changes.iter().any(|path| affects_landing(SOURCE, path)));
+        let Some(waited) = self.hold(landing, target.as_ref()) else {
             return;
         };
         let mut reason = match (&target, &changes) {

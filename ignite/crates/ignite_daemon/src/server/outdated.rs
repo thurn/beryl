@@ -7,7 +7,13 @@
 //! machine, until each session stopped its landing and landed again by hand.
 //!
 //! So a restarted daemon that finds a `land` verb process alive whose row names another Ignite
-//! commit than its own asks that landing to stop, exactly as `ignite stop` would. A landing whose
+//! commit than its own, and whose release changed the landing code between the two (the `land`
+//! module, see [`crate::update::scope::affects_landing`]), asks that landing to stop, exactly as
+//! `ignite stop` would. A release that changed only other daemon code leaves the landing running
+//! under its build, as a `check` or `test` is, so the daemon need not wait for the landings that
+//! run before it restarts. On 2026-11-19 every restart instead waited up to its 600 s cap
+//! while landings ran, because each landing would have been run again, and `ignite wait
+//! deploy-<commit>` took 470 to 563 s during bursts of landings. A landing whose
 //! push has begun refuses to stop (the refusal is kept in the local database, so the restarted
 //! daemon knows it), and is left to finish under the old build: a push cut short may or may not
 //! have reached the remote. Asking for the stop first also means a landing about to begin its push
@@ -31,12 +37,15 @@
 
 use std::sync::Arc;
 
-use ignite_core::ids::Handle;
+use ignite_core::ids::{Commit, Handle};
 use ignite_core::protocol::client::Request;
+use ignite_core::traits::Git;
 
 use super::process::Shared;
 use super::{Server, Verb};
 use crate::host::Host;
+use crate::update::SOURCE;
+use crate::update::scope::landing_changes;
 
 /// The verbs whose verb process a restarted daemon stops and runs again under its own build.
 pub const RESTARTED_UNDER_NEW_BUILD: &[&str] = &["land"];
@@ -77,6 +86,15 @@ impl Server {
         else {
             return false;
         };
+        if !landing_code_changed(processes.git.as_deref(), &old, own) {
+            eprintln!(
+                "ignite: `ignite {verb}` ({handle}) goes on under ignite {}: ignite {} changed \
+                 none of the landing code",
+                short(&old),
+                short(own)
+            );
+            return false;
+        }
         let (Some(request), Some(rerun)) = (request.cloned(), self.registry.resumable(verb)) else {
             return false;
         };
@@ -144,6 +162,20 @@ fn run_again_once_ended(
     shared.handles.reopen(handle, &request);
     shared.handles.release_hold(handle, true);
     super::resume::run_again(shared, handle, verb, Ok((rerun, request)));
+}
+
+/// Whether a landing started under the build `old` would run other landing code under `own`
+/// (see [`crate::update::scope::affects_landing`]). True whenever that cannot be told: with no
+/// `git`, when either version is not a commit, when `own` does not follow `old`, or when Git
+/// fails, since running the landing again is what keeps a fix from missing it.
+fn landing_code_changed(git: Option<&dyn Git>, old: &str, own: &str) -> bool {
+    let (Some(git), Ok(old), Ok(own)) = (git, Commit::new(old), Commit::new(own)) else {
+        return true;
+    };
+    if !git.is_ancestor(&old, &own).unwrap_or(false) {
+        return true;
+    }
+    landing_changes(git, SOURCE, &old, &own).map_or(true, |changes| !changes.is_empty())
 }
 
 /// The first seven characters of a commit, as `ignite status` shows it.

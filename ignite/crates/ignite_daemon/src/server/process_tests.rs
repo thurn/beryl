@@ -400,6 +400,8 @@ struct Machine {
     switch: Arc<Switch>,
     threads: Arc<Threads>,
     in_daemon: BTreeMap<&'static str, Arc<AtomicUsize>>,
+    /// What the daemons it starts compare a landing's build with theirs through, if anything.
+    git: Mutex<Option<Arc<FakeGit>>>,
 }
 
 const VERBS: [&str; 3] = ["land", "test", "run"];
@@ -433,6 +435,7 @@ impl Machine {
             switch,
             threads,
             in_daemon: counters(),
+            git: Mutex::new(None),
         }
     }
 
@@ -486,6 +489,9 @@ impl Machine {
                 .collect::<BTreeSet<_>>(),
             watch: Duration::from_millis(20),
             version: version.map(str::to_owned),
+            git: lock(&self.git)
+                .clone()
+                .map(|git| git as Arc<dyn ignite_core::traits::Git>),
         };
         let server = Server::with_processes(
             context(),

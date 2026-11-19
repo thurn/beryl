@@ -193,6 +193,7 @@ impl TipMachine {
             verbs: BTreeSet::from([ROUND_VERB.to_owned()]),
             watch: Duration::from_millis(20),
             version: None,
+            git: None,
         };
         let server = Arc::new(
             Server::with_processes(

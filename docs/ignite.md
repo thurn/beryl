@@ -553,19 +553,20 @@ How the executable is installed and kept current:
   alone, is taken on without a restart: the daemon reports it as its version
   from then on and compares later releases with it. A restart that is due waits
   for a quiet window: until no newer release has appeared for
-  `self_update.quiet_seconds` (15), no landing runs and no newer release is
-  still building, but at most `self_update.cap_seconds` (600) from the first
-  release it waits with. Releases that land one after another therefore cause
-  one restart into the newest: a release that lands while another builds is
-  built as soon as that build ends, and replaces it as the one to restart into.
-  A push in progress holds the restart even past the cap. It never waits for
-  running commands or verb processes, which survive it. Before it restarts, the
-  daemon answers every new request, except the calls of verb processes, with a
-  reply that says it is restarting, which the client sends again, and waits up
-  to 30 seconds for the verbs running on its own threads, such as a `release`.
-  It does not wait for a `start` that only waits for a free tree: the new daemon
-  runs that `start` again under its handle, and the rerun claims the tree if one
-  was leased to the session meanwhile. Daemons look at the branch every five
+  `self_update.quiet_seconds` (15), no newer release is still building and, when
+  the release changes the landing code (the daemon's `land` module), no landing
+  runs, but at most `self_update.cap_seconds` (600) from the first release it
+  waits with. Releases that land one after another therefore cause one restart
+  into the newest: a release that lands while another builds is built as soon as
+  that build ends, and replaces it as the one to restart into. A push in
+  progress holds the restart even past the cap. It never waits for running
+  commands or verb processes, which survive it. Before it restarts, the daemon
+  answers every new request, except the calls of verb processes, with a reply
+  that says it is restarting, which the client sends again, and waits up to 30
+  seconds for the verbs running on its own threads, such as a `release`. It does
+  not wait for a `start` that only waits for a free tree: the new daemon runs
+  that `start` again under its handle, and the rerun claims the tree if one was
+  leased to the session meanwhile. Daemons look at the branch every five
   minutes, so a fix pushed to it by hand deploys too.
 - The release build is not run by a loop. When the release branch moves, or the
   hub reports a version this daemon doesn't have, the daemon starts one build on
@@ -631,9 +632,10 @@ How the executable is installed and kept current:
   the branch by hand and ran `ignite install`.
 - Each build is stored under its commit, so a new executable never replaces a
   file that is running. Supervisors and verb processes finish under the version
-  that started them, except a landing that has not begun its push (see "How a
-  restart is survived"); `ignite status` names the commit each running verb runs
-  under, such as `L-6 land under 87631b5 …`.
+  that started them, except a landing that has not begun its push when the
+  release changed the landing code (see "How a restart is survived");
+  `ignite status` names the commit each running verb runs under, such as
+  `L-6 land under 87631b5 …`.
 - The hub updates first. Before the daemon on jarvis restarts into a release, it
   kickstarts the hub's service, which comes back on the new `bin/current` and
   reports its version in every heartbeat reply. A daemon whose version differs
@@ -678,17 +680,25 @@ How a restart is survived:
   daemon runs is noticed within a second and treated the same way, after the
   daemon ends the commands it left.
 - A landing whose verb process is alive but runs another build than the
-  restarted daemon is asked to stop, as `ignite stop` would ask it, so that a
-  release that fixes a landing bug reaches the landings already queued. On
-  2026-11-18 six landings went on waiting for the express lane under a broken
-  daemon after the fix had reached every machine, until each session stopped its
-  landing and landed again by hand. A landing whose push has begun refuses to
-  stop and finishes under its build, since a push cut short may or may not have
-  reached the remote. One that stops gives back its cores, lease and tree, and
-  once its process has ended the daemon runs it again itself under the same
-  handle, with the same request, so the same note and session. The stopped reply
-  never reaches the session: its `ignite wait` keeps waiting and gets the new
-  run's reply, and a wait that ends first starts with a line such as
+  restarted daemon, when the landing code (the daemon's `land` module, outside
+  its tests) differs between the two builds, is asked to stop, as `ignite stop`
+  would ask it, so that a release that fixes a landing bug reaches the landings
+  already queued. On 2026-11-18 six landings went on waiting for the express
+  lane under a broken daemon after the fix had reached every machine, until each
+  session stopped its landing and landed again by hand. When Git cannot compare
+  the two builds, it is asked to stop too. A landing whose landing code is
+  unchanged goes on under its build, as a `check` or `test` does, so a restart
+  into such a release does not wait for the landings that run. On 2026-11-19
+  every restart waited for the landings instead, and with about 194 landings a
+  day one was nearly always running, so `ignite wait deploy-<commit>` took 470
+  to 563 seconds during bursts of landings. A landing whose push has begun
+  refuses to stop and finishes under its build, since a push cut short may or
+  may not have reached the remote. One that stops gives back its cores, lease
+  and tree, and once its process has ended the daemon runs it again itself under
+  the same handle, with the same request, so the same note and session. The
+  stopped reply never reaches the session: its `ignite wait` keeps waiting and
+  gets the new run's reply, and a wait that ends first starts with a line such
+  as
   `restart  L-128 was restarted under ignite eda21bd: it had not begun its push under ignite 87631b5`.
   A `check` or `test` started under the old build is not restarted: it only
   reports on a commit, restarting it would end its running commands, and the

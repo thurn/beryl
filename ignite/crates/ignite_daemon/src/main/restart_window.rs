@@ -3,8 +3,8 @@
 //! On 2026-11-18 the daemon on the hub's machine restarted 16 times in under two hours, once for
 //! each landed release that changed Ignite's code, and each restart reran every `ignite start`
 //! in progress. A restart now waits for a quiet window: it goes ahead once no newer release has
-//! appeared for `quiet_seconds` and nothing else holds it (a landing, or a newer release still
-//! building), but never later than `cap_seconds` after the first release it waited with, so a
+//! appeared for `quiet_seconds` and nothing else holds it (a landing, when the release changes
+//! the landing code, or a newer release still building), but never later than `cap_seconds` after the first release it waited with, so a
 //! fix reaches the machine even while releases keep landing. Both numbers come from the
 //! `[self_update]` section of `ignite.toml`. A push in progress holds the restart regardless
 //! of the cap; [`super::selfupdate::SelfUpdate::after_heartbeat`] checks that before asking

@@ -10,6 +10,13 @@ use ignite_core::time::Timestamp;
 /// A third commit, after `NEW`.
 const NEWER: &str = "c7d8e9f";
 
+/// A file of the landing code, which a landing started under an older build would run again
+/// under the new one for (see `server/outdated.rs`).
+const LANDING_FILE: &str = "ignite/crates/ignite_daemon/src/land/express.rs";
+
+/// A file of the daemon's code outside the landing code.
+const DAEMON_FILE: &str = "ignite/crates/ignite_daemon/src/x.rs";
+
 /// A landing runs, and no verb is in a part that may not be cut short.
 const LANDING: Busy = Busy {
     critical: false,
@@ -160,8 +167,9 @@ fn a_release_that_does_not_follow_the_daemon_restarts_it_whatever_changed() {
 }
 
 #[test]
-fn a_restart_waits_for_a_landing_up_to_the_cap() {
-    let (update, _git, restart, clock) = daemon_with_clock(NEW);
+fn a_release_of_landing_code_waits_for_a_landing_up_to_the_cap() {
+    let (update, git, restart, clock) = daemon_with_clock(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &[LANDING_FILE]);
     let home = home_with_this_run(&update);
     update.after_master_moved().unwrap();
     settle(&update);
@@ -181,8 +189,9 @@ fn a_restart_waits_for_a_landing_up_to_the_cap() {
 }
 
 #[test]
-fn a_restart_goes_ahead_once_the_landing_ends() {
-    let (update, _git, restart, clock) = daemon_with_clock(NEW);
+fn a_release_of_landing_code_goes_ahead_once_the_landing_ends() {
+    let (update, git, restart, clock) = daemon_with_clock(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &[LANDING_FILE]);
     update.after_master_moved().unwrap();
     settle(&update);
     update.after_heartbeat(Some(OLD), LANDING);
@@ -194,6 +203,7 @@ fn a_restart_goes_ahead_once_the_landing_ends() {
 #[test]
 fn releases_that_land_while_a_restart_waits_make_one_restart_into_the_newest() {
     let (update, git, restart, clock) = daemon_with_clock(NEW);
+    git.set_changed(&commit(OLD), &commit(NEW), &[LANDING_FILE]);
     update.after_master_moved().unwrap();
     settle(&update);
     update.after_heartbeat(Some(OLD), LANDING);
@@ -257,14 +267,10 @@ fn daemon_with_default_window(
     (update, git, restart, clock)
 }
 
-/// Moves `master` to `release`, which changes the daemon's code, and builds it.
-fn land_release(update: &SelfUpdate, git: &FakeGit, release: &Commit) {
+/// Moves `master` to `release`, which changes `file` of the daemon's code, and builds it.
+fn land_release(update: &SelfUpdate, git: &FakeGit, release: &Commit, file: &str) {
     git.set_tip("master", release.clone());
-    git.set_changed(
-        &commit(OLD),
-        release,
-        &["ignite/crates/ignite_daemon/src/x.rs"],
-    );
+    git.set_changed(&commit(OLD), release, &[file]);
     update.after_master_moved().unwrap();
     settle(update);
 }
@@ -277,19 +283,35 @@ fn heartbeats(update: &SelfUpdate, clock: &FakeClock, n: usize, busy: Busy) {
     }
 }
 
+/// The acceptance test for landings in a row: while landings run one after another, a release
+/// that changes daemon code other than the landing code restarts the daemon once no newer
+/// release has appeared for the quiet window (15 s), not at the 600 s cap. The landings go on
+/// under the build that started them.
+#[test]
+fn a_release_outside_the_landing_code_restarts_while_landings_run() {
+    let (update, git, restart, clock) = daemon_with_default_window(NEW);
+    land_release(&update, &git, &commit(NEW), DAEMON_FILE);
+    heartbeats(&update, &clock, 2, LANDING);
+    assert!(restart.started().is_empty(), "{:?}", restart.started());
+    update.after_heartbeat(Some(OLD), LANDING);
+    assert_eq!(clock.now(), Timestamp::from_millis(20_000));
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+}
+
 /// Releases come from landings. While the next landing runs, the landing hold merges the
-/// releases into one restart; the quiet window then only adds its 15 s.
+/// releases that change the landing code into one restart; the quiet window then only adds its
+/// 15 s.
 #[test]
 fn three_releases_30_s_apart_while_landings_run_make_one_restart_into_the_last() {
     let (update, git, restart, clock) = daemon_with_default_window(NEW);
     let releases = [commit(NEW), commit(NEWER), commit("f0e1d2c")];
     for release in &releases[..2] {
-        land_release(&update, &git, release);
+        land_release(&update, &git, release, LANDING_FILE);
         heartbeats(&update, &clock, 3, LANDING);
         assert!(restart.started().is_empty(), "{:?}", restart.started());
     }
     // The last release appeared at 60 s with no landing left, so the quiet window ends at 75 s.
-    land_release(&update, &git, &releases[2]);
+    land_release(&update, &git, &releases[2], LANDING_FILE);
     heartbeats(&update, &clock, 2, IDLE);
     assert!(restart.started().is_empty(), "{:?}", restart.started());
     assert_eq!(clock.now(), Timestamp::from_millis(80_000));
@@ -308,7 +330,7 @@ fn the_cap_forces_a_restart_under_a_constant_stream_of_releases() {
     for round in 0u32.. {
         if round % 3 == 0 {
             newest = commit(&format!("{:07x}", 0x0a0_0000 + round / 3));
-            land_release(&update, &git, &newest);
+            land_release(&update, &git, &newest, LANDING_FILE);
         }
         update.after_heartbeat(Some(OLD), LANDING);
         if !restart.started().is_empty() {
@@ -330,7 +352,7 @@ fn the_cap_forces_a_restart_under_a_constant_stream_of_releases() {
 #[test]
 fn status_says_when_a_pending_restart_goes_ahead() {
     let (update, git, _restart, clock) = daemon_with_default_window(NEW);
-    land_release(&update, &git, &commit(NEW));
+    land_release(&update, &git, &commit(NEW), DAEMON_FILE);
     clock.advance(10.0);
     let Some(Work::Restarting {
         commit: target,

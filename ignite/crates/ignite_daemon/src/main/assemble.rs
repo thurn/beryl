@@ -506,7 +506,8 @@ pub fn server(
         }),
         home,
     )
-    .with_version(&base.options.version);
+    .with_version(&base.options.version)
+    .with_git(base.git.clone());
     let mut server = Server::with_processes(
         ctx.clone(),
         registry,

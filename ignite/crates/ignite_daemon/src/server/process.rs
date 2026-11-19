@@ -39,6 +39,7 @@ use rusqlite::Connection;
 
 use ignite_core::ids::Handle;
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::traits::Git;
 use ignite_os::Native;
 use ignite_os::proc::Processes as _;
 use ignite_store::local::handles as handle_store;
@@ -183,9 +184,13 @@ pub struct Processes {
     /// How often a verb process is looked at.
     pub watch: Duration,
     /// The Ignite commit of the executable new verb processes start from, the daemon's own;
-    /// `None` when unknown. A landing whose verb process runs another commit is run again
-    /// under this one (see `server/outdated.rs`).
+    /// `None` when unknown. A landing whose verb process runs another commit with other
+    /// landing code is run again under this one (see `server/outdated.rs`).
     pub version: Option<String>,
+    /// Compares the landing code of a landing's build with the daemon's, so that a landing
+    /// started under an older build is run again only when the release changed what it runs
+    /// (see `server/outdated.rs`). `None` runs every such landing again.
+    pub git: Option<Arc<dyn Git>>,
 }
 
 impl Processes {
@@ -197,6 +202,16 @@ impl Processes {
             verbs: PROCESS_VERBS.iter().map(|v| (*v).to_owned()).collect(),
             watch: Duration::from_secs(1),
             version: None,
+            git: None,
+        }
+    }
+
+    /// The processes with `git` to compare a landing's build with the daemon's.
+    #[must_use]
+    pub fn with_git(self, git: Arc<dyn Git>) -> Processes {
+        Processes {
+            git: Some(git),
+            ..self
         }
     }
 

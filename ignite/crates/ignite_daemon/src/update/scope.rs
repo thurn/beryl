@@ -86,6 +86,40 @@ pub fn daemon_changes(
     Ok(changed)
 }
 
+/// The daemon's landing code, relative to Ignite's source directory: the `land` module, which
+/// `ignite land` runs in its verb process.
+const LANDING_CODE: &[&str] = &[
+    "crates/ignite_daemon/src/land.rs",
+    "crates/ignite_daemon/src/land/",
+];
+
+/// Whether `path`, relative to the repository, is part of the code a landing runs when Ignite's
+/// source lives in `source`. A landing whose verb process runs an older build than the daemon
+/// goes on under that build unless the release changed such a file (see `server/outdated.rs`),
+/// and only such a release waits for the landings that run before it restarts the daemon (see
+/// `main/selfupdate.rs`).
+pub fn affects_landing(source: &str, path: &str) -> bool {
+    let prefix = format!("{}/", source.trim_end_matches('/'));
+    affects_daemon(source, path)
+        && path
+            .strip_prefix(&prefix)
+            .is_some_and(|inside| LANDING_CODE.iter().any(|code| inside.starts_with(code)))
+}
+
+/// The files changed between `from` and `to` that are part of the code a landing runs, sorted.
+/// Empty when a landing started under `from` would run the same landing code under `to`.
+pub fn landing_changes(
+    git: &dyn Git,
+    source: &str,
+    from: &Commit,
+    to: &Commit,
+) -> Result<Vec<String>> {
+    Ok(daemon_changes(git, source, from, to)?
+        .into_iter()
+        .filter(|path| affects_landing(source, path))
+        .collect())
+}
+
 /// `changes` for a message: the first three, then how many more.
 pub fn summary(changes: &[String]) -> String {
     let shown = changes

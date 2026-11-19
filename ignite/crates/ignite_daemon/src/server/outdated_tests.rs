@@ -138,3 +138,52 @@ fn a_restart_into_the_same_build_restarts_no_landing() {
     assert_eq!(waited(&second, &land).text, "land: Some(0)");
     assert_eq!(machine.ran_in_daemon("land"), 0);
 }
+
+/// A release that changed none of the landing code leaves the landing running under its build,
+/// so the daemon need not wait for landings before it restarts (see `main/selfupdate.rs`).
+#[test]
+fn a_landing_goes_on_under_its_build_when_the_release_changed_no_landing_code() {
+    let machine = Machine::new("outdated-unchanged", false);
+    let git = Arc::new(FakeGit::default());
+    git.set_changed(
+        &Commit::new("87631b5").unwrap(),
+        &Commit::new(NEW_BUILD).unwrap(),
+        &["ignite/crates/ignite_daemon/src/main/loops.rs"],
+    );
+    *lock(&machine.git) = Some(git.clone());
+    let (first, land, _test) = landing_and_test(&machine);
+    let second = restart(&machine, first);
+
+    assert!(!wait_now(&second, &land).text.contains("restart"));
+    machine.commands.finish_all();
+    assert_eq!(waited(&second, &land).text, "land: Some(0)");
+    assert_eq!(
+        (
+            machine.ran_in_process("land"),
+            machine.ran_in_daemon("land")
+        ),
+        (1, 0),
+        "the landing finished in its verb process"
+    );
+}
+
+/// A release that changed the landing code still runs the landing again under it.
+#[test]
+fn a_landing_runs_again_when_the_release_changed_landing_code() {
+    let machine = Machine::new("outdated-changed", false);
+    let git = Arc::new(FakeGit::default());
+    git.set_changed(
+        &Commit::new("87631b5").unwrap(),
+        &Commit::new(NEW_BUILD).unwrap(),
+        &["ignite/crates/ignite_daemon/src/land/lease.rs"],
+    );
+    *lock(&machine.git) = Some(git.clone());
+    let (first, land, _test) = landing_and_test(&machine);
+    let second = restart(&machine, first);
+
+    assert!(wait_now(&second, &land).text.starts_with("restart  "));
+    assert!(until(|| machine.switch.stops.load(Ordering::SeqCst) >= 2));
+    machine.commands.finish_all();
+    assert_eq!(waited(&second, &land).text, "land: Some(0)");
+    assert_eq!(machine.ran_in_daemon("land"), 1);
+}

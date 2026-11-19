@@ -20,9 +20,9 @@
 //! wrote its reply while no daemon ran has the reply handed on. Only a verb process that died
 //! (its lock is free and its handle still `running`) has its leftover commands ended and its
 //! verb run again here, under the rules above. The exception is a landing whose live verb
-//! process runs an older build than this daemon and has not begun its push: it is stopped and run
-//! again here under the same handle, so that it runs the new build's code (see
-//! `server/outdated.rs`).
+//! process runs an older build than this daemon, whose landing code differs from this daemon's,
+//! and has not begun its push: it is stopped and run again here under the same handle, so that it
+//! runs the new build's code (see `server/outdated.rs`).
 
 use std::sync::Arc;
 

@@ -67,3 +67,39 @@ fn daemon_changes_keep_only_the_daemons_files_and_summarise_them() {
         "a, b, c and 2 more"
     );
 }
+
+#[test]
+fn only_the_land_module_outside_its_tests_affects_a_landing() {
+    for path in [
+        "ignite/crates/ignite_daemon/src/land.rs",
+        "ignite/crates/ignite_daemon/src/land/express.rs",
+    ] {
+        assert!(affects_landing("ignite", path), "{path}");
+    }
+    for path in [
+        "ignite/crates/ignite_daemon/src/land/express_tests.rs",
+        "ignite/crates/ignite_daemon/src/land/tests/fakes.rs",
+        "ignite/crates/ignite_daemon/src/landing.rs",
+        "ignite/crates/ignite_daemon/src/main/selfupdate.rs",
+        "ignite/crates/ignite_core/src/config.rs",
+    ] {
+        assert!(!affects_landing("ignite", path), "{path}");
+    }
+    let git = FakeGit::default();
+    let (from, to) = (
+        Commit::new("a1b2c3d").unwrap(),
+        Commit::new("e4f5a6b").unwrap(),
+    );
+    git.set_changed(
+        &from,
+        &to,
+        &[
+            "ignite/crates/ignite_daemon/src/main/loops.rs",
+            "ignite/crates/ignite_daemon/src/land/lease.rs",
+        ],
+    );
+    assert_eq!(
+        landing_changes(&git, "ignite", &from, &to).unwrap(),
+        ["ignite/crates/ignite_daemon/src/land/lease.rs"]
+    );
+}
