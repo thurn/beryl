@@ -71,3 +71,17 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
+
+# The daemon rebuilds the release after every landing that changes Ignite, in an update tree
+# that keeps `ignite/target`. A daemon-only edit rebuilt `ignite_daemon` and `ignite_cli` from
+# scratch in 75 s on 3 cores; with incremental compilation the same rebuild takes about 4 s. The
+# executable is a little slower to run, which does not matter for a command-line tool and a
+# daemon that mostly waits.
+[profile.release]
+incremental = true
+
+# Express landings and `ignite test` build and link about 30 test binaries after every daemon
+# edit. Line tables keep backtraces readable and leave out the variable information, which
+# nothing here uses; the debug executables are smaller and link faster.
+[profile.dev]
+debug = "line-tables-only"

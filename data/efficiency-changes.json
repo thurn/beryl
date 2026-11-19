@@ -384,5 +384,10 @@
     "label": "The Claude dispatcher's settings deny the tools its loop never calls, which Claude Code then leaves out of its context: the desktop app's browser, simulator, chart, terminal and editing tools took about 60,000 of its 120,000-token window before its first message, so each request re-sent them and it compacted after about 27,000 tokens of loop",
     "metric": "bead.dollars",
     "expect": "down"
+  },
+  {
+    "label": "Ignite's release build is incremental and its dev and test profiles keep only line tables: after a daemon-only edit the release rebuild took 75 s on 3 cores and now takes about 4 s, and the express commands (clippy, test build and nextest run) took 85 s and now take about 70 s",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
