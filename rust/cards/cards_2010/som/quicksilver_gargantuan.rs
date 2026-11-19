@@ -47,7 +47,8 @@ pub mod scenarios {
 
     pub const SCENARIOS: &[Scenario] = &[
         // The Gargantuan enters as Beza, the Bounding Spring, a 7/7 for its exception, and
-        // Beza's enters ability triggers for it (CR 707.5), gaining P0 4 life.
+        // Beza's enters ability triggers for it
+        // ([CR 707.5](https://yawgatog.com/resources/magic-rules/#R7075)), gaining P0 4 life.
         copying("the Gargantuan enters as a 7/7 copy", &[Card::Plains])
             .interaction(&[BEZA])
             .permanents(
