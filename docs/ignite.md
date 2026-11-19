@@ -1454,8 +1454,8 @@ The steps, in order:
    `scope` line says how many families were left out.
 5. Take the hub's short `staging` lease. If the tip moved since step 2, release
    it and go back to step 2. The second pass is mostly cache hits. The lease is
-   taken only after the gate passes and held only for the push, so landings
-   gate in parallel and never wait for another landing's gate.
+   taken only after the gate passes and held only for the push, so landings gate
+   in parallel and never wait for another landing's gate.
 6. Push the commit from the landing tree to `staging` on the git remote, and
    release the lease.
 7. Record the commits and the files they touch on the ticket with the agent's
