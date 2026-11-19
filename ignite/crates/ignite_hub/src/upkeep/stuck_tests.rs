@@ -262,3 +262,74 @@ fn a_loop_through_a_parent_link_is_reported() {
         filed.title
     );
 }
+
+/// A tip that waits on checks only another system's machines can run holds `master` back: its
+/// ticket is filed open, and a ticket still waiting for a person that holds back one of those
+/// checks is released.
+#[test]
+fn a_tip_waiting_on_checks_files_open_and_releases_tickets_holding_them() {
+    use ignite_core::config::Os;
+    use ignite_core::ids::{CheckName, Commit, MachineId};
+    use ignite_core::protocol::hub::{IncompleteReason, IncompleteReport, TipWaiting};
+
+    use super::filing::UPKEEP;
+    use super::stuck;
+
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let held = CheckName::new("rust:windows_paths").unwrap();
+    // Each report's output differs once check names are taken out, so each is its own cause.
+    let incomplete = |check: &CheckName, output: &str| IncompleteReport {
+        check: check.clone(),
+        machine: MachineId::new("m-3").unwrap(),
+        host: "cygnus".to_owned(),
+        platform: Some(Os::Windows),
+        attempts: 2,
+        reason: IncompleteReason::Hung,
+        commit: Commit::new("abcd").unwrap(),
+        output: output.to_owned(),
+        checks: vec![check.clone()],
+        count: 1,
+        product: None,
+        holds_tip: false,
+    };
+    let waited = stuck::incomplete(
+        &mut conn,
+        UPKEEP,
+        &incomplete(&held, "paths hung"),
+        clock.now(),
+    )
+    .unwrap();
+    let other = CheckName::new("rust:other").unwrap();
+    let unrelated = stuck::incomplete(
+        &mut conn,
+        UPKEEP,
+        &incomplete(&other, "other hung"),
+        clock.now(),
+    )
+    .unwrap();
+    assert_ne!(waited.ticket, unrelated.ticket);
+    for id in [&waited.ticket, &unrelated.ticket] {
+        assert_eq!(ticket(&conn, id).status, Status::PendingApproval);
+    }
+
+    let filed = stuck::tip_waiting(
+        &mut conn,
+        UPKEEP,
+        &TipWaiting {
+            commit: Commit::new("abcd").unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            platform: Os::Windows,
+            checks: vec![held],
+            waited_s: 3_600.0,
+        },
+        clock.now(),
+    )
+    .unwrap();
+    assert_eq!(ticket(&conn, &filed[0].ticket).status, Status::Open);
+    assert_eq!(ticket(&conn, &waited.ticket).status, Status::Open);
+    assert_eq!(
+        ticket(&conn, &unrelated.ticket).status,
+        Status::PendingApproval
+    );
+}

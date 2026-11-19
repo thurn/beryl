@@ -13,7 +13,9 @@
 //!   from it.
 //!
 //! Every filing goes through [`filing`] with a signature of its subject, so a repeated sighting
-//! adds a comment to the open ticket and never a second ticket.
+//! adds a comment to the open ticket and never a second ticket. Every justiciar ticket is filed
+//! released ([`Filing::released`]): an emergency that stops work cannot wait for a person to
+//! release its ticket.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -36,8 +38,9 @@ pub const MASTER_LAG_SUBJECT: &str = "master-lag";
 const TIER: &str = "tier:opus";
 
 /// How long the oldest landing that `master` does not hold may wait before a justiciar ticket
-/// is filed.
-pub const MASTER_LAG_SECONDS: f64 = 3.0 * 3_600.0;
+/// is filed: 30 minutes. A tip round under load takes a few minutes, so half an hour without
+/// `master` moving while landings wait is a fault, not a slow round.
+pub const MASTER_LAG_SECONDS: f64 = 30.0 * 60.0;
 
 /// Landings older than this are left out of the lag check, so history imported from before
 /// the hub existed never counts as lag.
@@ -81,6 +84,7 @@ pub fn report(
         evidence: report.evidence.clone(),
         fields: fields(report.title.clone(), body, labels),
         deps: Vec::new(),
+        released: true,
     };
     filing::file(conn, author, &filing, now)
 }
@@ -138,9 +142,9 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     if waited < MASTER_LAG_SECONDS {
         return Ok(Vec::new());
     }
-    let hours = waited / 3_600.0;
+    let minutes = waited / 60.0;
     let body = format!(
-        "`master` has not moved for {hours:.1} hours: ticket {ticket} landed at {landed_at} \
+        "`master` has not moved for {minutes:.0} minutes: ticket {ticket} landed at {landed_at} \
          and no tip since has been verified. Tip verification is the only thing that moves \
          `master`, so nothing reaches it, and no fix to Ignite is released from it, until \
          this is fixed.\n\nLook at the tip loop's state in `ignite status` and the daemon \
@@ -153,11 +157,12 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         // oldest one waiting, which means `master` moved in between.
         evidence: ticket.clone(),
         fields: fields(
-            format!("master has not moved for {hours:.0} hours"),
+            format!("master has not moved for {minutes:.0} minutes"),
             body,
             Vec::new(),
         ),
         deps: Vec::new(),
+        released: true,
     };
     Ok(vec![filing::file(conn, UPKEEP, &filing, now)?])
 }

@@ -502,7 +502,7 @@ impl TipVerifier {
             settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
         }
         Self::fill_from_cache(ctx, &checks, &mut verdicts)?;
-        self.note_incomplete(ctx, tip, &checks, &verdicts);
+        self.note_incomplete(ctx, tip, &checks, &verdicts, true);
         self.report_unlisted(ctx, tip, &unlisted);
         self.save(ctx);
 

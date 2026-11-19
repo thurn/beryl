@@ -7,6 +7,7 @@ use rusqlite::Connection;
 
 use ignite_core::ids::{CheckName, Commit, MachineId};
 use ignite_core::protocol::hub::{IncompleteReason, IncompleteReport};
+use ignite_core::protocol::tickets::Status;
 use ignite_core::traits::Clock;
 use ignite_store::hub;
 
@@ -27,6 +28,7 @@ fn report(check: &str, reason: IncompleteReason, output: &str) -> IncompleteRepo
         checks: Vec::new(),
         count: 0,
         product: None,
+        holds_tip: false,
     }
 }
 
@@ -236,4 +238,34 @@ fn a_run_with_30_causes_files_at_most_six_tickets() {
             .change,
         Change::Commented
     );
+}
+
+/// A failed build that the tip waits on keeps `master` where it is, so its ticket is filed open
+/// for the pool; one that holds back only checks run after `master` moved waits for a person.
+#[test]
+fn a_failed_build_is_filed_open_only_when_the_tip_waits_on_it() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut build = report("b3d:build", IncompleteReason::BuildFailed, "link failed");
+    build.product = Some("b3d".to_owned());
+    build.checks = vec![CheckName::new("b3d-test:faces").unwrap()];
+    build.holds_tip = true;
+    let held = incomplete(&mut conn, UPKEEP, &build, clock.now()).unwrap();
+    assert_eq!(ticket(&conn, &held.ticket).status, Status::Open);
+
+    let mut after = report("rust:build", IncompleteReason::BuildFailed, "link failed");
+    after.product = Some("rust-tests".to_owned());
+    let waits = incomplete(&mut conn, UPKEEP, &after, clock.now()).unwrap();
+    assert_ne!(waits.ticket, held.ticket);
+    assert_eq!(ticket(&conn, &waits.ticket).status, Status::PendingApproval);
+
+    // A later tip that waits on the same build releases its ticket.
+    after.commit = Commit::new("1963793e7").unwrap();
+    after.holds_tip = true;
+    let again = incomplete(&mut conn, UPKEEP, &after, clock.now()).unwrap();
+    assert_eq!(
+        (again.ticket.as_str(), again.change),
+        (waits.ticket.as_str(), Change::Commented)
+    );
+    assert_eq!(ticket(&conn, &waits.ticket).status, Status::Open);
 }

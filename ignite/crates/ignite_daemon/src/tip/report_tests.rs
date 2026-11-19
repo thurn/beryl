@@ -118,6 +118,7 @@ fn a_check_whose_build_failed_is_reported_but_never_held_off() {
         &tip,
         &[unbuilt.clone(), unreported.clone()],
         &verdicts,
+        true,
     );
 
     assert!(!verifier.held_off.contains_key(&unbuilt.key));

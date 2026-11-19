@@ -123,7 +123,7 @@ impl TipVerifier {
             .filter(|(key, _)| split.after_keys.contains(*key))
             .map(|(key, run)| (key.clone(), run.clone()))
             .collect();
-        self.note_incomplete(ctx, tip, checks, &after);
+        self.note_incomplete(ctx, tip, checks, &after, false);
         for check in &split.after {
             let Some(run) = verdicts.get(&check.key) else {
                 continue;

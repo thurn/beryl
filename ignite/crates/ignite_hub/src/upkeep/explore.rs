@@ -45,6 +45,7 @@ pub fn find(
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     };
     filing::file(conn, author, &filing, now)
 }

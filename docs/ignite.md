@@ -2145,7 +2145,7 @@ cleared:
 - A ticket held in progress for six hours: it is no longer held that long.
 - A machine that has not reported: it has reported since, and no tip has waited
   an hour for verification since.
-- `master` has not moved: no landing has waited three hours for it.
+- `master` has not moved: no landing has waited 30 minutes for it.
 - Checks left incomplete (a failed build, a hung command, an invalid manifest
   entry, a command that cannot run or did not report): each check the ticket
   holds back has a result stored after the last sighting.
@@ -2432,14 +2432,17 @@ Not every ticket is offered:
 
 - Nothing is scheduled until a person releases it. Every ticket is filed with
   the status `pending_approval`, the hub's own improvements and fault reports
-  included, and the pool is never offered a pending ticket. The one exception is
-  a regression, a check that tip verification found failing on `staging`: it
-  holds `master` back, so the hub files it already released.
-  `ignite ticket update <id> --release`, or the Release button on the dashboard,
-  makes the ticket and every descendant still pending `open`: the hub adds the
-  descendants to any update that releases a pending ticket.
-  `ignite ticket create --release` files a ticket already released. A session
-  may still start a pending ticket by name.
+  included, and the pool is never offered a pending ticket. The exception is a
+  ticket for anything that holds `master` back, which the hub files already
+  released: a regression (a check that tip verification found failing on
+  `staging`), every justiciar ticket, a machine a tip has waited an hour for,
+  and checks left incomplete that the tip being verified waits on. A ticket for
+  incomplete checks that no tip waits on stays pending, and the hub releases it
+  when a later tip waits on them. `ignite ticket update <id> --release`, or the
+  Release button on the dashboard, makes the ticket and every descendant still
+  pending `open`: the hub adds the descendants to any update that releases a
+  pending ticket. `ignite ticket create --release` files a ticket already
+  released. A session may still start a pending ticket by name.
 - An epic is worked only once it is active, which means it has a `--workers`
   number above 0. An epic filed without one gets a share of 3, so releasing it
   is enough; the share is bounded by the pool, so it reserves nothing. File it
@@ -2674,8 +2677,8 @@ release branch when Ignite blocks its own landing.
 
 - The hub files justiciar tickets at P0 with `tier:opus`, matched by signature
   so a repeated sighting adds a comment and never a second ticket. They come
-  from upkeep, when the oldest landing since the last verified tip has waited
-  three hours or a ticket has been held for six, and from `POST /justiciar`,
+  from upkeep, when the oldest landing since the last verified tip has waited 30
+  minutes or a ticket has been held for six hours, and from `POST /justiciar`,
   which daemons send for a crash record or a loop that keeps failing, and which
   `ignite justiciar "<reason>"` sends for a session that meets an emergency.
 - A report about one machine, such as its daemon's crash, is labelled

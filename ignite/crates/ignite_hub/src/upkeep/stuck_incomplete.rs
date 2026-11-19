@@ -12,6 +12,10 @@
 //! older daemon sends one report per check, and every check's report of one cause has the same
 //! signature, so it still files one ticket.
 //!
+//! A report says whether the tip being verified waits on the checks it names
+//! (`IncompleteReport::holds_tip`). Such a cause keeps `master` from moving, so its ticket is filed
+//! released; a later sighting that holds the tip releases a ticket still waiting for a person.
+//!
 //! As a second guard, one run (one family's command, on one machine, at one commit) files at
 //! most [`ROUND_LIMIT`] tickets. Each cause past that is a comment on one more ticket, which says
 //! how many causes were left out and lists them.
@@ -95,6 +99,7 @@ pub fn incomplete(
             fields: fields(cause.title.clone(), body(report, &cause, &checks)),
             signature: cause.signature,
             deps: Vec::new(),
+            released: report.holds_tip,
         }
     };
     filing::file(conn, author, &filing, now)
@@ -129,6 +134,7 @@ fn overflow(
             body,
         ),
         deps: Vec::new(),
+        released: report.holds_tip,
     }
 }
 

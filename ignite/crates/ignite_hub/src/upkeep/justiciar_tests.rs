@@ -2,7 +2,7 @@
 
 use ignite_core::ids::MachineId;
 use ignite_core::protocol::hub::JusticiarReport;
-use ignite_core::protocol::tickets::TicketType;
+use ignite_core::protocol::tickets::{Status, TicketType};
 use ignite_core::traits::Clock;
 use ignite_store::hub;
 
@@ -31,6 +31,8 @@ fn a_repeated_report_comments_on_one_p0_ticket_offered_first() {
     assert_eq!(first.change, Change::Created);
     let filed = ticket(&conn, &first.ticket);
     assert_eq!(filed.priority, 0);
+    // An emergency cannot wait for a person to release its ticket.
+    assert_eq!(filed.status, Status::Open);
     for label in ["justiciar", "tier:opus"] {
         assert!(
             filed.labels.iter().any(|l| l == label),
@@ -93,7 +95,7 @@ fn lag_tickets(conn: &rusqlite::Connection, clock: &ignite_core::fakes::FakeCloc
 }
 
 #[test]
-fn a_landing_that_master_lacks_for_three_hours_files_one_ticket() {
+fn a_landing_that_master_lacks_for_half_an_hour_files_one_open_ticket() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
     let landed = apply(
@@ -113,7 +115,11 @@ fn a_landing_that_master_lacks_for_three_hours_files_one_ticket() {
     clock.advance(120.0);
     let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(filed.len(), 1);
-    assert!(ticket(&conn, &filed[0].ticket).body.contains(&landed[0]));
+    let lag = ticket(&conn, &filed[0].ticket);
+    assert!(lag.body.contains(&landed[0]));
+    assert_eq!(lag.title, "master has not moved for 31 minutes");
+    assert_eq!(lag.status, Status::Open);
+    assert!((MASTER_LAG_SECONDS - 30.0 * 60.0).abs() < f64::EPSILON);
     // Another pass sees the same stuck landing and adds nothing.
     let again = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(again[0].change, Change::Unchanged);

@@ -117,6 +117,7 @@ fn record(
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     };
     let filed = filing::file(conn, author, &filing, now)?;
     Ok(TipRoundFiled {

@@ -171,7 +171,7 @@ pub fn verdict(
         "unreachable" => Ok(unreachable(world, subject, sighted)),
         category if category == justiciar::LABEL && subject == justiciar::MASTER_LAG_SUBJECT => {
             present_unless(world.master_lagging, &|| {
-                Ok("`master` moved: no landing has waited three hours for it since.".to_owned())
+                Ok("`master` moved: no landing has waited 30 minutes for it since.".to_owned())
             })
         }
         category if INCOMPLETE.contains(&category) => checks_reported(conn, ticket, fault, sighted),

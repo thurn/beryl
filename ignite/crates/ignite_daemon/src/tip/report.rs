@@ -38,15 +38,20 @@ impl TipVerifier {
     /// hung or went unreported, and a build fails the same way at once until its tree or its
     /// inputs change, so holding its checks off only kept `master` waiting for hours after a
     /// tree's damaged build was mended.
+    ///
+    /// `holds_tip` says whether `tip` waits on these checks before `master` can move; a check
+    /// run past the tip budget, after `master` moved, holds nothing back. The hub files a report
+    /// that holds the tip released, for the pool to take at once.
     pub(super) fn note_incomplete(
         &mut self,
         ctx: &Context,
         tip: &Commit,
         checks: &[TipCheck],
         verdicts: &HashMap<ResultKey, TipRun>,
+        holds_tip: bool,
     ) {
         let now = ctx.clock.now();
-        self.report_failed_builds(ctx, tip, checks, verdicts);
+        self.report_failed_builds(ctx, tip, checks, verdicts, holds_tip);
         // Checks not yet told, by family, reason and platform, with the first one's output.
         let mut causes: Vec<Cause<ResultKey>> = Vec::new();
         for check in checks.iter().filter(|c| c.runnable) {
@@ -86,6 +91,7 @@ impl TipVerifier {
             let mut report =
                 incomplete_report(ctx, tip, &cause.checks[0], platform, reason, attempts, "");
             cause.fill(&mut report);
+            report.holds_tip = holds_tip;
             self.name_host(&mut report);
             match ctx.hub.incomplete(&report) {
                 Ok(_) => self.reported_incomplete.extend(cause.keys),
@@ -106,6 +112,7 @@ impl TipVerifier {
         tip: &Commit,
         checks: &[TipCheck],
         verdicts: &HashMap<ResultKey, TipRun>,
+        holds_tip: bool,
     ) {
         // Each failed product, with the name of its report: the first family's `<family>:build`.
         let mut builds: Vec<(CheckName, Cause<()>)> = Vec::new();
@@ -139,6 +146,7 @@ impl TipVerifier {
                 incomplete_report(ctx, tip, &name, None, IncompleteReason::BuildFailed, 1, "");
             build.fill(&mut report);
             report.product = Some(build.group.0);
+            report.holds_tip = holds_tip;
             self.send_once(ctx, tip, &report);
         }
     }
@@ -286,7 +294,8 @@ impl<K> Cause<K> {
 }
 
 /// The report of `check`, naming the machine by its ID in both `machine` and `host`; the caller
-/// puts the hostname in `host` when it knows it (see `TipVerifier::name_host`).
+/// puts the hostname in `host` when it knows it (see `TipVerifier::name_host`). The report says
+/// it holds the tip back; a check run after `master` moved is reported with `holds_tip` unset.
 fn incomplete_report(
     ctx: &Context,
     tip: &Commit,
@@ -308,6 +317,7 @@ fn incomplete_report(
         checks: Vec::new(),
         count: 0,
         product: None,
+        holds_tip: true,
     }
 }
 

@@ -288,6 +288,7 @@ fn file_with(
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     };
     let filed = filing::file(conn, UPKEEP, &filing, now).unwrap();
     assert_eq!(filed.change, Change::Created);
@@ -453,6 +454,7 @@ fn an_incomplete_ticket_closes_once_every_check_it_held_back_has_a_result() {
         ],
         count: 2,
         product: None,
+        holds_tip: false,
     };
     // A result stored before the ticket says nothing.
     result(&mut conn, "ios:launch", '1', Outcome::Pass, clock.now());

@@ -141,6 +141,7 @@ fn machine_faults(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
                 ..TicketFields::default()
             },
             deps: Vec::new(),
+            released: false,
         };
         let one = filing::file(conn, UPKEEP, &filing, now)?;
         conn.execute(
@@ -251,6 +252,7 @@ fn off_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Filing 
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     }
 }
 
@@ -275,5 +277,6 @@ fn always_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Fili
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     }
 }

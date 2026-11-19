@@ -605,6 +605,11 @@ pub struct IncompleteReport {
     /// The build product whose build failed or was refused, for [`IncompleteReason::BuildFailed`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub product: Option<String>,
+    /// Whether the tip being verified waits on some check this cause holds back, so that
+    /// `master` cannot move until the cause is fixed. The hub files such a ticket released. An
+    /// older daemon leaves it out, which reads as `false`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub holds_tip: bool,
 }
 
 /// How many checks an [`IncompleteReport`] names; `count` gives the whole number.

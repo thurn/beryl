@@ -14,6 +14,10 @@
 //! newest sighting came ([`SIGHTED_KEY`]) and, for a fault that holds checks back, which checks
 //! ([`CHECKS_KEY`]).
 //!
+//! A ticket is filed `pending_approval`, so the pool never takes it before a person releases it,
+//! unless its filing says it is [`Filing::released`]: a fault that holds `master` back cannot
+//! wait for a person. A later released sighting releases a ticket still waiting for a person.
+//!
 //! The lookup and the write are fenced by the feed position: if anything else wrote between
 //! them, the write is refused and the lookup is done again.
 
@@ -99,6 +103,10 @@ pub struct Filing {
     /// The new ticket's fields. Its body is also the comment on a matching open ticket.
     pub fields: TicketFields,
     pub deps: Vec<Dependency>,
+    /// Whether the fault holds `master` back, so that its ticket is filed `open` for the pool
+    /// to take at once instead of waiting for a person to release it. A sighting with this set
+    /// also releases a matching ticket that is still `pending_approval`.
+    pub released: bool,
 }
 
 /// What filing did.
@@ -121,6 +129,7 @@ pub enum Change {
 struct Match {
     id: String,
     closed: bool,
+    pending: bool,
     sightings: Vec<String>,
     metadata: BTreeMap<String, Value>,
 }
@@ -146,6 +155,7 @@ pub fn file(
                 });
             }
             Some(open) => {
+                let release = filing.released && open.pending;
                 let ops = vec![
                     Operation::Comment {
                         id: open.id.clone(),
@@ -153,7 +163,10 @@ pub fn file(
                     },
                     Operation::Update {
                         id: open.id.clone(),
-                        set: None,
+                        set: release.then(|| TicketFields {
+                            status: Some(Status::Open),
+                            ..TicketFields::default()
+                        }),
                         add_labels: Vec::new(),
                         remove_labels: Vec::new(),
                         set_meta: sighting_meta(open, filing, author, now),
@@ -227,6 +240,54 @@ pub fn sighted(conn: &Connection, labels: &[&str], evidence: &str) -> Result<usi
     Ok(usize::try_from(count).unwrap_or(0))
 }
 
+/// Releases each ticket the hub filed that still waits for a person (`pending_approval`) and
+/// holds back one of `checks`, which a tip now waits on, so that `master` does not wait for a
+/// person to release it. Returns the tickets released.
+///
+/// The release is written by [`UPKEEP`] and changes nothing but the status, so
+/// [`super::clearing`] counts it as it counts a person's release and still closes the ticket
+/// once its fault clears.
+pub fn release_holding(
+    conn: &mut Connection,
+    checks: &[&str],
+    now: Timestamp,
+) -> Result<Vec<String>> {
+    let wanted = serde_json::to_string(checks)
+        .map_err(|error| StoreError::Invalid(format!("checks {checks:?}: {error}")))?;
+    let ids = {
+        let mut select = conn.prepare(
+            "SELECT t.id FROM tickets t
+             WHERE t.status = 'pending_approval'
+               AND EXISTS (SELECT 1 FROM json_each(t.labels) l WHERE l.value = ?1)
+               AND EXISTS (
+                 SELECT 1 FROM json_each(t.metadata, '$.ignite_checks') held
+                 WHERE held.value IN (SELECT value FROM json_each(?2)))
+             ORDER BY t.id",
+        )?;
+        select
+            .query_map(params![HUB_LABEL, wanted], |row| row.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    for id in &ids {
+        let request = BatchRequest {
+            preconditions: Vec::new(),
+            ops: vec![Operation::Update {
+                id: id.clone(),
+                set: Some(TicketFields {
+                    status: Some(Status::Open),
+                    ..TicketFields::default()
+                }),
+                add_labels: Vec::new(),
+                remove_labels: Vec::new(),
+                set_meta: BTreeMap::new(),
+                unset_meta: Vec::new(),
+            }],
+        };
+        batch::apply(conn, &request, UPKEEP.actor, UPKEEP.machine, now)?;
+    }
+    Ok(ids)
+}
+
 fn create(
     filing: &Filing,
     key: &str,
@@ -253,8 +314,13 @@ fn create(
         labels.push(HUB_LABEL.to_owned());
     }
     fields.labels = Some(labels);
-    // Nothing is scheduled until a person releases it, the hub's own tickets included.
-    fields.status = Some(Status::PendingApproval);
+    // Nothing is scheduled until a person releases it, the hub's own tickets included, unless
+    // the fault holds `master` back.
+    fields.status = Some(if filing.released {
+        Status::Open
+    } else {
+        Status::PendingApproval
+    });
     Operation::Create {
         fields,
         parent: None,
@@ -352,12 +418,13 @@ fn reopen(ticket: &Match, filing: &Filing, author: Author, now: Timestamp) -> Ve
         .unwrap_or(0);
     meta.insert(RETURNS_KEY.to_owned(), Value::from(returns + 1));
     // Reopening makes a ticket `open`; one closed before a person released it goes back to
-    // waiting for that release.
+    // waiting for that release, unless the fault now holds `master` back.
     let status = ticket
         .metadata
         .get(STATUS_BEFORE_KEY)
         .and_then(|value| serde_json::from_value::<Status>(value.clone()).ok())
-        .filter(|status| *status != Status::Open);
+        .filter(|status| *status != Status::Open)
+        .filter(|status| !(filing.released && *status == Status::PendingApproval));
     vec![
         Operation::Reopen {
             id: ticket.id.clone(),
@@ -419,6 +486,7 @@ fn matching(conn: &Connection, key: &str) -> Result<Vec<Match>> {
             };
             Ok(Match {
                 closed: status == "closed",
+                pending: status == "pending_approval",
                 id,
                 sightings: strings(&metadata, SIGHTINGS_KEY),
                 metadata,

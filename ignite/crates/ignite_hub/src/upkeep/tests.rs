@@ -451,6 +451,7 @@ fn an_incomplete_check_and_a_disagreeing_audit_file_p1_tickets() {
         checks: Vec::new(),
         count: 0,
         product: None,
+        holds_tip: false,
     };
     let filed = stuck::incomplete(&mut conn, UPKEEP, &incomplete, clock.now()).unwrap();
     let held = ticket(&conn, &filed.ticket);

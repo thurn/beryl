@@ -5,7 +5,8 @@
 //! - a cache audit whose rerun disagreed with the cache, which also switches off caching for
 //!   that check;
 //! - a tip that has waited an hour while a machine has not reported, or for checks that only
-//!   machines of another operating system can run;
+//!   machines of another operating system can run. These hold `master` back, so their tickets
+//!   are filed released;
 //! - an epic with open tickets of which none is ready or in progress, nor waits (through any
 //!   chain of dependencies and epics) on a ticket that is. A ready ticket that no machine can
 //!   take (its `needs:` label names no registered machine or operating system, or is
@@ -81,6 +82,7 @@ pub fn audit(
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     };
     // The ticket comes first, so a failure to file never leaves caching off with nobody told.
     let filed = filing::file(conn, author, &filing, now)?;
@@ -138,6 +140,7 @@ pub fn tips_waiting(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>>
                 ..TicketFields::default()
             },
             deps: Vec::new(),
+            released: true,
         };
         filed.push(filing::file(conn, UPKEEP, &filing, now)?);
     }
@@ -149,7 +152,9 @@ const LISTED_CHECKS: usize = 20;
 
 /// Files one ticket for each machine running the platform a tip has waited an hour for, or one
 /// saying no such machine is registered. A machine shares its ticket with [`tips_waiting`], so
-/// a machine that is silent and needed has one ticket.
+/// a machine that is silent and needed has one ticket. Each of these tickets is filed released,
+/// since the tip holds `master` back, and so is any ticket still waiting for a person that holds
+/// back one of the checks the tip waits on ([`filing::release_holding`]).
 pub fn tip_waiting(
     conn: &mut Connection,
     author: Author,
@@ -191,6 +196,7 @@ pub fn tip_waiting(
                 ..TicketFields::default()
             },
             deps: Vec::new(),
+            released: true,
         }]
     } else {
         machines
@@ -214,6 +220,7 @@ pub fn tip_waiting(
                     ..TicketFields::default()
                 },
                 deps: Vec::new(),
+                released: true,
             })
             .collect()
     };
@@ -221,6 +228,8 @@ pub fn tip_waiting(
     for filing in &filings {
         filed.push(filing::file(conn, author, filing, now)?);
     }
+    let names: Vec<&str> = report.checks.iter().map(CheckName::as_str).collect();
+    filing::release_holding(conn, &names, now)?;
     Ok(filed)
 }
 
@@ -454,6 +463,7 @@ fn epic_filing(epic: &str, lines: &[String]) -> Filing {
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     }
 }
 
@@ -565,6 +575,7 @@ fn cycle_filing(cycle: &[String]) -> Filing {
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     }
 }
 
@@ -631,5 +642,6 @@ fn held_filing(held: &Held) -> Filing {
             ..TicketFields::default()
         },
         deps: Vec::new(),
+        released: false,
     }
 }
