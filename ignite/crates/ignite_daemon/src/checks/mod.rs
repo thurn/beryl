@@ -53,6 +53,7 @@ mod regression;
 mod scope;
 pub mod sources;
 mod spent;
+mod split;
 mod time_lines;
 mod units;
 mod unstarted;

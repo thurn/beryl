@@ -495,8 +495,9 @@ impl Checks {
     }
 
     /// Runs the family's `run` command once for `checks` and reads what it reported, with the
-    /// ID the hub gave the run's record if it took it.
-    pub(super) fn run_family(
+    /// ID the hub gave the run's record if it took it. Callers use `run_family` (`split.rs`),
+    /// which splits a run that one command line cannot hold.
+    pub(super) fn run_family_once(
         &self,
         ctx: &Context,
         tree: &OpenTree,
