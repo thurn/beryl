@@ -511,7 +511,7 @@
     "expect": "down"
   },
   {
-    "label": "Rust test listings compile nothing on a built tree: `beryl-mobile`'s watched `permissions/` directory is tracked so tree resets keep it, and host debug builds of `beryl_app` stop watching `HEAD` (on 2026-11-19 most `rust` listings spent 18 to 25 s recompiling the two crates); and a `nextest` family with no kept listing is judged by its declared inputs, so a Beryl change no longer lists Ignite's test family",
+    "label": "Rust test listings compile nothing on a built tree, and a game change no longer lists Ignite's test family (on 2026-11-19 most `rust` listings spent 18 to 25 s recompiling `beryl-mobile` and `beryl_app`)",
     "metric": "bead.agent-minutes",
     "expect": "down"
   }
