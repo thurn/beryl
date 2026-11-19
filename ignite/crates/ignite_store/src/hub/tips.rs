@@ -170,6 +170,19 @@ pub fn regression_fixed(conn: &Connection, check: &str) -> Result<()> {
     Ok(())
 }
 
+/// Each check whose regression is not fixed, with its ticket, for the tickets that are not
+/// closed. A check the hub added to another check's ticket is listed with that ticket.
+pub fn open_regressions(conn: &Connection) -> Result<Vec<(String, String)>> {
+    let mut statement = conn.prepare(
+        "SELECT r.check_name, r.ticket FROM regressions r JOIN tickets t ON t.id = r.ticket
+         WHERE t.status != 'closed' AND r.state != ?1 ORDER BY r.check_name",
+    )?;
+    let rows = statement
+        .query_map(params![FIXED], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
 /// The ticket whose landing recorded each of `commits`, in the order asked, leaving out commits
 /// no landing recorded. A commit recorded by two landings belongs to the later one.
 pub fn landed_commits(conn: &Connection, commits: &[Commit]) -> Result<Vec<LandedCommit>> {

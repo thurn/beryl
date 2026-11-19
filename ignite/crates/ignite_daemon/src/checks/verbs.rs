@@ -455,10 +455,15 @@ pub(super) fn unbuilt<'a>(
     products
 }
 
-/// The open regression ticket of each check the hub has one for. The hub files each as
-/// `Regression: <check>`. A hub that cannot be reached answers none, which only means the gate
-/// plans every check as if none were known to fail.
+/// The open regression ticket of each check the hub has one for, including a check the hub
+/// grouped onto another check's ticket. A hub that cannot be reached answers none, which only
+/// means the gate plans every check as if none were known to fail. A hub that does not know the
+/// request is read by the titles of its regression tickets (`Regression: <check>`), which name
+/// only the check each ticket was filed for.
 pub(super) fn open_regressions(ctx: &Context) -> BTreeMap<CheckName, TicketId> {
+    if let Ok(open) = ctx.hub.open_regressions() {
+        return open.into_iter().map(|o| (o.check, o.ticket)).collect();
+    }
     let query = TicketQuery {
         label: vec!["regression".to_owned()],
         limit: Some(1000),

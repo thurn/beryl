@@ -4,6 +4,7 @@
 
 use super::*;
 
+use ignite_core::protocol::hub::OpenRegression;
 use ignite_core::protocol::tickets::TicketDetail;
 
 fn tree() -> TreeId {
@@ -308,6 +309,34 @@ fn the_gate_leaves_out_a_check_with_an_open_regression_unless_it_lands_the_fix()
     let world = gate_world(&changed);
     world.hub.insert_ticket(regression_ticket("tk.1", "unit:b"));
     assert!(verbs::open_regressions(&world.ctx).contains_key(&name("unit:b")));
+    assert!(
+        gated(&world, Some("tk.9")).is_empty(),
+        "left out: known to fail"
+    );
+    assert_eq!(gated(&world, Some("tk.1")), ["unit:b"], "the fix runs it");
+}
+
+#[test]
+fn the_gate_leaves_out_a_check_grouped_onto_another_checks_ticket() {
+    let changed = ["game_rules/tests/entering.rs", "src/a.py"];
+    let world = gate_world(&changed);
+    // The ticket's title names `unit:a`; the hub added `unit:b` to it without renaming it.
+    world.hub.insert_ticket(regression_ticket("tk.1", "unit:a"));
+    world.hub.set_open_regressions(vec![
+        OpenRegression {
+            check: name("unit:a"),
+            ticket: TicketId::new("tk.1").unwrap(),
+        },
+        OpenRegression {
+            check: name("unit:b"),
+            ticket: TicketId::new("tk.1").unwrap(),
+        },
+    ]);
+    let open = verbs::open_regressions(&world.ctx);
+    assert_eq!(
+        open.get(&name("unit:b")).map(TicketId::as_str),
+        Some("tk.1")
+    );
     assert!(
         gated(&world, Some("tk.9")).is_empty(),
         "left out: known to fail"

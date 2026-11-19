@@ -518,6 +518,20 @@ pub struct RegressionReport {
     pub search: Option<crate::tipround::CulpritSearch>,
 }
 
+/// A check whose regression is open, with the open ticket that holds it. One ticket can hold
+/// several checks, because the hub groups failing checks onto few tickets.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenRegression {
+    pub check: CheckName,
+    pub ticket: TicketId,
+}
+
+/// `GET /regressions/open`: every check with an open regression and its ticket.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenRegressions {
+    pub regressions: Vec<OpenRegression>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegressionFiled {
     pub ticket: TicketId,

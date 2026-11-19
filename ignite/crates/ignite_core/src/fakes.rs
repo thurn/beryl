@@ -14,9 +14,9 @@ use crate::protocol::Usage;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
-    Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey,
-    SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting,
-    TipWaitingFiled,
+    OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation,
+    ResultKey, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
@@ -133,6 +133,9 @@ pub struct FakeHub {
     tip_claim_asks: Mutex<Vec<TipClaim>>,
     tip_states: Mutex<Vec<TipVerified>>,
     regressions: Mutex<Vec<RegressionReport>>,
+    /// The open regressions `open_regressions` answers; none set means the hub does not know the
+    /// request (see `set_open_regressions`).
+    open_regressions: Mutex<Option<Vec<OpenRegression>>>,
     tips_waiting: Mutex<Vec<TipWaiting>>,
     tickets: Mutex<BTreeMap<TicketId, TicketDetail>>,
     /// Whole tickets, for `export` and `import` (see `whole`).
@@ -248,6 +251,11 @@ impl FakeHub {
     /// Every tip state reported so far, in order.
     pub fn tip_states(&self) -> Vec<TipVerified> {
         lock(&self.tip_states).clone()
+    }
+
+    /// Sets what `open_regressions` answers.
+    pub fn set_open_regressions(&self, open: Vec<OpenRegression>) {
+        *lock(&self.open_regressions) = Some(open);
     }
 
     /// Every regression reported so far, in order.
@@ -492,6 +500,13 @@ impl Hub for FakeHub {
         let ticket = TicketId::new(format!("tk.{}", regressions.len()))
             .map_err(|e| Error::Invalid(e.to_string()))?;
         Ok(RegressionFiled { ticket })
+    }
+
+    fn open_regressions(&self) -> Result<Vec<OpenRegression>> {
+        self.reachable()?;
+        lock(&self.open_regressions)
+            .clone()
+            .ok_or_else(|| Error::Invalid("open regressions are not supported".to_owned()))
     }
 
     fn ticket(&self, id: &TicketId) -> Result<TicketDetail> {

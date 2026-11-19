@@ -20,9 +20,9 @@ use serde_json::json;
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     AuditReport, ExplorationFind, FlakyReport, IncompleteReport, JusticiarReport, LandingsReply,
-    LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult, RecordBatch,
-    RegressionReport, ReportFiled, StoreRequest, TipClaim, TipVerified, TipWaiting,
-    TipWaitingFiled,
+    LandingsRequest, LookupReply, LookupRequest, MetricsImport, NewResult, OpenRegression,
+    OpenRegressions, RecordBatch, RegressionReport, ReportFiled, StoreRequest, TipClaim,
+    TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
@@ -39,7 +39,7 @@ const BILLION: f64 = 1e9;
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
     let (method, writes) = match request.path.as_str() {
         "/results/lookup" | "/landings/lookup" => ("POST", false),
-        "/checks/stats" => ("GET", false),
+        "/checks/stats" | "/regressions/open" => ("GET", false),
         "/results/store" | "/flaky" | "/tips/claim" | "/tips/verified" | "/regressions"
         | "/records" | "/metrics/import" | "/incomplete" | "/audits" | "/finds" | "/justiciar"
         | "/tips/waiting" => ("POST", true),
@@ -64,6 +64,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
             Ok(done())
         }
         "/checks/stats" => stats(conn, request),
+        "/regressions/open" => open_regressions(conn),
         "/tips/claim" => {
             let claim: TipClaim = body(request)?;
             let reply = tips::claim(conn, &claim, now).map_err(|e| store_failure(&e))?;
@@ -278,6 +279,25 @@ fn stats(conn: &Connection, request: &Request) -> Result<Response, Response> {
         .ok_or_else(|| failure(400, "missing the family parameter"))?;
     let reply = checks::stats(conn, family).map_err(|e| store_failure(&e))?;
     Ok(Response::json(200, &json!(reply)))
+}
+
+/// Every check with an open regression and the open ticket that holds it.
+fn open_regressions(conn: &Connection) -> Result<Response, Response> {
+    let rows = tips::open_regressions(conn).map_err(|e| store_failure(&e))?;
+    let regressions = rows
+        .into_iter()
+        .map(|(check, ticket)| {
+            Ok(OpenRegression {
+                check: check
+                    .parse()
+                    .map_err(|e| failure(500, &format!("check name {check:?}: {e}")))?,
+                ticket: ticket
+                    .parse()
+                    .map_err(|e| failure(500, &format!("ticket ID {ticket:?}: {e}")))?,
+            })
+        })
+        .collect::<Result<Vec<_>, Response>>()?;
+    Ok(Response::json(200, &json!(OpenRegressions { regressions })))
 }
 
 /// Records the regression and returns the ticket for it (see `upkeep::regressions`).

@@ -13,9 +13,9 @@ use crate::protocol::Usage;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
-    Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey,
-    SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting,
-    TipWaitingFiled,
+    OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation,
+    ResultKey, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified,
+    TipWaiting, TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, LeaseOp, LeaseReply, Ticket,
@@ -251,6 +251,11 @@ pub trait Hub: Send + Sync {
     fn tip_verified(&self, verified: &TipVerified) -> Result<()>;
     /// Reports a regression; the hub files or reopens its ticket (`POST /regressions`).
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled>;
+    /// Every check with an open regression and the open ticket that holds it, including checks
+    /// the hub grouped onto another check's ticket (`GET /regressions/open`).
+    fn open_regressions(&self) -> Result<Vec<OpenRegression>> {
+        Err(not_supported("list open regressions"))
+    }
     /// Reports a cache audit whose rerun disagreed with the cached result (`POST /audits`).
     fn audit(&self, report: &AuditReport) -> Result<ReportFiled>;
     /// Reports a failed exploration check (`POST /finds`).

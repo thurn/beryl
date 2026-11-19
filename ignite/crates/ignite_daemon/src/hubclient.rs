@@ -27,9 +27,9 @@ use ignite_core::protocol::hub::{
     HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandingsReply,
     LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply, LookupRequest,
     MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
-    Pause, Record, RecordBatch, RegressionFiled, RegressionReport, Release, ReportFiled,
-    Reservation, ResultKey, SessionTitle, StoreRequest, StoredListing, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
+    Release, ReportFiled, Reservation, ResultKey, SessionTitle, StoreRequest, StoredListing,
+    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -516,6 +516,11 @@ impl Hub for HubClient {
 
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
         self.post("/regressions", report)
+    }
+
+    fn open_regressions(&self) -> Result<Vec<OpenRegression>> {
+        let reply: OpenRegressions = self.get("/regressions/open", &[])?;
+        Ok(reply.regressions)
     }
 
     fn audit(&self, report: &AuditReport) -> Result<ReportFiled> {
