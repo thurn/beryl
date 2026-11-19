@@ -71,10 +71,8 @@ pub trait ExpressLane: Send + Sync {
     /// Checks `commit` out in the tree and runs the commands there, waiting for any other
     /// express run on the machine to finish first.
     fn run(&self, commit: &Commit) -> ExpressRun;
-    /// Runs the commands in `tree` as it is, with no checkout, under the same lock as [`run`]
-    /// (`ignite test` and `ignite check` in an agent's tree).
-    ///
-    /// [`run`]: ExpressLane::run
+    /// Runs the commands in `tree` as it is, with no checkout and no lock: a landing in its
+    /// ticket tree, and `ignite test` and `ignite check` in an agent's tree.
     fn run_in(&self, tree: &Path) -> ExpressRun;
 }
 
@@ -364,13 +362,8 @@ impl ExpressLane for MachineExpress {
             cores: self.cores,
             ..ExpressRun::default()
         };
-        let _held = match self.lock() {
-            Ok(file) => file,
-            Err(why) => {
-                run.failure = Some(("locking the express tree".to_owned(), why));
-                return run;
-            }
-        };
+        // No lock: each tree has its own target directory, so runs in different trees share
+        // nothing, and a lock made every landing and check wait for every other one.
         self.run_commands(tree, &mut run);
         run
     }

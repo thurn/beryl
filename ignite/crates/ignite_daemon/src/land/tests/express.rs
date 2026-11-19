@@ -18,6 +18,8 @@ use crate::land::records::Records;
 #[derive(Default)]
 struct FakeExpress {
     ran: Mutex<Vec<Commit>>,
+    /// The trees `run_in` ran in.
+    trees: Mutex<Vec<PathBuf>>,
     fails: bool,
 }
 
@@ -40,8 +42,9 @@ impl ExpressLane for FakeExpress {
         }
     }
 
-    fn run_in(&self, _tree: &std::path::Path) -> ExpressRun {
-        unreachable!("a landing runs in the express tree")
+    fn run_in(&self, tree: &std::path::Path) -> ExpressRun {
+        self.trees.lock().unwrap().push(tree.to_path_buf());
+        self.run(&Commit::new("0".repeat(40)).unwrap())
     }
 }
 
@@ -101,8 +104,9 @@ fn a_landing_that_changes_only_ignite_runs_the_express_commands_instead_of_the_g
     assert!(!reply.text.contains("gate     "), "{}", reply.text);
     let pushes = world.git.pushes();
     assert_eq!(pushes.len(), 1);
-    assert_eq!(pushes[0].0, PathBuf::from("/trees/express"));
-    assert_eq!(*lane.ran.lock().unwrap(), [pushes[0].1.clone()]);
+    // The commands ran in the ticket tree, at the rebased commit, and it pushed from there.
+    assert_eq!(*lane.trees.lock().unwrap(), [pushes[0].0.clone()]);
+    assert!(pushes[0].0.ends_with("tree-01"), "{:?}", pushes[0].0);
     assert!(world.gate.passes.lock().unwrap().is_empty());
     // The express commands stand in for the release family, which is not run again.
     assert!(world.gate.family_runs.lock().unwrap().is_empty());

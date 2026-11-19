@@ -74,7 +74,7 @@ use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use crate::steps;
-use env::{LandGate, LandTrees, TicketTree};
+use env::{GateTree, LandGate, LandTrees, TicketTree};
 use express::{ExpressLane, ExpressRun};
 use lease::{HeldLease, LEASE_TTL_S};
 use passes::{GateHome, Passed};
@@ -429,8 +429,16 @@ impl Landing {
             passes += 1;
             let changed = ctx.git.changed(&rebased.onto, &rebased.head).map_err(io)?;
             let express = self.express_for(ctx, &changed);
+            // An express landing runs its commands in its own ticket tree, which the rebase has
+            // put at the rebased commit, so express landings run side by side. They once all ran
+            // in one shared tree under one lock, and on 2026-11-18 eight of them queued behind
+            // each other for up to 32 minutes: each one that lost the race for the tip while it
+            // waited ran its commands again.
             let gate_tree = match express {
-                Some(lane) => lane.tree(),
+                Some(_) => GateTree {
+                    tree: held.tree.clone(),
+                    path: held.path.clone(),
+                },
                 None => home
                     .for_pass(&holder, &rebased.head, rebased.landed_since, &held)
                     .map_err(io)?,
@@ -443,7 +451,7 @@ impl Landing {
                 session: Some(session.clone()),
             };
             let (gated, expressed) = if let Some(lane) = express {
-                (GateRun::default(), Some(lane.run(&rebased.head)))
+                (GateRun::default(), Some(lane.run_in(&held.path)))
             } else {
                 // A pass after one whose gate passed judges again only what the commits landed
                 // since can change (see `passes`).
