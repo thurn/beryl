@@ -2,8 +2,12 @@
 
 use std::process::Command;
 
+/// Runs the built `ignite` in the temporary directory, outside any repository. Run from a build
+/// tree, `ignite land` with no arguments started a real landing of that tree through the
+/// machine's daemon, and the test hung until nextest ended it at 120 s.
 fn ignite(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_ignite"))
+        .current_dir(std::env::temp_dir())
         .args(args)
         .env_remove("IGNITE_SESSION")
         .output()
@@ -24,7 +28,9 @@ fn help_lists_the_agent_verbs() {
 
 #[test]
 fn a_usage_error_exits_nonzero() {
-    let output = ignite(&["land"]);
+    // An unknown flag is refused before the daemon is asked anything. `ignite land` alone asked
+    // the daemon, which took up to 102 s under load and in a build tree started a real landing.
+    let output = ignite(&["land", "--no-such-flag"]);
     assert!(!output.status.success());
 }
 
