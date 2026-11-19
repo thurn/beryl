@@ -10,7 +10,7 @@
 use crate::protocol::host::{
     Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
     LeaseLanding, LeaseLandingReply, Poll, RefuseStop, RefuseStopReply, ReleaseLanding,
-    ReturnCores, Run, RunReply, StepUpdate, StopState,
+    ReturnCores, Run, RunReply, Selected, SelectedReply, StepUpdate, StopState,
 };
 use crate::traits::Result;
 
@@ -39,4 +39,6 @@ pub trait HostClient: Send + Sync {
     fn borrow_cores(&self, call: &BorrowCores) -> Result<BorrowCoresReply>;
     /// `host-return-cores`.
     fn return_cores(&self, call: &ReturnCores) -> Result<Ack>;
+    /// `host-selected`; never waits for a build.
+    fn selected(&self, call: &Selected) -> Result<SelectedReply>;
 }

@@ -301,6 +301,39 @@ fn a_verb_runs_to_the_end_across_dropped_calls_and_its_reply_lands_in_the_row() 
     assert!(host.hellos().len() > 1);
 }
 
+/// A verb process lists and runs tests with the packages the daemon's build selects. When the
+/// subset's features differ from the whole workspace's, the daemon selects none, standing for
+/// the whole workspace, and the verb process must not select the subset itself.
+#[test]
+fn a_verb_selects_the_packages_the_daemon_selects() {
+    let scratch = Scratch::new("selected");
+    let (db, handle) = running_test();
+    let host = Arc::new(FakeHost::default());
+    let tree = TreeId::new("tree-01").unwrap();
+    host.script_selected(&tree, "rust-tests", &[]);
+    let asked = vec!["cards".to_owned()];
+    let outcome = process(&scratch, &db, &handle, &host).run(|remote, _, _| {
+        let tree = tree.clone();
+        let asked = asked.clone();
+        Ok(assembled(
+            remote,
+            FakeVerb(Box::new(move |ctx| {
+                let differing = ctx.builds.selected(&tree, "rust-tests", &asked);
+                let same = ctx.builds.selected(&tree, "other", &asked);
+                Reply::text(Exit::Success, format!("{differing:?} {same:?}"))
+            })),
+        ))
+    });
+    assert_eq!(reply_of(outcome).text, "[] [\"cards\"]");
+    assert_eq!(
+        host.verbs()
+            .iter()
+            .filter(|verb| *verb == "host-selected")
+            .count(),
+        2
+    );
+}
+
 /// A stop asked at the daemon reaches the verb, which unwinds; the row keeps it as `stopped`.
 #[test]
 fn a_stop_asked_at_the_daemon_stops_the_verb() {

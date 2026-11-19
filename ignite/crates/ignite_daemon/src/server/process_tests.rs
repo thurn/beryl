@@ -22,8 +22,8 @@ use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::host::{
     Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
     HostCall, LeaseLanding, LeaseLandingReply, Poll, REQUEST_VARIABLE, RefuseStop, RefuseStopReply,
-    ReleaseLanding, RequestId, ReturnCores, Run, RunReply, StepUpdate, StopState, decode_reply,
-    encode_request,
+    ReleaseLanding, RequestId, ReturnCores, Run, RunReply, Selected, SelectedReply, StepUpdate,
+    StopState, decode_reply, encode_request,
 };
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::time::Timestamp;
@@ -307,6 +307,9 @@ impl HostClient for Switch {
         self.call(call)
     }
     fn return_cores(&self, call: &ReturnCores) -> Result<Ack> {
+        self.call(call)
+    }
+    fn selected(&self, call: &Selected) -> Result<SelectedReply> {
         self.call(call)
     }
 }

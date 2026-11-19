@@ -89,7 +89,7 @@ pub trait HostCall: Serialize + DeserializeOwned {
 }
 
 /// Every call, with the version that introduced it. A daemon registers a verb for each.
-pub const CALLS: [(&str, u32); 12] = [
+pub const CALLS: [(&str, u32); 13] = [
     (Hello::VERB, Hello::SINCE),
     (Run::VERB, Run::SINCE),
     (Build::VERB, Build::SINCE),
@@ -102,6 +102,7 @@ pub const CALLS: [(&str, u32); 12] = [
     (Finished::VERB, Finished::SINCE),
     (BorrowCores::VERB, BorrowCores::SINCE),
     (ReturnCores::VERB, ReturnCores::SINCE),
+    (Selected::VERB, Selected::SINCE),
 ];
 
 /// Whether a verb process speaking `own` may make the call introduced in `since` to a daemon
@@ -522,6 +523,37 @@ impl HostCall for ReturnCores {
     const VERB: &'static str = "host-return-cores";
     const SINCE: u32 = 2;
     type Reply = Ack;
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+/// `host-selected`: asks which packages the build of `product` selects for `packages`
+/// ([`Builds::selected`](crate::traits::Builds::selected)). The daemon compares the features of
+/// the subset with the whole workspace's, which only its build manager can do, and the verb
+/// process uses the answer to list and run tests with the same packages the build compiled. It
+/// never waits for a build, and repeating it gives the same answer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Selected {
+    pub handle: Handle,
+    pub tree: TreeId,
+    pub product: String,
+    /// The packages the caller wants.
+    pub packages: Vec<String>,
+}
+
+/// The answer to `host-selected`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SelectedReply {
+    /// The packages selected: `packages` themselves, or none when the build is of the whole
+    /// workspace.
+    pub packages: Vec<String>,
+}
+
+impl HostCall for Selected {
+    const VERB: &'static str = "host-selected";
+    const SINCE: u32 = 2;
+    type Reply = SelectedReply;
     fn handle(&self) -> &Handle {
         &self.handle
     }

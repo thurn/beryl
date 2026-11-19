@@ -12,7 +12,7 @@ use ignite_core::protocol::Class;
 use ignite_core::protocol::Usage;
 use ignite_core::protocol::host::{
     BorrowCores, Build, BuildReply, Command, LeaseLanding, LeaseLandingReply, ReleaseLanding,
-    RequestIds, ReturnCores, Run, RunReply,
+    RequestIds, ReturnCores, Run, RunReply, Selected,
 };
 use ignite_core::traits::{
     BuildFor, BuildResult, Builds, Clock, CommandSpec, Launcher, Result, RunResult,
@@ -202,6 +202,23 @@ impl Builds for RemoteBuilds {
                     };
                 }
             }
+        }
+    }
+
+    /// Asks the daemon (`host-selected`), whose build manager compares the subset's features with
+    /// the whole workspace's, so that a listing or a run selects what the daemon's build built.
+    /// When the daemon cannot be reached or does not know the call, the packages asked for are
+    /// selected, as for any [`Builds`] that cannot tell.
+    fn selected(&self, tree: &TreeId, product: &str, packages: &[String]) -> Vec<String> {
+        let call = Selected {
+            handle: self.remote.link.handle().clone(),
+            tree: tree.clone(),
+            product: product.to_owned(),
+            packages: packages.to_vec(),
+        };
+        match self.remote.link.selected(&call) {
+            Ok(reply) => reply.packages,
+            Err(_) => packages.to_vec(),
         }
     }
 

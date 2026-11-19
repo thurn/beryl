@@ -22,6 +22,9 @@
 //!   it was first asked for (`first_asked_at`), so it keeps its place.
 //! - `host-build` makes a product current in a tree with the daemon's build manager, joining a
 //!   build already running for it, under the same 30-second rule (`host/builds.rs`).
+//! - `host-selected` answers which packages the build of a product selects for the packages a
+//!   verb process wants, since only the build manager compares their features with the whole
+//!   workspace's (`host/builds.rs`).
 //! - `host-lease-landing` and `host-release-landing` lease and free a landing tree, owned by the
 //!   handle, so a restarted daemon keeps it (`host/landing.rs`).
 //! - `host-borrow-cores` and `host-return-cores` lend a verb process the scheduler cores that are

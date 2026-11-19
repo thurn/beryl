@@ -1,5 +1,7 @@
 //! `host-build`: makes a product current in a tree with the daemon's build manager
 //! (`Builds::ensure_for`), which joins a build already running for the same product.
+//! `host-selected` asks the same manager which packages that build would select
+//! (`Builds::selected`) and never waits for a build.
 //!
 //! A new request ID gets a thread of its own that asks the build manager, inside the verb
 //! process's activity, so the build is charged and stopped as one a verb on the daemon's own
@@ -11,7 +13,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use ignite_core::protocol::host::{Build, BuildReply};
+use ignite_core::protocol::host::{Build, BuildReply, Selected, SelectedReply};
 use ignite_core::traits::{BuildFor, Error, Result};
 
 use super::{Host, Pending};
@@ -31,6 +33,16 @@ impl Host {
         Ok(pending
             .wait(self.timing.block)
             .unwrap_or(BuildReply::Waiting { what }))
+    }
+
+    /// `host-selected`: what the build manager selects for the packages asked
+    /// ([`Builds::selected`](ignite_core::traits::Builds::selected)).
+    pub(super) fn selected(&self, call: &Selected) -> SelectedReply {
+        SelectedReply {
+            packages: self
+                .builds
+                .selected(&call.tree, &call.product, &call.packages),
+        }
     }
 
     /// The thread working on `call`'s request ID: the one already started, or a new one.

@@ -18,6 +18,7 @@ pub struct FakeBuilds {
     never_built: Mutex<Vec<(TreeId, String)>>,
     forgotten: Mutex<Vec<TreeId>>,
     held: Mutex<Vec<(TreeId, String)>>,
+    selections: Mutex<HashMap<(TreeId, String), Vec<String>>>,
 }
 
 impl FakeBuilds {
@@ -43,6 +44,16 @@ impl FakeBuilds {
         lock(&self.scripted).insert((tree.clone(), product.to_owned()), result);
     }
 
+    /// Makes [`Builds::selected`] answer `packages` for every later ask about `product` in
+    /// `tree`, whatever packages are asked for. An empty list stands for the whole workspace,
+    /// as when the subset's features differ from the whole workspace's.
+    pub fn script_selected(&self, tree: &TreeId, product: &str, packages: &[&str]) {
+        lock(&self.selections).insert(
+            (tree.clone(), product.to_owned()),
+            packages.iter().map(|&p| p.to_owned()).collect(),
+        );
+    }
+
     /// Every request so far: tree, product and packages.
     pub fn requests(&self) -> Vec<(TreeId, String, Vec<String>)> {
         lock(&self.built).clone()
@@ -58,6 +69,13 @@ impl Builds for FakeBuilds {
     fn forget(&self, tree: &TreeId) {
         lock(&self.forgotten).push(tree.clone());
         lock(&self.held).retain(|(t, _)| t != tree);
+    }
+
+    fn selected(&self, tree: &TreeId, product: &str, packages: &[String]) -> Vec<String> {
+        lock(&self.selections)
+            .get(&(tree.clone(), product.to_owned()))
+            .cloned()
+            .unwrap_or_else(|| packages.to_vec())
     }
 
     fn held_in(&self, tree: &TreeId, _dirs: &[String]) -> BTreeSet<String> {

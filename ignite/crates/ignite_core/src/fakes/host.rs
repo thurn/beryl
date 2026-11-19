@@ -9,7 +9,8 @@ use crate::ids::{Commit, Handle, TreeId};
 use crate::protocol::host::{
     Ack, AllowStop, BorrowCores, BorrowCoresReply, Build, BuildReply, Finished, Hello, HelloReply,
     HostCall, LeaseLanding, LeaseLandingReply, PROTOCOL_VERSION, Poll, RefuseStop, RefuseStopReply,
-    ReleaseLanding, RequestId, ReturnCores, Run, RunReply, StepUpdate, StopState,
+    ReleaseLanding, RequestId, ReturnCores, Run, RunReply, Selected, SelectedReply, StepUpdate,
+    StopState,
 };
 use crate::traits::{Error, Result};
 
@@ -57,6 +58,8 @@ struct State {
     free_cores: u32,
     borrowed: BTreeMap<u64, u32>,
     next_grant: u64,
+    /// What `host-selected` answers for a tree and product, before echoing the packages asked.
+    selections: HashMap<(TreeId, String), Vec<String>>,
     steps: Vec<StepUpdate>,
     stop: bool,
     daemon_started: Option<String>,
@@ -87,6 +90,7 @@ impl Default for FakeHost {
                 borrowed: BTreeMap::new(),
                 next_grant: 1,
                 released: Vec::new(),
+                selections: HashMap::new(),
                 steps: Vec::new(),
                 stop: false,
                 daemon_started: None,
@@ -141,6 +145,15 @@ impl FakeHost {
         lock(&self.state)
             .scripted_builds
             .insert((tree.clone(), product.to_owned()), reply);
+    }
+
+    /// Answers every later `host-selected` for `product` in `tree` with `packages`, whatever
+    /// packages are asked for. An empty list stands for the whole workspace.
+    pub fn script_selected(&self, tree: &TreeId, product: &str, packages: &[&str]) {
+        lock(&self.state).selections.insert(
+            (tree.clone(), product.to_owned()),
+            packages.iter().map(|&p| p.to_owned()).collect(),
+        );
     }
 
     /// Answers the next new landing lease with `reply`, before the default.
@@ -402,6 +415,18 @@ impl HostClient for FakeHost {
             state.free_cores += cores;
         }
         Ok(Ack {})
+    }
+
+    fn selected(&self, call: &Selected) -> Result<SelectedReply> {
+        let state = self.attempt(call)?;
+        let key = (call.tree.clone(), call.product.clone());
+        Ok(SelectedReply {
+            packages: state
+                .selections
+                .get(&key)
+                .cloned()
+                .unwrap_or_else(|| call.packages.clone()),
+        })
     }
 }
 

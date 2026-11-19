@@ -19,7 +19,7 @@ use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::host::{
     AllowStop, Build, BuildReply, BuildWho, Command, Finished, Hello, HostCall, LeaseLanding,
     LeaseLandingReply, PROTOCOL_VERSION, Poll, RefuseStop, ReleaseLanding, RequestId, Run,
-    RunReply, StepUpdate, decode_reply, encode_request,
+    RunReply, Selected, StepUpdate, decode_reply, encode_request,
 };
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{BuildResult, CommandSpec, Result};
@@ -624,6 +624,33 @@ fn a_verb_process_that_ends_without_saying_so_is_noticed() {
     let reply = send(&daemon.registry, &hello(&handle)).unwrap();
     assert!(!reply.running);
     assert!(send(&daemon.registry, &Poll { handle }).unwrap().stop);
+    let _ = fs::remove_dir_all(&runs);
+}
+
+#[test]
+fn selected_asks_the_build_manager() {
+    let db = database();
+    let runs = runs_folder("selected");
+    let handle = running(&db, "L-6");
+    let daemon = daemon(&db, &runs, None);
+    let tree = TreeId::new("landing-1").unwrap();
+    let ask = |product: &str| Selected {
+        handle: handle.clone(),
+        tree: tree.clone(),
+        product: product.to_owned(),
+        packages: vec!["engine".to_owned()],
+    };
+    daemon.builds.script_selected(&tree, "rust-tests", &[]);
+    assert!(
+        send(&daemon.registry, &ask("rust-tests"))
+            .unwrap()
+            .packages
+            .is_empty()
+    );
+    assert_eq!(
+        send(&daemon.registry, &ask("other")).unwrap().packages,
+        ["engine"]
+    );
     let _ = fs::remove_dir_all(&runs);
 }
 
