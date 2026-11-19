@@ -264,9 +264,21 @@ fn the_gear_icon_is_tinted_on_its_teeth_and_empty_in_its_hole() {
     let worker = GlyphWorker::spawn(out, || {}, || {});
     worker.icons(4.0);
     worker.flush();
-    let page = pages.try_recv().expect("the worker sent the icons' page");
+    // The icons and their shadows fill several pages; the gear itself is on one of them.
+    let (page, gear) = pages
+        .try_iter()
+        .find_map(|page| {
+            let AssetReady::Icons { cells, .. } = &page.ready else {
+                return None;
+            };
+            let gear = *cells
+                .iter()
+                .find(|cell| cell.icon == GEAR && cell.shadow == 0)?;
+            Some((page, gear))
+        })
+        .expect("the worker sent a page with the gear");
     let (
-        AssetReady::Icons { cells, .. },
+        AssetReady::Icons { .. },
         Upload::AtlasPage {
             page: number,
             pixels: atlas,
@@ -275,10 +287,6 @@ fn the_gear_icon_is_tinted_on_its_teeth_and_empty_in_its_hole() {
     else {
         panic!("only icons were asked for");
     };
-    let gear = *cells
-        .iter()
-        .find(|cell| cell.icon == GEAR)
-        .expect("the gear");
     let [x, y, side, _] = gear.rect;
     let coverage = |dx: u16, dy: u16| {
         atlas[usize::from(y + dy) * usize::from(PAGE_SIZE) + usize::from(x + dx)]
