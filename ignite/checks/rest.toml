@@ -239,11 +239,17 @@ inputs = ["ignite/**", "ignite.toml"]
 # `ignite-tests` builds. Clippy compiles the workspace's crates once more in its own check
 # mode, which cargo cannot share with the test build; on a warm tree after an edit that took
 # about 4 s.
+#
+# In the always set, like every other format and lint family: a change that touches Ignite and
+# also Beryl files takes the Beryl gate, whose instruction budget would otherwise leave clippy
+# to tip verification, and a lint failure then landed on `staging` that an Ignite-only change
+# would have caught. It still runs only when its inputs change.
 [family.ignite-lint]
 kind = "regression"
 adapter = "jsonl"
 platforms = "any"
 needs = ["python-env"]
+always = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list ignite-lint"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run ignite-lint {checks}"
 inputs = [
