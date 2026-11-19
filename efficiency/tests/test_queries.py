@@ -157,6 +157,16 @@ def numbers_in(value: object) -> list[float]:
 
 
 # A number standing alone in text: not part of a date, a time, an id or a name.
+def strings_in(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [n for v in value.values() for n in strings_in(v)]
+    if isinstance(value, list):
+        return [n for v in value for n in strings_in(v)]
+    return []
+
+
 NUMBER: re.Pattern[str] = re.compile(r"(?<![\w.:/-])-?\d+(?:\.\d+)?(?![\w.:/-])")
 
 QUERIES: list[list[str]] = [
@@ -184,11 +194,17 @@ def test_every_number_in_the_text_is_in_the_json(
 ) -> None:
     shown, found = run(capsys, *query, "--since", since)
     have = numbers_in(found)
+    # Free text the JSON holds as a string, such as an efficiency change's label, may name
+    # numbers of its own; every figure is a number in the JSON.
+    words = [w for text in strings_in(found) for w in NUMBER.findall(text)]
     body = shown.split("\nmore: ")[0]
     seen = NUMBER.findall(body)
     assert seen, body
     for token in seen:
-        assert any(abs(float(token) - n) < 1e-9 for n in have), (token, body)
+        assert token in words or any(abs(float(token) - n) < 1e-9 for n in have), (
+            token,
+            body,
+        )
     assert shown.rstrip().splitlines()[-1].startswith("more: ")
     assert found["more"]
 
