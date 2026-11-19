@@ -10,9 +10,7 @@ DESKTOP = {"CLAUDE_CODE_HOST_SESSION_ID": "local_w1"}
 
 def test_the_session_is_the_one_ignite_records() -> None:
     assert turn_ended.session(DESKTOP) == "local_w1"
-    assert (
-        turn_ended.session({"IGNITE_SESSION": "local_x", **DESKTOP}) == "local_x"
-    )
+    assert turn_ended.session({"IGNITE_SESSION": "local_x", **DESKTOP}) == "local_x"
     assert turn_ended.session({}) is None
 
 
