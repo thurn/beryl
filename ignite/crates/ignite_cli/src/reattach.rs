@@ -17,7 +17,9 @@
 //!   reads or waits ([`REPEATABLE`]). Any other is answered with a reply that says its outcome
 //!   is unknown and how to find it.
 //! - A daemon that refuses the connection before the request is written is being started, so
-//!   the request is sent again for up to [`RETRY_FOR`]. So is one whose socket does not exist
+//!   the request is sent again for up to [`RETRY_FOR`], counted from the last time a daemon
+//!   accepted a request of the command and held it until it went away (a command that outlives
+//!   one restart can meet the next long after). So is one whose socket does not exist
 //!   while a process holds the machine's daemon lock or a daemon start was logged in the last
 //!   minute ([`Daemon::starting`]): on Windows the old daemon's pipe goes away before the new
 //!   daemon creates its own. Otherwise a missing socket means no daemon is installed or
@@ -73,7 +75,7 @@ pub fn send(
     if !(cut.sent || retry_unsent && starting(daemon, &cut)) {
         return Err(cut);
     }
-    let since = daemon.elapsed();
+    let mut since = daemon.elapsed();
     let mut pause = FIRST_PAUSE;
     let mut cut = cut;
     loop {
@@ -98,6 +100,12 @@ pub fn send(
             Ok(reply) => return Ok(reply),
             Err(cut) => cut,
         };
+        if cut.sent {
+            // A daemon accepted the request and held it until it restarted again: it was
+            // reachable up to this moment, so the next [`RETRY_FOR`] starts here.
+            since = daemon.elapsed();
+            pause = FIRST_PAUSE;
+        }
     }
 }
 
@@ -137,13 +145,14 @@ fn starting(daemon: &dyn Daemon, cut: &Cut) -> bool {
 }
 
 /// Waits on `handle` for `req`'s reply, as `ignite wait` does, passing the verb's steps to
-/// `progress`, trying to reach the daemon for up to [`RETRY_FOR`] after `since`. The wait lasts
-/// what is left of the request's own.
+/// `progress`, trying to reach the daemon for up to [`RETRY_FOR`] after `since`, which moves to
+/// the moment each wait that the daemon accepted was cut. The wait lasts what is left of the
+/// request's own.
 fn reattach(
     daemon: &mut dyn Daemon,
     req: &Request,
     handle: &Handle,
-    since: Duration,
+    mut since: Duration,
     mut progress: Option<&mut dyn FnMut(&str)>,
 ) -> Reply {
     let mut pause = FIRST_PAUSE;
@@ -159,6 +168,12 @@ fn reattach(
             Ok(reply) => return reply,
             Err(cut) => cut,
         };
+        if cut.sent {
+            // The daemon accepted this wait and held it until it went away, so it was
+            // reachable up to this moment, however long the wait lasted.
+            since = daemon.elapsed();
+            pause = FIRST_PAUSE;
+        }
         if daemon.elapsed().saturating_sub(since) >= RETRY_FOR {
             return Reply::text(
                 Exit::Usage,

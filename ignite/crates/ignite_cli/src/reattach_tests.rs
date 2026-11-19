@@ -13,6 +13,8 @@ enum Answer {
     Missing,
     /// The connection drops after the request was written, having named this handle.
     Dropped(Option<&'static str>),
+    /// The daemon holds the request for this long, then the connection drops without a handle.
+    DroppedAfter(Duration),
 }
 
 /// A daemon that answers each exchange from a script and keeps a clock that pauses advance.
@@ -64,6 +66,10 @@ impl Daemon for Scripted {
             Answer::Refused => Err(cut(false, None, ErrorKind::ConnectionRefused)),
             Answer::Missing => Err(cut(false, None, ErrorKind::NotFound)),
             Answer::Dropped(handle) => Err(cut(true, handle, ErrorKind::UnexpectedEof)),
+            Answer::DroppedAfter(held) => {
+                self.now += held;
+                Err(cut(true, None, ErrorKind::UnexpectedEof))
+            }
         }
     }
 
@@ -241,4 +247,41 @@ fn a_daemon_about_to_restart_is_sent_the_request_again() {
     let reply = send(&mut daemon, &request("release"), None, true).unwrap();
     assert_eq!(reply, passed());
     assert_eq!(daemon.verbs(), ["release", "release", "release"]);
+}
+
+/// A restart cuts a command, the new daemon holds the resent request for longer than
+/// [`RETRY_FOR`], and a second restart cuts it again. The second cut must start a new window of
+/// [`RETRY_FOR`], not be judged against the first one.
+#[test]
+fn a_repeatable_verb_survives_a_second_restart_long_after_the_first() {
+    let long_hold = RETRY_FOR + Duration::from_secs(240);
+    let mut daemon = Scripted::new(vec![
+        Answer::Dropped(None),
+        Answer::DroppedAfter(long_hold),
+        // The daemon is starting again.
+        Answer::Refused,
+        Answer::Reply(passed()),
+    ]);
+    let reply = send(&mut daemon, &request("dispatch"), None, true).unwrap();
+    assert_eq!(reply, passed());
+    assert_eq!(
+        daemon.verbs(),
+        ["dispatch", "dispatch", "dispatch", "dispatch"]
+    );
+}
+
+/// The same for a long verb that is waited on by its handle: each wait the daemon accepts and
+/// holds starts a new window.
+#[test]
+fn a_wait_on_a_handle_survives_a_second_restart_long_after_the_first() {
+    let long_hold = RETRY_FOR + Duration::from_secs(240);
+    let mut daemon = Scripted::new(vec![
+        Answer::Dropped(Some("L-9")),
+        Answer::DroppedAfter(long_hold),
+        Answer::Refused,
+        Answer::Reply(passed()),
+    ]);
+    let reply = send(&mut daemon, &request("land"), None, true).unwrap();
+    assert_eq!(reply, passed());
+    assert_eq!(daemon.verbs(), ["land", "wait L-9", "wait L-9", "wait L-9"]);
 }
