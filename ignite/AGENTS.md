@@ -67,3 +67,9 @@ into the binary.
   never start there.
 - `tests/dashboard_*.rs` check the pages' HTML against seeded databases. Add to
   them for any change in what a page shows.
+- A dashboard change is not done when it lands. After `ignite land`, run the
+  `ignite wait deploy-<commit>` it prints until the hub runs the release, then
+  fetch the live page or the asset it links (`/assets/cirrus.<hash>.css` or
+  `.js`) with `curl` and confirm it contains your change. Only then set the
+  session's title to ✅ or tell the user it is done, and tell them to reload any
+  open dashboard tab, which keeps the old assets until it reloads.
