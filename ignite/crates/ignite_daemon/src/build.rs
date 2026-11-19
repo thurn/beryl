@@ -15,7 +15,8 @@
 //!   inputs fail the same way. A build that a signal ended, or that hung, is not remembered,
 //!   so the next request tries it again.
 //! - Otherwise it waits until no build is writing any of the product's output directories in
-//!   that tree, then runs the build command through the [`Launcher`]. A failure that looks
+//!   that tree and, while the disk has less than [`START_GB`] free, for disk space (see `room`),
+//!   then runs the build command through the [`Launcher`]. A failure that looks
 //!   like damage to the tree's own build products is cleared and run once more (see `repair`).
 //!
 //! The input hash covers the product's resolved inputs (by git object ID) and its build command
@@ -47,9 +48,11 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 mod flight;
 mod rejoin;
 pub mod repair;
+mod room;
 mod store;
 use flight::{Flight, FlightGuard, STOP_RECHECK};
 pub use rejoin::BUILD_KEY_ENV;
+pub use room::{DiskRoom, NativeRoom, START_GB};
 
 use ignite_core::hash::{HashParts, input_hash};
 use ignite_core::ids::{InputHash, TreeId};
@@ -165,6 +168,8 @@ pub struct BuildManager {
     launcher: Arc<dyn Launcher>,
     git: Arc<dyn Git>,
     trees: Arc<dyn TreeFacts>,
+    /// The disk whose free space a build waits for (see `room`); `None` never waits.
+    room: Option<Arc<dyn DiskRoom>>,
     state: Mutex<State>,
     /// The local database that keeps `held` and `failed` across restarts; `None` keeps them in
     /// memory only.
@@ -238,6 +243,7 @@ impl BuildManager {
             launcher,
             git,
             trees,
+            room: None,
             state: Mutex::default(),
             store: Mutex::new(None),
             ended: Condvar::new(),
@@ -400,17 +406,6 @@ impl BuildManager {
         }
     }
 
-    /// The result of a request whose work was asked to stop while it waited for another build.
-    fn stopped_waiting(&self, plan: &Plan) -> BuildResult {
-        self.failure(
-            &plan.request.product,
-            &format!(
-                "stopped waiting for a build of {} in {}: its work was asked to stop",
-                plan.request.product, plan.request.tree
-            ),
-        )
-    }
-
     /// The shared dependencies whose features the subset's build would enable differently
     /// from the whole workspace's, compared once per state of the Cargo files. Empty when the
     /// product reads no crates or builds the whole workspace. `Err` when `cargo tree` fails.
@@ -495,6 +490,7 @@ impl BuildManager {
         let activity = crate::steps::current();
         let stop_requested = || activity.as_ref().is_some_and(|a| a.stop_requested());
         let mut state = lock(&self.state);
+        let mut room_checked = false;
         loop {
             if state.held.get(&plan.request) == Some(&plan.hash) {
                 return BuildResult::Current;
@@ -520,7 +516,16 @@ impl BuildManager {
                 return result.unwrap_or_else(|| self.stopped_waiting(plan));
             }
             if dirs.iter().all(|dir| !state.busy.contains(dir)) {
-                break;
+                if room_checked {
+                    break;
+                }
+                drop(state);
+                if let Some(stopped) = self.wait_for_room(plan, &stop_requested) {
+                    return stopped;
+                }
+                room_checked = true;
+                state = lock(&self.state);
+                continue;
             }
             if stop_requested() {
                 drop(state);

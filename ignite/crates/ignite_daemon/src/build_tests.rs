@@ -737,3 +737,6 @@ mod restart;
 
 #[path = "build/repair_build_tests.rs"]
 mod repair;
+
+#[path = "build/room_tests.rs"]
+mod room;

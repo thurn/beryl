@@ -20,7 +20,7 @@ use ignite_os::hostcpu::HostCpu;
 
 use super::{DaemonOptions, TreeSetup, desk, loops};
 use crate::adopt::AdoptingLauncher;
-use crate::build::{BuildManager, BuildSettings, DirectoryTrees};
+use crate::build::{BuildManager, BuildSettings, DirectoryTrees, NativeRoom};
 use crate::cache::ResultCache;
 use crate::checks::sources::HubHistory;
 use crate::checks::verbs::{CheckVerb, TestVerb, WhyVerb};
@@ -185,7 +185,12 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         )
         // What each tree holds and which builds failed survive the restart, and builds a previous
         // daemon left running are waited for instead of run again (see `crate::build`).
-        .with_store(base.open()?),
+        .with_store(base.open()?)
+        // A build waits while the disk is nearly full instead of failing partway through it,
+        // and the disk loop reads the free space at the repository too.
+        .with_room(Arc::new(NativeRoom {
+            path: base.options.repo.clone(),
+        })),
     );
     builds.rejoin(unfinished, &reset);
     let repo = &base.options.repo;

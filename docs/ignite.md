@@ -852,6 +852,11 @@ Rules for trees:
   deletion alone frees at least 1 GB, so a donor whose blocks a leased tree's
   clones share is kept, then any whose bytes no tree outside the free ones
   shares.
+- A build waits to start while the disk has less than 30 GB free, reading the
+  free space again every 10 seconds, until there is room or its work is stopped.
+  A backup's APFS snapshot keeps every block that builds rewrite or delete
+  allocated, so sweeping free trees can free almost nothing for hours, and a
+  build started on a nearly full disk fails with `ENOSPC` partway through.
 - A tree's recorded builds are forgotten before its build directories are
   deleted, by the disk loop or by seeding, so a daemon restart partway through a
   deletion cannot leave records of builds whose files are gone.
