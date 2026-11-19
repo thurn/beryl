@@ -1005,4 +1005,8 @@ fixed in the same session. Newest first.
   check. Its audit hook sees every file a test's code opens and fails the test
   when the record does not list the file for the module that opened it. The same
   gap remains for check families whose run-time reads happen in a subprocess
-  (node, a browser, a Rust binary), which a Python audit hook cannot see.
+  (node, a browser, a Rust binary), which a Python audit hook cannot see. The
+  first run with the record found two more stale passes of the same kind:
+  `test_ignite_rest.py` reads `ignite/checks/rest.toml` and `test_changes.py`
+  reads `data/efficiency-changes.json`, and changes to those files had broken
+  both tests without the gate noticing.

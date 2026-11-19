@@ -311,9 +311,10 @@
     "expect": "down"
   },
   {
-    "label": "`just b3d cargo-test -p` filters the shared workspace build instead of building the named crates again: 74 crates and 689 CPU-s (310 s wall) after the shared build, now 0 crates and 1 CPU-s",
+    "label": "Running `just b3d cargo-test -p` filters the shared workspace build instead of building the named crates again: 74 crates and 689 CPU-s (310 s wall) after the shared build, now 0 crates and 1 CPU-s",
     "metric": "bead.agent-minutes",
-    "expect": "down"
+    "expect": "down",
+    "commit": "fd371f97cea28eecfcede6fc20dd61432fdc6df6"
   },
   {
     "label": "Compiling grants give cores back to waiters of their own class past a fair share: 15 agent requests had queued 148-164 s behind one 12-core build",
@@ -366,9 +367,10 @@
     "expect": "down"
   },
   {
-    "label": "Ignite's own tests run under cargo-nextest, from the test build, and fmt and clippy no longer wait for that build: warm on 2026-11-18 at load 30 to 43 the 1325 tests took 13.2 s wall and 59 CPU-s against 35 s and 91 CPU-s through `cargo test`, which ran the 29 test binaries one after another; clippy re-checked the workspace in about 4 s",
+    "label": "Ignite's own tests run under cargo-nextest, from the test build, and fmt and clippy no longer wait for that build: warm on 2026-11-18 at load 30 to 43 the 1325 tests took 13.2 s wall and 59 CPU-s against 35 s and 91 CPU-s through `cargo test`, which ran the 29 test binaries one after another, and clippy re-checked the workspace in about 4 s",
     "metric": "ignite.gate-seconds",
-    "expect": "down"
+    "expect": "down",
+    "commit": "6a6fc18e94c6fa0c13eb65f890081c44197b3c53"
   },
   {
     "label": "The monitor rewrites a daemon launchd agent an older build wrote: hours after the agent became Interactive, jarvis still ran every rustc at utility priority, ten of them at a quarter core each with 40% of the CPU idle, because only `ignite install` wrote the agent",
@@ -376,9 +378,10 @@
     "expect": "down"
   },
   {
-    "label": "`ignite test` of Ignite's own checks, and `ignite check`, run the express commands on the reserved express cores when the tree changes only Ignite: through the scheduler they took 5 to 8.5 minutes while other builds held its cores, against 40 s warm on 3 express cores after a daemon edit (fmt 0 s, clippy 2 s, nextest 38 s)",
+    "label": "Both `ignite test` of Ignite's own checks and `ignite check` run the express commands on the reserved express cores when the tree changes only Ignite: through the scheduler they took 5 to 8.5 minutes while other builds held its cores, against 40 s warm on 3 express cores after a daemon edit (fmt 0 s, clippy 2 s, nextest 38 s)",
     "metric": "bead.agent-minutes",
-    "expect": "down"
+    "expect": "down",
+    "commit": "4e8341c6d1ebfd864ee0a9f2c806c9dce3114a2c"
   },
   {
     "label": "The Claude dispatcher's settings deny the tools its loop never calls, which Claude Code then leaves out of its context: the desktop app's browser, simulator, chart, terminal and editing tools took about 60,000 of its 120,000-token window before its first message, so each request re-sent them and it compacted after about 27,000 tokens of loop",
@@ -421,14 +424,16 @@
     "expect": "down"
   },
   {
-    "label": "`ignite land` runs the formatters of `[format]` on the changed files and commits what they change before its checks, and a failed express clippy names `cargo clippy -p <crate>` to run locally: on 2026-11-18 formatting and clippy failures found one Ignite round trip at a time cost one epic's workers about 25 minutes",
+    "label": "The command `ignite land` runs the formatters of `[format]` on the changed files and commits what they change before its checks, and a failed express clippy names `cargo clippy -p <crate>` to run locally: on 2026-11-18 formatting and clippy failures found one Ignite round trip at a time cost one epic's workers about 25 minutes",
     "metric": "bead.agent-minutes",
-    "expect": "down"
+    "expect": "down",
+    "commit": "2b36224587ef8e13028828e6a023609a1f973ad6"
   },
   {
-    "label": "ignite test looks a bare name up in each family's newest listing, so a one-card change no longer lists and builds every family (ignite test oust took 39 minutes and 816 s of builds in 8 products; a full-gate ignite check of the same change took 229 s, and of a second card change 44 s, under full load on 2026-11-19)",
+    "label": "The command `ignite test` looks a bare name up in each family's newest listing, so a one-card change no longer lists and builds every family (ignite test oust took 39 minutes and 816 s of builds in 8 products, and a full-gate ignite check of the same change took 229 s, and of a second card change 44 s, under full load on 2026-11-19)",
     "metric": "bead.agent-minutes",
-    "expect": "down"
+    "expect": "down",
+    "commit": "0b650715af355d082e9935203dff555db8258ab7"
   },
   {
     "label": "An express landing reuses its tree's `ignite check` pass when the commits landed since touch none of the change's files or build inputs: on 2026-11-18 a landing reran all four express commands (56 s) a minute after its check had passed them in 60 s, because a commit had landed meanwhile",
@@ -436,9 +441,10 @@
     "expect": "down"
   },
   {
-    "label": "ignite start replies before a compiling tree's build directories are copied from another tree; the copy runs on the prebuild thread and builds in the tree wait for it (9 of 25 starts between 05:38 and 06:38 UTC on 2026-11-19 had waited 30 to 141 s for the copy)",
+    "label": "The command `ignite start` replies before a compiling tree's build directories are copied from another tree, and the copy runs on the prebuild thread and builds in the tree wait for it (9 of 25 starts between 05:38 and 06:38 UTC on 2026-11-19 had waited 30 to 141 s for the copy)",
     "metric": "bead.agent-minutes",
-    "expect": "down"
+    "expect": "down",
+    "commit": "e8988e70de3043f5081f2b273f37a79ab9da6371"
   },
   {
     "label": "An express pass from `ignite test` in a tree with uncommitted edits is remembered by the tree ID of the files on disk, so the landing reuses it once exactly those edits are committed: on 2026-11-19 two Ignite fixes reran the express commands after a passing `ignite test`, waiting 220 s and 379 s",
@@ -451,23 +457,27 @@
     "expect": "down"
   },
   {
-    "label": "The dispatcher's stall watch keeps a record of every check, so a worker answered `running`, or one whose release failed, is checked again only after another 30 minutes of silence; and a worker whose ticket just ended settles 3 minutes before its next hand-off. On 2026-11-19, from 04:00 to 14:30, the Claude dispatcher received about 44 instructions an hour, 231 of them `check`s: 30 repeated `running` checks of one worker in 4 minutes, and two checks plus a reminder every 15 minutes for each worker whose release failed; and 32 of its 114 hand-offs failed because the app refused to clear a session still finishing its turn",
+    "label": "The dispatcher's stall watch keeps a record of every check, so a worker answered `running`, or one whose release failed, is checked again only after another 30 minutes of silence, and a worker whose ticket just ended settles 3 minutes before its next hand-off, and on 2026-11-19, from 04:00 to 14:30, the Claude dispatcher received about 44 instructions an hour, 231 of them `check`s: 30 repeated `running` checks of one worker in 4 minutes, and two checks plus a reminder every 15 minutes for each worker whose release failed, and 32 of its 114 hand-offs failed because the app refused to clear a session still finishing its turn",
     "metric": "ignite.dispatch-dollars",
-    "expect": "down"
+    "expect": "down",
+    "commit": "dfc90261b1ee7acf23dfa07991068aedc04a8629"
   },
   {
-    "label": "The Claude dispatcher runs `ignite dispatch --wait 3600` as a background command instead of an 8-minute foreground wait, so it wakes once an hour when there is nothing to do instead of about 7 times. On 2026-11-19 197 of its 426 instructions were `idle` wake-ups, each a full request over its context; the daemon now keeps only the newest wait from each dispatcher, so a second wait started after a worker's notice is harmless",
+    "label": "The Claude dispatcher runs `ignite dispatch --wait 3600` as a background command instead of an 8-minute foreground wait, so it wakes once an hour when there is nothing to do instead of about 7 times, and on 2026-11-19 197 of its 426 instructions were `idle` wake-ups, each a full request over its context, and the daemon now keeps only the newest wait from each dispatcher, so a second wait started after a worker's notice is harmless",
     "metric": "ignite.dispatch-dollars",
-    "expect": "down"
+    "expect": "down",
+    "commit": "6ffafcdc80bb6f894b45765bcfdf6d06b03ee0b1"
   },
   {
-    "label": "A daemon restarts into a new release 15 s after the last release appeared instead of 90 s; the restart still waits while any landing runs or a newer release builds, which already merges releases landing one after another. On 2026-11-19 a lone Ignite landing's `ignite wait deploy-<commit>` took 100 to 116 s, of which the build was about 40 s and the rest the 90 s quiet window",
+    "label": "A daemon restarts into a new release 15 s after the last release appeared instead of 90 s, and the restart still waits while any landing runs or a newer release builds, which already merges releases landing one after another, and on 2026-11-19 a lone Ignite landing's `ignite wait deploy-<commit>` took 100 to 116 s, of which the build was about 40 s and the rest the 90 s quiet window",
     "metric": "bead.agent-minutes",
-    "expect": "down"
+    "expect": "down",
+    "commit": "35567d717c36ed50910ee7975bf0cad7e28cf18f"
   },
   {
-    "label": "The `ignite` check family hashes each test over its own crate's dependency closure (`crate-closure`) instead of all of `ignite/`, so a landing that edits a check manifest under ignite/checks/, or that rebases over another landing's Ignite change, reruns only the tests whose crates changed instead of all 1562. On 2026-11-19 a Beryl 3D change that edited beryl3d.toml ran the whole workspace's tests on each of four landing passes, 40 to 200 s each",
+    "label": "The `ignite` check family hashes each test over its own crate's dependency closure (`crate-closure`) instead of all of `ignite/`, so a landing that edits a check manifest under ignite/checks/, or that rebases over another landing's Ignite change, reruns only the tests whose crates changed instead of all 1562, and on 2026-11-19 a Beryl 3D change that edited beryl3d.toml ran the whole workspace's tests on each of four landing passes, 40 to 200 s each",
     "metric": "ignite.gate-seconds",
-    "expect": "down"
+    "expect": "down",
+    "commit": "daeb5d8f0910cd6abc038e5d5e9f1dd9c6ac1ee5"
   }
 ]
