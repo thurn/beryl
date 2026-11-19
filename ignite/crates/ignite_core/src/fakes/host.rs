@@ -55,6 +55,7 @@ struct State {
     released: Vec<ReleaseLanding>,
     steps: Vec<StepUpdate>,
     stop: bool,
+    daemon_started: Option<String>,
     refusing: Option<String>,
     finished: Vec<Handle>,
 }
@@ -81,6 +82,7 @@ impl Default for FakeHost {
                 released: Vec::new(),
                 steps: Vec::new(),
                 stop: false,
+                daemon_started: None,
                 refusing: None,
                 finished: Vec::new(),
             }),
@@ -98,6 +100,12 @@ impl FakeHost {
     /// ran.
     pub fn set_running(&self, running: bool) {
         lock(&self.state).running = running;
+    }
+
+    /// Reports `started` as the instant the daemon started in every answer that carries it, as
+    /// a daemon restarted into a new build would.
+    pub fn set_daemon_started(&self, started: &str) {
+        lock(&self.state).daemon_started = Some(started.to_owned());
     }
 
     /// While down, every call fails as unreachable and changes nothing.
@@ -223,6 +231,7 @@ impl HostClient for FakeHost {
             protocol: state.protocol,
             running: state.running,
             stop: state.stop,
+            daemon_started: state.daemon_started.clone(),
         })
     }
 
@@ -315,7 +324,10 @@ impl HostClient for FakeHost {
     fn step(&self, call: &StepUpdate) -> Result<StopState> {
         let mut state = self.attempt(call)?;
         state.steps.push(call.clone());
-        Ok(StopState { stop: state.stop })
+        Ok(StopState {
+            stop: state.stop,
+            daemon_started: state.daemon_started.clone(),
+        })
     }
 
     fn refuse_stop(&self, call: &RefuseStop) -> Result<RefuseStopReply> {
@@ -334,7 +346,10 @@ impl HostClient for FakeHost {
 
     fn poll(&self, call: &Poll) -> Result<StopState> {
         let state = self.attempt(call)?;
-        Ok(StopState { stop: state.stop })
+        Ok(StopState {
+            stop: state.stop,
+            daemon_started: state.daemon_started.clone(),
+        })
     }
 
     fn finished(&self, call: &Finished) -> Result<Ack> {

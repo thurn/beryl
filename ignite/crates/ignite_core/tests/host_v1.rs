@@ -153,6 +153,7 @@ fn hello_and_run_files() -> Vec<String> {
                 protocol: 1,
                 running: true,
                 stop: false,
+                daemon_started: None,
             },
         )],
     ));
@@ -279,7 +280,13 @@ fn step_and_stop_files() -> Vec<String> {
             class: Some(Class::Land),
             ticket: Some(ticket()),
         },
-        &[("", StopState { stop: false })],
+        &[(
+            "",
+            StopState {
+                stop: false,
+                daemon_started: None,
+            },
+        )],
     ));
     files.extend(call(
         &RefuseStop {
@@ -291,7 +298,13 @@ fn step_and_stop_files() -> Vec<String> {
     files.extend(call(&AllowStop { handle: handle() }, &[("", Ack {})]));
     files.extend(call(
         &Poll { handle: handle() },
-        &[("", StopState { stop: true })],
+        &[(
+            "",
+            StopState {
+                stop: true,
+                daemon_started: None,
+            },
+        )],
     ));
     files.extend(call(&Finished { handle: handle() }, &[("", Ack {})]));
 
@@ -307,7 +320,10 @@ fn envelope_files() -> Vec<String> {
     ));
     files.push(golden(
         "envelope.reply",
-        &encode_reply(&Ok(StopState { stop: false })),
+        &encode_reply(&Ok(StopState {
+            stop: false,
+            daemon_started: None,
+        })),
     ));
     files.push(golden(
         "envelope.error",

@@ -32,7 +32,8 @@
 //! a long wait is a series of calls and no call is cut off for long.
 //!
 //! After any failed call the verb process sends `host-hello` first, then its current step again
-//! (`host-step`), then the call that failed.
+//! (`host-step`), then the call that failed. It does the same, without a failed call, when the
+//! `daemon_started` of a reply differs from the one before.
 //!
 //! # Versions
 //!
@@ -221,6 +222,9 @@ pub struct HelloReply {
     pub running: bool,
     /// Someone asked the verb to stop.
     pub stop: bool,
+    /// When the daemon that answered started (see [`StopState::daemon_started`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daemon_started: Option<String>,
 }
 
 impl HostCall for Hello {
@@ -492,6 +496,12 @@ pub struct StepUpdate {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StopState {
     pub stop: bool,
+    /// The instant the daemon that answered started. A verb process that sees it change knows
+    /// the daemon restarted and sends `host-hello` and its current step at once, instead of
+    /// waiting for a call to fail: a verb that waits on a lock or runs one long command makes no
+    /// call that a restart would cut off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daemon_started: Option<String>,
 }
 
 impl HostCall for StepUpdate {
@@ -730,10 +740,16 @@ mod tests {
         assert_eq!(request.verb, "host-poll");
         assert_eq!(decode_request::<Poll>(&request).unwrap(), poll);
         assert!(decode_request::<Finished>(&request).is_err());
-        let reply = encode_reply(&Ok(StopState { stop: true }));
+        let reply = encode_reply(&Ok(StopState {
+            stop: true,
+            daemon_started: None,
+        }));
         assert_eq!(
             decode_reply::<Poll>(reply).unwrap(),
-            StopState { stop: true }
+            StopState {
+                stop: true,
+                daemon_started: None
+            }
         );
     }
 

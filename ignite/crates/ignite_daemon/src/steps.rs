@@ -131,6 +131,9 @@ pub struct Activity {
     kind: Kind,
     clock: Arc<dyn Clock>,
     started: Timestamp,
+    /// Taken over from a daemon that ran before this one, so a step that is not reported yet
+    /// is not known to be missing.
+    adopted: bool,
     state: Mutex<State>,
     changed: Condvar,
     keeper: std::sync::OnceLock<Arc<dyn StopKeeper>>,
@@ -155,6 +158,8 @@ pub struct View {
     pub waiting_s: Option<f64>,
     /// A stop has been asked for and the work has not ended yet.
     pub stopping: bool,
+    /// The work started under an earlier daemon, which did not tell this one its step yet.
+    pub adopted: bool,
 }
 
 impl View {
@@ -163,6 +168,7 @@ impl View {
     pub fn doing(&self) -> String {
         let mut text = match (&self.step, self.step_age_s) {
             (Some(step), Some(age)) => format!("{step} ({})", span(age)),
+            _ if self.adopted => "step not reported since the daemon restarted".to_owned(),
             _ => "no step recorded".to_owned(),
         };
         if let (Some(what), Some(age)) = (&self.waiting_for, self.waiting_s) {
@@ -195,10 +201,16 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Activity {
-    fn new(kind: Kind, work: Work, clock: Arc<dyn Clock>) -> Activity {
+    fn new(
+        kind: Kind,
+        work: Work,
+        clock: Arc<dyn Clock>,
+        adopted_from: Option<Timestamp>,
+    ) -> Activity {
         Activity {
             kind,
-            started: clock.now(),
+            started: adopted_from.unwrap_or_else(|| clock.now()),
+            adopted: adopted_from.is_some(),
             clock,
             state: Mutex::new(State {
                 work,
@@ -490,6 +502,7 @@ impl Activity {
             waiting_for: wait.map(|(_, what, _)| what.clone()),
             waiting_s: wait.map(|(_, _, at)| now.seconds_since(*at)),
             stopping: state.stop == Stop::Asked && !state.finished,
+            adopted: self.adopted,
         }
     }
 }
@@ -572,7 +585,17 @@ impl Steps {
 
     /// A new activity, listed until it finishes or is dropped.
     pub fn begin(&self, kind: Kind, work: Work) -> Arc<Activity> {
-        let activity = Arc::new(Activity::new(kind, work, self.clock.clone()));
+        self.begin_adopted(kind, work, None)
+    }
+
+    /// Like [`Steps::begin`] for work an earlier daemon started at `started`, if known.
+    pub fn begin_adopted(
+        &self,
+        kind: Kind,
+        work: Work,
+        started: Option<Timestamp>,
+    ) -> Arc<Activity> {
+        let activity = Arc::new(Activity::new(kind, work, self.clock.clone(), started));
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let mut live = lock(&self.live);
         live.retain(|_, weak| weak.upgrade().is_some_and(|a| !a.is_finished()));

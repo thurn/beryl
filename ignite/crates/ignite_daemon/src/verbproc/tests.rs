@@ -12,13 +12,14 @@ use ignite_core::config::Config;
 use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHost, FakeHub, FakeLauncher};
 use ignite_core::ids::{Handle, MachineId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
+use ignite_core::protocol::host::{Hello, PROTOCOL_VERSION, StepUpdate};
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{BuildFor, BuildResult, CommandSpec, Result};
 use ignite_store::local::handles as handle_store;
 
 use super::{
-    Assembled, Outcome, Process, Remote, RemoteBuilds, RemoteLauncher, Timing, alive, hold,
+    Assembled, Link, Outcome, Process, Remote, RemoteBuilds, RemoteLauncher, Timing, alive, hold,
 };
 use crate::handles::{Handles, lock};
 use crate::server::{Context, Verb};
@@ -465,6 +466,42 @@ fn a_daemon_away_past_the_retry_window_fails_the_command() {
     );
     assert!(host.started().is_empty());
     assert_eq!(row(&db, &handle).state, "done");
+}
+
+#[test]
+fn a_verb_sends_its_step_again_when_the_daemon_restarted_without_failing_a_call() {
+    let (_, handle) = running_test();
+    let host = Arc::new(FakeHost::default());
+    host.set_daemon_started("2026-11-18T10:00:00.000Z");
+    let link = Link::new(
+        host.clone(),
+        Hello {
+            handle: handle.clone(),
+            protocol: PROTOCOL_VERSION,
+            executable: "1a2b3c4".to_owned(),
+            pid: 42,
+        },
+        timing(),
+    );
+    link.hello().unwrap();
+    let update = StepUpdate {
+        handle,
+        step: Some("waiting for the express lock".to_owned()),
+        waiting: Vec::new(),
+        class: None,
+        ticket: None,
+    };
+    link.step(&update).unwrap();
+    link.poll().unwrap();
+    assert_eq!((host.hellos().len(), host.steps().len()), (1, 1));
+
+    // The daemon restarts: nothing fails, but its start instant changes.
+    host.set_daemon_started("2026-11-18T11:00:00.000Z");
+    link.poll().unwrap();
+    assert_eq!(host.hellos().len(), 2);
+    assert_eq!(host.steps().last(), Some(&update));
+    link.poll().unwrap();
+    assert_eq!(host.hellos().len(), 2, "once per restart");
 }
 
 #[test]

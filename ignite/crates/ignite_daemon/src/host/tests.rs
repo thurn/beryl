@@ -19,7 +19,7 @@ use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::host::{
     AllowStop, Build, BuildReply, BuildWho, Command, Finished, Hello, HostCall, LeaseLanding,
     LeaseLandingReply, PROTOCOL_VERSION, Poll, RefuseStop, ReleaseLanding, RequestId, Run,
-    RunReply, decode_reply, encode_request,
+    RunReply, StepUpdate, decode_reply, encode_request,
 };
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{BuildResult, CommandSpec, Result};
@@ -698,5 +698,46 @@ fn a_repeated_build_answers_once_and_leases_are_kept_by_their_owner() {
         send(&daemon.registry, &run_call(&gone, 1, T0)),
         Ok(RunReply::Refused { .. })
     ));
+    let _ = fs::remove_dir_all(&runs);
+}
+
+#[test]
+fn a_verb_adopted_after_a_restart_ages_from_its_handle_and_says_its_step_is_not_reported() {
+    use ignite_core::traits::Clock as _;
+    let db = database();
+    let runs = runs_folder("adopted");
+    let handle = running(&db, "L-9");
+    let half_hour_ago =
+        Timestamp::from_millis(ignite_core::time::SystemClock.now().millis() - 30 * 60 * 1000);
+    {
+        let conn = lock(&db);
+        let mut row = handle_store::get(&conn, handle.as_str()).unwrap().unwrap();
+        row.started_at = half_hour_ago.to_string();
+        handle_store::upsert(&conn, &row).unwrap();
+    }
+    let daemon = daemon(&db, &runs, None);
+    send(&daemon.registry, &hello(&handle)).unwrap();
+    let view = daemon.steps.by_handle(&handle).unwrap().view();
+    assert!(view.age_s >= 30.0 * 60.0, "age {}", view.age_s);
+    assert_eq!(view.doing(), "step not reported since the daemon restarted");
+
+    let update = StepUpdate {
+        handle: handle.clone(),
+        step: Some("running the gate".to_owned()),
+        waiting: Vec::new(),
+        class: None,
+        ticket: None,
+    };
+    let state = send(&daemon.registry, &update).unwrap();
+    assert!(state.daemon_started.is_some());
+    assert!(
+        daemon
+            .steps
+            .by_handle(&handle)
+            .unwrap()
+            .view()
+            .doing()
+            .starts_with("running the gate")
+    );
     let _ = fs::remove_dir_all(&runs);
 }

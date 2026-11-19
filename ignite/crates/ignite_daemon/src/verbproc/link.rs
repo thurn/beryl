@@ -85,6 +85,9 @@ pub struct Link {
     timing: Timing,
     /// The step last sent, or about to be: what a repeat after a failure sends again.
     current: Mutex<StepUpdate>,
+    /// The start instant of the daemon that answered last. When an answer names another, the
+    /// daemon restarted.
+    daemon: Mutex<Option<String>>,
     /// The activity of the verb, once it runs, which hears about stops.
     activity: OnceLock<Weak<Activity>>,
 }
@@ -103,6 +106,7 @@ impl Link {
             hello,
             timing,
             current: Mutex::new(current),
+            daemon: Mutex::new(None),
             activity: OnceLock::new(),
         }
     }
@@ -119,6 +123,24 @@ impl Link {
     fn notice(&self, stop: bool) {
         if stop && let Some(activity) = self.activity.get().and_then(Weak::upgrade) {
             let _ = activity.request_stop();
+        }
+    }
+
+    /// Remembers which daemon answered. When it is another one than the one before, the daemon
+    /// restarted, and the verb sends `host-hello` and its step at once: a verb that waits on a
+    /// lock or in one long command makes no call that a restart would cut off, so nothing else
+    /// would tell the new daemon about it. A failure is left to the next call's retry.
+    fn note_daemon(&self, started: Option<&String>) {
+        let Some(started) = started else {
+            return;
+        };
+        let previous = lock(&self.daemon).replace(started.clone());
+        if previous.is_some_and(|previous| previous != *started) {
+            let current = lock(&self.current).clone();
+            let _ = self.host.hello(&self.hello).and_then(|reply| {
+                self.notice(reply.stop || !reply.running);
+                self.host.step(&current)
+            });
         }
     }
 
@@ -145,6 +167,7 @@ impl Link {
             std::thread::sleep(self.timing.pause);
             let attempt = self.host.hello(&self.hello).and_then(|reply| {
                 self.notice(reply.stop || !reply.running);
+                lock(&self.daemon).clone_from(&reply.daemon_started);
                 let current = lock(&self.current).clone();
                 self.host.step(&current)
             });
@@ -176,6 +199,7 @@ impl Link {
                 }
                 Ok(reply) => {
                     self.notice(reply.stop || !reply.running);
+                    lock(&self.daemon).clone_from(&reply.daemon_started);
                     return Ok(reply);
                 }
                 other => return other,
@@ -204,6 +228,7 @@ impl Link {
         update.clone_into(&mut lock(&self.current));
         let state = self.call(|host| host.step(update))?;
         self.notice(state.stop);
+        self.note_daemon(state.daemon_started.as_ref());
         Ok(state)
     }
 
@@ -213,6 +238,7 @@ impl Link {
         };
         let state = self.call(|host| host.poll(&call))?;
         self.notice(state.stop);
+        self.note_daemon(state.daemon_started.as_ref());
         Ok(state)
     }
 

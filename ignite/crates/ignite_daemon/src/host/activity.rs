@@ -11,6 +11,7 @@ use ignite_core::protocol::client::Reply;
 use ignite_core::protocol::host::{
     Hello, HelloReply, PROTOCOL_VERSION, RefuseStop, RefuseStopReply, StepUpdate, StopState,
 };
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::{handle_stops, handles as handle_store, rows};
 
@@ -18,6 +19,11 @@ use super::{Host, Remote};
 use crate::handles::lock;
 use crate::server::Context;
 use crate::steps::{Activity, Kind, Work};
+
+/// When this daemon started, as the replies that carry it say.
+fn daemon_started() -> String {
+    crate::update::started_at().to_string()
+}
 
 impl Host {
     /// The activity of `handle`'s verb process, created from its handle's row when this daemon
@@ -47,7 +53,12 @@ impl Host {
             }),
             tree,
         };
-        let activity = self.steps.begin(Kind::Verb(row.verb), work);
+        // The verb started under the daemon before this one: its age counts from its handle's
+        // start, not from the moment this daemon first heard from it.
+        let started = Timestamp::parse(&row.started_at).ok();
+        let activity = self
+            .steps
+            .begin_adopted(Kind::Verb(row.verb), work, started);
         activity.attach_handle(handle);
         match self.stop_row(handle) {
             Some(stop) if stop.asked => {
@@ -79,6 +90,7 @@ impl Host {
                 protocol: PROTOCOL_VERSION,
                 running: false,
                 stop: true,
+                daemon_started: Some(daemon_started()),
             };
         };
         if let Some(remote) = lock(&self.remotes).get_mut(&call.handle) {
@@ -88,12 +100,16 @@ impl Host {
             protocol: PROTOCOL_VERSION,
             running: true,
             stop: activity.stop_requested(),
+            daemon_started: Some(daemon_started()),
         }
     }
 
     pub(super) fn step(self: &Arc<Self>, ctx: &Context, call: &StepUpdate) -> StopState {
         let Some(activity) = self.remote(ctx, &call.handle) else {
-            return StopState { stop: true };
+            return StopState {
+                stop: true,
+                daemon_started: Some(daemon_started()),
+            };
         };
         activity.report(
             call.step.as_deref(),
@@ -103,6 +119,7 @@ impl Host {
         );
         StopState {
             stop: activity.stop_requested(),
+            daemon_started: Some(daemon_started()),
         }
     }
 
@@ -110,7 +127,10 @@ impl Host {
         let stop = self
             .remote(ctx, handle)
             .is_none_or(|activity| activity.stop_requested());
-        StopState { stop }
+        StopState {
+            stop,
+            daemon_started: Some(daemon_started()),
+        }
     }
 
     /// Refuses later stops, unless one was asked already. The refusal is kept in the local
