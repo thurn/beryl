@@ -54,8 +54,13 @@ commands = [
   # The `express` profile (ignite/.config/nextest.toml) kills a test after 120 s, so a hung test
   # fails in about two minutes with its name instead of holding the landing to the verb limit.
   # It also leaves out the few tests that take over 3 s, which the `ignite` family runs in tip
-  # verification: with them the test run took 90 to 96 s under load, without them 15 to 19 s.
-  "cargo nextest run --locked --cargo-quiet --workspace --profile express --status-level=fail --final-status-level=fail",
+  # verification: with them the test run took 90 to 96 s under load whatever the thread count.
+  # `--test-threads=num-cpus` runs as many tests at once as the machine has cores, whatever the
+  # `NEXTEST_TEST_THREADS` the daemon sets from the express cores: the tests mostly wait for the
+  # processes and `git` commands they start, so threads beyond the cores cost little CPU. On
+  # 2026-11-19, at a load average of 15 to 23 on 18 cores, the run took 56 to 82 s on 3 threads,
+  # 37 to 72 s on 6, 14 to 17 s on 12 and 12 s on 18.
+  "cargo nextest run --locked --cargo-quiet --workspace --profile express --test-threads=num-cpus --status-level=fail --final-status-level=fail",
 ]
 families = ["ignite", "ignite-lint"]
 

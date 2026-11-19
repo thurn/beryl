@@ -14,7 +14,7 @@ terminate-after = 4
 # The express lane leaves out the tests that took over 3 s each. On 2026-11-19, at a load average
 # of about 20, the workspace's 1638 tests took 257 s on one thread, and these ten took 121 s of
 # it; the build through the wrapper alone took 51 s. With them, the test run took 90 to 96 s on 3
-# or 12 threads; without them, 15 to 19 s. The `ignite` family still runs every one of them, in
+# or 12 threads, at least as long as the slowest; without them, 14 to 17 s on 12. The `ignite` family still runs every one of them, in
 # tip verification and in the gate of any landing that is not express, so a change that breaks
 # one is caught there before `master` moves. A new slow test belongs here too.
 [profile.express]

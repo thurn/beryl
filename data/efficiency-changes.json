@@ -506,7 +506,7 @@
     "expect": "down"
   },
   {
-    "label": "The express lane's nextest profile leaves out Ignite's ten tests over 3 s, which tip verification still runs, and `ignite_cli`'s eight integration-test binaries are one, so an express test run after a daemon edit takes 15 to 19 s instead of 90 to 96 s at a load average of about 20",
+    "label": "The express lane's nextest profile leaves out Ignite's ten tests over 3 s, which tip verification still runs, and `ignite_cli`'s eight integration-test binaries are one, and the express test run uses a thread per core, so its test run after a daemon edit takes 12 to 17 s instead of 56 to 96 s at a load average of about 20",
     "metric": "bead.agent-minutes",
     "expect": "down"
   }

@@ -1853,7 +1853,7 @@ commands = [
   "cargo fmt --check",
   "uv run --quiet --project ../tools mdformat --check --exclude target/** ../docs/ignite.md .",
   "cargo clippy --locked --all-targets -- -D warnings",
-  "cargo nextest run --locked --cargo-quiet --workspace --profile express --status-level=fail --final-status-level=fail",
+  "cargo nextest run --locked --cargo-quiet --workspace --profile express --test-threads=num-cpus --status-level=fail --final-status-level=fail",
 ]
 families = ["ignite", "ignite-lint"]
 
@@ -1951,11 +1951,18 @@ express_cores = 3
   profile, which has the same limit.
 - The `express` profile leaves out the tests that took over 3 s each, by name.
   On 2026-11-19, at a load average of about 20, the workspace's 1638 tests took
-  257 s on one thread, and ten of them took 121 s of it. With them an express
-  test run took 90 to 96 s on 3 or 12 threads, and without them 15 to 19 s. The
-  `ignite` profile runs every test, so tip verification and the gate of a
-  landing that is not express still run the slow ones, and a change that breaks
-  one is caught before `master` moves.
+  257 s on one thread, and ten of them took 121 s of it. With them the test run
+  took 90 to 96 s, and the slowest of them alone took 51 s. The `ignite` profile
+  runs every test, so tip verification and the gate of a landing that is not
+  express still run the slow ones, and a change that breaks one is caught before
+  `master` moves.
+- The nextest command passes `--test-threads=num-cpus`, which overrides the
+  `NEXTEST_TEST_THREADS` above: the tests mostly wait for the processes and
+  `git` commands they start, so threads beyond the express cores cost little
+  CPU. On 2026-11-19, at a load average of 15 to 23 on 18 cores, the run took 56
+  to 82 s on 3 threads, 14 to 17 s on 12 and 12 s on 18. More build jobs did not
+  help: after a one-line daemon edit the build took about 30 s on 3 jobs or 12,
+  because it waits on compiling `ignite_daemon` and then `ignite_cli`.
 - `ignite_cli`'s integration tests are one test binary,
   `tests/integration/main.rs`. macOS checks a newly linked executable the first
   time it runs, about 1.5 to 2 s each and one at a time, and cargo-nextest runs
