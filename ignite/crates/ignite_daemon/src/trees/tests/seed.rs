@@ -104,3 +104,163 @@ fn a_donor_whose_cargo_lock_is_held_is_passed_over() {
     assert!(lease.path.join("out/debug/.fingerprint/mine-1").exists());
     assert!(!lease.path.join("out/debug/deps/libfoo-1.rlib").exists());
 }
+
+/// Builds that note, when a tree's builds are forgotten, whether its `out` directory was still
+/// there: a tree's builds must be forgotten before its build directories are deleted, or a
+/// restart partway through the deletion leaves the record of builds whose files are gone.
+struct Watching {
+    root: PathBuf,
+    forgotten: std::sync::Mutex<Vec<(TreeId, bool)>>,
+}
+
+impl ignite_core::traits::Builds for Watching {
+    fn ensure(
+        &self,
+        _tree: &TreeId,
+        _product: &str,
+        _packages: &[String],
+    ) -> ignite_core::traits::BuildResult {
+        ignite_core::traits::BuildResult::Current
+    }
+
+    fn forget(&self, tree: &TreeId) {
+        let out = self.root.join(tree.as_str()).join("out");
+        self.forgotten
+            .lock()
+            .unwrap()
+            .push((tree.clone(), out.exists()));
+    }
+}
+
+/// `f`'s trees again, over a new database, with `builds` and `disk_limit`.
+fn trees_with(
+    f: &Fixture,
+    builds: Arc<dyn ignite_core::traits::Builds>,
+    disk_limit: Option<u64>,
+) -> Trees {
+    let mut config = f.trees.config().clone();
+    config.disk_limit = disk_limit;
+    let trees = Trees::new(
+        config,
+        open_in_memory().unwrap(),
+        Arc::new(FakeClock::new(
+            Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),
+        )),
+        builds,
+    );
+    trees.setup(&f.tip()).unwrap();
+    trees
+}
+
+fn watching(f: &Fixture) -> Arc<Watching> {
+    Arc::new(Watching {
+        root: f.repo.join(".worktrees"),
+        forgotten: std::sync::Mutex::default(),
+    })
+}
+
+/// A free tree whose files are clones of a leased tree's frees almost nothing when deleted, so
+/// the disk loop keeps it, as a donor for the next lease, and clears a free tree whose bytes are
+/// its own, although that one was used more recently.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_cleared() {
+    let f = Fixture::new(3, 1);
+    let builds = watching(&f);
+    let probe = trees_with(&f, builds.clone(), None);
+    let leased = match probe.lease(f.request("T.1", false)).unwrap() {
+        Lease::Ready(lease) => lease,
+        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
+    };
+    // The free trees are cleared in the order of their ids, since neither was used.
+    let mut free: Vec<String> = ["tree-01", "tree-02", "tree-03"]
+        .into_iter()
+        .filter(|t| *t != leased.tree.as_str())
+        .map(str::to_owned)
+        .collect();
+    free.sort();
+    let (donor, own) = (
+        f.repo.join(".worktrees").join(&free[0]),
+        f.repo.join(".worktrees").join(&free[1]),
+    );
+    write(&donor, "out/big", &"x".repeat(4_000_000));
+    fs::create_dir_all(leased.path.join("out")).unwrap();
+    let status = Command::new("cp")
+        .arg("-c")
+        .arg(donor.join("out/big"))
+        .arg(leased.path.join("out/big"))
+        .status()
+        .unwrap();
+    assert!(status.success());
+    write(&own, "out/own", &"y".repeat(2_000_000));
+    let total = probe.hold_disk(0).unwrap().before;
+    assert!(total < 7_000_000, "the clone counts once: {total}");
+
+    let limited = trees_with(&f, builds.clone(), Some(total - 1_000_000));
+    let held = match limited.lease(f.request("T.1", false)).unwrap() {
+        Lease::Ready(lease) => lease,
+        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
+    };
+    assert_eq!(held.tree, leased.tree);
+    let report = limited.hold_disk(0).unwrap();
+
+    assert_eq!(report.cleared, [id(&free[1])], "{report:?}");
+    assert!(report.after <= report.limit.unwrap(), "{report:?}");
+    assert!(donor.join("out/big").exists());
+    assert!(!own.join("out").exists());
+    assert_eq!(
+        *builds.forgotten.lock().unwrap(),
+        [(id(&free[1]), true)],
+        "forgotten before the deletion"
+    );
+}
+
+/// The disk loop forgets a cleared tree's builds before it deletes its build directories.
+#[test]
+fn a_cleared_tree_is_forgotten_before_its_directories_are_deleted() {
+    let f = Fixture::new(1, 1);
+    write(
+        &f.repo.join(".worktrees/tree-01"),
+        "out/big",
+        &"x".repeat(100_000),
+    );
+    let builds = watching(&f);
+    let trees = trees_with(&f, builds.clone(), Some(1));
+
+    let report = trees.hold_disk(0).unwrap();
+
+    assert_eq!(report.cleared, [id("tree-01")]);
+    assert_eq!(*builds.forgotten.lock().unwrap(), [(id("tree-01"), true)]);
+    assert!(!f.repo.join(".worktrees/tree-01/out").exists());
+}
+
+/// Seeding forgets the leased tree's builds before it replaces the tree's target directories,
+/// so that a copy that fails partway, which deletes them, leaves no record of them either.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_seeded_tree_is_forgotten_before_its_own_build_is_replaced() {
+    let f = Fixture::new(2, 2);
+    let builds = watching(&f);
+    let trees = trees_with(&f, builds.clone(), None);
+    trees.record_build(&id("tree-01"), &f.commits[0]).unwrap();
+    let other = match trees.lease(f.request("T.1", false)).unwrap() {
+        Lease::Ready(lease) => lease,
+        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
+    };
+    fake_target(&other.path);
+    trees.record_build(&other.tree, &f.tip()).unwrap();
+    write(
+        &f.repo.join(".worktrees/tree-01"),
+        "out/debug/.fingerprint/mine-1/lib-mine",
+        "0",
+    );
+
+    let lease = match trees.lease(f.request("T.2", true)).unwrap() {
+        Lease::Ready(lease) => lease,
+        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
+    };
+
+    assert_eq!(lease.tree.as_str(), "tree-01");
+    assert!(lease.path.join("out/debug/deps/libfoo-1.rlib").exists());
+    assert_eq!(*builds.forgotten.lock().unwrap(), [(id("tree-01"), true)]);
+}

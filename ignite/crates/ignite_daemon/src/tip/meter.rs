@@ -186,4 +186,8 @@ impl Builds for MeteredBuilds {
     fn has_built(&self, tree: &TreeId, product: &str) -> bool {
         self.inner.has_built(tree, product)
     }
+
+    fn forget(&self, tree: &TreeId) {
+        self.inner.forget(tree);
+    }
 }

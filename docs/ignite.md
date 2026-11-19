@@ -807,6 +807,19 @@ Rules for trees:
   alike it looks to another. While the disk has less than 50 GB free, it also
   holds the trees under their current size less what the disk lacks, since the
   limit was set for the disk as it was then.
+- The trees' size counts each file's blocks once. A seeded tree's files are APFS
+  clones of its donor's and share their blocks, so each file counts its private
+  bytes (macOS `getattrlist`, `ATTR_CMNEXT_PRIVATESIZE`) in its own tree and its
+  shared bytes once for all trees with the same clone ID. Counting every tree's
+  blocks in full had measured hundreds of gigabytes the disk did not hold, and
+  cleared every free tree, the donors the next leases would have copied from.
+  Free trees are cleared in two passes, each oldest first: first those whose
+  deletion alone frees at least 1 GB, so a donor whose blocks a leased tree's
+  clones share is kept, then any whose bytes no tree outside the free ones
+  shares.
+- A tree's recorded builds are forgotten before its build directories are
+  deleted, by the disk loop or by seeding, so a daemon restart partway through a
+  deletion cannot leave records of builds whose files are gone.
 - The daemon's disk loop checks this every minute, in a loop of its own so that
   idle work waiting for cores cannot hold it up. It measures the trees at most
   once every 30 minutes (every 5 while under 50 GB free), and not at all while

@@ -5,7 +5,8 @@
 //! profile makes Cargo build that crate, and every crate above it, under a new hash beside the
 //! old one, and nothing deletes the old one. So the daemon first deletes builds that a newer
 //! build of the same unit replaced, and then, if the trees are still over the limit, the whole
-//! build directories of the free trees used longest ago.
+//! build directories of the free trees used longest ago. Files that are clones of another tree's
+//! count their shared blocks once (`disk/space.rs`).
 //!
 //! Only free trees are touched. Each is marked `resetting` while its files are deleted, so no
 //! lease can take it half swept, and its row is put back as it was afterwards, so the order of
@@ -23,9 +24,17 @@ use ignite_store::local::{rows, trees as store};
 use serde::Serialize;
 
 use super::{Trees, store_error};
+use space::Space;
 
+mod space;
 #[cfg(test)]
 mod tests;
+
+/// The bytes a free tree's deletion must free alone for the first pass of [`Trees::hold_disk`]
+/// to clear it. A tree whose files are all clones of another tree's still writes its own lock
+/// files and Cargo's small records, a few megabytes; a tree that built a ticket's change holds
+/// gigabytes of its own.
+const OWN_BYTES: u64 = 1_000_000_000;
 
 /// The folder of per-unit fingerprints in each profile directory of a Cargo target directory,
 /// which is how such a directory is recognised among a product's outputs.
@@ -51,27 +60,35 @@ pub struct DiskReport {
 }
 
 impl Trees {
-    /// Bytes on disk in each configured tree's build directories.
+    /// The bytes that deleting each configured tree's build directories alone would free: the
+    /// bytes they share with clones in another tree are not counted ([`Space`]).
     pub fn disk_usage(&self) -> Vec<(TreeId, u64)> {
+        self.measure().own()
+    }
+
+    /// Measures every configured tree's build directories together.
+    fn measure(&self) -> Space {
         let config = &self.inner.config;
-        config
-            .configured()
-            .into_iter()
-            .map(|(id, _)| {
-                let path = config.path(&id);
-                let bytes = config.keep.iter().map(|dir| size(&path.join(dir))).sum();
-                (id, bytes)
-            })
-            .collect()
+        Space::measure(config.configured().into_iter().map(|(id, _)| {
+            let path = config.path(&id);
+            let dirs = config.keep.iter().map(|dir| path.join(dir)).collect();
+            (id, dirs)
+        }))
     }
 
     /// Brings the trees under the disk limit, if they are over it. `short` is how many bytes
     /// the disk lacks of the free space the daemon keeps; the trees are then held that many
     /// bytes under their current size as well, since a limit set when the disk had room says
     /// nothing about how full the rest of the disk has become since.
+    ///
+    /// Free trees are cleared in two passes, each in the order of last use. The first clears
+    /// only trees whose deletion alone frees at least [`OWN_BYTES`]. A tree seeded from another
+    /// holds clones of the donor's files, and deleting either frees almost nothing while the
+    /// other keeps the shared blocks, so a donor is kept while a tree that holds bytes of its
+    /// own can go instead. The second pass clears any free tree whose bytes would be freed if
+    /// every free tree went, which takes the clones that only free trees share.
     pub fn hold_disk(&self, short: u64) -> Result<DiskReport> {
-        let usage = self.disk_usage();
-        let before: u64 = usage.iter().map(|(_, bytes)| bytes).sum();
+        let before = self.measure().total();
         let room = (short > 0).then(|| before.saturating_sub(short));
         let limit = match (self.inner.config.disk_limit, room) {
             (Some(limit), Some(room)) => Some(limit.min(room)),
@@ -99,35 +116,46 @@ impl Trees {
             }
             self.put_back(&row)?;
         }
-        let mut usage: BTreeMap<TreeId, u64> = self.disk_usage().into_iter().collect();
-        report.after = usage.values().sum();
-        for row in self.free_rows()? {
-            if report.after <= limit {
-                break;
+        let mut space = self.measure();
+        report.after = space.total();
+        let free: HashSet<TreeId> = self.free_rows()?.iter().map(id_of).collect::<Result<_>>()?;
+        for own_only in [true, false] {
+            for row in self.free_rows()? {
+                if report.after <= limit {
+                    break;
+                }
+                let id = id_of(&row)?;
+                if !space.holds_any(&id) {
+                    continue;
+                }
+                let freed = if own_only {
+                    space.freed_with(&id, &HashSet::new())
+                } else {
+                    space.freed_with(&id, &free)
+                };
+                if freed == 0 || (own_only && freed < OWN_BYTES) {
+                    continue;
+                }
+                let Some(mut row) = self.take_for_sweep(&row.id)? else {
+                    continue;
+                };
+                // Forgotten before anything is deleted: the build manager would otherwise still
+                // answer that the tree holds its products, and the gate would run checks against
+                // binaries that are gone. A daemon restart partway through the deletion would
+                // otherwise leave the record of builds whose files are half deleted.
+                self.inner.builds.forget(&id);
+                let path = self.inner.config.path(&id);
+                for dir in &self.inner.config.keep {
+                    remove(&path.join(dir));
+                }
+                row.built_commit = None;
+                self.put_back(&row)?;
+                report.after = report.after.saturating_sub(space.clear(&id));
+                report.cleared.push(id);
             }
-            let id = id_of(&row)?;
-            let used = usage.get(&id).copied().unwrap_or(0);
-            if used == 0 {
-                continue;
-            }
-            let Some(mut row) = self.take_for_sweep(&row.id)? else {
-                continue;
-            };
-            let path = self.inner.config.path(&id);
-            for dir in &self.inner.config.keep {
-                remove(&path.join(dir));
-            }
-            // The build manager would otherwise still answer that the tree holds its products,
-            // and the gate would run checks against binaries that are gone.
-            self.inner.builds.forget(&id);
-            row.built_commit = None;
-            self.put_back(&row)?;
-            usage.insert(id.clone(), 0);
-            report.after = report.after.saturating_sub(used);
-            report.cleared.push(id);
         }
         if !report.cleared.is_empty() {
-            report.after = self.disk_usage().iter().map(|(_, bytes)| bytes).sum();
+            report.after = self.measure().total();
         }
         self.serve_waiters();
         Ok(report)
@@ -190,38 +218,6 @@ impl Trees {
 
 pub(super) fn id_of(row: &rows::Tree) -> Result<TreeId> {
     TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))
-}
-
-/// Bytes on disk under `path`, not following symbolic links; 0 if it does not exist.
-pub(super) fn size(path: &Path) -> u64 {
-    let Ok(meta) = fs::symlink_metadata(path) else {
-        return 0;
-    };
-    let own = allocated(&meta);
-    if !meta.is_dir() {
-        return own;
-    }
-    let Ok(entries) = fs::read_dir(path) else {
-        return own;
-    };
-    own + entries
-        .filter_map(io::Result::ok)
-        .map(|entry| size(&entry.path()))
-        .sum::<u64>()
-}
-
-/// The bytes a file's blocks take on disk.
-#[cfg(unix)]
-fn allocated(meta: &fs::Metadata) -> u64 {
-    use std::os::unix::fs::MetadataExt;
-    meta.blocks() * 512
-}
-
-/// The file's length. Windows reports no block count without opening the file, so a sparse or
-/// compressed file counts at its full length.
-#[cfg(windows)]
-fn allocated(meta: &fs::Metadata) -> u64 {
-    meta.len()
 }
 
 fn remove(path: &Path) {

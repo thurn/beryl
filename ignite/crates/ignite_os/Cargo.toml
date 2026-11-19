@@ -1,6 +1,6 @@
 [package]
 name = "ignite_os"
-description = "Ignite's operating-system layer: process usage, groups, local sockets, login items."
+description = "Ignite's operating-system layer: process usage, groups, local sockets, login items, clones."
 edition.workspace = true
 license.workspace = true
 version.workspace = true

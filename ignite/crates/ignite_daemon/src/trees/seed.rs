@@ -125,7 +125,6 @@ impl Trees {
         if dirs.is_empty() {
             return Ok(None);
         }
-        self.inner.builds.forget(tree);
         if let Some(built) = donor.row.built_commit.as_deref() {
             let built = Commit::new(built).map_err(|e| Error::Invalid(e.to_string()))?;
             self.record_build(tree, &built)?;
@@ -219,6 +218,10 @@ impl Trees {
         ];
         let times = file_times(&from, &to)?;
         let own = self.cargo_dirs(&to);
+        // Forgotten before the tree's own target directories are deleted, and whether or not the
+        // copy succeeds: a copy that fails partway leaves none, and a daemon restart during the
+        // copy would otherwise leave the record of builds whose files are gone.
+        self.inner.builds.forget(tree);
         let copied = (|| -> io::Result<()> {
             for dir in own.iter().chain(&dirs) {
                 remove(&to.join(dir))?;
