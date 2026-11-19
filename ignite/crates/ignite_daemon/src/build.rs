@@ -45,7 +45,7 @@
 //! unfinished run with that variable back into a running build that requests join (see
 //! `rejoin`).
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -771,6 +771,24 @@ pub fn recompiled(units: &[CompileUnit]) -> usize {
         .map(|unit| unit.crate_name.as_str())
         .collect::<BTreeSet<_>>()
         .len()
+}
+
+/// The `n` crates the units spent the most CPU seconds compiling, most first, each with its
+/// seconds summed over its modes (a crate built for `check` and `test` counts once). The
+/// `built` line names them, so a build that recompiled far more than a change reaches says
+/// which crates it was.
+pub fn costliest(units: &[CompileUnit], n: usize) -> Vec<(String, f64)> {
+    let mut by_crate: BTreeMap<&str, f64> = BTreeMap::new();
+    for unit in units.iter().filter(|u| u.mode != crate::wrap::RUN_MODE) {
+        *by_crate.entry(unit.crate_name.as_str()).or_default() += unit.cpu_s;
+    }
+    let mut crates: Vec<(String, f64)> = by_crate
+        .into_iter()
+        .map(|(name, cpu_s)| (name.to_owned(), cpu_s))
+        .collect();
+    crates.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    crates.truncate(n);
+    crates
 }
 
 #[cfg(test)]

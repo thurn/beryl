@@ -899,8 +899,9 @@ Rules for trees:
   and `ignite status` shows the wait as "waiting for tree-06's build directories
   to be copied from tree-03". A release of the tree also waits for it. A file
   the session edits during the copy keeps its own modification time, so the
-  units that read it are rebuilt. The daemon's log line for each copy says how
-  long it took.
+  units that read it are rebuilt. The daemon's log line for each copy names the
+  donor, the commit its build was made at, how many commits that is behind the
+  tip, and how long the copy took.
 - While cores are idle, the daemon keeps one free ticket tree built at the tip,
   so the next lease starts with nothing to compile.
 - A tree keeps the directories that its build products declare as their output,
@@ -1043,6 +1044,14 @@ The daemon runs builds so that sessions do not compete inside one tree:
   that a restart ended left one landing tree failing to link `session` on every
   run, and `master` waited an hour for it.
 - Checks waiting for a build hold no cores.
+- Each product built for a command is sent to the hub as a record of verb
+  `build`, with the product as its family and one compile unit per crate the
+  compiler wrapper saw (crate, mode, CPU seconds, whether it was rebuilt). The
+  command's `built` line names the three crates that took the most CPU seconds,
+  as in `built ignite-tests in 319 s, 191 CPU-s, 0.6 cores busy (22 crates
+  recompiled; most CPU: ignite_daemon 80 s, ignite_core 31 s, rusqlite 12 s)`.
+  So a build that recompiled more than its change reaches says which crates it
+  was, then and afterwards.
 - The gate builds test binaries only for the packages whose tests it will run. A
   `beryl_rules` change does not build `beryl_session`'s tests before landing
   unless the gate chose one of them.

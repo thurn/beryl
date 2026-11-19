@@ -157,6 +157,10 @@ pub fn wait_until_seeded(path: &Path) -> std::result::Result<(), String> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Seeded {
     pub donor: TreeId,
+    /// The commit the donor's build was made at, when its row records one.
+    pub built: Option<Commit>,
+    /// How many commits the leased tree's tip is ahead of `built`.
+    pub behind: usize,
     /// The Cargo target directories copied, relative to the tree's root.
     pub dirs: Vec<String>,
 }
@@ -165,6 +169,8 @@ pub struct Seeded {
 struct Donor {
     row: rows::Tree,
     free: bool,
+    /// How many commits the tip is ahead of the donor's last build.
+    behind: usize,
 }
 
 impl Trees {
@@ -188,9 +194,12 @@ impl Trees {
                 let took = trees.inner.clock.now().seconds_since(started);
                 match seeded {
                     Ok(Some(seeded)) => eprintln!(
-                        "ignite: {tree} starts from a copy of {}'s {}, made in {took:.1} s",
+                        "ignite: {tree} starts from a copy of {}'s {} (built at {}, {} commits \
+                         behind {tip}), made in {took:.1} s",
                         seeded.donor,
-                        seeded.dirs.join(", ")
+                        seeded.dirs.join(", "),
+                        seeded.built.as_ref().map_or("an unknown commit", Commit::as_str),
+                        seeded.behind,
                     ),
                     Ok(None) => {}
                     Err(error) => {
@@ -220,12 +229,17 @@ impl Trees {
         if dirs.is_empty() {
             return Ok(None);
         }
-        if let Some(built) = donor.row.built_commit.as_deref() {
-            let built = Commit::new(built).map_err(|e| Error::Invalid(e.to_string()))?;
-            self.record_build(tree, &built)?;
+        let built = match donor.row.built_commit.as_deref() {
+            Some(built) => Some(Commit::new(built).map_err(|e| Error::Invalid(e.to_string()))?),
+            None => None,
+        };
+        if let Some(built) = &built {
+            self.record_build(tree, built)?;
         }
         Ok(Some(Seeded {
             donor: id_of(&donor.row)?,
+            built,
+            behind: donor.behind,
             dirs,
         }))
     }
@@ -266,15 +280,20 @@ impl Trees {
             .collect();
         // Nearest first, and a free tree before a leased one at the same distance.
         candidates.sort_by(|a, b| (a.0, a.1, &a.2.id).cmp(&(b.0, b.1, &b.2.id)));
-        for (_, leased, row) in candidates {
+        for (behind, leased, row) in candidates {
             if leased {
                 return Ok(Some(Donor {
                     row: row.clone(),
                     free: false,
+                    behind,
                 }));
             }
             if let Some(row) = self.take_for_sweep(&row.id)? {
-                return Ok(Some(Donor { row, free: true }));
+                return Ok(Some(Donor {
+                    row,
+                    free: true,
+                    behind,
+                }));
             }
         }
         Ok(None)

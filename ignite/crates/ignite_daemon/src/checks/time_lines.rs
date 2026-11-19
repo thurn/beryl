@@ -9,6 +9,9 @@ use super::{Built, CheckRun, ListingTime, plan};
 /// How many families the `listed` line names.
 const SLOWEST: usize = 3;
 
+/// How many crates a `built` line names as the costliest it compiled.
+pub(crate) const COSTLIEST: usize = 3;
+
 pub(crate) fn built_lines(run: &CheckRun) -> Vec<(String, String)> {
     run.builds
         .iter()
@@ -16,9 +19,10 @@ pub(crate) fn built_lines(run: &CheckRun) -> Vec<(String, String)> {
         .collect()
 }
 
-/// `ignite-tests in 319 s, 191 CPU-s, 0.6 cores busy (22 crates recompiled)`: the wall time, the
-/// CPU seconds and the cores they kept busy on average, the seconds spent queued for cores when
-/// there were any, and how many crates were compiled.
+/// `ignite-tests in 319 s, 191 CPU-s, 0.6 cores busy (22 crates recompiled; most CPU:
+/// ignite_daemon 80 s, ignite_core 31 s, rusqlite 12 s)`: the wall time, the CPU seconds and
+/// the cores they kept busy on average, the seconds spent queued for cores when there were any,
+/// how many crates were compiled and the [`COSTLIEST`] of them by CPU seconds.
 fn built_line(b: &Built) -> String {
     let running = (b.wall_s - b.queued_s).max(b.wall_s.min(1.0)).max(0.001);
     let queued = if b.queued_s >= 1.0 {
@@ -30,6 +34,16 @@ fn built_line(b: &Built) -> String {
         Some(1) => "1 crate recompiled".to_owned(),
         Some(n) => format!("{n} crates recompiled"),
         None => "crates recompiled unknown".to_owned(),
+    };
+    let named: Vec<String> = b
+        .costliest
+        .iter()
+        .map(|(name, cpu_s)| format!("{name} {cpu_s:.0} s"))
+        .collect();
+    let crates = if named.is_empty() {
+        crates
+    } else {
+        format!("{crates}; most CPU: {}", named.join(", "))
     };
     format!(
         "{} in {:.0} s{queued}, {:.0} CPU-s, {:.1} cores busy ({crates})",
@@ -126,6 +140,7 @@ mod tests {
             product: "ignite-tests".to_owned(),
             wall_s: 319.0,
             rebuilt,
+            costliest: Vec::new(),
             cpu_s: 191.0,
             queued_s: 19.0,
         }
@@ -138,6 +153,17 @@ mod tests {
             "ignite-tests in 319 s (19 s queued), 191 CPU-s, 0.6 cores busy (22 crates recompiled)"
         );
         assert!(built_line(&built(Some(1))).ends_with("(1 crate recompiled)"));
+    }
+
+    #[test]
+    fn the_line_names_the_costliest_crates() {
+        let mut b = built(Some(85));
+        b.costliest = vec![("bevy_render".to_owned(), 41.4), ("cards".to_owned(), 9.6)];
+        assert!(
+            built_line(&b).ends_with("(85 crates recompiled; most CPU: bevy_render 41 s, cards 10 s)"),
+            "{}",
+            built_line(&b)
+        );
     }
 
     #[test]

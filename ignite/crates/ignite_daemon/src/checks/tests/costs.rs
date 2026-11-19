@@ -99,7 +99,7 @@ fn a_product_that_fails_for_two_families_is_reported_once() {
     let deps = vec!["deps".to_owned()];
     for _ in 0..2 {
         let who = execute::build_for(&options(false));
-        let built = Checks::build_products(&world.ctx, &tree, &deps, &[], &who, &mut run);
+        let built = world.checks.build_products(&world.ctx, &tree, &deps, &[], &who, &mut run);
         assert!(built.is_err());
     }
     assert_eq!(run.build_failures.len(), 1);
@@ -223,4 +223,47 @@ fn a_gate_run_that_is_entirely_cached_launches_no_command() {
     assert!(again.passed());
     assert_eq!(again.from_cache, 1, "{again:?}");
     assert_eq!(world.launcher.runs.lock().unwrap().len(), launched);
+}
+
+#[test]
+fn a_product_build_is_recorded_with_its_compile_units() {
+    let world = jsonl_world();
+    let tree_id = TreeId::new("tree-01").unwrap();
+    let unit = |name: &str, cpu_s: f64| ignite_core::protocol::hub::CompileUnit {
+        crate_name: name.to_owned(),
+        mode: "build".to_owned(),
+        instructions: None,
+        cpu_s,
+        rebuilt: true,
+    };
+    world.builds.script(
+        &tree_id,
+        "deps",
+        BuildResult::Built {
+            usage: Usage {
+                cpu_s: 50.0,
+                ..Usage::default()
+            },
+            units: vec![unit("small", 2.0), unit("large", 40.0)],
+        },
+    );
+    let tree = world.checks.open(&tree_id).unwrap();
+    let mut run = CheckRun::default();
+    let who = execute::build_for(&options(false));
+    let deps = vec!["deps".to_owned()];
+    assert!(
+        world
+            .checks
+            .build_products(&world.ctx, &tree, &deps, &[], &who, &mut run)
+            .is_ok()
+    );
+    assert_eq!(
+        run.builds[0].costliest,
+        vec![("large".to_owned(), 40.0), ("small".to_owned(), 2.0)]
+    );
+    let records = world.hub.stored_records();
+    let build = records.iter().find(|r| r.verb == "build").unwrap();
+    assert_eq!(build.family.as_deref(), Some("deps"));
+    assert_eq!(build.tree, Some(tree_id));
+    assert_eq!(build.compile_units.len(), 2);
 }
