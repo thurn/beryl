@@ -1745,15 +1745,15 @@ express_cores = 3
   every changed file matches `paths`. `ignite test` does so when every name it
   is given is in one of `families` (`ignite test ignite: ignite-lint:`, or the
   bare family name), or is a bare word with no `family:` prefix, such as a test
-  name (the reply then says the whole command list ran), and
-  `ignite check` does so for any such tree, because its landing would take the
-  express lane. They run `commands` in the agent's own tree as it is, with no
-  checkout, on the same cores, and reply with the `express` line or with the
-  failed command and the end of its output. The whole command list runs whatever
-  names were given, and no result goes into the check cache. On 2026-11-18
-  `ignite test` of these checks took 5 to 8.5 minutes through the scheduler
-  while Beryl builds held its cores: one test build got 4 cores for 319 s and
-  its run 1 core for 180 s, against 65 s in all when it got 12 cores.
+  name (the reply then says the whole command list ran), and `ignite check` does
+  so for any such tree, because its landing would take the express lane. They
+  run `commands` in the agent's own tree as it is, with no checkout, on the same
+  cores, and reply with the `express` line or with the failed command and the
+  end of its output. The whole command list runs whatever names were given, and
+  no result goes into the check cache. On 2026-11-18 `ignite test` of these
+  checks took 5 to 8.5 minutes through the scheduler while Beryl builds held its
+  cores: one test build got 4 cores for 319 s and its run 1 core for 180 s,
+  against 65 s in all when it got 12 cores.
 - `ignite run` of a command in the commands' directory of a build tree still
   asks the scheduler, and its reply ends with a hint naming
   `ignite test ignite: ignite-lint:`.
