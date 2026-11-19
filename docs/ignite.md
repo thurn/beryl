@@ -616,11 +616,17 @@ How the executable is installed and kept current:
 - The check manifests (`repository.checks`, `ignite/checks/`) are not Ignite's
   source, although they lie under `ignite/`: no executable compiles them. A
   landing that changes only them judges no release, so the release branch stays
-  where it is and no daemon builds or restarts. Each verb process, including a
-  landing's gate and a tip round, reads the manifests from the main checkout
-  when it starts. The daemon itself reads the build products and the exploration
-  families from them, and reads them again each time its tip loop fast-forwards
-  the main checkout. Before 2026-11-19 every manifest edit moved the release and
+  where it is and no daemon builds or restarts. Every command reads the families
+  and products it lists, builds and runs from the tree it runs in: the ticket
+  tree's working directory for `ignite test` and `ignite check`, the rebased
+  commit in the landing tree for a landing's gate, and the tip's tree for a tip
+  round. The build manager reads each product from the tree it builds in. A
+  change to a family or product therefore takes effect in the tree that makes
+  it, before it lands, and never runs against sources it does not match. The
+  daemon keeps its own copy for what has no tree (which directories a tree reset
+  keeps, what is prebuilt and the exploration families its idle loop chooses
+  from), and reads it again each time its tip loop fast-forwards the main
+  checkout. Before 2026-11-19 every manifest edit moved the release and
   restarted every daemon, which ended the verbs running on them.
 - Whether the release moves is decided before the push. The gate's outcomes
   count when it ran every check of the release family; checks of other families
@@ -1004,6 +1010,10 @@ outputs = ["rust/target"]
 Ignite's code names no path, crate, tool or branch of Beryl's. Everything
 specific to this repository is in `ignite.toml` and these declarations, so
 merging a workspace or dropping a directory is an edit to a declaration.
+
+A build in a tree runs the product as that tree's own declarations say, so a
+change to a product is built in the tree that makes it, and the families that
+read the product list and run with the same command line that built it.
 
 The daemon runs builds so that sessions do not compete inside one tree:
 
@@ -1734,7 +1744,8 @@ The steps, in order:
    commit what they change (see
    [Formatting at landing](#formatting-at-landing)).
 3. Take a landing tree, unless the ticket tree is already at the tip. Check out
-   the rebased commit there.
+   the rebased commit there. The rest of the landing reads the check families
+   and products from that commit, not from the main checkout.
 4. Decide which families the change can affect, from the paths that differ
    between the rebased commit and the tip, before anything is listed or built. A
    family is left out when no changed path matches its inputs, its

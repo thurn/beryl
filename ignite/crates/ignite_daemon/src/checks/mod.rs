@@ -309,8 +309,17 @@ pub trait HitSink: Send + Sync {
 }
 
 /// Runs checks in build trees. See the module documentation.
+///
+/// A runner opened on a tree ([`Checks::open`]) is a view of this one with the families and
+/// products of the tree's own manifests (see `crate::manifests`), sharing everything else.
 pub struct Checks {
     settings: CheckSettings,
+    shared: Arc<Shared>,
+}
+
+/// What every view of one runner shares: the cache, the trees, the history and what the
+/// runner remembers between commands. [`Checks`] dereferences to it.
+pub struct Shared {
     cache: ResultCache,
     trees: Box<dyn TreeSource>,
     history: Box<dyn CheckHistory>,
@@ -331,6 +340,14 @@ pub struct Checks {
     hits: OnceLock<Arc<dyn HitSink>>,
 }
 
+impl std::ops::Deref for Checks {
+    type Target = Shared;
+
+    fn deref(&self) -> &Shared {
+        &self.shared
+    }
+}
+
 impl Checks {
     pub fn new(
         settings: CheckSettings,
@@ -340,15 +357,17 @@ impl Checks {
     ) -> Self {
         Self {
             settings,
-            cache,
-            trees,
-            history,
-            listings: Mutex::new(HashMap::new()),
-            not_kept: Mutex::new(HashSet::new()),
-            listed_before: Mutex::new(HashSet::new()),
-            foreign_listings: Mutex::new(HashMap::new()),
-            next_file: AtomicU64::new(0),
-            hits: OnceLock::new(),
+            shared: Arc::new(Shared {
+                cache,
+                trees,
+                history,
+                listings: Mutex::new(HashMap::new()),
+                not_kept: Mutex::new(HashSet::new()),
+                listed_before: Mutex::new(HashSet::new()),
+                foreign_listings: Mutex::new(HashMap::new()),
+                next_file: AtomicU64::new(0),
+                hits: OnceLock::new(),
+            }),
         }
     }
 
@@ -372,8 +391,8 @@ impl Checks {
         options: &RunOptions,
     ) -> CheckRun {
         let mut run = CheckRun::default();
-        let tree = match self.open(tree) {
-            Ok(tree) => tree,
+        let (checks, tree) = match self.open(ctx, tree) {
+            Ok(opened) => opened,
             Err(error) => {
                 for name in names {
                     run.finish(name, Outcome::Incomplete, Some(incomplete(name, &error)));
@@ -387,7 +406,7 @@ impl Checks {
             families.dedup();
             families
         };
-        let mut prepared = self.prepare(ctx, &tree, &families, options, &mut run);
+        let mut prepared = checks.prepare(ctx, &tree, &families, options, &mut run);
         for name in names {
             let listed = prepared.iter().any(|p| {
                 p.keyed.iter().any(|k| k.listed.check == *name)
@@ -405,7 +424,7 @@ impl Checks {
         for family in &mut prepared {
             family.keep(|check| names.contains(check), &mut run);
         }
-        self.run_prepared(ctx, &tree, prepared, options, &mut run);
+        checks.run_prepared(ctx, &tree, prepared, options, &mut run);
         run
     }
 
@@ -447,19 +466,36 @@ impl Checks {
         }
     }
 
-    pub(crate) fn open(&self, tree: &TreeId) -> Result<OpenTree> {
+    /// Opens `tree` for one command, with this runner as it runs there: a view whose families
+    /// and products are those of the tree's own manifests, in `repository.checks` within it.
+    /// Every command on the tree goes through the view, so the commands it lists, builds and
+    /// runs are the tree's, whatever manifests this runner was made with; those stand only for
+    /// a tree with no manifest directory. Manifests the tree has but that cannot be parsed are
+    /// an error.
+    pub(crate) fn open(&self, ctx: &Context, tree: &TreeId) -> Result<(Checks, OpenTree)> {
         let path = self
             .trees
             .path(tree)
             .ok_or_else(|| Error::NotFound(format!("tree {tree}")))?;
+        let own = crate::manifests::in_tree(&path, &ctx.config.repository.checks)
+            .map_err(|e| Error::Invalid(format!("the manifests of tree {tree}: {e}")))?;
         let tracked = self.trees.tracked(&path)?;
         let graph = self.trees.crate_graph(&path, &tracked)?;
-        Ok(OpenTree {
+        let mut settings = self.settings.clone();
+        if let Some(own) = own {
+            settings.manifest = own;
+        }
+        let view = Checks {
+            settings,
+            shared: self.shared.clone(),
+        };
+        let tree = OpenTree {
             id: tree.clone(),
             path,
             tracked,
             graph,
-        })
+        };
+        Ok((view, tree))
     }
 
     /// The families this machine runs, by name.

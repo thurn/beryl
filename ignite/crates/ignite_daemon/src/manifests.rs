@@ -1,18 +1,26 @@
-//! The check manifests as the long-running daemon holds them, read again whenever it
-//! fast-forwards the main checkout.
+//! The check manifests: those of the tree a command runs in, and those the long-running daemon
+//! holds for the work that has no tree.
 //!
-//! A change to the manifests builds no release and restarts no daemon (see
-//! [`crate::update::scope::ignite_change`]), so the daemon cannot rely on a restart to see new
-//! ones. Most readers never needed one: each verb process, including a landing's gate and a tip
-//! round, reads the manifests from the main checkout when it starts. What the daemon process
-//! itself reads from them is the build products, which its build manager runs for every verb
-//! process and which decide what a tree reset keeps and what is prebuilt, and the exploration
-//! families its idle loop chooses from. Those components hold a [`Live`] value, and the tip
-//! loop calls [`Reload::run`] after each fast-forward of the main checkout, so the daemon reads
-//! the manifests `master` has, as a restart into the new release did.
+//! A command reads the families and products it uses from the tree it runs in ([`in_tree`]): a
+//! ticket tree's working directory for `ignite test` and `ignite check`, and the rebased commit
+//! checked out in a landing tree for a landing's gate. That is the only manifest that matches
+//! the sources being checked. The main checkout's manifests, which verb processes read when they
+//! start, and the daemon's, which follow `master`, can be older or newer than the tree, and a
+//! command built from them runs other commands than the tree's own (a `cargo nextest` profile
+//! the tree's code does not have, or a product built with other arguments than the family that
+//! reads it lists with). The check runner opens every tree with the tree's manifests (see
+//! `crate::checks::Checks::open`), and the build manager reads a product from the tree it builds
+//! in (see `crate::build`).
+//!
+//! The daemon keeps its own copy for what has no tree: which directories a tree reset keeps,
+//! what is prebuilt, the exploration families its idle loop chooses from, and a tree that holds
+//! no manifest directory. A change to the manifests builds no release and restarts no daemon
+//! (see [`crate::update::scope::ignite_change`]), so those components hold a [`Live`] value, and
+//! the tip loop calls [`Reload::run`] after each fast-forward of the main checkout, so the daemon
+//! reads the manifests `master` has, as a restart into the new release did.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, PoisonError, RwLock};
 
 use ignite_core::config::Config;
@@ -80,12 +88,48 @@ impl<T: PartialEq> PartialEq for Live<T> {
 
 impl<T: Eq> Eq for Live<T> {}
 
+/// Every `*.toml` in `dir`, parsed together. Keys this Ignite does not know are reported on
+/// standard error and ignored, since a newer Ignite may know them.
+pub fn read_directory(dir: &Path) -> Result<Manifest, String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let mut files = Vec::new();
+    for entry in entries {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        if path.extension().is_some_and(|e| e == "toml") {
+            let text =
+                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            files.push((path, text));
+        }
+    }
+    files.sort();
+    let (manifest, unknown) =
+        Manifest::from_files_with_unknown(&files).map_err(|e| e.to_string())?;
+    for key in unknown {
+        eprintln!("ignite: ignoring the unknown manifest key {key}; a newer Ignite may know it");
+    }
+    Ok(manifest)
+}
+
+/// The manifests of the tree whose working directory is `root`, from its directory `checks`
+/// (`repository.checks`, relative to the tree). `None` when the tree has no such directory, as
+/// in a test's tree, where the caller uses the manifests it holds. Manifests the tree has but
+/// that cannot be read or parsed are an error: running the commands of other manifests on the
+/// tree's sources is what reading the tree's prevents.
+pub fn in_tree(root: &Path, checks: &Path) -> Result<Option<Manifest>, String> {
+    let dir = root.join(checks);
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    read_directory(&dir).map(Some)
+}
+
 /// Reads the main checkout's manifests again and hands any change to the daemon's components.
 pub struct Reload {
     /// The main checkout.
     pub repo: PathBuf,
     pub config: Config,
-    /// The manifests the build manager and the idle work read.
+    /// The manifests the idle work reads, and the build manager for a tree with no manifest
+    /// directory.
     pub manifest: LiveManifest,
     /// The trees, whose reset keeps and prebuild lists come from the products.
     pub trees: Trees,

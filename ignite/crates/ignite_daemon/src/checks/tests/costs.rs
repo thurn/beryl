@@ -94,7 +94,7 @@ fn a_product_that_fails_for_two_families_is_reported_once() {
             usage: Usage::default(),
         },
     );
-    let tree = world.checks.open(&tree_id).unwrap();
+    let tree = world.checks.open(&world.ctx, &tree_id).unwrap().1;
     let mut run = CheckRun::default();
     let deps = vec!["deps".to_owned()];
     for _ in 0..2 {

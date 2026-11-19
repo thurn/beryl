@@ -131,7 +131,7 @@ fn a_check_name_ignite_refuses_makes_the_family_listing_an_incomplete_check() {
 
     // A run of the whole family, as the gate runs it, does not pass.
     let mut run = CheckRun::default();
-    let open = world.checks.open(&tree()).unwrap();
+    let open = world.checks.open(&world.ctx, &tree()).unwrap().1;
     let mut prepared =
         world
             .checks

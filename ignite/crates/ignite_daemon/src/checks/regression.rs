@@ -9,7 +9,7 @@ use ignite_core::protocol::Class;
 use ignite_core::protocol::hub::{CheckState, IncompleteReason, ResultKey};
 use ignite_core::traits::Result;
 
-use super::{CheckRun, Checks, LISTING_BUILD_FAILED, RunOptions, UNRESOLVED};
+use super::{CheckRun, Checks, LISTING_BUILD_FAILED, OpenTree, RunOptions, UNRESOLVED};
 use crate::server::Context;
 use crate::tip::{TipCheck, TipSet, Unlisted};
 
@@ -26,9 +26,14 @@ impl Checks {
     /// A family that cannot be listed, one whose products cannot be built for its listing, and
     /// a check whose inputs cannot be resolved are not errors: they come back in
     /// [`TipSet::unlisted`], so the other families still verify and the tip waits for these.
-    #[allow(clippy::too_many_lines)]
     pub(crate) fn regression_checks(&self, ctx: &Context, tree: &TreeId) -> Result<TipSet> {
-        let tree = self.open(tree)?;
+        let (checks, tree) = self.open(ctx, tree)?;
+        Ok(checks.regression_in(ctx, &tree))
+    }
+
+    /// [`Checks::regression_checks`] in a tree opened with its own manifests.
+    #[allow(clippy::too_many_lines)]
+    fn regression_in(&self, ctx: &Context, tree: &OpenTree) -> TipSet {
         let runs_here: Vec<&str> = self
             .families()
             .filter(|(_, family)| family.kind == Kind::Regression)
@@ -50,7 +55,7 @@ impl Checks {
             session: None,
         };
         let mut run = CheckRun::default();
-        let prepared = self.prepare_among(ctx, &tree, &among, &options, &mut run);
+        let prepared = self.prepare_among(ctx, tree, &among, &options, &mut run);
         let mut set = TipSet::default();
         for &(name, family) in &among {
             let reportable = runs_here.contains(&name);
@@ -161,7 +166,7 @@ impl Checks {
                 }
             }
         }
-        Ok(set)
+        set
     }
 }
 

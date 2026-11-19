@@ -225,7 +225,7 @@ impl super::Checks {
         changed: &[String],
         checks: &[(CheckName, String)],
     ) -> ignite_core::traits::Result<Scoring> {
-        let tree = self.open(tree)?;
+        let (view, tree) = self.open(ctx, tree)?;
         let families: BTreeSet<&str> = checks.iter().map(|(_, f)| f.as_str()).collect();
         let stats: BTreeMap<&str, CheckStatsReply> = families
             .into_iter()
@@ -235,7 +235,7 @@ impl super::Checks {
         let scored = checks
             .iter()
             .filter_map(|(check, family)| {
-                let declared = &self.settings.manifest.families.get(family)?.family;
+                let declared = &view.settings.manifest.families.get(family)?.family;
                 let reply = stats.get(family.as_str());
                 let mut scored =
                     scored_check(check, declared, reply, regressions.get(check).cloned())?;

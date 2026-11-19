@@ -2,7 +2,10 @@
 //! product in the same tree state, and skipped when the tree already holds it.
 //!
 //! A build product is a `[product.<name>]` table in the check manifests: the command that makes
-//! it, the directory it runs in, what it reads and the directories it writes. A request names a
+//! it, the directory it runs in, what it reads and the directories it writes. The manager reads
+//! the product from the manifests of the tree it builds in, so a tree whose `ignite/checks`
+//! changes a product builds it as that tree says, whatever the daemon's own manifests hold; those
+//! are used only for a tree with no manifest directory (see `crate::manifests`). A request names a
 //! tree, a product and the packages the caller needs. [`BuildManager::ensure`] answers it in one
 //! of three ways:
 //!
@@ -63,7 +66,7 @@ pub use room::{DiskRoom, NativeRoom, START_GB};
 use ignite_core::hash::{HashParts, input_hash};
 use ignite_core::ids::{InputHash, TreeId};
 use ignite_core::inputs::{self, CrateGraph};
-use ignite_core::manifest::{InputPattern, Product};
+use ignite_core::manifest::{InputPattern, Manifest, Product};
 use ignite_core::protocol::hub::CompileUnit;
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::traits::{
@@ -153,9 +156,13 @@ impl TreeFacts for DirectoryTrees {
 
 /// How the manager runs builds.
 pub struct BuildSettings {
-    /// The manifests, whose products the manager builds. The daemon reads them again when the
-    /// main checkout moves (see `crate::manifests`).
+    /// The manifests whose products the manager builds in a tree that has no manifest
+    /// directory of its own. The daemon reads them again when the main checkout moves (see
+    /// `crate::manifests`).
     pub manifest: crate::manifests::LiveManifest,
+    /// The manifest directory within each tree (`repository.checks`), whose products the
+    /// manager builds in that tree.
+    pub checks: PathBuf,
     /// Where build output notes and compile unit files are written.
     pub records: PathBuf,
     /// The cores each build asks the scheduler for.
@@ -277,11 +284,22 @@ impl BuildManager {
         (state.joined, state.queued)
     }
 
+    /// The manifests whose products the manager builds in `tree`: the tree's own, or the held
+    /// ones when the tree has no manifest directory. Manifests the tree has but that cannot be
+    /// parsed are an error, so no build runs a product the tree does not declare.
+    fn manifest(&self, tree: &TreeId) -> Result<Arc<Manifest>> {
+        let held = self.settings.manifest.get();
+        let Some(root) = self.trees.path(tree) else {
+            return Ok(held);
+        };
+        Ok(crate::manifests::in_tree(&root, &self.settings.checks)
+            .map_err(|e| Error::Invalid(format!("the manifests of tree {tree}: {e}")))?
+            .map_or(held, Arc::new))
+    }
+
     fn plan(&self, tree: &TreeId, name: &str, packages: &[String]) -> Result<Plan> {
         let product = self
-            .settings
-            .manifest
-            .get()
+            .manifest(tree)?
             .products
             .get(name)
             .ok_or_else(|| Error::NotFound(format!("no product named {name:?} is declared")))?
@@ -663,13 +681,12 @@ impl Builds for BuildManager {
         {
             return true;
         }
-        self.settings
-            .manifest
-            .get()
-            .products
-            .get(product)
-            .is_some_and(|declared| !declared.outputs.is_empty())
-            && self.outputs_present(tree, product)
+        self.manifest(tree).is_ok_and(|manifest| {
+            manifest
+                .products
+                .get(product)
+                .is_some_and(|declared| !declared.outputs.is_empty())
+        }) && self.outputs_present(tree, product)
     }
 }
 
@@ -677,7 +694,9 @@ impl BuildManager {
     /// Whether `product` is declared and every directory it writes is in `tree` and not empty.
     /// A product that writes no directory has them all.
     fn outputs_present(&self, tree: &TreeId, product: &str) -> bool {
-        let manifest = self.settings.manifest.get();
+        let Ok(manifest) = self.manifest(tree) else {
+            return false;
+        };
         let (Some(declared), Some(root)) = (manifest.products.get(product), self.trees.path(tree))
         else {
             return false;

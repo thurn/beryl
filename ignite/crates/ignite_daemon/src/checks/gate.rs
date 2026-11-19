@@ -123,8 +123,8 @@ impl Checks {
         carried: Option<&Carried>,
         excused: &Excused,
     ) -> GateRun {
-        match self.open(tree) {
-            Ok(tree) => self.gate_in(ctx, &tree, options, carried, excused),
+        match self.open(ctx, tree) {
+            Ok((checks, tree)) => checks.gate_in(ctx, &tree, options, carried, excused),
             Err(error) => {
                 let mut gated = GateRun::default();
                 gated

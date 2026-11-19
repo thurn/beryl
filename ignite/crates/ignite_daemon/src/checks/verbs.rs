@@ -47,22 +47,20 @@ impl Verb for TestVerb {
             return Reply::text(Exit::Usage, "usage: ignite test <names> [--rerun]");
         }
         let options = options("test", req, flags.contains(&"--rerun"));
-        let tree = match self.tree(ctx, req) {
-            Ok(tree) => tree,
+        let (checks, tree) = match self.tree(ctx, req) {
+            Ok(opened) => opened,
             Err(reply) => return reply,
         };
         let asked = Asked::Named(&words);
-        if let Some(reply) = express_reply(self.express.as_ref(), &self.checks, ctx, &tree, asked) {
+        if let Some(reply) = express_reply(self.express.as_ref(), &checks, ctx, &tree, asked) {
             return reply;
         }
-        let families = match self.test_families(ctx, &tree, &words) {
+        let families = match Self::test_families(&checks, ctx, &tree, &words) {
             Ok(found) => found,
             Err(reply) => return reply,
         };
         let mut run = CheckRun::default();
-        let mut prepared = self
-            .checks
-            .prepare(ctx, &tree, &families, &options, &mut run);
+        let mut prepared = checks.prepare(ctx, &tree, &families, &options, &mut run);
         let unmatched: Vec<&str> = words
             .iter()
             .copied()
@@ -85,8 +83,7 @@ impl Verb for TestVerb {
                 &mut run,
             );
         }
-        self.checks
-            .run_prepared(ctx, &tree, prepared, &options, &mut run);
+        checks.run_prepared(ctx, &tree, prepared, &options, &mut run);
         let mut lines = built_lines(&run);
         lines.extend(listed_line(&run));
         lines.push(("ran".to_owned(), ran_line(&run)));
@@ -112,14 +109,14 @@ impl TestVerb {
     /// listing, so is every family without a kept listing for the tree's inputs. When no
     /// family could hold a bare word, the reply says how checks are named.
     fn test_families<'a>(
-        &'a self,
+        checks: &'a Checks,
         ctx: &Context,
         tree: &OpenTree,
         words: &[&str],
     ) -> Result<Vec<&'a str>, Reply> {
         let prefixed = |w: &str| {
             w.split_once(':')
-                .and_then(|(f, _)| self.checks.families().find(|(n, _)| *n == f))
+                .and_then(|(f, _)| checks.families().find(|(n, _)| *n == f))
                 .map(|(n, _)| n)
         };
         let mut families: Vec<&str> = words.iter().filter_map(|w| prefixed(w)).collect();
@@ -131,8 +128,8 @@ impl TestVerb {
         if bare.is_empty() {
             return Ok(families);
         }
-        let all: Vec<(&str, &Family)> = self.checks.families().collect();
-        let kept = self.checks.kept_listings(ctx, tree, &all);
+        let all: Vec<(&str, &Family)> = checks.families().collect();
+        let kept = checks.kept_listings(ctx, tree, &all);
         let mut found = vec![false; bare.len()];
         let mut not_current = Vec::new();
         for (name, _) in &all {
@@ -140,7 +137,7 @@ impl TestVerb {
                 Arc::clone(listing)
             } else {
                 not_current.push(*name);
-                let Some(latest) = self.checks.latest_listing(name) else {
+                let Some(latest) = checks.latest_listing(name) else {
                     families.push(name);
                     continue;
                 };
@@ -199,45 +196,40 @@ impl Verb for CheckVerb {
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let (_, flags) = split_args(&req.args);
         let options = options("check", req, flags.contains(&"--rerun"));
-        let tree = match self.tree(ctx, req) {
-            Ok(tree) => tree,
+        let (checks, tree) = match self.tree(ctx, req) {
+            Ok(opened) => opened,
             Err(reply) => return reply,
         };
         if !flags.contains(&"--plan") {
             let lane = self.express.as_ref();
-            if let Some(reply) = express_reply(lane, &self.checks, ctx, &tree, Asked::Gate) {
+            if let Some(reply) = express_reply(lane, &checks, ctx, &tree, Asked::Gate) {
                 return reply;
             }
-            let gated = self
-                .checks
-                .gate_in(ctx, &tree, &options, None, &super::Excused::new());
+            let gated = checks.gate_in(ctx, &tree, &options, None, &super::Excused::new());
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
             return reply(&gated.run, render(&lines));
         }
-        let regression: Vec<(&str, &Family)> = self
-            .checks
+        let regression: Vec<(&str, &Family)> = checks
             .families()
             .filter(|(_, f)| f.kind == Kind::Regression)
             .collect();
         let mut run = CheckRun::default();
         // Without the changed paths nothing can be left out of scope.
-        let among = match changed_paths(&self.checks, ctx, &tree) {
+        let among = match changed_paths(&checks, ctx, &tree) {
             Ok(changed) => {
-                let (among, left_out) = self.checks.scope(ctx, &tree, &regression, &changed);
+                let (among, left_out) = checks.scope(ctx, &tree, &regression, &changed);
                 run.out_of_scope = left_out;
                 among
             }
             Err(_) => regression,
         };
-        let mut prepared = self
-            .checks
-            .prepare_among(ctx, &tree, &among, &options, &mut run);
+        let mut prepared = checks.prepare_among(ctx, &tree, &among, &options, &mut run);
         for family in &mut prepared {
             family.keep(|_| true, &mut run);
         }
-        let hits = self.checks.lookup(&prepared, &options);
-        let view = self.view(ctx, &tree, &prepared, &hits);
+        let hits = checks.lookup(&prepared, &options);
+        let view = gate_view(&checks, ctx, &tree, &prepared, &hits);
         let gate_plan = view.plan(&ctx.config.gate);
         let mut lines = plan::plan_lines(&view, &gate_plan, &ctx.config.gate);
         lines.extend(failure_lines(&run));
@@ -289,18 +281,16 @@ impl Verb for WhyVerb {
         if ctx.tree.is_none() && self.checks.trees.tree_of(&req.cwd).is_none() {
             return why_record::outside_a_tree(&self.checks, wanted, flags.contains(&"--inputs"));
         }
-        let tree = match self.tree(ctx, req) {
-            Ok(tree) => tree,
+        let (checks, tree) = match self.tree(ctx, req) {
+            Ok(opened) => opened,
             Err(reply) => return reply,
         };
         let families: Vec<&str> = match wanted.split_once(':') {
-            Some((family, _)) if self.checks.families().any(|(n, _)| n == family) => vec![family],
-            _ => self.checks.families().map(|(name, _)| name).collect(),
+            Some((family, _)) if checks.families().any(|(n, _)| n == family) => vec![family],
+            _ => checks.families().map(|(name, _)| name).collect(),
         };
         let mut run = CheckRun::default();
-        let prepared = self
-            .checks
-            .prepare(ctx, &tree, &families, &options, &mut run);
+        let prepared = checks.prepare(ctx, &tree, &families, &options, &mut run);
         let found: Vec<(&Prepared, &Keyed)> = prepared
             .iter()
             .flat_map(|p| p.keyed.iter().map(move |k| (p, k)))
@@ -324,7 +314,7 @@ impl Verb for WhyVerb {
                 );
             }
         };
-        let hit = self.checks.cache().lookup(std::slice::from_ref(&keyed.key));
+        let hit = checks.cache().lookup(std::slice::from_ref(&keyed.key));
         let hit = hit.into_iter().next().flatten();
         let lines = if flags.contains(&"--inputs") {
             input_lines(&tree, keyed, hit.as_ref())
@@ -334,20 +324,14 @@ impl Verb for WhyVerb {
                 keyed: vec![keyed.clone()],
                 broken: Vec::new(),
             };
-            let view = self.view(
+            let view = gate_view(
+                &checks,
                 ctx,
                 &tree,
                 std::slice::from_ref(&single),
                 std::slice::from_ref(&hit),
             );
-            record_lines(
-                ctx,
-                &self.checks,
-                &view,
-                keyed,
-                &family.family,
-                hit.as_ref(),
-            )
+            record_lines(ctx, &checks, &view, keyed, &family.family, hit.as_ref())
         };
         Reply::text(Exit::Success, render(&lines))
     }
@@ -359,7 +343,9 @@ trait TreeVerb {
 
     /// The tree the request came from: the one the daemon found for it, or the one that holds
     /// its working directory.
-    fn tree(&self, ctx: &Context, req: &Request) -> Result<OpenTree, Reply> {
+    /// The tree is opened with its own manifests, and every command on it goes through the
+    /// runner returned with it (see [`Checks::open`]).
+    fn tree(&self, ctx: &Context, req: &Request) -> Result<(Checks, OpenTree), Reply> {
         let checks = self.checks();
         let found = ctx.tree.clone();
         let id: TreeId = found
@@ -371,18 +357,8 @@ trait TreeVerb {
                 )
             })?;
         checks
-            .open(&id)
+            .open(ctx, &id)
             .map_err(|e| Reply::text(Exit::Usage, format!("cannot read tree {id}: {e}")))
-    }
-
-    fn view(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        prepared: &[Prepared],
-        hits: &[Option<CachedResult>],
-    ) -> GateView {
-        gate_view(self.checks(), ctx, tree, prepared, hits)
     }
 }
 

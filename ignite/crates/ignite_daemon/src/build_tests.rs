@@ -256,6 +256,7 @@ fn manager_in(dir: PathBuf, git: Arc<FakeGit>, gated: bool) -> Fixture {
     let launcher = Arc::new(TestLauncher::new(dir.clone(), gated));
     let settings = BuildSettings {
         manifest: manifest.into(),
+        checks: PathBuf::from("checks"),
         records: dir.join("records"),
         cores: 8,
         class: Class::Agent,
@@ -446,6 +447,43 @@ fn unknown_products_and_trees_fail_with_a_reason() {
                 .starts_with("cannot build")
         );
     }
+}
+
+/// A tree whose manifest directory changes a product builds the product as the tree declares
+/// it, not as the manifests the daemon holds do, and a product only the tree declares builds.
+#[test]
+fn a_tree_builds_the_products_its_own_manifests_declare() {
+    let f = fixture("tree-manifest", false);
+    fs::create_dir_all(f.dir.join("checks")).unwrap();
+    fs::write(
+        f.dir.join("checks").join("products.toml"),
+        "[product.fixed]\nbuild = \"cargo test --no-run -p a\"\ninputs = [\"crate-closure\"]\n\
+         outputs = [\"target\"]\n\n[product.new]\nbuild = \"cargo build -p b\"\n\
+         inputs = [\"crate-closure\"]\noutputs = [\"target\"]\n",
+    )
+    .unwrap();
+    for product in ["fixed", "new"] {
+        let built = f.manager.ensure(&tree(), product, &[]);
+        assert!(matches!(built, BuildResult::Built { .. }), "{built:?}");
+    }
+    assert_eq!(
+        f.launcher.builds(),
+        vec![
+            names(&["cargo", "test", "--no-run", "-p", "a"]),
+            names(&["cargo", "build", "-p", "b"]),
+        ]
+    );
+    // Manifests the tree has but that do not parse build nothing, rather than the held ones.
+    fs::write(f.dir.join("checks").join("broken.toml"), "[product.fixed\n").unwrap();
+    let BuildResult::Failed { output, .. } = f.manager.ensure(&tree(), "tests", &[]) else {
+        panic!("expected a failure");
+    };
+    assert!(
+        fs::read_to_string(output)
+            .unwrap()
+            .contains("the manifests of tree")
+    );
+    assert_eq!(f.launcher.builds().len(), 2);
 }
 
 #[test]

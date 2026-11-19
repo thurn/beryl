@@ -493,22 +493,5 @@ pub(crate) fn read_config(repo: &Path) -> Result<Config> {
 
 /// Every `*.toml` in the repository's manifest directory, parsed together.
 pub(crate) fn read_manifest(repo: &Path, config: &Config) -> std::result::Result<Manifest, String> {
-    let dir = repo.join(&config.repository.checks);
-    let entries = std::fs::read_dir(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let mut files = Vec::new();
-    for entry in entries {
-        let path = entry.map_err(|e| e.to_string())?.path();
-        if path.extension().is_some_and(|e| e == "toml") {
-            let text =
-                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-            files.push((path, text));
-        }
-    }
-    files.sort();
-    let (manifest, unknown) =
-        Manifest::from_files_with_unknown(&files).map_err(|e| e.to_string())?;
-    for key in unknown {
-        eprintln!("ignite: ignoring the unknown manifest key {key}; a newer Ignite may know it");
-    }
-    Ok(manifest)
+    crate::manifests::read_directory(&repo.join(&config.repository.checks))
 }

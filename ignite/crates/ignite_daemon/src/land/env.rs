@@ -219,16 +219,14 @@ impl LandGate for ChecksGate {
         checks: &[CheckName],
         options: &RunOptions,
     ) -> Vec<CheckVerdict> {
-        let Ok(open) = self.checks.open(&tree.tree) else {
+        let Ok((runner, open)) = self.checks.open(ctx, &tree.tree) else {
             return Vec::new();
         };
         let mut families: Vec<&str> = checks.iter().map(CheckName::family).collect();
         families.sort_unstable();
         families.dedup();
         let mut run = CheckRun::default();
-        let mut prepared = self
-            .checks
-            .prepare(ctx, &open, &families, options, &mut run);
+        let mut prepared = runner.prepare(ctx, &open, &families, options, &mut run);
         let mut platforms = BTreeMap::new();
         for listed in &mut prepared {
             listed.keep(|check| checks.contains(check), &mut run);
@@ -236,8 +234,7 @@ impl LandGate for ChecksGate {
                 platforms.insert(keyed.listed.check.clone(), keyed.key.platform);
             }
         }
-        self.checks
-            .run_prepared(ctx, &open, prepared, options, &mut run);
+        runner.run_prepared(ctx, &open, prepared, options, &mut run);
         run.outcomes
             .iter()
             .map(|(check, outcome)| CheckVerdict {
@@ -262,27 +259,25 @@ impl LandGate for ChecksGate {
         options: &RunOptions,
     ) -> CheckRun {
         let mut run = CheckRun::default();
-        if !self.checks.families().any(|(name, _)| name == family) {
-            run.incomplete_families
-                .push((format!("no check family {family}"), PathBuf::new()));
-            return run;
-        }
-        let open = match self.checks.open(&tree.tree) {
-            Ok(open) => open,
+        let (runner, open) = match self.checks.open(ctx, &tree.tree) {
+            Ok(opened) => opened,
             Err(error) => {
                 run.incomplete_families
                     .push((format!("tree {}: {error}", tree.tree), PathBuf::new()));
                 return run;
             }
         };
-        let mut prepared = self
-            .checks
-            .prepare(ctx, &open, &[family], options, &mut run);
+        // The family is looked up in the tree's manifests, which a landing may change.
+        if !runner.families().any(|(name, _)| name == family) {
+            run.incomplete_families
+                .push((format!("no check family {family}"), PathBuf::new()));
+            return run;
+        }
+        let mut prepared = runner.prepare(ctx, &open, &[family], options, &mut run);
         for listed in &mut prepared {
             listed.keep(|_| true, &mut run);
         }
-        self.checks
-            .run_prepared(ctx, &open, prepared, options, &mut run);
+        runner.run_prepared(ctx, &open, prepared, options, &mut run);
         run
     }
 }

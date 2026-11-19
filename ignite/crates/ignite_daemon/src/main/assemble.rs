@@ -183,6 +183,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         BuildManager::new(
             BuildSettings {
                 manifest: base.live.clone(),
+                checks: base.config.repository.checks.clone(),
                 records: base.home("records"),
                 cores: base.limits.max_per_command(),
                 class: Class::Agent,

@@ -11,6 +11,7 @@ mod listings;
 mod observed;
 mod plan;
 mod scope;
+mod tree_manifest;
 mod verdicts;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -421,7 +422,11 @@ fn outcome(run: &CheckRun, check: &str) -> Outcome {
 /// The result key of `check` in this world's tree.
 fn key_of(world: &World, check: &str) -> ResultKey {
     let mut probe = CheckRun::default();
-    let tree = world.checks.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let tree = world
+        .checks
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
     let family = name(check).family().to_owned();
     let prepared = world
         .checks
@@ -446,7 +451,11 @@ fn a_family_reads_the_tree_once_to_hash_all_its_checks() {
     // Reading the tree runs git; one reading per check made a round of thousands of checks
     // take most of an hour.
     let world = jsonl_world();
-    let tree = world.checks.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let tree = world
+        .checks
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
     let before = world.git.object_id_calls();
     let mut probe = CheckRun::default();
     let prepared = world

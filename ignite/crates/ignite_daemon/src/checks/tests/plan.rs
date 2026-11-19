@@ -90,7 +90,11 @@ fn seeded() -> World {
 /// Stores passes for the always set and the 44 cached scored checks of [`seeded`].
 fn store_cached(world: &World) {
     let mut probe = CheckRun::default();
-    let tree = world.checks.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let tree = world
+        .checks
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
     let prepared = world.checks.prepare(
         &world.ctx,
         &tree,

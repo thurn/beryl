@@ -36,8 +36,8 @@ impl Checks {
         claim: &dyn Fn(u32) -> bool,
     ) -> (CheckRun, usize) {
         let mut run = CheckRun::default();
-        let tree = match self.open(tree) {
-            Ok(tree) => tree,
+        let (checks, tree) = match self.open(ctx, tree) {
+            Ok(opened) => opened,
             Err(error) => {
                 for name in batches.iter().flat_map(|(_, names)| names) {
                     run.finish(name, Outcome::Incomplete, Some(incomplete(name, &error)));
@@ -45,7 +45,7 @@ impl Checks {
                 return (run, 0);
             }
         };
-        let prepared = self.prepare(ctx, &tree, &[family], options, &mut run);
+        let prepared = checks.prepare(ctx, &tree, &[family], options, &mut run);
         let family_failed = run.incomplete_families.iter().any(|(f, _)| f == family);
         let mut ran = 0;
         for (batch, names) in batches {
@@ -71,7 +71,7 @@ impl Checks {
             for part in &mut wanted {
                 part.keep(|check| names.contains(check), &mut run);
             }
-            self.run_prepared(ctx, &tree, wanted, options, &mut run);
+            checks.run_prepared(ctx, &tree, wanted, options, &mut run);
         }
         (run, ran)
     }

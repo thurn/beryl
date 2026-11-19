@@ -68,7 +68,10 @@ fn tree_with(world: &World, changed: &[&str]) -> FakeTrees {
 
 /// The key of the family's one test on `checks`, and what its hash covers.
 fn keyed(world: &World, checks: &Checks) -> Keyed {
-    let tree = checks.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let tree = checks
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
     let mut probe = CheckRun::default();
     let prepared = checks.prepare(&world.ctx, &tree, &["rust"], &options(false), &mut probe);
     assert_eq!(prepared.len(), 1, "{probe:?}");
@@ -148,7 +151,10 @@ fn a_change_to_an_included_file_keeps_the_family_in_scope() {
     keyed(&world, &checks);
     let families = [("rust", &checks.settings.manifest.families["rust"].family)];
     for (changed, in_scope) in [("data/included.tsv", true), ("data/unread.json", false)] {
-        let tree = checks.open(&TreeId::new("tree-01").unwrap()).unwrap();
+        let tree = checks
+            .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+            .unwrap()
+            .1;
         let (affected, _) = checks.scope(&world.ctx, &tree, &families, &[changed.to_owned()]);
         assert_eq!(!affected.is_empty(), in_scope, "{changed}");
     }

@@ -99,7 +99,10 @@ fn memory() -> rusqlite::Connection {
 /// Lists every family of `world` on a daemon of its own, as tip verification does.
 fn listed_at_the_tip(world: &World) {
     let tip = daemon(world, memory(), tree_with(world, &[]));
-    let tree = tip.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let tree = tip
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
     let mut probe = CheckRun::default();
     let families = ["client-interface", "markdown", "rust"];
     let prepared = tip.prepare(&world.ctx, &tree, &families, &options(false), &mut probe);
@@ -356,7 +359,10 @@ fn a_change_to_another_workspaces_crate_leaves_the_rust_families_out() {
             .set_object(path, Oid::new("a".repeat(40)).unwrap());
     }
     let tip = daemon(&world, memory(), two_workspaces(&world, &[]));
-    let tree = tip.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let tree = tip
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
     let mut probe = CheckRun::default();
     let families = ["client-interface", "markdown", "rust"];
     let prepared = tip.prepare(&world.ctx, &tree, &families, &options(false), &mut probe);
@@ -482,7 +488,10 @@ fn digest_tree(world: &World, changed: &[&str]) -> FakeTrees {
 fn a_family_with_declared_digest_inputs_is_left_out_when_none_changed() {
     let world = with_digests();
     let tip = daemon(&world, memory(), digest_tree(&world, &[]));
-    let tree = tip.open(&TreeId::new("tree-01").unwrap()).unwrap();
+    let tree = tip
+        .open(&world.ctx, &TreeId::new("tree-01").unwrap())
+        .unwrap()
+        .1;
     let mut probe = CheckRun::default();
     let families = ["client-interface", "markdown", "oracle", "rust"];
     let prepared = tip.prepare(&world.ctx, &tree, &families, &options(false), &mut probe);
