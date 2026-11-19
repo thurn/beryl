@@ -17,6 +17,7 @@ pub mod owners;
 pub mod rates;
 pub mod records;
 pub mod rejected;
+pub mod renumber;
 pub mod results;
 pub mod rows;
 pub mod schedules;
@@ -127,6 +128,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 18,
         sql: include_str!("listing_alone.sql"),
         code: None,
+    },
+    Migration {
+        version: 19,
+        sql: include_str!("hierarchical_ids.sql"),
+        code: Some(renumber::renumber_all),
     },
 ];
 

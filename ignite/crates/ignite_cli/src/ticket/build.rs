@@ -159,6 +159,16 @@ pub fn update(id: &str, fields: &TicketFieldArgs, changes: &Changes) -> Result<V
     }
 }
 
+/// How the reply to an update reads: a new parent gives the ticket a new ID, so the reply says
+/// `moved <old> to <new>`.
+pub fn update_verb(id: &str, fields: &TicketFieldArgs) -> String {
+    if fields.parent.is_some() {
+        format!("moved {id} to")
+    } else {
+        "updated".to_owned()
+    }
+}
+
 /// An edge between two tickets. `relates-to` is the hub's `related`.
 pub fn edge(op: &str, id: &str, on: &str, kind: Option<&str>) -> Value {
     let mut value = json!({"op": op, "id": id, "on": on});

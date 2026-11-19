@@ -51,6 +51,17 @@ fn other_blockers(ticket: &Value) -> Vec<&str> {
         .collect()
 }
 
+/// An alias as a person would write it. Aliases are stored in lowercase; one without a dash is
+/// an ID the ticket had before it moved, shown in capitals as IDs are. One with a dash comes
+/// from an earlier tracker and is shown as stored.
+fn shown_alias(alias: &str) -> String {
+    if alias.contains('-') {
+        alias.to_owned()
+    } else {
+        alias.to_ascii_uppercase()
+    }
+}
+
 /// A ticket with its text, edges and, when asked for, comments and history.
 pub fn detail(ticket: &Value) -> String {
     let mut out = vec![line(ticket)];
@@ -62,6 +73,16 @@ pub fn detail(ticket: &Value) -> String {
         if let Some(value) = ticket[key].as_str() {
             out.push(format!("{label}: {value}"));
         }
+    }
+    let aliases: Vec<String> = ticket["aliases"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(shown_alias)
+        .collect();
+    if !aliases.is_empty() {
+        out.push(format!("formerly: {}", aliases.join(", ")));
     }
     if let Some(hours) = ticket["every_hours"].as_u64() {
         out.push(format!(
@@ -264,6 +285,19 @@ mod tests {
         );
         let children = json!([waiting]);
         assert!(open_children(&children).contains("    blocked by: Tc"));
+    }
+
+    #[test]
+    fn a_moved_ticket_lists_its_former_ids_in_capitals() {
+        let ticket = json!({"id": "EME7A.30", "priority": 0, "status": "closed", "title": "Font",
+                            "parent": "EME7A", "aliases": ["by-old", "tq44s.113"]});
+        assert!(
+            detail(&ticket)
+                .lines()
+                .any(|l| l == "formerly: by-old, TQ44S.113"),
+            "{}",
+            detail(&ticket)
+        );
     }
 
     #[test]

@@ -239,3 +239,27 @@ fn a_restore_without_a_moment_sends_the_newest_versions_parents_first() {
     assert!(!plan.force);
     assert!(restore::plan(rig.mirror.connection(), None, Some("rogue")).is_err());
 }
+
+#[test]
+fn a_restore_leaves_out_the_old_copy_of_a_ticket_that_moved_to_a_new_id() {
+    let mut rig = Rig::new();
+    // The mirror stored `TQ44S` before it moved under `EME7A` as `EME7A.2`, which lists the old
+    // ID among its aliases.
+    rig.hub.put_whole(whole("TQ44S", "moved"));
+    let mut moved = whole("EME7A.2", "moved");
+    moved.ticket.parent = Some(TicketId::new("EME7A").unwrap());
+    moved.aliases = vec!["tq44s".to_owned()];
+    rig.hub.put_whole(moved);
+    rig.hub.put_whole(whole("EME7A", "epic"));
+    rig.copy();
+    let plan = restore::plan(rig.mirror.connection(), None, None).unwrap();
+    let ids: Vec<&str> = plan.tickets.iter().map(|w| w.ticket.id.as_str()).collect();
+    assert_eq!(ids, ["EME7A", "EME7A.2"]);
+    let later = Timestamp::parse(START).unwrap().plus_seconds(1.0);
+    let rollback = restore::plan(rig.mirror.connection(), Some(later), None).unwrap();
+    assert!(
+        rollback.created_later.is_empty(),
+        "{:?}",
+        rollback.created_later
+    );
+}

@@ -465,10 +465,14 @@ fn reparenting_a_live_subtree_updates_readiness_and_rejects_ancestry_cycles() {
     ]));
     let [old, current, container, task, external] = [&ids[0], &ids[1], &ids[2], &ids[3], &ids[4]];
     assert!(hub.show(task).ready);
-    hub.batch(json!([{"op": "update", "id": container, "set": {"parent": current}}]));
+    let moved = hub
+        .ids(json!([{"op": "update", "id": container, "set": {"parent": current}}]))
+        .remove(0);
+    // The container takes the new parent's first child number, and its task follows it.
+    assert_eq!(moved, format!("{current}.1"));
     assert_eq!(
         hub.list(json!({"ancestor": current})),
-        [container.clone(), task.clone()]
+        [moved.clone(), format!("{moved}.1")]
     );
     assert_eq!(hub.blocked_by(task), [pair(external, 3)]);
     assert!(hub.show(old).children.is_empty());

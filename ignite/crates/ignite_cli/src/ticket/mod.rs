@@ -125,11 +125,8 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
                 remove_labels: remove_label,
             };
             // The hub releases the pending descendants of a ticket this update releases.
-            write(
-                hub,
-                "updated",
-                build::single(build::update(id, fields, &changes)?),
-            )
+            let op = build::update(id, fields, &changes)?;
+            write(hub, &build::update_verb(id, fields), build::single(op))
         }
         TicketCommand::Comment { id, text } => write(
             hub,

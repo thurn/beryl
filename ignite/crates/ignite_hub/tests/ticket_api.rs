@@ -474,6 +474,13 @@ fn an_export_imports_into_an_empty_hub_once() {
         shown(&source),
         "a refused page changes nothing"
     );
+    // A child's ID implies its parent, so a dotted ID with no parent is refused.
+    let mut detached = tickets[1].clone();
+    detached["parent"] = Value::Null;
+    detached["updated_at"] = json!("2999-01-01T00:00:00.000Z");
+    let refused = target.post_raw("/import", &json!({"tickets": [detached]}));
+    assert_eq!(refused.status, 400, "{}", refused.text);
+    assert!(refused.text.contains("implies"), "{}", refused.text);
 }
 
 #[test]

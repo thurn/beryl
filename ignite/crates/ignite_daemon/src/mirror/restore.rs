@@ -42,7 +42,18 @@ pub fn plan(conn: &Connection, at: Option<Timestamp>, actor: Option<&str>) -> Re
         ));
     }
     let at_text = at.map(|at| at.to_string());
-    let then = decode(mirror::as_of(conn, at_text.as_deref()).map_err(|e| store(&e))?)?;
+    let mut newest = decode(mirror::as_of(conn, None).map_err(|e| store(&e))?)?;
+    let mut then = decode(mirror::as_of(conn, at_text.as_deref()).map_err(|e| store(&e))?)?;
+    // A ticket that moved to another parent took a new ID, and the mirror still holds its last
+    // version under the old one. The new ticket lists the old ID among its aliases, so the old
+    // copy is left out; the hub would refuse it as colliding with that alias.
+    let moved_away: BTreeSet<String> = newest
+        .values()
+        .flat_map(|whole| whole.aliases.iter().cloned())
+        .collect();
+    let kept = |id: &TicketId| !moved_away.contains(&id.as_str().to_ascii_lowercase());
+    then.retain(|id, _| kept(id));
+    newest.retain(|id, _| kept(id));
     let Some(at) = at else {
         return Ok(Plan {
             tickets: parents_first(then.into_values().collect()),
@@ -50,7 +61,6 @@ pub fn plan(conn: &Connection, at: Option<Timestamp>, actor: Option<&str>) -> Re
             created_later: Vec::new(),
         });
     };
-    let newest = decode(mirror::as_of(conn, None).map_err(|e| store(&e))?)?;
     let covered: BTreeSet<TicketId> = newest
         .values()
         .filter(|whole| actor.is_none_or(|actor| changed_by(whole, actor, at)))

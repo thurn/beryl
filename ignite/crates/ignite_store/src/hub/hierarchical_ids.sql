@@ -1,0 +1,4 @@
+-- Every ticket's ID extends its parent's ID by one dotted number, and a ticket with no parent
+-- has a root ID. Tickets moved to another parent before the hub kept this true are given the ID
+-- their place implies by `renumber::renumber_all`, which runs after this script; each old ID
+-- becomes an alias. The schema does not change, so an older build still reads the database.

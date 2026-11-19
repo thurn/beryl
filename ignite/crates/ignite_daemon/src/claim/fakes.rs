@@ -98,6 +98,7 @@ impl FakeDesk {
             blocked_by: Vec::new(),
             comments: Some(Vec::new()),
             history: Some(Vec::new()),
+            aliases: Vec::new(),
         };
         lock(&self.details).insert(detail.ticket.id.clone(), detail);
     }

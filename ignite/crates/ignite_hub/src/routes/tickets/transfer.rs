@@ -15,9 +15,9 @@ use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, TransactionBehavior, params, params_from_iter};
 use serde_json::{Value, json};
 
-use ignite_core::ids::Seq;
+use ignite_core::ids::{Seq, TicketId};
 use ignite_core::protocol::tickets::{FeedChange, ImportReply, ImportRequest, WholeTicket};
-use ignite_store::hub::{edges, feed, tickets};
+use ignite_store::hub::{edges, feed, renumber, tickets};
 use ignite_store::{Result, StoreError};
 
 use super::{failure, store_failure};
@@ -196,7 +196,7 @@ fn import_ticket(conn: &Connection, whole: &WholeTicket, seq: Seq, force: bool) 
     let id = whole.ticket.id.as_str();
     let collides: Option<String> = conn
         .query_row(
-            "SELECT id FROM aliases WHERE alias = ?1 AND id != ?1",
+            "SELECT id FROM aliases WHERE alias = lower(?1) AND id != ?1",
             [id],
             |row| row.get(0),
         )
@@ -321,9 +321,21 @@ fn text(value: &Value) -> String {
     value.as_str().unwrap_or_default().to_owned()
 }
 
-/// Refuses a page that leaves an imported ticket with a missing parent or in a parent cycle.
+/// Refuses a page that leaves an imported ticket with a missing parent or in a parent cycle,
+/// or with a parent its ID does not imply (see `ignite_store::hub::renumber`).
 fn check_parents(conn: &Connection, page: &[WholeTicket]) -> Result<()> {
     let mut parents: BTreeMap<String, Option<String>> = BTreeMap::new();
+    for whole in page {
+        let id = whole.ticket.id.as_str();
+        let parent = whole.ticket.parent.as_ref().map(TicketId::as_str);
+        if renumber::parent_of(id) != parent {
+            return Err(StoreError::Rejected(format!(
+                "Ticket {id} has parent {}, but its ID implies {}",
+                parent.unwrap_or("none"),
+                renumber::parent_of(id).unwrap_or("none")
+            )));
+        }
+    }
     for whole in page {
         let mut current = Some(whole.ticket.id.as_str().to_owned());
         let mut path = HashSet::new();

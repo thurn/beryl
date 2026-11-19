@@ -2648,6 +2648,22 @@ ignite ticket ready --limit 10 --brief
 ignite ticket wait TIG9A.1 --status closed
 ```
 
+A ticket's ID always extends its parent's ID by one dotted number, and a ticket
+with no parent has a root ID with no dots. The hub keeps this true for every
+ticket. Giving a ticket another parent with
+`ignite ticket update TQ44S.113 --parent EME7A` therefore gives it a new ID, the
+new parent's next child number (`EME7A.30`), and renumbers every ticket below it
+the same way (`TQ44S.113.1` becomes `EME7A.30.1`). `--parent ""` detaches a
+ticket and gives it a new root ID. The command prints
+`moved TQ44S.113 to EME7A.30`. Each old ID becomes an alias, so a commit message
+or note that names it still finds the ticket, and `ignite ticket show` lists the
+old IDs on a `formerly:` line. Edges, comments, history and the records of
+checks and landings move to the new ID; ticket text that mentions the old ID is
+left as written. A ticket cannot move while it or a ticket below it is claimed
+or held by a build tree, since its branch, tree and session title carry the ID:
+release it first. An import is refused if it would break the rule, and tickets
+moved before the rule existed were renumbered once by a migration.
+
 Labels carry what the dispatcher needs to know about a ticket: `tier:opus`,
 `tier:sonnet` or `tier:light` names the model it needs, and `lane:<name>` a
 chain. Which machine and app work it is the ticket's owner, a field of its own

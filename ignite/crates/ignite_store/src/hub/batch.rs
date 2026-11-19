@@ -31,6 +31,7 @@ use crate::hub::{cycles, edges, feed, findings, tickets};
 use crate::{Result, StoreError};
 
 mod ancestors;
+mod moves;
 pub(crate) mod roots;
 
 use roots::Filer;
@@ -447,15 +448,7 @@ impl<'a> Run<'a> {
             return rejected("A meta-ticket needs a schedule (every_hours)");
         }
         let id = match &parent {
-            Some(parent) => {
-                let next_child = parent.next_child + 1;
-                self.conn.execute(
-                    "UPDATE tickets SET next_child = ?1 WHERE id = ?2",
-                    params![next_child, parent.id.as_str()],
-                )?;
-                self.changed.insert(parent.id.to_string());
-                format!("{}.{}", parent.id, parent.next_child)
-            }
+            Some(parent) => self.take_child_id(parent)?,
             None => roots::allocate(self.conn, self.filer.letter(fields))?,
         };
         self.seq += 1;
@@ -548,22 +541,15 @@ impl<'a> Run<'a> {
         if was_meta && matches!(fields.every_hours, Some(None)) {
             return rejected("A meta-ticket needs a schedule (every_hours)");
         }
-        match &fields.parent {
-            Some(Some(parent)) => {
-                let parent = self.ticket(parent.as_str())?.id.to_string();
-                if parent == ticket.id.as_str()
-                    || self.ancestors(&parent)?.contains(&ticket.id.to_string())
-                {
-                    return rejected("A ticket cannot become its own ancestor");
-                }
-                changes.insert("parent".to_owned(), json!(parent));
+        // A new parent, or `"parent": null` to detach, gives the ticket a new ID.
+        let moved;
+        let ticket = match &fields.parent {
+            Some(parent) => {
+                moved = self.move_ticket(ticket, parent.as_ref().map(TicketId::as_str))?;
+                &moved
             }
-            // `"parent": null` detaches the ticket from its parent.
-            Some(None) => {
-                changes.insert("parent".to_owned(), Value::Null);
-            }
-            None => {}
-        }
+            None => ticket,
+        };
         if let Some(labels) = labels {
             changes.insert("labels".to_owned(), json!(labels));
         }

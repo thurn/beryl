@@ -72,6 +72,11 @@ pub fn get(
         history: history
             .then(|| self::history(conn, id.as_str()))
             .transpose()?,
+        aliases: collect_strings(
+            conn,
+            "SELECT alias FROM aliases WHERE id = ?1 ORDER BY alias",
+            &[id.as_str()],
+        )?,
         ticket,
     }))
 }

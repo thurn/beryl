@@ -51,6 +51,7 @@ fn field_words(field: &str) -> Option<&'static str> {
         "notes" => "edited the notes",
         "type" | "issue_type" => "changed the type",
         "parent" => "changed the parent",
+        "id" => "changed the ID",
         "defer_until" => "changed the deferral",
         "last" => "changed when this ticket runs",
         _ => return None,

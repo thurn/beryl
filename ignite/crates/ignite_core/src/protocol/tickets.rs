@@ -320,6 +320,10 @@ pub struct TicketDetail {
     pub comments: Option<Vec<Comment>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history: Option<Vec<History>>,
+    /// Other names that find this ticket, in lowercase: the IDs it had before it moved to
+    /// another parent, and names from earlier trackers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
 }
 
 /// The query of `GET /tickets`.

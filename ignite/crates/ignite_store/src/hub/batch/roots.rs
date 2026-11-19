@@ -53,7 +53,7 @@ pub(super) fn prefix_for(fields: &TicketFields) -> char {
 
 /// A new root ID: `prefix`, a capital letter and three capitals or digits (`TQ44S`), whose root
 /// is not [`taken`].
-pub(super) fn allocate(conn: &Connection, prefix: char) -> Result<String> {
+pub(crate) fn allocate(conn: &Connection, prefix: char) -> Result<String> {
     loop {
         let mut bytes = [0_u8; 4];
         getrandom::getrandom(&mut bytes)
