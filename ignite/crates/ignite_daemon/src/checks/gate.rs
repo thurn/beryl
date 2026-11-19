@@ -17,6 +17,7 @@ use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::hub::CachedResult;
 
 use super::plan;
+use super::time_lines::listed_line;
 use super::verbs::{changed_paths, counts, failure_lines, gate_view_of, open_regressions, unbuilt};
 use super::{CheckRun, Checks, Keyed, OpenTree, RunOptions};
 use crate::server::Context;
@@ -303,7 +304,8 @@ fn gate_budget(
     }
 }
 
-/// The `gate`, `budget` and `build` lines, the failures and the `tip` line of a gate's output.
+/// The `gate`, `budget`, `build` and `listed` lines, the failures and the `tip` line of a gate's
+/// output.
 /// Check seconds and build seconds are on lines of their own, so a landing that was slow
 /// because it compiled shows as that.
 pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
@@ -325,6 +327,7 @@ pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
         lines.push(budget_line(budget));
     }
     lines.push(build_line(run, gated.budget.as_ref()));
+    lines.extend(listed_line(run));
     lines.extend(failure_lines(run));
     lines.extend(stopped_line(run));
     lines.extend(scope_line(run));

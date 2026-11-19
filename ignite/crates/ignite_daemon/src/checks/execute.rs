@@ -16,11 +16,12 @@ use ignite_core::protocol::hub::{
 use ignite_core::protocol::{Outcome, Usage};
 use ignite_core::traits::{BuildFor, BuildResult, CommandSpec, Error, RunResult};
 
+use super::units::CompileSpan;
 use crate::build::repair;
 
 use super::{
     Built, CheckRun, Checks, Failure, Final, Keyed, Listed, OpenTree, Reported, RunOptions, TRIES,
-    Target, adapters, base_env, failure, hang_limit_s, incomplete, path_text,
+    Target, adapters, base_env, failure, hang_limit_s, incomplete, path_text, units,
 };
 use crate::server::Context;
 use crate::supervise;
@@ -539,7 +540,7 @@ impl Checks {
                 let args = adapters::jsonl_run(family.run.as_deref().unwrap_or_default(), &names);
                 let mut env = vec![(adapters::RESULTS_ENV.to_owned(), path_text(&file))];
                 env.extend(base_env(ctx));
-                let (result, record) = self
+                let (result, record, _) = self
                     .launch_recorded(ctx, tree, name, family, RUN, args, &tree.path, env, options);
                 let text = fs::read_to_string(&file).unwrap_or_default();
                 let _ = fs::remove_file(&file);
@@ -564,42 +565,13 @@ impl Checks {
                 )];
                 env.extend(self.unit_recording_env());
                 let cwd = self.nextest_dir(tree, family);
-                let (result, record) =
+                let (result, record, _) =
                     self.launch_recorded(ctx, tree, name, family, RUN, args, &cwd, env, options);
                 let text = fs::read_to_string(&result.output).unwrap_or_default();
                 let listed: Vec<Listed> = checks.iter().map(|k| k.listed.clone()).collect();
                 (adapters::nextest_results(&text, &listed), result, record)
             }
         }
-    }
-
-    /// The variables that make Cargo's target runner (and the compiler wrapper) record each test
-    /// process (and compile) of a `cargo nextest run` into a new units file, as the daemon's own
-    /// builds do (`crate::wrap::cargo_env`). [`Checks::launch_recorded`] reads the file back and
-    /// attaches its units to the command's record. Empty when this daemon has no `ignite`
-    /// executable to point the scripts at, or cannot write them: the run then goes unrecorded
-    /// one by one but is otherwise unchanged.
-    fn unit_recording_env(&self) -> Vec<(String, String)> {
-        if self.settings.ignite_exe.as_os_str().is_empty() {
-            return Vec::new();
-        }
-        if let Err(error) =
-            crate::wrap::write_shims(&self.settings.shims, &self.settings.ignite_exe)
-                .and_then(|()| fs::create_dir_all(&self.settings.outputs))
-        {
-            eprintln!(
-                "ignite: cannot write the test runner to {}: {error}",
-                self.settings.shims.display()
-            );
-            return Vec::new();
-        }
-        let units = self.settings.outputs.join(format!(
-            "units-{}-{}.jsonl",
-            std::process::id(),
-            self.next_file.fetch_add(1, Ordering::Relaxed)
-        ));
-        let _ = fs::remove_file(&units);
-        crate::wrap::cargo_env(&self.settings.shims, &units)
     }
 
     /// Where cargo-nextest runs: the directory of the first product the family needs.
@@ -627,12 +599,14 @@ impl Checks {
         cwd: &Path,
         env: Vec<(String, String)>,
         options: &RunOptions,
-    ) -> RunResult {
-        self.launch_recorded(ctx, tree, name, family, command, args, cwd, env, options)
-            .0
+    ) -> (RunResult, Option<CompileSpan>) {
+        let (result, _, span) =
+            self.launch_recorded(ctx, tree, name, family, command, args, cwd, env, options);
+        (result, span)
     }
 
-    /// [`Checks::launch`], with the ID the hub gave the command's record, if it took it.
+    /// [`Checks::launch`], with the ID the hub gave the command's record, if it took it, and
+    /// when the command's first compile started and its last one ended.
     #[allow(clippy::too_many_arguments)]
     fn launch_recorded(
         &self,
@@ -645,7 +619,7 @@ impl Checks {
         cwd: &Path,
         mut env: Vec<(String, String)>,
         options: &RunOptions,
-    ) -> (RunResult, Option<RecordId>) {
+    ) -> (RunResult, Option<RecordId>, Option<CompileSpan>) {
         env.push((CLASS_ENV.to_owned(), options.class.as_str().to_owned()));
         let spec_env = env.clone();
         let slowest = self.cache.slowest_pass(name, command);
@@ -662,12 +636,8 @@ impl Checks {
             hang_limit_s: Some(hang_limit_s(slowest)),
         });
         // The units the command's test processes and compiles recorded, if it was set up to.
-        let units = env_units_file(&spec_env)
-            .map(|file| {
-                let units = crate::build::read_units(&file);
-                let _ = fs::remove_file(&file);
-                units
-            })
+        let (units, span) = units::env_units_file(&spec_env)
+            .map(|file| units::take(&file))
             .unwrap_or_default();
         let outcome = (result.exit == Some(0) && !result.hung).then_some(Outcome::Pass);
         if outcome.is_some() {
@@ -683,7 +653,7 @@ impl Checks {
             outcome,
             units,
         );
-        (result, record)
+        (result, record, span)
     }
 
     /// Sends a record of one command to the hub, or queues it when the hub cannot take it.
@@ -731,13 +701,6 @@ fn build_failure(reported: &[Reported], output: &RunResult) -> Option<repair::Co
         .iter()
         .any(|r| matches!(r.outcome, Outcome::Pass | Outcome::Fail | Outcome::Flaky));
     repair::run_failure(ran, output)
-}
-
-/// The units file a command's environment names, if it names one.
-fn env_units_file(env: &[(String, String)]) -> Option<PathBuf> {
-    env.iter()
-        .find(|(name, _)| name == crate::wrap::UNITS_ENV)
-        .map(|(_, file)| PathBuf::from(file))
 }
 
 /// The input paths of `finals` whose git object IDs differ from the ones their hashes were

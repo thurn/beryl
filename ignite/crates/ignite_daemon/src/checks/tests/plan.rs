@@ -192,6 +192,7 @@ fn check_runs_the_gate_and_answers_the_rest_from_the_cache() {
             "budget   60 s at 17.5 billion/s = 1,050 billion: 15 checks (94 billion) within it, \
              2 checks (2 billion) outside it, 48 checks (48 billion) cached",
             "build    nothing built",
+            "listed   1 s listing 1 family afresh, 2 kept; slowest: rust 1 s",
             "tip      1,204 checks left to tip verification: 1,204 checks (1,204 billion) below \
              the threshold",
         ],

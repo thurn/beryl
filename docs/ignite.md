@@ -1559,15 +1559,27 @@ top      rust:beryl_rules::tests::entering::*      0.91  edited by this change
          script:aura/enters-attached/you           0.13  9 of 74 runs failed
 ```
 
-The gate's own output puts running checks and building on separate lines, so a
-landing that was slow because it compiled shows as that:
+The gate's own output puts running checks, building and listing on separate
+lines, so a landing that was slow because it compiled shows as that:
 
 ```text
 gate     65 checks: 48 from cache, 17 run, all passed in 41 s of running checks
 budget   60 s at 17.5 billion/s = 1,050 billion: 15 checks (94 billion) within it, 2 checks (2 billion) outside it, 48 checks (48 billion) cached
 build    12 s building 1 product
+listed   668 s listing 3 families afresh, 9 kept; slowest: rust 640 s (600 s waiting for Cargo's lock; 31 crates compiled in 38 s), ignite 19 s, script 9 s
 tip      1,204 checks left to tip verification: 1,204 checks (1,204 billion) below the threshold
 ```
+
+The `listed` line, which `ignite test` prints too, counts the seconds that
+families' `list` commands ran, how many families were listed afresh and how many
+came from a kept listing, and names the three slowest. A `cargo nextest list`
+compiles whatever its product's build did not, and waits while another Cargo
+command in the tree holds the target directory's lock, so each slow family says
+which. Compiling is timed from the first compile's start to the last one's end,
+as Ignite's compiler wrapper records them. A lock wait is the time before the
+first compile, or the whole command when it compiled nothing, and counts only
+when Cargo printed "Blocking waiting for file lock", which `--cargo-quiet`
+hides.
 
 ## Landing
 

@@ -37,7 +37,8 @@ use ignite_core::manifest::{Adapter, Family, InputPattern};
 use ignite_core::protocol::hub::ListingKey;
 
 use super::{
-    CheckRun, Checks, ListError, Listed, OpenTree, RunOptions, TRIES, adapters, base_env, execute,
+    CheckRun, Checks, ListError, Listed, ListingTime, OpenTree, RunOptions, TRIES, adapters,
+    base_env, execute,
 };
 use crate::server::Context;
 
@@ -343,6 +344,7 @@ impl Checks {
         kept: Option<(ListingKey, Arc<Kept>)>,
     ) -> std::result::Result<Listing, ListError> {
         if let Some((key, kept)) = kept {
+            run.listings_kept += 1;
             self.note_listed(name, &kept.checks);
             return Ok(Listing {
                 checks: kept.checks.clone(),
@@ -368,60 +370,76 @@ impl Checks {
             ),
         };
         let mut output = PathBuf::new();
-        for _ in 0..TRIES {
-            let env = base_env(ctx);
-            let result = self.launch(
-                ctx,
-                tree,
-                name,
-                family,
-                execute::LIST,
-                args.clone(),
-                &cwd,
-                env,
-                options,
-            );
-            output.clone_from(&result.output);
-            if result.exit != Some(0) {
-                let _ = crate::supervise::keep(&result.output);
-                if result.hung {
-                    // A hung command hangs again.
-                    break;
+        let mut time = ListingTime {
+            family: name.to_owned(),
+            ..ListingTime::default()
+        };
+        // The tries run in a closure so that their time is recorded however the listing ends.
+        let listing = (|| {
+            for _ in 0..TRIES {
+                let mut env = base_env(ctx);
+                // A Cargo command records its compiles, so the `listed` line can say how much of
+                // the listing went to compiling.
+                if family.adapter == Adapter::Nextest {
+                    env.extend(self.unit_recording_env());
                 }
-                continue;
-            }
-            let Ok(text) = fs::read_to_string(&result.output) else {
-                continue;
-            };
-            let listed = match family.adapter {
-                Adapter::Jsonl => adapters::jsonl_list(&text, name),
-                Adapter::Nextest => adapters::nextest_list(&text, name),
-            };
-            if listed.is_empty() && self.cannot_be_empty(name, family) {
-                // A zero-check listing that exited 0 would count as a vacuous pass. It counts
-                // as a failed try instead, and is never kept.
-                let _ = crate::supervise::keep(&result.output);
-                continue;
-            }
-            self.note_listed(name, &listed);
-            let digests_from_files = !family.digest_inputs.is_empty();
-            let keepable = !listed.is_empty()
-                && listed
-                    .iter()
-                    .all(|l| (l.digest.is_none() || digests_from_files) && l.refused.is_none());
-            let key = key.filter(|key| {
-                if !keepable {
-                    let mut not_kept = self.not_kept.lock().unwrap_or_else(PoisonError::into_inner);
-                    not_kept.insert(key.clone());
+                let (result, span) = self.launch(
+                    ctx,
+                    tree,
+                    name,
+                    family,
+                    execute::LIST,
+                    args.clone(),
+                    &cwd,
+                    env,
+                    options,
+                );
+                time.add_try(&result, span, ctx.clock.now().millis());
+                output.clone_from(&result.output);
+                if result.exit != Some(0) {
+                    let _ = crate::supervise::keep(&result.output);
+                    if result.hung {
+                        // A hung command hangs again.
+                        break;
+                    }
+                    continue;
                 }
-                keepable
-            });
-            return Ok(Listing {
-                checks: listed,
-                origin: Origin::Made { key },
-            });
-        }
-        Err(ListError::Output(output))
+                let Ok(text) = fs::read_to_string(&result.output) else {
+                    continue;
+                };
+                let listed = match family.adapter {
+                    Adapter::Jsonl => adapters::jsonl_list(&text, name),
+                    Adapter::Nextest => adapters::nextest_list(&text, name),
+                };
+                if listed.is_empty() && self.cannot_be_empty(name, family) {
+                    // A zero-check listing that exited 0 would count as a vacuous pass. It counts
+                    // as a failed try instead, and is never kept.
+                    let _ = crate::supervise::keep(&result.output);
+                    continue;
+                }
+                self.note_listed(name, &listed);
+                let digests_from_files = !family.digest_inputs.is_empty();
+                let keepable = !listed.is_empty()
+                    && listed
+                        .iter()
+                        .all(|l| (l.digest.is_none() || digests_from_files) && l.refused.is_none());
+                let key = key.filter(|key| {
+                    if !keepable {
+                        let mut not_kept =
+                            self.not_kept.lock().unwrap_or_else(PoisonError::into_inner);
+                        not_kept.insert(key.clone());
+                    }
+                    keepable
+                });
+                return Ok(Listing {
+                    checks: listed,
+                    origin: Origin::Made { key },
+                });
+            }
+            Err(ListError::Output(output))
+        })();
+        run.listings.push(time);
+        listing
     }
 
     /// Remembers that `name` has listed checks, if it has, so a later empty listing of it is

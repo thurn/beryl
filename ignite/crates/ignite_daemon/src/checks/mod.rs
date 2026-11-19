@@ -49,6 +49,10 @@ mod prepare;
 mod regression;
 mod scope;
 pub mod sources;
+mod time_lines;
+mod units;
+
+pub use units::ListingTime;
 pub(crate) mod verbs;
 mod why_record;
 
@@ -186,6 +190,10 @@ pub struct CheckRun {
     pub cold_families: Vec<String>,
     /// Seconds the check commands ran, builds excluded.
     pub wall_s: f64,
+    /// Each `list` command run for a family no kept listing served, in the order they ran.
+    pub listings: Vec<ListingTime>,
+    /// Families whose checks came from a kept listing, without running their `list` command.
+    pub listings_kept: u32,
     /// For each check a run gave a verdict, the hub's ID for that run's record, when the hub
     /// took it.
     pub records: Vec<(CheckName, ignite_core::ids::RecordId)>,

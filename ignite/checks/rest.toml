@@ -208,7 +208,7 @@ kind = "regression"
 adapter = "nextest"
 platforms = ["macos"]
 needs = ["rust-tests"]
-list = "cargo nextest list --locked --cargo-quiet -p beryl_link_iroh --message-format json"
+list = "cargo nextest list --locked -p beryl_link_iroh --message-format json"
 run = "cargo nextest run --locked --cargo-quiet -p beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 
@@ -230,7 +230,7 @@ kind = "regression"
 adapter = "nextest"
 platforms = "any"
 needs = ["ignite-tests"]
-list = "cargo nextest list --locked --cargo-quiet --workspace --message-format json"
+list = "cargo nextest list --locked --workspace --message-format json"
 run = "cargo nextest run --locked --cargo-quiet --workspace --profile express --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["ignite/**", "ignite.toml"]
 

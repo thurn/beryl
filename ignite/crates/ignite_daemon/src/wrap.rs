@@ -2,7 +2,7 @@
 //!
 //! - `ignite rustc-wrap`, set as Cargo's `RUSTC_WRAPPER`, runs the compiler and appends one
 //!   JSON line per compile unit to the build's units file: crate, mode, instructions, CPU
-//!   seconds and whether the unit was rebuilt.
+//!   seconds, whether the unit was rebuilt, and when it started and ended.
 //! - `ignite runner`, set as Cargo's target runner, does the same for each test process.
 //!
 //! Cargo runs `RUSTC_WRAPPER` and the runner as one program path with no arguments of its own,
@@ -22,8 +22,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use ignite_core::protocol::hub::CompileUnit;
+use ignite_core::time::{SystemClock, Timestamp};
+use ignite_core::traits::Clock;
 use ignite_os::Native;
 use ignite_os::usage::{ProcessUsage, UsageReader};
+use serde::Serialize;
 
 /// The variable that names the build's units file. The wrapper and the runner record nothing
 /// when it is unset.
@@ -163,6 +166,7 @@ pub fn rustc_wrap(args: &[String]) -> i32 {
     };
     let unit = CompileArgs::parse(args);
     let rebuilt = unit.as_ref().is_some_and(CompileArgs::built_before);
+    let started = SystemClock.now();
     let (code, usage) = match run_measured(program, rest) {
         Ok(ran) => ran,
         Err(error) => {
@@ -171,13 +175,14 @@ pub fn rustc_wrap(args: &[String]) -> i32 {
         }
     };
     if let Some(unit) = unit {
-        record(&CompileUnit {
+        let compiled = CompileUnit {
             crate_name: unit.crate_name,
             mode: unit.mode.to_owned(),
             instructions: usage.instructions.map(|n| n as f64),
             cpu_s: usage.cpu_s,
             rebuilt,
-        });
+        };
+        record(&compiled, started);
     }
     code
 }
@@ -188,6 +193,7 @@ pub fn runner(args: &[String]) -> i32 {
         eprintln!("ignite runner: no test binary given");
         return 1;
     };
+    let started = SystemClock.now();
     let (code, usage) = match run_measured(program, rest) {
         Ok(ran) => ran,
         Err(error) => {
@@ -195,13 +201,14 @@ pub fn runner(args: &[String]) -> i32 {
             return 1;
         }
     };
-    record(&CompileUnit {
+    let ran = CompileUnit {
         crate_name: test_binary_crate(Path::new(program)),
         mode: RUN_MODE.to_owned(),
         instructions: usage.instructions.map(|n| n as f64),
         cpu_s: usage.cpu_s,
         rebuilt: false,
-    });
+    };
+    record(&ran, started);
     code
 }
 
@@ -228,13 +235,28 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
-/// Appends one unit line to the file `IGNITE_UNITS` names. A failed write loses the line and
-/// never fails the compile.
-fn record(unit: &CompileUnit) {
+/// One line of a units file: the unit, with when it started and ended in milliseconds since the
+/// Unix epoch, so a reader can tell how much of a command's time went to compiling.
+#[derive(Serialize)]
+struct UnitLine<'a> {
+    #[serde(flatten)]
+    unit: &'a CompileUnit,
+    started_ms: i64,
+    ended_ms: i64,
+}
+
+/// Appends one unit line, for a unit that started at `started` and ends now, to the file
+/// `IGNITE_UNITS` names. A failed write loses the line and never fails the compile.
+fn record(unit: &CompileUnit, started: Timestamp) {
     let Some(path) = std::env::var_os(UNITS_ENV) else {
         return;
     };
-    let Ok(mut line) = serde_json::to_vec(unit) else {
+    let line = UnitLine {
+        unit,
+        started_ms: started.millis(),
+        ended_ms: SystemClock.now().millis(),
+    };
+    let Ok(mut line) = serde_json::to_vec(&line) else {
         return;
     };
     line.push(b'\n');

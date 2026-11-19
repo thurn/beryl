@@ -675,7 +675,10 @@ fn test_resolves_names_by_substring_and_pattern() {
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert_eq!(world.launcher.commands("runner")[0][1..], ["unit:b"]);
     let reply = verb.run(&world.ctx, &request(&["u*:?"]));
-    assert_eq!(reply.text, "ran      2 checks: all passed (1 from cache)\n");
+    assert_eq!(
+        reply.text,
+        "listed   nothing listed afresh, 1 kept\nran      2 checks: all passed (1 from cache)\n"
+    );
     // Every family's listing is kept by now, so a name that matches none is refused with a
     // hint and nothing is listed or built again.
     let listers = world.launcher.commands("lister").len();
