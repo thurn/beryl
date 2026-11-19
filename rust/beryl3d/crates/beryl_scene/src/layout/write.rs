@@ -14,7 +14,7 @@ use crate::art::orb;
 use crate::element::{Display, Element, Overflow, Shown, TextAlign};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
-    Band, Draw, ElementLook, FrameBuilder, NameRef, Place, Resolved, Role, StateBits,
+    Band, Draw, ElementLook, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits,
 };
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera};
@@ -176,7 +176,7 @@ impl Layer {
         if node.block.is_some() {
             self.write_text(node, index, state, shown, builder, camera);
         }
-        self.write_shown(node, state, shown, builder, camera);
+        self.write_shown(node, index, state, shown, builder, camera);
         if let Some(editing) = edited {
             write_marks(node, &editing.marks, false, shown, builder, camera);
         }
@@ -211,10 +211,12 @@ impl Layer {
     }
 
     /// Writes what `node` shows in its content box (`Shown`), moved, colored and clipped by
-    /// `look`: an icon centred in it, or a face drawn flat to fill it.
+    /// `look`: an icon centred in it, or a face drawn flat to fill it. An icon the atlas holds no
+    /// cell for at its size draws nothing, and is noted against the resolved element at `index`.
     fn write_shown(
         &self,
         node: &Node,
+        index: u32,
         state: StateBits,
         look: Look<'_>,
         builder: &mut FrameBuilder,
@@ -225,6 +227,13 @@ impl Layer {
         let draw = match node.element.shows {
             Some(Shown::Icon(icon, side)) => {
                 let Some(sprite) = self.icons.get(icon, side) else {
+                    builder.undrawn(
+                        index,
+                        Missing::Icon {
+                            icon: icon.0,
+                            size: side,
+                        },
+                    );
                     return;
                 };
                 let side = f32::from(side);
@@ -259,7 +268,11 @@ impl Layer {
                 active,
                 scale,
             }) => {
-                self.write_orb((side, active, scale), content, look, clip, builder, camera);
+                let missing =
+                    self.write_orb((side, active, scale), content, look, clip, builder, camera);
+                if let Some(missing) = missing {
+                    builder.undrawn(index, missing);
+                }
                 return;
             }
             Some(Shown::Object(_)) | None => return,
@@ -270,7 +283,8 @@ impl Layer {
 
     /// Writes the layers of `side`'s life orb (`art::orb::LAYERS`) in order, its art's box
     /// filling `content`. Each layer's cell is centred where its box lies in the art, so that a
-    /// cell a whole number of points wide is off by under half a point at its edges.
+    /// cell a whole number of points wide is off by under half a point at its edges. Returns the
+    /// first layer the atlas holds no cell for, which draws nothing.
     fn write_orb(
         &self,
         (side, active, scale): (Side, bool, u8),
@@ -279,16 +293,22 @@ impl Layer {
         clip: u8,
         builder: &mut FrameBuilder,
         camera: &Camera,
-    ) {
+    ) -> Option<Missing> {
         let units = orb::SCALES[usize::from(scale)];
         let [left, top, ..] = orb::ART;
+        let mut missing = None;
         for (at, layer) in orb::LAYERS.iter().enumerate() {
             if layer.active && !active {
                 continue;
             }
             let [x, y, w, h] = layer.views[orb::seat(side)];
             let width = orb::cell_width(w, units);
-            let Some(sprite) = self.icons.get(orb::icon(side, at), width) else {
+            let icon = orb::icon(side, at);
+            let Some(sprite) = self.icons.get(icon, width) else {
+                missing.get_or_insert(Missing::Icon {
+                    icon: icon.0,
+                    size: width,
+                });
                 continue;
             };
             let width = f32::from(width);
@@ -313,6 +333,7 @@ impl Layer {
                 if clip > 0 { draw.with_clip(clip) } else { draw },
             );
         }
+        missing
     }
 
     /// Writes the lines and glyphs of `node`'s text, which the resolved element at `index`
@@ -381,7 +402,10 @@ impl Layer {
             camera,
             clip: look.clip.map_or(0, |(_, entry)| entry),
         };
-        text::write_block(builder, block, origin, &block_look);
+        let missing = text::write_block(builder, block, origin, &block_look);
+        if missing > 0 {
+            builder.undrawn(index, Missing::Glyphs(missing));
+        }
     }
 }
 

@@ -8,7 +8,7 @@ use std::ops::AddAssign;
 
 use super::checks::{KeptArrow, arrows_held};
 use super::fault::{Layout, Rule};
-use crate::frame::{Frame, Place, Role, StateBits};
+use crate::frame::{Frame, Material, Place, Role, StateBits};
 use crate::play::record::ScriptRecord;
 
 /// What one rule judged.
@@ -83,6 +83,15 @@ impl Judged {
         self.add(Rule::Duplicate, frame.resolved.len());
         self.add(Rule::TextFits, frame.lines.len());
         self.add(Rule::TextOverlap, frame.lines.len());
+        // "Drawn" judges each glyph and icon record of the flat layer, and each element whose
+        // glyphs or icon had no cell.
+        let records = frame.draws.get(frame.layer as usize..).unwrap_or_default();
+        let atlas = (records.iter())
+            .filter(|draw| {
+                draw.material == Material::Glyph as u8 || draw.material == Material::Icon as u8
+            })
+            .count();
+        self.add(Rule::Drawn, atlas + frame.undrawn.len());
         self.add(Rule::Named, interactive);
         self.add(Rule::BlankCard, face_up);
         self.add(

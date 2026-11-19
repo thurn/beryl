@@ -6,6 +6,7 @@ use beryl_protocol::protocol::Side;
 use beryl_scene::agent::{Layout, Rule};
 use beryl_scene::command::Request;
 use beryl_scene::driver::{Duration, Page, Recording};
+use beryl_scene::frame::Material;
 use beryl_scene::input::{
     Button, Input, KeyCode, Modifiers, Pointer, PointerKind, PointerPhase, Size, TextChange,
 };
@@ -41,12 +42,12 @@ fn requests(page: &mut Page) -> Vec<Request> {
     std::iter::from_fn(|| page.next_request()).collect()
 }
 
-/// How many of the flat layer's records are drawn in the color of type: the caret and the
-/// underline of composing text. The page has no glyph pages, so no glyph is drawn.
+/// How many of the flat layer's panels are drawn in the color of type: the caret and the
+/// underline of composing text. The text's glyphs, drawn in that color too, are not panels.
 fn type_marks(page: &mut Page) -> usize {
     let frame = page.frame();
     (frame.draws[frame.layer as usize..].iter())
-        .filter(|draw| draw.tint == color::TYPE)
+        .filter(|draw| draw.material == Material::Panel as u8 && draw.tint == color::TYPE)
         .count()
 }
 

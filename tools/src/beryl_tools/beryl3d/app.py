@@ -162,10 +162,43 @@ def run_app(args: argparse.Namespace) -> int:
             command += [option, value]
     for name in args.offer:
         command += ["--offer", name]
+    started_ms = int(time.time() * 1000)
     code = subprocess.run(command, check=False).returncode
-    if code != MISSING_PACK or record() != 0:
+    if code == MISSING_PACK and record() == 0:
+        code = subprocess.run(command, check=False).returncode
+    if code != 0 or args.run_for is None:
         return code
-    return subprocess.run(command, check=False).returncode
+    path = newest_log(frames_dir(), repo_paths.REPO.resolve())
+    started = int(path.name.split("-", 1)[0]) if path else 0
+    failure = undelivered(path) if path and started >= started_ms else None
+    if failure:
+        print(f"app: FAILED: {failure}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def undelivered(path: Path) -> str | None:
+    """Why the run whose frame log is `path` ended with text it could not draw: glyphs its
+    last frame's text asked for that no atlas page held (`missing_glyphs`). A host delivers
+    glyphs within a few frames of being asked, so a run that ends seconds in with any missing
+    has a host that is not delivering them, as when the renderer refused an atlas page past its
+    last and the client drew \"You won the  ip\". None when the run drew everything, or wrote no
+    summary."""
+    summary = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry, dict) and isinstance(entry.get("summary"), dict):
+            summary = entry["summary"]
+    missing = summary.get("missing_glyphs", 0) if summary else 0
+    if not missing:
+        return None
+    return (
+        f"the run ended with {missing} glyphs its text asked for that no atlas page held;"
+        f" the host is not delivering them ({path})"
+    )
 
 
 def smoke_arguments(parser: argparse.ArgumentParser) -> None:

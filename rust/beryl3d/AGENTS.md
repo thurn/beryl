@@ -166,11 +166,16 @@ through the client with no window or GPU (the `b3d` skill has the details):
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you
 changed is drawn with `--scale 2` (the windowless app runs at 2 on macOS). A
-tree line shows that text was laid out, not that its glyphs drew. A worker or
-reviewer closes a ticket that changes how something looks only after reading a
-picture of it beside the web interface's at the same moment
-(`just b3d compare --scale 2`), and names the file on the ticket ("What these
-tools cannot show" in the `b3d` skill).
+tree line shows that text was laid out, not that its glyphs drew. The text
+commands give the client a stub atlas (`driver::glyphs`), which delivers every
+glyph it asks for and each icon at its artwork's size (`icons::atlas_size`), so
+the "drawn" check faults text drawn with a glyph never asked for and an icon at
+a size the atlas does not hold; `just b3d app --for` fails a run that ends with
+glyphs missing (`missing_glyphs` in its frame log). A worker or reviewer closes
+a ticket that changes how something looks only after reading a picture of it
+beside the web interface's at the same moment (`just b3d compare --scale 2`),
+and names the file on the ticket ("What these tools cannot show" in the `b3d`
+skill).
 
 The text commands are the `b3d` program in `beryl_inspect` (`src/cli`), and the
 pictures are `b3d-render` in `beryl_pictures` (with `Headless` in `beryl_host`),

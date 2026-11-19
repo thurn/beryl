@@ -4,7 +4,7 @@
 //! color. Under the pointer the rim and the glyph brighten, and held down the face darkens (the
 //! flat layer's `write` draws those states).
 
-use super::IconId;
+use super::{IconId, icons};
 use crate::element::{Element, Shown};
 use crate::frame::Role;
 use crate::tokens::{color, size};
@@ -24,13 +24,8 @@ pub(super) fn round(role: Role, icon: IconId, name: &str) -> Element {
         .background(color::ICON_BUTTON)
         .border((color::ICON_BUTTON_RIM, size::ICON_BUTTON_RIM))
         .radius(size::ICON_BUTTON / 2.0);
-    element.shows = Some(Shown::Icon(icon, icon_side()));
+    // At the one size the atlas holds the icon: 22 points for most, as `size::ICON` is, and 28
+    // for full control's mark, whose artwork is drawn larger.
+    element.shows = Some(Shown::Icon(icon, icons::atlas_size(icon)));
     element
-}
-
-/// The side of an icon button's glyph, in whole points, as the atlas holds icons.
-fn icon_side() -> u16 {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let side = size::ICON as u16;
-    side
 }

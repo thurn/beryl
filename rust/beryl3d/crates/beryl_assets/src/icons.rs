@@ -15,8 +15,9 @@ use std::cell::Cell;
 use beryl_scene::input::IconCell;
 use beryl_scene::widgets::IconId;
 use beryl_scene::widgets::icons::{
-    BUG, CLOSE, FULL_CONTROL, GEAR, LOCK, LOCK_SIDE, LOG, MENU, MINUS, PASS_ON, PHASE_SIDE, PHASES,
-    PLUS, SPEAKER, SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO, WHOLE,
+    BUG, BUTTON_SIDE, CLOSE, FULL_CONTROL, FULL_CONTROL_SIDE, GEAR, LOCK, LOCK_SIDE, LOG, MENU,
+    MINUS, PASS_ON, PHASE_SIDE, PHASES, PLUS, SPEAKER, SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO,
+    WHOLE,
 };
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Pixmap, Stroke, Transform};
 
@@ -72,9 +73,9 @@ const BOX_16: [f32; 4] = [0.0, 0.0, 16.0, 16.0];
 const BOX_256: [f32; 4] = [0.0, 0.0, 256.0, 256.0];
 /// The size of an icon button's glyph (`.icon-button > svg`, icon-button.css) and of a step
 /// stop (`.step-icon`, phase-tracker.css).
-const BUTTON: u16 = 22;
+const BUTTON: u16 = BUTTON_SIDE;
 /// The size of full control's mark (`.full-control svg`, controls.css).
-const FULL_CONTROL_SIZE: u16 = 28;
+const FULL_CONTROL_SIZE: u16 = FULL_CONTROL_SIDE;
 
 /// The phase icons' outline width (`.phase-icon`'s `stroke-width`).
 const PHASE_STROKE: f32 = 1.7;
@@ -633,8 +634,21 @@ pub(crate) fn cell(artwork: &Artwork, rect: [u16; 4]) -> IconCell {
 
 #[cfg(test)]
 mod tests {
+    use beryl_scene::widgets::icons::{ORB, atlas_size};
+
     use super::ALL;
     use crate::svg;
+
+    /// The test driver's stub atlas, and the "drawn" check it serves, hold each icon at
+    /// `atlas_size`, so every icon's artwork must be drawn at that size, and each id once.
+    #[test]
+    fn every_icon_is_drawn_at_its_atlas_size() {
+        assert_eq!(ALL.len(), usize::from(ORB));
+        for (index, artwork) in ALL.iter().enumerate() {
+            assert_eq!(usize::from(artwork.icon.0), index, "{:?}", artwork.icon);
+            assert_eq!(artwork.size, atlas_size(artwork.icon), "{:?}", artwork.icon);
+        }
+    }
 
     #[test]
     fn every_shape_of_every_icon_is_valid_path_data() {

@@ -18,7 +18,9 @@ def test_an_agent_gets_no_window_and_a_person_fullscreen_and_agents_give_for() -
             app.choose_window(window, None, agent=True)
 
 
-def log(folder: Path, started: int, checkout: str, frames: int) -> Path:
+def log(
+    folder: Path, started: int, checkout: str, frames: int, missing_glyphs: int = 0
+) -> Path:
     path = folder / f"{started}-{started % 1000}.jsonl"
     run = {
         "checkout": checkout,
@@ -67,6 +69,7 @@ def log(folder: Path, started: int, checkout: str, frames: int) -> Path:
             "unbuilt": [],
             "hz": 60.0,
             "steps": [{"at_ms": 550.0, "hz": 60.0}],
+            "missing_glyphs": missing_glyphs,
         }
     }
     lines = [{"run": run}, *late, summary]
@@ -96,3 +99,9 @@ def test_a_report_gives_the_summary_and_the_ten_worst_frames(tmp_path: Path) -> 
     worst = [line for line in printed if line.startswith("  at ")]
     assert len(worst) == app.WORST
     assert "gap 31.0 at 60.0 Hz" in worst[0] and "gap 22.0 at 120.0 Hz" in worst[-1]
+
+
+def test_a_run_that_ends_with_glyphs_missing_fails(tmp_path: Path) -> None:
+    assert app.undelivered(log(tmp_path, 1000, "/here", 10)) is None
+    failure = app.undelivered(log(tmp_path, 2000, "/here", 10, missing_glyphs=3))
+    assert failure is not None and "3 glyphs" in failure

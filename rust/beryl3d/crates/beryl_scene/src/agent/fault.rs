@@ -56,6 +56,7 @@ pub enum Rule {
     Duplicate,
     TextFits,
     TextOverlap,
+    Drawn,
     Named,
     BlankCard,
     LinesHold,
@@ -72,13 +73,14 @@ pub enum Rule {
 
 impl Rule {
     /// Every rule, in the doc's order.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::OnScreen,
         Self::Overlap,
         Self::Reachable,
         Self::Duplicate,
         Self::TextFits,
         Self::TextOverlap,
+        Self::Drawn,
         Self::Named,
         Self::Clips,
         Self::LayerDrawn,
@@ -112,6 +114,7 @@ impl Rule {
             Self::Duplicate => "duplicate",
             Self::TextFits => "text-fits",
             Self::TextOverlap => "text-overlap",
+            Self::Drawn => "drawn",
             Self::Named => "named",
             Self::BlankCard => "blank-card",
             Self::LinesHold => "lines-hold",

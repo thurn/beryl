@@ -31,8 +31,14 @@ pub struct BlockLook<'a> {
 }
 
 /// Writes the symbols and glyphs of `block` whose top left corner, in logical points of the
-/// window, is at `origin`.
-pub fn write_block(builder: &mut FrameBuilder, block: &Block, origin: Vec2, look: &BlockLook) {
+/// window, is at `origin`. Returns how many of its glyphs had no atlas cell at their own key,
+/// each drawn from another size of itself or not at all, for the "drawn" check.
+pub fn write_block(
+    builder: &mut FrameBuilder,
+    block: &Block,
+    origin: Vec2,
+    look: &BlockLook,
+) -> u32 {
     for symbol in &block.symbols {
         let rect = Rect {
             x: origin.x + symbol.rect.x,
@@ -53,9 +59,17 @@ pub fn write_block(builder: &mut FrameBuilder, block: &Block, origin: Vec2, look
         builder.draw(Band::Layer, draw);
     }
     let scale = look.scale;
+    let mut missing = 0;
     for glyph in &block.glyphs {
         let run = block.run(glyph.run);
-        let Some((placed, larger)) = look.glyphs.nearest(key(run.style, scale, glyph.glyph)) else {
+        let key = key(run.style, scale, glyph.glyph);
+        let found = if let Some(placed) = look.glyphs.get(key) {
+            Some((placed, 1.0))
+        } else {
+            missing += 1;
+            look.glyphs.nearest(key)
+        };
+        let Some((placed, larger)) = found else {
             continue;
         };
         // Physical pixels of the cell to logical points of the window.
@@ -83,6 +97,7 @@ pub fn write_block(builder: &mut FrameBuilder, block: &Block, origin: Vec2, look
         }
         builder.draw(Band::Layer, draw);
     }
+    missing
 }
 
 /// `color` with its alpha scaled by `opacity`.

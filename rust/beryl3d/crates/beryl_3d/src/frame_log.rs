@@ -156,7 +156,7 @@ pub struct Summary {
     /// had no layer (`Frame::faceless_cards`), and how many glyphs the text asked for that no
     /// atlas page held (`Client::missing_glyphs`). A host that delivers its card faces and
     /// glyphs leaves both at zero soon after a game's opening hand, which `just b3d stand-in`
-    /// checks.
+    /// checks. `just b3d app --for` fails a run that ends with glyphs missing.
     #[serde(default)]
     pub faceless_cards: usize,
     #[serde(default)]

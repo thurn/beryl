@@ -13,7 +13,9 @@ use super::hit::{
 };
 use super::tree::locator_of;
 use crate::data::audit;
-use crate::frame::{Draw, Frame, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits, sprites};
+use crate::frame::{
+    Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits, sprites,
+};
 use crate::input::{Rect, Size};
 
 /// The most covering elements a "reachable" fault names.
@@ -28,6 +30,7 @@ pub fn check(frame: &Frame, context: &Context) -> Vec<Fault> {
     faults.extend(duplicates(frame, context));
     faults.extend(text_fits(frame, context));
     faults.extend(super::text_overlap::text_overlap(frame, context));
+    faults.extend(drawn(frame, context));
     faults.extend(named(frame, context));
     faults.extend(blank_cards(frame, context));
     faults.extend(clips(frame, context));
@@ -319,6 +322,36 @@ pub fn text_fits(frame: &Frame, context: &Context) -> Vec<Fault> {
                 ),
                 vec![subject],
             )
+        })
+        .collect()
+}
+
+/// Drawn: every glyph of every element's text, and every icon, has an atlas cell at its own key
+/// (`Frame::undrawn`). A line of text whose glyphs the host never delivered, or delivered only
+/// at another size, is laid out in full, so the tree lists its string and "text fits" passes it,
+/// while the window shows letters missing or blurred; an icon with no cell shows nothing. It
+/// judges the frame as the host left it, so it is meant for a host that has delivered every
+/// glyph and icon the client asked for before the frame is checked, as the test driver's stub
+/// atlas does (`driver::glyphs`).
+#[must_use]
+pub fn drawn(frame: &Frame, context: &Context) -> Vec<Fault> {
+    (frame.undrawn.iter())
+        .map(|undrawn| {
+            let subject = subject(frame, undrawn.element);
+            let what = match undrawn.missing {
+                Missing::Glyphs(count) => format!(
+                    "{count} glyph{} of {}'s text {} no atlas cell at {} own size",
+                    if count == 1 { "" } else { "s" },
+                    subject.describe(),
+                    if count == 1 { "has" } else { "have" },
+                    if count == 1 { "its" } else { "their" },
+                ),
+                Missing::Icon { icon, size } => format!(
+                    "{}'s icon {icon} has no atlas cell at {size} points, so it is not drawn",
+                    subject.describe()
+                ),
+            };
+            fault(Rule::Drawn, context, what, vec![subject])
         })
         .collect()
 }

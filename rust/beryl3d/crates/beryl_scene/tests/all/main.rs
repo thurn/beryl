@@ -13,6 +13,7 @@ mod checks;
 mod common;
 mod compile_in_parts;
 mod contract;
+mod drawn;
 mod driver;
 mod effects;
 mod effects_card;

@@ -3067,6 +3067,12 @@ screen, so they cover every card spec that is ever generated.
   name. Arrows are left out of that last rule, since two arrows of one kind from
   one spell are named alike and told apart by their ids.
 - **Text fits.** No laid-out line is wider or taller than its element's box.
+- **Drawn.** Every glyph of an element's text and every icon has an atlas cell
+  at its own size once the host has delivered what the client asked for. A line
+  laid out with a glyph missing still prints its whole string in the tree, so
+  only this check sees "You won the ip". The interface tests run it with the
+  driver's stub atlas, which answers each glyph the client asks for and holds
+  each icon at the size its artwork is drawn (`icons::atlas_size`).
 - **Named.** Every interactive element has a role and a non-empty name.
 - **Clips fit.** The frame asks for no more than 15 clip rectangles. A clip
   asked for past the last entry is dropped, and the records that wanted it are

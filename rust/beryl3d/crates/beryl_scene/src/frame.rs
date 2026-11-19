@@ -5,12 +5,14 @@
 mod draw;
 mod look;
 mod order;
+mod undrawn;
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
 pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, sprites};
 pub use look::ElementLook;
+pub use undrawn::{Missing, Undrawn};
 
 use crate::input::{Rect, Tier};
 
@@ -376,6 +378,10 @@ pub struct Frame {
     /// belongs to the element added last before it was pushed, or to none (`u32::MAX`), as the
     /// table's cloth does.
     pub owners: Vec<u32>,
+    /// Each element whose text or icon the frame could not draw in full because no atlas cell
+    /// holds a glyph or the icon at its own size, for the "drawn" check. A host delivers what
+    /// the client asks for soon after it is asked, so this is empty once delivery has caught up.
+    pub undrawn: Vec<Undrawn>,
     /// The hand cards the pointer has up out of their place in the fan (rising, raised or
     /// falling), each with the box it has resting in the fan. The pointer's hit test and the
     /// "reachable" check put these boxes in place of the drawn ones, so that a pointer over the
@@ -481,6 +487,7 @@ impl Frame {
             looking: false,
             looks: Vec::new(),
             owners: Vec::new(),
+            undrawn: Vec::with_capacity(elements),
             lifted: Vec::with_capacity(LIFTED),
             rings: Vec::with_capacity(RINGS),
             load: Load::default(),
@@ -556,6 +563,7 @@ impl<'a> FrameBuilder<'a> {
         frame.lines.clear();
         frame.looks.clear();
         frame.owners.clear();
+        frame.undrawn.clear();
         frame.lifted.clear();
         frame.rings.clear();
         frame.load = Load::default();
@@ -727,6 +735,15 @@ impl<'a> FrameBuilder<'a> {
     pub fn look(&mut self, look: ElementLook) {
         if self.frame.looking {
             self.frame.looks.push(look);
+        }
+    }
+
+    /// Notes that the resolved element at `element` lacked atlas cells for `missing`. Past the
+    /// capacity the frame was made with, which is one entry per element, a note is dropped, so
+    /// that building a frame never allocates.
+    pub fn undrawn(&mut self, element: u32, missing: Missing) {
+        if self.frame.undrawn.len() < self.frame.undrawn.capacity() {
+            self.frame.undrawn.push(Undrawn { element, missing });
         }
     }
 

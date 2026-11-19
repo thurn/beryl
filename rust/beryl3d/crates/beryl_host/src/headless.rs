@@ -54,6 +54,7 @@ impl Headless {
     ///
     /// When there is no GPU adapter or device.
     pub fn new(page: Page, width: f32, height: f32, scans: &Scans) -> Result<Self, String> {
+        let page = page.with_host_atlas();
         let scale = page.scale();
         let mut renderer = Renderer::headless(Limits::Default)?;
         renderer.upload_page(&light::prepared());

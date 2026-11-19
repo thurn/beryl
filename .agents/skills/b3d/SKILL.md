@@ -104,7 +104,11 @@ desktop app. Draw a look you changed with `png --scale 2`. The windowless app
 gives another, and `just b3d test` plays its 1600x900 window at scale 2.
 
 - A `tree` line with the right string says the text was laid out, not that its
-  glyphs drew. Only a picture shows that.
+  glyphs drew. The "drawn" check of `check` and `test` faults text drawn with a
+  glyph the client never asked for and an icon drawn at a size the atlas does
+  not hold, but these commands deliver every glyph through a stub atlas, so a
+  host that loses glyphs (an atlas page the renderer refused) shows only in a
+  picture, or as `missing_glyphs` failing `just b3d app --for`.
 - The interface checks judge interactive elements, and the "marks on their
   things" check holds each mark's outline round its card, ability or life total,
   and "text overlaps nothing" keeps text off other text and controls. Of the

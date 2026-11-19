@@ -134,7 +134,10 @@ pub fn middle(view: &PlayerView, full_control: bool, bands: &PhoneBands) -> Elem
             .height(side)
             .color(color::GOLD)
             .passes(true);
-        mark.shows = Some(Shown::Icon(icons::FULL_CONTROL, icon_side()));
+        mark.shows = Some(Shown::Icon(
+            icons::FULL_CONTROL,
+            icons::atlas_size(icons::FULL_CONTROL),
+        ));
         mark.anchor = Some(Anchor::Point(
             Vec2::new(bands.right, line),
             Vec2::new(1.0, 0.5),
@@ -184,17 +187,6 @@ fn phase_icon(step: Step) -> crate::widgets::IconId {
         Step::End | Step::Cleanup => 4,
     };
     icons::PHASES[phase]
-}
-
-/// The side of an icon button's glyph, as the atlas holds it.
-fn icon_side() -> u16 {
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a few points"
-    )]
-    let side = size::ICON as u16;
-    side
 }
 
 /// The log as a sheet over the table while it is open (`LogSheet` in
