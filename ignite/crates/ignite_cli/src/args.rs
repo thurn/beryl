@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+use crate::values::{parse_every, parse_priority};
+
 /// Builds, checks and delivery for agents. Run `ignite prime` for the whole workflow.
 #[derive(Debug, Parser)]
 #[command(name = "ignite", version)]
@@ -419,7 +421,8 @@ pub struct TicketFieldArgs {
     /// P0 (highest) to P4.
     #[arg(short = 'p', long, value_parser = parse_priority)]
     pub priority: Option<u8>,
-    /// task, epic, bug, feature, chore, decision, spike, story or milestone.
+    /// task, epic, bug, feature, chore, decision, spike, story, milestone or meta (a scheduled
+    /// ticket; see `--every`).
     #[arg(long = "type")]
     pub ticket_type: Option<String>,
     #[arg(long)]
@@ -442,6 +445,12 @@ pub struct TicketFieldArgs {
     /// home app, or `default` to follow its epic's owner or the default owner.
     #[arg(long)]
     pub owner: Option<String>,
+    /// Make it a meta-ticket, a template the hub copies into a new child ticket on this
+    /// schedule: hours (`6` or `6h`) or days (`2d`). A copy is filed when the meta-ticket is
+    /// created and then at each due time, never while an earlier copy is still open. On create
+    /// it implies `--type meta`, whose ID starts with `M`.
+    #[arg(long, value_parser = parse_every)]
+    pub every: Option<u32>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -603,14 +612,6 @@ pub enum DepCommand {
     List {
         id: String,
     },
-}
-
-fn parse_priority(text: &str) -> Result<u8, String> {
-    let digits = text.strip_prefix(['P', 'p']).unwrap_or(text);
-    match digits.parse::<u8>() {
-        Ok(priority) if priority <= 4 => Ok(priority),
-        _ => Err(format!("{text:?} is not a priority from P0 to P4")),
-    }
 }
 
 impl Command {

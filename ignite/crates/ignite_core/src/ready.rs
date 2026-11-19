@@ -1,7 +1,8 @@
 //! Ticket readiness. A ticket is ready when nothing holds it back. Each thing that does is a
 //! [`Blocker`] naming the ticket in the way and the rule it breaks, checked in this order:
 //!
-//! 1. The ticket itself is not open, or is deferred until a time that has not passed.
+//! 1. The ticket itself is not open, is deferred until a time that has not passed, or is a
+//!    meta-ticket, a template that only its copies carry out ([`crate::schedule`]).
 //! 2. One of its own dependencies is live.
 //! 3. A dependency of one of its ancestors is live.
 //! 4. It is a `last` ticket and a live descendant of its parent is not.
@@ -15,7 +16,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::ids::TicketId;
-use crate::protocol::tickets::{Blocker, Edge, EdgeKind, Status, Ticket};
+use crate::protocol::tickets::{Blocker, Edge, EdgeKind, Status, Ticket, TicketType};
 use crate::time::Timestamp;
 
 /// The tickets and edges that readiness depends on, indexed once so that many tickets can be
@@ -95,7 +96,7 @@ impl<'a> Readiness<'a> {
             });
         };
         let deferred = ticket.defer_until.is_some_and(|until| until >= self.now);
-        if ticket.status != Status::Open || deferred {
+        if ticket.status != Status::Open || deferred || ticket.ticket_type == TicketType::Meta {
             push(&ticket.id, 1);
         }
         let dependencies = |source: &TicketId, rule: u8, push: &mut dyn FnMut(&TicketId, u8)| {

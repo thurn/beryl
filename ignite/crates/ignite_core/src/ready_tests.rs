@@ -44,6 +44,7 @@ fn ticket(text: &str) -> Ticket {
         owner: None,
         needs_os: None,
         fallback: false,
+        every_hours: None,
     }
 }
 
@@ -198,4 +199,19 @@ fn an_edge_from_a_ticket_to_itself_holds_nothing_back() {
     ];
     assert_eq!(of(&tickets, &edges, "a"), []);
     assert_eq!(ready(&tickets, &edges, NOW), [id("a"), id("b")]);
+}
+
+#[test]
+fn a_meta_ticket_is_never_ready_but_its_copies_are() {
+    let meta = Ticket {
+        ticket_type: TicketType::Meta,
+        every_hours: Some(6),
+        ..ticket("MAB12")
+    };
+    assert_eq!(
+        of(std::slice::from_ref(&meta), &[], "MAB12"),
+        vec![blocker("MAB12", 1)]
+    );
+    let tickets = [meta, ticket("MAB12.1")];
+    assert!(of(&tickets, &[], "MAB12.1").is_empty());
 }

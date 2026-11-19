@@ -23,7 +23,7 @@ use serde_json::{Map, Value, json};
 use ignite_core::ids::{Seq, TicketId};
 use ignite_core::protocol::tickets::{
     BatchConflict, BatchReply, BatchRequest, Dependency, EdgeKind, FeedChange, Operation,
-    OperationResult, Precondition, Status, Ticket, TicketFields,
+    OperationResult, Precondition, Status, Ticket, TicketFields, TicketType,
 };
 use ignite_core::time::Timestamp;
 
@@ -397,6 +397,13 @@ impl<'a> Run<'a> {
             None => fields.parent.clone().flatten().map(String::from),
         };
         let parent = parent_name.map(|name| self.ticket(&name)).transpose()?;
+        let meta = fields.ticket_type == Some(TicketType::Meta);
+        if meta && parent.is_some() {
+            return rejected("A meta-ticket cannot have a parent");
+        }
+        if meta && fields.every_hours.flatten().is_none() {
+            return rejected("A meta-ticket needs a schedule (every_hours)");
+        }
         let id = match &parent {
             Some(parent) => {
                 let next_child = parent.next_child + 1;
@@ -407,7 +414,7 @@ impl<'a> Run<'a> {
                 self.changed.insert(parent.id.to_string());
                 format!("{}.{}", parent.id, parent.next_child)
             }
-            None => self.allocate_root()?,
+            None => self.allocate_root(if meta { 'M' } else { 'T' })?,
         };
         self.seq += 1;
         let ticket = tickets::blank(
@@ -484,6 +491,21 @@ impl<'a> Run<'a> {
         metadata: Option<BTreeMap<String, Value>>,
     ) -> Step<OperationResult> {
         let mut changes = Self::field_changes(fields)?;
+        let was_meta = ticket.ticket_type == TicketType::Meta;
+        if fields
+            .ticket_type
+            .is_some_and(|t| (t == TicketType::Meta) != was_meta)
+        {
+            // A meta-ticket's ID starts with `M` and an ordinary ticket's with `T`, so neither
+            // can become the other.
+            return rejected("A ticket cannot become a meta-ticket or stop being one");
+        }
+        if was_meta && matches!(fields.parent, Some(Some(_))) {
+            return rejected("A meta-ticket cannot have a parent");
+        }
+        if was_meta && matches!(fields.every_hours, Some(None)) {
+            return rejected("A meta-ticket needs a schedule (every_hours)");
+        }
         match &fields.parent {
             Some(Some(parent)) => {
                 let parent = self.ticket(parent.as_str())?.id.to_string();
@@ -548,6 +570,9 @@ impl<'a> Run<'a> {
         }
         if fields.last.is_some_and(|l| l > 1) {
             return rejected("last must be 0 or 1");
+        }
+        if matches!(fields.every_hours, Some(Some(0))) {
+            return rejected("every_hours must be at least 1");
         }
         let Ok(Value::Object(mut changes)) = serde_json::to_value(fields) else {
             unreachable!("ticket fields serialize to an object")
@@ -655,9 +680,10 @@ impl<'a> Run<'a> {
         Ok(())
     }
 
-    /// A new root ID: `T`, a capital letter and three capitals or digits (`TQ44S`), used by no
-    /// ticket or alias. Aliases are stored in lowercase, so they are compared in lowercase.
-    fn allocate_root(&self) -> Step<String> {
+    /// A new root ID: `prefix` (`T`, or `M` for a meta-ticket), a capital letter and three
+    /// capitals or digits (`TQ44S`), used by no ticket or alias. Aliases are stored in
+    /// lowercase, so they are compared in lowercase.
+    fn allocate_root(&self, prefix: char) -> Step<String> {
         loop {
             let mut bytes = [0_u8; 4];
             getrandom::getrandom(&mut bytes)
@@ -667,7 +693,7 @@ impl<'a> Run<'a> {
                 continue;
             }
             let mut id = String::with_capacity(5);
-            id.push('T');
+            id.push(prefix);
             id.push(char::from(ALPHABET[10 + usize::from(bytes[0]) % 22]));
             for byte in &bytes[1..] {
                 id.push(char::from(ALPHABET[usize::from(*byte) % 32]));

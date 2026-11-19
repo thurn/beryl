@@ -16,6 +16,7 @@ mod rejected;
 mod replay;
 mod restore;
 mod ticket;
+mod values;
 
 use std::process::ExitCode;
 

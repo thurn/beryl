@@ -63,6 +63,11 @@ pub fn detail(ticket: &Value) -> String {
             out.push(format!("{label}: {value}"));
         }
     }
+    if let Some(hours) = ticket["every_hours"].as_u64() {
+        out.push(format!(
+            "every: {hours}h (a meta-ticket; each copy is filed under it)"
+        ));
+    }
     if let Some(reason) = ticket["close_reason"].as_str() {
         out.push(format!("closed: {reason}"));
     }

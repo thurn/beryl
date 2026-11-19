@@ -19,6 +19,7 @@ pub mod records;
 pub mod rejected;
 pub mod results;
 pub mod rows;
+pub mod schedules;
 pub mod session_titles;
 pub mod ticket_spend;
 pub mod tickets;
@@ -109,6 +110,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 15,
         sql: include_str!("ticket_spend.sql"),
+        code: None,
+    },
+    Migration {
+        version: 16,
+        sql: include_str!("schedules.sql"),
         code: None,
     },
 ];

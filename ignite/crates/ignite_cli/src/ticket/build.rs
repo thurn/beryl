@@ -20,6 +20,7 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "workers", args.workers);
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
+    put(fields, "every_hours", args.every);
     if let Some(owner) = &args.owner {
         let value = if owner == "default" {
             Value::Null
@@ -101,6 +102,9 @@ pub fn create(
         set.insert("status".into(), json!(status));
     }
     shared_fields(&mut set, fields)?;
+    if fields.every.is_some() && fields.ticket_type.is_none() {
+        set.insert("type".into(), json!("meta"));
+    }
     if !labels.is_empty() {
         set.insert("labels".into(), json!(labels));
     }
@@ -239,7 +243,21 @@ mod tests {
             max_workers: None,
             cores: None,
             owner: None,
+            every: None,
         }
+    }
+
+    #[test]
+    fn every_files_a_meta_ticket_and_update_changes_its_schedule() {
+        let scheduled = TicketFieldArgs {
+            every: Some(6),
+            ..no_fields()
+        };
+        let op = create("Sweep", &scheduled, &[], &[], None).unwrap();
+        assert_eq!(op["fields"]["type"], "meta");
+        assert_eq!(op["fields"]["every_hours"], 6);
+        let changed = update("MAB12", &scheduled, &no_changes()).unwrap();
+        assert_eq!(changed["set"], json!({"every_hours": 6}));
     }
 
     #[test]

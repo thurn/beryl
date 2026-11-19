@@ -2191,7 +2191,9 @@ with no lock held across it.
 
 A ticket ID is a `T`, a root of a capital letter and three capitals or digits,
 and one dotted number for each level below the root: `TQ44S` is an epic and
-`TQ44S.7.24` a ticket two levels under it. IDs are stored and printed this way.
+`TQ44S.7.24` a ticket two levels under it. A meta-ticket's ID starts with `M`
+instead (`MAB12`), and its copies are numbered under it (`MAB12.3`); see
+[Scheduled tickets](#scheduled-tickets). IDs are stored and printed this way.
 Lookups ignore case and accept the spelling from before IDs were stored in
 capitals (`Tq44s.7` or a bare `q44s.7`), so old commit messages and notes still
 find their tickets. Roots carried over from earlier trackers keep their dashes
@@ -2363,6 +2365,40 @@ While the hub cannot be reached:
   own into a `.bad` file in the `outbox` directory beside the daemon's database
   and reports it in the daemon's log.
 - Claims and landings exit with code 4, because both need the hub.
+
+### Scheduled tickets
+
+A meta-ticket is a template for work that recurs, such as a weekly sweep of
+stale tickets. It is a ticket of type `meta` with an interval in hours, and the
+hub copies it into a new child ticket on that schedule.
+
+```sh
+ignite ticket create "Sweep stale tickets" --every 24h -p P2 \
+  --labels tier:sonnet --body-file sweep.txt
+ignite ticket update MAB12 --every 2d
+```
+
+- `--every` takes hours (`6`, `6h`) or days (`2d`), and on create implies
+  `--type meta`. A meta-ticket has no parent, and keeps its type: an ordinary
+  ticket cannot become one, or the other way round, because the first letter of
+  the ID says which it is.
+- Copies are due on a fixed clock that starts when the meta-ticket is created:
+  at once, then every interval after. Each hub upkeep pass, once a minute, files
+  the copies that are due.
+- At most one copy is live (not closed) at a time. A due time that passes while
+  a copy is live is skipped, so the next copy is filed at the first due time
+  after that copy closes.
+- A copy is an ordinary task, filed `open` so the pool may be offered it at
+  once. It takes the meta-ticket's title, body, acceptance, design, labels,
+  priority, owner and cores at the moment it is filed, so an edit to the
+  meta-ticket changes every later copy and none already filed.
+- The meta-ticket itself is never ready or offered to a worker, and closing its
+  last live copy does not close it. Deferring it pauses the schedule, reopening
+  it resumes the schedule, and closing it retires the schedule.
+- On the dashboard, open meta-tickets have a "Scheduled" section on the home
+  page. A meta-ticket's page shows the interval under "Every", which a person
+  edits in place like any other value, and when the next copy falls due under
+  "Next copy". A copy's page links to its meta-ticket under "Schedule".
 
 ## Workers, the pool and the dispatcher
 

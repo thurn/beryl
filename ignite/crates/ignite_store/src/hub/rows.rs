@@ -44,6 +44,7 @@ crate::tables! {
         owner: Option<String>,
         needs_os: Option<String>,
         fallback: bool,
+        every_hours: Option<i64>,
     }
 
     Edge = "edges" { src: String, dst: String, kind: String }

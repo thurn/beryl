@@ -20,6 +20,7 @@ pub mod owner;
 pub mod prime;
 pub mod protocol;
 pub mod ready;
+pub mod schedule;
 pub mod score;
 pub mod shares;
 pub mod time;

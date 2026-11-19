@@ -10,7 +10,9 @@ use rusqlite::{Connection, Row, params};
 use serde_json::Value;
 
 use ignite_core::protocol::tickets::{EdgeKind, Status};
-use ignite_store::hub::{edges, tickets};
+use ignite_core::schedule;
+use ignite_core::time::Timestamp;
+use ignite_store::hub::{edges, schedules, tickets};
 
 use super::references::{mentions, ticket_paths};
 
@@ -102,6 +104,8 @@ pub struct TicketRow {
     /// An epic's target number of workers and its hard cap.
     pub workers: Option<u32>,
     pub max_workers: Option<u32>,
+    /// A meta-ticket's interval in hours (see `ignite_core::schedule`).
+    pub every_hours: Option<u32>,
 }
 
 pub(crate) fn parse_status(text: &str) -> Status {
@@ -241,13 +245,46 @@ pub struct TicketData {
     /// Whether the ticket or any ticket under it has efficiency windows, which the page shows
     /// in its efficiency section (see [`super::spend`]).
     pub spend: bool,
+    /// When a meta-ticket files its next copy; `None` for any other ticket.
+    pub next_copy: Option<NextCopy>,
+}
+
+/// When a meta-ticket files its next copy, as its page shows it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NextCopy {
+    /// The meta-ticket is not open, so its schedule does not run.
+    Paused,
+    /// The next copy falls due at this RFC 3339 time; the hub files it within a minute after.
+    At(String),
+    /// A copy is still live, and the next falls due at the first due time after it closes.
+    AfterLiveCopy,
+}
+
+/// When the meta-ticket in `ticket` files its next copy; `None` when it is not a meta-ticket.
+fn next_copy(conn: &Connection, ticket: &TicketRow) -> Result<Option<NextCopy>, ReadError> {
+    let Some(every) = ticket
+        .every_hours
+        .filter(|_| ticket.card.ticket_type == "meta")
+    else {
+        return Ok(None);
+    };
+    if ticket.card.status != Status::Open || every == 0 {
+        return Ok(Some(NextCopy::Paused));
+    }
+    let created = Timestamp::parse(&ticket.created_at)
+        .map_err(|error| ReadError(format!("created_at: {error}")))?;
+    let last = schedules::last_copy(conn, &ticket.card.id)?;
+    Ok(Some(match schedule::due_at(created, every, last) {
+        Some(due) => NextCopy::At(due.to_string()),
+        None => NextCopy::AfterLiveCopy,
+    }))
 }
 
 /// One ticket by exact ID.
 pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, ReadError> {
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, body, acceptance, design, notes, labels, metadata, close_reason,
-                created_at, created_by, closed_at, version, workers, max_workers
+                created_at, created_by, closed_at, version, workers, max_workers, every_hours
          FROM tickets WHERE id = ?1"
     ))?;
     let mut rows = statement.query_map([id], |row| {
@@ -267,6 +304,7 @@ pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, Read
             version: u64::try_from(row.get::<_, i64>(19)?).unwrap_or_default(),
             workers: row.get(20)?,
             max_workers: row.get(21)?,
+            every_hours: row.get(22)?,
         })
     })?;
     Ok(rows.next().transpose()?)
@@ -386,7 +424,6 @@ pub fn ticket_data(
         .map(|(name, set)| (name, set.members))
         .collect();
     Ok(TicketData {
-        ticket,
         comments,
         history,
         children,
@@ -397,6 +434,8 @@ pub fn ticket_data(
         groups,
         counts,
         spend: super::spend::exists(conn, &super::spend::subtree(conn, &id)?),
+        next_copy: next_copy(conn, &ticket)?,
+        ticket,
     })
 }
 

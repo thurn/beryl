@@ -69,6 +69,7 @@ pub fn ticket(id_text: &str, title: &str, body: &str) -> Ticket {
         owner: None,
         needs_os: None,
         fallback: false,
+        every_hours: None,
     }
 }
 

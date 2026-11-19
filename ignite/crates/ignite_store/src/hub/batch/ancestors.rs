@@ -6,7 +6,8 @@
 //! closes the epic) or files the missing work under the epic first. When that verify child is
 //! the ticket that just closed, the epic closes; when anything else was last, such as the
 //! missing work a verify session filed, a new verify child is filed. An epic with an empty
-//! acceptance closes as soon as its last descendant does.
+//! acceptance closes as soon as its last descendant does. A meta-ticket never closes this way:
+//! it outlives its copies (see `ignite_core::schedule`).
 
 use rusqlite::OptionalExtension;
 use serde_json::json;
@@ -43,6 +44,10 @@ impl Run<'_> {
             };
             if ticket.status == Status::Closed {
                 continue;
+            }
+            // A meta-ticket outlives its copies: it files the next one on its schedule.
+            if ticket.ticket_type == TicketType::Meta {
+                break;
             }
             if needs_verifying(&ticket, closing.as_ref()) {
                 let filed = self.file_verify_child(&ticket)?;

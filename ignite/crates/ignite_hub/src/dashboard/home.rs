@@ -58,6 +58,7 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
         .collect();
     let mut active: Vec<&HomeCard> = Vec::new();
     let mut epics: Vec<&HomeCard> = Vec::new();
+    let mut scheduled: Vec<&HomeCard> = Vec::new();
     let mut tickets: Vec<&HomeCard> = Vec::new();
     let mut deferred: Vec<&HomeCard> = Vec::new();
     let mut bug_reports: Vec<&HomeCard> = Vec::new();
@@ -77,6 +78,8 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
         } else if ticket.card.parent.is_none() {
             if ticket.card.ticket_type == "epic" {
                 epics.push(ticket);
+            } else if ticket.card.ticket_type == "meta" {
+                scheduled.push(ticket);
             } else {
                 tickets.push(ticket);
             }
@@ -89,6 +92,8 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
             let state = status_dot(card.status, true);
             let kind = if show_kind && card.ticket_type == "epic" {
                 c::chip("Epic", Tone::Violet, None)
+            } else if show_kind && card.ticket_type == "meta" {
+                c::chip("Scheduled", Tone::Blue, None)
             } else {
                 String::new()
             };
@@ -125,6 +130,12 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
     let sections = [
         ("Epics", "epics", epics.len(), grid(&epics, false)),
         ("Tickets", "tickets", tickets.len(), grid(&tickets, true)),
+        (
+            "Scheduled",
+            "scheduled",
+            scheduled.len(),
+            grid(&scheduled, false),
+        ),
         (
             "Filed automatically",
             "automatic",

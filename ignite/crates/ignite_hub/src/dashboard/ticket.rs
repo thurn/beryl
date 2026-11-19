@@ -17,7 +17,8 @@ use super::common::{
 };
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{
-    Card, Progress, ReadError, TicketData, TicketRow, by_attention, ticket_data, ticket_row,
+    Card, NextCopy, Progress, ReadError, TicketData, TicketRow, by_attention, ticket_data,
+    ticket_row,
 };
 use super::edit;
 use super::history::timeline;
@@ -390,8 +391,30 @@ pub fn page(
             ));
         }
     }
+    if let Some(next) = &data.next_copy {
+        let every = ticket.every_hours.unwrap_or_default();
+        let view = esc(&format!(
+            "{every} {}",
+            if every == 1 { "hour" } else { "hours" }
+        ));
+        properties.push((
+            "Every".into(),
+            editable_value("every_hours", "Every", "count", view, &every.to_string()),
+        ));
+        let next = match next {
+            NextCopy::Paused => c::muted("Paused"),
+            NextCopy::At(at) => c::time(Some(at), ""),
+            NextCopy::AfterLiveCopy => c::muted("When the open copy closes"),
+        };
+        properties.push(("Next copy".into(), next));
+    }
     if let Some(parent) = card.parent.as_deref().and_then(|id| references.get(id)) {
-        properties.push(("Epic".into(), hover_link(parent, &esc(&parent.title))));
+        let label = if parent.ticket_type == "meta" {
+            "Schedule"
+        } else {
+            "Epic"
+        };
+        properties.push((label.into(), hover_link(parent, &esc(&parent.title))));
     }
     if !ticket.labels.is_empty() || editable {
         let chips: String = ticket

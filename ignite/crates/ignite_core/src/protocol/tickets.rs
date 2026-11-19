@@ -26,6 +26,10 @@ pub enum TicketType {
     Spike,
     Story,
     Milestone,
+    /// A scheduled ticket: a template that the hub copies into a new child ticket every
+    /// `every_hours` hours ([`crate::schedule`]). Its root ID starts with `M`, and it is never
+    /// ready or offered to a worker itself.
+    Meta,
 }
 
 /// A ticket's status.
@@ -144,6 +148,13 @@ pub struct TicketFields {
     pub needs_os: Option<Option<Os>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fallback: Option<bool>,
+    /// A meta-ticket's schedule: a copy is due every this many hours.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub every_hours: Option<Option<u32>>,
 }
 
 /// Reads a field that is present, so that `null` means "clear it" and absence (through
@@ -229,6 +240,9 @@ pub struct Ticket {
     /// owner's machine goes silent ([`crate::owner::FALLBACK_SECONDS`]).
     #[serde(default, deserialize_with = "flag")]
     pub fallback: bool,
+    /// A meta-ticket's schedule: a copy is due every this many hours ([`crate::schedule`]).
+    #[serde(default)]
+    pub every_hours: Option<u32>,
 }
 
 /// Reads a flag stored as `true`/`false` or as the integer 0 or 1, as SQLite stores it.

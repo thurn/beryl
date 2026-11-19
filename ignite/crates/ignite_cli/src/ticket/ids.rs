@@ -93,9 +93,11 @@ pub fn spelled(id: &str) -> String {
     value.as_str().unwrap_or(id).to_owned()
 }
 
+/// Adds the `T` an ID from before IDs were stored in capitals lacks. A meta-ticket's ID starts
+/// with a capital `M` (`MAB12`), which no such older ID does, since those were lowercase.
 fn prefix(value: &mut Value) {
     if let Value::String(id) = value
-        && !id.starts_with('T')
+        && !id.starts_with(['T', 'M'])
     {
         id.insert(0, 'T');
     }
@@ -128,6 +130,11 @@ mod tests {
                 "aliases": ["by-moved.7"], "metadata": {"id": "keep"},
             })
         );
+    }
+
+    #[test]
+    fn meta_ticket_ids_keep_their_m() {
+        assert_eq!(spelled("MAB12.3"), "MAB12.3");
     }
 
     #[test]

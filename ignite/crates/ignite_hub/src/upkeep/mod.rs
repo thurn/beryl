@@ -10,6 +10,7 @@
 //!   for a check in the always set or a command in which many checks flaked ([`flaky`]);
 //! - files a P1 ticket for a tip that has waited an hour on a machine that has not reported,
 //!   and one for an epic in which nothing can start ([`stuck`]);
+//! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
 //! - closes each ticket it filed by itself whose fault has stayed clear for an hour, unless a
 //!   person touched it or a worker holds it ([`clearing`]);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
@@ -33,6 +34,7 @@ pub mod justiciar;
 pub mod machines;
 pub mod offline;
 pub mod regressions;
+pub mod schedules;
 pub mod signature;
 pub mod stuck;
 
@@ -42,6 +44,8 @@ mod clearing_tests;
 mod guard_tests;
 #[cfg(test)]
 mod justiciar_tests;
+#[cfg(test)]
+mod schedules_tests;
 #[cfg(test)]
 mod stuck_tests;
 #[cfg(test)]
@@ -136,6 +140,7 @@ impl Upkeep {
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
         keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));
+        keep(schedules::file_due(conn, now).map(|copies| report.tickets_filed.extend(copies)));
         // After every step that files, so a fault seen again on this pass keeps its ticket open.
         keep(clearing::close_cleared(conn, now).map(|closed| report.tickets_closed = closed));
         if let Some(dir) = self.backups.clone() {

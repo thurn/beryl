@@ -92,9 +92,19 @@ fn collect(chars: &[char]) -> String {
     chars.iter().collect()
 }
 
+/// Whether `name` has the shape of a meta-ticket's root ID: `M` and four capitals or digits
+/// (`MAB12`), which ordinary words written in capitals rarely are.
+fn meta_root(name: &str) -> bool {
+    name.len() == 5
+        && name.starts_with('M')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+}
+
 /// Calls `replace` on each ticket-like word of `text` and keeps the result. Bare names are
-/// replaced only when they begin with `T`, begin with `<project>-`, or are dotted IDs, because
-/// a lone root such as `fix` is an ordinary word.
+/// replaced only when they begin with `T`, begin with `<project>-`, are dotted IDs or have a
+/// meta-ticket's shape, because a lone root such as `fix` is an ordinary word.
 pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> String) -> String {
     let chars: Vec<char> = text.chars().collect();
     let prefix = format!("{project}-");
@@ -113,7 +123,7 @@ pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> Stri
                     && head.chars().all(name_char)
                     && tail.starts_with(|c: char| c.is_ascii_digit())
             });
-            if name.starts_with('T') || name.starts_with(&prefix) || dotted_id {
+            if name.starts_with('T') || name.starts_with(&prefix) || dotted_id || meta_root(&name) {
                 out.push_str(&replace(&name));
             } else {
                 out.push_str(&name);
