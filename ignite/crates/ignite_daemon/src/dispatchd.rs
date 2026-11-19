@@ -48,6 +48,8 @@ mod allowed;
 mod feed;
 #[path = "dispatchd_justiciar.rs"]
 mod justiciar;
+#[path = "dispatchd_raw.rs"]
+mod raw;
 #[path = "dispatchd_slots.rs"]
 mod slots;
 #[path = "dispatchd_stall.rs"]
@@ -86,7 +88,8 @@ pub const FEED_WAIT_S: u32 = 30;
 
 /// The line every instruction ends with, so the dispatcher keeps its loop after compaction.
 pub const LOOP: &str = "Loop: run the recipe in AGENTS.md for this `do`, then `ignite dispatch ack \
-                        <id> ok|failed <why>`, then `ignite dispatch --wait 480` again.";
+                        <id> ok|failed <why>|raw '<result>'`, then `ignite dispatch --wait 480` \
+                        again.";
 
 /// The message an idle worker gets when it has run nothing for 30 minutes.
 pub const CONTINUE: &str = "You have run no `ignite` command for 30 minutes. Continue the \
@@ -174,6 +177,8 @@ struct Queued {
 struct Given {
     queued: Queued,
     at: Timestamp,
+    /// A hand-off's model and effort read back as asked (see `raw`).
+    verified: bool,
 }
 
 /// A working session that went silent.
@@ -398,7 +403,11 @@ impl Dispatcher {
         let mut queued = state.pending.remove(index)?;
         queued.gives += 1;
         let body = queued.body.clone();
-        state.given.insert(body.id, Given { queued, at: now });
+        state.given.insert(body.id, Given {
+                queued,
+                at: now,
+                verified: false,
+            });
         if let Some(session) = asking {
             *state.given_to.entry(session.clone()).or_default() += 1;
         }
@@ -462,6 +471,14 @@ impl Dispatcher {
 
     /// Records the acknowledgement of instruction `id`.
     pub fn ack(&self, ctx: &Context, id: u64, result: &str, reason: &str) -> Reply {
+        if result == "raw" {
+            return self.ack_raw(ctx, id, reason);
+        }
+        if result == "ok"
+            && let Some(refusal) = self.unread_handoff(id)
+        {
+            return refusal;
+        }
         let now = ctx.clock.now();
         let members = self.pool.members().unwrap_or_default();
         let mut state = self.state();
@@ -641,8 +658,9 @@ impl Dispatcher {
 
     fn queue_check(state: &mut State, session: &SessionId) {
         let prompt = format!(
-            "Look up the session {session}: is it running, idle or gone? An archived session is \
-             `gone`. A lookup that failed is `unknown`, never `gone`."
+            "Call get_session on {session} and report what it returned, JSON or error, as it \
+             came. In Codex, answer running, idle or gone: an archived session is `gone`, and a \
+             lookup that failed is `unknown`, never `gone`."
         );
         Self::queue(
             state,
@@ -786,6 +804,9 @@ mod justiciar_tests;
 #[cfg(test)]
 #[path = "dispatchd_models_tests.rs"]
 mod models_tests;
+#[cfg(test)]
+#[path = "dispatchd_raw_tests.rs"]
+mod raw_tests;
 #[cfg(test)]
 #[path = "dispatchd_restart_tests.rs"]
 mod restart_tests;

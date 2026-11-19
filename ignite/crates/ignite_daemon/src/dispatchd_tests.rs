@@ -280,7 +280,7 @@ fn four_idle_workers_take_four_of_six_tickets_and_the_rest_as_they_finish() {
             .all(|i| i.clear && i.model.as_deref() == Some("opus"))
     );
     for instruction in &first {
-        assert_eq!(rig.ack(instruction.id, "ok", "").exit, Exit::Success);
+        assert_eq!(rig.handed(instruction).exit, Exit::Success);
     }
     assert_eq!(rig.state_of("local_w1"), "reserved");
     for (worker, ticket) in [
@@ -691,6 +691,12 @@ fn dispatch_prints_the_instruction_then_the_loop() {
     rig.reserve("T.1", "local_w1", &[]);
     let handoff = verb.run(&rig.ctx, &request("dispatch", &["--wait", "0"], None));
     let id = handoff.json.unwrap()["id"].as_u64().unwrap();
+    let readback = r#"{"sessionId":"local_w1","model":"sonnet","effort":"medium"}"#;
+    let raw = verb.run(
+        &rig.ctx,
+        &request("dispatch", &["ack", &id.to_string(), "raw", readback], None),
+    );
+    assert_eq!(raw.exit, Exit::Success, "{}", raw.text);
     let ack = verb.run(
         &rig.ctx,
         &request("dispatch", &["ack", &id.to_string(), "ok"], None),

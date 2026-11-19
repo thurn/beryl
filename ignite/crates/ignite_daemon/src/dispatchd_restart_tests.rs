@@ -52,7 +52,7 @@ fn a_handoff_given_before_a_restart_is_given_again_at_once() {
     let restarted = rig_on(&[], file.open(), now);
     let again = restarted.step().expect("given again without waiting");
     assert_eq!(again, given);
-    assert_eq!(restarted.ack(again.id, "ok", "").exit, Exit::Success);
+    assert_eq!(restarted.handed(&again).exit, Exit::Success);
     assert_eq!(restarted.state_of("local_w1"), "reserved");
     assert!(restarted.step().is_none());
 }

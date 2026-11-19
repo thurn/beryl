@@ -32,7 +32,7 @@ fn no_hub_request_is_made_while_the_state_is_locked() {
     // Asking for a ticket and reading it.
     rig.reserve("T.1", "local_w1", &[]);
     let handoff = rig.step().unwrap();
-    rig.ack(handoff.id, "ok", "");
+    rig.handed(&handoff);
     // A session finishing its ticket, whose landed files are read.
     rig.hub
         .insert_ticket(detail("T.1", "in_progress", Some("local_w1"), &[], ""));

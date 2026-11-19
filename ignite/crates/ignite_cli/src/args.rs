@@ -298,13 +298,15 @@ pub enum ClassArg {
     Idle,
 }
 
-/// How an instruction ended: `ok` or `failed` for a hand-off or message, and for a `check`
-/// what the app said of the session (`unknown` when the lookup itself failed).
+/// How an instruction ended: `ok` or `failed` for a hand-off or message. `raw` carries what the
+/// app's `get_session` returned, for a `check` or a hand-off's read-back, and the daemon decides
+/// what it means. A Codex dispatcher answers a `check` itself (`unknown` when the lookup failed).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum AckResult {
     Ok,
     #[value(alias = "fail")]
     Failed,
+    Raw,
     Running,
     Idle,
     Gone,
@@ -324,8 +326,8 @@ pub enum DispatchCommand {
     Ack {
         id: u64,
         result: AckResult,
-        /// Why it failed.
-        #[arg(trailing_var_arg = true)]
+        /// Why it failed, or the raw `get_session` result.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         reason: Vec<String>,
     },
     /// Exit 0 only when the current instruction calls for a session tool on a session. With no
@@ -703,6 +705,29 @@ mod tests {
             .unwrap()
             .command;
         assert!(matches!(parsed, Command::Land { note: Some(_) }));
+    }
+
+    #[test]
+    fn a_raw_ack_carries_the_tool_result_as_given() {
+        let line = r#"ignite dispatch ack 4814 raw {"sessionId":"local_a","isRunning":true}"#;
+        let Ok(Cli {
+            command:
+                Command::Dispatch {
+                    command: Some(DispatchCommand::Ack { result, reason, .. }),
+                    ..
+                },
+            ..
+        }) = Cli::try_parse_from(line.split_whitespace())
+        else {
+            panic!("not ack");
+        };
+        assert_eq!(
+            (result, reason.join(" ")),
+            (
+                AckResult::Raw,
+                r#"{"sessionId":"local_a","isRunning":true}"#.to_owned()
+            )
+        );
     }
 
     #[test]

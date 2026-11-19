@@ -2422,8 +2422,8 @@ $ ignite dispatch --wait 480
  "prompt": "Run `ignite start TQ44S.9.48 --reservation 7f3a` and follow it."}
 ```
 
-The dispatcher carries out a hand-off as separate calls, in this order, and
-reports `ignite dispatch ack 4812 ok`, or `failed` with the reason:
+The dispatcher carries out a hand-off as separate calls, in the order listed
+below, and reports `ignite dispatch ack 4812 ok`, or `failed` with the reason.
 
 The `model` is an ID the app's session tool accepts, not a tier name. The daemon
 looks the ticket's `tier:` label up in `[pool.models.<app>]` in `ignite.toml`:
@@ -2450,17 +2450,41 @@ justiciar hand-off is always `high`.
 1. Clear the session. A session that refuses is still finishing a turn. The
    hand-off fails, the daemon tries another worker, and it comes back to this
    one after a minute.
-2. Set the model and effort, then read the session back to confirm them. The app
-   can ignore a model without saying so. A model that cannot be set fails the
-   hand-off: a ticket is never run on a model other than the one it names.
+2. Set the model and effort, then read the session back with `get_session` and
+   report what it returned, as it came:
+   `ignite dispatch ack 4812 raw '<the JSON>'`. The app can ignore a model
+   without saying so, so the daemon, not the dispatcher, compares the
+   read-back's `model` and `effort` with what it asked for. A model ID's
+   context-window suffix, such as `[1m]`, does not count as a difference. When
+   they match, the instruction stays open and the reply says to send the prompt.
+   When they differ, the hand-off fails as if the dispatcher had reported
+   `failed`, and the reply says not to send the prompt: a ticket is never run on
+   a model other than the one it names. An `ok` for a hand-off to a named
+   session with no matching read-back is refused.
 3. Send the prompt. It carries a reservation code that only this hand-off's
    `ignite start` can use, so a hand-off that arrives late, after the ticket
    went elsewhere, claims nothing.
 
 The other instructions are `message`, which sends text to a live session,
-`check`, which asks whether a session is running, idle or gone (an archived
-session counts as gone, since it can take no message), and `idle`, which means
-the wait ended with nothing to do. Every instruction ends with one line that
+`check`, which asks whether a session is running, idle or gone, and `idle`,
+which means the wait ended with nothing to do.
+
+The two judgments where a dispatcher's mistake costs most are whether a session
+is gone and whether a hand-off's model stuck: a wrong `gone` releases a live
+worker's ticket, and a skipped read-back runs a ticket on the wrong model. So a
+Claude dispatcher makes neither. For a `check` it calls `get_session` and
+reports the result as it came, JSON or error, with `raw`, and the daemon reads
+it:
+
+- an error saying the session was not found, or `isArchived: true`, is gone (an
+  archived session can take no message);
+- `isRunning: true` is running, and `isRunning: false` is idle;
+- anything else, such as a timeout or a result about another session, is
+  unknown, which proves nothing.
+
+This also lets the dispatcher run on a cheaper model. A Codex dispatcher still
+answers a `check` with `running`, `idle`, `gone` or `unknown`, and its
+hand-offs open new chats, which have nothing to read back. Every instruction ends with one line that
 restates the loop, so the dispatcher still knows its job after its context is
 compacted. The output is data only: it picks one action from a closed set and
 supplies its values, and never says what to do, because a model distrusts a tool
