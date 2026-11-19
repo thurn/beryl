@@ -201,6 +201,18 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
 }
 
 #[test]
+fn closed_subtasks_are_listed_without_a_collapsed_group() {
+    let hub = seeded();
+    // This epic has closed children. They used to sit behind a "<n> closed" disclosure.
+    let page = hub.text("/TQ44S");
+    assert!(
+        page.contains("class=\"c-row-id c-mono c-hide-narrow\">TQ44S.7</"),
+        "{page}"
+    );
+    assert!(!page.contains(" closed</summary>"), "{page}");
+}
+
+#[test]
 fn imported_tickets_show_their_owner_and_start_without_the_import_key() {
     let hub = seeded();
     let page = hub.text("/TWAIT");

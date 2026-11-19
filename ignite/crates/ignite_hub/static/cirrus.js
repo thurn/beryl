@@ -302,7 +302,7 @@
         if (status && placeholder) placeholder.replaceWith(status);
         const disclosures = (scope) => [...scope.querySelectorAll("details")];
         const disclosureKey = (el) => (el.closest("section[id]")?.id ?? "")
-            + "/" + el.querySelector("summary")?.textContent.replace(/^\d+ closed$/, "closed");
+            + "/" + el.querySelector("summary")?.textContent;
         const opened = new Set(disclosures(current).filter((el) => el.open).map(disclosureKey));
         for (const el of disclosures(next)) {
             if (opened.has(disclosureKey(el))) el.open = true;

@@ -202,22 +202,14 @@ pub fn page(
         }
         let (closed, open): (Vec<&Card>, Vec<&Card>) =
             cards.iter().partition(|card| card.status == Status::Closed);
-        let archived = if closed.is_empty() {
-            String::new()
-        } else {
-            c::rows(closed.iter().map(|card| row(card)))
-        };
-        let body = if open.is_empty() {
-            archived
-        } else {
-            let folded = if archived.is_empty() {
-                String::new()
-            } else {
-                c::disclosure(&format!("{} closed", closed.len()), &archived, false)
-            };
-            c::rows(open.iter().map(|card| row(card))) + &folded
-        };
-        add(heading, &body, Some(cards.len()));
+        // Closed tickets follow the open ones in the same list, with no
+        // collapsed group or count header.
+        let ordered = open.iter().chain(closed.iter());
+        add(
+            heading,
+            &c::rows(ordered.map(|card| row(card))),
+            Some(cards.len()),
+        );
     }
 
     if !comments.is_empty() || editable {
