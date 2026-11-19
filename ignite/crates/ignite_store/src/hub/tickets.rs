@@ -407,6 +407,66 @@ pub(crate) fn sql_value(column: &str, value: &Value) -> SqlValue {
     }
 }
 
+/// Gives each ticket that `batch` creates without a status the one it waits in: an epic, and any
+/// ticket filed under a pending ancestor, wait for a person's release (`pending_approval`);
+/// any other ticket is filed `open`, so the pool may be offered it at once. A parent created in
+/// the same batch (`$<index>`) counts as pending when this pass made it so. A create that names
+/// its status, as the hub's own filings and `ignite ticket create --release` do, is kept.
+pub fn add_holds(conn: &Connection, batch: &mut BatchRequest) -> Result<()> {
+    let mut held = HashSet::new();
+    for (index, operation) in batch.ops.iter_mut().enumerate() {
+        let Operation::Create { fields, parent, .. } = operation else {
+            continue;
+        };
+        let parent_name = parent
+            .clone()
+            .or_else(|| fields.parent.clone().flatten().map(String::from));
+        let pending = if let Some(status) = fields.status {
+            status == Status::PendingApproval
+        } else {
+            let pending = fields.ticket_type == Some(TicketType::Epic)
+                || match parent_name.as_deref() {
+                    None => false,
+                    Some(name) => match name.strip_prefix('$') {
+                        Some(reference) => reference
+                            .parse::<usize>()
+                            .is_ok_and(|index| held.contains(&index)),
+                        None => pending_line(conn, name)?,
+                    },
+                };
+            fields.status = Some(if pending {
+                Status::PendingApproval
+            } else {
+                Status::Open
+            });
+            pending
+        };
+        if pending {
+            held.insert(index);
+        }
+    }
+    Ok(())
+}
+
+/// Whether the ticket `name` names, or one of its ancestors, is pending approval.
+fn pending_line(conn: &Connection, name: &str) -> Result<bool> {
+    let mut next = resolve(conn, name)?.map(|id| id.to_string());
+    let mut seen = HashSet::new();
+    while let Some(id) = next {
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        let Some(ticket) = load(conn, &id)? else {
+            break;
+        };
+        if ticket.status == Status::PendingApproval {
+            return Ok(true);
+        }
+        next = ticket.parent.map(|parent| parent.to_string());
+    }
+    Ok(false)
+}
+
 /// Adds to `batch` the release of every pending descendant of each pending ticket that one of
 /// its updates releases (sets `open`), so that releasing an epic releases its tickets whichever
 /// client sent the update: `ignite ticket update --release` or the dashboard's Release button.

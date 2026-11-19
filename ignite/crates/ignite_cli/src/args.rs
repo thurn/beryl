@@ -434,8 +434,10 @@ pub enum TicketCommand {
         /// Comma-separated tickets the new one depends on.
         #[arg(long, value_delimiter = ',')]
         deps: Vec<String>,
-        /// File it released for implementation. Without this flag the ticket is filed
-        /// `pending_approval`, and the pool is never offered it until a person releases it.
+        /// File it released for implementation even if it is an epic or under a pending one.
+        /// Without this flag an epic, and a ticket under a pending epic, are filed
+        /// `pending_approval` and the pool is never offered them until a person releases them;
+        /// any other ticket is filed `open`.
         #[arg(long)]
         release: bool,
     },

@@ -90,6 +90,7 @@ fn apply_batch(
     now: Timestamp,
 ) -> Result<Response, Response> {
     let mut batch: BatchRequest = body(request)?;
+    tickets::add_holds(conn, &mut batch).map_err(|e| store_failure(&e))?;
     tickets::add_releases(conn, &mut batch).map_err(|e| store_failure(&e))?;
     let writer = request.writer.as_ref().expect("checked in handle");
     // The CLI sends the writing session's title beside the operations, so the dashboard can

@@ -622,6 +622,54 @@ fn releasing_an_epic_with_no_workers_number_gives_it_the_default() {
     );
 }
 
+/// A create that names no status waits for a person only when it is an epic or sits under a
+/// pending ticket, including a parent created earlier in the same batch. Any other ticket is
+/// filed `open`, and a named status is kept.
+#[test]
+fn only_an_epic_and_what_is_filed_under_a_pending_one_wait_for_release() {
+    let fixture = Fixture::new("holds");
+    let hub = fixture.start();
+    let receipt = hub.post(
+        "/batch",
+        &json!({"ops": [
+            {"op": "create", "fields": {"title": "Epic", "type": "epic"}},
+            {"op": "create", "parent": "$0", "fields": {"title": "Child"}},
+            {"op": "create", "fields": {"title": "Single"}},
+            {"op": "create", "parent": "$2", "fields": {"title": "Under single"}},
+            {"op": "create", "fields": {"title": "Released epic", "type": "epic", "status": "open"}},
+            {"op": "create", "fields": {"title": "Held", "status": "pending_approval"}},
+        ]}),
+    );
+    let id = |index: usize| receipt["results"][index]["id"].as_str().unwrap().to_owned();
+    let later = hub.post(
+        "/batch",
+        &json!({"ops": [
+            {"op": "create", "parent": id(1), "fields": {"title": "Grandchild"}},
+            {"op": "create", "parent": id(4), "fields": {"title": "Under released"}},
+        ]}),
+    );
+    let later_id = |index: usize| later["results"][index]["id"].as_str().unwrap().to_owned();
+    let status = |id: String| hub.get(&format!("/tickets/{id}")).json()["status"].clone();
+    assert_eq!(
+        (0..6)
+            .map(id)
+            .chain((0..2).map(later_id))
+            .map(status)
+            .collect::<Vec<_>>(),
+        [
+            "pending_approval",
+            "pending_approval",
+            "open",
+            "open",
+            "open",
+            "pending_approval",
+            "pending_approval",
+            "open"
+        ]
+        .map(|s| json!(s)),
+    );
+}
+
 #[test]
 fn writers_report_session_titles_that_the_hub_keeps() {
     let fixture = Fixture::new("titles");

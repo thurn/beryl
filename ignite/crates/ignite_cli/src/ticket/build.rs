@@ -69,14 +69,12 @@ fn dependency(spec: &str) -> Result<Value> {
     Ok(json!({"on": id, "kind": kind}))
 }
 
-/// The status of a ticket filed but not yet released for implementation.
-pub const PENDING: &str = "pending_approval";
-
 /// The status a released ticket takes.
 pub const RELEASED: &str = "open";
 
-/// Files a ticket. Unless `release` is set it is filed pending approval, so that nothing is
-/// scheduled that a person has not released.
+/// Files a ticket. With `release` it is filed `open` whatever it is. Without it the hub decides:
+/// an epic, or a ticket under a pending epic, waits for a person's release, and any other
+/// ticket is filed `open` (see `add_holds` in `ignite_store`).
 pub fn create(
     title: &str,
     fields: &TicketFieldArgs,
@@ -86,8 +84,8 @@ pub fn create(
 ) -> Result<Value> {
     let mut set = Fields::new();
     set.insert("title".into(), json!(title));
-    if !release {
-        set.insert("status".into(), json!(PENDING));
+    if release {
+        set.insert("status".into(), json!(RELEASED));
     }
     shared_fields(&mut set, fields)?;
     if !labels.is_empty() {
@@ -252,7 +250,7 @@ mod tests {
             op,
             json!({
                 "op": "create", "parent": "Tig9a",
-                "fields": {"title": "Split", "status": "pending_approval", "priority": 1, "workers": 3, "max_workers": 5,
+                "fields": {"title": "Split", "priority": 1, "workers": 3, "max_workers": 5,
                            "cores": 2.5, "labels": ["tier:opus"]},
                 "deps": [{"on": "a"}, {"on": "b", "kind": "blocks"},
                          {"on": "c", "kind": "related"}],
@@ -260,7 +258,7 @@ mod tests {
         );
         assert!(create("x", &no_fields(), &[], &["blocks:z".into()], false).is_err());
         let released = create("x", &no_fields(), &[], &[], true).unwrap();
-        assert!(released["fields"].get("status").is_none());
+        assert_eq!(released["fields"]["status"], "open");
     }
 
     #[test]

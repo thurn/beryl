@@ -180,7 +180,7 @@ hold, and record that on the ticket.
    `ignite check` on your tree. Land anything not yet on `staging` with
    `ignite land`. If validation fails, fix it now as an ordinary change; it is
    not a new emergency unless work stops again.
-5. File follow-up tickets (`tier:opus`, filed `pending_approval` as always) for
+5. File follow-up tickets (`tier:opus`, under no epic, so they start at once) for
    what the hotfix left: a regression test, the root-cause fix if you only
    rolled back, a guard that stops this class of fault, and a `docs/bugs.md`
    entry when a rules engine bug caused it.

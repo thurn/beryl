@@ -122,11 +122,12 @@ situation, and a command names the topic when it applies.
   `set_thread_title`).
 - File tickets freely and in parallel with `ignite ticket create`, and record
   plans, designs and decisions on their tickets. Merge conflicts are cheap:
-  `ignite land` rebases, and you fix and land again. A ticket is filed
-  `pending_approval` and the pool is never offered it until the user releases it
-  (`ignite ticket update <id> --release`); agents never pass `--release`. A
-  released ticket can be picked up within minutes, so land what it depends on
-  first or give it the dependency.
+  `ignite land` rebases, and you fix and land again. A single ticket is filed
+  `open`, so the pool can pick it up within minutes: land what it depends on
+  first or give it the dependency. An epic, and every ticket filed under a
+  pending epic, is filed `pending_approval`, and the pool is never offered its
+  tickets until the user releases it (`ignite ticket update <epic> --release`);
+  agents never pass `--release`.
 - Every session has to spend time learning the code it touches, so each ticket
   names the files, helpers and tests it needs by path, so that its session can
   read them all in its first message.

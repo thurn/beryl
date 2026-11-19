@@ -2468,9 +2468,13 @@ A machine can take a ticket when all of these hold:
 
 Not every ticket is offered:
 
-- Nothing is scheduled until a person releases it. Every ticket is filed with
-  the status `pending_approval`, the hub's own improvements and fault reports
-  included, and the pool is never offered a pending ticket. The exception is a
+- An epic is scheduled only once a person releases it. A ticket filed with no
+  status takes one from the hub: an epic, and any ticket filed under a pending
+  ticket (a parent created earlier in the same batch included), is filed with
+  the status `pending_approval`; any other ticket is filed `open`, so a single
+  ticket under no epic is offered to the pool at once. The pool is never offered
+  a pending ticket. The hub's own improvements and fault reports are filed
+  pending as well, so a person decides which of them to work. The exception is a
   ticket for anything that holds `master` back, which the hub files already
   released: a regression (a check that tip verification found failing on
   `staging`), every justiciar ticket, a machine a tip has waited an hour for,
@@ -2479,8 +2483,8 @@ Not every ticket is offered:
   when a later tip waits on them. `ignite ticket update <id> --release`, or the
   Release button on the dashboard, makes the ticket and every descendant still
   pending `open`: the hub adds the descendants to any update that releases a
-  pending ticket. `ignite ticket create --release` files a ticket already
-  released. A session may still start a pending ticket by name.
+  pending ticket. `ignite ticket create --release` files a ticket
+  `open` even when it is an epic or sits under a pending one. A session may still start a pending ticket by name.
 - An epic is worked only once it is active, which means it has a `--workers`
   number above 0. An epic filed without one gets a share of 3, so releasing it
   is enough; the share is bounded by the pool, so it reserves nothing. An epic
