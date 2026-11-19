@@ -1971,6 +1971,7 @@ commands = [
   "cargo nextest run --locked --cargo-quiet --workspace --profile express --test-threads=num-cpus --status-level=fail --final-status-level=fail",
 ]
 families = ["ignite", "ignite-lint"]
+inert = ["docs/ignite.md", "data/efficiency-changes.json"]
 
 [machine.jarvis]
 express_cores = 3
@@ -2044,6 +2045,16 @@ express_cores = 3
   1a2b3c4d; the commits landed since touch none of its files". On 2026-11-18 a
   landing reran all four commands, taking 56 s, a minute after its
   `ignite check` had passed them in 60 s.
+- A file of the change that a landed commit also edited does not count against
+  an earlier pass when it matches `inert`: files no command builds or runs, or
+  whose formatting is all a command checks. The landing's formatters rewrite
+  such a file after the first rebase, and the rebase merged the two edits
+  without a conflict, so the commands would build the same code. On 2026-11-19
+  two landings each ran all four commands again (65 s and 71 s) because the
+  commits they rebased over had also edited `docs/ignite.md` and
+  `data/efficiency-changes.json`, which nearly every Ignite change edits. A
+  merge of two Markdown edits that a later lost race brings in is not formatted
+  again; tip verification's lint family reports one that came out wrong.
 - The two formatting commands come first, because they take a second or so and
   clippy and nextest take 90 to 140 s under load. On 2026-11-19 an Ignite-only
   fix lost a full run of 144 s to a misformatted `docs/ignite.md`, which the
@@ -2070,7 +2081,12 @@ express_cores = 3
   took 90 to 96 s, and the slowest of them alone took 51 s. The `ignite` profile
   runs every test, so tip verification and the gate of a landing that is not
   express still run the slow ones, and a change that breaks one is caught before
-  `master` moves.
+  `master` moves. Later that day, at a load average of 46 to 62, the run took 26
+  to 61 s, set each time by three more tests: two that drive a Cargo stand-in
+  through a growing grant (20 to 58 s) and one that runs a new script, which
+  takes under a second alone but waited 13 to 25 s for macOS to check it behind
+  the other tests' new executables. Without them it took 18 to 19 s at a load
+  average of 32 to 40.
 - The nextest command passes `--test-threads=num-cpus`, which overrides the
   `NEXTEST_TEST_THREADS` above: the tests mostly wait for the processes and
   `git` commands they start, so threads beyond the express cores cost little

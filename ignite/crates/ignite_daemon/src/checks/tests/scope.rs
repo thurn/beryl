@@ -293,6 +293,7 @@ fn a_change_inside_the_express_paths_lists_no_family_it_does_not_name() {
         dir: "ignite".to_owned(),
         commands: vec!["true".to_owned()],
         families: Vec::new(),
+        inert: Vec::new(),
     });
     let tree = TreeId::new("tree-01").unwrap();
     let fresh = daemon(&world, memory(), tree_with(&world, &["docs/ignite.md"]));

@@ -559,5 +559,10 @@
     "label": "A rebase gives each file it writes back unchanged its old modification time, and a landing rebased over other commits gates in its ticket tree when that leaves less to build than every free landing tree (on 2026-11-19 the landing of a one-card comment change rebased over Ignite-only commits rebuilt 74 crates for 76 s in a landing tree after `ignite check` had built the change in its ticket tree)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "An express landing keeps an earlier express pass when the only files the commits it rebased over share with the change are `[express] inert` ones (the design document and this file), and the express nextest profile leaves out three more tests that set the run's wall time under load (on 2026-11-19 two Ignite landings each ran all four express commands again, 65 s and 71 s, after rebasing over commits that also edited those two files, and the express test run took 26 to 61 s at a load average of 46 to 62 against 18 to 19 s without the three tests)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

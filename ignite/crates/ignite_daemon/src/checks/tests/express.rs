@@ -57,6 +57,7 @@ fn express_world(changed: &[&str]) -> World {
         dir: "ignite".to_owned(),
         commands: vec!["cargo test".to_owned()],
         families: vec!["unit".to_owned()],
+        inert: Vec::new(),
     });
     world
 }

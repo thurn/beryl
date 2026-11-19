@@ -17,6 +17,13 @@ terminate-after = 4
 # or 12 threads, at least as long as the slowest; without them, 14 to 17 s on 12. The `ignite` family still runs every one of them, in
 # tip verification and in the gate of any landing that is not express, so a change that breaks
 # one is caught there before `master` moves. A new slow test belongs here too.
+#
+# Later on 2026-11-19, at a load average of 46 to 62, the express run took 26 to 61 s, and three
+# more tests were always the slowest: the two `supervise::grants` tests that drive a Cargo
+# stand-in through a growing and shrinking grant (20 to 58 s each) and the install handoff test
+# (13 to 25 s, although it takes under a second alone, because it waits for macOS to check the
+# new script it runs behind every other test's new executables). Without them the run took 18 to
+# 19 s at a load average of 32 to 40, and 36 s at 46.
 [profile.express]
 default-filter = """
 not (
@@ -26,10 +33,13 @@ not (
     | test(=adopt::a_command_in_a_tree_reset_at_start_is_ended_and_not_taken_over)
     | test(=supervise::a_command_past_its_hang_limit_is_ended_with_its_children_and_reads_as_hung)
     | test(=restart::a_restart_under_load_ends_no_command_and_runs_nothing_twice)
+    | test(=supervise::grants::a_cargo_build_takes_job_slots_as_its_grant_grows_and_shrinks_for_a_landing)
+    | test(=supervise::grants::cargo_inside_a_script_takes_job_slots_as_the_grant_grows)
   ))
   | (binary_id(ignite_daemon) & (
     test(=trees::tests::the_main_checkout_is_left_alone_while_it_has_a_local_change)
     | test(=trees::tests::setup_frees_a_landing_tree_left_landing_by_a_stopped_daemon)
+    | test(=update::install::tests::the_process_handoff_runs_install_in_the_stored_build)
   ))
 )
 """

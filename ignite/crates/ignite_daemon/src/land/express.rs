@@ -342,14 +342,9 @@ impl Expressed {
         head: &Commit,
         changed: &[String],
     ) -> ignite_core::traits::Result<Option<ExpressRun>> {
-        let dir = ctx
-            .config
-            .express
-            .as_ref()
-            .map_or("", |express| express.dir.trim_matches('/'));
         if !still_holds(
             ctx.git.as_ref(),
-            dir,
+            ctx.config.express.as_ref(),
             (&self.head, &self.changed),
             head,
             changed,
@@ -365,12 +360,20 @@ impl Expressed {
 
 /// Whether an express pass on the commit `earlier.0`, whose change's own files were
 /// `earlier.1`, still holds for `head`, whose own files are `changed`. It does not when the
-/// files differ (the rebase merged a landed edit into one of them), or when the commits between
-/// the two touch one of them or a build input of the workspace in `dir` (see
-/// [`is_build_input`]). The order of the files does not matter.
+/// files differ, or when the commits between the two touch one of them or a build input of the
+/// workspace in the commands' directory of `express` (see [`is_build_input`]). The order of the
+/// files does not matter.
+///
+/// A file of the change that the landed commits touch too does not count when it matches the
+/// section's `inert` patterns: no command builds it, or a command only checks its formatting,
+/// and the landing formats it after its first rebase. The rebase merged the two edits without a
+/// conflict, so the commands would build the same code as before. On 2026-11-19 two landings
+/// ran all four commands again (71 s and 65 s) because the commits they rebased over had also
+/// edited the design document and the efficiency log, which almost every Ignite change edits. A merge of two well formatted Markdown edits that a later race brings in is not
+/// formatted again, and tip verification's lint family would report one that came out wrong.
 fn still_holds(
     git: &dyn Git,
-    dir: &str,
+    express: Option<&ignite_core::config::Express>,
     earlier: (&Commit, &[String]),
     head: &Commit,
     changed: &[String],
@@ -383,10 +386,12 @@ fn still_holds(
     if sorted(earlier.1) != sorted(changed) {
         return Ok(false);
     }
+    let dir = express.map_or("", |express| express.dir.trim_matches('/'));
+    let inert = |file: &str| express.is_some_and(|express| express.is_inert(file));
     let moved = git.changed(earlier.0, head)?;
     Ok(!moved
         .iter()
-        .any(|file| changed.contains(file) || is_build_input(file, dir)))
+        .any(|file| (changed.contains(file) && !inert(file)) || is_build_input(file, dir)))
 }
 
 /// The run a landing at `head`, whose own files are `changed`, may push on because the commands
@@ -405,9 +410,14 @@ pub(super) fn reused(
     let Some(earlier) = lane.earlier_pass(tree, express) else {
         return Ok(None);
     };
-    let dir = express.dir.trim_matches('/');
     if earlier.head == *head
-        || !still_holds(git, dir, (&earlier.head, &earlier.changed), head, changed)?
+        || !still_holds(
+            git,
+            Some(express),
+            (&earlier.head, &earlier.changed),
+            head,
+            changed,
+        )?
     {
         return Ok(None);
     }
@@ -427,38 +437,6 @@ pub(super) fn is_build_input(file: &str, dir: &str) -> bool {
     let anywhere =
         name.starts_with("rust-toolchain") || file.split('/').any(|part| part == ".cargo");
     anywhere || (in_dir && BUILD_INPUTS.contains(&name))
-}
-
-/// The command an agent runs in their tree to see a failed express command's errors: for
-/// clippy, clippy on the crate that failed alone, which takes seconds; otherwise the command.
-///
-/// On 2026-11-18 one worker hit clippy's line limit on a function four times in a row through
-/// `ignite test`, at 54 to 555 s a round, and a landing failed it once more, when clippy on the
-/// one crate in the tree would have shown each error in seconds.
-pub fn rerun_command(command: &str, output: &str) -> String {
-    if !command.split_whitespace().any(|word| word == "clippy") {
-        return command.to_owned();
-    }
-    match failed_crate(output) {
-        Some(name) => format!("cargo clippy -p {name} --all-targets -- -D warnings"),
-        None => "cargo clippy --all-targets -- -D warnings".to_owned(),
-    }
-}
-
-/// The crate a Cargo failure names: ``could not compile `<crate>` `` or, failing that, the
-/// first `crates/<crate>/` path of a diagnostic.
-fn failed_crate(output: &str) -> Option<String> {
-    let named = output.lines().find_map(|text| {
-        let rest = text.split("could not compile `").nth(1)?;
-        rest.split('`').next().map(str::to_owned)
-    });
-    named.or_else(|| {
-        output.lines().find_map(|text| {
-            let rest = text.trim_start().strip_prefix("--> ")?;
-            let rest = rest.split("crates/").nth(1)?;
-            rest.split('/').next().map(str::to_owned)
-        })
-    })
 }
 
 /// The reply to an express run that failed: exit code 2, the command and the end of its
@@ -793,6 +771,10 @@ fn tail(log: &Path, start: u64) -> String {
 #[path = "express_memory.rs"]
 mod memory;
 pub use memory::PassMemory;
+
+#[path = "express_rerun.rs"]
+mod rerun;
+pub use rerun::rerun_command;
 
 #[cfg(all(test, unix))]
 #[path = "express_tests.rs"]

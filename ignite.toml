@@ -63,6 +63,12 @@ commands = [
   "cargo nextest run --locked --cargo-quiet --workspace --profile express --test-threads=num-cpus --status-level=fail --final-status-level=fail",
 ]
 families = ["ignite", "ignite-lint"]
+# Files no express command builds or runs: the design document, which the Markdown check only
+# checks the formatting of after the landing's formatters rewrote it, and the efficiency log,
+# which no command reads. Nearly every Ignite change edits both, so a landing that rebased over
+# another Ignite change found them shared and ran all four commands again (65 to 71 s on
+# 2026-11-19). A commit landed meanwhile that edits one of them leaves an earlier pass standing.
+inert = ["docs/ignite.md", "data/efficiency-changes.json"]
 
 # Formatters `ignite land` runs on the files a landing changes, before the gate or the express
 # commands, committing what they change as `style: format` (docs/ignite.md, "Formatting at

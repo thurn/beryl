@@ -191,6 +191,7 @@ fn a_run_in_the_express_directory_of_a_tree_names_ignite_test_of_the_express_fam
         dir: "tool".to_owned(),
         commands: strings(&["cargo test"]),
         families: strings(&["tool", "tool-lint"]),
+        inert: Vec::new(),
     });
     let run_in = |cwd: &str| {
         let mut req = request(&["--", "cargo", "test"]);

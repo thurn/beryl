@@ -112,6 +112,7 @@ fn section(lane: &MachineExpress) -> ignite_core::config::Express {
         dir: lane.dir.clone(),
         commands: lane.commands.clone(),
         families: Vec::new(),
+        inert: Vec::new(),
     }
 }
 
@@ -323,6 +324,46 @@ fn a_landing_reruns_when_a_landed_commit_touches_the_workspaces_lock_file() {
     let _ = fs::remove_dir_all(root);
 }
 
+#[test]
+fn a_landing_reuses_a_pass_when_the_only_file_a_landed_commit_shares_with_it_is_inert() {
+    let (root, mut lane, _) = lane("reuse-inert", &["true"]);
+    let clock = Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::parse("2026-11-19T21:40:00Z").unwrap(),
+    ));
+    remembering(&mut lane, &clock);
+    let mut express = section(&lane);
+    express.inert = vec!["notes.md".to_owned()];
+    let files = vec!["notes.md".to_owned(), "tool/lib.txt".to_owned()];
+    let checked = commit_files(&lane.repo, &["notes.md", "tool/lib.txt"], "the change");
+    assert!(lane.run_in(&lane.repo, &express, &files).passed());
+    clock.advance(60.0);
+    let git = ignite_git::GitCli {
+        repo: lane.repo.clone(),
+        remote: "origin".to_owned(),
+    };
+    // Another landed change also edited the notes, which no command builds.
+    let head = commit_files(&lane.repo, &["notes.md"], "another change's notes");
+    let run = reused(&lane, &git, &express, &lane.repo, &head, &files)
+        .unwrap()
+        .expect("the pass holds");
+    assert_eq!(run.reused_on.as_ref(), Some(&checked));
+    // Without the pattern the shared file runs the commands again.
+    let strict = section(&lane);
+    assert!(lane.run_in(&lane.repo, &strict, &files).passed());
+    let later = commit_files(&lane.repo, &["notes.md"], "more notes");
+    assert_eq!(
+        reused(&lane, &git, &strict, &lane.repo, &later, &files).unwrap(),
+        None
+    );
+    // A shared file that is not inert still runs them.
+    let built = commit_files(&lane.repo, &["tool/lib.txt"], "a landed edit to the code");
+    assert_eq!(
+        reused(&lane, &git, &express, &lane.repo, &built, &files).unwrap(),
+        None
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
 /// A lender with `free` cores that records what was borrowed and returned.
 struct FakeLender {
     free: u32,
@@ -421,6 +462,7 @@ fn the_tree_s_ignite_toml_is_read_for_its_express_section_with_the_daemons_as_fa
         dir: "a".to_owned(),
         commands: vec!["daemon".to_owned()],
         families: Vec::new(),
+        inert: Vec::new(),
     };
     // No file, then a file that does not parse: the daemon's section.
     assert_eq!(section_in(&root, Some(&daemons)), Some(daemons.clone()));

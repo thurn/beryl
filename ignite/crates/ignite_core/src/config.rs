@@ -144,9 +144,25 @@ pub struct Express {
     /// None leaves both verbs to the scheduler.
     #[serde(default)]
     pub families: Vec<String>,
+    /// Path patterns for files under `paths` that no command builds or runs, or that a command
+    /// only checks the formatting of, which the landing's `[format]` rules rewrite after its
+    /// rebase. A commit landed after an express pass that edits one of the change's own files
+    /// leaves the pass standing when the file matches one of these (see
+    /// `ignite_daemon::land::express`). On 2026-11-19 two Ignite landings each ran the commands
+    /// again (65 s and 71 s) because the commits they rebased over had also added a paragraph to
+    /// the design document and a line to a data file that no command builds.
+    #[serde(default)]
+    pub inert: Vec<String>,
 }
 
 impl Express {
+    /// Whether `path` matches `inert`.
+    pub fn is_inert(&self, path: &str) -> bool {
+        self.inert
+            .iter()
+            .any(|p| crate::inputs::path_matches(p, path))
+    }
+
     /// Whether every one of `changed` matches `paths`; false for no paths at all.
     pub fn covers(&self, changed: &[String]) -> bool {
         !changed.is_empty()

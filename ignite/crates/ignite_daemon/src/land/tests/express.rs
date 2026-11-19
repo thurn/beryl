@@ -79,6 +79,7 @@ fn express_world(lane: &Arc<FakeExpress>) -> World {
         dir: "ignite".to_owned(),
         commands: vec!["cargo test".to_owned()],
         families: Vec::new(),
+        inert: Vec::new(),
     });
     let pause_clock = world.clock.clone();
     world.landing = Arc::new(Landing {
