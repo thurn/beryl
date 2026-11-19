@@ -70,11 +70,7 @@ fn a_machine_with_no_database_yet_passes() {
 #[test]
 fn a_manifest_that_does_not_parse_fails() {
     let (repo, machine) = repository();
-    std::fs::write(
-        repo.join("manifests/broken.toml"),
-        "[family.x\nnot toml",
-    )
-    .unwrap();
+    std::fs::write(repo.join("manifests/broken.toml"), "[family.x\nnot toml").unwrap();
     let error = check(&repo, &home_with_database(), &machine).unwrap_err();
     assert!(error.contains("broken.toml"), "{error}");
 }
