@@ -459,5 +459,10 @@
     "label": "The Claude dispatcher runs `ignite dispatch --wait 3600` as a background command instead of an 8-minute foreground wait, so it wakes once an hour when there is nothing to do instead of about 7 times. On 2026-11-19 197 of its 426 instructions were `idle` wake-ups, each a full request over its context; the daemon now keeps only the newest wait from each dispatcher, so a second wait started after a worker's notice is harmless",
     "metric": "ignite.dispatch-dollars",
     "expect": "down"
+  },
+  {
+    "label": "A daemon restarts into a new release 15 s after the last release appeared instead of 90 s; the restart still waits while any landing runs or a newer release builds, which already merges releases landing one after another. On 2026-11-19 a lone Ignite landing's `ignite wait deploy-<commit>` took 100 to 116 s, of which the build was about 40 s and the rest the 90 s quiet window",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

@@ -246,7 +246,7 @@ fn a_drill_restart_drains_and_restarts_into_the_given_executable_even_unstored()
 }
 
 /// A daemon as [`daemon_with_clock`] makes it, with the restart window `ignite.toml` gets by
-/// default: a 90 s quiet window and a 10 minute cap.
+/// default: a 15 s quiet window and a 10 minute cap.
 fn daemon_with_default_window(
     master: &str,
 ) -> (SelfUpdate, Arc<FakeGit>, FakeRestart, Arc<FakeClock>) {
@@ -269,27 +269,30 @@ fn land_release(update: &SelfUpdate, git: &FakeGit, release: &Commit) {
     settle(update);
 }
 
-/// Sends `n` heartbeats 10 s apart, as the sender loop does, with nothing running.
-fn heartbeats(update: &SelfUpdate, clock: &FakeClock, n: usize) {
+/// Sends `n` heartbeats 10 s apart, as the sender loop does, with `busy` running.
+fn heartbeats(update: &SelfUpdate, clock: &FakeClock, n: usize, busy: Busy) {
     for _ in 0..n {
-        update.after_heartbeat(Some(OLD), IDLE);
+        update.after_heartbeat(Some(OLD), busy);
         clock.advance(10.0);
     }
 }
 
+/// Releases come from landings. While the next landing runs, the landing hold merges the
+/// releases into one restart; the quiet window then only adds its 15 s.
 #[test]
-fn three_releases_30_s_apart_make_one_restart_into_the_last() {
+fn three_releases_30_s_apart_while_landings_run_make_one_restart_into_the_last() {
     let (update, git, restart, clock) = daemon_with_default_window(NEW);
     let releases = [commit(NEW), commit(NEWER), commit("f0e1d2c")];
-    for release in &releases {
+    for release in &releases[..2] {
         land_release(&update, &git, release);
-        heartbeats(&update, &clock, 3);
+        heartbeats(&update, &clock, 3, LANDING);
         assert!(restart.started().is_empty(), "{:?}", restart.started());
     }
-    // The last release appeared at 60 s, so the quiet window ends at 150 s.
-    heartbeats(&update, &clock, 6);
+    // The last release appeared at 60 s with no landing left, so the quiet window ends at 75 s.
+    land_release(&update, &git, &releases[2]);
+    heartbeats(&update, &clock, 2, IDLE);
     assert!(restart.started().is_empty(), "{:?}", restart.started());
-    assert_eq!(clock.now(), Timestamp::from_millis(150_000));
+    assert_eq!(clock.now(), Timestamp::from_millis(80_000));
     update.after_heartbeat(Some(OLD), IDLE);
     assert_eq!(restart.started(), [update.store.path(&releases[2])]);
 }
@@ -299,14 +302,15 @@ fn the_cap_forces_a_restart_under_a_constant_stream_of_releases() {
     let (update, git, restart, clock) = daemon_with_default_window(NEW);
     let start = clock.now();
     let mut newest = commit(NEW);
-    // A release every 30 s, with a heartbeat every 10 s, until the daemon restarts.
+    // A release every 30 s, with a landing always running and a heartbeat every 10 s, until
+    // the daemon restarts.
     let mut restarted_at = None;
     for round in 0u32.. {
         if round % 3 == 0 {
             newest = commit(&format!("{:07x}", 0x0a0_0000 + round / 3));
             land_release(&update, &git, &newest);
         }
-        update.after_heartbeat(Some(OLD), IDLE);
+        update.after_heartbeat(Some(OLD), LANDING);
         if !restart.started().is_empty() {
             restarted_at = Some(clock.now());
             break;
@@ -337,6 +341,6 @@ fn status_says_when_a_pending_restart_goes_ahead() {
         panic!("{:?}", update.local().work);
     };
     assert_eq!(target, commit(NEW));
-    assert_eq!(due, Some(Timestamp::from_millis(90_000)));
+    assert_eq!(due, Some(Timestamp::from_millis(15_000)));
     assert_eq!(cap, Some(Timestamp::from_millis(600_000)));
 }

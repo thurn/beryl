@@ -78,12 +78,15 @@ rules = [
 # When a daemon restarts into a new release (docs/ignite.md, "Processes"). On 2026-11-18 the
 # daemon on jarvis restarted 16 times between 20:28 and 22:11 PST, once per landed release that
 # changed its code, and each restart reran every `ignite start` in progress. A restart now waits
-# until no newer release has appeared for `quiet_seconds`, so releases that land one after another
-# make one restart into the newest; 90 s is longer than the 30 to 60 s between landings of an epic
-# of Ignite fixes. `cap_seconds` bounds the wait from the first pending release, so a fix still
-# reaches the machine within 10 minutes while releases keep landing.
+# while a landing runs or a newer release builds, and until no newer release has appeared for
+# `quiet_seconds`. Releases come from landings, so the landing hold already merges releases that
+# land one after another; the quiet window only covers a release pushed by hand. It was 90 s
+# until 2026-11-19, when it set the floor of every `ignite wait deploy-<commit>`: a lone Ignite
+# landing waited 100 to 110 s for a build that had finished in 40 s. `cap_seconds` bounds the
+# wait from the first pending release, so a fix still reaches the machine within 10 minutes while
+# landings keep running.
 [self_update]
-quiet_seconds = 90
+quiet_seconds = 15
 cap_seconds = 600
 
 [hub]

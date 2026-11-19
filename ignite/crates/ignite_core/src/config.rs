@@ -104,7 +104,7 @@ impl Default for SelfUpdateConfig {
 }
 
 fn default_quiet_seconds() -> f64 {
-    90.0
+    15.0
 }
 
 fn default_cap_seconds() -> f64 {

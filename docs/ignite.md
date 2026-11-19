@@ -553,7 +553,7 @@ How the executable is installed and kept current:
   alone, is taken on without a restart: the daemon reports it as its version
   from then on and compares later releases with it. A restart that is due waits
   for a quiet window: until no newer release has appeared for
-  `self_update.quiet_seconds` (90), no landing runs and no newer release is
+  `self_update.quiet_seconds` (15), no landing runs and no newer release is
   still building, but at most `self_update.cap_seconds` (600) from the first
   release it waits with. Releases that land one after another therefore cause
   one restart into the newest: a release that lands while another builds is
