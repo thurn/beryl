@@ -369,7 +369,8 @@ impl Checks {
         // `list` may read what a product builds, so it waits for the products it needs.
         let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
         let who = execute::build_for(options);
-        self.build_products(ctx, tree, needs, &[], &who, run).map_err(|_| ListError::Build)?;
+        self.build_products(ctx, tree, needs, &[], &who, run)
+            .map_err(|_| ListError::Build)?;
         let (args, cwd) = match family.adapter {
             Adapter::Jsonl => (
                 adapters::words(family.list.as_deref().unwrap_or_default()),

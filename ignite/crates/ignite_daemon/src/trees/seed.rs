@@ -198,7 +198,10 @@ impl Trees {
                          behind {tip}), made in {took:.1} s",
                         seeded.donor,
                         seeded.dirs.join(", "),
-                        seeded.built.as_ref().map_or("an unknown commit", Commit::as_str),
+                        seeded
+                            .built
+                            .as_ref()
+                            .map_or("an unknown commit", Commit::as_str),
                         seeded.behind,
                     ),
                     Ok(None) => {}

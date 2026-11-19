@@ -122,7 +122,10 @@ impl Checks {
             .collect();
         packages.sort();
         packages.dedup();
-        if self.build(ctx, tree, family, &packages, &build_for(options), run).is_err() {
+        if self
+            .build(ctx, tree, family, &packages, &build_for(options), run)
+            .is_err()
+        {
             for keyed in &pending {
                 let check = &keyed.listed.check;
                 let error = Error::Io(super::BUILD_FAILED.to_owned());
@@ -724,7 +727,16 @@ impl Checks {
             ticket: who.ticket.clone(),
             session: who.session.clone(),
         };
-        self.record(ctx, tree, product, &options, usage, "build", None, compile_units);
+        self.record(
+            ctx,
+            tree,
+            product,
+            &options,
+            usage,
+            "build",
+            None,
+            compile_units,
+        );
     }
 }
 

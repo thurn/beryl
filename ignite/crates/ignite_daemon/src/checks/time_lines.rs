@@ -160,7 +160,8 @@ mod tests {
         let mut b = built(Some(85));
         b.costliest = vec![("bevy_render".to_owned(), 41.4), ("cards".to_owned(), 9.6)];
         assert!(
-            built_line(&b).ends_with("(85 crates recompiled; most CPU: bevy_render 41 s, cards 10 s)"),
+            built_line(&b)
+                .ends_with("(85 crates recompiled; most CPU: bevy_render 41 s, cards 10 s)"),
             "{}",
             built_line(&b)
         );

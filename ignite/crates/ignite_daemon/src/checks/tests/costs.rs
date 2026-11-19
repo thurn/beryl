@@ -99,7 +99,9 @@ fn a_product_that_fails_for_two_families_is_reported_once() {
     let deps = vec!["deps".to_owned()];
     for _ in 0..2 {
         let who = execute::build_for(&options(false));
-        let built = world.checks.build_products(&world.ctx, &tree, &deps, &[], &who, &mut run);
+        let built = world
+            .checks
+            .build_products(&world.ctx, &tree, &deps, &[], &who, &mut run);
         assert!(built.is_err());
     }
     assert_eq!(run.build_failures.len(), 1);
