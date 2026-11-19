@@ -258,8 +258,16 @@ pub fn page(
         None,
     );
     let mut details: Vec<(String, String)> = Vec::new();
+    let filer_title = ticket
+        .metadata
+        .iter()
+        .find(|(key, _)| key == CREATED_BY_TITLE)
+        .and_then(|(_, value)| value.as_str());
     if !ticket.created_by.is_empty() {
-        details.push(("Created by".into(), esc(&ticket.created_by)));
+        details.push((
+            "Created by".into(),
+            created_by(&ticket.created_by, filer_title),
+        ));
     }
     if !legacy_text("owner").is_empty() {
         details.push(("Owner".into(), esc(legacy_text("owner"))));
@@ -270,7 +278,7 @@ pub fn page(
     let mut metadata: Vec<&(String, Value)> = ticket
         .metadata
         .iter()
-        .filter(|(key, _)| key != "_enact_beads")
+        .filter(|(key, _)| key != "_enact_beads" && key != CREATED_BY_TITLE)
         .collect();
     metadata.sort_by(|left, right| left.0.cmp(&right.0));
     for (key, value) in metadata {
@@ -436,6 +444,25 @@ pub fn page(
 }
 
 /// A titled section of the page's main column and its entry in the contents.
+/// The metadata key under which `ignite ticket create` saves the title of the Claude desktop
+/// session that filed the ticket.
+const CREATED_BY_TITLE: &str = "created_by_title";
+
+/// Who filed a ticket: the filing session's title when it was saved, otherwise the actor. A
+/// Claude desktop session (`local_<uuid>`) links to the app, which opens that session.
+fn created_by(actor: &str, title: Option<&str>) -> String {
+    let text = esc(title.unwrap_or(actor));
+    if actor.starts_with("local_") {
+        format!(
+            "<a href=\"claude://claude.ai/epitaxy/{}\" title=\"{}\">{text}</a>",
+            esc(actor),
+            esc(actor)
+        )
+    } else {
+        text
+    }
+}
+
 fn plain_section(heading: &str, html: &str, count: Option<usize>) -> (c::TocEntry, String) {
     let anchor = heading.to_lowercase().replace(' ', "-");
     let section = c::section(heading, html, count, Some(&anchor), 2);

@@ -10,6 +10,7 @@ pub mod http;
 mod ids;
 mod related;
 mod render;
+mod session_title;
 mod wait;
 
 use std::io::Write;
@@ -76,11 +77,14 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             labels,
             deps,
             release,
-        } => write(
-            hub,
-            "created",
-            build::single(build::create(title, fields, labels, deps, *release)?),
-        ),
+        } => {
+            let mut op = build::create(title, fields, labels, deps, *release)?;
+            let env = |name: &str| std::env::var(name).ok();
+            let filer = session_title::app_data(&env)
+                .and_then(|dir| session_title::title(&dir, &hub.actor, &env));
+            session_title::attach(&mut op, filer);
+            write(hub, "created", build::single(op))
+        }
         TicketCommand::Update {
             id,
             fields,

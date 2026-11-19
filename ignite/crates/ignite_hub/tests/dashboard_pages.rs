@@ -212,6 +212,50 @@ fn imported_tickets_show_their_owner_and_start_without_the_import_key() {
 }
 
 #[test]
+fn tickets_name_the_desktop_session_that_filed_them() {
+    let mut hub = seeded();
+    hub.batch(&json!({"op": "create", "fields": {
+        "title": "Filed by a session", "metadata": {"created_by_title": "Status <check>"}
+    }}));
+    let id: String = hub
+        .conn
+        .query_row(
+            "SELECT id FROM tickets WHERE title = 'Filed by a session'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    hub.conn
+        .execute(
+            "UPDATE tickets SET created_by = 'local_8c29f0b2' WHERE id = ?1",
+            [&id],
+        )
+        .unwrap();
+    let page = hub.text(&format!("/{id}"));
+    assert!(
+        page.contains(
+            "<dt>Created by</dt><dd><a href=\"claude://claude.ai/epitaxy/local_8c29f0b2\" \
+             title=\"local_8c29f0b2\">Status &lt;check&gt;</a></dd>"
+        ),
+        "{page}"
+    );
+    assert!(!page.contains("created_by_title"));
+
+    hub.conn
+        .execute("UPDATE tickets SET metadata = '{}' WHERE id = ?1", [&id])
+        .unwrap();
+    let untitled = hub.text(&format!("/{id}"));
+    assert!(untitled.contains(
+        "<dd><a href=\"claude://claude.ai/epitaxy/local_8c29f0b2\" \
+         title=\"local_8c29f0b2\">local_8c29f0b2</a></dd>"
+    ));
+    assert!(
+        hub.text("/TWAIT")
+            .contains("<dt>Created by</dt><dd>Derek</dd>")
+    );
+}
+
+#[test]
 fn pages_revalidate_only_when_their_content_changes() {
     let mut hub = seeded();
     let home = hub.get("/");
