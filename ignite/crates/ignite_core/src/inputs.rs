@@ -136,13 +136,18 @@ impl CrateGraph {
     }
 }
 
-/// `path` relative to `root`.
+/// `path` relative to `root`, with `/` between its parts.
+///
+/// On Windows `cargo metadata` separates with backslashes (`D:\repo\.worktrees\landing-1`)
+/// while the checkout's path from git uses `/` (`D:/repo`), so on cygnus every workspace was
+/// "not inside" its tree and tip verification failed. Both are compared with `/`.
 fn relative(path: &str, root: &str) -> Result<String, InputError> {
+    let (path, root) = (path.replace('\\', "/"), root.replace('\\', "/"));
     let root = root.trim_end_matches('/');
     let rest = path
         .strip_prefix(root)
         .filter(|rest| rest.is_empty() || rest.starts_with('/'))
-        .ok_or_else(|| input_error(path, format!("is not inside {root}")))?;
+        .ok_or_else(|| input_error(&path, format!("is not inside {root}")))?;
     Ok(rest.trim_start_matches('/').to_owned())
 }
 

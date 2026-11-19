@@ -318,3 +318,15 @@ fn touched_names_the_changed_paths_a_pattern_can_read() {
     );
     assert!(super::touched(&patterns(&["crate:ghost"]), &graph(), &changed).is_err());
 }
+
+/// `cargo metadata` on Windows names paths with backslashes, and git names the checkout with
+/// `/`; the workspace is still inside the checkout.
+#[test]
+fn windows_paths_from_cargo_are_inside_a_checkout_named_with_slashes() {
+    let metadata = METADATA
+        .replace("/repo/", r"D:\\repo\\")
+        .replace("/repo\"", r#"D:\\repo""#);
+    let mut windows = CrateGraph::default();
+    windows.add_workspace(&metadata, "D:/repo").unwrap();
+    assert_eq!(windows.packages.len(), graph().packages.len());
+}
