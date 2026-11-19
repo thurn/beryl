@@ -1,0 +1,243 @@
+/* Ticket editing, on the private listener only (see dashboard/edit.rs). Pencils stay faint until
+   their heading or value is hovered, and always show on a touch screen. */
+
+.c-edit-button {
+  /* The icon's center sits on the middle of the neighbouring text's x-height. The button takes
+     the text's font, so `ex` is that text's x-height. In a flex row aligned on baselines (a
+     section heading, a rail value) the button's baseline is the bottom of its icon, so the icon
+     is moved down by half its size less half an x-height. */
+  --c-edit-icon: 14px;
+  position: relative;
+  top: calc(var(--c-edit-icon) / 2 - 0.5ex);
+  display: inline-flex;
+  flex: none;
+  align-self: baseline;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 0 0 var(--space-1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+
+.c-edit-button svg {
+  display: block;
+  width: var(--c-edit-icon);
+  height: var(--c-edit-icon);
+}
+
+.c-section-title:hover .c-edit-button,
+.c-title:hover .c-edit-button,
+.c-meta-item:hover .c-edit-button,
+.c-edit-button:focus-visible {
+  opacity: 1;
+}
+
+.c-edit-button:hover {
+  background: var(--sunk);
+  color: var(--ink);
+}
+
+@media (hover: none) {
+  .c-edit-button {
+    opacity: 0.7;
+  }
+}
+
+/* In the title, a block of text, `vertical-align: middle` puts the button's middle, which is the
+   icon's middle, half an x-height above the baseline. */
+.c-title .c-edit-button {
+  --c-edit-icon: 20px;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+
+.c-meta-item dd:has(.c-edit-button) {
+  align-items: baseline;
+}
+
+.c-meta-item dd .c-edit-button {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.c-editing > .c-edit-view,
+.c-editing + .c-edit-button,
+.c-section-title:has(+ .c-editing) .c-edit-button {
+  display: none;
+}
+
+.c-editable.c-saving {
+  opacity: 0.55;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+
+/* The editors. */
+
+.c-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.c-edit-form input,
+.c-edit-form select,
+.c-edit-form textarea,
+.c-edit-composer textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  box-shadow: var(--shadow-1);
+}
+
+.c-edit-form textarea,
+.c-edit-composer textarea {
+  min-height: 6em;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.c-edit-form input:focus,
+.c-edit-form select:focus,
+.c-edit-form textarea:focus,
+.c-edit-composer textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.c-title .c-edit-form input {
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.c-meta-item .c-edit-form input,
+.c-meta-item .c-edit-form select {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.c-edit-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.c-edit-hint {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--ink-3);
+}
+
+.c-edit-error {
+  font-size: var(--text-sm);
+  color: var(--tone-red);
+}
+
+/* Buttons: the status actions, Save, Cancel, Comment. */
+
+.c-edit-action {
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: 550 var(--text-sm) / 1.2 var(--font-sans);
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
+}
+
+.c-edit-action:hover {
+  background: var(--sunk);
+}
+
+.c-edit-action.c-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.c-edit-action.c-primary:hover {
+  filter: brightness(1.08);
+}
+
+.c-edit-action:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.c-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.c-edit-actions .c-edit-form {
+  margin-top: var(--space-1);
+}
+
+/* The buttons that add an empty text section. */
+
+.c-edit-adders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 0;
+}
+
+.c-edit-add {
+  padding: var(--space-1) var(--space-2);
+  border: 1px dashed var(--hairline);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-3);
+  font: 500 var(--text-xs) / 1.4 var(--font-sans);
+  cursor: pointer;
+}
+
+.c-edit-add:hover {
+  border-color: var(--ink-3);
+  color: var(--ink-2);
+}
+
+.c-edit-add[hidden] {
+  display: none;
+}
+
+.c-edit-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.c-edit-composer textarea {
+  min-height: 4.5em;
+}

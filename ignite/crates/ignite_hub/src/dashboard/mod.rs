@@ -8,6 +8,7 @@ pub mod attention;
 pub mod common;
 pub mod components;
 pub mod data;
+pub mod edit;
 pub mod explore;
 pub mod history;
 pub mod home;

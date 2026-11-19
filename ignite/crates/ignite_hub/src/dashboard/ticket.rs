@@ -19,13 +19,21 @@ use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{
     Card, Progress, ReadError, TicketData, TicketRow, by_attention, ticket_data, ticket_row,
 };
+use super::edit;
 use super::history::timeline;
 use super::markdown::render as render_markdown;
 use super::references::{display_id, mentions, rewrite_ticket_paths, ticket_url};
 
-/// A ticket's page for the project `project` at `root`, at feed position `seq`.
+/// A ticket's page for the project `project` at `root`, at feed position `seq`. An `editable`
+/// page carries the controls that edit the ticket (see [`edit`]).
 #[allow(clippy::too_many_lines)]
-pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOptions {
+pub fn page(
+    root: &str,
+    project: &str,
+    data: &TicketData,
+    seq: &str,
+    editable: bool,
+) -> PageOptions {
     let TicketData {
         ticket,
         children,
@@ -99,11 +107,6 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
 
     let mut entries: Vec<c::TocEntry> = Vec::new();
     let mut main: Vec<String> = Vec::new();
-    let mut add = |heading: &str, html: &str, count: Option<usize>| {
-        let anchor = heading.to_lowercase().replace(' ', "-");
-        entries.push((heading.to_owned(), anchor.clone(), count, 0));
-        main.push(c::section(heading, html, count, Some(&anchor), 2));
-    };
 
     let eyebrow = c::mono(&display)
         + &if card.ticket_type == "epic" {
@@ -117,17 +120,48 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
     } else {
         ""
     };
-    for (heading, text) in [
-        ("Close reason", close_reason),
-        ("Description", &ticket.body),
-        ("Acceptance criteria", &ticket.acceptance),
-        ("Design", &ticket.design),
-        ("Notes", &ticket.notes),
+    if !close_reason.trim().is_empty() {
+        let (entry, section) =
+            plain_section("Close reason", &c::prose(&markdown(close_reason)), None);
+        entries.push(entry);
+        main.push(section);
+    }
+    let mut missing: Vec<(&str, &str)> = Vec::new();
+    for (heading, field, text) in [
+        ("Description", "body", &ticket.body),
+        ("Acceptance criteria", "acceptance", &ticket.acceptance),
+        ("Design", "design", &ticket.design),
+        ("Notes", "notes", &ticket.notes),
     ] {
-        if !text.trim().is_empty() {
-            add(heading, &c::prose(&markdown(text)), None);
+        let empty = text.trim().is_empty();
+        if editable {
+            // An empty section is on the page but hidden, for its "add" button to show.
+            let anchor = heading.to_lowercase().replace(' ', "-");
+            let view = if empty {
+                String::new()
+            } else {
+                c::prose(&markdown(text))
+            };
+            if empty {
+                missing.push((field, heading));
+            } else {
+                entries.push((heading.to_owned(), anchor.clone(), None, 0));
+            }
+            main.push(edit::section(heading, &anchor, field, &view, text));
+        } else if !empty {
+            let (entry, section) = plain_section(heading, &c::prose(&markdown(text)), None);
+            entries.push(entry);
+            main.push(section);
         }
     }
+    if editable {
+        main.push(edit::adders(&missing));
+    }
+    let mut add = |heading: &str, html: &str, count: Option<usize>| {
+        let (entry, section) = plain_section(heading, html, count);
+        entries.push(entry);
+        main.push(section);
+    };
 
     let row = |card: &Card| -> String {
         let label = format!(
@@ -186,8 +220,8 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
         add(heading, &body, Some(cards.len()));
     }
 
-    if !comments.is_empty() {
-        let body: String = comments
+    if !comments.is_empty() || editable {
+        let mut body: String = comments
             .iter()
             .map(|comment| {
                 c::comment(
@@ -198,6 +232,9 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
                 )
             })
             .collect();
+        if editable {
+            body.push_str(&edit::composer());
+        }
         add("Comments", &body, Some(comments.len()));
     }
 
@@ -256,31 +293,78 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
         ));
     }
 
+    let status = status_dot(card.status, true);
+    let priority = priority_chip(i64::from(card.priority))
+        + &c::muted(
+            PRIORITY_NAMES
+                .get(usize::from(card.priority))
+                .copied()
+                .unwrap_or(""),
+        );
+    // On an editable page a value carries its pencil; a closed ticket's status changes only by
+    // reopening it.
+    let editable_value = |field: &str, label: &str, kind: &str, view: String, raw: &str| {
+        if editable {
+            edit::property(field, label, kind, &view, raw)
+        } else {
+            view
+        }
+    };
+    let status = if card.status == Status::Closed {
+        status
+    } else {
+        editable_value(
+            "status",
+            "Status",
+            "status",
+            status,
+            edit::status_value(card.status),
+        )
+    };
     let mut properties: Vec<(String, String)> = vec![
-        ("Status".into(), status_dot(card.status, true)),
+        ("Status".into(), status),
         (
             "Priority".into(),
-            priority_chip(i64::from(card.priority))
-                + &c::muted(
-                    PRIORITY_NAMES
-                        .get(usize::from(card.priority))
-                        .copied()
-                        .unwrap_or(""),
-                ),
+            editable_value(
+                "priority",
+                "Priority",
+                "priority",
+                priority,
+                &card.priority.to_string(),
+            ),
         ),
         ("Assignee".into(), person(card.assignee.as_deref())),
     ];
+    if editable && card.ticket_type == "epic" {
+        for (label, field, value) in [
+            ("Workers", "workers", ticket.workers),
+            ("Max workers", "max_workers", ticket.max_workers),
+        ] {
+            let view = value.map_or_else(|| c::muted("None"), |n| esc(&n.to_string()));
+            let raw = value.map(|n| n.to_string()).unwrap_or_default();
+            properties.push((
+                label.into(),
+                editable_value(field, label, "count", view, &raw),
+            ));
+        }
+    }
     if let Some(parent) = card.parent.as_deref().and_then(|id| references.get(id)) {
         properties.push(("Epic".into(), hover_link(parent, &esc(&parent.title))));
     }
-    if !ticket.labels.is_empty() {
+    if !ticket.labels.is_empty() || editable {
+        let chips: String = ticket
+            .labels
+            .iter()
+            .map(|label| c::chip(label, Tone::Muted, None))
+            .collect();
+        let view = if chips.is_empty() {
+            c::muted("None")
+        } else {
+            chips
+        };
         properties.push((
             "Labels".into(),
-            ticket
-                .labels
-                .iter()
-                .map(|label| c::chip(label, Tone::Muted, None))
-                .collect(),
+            editable_value("labels", "Labels", "labels", view, &ticket.labels.join(" ")),
         ));
     }
     let kind: String = {
@@ -296,7 +380,12 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
         properties.push(("Closed".into(), c::time(Some(closed_at), "")));
     }
 
-    let layout = c::layout(&main.join(""), &c::meta(&properties));
+    let aside = if editable {
+        edit::actions(card.status) + &c::meta(&properties)
+    } else {
+        c::meta(&properties)
+    };
+    let layout = c::layout(&main.join(""), &aside);
     let mut crumbs: Vec<c::Crumb> = vec![("Tickets".to_owned(), Some(root.to_owned()))];
     crumbs.extend(
         chain
@@ -317,9 +406,21 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
         .iter()
         .map(|(_, html)| html.as_str())
         .collect();
+    let mut heading = c::title(&card.title, &eyebrow, "");
+    if editable {
+        // The title is edited in place, with its pencil after it.
+        let plain = format!("<h1 class=\"c-title\">{}</h1>", esc(&card.title));
+        let editable_title = format!(
+            "<h1 class=\"c-title\">{}{}</h1>",
+            edit::unit("title", "line", &esc(&card.title), &card.title, false),
+            edit::pencil("title", "Title")
+        );
+        heading = heading.replacen(&plain, &editable_title, 1)
+            + &edit::context(project, &card.id, ticket.version);
+    }
     PageOptions {
         title: format!("{} · {display}", card.title),
-        body: c::title(&card.title, &eyebrow, "") + &body + &hovercards,
+        body: heading + &body + &hovercards,
         feed: Some(Feed {
             seq: seq.to_owned(),
             tickets: Some(watched),
@@ -332,6 +433,13 @@ pub fn page(root: &str, project: &str, data: &TicketData, seq: &str) -> PageOpti
         crumbs,
         ..PageOptions::default()
     }
+}
+
+/// A titled section of the page's main column and its entry in the contents.
+fn plain_section(heading: &str, html: &str, count: Option<usize>) -> (c::TocEntry, String) {
+    let anchor = heading.to_lowercase().replace(' ', "-");
+    let section = c::section(heading, html, count, Some(&anchor), 2);
+    ((heading.to_owned(), anchor, count, 0), section)
 }
 
 /// A ticket named in backticks or as the label of a Markdown link is shown by its display name.
@@ -396,10 +504,11 @@ pub(crate) fn options(
     project: &str,
     id: &str,
     seq: &str,
+    editable: bool,
 ) -> Result<Option<PageOptions>, ReadError> {
     let Some(row): Option<TicketRow> = ticket_row(conn, id)? else {
         return Ok(None);
     };
     let data = ticket_data(conn, project, row)?;
-    Ok(Some(page(root, project, &data, seq)))
+    Ok(Some(page(root, project, &data, seq, editable)))
 }

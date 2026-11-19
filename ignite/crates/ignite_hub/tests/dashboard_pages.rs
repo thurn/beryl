@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use ignite_core::protocol::tickets::BatchRequest;
 use ignite_core::time::Timestamp;
-use ignite_hub::dashboard::serve::{alias_redirect, serve, serve_with, static_file};
+use ignite_hub::dashboard::serve::{Site, alias_redirect, serve, serve_with, static_file};
 use ignite_hub::routes::{Request, Response};
 use ignite_store::hub::{self, batch};
 
@@ -449,8 +449,11 @@ fn a_configured_wordmark_replaces_the_brand_and_the_home_page_has_no_crumb() {
         let reply = serve_with(
             &hub.conn,
             &request("GET", target, None),
-            "proj",
-            Some(wordmark),
+            &Site {
+                project: "proj",
+                wordmark: Some(wordmark),
+                editable: false,
+            },
             now,
         )
         .expect("a dashboard route");

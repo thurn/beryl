@@ -295,7 +295,10 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         .strip_prefix('/')
         .and_then(|p| p.strip_prefix(shared.project.as_str()))
         .and_then(|rest| rest.strip_prefix("/api"))
-        .filter(|api| api.is_empty() || api.starts_with('/'));
+        .filter(|api| api.is_empty() || api.starts_with('/'))
+        // The dashboard's pages are at the root, and their script follows the change feed at
+        // `api/feed` relative to the root.
+        .or_else(|| (path == "/api/feed").then_some("/feed"));
     // `/export` dumps every ticket, which a public listener does not serve.
     if shared.read_only && api.is_some_and(|api| api == "/export" || api.starts_with("/export/")) {
         return failure(404, "Unknown route");
@@ -323,7 +326,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     };
     // The token is checked before any body is read, so a request without one cannot make the
     // hub buffer more than a small body.
-    let writer = auth::authorize(&conn, header("authorization"), header("x-actor")).ok();
+    let (writer, editable) = writer(&conn, shared.read_only, api, &header);
     let limit = if writer.is_some() {
         MAX_BODY
     } else {
@@ -363,7 +366,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         caught(conn, |conn| api_route(conn, &request, now))
     } else {
         path.clone_into(&mut request.path);
-        caught(conn, |conn| page(conn, &request, shared, now))
+        caught(conn, |conn| page(conn, &request, shared, editable, now))
     };
     match conn {
         Some(conn) => shared.give_back(conn),
@@ -373,6 +376,26 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
         routes::feed::notify();
     }
     response
+}
+
+/// Who may write with this request, and whether its pages carry the dashboard's edit controls.
+/// A machine writes with its token. The dashboard's edit controls write tickets as the Tailscale
+/// user, on the private listener only and through `/batch` only (see `auth`).
+fn writer<'h>(
+    conn: &Connection,
+    read_only: bool,
+    api: Option<&str>,
+    header: &impl Fn(&str) -> Option<&'h str>,
+) -> (Option<auth::Writer>, bool) {
+    let login = header("tailscale-user-login").filter(|_| !read_only);
+    let writer = auth::authorize(conn, header("authorization"), header("x-actor"))
+        .ok()
+        .or_else(|| {
+            (api == Some("/batch"))
+                .then(|| auth::dashboard_writer(login, header(auth::DASHBOARD_HEADER)))
+                .flatten()
+        });
+    (writer, auth::dashboard_editor(login).is_some())
 }
 
 /// Runs a route, turning a panic into a 500. The connection of a route that panicked is dropped,
@@ -409,13 +432,22 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
 }
 
 /// The dashboard's pages, which [`dashboard::serve::serve`] routes and renders from the request
-/// path.
-fn page(conn: &mut Connection, request: &Request, shared: &Shared, now: Timestamp) -> Response {
+/// path. `editable` pages carry the controls that edit tickets.
+fn page(
+    conn: &mut Connection,
+    request: &Request,
+    shared: &Shared,
+    editable: bool,
+    now: Timestamp,
+) -> Response {
     dashboard::serve::serve_with(
         conn,
         request,
-        &shared.project,
-        shared.wordmark.as_deref(),
+        &dashboard::serve::Site {
+            project: &shared.project,
+            wordmark: shared.wordmark.as_deref(),
+            editable,
+        },
         now,
     )
     .unwrap_or_else(|| failure(404, "Unknown route"))

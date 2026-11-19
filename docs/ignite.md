@@ -511,7 +511,8 @@ How the executable is installed and kept current:
   with plain Cargo, registers the machine with the hub and sets the daemon to
   start at login. Registering stores a write token in the user's configuration.
   The hub accepts only requests that come over the Tailscale network with a
-  registered token.
+  registered token, apart from the dashboard's ticket edits described under
+  [Tickets and the hub](#tickets-and-the-hub).
 - Install runs the steps after the build (registering and writing the login
   services) in the executable it just built, so an older `ignite` never writes
   the services its own way. It records the repository's main checkout for the
@@ -2001,6 +2002,29 @@ and a ticket that no machine is able to run.
 The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
 example `/TBEJE.34`). Only the API is under the project name (`/by/api`). Page
 addresses under `/by/` redirect to the root.
+
+On the private listener, a person edits a ticket from its page. The public
+listener shows no edit controls and refuses every write.
+
+- Pencils beside the title, each text section and the rail's status, priority,
+  labels and, for an epic, workers and max workers open an editor in place.
+  Buttons at the top of the rail release a ticket that is pending approval,
+  close an open one with a reason, or reopen a closed one. A box under the
+  comments adds a comment.
+- Each edit is one `POST /by/api/batch`, so it is recorded and relayed like any
+  other ticket write. A released ticket reaches dispatch through the change feed
+  within about a second when a worker is idle.
+- The browser holds no token. `tailscale serve` replaces any
+  `Tailscale-User-Login` header a client sends with the Tailscale user's login,
+  and Funnel requests carry none, so the hub accepts a batch from a request with
+  that header and the `X-Ignite-Dashboard` header that the page's script sends.
+  A page on another site cannot add that header to a cross-origin request
+  without a CORS preflight, which the hub never approves. The edit is recorded
+  under the part of the login before the `@`, since the public listener shows
+  the changelog.
+- A text edit names the ticket's version. If the ticket changed after the page
+  loaded, the editor stays open and says so, and a second Save replaces the
+  other change.
 
 The hub backs up its database hourly and exports it daily, as the service does
 now. While the hub cannot be reached:

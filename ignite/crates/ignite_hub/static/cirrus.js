@@ -258,6 +258,14 @@
     let pendingStatus = false;
     let resync = false;
 
+    // An open editor (edit.js) holds back live updates until it closes and sends
+    // `cirrus:flush`, so a change elsewhere does not replace what is being typed.
+    const editing = () => document.querySelector(".c-editing") !== null;
+    document.addEventListener("cirrus:flush", (e) => {
+        if (e.detail?.resync) resync = true;
+        flushChanges();
+    });
+
     function preserveControls(current, next) {
         const status = current.querySelector("#project-status");
         // A board update can carry a new status fragment. Keep the mounted
@@ -282,7 +290,7 @@
     async function freshFromCache(url) {
         // Navigation's background revalidation has already fetched this page.
         // Read its result without making a second request.
-        if (!sameDocument(url) || navigating) return;
+        if (!sameDocument(url) || navigating || editing()) return;
         try {
             const response = await caches.match(key(url));
             if (!response) return;
@@ -309,7 +317,7 @@
     }
 
     async function flushChanges() {
-        if (refreshing || navigating || suspended) return;
+        if (refreshing || navigating || suspended || editing()) return;
         const tickets = resync || (home() ? pendingTickets.size > 0 : [...pendingTickets].some(watching));
         const status = home() && pendingStatus;
         if (!tickets && !status) {

@@ -94,6 +94,11 @@ pub struct TicketRow {
     pub created_at: String,
     pub created_by: String,
     pub closed_at: Option<String>,
+    /// The feed position of the ticket's last change, which an edit names as its precondition.
+    pub version: u64,
+    /// An epic's target number of workers and its hard cap.
+    pub workers: Option<u32>,
+    pub max_workers: Option<u32>,
 }
 
 pub(crate) fn parse_status(text: &str) -> Status {
@@ -226,7 +231,8 @@ pub struct TicketData {
 pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, ReadError> {
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, body, acceptance, design, notes, labels, metadata, close_reason,
-                created_at, created_by, closed_at FROM tickets WHERE id = ?1"
+                created_at, created_by, closed_at, version, workers, max_workers
+         FROM tickets WHERE id = ?1"
     ))?;
     let mut rows = statement.query_map([id], |row| {
         let metadata: String = row.get(13)?;
@@ -242,6 +248,9 @@ pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, Read
             created_at: row.get(15)?,
             created_by: row.get(16)?,
             closed_at: row.get(17)?,
+            version: u64::try_from(row.get::<_, i64>(18)?).unwrap_or_default(),
+            workers: row.get(19)?,
+            max_workers: row.get(20)?,
         })
     })?;
     Ok(rows.next().transpose()?)

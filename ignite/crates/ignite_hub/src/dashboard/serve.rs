@@ -226,18 +226,38 @@ pub fn serve(
     project: &str,
     now: Timestamp,
 ) -> Option<Response> {
-    serve_with(conn, request, project, None, now)
+    let site = Site {
+        project,
+        wordmark: None,
+        editable: false,
+    };
+    serve_with(conn, request, &site, now)
 }
 
-/// Like [`serve`], with `wordmark` (HTML) shown at the left of every page's header in place of
-/// the name "Ignite"; see `HubServer::wordmark`.
+/// How the pages of one listener are rendered.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Site<'a> {
+    pub project: &'a str,
+    /// HTML shown at the left of every page's header in place of the name "Ignite"; see
+    /// `HubServer::wordmark`.
+    pub wordmark: Option<&'a str>,
+    /// Whether ticket pages carry the controls that edit the ticket: only on the private
+    /// listener, for a request from a Tailscale user (see `crate::auth`).
+    pub editable: bool,
+}
+
+/// Like [`serve`], for the listener `site`.
 pub fn serve_with(
     conn: &Connection,
     request: &Request,
-    project: &str,
-    wordmark: Option<&str>,
+    site: &Site,
     now: Timestamp,
 ) -> Option<Response> {
+    let Site {
+        project,
+        wordmark,
+        editable,
+    } = *site;
     let head = request.method.eq_ignore_ascii_case("HEAD");
     if !head && !request.method.eq_ignore_ascii_case("GET") {
         return None;
@@ -301,7 +321,9 @@ pub fn serve_with(
             if canonical != request.path {
                 return Some(redirect(&canonical, &request.query));
             }
-            match ticket::options(conn, &root, project, id.as_str(), &seq).map(|o| o.map(brand)) {
+            match ticket::options(conn, &root, project, id.as_str(), &seq, editable)
+                .map(|o| o.map(brand))
+            {
                 Err(error) => failed(&error),
                 Ok(None) => not_found(&root, wordmark, head),
                 Ok(Some(options)) if fragment_kind == Some("all") => {

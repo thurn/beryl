@@ -8,6 +8,14 @@
 //! A token stands for its machine only: a route whose body names a machine refuses, with HTTP
 //! 403, a token issued to another one (`routes::dispatch`). The `X-Actor` session or person is
 //! taken on trust, a risk accepted because the hub is reachable only on the private network.
+//!
+//! The dashboard's edit controls write without a token. On the private listener, `tailscale
+//! serve` replaces any `Tailscale-User-Login` header a client sent with the login of the
+//! Tailscale user making the request, and Funnel requests from the public internet carry none,
+//! so the header names a person on the private network ([`dashboard_editor`]). A browser sends
+//! [`DASHBOARD_HEADER`] with each edit: a page on another site cannot add a custom header to a
+//! cross-origin request without a CORS preflight, which the hub never approves, so the header
+//! stops cross-site request forgery.
 
 use rusqlite::Connection;
 
@@ -53,6 +61,32 @@ pub fn authorize(
     })
 }
 
+/// The header the dashboard's script sends with every edit (see the module comment).
+pub const DASHBOARD_HEADER: &str = "x-ignite-dashboard";
+
+/// The machine a dashboard edit is recorded on.
+pub const DASHBOARD_MACHINE: &str = "dashboard";
+
+/// The name a dashboard edit is recorded under, from the `Tailscale-User-Login` header: the part
+/// of the login before any `@`, so the changelog, which the public listener shows, never shows
+/// an email address. `None` without a login.
+pub fn dashboard_editor(login: Option<&str>) -> Option<String> {
+    let login = login.map(str::trim).filter(|login| !login.is_empty())?;
+    let name = login.split('@').next().unwrap_or(login);
+    (!name.is_empty() && !name.contains(char::is_whitespace)).then(|| name.to_owned())
+}
+
+/// The writer of a dashboard edit: a Tailscale user (`login`) whose request carries
+/// [`DASHBOARD_HEADER`] (`marker`). The caller allows this only on the private listener and only
+/// for ticket edits.
+pub fn dashboard_writer(login: Option<&str>, marker: Option<&str>) -> Option<Writer> {
+    marker?;
+    Some(Writer {
+        machine: DASHBOARD_MACHINE.parse().ok()?,
+        actor: dashboard_editor(login)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,5 +125,16 @@ mod tests {
                 "{authorization:?} {actor:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_dashboard_edit_needs_a_tailscale_login_and_the_marker_header() {
+        let writer = dashboard_writer(Some("someone@example.com"), Some("1")).unwrap();
+        assert_eq!(writer.actor, "someone");
+        assert_eq!(writer.machine.as_str(), DASHBOARD_MACHINE);
+        assert_eq!(dashboard_writer(Some("someone@example.com"), None), None);
+        assert_eq!(dashboard_writer(None, Some("1")), None);
+        assert_eq!(dashboard_writer(Some("  "), Some("1")), None);
+        assert_eq!(dashboard_editor(Some("@example.com")), None);
     }
 }

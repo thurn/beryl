@@ -11,13 +11,18 @@ use std::sync::OnceLock;
 
 use sha2::{Digest, Sha256};
 
-const STYLES: [&str; 4] = [
+const STYLES: [&str; 5] = [
     include_str!("../../static/css/1-tokens.css"),
     include_str!("../../static/css/2-layout.css"),
     include_str!("../../static/css/3-components.css"),
     include_str!("../../static/css/4-motion.css"),
+    include_str!("../../static/css/5-edit.css"),
 ];
-const SCRIPT: &str = include_str!("../../static/cirrus.js");
+/// The scripts, served as one file: cirrus itself, then ticket editing.
+const SCRIPTS: [&str; 2] = [
+    include_str!("../../static/cirrus.js"),
+    include_str!("../../static/edit.js"),
+];
 const WORKER: &str = include_str!("../../static/sw.js");
 const FAVICON_SVG: &[u8] = include_bytes!("../../static/favicon.svg");
 const FAVICON_PNG: &[u8] = include_bytes!("../../static/favicon-32.png");
@@ -46,6 +51,7 @@ impl Assets {
 struct Bundle {
     css: String,
     css_path: String,
+    js: String,
     js_path: String,
 }
 
@@ -63,10 +69,12 @@ fn bundle() -> &'static Bundle {
     static BUNDLE: OnceLock<Bundle> = OnceLock::new();
     BUNDLE.get_or_init(|| {
         let css = STYLES.join("\n");
+        let js = SCRIPTS.join("\n");
         Bundle {
             css_path: fingerprint(&css, "css"),
-            js_path: fingerprint(SCRIPT, "js"),
+            js_path: fingerprint(&js, "js"),
             css,
+            js,
         }
     })
 }
@@ -95,7 +103,7 @@ pub fn serve(path: &str) -> Option<Asset> {
         (
             "text/javascript; charset=utf-8",
             IMMUTABLE,
-            SCRIPT.as_bytes().to_vec(),
+            bundle.js.clone().into_bytes(),
         )
     } else {
         match path {
