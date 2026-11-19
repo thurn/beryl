@@ -1,5 +1,5 @@
-"""The `counts`, `fuzz`, `exhaust`, `scale` and `ignite` check families' adapter. The families are
-declared in `ignite/checks/rest.toml`.
+"""The `counts`, `fuzz`, `exhaust`, `scale` and `ignite-lint` check families' adapter. The
+families are declared in `ignite/checks/rest.toml`.
 
 Run from the repository's root as `python -m beryl_tools.ignite.rest <verb> <family> ...`:
 
@@ -29,7 +29,10 @@ The families:
 - `exhaust`: `exhaust:<card>/depth<d>-nodes<n>`, every decision sequence from the end positions of
   one card's scenarios (`beryl_cards`' `exhaust` test).
 - `scale`: the Python tests that read every card file, with the card files among their inputs.
-- `ignite`: `ignite:fmt`, `ignite:clippy` and `ignite:test` over the `ignite/` workspace.
+- `ignite-lint`: `ignite-lint:fmt` and `ignite-lint:clippy` over the `ignite/` workspace. Its
+  tests are the `ignite` family, which runs them under cargo-nextest with no adapter of ours.
+  `ignite` is accepted here too, with `ignite:test`, for a main checkout whose manifest predates
+  that split (see `LEGACY_IGNITE`).
 """
 
 from __future__ import annotations
@@ -56,7 +59,7 @@ RESULTS_ENV = "IGNITE_RESULTS"
 # resources"). Only a run in this one verifies a commit.
 CLASS_ENV = "IGNITE_CLASS"
 VERIFYING_CLASS = "tip"
-FAMILIES = ("counts", "fuzz", "exhaust", "scale", "ignite")
+FAMILIES = ("counts", "fuzz", "exhaust", "scale", "ignite-lint", "ignite")
 EXPLORING = ("fuzz", "exhaust")
 # The longest message a result carries.
 MESSAGE_LIMIT = 300
@@ -125,14 +128,22 @@ SCALE_INPUTS = [
     "data/set-groups.json",
 ]
 
-# --- ignite ---
+# --- ignite-lint ---
 
 IGNITE_COMMANDS: dict[str, list[str]] = {
     "fmt": ["cargo", "fmt", "--check"],
     "clippy": ["cargo", "clippy", "--locked", "--all-targets", "--", "-D", "warnings"],
-    "test": ["cargo", "test", "--locked", "-q"],
 }
 IGNITE_DIR = "ignite"
+# Ignite's daemon reads the check manifests from the main checkout, which lags the trees it runs
+# checks in. A checkout whose manifest predates the `ignite-lint` family still declares `ignite`
+# as a family of this adapter, with `ignite:test` running `cargo test`. These keep that family
+# working in a tree that holds this file until no checkout's manifest declares it.
+LEGACY_IGNITE = "ignite"
+LEGACY_IGNITE_COMMANDS: dict[str, list[str]] = {
+    **IGNITE_COMMANDS,
+    "test": ["cargo", "test", "--locked", "-q"],
+}
 
 
 # --- list and next ---
@@ -183,8 +194,14 @@ def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
         ]
     if family == "scale":
         return scale_checks(root)
-    if family == "ignite":
-        return [{"check": f"ignite:{name}", "inputs": []} for name in IGNITE_COMMANDS]
+    if family == "ignite-lint":
+        return [
+            {"check": f"ignite-lint:{name}", "inputs": []} for name in IGNITE_COMMANDS
+        ]
+    if family == LEGACY_IGNITE:
+        return [
+            {"check": f"ignite:{name}", "inputs": []} for name in LEGACY_IGNITE_COMMANDS
+        ]
     # An exploration family's checks come from `next`.
     return []
 
@@ -535,7 +552,11 @@ def run_scale(names: Sequence[str], root: Path, results: Path) -> None:
 
 def run_ignite(names: Sequence[str], root: Path, results: Path) -> None:
     for name in names:
-        command = IGNITE_COMMANDS.get(name.removeprefix("ignite:"))
+        family, _, short = name.partition(":")
+        commands = (
+            LEGACY_IGNITE_COMMANDS if family == LEGACY_IGNITE else IGNITE_COMMANDS
+        )
+        command = commands.get(short)
         if command is None:
             continue
         done = subprocess.run(
@@ -564,7 +585,8 @@ def run_checks(family: str, names: Sequence[str], root: Path, results: Path) -> 
         "fuzz": run_fuzz,
         "exhaust": run_exhaust,
         "scale": run_scale,
-        "ignite": run_ignite,
+        "ignite-lint": run_ignite,
+        LEGACY_IGNITE: run_ignite,
     }
     runners[family](names, root, results)
 

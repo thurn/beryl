@@ -1,7 +1,7 @@
 # The remaining check families: the instruction-count gate, the two exploration searches that run
 # on idle cores (`fuzz` and `exhaust`), the tests that read every card file (`scale`), the iroh
 # transport and Ignite's own workspace. Their adapter is tools/src/beryl_tools/ignite/rest.py
-# (the iroh tests use the `nextest` adapter instead), which lists each family's checks and
+# (the iroh tests and Ignite's tests use the `nextest` adapter instead), which lists each family's checks and
 # reports results as JSON lines. See docs/ignite.md, "Declaring a family", "Reporting results"
 # and "Exploration checks". The `python-env` product is in python.toml and `rust-tests` in
 # rust.toml.
@@ -208,20 +208,41 @@ list = "cargo nextest list --locked --cargo-quiet -p beryl_link_iroh --message-f
 run = "cargo nextest run --locked --cargo-quiet -p beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 
-# Ignite's own workspace: formatting, clippy and every test, as `ignite:fmt`, `ignite:clippy` and
-# `ignite:test`. The workspace shares nothing with the game's, so only a change under `ignite/`
-# (or to `ignite.toml`, which its tests read) selects these checks, and no other family reads
-# those paths. The tests parse `ignite.toml` and this directory's manifests.
+# Every test of Ignite's own workspace, as `ignite:<binary id>::<test>`. The workspace shares
+# nothing with the game's, so only a change under `ignite/` (or to `ignite.toml`, which its tests
+# read with the manifests in this directory) selects these checks, and no other family reads
+# those paths. This is the family `release_family` names in ignite.toml: a commit that changed
+# Ignite moves the release branch only once every test here passed on it.
+#
+# The tests run under cargo-nextest, which runs every test binary at once, from the build of
+# `ignite-tests`. Through `cargo test`, which runs the binaries one after another, the same 1325
+# tests took 38 to 57 s on a warm tree on 2026-11-18, against 13 s here. The command runs in
+# ignite/, the directory of the first product the family needs. The workspace has no nextest
+# configuration of its own, so the run names no profile. All crates stay in the run: testing
+# `ignite_daemon` alone once missed a failing test in `ignite_core`.
 [family.ignite]
+kind = "regression"
+adapter = "nextest"
+platforms = "any"
+needs = ["ignite-tests"]
+list = "cargo nextest list --locked --cargo-quiet --workspace --message-format json"
+run = "cargo nextest run --locked --cargo-quiet --workspace --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+inputs = ["ignite/**", "ignite.toml"]
+
+# Formatting and clippy over Ignite's workspace, as `ignite-lint:fmt` and `ignite-lint:clippy`.
+# Neither reads the test build, so they need only the Python environment and run while
+# `ignite-tests` builds. Clippy compiles the workspace's crates once more in its own check
+# mode, which cargo cannot share with the test build; on a warm tree after an edit that took
+# about 4 s.
+[family.ignite-lint]
 kind = "regression"
 adapter = "jsonl"
 platforms = "any"
-needs = ["python-env", "ignite-tests"]
-list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list ignite"
-run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run ignite {checks}"
+needs = ["python-env"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list ignite-lint"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run ignite-lint {checks}"
 inputs = [
   "ignite/**",
-  "ignite.toml",
   "tools/src/beryl_tools/ignite/rest.py",
   "tools/src/beryl_tools/__init__.py",
   "tools/src/beryl_tools/count_trend.py",
@@ -248,7 +269,8 @@ dir = "rust"
 inputs = ["crate:beryl_cards", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]
 
-# The test binaries of Ignite's workspace, which has its own lock file and target directory.
+# The test binaries of Ignite's workspace, which has its own lock file and target directory. The
+# `ignite` family's nextest run reuses this build.
 [product.ignite-tests]
 build = "cargo test --locked --no-run"
 dir = "ignite"

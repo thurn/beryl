@@ -1636,7 +1636,7 @@ dir = "ignite"
 commands = [
   "cargo fmt --check",
   "cargo clippy --locked --all-targets -- -D warnings",
-  "cargo test --locked --workspace -q",
+  "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
 ]
 
 [machine.jarvis]
@@ -1648,22 +1648,24 @@ express_cores = 3
   `dir`. It lands when every command exits 0, and moves the release branch at
   once. A failure exits with code 2 and shows the end of the command's output.
 - The commands run as the daemon's own processes, never through a supervisor or
-  the scheduler, with `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS` and `IGNITE_CORES`
-  set to the machine's `express_cores`. The scheduler leaves those cores out of
-  what it hands out, so a saturated or broken scheduler cannot hold them. While
-  an express run goes, the scheduler also sees its CPU as load outside Ignite
-  and hands out that much less.
+  the scheduler, with `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS`,
+  `NEXTEST_TEST_THREADS` and `IGNITE_CORES` set to the machine's
+  `express_cores`. The scheduler leaves those cores out of what it hands out, so
+  a saturated or broken scheduler cannot hold them. While an express run goes,
+  the scheduler also sees its CPU as load outside Ignite and hands out that much
+  less.
 - One express run goes at a time on a machine, under a lock on a file beside the
   tree. The tree keeps its ignored files between landings, so Ignite's target
   directory stays warm: the test build takes about 56 CPU-seconds then.
-- The commands are what the `ignite` family runs, without its Python adapter.
-  The family still runs in the gate when a change to Ignite lands together with
-  other files, and in tip verification.
+- The commands are what the `ignite` family (every test, under cargo-nextest)
+  and the `ignite-lint` family (`cargo fmt` and clippy) run. Those families
+  still run in the gate when a change to Ignite lands together with other files,
+  and in tip verification.
 - `ignite check` and the gate also use `paths` for scope. When every changed
   file matches, a family with no kept listing (a fresh tree has none) is judged
   by its declared inputs instead of being listed, so a change to Ignite alone
-  selects the `ignite` family and the always-set families, and builds nothing
-  for the game.
+  selects the `ignite` and `ignite-lint` families and the always-set families,
+  and builds nothing for the game.
 - A machine whose `express_cores` is 0, or a repository with no `[express]` or
   no release branch, sends every landing through the gate.
 - The integration branch's lease and the push are the same as for any landing.

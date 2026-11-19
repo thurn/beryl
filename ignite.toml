@@ -25,9 +25,12 @@ checks = "ignite/checks"
 # pushed to `ignite-release` by hand instead. A landing whose every changed file matches `paths`
 # runs these commands in one fixed tree, on each machine's `express_cores`, which the scheduler
 # never hands out, instead of the gate; it then pushes and moves `ignite-release` on their pass.
-# The commands are the `ignite` family's, run plainly: the whole workspace's tests, because
-# `cargo test -p ignite_daemon` alone once missed a failing test in `ignite_core`. Ignite's test
-# build is about 56 CPU-seconds with the tree's target directory warm.
+# The commands are those of the `ignite` and `ignite-lint` families (ignite/checks/rest.toml):
+# the whole workspace's tests, because `cargo test -p ignite_daemon` alone once missed a failing
+# test in `ignite_core`. They run under cargo-nextest, which runs every test binary at once and
+# reads its thread count from the `NEXTEST_TEST_THREADS` the daemon sets; `cargo test` ran the
+# binaries one after another. Ignite's test build is about 56 CPU-seconds with the tree's target
+# directory warm.
 [express]
 paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.json"]
 tree = ".worktrees/express"
@@ -35,7 +38,7 @@ dir = "ignite"
 commands = [
   "cargo fmt --check",
   "cargo clippy --locked --all-targets -- -D warnings",
-  "cargo test --locked --workspace -q",
+  "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
 ]
 
 [hub]

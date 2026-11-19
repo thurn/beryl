@@ -14,9 +14,9 @@ owns which file. These are the contract's rules.
   `ignite_git` (every `git` call), `ignite_store` (SQLite), `ignite_hub` (the
   HTTP server and dashboard), `ignite_daemon` (one per machine) and `ignite_cli`
   (the `ignite` executable).
-- Check it with `cd ignite && cargo test -p <crate>` for one crate, or the
-  `ignite` check family (`ignite test ignite:fmt ignite:clippy ignite:test`) for
-  formatting, clippy and every test.
+- Check it with `cd ignite && cargo nextest run -p <crate>` for one crate, or
+  `ignite test ignite ignite-lint` for every test (the `ignite` family),
+  formatting and clippy (the `ignite-lint` family).
 
 ## Rules
 

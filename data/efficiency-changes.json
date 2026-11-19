@@ -364,5 +364,10 @@
     "label": "A change confined to the express paths judges a family with no kept listing by its declared inputs: a change touching only Ignite's files selected 637 checks, built `b3d` (310 CPU-s) and gated twice, about 95 s each",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Ignite's own tests run under cargo-nextest, from the test build, and fmt and clippy no longer wait for that build: warm on 2026-11-18 at load 30 to 43 the 1325 tests took 13.2 s wall and 59 CPU-s against 35 s and 91 CPU-s through `cargo test`, which ran the 29 test binaries one after another; clippy re-checked the workspace in about 4 s",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

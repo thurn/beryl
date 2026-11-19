@@ -1,4 +1,4 @@
-"""The counts, fuzz, exhaust, scale and ignite check families: their manifest and their adapter."""
+"""The counts, fuzz, exhaust, scale, ignite and ignite-lint check families: their manifest and their adapter."""
 
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ def test_the_manifest_declares_the_families_and_products() -> None:
         "scale",
         "iroh",
         "ignite",
+        "ignite-lint",
     }
     assert set(declared["product"]) == {"fuzz-tests", "exhaust-tests", "ignite-tests"}
     for name, family in declared["family"].items():
@@ -52,6 +53,11 @@ def test_the_manifest_declares_the_families_and_products() -> None:
         assert family["kind"] == "exploration"
         assert f"rest next {name}" in str(family["next"])
     assert declared["family"]["iroh"]["adapter"] == "nextest"
+    # The release branch waits on the `ignite` family (ignite.toml's `release_family`), so it
+    # must hold Ignite's tests, and they must reuse the `ignite-tests` build.
+    ignite = declared["family"]["ignite"]
+    assert ignite["adapter"] == "nextest" and ignite["needs"] == ["ignite-tests"]
+    assert "--workspace" in str(ignite["list"]) and "--workspace" in str(ignite["run"])
 
 
 def test_the_adapter_imports_no_orchestration_module() -> None:
@@ -77,7 +83,7 @@ def matches(pattern: str, path: str) -> bool:
     return path == pattern or path.startswith(pattern.rstrip("/") + "/")
 
 
-def test_a_change_under_ignite_selects_only_the_ignite_family() -> None:
+def test_a_change_under_ignite_selects_only_ignites_families() -> None:
     selected: set[str] = set()
     for file in CHECKS.glob("*.toml"):
         for name, family in tomllib.loads(file.read_text()).get("family", {}).items():
@@ -86,7 +92,7 @@ def test_a_change_under_ignite_selects_only_the_ignite_family() -> None:
                 for i in family["inputs"]
             ):
                 selected.add(name)
-    assert selected == {"ignite"}
+    assert selected == {"ignite", "ignite-lint"}
 
 
 def card(name: str) -> str:
@@ -119,7 +125,18 @@ def test_counts_lists_the_rollouts_and_each_family_with_a_bar(tmp_path: Path) ->
     ]
 
 
-def test_the_ignite_family_lists_its_three_checks(tmp_path: Path) -> None:
+def test_the_ignite_lint_family_lists_fmt_and_clippy(tmp_path: Path) -> None:
+    assert [c["check"] for c in adapter.list_checks("ignite-lint", tmp_path)] == [
+        "ignite-lint:fmt",
+        "ignite-lint:clippy",
+    ]
+
+
+def test_a_manifest_from_before_the_lint_split_still_lists_its_three_checks(
+    tmp_path: Path,
+) -> None:
+    # The daemon reads the main checkout's manifest, which may still declare the `ignite`
+    # family as this adapter's while a tree holds the newer adapter.
     assert [c["check"] for c in adapter.list_checks("ignite", tmp_path)] == [
         "ignite:fmt",
         "ignite:clippy",
