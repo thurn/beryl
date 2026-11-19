@@ -2097,7 +2097,12 @@ the tool calls the daemon asks for.
   instructions name the main checkout, because a session started from the
   dispatcher otherwise runs in the dispatcher's folder.
 - That folder's `.claude/settings.json` sets `autoCompactWindow` to 120,000
-  tokens, so its context never grows the way an orchestrator's does today.
+  tokens, so its context never grows the way an orchestrator's does today. It
+  also sets the environment variable `CLAUDE_CODE_AUTO_COMPACT_WINDOW` to the
+  same value. A Claude Desktop session can keep a window of its own that
+  outranks `autoCompactWindow`: a dispatcher showed a 1M window and reached
+  131,000 tokens without compacting until `/autocompact` was run in it. The
+  environment variable outranks that window.
 - It never plans, reads tickets or decides anything.
 - Codex has no such setting. When a Codex dispatcher's context passes the same
   size, the daemon's next instruction has it open a new chat in its folder with

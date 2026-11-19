@@ -6,7 +6,10 @@
 //! - `AGENTS.md`, the dispatcher's instructions, with the main checkout's path filled in so the
 //!   workers it starts run there and not in this folder; `CLAUDE.md` imports it.
 //! - `.claude/settings.json` with `autoCompactWindow`, so a Claude dispatcher's context stays
-//!   small. Other settings already in the file are kept.
+//!   small, and the same window in the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` environment variable.
+//!   Claude Desktop sessions can carry a window of their own that outranks `autoCompactWindow`
+//!   until someone runs `/autocompact`; the environment variable outranks both. Other settings
+//!   already in the file are kept.
 //! - A skill named `ignite` for Claude and Codex, so that `/ignite pool <n>` works there.
 //!
 //! Running it again rewrites the instructions, which is how a dispatcher folder picks up a newer
@@ -72,8 +75,9 @@ fn write(folder: &Path, checkout: &Path) -> std::io::Result<()> {
     std::fs::write(&settings, with_compact_window(&existing))
 }
 
-/// The settings file's text with `autoCompactWindow` set, keeping every other setting. Text that
-/// is not a JSON object is replaced.
+/// The settings file's text with `autoCompactWindow` and the `CLAUDE_CODE_AUTO_COMPACT_WINDOW`
+/// environment variable set, keeping every other setting and variable. Text that is not a JSON
+/// object is replaced.
 fn with_compact_window(existing: &str) -> String {
     let mut settings = match serde_json::from_str::<serde_json::Value>(existing) {
         Ok(serde_json::Value::Object(map)) => map,
@@ -83,6 +87,18 @@ fn with_compact_window(existing: &str) -> String {
         "autoCompactWindow".to_owned(),
         serde_json::Value::from(AUTO_COMPACT_WINDOW),
     );
+    let env = settings
+        .entry("env")
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    if !env.is_object() {
+        *env = serde_json::Value::Object(serde_json::Map::new());
+    }
+    if let serde_json::Value::Object(env) = env {
+        env.insert(
+            "CLAUDE_CODE_AUTO_COMPACT_WINDOW".to_owned(),
+            serde_json::Value::from(AUTO_COMPACT_WINDOW.to_string()),
+        );
+    }
     let mut text = serde_json::to_string_pretty(&serde_json::Value::Object(settings))
         .unwrap_or_else(|_| "{}".to_owned());
     text.push('\n');
@@ -129,7 +145,7 @@ mod tests {
         std::fs::create_dir_all(folder.join(".claude")).unwrap();
         std::fs::write(
             folder.join(".claude/settings.json"),
-            r#"{"model": "sonnet", "autoCompactWindow": 5}"#,
+            r#"{"model": "sonnet", "autoCompactWindow": 5, "env": {"OTHER": "1"}}"#,
         )
         .unwrap();
         run(&folder, Path::new("/work/project"));
@@ -137,6 +153,8 @@ mod tests {
         let settings: serde_json::Value = serde_json::from_str(&text).unwrap();
         assert_eq!(settings["model"], "sonnet");
         assert_eq!(settings["autoCompactWindow"], AUTO_COMPACT_WINDOW);
+        assert_eq!(settings["env"]["OTHER"], "1");
+        assert_eq!(settings["env"]["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], "120000");
         let _ = std::fs::remove_dir_all(&folder);
     }
 
@@ -144,7 +162,7 @@ mod tests {
     fn replaces_settings_that_are_not_an_object() {
         assert_eq!(
             with_compact_window("not json"),
-            "{\n  \"autoCompactWindow\": 120000\n}\n"
+            "{\n  \"autoCompactWindow\": 120000,\n  \"env\": {\n    \"CLAUDE_CODE_AUTO_COMPACT_WINDOW\": \"120000\"\n  }\n}\n"
         );
     }
 }
