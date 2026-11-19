@@ -373,6 +373,9 @@ fn unattach_from<L: Layout>(s: &mut State<L>, slot: L::Slot) {
 /// [CR 701.26b](https://yawgatog.com/resources/magic-rules/#R70126b): "To untap a permanent,
 /// rotate it back to the upright position from a sideways position. Only tapped permanents
 /// can be untapped."
+// Inline: every mana payment taps through here, and out of line it cost the rollout
+// benchmark about a million instructions more than inlined into its callers.
+#[inline]
 pub(crate) fn set_tapped<L: Layout>(
     s: &mut State<L>,
     t: &GameTable,

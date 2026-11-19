@@ -94,7 +94,11 @@ impl Words {
         read
     }
 
-    /// What one subtype reads as.
+    /// What one subtype reads as. Out of line: only an object whose text changed a subtype
+    /// word asks ([`Words::changes_subtypes`]), and inlined into a reader such as a filter's
+    /// test it made every call of that reader save more registers.
+    #[cold]
+    #[inline(never)]
     fn subtype(&self, subtype: Subtype) -> Subtype {
         BasicLandWord::of_subtype(subtype).map_or(subtype, |word| {
             self.land_types[usize::from(word.0)].subtype()
@@ -366,12 +370,20 @@ impl SubtypeWords {
     #[inline]
     pub fn read(self, words: &Words) -> Subtypes {
         if words.changes_subtypes() {
-            self.0
-                .iter()
-                .fold(Subtypes::NONE, |set, s| set.with(words.subtype(s)))
+            self.read_changed(words)
         } else {
             self.0
         }
+    }
+
+    /// [`SubtypeWords::read`] when some subtype word reads otherwise. Out of line, as
+    /// [`Words::subtype`] is.
+    #[cold]
+    #[inline(never)]
+    fn read_changed(self, words: &Words) -> Subtypes {
+        self.0
+            .iter()
+            .fold(Subtypes::NONE, |set, s| set.with(words.subtype(s)))
     }
 }
 
@@ -390,13 +402,21 @@ impl LandTypeWords {
     #[inline]
     pub fn read(self, words: &Words) -> BasicLandTypes {
         if words.changes_subtypes() {
-            self.0
-                .subtypes()
-                .filter_map(|s| BasicLandTypes::of_subtype(words.subtype(s)))
-                .fold(BasicLandTypes::NONE, BasicLandTypes::union)
+            self.read_changed(words)
         } else {
             self.0
         }
+    }
+
+    /// [`LandTypeWords::read`] when some subtype word reads otherwise. Out of line, as
+    /// [`Words::subtype`] is.
+    #[cold]
+    #[inline(never)]
+    fn read_changed(self, words: &Words) -> BasicLandTypes {
+        self.0
+            .subtypes()
+            .filter_map(|s| BasicLandTypes::of_subtype(words.subtype(s)))
+            .fold(BasicLandTypes::NONE, BasicLandTypes::union)
     }
 }
 

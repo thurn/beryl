@@ -72,8 +72,10 @@ pub fn create<L: Layout>(
     // A copy of a double-faced permanent enters with the same face up (CR 707.8a).
     let mut face = FaceIx::FRONT;
     // Each token is made in its own slot, with no event; they enter together below, in the
-    // batch's order.
-    for slot in L::Slot::pool().filter(|&slot| tokens.contains(slot)) {
+    // batch's order. They are the first `count` free slots of the pool, so the walk stops at
+    // the last of them rather than looking at every slot of the pool.
+    let made = L::Slot::pool().filter(|&slot| tokens.contains(slot));
+    for slot in made.take(usize::from(count)) {
         face = s.make_token(t, slot, controller, what)?;
     }
     let entry = Entry {
