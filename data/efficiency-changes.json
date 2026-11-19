@@ -334,5 +334,10 @@
     "label": "Grants whose commands leave cores idle lend them to waiting requests: every core was granted for an hour while the machine stayed half idle and requests queued",
     "metric": "machine.queued-core-hours-per-day",
     "expect": "down"
+  },
+  {
+    "label": "Landings that change only Ignite run its fmt, clippy and tests on reserved cores in a fixed warm tree instead of the gate: four Ignite fixes waited 10 to 30 minutes in the scheduler they were fixing",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

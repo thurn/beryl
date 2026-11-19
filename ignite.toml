@@ -20,6 +20,24 @@ release_family = "ignite"
 trees = ".worktrees"
 checks = "ignite/checks"
 
+# Express landings (docs/ignite.md, "Express landings"). On 2026-11-18 every fix to Ignite's own
+# scheduling waited 10 to 30 minutes for `ignite land` in the queue it was fixing, and three were
+# pushed to `ignite-release` by hand instead. A landing whose every changed file matches `paths`
+# runs these commands in one fixed tree, on each machine's `express_cores`, which the scheduler
+# never hands out, instead of the gate; it then pushes and moves `ignite-release` on their pass.
+# The commands are the `ignite` family's, run plainly: the whole workspace's tests, because
+# `cargo test -p ignite_daemon` alone once missed a failing test in `ignite_core`. Ignite's test
+# build is about 56 CPU-seconds with the tree's target directory warm.
+[express]
+paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.json"]
+tree = ".worktrees/express"
+dir = "ignite"
+commands = [
+  "cargo fmt --check",
+  "cargo clippy --locked --all-targets -- -D warnings",
+  "cargo test --locked --workspace -q",
+]
+
 [hub]
 url = "https://jarvis.tail4b0774.ts.net:8443"
 project = "by"
@@ -83,6 +101,8 @@ landing_trees = 3
 # The daemon also sweeps free trees whenever the disk has under 50 GB free, whatever this allows.
 trees_disk_gb = 250
 floor = { batch = 8, tip = 2 }
+# Of 18 cores: an express landing's commands take about half a minute warm on three.
+express_cores = 3
 
 # Browser pages: at most half the cores' worth at once across every tree. Headless WebKit runs at
 # a higher priority than any build, so more pages starve the builds beside them.
@@ -98,6 +118,7 @@ ticket_trees = 8
 landing_trees = 2
 trees_disk_gb = 200
 floor = { batch = 2, tip = 2 }
+express_cores = 2
 
 [machine.multivac.resources]
 browser-pages = 4
@@ -111,6 +132,7 @@ ticket_trees = 6
 landing_trees = 2
 families = ["rust", "clippy", "format", "source-rules", "python"]
 floor = { batch = 8, tip = 2 }
+express_cores = 2
 
 [[rebuild]]
 name = "kernel-body"

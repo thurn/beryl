@@ -17,9 +17,37 @@ use crate::cmd;
 /// with no ref line means the conversation with the remote never got that far:
 /// [`Error::Unreachable`].
 pub fn push(tree: &Path, remote: &str, commit: &Commit, branch: &str) -> Result<Push> {
+    push_with(tree, remote, commit, branch, None)
+}
+
+/// Pushes `commit` from `tree` to `branch` on `remote` in place of `expected`, the commit the
+/// caller last saw there, whether or not `commit` contains it (`--force-with-lease`). If the
+/// branch has moved off `expected` since, nothing changes and the answer is [`Push::Rejected`],
+/// as for a branch that moved under [`push`]; other answers are as for [`push`].
+pub fn replace(
+    tree: &Path,
+    remote: &str,
+    commit: &Commit,
+    branch: &str,
+    expected: &Commit,
+) -> Result<Push> {
+    push_with(tree, remote, commit, branch, Some(expected))
+}
+
+fn push_with(
+    tree: &Path,
+    remote: &str,
+    commit: &Commit,
+    branch: &str,
+    expected: Option<&Commit>,
+) -> Result<Push> {
     let target = format!("refs/heads/{branch}");
     let refspec = format!("{commit}:{target}");
-    let mut command = cmd::git(tree, ["push", "--porcelain", remote, &refspec]);
+    let mut command = cmd::git(tree, ["push", "--porcelain"]);
+    if let Some(expected) = expected {
+        command.arg(format!("--force-with-lease={target}:{expected}"));
+    }
+    command.arg(remote).arg(&refspec);
     let out = cmd::output(&mut command)?;
     let stdout = String::from_utf8_lossy(&out.stdout);
     let line = stdout.lines().find(|line| ref_line_for(line, &target));

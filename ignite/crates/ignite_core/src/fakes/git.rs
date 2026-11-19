@@ -20,6 +20,9 @@ pub struct FakeGit {
     rejection: Mutex<Option<String>>,
     /// Pairs `(ancestor, descendant)` that are not related; every other pair is.
     unrelated: Mutex<HashSet<(Commit, Commit)>>,
+    /// Pairs `(history, version)` where `history` holds `version`'s changes without holding
+    /// `version` itself, as a rebased copy does.
+    holding: Mutex<HashSet<(Commit, Commit)>>,
     /// How many times `object_ids` was called.
     object_id_calls: std::sync::atomic::AtomicUsize,
 }
@@ -48,6 +51,12 @@ impl FakeGit {
     /// ancestor of every other, as on a branch that only moves forward.
     pub fn set_not_ancestor(&self, ancestor: &Commit, descendant: &Commit) {
         lock(&self.unrelated).insert((ancestor.clone(), descendant.clone()));
+    }
+
+    /// Makes `history` hold the changes of `version` though `version` is not its ancestor, as
+    /// the rebased copy of a commit does.
+    pub fn set_holds(&self, history: &Commit, version: &Commit) {
+        lock(&self.holding).insert((history.clone(), version.clone()));
     }
 
     /// The next rebase's result; by default a rebase is clean onto the tip given.
@@ -116,5 +125,29 @@ impl Git for FakeGit {
 
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
         Ok(!lock(&self.unrelated).contains(&(ancestor.clone(), descendant.clone())))
+    }
+
+    fn holds_changes(&self, history: &Commit, version: &Commit, _path: &str) -> Result<bool> {
+        Ok(self.is_ancestor(version, history)?
+            || lock(&self.holding).contains(&(history.clone(), version.clone())))
+    }
+
+    fn replace(
+        &self,
+        tree: &Path,
+        commit: &Commit,
+        branch: &str,
+        expected: &Commit,
+    ) -> Result<Push> {
+        if lock(&self.tips).get(branch) != Some(expected) {
+            return Ok(Push::Rejected {
+                reason: "[rejected] (stale info)".to_owned(),
+            });
+        }
+        lock(&self.pushes).push((tree.to_path_buf(), commit.clone(), branch.to_owned()));
+        lock(&self.tips).insert(branch.to_owned(), commit.clone());
+        Ok(Push::Pushed {
+            commit: commit.clone(),
+        })
     }
 }

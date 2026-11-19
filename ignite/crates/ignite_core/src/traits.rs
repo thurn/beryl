@@ -203,6 +203,19 @@ pub trait Git: Send + Sync {
     fn tip(&self, branch: &str) -> Result<Commit>;
     /// Whether `ancestor` is `descendant` or one of its ancestors.
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool>;
+    /// Whether `history` holds every change under `path` that `version` holds: `version` is in
+    /// its history, or reached it as other commits with the same changes, as a rebased copy of
+    /// a commit does.
+    fn holds_changes(&self, history: &Commit, version: &Commit, path: &str) -> Result<bool>;
+    /// Pushes `commit` to the remote `branch` in place of `expected`, whether or not `commit`
+    /// contains it; [`Push::Rejected`] if the branch is no longer at `expected`.
+    fn replace(
+        &self,
+        tree: &Path,
+        commit: &Commit,
+        branch: &str,
+        expected: &Commit,
+    ) -> Result<Push>;
 }
 
 pub trait Hub: Send + Sync {

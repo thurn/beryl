@@ -69,6 +69,40 @@ pub struct Config {
     /// How each daemon sends its machine's efficiency rows to the hub; none sends nothing.
     #[serde(default)]
     pub metrics: Option<Metrics>,
+    /// Landings that change only Ignite run these commands instead of the gate; none sends
+    /// every landing through the gate.
+    #[serde(default)]
+    pub express: Option<Express>,
+}
+
+/// The express lane (see "Express landings" in the design document). A landing whose every
+/// changed file matches `paths` runs `commands` in one fixed worktree, `tree`, on cores the
+/// scheduler never hands out (`express_cores` on the machine), instead of the gate. It exists
+/// so that a fix to Ignite's own scheduling never waits in the queue it is fixing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Express {
+    /// Path patterns, relative to the checkout's root, as in a family's `inputs`.
+    pub paths: Vec<String>,
+    /// The fixed worktree the commands run in, relative to the checkout's root. It keeps its
+    /// ignored files, such as a Cargo target directory, from one landing to the next.
+    pub tree: PathBuf,
+    /// The directory, relative to the worktree, that the commands run in.
+    pub dir: String,
+    /// The commands, each split on whitespace and run without a shell, in order. The landing
+    /// passes when every one exits 0.
+    pub commands: Vec<String>,
+}
+
+impl Express {
+    /// Whether every one of `changed` matches `paths`; false for no paths at all.
+    pub fn covers(&self, changed: &[String]) -> bool {
+        !changed.is_empty()
+            && changed.iter().all(|path| {
+                self.paths
+                    .iter()
+                    .any(|p| crate::inputs::path_matches(p, path))
+            })
+    }
 }
 
 /// The efficiency dashboard's commands, which each daemon runs for its own machine when the
@@ -279,6 +313,10 @@ pub struct Machine {
     /// Scarce resources by name, with each one's capacity.
     #[serde(default)]
     pub resources: BTreeMap<String, u32>,
+    /// Cores the scheduler never hands out, kept for the express lane's commands (see
+    /// [`Express`]). Zero turns the express lane off on the machine.
+    #[serde(default)]
+    pub express_cores: u32,
 }
 
 /// Cores reserved for the `batch` and `tip` classes.
@@ -549,6 +587,22 @@ products = ["clippy", "rust-tests"]
         assert!(std::ptr::eq(config.machine("JARVIS").unwrap(), declared));
         assert!(config.machine("Jarvis").is_some());
         assert!(config.machine("nobody").is_none());
+    }
+
+    #[test]
+    fn the_express_lane_covers_a_landing_only_when_every_changed_file_matches() {
+        let text = format!(
+            "{DOCUMENT_EXAMPLES}\n[express]\npaths = [\"ignite/**\", \"ignite.toml\"]\n\
+             tree = \".worktrees/express\"\ndir = \"ignite\"\ncommands = [\"cargo fmt --check\"]\n"
+        );
+        let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        let express = config.express.unwrap();
+        let paths = |names: &[&str]| names.iter().map(|n| (*n).to_owned()).collect::<Vec<_>>();
+        assert!(express.covers(&paths(&["ignite/crates/a.rs", "ignite.toml"])));
+        assert!(!express.covers(&paths(&["ignite/crates/a.rs", "rust/Cargo.toml"])));
+        assert!(!express.covers(&[]));
+        assert_eq!(config.machine["jarvis"].express_cores, 0);
     }
 
     #[test]

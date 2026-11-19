@@ -7,6 +7,17 @@
 //! that holds the commit. Whatever happens here is reported on the landing's `release` line and
 //! never fails or undoes the landing.
 //!
+//! The push fast-forwards the release branch. When the release branch holds a commit the landed
+//! commit does not contain, the push is refused; if the landed commit holds that commit's
+//! changes to Ignite's source anyway, the branch is moved over it with `--force-with-lease`.
+//! That is the state a commit pushed to the release branch by hand leaves: its landing rebases
+//! it, and the release branch holds the copy from before the rebase. Before this, the release
+//! stayed on that copy until someone moved it by hand.
+//!
+//! An express landing (see [`super::express`]) has already run the express commands on the
+//! commit, which is what this step asks of the release family, so it moves the release on their
+//! pass without running the family.
+//!
 //! A landing that moved the release names the deploy handle in its `next` line
 //! ([`crate::deploy::landed_handle`]): `ignite wait deploy-<commit>` waits until every machine
 //! runs the release or it was rolled back (see [`crate::deploy`]).
@@ -16,7 +27,7 @@ use ignite_core::protocol::Outcome;
 use ignite_core::traits::Push;
 
 use super::env::GateTree;
-use super::{Landing, line};
+use super::{Landing, line, short};
 use crate::checks::{GateRun, RunOptions};
 use crate::server::Context;
 use crate::update::SOURCE;
@@ -30,6 +41,8 @@ pub(super) struct Landed<'a> {
     pub files: &'a [String],
     pub gated: &'a GateRun,
     pub options: &'a RunOptions,
+    /// The express commands passed on the commit, instead of a gate.
+    pub express: bool,
 }
 
 impl Landing {
@@ -48,7 +61,9 @@ impl Landing {
         if !landed.files.iter().any(|file| file.starts_with(&source)) {
             return None;
         }
-        let outcomes: Vec<Outcome> = if Self::gate_ran_family(landed.gated, family) {
+        let outcomes: Vec<Outcome> = if landed.express {
+            vec![Outcome::Pass]
+        } else if Self::gate_ran_family(landed.gated, family) {
             Self::family_outcomes(landed.gated, family)
         } else {
             let run = self
@@ -73,10 +88,47 @@ impl Landing {
                 Ok(Push::Pushed { .. }) => {
                     line("release", crate::deploy::moved(branch, landed.commit))
                 }
-                Ok(Push::Rejected { reason }) => self.not_moved(branch, &reason),
+                Ok(Push::Rejected { reason }) => self.replace_release(ctx, landed, branch, &reason),
                 Err(error) => self.not_moved(branch, &error.to_string()),
             },
         )
+    }
+
+    /// Moves the release branch to the landed commit over a commit it does not contain, when
+    /// the landed commit holds that commit's changes to Ignite's source; the push was refused
+    /// for `refused`.
+    fn replace_release(
+        &self,
+        ctx: &Context,
+        landed: &Landed<'_>,
+        branch: &str,
+        refused: &str,
+    ) -> (String, String) {
+        let held = match ctx.git.tip(branch) {
+            Ok(held) => held,
+            Err(error) => return self.not_moved(branch, &format!("{refused}; {error}")),
+        };
+        match ctx.git.holds_changes(landed.commit, &held, SOURCE) {
+            Ok(true) => {}
+            Ok(false) => {
+                return self.not_moved(
+                    branch,
+                    &format!(
+                        "it holds {}, whose changes to {SOURCE}/ the landing lacks",
+                        short(&held)
+                    ),
+                );
+            }
+            Err(error) => return self.not_moved(branch, &format!("{refused}; {error}")),
+        }
+        match ctx
+            .git
+            .replace(&landed.tree.path, landed.commit, branch, &held)
+        {
+            Ok(Push::Pushed { .. }) => line("release", crate::deploy::moved(branch, landed.commit)),
+            Ok(Push::Rejected { reason }) => self.not_moved(branch, &reason),
+            Err(error) => self.not_moved(branch, &error.to_string()),
+        }
     }
 
     /// Whether the gate ran the whole release family: it has outcomes for the family and left

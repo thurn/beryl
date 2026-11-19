@@ -50,6 +50,22 @@ fn granted_cores(ledger: &Ledger) -> u32 {
 }
 
 #[test]
+fn the_express_cores_are_never_handed_out() {
+    let config = ignite_core::config::Config::parse(
+        "ignite.toml",
+        "[repository]\nremote = \"origin\"\nstaging = \"s\"\nmaster = \"m\"\n\
+         trees = \"t\"\nchecks = \"c\"\n[hub]\nurl = \"http://h\"\nproject = \"p\"\n\
+         [gate]\nthreshold = 1.0\n[machine.m]\nticket_trees = 1\nlanding_trees = 1\n\
+         express_cores = 4\n",
+    )
+    .unwrap();
+    let machine = &config.machine["m"];
+    assert_eq!(Limits::for_machine(machine, 18).cores, 14);
+    // At least one core is left to hand out, whatever the machine reserves.
+    assert_eq!(Limits::for_machine(machine, 4).cores, 1);
+}
+
+#[test]
 fn ten_commands_starting_at_once_share_the_cores() {
     let mut ledger = Ledger::new(limits());
     let ids: Vec<u64> = (0..10)

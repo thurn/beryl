@@ -270,6 +270,15 @@ fn a_rejected_release_push_is_reported_and_the_landing_stands() {
         .git
         .other_branch_rejected
         .store(true, Ordering::SeqCst);
+    // The release branch holds a commit whose changes the landing lacks.
+    let foreign = Commit::new("f".repeat(40)).unwrap();
+    world
+        .git
+        .repo
+        .lock()
+        .unwrap()
+        .other_tips
+        .insert("release".to_owned(), foreign);
     world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
 
     let reply = world.land_as("tree-01", "local_a");

@@ -644,9 +644,10 @@ pub enum UpdateCheck {
     UpToDate,
     /// `master` moved but nothing under `ignite/` changed, so the executable stays.
     NotNeeded { tip: Commit },
-    /// The release branch's tip is not a descendant of the running commit: the daemon was
-    /// installed by hand from a newer or diverged commit. Going to the tip would be a
-    /// downgrade, so the executable stays until the branch moves past it.
+    /// The release branch's tip lacks changes to Ignite's source that the running commit has:
+    /// the daemon was installed by hand from a newer or diverged commit. Going to the tip would
+    /// be a downgrade, so the executable stays until the branch moves past it. A tip that holds
+    /// the running commit's changes as other commits, as a rebased copy does, is not ahead.
     Ahead { tip: Commit },
     /// The release branch's tip was rolled back or failed its selftest on this machine, so the
     /// executable stays until the branch moves again.
@@ -690,7 +691,14 @@ impl Updater<'_> {
         if self.store.is_rejected(&tip) {
             return Ok(Plan::Done(UpdateCheck::Rejected { tip }));
         }
-        if !self.git.is_ancestor(current, &tip)? {
+        // A tip that does not contain the running commit may still hold its changes: a commit
+        // pushed to the release branch by hand and then landed is rebased, and the landing moves
+        // the release branch to the rebased copy. Staying on the hand-pushed commit then would
+        // refuse every later release. Only a tip that lacks the running commit's changes to
+        // Ignite's source would be a downgrade.
+        if !self.git.is_ancestor(current, &tip)?
+            && !self.git.holds_changes(&tip, current, self.source)?
+        {
             return Ok(Plan::Done(UpdateCheck::Ahead { tip }));
         }
         let prefix = format!("{}/", self.source.trim_end_matches('/'));

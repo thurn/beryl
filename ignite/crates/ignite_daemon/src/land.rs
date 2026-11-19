@@ -6,7 +6,8 @@
 //!    file may be neither committed nor ignored.
 //! 2. The branch is rebased onto the remote tip. A conflict exits with code 3 and the files.
 //! 3. The gate runs in a landing tree checked out at the rebased commit, or in the ticket tree
-//!    when the branch was already at the tip.
+//!    when the branch was already at the tip. A landing that changes only Ignite runs the
+//!    express commands in the express tree instead (see [`express`]).
 //! 4. The always set and the gate run there, each check from the result cache where it can be.
 //!    On a rebase, only a check that reads both the ticket's change and what landed meanwhile
 //!    has a new input hash, so a second pass is mostly cache hits.
@@ -42,15 +43,16 @@
 //! succeeds. A push the remote rejects lets the landing be stopped again.
 
 pub mod env;
+pub mod express;
 mod lease;
 pub mod records;
 mod release;
+mod replies;
 mod resolve;
 
 #[cfg(test)]
 mod tests;
 
-use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -67,8 +69,10 @@ use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use crate::steps;
 use env::{GateTree, LandGate, LandTrees, TicketTree};
+use express::{ExpressLane, ExpressRun};
 use lease::{HeldLease, LEASE_TTL_S};
 use records::{LandingRecord, RecordState, Records};
+use replies::{done_title, failed_gate};
 
 /// The longest wait between two tries for a busy lease.
 const BUSY_WAIT_S: f64 = 10.0;
@@ -82,6 +86,8 @@ pub struct Landing {
     pub trees: Arc<dyn LandTrees>,
     pub gate: Arc<dyn LandGate>,
     pub records: Records,
+    /// The machine's express lane; `None` sends every landing through the gate.
+    pub express: Option<Arc<dyn ExpressLane>>,
     /// Waits this many seconds before trying a busy lease again: a sleep in the daemon, a move
     /// of the fake clock in tests.
     pub pause: Arc<dyn Fn(f64) + Send + Sync>,
@@ -408,7 +414,9 @@ impl Landing {
                 ));
             }
             passes += 1;
-            let landing_tree = if rebased.landed_since == 0 {
+            let changed = ctx.git.changed(&rebased.onto, &rebased.head).map_err(io)?;
+            let express = self.express_for(ctx, &changed);
+            let landing_tree = if express.is_some() || rebased.landed_since == 0 {
                 None
             } else {
                 steps::step("taking a landing tree");
@@ -416,10 +424,13 @@ impl Landing {
                     .lease_landing(&holder, &rebased.head)
                     .map_err(io)?
             };
-            let gate_tree = landing_tree.clone().unwrap_or_else(|| GateTree {
-                tree: held.tree.clone(),
-                path: held.path.clone(),
-            });
+            let gate_tree = express
+                .map(ExpressLane::tree)
+                .or_else(|| landing_tree.clone())
+                .unwrap_or_else(|| GateTree {
+                    tree: held.tree.clone(),
+                    path: held.path.clone(),
+                });
             let options = RunOptions {
                 verb: "land".to_owned(),
                 class: Class::Land,
@@ -427,8 +438,12 @@ impl Landing {
                 ticket: Some(ticket.clone()),
                 session: Some(session.clone()),
             };
-            steps::step(format!("running the gate in {}", gate_tree.tree));
-            let gated = self.gate.run(ctx, &gate_tree, &options);
+            let (gated, expressed) = if let Some(lane) = express {
+                (GateRun::default(), Some(lane.run(&rebased.head)))
+            } else {
+                steps::step(format!("running the gate in {}", gate_tree.tree));
+                (self.gate.run(ctx, &gate_tree, &options), None)
+            };
             let free_landing = |built: Option<&Commit>| {
                 if let Some(tree) = &landing_tree
                     && let Err(error) = self.trees.release_landing(&tree.tree, built)
@@ -443,6 +458,9 @@ impl Landing {
             if steps::stop_requested() {
                 free_landing(None);
                 return Err(stopped());
+            }
+            if let Some(run) = expressed.as_ref().filter(|run| !run.passed()) {
+                return Err(Box::new(express::failed_express(ctx, run)));
             }
             if !gated.run.passed() {
                 free_landing(None);
@@ -478,10 +496,7 @@ impl Landing {
                     .trees
                     .commits(&held.path, &rebased.onto, &rebased.head)
                     .map_err(fail)?,
-                files: ctx
-                    .git
-                    .changed(&rebased.onto, &rebased.head)
-                    .map_err(fail)?,
+                files: changed.clone(),
                 note: args.note.clone(),
             };
             let mut record = LandingRecord {
@@ -551,6 +566,7 @@ impl Landing {
                     files: &record.landed.work.files,
                     gated: &gated,
                     options: &options,
+                    express: expressed.is_some(),
                 },
             );
             free_landing(Some(&rebased.head));
@@ -560,6 +576,7 @@ impl Landing {
                 passes,
                 gated,
                 release,
+                express: expressed,
             };
             return Ok(self.finish(ctx, req, &held, &record, Some(&summary), Some(&args.note)));
         }
@@ -622,8 +639,12 @@ impl Landing {
                     ),
                 ));
             }
-            lines.extend(built_lines(&summary.gated.run));
-            lines.extend(gate_lines(&summary.gated));
+            if let Some(run) = &summary.express {
+                lines.push(run.line());
+            } else {
+                lines.extend(built_lines(&summary.gated.run));
+                lines.extend(gate_lines(&summary.gated));
+            }
         }
         lines.push(line(
             "landed",
@@ -664,6 +685,7 @@ impl Landing {
                 "rate": budget.map(|b| b.rate),
                 "closed": closed == "ticket closed",
                 "deploy": deploy,
+                "express": summary.is_some_and(|s| s.express.is_some()),
             })),
             handle: None,
         }
@@ -727,49 +749,6 @@ struct Summary {
     gated: GateRun,
     /// The `release` line, when the landing called for a move of the release branch.
     release: Option<(String, String)>,
-}
-
-/// The reply to a gate that failed: exit code 2, the failures with paths relative to the
-/// repository, and a rerun command that works in the ticket tree.
-fn failed_gate(staging: &str, rebased: &Rebased, gated: &GateRun, gate_path: &Path) -> Reply {
-    let mut lines = vec![line(
-        "rebased",
-        format!("onto {staging} {}", short(&rebased.onto)),
-    )];
-    lines.extend(built_lines(&gated.run));
-    lines.extend(gate_lines(gated));
-    let rerun = gated.run.failures.first().map_or_else(
-        || "ignite check".to_owned(),
-        |failure| format!("ignite test {}", failure.check),
-    );
-    lines.push(line("rerun", rerun));
-    lines.push(line(
-        "next",
-        "fix it in your tree; nothing landed and the tree stays rebased",
-    ));
-    let prefix = format!("{}/", gate_path.display());
-    let text = render(&lines).replace(&prefix, "");
-    Reply {
-        exit: Exit::CheckFailed,
-        text,
-        json: Some(json!({
-            "failures": gated.run.failures.iter().map(|f| json!({
-                "check": f.check, "outcome": f.outcome, "at": f.at, "message": f.message,
-            })).collect::<Vec<_>>(),
-        })),
-        handle: None,
-    }
-}
-
-/// The session title for a landed ticket: `✅ [<ticket>] <ticket title>`, the title that
-/// `ignite start` printed with its working emoji. When the hub cannot be asked, only the ticket
-/// ID follows the emoji.
-fn done_title(ctx: &Context, ticket: &TicketId) -> String {
-    match ctx.hub.ticket(ticket) {
-        Ok(detail) => {
-            let title = detail.ticket.title.lines().next().unwrap_or("").trim();
-            format!("✅ [{ticket}] {title}")
-        }
-        Err(_) => format!("✅ [{ticket}]"),
-    }
+    /// The express run that took the gate's place, if the landing took the express lane.
+    express: Option<ExpressRun>,
 }

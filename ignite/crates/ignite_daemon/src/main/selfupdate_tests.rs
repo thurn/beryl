@@ -769,6 +769,9 @@ fn the_deploy_state_gives_why_a_build_failed_or_was_rolled_back() {
     assert!(update.reached(&commit(NEW), &commit(OLD)));
     git.set_not_ancestor(&commit(NEW), &commit(OLD));
     assert!(!update.reached(&commit(OLD), &commit(NEW)));
+    // A commit that holds the release's changes as a rebased copy has reached it too.
+    git.set_holds(&commit(OLD), &commit(NEW));
+    assert!(update.reached(&commit(OLD), &commit(NEW)));
 }
 
 #[test]

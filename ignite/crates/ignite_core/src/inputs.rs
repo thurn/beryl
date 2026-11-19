@@ -253,7 +253,7 @@ pub fn touched(
 }
 
 /// Whether the path pattern `pattern` names `path` or a directory that holds it.
-fn path_matches(pattern: &str, path: &str) -> bool {
+pub fn path_matches(pattern: &str, path: &str) -> bool {
     if let Some(dir) = pattern.strip_suffix("/**")
         && !has_wildcard(dir)
     {

@@ -1,5 +1,6 @@
 //! Landings against the fakes in [`fakes`], with no real time.
 
+mod express;
 mod fakes;
 mod more;
 
@@ -119,6 +120,7 @@ fn world_with(
         trees: trees.clone(),
         gate: gate.clone(),
         records: Records::new(&records),
+        express: None,
         pause: Arc::new(move |seconds| pause_clock.advance(seconds)),
     });
     let ctx = Context {

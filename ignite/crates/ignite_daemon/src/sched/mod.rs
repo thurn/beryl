@@ -161,10 +161,13 @@ pub struct Limits {
 }
 
 impl Limits {
-    /// The limits of a machine declared in `ignite.toml` with `cores` logical cores.
+    /// The limits of a machine declared in `ignite.toml` with `cores` logical cores. The
+    /// machine's `express_cores` are left out: the express lane runs its commands on them
+    /// itself, so a saturated or broken scheduler can never hold them (see
+    /// `crate::land::express`). At least one core is always left to hand out.
     pub fn for_machine(machine: &Machine, cores: u32) -> Self {
         Self {
-            cores,
+            cores: cores.saturating_sub(machine.express_cores).max(1),
             floor: machine.floor,
             resources: machine.resources.clone(),
         }

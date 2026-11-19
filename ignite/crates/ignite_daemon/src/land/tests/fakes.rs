@@ -49,6 +49,12 @@ pub struct Repo {
     pub pushes: Vec<(PathBuf, Commit)>,
     /// Commits pushed to a branch other than the integration branch, by branch.
     pub branch_pushes: Vec<(String, Commit)>,
+    /// Commits pushed over another branch's commit by `Git::replace`: branch, commit, and the
+    /// commit it replaced.
+    pub replaces: Vec<(String, Commit, Commit)>,
+    /// The tips of branches other than the integration branch; one not here is at the
+    /// integration branch's tip.
+    pub other_tips: HashMap<String, Commit>,
 }
 
 #[derive(Default)]
@@ -64,6 +70,8 @@ pub struct TestGit {
     pub push_refused: AtomicBool,
     /// Makes a push to any branch but the integration branch answer that the tip moved.
     pub other_branch_rejected: AtomicBool,
+    /// Makes every commit hold the changes of every other, as if each were a rebased copy.
+    pub copies_hold: AtomicBool,
 }
 
 impl Repo {
@@ -226,8 +234,9 @@ impl Git for TestGit {
         })
     }
 
-    fn tip(&self, _branch: &str) -> Result<Commit> {
-        Ok(self.tip_now())
+    fn tip(&self, branch: &str) -> Result<Commit> {
+        let held = self.repo.lock().unwrap().other_tips.get(branch).cloned();
+        Ok(held.unwrap_or_else(|| self.tip_now()))
     }
 
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
@@ -238,6 +247,25 @@ impl Git for TestGit {
             (position(ancestor), position(descendant)),
             (Some(a), Some(d)) if a <= d
         ))
+    }
+
+    fn holds_changes(&self, history: &Commit, version: &Commit, _path: &str) -> Result<bool> {
+        Ok(self.copies_hold.load(Ordering::SeqCst) || self.is_ancestor(version, history)?)
+    }
+
+    fn replace(
+        &self,
+        _tree: &Path,
+        commit: &Commit,
+        branch: &str,
+        expected: &Commit,
+    ) -> Result<Push> {
+        let mut repo = self.repo.lock().unwrap();
+        repo.replaces
+            .push((branch.to_owned(), commit.clone(), expected.clone()));
+        Ok(Push::Pushed {
+            commit: commit.clone(),
+        })
     }
 }
 

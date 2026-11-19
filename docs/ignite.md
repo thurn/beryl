@@ -569,9 +569,23 @@ How the executable is installed and kept current:
   still starts after a release that added a table or column.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
-  passed on it. A fix to Ignite therefore reaches every machine minutes after it
-  lands, without waiting for tip verification of everything else, which an
-  Ignite bug can itself be blocking.
+  passed on it, or the express commands have (see
+  [Express landings](#express-landings)). A fix to Ignite therefore reaches
+  every machine minutes after it lands, without waiting for tip verification of
+  everything else, which an Ignite bug can itself be blocking.
+- A release survives a rebase. A commit pushed to the release branch by hand is
+  rebased when its ticket lands, so the release branch then holds a commit that
+  the landed one does not contain. The landing moves the release branch over it
+  anyway, with `--force-with-lease` against the commit it read there, when the
+  landed commit holds that commit's changes to Ignite's source: some commit of
+  the landed history has the same `ignite/` tree, or every commit that changed
+  `ignite/` has an equivalent patch there (as `git cherry` compares them). A
+  daemon that runs a commit the release branch does not contain uses the same
+  test before it calls itself ahead of the release: it builds the release if the
+  release holds its changes, and counts as running the release when the two
+  `ignite/` trees match. On 2026-11-18 each of three hand pushes followed by a
+  rebased landing left every daemon refusing new releases until someone moved
+  the branch by hand and ran `ignite install`.
 - Each build is stored under its commit, so a new executable never replaces a
   file that is running. Supervisors and verb processes finish under the version
   that started them; `ignite status` names the commit each running verb runs
@@ -744,6 +758,7 @@ Each machine has a fixed number of trees of two kinds:
 ticket_trees = 12
 landing_trees = 3
 trees_disk_gb = 250
+express_cores = 3   # see Express landings
 ```
 
 Rules for trees:
@@ -962,6 +977,9 @@ Rules for cores:
   shared resource, is not `idle` work and does not name Cargo. `uv sync`, which
   builds the Python environment most families list their checks with, used at
   most 1.2 CPU-seconds in 82 runs but had waited up to 726 s for a core.
+- A machine's `express_cores` are never granted: they are kept for the express
+  lane's commands, which run outside the scheduler (see
+  [Express landings](#express-landings)).
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
   CPU for hours.
@@ -1298,6 +1316,10 @@ spent in instructions:
 - **The tip's budget**, `[tip] seconds = 300`: what a tip verification round
   spends on its best-scored checks before `master` moves to the tip.
 
+A landing that changes only Ignite runs no regression check before it lands. It
+runs the express commands instead, and tip verification runs the rest (see
+[Express landings](#express-landings)).
+
 Seconds convert to instructions at the rate the class's check commands really
 achieve on the machine's average load, not at a full grant of cores on a quiet
 machine. The hub computes each class's rate once a day (`GET /rates`): the
@@ -1527,6 +1549,49 @@ Rules:
   reported as `known-failing`, so one broken check fails nobody else's landing.
   The ticket that fixes it must make it pass, and the check leaves that state
   when it next passes at a tip.
+
+### Express landings
+
+On 2026-11-18 every fix to Ignite's own scheduling waited in the queue it was
+fixing. Four fixes waited 10 to 30 minutes each for `ignite land`, because their
+gates asked the scheduler for cores that it had granted to other work, often
+because of the bug being fixed, and three were pushed to the release branch by
+hand. So a landing that changes only Ignite does not go through the gate:
+
+```toml
+[express]
+paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.json"]
+tree = ".worktrees/express"
+dir = "ignite"
+commands = [
+  "cargo fmt --check",
+  "cargo clippy --locked --all-targets -- -D warnings",
+  "cargo test --locked --workspace -q",
+]
+
+[machine.jarvis]
+express_cores = 3
+```
+
+- A landing whose every changed file matches `paths` checks the rebased commit
+  out in one fixed worktree, `tree`, and runs `commands` there in order, in
+  `dir`. It lands when every command exits 0, and moves the release branch at
+  once. A failure exits with code 2 and shows the end of the command's output.
+- The commands run as the daemon's own processes, never through a supervisor or
+  the scheduler, with `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS` and `IGNITE_CORES`
+  set to the machine's `express_cores`. The scheduler leaves those cores out of
+  what it hands out, so a saturated or broken scheduler cannot hold them. While
+  an express run goes, the scheduler also sees its CPU as load outside Ignite
+  and hands out that much less.
+- One express run goes at a time on a machine, under a lock on a file beside the
+  tree. The tree keeps its ignored files between landings, so Ignite's target
+  directory stays warm: the test build takes about 56 CPU-seconds then.
+- The commands are what the `ignite` family runs, without its Python adapter.
+  The family still runs in the gate when a change to Ignite lands together with
+  other files, and in tip verification.
+- A machine whose `express_cores` is 0, or a repository with no `[express]` or
+  no release branch, sends every landing through the gate.
+- The integration branch's lease and the push are the same as for any landing.
 
 ## Tip verification
 

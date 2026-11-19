@@ -6,6 +6,7 @@
 pub mod changed;
 mod cmd;
 pub mod fastforward;
+pub mod holds;
 pub mod push;
 pub mod rebase;
 pub mod refs;
@@ -49,5 +50,19 @@ impl Git for GitCli {
 
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
         refs::is_ancestor(&self.repo, ancestor, descendant)
+    }
+
+    fn holds_changes(&self, history: &Commit, version: &Commit, path: &str) -> Result<bool> {
+        holds::holds_changes(&self.repo, history, version, path)
+    }
+
+    fn replace(
+        &self,
+        tree: &Path,
+        commit: &Commit,
+        branch: &str,
+        expected: &Commit,
+    ) -> Result<Push> {
+        push::replace(tree, &self.remote, commit, branch, expected)
     }
 }

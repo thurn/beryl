@@ -583,8 +583,16 @@ impl DeployState for SelfUpdate {
         self.rounds.store(0, Ordering::Relaxed);
     }
 
+    /// A version that holds the target's changes to Ignite's source as other commits, as the
+    /// daemon still running a hand-pushed commit does once the release is its rebased copy,
+    /// runs the release too.
     fn reached(&self, version: &Commit, target: &Commit) -> bool {
-        version == target || self.git.is_ancestor(target, version).unwrap_or(false)
+        version == target
+            || self.git.is_ancestor(target, version).unwrap_or(false)
+            || self
+                .git
+                .holds_changes(version, target, SOURCE)
+                .unwrap_or(false)
     }
 
     fn rejection(&self, commit: &Commit) -> Option<String> {

@@ -218,6 +218,42 @@ fn a_release_tip_that_does_not_contain_the_running_commit_is_not_an_update() {
 }
 
 #[test]
+fn a_release_tip_that_holds_a_rebased_copy_of_the_running_commit_is_not_ahead() {
+    // The daemon runs a commit pushed to the release branch by hand. The landing of the same
+    // ticket rebased it, and the release branch now holds the rebased copy: the tip does not
+    // contain the running commit but holds its changes.
+    let home = tempdir("copy");
+    let store = ExecutableStore::new(home.join("bin"));
+    let (running, copy, later) = (commit("ccccccc"), commit("ddddddd"), commit("eeeeeee"));
+    let git = FakeGit::default();
+    git.set_not_ancestor(&running, &copy);
+    git.set_not_ancestor(&running, &later);
+    git.set_holds(&copy, &running);
+    git.set_holds(&later, &running);
+    git.set_changed(&running, &later, &["ignite/crates/x.rs"]);
+    let builder = FakeBuilder {
+        out: home.join("build"),
+        built: RefCell::default(),
+    };
+    let updater = Updater {
+        git: &git,
+        builder: &builder,
+        store: &store,
+        master: "master",
+        source: "ignite",
+    };
+    // The copy changes nothing under Ignite's source, so the daemon stays as it is.
+    git.set_tip("master", copy.clone());
+    assert_eq!(
+        updater.plan(&running).unwrap(),
+        Plan::Done(UpdateCheck::NotNeeded { tip: copy })
+    );
+    // A later release with more changes is built, not refused as a downgrade.
+    git.set_tip("master", later.clone());
+    assert_eq!(updater.plan(&running).unwrap(), Plan::Build(later));
+}
+
+#[test]
 fn planning_a_release_builds_nothing_and_installing_a_finished_build_activates_it() {
     let home = tempdir("plan");
     let store = ExecutableStore::new(home.join("bin"));
