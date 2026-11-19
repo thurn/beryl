@@ -93,7 +93,7 @@ fn lag_tickets(conn: &rusqlite::Connection, clock: &ignite_core::fakes::FakeCloc
 }
 
 #[test]
-fn a_landing_that_master_lacks_for_half_an_hour_files_one_open_ticket() {
+fn a_landing_that_master_lacks_for_two_hours_files_one_open_ticket() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
     let landed = apply(
@@ -115,9 +115,9 @@ fn a_landing_that_master_lacks_for_half_an_hour_files_one_open_ticket() {
     assert_eq!(filed.len(), 1);
     let lag = ticket(&conn, &filed[0].ticket);
     assert!(lag.body.contains(&landed[0]));
-    assert_eq!(lag.title, "master has not moved for 31 minutes");
+    assert_eq!(lag.title, "master has not moved for 121 minutes");
     assert_eq!(lag.status, Status::Open);
-    assert!((MASTER_LAG_SECONDS - 30.0 * 60.0).abs() < f64::EPSILON);
+    assert!((MASTER_LAG_SECONDS - 2.0 * 3600.0).abs() < f64::EPSILON);
     // Another pass sees the same stuck landing and adds nothing.
     let again = justiciar::master_lag(&mut conn, clock.now()).unwrap();
     assert_eq!(again[0].change, Change::Unchanged);
@@ -160,4 +160,99 @@ fn landings_older_than_a_week_never_count_as_lag() {
             .unwrap()
             .is_empty()
     );
+}
+
+/// Records a landing of a new ticket at `clock`'s time and returns the ticket.
+fn landing(conn: &mut rusqlite::Connection, clock: &ignite_core::fakes::FakeClock) -> String {
+    let landed = apply(
+        conn,
+        vec![create("work", TicketType::Task, None, &[])],
+        clock.now(),
+    );
+    land(conn, &landed[0], &clock.now().to_string());
+    landed[0].clone()
+}
+
+fn close(conn: &mut rusqlite::Connection, id: &str, at: &str) {
+    conn.execute(
+        "UPDATE tickets SET status = 'closed', closed_at = ?1 WHERE id = ?2",
+        [at, id],
+    )
+    .unwrap();
+}
+
+#[test]
+fn an_open_regression_ticket_explains_the_lag_and_files_nothing() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    let regression = apply(
+        &mut conn,
+        vec![create("pytest fails", TicketType::Bug, None, &[])],
+        clock.now(),
+    );
+    conn.execute(
+        "INSERT INTO regressions (check_name, ticket, first_bad, last_good, state)
+         VALUES ('pytest', ?1, 'bbbbbbb', 'aaaaaaa', 'open')",
+        [&regression[0]],
+    )
+    .unwrap();
+    clock.advance(MASTER_LAG_SECONDS + 60.0);
+    assert!(
+        justiciar::master_lag(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+
+    // Once the regression ticket is closed, a lag that remains is no longer explained.
+    close(&mut conn, &regression[0], &clock.now().to_string());
+    assert_eq!(
+        justiciar::master_lag(&mut conn, clock.now()).unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn a_closed_ticket_for_the_same_stuck_landing_waits_before_a_new_one() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS + 60.0);
+    let first = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    close(&mut conn, &first[0].ticket, &clock.now().to_string());
+
+    // A worker closed it, but `master` still lacks the same landing.
+    clock.advance(MASTER_LAG_SECONDS - 60.0);
+    assert!(
+        justiciar::master_lag(&mut conn, clock.now())
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(lag_tickets(&conn, &clock), 1);
+
+    // The stall outlasted the wait, so the fix did not work and a new ticket is filed.
+    clock.advance(120.0);
+    let second = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(second[0].change, Change::Created);
+    assert_ne!(second[0].ticket, first[0].ticket);
+}
+
+#[test]
+fn a_closed_ticket_for_an_earlier_landing_does_not_hold_back_a_new_stall() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    landing(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS + 60.0);
+    let first = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    close(&mut conn, &first[0].ticket, &clock.now().to_string());
+
+    // `master` moves past the first landing, and a later one gets stuck.
+    clock.advance(60.0);
+    verify(&conn, "abc1234", &clock.now().to_string());
+    clock.advance(60.0);
+    landing(&mut conn, &clock);
+    clock.advance(MASTER_LAG_SECONDS + 60.0);
+    let second = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(second.len(), 1);
+    assert_ne!(second[0].ticket, first[0].ticket);
 }

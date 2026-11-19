@@ -2244,7 +2244,7 @@ cleared:
 - A ticket held in progress for six hours: it is no longer held that long.
 - A machine that has not reported: it has reported since, and no tip has waited
   an hour for verification since.
-- `master` has not moved: no landing has waited 30 minutes for it.
+- `master` has not moved: no landing has waited two hours for it.
 - Checks left incomplete (a failed build, a hung command, an invalid manifest
   entry, a command that cannot run or did not report): each check the ticket
   holds back has a result stored after the last sighting.
@@ -2930,10 +2930,15 @@ release branch when Ignite blocks its own landing.
 
 - The hub files justiciar tickets at P0 with `tier:opus`, matched by signature
   so a repeated sighting adds a comment and never a second ticket. They come
-  from upkeep, when the oldest landing since the last verified tip has waited 30
-  minutes or a ticket has been held for six hours, and from `POST /justiciar`,
+  from upkeep, when the oldest landing since the last verified tip has waited
+  two hours or a ticket has been held for six hours, and from `POST /justiciar`,
   which daemons send for a crash record or a loop that keeps failing, and which
   `ignite justiciar "<reason>"` sends for a session that meets an emergency.
+- Upkeep files no master-lag ticket while an open regression ticket explains the
+  stall, because that ticket's worker is already fixing it. Nor does it file one
+  for a stuck landing whose master-lag ticket a worker closed less than two
+  hours ago: the worker either found nothing for Ignite to fix or landed a fix
+  that has not yet moved `master`. A stall that outlasts that gets a new ticket.
 - A report about one machine, such as its daemon's crash, is owned by that
   machine, so its pool works it unless the machine goes silent (see
   [Owners](#owners)).

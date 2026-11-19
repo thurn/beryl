@@ -8,22 +8,28 @@
 //! - A report (`POST /justiciar`) from a daemon that saw Ignite crash or one of its loops keep
 //!   failing, or from a session that ran `ignite justiciar "<reason>"` ([`report`]).
 //! - Upkeep, when `master` has not moved for [`MASTER_LAG_SECONDS`] although commits landed
-//!   ([`master_lag`]). Tip verification is the only thing that moves `master`, so when it is
-//!   stuck, for any reason, nothing reaches `master` and no fix to Ignite itself is released
-//!   from it.
+//!   on `staging` ([`master_lag`]). Tip verification is the only thing that moves `master`, so
+//!   when it is stuck, for any reason, nothing reaches `master` and no fix to Ignite itself is
+//!   released from it. Upkeep files nothing while an open regression ticket explains the stall,
+//!   since that ticket's worker is already fixing it, and nothing for a stuck landing whose
+//!   ticket a worker closed less than [`MASTER_LAG_SECONDS`] ago.
 //!
 //! Every filing goes through [`filing`] with a signature of its subject, so a repeated sighting
 //! adds a comment to the open ticket and never a second ticket. Every justiciar ticket is filed
 //! released ([`Filing::released`]): an emergency that stops work cannot wait for a person to
 //! release its ticket.
 
+use std::collections::BTreeMap;
+
 use rusqlite::{Connection, OptionalExtension};
+use serde_json::Value;
 
 use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
-use ignite_store::Result;
+use ignite_store::hub::tips;
+use ignite_store::{Result, StoreError};
 
 use super::filing::{self, Author, Filed, Filing, UPKEEP};
 use super::parse_time;
@@ -38,10 +44,12 @@ pub const MASTER_LAG_SUBJECT: &str = "master-lag";
 /// The model tier a justiciar ticket asks for.
 const TIER: &str = "tier:opus";
 
-/// How long the oldest landing that `master` does not hold may wait before a justiciar ticket
-/// is filed: 30 minutes. A tip round under load takes a few minutes, so half an hour without
-/// `master` moving while landings wait is a fault, not a slow round.
-pub const MASTER_LAG_SECONDS: f64 = 30.0 * 60.0;
+/// How long the oldest landing on `staging` that `master` does not hold may wait before a
+/// justiciar ticket is filed: two hours. A tip round under load takes a few minutes, and a
+/// failing check already has a regression ticket, so two hours without `master` moving is a
+/// fault that no other ticket covers. At 30 minutes, most tickets filed were closed as "no
+/// emergency" by a worker who found ordinary regressions holding `master` back.
+pub const MASTER_LAG_SECONDS: f64 = 2.0 * 3600.0;
 
 /// Landings older than this are left out of the lag check, so history imported from before
 /// the hub existed never counts as lag.
@@ -136,13 +144,65 @@ pub(super) fn master_lagging(conn: &Connection, now: Timestamp) -> Result<bool> 
         .is_some_and(|(landed_at, _)| now.seconds_since(landed_at) >= MASTER_LAG_SECONDS))
 }
 
-/// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`.
+/// The open regression ticket of a check that is still failing, if there is one. Every tip
+/// that holds the failing landing fails that check, so such a ticket explains why `master` has
+/// not moved, and its worker is already fixing it.
+fn covering_regression(conn: &Connection) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT r.ticket FROM regressions r JOIN tickets t ON t.id = r.ticket
+             WHERE r.state != ?1 AND t.status != 'closed'
+             ORDER BY r.ticket LIMIT 1",
+            [tips::FIXED],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// Whether a master-lag ticket that reported the stuck landing `landing` was closed less than
+/// [`MASTER_LAG_SECONDS`] before `now`. Its worker either found nothing for Ignite to fix or
+/// landed a fix that has not yet had time to move `master`, so a new ticket for the same
+/// landing would send a second worker after the same stall. A stall that outlasts that wait
+/// gets a new ticket, in case the fix did not work.
+fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Result<bool> {
+    let key = Signature::of_subject(MASTER_LAG_SUBJECT, LABEL).key();
+    let newest: Option<(Option<String>, Option<String>)> = conn
+        .query_row(
+            "SELECT closed_at, metadata FROM tickets
+             WHERE json_extract(metadata, '$.ignite_signature') = ?1 AND status = 'closed'
+             ORDER BY created_at DESC, id DESC LIMIT 1",
+            [key],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    let Some((Some(closed_at), metadata)) = newest else {
+        return Ok(false);
+    };
+    if now.seconds_since(parse_time(&closed_at)?) >= MASTER_LAG_SECONDS {
+        return Ok(false);
+    }
+    let metadata: BTreeMap<String, Value> = match metadata {
+        Some(json) => serde_json::from_str(&json)
+            .map_err(|error| StoreError::Invalid(format!("master-lag metadata: {error}")))?,
+        None => BTreeMap::new(),
+    };
+    Ok(filing::strings(&metadata, filing::SIGHTINGS_KEY)
+        .iter()
+        .any(|seen| seen == landing))
+}
+
+/// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`,
+/// unless an open regression ticket explains the stall or a worker closed a ticket about the
+/// same stuck landing within that time.
 pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let Some((landed_at, ticket)) = oldest_unverified_landing(conn, now)? else {
         return Ok(Vec::new());
     };
     let waited = now.seconds_since(landed_at);
-    if waited < MASTER_LAG_SECONDS {
+    if waited < MASTER_LAG_SECONDS
+        || covering_regression(conn)?.is_some()
+        || recently_closed_for(conn, &ticket, now)?
+    {
         return Ok(Vec::new());
     }
     let minutes = waited / 60.0;
