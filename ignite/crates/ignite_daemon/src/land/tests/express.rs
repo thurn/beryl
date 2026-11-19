@@ -24,6 +24,8 @@ struct FakeExpress {
     ran: Mutex<Vec<Commit>>,
     /// The trees `run_in` ran in.
     trees: Mutex<Vec<PathBuf>>,
+    /// The express commands each `run_in` was given.
+    commands: Mutex<Vec<Vec<String>>>,
     fails: bool,
     hooks: Mutex<VecDeque<Hook>>,
 }
@@ -49,8 +51,9 @@ impl ExpressLane for FakeExpress {
         }
     }
 
-    fn run_in(&self, tree: &std::path::Path) -> ExpressRun {
+    fn run_in(&self, tree: &std::path::Path, express: &Express) -> ExpressRun {
         self.trees.lock().unwrap().push(tree.to_path_buf());
+        self.commands.lock().unwrap().push(express.commands.clone());
         let hook = self.hooks.lock().unwrap().pop_front();
         if let Some(hook) = hook {
             hook();

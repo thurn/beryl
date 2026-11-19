@@ -10,6 +10,8 @@ use crate::land::express::{ExpressLane, ExpressRun};
 #[derive(Default)]
 struct FakeLane {
     ran_in: Mutex<Vec<PathBuf>>,
+    /// The express commands each run was given.
+    commands: Mutex<Vec<Vec<String>>>,
     fails: bool,
 }
 
@@ -22,8 +24,9 @@ impl ExpressLane for FakeLane {
         unreachable!("a verb runs in the agent's tree")
     }
 
-    fn run_in(&self, tree: &Path) -> ExpressRun {
+    fn run_in(&self, tree: &Path, express: &ignite_core::config::Express) -> ExpressRun {
         self.ran_in.lock().unwrap().push(tree.to_path_buf());
+        self.commands.lock().unwrap().push(express.commands.clone());
         ExpressRun {
             ran: vec![("cargo test".to_owned(), 12.0)],
             failure: self
@@ -167,4 +170,65 @@ fn check_in_an_express_tree_runs_the_express_commands_but_plan_does_not() {
     );
     verb.run(&world.ctx, &request(&world, "check", &["--plan"]));
     assert_eq!(lane.ran_in.lock().unwrap().len(), 1);
+}
+
+/// The text of an `ignite.toml` whose express section runs `commands`.
+fn toml_with_express(commands: &str) -> String {
+    format!(
+        "[repository]\nremote = \"origin\"\nstaging = \"staging\"\nmaster = \"master\"\n\
+         trees = \"trees\"\nchecks = \"checks\"\n[hub]\nurl = \"http://localhost:1\"\n\
+         project = \"test\"\n[gate]\nthreshold = 0.01\ncap = 10\n\
+         [machine.local]\nticket_trees = 1\nlanding_trees = 1\n\
+         [express]\npaths = [\"ignite/**\"]\ntree = \"express\"\ndir = \"ignite\"\n\
+         commands = [{commands}]\nfamilies = [\"unit\"]\n"
+    )
+}
+
+#[test]
+fn a_tree_runs_the_express_commands_of_its_own_ignite_toml_not_the_daemons() {
+    let world = express_world(&["ignite/src/lib.rs"]);
+    // The daemon's section says `cargo test`; this tree, started earlier or later, says more.
+    fs::write(
+        world.dir.join("ignite.toml"),
+        toml_with_express("\"cargo fmt --check\", \"cargo nextest run --profile express\""),
+    )
+    .unwrap();
+    let lane = Arc::new(FakeLane::default());
+    let reply = verb_check(&world, &lane);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(
+        *lane.commands.lock().unwrap(),
+        [["cargo fmt --check", "cargo nextest run --profile express"]]
+    );
+}
+
+#[test]
+fn a_tree_whose_ignite_toml_does_not_parse_runs_the_daemons_express_commands() {
+    let world = express_world(&["ignite/src/lib.rs"]);
+    fs::write(world.dir.join("ignite.toml"), "this is = not [valid").unwrap();
+    let lane = Arc::new(FakeLane::default());
+    assert_eq!(verb_check(&world, &lane).exit, Exit::Success);
+    assert_eq!(*lane.commands.lock().unwrap(), [["cargo test"]]);
+}
+
+#[test]
+fn the_tree_s_express_paths_decide_whether_the_lane_is_taken() {
+    let world = express_world(&["src/main.rs"]);
+    // The daemon's paths do not cover `src/`, but the tree's file does.
+    fs::write(
+        world.dir.join("ignite.toml"),
+        toml_with_express("\"true\"").replace("ignite/**", "src/**"),
+    )
+    .unwrap();
+    let lane = Arc::new(FakeLane::default());
+    verb_check(&world, &lane);
+    assert_eq!(lane.commands.lock().unwrap().len(), 1);
+}
+
+fn verb_check(world: &World, lane: &Arc<FakeLane>) -> ignite_core::protocol::client::Reply {
+    let verb = CheckVerb {
+        checks: world.checks.clone(),
+        express: Some(lane.clone()),
+    };
+    verb.run(&world.ctx, &request(world, "check", &[]))
 }

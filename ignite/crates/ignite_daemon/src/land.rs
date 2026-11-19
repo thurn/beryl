@@ -445,7 +445,7 @@ impl Landing {
                 Some(done) => Box::new(done.onto(reply)),
                 None => Box::new(reply),
             };
-            let express = self.express_for(ctx, &changed);
+            let express = self.express_for(ctx, &held.path, &changed);
             // An express landing runs its commands in its own ticket tree, which the rebase has
             // put at the rebased commit, so express landings run side by side. They once all ran
             // in one shared tree under one lock, and on 2026-11-18 eight of them queued behind
@@ -467,14 +467,14 @@ impl Landing {
                 ticket: Some(ticket.clone()),
                 session: Some(session.clone()),
             };
-            let (gated, expressed) = if let Some(lane) = express {
+            let (gated, expressed) = if let Some((lane, section)) = &express {
                 // A pass after one whose commands passed runs them again only when the commits
                 // landed since touch what they depend on (see `express::Expressed`).
                 let carried = match &last_expressed {
                     Some(earlier) => earlier.carried(ctx, &rebased.head, &changed).map_err(io)?,
                     None => None,
                 };
-                let run = carried.unwrap_or_else(|| lane.run_in(&held.path));
+                let run = carried.unwrap_or_else(|| lane.run_in(&held.path, section));
                 (GateRun::default(), Some(run))
             } else {
                 // A pass after one whose gate passed judges again only what the commits landed
@@ -497,7 +497,12 @@ impl Landing {
                 return Err(stopped());
             }
             if let Some(run) = expressed.as_ref().filter(|run| !run.passed()) {
-                return Err(format_onto(express::failed_express(ctx, run)));
+                return Err(format_onto(express::failed_express(
+                    express
+                        .as_ref()
+                        .map_or("", |(_, section)| section.dir.as_str()),
+                    run,
+                )));
             }
             if !gated.run.passed() {
                 return Err(format_onto(failed_gate(

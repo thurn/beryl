@@ -421,6 +421,13 @@ impl Config {
         Ok((config, unknown))
     }
 
+    /// The `[express]` section of the `ignite.toml` in `text`, or `None` when the text does not
+    /// parse or has no such section. A tree's own file is read this way, so that a tree judges
+    /// itself by the express commands it has rather than those of the daemon's release.
+    pub fn express_section(text: &str) -> Option<Express> {
+        Self::parse("ignite.toml", text).ok()?.express
+    }
+
     /// The declaration of the machine with this hostname. Hostnames are compared without regard
     /// to case, as DNS compares them: macOS reports `JARVIS` for a machine declared as `jarvis`.
     pub fn machine(&self, hostname: &str) -> Option<&Machine> {

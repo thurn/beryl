@@ -1757,6 +1757,15 @@ express_cores = 3
   and the `ignite-lint` family (`cargo fmt` and clippy) run. Those families
   still run in the gate when a change to Ignite lands together with other files,
   and in tip verification.
+- The `[express]` section that `ignite check`, `ignite test` and `ignite land`
+  use is the one in the `ignite.toml` of the tree they run in (for a landing,
+  the ticket tree after the rebase, which is the commit that lands). The
+  daemon's own section, loaded from its release, is the fallback when the tree
+  has no `ignite.toml`, it does not parse or it has no `[express]`. On
+  2026-11-18 a tree started before a commit that changed the nextest command and
+  added the file that command reads failed every `ignite check` with
+  `profile 'express' not found`, because the daemon's newer commands ran in the
+  older tree. The pass memory's digest covers the section that ran.
 - `ignite test` and `ignite check` use the express lane too, for a tree whose
   every changed file matches `paths`. `ignite test` does so when every name it
   is given is in one of `families` (`ignite test ignite: ignite-lint:`, or the

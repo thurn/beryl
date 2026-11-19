@@ -138,8 +138,10 @@ pub trait ExpressLane: Send + Sync {
     /// express run on the machine to finish first.
     fn run(&self, commit: &Commit) -> ExpressRun;
     /// Runs the commands in `tree` as it is, with no checkout and no lock: a landing in its
-    /// ticket tree, and `ignite test` and `ignite check` in an agent's tree.
-    fn run_in(&self, tree: &Path) -> ExpressRun;
+    /// ticket tree, and `ignite test` and `ignite check` in an agent's tree. It runs the
+    /// commands and directory of `express`, the section of that tree's own `ignite.toml`
+    /// (see [`section_in`]), not the lane's own.
+    fn run_in(&self, tree: &Path, express: &ignite_core::config::Express) -> ExpressRun;
 }
 
 /// What an express run did.
@@ -220,18 +222,16 @@ fn ago_text(seconds: f64) -> String {
 pub struct PassMemory {
     pub db: Arc<Mutex<Connection>>,
     pub clock: Arc<dyn Clock>,
-    /// The digest of the section the lane runs.
-    pub section: String,
 }
 
 impl PassMemory {
-    /// A memory for `express`, whose digest covers every setting that decides what runs where.
-    pub fn new(
-        db: Arc<Mutex<Connection>>,
-        clock: Arc<dyn Clock>,
-        express: &ignite_core::config::Express,
-        cores: u32,
-    ) -> Self {
+    pub fn new(db: Arc<Mutex<Connection>>, clock: Arc<dyn Clock>) -> Self {
+        Self { db, clock }
+    }
+
+    /// The digest of `express`, covering every setting that decides what runs where, with the
+    /// machine's `cores`. It is of the section a run used, which is the tree's own.
+    pub fn digest(express: &ignite_core::config::Express, cores: u32) -> String {
         // FNV-1a over the serialized section: stable across runs and Rust versions, unlike
         // the standard library's hasher.
         let text = serde_json::to_string(express).unwrap_or_default() + &cores.to_string();
@@ -240,30 +240,26 @@ impl PassMemory {
             digest ^= u64::from(byte);
             digest = digest.wrapping_mul(0x0100_0000_01b3);
         }
-        Self {
-            db,
-            clock,
-            section: format!("{digest:016x}"),
-        }
+        format!("{digest:016x}")
     }
 
     /// How many seconds ago the commands passed on `tree_id`, if they did within the hour.
-    fn passed_ago(&self, tree_id: &str) -> Option<f64> {
+    fn passed_ago(&self, tree_id: &str, section: &str) -> Option<f64> {
         let now = self.clock.now();
         let since = now.plus_seconds(-REMEMBER_S).to_string();
         let db = self.db.lock().unwrap_or_else(PoisonError::into_inner);
-        let at = express_passes::passed_at(&db, tree_id, &self.section, &since).ok()??;
+        let at = express_passes::passed_at(&db, tree_id, section, &since).ok()??;
         let at = Timestamp::parse(&at).ok()?;
         Some(now.seconds_since(at).max(0.0))
     }
 
     /// Remembers that the commands passed on `tree_id`. A failure to write is ignored: the next
     /// landing then runs the commands, as it did before there was a memory.
-    fn remember(&self, tree_id: &str) {
+    fn remember(&self, tree_id: &str, section: &str) {
         let now = self.clock.now();
         let forget = now.plus_seconds(-REMEMBER_S).to_string();
         let db = self.db.lock().unwrap_or_else(PoisonError::into_inner);
-        let _ = express_passes::record(&db, tree_id, &self.section, &now.to_string(), &forget);
+        let _ = express_passes::record(&db, tree_id, section, &now.to_string(), &forget);
     }
 }
 
@@ -271,17 +267,39 @@ impl Landing {
     /// The express lane, when this landing may take it: the machine has one, the repository
     /// configures the express commands and a release branch to move, and every file the
     /// landing changes matches `[express] paths`.
+    ///
+    /// The section judged is that of the `ignite.toml` in `tree`, the ticket tree the rebase
+    /// has put at the commit that would land, so the paths and commands are those that land
+    /// with it. It falls back to the daemon's when the tree has no readable one.
     pub(super) fn express_for(
         &self,
         ctx: &Context,
+        tree: &Path,
         changed: &[String],
-    ) -> Option<&dyn ExpressLane> {
+    ) -> Option<(&dyn ExpressLane, ignite_core::config::Express)> {
         let lane = self.express.as_deref()?;
-        let express = ctx.config.express.as_ref()?;
+        let express = section_in(tree, ctx.config.express.as_ref())?;
         let repository = &ctx.config.repository;
         let releases = repository.release.is_some() && repository.release_family.is_some();
-        (releases && !express.commands.is_empty() && express.covers(changed)).then_some(lane)
+        (releases && !express.commands.is_empty() && express.covers(changed))
+            .then_some((lane, express))
     }
+}
+
+/// The `[express]` section of the `ignite.toml` in `tree`, or `fallback` (the daemon's section)
+/// when the tree has no such file, it does not parse or it has no `[express]`.
+///
+/// On 2026-11-18 a tree started before a commit that changed the express commands and added a
+/// file they read failed every `ignite check` with `profile 'express' not found`: the daemon
+/// had loaded the newer `ignite.toml` but the commands ran in the older tree.
+pub fn section_in(
+    tree: &Path,
+    fallback: Option<&ignite_core::config::Express>,
+) -> Option<ignite_core::config::Express> {
+    fs::read_to_string(tree.join("ignite.toml"))
+        .ok()
+        .and_then(|text| Config::express_section(&text))
+        .or_else(|| fallback.cloned())
 }
 
 /// Files that make a passing express run stale when another change lands them, even though
@@ -394,8 +412,7 @@ fn failed_crate(output: &str) -> Option<String> {
 
 /// The reply to an express run that failed: exit code 2, the command and the end of its
 /// output, and how to run the same command in the ticket tree.
-pub(super) fn failed_express(ctx: &Context, run: &ExpressRun) -> Reply {
-    let dir = ctx.config.express.as_ref().map_or("", |e| e.dir.as_str());
+pub(super) fn failed_express(dir: &str, run: &ExpressRun) -> Reply {
     let (command, output) = run.failure.clone().unwrap_or_default();
     let rerun = rerun_command(&command, &output);
     let mut lines = vec![line(
@@ -454,7 +471,7 @@ impl MachineExpress {
             dir: express.dir.clone(),
             commands: express.commands.clone(),
             cores,
-            memory: db.map(|db| PassMemory::new(db, clock.clone(), express, cores)),
+            memory: db.map(|db| PassMemory::new(db, clock.clone())),
             lender,
         }))
     }
@@ -516,8 +533,8 @@ impl MachineExpress {
 
     /// Runs the commands in order in `tree`'s commands directory, logging to `express.log` in
     /// its `target` directory, and records each in `run`; stops at the first failure.
-    fn run_commands(&self, tree: &Path, run: &mut ExpressRun) {
-        let dir = tree.join(&self.dir);
+    fn run_commands(&self, tree: &Path, dir: &str, commands: &[String], run: &mut ExpressRun) {
+        let dir = tree.join(dir);
         let target = dir.join("target");
         let log = target.join("express.log");
         if let Err(error) = fs::create_dir_all(&target).and_then(|()| File::create(&log)) {
@@ -535,7 +552,7 @@ impl MachineExpress {
             lender: self.lender.clone().expect("a loan came from a lender"),
             loan,
         });
-        for command in &self.commands {
+        for command in commands {
             steps::step(format!("running `{command}` on {cores} cores"));
             let began = Instant::now();
             let result = Self::run_one(command, &dir, &log, cores);
@@ -652,11 +669,11 @@ impl ExpressLane for MachineExpress {
             run.failure = Some(("checking out the express tree".to_owned(), why));
             return run;
         }
-        self.run_commands(&self.tree, &mut run);
+        self.run_commands(&self.tree, &self.dir, &self.commands, &mut run);
         run
     }
 
-    fn run_in(&self, tree: &Path) -> ExpressRun {
+    fn run_in(&self, tree: &Path, express: &ignite_core::config::Express) -> ExpressRun {
         let mut run = ExpressRun {
             cores: self.cores,
             ..ExpressRun::default()
@@ -666,19 +683,20 @@ impl ExpressLane for MachineExpress {
             .memory
             .as_ref()
             .and_then(|_| committed::clean_tree_id(tree).ok().flatten());
+        let section = PassMemory::digest(express, self.cores);
         if let (Some(memory), Some(id)) = (&self.memory, &tree_id)
-            && let Some(ago) = memory.passed_ago(id)
+            && let Some(ago) = memory.passed_ago(id, &section)
         {
             run.reused_after_s = Some(ago);
             return run;
         }
         // No lock: each tree has its own target directory, so runs in different trees share
         // nothing, and a lock made every landing and check wait for every other one.
-        self.run_commands(tree, &mut run);
+        self.run_commands(tree, &express.dir, &express.commands, &mut run);
         if let (Some(memory), Some(id)) = (&self.memory, &tree_id)
             && run.passed()
         {
-            memory.remember(id);
+            memory.remember(id, &section);
         }
         run
     }

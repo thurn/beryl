@@ -22,7 +22,7 @@ use ignite_core::protocol::client::{Exit, Reply};
 use super::OpenTree;
 use super::verbs::{changed_paths, render};
 use crate::checks::Checks;
-use crate::land::express::{ExpressLane, ExpressRun, rerun_command};
+use crate::land::express::{ExpressLane, ExpressRun, rerun_command, section_in};
 use crate::server::Context;
 
 /// What the verb was asked to run.
@@ -46,7 +46,7 @@ pub(super) fn express_reply(
     asked: Asked<'_>,
 ) -> Option<Reply> {
     let lane = lane?;
-    let express = ctx.config.express.as_ref()?;
+    let express = section_in(&tree.path, ctx.config.express.as_ref())?;
     if express.families.is_empty() || express.commands.is_empty() {
         return None;
     }
@@ -74,7 +74,7 @@ pub(super) fn express_reply(
     if !express.covers(&changed) {
         return None;
     }
-    Some(reply(&lane.run_in(&tree.path), &what))
+    Some(reply(&lane.run_in(&tree.path, &express), &what))
 }
 
 /// The reply to an express run: the `express` line when every command passed, else exit code

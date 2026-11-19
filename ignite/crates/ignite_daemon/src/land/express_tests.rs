@@ -85,7 +85,7 @@ fn a_run_in_an_agents_tree_uses_that_tree_as_it_is() {
     let (root, lane, _) = lane("in-tree", &["test -f lib.txt", "touch ran-here"]);
     let agent = lane.repo.clone();
     fs::write(agent.join("tool/uncommitted.txt"), "edit").unwrap();
-    let run = lane.run_in(&agent);
+    let run = lane.run_in(&agent, &section(&lane));
     assert!(run.passed(), "{run:?}");
     assert_eq!(run.ran.len(), 2);
     assert!(agent.join("tool/ran-here").exists());
@@ -100,20 +100,19 @@ fn a_run_in_an_agents_tree_uses_that_tree_as_it_is() {
 
 /// The lane `lane` with a pass memory over an in-memory database and a clock at `now`.
 fn remembering(lane: &mut MachineExpress, clock: &Arc<ignite_core::fakes::FakeClock>) {
-    let express = ignite_core::config::Express {
+    let db = ignite_store::local::open_in_memory().unwrap();
+    lane.memory = Some(PassMemory::new(Arc::new(Mutex::new(db)), clock.clone()));
+}
+
+/// The section a lane's own settings make, as the daemon's `ignite.toml` would declare it.
+fn section(lane: &MachineExpress) -> ignite_core::config::Express {
+    ignite_core::config::Express {
         paths: vec!["tool/**".to_owned()],
         tree: PathBuf::from("trees/express"),
-        dir: "tool".to_owned(),
+        dir: lane.dir.clone(),
         commands: lane.commands.clone(),
         families: Vec::new(),
-    };
-    let db = ignite_store::local::open_in_memory().unwrap();
-    lane.memory = Some(PassMemory::new(
-        Arc::new(Mutex::new(db)),
-        clock.clone(),
-        &express,
-        lane.cores,
-    ));
+    }
 }
 
 #[test]
@@ -123,27 +122,27 @@ fn a_second_run_of_an_unchanged_clean_tree_skips_the_commands() {
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
     remembering(&mut lane, &clock);
-    let first = lane.run_in(&lane.repo);
+    let first = lane.run_in(&lane.repo, &section(&lane));
     assert!(
         first.passed() && first.reused_after_s.is_none(),
         "{first:?}"
     );
     assert_eq!(first.ran.len(), 1);
     clock.advance(240.0);
-    let second = lane.run_in(&lane.repo);
+    let second = lane.run_in(&lane.repo, &section(&lane));
     assert!(second.passed() && second.ran.is_empty(), "{second:?}");
     assert_eq!(second.reused_after_s, Some(240.0));
     assert!(second.line().1.contains("passed for this tree 4 min ago"));
     // A new commit with other content runs the commands again.
     fs::write(lane.repo.join("tool/lib.txt"), "two").unwrap();
     git(&lane.repo, &["commit", "--quiet", "-am", "two"]);
-    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
     // An edited `[express]` section does not match the earlier pass.
-    let again = lane.run_in(&lane.repo);
+    let again = lane.run_in(&lane.repo, &section(&lane));
     assert!(again.reused_after_s.is_some());
     lane.commands.push("true".to_owned());
     remembering(&mut lane, &clock);
-    assert_eq!(lane.run_in(&lane.repo).ran.len(), 2);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 2);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -155,8 +154,8 @@ fn a_dirty_tree_neither_records_nor_reuses_a_pass() {
     ));
     remembering(&mut lane, &clock);
     fs::write(lane.repo.join("tool/lib.txt"), "edited").unwrap();
-    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
-    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -167,9 +166,9 @@ fn a_pass_older_than_an_hour_is_not_reused() {
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
     remembering(&mut lane, &clock);
-    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
     clock.advance(3601.0);
-    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -238,5 +237,44 @@ fn with_no_free_cores_the_run_keeps_its_reserved_cores_and_returns_nothing() {
         1,
         "asked once, nothing to return"
     );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_run_in_uses_the_commands_of_the_section_it_is_given() {
+    let (root, mut lane, _) = lane("own-section", &["false"]);
+    let clock = Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
+    ));
+    remembering(&mut lane, &clock);
+    // The lane's own commands fail, but the tree's section names others.
+    let mut own = section(&lane);
+    own.commands = vec!["touch own-ran".to_owned()];
+    let run = lane.run_in(&lane.repo, &own);
+    assert!(run.passed(), "{run:?}");
+    assert!(lane.repo.join("tool/own-ran").exists());
+    // A pass of one section is not reused for another.
+    own.commands = vec!["true".to_owned(), "true".to_owned()];
+    assert_eq!(lane.run_in(&lane.repo, &own).ran.len(), 2);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_tree_s_ignite_toml_is_read_for_its_express_section_with_the_daemons_as_fallback() {
+    let root = std::env::temp_dir().join(format!("ignite-section-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    let daemons = ignite_core::config::Express {
+        paths: vec!["a/**".to_owned()],
+        tree: PathBuf::from("t"),
+        dir: "a".to_owned(),
+        commands: vec!["daemon".to_owned()],
+        families: Vec::new(),
+    };
+    // No file, then a file that does not parse: the daemon's section.
+    assert_eq!(section_in(&root, Some(&daemons)), Some(daemons.clone()));
+    fs::write(root.join("ignite.toml"), "[express").unwrap();
+    assert_eq!(section_in(&root, Some(&daemons)), Some(daemons.clone()));
+    assert_eq!(section_in(&root, None), None);
     let _ = fs::remove_dir_all(root);
 }
