@@ -492,3 +492,25 @@ fn a_request_asked_again_keeps_its_place_by_when_it_was_first_asked() {
     let ids: Vec<u64> = ledger.step(at(14.0)).granted.iter().map(|g| g.id).collect();
     assert_eq!(ids, [fresh]);
 }
+
+#[test]
+fn adopted_grants_can_pass_the_cores_and_are_named_as_adopted() {
+    let mut ledger = Ledger::new(limits());
+    ledger.enqueue(ask(Class::Agent, 4), T0);
+    ledger.step(T0);
+    // A previous daemon's commands are recorded whatever is free, so the total can pass the
+    // machine's cores; the log line names which grants were adopted.
+    ledger.adopt(Class::Agent, 16, Vec::new(), None, None, false);
+    ledger.adopt(Class::Tip, 8, Vec::new(), None, None, false);
+    assert_eq!(granted_cores(&ledger), 28);
+    let mut holders = ledger.holders();
+    holders.sort_by_key(|&(_, cores, _)| cores);
+    assert_eq!(
+        holders,
+        [
+            (Class::Agent, 4, false),
+            (Class::Tip, 8, true),
+            (Class::Agent, 16, true)
+        ]
+    );
+}

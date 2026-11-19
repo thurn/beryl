@@ -84,6 +84,7 @@ impl SupervisedLauncher {
     /// out again while the command runs, and released when its supervisor has exited. Each run
     /// waits on a thread of its own.
     pub fn adopt_unfinished(&self) {
+        let (mut runs, mut cores_held) = (0, 0);
         for run in self.unfinished() {
             let held = self.scheduler.as_ref().and_then(|scheduler| {
                 let spec = run.spec()?;
@@ -98,6 +99,8 @@ impl SupervisedLauncher {
                     shrinks: file.shrinks,
                 });
                 let grant = scheduler.adopt(file.class, cores, file.resources, None, follow);
+                runs += 1;
+                cores_held += grant.cores;
                 if file.class == Class::Idle {
                     watch_for_stop(scheduler, grant.id, run.clone(), self.stop_grace_s);
                 }
@@ -107,6 +110,11 @@ impl SupervisedLauncher {
                 run.wait();
                 drop(held);
             });
+        }
+        if runs > 0 {
+            eprintln!(
+                "ignite: took over {runs} runs a previous daemon started, holding {cores_held} cores"
+            );
         }
     }
 }

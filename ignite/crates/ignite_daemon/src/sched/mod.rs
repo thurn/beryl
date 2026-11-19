@@ -215,6 +215,9 @@ struct State {
     stop: BTreeSet<u64>,
     /// The cores file of each grant that has one, until it is released.
     files: BTreeMap<u64, PathBuf>,
+    /// The grants exceeded the machine's cores at the last step, so the log line that says so
+    /// is written once each time they go over.
+    over: bool,
 }
 
 impl Scheduler {
@@ -229,6 +232,7 @@ impl Scheduler {
                 ready: BTreeMap::new(),
                 stop: BTreeSet::new(),
                 files: BTreeMap::new(),
+                over: false,
             }),
             changed: Condvar::new(),
             clock,
@@ -421,6 +425,7 @@ impl Scheduler {
 
     fn advance(&self, state: &mut State) {
         let step = state.ledger.step(self.clock.now());
+        log_overcommit(state);
         if step.granted.is_empty() && step.stop.is_empty() && step.resized.is_empty() {
             return;
         }
@@ -452,6 +457,33 @@ impl Scheduler {
             .wait(guard)
             .unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+/// Writes one log line, each time the grants go past the machine's cores, naming every grant
+/// held. After a restart on 2026-11-18 the daemon showed 25 of 18 cores granted, and nothing
+/// recorded which grants made up the 25: ones adopted from the previous daemon or ones this
+/// daemon made. The line says, for the next time it happens.
+fn log_overcommit(state: &mut State) {
+    let status = state.ledger.status();
+    let over = status.granted > status.cores;
+    if over && !state.over {
+        let holders: Vec<String> = state
+            .ledger
+            .holders()
+            .iter()
+            .map(|(class, cores, adopted)| {
+                let from = if *adopted { " adopted" } else { "" };
+                format!("{} {cores}{from}", class.as_str())
+            })
+            .collect();
+        eprintln!(
+            "ignite: {} of {} cores granted, past the machine's cores: {}",
+            status.granted,
+            status.cores,
+            holders.join(", ")
+        );
+    }
+    state.over = over;
 }
 
 /// What a waiting request waits for, such as `8 cores for tip work (2 tip commands running, 3

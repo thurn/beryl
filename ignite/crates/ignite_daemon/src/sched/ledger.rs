@@ -43,6 +43,15 @@ struct Held {
     unseen_memory: bool,
     /// Asked to stop to make room for a higher class; its cores are freed when it is released.
     stopping: bool,
+    /// Whether this daemon granted it or [`Ledger::adopt`] recorded a previous daemon's grant.
+    origin: Origin,
+}
+
+/// Where a held grant came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Origin {
+    Granted,
+    Adopted,
 }
 
 /// What [`Ledger::step`] decided.
@@ -148,6 +157,7 @@ impl Ledger {
                 shrinks,
                 unseen_memory: false,
                 stopping: false,
+                origin: Origin::Adopted,
             },
         );
         id
@@ -293,6 +303,15 @@ impl Ledger {
             step.stop.extend(self.stop_all_idle());
         }
         step
+    }
+
+    /// Every grant held, as `(class, cores, adopted)`, for the log line written when the grants
+    /// exceed the machine's cores.
+    pub fn holders(&self) -> Vec<(Class, u32, bool)> {
+        self.held
+            .values()
+            .map(|h| (h.class, h.cores, h.origin == Origin::Adopted))
+            .collect()
     }
 
     /// The scheduler's state for `ignite status`.
@@ -513,6 +532,7 @@ impl Ledger {
                 shrinks: waiter.request.shrinks,
                 unseen_memory: true,
                 stopping: false,
+                origin: Origin::Granted,
             },
         );
         Grant {
