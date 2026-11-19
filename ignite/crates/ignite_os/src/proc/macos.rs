@@ -303,7 +303,11 @@ mod tests {
             .unwrap();
         let _ = std::fs::remove_dir_all(&dir);
         let out = String::from_utf8_lossy(&output.stdout);
-        let line = out.lines().find(|line| line.starts_with("replaced"));
+        // The test harness prints `test <name> ... ` without a newline before the test runs,
+        // so the replaced image's line may follow that prefix on the same line.
+        let line = out
+            .lines()
+            .find_map(|line| line.find("replaced 1 ").map(|start| &line[start..]));
         assert_eq!(line, Some(expected.as_str()), "{out}");
     }
 
