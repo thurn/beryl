@@ -374,10 +374,6 @@ OWN_COMMANDS: tuple[Command, ...] = (
         "holds the web interface's and Beryl 3D's timelines of every recording to each other",
         (
             (
-                "just b3d timeline-parity verbs-zones",
-                "the recordings named verbs-zones",
-            ),
-            (
                 "just b3d timeline-parity --fixtures",
                 "the recorded fixtures only",
             ),
