@@ -564,5 +564,10 @@
     "label": "An express landing keeps an earlier express pass when the only files the commits it rebased over share with the change are `[express] inert` ones (the design document and this file), and the express nextest profile leaves out three more tests that set the run's wall time under load (on 2026-11-19 two Ignite landings each ran all four express commands again, 65 s and 71 s, after rebasing over commits that also edited those two files, and the express test run took 26 to 61 s at a load average of 46 to 62 against 18 to 19 s without the three tests)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The hub files one flaky-check ticket per check family and adds each later switched-off check of that family to it as a comment (on 2026-11-19 two `ignite` tests that flaked on one machine within the same hour each got their own ticket and would have each cost a session)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

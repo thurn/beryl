@@ -118,6 +118,45 @@ fn many_checks_flaking_in_one_command_switch_none_off_and_file_one_machine_ticke
     assert_eq!(all_tickets(&conn, clock.now()).len(), 1);
 }
 
+#[test]
+fn flaky_checks_of_one_family_share_one_ticket_and_other_families_get_their_own() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    for name in ["rust:a", "rust:b", "ui:c"] {
+        list_check(&mut conn, name);
+    }
+    // Each check flakes alone in its own command, twice on different commits.
+    let twice = |conn: &Connection, clock: &dyn Clock, name: &str| {
+        for commit in ["aaaa", "bbbb"] {
+            let command = format!("m-1:{name}:{commit}");
+            checks::record_flaky(conn, &flaky(name, commit, &command), clock.now()).unwrap();
+        }
+    };
+
+    twice(&conn, &clock, "rust:a");
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert_eq!(report.checks_switched_off, vec!["rust:a"]);
+    let shared = ticket(&conn, &report.tickets_filed[0]);
+    assert_eq!(shared.title, "Flaky checks switched off in rust");
+
+    // A second check of the same family goes onto the open ticket as a comment.
+    clock.advance(3_600.0);
+    twice(&conn, &clock, "rust:b");
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert_eq!(report.checks_switched_off, vec!["rust:b"]);
+    assert_eq!(report.tickets_filed, vec![shared.id.to_string()]);
+    assert_eq!(comment_count(&conn, shared.id.as_str()), 1);
+    assert_eq!(check_state(&conn, "rust:b"), "off");
+
+    // A check of another family gets a ticket of its own.
+    clock.advance(3_600.0);
+    twice(&conn, &clock, "ui:c");
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert_ne!(report.tickets_filed, vec![shared.id.to_string()]);
+    assert_eq!(all_tickets(&conn, clock.now()).len(), 2);
+}
+
 fn store(conn: &mut Connection, machine: &str, outcome: Outcome, now: Timestamp) -> u16 {
     let request = StoreRequest {
         results: vec![NewResult {

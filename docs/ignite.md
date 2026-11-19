@@ -2427,8 +2427,12 @@ soon as the evidence is in, without waiting for an agent.
   saw it passes.
 - A second flaky record within 7 days of the first, on a different commit,
   switches the check off on every machine. An off check does not run.
-- The hub files one P3 ticket to delete the check or replace it with a
+- The hub files a P3 ticket to delete the check or replace it with a
   deterministic test. The ticket quotes both failures.
+- One ticket covers a whole check family. While a family's flaky ticket is not
+  closed, the next check of that family to be switched off is added to it as a
+  comment, so one session investigates them together instead of one session per
+  check. Flakes in one family often share a cause, such as a loaded machine.
 - `ignite flaky on <check> -m "<why>"` switches a check back on once the ticket
   is fixed, and `ignite flaky off <check> -m "<why>"` switches one off on every
   machine by hand. Each needs the machine's write token. The hub records who
@@ -2443,7 +2447,8 @@ soon as the evidence is in, without waiting for an agent.
   culprit, and it is not stored in the result cache.
 - A check in the always set is never switched off. A formatter or a lint that
   flakes is almost always the machine: a file another process changed, a shared
-  temporary path, a download. The hub files a P1 ticket to fix the step.
+  temporary path, a download. The hub files a P1 ticket to fix the step, also
+  one per family.
 - A flaky record does not count toward switching a check off when three or more
   unrelated checks flaked in the same command. That is one fault of the machine,
   such as a full disk or a stuck browser page, and it gets one ticket.

@@ -1,11 +1,16 @@
 //! Flaky checks.
 //!
 //! - A check with a second flaky record within 7 days of the first, on a different commit, is
-//!   switched off on every machine, and one P3 ticket asks for it to be deleted or replaced with
-//!   a deterministic test. The ticket quotes both failures' output.
+//!   switched off on every machine, and a P3 ticket asks for it to be deleted or replaced with a
+//!   deterministic test. The ticket quotes both failures' output.
 //! - A check in the always set is never switched off. Its second flaky record files a P1 ticket
 //!   to fix the step instead, because a formatter or lint that flakes is almost always the
 //!   machine.
+//! - Both kinds of ticket are shared by a check family (the part of a check's name before the
+//!   colon). While a family's ticket is not closed, the next check of that family to be switched
+//!   off is added to it as a comment instead of filing another ticket. Flakes in one family
+//!   often share a cause, such as a loaded machine, and one session investigating them together
+//!   costs much less than one session per check.
 //! - When three or more checks flaked in one command run, the machine is at fault (a full disk,
 //!   a stuck browser page). None of those records counts toward switching a check off, and the
 //!   command gets one P1 ticket for the machine.
@@ -234,23 +239,30 @@ fn family(check: &str) -> &str {
     check.split_once(':').map_or(check, |(family, _)| family)
 }
 
+/// Names one check's pair of flaky records, so that the family's shared ticket records each
+/// check's pair once.
+fn evidence(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> String {
+    format!("{check}@{}+{}", first.commit, second.commit)
+}
+
 fn off_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Filing {
+    let family = family(check);
     let body = format!(
         "{check} failed and then passed at once on the same inputs twice within \
          {FLAKY_WINDOW_DAYS} days, on different commits. It is switched off on every machine.\n\n\
          {}\n\n\
-         Delete the check, or replace it with a deterministic test and switch it back on.",
+         Delete {check}, or replace it with a deterministic test and switch it back on.",
         quote_both(first, second)
     );
     Filing {
-        signature: Signature::of_subject(check, "flaky"),
-        evidence: format!("{}+{}", first.commit, second.commit),
+        signature: Signature::of_subject(family, "flaky"),
+        evidence: evidence(check, first, second),
         fields: TicketFields {
-            title: Some(format!("Flaky check switched off: {check}")),
+            title: Some(format!("Flaky checks switched off in {family}")),
             body: Some(body),
             ticket_type: Some(TicketType::Bug),
             priority: Some(3),
-            labels: Some(vec!["flaky".to_owned(), format!("check:{}", family(check))]),
+            labels: Some(vec!["flaky".to_owned(), format!("check:{family}")]),
             ..TicketFields::default()
         },
         deps: Vec::new(),
@@ -259,6 +271,7 @@ fn off_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Filing 
 }
 
 fn always_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Filing {
+    let family = family(check);
     let body = format!(
         "{check} is in the always set and failed and then passed at once on the same inputs \
          twice within {FLAKY_WINDOW_DAYS} days, on different commits. A check in the always set \
@@ -268,14 +281,14 @@ fn always_filing(check: &str, first: &FlakyRecord, second: &FlakyRecord) -> Fili
         quote_both(first, second)
     );
     Filing {
-        signature: Signature::of_subject(check, "flaky-always"),
-        evidence: format!("{}+{}", first.commit, second.commit),
+        signature: Signature::of_subject(family, "flaky-always"),
+        evidence: evidence(check, first, second),
         fields: TicketFields {
-            title: Some(format!("Always-set check flakes: {check}")),
+            title: Some(format!("Always-set checks flake in {family}")),
             body: Some(body),
             ticket_type: Some(TicketType::Bug),
             priority: Some(1),
-            labels: Some(vec!["flaky".to_owned(), format!("check:{}", family(check))]),
+            labels: Some(vec!["flaky".to_owned(), format!("check:{family}")]),
             ..TicketFields::default()
         },
         deps: Vec::new(),
