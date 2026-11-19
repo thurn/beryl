@@ -125,7 +125,11 @@ impl Daemon {
             version: base.options.version.clone(),
             hostname: base.options.hostname.clone(),
             feed_wait_s: base.options.feed_wait_s,
-            update: Arc::new(self_update(&base, machinery.launcher.clone())),
+            update: Arc::new(self_update(
+                &base,
+                &machinery.launcher,
+                &machinery.scheduler,
+            )),
             health: health.clone(),
             reporter: Arc::new(crate::justiciar::Reporter::new(
                 base.options.home.root.clone(),
@@ -182,13 +186,30 @@ impl Daemon {
 }
 
 /// Updates this daemon to new releases: builds them in `update/update-tree` in the home
-/// folder, apart from the build trees, as supervised commands run through `launcher`, and
-/// restarts with [`ExecRestart`].
+/// folder, apart from the build trees, and restarts with [`ExecRestart`]. The build and its
+/// selftest run on the machine's express cores, borrowing free cores from `scheduler` (see
+/// [`crate::update::direct`]), or as supervised commands through `launcher` on a machine with
+/// no express cores.
 fn self_update(
     base: &assemble::Base,
-    launcher: Arc<dyn ignite_core::traits::Launcher>,
+    launcher: &Arc<dyn ignite_core::traits::Launcher>,
+    scheduler: &Arc<crate::sched::Scheduler>,
 ) -> selfupdate::SelfUpdate {
     let options = &base.options;
+    let update = options.home.root.join("update");
+    let express = |log: &str| -> Arc<dyn ignite_core::traits::Launcher> {
+        let cores = base.declared.express_cores;
+        if cores == 0 {
+            return launcher.clone();
+        }
+        Arc::new(crate::update::direct::ExpressLauncher {
+            cores,
+            lender: Some(Arc::new(crate::land::express::SchedulerLender(
+                scheduler.clone(),
+            ))),
+            log: update.join(log),
+        })
+    };
     selfupdate::SelfUpdate {
         own: Commit::new(&options.version).ok(),
         git: base.git.clone(),
@@ -197,7 +218,7 @@ fn self_update(
                 repo: options.repo.clone(),
                 work: options.home.root.join("update"),
             },
-            launcher: launcher.clone(),
+            launcher: express("build.log"),
         }),
         store: options.home.store(),
         master: base.config.repository.release_branch().to_owned(),
@@ -209,7 +230,7 @@ fn self_update(
         building: Mutex::default(),
         failed: Mutex::default(),
         selftest: Arc::new(crate::update::selftest::SupervisedSelftest {
-            launcher,
+            launcher: express("selftest.log"),
             repo: options.repo.clone(),
         }),
         hub: base.hub.clone(),
@@ -221,6 +242,7 @@ fn self_update(
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),
         adopted: Mutex::default(),
+        release_seen: Mutex::default(),
         window: Mutex::new(restart_window::RestartWindow::new(base.config.self_update)),
     }
 }

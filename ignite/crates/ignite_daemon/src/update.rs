@@ -32,6 +32,7 @@ use ignite_core::traits::{CommandSpec, Error, Git, Launcher, Result, RunResult};
 use ignite_os::Native;
 use serde::{Deserialize, Serialize};
 
+pub mod direct;
 mod install;
 mod lastgood;
 mod rollback;
@@ -371,10 +372,10 @@ fn wait_for_running_build(workspace: &Path) {
     }
 }
 
-/// Builds each release in the update tree as a command run by the daemon's launcher, in the
-/// `agent` class with a hang limit, so that the scheduler accounts for its cores and its
-/// supervisor, not a thread of the daemon, owns the Cargo process. [`Builder::build`] blocks
-/// until Cargo ends, so the caller runs it on a thread of its own (see `SelfUpdate`).
+/// Builds each release in the update tree as a command run by `launcher`, with a hang limit:
+/// on the machine's express cores ([`direct::ExpressLauncher`]), or through the scheduler as an
+/// `agent` command on a machine with none. [`Builder::build`] blocks until Cargo ends, so the
+/// caller runs it on a thread of its own (see `SelfUpdate`).
 pub struct ReleaseBuilder {
     pub tree: TreeBuilder,
     pub launcher: Arc<dyn Launcher>,

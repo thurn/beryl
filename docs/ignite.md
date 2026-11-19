@@ -555,37 +555,46 @@ How the executable is installed and kept current:
   that is due waits for a quiet window: until no newer release has appeared for
   `self_update.quiet_seconds` (15), no newer release is still building and, when
   the release changes the landing code (the daemon's `land` module), no landing
-  runs, but at most `self_update.cap_seconds` (600) from the first release it
-  waits with. Releases that land one after another therefore cause one restart
-  into the newest: a release that lands while another builds is built as soon as
-  that build ends, and replaces it as the one to restart into. A push in
-  progress holds the restart even past the cap. It never waits for running
-  commands or verb processes, which survive it. Before it restarts, the daemon
-  answers every new request, except the calls of verb processes, with a reply
-  that says it is restarting, which the client sends again, and waits up to 30
-  seconds for the verbs running on its own threads, such as a `release`. It does
-  not wait for a `start` that only waits for a free tree: the new daemon runs
-  that `start` again under its handle, and the rerun claims the tree if one was
-  leased to the session meanwhile. Daemons look at the branch every five
-  minutes, so a fix pushed to it by hand deploys too.
+  runs, but at most `self_update.cap_seconds` (30) from the first release it
+  waits with, counted from when its build started. Releases that land one after
+  another therefore cause one restart into the newest: a release that lands
+  while another builds is built as soon as that build ends, and replaces it as
+  the one to restart into. A push in progress holds the restart even past the
+  cap. It never waits for running commands or verb processes, which survive it.
+  Before it restarts, the daemon answers every new request, except the calls of
+  verb processes, with a reply that says it is restarting, which the client
+  sends again, and waits up to 30 seconds for the verbs running on its own
+  threads, such as a `release`. It does not wait for a `start` that only waits
+  for a free tree: the new daemon runs that `start` again under its handle, and
+  the rerun claims the tree if one was leased to the session meanwhile. Daemons
+  fetch the branch every five minutes, so a fix pushed to it by hand deploys
+  too. A landing on the machine moves the release branch from a worktree of the
+  main checkout, which updates the checkout's copy of the branch, so the daemon
+  reads that copy every round of its sender loop (10 seconds) and starts the
+  build at the next round.
 - The release build is not run by a loop. When the release branch moves, or the
   hub reports a version this daemon doesn't have, the daemon starts one build on
-  a thread of its own, as a supervised `agent` command in `update/update-tree`
-  with a one-hour hang limit; only one runs at a time. The sender loop never
-  waits for it: each round it looks whether the build has finished and shows
-  "building release <commit>" as its step meanwhile, and the next heartbeat
-  after it finishes restarts the daemon into it, or takes it on without a
-  restart as above. A failed build is logged once and not retried until another
-  commit is wanted. A daemon that restarts mid-build waits for Cargo's lock
-  before it resets the update tree.
+  a thread of its own in `update/update-tree` with a one-hour hang limit; only
+  one runs at a time. The build runs as the daemon's own child process on the
+  machine's `express_cores`, borrowing whatever cores are free when it starts up
+  to 12 in all, and logs to `update/build.log`. Before 2026-11-19 it was a
+  supervised `agent` command, which waited up to 7.5 minutes for the scheduler's
+  cores under load and then compiled on one core. A machine with no express
+  cores still runs it that way. The sender loop never waits for it: each round
+  it looks whether the build has finished and shows "building release <commit>"
+  as its step meanwhile, and the next heartbeat after it finishes restarts the
+  daemon into it, or takes it on without a restart as above. A failed build is
+  logged once and not retried until another commit is wanted. A daemon that
+  restarts mid-build waits for Cargo's lock before it resets the update tree.
 - Before the daemon restarts into a new release, the release thread runs the new
-  executable's selftest, `bin/<commit>/ignite internal selftest`, as a
-  supervised command. It parses `ignite.toml` and every check manifest as the
-  daemon does at start, requires this machine's `[machine.<host>]` table, and
-  applies the build's migrations to a copy of `daemon.db`. `bin/current` points
-  at the build only after it passes. A build that fails is added to
-  `bin/rejected`, so no daemon updates to it, and is reported once to the
-  justiciar; the daemon stays on its own build until the release branch moves.
+  executable's selftest, `bin/<commit>/ignite internal selftest`, the same way
+  as the build, on one express core (`update/selftest.log`). It parses
+  `ignite.toml` and every check manifest as the daemon does at start, requires
+  this machine's `[machine.<host>]` table, and applies the build's migrations to
+  a copy of `daemon.db`. `bin/current` points at the build only after it passes.
+  A build that fails is added to `bin/rejected`, so no daemon updates to it, and
+  is reported once to the justiciar; the daemon stays on its own build until the
+  release branch moves.
 - A restart on Windows starts the new executable with `IGNITE_RESTART_FROM` set
   to the old daemon's process ID, and the old daemon exits once the new one has
   logged its start in `starts.jsonl`. The new daemon waits up to 30 seconds for
@@ -662,15 +671,15 @@ How the executable is installed and kept current:
   `bin/rollbacks.log`), then the hub's version and each machine's, which the hub
   reports at `GET /machines/versions`.
 - When `ignite land` moves the release branch, its `next` line names
-  `ignite wait deploy-<commit>`. That wait asks the daemon to check the release
-  branch at its next round instead of at its five-minute check. It then waits
-  until this daemon, the hub and every machine the hub heard from in the last
-  ten minutes run the commit or a later one (exit 0), or the commit was rolled
-  back, failed its selftest or failed to build on this machine (exit 2, with the
-  reason). A wait that ends first exits 5, or 4 when the hub cannot be reached.
-  The wait keeps no state, so a client cut off by the daemon restarting into the
-  release sends it again. A rollback on another machine shows only as that
-  machine staying behind.
+  `ignite wait deploy-<commit>`. That wait asks the daemon to fetch the release
+  branch at its next round instead of at its five-minute check, for a release
+  that moved on another machine. It then waits until this daemon, the hub and
+  every machine the hub heard from in the last ten minutes run the commit or a
+  later one (exit 0), or the commit was rolled back, failed its selftest or
+  failed to build on this machine (exit 2, with the reason). A wait that ends
+  first exits 5, or 4 when the hub cannot be reached. The wait keeps no state,
+  so a client cut off by the daemon restarting into the release sends it again.
+  A rollback on another machine shows only as that machine staying behind.
 
 How a restart is survived:
 

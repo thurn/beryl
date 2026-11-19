@@ -8,7 +8,7 @@ use ignite_core::fakes::{FakeClock, FakeGit, FakeHub};
 use ignite_core::ids::MachineId;
 
 use super::*;
-use crate::deploy::{Checked, Work};
+use crate::deploy::{Checked, DeployState, Work};
 
 const OLD: &str = "a1b2c3d";
 const NEW: &str = "e4f5a6b";
@@ -139,6 +139,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),
         adopted: Mutex::default(),
+        release_seen: Mutex::default(),
         window: Mutex::new(RestartWindow::new(WINDOW)),
     };
     (update, git, restart)
@@ -361,6 +362,27 @@ fn a_push_straight_to_the_release_branch_deploys() {
     );
 
     poll(&update);
+    assert!(update.store.has(&commit(NEW)));
+    update.after_heartbeat(Some(OLD), IDLE);
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+}
+
+/// A landing on this machine moves the release branch from a worktree of the checkout, so the
+/// next round of the sender loop sees it without a fetch and builds it, instead of waiting for
+/// the regular check every `POLL_EVERY_ROUNDS` rounds.
+#[test]
+fn a_release_moved_in_the_checkout_builds_at_the_next_round() {
+    let (mut update, git, restart) = daemon(OLD);
+    update.master = "release".to_owned();
+    git.set_tip("release", commit(OLD));
+    update.rounds.store(1, Ordering::Relaxed);
+    update.poll_release().unwrap();
+    settle(&update);
+
+    git.set_tip("release", commit(NEW));
+    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
+    update.poll_release().unwrap();
+    settle(&update);
     assert!(update.store.has(&commit(NEW)));
     update.after_heartbeat(Some(OLD), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);

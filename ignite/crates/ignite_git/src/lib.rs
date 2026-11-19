@@ -50,6 +50,10 @@ impl Git for GitCli {
         refs::remote_tip(&self.repo, &self.remote, branch)
     }
 
+    fn known_tip(&self, branch: &str) -> Result<Commit> {
+        refs::cached_tip(&self.repo, &self.remote, branch)
+    }
+
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
         refs::is_ancestor(&self.repo, ancestor, descendant)
     }

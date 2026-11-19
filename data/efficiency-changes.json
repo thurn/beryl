@@ -489,5 +489,10 @@
     "label": "Workers start `ignite land`, `check`, `test` and `wait` in the background and end the turn instead of sleep-polling or holding a foreground call to the 600 s Bash limit, and the post-start title reminder lets the title call share a request with the first reads (on 2026-11-19, 33 worker sessions spent 151 minutes in 108 sleep-poll calls, and 45 `ignite` calls ran 530 to 601 s in the foreground)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite release builds and selftests run on the express cores instead of queueing for the scheduler's, the daemon notices a landing's release move at the next sender round instead of its five-minute fetch, and the restart cap is 30 s instead of 600 s (on 2026-11-19 the median release reached jarvis 395 s after its landing moved it)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

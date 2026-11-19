@@ -13,9 +13,9 @@
 //! - prints the host protocol versions the build serves.
 //!
 //! It exits 0 when everything works, and otherwise 1 with the reason on standard error. The
-//! daemon runs it through its launcher ([`SupervisedSelftest`]) before pointing `bin/current`
-//! at the build; a failure records the commit as rejected and is reported to the justiciar (see
-//! `main/selfupdate.rs`).
+//! daemon runs it through a launcher ([`SupervisedSelftest`], on the express cores where the
+//! machine has them) before pointing `bin/current` at the build; a failure records the commit
+//! as rejected and is reported to the justiciar (see `main/selfupdate.rs`).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

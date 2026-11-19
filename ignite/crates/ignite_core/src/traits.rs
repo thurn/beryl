@@ -203,6 +203,12 @@ pub trait Git: Send + Sync {
     fn push(&self, tree: &Path, commit: &Commit, branch: &str) -> Result<Push>;
     /// The remote branch's newest commit.
     fn tip(&self, branch: &str) -> Result<Commit>;
+    /// The remote branch's newest commit as this checkout last saw it, by a fetch or by a push
+    /// from it, without asking the remote. Cheap enough to call every few seconds. Fakes, which
+    /// never fetch, answer [`Git::tip`].
+    fn known_tip(&self, branch: &str) -> Result<Commit> {
+        self.tip(branch)
+    }
     /// Whether `ancestor` is `descendant` or one of its ancestors.
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool>;
     /// Whether `history` holds every change under `path` that `version` holds: `version` is in

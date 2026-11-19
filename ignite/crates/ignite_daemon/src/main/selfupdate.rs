@@ -9,9 +9,11 @@
 //!   (10 seconds), whatever runs. A daemon
 //!   whose own commit the branch does not contain, such as one installed by hand from
 //!   `staging`, stays where it is: going to the branch's tip would be a downgrade.
-//! - Someone pushes straight to the release branch, which tip verification never sees. The
-//!   sender loop calls [`SelfUpdate::poll_release`] every round, and every
-//!   [`POLL_EVERY_ROUNDS`]th call fetches the branch's tip and prepares the build the same way.
+//! - A landing moves the release branch, or someone pushes straight to it, which tip
+//!   verification never sees. The sender loop calls [`SelfUpdate::poll_release`] every round.
+//!   It prepares the build the same way when the checkout's copy of the branch moved, as a
+//!   landing on this machine moves it, and every [`POLL_EVERY_ROUNDS`]th call fetches the
+//!   branch's tip, for a push from elsewhere.
 //! - The hub reports, in its heartbeat reply, a version other than the daemon's. The sender loop
 //!   calls [`SelfUpdate::after_heartbeat`], which builds the hub's version (or finds it stored)
 //!   and restarts into it.
@@ -42,10 +44,10 @@
 //! replaced by the newer one. Each restart records its reason in `starts.jsonl`: the release and
 //! the daemon files it changed.
 //!
-//! The release is built by a thread of its own, through the daemon's launcher (see
-//! [`crate::update::ReleaseBuilder`]), so the sender loop goes on sending heartbeats and the outbox
-//! while Cargo runs, which takes minutes on a loaded machine. Whichever loop asks for a build
-//! starts it unless one runs already. The sender looks each round whether it has finished
+//! The release is built by a thread of its own (see [`crate::update::ReleaseBuilder`]), on the
+//! machine's express cores rather than the scheduler's (see [`crate::update::direct`]), so the
+//! sender loop goes on sending heartbeats and the outbox while Cargo runs. Whichever loop asks
+//! for a build starts it unless one runs already. The sender looks each round whether it has finished
 //! ([`SelfUpdate::collect_build`]) and says in its step that a release is building. A build that
 //! failed is reported once and not tried again for the same commit; the next move of the release
 //! branch tries the new commit.
@@ -86,7 +88,6 @@ use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
-use crate::deploy::{Checked, DeployState, LocalRelease, Work};
 use crate::main::restart_window::{Decision, RestartWindow};
 use crate::server::{DRAIN_WAIT, Drain};
 use crate::update::scope::{Source, affects_landing, daemon_changes, summary};
@@ -162,6 +163,9 @@ pub struct SelfUpdate {
     pub ready: Mutex<Option<PathBuf>>,
     /// How many times [`SelfUpdate::poll_release`] has been called.
     pub rounds: AtomicU32,
+    /// The release branch's tip as this checkout last knew it, when [`SelfUpdate::poll_release`]
+    /// last looked.
+    pub release_seen: Mutex<Option<Commit>>,
     /// The release tip last reported as not containing this daemon's commit.
     pub ahead_of: Mutex<Option<Commit>>,
     /// The release build that is running, if any. At most one runs, so a second request for the
@@ -439,19 +443,44 @@ impl SelfUpdate {
     }
 
     /// Called once per round of the sender loop. Every [`POLL_EVERY_ROUNDS`]th call (the first
-    /// one included) fetches the release branch's tip and, if it moved past this daemon's own
-    /// commit and files under Ignite's source changed, builds and stores it exactly as
-    /// [`SelfUpdate::after_master_moved`] does. This is what deploys a push made straight to
-    /// the release branch. A commit recorded as bad is never built.
+    /// one included), and every call that finds the release branch's tip moved in this checkout
+    /// without asking the remote, fetches the release branch's tip and, if it moved past this
+    /// daemon's own commit and files under Ignite's source changed, builds and stores it
+    /// exactly as [`SelfUpdate::after_master_moved`] does. A commit recorded as bad is never
+    /// built.
+    ///
+    /// The regular fetch deploys a push made straight to the release branch, or from another
+    /// machine. A landing on this machine moves the release branch from a worktree of this
+    /// checkout, which updates the checkout's copy of the branch, so the next round sees it.
+    /// Before, such a release waited for the regular fetch, up to 5 minutes, unless someone
+    /// ran `ignite wait deploy-<commit>`.
     pub fn poll_release(&self) -> Result<()> {
-        if !self
+        let due = self
             .rounds
             .fetch_add(1, Ordering::Relaxed)
-            .is_multiple_of(POLL_EVERY_ROUNDS)
-        {
-            return Ok(());
+            .is_multiple_of(POLL_EVERY_ROUNDS);
+        // Asked every round, so that the first round records the tip it starts from.
+        let moved = self.release_moved();
+        if due || moved {
+            return self.after_master_moved();
         }
-        self.after_master_moved()
+        Ok(())
+    }
+
+    /// Whether this checkout's copy of the release branch is at another commit than when this
+    /// was last asked. The first call records the tip and answers false; a branch that cannot be
+    /// read answers false.
+    fn release_moved(&self) -> bool {
+        let Ok(known) = self.git.known_tip(&self.master) else {
+            return false;
+        };
+        let mut seen = self
+            .release_seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let moved = seen.as_ref().is_some_and(|seen| *seen != known);
+        *seen = Some(known);
+        moved
     }
 
     /// After each heartbeat, with the hub's version from the last reply that arrived. Restarts
@@ -708,91 +737,8 @@ impl SelfUpdate {
     }
 }
 
-impl DeployState for SelfUpdate {
-    fn local(&self) -> LocalRelease {
-        let building = self
-            .building()
-            .as_ref()
-            .map(|b| (b.commit.clone(), b.testing.load(Ordering::SeqCst)));
-        let work = match building {
-            Some((commit, true)) => Some(Work::SelfTesting(commit)),
-            Some((commit, false)) => Some(Work::Building(commit)),
-            None => match self
-                .ready()
-                .as_deref()
-                .and_then(ExecutableStore::version_of)
-            {
-                Some(commit) => {
-                    let window = self.window();
-                    Some(Work::Restarting {
-                        commit,
-                        due: window.due_at(),
-                        cap: window.cap_at(),
-                    })
-                }
-                None => self
-                    .failed()
-                    .clone()
-                    .map(|(commit, reason)| Work::Failed(commit, reason)),
-            },
-        };
-        // The call of `poll_release` that finds a multiple of `POLL_EVERY_ROUNDS` checks the
-        // branch, one round of the sender loop after another.
-        let rounds = self.rounds.load(Ordering::Relaxed);
-        let left = (POLL_EVERY_ROUNDS - rounds % POLL_EVERY_ROUNDS) % POLL_EVERY_ROUNDS;
-        LocalRelease {
-            own: self.version(),
-            branch: self.master.clone(),
-            next_check: Some(self.clock.now().plus_seconds(f64::from(left) * ROUND_S)),
-            work,
-        }
-    }
-
-    fn check(&self) -> Result<(Commit, Checked)> {
-        let tip = self.git.tip(&self.master)?;
-        let Some(own) = self.version() else {
-            return Ok((tip, Checked::Current));
-        };
-        Ok(match self.updater().plan(&own)? {
-            Plan::Build(tip) => (tip, Checked::Build),
-            Plan::Done(UpdateCheck::Ahead { tip }) => (tip, Checked::Ahead),
-            Plan::Done(UpdateCheck::NotNeeded { tip }) => (tip, Checked::Unchanged),
-            Plan::Done(UpdateCheck::Rejected { tip }) => (tip, Checked::Rejected),
-            Plan::Done(UpdateCheck::UpToDate | UpdateCheck::Ready { .. }) => {
-                (tip, Checked::Current)
-            }
-        })
-    }
-
-    /// The next call of [`SelfUpdate::poll_release`], within a round of the sender loop, checks
-    /// the branch.
-    fn check_soon(&self) {
-        self.rounds.store(0, Ordering::Relaxed);
-    }
-
-    /// A version that holds the target's changes to Ignite's source as other commits, as the
-    /// daemon still running a hand-pushed commit does once the release is its rebased copy,
-    /// runs the release too.
-    fn reached(&self, version: &Commit, target: &Commit) -> bool {
-        version == target
-            || self.git.is_ancestor(target, version).unwrap_or(false)
-            || self
-                .git
-                .holds_changes(version, target, SOURCE)
-                .unwrap_or(false)
-    }
-
-    fn rejection(&self, commit: &Commit) -> Option<String> {
-        if !self.store.is_rejected(commit) {
-            return None;
-        }
-        Some(
-            self.store
-                .rejection(commit)
-                .unwrap_or_else(|| format!("{commit} is listed in bin/rejected")),
-        )
-    }
-}
+#[path = "selfupdate_deploy.rs"]
+mod deploy;
 
 #[cfg(test)]
 #[path = "selfupdate_tests.rs"]

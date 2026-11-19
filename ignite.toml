@@ -83,11 +83,15 @@ rules = [
 # land one after another; the quiet window only covers a release pushed by hand. It was 90 s
 # until 2026-11-19, when it set the floor of every `ignite wait deploy-<commit>`: a lone Ignite
 # landing waited 100 to 110 s for a build that had finished in 40 s. `cap_seconds` bounds the
-# wait from the first pending release, so a fix still reaches the machine within 10 minutes while
-# landings keep running.
+# wait from the first pending release, which the daemon records when it starts the release's
+# build. It was 600 s until 2026-11-19, when landings ran almost all the time: 4 of 15 restarts
+# on jarvis waited out the whole cap and the median release reached jarvis 395 s after it moved.
+# At 30 s the build (about 40 s on the express cores) outlasts the cap, so the restart follows
+# the build. A landing it cuts short runs again under the new build, and loses little: its
+# express tree's Cargo target directory is warm and a finished express pass is remembered.
 [self_update]
 quiet_seconds = 15
-cap_seconds = 600
+cap_seconds = 30
 
 [hub]
 url = "https://jarvis.tail4b0774.ts.net:8443"
