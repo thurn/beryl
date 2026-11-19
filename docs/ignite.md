@@ -3004,9 +3004,9 @@ machine can take:
 1. An open regression ticket. It needs an idle worker and a free tree on a
    machine that can run its check, and skips the test of expected cores below.
 2. An improvement ticket, when improvements are under their share. See
-   [Improvement tickets](#improvement-tickets). It skips its epic's share but
-   not its `--max-workers` cap.
-3. A ready ticket from the epic that is furthest below its share of workers. See
+   [Improvement tickets](#improvement-tickets). It skips its epic's allocation
+   but not its `--max-workers` cap.
+3. A ready ticket from the epic that is furthest below its allocation. See
    [Dividing workers between epics](#dividing-workers-between-epics). Within an
    epic, the ticket of highest priority goes first, then the one with the
    longest chain of tickets waiting behind it, then the oldest.
@@ -3044,12 +3044,13 @@ Not every ticket is offered:
   pending, as `just bugs file` does for a player's bug report, so an agent can
   deduplicate and group the reports before any of them runs. A session may still
   start a pending ticket by name.
-- An epic is worked only once it is active, which means it has a `--workers`
-  number above 0. An epic filed without one gets a share of 3, so releasing it
-  is enough; the share is bounded by the pool, so it reserves nothing. An epic
-  that has no number, such as one imported from Enact, gets the same share when
-  it is released, so releasing one epic inside a larger project works it even
-  when the project's epic has no number either. File it with `--workers 0`, or
+- An epic is worked only once it is active, which means it has an
+  `--allocation` above 0. An epic filed without one gets an allocation of 3, so
+  releasing it is enough; an allocation is a weight bounded by the pool, so it
+  reserves nothing. An epic that has no allocation, such as one imported from
+  Enact, gets the same allocation when it is released, so releasing one epic
+  inside a larger project works it even when the project's epic has no
+  allocation either. File it with `--allocation 0`, or
   set that later, to park a backlog: its tickets then wait, however ready they
   are. A ticket under no epic has nothing to activate, so releasing it is
   enough.
@@ -3116,26 +3117,28 @@ machine's load.
 
 ### Dividing workers between epics
 
-A person decides how much of the fleet each epic gets by giving the epic a
-number of workers:
+A person decides how much of the fleet each epic gets by giving the epic an
+allocation:
 
 ```sh
-ignite ticket update TQ44S --workers 5      # Beryl 3D
-ignite ticket update TW8GV --workers 2      # Project 50k
+ignite ticket update TQ44S --allocation 5   # Beryl 3D
+ignite ticket update TW8GV --allocation 2   # Project 50k
 ```
 
-- The numbers are shares, not reservations. The hub gives the next free worker
-  to the epic with the fewest tickets in progress per share, counted across
-  every machine.
-- A share by itself never leaves a worker idle. An epic with fewer ready tickets
-  than its share takes what it can use, and the others divide the rest in
-  proportion.
+- An allocation is a weight, not a reservation. The hub gives the next free
+  worker to the epic with the fewest tickets in progress per unit of allocation,
+  counted across every machine.
+- An allocation by itself never leaves a worker idle. An epic with fewer ready
+  tickets than its allocation takes what it can use, and the others divide the
+  rest in proportion.
 - `--max-workers` is a hard cap, for an epic whose tickets conflict when too
   many run at once. It is the one setting here that can leave a worker idle.
-- An epic with no number has a share of 1. Tickets under no epic form one group
-  with a share of 1.
-- The number may sit on any ticket that has children. A ticket belongs to the
-  nearest ancestor that has one.
+- An epic with no allocation counts as 1. Tickets under no epic form one group
+  with an allocation of 1.
+- The allocation may sit on any ticket that has children. A ticket belongs to
+  the nearest ancestor that has one.
+- `--workers` is the flag's old name and still works. The hub stores the
+  allocation in the `workers` column and sends it as the `workers` field.
 
 With the two settings above, nothing yet in progress and plenty of ready tickets
 in both epics:
@@ -4053,9 +4056,9 @@ These show that cores, trees and workers go where the rules say.
 - **A ticket that needs a person.** Release a ticket with `--needs person`.
   Expect it on the dashboard's first line, never handed off, and handed off
   again once the label is removed.
-- **An inactive epic.** File an epic with ready tickets and `--workers 0`.
-  Expect no hand-off from it. Set `--workers 1` and expect one. File another
-  with no `--workers` and expect hand-offs at once.
+- **An inactive epic.** File an epic with ready tickets and `--allocation 0`.
+  Expect no hand-off from it. Set `--allocation 1` and expect one. File another
+  with no `--allocation` and expect hand-offs at once.
 - **A pause.** Run `ignite pool pause` with two workers busy and tickets ready.
   Expect both to finish, no new hand-off of feature work, and hand-offs again
   after `ignite pool resume`. File a regression while paused and expect it
@@ -4078,8 +4081,8 @@ These show that cores, trees and workers go where the rules say.
 - **A batch job.** Start a tournament with `ignite run --class batch` on cygnus
   and then several landings. Expect the tournament to keep its floor of cores
   and the landings to take the rest.
-- **Shares between epics.** Give one epic `--workers 5` and another
-  `--workers 2`, each with twenty ready tickets, and a pool of seven. Expect
+- **Allocations between epics.** Give one epic `--allocation 5` and another
+  `--allocation 2`, each with twenty ready tickets, and a pool of seven. Expect
   five and two in progress. Close all but one of the second epic's tickets and
   expect six and one.
 - **A light ticket on a busy machine.** Fill the machine with core-crate tickets

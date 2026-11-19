@@ -155,14 +155,14 @@ fn the_group_furthest_below_its_share_goes_first() {
     let epics = [
         EpicDemand {
             epic: Some(id("Tq44s")),
-            workers: Some(5),
+            allocation: Some(5),
             max_workers: None,
             ready: 3,
             held: 5,
         },
         EpicDemand {
             epic: Some(id("Tw8gv")),
-            workers: Some(2),
+            allocation: Some(2),
             max_workers: None,
             ready: 3,
             held: 0,

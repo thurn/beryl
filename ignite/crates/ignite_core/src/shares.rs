@@ -1,12 +1,12 @@
 //! Shares: dividing idle workers between epics, and the share of hand-offs owed to improvement
 //! tickets.
 //!
-//! Epic shares. A person gives an epic a number of workers (`--workers`). The numbers are
-//! shares, not reservations: the next free worker goes to the group with the fewest tickets in
-//! progress per share, counted across every machine. A group with fewer ready tickets than its
-//! share takes what it can use and the others divide the rest. `--max-workers` is a hard cap,
-//! the one setting that can leave a worker idle. A group with no number has a share of 1, and
-//! tickets under no epic form one group (`None`) with a share of 1.
+//! Epic allocations. A person gives an epic an allocation (`--allocation`), a weight rather than
+//! a reservation: the next free worker goes to the group with the fewest tickets in progress per
+//! unit of allocation, counted across every machine. A group with fewer ready tickets than its
+//! allocation takes what it can use and the others divide the rest. `--max-workers` is a hard
+//! cap, the one setting that can leave a worker idle. A group with no allocation counts as 1, and
+//! tickets under no epic form one group (`None`) with an allocation of 1.
 //!
 //! Improvement share. Improvement tickets get at least 15% of the last 20 hand-offs to a
 //! machine, not counting regressions, rising in a straight line to 30% as the backlog's saving
@@ -20,17 +20,17 @@ use crate::ids::TicketId;
 /// A group of tickets that shares workers: an epic, or `None` for tickets under no epic.
 pub type Group = Option<TicketId>;
 
-/// The `--workers` share an epic gets when it is filed without one, so filing and releasing an
-/// epic is enough for the pool to work it. Shares are bounded by the pool, so this reserves
-/// nothing; `--workers 0` files an epic that waits.
-pub const DEFAULT_EPIC_WORKERS: u32 = 3;
+/// The `--allocation` an epic gets when it is filed without one, so filing and releasing an epic
+/// is enough for the pool to work it. Allocations are weights bounded by the pool, so this
+/// reserves nothing; `--allocation 0` files an epic that waits.
+pub const DEFAULT_EPIC_ALLOCATION: u32 = 3;
 
 /// One group's claim on workers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EpicDemand {
     pub epic: Group,
-    /// The group's `--workers` share; `None` counts as 1.
-    pub workers: Option<u32>,
+    /// The group's `--allocation`; `None` counts as 1.
+    pub allocation: Option<u32>,
     /// The group's `--max-workers` cap.
     pub max_workers: Option<u32>,
     /// Its ready tickets.
@@ -40,10 +40,10 @@ pub struct EpicDemand {
 }
 
 impl EpicDemand {
-    /// The share, never below 1: a share of 0 would divide nothing, and pausing an epic is what
-    /// `--max-workers 0` is for.
+    /// The allocation, never below 1: an allocation of 0 would divide nothing, and pausing an
+    /// epic is what `--max-workers 0` is for.
     fn share(&self) -> u64 {
-        u64::from(self.workers.unwrap_or(1).max(1))
+        u64::from(self.allocation.unwrap_or(1).max(1))
     }
 
     fn cap(&self) -> u32 {
@@ -52,7 +52,7 @@ impl EpicDemand {
 }
 
 /// The group a ticket belongs to, from its ancestors listed nearest first with each one's
-/// `--workers` number: the nearest that has one. When none has one, the outermost ancestor, so
+/// `--allocation`: the nearest that has one. When none has one, the outermost ancestor, so
 /// that an epic's milestones share the epic's 1 instead of each claiming its own. `None` when
 /// the ticket has no ancestor.
 pub fn group_of(ancestors: &[(TicketId, Option<u32>)]) -> Group {
@@ -251,10 +251,10 @@ mod tests {
         TicketId::new(text).unwrap()
     }
 
-    fn epic(name: &str, workers: Option<u32>, ready: u32) -> EpicDemand {
+    fn epic(name: &str, allocation: Option<u32>, ready: u32) -> EpicDemand {
         EpicDemand {
             epic: Some(id(name)),
-            workers,
+            allocation,
             max_workers: None,
             ready,
             held: 0,
@@ -306,7 +306,7 @@ mod tests {
     fn tickets_under_no_epic_share_like_an_epic_with_a_share_of_one() {
         let loose = EpicDemand {
             epic: None,
-            workers: None,
+            allocation: None,
             max_workers: None,
             ready: 10,
             held: 0,

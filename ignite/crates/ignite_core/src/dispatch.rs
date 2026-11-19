@@ -9,7 +9,7 @@
 //! 3. An improvement ticket, when improvements are under their share
 //!    ([`crate::shares::improvements_due`]). The largest saving goes first, taking the three
 //!    units in turn.
-//! 4. A ready ticket from the group furthest below its share of workers
+//! 4. A ready ticket from the group furthest below its allocation of workers
 //!    ([`crate::shares::epic_order`]). Within a group, the highest priority goes first, then the
 //!    longest chain of tickets waiting behind it, then the oldest.
 //!

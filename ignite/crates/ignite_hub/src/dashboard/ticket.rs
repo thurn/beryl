@@ -380,7 +380,7 @@ pub fn page(
     ));
     if editable && card.ticket_type == "epic" {
         for (label, field, value) in [
-            ("Workers", "workers", ticket.workers),
+            ("Allocation", "workers", ticket.workers),
             ("Max workers", "max_workers", ticket.max_workers),
         ] {
             let view = value.map_or_else(|| c::muted("None"), |n| esc(&n.to_string()));

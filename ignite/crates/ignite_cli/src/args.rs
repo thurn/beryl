@@ -451,9 +451,10 @@ pub struct TicketFieldArgs {
     pub body_file: Option<PathBuf>,
     #[arg(long)]
     pub acceptance: Option<String>,
-    /// An epic's share of workers: 3 when an epic is filed without one, 0 to park it.
-    #[arg(long)]
-    pub workers: Option<u32>,
+    /// An epic's allocation: its weight when the pool divides workers between epics. 3 when an
+    /// epic is filed without one, 0 to park it. `--workers` is its old name.
+    #[arg(long, alias = "workers")]
+    pub allocation: Option<u32>,
     /// A hard cap on an epic's workers.
     #[arg(long)]
     pub max_workers: Option<u32>,

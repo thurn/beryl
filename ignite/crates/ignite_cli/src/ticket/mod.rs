@@ -1,6 +1,6 @@
 //! `ignite ticket`: the ticket verbs, which talk to the hub directly so they work while the
 //! daemon is down. A port of the `tk` client: the same requests and the same JSON, with the
-//! new `--workers`, `--max-workers` and `--cores` flags on `create` and `update`.
+//! new `--allocation`, `--max-workers` and `--cores` flags on `create` and `update`.
 //!
 //! Every write is one `POST /batch`, so it succeeds or fails as a whole. Text output is one line
 //! per ticket; `--json` prints the hub's reply with each ticket ID spelled with its `T`.

@@ -1,5 +1,5 @@
 //! The `pool` page: each machine's workers with their tickets and the command they run, the
-//! dispatcher's state per app, and the `epics` page with each epic's share of the workers.
+//! dispatcher's state per app, and the `epics` page with each epic's allocation of workers.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
@@ -254,16 +254,18 @@ pub(crate) fn epics(
     for (id, title, workers, max_workers) in &epics {
         let (in_progress, ready_here, landed, unverified) = counts(conn, id, &ready)?;
         let share = match (workers, max_workers) {
-            (Some(workers), Some(cap)) => c::chip(
-                &format!("{workers} workers, at most {cap}"),
+            (Some(allocation), Some(cap)) => c::chip(
+                &format!("Allocation {allocation}, at most {cap} workers"),
                 Tone::Green,
                 None,
             ),
-            (Some(workers), None) => c::chip(&format!("{workers} workers"), Tone::Green, None),
+            (Some(allocation), None) => {
+                c::chip(&format!("Allocation {allocation}"), Tone::Green, None)
+            }
             _ => c::chip(
                 "Inactive",
                 Tone::Muted,
-                Some("The epic has no workers number, so none of its tickets are offered."),
+                Some("The epic has no allocation, so none of its tickets are offered."),
             ),
         };
         let verified = if landed == 0 {
@@ -302,7 +304,7 @@ pub(crate) fn epics(
         root,
         seq,
         "epics",
-        "Each epic's share of the workers, and its work in progress.",
+        "Each epic's allocation of workers, and its work in progress.",
         &body,
     ))
 }

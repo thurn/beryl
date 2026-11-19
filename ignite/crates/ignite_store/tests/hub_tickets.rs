@@ -602,7 +602,7 @@ fn an_epic_filed_without_workers_gets_the_default_share_and_an_explicit_one_is_k
     assert_eq!(
         workers,
         [
-            Some(ignite_core::shares::DEFAULT_EPIC_WORKERS),
+            Some(ignite_core::shares::DEFAULT_EPIC_ALLOCATION),
             Some(0),
             Some(6),
             None

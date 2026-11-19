@@ -2,7 +2,7 @@
 //!
 //! A machine that stops reporting (powered off, asleep, off the network) cannot release its
 //! tickets. Without this step they stay `in_progress` for good and count against their epic's
-//! share of workers. [`release_claims`] gives back every claim of a machine whose last
+//! allocation of workers. [`release_claims`] gives back every claim of a machine whose last
 //! heartbeat is more than [`OFFLINE_SECONDS`] old. The ticket returns to the queue with a
 //! comment, and a daemon that comes back finds its claim lost, which `/landed` and `/release`
 //! answer with 409 (exit code 3).
@@ -11,7 +11,7 @@
 //! machine holds it, once it has gone [`OFFLINE_SECONDS`] without a change. Such a ticket was
 //! claimed outside Ignite: by the tracker it was imported from, or by a status set by hand. No
 //! heartbeat ever ends that claim, and the stall rule covers only Ignite's own workers, so
-//! without this step the ticket would count against its epic's share of workers for good.
+//! without this step the ticket would count against its epic's allocation for good.
 
 use rusqlite::{Connection, TransactionBehavior};
 use serde_json::Value;

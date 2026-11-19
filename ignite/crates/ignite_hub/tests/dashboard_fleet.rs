@@ -243,7 +243,7 @@ fn epics_show_activity_shares_and_verification() {
         &body[start..start + end]
     };
     let active = row("Active epic");
-    assert!(active.contains("3 workers"));
+    assert!(active.contains("Allocation 3"));
     assert!(active.contains("3 in progress"));
     // The landed ticket landed at 10:00 and the last verified tip is from 11:10.
     assert!(active.contains("landed work verified"));

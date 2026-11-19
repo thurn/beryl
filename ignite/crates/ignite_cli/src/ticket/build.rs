@@ -17,7 +17,7 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "priority", args.priority);
     put(fields, "body", read_file(args.body_file.as_deref())?);
     put(fields, "acceptance", args.acceptance.clone());
-    put(fields, "workers", args.workers);
+    put(fields, "workers", args.allocation);
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
     put(fields, "every_hours", args.every);
@@ -250,7 +250,7 @@ mod tests {
             parent: None,
             body_file: None,
             acceptance: None,
-            workers: None,
+            allocation: None,
             max_workers: None,
             cores: None,
             owner: None,
@@ -299,7 +299,7 @@ mod tests {
         let fields = TicketFieldArgs {
             priority: Some(1),
             parent: Some("Tig9a".into()),
-            workers: Some(3),
+            allocation: Some(3),
             max_workers: Some(5),
             cores: Some(2.5),
             ..no_fields()

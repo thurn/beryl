@@ -486,9 +486,9 @@ fn pending_line(conn: &Connection, name: &str) -> Result<bool> {
 /// client sent the update: `ignite ticket update --release` or the dashboard's Release button.
 /// A ticket created in the same batch (`$<index>`) has no descendants yet and is skipped.
 ///
-/// A released epic with no `workers` number, such as one imported from Enact, also gets the
-/// default share ([`shares::DEFAULT_EPIC_WORKERS`]) unless the update sets one. The pool offers a
-/// ticket only when the nearest ancestor with a `workers` number has one above 0
+/// A released epic with no allocation (the `workers` column), such as one imported from Enact,
+/// also gets the default ([`shares::DEFAULT_EPIC_ALLOCATION`]) unless the update sets one. The pool offers a
+/// ticket only when the nearest ancestor with an allocation has one above 0
 /// (`ignite_hub`'s `dispatch_queue`), so without it a released epic inside a larger project
 /// whose epics have no number either would never be worked.
 pub fn add_releases(conn: &Connection, batch: &mut BatchRequest) -> Result<()> {
@@ -516,7 +516,7 @@ pub fn add_releases(conn: &Connection, batch: &mut BatchRequest) -> Result<()> {
             && ticket.workers.is_none()
             && set.workers.is_none()
         {
-            set.workers = Some(Some(shares::DEFAULT_EPIC_WORKERS));
+            set.workers = Some(Some(shares::DEFAULT_EPIC_ALLOCATION));
         }
         released.push(id);
     }
@@ -693,12 +693,12 @@ fn collect_ids(conn: &Connection, sql: &str, args: &[&str]) -> Result<Vec<Ticket
         .collect()
 }
 
-/// Gives an epic filed without a `workers` number the default share
-/// ([`shares::DEFAULT_EPIC_WORKERS`]), so releasing it is enough for the pool to work it. An
+/// Gives an epic filed without an allocation (the `workers` column) the default
+/// ([`shares::DEFAULT_EPIC_ALLOCATION`]), so releasing it is enough for the pool to work it. An
 /// explicit number, `0` included, is kept.
 pub(crate) fn default_workers(fields: &TicketFields, changes: &mut Map<String, Value>) {
     if fields.ticket_type == Some(TicketType::Epic) && fields.workers.is_none() {
-        changes.insert("workers".to_owned(), json!(shares::DEFAULT_EPIC_WORKERS));
+        changes.insert("workers".to_owned(), json!(shares::DEFAULT_EPIC_ALLOCATION));
     }
 }
 

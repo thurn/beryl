@@ -1,5 +1,5 @@
 //! The queue snapshot behind `POST /next`: every ready ticket as `ignite_core::dispatch` sees it,
-//! each group's share of workers, whether improvements are under their share, and each idle
+//! each group's allocation of workers, whether improvements are under their share, and each idle
 //! worker's last files. The hub keeps no model of a machine's load; it reads what the machine
 //! says it has free and the tickets in the database.
 //!
@@ -365,8 +365,8 @@ impl Snapshot {
     /// The ticket if it may be offered: it is under an active epic, under no epic at all, or
     /// the hub filed it itself, and it is not set aside for a person (`needs:person`).
     ///
-    /// An epic is active when it has a `workers` number greater than zero: the nearest ancestor
-    /// with a `workers` number decides, so an epic set to 0 stops its milestones however their
+    /// An epic is active when it has an allocation (the `workers` column) greater than zero: the
+    /// nearest ancestor with an allocation decides, so an epic set to 0 stops its milestones however their
     /// parent is set. A ticket with no parent has no epic a person could activate, so a person
     /// releasing it (only an `open` ticket gets here) is what asks for it to be worked. A ticket
     /// started by name skips these rules, because `/claims` does not ask the queue.
@@ -451,7 +451,7 @@ impl Snapshot {
                 .entry(group.clone())
                 .or_insert_with(|| EpicDemand {
                     epic: group,
-                    workers: node.and_then(|n| n.workers),
+                    allocation: node.and_then(|n| n.workers),
                     max_workers: cap,
                     ready: 0,
                     held: 0,
