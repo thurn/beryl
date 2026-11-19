@@ -26,7 +26,7 @@
       "total_text_runs": 18,
       "worst_frame_draw_calls": 4,
       "worst_frame_upload_bytes": 11680,
-      "worst_frame_blended_area": 0.0813,
+      "worst_frame_blended_area": 0.0817,
       "handle_allocations": 3360,
       "frame_allocations": 0,
       "worst_frame_instructions": 1989925,
