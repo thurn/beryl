@@ -127,8 +127,14 @@ impl Host for NativeHost {
             dirs.push(home.join(".cargo").join("bin"));
         }
         dirs.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
+        // A Windows program's file ends in `.exe`, which its name on a command line leaves out.
+        let file = if cfg!(windows) {
+            format!("{name}.exe")
+        } else {
+            name.to_owned()
+        };
         dirs.into_iter()
-            .map(|dir| dir.join(name))
+            .map(|dir| dir.join(&file))
             .find(|p| p.is_file())
     }
 
