@@ -790,7 +790,7 @@ Each machine has a fixed number of trees of two kinds:
 ```toml
 # ignite.toml, per machine
 [machine.jarvis]
-ticket_trees = 12
+ticket_trees = 24
 landing_trees = 3
 trees_disk_gb = 250
 express_cores = 3   # see Express landings
