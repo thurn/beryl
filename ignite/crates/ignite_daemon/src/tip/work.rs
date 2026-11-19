@@ -83,7 +83,9 @@ impl TipWork for CheckTipWork {
         rerun: bool,
     ) -> Vec<TipRun> {
         let options = options(rerun);
-        match self.at(ctx, commit, |tree| self.checks.run(ctx, tree, checks, &options)) {
+        match self.at(ctx, commit, |tree| {
+            self.checks.run(ctx, tree, checks, &options)
+        }) {
             Ok(run) => tip_runs(&run, &self.family_needs()),
             Err(error) => not_run(checks.iter(), &error),
         }
@@ -138,7 +140,9 @@ impl TipWork for CheckTipWork {
                 .iter()
                 .map(|c| (c.check.clone(), c.family.clone()))
                 .collect();
-            self.at(ctx, to, |tree| self.checks.scoring(ctx, tree, &changed, &named))?
+            self.at(ctx, to, |tree| {
+                self.checks.scoring(ctx, tree, &changed, &named)
+            })?
         });
         scored
             .inspect_err(|error| {
