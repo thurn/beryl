@@ -1,6 +1,6 @@
 use ignite_core::protocol::tickets::Status;
 
-use super::super::data::{Card, HomeCard};
+use super::super::data::{Card, HomeCard, by_recency};
 use super::{AUTOMATIC, automatic_group, page};
 
 fn ticket(id: &str, labels: &[&str]) -> HomeCard {
@@ -75,4 +75,21 @@ fn the_home_page_shows_justiciar_tickets_under_incidents() {
     assert!(!body.contains("Slow CI failures"), "{body}");
     // The plain ticket is under Tickets, and the two filed ones are not.
     assert!(body.contains("id=\"tickets\""), "{body}");
+}
+
+#[test]
+fn the_most_recently_updated_ticket_comes_first_whatever_its_status() {
+    let mut cards = [
+        ticket("Told", &[]),
+        ticket("Tnew", &[]),
+        ticket("Tmid", &[]),
+    ];
+    cards[0].card.updated_at = "2026-11-01T00:00:00Z".to_owned();
+    cards[1].card.updated_at = "2026-11-18T00:00:00Z".to_owned();
+    cards[1].card.status = Status::Blocked;
+    cards[2].card.updated_at = "2026-11-10T00:00:00Z".to_owned();
+    cards[2].card.priority = 3;
+    cards.sort_by(|left, right| by_recency(&left.card, &right.card));
+    let ids: Vec<&str> = cards.iter().map(|card| card.card.id.as_str()).collect();
+    assert_eq!(ids, ["Tnew", "Tmid", "Told"]);
 }

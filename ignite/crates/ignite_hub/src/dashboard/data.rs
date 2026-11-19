@@ -126,6 +126,15 @@ pub fn by_attention(left: &Card, right: &Card) -> std::cmp::Ordering {
         .then(left.id.cmp(&right.id))
 }
 
+/// Orders cards with the most recently updated first, ties broken by id. The home page sorts by
+/// this so that, within each of its sections, the ticket changed last comes first.
+pub fn by_recency(left: &Card, right: &Card) -> std::cmp::Ordering {
+    right
+        .updated_at
+        .cmp(&left.updated_at)
+        .then(left.id.cmp(&right.id))
+}
+
 const CARD_FIELDS: &str = "id, parent, title, type, status, priority, assignee, updated_at";
 
 fn card(row: &Row) -> rusqlite::Result<Card> {
@@ -173,7 +182,7 @@ pub fn progress(conn: &Connection, ids: &[String]) -> Result<Vec<Progress>, Read
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// The open tickets the home page can show, in order of attention, with their progress.
+/// The open tickets the home page can show, most recently updated first, with their progress.
 pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Vec<Progress>), ReadError> {
     let mut statement = conn.prepare(&format!(
         "SELECT {CARD_FIELDS}, labels FROM tickets
@@ -187,7 +196,7 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Vec<Progress>), Re
         })
     })?;
     let mut cards: Vec<HomeCard> = rows.collect::<Result<_, _>>()?;
-    cards.sort_by(|left, right| by_attention(&left.card, &right.card));
+    cards.sort_by(|left, right| by_recency(&left.card, &right.card));
     let ids: Vec<String> = cards.iter().map(|card| card.card.id.clone()).collect();
     let counts = progress(conn, &ids)?;
     Ok((cards, counts))
