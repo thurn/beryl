@@ -509,5 +509,10 @@
     "label": "The express lane's nextest profile leaves out Ignite's ten tests over 3 s, which tip verification still runs, and `ignite_cli`'s eight integration-test binaries are one, and the express test run uses a thread per core, so its test run after a daemon edit takes 12 to 17 s instead of 56 to 96 s at a load average of about 20",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Rust test listings compile nothing on a built tree: `beryl-mobile`'s watched `permissions/` directory is tracked so tree resets keep it, and host debug builds of `beryl_app` stop watching `HEAD` (on 2026-11-19 most `rust` listings spent 18 to 25 s recompiling the two crates); and a `nextest` family with no kept listing is judged by its declared inputs, so a Beryl change no longer lists Ignite's test family",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

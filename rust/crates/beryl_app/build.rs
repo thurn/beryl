@@ -22,11 +22,23 @@ fn git(args: &[&str]) -> Option<String> {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
 }
 
-/// Sets `BERYL_COMMIT` to `HEAD`'s hash, and reruns once `HEAD` moves: a commit, a checkout or
-/// a fast-forward of the branch it is on.
+/// Sets `BERYL_COMMIT` to `HEAD`'s hash, and reruns once `HEAD` moves (a commit, a checkout or
+/// a fast-forward of the branch it is on) when the app may run from no checkout: a release build,
+/// or a build for another target such as a phone.
+///
+/// A debug build for this machine (the tests, `just dev`) runs under Cargo, and its bug reports
+/// ask git for the commit when they are filed (`beryl_session::bugs::commit`), so it does not
+/// watch `HEAD`. Watching it rebuilt `beryl_app` and its tests after every commit, rebase or tree
+/// reset that changed no source file: on 2026-11-19 most Rust test listings in Ignite's build
+/// trees spent 20 to 25 s compiling `beryl_app` again.
 fn commit() {
     let head = git(&["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".to_owned());
     println!("cargo:rustc-env=BERYL_COMMIT={head}");
+    let release = std::env::var("PROFILE").as_deref() == Ok("release");
+    let other_target = std::env::var("TARGET").ok() != std::env::var("HOST").ok();
+    if !release && !other_target {
+        return;
+    }
     let mut watched = vec![
         "HEAD".to_owned(),
         "logs/HEAD".to_owned(),

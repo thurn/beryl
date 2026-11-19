@@ -1740,11 +1740,14 @@ The steps, in order:
    family is left out when no changed path matches its inputs, its
    `package_inputs`, the inputs of the products it needs, the lock file,
    manifest and toolchain file of the Cargo workspaces those name, its manifest
-   file, or any input its checks printed in its kept listing. A family with no
-   kept listing for the tree's inputs is listed. The always set follows the same
-   rule. Then compute input hashes, look up the result cache, build what the
-   remaining checks need, and run the always set and the gate. The output's
-   `scope` line says how many families were left out.
+   file, or any input its checks printed in its kept listing. A `nextest` family
+   with no kept listing for the tree's inputs is judged by its declared inputs,
+   with `crate-closure` standing for the packages of its own workspaces, since
+   its checks print no inputs of their own. Any other family with no kept
+   listing is listed. The always set follows the same rule. Then compute input
+   hashes, look up the result cache, build what the remaining checks need, and
+   run the always set and the gate. The output's `scope` line says how many
+   families were left out.
 5. Take the hub's short `staging` lease. If the tip moved since step 2, release
    it and go back to step 2. The lease is taken only after the gate passes and
    held only for the push, so landings gate in parallel and never wait for

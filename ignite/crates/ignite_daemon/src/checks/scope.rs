@@ -7,14 +7,24 @@
 //! file that declares the family, and every input of their own that its checks printed in its
 //! kept listing (with the directory of each such file, where a new check would appear). A
 //! family one of whose checks is named after a file the change edits stays in scope too. A
-//! family with no kept listing for the tree's inputs cannot be judged, and stays in scope to be
-//! listed as before; a family whose checks carry digests has a kept listing only when it
+//! `jsonl` family with no kept listing for the tree's inputs cannot be judged, since its checks
+//! may print inputs of their own, and stays in scope to be listed; a family whose checks carry digests has a kept listing only when it
 //! declares `digest_inputs`. A family in the always set is treated the same way: it blocks
 //! every landing its inputs touch, so it too is left out when the change touches none of them.
 //!
-//! A change that the express paths (`ignite.toml`) cover entirely also judges a family with no
-//! kept listing by its declared inputs, so a fresh tree lists no unrelated family for a change
-//! confined to Ignite's own files. Families in the always set are still listed.
+//! A `nextest` family with no kept listing is judged by its declared inputs too. Its checks
+//! print no inputs of their own: each test reads its package's closure, the family's `inputs`
+//! and its package's `package_inputs`, all declared in the manifest, so the declared inputs
+//! cover every check the family could list. On 2026-11-19 a change to one card file listed
+//! Ignite's own test family (62 s waiting for Cargo's lock) and built its tests, because Ignite
+//! changes land every few minutes and the family's kept listing rarely matched the tree.
+//!
+//! A change that the express paths (`ignite.toml`) cover entirely also judges any other family
+//! with no kept listing by its declared inputs, so a fresh tree lists no unrelated family for a
+//! change confined to Ignite's own files. Families in the always set are still listed.
+//!
+//! When a family is judged by its declared inputs, `crate-closure` stands for the packages of the
+//! workspaces the family reaches ([`Checks::closure_packages`]), as in its listing hash.
 //!
 //! A `nextest` family's kept listing also names what its builds were observed to read (see
 //! `observed`), which counts like an input the family declares.
@@ -27,7 +37,7 @@
 use std::path::Path;
 
 use ignite_core::inputs;
-use ignite_core::manifest::{Family, InputPattern};
+use ignite_core::manifest::{Adapter, Family, InputPattern};
 
 use super::{Checks, Listed, OpenTree, observed, plan};
 use crate::server::Context;
@@ -56,9 +66,8 @@ impl Checks {
                 // printed. When the express paths cover the whole change, the family's
                 // declared inputs are judged instead, unless it is in the always set, whose
                 // checks read repository-wide files its inputs do not name.
-                None if express_only && !family.always => {
-                    let mut patterns = self.listing_patterns(family);
-                    patterns.extend(self.manifest_file(ctx, name).map(InputPattern::Path));
+                None if family.adapter == Adapter::Nextest || (express_only && !family.always) => {
+                    let patterns = self.declared_patterns(ctx, tree, name, family);
                     inputs::touched(&patterns, &tree.graph, changed)
                         .map_or(true, |touched| !touched.is_empty())
                 }
@@ -99,6 +108,36 @@ impl Checks {
             }
         }
         (affected, left_out)
+    }
+
+    /// Everything a family's checks can read by its manifest alone: its listing patterns, the
+    /// inputs of every product it needs and the manifest file that declares it, with
+    /// `crate-closure` standing for the packages of the workspaces the family reaches.
+    fn declared_patterns(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        name: &str,
+        family: &Family,
+    ) -> Vec<InputPattern> {
+        let manifest = &self.settings.manifest;
+        let mut patterns = self.listing_patterns(family);
+        for product in family.needs.iter().filter_map(|n| manifest.products.get(n)) {
+            patterns.extend(product.inputs.iter().cloned());
+        }
+        let closure = self.closure_packages(family, &patterns, &tree.graph);
+        let mut patterns: Vec<InputPattern> = patterns
+            .into_iter()
+            .flat_map(|pattern| match pattern {
+                InputPattern::CrateClosure => closure
+                    .iter()
+                    .map(|p| InputPattern::Crate(p.clone()))
+                    .collect(),
+                other => vec![other],
+            })
+            .collect();
+        patterns.extend(self.manifest_file(ctx, name).map(InputPattern::Path));
+        patterns
     }
 
     /// The manifest file that declares the family, relative to the checkout's root.

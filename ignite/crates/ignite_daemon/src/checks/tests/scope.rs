@@ -260,13 +260,16 @@ fn a_later_pass_judges_only_the_families_the_landed_commits_touch() {
     assert_eq!(world.builds.requests().len(), builds, "nothing was built");
 }
 
+/// A `jsonl` family's checks may print inputs of their own, so without a kept listing it cannot
+/// be judged and is listed. A `nextest` family's checks read only what the manifest declares, so
+/// it is judged by its declared inputs even with no kept listing.
 #[test]
 fn a_family_with_no_kept_listing_is_listed() {
     let world = repository();
     let fresh = daemon(&world, memory(), tree_with(&world, &["docs/ignite.md"]));
     let gated = fresh.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
-    assert!(gated.run.out_of_scope.is_empty());
-    assert_eq!(list_commands(&world), 3, "every family is listed");
+    assert_eq!(gated.run.out_of_scope, ["rust"]);
+    assert_eq!(list_commands(&world), 2, "every jsonl family is listed");
     // The listings are kept, so the next landing can leave them out.
     let next = daemon(&world, memory(), tree_with(&world, &["docs/ignite.md"]));
     let gated = next.gate(&world.ctx, &TreeId::new("tree-01").unwrap(), &landing());
@@ -375,6 +378,47 @@ fn a_change_to_another_workspaces_crate_leaves_the_rust_families_out() {
     );
     assert_eq!(world.builds.requests().len(), builds, "nothing was built");
     assert_eq!(list_commands(&world), lists, "nothing was listed");
+}
+
+/// A one-card Beryl change listed Ignite's own test family and built its tests, because Ignite
+/// changes land every few minutes and that family rarely had a kept listing for the tree. A
+/// `nextest` family with no kept listing is now judged by its declared inputs, with
+/// `crate-closure` standing for its own workspace's packages: a change to another workspace
+/// leaves it out, and a change to one of its crates keeps it in.
+#[test]
+fn a_nextest_family_with_no_kept_listing_is_judged_by_its_declared_inputs() {
+    let world = repository();
+    for path in ["tool/Cargo.lock", "tool/Cargo.toml", "tool/crates/hub"] {
+        world
+            .git
+            .set_object(path, Oid::new("a".repeat(40)).unwrap());
+    }
+    let tree = TreeId::new("tree-01").unwrap();
+    let elsewhere = daemon(
+        &world,
+        memory(),
+        two_workspaces(&world, &["tool/crates/hub/src/lib.rs"]),
+    );
+    let gated = elsewhere.gate(&world.ctx, &tree, &landing());
+    assert!(gated.run.out_of_scope.contains(&"rust".to_owned()));
+    let cargo_lists = || {
+        world
+            .launcher
+            .commands("cargo")
+            .iter()
+            .filter(|args| args[2] == "list")
+            .count()
+    };
+    assert_eq!(cargo_lists(), 0, "the rust family was not listed");
+
+    let own = daemon(
+        &world,
+        memory(),
+        two_workspaces(&world, &["rust/crates/core/src/lib.rs"]),
+    );
+    let gated = own.gate(&world.ctx, &tree, &landing());
+    assert!(!gated.run.out_of_scope.contains(&"rust".to_owned()));
+    assert_eq!(cargo_lists(), 1, "the rust family was listed");
 }
 
 /// [`REPOSITORY`] with a family whose checks carry a digest computed from the client's build
