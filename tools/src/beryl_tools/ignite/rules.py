@@ -283,10 +283,7 @@ def card_names_check(root: Path) -> list[str]:
 
 
 def check_inputs_check(root: Path) -> list[str]:
-    try:
-        return check_inputs.check(root, root / allowlist("check-inputs"), tracked(root))
-    except RuntimeError as error:
-        raise Incomplete(str(error)) from error
+    return check_inputs.check(root, tracked(root))
 
 
 def file_length_check(root: Path) -> list[str]:
@@ -372,22 +369,15 @@ CHECKS: tuple[Check, ...] = (
         "check-inputs",
         "source",
         check_inputs_check,
-        # A literal in a Rust file may name a path anywhere the Rust code reads from, and the
-        # check reads the manifests and the Cargo workspaces. Of docs/, the Rust code reads
-        # only the sample decks and the incident reports, so a change to the rest of the
-        # documentation leaves this check alone. Ignite's crates are scanned too, so their
-        # sources and workspace manifest are inputs: without them, a test added under
-        # ignite/crates/ that read an undeclared path kept this check's cached pass.
+        # The check reads the test code of the Rust files under rust/ and ignite/, and the
+        # tracked paths that its literals might name, which are anywhere in the repository.
         (
             "rust/**",
             "ignite/crates/**",
-            "ignite/Cargo.toml",
             "ui/**",
             "data/**",
             "docs/sample-decks/**",
             "docs/incidents/**",
-            "ignite/checks/**",
-            allowlist("check-inputs"),
             module("check_inputs"),
         ),
     ),

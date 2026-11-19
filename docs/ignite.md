@@ -1594,10 +1594,12 @@ relative to the checkout's root.
 
 What observation does not see, which stays declared:
 
-- Files a test opens without the helper. These go in the family's
-  `package_inputs` for the package whose tests read them, and Beryl's
-  `check-inputs` source rule holds those lists to the literals the package's
-  Rust files read.
+- Files a test opens without the helper. Beryl's `check-inputs` source rule
+  fails a raw `fs::read`, `fs::read_to_string`, `fs::read_dir` or `File::open`
+  in test code that opens the checkout (see
+  [Auditing the cache](#auditing-the-cache)). A read made by library code that
+  tests call, which cannot depend on the helper, goes in the family's
+  `package_inputs` for the package whose tests reach it.
 - Anything a `jsonl` family reads, such as a Python adapter or a browser check.
   Those families keep their declared inputs.
 - A build that writes outside the product's first output directory: Ignite then
@@ -1641,14 +1643,17 @@ guards against that with reruns, which need no tracing of file access:
 - A rerun that disagrees with the cache switches caching off for that check and
   files a P1 ticket naming both runs, the cached run's record and the rerun's.
   The cause is an undeclared input or a check that is not deterministic.
-- Because the sample is small, a repository can also lint its manifests. Beryl's
-  `check-inputs` source rule compares the repository paths its Rust tests and
-  build scripts read through a literal (`include_str!`, `fs::read`, a `join` on
-  `CARGO_MANIFEST_DIR`) with the inputs of each `crate-closure` family that runs
-  them, counting the family's `package_inputs` for the package that holds the
-  file. In a `nextest` family it leaves out `include_str!`, `include_bytes!` and
-  `rerun-if-changed` literals, whose files are observed (see
-  [Observed inputs](#observed-inputs)).
+- Because the sample is small, a repository can also lint its test code.
+  Beryl's `check-inputs` source rule reads the test code of the game's and
+  Ignite's workspaces and fails a raw filesystem read of a repository file:
+  a file that names `CARGO_MANIFEST_DIR` (or Beryl 3D's `recordings::root()`)
+  and also reads with `std::fs`, or a read in a statement with a string literal
+  that names a tracked path (outside Ignite's workspace, whose tests write
+  fixture repositories under the real repository's file names). The read goes
+  through `beryl_test_files` or `ignite_core::test_files` instead, so that
+  Ignite records it (see [Observed inputs](#observed-inputs)). Compile-time
+  reads (`include_str!`, `include_bytes!`, `rerun-if-changed`) are observed
+  from Cargo's dep-info files and need nothing.
 
 ## Where regression checks run
 

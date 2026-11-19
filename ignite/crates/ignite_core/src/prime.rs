@@ -108,9 +108,7 @@ mod tests {
     use super::*;
 
     fn config() -> Config {
-        let text =
-            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../ignite.toml"))
-                .expect("ignite.toml");
+        let text = crate::test_files::read_to_string("ignite.toml").expect("ignite.toml");
         Config::parse("ignite.toml", &text).expect("config parses")
     }
 

@@ -12,8 +12,8 @@ use beryl_scene::driver::TimelineStep;
 use beryl_scene::input::Size;
 
 fn parity() -> serde_json::Value {
-    let path = recordings::root().join("data/beryl3d/parity.json");
-    let text = std::fs::read_to_string(&path).expect("the parity file is readable");
+    let text = beryl_test_files::read_to_string("data/beryl3d/parity.json")
+        .expect("the parity file is readable");
     serde_json::from_str(&text).expect("the parity file is JSON")
 }
 

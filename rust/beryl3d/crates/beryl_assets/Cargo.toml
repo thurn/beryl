@@ -40,5 +40,7 @@ swash = "=0.2.10"
 tiny-skia = { version = "=0.11.4", default-features = false, features = ["std", "simd"] }
 
 [dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # The crate itself with `decklists`, whose faces the tests prepare.
 beryl_assets = { path = ".", features = ["decklists"] }

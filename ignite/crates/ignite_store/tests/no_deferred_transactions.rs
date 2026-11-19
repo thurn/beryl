@@ -23,9 +23,13 @@ fn sources(dir: &Path, found: &mut Vec<(String, String)>) {
 
 #[test]
 fn no_code_starts_a_deferred_transaction() {
-    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let crates = ignite_core::test_files::root()
+        .unwrap()
+        .join("ignite/crates");
     let mut files = Vec::new();
     for krate in ["ignite_store", "ignite_hub"] {
+        // Opening the folder through the helper makes its whole tree an input of this test.
+        ignite_core::test_files::read_dir(format!("ignite/crates/{krate}/src")).unwrap();
         sources(&crates.join(krate).join("src"), &mut files);
     }
     let call = [".transaction", "()"].concat();

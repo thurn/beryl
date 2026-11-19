@@ -41,6 +41,8 @@ uuid = { version = "1", features = ["v4"] }
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../beryl_test_files" }
 # The tests play cards' scenarios.
 beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_scenario = { path = "../beryl_scenario" }

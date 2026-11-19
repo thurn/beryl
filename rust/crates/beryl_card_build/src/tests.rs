@@ -300,9 +300,7 @@ fn a_misspelled_file_or_constant_fails_the_build() {
 /// letter fails here and not in a build script.
 #[test]
 fn every_card_in_the_store_has_a_module() {
-    // Read at run time: a test binary in a copied target directory outlives its checkout.
-    let crate_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
-    Store::read(&crate_dir.join("../../../data/card-store.tsv")).unwrap();
+    Store::parse(&beryl_test_files::read_to_string("data/card-store.tsv").unwrap()).unwrap();
 }
 
 /// Each face's printed characteristics come from its record: a later face names itself, as

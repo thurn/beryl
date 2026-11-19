@@ -183,6 +183,7 @@ dependencies = [
  "beryl_session",
  "beryl_shell",
  "beryl_table_session",
+ "beryl_test_files",
  "cc",
  "glam",
  "jni-sys 0.3.1",
@@ -208,6 +209,7 @@ dependencies = [
  "beryl_assets",
  "beryl_card_records",
  "beryl_scene",
+ "beryl_test_files",
  "ctt",
  "image",
  "parley",
@@ -366,6 +368,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_protocol",
  "beryl_scene",
+ "beryl_test_files",
  "glam",
  "libc",
  "miniz_oxide 0.8.9",
@@ -479,6 +482,7 @@ dependencies = [
  "beryl_card_records",
  "beryl_protocol",
  "beryl_scene",
+ "beryl_test_files",
  "bytemuck",
  "glam",
  "parley",
@@ -551,6 +555,10 @@ dependencies = [
  "tempfile",
  "url",
 ]
+
+[[package]]
+name = "beryl_test_files"
+version = "0.1.0"
 
 [[package]]
 name = "bit-set"

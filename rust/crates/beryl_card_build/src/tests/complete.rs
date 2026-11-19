@@ -1,8 +1,6 @@
 //! The cards complete from the card store (`complete.rs`): the rule, and the definitions a set
 //! crate's build writes for them.
 
-use std::path::PathBuf;
-
 use super::{Scratch, face, record};
 use crate::complete::{Group, Keywords, complete_from_store, group_sets};
 use crate::files::card_files;
@@ -38,9 +36,8 @@ fn card(name: &str, type_line: &str, cost: &str, text: &str) -> beryl_card_store
 
 #[test]
 fn the_rule_reads_the_engines_keywords_from_its_source() {
-    let crate_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let source =
-        std::fs::read_to_string(crate_dir.join("../beryl_card/src/characteristics.rs")).unwrap();
+        beryl_test_files::read_to_string("rust/crates/beryl_card/src/characteristics.rs").unwrap();
     let engine = Keywords::parse(&source).unwrap();
     let flyer = card("Wind Drake", "Creature — Drake", "{2}{U}", "Flying");
     assert_eq!(complete_from_store(&flyer, &engine), Some(vec!["FLYING"]));
@@ -176,15 +173,21 @@ fn a_set_crate_defines_its_complete_cards_without_files() {
 /// at all. Also prints how many cards are complete, which the plan reports.
 #[test]
 fn every_card_complete_from_the_store_has_a_crate() {
-    let crate_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
-    let root = crate_dir.join("../../..");
-    let store = Store::read(&root.join("data/card-store.tsv")).unwrap();
-    let groups = std::fs::read_to_string(root.join("data/set-groups.json")).unwrap();
+    let root = beryl_test_files::root().unwrap();
+    let store =
+        Store::parse(&beryl_test_files::read_to_string("data/card-store.tsv").unwrap()).unwrap();
+    let groups = beryl_test_files::read_to_string("data/set-groups.json").unwrap();
     let engine = Keywords::parse(
-        &std::fs::read_to_string(root.join(crate::complete::KEYWORDS_SOURCE)).unwrap(),
+        &beryl_test_files::read_to_string(crate::complete::KEYWORDS_SOURCE).unwrap(),
     )
     .unwrap();
-    let catalogs = crate::catalogs::Catalogs::read(&root).unwrap();
+    let catalogs = crate::catalogs::Catalogs::parse(
+        &beryl_test_files::read_to_string("data/catalogs.json").unwrap(),
+    )
+    .unwrap();
+    // `card_files` lists each set crate's directory itself; opening `rust/cards` through the
+    // helper makes the whole folder an input of this test.
+    beryl_test_files::read_dir("rust/cards").unwrap();
     let subtypes = crate::printed::Subtypes::of_catalogs(&catalogs);
     let parsed: serde_json::Value = serde_json::from_str(&groups).unwrap();
     let (mut complete, mut with_files) = (0, 0);

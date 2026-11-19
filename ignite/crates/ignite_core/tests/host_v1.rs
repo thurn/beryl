@@ -12,7 +12,7 @@
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -30,7 +30,10 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::Error;
 
 fn folder() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/host_v1")
+    let relative = "ignite/crates/ignite_core/tests/host_v1";
+    // Opening the folder through the helper makes it an input of the tests that read it.
+    ignite_core::test_files::read_dir(relative).unwrap();
+    ignite_core::test_files::root().unwrap().join(relative)
 }
 
 fn handle() -> Handle {

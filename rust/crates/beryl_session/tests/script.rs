@@ -1,7 +1,5 @@
 //! A script's text form, its wire form, and its lists against the design language's data.
 
-use std::path::PathBuf;
-
 use beryl_session::protocol::{
     CardHandling, CardType, Combat, Counter, CounterView, Facing, Mana, ManaPool, ObjectId,
     ObjectView, PaidCost, PowerToughness, Side, StackItem, Step as TurnStep, TargetRef, Why,
@@ -644,14 +642,10 @@ fn a_script_survives_the_wire_and_leaves_out_what_it_lacks() {
 
 /// The names under `key` of `data/ui-conventions.json`, in its order.
 fn data_names(key: &str) -> Vec<String> {
-    // Read at run time: a test binary from the shared target directory may have been built in
-    // a worktree that no longer exists.
-    let path = PathBuf::from(
-        std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"),
+    let data: serde_json::Value = serde_json::from_str(
+        &beryl_test_files::read_to_string("data/ui-conventions.json").unwrap(),
     )
-    .join("../../../data/ui-conventions.json");
-    let data: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    .unwrap();
     data[key]
         .as_array()
         .unwrap_or_else(|| panic!("data/ui-conventions.json has no list `{key}`"))

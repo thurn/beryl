@@ -45,6 +45,8 @@ harness = false
 libc = "0.2.191"
 
 [dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # The points on screen the pointer tests press and drag to, the vector type `beryl_scene`'s
 # input already takes, in place of a point type of the tests' own.
 glam = "0.34.3"

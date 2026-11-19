@@ -308,20 +308,14 @@ pub fn vocabulary() {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
 
     use beryl_card_store::Record;
 
     use super::{Catalogs, counter_variant, variant};
     use crate::printed::{SUPERTYPES, Subtypes, TYPES, TypeLine};
 
-    fn root() -> PathBuf {
-        PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("run by cargo"))
-            .join("../../..")
-    }
-
     fn catalogs() -> Catalogs {
-        Catalogs::read(&root()).unwrap()
+        Catalogs::parse(&beryl_test_files::read_to_string("data/catalogs.json").unwrap()).unwrap()
     }
 
     /// A variant spells a name's words, and a power and toughness kind its numbers; the kinds
@@ -367,7 +361,7 @@ mod tests {
     #[test]
     fn every_pool_type_line_reads() {
         let subtypes = Subtypes::of_catalogs(&catalogs());
-        let text = std::fs::read_to_string(root().join("data/card-store.tsv")).unwrap();
+        let text = beryl_test_files::read_to_string("data/card-store.tsv").unwrap();
         let mut read = 0;
         let mut failures = Vec::new();
         for line in text.lines() {

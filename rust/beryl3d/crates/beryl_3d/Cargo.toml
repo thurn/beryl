@@ -78,5 +78,7 @@ ndk-sys = "0.6.0"
 cc = "1.11.2"
 
 [dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../../../crates/beryl_test_files" }
 # The crate itself with `tools`, so that its tests and the binary they run can replay fixtures.
 beryl_3d = { path = ".", features = ["tools"] }

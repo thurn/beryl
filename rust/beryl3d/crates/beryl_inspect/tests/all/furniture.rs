@@ -9,8 +9,6 @@
 //! every flat-layer panel is drawn, so that a scrim or other panel drawn over a button, which
 //! makes it look disabled, fails the check too.
 
-use std::path::{Path, PathBuf};
-
 use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_scene::agent::{Layout, hit};
@@ -26,8 +24,8 @@ const WINDOW: Size = Size {
 };
 
 fn web_file(path: &str) -> String {
-    let root: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../ui/src");
-    std::fs::read_to_string(root.join(path)).unwrap_or_else(|why| panic!("{path}: {why}"))
+    beryl_test_files::read_to_string(format!("ui/src/{path}"))
+        .unwrap_or_else(|why| panic!("{path}: {why}"))
 }
 
 /// The value of `property` in the rule of `selector` in the CSS `sheet`, which must have both.

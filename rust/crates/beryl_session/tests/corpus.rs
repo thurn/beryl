@@ -3,7 +3,7 @@
 //! a save on the breaks list, to its listed entry; and does so under each perturbation of what
 //! a save must not depend on (`beryl_session::perturb`). `just freeze-saves` adds saves.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::thread;
 
 use beryl_cards::CARDS;
@@ -15,17 +15,17 @@ use beryl_session::save::Act;
 use beryl_session::{Game, ReplayFile, SessionId};
 
 fn dir() -> PathBuf {
-    let crate_dir = std::env::var_os("CARGO_MANIFEST_DIR").expect("run under cargo");
-    Path::new(&crate_dir).join("tests/saves")
+    crate::saves_dir()
 }
 
 /// The names of the saves in the corpus.
 fn saves() -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(dir())
-        .unwrap()
-        .map(|e| e.unwrap().file_name().into_string().unwrap())
-        .filter(|name| name != ENDINGS)
-        .collect();
+    let mut names: Vec<String> =
+        beryl_test_files::read_dir("rust/crates/beryl_session/tests/saves")
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name != ENDINGS)
+            .collect();
     names.sort_unstable();
     names
 }

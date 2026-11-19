@@ -19,3 +19,7 @@ beryl_card_store = { path = "../beryl_card_store" }
 # Reads `data/catalogs.json`, in place of a hand-written JSON parser; the store's reader
 # already builds it.
 serde_json = "1.0.154"
+
+[dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../beryl_test_files" }

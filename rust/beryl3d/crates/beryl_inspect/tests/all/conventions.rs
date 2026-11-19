@@ -1,15 +1,13 @@
 //! The conventions files, `data/beryl3d/conventions/<kind>.json`: how Beryl 3D follows each
 //! entry of `data/ui-conventions.json`, one file per section kind, for the parity list to count.
 
-use beryl_inspect::recordings;
-
 use crate::screens::assert_shows;
 
 /// The section kinds of `data/ui-conventions.json` that have a conventions file.
 const KINDS: [&str; 4] = ["exception", "settled", "no-equivalent", "not-seen"];
 
 fn read(path: &str) -> serde_json::Value {
-    let text = std::fs::read_to_string(recordings::root().join(path))
+    let text = beryl_test_files::read_to_string(path)
         .unwrap_or_else(|why| panic!("{path} is not readable: {why}"));
     serde_json::from_str(&text).unwrap_or_else(|why| panic!("{path} is not JSON: {why}"))
 }

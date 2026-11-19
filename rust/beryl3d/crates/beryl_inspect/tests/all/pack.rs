@@ -207,12 +207,15 @@ fn two_processes_at_once_leave_one_whole_file() {
     assert_eq!(pack::read(&bytes).unwrap().len(), 3);
 }
 
-/// The repository this test was built from.
+/// The checkout the test runs in. `sources::sources` lists the files of the recorder's crates
+/// and data folders itself, so the folders it lists are opened through the helper, which makes
+/// them inputs of the test.
 fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../..")
-        .canonicalize()
-        .unwrap()
+    for folder in ["rust/crates", "rust/cards", "docs/sample-decks", "data"] {
+        beryl_test_files::read_dir(folder).unwrap();
+    }
+    beryl_test_files::read("ui/fixtures.json").unwrap();
+    beryl_test_files::root().unwrap().canonicalize().unwrap()
 }
 
 #[test]
@@ -233,7 +236,7 @@ fn the_sources_are_the_recorder_and_its_data_and_not_the_client() {
 fn a_changed_byte_in_the_fixture_definitions_changes_the_hash() {
     let dir = scratch("hash");
     std::fs::create_dir_all(dir.join("ui")).unwrap();
-    let mut bytes = std::fs::read(root().join("ui/fixtures.json")).unwrap();
+    let mut bytes = beryl_test_files::read("ui/fixtures.json").unwrap();
     let file = dir.join("ui/fixtures.json");
     std::fs::write(&file, &bytes).unwrap();
     let listed = [PathBuf::from("ui/fixtures.json")];

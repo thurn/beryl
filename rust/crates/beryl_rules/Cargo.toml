@@ -13,3 +13,6 @@ workspace = true
 beryl_card = { path = "../beryl_card" }
 beryl_kernel = { path = "../beryl_kernel" }
 
+[dev-dependencies]
+# Opens repository files and records each read, so Ignite reruns the tests when one changes.
+beryl_test_files = { path = "../beryl_test_files" }

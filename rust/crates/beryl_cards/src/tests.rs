@@ -1,7 +1,5 @@
 //! The generated names, the card table and the decklists.
 
-use std::path::PathBuf;
-
 use beryl_engine::card::{
     AbilityKind, CostAction, FaceIx, ManaColor, Purpose, Subtype, Supertypes, Types,
 };
@@ -27,12 +25,6 @@ mod slot_order;
 mod store;
 mod text;
 mod vocabulary;
-
-/// This crate's directory, read at run time: a test binary from the shared target directory
-/// may have been built in a worktree that no longer exists.
-fn crate_dir() -> PathBuf {
-    PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"))
-}
 
 /// The scenarios in the file of the card called `name`.
 pub(crate) fn scenarios_of(name: &str) -> &'static [beryl_scenario::Scenario] {
@@ -61,7 +53,7 @@ fn the_registry_lists_every_card_file_once() {
 /// A decklist file's main deck: its `<count> <name>` lines up to the blank line before the
 /// sideboard.
 fn main_deck(path: &str) -> Vec<(u8, String)> {
-    let text = std::fs::read_to_string(crate_dir().join(path)).unwrap();
+    let text = beryl_test_files::read_to_string(path).unwrap();
     text.lines()
         .take_while(|line| !line.trim().is_empty())
         .map(|line| {
@@ -76,12 +68,12 @@ fn the_decks_are_forty_cards_matching_their_decklist_files() {
     for (deck, path, names) in [
         (
             decks::WU_CONTROL,
-            "../../../docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt",
+            "docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt",
             30,
         ),
         (
             decks::VINTAGE_WU_CONTROL,
-            "../../../docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt",
+            "docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt",
             29,
         ),
     ] {

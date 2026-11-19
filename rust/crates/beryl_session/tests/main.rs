@@ -4,6 +4,14 @@
 //! each newly linked binary waits for the system's malware scan on its first launch.
 
 mod common;
+
+/// The folder of the frozen saves, opened through the helper so that the saves are inputs of
+/// the tests that replay them.
+pub(crate) fn saves_dir() -> std::path::PathBuf {
+    let relative = "rust/crates/beryl_session/tests/saves";
+    beryl_test_files::read_dir(relative).expect("the saves folder");
+    beryl_test_files::root().expect("a checkout").join(relative)
+}
 #[path = "common/play.rs"]
 mod play;
 
@@ -63,11 +71,10 @@ mod zone_picks;
 #[test]
 fn every_test_file_is_a_module_here() {
     let declared = include_str!("main.rs");
-    let dir =
-        std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets it"))
-            .join("tests");
     let mut missing = Vec::new();
-    for entry in std::fs::read_dir(&dir).expect("the tests directory") {
+    for entry in
+        beryl_test_files::read_dir("rust/crates/beryl_session/tests").expect("the tests directory")
+    {
         let path = entry.expect("a directory entry").path();
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;

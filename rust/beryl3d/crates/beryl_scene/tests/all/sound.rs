@@ -101,13 +101,11 @@ fn reached(at: u64, every: u64) -> u64 {
 
 #[test]
 fn the_list_of_names_is_the_manifests() {
-    let manifest = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../../ui/src/audio/manifest.json"
-    );
-    let json: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(manifest).expect("the manifest exists"))
-            .expect("the manifest is JSON");
+    let json: serde_json::Value = serde_json::from_str(
+        &beryl_test_files::read_to_string("ui/src/audio/manifest.json")
+            .expect("the manifest exists"),
+    )
+    .expect("the manifest is JSON");
     let sounds = json["sounds"].as_object().expect("`sounds` is an object");
     assert_eq!(NAMES.len(), sounds.len(), "one name for each sound");
     for name in NAMES {

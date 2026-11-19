@@ -2,14 +2,12 @@
 //! (`beryl_session::script::Script::timing`): scripts built as a scenario plays, and scripts
 //! of a game resumed from a save of the corpus.
 
-use std::collections::BTreeSet;
-use std::path::Path;
-
 use beryl_cards::{CARDS, names};
 use beryl_session::corpus;
 use beryl_session::protocol::PlayerView;
 use beryl_session::script::Script;
 use beryl_session::{Game, SessionId};
+use std::collections::BTreeSet;
 
 use crate::common::views;
 
@@ -55,9 +53,7 @@ fn a_cast_and_its_resolution_are_timed_step_for_step() {
 /// is played.
 #[test]
 fn a_game_resumed_from_a_save_sends_timed_scripts() {
-    let crate_dir = std::env::var_os("CARGO_MANIFEST_DIR").expect("run under cargo");
-    let dir = Path::new(&crate_dir).join("tests/saves");
-    let mut saves: Vec<_> = std::fs::read_dir(&dir)
+    let mut saves: Vec<_> = beryl_test_files::read_dir("rust/crates/beryl_session/tests/saves")
         .unwrap()
         .map(|e| e.unwrap().path())
         .filter(|p| p.to_string_lossy().ends_with(".json.gz"))

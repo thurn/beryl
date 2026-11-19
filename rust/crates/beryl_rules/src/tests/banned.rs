@@ -36,14 +36,12 @@ fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
 
 #[test]
 fn the_engine_crates_use_no_banned_types() {
-    // Read at run time: a test binary from the shared target directory may have been built in
-    // a worktree that no longer exists.
-    let manifest = PathBuf::from(
-        std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"),
-    );
-    let crates = manifest.parent().unwrap();
+    let crates = beryl_test_files::root().unwrap().join("rust/crates");
     let mut files = Vec::new();
     for name in ["beryl_rules", "beryl_cards"] {
+        // Opening the folder through the helper makes its whole tree an input of this test;
+        // `sources` then walks it.
+        beryl_test_files::read_dir(format!("rust/crates/{name}/src")).unwrap();
         sources(&crates.join(name).join("src"), &mut files);
     }
     assert!(files.len() > 10);

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use ignite_core::manifest::Manifest;
 
 fn workspace() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    ignite_core::test_files::root().unwrap().join("ignite")
 }
 
 fn files_under(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -26,6 +26,8 @@ fn files_under(dir: &Path, out: &mut Vec<PathBuf>) {
 fn no_source_file_names_the_repository() {
     let name = ["ber", "yl"].concat();
     let mut files = Vec::new();
+    // Opening the folder through the helper makes its whole tree an input of this test.
+    ignite_core::test_files::read_dir("ignite/crates").unwrap();
     files_under(&workspace().join("crates"), &mut files);
     let offenders: Vec<_> = files
         .iter()
@@ -47,7 +49,7 @@ fn no_source_file_names_the_repository() {
 #[test]
 fn every_check_manifest_parses() {
     let mut files = Vec::new();
-    for entry in fs::read_dir(workspace().join("checks")).unwrap() {
+    for entry in ignite_core::test_files::read_dir("ignite/checks").unwrap() {
         let path = entry.unwrap().path();
         if path.extension().is_some_and(|e| e == "toml") {
             let text = fs::read_to_string(&path).unwrap();

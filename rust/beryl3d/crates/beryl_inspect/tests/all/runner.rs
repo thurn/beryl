@@ -291,13 +291,11 @@ fn logged_verdict(name: &str, rule: &str, allowed: Option<usize>, label: &str) -
     let dir = std::env::temp_dir().join(format!("beryl-results-{}-{label}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a directory");
     let list = dir.join("test-faults.json");
-    let listed = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../../data/beryl3d/test-faults.json"
-    );
-    let listed: Value =
-        serde_json::from_str(&std::fs::read_to_string(listed).expect("the list of allowed faults"))
-            .expect("JSON");
+    let listed: Value = serde_json::from_str(
+        &beryl_test_files::read_to_string("data/beryl3d/test-faults.json")
+            .expect("the list of allowed faults"),
+    )
+    .expect("JSON");
     let mut entry = listed["tests"][name].clone();
     if !entry.is_object() {
         entry = serde_json::json!({});

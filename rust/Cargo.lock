@@ -286,6 +286,7 @@ name = "beryl_card_build"
 version = "0.1.0"
 dependencies = [
  "beryl_card_store",
+ "beryl_test_files",
  "serde_json",
 ]
 
@@ -326,6 +327,7 @@ dependencies = [
  "beryl_kernel",
  "beryl_scenario",
  "beryl_scenario_types",
+ "beryl_test_files",
  "cards_1993",
  "cards_1994",
  "cards_1995",
@@ -449,6 +451,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_card",
  "beryl_kernel",
+ "beryl_test_files",
 ]
 
 [[package]]
@@ -493,6 +496,7 @@ dependencies = [
  "beryl_scenario",
  "beryl_search",
  "beryl_table",
+ "beryl_test_files",
  "flate2",
  "getrandom 0.4.3",
  "proptest",

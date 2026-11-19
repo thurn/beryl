@@ -6,8 +6,8 @@ use beryl_scene::driver::Page;
 
 /// The recordings `data/beryl3d/screens.json` names, in its order.
 fn listed_recordings() -> Vec<String> {
-    let path = recordings::root().join("data/beryl3d/screens.json");
-    let text = std::fs::read_to_string(&path).expect("the screens file is readable");
+    let text = beryl_test_files::read_to_string("data/beryl3d/screens.json")
+        .expect("the screens file is readable");
     let file: serde_json::Value = serde_json::from_str(&text).expect("the screens file is JSON");
     file["screens"]
         .as_array()
@@ -43,9 +43,8 @@ fn every_recording_the_screens_file_names_is_listed() {
 /// `prompt_shapes`, for the parity list to count, and that fixture is a recording of the pack.
 #[test]
 fn the_screens_file_names_a_fixture_for_every_prompt_shape() {
-    let root = recordings::root();
     let read = |path: &str| -> serde_json::Value {
-        let text = std::fs::read_to_string(root.join(path)).expect("the file is readable");
+        let text = beryl_test_files::read_to_string(path).expect("the file is readable");
         serde_json::from_str(&text).expect("the file is JSON")
     };
     let shapes = read("ui/shapes.json");
@@ -102,8 +101,8 @@ fn the_start_screen_offers_resume_table_for_saved_tables() {
 
 #[test]
 fn every_built_screen_shows_in_its_recording() {
-    let path = recordings::root().join("data/beryl3d/screens.json");
-    let text = std::fs::read_to_string(&path).expect("the screens file is readable");
+    let text = beryl_test_files::read_to_string("data/beryl3d/screens.json")
+        .expect("the screens file is readable");
     let file: serde_json::Value = serde_json::from_str(&text).expect("the screens file is JSON");
     for screen in file["screens"]
         .as_array()

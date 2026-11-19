@@ -7,12 +7,9 @@ use beryl_session::prompt::{PartName, PromptView, ShapeBody, Words};
 use beryl_session::typescript::{PATH, typescript};
 use beryl_session::{WIRE_HASH, wire_hash};
 
-/// The checked-in file's path. It is read at run time: a test binary from the shared target
-/// directory may have been built in a worktree that no longer exists.
+/// The checked-in file's path, in the checkout the test runs in.
 fn path() -> PathBuf {
-    PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .join(PATH)
+    beryl_test_files::root().expect("a checkout").join(PATH)
 }
 
 #[test]
@@ -24,7 +21,7 @@ fn the_generated_typescript_is_current() {
         std::fs::write(&path, &expected).unwrap();
         return;
     }
-    let actual = std::fs::read_to_string(&path).unwrap_or_default();
+    let actual = beryl_test_files::read_to_string(PATH).unwrap_or_default();
     assert!(
         actual == expected,
         "{PATH} is stale: run `BERYL_UPDATE_TS=1 just test-rust -p beryl_session --test session typescript`"

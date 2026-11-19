@@ -241,17 +241,15 @@ list = "cargo nextest list --locked --workspace --message-format json"
 run = "cargo nextest run --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "ignite/.config/nextest.toml"]
 
-# What one package's tests read beyond their own crates. ignite_core's tests/repository.rs reads
-# the source of every crate (no file may name the repository) and parses every manifest in this
-# directory, and prime.rs's tests parse ignite.toml. ignite_store's no_deferred_transactions.rs
-# reads ignite_hub's source, which ignite_store does not depend on. ignite_cli's tests read
-# ignite.toml and the agent instructions that `pool init` installs (ignite/AGENTS.md and
-# CLAUDE.md, .agents and .claude). ignite_daemon's tests read ignite.toml and the nextest
-# config, ignite_hub's preview reads both, and the daemon's and ignite_git's tests write a
-# .gitignore into the repositories they make, which the check that holds reads to inputs counts.
+# What one package's tests read beyond their own crates and do not open through
+# `ignite_core::test_files`, which records each read. ignite_cli's tests read ignite.toml and
+# the agent instructions that `pool init` installs (ignite/AGENTS.md and CLAUDE.md, .agents and
+# .claude). ignite_daemon's tests read ignite.toml and the nextest config, ignite_hub's preview
+# reads both, and the daemon's and ignite_git's tests write a .gitignore into the repositories
+# they make, which the check that holds reads to inputs counts. That is library code or a
+# program, which cannot take the helper of a test-only dependency. ignite_core's and
+# ignite_store's tests use the helper.
 [family.ignite.package_inputs]
-ignite_core = ["ignite/crates/**", "ignite/checks/**", "ignite.toml"]
-ignite_store = ["ignite/crates/ignite_hub/src/**"]
 ignite_cli = [
   "ignite.toml",
   "ignite/AGENTS.md",

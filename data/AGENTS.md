@@ -78,10 +78,6 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   `python -m beryl_tools.card_names --shrink` (from `tools/`) lowers them after
   you remove some.
 - `file-length-allowlist.json`: source files allowed to be over 800 lines.
-- `check-inputs-allowlist.json`: Rust files that read a repository path their
-  check family does not declare, with how many such reads each may hold, held by
-  the `check-inputs` source rule (`tools/src/beryl_tools/check_inputs.py`). Its
-  counts may only go down.
 - `ui-counts.json`: limits on the UI's renders, DOM mutations and style and
   layout work for a few fixtures, held by the `ui-counts` check family.
 - `save-breaks.json`: saved games in the corpus that can't be migrated past a

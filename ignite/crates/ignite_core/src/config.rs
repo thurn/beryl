@@ -766,8 +766,7 @@ products = ["clippy", "rust-tests"]
 
     #[test]
     fn the_repository_configuration_parses() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../ignite.toml");
-        let text = std::fs::read_to_string(path).unwrap();
+        let text = crate::test_files::read_to_string("ignite.toml").unwrap();
         let config = Config::parse("ignite.toml", &text).unwrap();
         assert!(config.machine.len() >= 3);
         assert_eq!(config.rules, Rules::default());
