@@ -2049,10 +2049,11 @@ express_cores = 3
   an earlier pass when it matches `inert`: files no command builds or runs, or
   whose formatting is all a command checks. The landing's formatters rewrite
   such a file after the first rebase, and the rebase merged the two edits
-  without a conflict, so the commands would build the same code. On 2026-11-19
-  two landings each ran all four commands again (65 s and 71 s) because the
-  commits they rebased over had also edited `docs/ignite.md` and
-  `data/efficiency-changes.json`, which nearly every Ignite change edits. A
+  without a conflict, so the commands would build the same code. Nearly every
+  Ignite change edits `docs/ignite.md` and `data/efficiency-changes.json`, so
+  without this rule any landing that rebased over another Ignite change ran all
+  four commands again (65 s and 71 s for two landings on 2026-11-19, although
+  those two also shared files under `ignite/` and would have rerun anyway). A
   merge of two Markdown edits that a later lost race brings in is not formatted
   again; tip verification's lint family reports one that came out wrong.
 - The two formatting commands come first, because they take a second or so and

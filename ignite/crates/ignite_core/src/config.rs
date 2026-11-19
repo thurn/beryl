@@ -148,9 +148,10 @@ pub struct Express {
     /// only checks the formatting of, which the landing's `[format]` rules rewrite after its
     /// rebase. A commit landed after an express pass that edits one of the change's own files
     /// leaves the pass standing when the file matches one of these (see
-    /// `ignite_daemon::land::express`). On 2026-11-19 two Ignite landings each ran the commands
-    /// again (65 s and 71 s) because the commits they rebased over had also added a paragraph to
-    /// the design document and a line to a data file that no command builds.
+    /// `ignite_daemon::land::express`). Nearly every Ignite change adds a paragraph to the design
+    /// document and a line to a data file that no command builds, so without this list any
+    /// landing that rebased over another Ignite change ran the commands again (65 to 71 s on
+    /// 2026-11-19).
     #[serde(default)]
     pub inert: Vec<String>,
 }

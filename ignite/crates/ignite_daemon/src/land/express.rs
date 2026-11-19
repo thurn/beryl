@@ -367,10 +367,11 @@ impl Expressed {
 /// A file of the change that the landed commits touch too does not count when it matches the
 /// section's `inert` patterns: no command builds it, or a command only checks its formatting,
 /// and the landing formats it after its first rebase. The rebase merged the two edits without a
-/// conflict, so the commands would build the same code as before. On 2026-11-19 two landings
-/// ran all four commands again (71 s and 65 s) because the commits they rebased over had also
-/// edited the design document and the efficiency log, which almost every Ignite change edits. A merge of two well formatted Markdown edits that a later race brings in is not
-/// formatted again, and tip verification's lint family would report one that came out wrong.
+/// conflict, so the commands would build the same code as before. Almost every Ignite change
+/// edits the design document and the efficiency log, so without this rule any landing that
+/// rebased over another Ignite change ran all four commands again (65 to 71 s on 2026-11-19).
+/// A merge of two well formatted Markdown edits that a later race brings in is not formatted
+/// again, and tip verification's lint family would report one that came out wrong.
 fn still_holds(
     git: &dyn Git,
     express: Option<&ignite_core::config::Express>,
