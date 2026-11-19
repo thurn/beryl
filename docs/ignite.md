@@ -313,7 +313,11 @@ The verbs an agent uses while working:
   starts building it, and prints the ticket with what its dependencies left
   behind. `ignite start "<summary>"` files a ticket first, for a session that
   was given a task and no ticket.
-- `ignite test <names>` runs the checks the agent names, in its tree.
+- `ignite test <names>` runs the checks the agent names, in its tree. A name
+  without a known `<family>:` prefix is looked up in the kept listings, and
+  only the families that match, or that have no kept listing, are listed. A
+  name that no family could hold is refused at once with a hint on how checks
+  are named, so a Rust test function name never builds every family.
 - `ignite check` runs what the landing gate would run on the tree as it is.
 - `ignite sync` rebases the tree's branch onto the tip.
 - `ignite land -m "<note>"` rebases, runs the gate, lands the commits, records

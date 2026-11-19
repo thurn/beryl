@@ -54,18 +54,9 @@ impl Verb for TestVerb {
         if let Some(reply) = express_reply(self.express.as_ref(), &self.checks, ctx, &tree, asked) {
             return reply;
         }
-        let known = |w: &&str| {
-            w.split_once(':')
-                .is_some_and(|(f, _)| self.checks.families().any(|(n, _)| n == f))
-        };
-        let families: Vec<&str> = if words.iter().all(known) {
-            words
-                .iter()
-                .filter_map(|w| w.split_once(':'))
-                .map(|(f, _)| f)
-                .collect()
-        } else {
-            self.checks.families().map(|(name, _)| name).collect()
+        let families = match self.test_families(ctx, &tree, &words) {
+            Ok(found) => found,
+            Err(reply) => return reply,
         };
         let mut run = CheckRun::default();
         let mut prepared = self
@@ -105,6 +96,65 @@ impl Verb for TestVerb {
             ));
         }
         reply(&run, render(&lines))
+    }
+}
+
+impl TestVerb {
+    /// The families whose checks `words` could name, found without building anything. A word
+    /// with a known `<family>:` prefix names that family. Any other word is looked up in the
+    /// kept listings; it could also name a check of a family with no kept listing, so those
+    /// families are listed too. When no family could hold a bare word, the reply says how
+    /// checks are named.
+    fn test_families<'a>(
+        &'a self,
+        ctx: &Context,
+        tree: &OpenTree,
+        words: &[&str],
+    ) -> Result<Vec<&'a str>, Reply> {
+        let prefixed = |w: &str| {
+            w.split_once(':')
+                .and_then(|(f, _)| self.checks.families().find(|(n, _)| *n == f))
+                .map(|(n, _)| n)
+        };
+        let mut families: Vec<&str> = words.iter().filter_map(|w| prefixed(w)).collect();
+        let bare: Vec<&str> = words
+            .iter()
+            .copied()
+            .filter(|w| prefixed(w).is_none())
+            .collect();
+        if bare.is_empty() {
+            return Ok(families);
+        }
+        let all: Vec<(&str, &Family)> = self.checks.families().collect();
+        let kept = self.checks.kept_listings(ctx, tree, &all);
+        for (name, _) in &all {
+            match kept.get(*name) {
+                None => families.push(name),
+                Some((_, listing)) => {
+                    let named = bare
+                        .iter()
+                        .any(|w| listing.checks.iter().any(|l| matches(w, l.check.as_str())));
+                    if named {
+                        families.push(name);
+                    }
+                }
+            }
+        }
+        if families.is_empty() {
+            let names: Vec<&str> = all.iter().map(|(n, _)| *n).collect();
+            return Err(Reply::text(
+                Exit::Usage,
+                format!(
+                    "no check matches {}\nchecks are named <family>:<check> (families: {}); to \
+                     run one Rust test, use `cargo nextest run -p <crate> <name>` in the tree",
+                    bare.join(", "),
+                    names.join(", ")
+                ),
+            ));
+        }
+        families.sort_unstable();
+        families.dedup();
+        Ok(families)
     }
 }
 
