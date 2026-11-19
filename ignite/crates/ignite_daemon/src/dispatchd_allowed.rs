@@ -12,7 +12,9 @@
 //!
 //! - `clear_session`: a current hand-off to that session with `clear` set.
 //! - `set_session_model` and `set_session_effort`: a current hand-off to that session.
-//! - `send_message`: a current hand-off or message to that session.
+//! - `send_message`: a current message to that session, or a current hand-off to it whose model
+//!   and effort the daemon has read back as asked (see `raw`), so a prompt never reaches a worker
+//!   on the wrong model.
 //! - `start_session`: a current hand-off that names no session (a Codex slot's new chat), a
 //!   `rotate` given in the last ten minutes, the pool setup of `/ignite pool <n>` (from
 //!   `ignite pool add --dispatcher` until the workers are registered, at most fifteen minutes),
@@ -60,8 +62,9 @@ impl Tool {
         }
     }
 
-    /// Whether `queued`, a current instruction, calls for this tool on `session`.
-    fn called_for(self, queued: &Queued, session: Option<&str>) -> bool {
+    /// Whether `queued`, a current instruction, calls for this tool on `session`. `verified` is
+    /// whether a hand-off's read-back matched.
+    fn called_for(self, queued: &Queued, verified: bool, session: Option<&str>) -> bool {
         let body = &queued.body;
         let names = |s: Option<&str>| body.session.as_ref().map(SessionId::as_str) == s;
         let handoff = matches!(queued.purpose, Purpose::Handoff(_));
@@ -70,7 +73,7 @@ impl Tool {
             Tool::Clear => handoff && body.clear && session.is_some() && names(session),
             Tool::Model | Tool::Effort => handoff && session.is_some() && names(session),
             Tool::Message => {
-                (handoff || body.action == DispatchAction::Message)
+                ((handoff && verified) || body.action == DispatchAction::Message)
                     && session.is_some()
                     && names(session)
             }
@@ -78,13 +81,20 @@ impl Tool {
     }
 }
 
-/// The instructions the dispatcher may be carrying out now.
-fn current(state: &State) -> Vec<&Queued> {
+/// The instructions the dispatcher may be carrying out now, each with whether it is a hand-off
+/// whose read-back matched.
+fn current(state: &State) -> Vec<(&Queued, bool)> {
     state
         .given
         .values()
-        .map(|given| &given.queued)
-        .chain(state.pending.iter().filter(|queued| queued.gives > 0))
+        .map(|given| (&given.queued, given.verified))
+        .chain(
+            state
+                .pending
+                .iter()
+                .filter(|queued| queued.gives > 0)
+                .map(|queued| (queued, false)),
+        )
         .collect()
 }
 
@@ -117,7 +127,9 @@ impl Dispatcher {
             since.is_some_and(|at| now.seconds_since(at) < limit)
         };
         let current = current(&state);
-        let allowed = current.iter().any(|q| parsed.called_for(q, session))
+        let allowed = current
+            .iter()
+            .any(|(q, verified)| parsed.called_for(q, *verified, session))
             || (parsed == Tool::Start
                 && (no_dispatcher
                     || within(state.setup_since, SETUP_S)
@@ -132,9 +144,21 @@ impl Dispatcher {
         if current.is_empty() {
             text.push_str("\ncurrent  none");
         }
-        for queued in current {
+        for (queued, verified) in current {
             let line = serde_json::to_string(&queued.body).unwrap_or_default();
             let _ = write!(text, "\ncurrent  {line}");
+            if parsed == Tool::Message
+                && matches!(queued.purpose, Purpose::Handoff(_))
+                && !verified
+                && queued.body.session.as_ref().map(SessionId::as_str) == session
+            {
+                let _ = write!(
+                    text,
+                    "\nreason   the prompt waits for the read-back: call get_session and report \
+                     `ignite dispatch ack {} raw '<its JSON>'`",
+                    queued.body.id
+                );
+            }
         }
         text.push_str(
             "\nnext     carry out only the current instruction, report it with `ignite dispatch \

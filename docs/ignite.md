@@ -2396,8 +2396,9 @@ the tool calls the daemon asks for.
   only the instructions' wording stopped a confused dispatcher from starting
   duplicate workers or clearing a busy one.
   - Clearing needs a hand-off with `clear` set to that session; setting the
-    model or effort needs a hand-off to it; sending needs a hand-off or a
-    `message` to it.
+    model or effort needs a hand-off to it; sending needs a `message` to it, or
+    a hand-off to it whose `raw` read-back matched, so a prompt never reaches a
+    worker before the daemon has seen its model and effort stick.
   - Starting a session needs a hand-off that names no session, a `rotate` in the
     last 10 minutes, or the pool setup of `/ignite pool <n>`: from
     `ignite pool add --dispatcher` until the workers are registered, at most 15

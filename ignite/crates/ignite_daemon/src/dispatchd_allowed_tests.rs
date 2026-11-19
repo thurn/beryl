@@ -35,7 +35,7 @@ fn a_handoff_allows_its_own_calls_on_its_own_worker_until_acknowledged() {
     rig.reserve("T.1", "local_w1", &[]);
     let handoff = rig.step().unwrap();
     assert_eq!(handoff_to(&handoff).0, "local_w1");
-    for tool in [CLEAR, MODEL, EFFORT, SEND] {
+    for tool in [CLEAR, MODEL, EFFORT] {
         assert!(allows(&rig, tool, Some("local_w1")), "{tool}");
         assert!(
             !allows(&rig, tool, Some("local_w2")),
@@ -56,6 +56,16 @@ fn a_handoff_allows_its_own_calls_on_its_own_worker_until_acknowledged() {
     rig.clock.advance(ACK_WAIT_S + 1.0);
     assert!(rig.step().is_some());
     assert!(allows(&rig, CLEAR, Some("local_w1")));
+    // The prompt waits until the model and effort read back as asked.
+    assert!(!allows(&rig, SEND, Some("local_w1")), "no read-back yet");
+    let readback = format!(
+        r#"{{"sessionId":"local_w1","model":"{}","effort":"{}"}}"#,
+        handoff.model.as_deref().unwrap_or_default(),
+        handoff.effort.as_deref().unwrap_or_default()
+    );
+    rig.ack(handoff.id, "raw", &readback);
+    assert!(allows(&rig, SEND, Some("local_w1")), "read back as asked");
+    assert!(!allows(&rig, SEND, Some("local_w2")));
     rig.ack(handoff.id, "ok", "");
     assert!(!allows(&rig, SEND, Some("local_w1")));
 }
