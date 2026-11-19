@@ -1,5 +1,5 @@
-//! Outside the landing gate, families are listed and run on threads of their own, so the
-//! products they need build at once.
+//! Families are listed and run on threads of their own, so the products they need build at
+//! once, in the landing gate as outside it.
 
 use std::sync::Condvar;
 use std::time::Duration;
@@ -154,4 +154,44 @@ fn a_build_two_families_share_is_reported_once() {
         .filter(|r| r.verb == "build")
         .count();
     assert_eq!(recorded, 1);
+}
+
+/// On 2026-11-19 `ignite check` of a one-card comment change listed its families one after
+/// another and built each product only when the listing reached the family that needed it. The
+/// landing gate now builds every product its families need to be listed at once.
+#[test]
+fn the_gate_builds_the_products_its_listings_need_at_once() {
+    let manifest = [
+        product("one"),
+        product("two"),
+        family("alpha", "one"),
+        family("beta", "two"),
+    ]
+    .concat();
+    let builds = MeetingBuilds::new(2);
+    let world = world(&manifest, &["src/a.py"], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"alpha:a\"}\n{\"check\": \"beta:b\"}\n".to_owned();
+    let ctx = Context {
+        builds: builds.clone(),
+        ..world.ctx.clone()
+    };
+    let tree = TreeId::new("tree-01").unwrap();
+    let options = RunOptions {
+        verb: "check".to_owned(),
+        ..options(false)
+    };
+
+    let gated = world.checks.gate(&ctx, &tree, &options);
+
+    assert!(gated.run.build_failures.is_empty(), "{gated:?}");
+    let mut built: Vec<&str> = gated
+        .run
+        .builds
+        .iter()
+        .map(|b| b.product.as_str())
+        .collect();
+    built.sort_unstable();
+    assert_eq!(built, ["one", "two"]);
+    assert_eq!(world.launcher.commands("lister").len(), 2);
 }

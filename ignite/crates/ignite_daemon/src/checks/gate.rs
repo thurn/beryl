@@ -12,6 +12,7 @@
 //! the seconds spent running checks on lines of their own.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::AtomicBool;
 
 use ignite_core::budget::billions_text;
 use ignite_core::gate::cost_of;
@@ -20,7 +21,7 @@ use ignite_core::manifest::{Family, Kind};
 use ignite_core::protocol::hub::CachedResult;
 
 use super::plan;
-use super::time_lines::listed_line;
+use super::time_lines::{Stopwatch, listed_line, slow_line, took_line};
 use super::verbs::{changed_paths, counts, failure_lines, gate_view_of, open_regressions, unbuilt};
 use super::{CheckRun, Checks, Keyed, OpenTree, RunOptions};
 use crate::server::Context;
@@ -54,6 +55,9 @@ pub struct GateRun {
     /// What comparing the gate's failures with the tip the landing was rebased onto found, when
     /// they still refuse the landing.
     pub base: Option<String>,
+    /// The seconds the gate took, from opening the tree to its last check, which the `took`
+    /// line splits into the stages recorded in `run.stages`.
+    pub seconds: f64,
 }
 
 /// Checks a landing found failing at the tip it was rebased onto as well as in its own commit,
@@ -129,8 +133,13 @@ impl Checks {
         carried: Option<&Carried>,
         excused: &Excused,
     ) -> GateRun {
+        let opening = Stopwatch::start(ctx);
         match self.open(ctx, tree) {
-            Ok((checks, tree)) => checks.gate_in(ctx, &tree, options, carried, excused),
+            Ok((checks, tree)) => {
+                let mut gated = checks.gate_in(ctx, &tree, options, carried, excused);
+                gated.opened(ctx, opening);
+                gated
+            }
             Err(error) => {
                 let mut gated = GateRun::default();
                 gated
@@ -150,7 +159,23 @@ impl Checks {
         carried: Option<&Carried>,
         excused: &Excused,
     ) -> GateRun {
+        let started = Stopwatch::start(ctx);
+        let mut gated = self.gate_stages(ctx, tree, options, carried, excused);
+        gated.seconds = started.seconds(ctx);
+        gated
+    }
+
+    /// [`Checks::gate_in`], recording each stage it reaches in `run.stages`.
+    fn gate_stages(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        options: &RunOptions,
+        carried: Option<&Carried>,
+        excused: &Excused,
+    ) -> GateRun {
         let mut run = CheckRun::default();
+        let scoping = Stopwatch::start(ctx);
         // Without the changed paths the gate cannot tell which checks the change edited, and
         // would drop them silently, so it fails instead.
         let changed = match changed_paths(self, ctx, tree) {
@@ -179,6 +204,7 @@ impl Checks {
             Some(carried) => self.carry(ctx, tree, among, carried),
             None => (among, Vec::new()),
         };
+        run.stage(ctx, "finding the scope", scoping);
         // Nothing the commits landed since touch can change a verdict, so nothing is listed,
         // built or run.
         if among.is_empty() && !carried.is_empty() {
@@ -191,6 +217,7 @@ impl Checks {
         }
         // A family listed even if that builds a product the tree has never built: one in the
         // always set for this change, or one holding the check whose regression this fixes.
+        let listing = Stopwatch::start(ctx);
         let fixing = fixing(ctx, options);
         let unbuilt = unbuilt(ctx, tree, among.iter().map(|(_, family)| *family));
         let listed = |name: &str, f: &Family| f.always_for(&changed) || fixing.contains(name);
@@ -202,6 +229,7 @@ impl Checks {
         for family in &mut prepared {
             family.keep(|_| true, &mut run);
         }
+        run.stage(ctx, "listing", listing);
         // A fault found while listing, such as an invalid manifest entry, refuses the landing
         // before anything is looked up, built or run.
         if !run.passed() {
@@ -210,6 +238,7 @@ impl Checks {
                 ..GateRun::default()
             };
         }
+        let planning = Stopwatch::start(ctx);
         let hits = self.lookup(&prepared, options);
         let mut view = gate_view_of(self, ctx, tree, &prepared, &hits, &changed);
         landing_view(&mut view, options, excused);
@@ -241,15 +270,10 @@ impl Checks {
         let order = plan::run_order(&view, &gate_plan);
         let key = |family: &str| order.get(family).copied().unwrap_or(0.0);
         families.sort_by(|a, b| key(&a.0).total_cmp(&key(&b.0)));
-        for (family, items) in families {
-            // Once a check has failed, the landing is refused: no further command starts, and
-            // what already passed stays in the cache.
-            if !run.passed() {
-                run.skipped += u32::try_from(items.len()).unwrap_or(u32::MAX);
-                continue;
-            }
-            self.execute(ctx, tree, &family, items, options, &mut run, true);
-        }
+        run.stage(ctx, "planning", planning);
+        let running = Stopwatch::start(ctx);
+        self.run_families(ctx, tree, families, options, &mut run);
+        run.stage(ctx, "running", running);
         self.remember(ctx, &changed, &gate_plan, &run);
         GateRun {
             run,
@@ -260,6 +284,30 @@ impl Checks {
             carried,
             known_failing: gate_plan.known_failing,
             base: None,
+            seconds: 0.0,
+        }
+    }
+
+    /// Runs every family at once, each on a thread of its own, started in the order given,
+    /// which ranks them by the failures they are likely to find first. Once a failure is
+    /// confirmed, the landing is refused: no further command starts in any family, and what
+    /// already passed stays in the cache. What each family found is added to `run` in that
+    /// order. On 2026-11-19 the gate of a one-card comment change ran its families one after
+    /// another for 123 s, though no single family took more than 41 s.
+    fn run_families(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        families: Vec<(String, Vec<Item>)>,
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) {
+        let stop = AtomicBool::new(false);
+        let ran = super::prepare::on_threads(families, |(family, items), own| {
+            self.execute(ctx, tree, &family, items, options, own, Some(&stop));
+        });
+        for ((), own) in ran {
+            run.absorb(own);
         }
     }
 
@@ -314,6 +362,19 @@ impl Checks {
             })
             .collect();
         (again, untouched)
+    }
+}
+
+impl GateRun {
+    /// Counts the seconds since `opening`, when the gate began opening its tree, as the gate's
+    /// first stage and in its total.
+    pub(crate) fn opened(&mut self, ctx: &Context, opening: Stopwatch) {
+        let total = opening.seconds(ctx);
+        let opened = (total - self.seconds).max(0.0);
+        self.run
+            .stages
+            .insert(0, ("opening the tree".to_owned(), opened));
+        self.seconds = total;
     }
 }
 
@@ -372,8 +433,8 @@ fn gate_budget(
     }
 }
 
-/// The `gate`, `budget`, `build` and `listed` lines, the failures and the `tip` line of a gate's
-/// output.
+/// The `gate`, `budget`, `build`, `listed`, `slow` and `took` lines, the failures and the `tip`
+/// line of a gate's output.
 /// Check seconds and build seconds are on lines of their own, so a landing that was slow
 /// because it compiled shows as that.
 pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
@@ -396,6 +457,8 @@ pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
     }
     lines.push(build_line(run, gated.budget.as_ref()));
     lines.extend(listed_line(run));
+    lines.extend(slow_line(run));
+    lines.extend(took_line(run, gated.seconds));
     lines.extend(failure_lines(run));
     lines.extend(gated.base.clone().map(|base| ("base".to_owned(), base)));
     lines.extend(stopped_line(run));

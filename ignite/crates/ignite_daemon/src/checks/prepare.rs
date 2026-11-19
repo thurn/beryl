@@ -1,7 +1,8 @@
 //! Listing and keying the checks of a set of families, and running the prepared checks, for
 //! every verb and for the landing gate, which stops at the first fault it knows of (see
-//! "Landing" in `docs/ignite.md`). Outside the landing gate each family is listed, and run, on
-//! a thread of its own ([`on_threads`]).
+//! "Landing" in `docs/ignite.md`). Each family is listed, and run, on a thread of its own
+//! ([`on_threads`]); the landing gate lists in two rounds, so a fault found without building
+//! anything stops it before the families that need a product are listed.
 
 use std::panic::resume_unwind;
 use std::sync::Arc;
@@ -53,8 +54,9 @@ impl Checks {
     /// [`Checks::prepare_among`] for the landing gate, which stops at the first fault it knows
     /// of: a check whose manifest entry is invalid, a listing that failed, or a build that
     /// failed. The families that can be listed without building anything (a kept listing, or a
-    /// `list` that needs no product) are listed first, so such a fault refuses the landing
-    /// before anything is built. The families not listed are named in `run.unlisted`.
+    /// `list` that needs no product) are listed first, while the products the others need build,
+    /// so such a fault refuses the landing before any other family is listed or any check runs.
+    /// The families not listed are named in `run.unlisted`.
     ///
     /// A family for which `cold` holds (its listing needs a product the tree has never built)
     /// and of which no listing is kept is not listed, and is named in `run.cold_families`.
@@ -77,8 +79,14 @@ impl Checks {
     /// `list` needs no product, or a product already current, is listed while another family's
     /// product builds, and the products of different families build at once where the
     /// scheduler grants the cores. What the threads find is added to `run` in the families'
-    /// order, as if they had been listed one after another. The landing gate lists them one
-    /// at a time, because it stops at the first fault.
+    /// order, as if they had been listed one after another.
+    ///
+    /// The landing gate lists in two rounds, because it stops at the first fault. First it
+    /// lists the families that build nothing to be listed, each on a thread of its own, while
+    /// every product the other families need to be listed builds. When that round finds no
+    /// fault, it lists the other families at once, whose products are by then current. A
+    /// fault in the first round leaves the other families unlisted, but the gate still waits
+    /// for the builds already started; their products are current for the next attempt.
     fn prepare_families(
         &self,
         ctx: &Context,
@@ -123,20 +131,28 @@ impl Checks {
         if !fail_fast {
             return self.prepare_at_once(ctx, tree, work, options, run);
         }
-        let mut work = work;
-        // A stable sort: the families that build nothing to be listed come first.
-        work.sort_by_key(|w| {
-            let needs = w.family.list_needs.as_ref().unwrap_or(&w.family.needs);
-            !(w.kept.is_some() || needs.is_empty())
-        });
-        let mut prepared: Vec<Prepared> = Vec::new();
-        for one in work {
-            if known_fault(&prepared, run) {
-                run.unlisted.push(one.name.to_owned());
-                continue;
+        // The families that build nothing to be listed are listed first, at once, while the
+        // products the others need to be listed build.
+        let (free, building): (Vec<FamilyWork>, Vec<FamilyWork>) =
+            work.into_iter().partition(|w| {
+                let needs = w.family.list_needs.as_ref().unwrap_or(&w.family.needs);
+                w.kept.is_some() || needs.is_empty()
+            });
+        let mut products: Vec<String> = Vec::new();
+        for w in &building {
+            for product in w.family.list_needs.as_ref().unwrap_or(&w.family.needs) {
+                if !products.contains(product) {
+                    products.push(product.clone());
+                }
             }
-            prepared.extend(self.prepare_family(ctx, tree, one, options, run));
         }
+        let mut prepared = self.list_while_building(ctx, tree, free, &products, options, run);
+        if known_fault(&prepared, run) {
+            run.unlisted
+                .extend(building.iter().map(|w| w.name.to_owned()));
+            return prepared;
+        }
+        prepared.extend(self.prepare_at_once(ctx, tree, building, options, run));
         prepared
     }
 
@@ -155,6 +171,47 @@ impl Checks {
         });
         let mut prepared = Vec::new();
         for (one, own) in found {
+            run.absorb(own);
+            prepared.extend(one);
+        }
+        prepared
+    }
+
+    /// Prepares each family of `free` on a thread of its own while each of `products` builds
+    /// on another, and adds what each found to `run`: the families' findings in order, then
+    /// the builds'. On 2026-11-19 `ignite check` of a one-card comment change listed 26
+    /// families one after another and built the two products it needed only when the
+    /// listing reached the families that needed them, so 137 s went to listing.
+    fn list_while_building(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        free: Vec<FamilyWork>,
+        products: &[String],
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) -> Vec<Prepared> {
+        let who = super::execute::build_for(options);
+        let jobs = products
+            .iter()
+            .map(Job::Build)
+            .chain(free.into_iter().map(Job::List))
+            .collect();
+        let found = on_threads(jobs, |job, own| match job {
+            Job::Build(product) => {
+                // A failure is recorded in `own`, which the gate reads as a fault.
+                let _ =
+                    self.build_products(ctx, tree, std::slice::from_ref(product), &[], &who, own);
+                None
+            }
+            Job::List(one) => self.prepare_family(ctx, tree, one, options, own),
+        });
+        let (built, listed): (Vec<_>, Vec<_>) = found
+            .into_iter()
+            .enumerate()
+            .partition(|(i, _)| *i < products.len());
+        let mut prepared = Vec::new();
+        for (_, (one, own)) in listed.into_iter().chain(built) {
             run.absorb(own);
             prepared.extend(one);
         }
@@ -246,7 +303,7 @@ impl Checks {
             })
             .collect();
         let ran = on_threads(families, |(name, items), own| {
-            self.execute(ctx, tree, &name, items, options, own, false);
+            self.execute(ctx, tree, &name, items, options, own, None);
         });
         for ((), own) in ran {
             run.absorb(own);
@@ -309,6 +366,13 @@ struct FamilyWork<'a> {
     family: &'a Family,
     key: Option<ListingKey>,
     kept: Option<(ListingKey, Arc<Kept>)>,
+}
+
+/// One piece of the landing gate's first round of listing: a product to build, or a family to
+/// list that builds nothing to be listed.
+enum Job<'a, 'p> {
+    Build(&'p String),
+    List(FamilyWork<'a>),
 }
 
 /// Whether listing has already found a fault that refuses a landing: a failed build or

@@ -1849,15 +1849,25 @@ The steps, in order:
 The gate stops at the first fault it knows of:
 
 - After scoping, it lists first the families that need no build to be listed
-  (those with a kept listing, or whose `list` needs no product). If any listed
-  check's manifest entry is invalid, a listing fails, or a build fails, the
-  landing is refused at once, before anything is built or run, and the reply
-  names the faulty entries and the families it did not list.
-- It runs the families in order of cost per expected failure, cheapest first,
-  with families answered wholly from the cache first.
-- Once a check's failure is confirmed by its rerun, it starts no further
-  command. What already passed stays in the result cache, and the `stopped` line
-  says how many checks it did not run.
+  (those with a kept listing, or whose `list` needs no product), each on a
+  thread of its own, while every product the other families need to be listed
+  builds. If any listed check's manifest entry is invalid, a listing fails, or a
+  build fails, the landing is refused once those builds end, before any other
+  family is listed or any check runs, and the reply names the faulty entries and
+  the families it did not list. Otherwise the other families are listed at once.
+- It starts every family at once, each on a thread of its own, in order of cost
+  per expected failure, cheapest first, with families answered wholly from the
+  cache first.
+- Once a check's failure is confirmed by its rerun, it starts no further command
+  in any family. What already passed stays in the result cache, and the
+  `stopped` line says how many checks it did not run.
+- Its output ends, as `ignite test`'s does, with a `slow` line and a `took` line
+  that splits its time into opening the tree, finding the scope, listing,
+  planning and running. On 2026-11-19 `ignite check` of a one-card comment
+  change took 273 s: it listed 26 families one after another for 137 s, building
+  each of its two products only when the listing reached the family that needed
+  it, ran its families one after another for 123 s, and its output accounted for
+  164 s.
 - When judging scope, `crate-closure` stands for the packages the family's
   listed checks belong to. In a listing hash it stands for the packages of the
   workspaces the family's other inputs reach into, so a change to Ignite's own

@@ -220,6 +220,7 @@ impl Verb for CheckVerb {
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let (_, flags) = split_args(&req.args);
         let options = options("check", req, flags.contains(&"--rerun"));
+        let opening = Stopwatch::start(ctx);
         let (checks, tree) = match self.tree(ctx, req) {
             Ok(opened) => opened,
             Err(reply) => return reply,
@@ -229,10 +230,10 @@ impl Verb for CheckVerb {
             if let Some(reply) = express_reply(lane, &checks, ctx, &tree, Asked::Gate) {
                 return reply;
             }
-            let gated = checks.gate_in(ctx, &tree, &options, None, &super::Excused::new());
+            let mut gated = checks.gate_in(ctx, &tree, &options, None, &super::Excused::new());
+            gated.opened(ctx, opening);
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
-            lines.extend(slow_line(&gated.run));
             return reply(&gated.run, render(&lines));
         }
         let regression: Vec<(&str, &Family)> = checks

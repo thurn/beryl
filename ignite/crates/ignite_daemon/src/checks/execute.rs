@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use ignite_core::ids::{CheckName, Commit, RecordId};
 use ignite_core::inputs;
@@ -35,6 +35,12 @@ pub(super) fn build_for(options: &RunOptions) -> BuildFor {
     }
 }
 
+/// Whether the landing gate's stop flag, if there is one, has been raised by a confirmed
+/// failure.
+fn stopped(stop: Option<&AtomicBool>) -> bool {
+    stop.is_some_and(|stop| stop.load(Ordering::SeqCst))
+}
+
 /// The variable that tells each check command its class, so a family can wait longer for a slow
 /// tool outside the landing gate.
 pub const CLASS_ENV: &str = "IGNITE_CLASS";
@@ -52,8 +58,9 @@ impl Checks {
     }
 
     /// Answers each check from its cached result or runs it, with the rerun of a failure and
-    /// the retries of an incomplete run, and stores what it learns. With `fail_fast`, as in
-    /// the landing gate, no further command starts once a check's failure is confirmed.
+    /// the retries of an incomplete run, and stores what it learns. With `stop`, as in the
+    /// landing gate, no further command starts once a check's failure is confirmed, in this
+    /// family or in any other family that shares the flag.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn execute(
         &self,
@@ -63,7 +70,7 @@ impl Checks {
         items: Vec<(Keyed, Option<CachedResult>)>,
         options: &RunOptions,
         run: &mut CheckRun,
-        fail_fast: bool,
+        stop: Option<&AtomicBool>,
     ) {
         let Some(family) = self.settings.manifest.families.get(name).map(|d| &d.family) else {
             return;
@@ -116,6 +123,10 @@ impl Checks {
             }
             return;
         }
+        if stopped(stop) {
+            run.skipped += u32::try_from(pending.len()).unwrap_or(u32::MAX);
+            return;
+        }
         let mut packages: Vec<String> = pending
             .iter()
             .filter_map(|k| k.listed.package.clone())
@@ -138,16 +149,16 @@ impl Checks {
             return;
         }
         run.ran += u32::try_from(pending.len()).unwrap_or(u32::MAX);
-        let finals = self.attempts(ctx, tree, name, family, pending, options, run, fail_fast);
+        let finals = self.attempts(ctx, tree, name, family, pending, options, run, stop);
         self.settle(ctx, tree, family, finals, run);
     }
 
     /// Runs `pending` until each has a verdict: a failure runs once more at once, and a check
     /// left unreported runs at most [`TRIES`] times. A check its command says cannot run on this
     /// machine, and every check a hung command left unreported, is incomplete at once, because
-    /// running it again here would end the same way. With `fail_fast`, once a failure is
-    /// confirmed by its rerun, the checks still waiting for another run are left unanswered and
-    /// counted in `run.skipped`.
+    /// running it again here would end the same way. With `stop`, once a failure is confirmed
+    /// by its rerun the flag is raised, and once it is raised, here or by another family, the
+    /// checks still waiting for a run are left unanswered and counted in `run.skipped`.
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(super) fn attempts(
         &self,
@@ -158,7 +169,7 @@ impl Checks {
         mut pending: Vec<Keyed>,
         options: &RunOptions,
         run: &mut CheckRun,
-        fail_fast: bool,
+        stop: Option<&AtomicBool>,
     ) -> Vec<Final> {
         // A first failure, with its run's output and record.
         let mut failed: BTreeMap<CheckName, (Reported, PathBuf, Option<RecordId>)> =
@@ -170,6 +181,11 @@ impl Checks {
         // Whether a damaged build was cleared and run again: that happens once.
         let mut repaired = false;
         while !pending.is_empty() {
+            if stopped(stop) {
+                run.skipped += u32::try_from(pending.len()).unwrap_or(u32::MAX);
+                pending.clear();
+                break;
+            }
             let (reported, output, record, unbuilt) = self.run_family_built(
                 ctx,
                 tree,
@@ -342,9 +358,10 @@ impl Checks {
                 let _ = supervise::keep(&output.output);
             }
             pending = again;
-            if fail_fast && !pending.is_empty() && finals.iter().any(|f| f.1 == Outcome::Fail) {
-                run.skipped += u32::try_from(pending.len()).unwrap_or(u32::MAX);
-                pending.clear();
+            if let Some(stop) = stop
+                && finals.iter().any(|f| f.1 == Outcome::Fail)
+            {
+                stop.store(true, Ordering::SeqCst);
             }
         }
         finals

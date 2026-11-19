@@ -13,9 +13,10 @@
 //! - Scope: the landing gate leaves out every family whose inputs the change does not touch,
 //!   before it lists or builds anything ([`scope`]).
 //! - Failing fast: the landing gate stops at the first fault it knows of. It lists first the
-//!   families that build nothing to be listed, refuses the landing before anything is built
-//!   when a listed check's manifest entry is invalid ([`prepare`]), runs the families cheapest
-//!   per expected failure first, and starts no further command once a failure is confirmed by
+//!   families that build nothing to be listed, while the products the others need build, and
+//!   refuses the landing before any other family is listed when a listed check's manifest
+//!   entry is invalid ([`prepare`]). It starts every family at once, cheapest per expected
+//!   failure first, and starts no further command in any family once a failure is confirmed by
 //!   its rerun ([`gate`]). What it leaves out is counted in `CheckRun::unlisted` and `skipped`.
 //! - Lookup: one result cache request per command, for every check it needs ([`ResultCache`]).
 //! - A failed check runs a second time at once. A pass then makes it flaky, which passes and is

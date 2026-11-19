@@ -1,5 +1,10 @@
 //! The landing gate stops at the first fault it knows of: an invalid manifest entry refuses the
-//! landing before anything is built, and a confirmed failure starts no further command.
+//! landing before any family that needs a product is listed, and a confirmed failure starts no
+//! further command in any family.
+
+use std::sync::atomic::AtomicBool;
+
+use ignite_core::protocol::hub::CachedResult;
 
 use super::*;
 
@@ -31,10 +36,11 @@ const DEPS: &str =
 
 /// A landing was refused for three invalid manifest entries only after it built every product
 /// and ran 5,478 checks, though the entries were known to be invalid once listed. The families
-/// that list without building now go first, and an invalid entry among them refuses the
-/// landing before anything is built or run.
+/// that list without building now go first, while the products the other families need to be
+/// listed build, and an invalid entry among them refuses the landing before any other family
+/// is listed or any check runs.
 #[test]
-fn an_invalid_entry_refuses_the_landing_before_anything_is_built() {
+fn an_invalid_entry_refuses_the_landing_before_anything_runs() {
     let manifest = [
         DEPS.to_owned(),
         family("unit", "\"deps\""),
@@ -50,7 +56,8 @@ fn an_invalid_entry_refuses_the_landing_before_anything_is_built() {
     let gated = world.checks.gate(&world.ctx, &tree(), &landing());
 
     assert!(!gated.run.passed());
-    assert!(world.builds.requests().is_empty(), "nothing was built");
+    // The product `unit` needs to be listed was built while `zlint` was listed.
+    assert_eq!(world.builds.requests().len(), 1, "only deps");
     assert!(world.launcher.commands("runner").is_empty(), "nothing ran");
     assert_eq!(world.launcher.commands("lister").len(), 1, "only zlint");
     assert_eq!(gated.run.unlisted, ["unit"]);
@@ -87,10 +94,12 @@ fn history(family: &str, checks: &[&str], cost: f64) -> CheckStatsReply {
 }
 
 /// The gate ran its families in name order and finished every one after a check had failed.
-/// It now runs the cheapest family for the failures it is likely to find first, and once a
-/// failure is confirmed by its rerun starts no further command.
+/// It now starts every family at once, and once a failure is confirmed by its rerun starts no
+/// further command. Whether the long family's one command started before the failure was
+/// confirmed depends on how the threads interleave, so either answer is accepted; the
+/// deterministic tests of the stop flag are below.
 #[test]
-fn a_confirmed_failure_in_a_cheap_family_stops_the_long_one_from_running() {
+fn a_confirmed_failure_in_a_cheap_family_refuses_the_landing() {
     let manifest = [family("along", ""), family("cheap", "")].join("\n");
     let mut replies = FakeHistory::default();
     let long = ["along:a", "along:b", "along:c"];
@@ -111,14 +120,89 @@ fn a_confirmed_failure_in_a_cheap_family_stops_the_long_one_from_running() {
     let gated = world.checks.gate(&world.ctx, &tree(), &landing());
 
     let runs = world.launcher.commands("runner");
-    assert_eq!(runs, [["runner", "cheap:x"], ["runner", "cheap:x"]]);
-    assert_eq!(gated.run.outcomes, [(name("cheap:x"), Outcome::Fail)]);
-    assert_eq!(gated.run.skipped, 3);
-    let text = verbs::render(&verbs::gate_lines(&gated));
+    let cheap = runs.iter().filter(|r| r[1] == "cheap:x").count();
+    assert_eq!(cheap, 2, "{runs:?}");
+    assert!(!gated.run.passed());
     assert!(
-        text.contains("stopped  at the first fault: 3 checks not run"),
-        "{text}"
+        gated
+            .run
+            .outcomes
+            .contains(&(name("cheap:x"), Outcome::Fail))
     );
+    let along = gated
+        .run
+        .outcomes
+        .iter()
+        .filter(|(c, o)| c.family() == "along" && *o == Outcome::Pass)
+        .count();
+    // The long family either ran its one command whole or never started it.
+    assert_eq!(along + gated.run.skipped as usize, 3, "{gated:?}");
+}
+
+/// The checks of `family` in the tree as `world` lists them, and the opened tree.
+fn listed(world: &World, family: &str) -> (Checks, OpenTree, Vec<(Keyed, Option<CachedResult>)>) {
+    let (checks, open) = world.checks.open(&world.ctx, &tree()).unwrap();
+    let mut run = CheckRun::default();
+    let prepared = checks.prepare(&world.ctx, &open, &[family], &landing(), &mut run);
+    let items = prepared
+        .into_iter()
+        .flat_map(|p| p.keyed)
+        .map(|k| (k, None))
+        .collect();
+    (checks, open, items)
+}
+
+/// The gate runs its families at once, sharing one stop flag: a family that has not yet
+/// started when another family's failure is confirmed starts no command and counts its checks
+/// as skipped.
+#[test]
+fn a_raised_stop_flag_starts_no_command() {
+    let world = world(&family("unit", ""), &["src/a.py"], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() =
+        "{\"check\": \"unit:a\"}\n{\"check\": \"unit:b\"}\n".to_owned();
+    let (checks, open, items) = listed(&world, "unit");
+    let stop = AtomicBool::new(true);
+    let mut run = CheckRun::default();
+
+    checks.execute(
+        &world.ctx,
+        &open,
+        "unit",
+        items,
+        &landing(),
+        &mut run,
+        Some(&stop),
+    );
+
+    assert!(world.launcher.commands("runner").is_empty());
+    assert_eq!(run.skipped, 2);
+    assert!(!run.passed());
+}
+
+/// A failure confirmed by its rerun raises the flag the gate's other families read.
+#[test]
+fn a_confirmed_failure_raises_the_stop_flag() {
+    let world = world(&family("unit", ""), &["src/a.py"], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = "{\"check\": \"unit:a\"}\n".to_owned();
+    world
+        .launcher
+        .script("unit:a", &[Some("fail"), Some("fail")]);
+    let (checks, open, items) = listed(&world, "unit");
+    let stop = AtomicBool::new(false);
+    let mut run = CheckRun::default();
+
+    checks.execute(
+        &world.ctx,
+        &open,
+        "unit",
+        items,
+        &landing(),
+        &mut run,
+        Some(&stop),
+    );
+
+    assert!(stop.load(std::sync::atomic::Ordering::SeqCst));
+    assert_eq!(run.outcomes, [(name("unit:a"), Outcome::Fail)]);
 }
 
 /// Within one family, a check left unreported was tried again after another check's failure
