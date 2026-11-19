@@ -2723,8 +2723,13 @@ enforces the pause itself.
 - The flag lapses two hours after it was declared unless the justiciar declares
   it again, so a justiciar that dies cannot leave the fleet stopped.
   `ignite status` and `ignite doctor` show it with its age and owner.
-  `ignite pool resume --all` ends it on every machine, and
-  `ignite emergency clear --local` lifts it on one machine alone, for an
+- Because Ignite enforces the pause, the justiciar sends `ignite tell --all`
+  only when the fault needs something Ignite cannot enforce (for example "delete
+  nothing of your own" on a full disk, or a session that must change what it is
+  doing). It never asks sessions to pause or to retitle themselves. The
+  all-clear message is optional, since refused verbs and `ignite wait emergency`
+  already tell sessions. `ignite pool resume --all` ends it on every machine,
+  and `ignite emergency clear --local` lifts it on one machine alone, for an
   operator stuck behind a flag nobody can end.
 
 ### Planning

@@ -27,7 +27,8 @@ For the length of the emergency, these rules from the root `AGENTS.md` and
 - "work only in your own tree" and "never take over another session's ticket":
   you may enter any tree, stop any command (`ignite stop`, or `kill` for a
   runaway process), and release, close, rewrite or re-wire any ticket;
-- "never wait for a person": the sessions you pause wait for your all-clear;
+- "never wait for a person": sessions refused during the emergency wait for it
+  to end;
 - running heavy commands outside Ignite, when Ignite is what is broken.
 
 These still bind you:
@@ -80,10 +81,18 @@ Find every session that could be doing Ignite work, in one round of reads:
 - `mcp__ccd_session_mgmt__list_sessions` for desktop sessions on this machine
   that a person started outside the pool and that work in this repository.
 
-Then send the emergency order:
+Ignite enforces the pause, so most emergencies need no message at all: a
+session that tries to build is refused and told why, and one waiting in
+`ignite wait emergency` hears the all-clear. Do not ask sessions to stop, to
+retitle themselves as paused or to wait; the refusal does that.
 
-- `ignite tell --all "<order>"` reaches the session holding every in-progress
-  ticket, on every machine.
+Send an order only when the fault needs something Ignite cannot enforce, such
+as "delete nothing of your own" on a full disk, "stop the command you are
+running" when a running command is the fault, or a session that must change
+what it is doing. Reach them with:
+
+- `ignite tell --all "<order>"`, which reaches the session holding every
+  in-progress ticket, on every machine;
 - `SendMessage` (or `mcp__ccd_session_mgmt__send_message`) to each desktop
   session found above that holds no ticket and is working, and to each
   dispatcher.
@@ -93,17 +102,13 @@ worker checks it against the ticket, so it does not need to be told to obey.
 Adapted to the emergency:
 
 ```text
-Ignite emergency <T>: <one line on what is broken>. The pool is paused. Start no
-build, test, check, landing or push until the all-clear; a landing you are
-waiting on keeps running. Finish the step you are in, commit your work in your
-tree, keep your ticket held, comment your state on it and end your turn with
-title ⛔ [<your ticket>] paused: emergency. Justiciar: session <ID>, ticket <T>
-(`ignite ticket show <T>` is labelled `justiciar` and held by that session).
+Ignite emergency <T>: <one line on what is broken>. <The one action Ignite
+cannot enforce, for example: delete nothing of your own on cygnus.> Justiciar:
+session <ID>, ticket <T> (`ignite ticket show <T>` is labelled `justiciar` and
+held by that session).
 ```
 
-Tighten the order to fit the fault: when the disk is full, also tell sessions
-to delete nothing of their own; when a running command is the fault, name it.
-A session that ignores the order may be stopped with
+A session that ignores an order may be stopped with
 `mcp__ccd_session_mgmt__stop_session`, and its ticket released.
 
 You may also give one or two sessions a specific job, such as "find what filled
@@ -158,8 +163,10 @@ hold, and record that on the ticket.
 
 1. `ignite pool resume --all`. It ends the emergency pause on every machine,
    and every session blocked in `ignite wait emergency` gets the all-clear.
-2. Send the all-clear the same ways as the order: `ignite tell --all` and a
-   message to every session you paused or gave a job:
+2. The all-clear message is optional, because refused verbs and
+   `ignite wait emergency` already tell sessions. Send one (`ignite tell --all`
+   and a message to each session you gave an order or a job) only when you sent
+   an order that needs withdrawing or a session needs to know what to do next:
 
    ```text
    Ignite emergency <T> is over: <one line on the fix>. The pool is resumed.
