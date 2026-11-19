@@ -153,6 +153,23 @@ fn workers(home: &Path) -> Vec<String> {
     members.into_iter().map(|m| m.session).collect()
 }
 
+/// Whether the client's own hand-off calls for a session tool on `session` while the daemon is
+/// down: it was given to that session less than [`ACK_WAIT_S`] ago and not yet acknowledged.
+/// Starting a session is never part of it.
+pub fn allows(home: &Path, starts: bool, session: Option<&str>, now: Timestamp) -> bool {
+    let Some(state) = load::<State>(&home.join(STATE)) else {
+        return false;
+    };
+    let fresh = state
+        .handed_at
+        .is_some_and(|at| now.seconds_since(at) < ACK_WAIT_S);
+    !starts
+        && fresh
+        && !state.acked
+        && session.is_some()
+        && state.tried.last().map(String::as_str) == session
+}
+
 /// Answers `ignite dispatch` (or its `ack`) for a daemon that did not answer, or `None` to let
 /// the caller report the failure as usual.
 pub fn dispatch(request: &Request, home: &Path, now: Timestamp) -> Option<Reply> {
@@ -260,5 +277,34 @@ mod tests {
         assert!(text.contains("ignite guide justiciar"));
         assert!(text.contains("the daemon does not answer"));
         assert!(text.contains("/home/ignite/crash"));
+    }
+
+    #[test]
+    fn only_the_clients_unacknowledged_handoff_allows_session_calls() {
+        let home =
+            std::env::temp_dir().join(format!("ignite-fallback-allows-{}", std::process::id()));
+        std::fs::create_dir_all(&home).unwrap();
+        assert!(
+            !allows(&home, false, Some("local_w1"), at(0.0)),
+            "no hand-off yet"
+        );
+        let state = State {
+            needed_at: Some(at(0.0)),
+            tried: vec!["local_w0".to_owned(), "local_w1".to_owned()],
+            handed_at: Some(at(10.0)),
+            acked: false,
+        };
+        std::fs::write(home.join(STATE), serde_json::to_vec(&state).unwrap()).unwrap();
+        assert!(allows(&home, false, Some("local_w1"), at(20.0)));
+        assert!(
+            !allows(&home, false, Some("local_w0"), at(20.0)),
+            "an earlier worker"
+        );
+        assert!(!allows(&home, true, None, at(20.0)), "starting a session");
+        assert!(
+            !allows(&home, false, Some("local_w1"), at(10.0 + ACK_WAIT_S)),
+            "lapsed"
+        );
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

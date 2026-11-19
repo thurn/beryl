@@ -42,6 +42,8 @@ use ignite_store::local::rows::DispatchEntry;
 use crate::pool::{Member, Pool};
 use crate::server::Context;
 
+#[path = "dispatchd_allowed.rs"]
+mod allowed;
 #[path = "dispatchd_feed.rs"]
 mod feed;
 #[path = "dispatchd_justiciar.rs"]
@@ -210,6 +212,11 @@ struct State {
     given_to: BTreeMap<SessionId, u32>,
     /// A step is asking the hub for tickets, with the state unlocked.
     asking_hub: bool,
+    /// When `ignite pool add --dispatcher` last ran, until its workers are registered (see
+    /// `allowed`).
+    setup_since: Option<Timestamp>,
+    /// When a dispatcher was last told to `rotate` (see `allowed`).
+    rotating_since: Option<Timestamp>,
 }
 
 /// The dispatcher's state and the pool, shared by the `dispatch`, `pool` and `tell` verbs.
@@ -355,6 +362,7 @@ impl Dispatcher {
             && state.given_to.get(session).copied().unwrap_or(0) >= ROTATE_AFTER
         {
             state.given_to.remove(session);
+            state.rotating_since = Some(now);
             return Some(DispatchInstruction {
                 id: 0,
                 action: DispatchAction::Rotate,
@@ -766,6 +774,9 @@ impl Dispatcher {
     }
 }
 
+#[cfg(test)]
+#[path = "dispatchd_allowed_tests.rs"]
+mod allowed_tests;
 #[cfg(test)]
 #[path = "dispatchd_hub_tests.rs"]
 mod hub_tests;

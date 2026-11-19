@@ -328,6 +328,14 @@ pub enum DispatchCommand {
         #[arg(trailing_var_arg = true)]
         reason: Vec<String>,
     },
+    /// Exit 0 only when the current instruction calls for a session tool on a session. With no
+    /// tool, reads a Claude Code hook's JSON from stdin and exits 2 to block the call.
+    Allowed {
+        /// The tool, such as `mcp__ccd_session_mgmt__clear_session`.
+        tool: Option<String>,
+        /// The session it acts on.
+        session: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

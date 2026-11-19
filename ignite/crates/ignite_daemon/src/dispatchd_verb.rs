@@ -55,6 +55,11 @@ impl Verb for DispatchVerb {
             let result = if *result == "fail" { "failed" } else { result };
             return self.dispatcher.ack(ctx, id, result, &reason.join(" "));
         }
+        match args.as_slice() {
+            ["allowed", tool] => return self.dispatcher.allowed(ctx, tool, None),
+            ["allowed", tool, session] => return self.dispatcher.allowed(ctx, tool, Some(session)),
+            _ => {}
+        }
         let wait = match args.as_slice() {
             ["--wait", seconds] => match seconds.parse::<u32>() {
                 Ok(seconds) => seconds,
@@ -64,7 +69,8 @@ impl Verb for DispatchVerb {
             _ => {
                 return Reply::text(
                     Exit::Usage,
-                    "usage: ignite dispatch [--wait <seconds>] | ignite dispatch ack <id> <result>",
+                    "usage: ignite dispatch [--wait <seconds>] | ignite dispatch ack <id> <result> \
+                     | ignite dispatch allowed <tool> [<session>]",
                 );
             }
         };

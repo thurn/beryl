@@ -3,6 +3,7 @@
 
 mod args;
 mod client;
+mod dispatch_allowed;
 mod emergency;
 mod fallback;
 mod flaky;
@@ -22,7 +23,7 @@ use clap::Parser;
 
 use ignite_core::protocol::client::Reply;
 
-use crate::args::{Cli, Command, HubCommand, InternalCommand, PoolCommand};
+use crate::args::{Cli, Command, DispatchCommand, HubCommand, InternalCommand, PoolCommand};
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().collect();
@@ -65,6 +66,12 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         Command::Pool {
             command: PoolCommand::Init { dir },
         } => pool_init(dir.as_deref(), &current_dir()),
+        // Sent to the daemon here, so that a hook's answer can fall back on the client's own
+        // hand-off while the daemon is down and block the call on any failure.
+        Command::Dispatch {
+            command: Some(DispatchCommand::Allowed { tool, session }),
+            ..
+        } => dispatch_allowed::run(tool.as_deref(), session.as_deref()),
         // Answered here, without the daemon: it is what looks after a daemon that is down.
         Command::Monitor => ignite_daemon::monitor::run(),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),

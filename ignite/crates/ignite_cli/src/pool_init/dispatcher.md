@@ -75,6 +75,10 @@ Rules:
 - A session is gone only when the app says it no longer exists or is archived. A
   failed lookup, or a list that does not show it, proves nothing: answer
   `unknown`.
+- A hook checks every call that starts, clears, reconfigures or messages a
+  session against the instruction you hold, and blocks a call it does not ask
+  for. When a call of the current instruction is blocked, report `failed` with
+  the hook's text. Never try the call another way.
 - Notices from worker sessions get no reply but going on with the loop.
 
 ## In Codex

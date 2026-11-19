@@ -2386,6 +2386,24 @@ the tool calls the daemon asks for.
   120,000 tokens were in use before the dispatcher's first message, most of them
   tool definitions, which left room for only a short stretch of the loop between
   compactions.
+- The same file holds a `PreToolUse` hook on the tools that start, clear,
+  reconfigure or message a session: `start_session`, `clear_session`,
+  `set_session_model`, `set_session_effort` and `send_message`. The hook runs
+  `ignite dispatch allowed`, which reads the tool call from stdin and asks the
+  daemon whether an instruction the dispatcher holds (given and not yet
+  acknowledged) calls for that tool on that session. If not, it exits 2, which
+  blocks the call and shows the dispatcher the current instruction. Without it,
+  only the instructions' wording stopped a confused dispatcher from starting
+  duplicate workers or clearing a busy one.
+  - Clearing needs a hand-off with `clear` set to that session; setting the
+    model or effort needs a hand-off to it; sending needs a hand-off or a
+    `message` to it.
+  - Starting a session needs a hand-off that names no session, a `rotate` in the
+    last 10 minutes, or the pool setup of `/ignite pool <n>`: from
+    `ignite pool add --dispatcher` until the workers are registered, at most 15
+    minutes. It is also allowed while no Claude dispatcher is registered.
+  - Every failure blocks, including a daemon that does not answer, except for
+    the client's own justiciar hand-off while the daemon is down.
 - It never plans, reads tickets or decides anything.
 - Codex has no such setting. When a Codex dispatcher's context passes the same
   size, the daemon's next instruction has it open a new chat in its folder with

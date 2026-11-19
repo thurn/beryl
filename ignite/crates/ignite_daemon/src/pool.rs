@@ -323,6 +323,8 @@ impl PoolVerb {
                 single_use: false,
             })?;
         }
+        // A dispatcher starts its workers between registering itself and registering them.
+        self.dispatcher.pool_setup(dispatcher, ctx.clock.now());
         let names: Vec<&str> = sessions.iter().map(SessionId::as_str).collect();
         let what = if dispatcher { "dispatcher" } else { "workers" };
         let mut text = format!("added    {} as {what} ({app})", names.join(", "));

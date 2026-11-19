@@ -12,8 +12,12 @@
 //!   gets `permissions.deny` naming the tools the dispatcher never calls. Claude Code removes a
 //!   denied tool from the model's context, not only from use. Without the list, about half of the
 //!   dispatcher's 120,000 tokens were in use before its first message, most of them the
-//!   definitions of the desktop app's browser, simulator, chart and editing tools. Other settings
-//!   already in the file are kept.
+//!   definitions of the desktop app's browser, simulator, chart and editing tools. It also gets a
+//!   `PreToolUse` hook that runs `ignite dispatch allowed` before each call that starts, clears,
+//!   reconfigures or messages a session, and blocks the call unless the instruction the
+//!   dispatcher holds asks for it. Before the hook, only the instructions' wording stopped a
+//!   confused dispatcher from starting duplicate workers or clearing a busy one. Other settings
+//!   and hooks already in the file are kept.
 //! - A skill named `ignite` for Claude and Codex, so that `/ignite pool <n>` works there.
 //!
 //! Running it again rewrites the instructions, which is how a dispatcher folder picks up a newer
@@ -33,8 +37,8 @@ const AUTO_COMPACT_WINDOW: u64 = 120_000;
 /// (`mcp__playwright`) denies every tool of that MCP server.
 ///
 /// The dispatcher's loop needs `Bash` (for `ignite dispatch`), `Skill` (for `/ignite pool`),
-/// `ToolSearch`, `start_session` and the `ccd_session_mgmt` tools that read, clear, retitle,
-/// configure and message a session. None of those are listed here.
+/// `ToolSearch`, `Read`, `start_session` and the `ccd_session_mgmt` tools that read, list, clear,
+/// retitle, set the model and effort of, and message a session. None of those are listed here.
 const DENIED_TOOLS: &[&str] = &[
     // Built-in tools for editing, research, subagents and artifacts.
     "Agent",
@@ -73,6 +77,10 @@ const DENIED_TOOLS: &[&str] = &[
     "DesignSync",
     "SendToProject",
     "SendToProjectContext",
+    "TaskCreate",
+    "TaskUpdate",
+    "TaskList",
+    "TaskGet",
     // MCP servers the desktop app or the user's configuration adds: browsers, the iOS simulator,
     // charts, terminal tabs, scheduled tasks, the connector registry and the app's panes,
     // sidebar, pull requests, settings and per-turn task list.
@@ -101,7 +109,36 @@ const DENIED_TOOLS: &[&str] = &[
     "mcp__ccd_session__dismiss_task",
     "mcp__ccd_session__read_widget_context",
     "mcp__ccd_session__list_start_targets",
+    // The session management tools other than those that read, list, clear, retitle, set the
+    // model and effort of, and message a session.
+    "mcp__ccd_session_mgmt__archive_session",
+    "mcp__ccd_session_mgmt__unarchive_session",
+    "mcp__ccd_session_mgmt__delete_session",
+    "mcp__ccd_session_mgmt__stop_session",
+    "mcp__ccd_session_mgmt__detach_session",
+    "mcp__ccd_session_mgmt__export_transcript",
+    "mcp__ccd_session_mgmt__search_session_transcripts",
+    "mcp__ccd_session_mgmt__list_events",
+    "mcp__ccd_session_mgmt__get_usage",
+    "mcp__ccd_session_mgmt__set_remote_control",
+    "mcp__ccd_session_mgmt__set_session_fast_mode",
+    "mcp__ccd_session_mgmt__set_session_output_style",
+    "mcp__ccd_session_mgmt__set_session_permission_mode",
 ];
+
+/// The tools the `PreToolUse` hook asks `ignite dispatch allowed` about: those that start,
+/// clear, reconfigure or message a session. Retitling and reading sessions are not checked.
+const CHECKED_TOOLS: &[&str] = &[
+    "mcp__ccd_session__start_session",
+    "mcp__ccd_session_mgmt__clear_session",
+    "mcp__ccd_session_mgmt__set_session_model",
+    "mcp__ccd_session_mgmt__set_session_effort",
+    "mcp__ccd_session_mgmt__send_message",
+];
+
+/// The hook's command. With no arguments it reads the tool call from stdin and exits 2 to block
+/// it. The dispatcher's own `ignite dispatch` calls find `ignite` on the same `PATH`.
+const HOOK_COMMAND: &str = "ignite dispatch allowed";
 
 const SKILL: &str = "---
 name: ignite
@@ -154,9 +191,9 @@ fn write(folder: &Path, checkout: &Path) -> std::io::Result<()> {
 }
 
 /// The settings file's text with `autoCompactWindow` and the `CLAUDE_CODE_AUTO_COMPACT_WINDOW`
-/// environment variable set and every rule in [`DENIED_TOOLS`] added to `permissions.deny`,
-/// keeping every other setting, variable and deny rule. Text that is not a JSON object is
-/// replaced.
+/// environment variable set, every rule in [`DENIED_TOOLS`] added to `permissions.deny` and the
+/// hook of [`with_hook`] in place, keeping every other setting, variable, deny rule and hook.
+/// Text that is not a JSON object is replaced.
 fn with_dispatcher_settings(existing: &str) -> String {
     let mut settings = match serde_json::from_str::<serde_json::Value>(existing) {
         Ok(serde_json::Value::Object(map)) => map,
@@ -199,10 +236,46 @@ fn with_dispatcher_settings(existing: &str) -> String {
             }
         }
     }
+    with_hook(&mut settings);
     let mut text = serde_json::to_string_pretty(&serde_json::Value::Object(settings))
         .unwrap_or_else(|_| "{}".to_owned());
     text.push('\n');
     text
+}
+
+/// Puts one `PreToolUse` entry in `settings.hooks` whose matcher names every tool in
+/// [`CHECKED_TOOLS`] and which runs [`HOOK_COMMAND`], replacing any earlier entry that runs it,
+/// so that running `ignite pool init` again updates the matcher instead of adding a second one.
+fn with_hook(settings: &mut serde_json::Map<String, serde_json::Value>) {
+    let ours = serde_json::json!({
+        "matcher": CHECKED_TOOLS.join("|"),
+        "hooks": [{"type": "command", "command": HOOK_COMMAND}],
+    });
+    let runs_ours = |entry: &serde_json::Value| {
+        entry["hooks"].as_array().is_some_and(|hooks| {
+            hooks
+                .iter()
+                .any(|hook| hook["command"].as_str() == Some(HOOK_COMMAND))
+        })
+    };
+    let hooks = settings
+        .entry("hooks")
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    if !hooks.is_object() {
+        *hooks = serde_json::Value::Object(serde_json::Map::new());
+    }
+    if let serde_json::Value::Object(hooks) = hooks {
+        let entries = hooks
+            .entry("PreToolUse")
+            .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+        if !entries.is_array() {
+            *entries = serde_json::Value::Array(Vec::new());
+        }
+        if let serde_json::Value::Array(entries) = entries {
+            entries.retain(|entry| !runs_ours(entry));
+            entries.push(ours);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -296,6 +369,7 @@ mod tests {
             "mcp__ccd_session_mgmt__set_session_effort",
             "mcp__ccd_session_mgmt__set_session_title",
             "mcp__ccd_session_mgmt__send_message",
+            "mcp__ccd_session_mgmt__list_sessions",
         ] {
             for rule in DENIED_TOOLS {
                 let server_prefix = rule.starts_with("mcp__")
@@ -303,6 +377,36 @@ mod tests {
                     && needed.starts_with(&format!("{rule}__"));
                 assert!(*rule != needed && !server_prefix, "{rule} denies {needed}");
             }
+        }
+    }
+
+    #[test]
+    fn checks_the_session_tools_with_one_hook_kept_beside_others() {
+        let existing = r#"{"hooks": {"PreToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "audit"}]},
+            {"matcher": "old", "hooks": [{"type": "command", "command": "ignite dispatch allowed"}]}
+        ], "Stop": [{"hooks": [{"type": "command", "command": "beep"}]}]}}"#;
+        let once = with_dispatcher_settings(existing);
+        assert_eq!(
+            with_dispatcher_settings(&once),
+            once,
+            "running again changes nothing"
+        );
+        let settings: serde_json::Value = serde_json::from_str(&once).unwrap();
+        let entries = settings["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(entries.len(), 2, "{entries:?}");
+        assert_eq!(entries[0]["matcher"], "Bash");
+        let matcher = entries[1]["matcher"].as_str().unwrap();
+        assert_eq!(matcher.split('|').collect::<Vec<_>>(), CHECKED_TOOLS);
+        assert_eq!(entries[1]["hooks"][0]["command"], HOOK_COMMAND);
+        assert_eq!(settings["hooks"]["Stop"][0]["hooks"][0]["command"], "beep");
+    }
+
+    /// A checked tool that was also denied would never reach the hook, and a hand-off would fail.
+    #[test]
+    fn denies_no_checked_tool() {
+        for tool in CHECKED_TOOLS {
+            assert!(!DENIED_TOOLS.contains(tool), "{tool}");
         }
     }
 }
