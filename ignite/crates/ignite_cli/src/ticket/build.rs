@@ -248,9 +248,9 @@ mod tests {
             owner: Some(owner.to_owned()),
             ..no_fields()
         };
-        let set = create("x", &owned("Cygnus/Codex"), &[], &[], false).unwrap();
+        let set = create("x", &owned("Cygnus/Codex"), &[], &[], None).unwrap();
         assert_eq!(set["fields"]["owner"], "cygnus/codex");
-        assert!(create("x", &owned("a b"), &[], &[], false).is_err());
+        assert!(create("x", &owned("a b"), &[], &[], None).is_err());
         let cleared = update("t1", &owned("default"), &no_changes()).unwrap();
         assert_eq!(cleared["set"]["owner"], Value::Null);
     }
