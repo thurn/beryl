@@ -1,0 +1,9 @@
+# Settings for Windows builds only; macOS builds read nothing here.
+#
+# On Cygnus, the Windows PC, PDB files were 6 GB of the 11 GB in a test build's
+# `target/debug/deps`, and every tree keeps its own build on a 128 GB disk. Line tables still
+# give file and line in backtraces. `rust-lld`, which ships with the toolchain, links the
+# workspace's many test binaries faster than Microsoft's `link.exe`.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+rustflags = ["-C", "debuginfo=line-tables-only"]

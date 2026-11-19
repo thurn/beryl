@@ -549,5 +549,10 @@
     "label": "`ignite test <word>` keeps a local copy of every listing that is never kept for its inputs, such as one whose checks carry digests, so a family whose checks do not hold the word is not listed again (on 2026-11-19 `ignite test quicksilver_gargantuan` after a one-line card comment change took 198 s, 173 s of it waiting for the Beryl 3D build that `b3d-timeline-drift` needs to be listed)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Windows trees on a Dev Drive (ReFS) start from a block-clone copy of the build nearest the tip, as APFS trees on macOS do; before, every Windows tree built from nothing (about 950 to 1,400 CPU-seconds per product). Windows Rust builds also link with rust-lld and keep only line tables, since PDB files were 6 GB of an 11 GB test build",
+    "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
   }
 ]

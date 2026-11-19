@@ -205,15 +205,28 @@ express_cores = 2
 browser-pages = 4
 oracle = 1
 
-# The Windows PC: no browser, oracle or app families. Those need WebKit, the Java oracles, the
-# Lima machines or a desktop window system, which only the Macs have.
+# The Windows PC (12 cores, 20 threads, 32 GB) with a 128 GB Dev Drive (ReFS) at D:. No browser,
+# oracle or app families: those need WebKit, the Java oracles, the Lima machines or a desktop
+# window system, which only the Macs have. Its sessions run in the Claude desktop app.
+#
+# Trees are seeded as block clones on the Dev Drive, so they share most of their blocks; the
+# limit leaves room on the 128 GB disk for the main checkout and the caches. A tree's Beryl
+# test build is about 20 GB before cloning. Two landing trees let idle work run beside a
+# landing.
+#
+# `families` holds those that passed when run by hand on cygnus on 2026-11-19. `pytest` is left
+# out: 29 of its 1,021 checks assume Unix paths or Unix sockets.
 [machine.cygnus]
 os = "windows"
-home_app = "codex"
-ticket_trees = 6
+home_app = "claude"
+ticket_trees = 3
 landing_trees = 2
-families = ["rust", "clippy", "format", "source-rules", "python"]
-floor = { batch = 8, tip = 2 }
+trees_disk_gb = 60
+families = [
+  "rust", "doctests", "clippy", "rust-format", "ignite", "ignite-lint", "source", "markdown",
+  "repository", "commit", "black", "b3d-format", "b3d-source",
+]
+floor = { batch = 4, tip = 2 }
 express_cores = 2
 
 [[rebuild]]

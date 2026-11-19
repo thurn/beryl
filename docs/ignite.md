@@ -930,15 +930,18 @@ Rules for trees:
   units current. The donor is a free tree or a leased ticket tree, and Cargo's
   own lock files are held while it is copied, so no build writes it meanwhile.
   On macOS each file is an APFS clone, so the copy takes a few seconds and
-  almost no disk; elsewhere nothing is copied. Cargo judges a unit by the
-  modification times of the files it read and by a few absolute paths. So every
-  file of the leased tree whose content is the donor's takes the donor file's
-  time, every other file is touched, and the donor's paths in Cargo's dependency
-  files and build-script output are rewritten. The leased tree's own target
-  directories are replaced, not merged, so that none of its older units looks
-  current. Measured with two trees 14 commits apart, the `cli`, test-binary and
-  release fuzz-test builds took 5.4, 6.3 and 0.2 CPU-s after the copy, against
-  medians of 947, 1,070 and 1,390 CPU-s for a cold build.
+  almost no disk. On Windows a copy is a clone only on a volume that counts
+  block references (ReFS, as on a Dev Drive), where `CopyFile` clones from
+  Windows 11 24H2: a 984 MB copy on cygnus took 23 MB of free space. Anywhere
+  else nothing is copied. Cargo judges a unit by the modification times of the
+  files it read and by a few absolute paths. So every file of the leased tree
+  whose content is the donor's takes the donor file's time, every other file is
+  touched, and the donor's paths in Cargo's dependency files and build-script
+  output are rewritten. The leased tree's own target directories are replaced,
+  not merged, so that none of its older units looks current. Measured with two
+  trees 14 commits apart, the `cli`, test-binary and release fuzz-test builds
+  took 5.4, 6.3 and 0.2 CPU-s after the copy, against medians of 947, 1,070 and
+  1,390 CPU-s for a cold build.
 - The copy runs after `ignite start` has replied, on the thread that then
   prebuilds the tree. Under load a copy took up to 141 s, and the session could
   do nothing while `ignite start` waited for it. Every build in the tree waits
@@ -3362,15 +3365,16 @@ do. The hub is the one shared point.
 ```toml
 [machine.cygnus]
 os = "windows"
-ticket_trees = 6
+ticket_trees = 3
 landing_trees = 2
-families = ["rust", "clippy", "format", "source-rules", "python"]
-floor = { batch = 8, tip = 2 }
+families = ["rust", "doctests", "clippy", "rust-format", "ignite", "source"]
+floor = { batch = 4, tip = 2 }
 ```
 
-`families` lists the check families the machine can run, here the Rust tests,
-clippy, the formatters, the source rules and the Python tools' tests. A machine
-with no such list can run every family.
+`families` lists the check families the machine can run, here the Rust tests and
+doctests, clippy, Rust formatting, Ignite's own tests and the source rules (the
+full list is in `ignite.toml`). A machine with no such list can run every
+family.
 
 What is shared, and what is not:
 
@@ -3393,7 +3397,15 @@ On Windows the daemon uses a named pipe for the client (a client that
 disconnects ends its `ignite run`), job objects to end a tree's processes, and
 CPU seconds for cost. The login service and the monitor are scheduled tasks
 (`ignite.daemon` and `ignite.monitor`), and notifications are toasts posted
-through PowerShell.
+through PowerShell. The machine's name is `COMPUTERNAME` in lower case, its
+memory and free disk space come from the system rather than `sysctl` and `df`,
+and the user's home is `USERPROFILE` where `HOME` is unset, as it is outside Git
+Bash. ReFS reports no per-file count of shared blocks, so on a block-cloning
+volume each file counts as shared under an ID made from its name, length and
+modification time, which a seeded copy keeps until a build replaces it. Windows
+refuses a command line over 32,767 characters, so there a family's run whose
+check names or test filter would pass that is split into several commands, one
+after another, and their reports are joined.
 
 A machine lists a family it does not run only to key the checks other machines
 run. It keeps that listing, or its failure, for the family's current inputs, so
