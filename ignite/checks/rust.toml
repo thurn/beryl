@@ -40,13 +40,21 @@
 # "Compiling" lines reach the output, where Ignite tells a listing that waited for another Cargo
 # command in the tree from one that compiled (the `listed` line, docs/ignite.md). The listing
 # itself is the one JSON line cargo-nextest prints, which the other lines do not disturb.
+#
+# `{packages}` selects packages as in the `rust-tests` build: the packages of the tests a run
+# runs, or the whole workspace less that product's `exclude`. cargo-nextest compiles every test
+# binary of the packages it selects before it lists or runs, so on 2026-11-19 `ignite test fork`
+# after a one-line change to a card file recompiled 35 crates (33 s alone, 77 s beside the other
+# builds) to run one test in beryl_cards. `ignite test` now lists this family for the packages
+# of the tests it names, and every run selects only its tests' packages (docs/ignite.md,
+# "Declaring a family").
 [family.rust]
 kind = "regression"
 adapter = "nextest"
 platforms = "any"
 needs = ["rust-tests"]
-list = "cargo nextest list --locked --workspace --exclude beryl_link_iroh --message-format json -E !binary(allocations)"
-run = "cargo nextest run --locked --cargo-quiet --workspace --exclude beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+list = "cargo nextest list --locked {packages} --message-format json -E !binary(allocations)"
+run = "cargo nextest run --locked --cargo-quiet {packages} --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 
 # What `beryl_cli`'s tests read at run time beyond the inputs above, hashed into that package's
@@ -216,7 +224,7 @@ inputs = [
 # The test binaries of the packages named, in the `test` profile. With no packages named, as
 # when a family is listed or a subset would change shared features, it builds the whole
 # workspace less beryl_link_iroh (`exclude`): the same packages the `rust` family's `list` and
-# `run`, `cli` and `scenario-dump` select. Cargo enables a dependency's features over the packages
+# `run` select for the whole workspace, and `cli` and `scenario-dump` select. Cargo enables a dependency's features over the packages
 # a command selects, so on 2026-11-19 a build with beryl_link_iroh gave 18 dependencies (`syn`,
 # `tokio`, `hashbrown` among them) other features than the `rust` family's commands, and each of
 # them compiled the whole workspace again inside an unreported listing.
