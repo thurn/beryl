@@ -10,6 +10,8 @@
 //!   for a check in the always set or a command in which many checks flaked ([`flaky`]);
 //! - files a P1 ticket for a tip that has waited an hour on a machine that has not reported,
 //!   and one for an epic in which nothing can start ([`stuck`]);
+//! - closes each ticket it filed by itself whose fault has stayed clear for an hour, unless a
+//!   person touched it or a worker holds it ([`clearing`]);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
 //! The routes call the rest as reports arrive: a regression ([`regressions::file`]), a check
@@ -22,6 +24,8 @@
 //! ([`signature`], [`filing`]), so a repeated fault adds a comment and never a second ticket.
 
 pub mod backup;
+pub mod clearing;
+mod clearing_kinds;
 pub mod explore;
 pub mod filing;
 pub mod flaky;
@@ -32,6 +36,8 @@ pub mod regressions;
 pub mod signature;
 pub mod stuck;
 
+#[cfg(test)]
+mod clearing_tests;
 #[cfg(test)]
 mod guard_tests;
 #[cfg(test)]
@@ -67,6 +73,8 @@ pub struct UpkeepReport {
     /// Tickets created or commented on.
     pub tickets_filed: Vec<String>,
     pub regressions_fixed: Vec<String>,
+    /// Tickets closed because the fault they report cleared ([`clearing`]).
+    pub tickets_closed: Vec<String>,
     pub checks_switched_off: Vec<String>,
     pub snapshot: Option<PathBuf>,
     pub export: Option<PathBuf>,
@@ -128,6 +136,8 @@ impl Upkeep {
         keep(stuck::tips_waiting(conn, now).map(|filed| note(&mut report, filed)));
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
         keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));
+        // After every step that files, so a fault seen again on this pass keeps its ticket open.
+        keep(clearing::close_cleared(conn, now).map(|closed| report.tickets_closed = closed));
         if let Some(dir) = self.backups.clone() {
             keep(self.backups_due(conn, &dir, now, &mut report));
         }

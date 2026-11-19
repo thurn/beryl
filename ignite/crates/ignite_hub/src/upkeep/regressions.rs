@@ -55,18 +55,25 @@ pub fn file(
     let (ops, outcome) = match &existing {
         None => (vec![create(report)], Outcome::Created),
         Some(ticket) => {
-            let closed = tickets::load(conn, ticket)?.is_some_and(|t| t.status == Status::Closed);
-            if !closed {
+            let loaded = tickets::load(conn, ticket)?;
+            if !loaded.as_ref().is_some_and(|t| t.status == Status::Closed) {
                 return Ok((ticket.clone(), Outcome::Unchanged));
             }
+            // Upkeep closes a regression whose check passed on a later tip (`clearing`); the
+            // check failing again then is not a failed fix.
+            let cleared = loaded
+                .and_then(|t| t.close_reason)
+                .is_some_and(|reason| reason.starts_with(super::clearing::CLOSE_PREFIX));
+            let again = if cleared {
+                "The check fails again after Ignite closed this ticket because a later tip passed."
+            } else {
+                "The check still fails after the fix."
+            };
             let ops = vec![
                 Operation::Reopen { id: ticket.clone() },
                 Operation::Comment {
                     id: ticket.clone(),
-                    text: format!(
-                        "The check still fails after the fix.\n\n{}",
-                        details(report)
-                    ),
+                    text: format!("{again}\n\n{}", details(report)),
                 },
             ];
             (ops, Outcome::Reopened)

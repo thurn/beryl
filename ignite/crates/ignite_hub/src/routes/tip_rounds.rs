@@ -29,8 +29,8 @@ use crate::upkeep::filing::{self, Author, Filing};
 use crate::upkeep::signature::Signature;
 
 /// The subject and category of the one improvement ticket slow rounds share.
-const SUBJECT: &str = "tip-rounds";
-const CATEGORY: &str = "slow-tip-round";
+pub const SUBJECT: &str = "tip-rounds";
+pub const CATEGORY: &str = "slow-tip-round";
 
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {

@@ -2075,8 +2075,50 @@ A ticket that the hub files by itself is matched against open ones by a
 signature of the check, the kind of failure and its message. Host names, thread
 numbers and source line numbers are left out of the signature, and the values in
 a failed assertion are kept, so two different faults of one check stay two
-tickets. A repeat adds a comment. A fault that returns after its ticket closed
-gets a new ticket that names the old one.
+tickets. A repeat adds a comment.
+
+Upkeep also closes these tickets once the fault they report has cleared, so they
+do not pile up for a person to check by hand, and a released one does not send a
+worker after a fault that is gone. Each kind of ticket says what shows its fault
+cleared:
+
+- A graph-repair ticket for an epic: something in the epic can start, is in
+  progress or waits for a person's release, or the epic is closed. For a loop of
+  tickets under no epic: the tickets no longer wait on one another.
+- A ticket held in progress for six hours: it is no longer held that long.
+- A machine that has not reported: it has reported since, and no tip has waited
+  an hour for verification since.
+- `master` has not moved: no landing has waited three hours for it.
+- Checks left incomplete (a failed build, a hung command, an invalid manifest
+  entry, a command that cannot run or did not report): each check the ticket
+  holds back has a result stored after the last sighting.
+- Slow tip rounds: the last three rounds came after the ticket and none was
+  slow.
+- A regression: a tip first seen after the ticket was filed, or last reopened,
+  passed verification. The regression is marked fixed too.
+
+The rules that apply to every kind:
+
+- A ticket that anyone other than the actors that filed its sightings commented
+  on, edited or claimed stays open until a person or worker closes it. A release
+  does not count.
+- A ticket in progress is never closed. Its worker gets one comment saying the
+  fault cleared.
+- The fault must stay clear for an hour, or a day once it has come back after an
+  automatic close. A pass that sees it again restarts the hour.
+- The close reason begins "Ignite closed this ticket because its fault cleared"
+  and says what showed it.
+- A fault that returns within a week of an automatic close reopens that ticket,
+  in the status it had, so one that was never released still waits for its
+  release. A fault that returns after a person closed its ticket, or later than
+  a week, gets a new ticket that names the old one.
+
+Some kinds are never closed automatically, because nothing the hub can observe
+shows their fault cleared: flaky checks (the check is switched off), flakes
+blamed on a machine and passes that replaced another machine's failure (both
+intermittent), cache audits (caching is switched off), exploration finds,
+justiciar reports from a daemon or a session, and improvement tickets from the
+rules.
 
 ```sh
 ignite ticket create "Split beryl_session's replay code" -p P2 \

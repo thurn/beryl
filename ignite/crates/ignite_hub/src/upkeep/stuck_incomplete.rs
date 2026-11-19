@@ -16,7 +16,10 @@
 //! most [`ROUND_LIMIT`] tickets. Each cause past that is a comment on one more ticket, which says
 //! how many causes were left out and lists them.
 
+use std::collections::BTreeMap;
+
 use rusqlite::Connection;
+use serde_json::Value;
 
 use ignite_core::ids::CheckName;
 use ignite_core::protocol::hub::{IncompleteReason, IncompleteReport};
@@ -68,12 +71,17 @@ pub fn incomplete(
         labels.push(format!("needs:{}", os.as_str()));
     }
     let evidence = format!("{}@{}", report.commit, report.machine);
+    // The checks this cause holds back: once each has a result again, the cause has cleared
+    // (see `clearing`).
+    let held: Vec<&str> = checks.iter().map(|check| check.as_str()).collect();
+    let metadata = BTreeMap::from([(filing::CHECKS_KEY.to_owned(), Value::from(held))]);
     let fields = |title: String, body: String| TicketFields {
         title: Some(title),
         body: Some(body),
         ticket_type: Some(TicketType::Bug),
         priority: Some(1),
         labels: Some(labels.clone()),
+        metadata: Some(metadata.clone()),
         ..TicketFields::default()
     };
     let round_labels = [LABEL, labels[1].as_str()];

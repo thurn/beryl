@@ -261,6 +261,34 @@ pub fn stuck_epics(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> 
     Ok(filed)
 }
 
+/// What the ticket graph shows stuck now, named as the subjects of the signatures
+/// [`stuck_epics`] files under, so [`super::clearing`] can tell which of those faults cleared.
+pub(super) struct StuckNow {
+    pub epics: BTreeSet<String>,
+    pub cycles: BTreeSet<String>,
+    pub held: BTreeSet<String>,
+}
+
+/// The epics, loops and held tickets [`stuck_epics`] would file for at `now`.
+pub(super) fn stuck_now(conn: &Connection, now: Timestamp) -> Result<StuckNow> {
+    let graph = tickets::graph(conn, false, now)?;
+    let known = machine_names(conn)?;
+    Ok(StuckNow {
+        epics: find_stuck(&graph, now, &known)
+            .into_iter()
+            .map(|(epic, _)| epic)
+            .collect(),
+        cycles: find_cycles(&graph)
+            .iter()
+            .map(|cycle| cycle.join(", "))
+            .collect(),
+        held: find_held(&graph, now)
+            .into_iter()
+            .map(|held| held.ticket)
+            .collect(),
+    })
+}
+
 /// Whether some registered machine could take a ticket with these labels: every `needs:` label
 /// names a known machine or operating system, and none is `needs:person`.
 fn takeable(labels: &[String], known: &BTreeSet<String>) -> bool {

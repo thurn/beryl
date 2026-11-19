@@ -29,6 +29,9 @@ use super::signature::Signature;
 /// The label of a justiciar ticket.
 pub const LABEL: &str = "justiciar";
 
+/// The subject of the signature [`master_lag`] files under.
+pub const MASTER_LAG_SUBJECT: &str = "master-lag";
+
 /// The model tier a justiciar ticket asks for.
 const TIER: &str = "tier:opus";
 
@@ -120,6 +123,12 @@ fn oldest_unverified_landing(
     row.map(|(at, id)| Ok((parse_time(&at)?, id))).transpose()
 }
 
+/// Whether a landing has waited [`MASTER_LAG_SECONDS`] or more for `master` at `now`.
+pub(super) fn master_lagging(conn: &Connection, now: Timestamp) -> Result<bool> {
+    Ok(oldest_unverified_landing(conn, now)?
+        .is_some_and(|(landed_at, _)| now.seconds_since(landed_at) >= MASTER_LAG_SECONDS))
+}
+
 /// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`.
 pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let Some((landed_at, ticket)) = oldest_unverified_landing(conn, now)? else {
@@ -139,7 +148,7 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
          tips page. Read `ignite guide justiciar` before anything else."
     );
     let filing = Filing {
-        signature: Signature::of_subject("master-lag", LABEL),
+        signature: Signature::of_subject(MASTER_LAG_SUBJECT, LABEL),
         // One sighting per stuck landing: a new comment only when a later landing is the
         // oldest one waiting, which means `master` moved in between.
         evidence: ticket.clone(),

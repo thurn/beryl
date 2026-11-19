@@ -4,7 +4,15 @@
 //! - Each report carries an `evidence` string that names the sighting, such as a commit or an
 //!   input hash. A report whose evidence the ticket already holds changes nothing, so a pass of
 //!   upkeep that sees the same fault again, or a daemon that sends a report twice, adds nothing.
-//! - A fault that returns after its ticket closed gets a new ticket that names the old one.
+//! - A fault that returns within [`REOPEN_SECONDS`] of upkeep closing its ticket because the
+//!   fault had cleared ([`super::clearing`]) reopens that ticket in the status it had. A fault
+//!   that returns after a person closed its ticket, or later, gets a new ticket that names the
+//!   old one.
+//!
+//! Each ticket also records what [`super::clearing`] needs to tell when its fault has cleared:
+//! the parts of its signature ([`FAULT_KEY`]), who filed its sightings ([`FILERS_KEY`]), when the
+//! newest sighting came ([`SIGHTED_KEY`]) and, for a fault that holds checks back, which checks
+//! ([`CHECKS_KEY`]).
 //!
 //! The lookup and the write are fenced by the feed position: if anything else wrote between
 //! them, the write is refused and the lookup is done again.
@@ -29,6 +37,35 @@ pub const SIGNATURE_KEY: &str = "ignite_signature";
 
 /// The ticket metadata key that holds the evidence of each sighting already recorded.
 pub const SIGHTINGS_KEY: &str = "ignite_sightings";
+
+/// The ticket metadata key that holds the signature's subject, category and platform.
+pub const FAULT_KEY: &str = "ignite_fault";
+
+/// The ticket metadata key that holds every actor that filed a sighting on the ticket.
+pub const FILERS_KEY: &str = "ignite_filers";
+
+/// The ticket metadata key that holds when the newest sighting was recorded.
+pub const SIGHTED_KEY: &str = "ignite_sighted_at";
+
+/// The ticket metadata key that holds the checks a fault keeps from a result. A filing sets it
+/// in its fields' metadata; each later sighting adds its checks to the ticket's list.
+pub const CHECKS_KEY: &str = "ignite_checks";
+
+/// The ticket metadata key that holds when upkeep closed the ticket because its fault cleared.
+pub const AUTO_CLOSED_KEY: &str = "ignite_auto_closed";
+
+/// The ticket metadata key that holds the status a ticket had when upkeep closed it.
+pub const STATUS_BEFORE_KEY: &str = "ignite_status_before";
+
+/// The ticket metadata key that counts how often the fault returned after an automatic close.
+pub const RETURNS_KEY: &str = "ignite_returns";
+
+/// The ticket metadata key that holds since when upkeep has seen the fault clear.
+pub const CLEARED_SINCE_KEY: &str = "ignite_cleared_since";
+
+/// How long after an automatic close a returning fault reopens the ticket instead of filing a
+/// new one: a week, so a fault that comes and goes keeps one ticket and its history.
+pub const REOPEN_SECONDS: f64 = 7.0 * 86_400.0;
 
 /// The label on every ticket the hub files by itself. A ticket with it is offered to workers
 /// whether or not an epic is active, so a fault report is never left with nobody to take it.
@@ -77,12 +114,15 @@ pub enum Change {
     Commented,
     /// The ticket already held this sighting.
     Unchanged,
+    /// Upkeep had closed the ticket because the fault cleared, and the fault came back.
+    Reopened,
 }
 
 struct Match {
     id: String,
     closed: bool,
     sightings: Vec<String>,
+    metadata: BTreeMap<String, Value>,
 }
 
 /// Files `filing`: a comment on the open ticket with its signature, or a new ticket.
@@ -106,8 +146,6 @@ pub fn file(
                 });
             }
             Some(open) => {
-                let mut sightings = open.sightings.clone();
-                sightings.push(filing.evidence.clone());
                 let ops = vec![
                     Operation::Comment {
                         id: open.id.clone(),
@@ -118,16 +156,28 @@ pub fn file(
                         set: None,
                         add_labels: Vec::new(),
                         remove_labels: Vec::new(),
-                        set_meta: sightings_meta(sightings),
-                        unset_meta: Vec::new(),
+                        set_meta: sighting_meta(open, filing, author, now),
+                        // The fault is seen again, so any clear spell upkeep was timing ends.
+                        unset_meta: vec![CLEARED_SINCE_KEY.to_owned()],
                     },
                 ];
                 (ops, Change::Commented)
             }
-            None => {
-                let previous = matches.first().map(|m| m.id.as_str());
-                (vec![create(filing, &key, previous)], Change::Created)
-            }
+            None => match matches.first() {
+                Some(newest) if auto_closed_within(newest, now) => {
+                    (reopen(newest, filing, author, now), Change::Reopened)
+                }
+                previous => (
+                    vec![create(
+                        filing,
+                        &key,
+                        author,
+                        previous.map(|m| m.id.as_str()),
+                        now,
+                    )],
+                    Change::Created,
+                ),
+            },
         };
         let request = BatchRequest {
             preconditions: vec![Precondition::Seq { seq }],
@@ -177,10 +227,19 @@ pub fn sighted(conn: &Connection, labels: &[&str], evidence: &str) -> Result<usi
     Ok(usize::try_from(count).unwrap_or(0))
 }
 
-fn create(filing: &Filing, key: &str, previous: Option<&str>) -> Operation {
+fn create(
+    filing: &Filing,
+    key: &str,
+    author: Author,
+    previous: Option<&str>,
+    now: Timestamp,
+) -> Operation {
     let mut fields = filing.fields.clone();
     let mut metadata = fields.metadata.take().unwrap_or_default();
     metadata.insert(SIGNATURE_KEY.to_owned(), Value::from(key));
+    metadata.insert(FAULT_KEY.to_owned(), fault_value(&filing.signature));
+    metadata.insert(FILERS_KEY.to_owned(), Value::from(vec![author.actor]));
+    metadata.insert(SIGHTED_KEY.to_owned(), Value::from(now.to_string()));
     metadata.extend(sightings_meta(vec![filing.evidence.clone()]));
     if let Some(previous) = previous {
         let body = fields.body.take().unwrap_or_default();
@@ -204,6 +263,130 @@ fn create(filing: &Filing, key: &str, previous: Option<&str>) -> Operation {
     }
 }
 
+/// The parts of a signature that its key hides, so upkeep can tell what the ticket is about.
+pub fn fault_value(signature: &Signature) -> Value {
+    serde_json::json!({
+        "subject": signature.subject,
+        "category": signature.category,
+        "platform": signature.platform,
+    })
+}
+
+/// The strings in a ticket's metadata list `key`.
+pub fn strings(metadata: &BTreeMap<String, Value>, key: &str) -> Vec<String> {
+    metadata
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `list` with each of `more` it does not already hold added at the end.
+fn union(mut list: Vec<String>, more: Vec<String>) -> Vec<String> {
+    for item in more {
+        if !list.contains(&item) {
+            list.push(item);
+        }
+    }
+    list
+}
+
+/// The metadata a new sighting writes on a ticket that already exists: the sighting, its filer,
+/// its time, its checks and, on a ticket filed before tickets recorded it, the fault.
+fn sighting_meta(
+    ticket: &Match,
+    filing: &Filing,
+    author: Author,
+    now: Timestamp,
+) -> BTreeMap<String, Value> {
+    let mut sightings = ticket.sightings.clone();
+    sightings.push(filing.evidence.clone());
+    let mut meta = sightings_meta(sightings);
+    let filers = union(
+        strings(&ticket.metadata, FILERS_KEY),
+        vec![author.actor.to_owned()],
+    );
+    meta.insert(FILERS_KEY.to_owned(), Value::from(filers));
+    meta.insert(SIGHTED_KEY.to_owned(), Value::from(now.to_string()));
+    let checks = filing
+        .fields
+        .metadata
+        .as_ref()
+        .map(|meta| strings(meta, CHECKS_KEY))
+        .unwrap_or_default();
+    if !checks.is_empty() || ticket.metadata.contains_key(CHECKS_KEY) {
+        let checks = union(strings(&ticket.metadata, CHECKS_KEY), checks);
+        meta.insert(CHECKS_KEY.to_owned(), Value::from(checks));
+    }
+    if !ticket.metadata.contains_key(FAULT_KEY) {
+        meta.insert(FAULT_KEY.to_owned(), fault_value(&filing.signature));
+    }
+    meta
+}
+
+/// Whether upkeep closed `ticket` because its fault cleared, within [`REOPEN_SECONDS`] of `now`.
+fn auto_closed_within(ticket: &Match, now: Timestamp) -> bool {
+    ticket.closed
+        && ticket
+            .metadata
+            .get(AUTO_CLOSED_KEY)
+            .and_then(Value::as_str)
+            .and_then(|at| Timestamp::parse(at).ok())
+            .is_some_and(|at| now.seconds_since(at) < REOPEN_SECONDS)
+}
+
+/// Reopens a ticket that upkeep closed when its fault cleared, back in the status it had, with
+/// the new sighting as a comment.
+fn reopen(ticket: &Match, filing: &Filing, author: Author, now: Timestamp) -> Vec<Operation> {
+    let body = filing.fields.body.clone().unwrap_or_default();
+    let mut meta = sighting_meta(ticket, filing, author, now);
+    let returns = ticket
+        .metadata
+        .get(RETURNS_KEY)
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    meta.insert(RETURNS_KEY.to_owned(), Value::from(returns + 1));
+    // Reopening makes a ticket `open`; one closed before a person released it goes back to
+    // waiting for that release.
+    let status = ticket
+        .metadata
+        .get(STATUS_BEFORE_KEY)
+        .and_then(|value| serde_json::from_value::<Status>(value.clone()).ok())
+        .filter(|status| *status != Status::Open);
+    vec![
+        Operation::Reopen {
+            id: ticket.id.clone(),
+        },
+        Operation::Update {
+            id: ticket.id.clone(),
+            set: status.map(|status| TicketFields {
+                status: Some(status),
+                ..TicketFields::default()
+            }),
+            add_labels: Vec::new(),
+            remove_labels: Vec::new(),
+            set_meta: meta,
+            unset_meta: vec![
+                AUTO_CLOSED_KEY.to_owned(),
+                STATUS_BEFORE_KEY.to_owned(),
+                CLEARED_SINCE_KEY.to_owned(),
+            ],
+        },
+        Operation::Comment {
+            id: ticket.id.clone(),
+            text: format!(
+                "The fault came back after Ignite closed this ticket as cleared, so Ignite \
+                 reopened it.\n\n{body}"
+            ),
+        },
+    ]
+}
+
 fn sightings_meta(mut sightings: Vec<String>) -> BTreeMap<String, Value> {
     if sightings.len() > SIGHTINGS_KEPT {
         sightings.drain(..sightings.len() - SIGHTINGS_KEPT);
@@ -214,7 +397,7 @@ fn sightings_meta(mut sightings: Vec<String>) -> BTreeMap<String, Value> {
 /// Every ticket with this signature, newest first.
 fn matching(conn: &Connection, key: &str) -> Result<Vec<Match>> {
     let mut select = conn.prepare_cached(
-        "SELECT id, status, json_extract(metadata, '$.ignite_sightings') FROM tickets
+        "SELECT id, status, metadata FROM tickets
          WHERE json_extract(metadata, '$.ignite_signature') = ?1
          ORDER BY created_at DESC, id DESC",
     )?;
@@ -228,16 +411,17 @@ fn matching(conn: &Connection, key: &str) -> Result<Vec<Match>> {
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(id, status, sightings)| {
-            let sightings = match sightings {
+        .map(|(id, status, metadata)| {
+            let metadata: BTreeMap<String, Value> = match metadata {
                 Some(json) => serde_json::from_str(&json)
-                    .map_err(|error| StoreError::Invalid(format!("sightings of {id}: {error}")))?,
-                None => Vec::new(),
+                    .map_err(|error| StoreError::Invalid(format!("metadata of {id}: {error}")))?,
+                None => BTreeMap::new(),
             };
             Ok(Match {
                 closed: status == "closed",
                 id,
-                sightings,
+                sightings: strings(&metadata, SIGHTINGS_KEY),
+                metadata,
             })
         })
         .collect()
