@@ -500,7 +500,7 @@ fn remove(path: &Path) -> io::Result<()> {
 
 /// Copies the directory `from` to `to`, which must not exist, keeping each file's modification
 /// time. On APFS and on a block-cloning `ReFS` volume each file is a clone.
-fn clone_dir(from: &Path, to: &Path) -> io::Result<()> {
+pub(super) fn clone_dir(from: &Path, to: &Path) -> io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;
@@ -530,12 +530,31 @@ fn copy_link(from: &Path, to: &Path) -> io::Result<()> {
     fs::copy(from, to).map(drop)
 }
 
+/// Sets a file's modification time. Cargo leaves some outputs read-only, and `fs::copy` keeps
+/// that mode, so the file is made writable for the moment Windows needs to open it for writing
+/// attributes. Elsewhere an open for reading is enough.
 fn set_modified(path: &Path, time: SystemTime) -> io::Result<()> {
-    // Windows sets a file's times only through a handle that may write its attributes.
-    fs::OpenOptions::new()
-        .write(true)
-        .open(path)?
-        .set_modified(time)
+    #[cfg(unix)]
+    {
+        File::open(path)?.set_modified(time)
+    }
+    #[cfg(not(unix))]
+    {
+        let permissions = fs::metadata(path)?.permissions();
+        if permissions.readonly() {
+            let mut writable = permissions.clone();
+            writable.set_readonly(false);
+            fs::set_permissions(path, writable)?;
+        }
+        let result = fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .and_then(|file| file.set_modified(time));
+        if permissions.readonly() {
+            fs::set_permissions(path, permissions)?;
+        }
+        result
+    }
 }
 
 /// Rewrites the donor's paths to the tree's in the Cargo target directory `target`: in each

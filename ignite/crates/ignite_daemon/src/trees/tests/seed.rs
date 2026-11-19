@@ -463,3 +463,32 @@ fn a_compiling_lease_returns_before_its_seed_and_a_build_waits_for_the_seed() {
     let calls = builds.until_called("ensure bin in tree-01");
     assert_eq!(calls, ["forget tree-01", "ensure bin in tree-01"]);
 }
+
+/// Cargo leaves some outputs read-only. The seed copy keeps that mode, and used to fail with
+/// "Permission denied" on macOS when it opened the copy for writing to set its modification time.
+#[test]
+fn a_read_only_file_is_copied_with_its_modification_time() {
+    let dir = std::env::temp_dir().join(format!("ignite-readonly-copy-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    let (from, to) = (dir.join("from"), dir.join("to"));
+    fs::create_dir_all(&from).unwrap();
+    let file = from.join("output");
+    fs::write(&file, "compiled").unwrap();
+    let earlier = SystemTime::now() - Duration::from_secs(3600);
+    set_time(&file, earlier);
+    let mut permissions = fs::metadata(&file).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&file, permissions).unwrap();
+
+    crate::trees::seed::clone_dir(&from, &to).unwrap();
+
+    assert_eq!(modified(&to.join("output")), earlier);
+    assert!(
+        fs::metadata(to.join("output"))
+            .unwrap()
+            .permissions()
+            .readonly()
+    );
+    // Remove the read-only files' directory last; deleting needs only the directory's rights.
+    fs::remove_dir_all(&dir).unwrap();
+}
