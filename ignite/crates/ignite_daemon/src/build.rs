@@ -770,12 +770,14 @@ pub fn read_units(path: &Path) -> Vec<CompileUnit> {
         .collect()
 }
 
-/// How many distinct crates the units recompiled, for the line `built <product> in <s> s
-/// (<n> crates recompiled)`.
+/// How many distinct crates the units compiled, for the line `built <product> in <s> s
+/// (<n> crates recompiled)`. A unit counts whether or not an earlier build had left its files
+/// (the units' `rebuilt` flag): a build in a tree that has never compiled a crate still
+/// compiled it. Runs of a test binary compile nothing.
 pub fn recompiled(units: &[CompileUnit]) -> usize {
     units
         .iter()
-        .filter(|unit| unit.rebuilt)
+        .filter(|unit| unit.mode != crate::wrap::RUN_MODE)
         .map(|unit| unit.crate_name.as_str())
         .collect::<BTreeSet<_>>()
         .len()

@@ -399,11 +399,14 @@ fn matching_features_build_and_report_the_crates_recompiled() {
             r#"{{"crate":"{name}","mode":"test","instructions":1e9,"cpu_s":1.0,"rebuilt":{rebuilt}}}"#
         )
     };
+    // `c` is a run of a test binary, which compiles nothing.
+    let run = r#"{"crate":"c","mode":"run","instructions":1e9,"cpu_s":1.0,"rebuilt":false}"#;
     f.launcher.with(|s| {
         s.units = vec![
             unit("a", true),
             unit("a", true),
             unit("b", false),
+            run.into(),
             "not json".into(),
         ];
     });
@@ -412,8 +415,9 @@ fn matching_features_build_and_report_the_crates_recompiled() {
         panic!("expected a build, got {result:?}");
     };
     assert!((usage.wall_s - 3.0).abs() < f64::EPSILON);
-    assert_eq!(units.len(), 3);
-    assert_eq!(recompiled(&units), 1);
+    assert_eq!(units.len(), 4);
+    // `b` had no files before this build, and it still compiled: `a` twice counts once.
+    assert_eq!(recompiled(&units), 2);
 }
 
 /// A build that ran without `RUSTC_WRAPPER` recorded no compile units, so every rebuild count

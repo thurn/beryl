@@ -429,7 +429,10 @@ impl Checks {
                 BuildResult::Built { usage, units } => run.builds.push(Built {
                     product: product.clone(),
                     wall_s: usage.wall_s,
-                    rebuilt: units.iter().filter(|u| u.rebuilt).count(),
+                    rebuilt: (!units.is_empty() || usage.cpu_s < 1.0)
+                        .then(|| crate::build::recompiled(&units)),
+                    cpu_s: usage.cpu_s,
+                    queued_s: usage.queued_s,
                 }),
                 BuildResult::Failed { output, .. } => {
                     // Every family that needs a product gets its remembered failure, which

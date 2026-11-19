@@ -149,8 +149,13 @@ pub struct Failure {
 pub struct Built {
     pub product: String,
     pub wall_s: f64,
-    /// Compiler processes that rebuilt a crate.
-    pub rebuilt: usize,
+    /// Distinct crates the build compiled, or `None` when the build recorded no compiler
+    /// processes although it used CPU time (it ran without the compiler wrapper).
+    pub rebuilt: Option<usize>,
+    /// CPU seconds of the build and its descendants.
+    pub cpu_s: f64,
+    /// Seconds the build waited for cores, apart from `wall_s`.
+    pub queued_s: f64,
 }
 
 /// The result of running a set of checks.

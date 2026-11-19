@@ -17,7 +17,7 @@ pub(crate) use super::gate::gate_lines;
 use super::gate::scope_line;
 use super::plan::{self, GateView};
 use super::why_record;
-use super::{CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
+use super::{Built, CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
 use crate::server::{Context, Verb};
 
 /// The most failures a reply lists; the rest are in its JSON.
@@ -473,17 +473,32 @@ fn reply(run: &CheckRun, text: String) -> Reply {
 pub(crate) fn built_lines(run: &CheckRun) -> Vec<(String, String)> {
     run.builds
         .iter()
-        .map(|b| {
-            let crates = if b.rebuilt == 1 { "crate" } else { "crates" };
-            (
-                "built".to_owned(),
-                format!(
-                    "{} in {:.0} s ({} {crates} recompiled)",
-                    b.product, b.wall_s, b.rebuilt
-                ),
-            )
-        })
+        .map(|b| ("built".to_owned(), built_line(b)))
         .collect()
+}
+
+/// `ignite-tests in 319 s, 191 CPU-s, 0.6 cores busy (22 crates recompiled)`: the wall time, the
+/// CPU seconds and the cores they kept busy on average, the seconds spent queued for cores when
+/// there were any, and how many crates were compiled.
+fn built_line(b: &Built) -> String {
+    let running = (b.wall_s - b.queued_s).max(b.wall_s.min(1.0)).max(0.001);
+    let queued = if b.queued_s >= 1.0 {
+        format!(" ({:.0} s queued)", b.queued_s)
+    } else {
+        String::new()
+    };
+    let crates = match b.rebuilt {
+        Some(1) => "1 crate recompiled".to_owned(),
+        Some(n) => format!("{n} crates recompiled"),
+        None => "crates recompiled unknown".to_owned(),
+    };
+    format!(
+        "{} in {:.0} s{queued}, {:.0} CPU-s, {:.1} cores busy ({crates})",
+        b.product,
+        b.wall_s,
+        b.cpu_s,
+        b.cpu_s / running,
+    )
 }
 
 pub(super) fn counts(run: &CheckRun) -> String {
@@ -667,4 +682,33 @@ fn input_lines(
         ),
     ));
     lines
+}
+
+#[cfg(test)]
+mod built_line_tests {
+    use super::*;
+
+    fn built(rebuilt: Option<usize>) -> Built {
+        Built {
+            product: "ignite-tests".to_owned(),
+            wall_s: 319.0,
+            rebuilt,
+            cpu_s: 191.0,
+            queued_s: 19.0,
+        }
+    }
+
+    #[test]
+    fn the_line_shows_crates_cpu_seconds_cores_and_queueing() {
+        assert_eq!(
+            built_line(&built(Some(22))),
+            "ignite-tests in 319 s (19 s queued), 191 CPU-s, 0.6 cores busy (22 crates recompiled)"
+        );
+        assert!(built_line(&built(Some(1))).ends_with("(1 crate recompiled)"));
+    }
+
+    #[test]
+    fn a_build_with_no_recorded_compiles_says_the_count_is_unknown() {
+        assert!(built_line(&built(None)).ends_with("(crates recompiled unknown)"));
+    }
 }
