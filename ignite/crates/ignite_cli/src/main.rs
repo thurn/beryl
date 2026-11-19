@@ -103,7 +103,8 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
             command: InternalCommand::Restart,
         } => restart(current_dir()),
         _ => {
-            let session = client::session_from_env(|name| std::env::var(name).ok());
+            let session = client::session_from_env(|name| std::env::var(name).ok())
+                .filter(|_| !client::UNRECORDED_VERBS.contains(&verb));
             let mut request = client::request(verb, raw, current_dir(), session);
             if let Command::Dispatch {
                 command: None,

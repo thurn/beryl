@@ -2883,6 +2883,23 @@ leased for nothing.
 - The daemon releases the ticket only when the app confirms that the session is
   gone, or that it is idle and has stayed idle for 15 minutes after the message.
   Releasing keeps the work, as [Releasing work](#releasing-work) describes.
+- A Claude worker that ends its turn while holding its ticket is caught at once,
+  without waiting for the silence above. The repository's `Stop` hook
+  (`.claude/settings.json`) runs at the end of every turn and asks
+  `ignite turn-ended`, which decides. The first stop with the ticket held is
+  blocked with a message that names the ticket and says to run `ignite land` or
+  `ignite release`. If the worker stops again in the same turn without doing
+  either, the daemon releases the ticket itself, saving the tree as
+  `ignite/<ticket>` and using the worker's last message as the release note.
+  This applies only to a worker of the machine's pool that holds a ticket. A
+  person's own session, including one running `/ignite`, ends turns to talk to
+  the person, and is never blocked. Neither is a justiciar's session, nor a
+  worker with an `ignite` command still running, such as a `land` waiting in the
+  background. The hook names the session by the desktop app's
+  `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite records for the lease; the hook
+  input's own `session_id` is Claude Code's internal ID, which Ignite never
+  sees. Codex has no such hook, so Codex workers rely on the silence check
+  alone, which also still catches workers that died.
 - The hub releases the claims of a machine that has not reported for 2 hours,
   with a comment on each ticket.
 - The hub also releases a ticket that is in progress although no Ignite session

@@ -40,6 +40,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/tools/src/beryl_tools/turn_ended.py\"",
+            "timeout": 60
+          }
+        ]
+      }
     ]
   }
 }

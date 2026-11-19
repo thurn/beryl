@@ -17,7 +17,9 @@
 //!   and ends that session's `ignite wait`; a regression whose culprit's worker is still idle
 //!   here becomes a `message` to that worker;
 //! - asks the dispatcher to `check` a worker that has run no command for 30 minutes, messages it
-//!   once if it is idle, and releases its ticket when it is gone or stays idle 15 minutes more.
+//!   once if it is idle, and releases its ticket when it is gone or stays idle 15 minutes more;
+//! - answers a worker's `Stop` hook through `ignite turn-ended` (see `turn`), which keeps a
+//!   worker from ending its turn holding its ticket.
 //!
 //! What other parts of the daemon own (trees, admission, handles, releasing) reaches this module
 //! through [`Host`]. The instruction queue is saved in the local database whenever it changes
@@ -58,12 +60,15 @@ mod stall;
 mod store;
 #[path = "dispatchd_tell.rs"]
 mod tell;
+#[path = "dispatchd_turn.rs"]
+mod turn;
 #[path = "dispatchd_verb.rs"]
 mod verb;
 #[path = "dispatchd_work.rs"]
 mod work;
 
 pub use tell::TellVerb;
+pub use turn::TurnEndedVerb;
 pub use verb::DispatchVerb;
 
 /// Seconds an instruction may go unacknowledged before it is given again.
@@ -125,6 +130,11 @@ pub trait Host: Send + Sync {
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
     /// Gives back the ticket of a session that is gone or idle, keeping its work.
     fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()>;
+    /// Whether an `ignite` command of the session is still running: its current command, or an
+    /// operation it started that runs under a handle after its caller stopped waiting.
+    fn busy(&self, session: &SessionId) -> bool {
+        self.command(session).is_some_and(|command| command.running)
+    }
 }
 
 /// Facts about the machine that `/next` needs.
@@ -828,3 +838,6 @@ mod stall_tests;
 #[cfg(test)]
 #[path = "dispatchd_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "dispatchd_turn_tests.rs"]
+mod turn_tests;

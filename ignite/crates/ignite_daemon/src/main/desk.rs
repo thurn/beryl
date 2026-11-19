@@ -436,6 +436,13 @@ impl Host for DaemonHost {
         self.claims
             .release_session(&self.ctx, session, ticket, reason)
     }
+
+    fn busy(&self, session: &SessionId) -> bool {
+        self.command(session).is_some_and(|command| command.running)
+            || self
+                .server()
+                .is_some_and(|server| server.handles().running_for(session))
+    }
 }
 
 /// Runs `git` in `dir` and returns its standard output.

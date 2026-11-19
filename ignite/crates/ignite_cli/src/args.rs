@@ -249,6 +249,19 @@ pub enum Command {
     /// Cargo's test runner.
     #[command(hide = true)]
     Runner(Passthrough),
+    /// What a pool worker's `Stop` hook reports at the end of a turn: `pass`, `block` with the
+    /// text to keep the worker going, or `released`.
+    #[command(hide = true, name = "turn-ended")]
+    TurnEnded {
+        #[arg(long)]
+        session: String,
+        /// The hook already kept the worker going once this turn.
+        #[arg(long)]
+        again: bool,
+        /// The worker's last message, the release note when it stops again.
+        #[arg(long)]
+        note: Option<String>,
+    },
     /// Checks this executable on this machine, for the daemon that is about to restart into it.
     #[command(hide = true)]
     Internal {
@@ -661,6 +674,7 @@ impl Command {
             Command::RustcWrap(_) => "rustc-wrap",
             Command::Runner(_) => "runner",
             Command::Internal { .. } => "internal",
+            Command::TurnEnded { .. } => "turn-ended",
         }
     }
 }

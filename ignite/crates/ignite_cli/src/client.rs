@@ -35,6 +35,12 @@ pub fn dispatch_request_wait_s(wait: u32) -> u32 {
 /// the one the Claude desktop app gives its sessions.
 pub const SESSION_VARIABLES: &[&str] = &["IGNITE_SESSION", "CLAUDE_CODE_HOST_SESSION_ID"];
 
+/// Verbs sent without the asking session, which names its session in its arguments instead.
+/// The daemon records each session's current command, and `turn-ended`, which a session's
+/// `Stop` hook runs, would replace a running background `land` there and look like a command
+/// that ended.
+pub const UNRECORDED_VERBS: &[&str] = &["turn-ended"];
+
 /// The reply for a verb nobody has built, if `verb` is one.
 pub fn not_built(verb: &str) -> Option<Reply> {
     NOT_BUILT

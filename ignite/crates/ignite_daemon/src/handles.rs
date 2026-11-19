@@ -105,6 +105,8 @@ struct Entry {
     verb: String,
     /// The build tree the operation was asked from, if any.
     tree: Option<TreeId>,
+    /// The session that asked for it, if any.
+    session: Option<SessionId>,
     reply: Option<Reply>,
     finished_at: Option<Timestamp>,
     /// A wait has returned the reply.
@@ -115,10 +117,11 @@ struct Entry {
 }
 
 impl Entry {
-    fn running(verb: &str, tree: Option<TreeId>) -> Entry {
+    fn running(verb: &str, tree: Option<TreeId>, session: Option<SessionId>) -> Entry {
         Entry {
             verb: verb.to_owned(),
             tree,
+            session,
             reply: None,
             finished_at: None,
             read: false,
@@ -163,7 +166,8 @@ impl Handles {
                 .and_then(|text| serde_json::from_str::<Running>(text).ok())
                 .map(|running| running.request);
             let tree = row.tree.as_deref().and_then(|t| TreeId::new(t).ok());
-            trees.push(tree);
+            let session = row.session.as_deref().and_then(|s| SessionId::new(s).ok());
+            trees.push((tree, session));
             orphans.push(Orphan {
                 handle,
                 verb: row.verb,
@@ -179,10 +183,11 @@ impl Handles {
             .unwrap_or_else(PoisonError::into_inner);
         // One counter numbers every verb's handles, so start above every stored number.
         state.next = highest + 1;
-        for (orphan, tree) in orphans.iter().zip(trees) {
-            state
-                .replies
-                .insert(orphan.handle.clone(), Entry::running(&orphan.verb, tree));
+        for (orphan, (tree, session)) in orphans.iter().zip(trees) {
+            state.replies.insert(
+                orphan.handle.clone(),
+                Entry::running(&orphan.verb, tree, session),
+            );
         }
         state.orphans = orphans;
         Ok(handles)
@@ -224,7 +229,7 @@ impl Handles {
         self.prune(&mut state);
         state
             .replies
-            .insert(handle.clone(), Entry::running(verb, tree.cloned()));
+            .insert(handle.clone(), Entry::running(verb, tree.cloned(), session.cloned()));
         self.save(&rows::Handle {
             id: handle.to_string(),
             verb: verb.to_owned(),
@@ -260,6 +265,15 @@ impl Handles {
             .collect();
         running.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
         running
+    }
+
+    /// Whether an operation that `session` asked for is still running, such as a `land` whose
+    /// caller's wait ended and that now runs under its handle.
+    pub fn running_for(&self, session: &SessionId) -> bool {
+        lock(&self.state)
+            .replies
+            .values()
+            .any(|entry| entry.reply.is_none() && entry.session.as_ref() == Some(session))
     }
 
     /// Records the reply of a finished operation and wakes everyone waiting on it.
@@ -394,6 +408,7 @@ impl Handles {
                     Entry {
                         verb: row.verb,
                         tree: row.tree.as_deref().and_then(|t| TreeId::new(t).ok()),
+                        session: row.session.as_deref().and_then(|s| SessionId::new(s).ok()),
                         reply,
                         finished_at,
                         read: false,

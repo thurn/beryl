@@ -210,3 +210,20 @@ fn a_restarted_daemons_first_handle_is_numbered_above_every_stored_one() {
     assert_eq!(handles.create("land", None, None).as_str(), "L-7");
     assert_eq!(handles.create("test", None, None).as_str(), "T-8");
 }
+
+#[test]
+fn a_sessions_operation_counts_as_running_until_it_finishes_even_across_a_restart() {
+    let db = Arc::new(Mutex::new(ignite_store::local::open_in_memory().unwrap()));
+    let clock: Arc<dyn Clock> = Arc::new(FakeClock::new(Timestamp::EPOCH));
+    let worker = session("local_w1");
+    let before = Handles::open(clock.clone(), db.clone()).unwrap();
+    let handle = before.create("land", Some(&worker), None);
+    assert!(before.running_for(&worker));
+    assert!(!before.running_for(&session("local_other")));
+    drop(before);
+
+    let after = Handles::open(clock, db).unwrap();
+    assert!(after.running_for(&worker));
+    after.finish(&handle, Reply::text(Exit::Success, "landed"));
+    assert!(!after.running_for(&worker));
+}

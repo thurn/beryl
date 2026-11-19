@@ -26,7 +26,7 @@ use crate::checks::sources::HubHistory;
 use crate::checks::verbs::{CheckVerb, TestVerb, WhyVerb};
 use crate::checks::{CheckSettings, Checks};
 use crate::claim::{BriefVerb, ClaimHook, Claims, CloseVerb, ReleaseVerb, StartVerb};
-use crate::dispatchd::{DispatchVerb, Dispatcher, Setup, TellVerb};
+use crate::dispatchd::{DispatchVerb, Dispatcher, Setup, TellVerb, TurnEndedVerb};
 use crate::doctor::{
     self, AdmissionSection, CoresSection, DoctorVerb, GitTrees, LoopsSection, NativeHost,
     StatusSection, StatusVerb, TreesSection,
@@ -458,6 +458,7 @@ pub fn server(
         parts.emergencies.clone(),
     )));
     registry.register(Box::new(TellVerb));
+    registry.register(Box::new(TurnEndedVerb::new(parts.dispatcher.clone())));
     registry.register(Box::new(crate::justiciar::JusticiarVerb {
         home: parts.home.root.clone(),
         host: parts.reporter.host.clone(),
