@@ -23,7 +23,9 @@ pub(super) fn round(role: Role, icon: IconId, name: &str) -> Element {
         .height(size::ICON_BUTTON)
         .background(color::ICON_BUTTON)
         .radius(size::ICON_BUTTON / 2.0);
-    // The rim is an inset ring of the box shadow, as the web draws it, not a border.
+    // The rim is an inset ring of the box shadow, as the web draws it, not a border:
+    // `.icon-button` has `border: 0`, so the button's usual border is turned off.
+    element.style.border = Some(([0; 4], 0.0));
     element.style.box_shadow = shadow::ICON_BUTTON.to_vec();
     // At the one size the atlas holds the icon: 22 points for most, as `size::ICON` is, and 28
     // for full control's mark, whose artwork is drawn larger.

@@ -43,7 +43,7 @@ const CLOTH: f32 = 4000.0;
 /// The cloth lies this far below the cards lying on the table, so that the two never share a
 /// height.
 const CLOTH_HEIGHT: f32 = -0.5;
-const CLOTH_TINT: [u8; 4] = [38, 66, 58, 255];
+const CLOTH_TINT: [u8; 4] = [0x83, 0x70, 0x69, 255]; // The web's `--tabletop` at its 42% stop.
 
 /// One game object's presence on the table.
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -1029,7 +1029,8 @@
         "value": 360
       },
       "SETTINGS_GEAR_INSET": {
-        "value": 12
+        "value": 14,
+        "note": "How far the game screen's corner column (the gear, bug button and undo) stands from the window's top and right edges: the web's gear is 14 points from each."
       },
       "ORDER_ENDS_SIZE": {
         "value": 18

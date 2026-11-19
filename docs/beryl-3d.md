@@ -4556,9 +4556,24 @@ reference is the web interface as WebKit draws it, at scale 2.
 Styles are not generated from the web interface's CSS. Each Beryl 3D element
 keeps its own `Style`, and the tools hold it equal to the web's computed style.
 Text is compared as data: string, font, size, weight, color, baseline and box.
-Whether the 3D table's card placement should follow the web interface's, instead
-of each client being fitted to Arena separately (below), is decided from the
-measured difference once the tools exist.
+An agent works through the differences in a fixed order, largest first: boxes,
+then style values, then values `Style` cannot express, then pixel regions, then
+motion, lowering the ratchet as each lands. The `b3d` skill's section "Matching
+the web" is that procedure.
+
+The first run of the procedure, on 2026-11-19, measured how far the 3D table's
+card placement is from the web interface's at scale 2. On the desktop, the
+viewer's hand is fanned the same way within about 9 points, but the two clients
+order it differently: the web keeps each hand in the order cards arrived, so a
+drawn card joins the right end, while Beryl 3D follows the view's order.
+Battlefield cards stand 25 to 80 points right of and up to 37 points below the
+web's, and the piles are drawn at 73 to 82% of the web's height. On the phone,
+battlefield cards are 2.5 to 3.9 times as tall as the web's and up to 150 points
+away. A camera that fits the hand and the piles cannot also fit rows laid out at
+other sizes. The recommendation is therefore to port the web's placement (each
+card's quad in `ui/src/stage/layout.ts`, `desktop.ts` and `phone.ts`, projected
+onto the table) and keep the camera, rather than refit the camera to the web's
+card quads.
 
 ### Timeline parity
 
