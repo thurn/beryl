@@ -6,6 +6,8 @@
 //! tree, a product and the packages the caller needs. [`BuildManager::ensure`] answers it in one
 //! of three ways:
 //!
+//! - Before anything else, while the tree's lease copies another tree's build into it, it
+//!   waits for the copy (see `crate::trees::wait_until_seeded`).
 //! - The tree already holds the product for the same packages and the same input hash: it
 //!   answers [`BuildResult::Current`] without starting anything.
 //! - A build of the same product, packages and input hash is running in the tree: it waits for
@@ -608,6 +610,11 @@ impl Builds for BuildManager {
     }
 
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {
+        // A tree whose lease is copying another tree's build has its target directories replaced.
+        let path = self.trees.path(tree);
+        if let Err(stopped) = path.map_or(Ok(()), |p| crate::trees::wait_until_seeded(&p)) {
+            return self.failure(product, &stopped);
+        }
         let plan = match self.plan(tree, product, packages) {
             Ok(plan) => plan,
             Err(error) => {

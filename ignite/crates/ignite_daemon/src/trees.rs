@@ -55,6 +55,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 pub use disk::DiskReport;
+pub use seed::{Seeding, wait_until_seeded};
 pub use setup::Unfinished;
 use wait::Slot;
 pub use wait::Waiter;
@@ -488,26 +489,14 @@ impl Trees {
     fn check_out(&self, tree: &TreeId, request: &LeaseRequest) -> Result<TreeLease> {
         let config = &self.inner.config;
         let path = config.path(tree);
+        // A tree given back while its last lease's copy ran may be leased again before the copy ends.
+        let _ = seed::wait_until_seeded(&path);
         if let Err(error) = worktree::reset(&path, &request.branch, &request.at, &config.keep) {
             let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
             return Err(error);
         }
         if request.compiles {
-            // A copy of a build nearer the tip leaves the builds below only the difference.
-            match self.seed(tree, &request.tip) {
-                Ok(Some(seeded)) => eprintln!(
-                    "ignite: {tree} starts from a copy of {}'s {}",
-                    seeded.donor,
-                    seeded.dirs.join(", ")
-                ),
-                Ok(None) => {}
-                Err(error) => eprintln!("ignite: {tree} was not seeded from another tree: {error}"),
-            }
-        }
-        if request.compiles && !config.prebuild.is_empty() {
-            let trees = self.clone();
-            let (tree, at) = (tree.clone(), request.at.clone());
-            std::thread::spawn(move || trees.build(&tree, &at));
+            self.start_builds(tree, request);
         }
         Ok(TreeLease {
             tree: tree.clone(),
@@ -630,6 +619,7 @@ impl Trees {
 
     /// Frees a tree that was leased but never used, without saving or resetting it.
     fn give_back(&self, tree: &TreeId) {
+        let _ = seed::wait_until_seeded(&self.inner.config.path(tree));
         let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
         self.serve_waiters();
     }

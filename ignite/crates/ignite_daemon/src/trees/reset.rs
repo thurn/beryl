@@ -43,6 +43,8 @@ impl Trees {
         // A release that fails after the tree is marked `resetting` goes back to `leased`, so
         // the caller can retry it; nothing else would move a `resetting` tree until the daemon
         // restarts.
+        // A copy of another tree's build still running writes the target directories.
+        let _ = super::seed::wait_until_seeded(&path);
         let reset = self
             .stop_work(tree)
             .and_then(|()| Self::end_processes(&path, caller));

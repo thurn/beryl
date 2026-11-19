@@ -434,5 +434,10 @@
     "label": "An express landing reuses its tree's `ignite check` pass when the commits landed since touch none of the change's files or build inputs: on 2026-11-18 a landing reran all four express commands (56 s) a minute after its check had passed them in 60 s, because a commit had landed meanwhile",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "ignite start replies before a compiling tree's build directories are copied from another tree; the copy runs on the prebuild thread and builds in the tree wait for it (9 of 25 starts between 05:38 and 06:38 UTC on 2026-11-19 had waited 30 to 141 s for the copy)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

@@ -732,6 +732,39 @@ fn a_stopped_request_stops_waiting_for_another_build() {
     assert_eq!(f.launcher.builds().len(), 1);
 }
 
+/// While the tree's lease copies another tree's build into it, a build waits for the copy and
+/// says so, and starts once the copy is done: the copy deletes and replaces the target
+/// directories the build would write.
+#[test]
+fn a_build_waits_while_its_tree_is_seeded_and_says_so() {
+    let f = fixture("seeding", false);
+    let seeding = crate::trees::Seeding::start(f.dir.clone(), tree());
+    let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
+    let work = steps.begin(
+        crate::steps::Kind::Verb("test".to_owned()),
+        crate::steps::Work::default(),
+    );
+    let waiter = {
+        let (manager, work) = (Arc::clone(&f.manager), Arc::clone(&work));
+        thread::spawn(move || {
+            let _entered = work.enter();
+            manager.ensure(&tree(), "tests", &[])
+        })
+    };
+    while work.waits().is_empty() {
+        assert!(!waiter.is_finished(), "{:?}", waiter.join());
+        thread::yield_now();
+    }
+    assert_eq!(work.waits(), ["tree-01's build directories to be copied"]);
+    assert!(f.launcher.builds().is_empty());
+
+    drop(seeding);
+
+    let result = waiter.join().unwrap();
+    assert!(matches!(result, BuildResult::Built { .. }), "{result:?}");
+    assert_eq!(f.launcher.builds().len(), 1);
+}
+
 #[path = "build/restart_tests.rs"]
 mod restart;
 

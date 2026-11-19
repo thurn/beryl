@@ -6,7 +6,11 @@
 //! is leased at the tip, and another tree usually holds a build near it.
 //!
 //! So a lease for a compiling ticket first copies the build of the tree nearest the tip, when
-//! that is nearer than the leased tree's own. On macOS the copy is a clone (APFS
+//! that is nearer than the leased tree's own. The copy runs after the lease has returned, on the
+//! thread that then prebuilds the tree ([`Trees::start_builds`]): a copy of large target
+//! directories under load took up to 141 s, and the session could do nothing while `ignite
+//! start` waited for it. Every build in the tree waits for the copy ([`wait_until_seeded`]),
+//! and a file the session edits during the copy keeps its own modification time. On macOS the copy is a clone (APFS
 //! `clonefile`): it takes a few seconds and almost no disk until either tree writes. Measured
 //! on 2026-11-18 with the two trees 14 commits apart (none of them touching a crate), three
 //! products whose cold builds took 947, 1,070 and 1,390 CPU-s then built in 5.4, 6.3 and
@@ -44,8 +48,8 @@ use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
-use std::time::SystemTime;
+use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, SystemTime};
 
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::traits::{Error, Result};
@@ -53,43 +57,100 @@ use ignite_git::{changed, refs, tracked};
 use ignite_store::local::{rows, trees as store};
 
 use super::disk::{id_of, profile_dirs};
-use super::{Kind, Trees, store_error};
+use super::{Kind, LeaseRequest, Trees, store_error};
 
 /// The lock files Cargo holds in a profile directory while it builds there: Cargo 1.98 holds the
 /// build and artifact locks exclusively for the whole build, and older versions `.cargo-lock`.
 const CARGO_LOCKS: [&str; 3] = [".cargo-lock", ".cargo-build-lock", ".cargo-artifact-lock"];
 
-/// The trees being seeded now, by path.
-static SEEDING: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+/// The trees being seeded now.
+static SEEDING: Mutex<Vec<Marker>> = Mutex::new(Vec::new());
 
-/// Marks a tree as being seeded until it is dropped.
-struct Seeding(PathBuf);
+/// Signalled whenever a tree's seed ends, for builds waiting on it.
+static SEEDED: Condvar = Condvar::new();
+
+/// How often a build waiting on a seed checks whether its work was asked to stop.
+const STOP_RECHECK: Duration = Duration::from_secs(1);
+
+/// A tree being seeded: its path, its ID, and the donor once one is chosen.
+struct Marker {
+    path: PathBuf,
+    tree: TreeId,
+    donor: Option<TreeId>,
+}
+
+fn seeding() -> MutexGuard<'static, Vec<Marker>> {
+    SEEDING.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Marks a tree as being seeded until it is dropped. While the mark is held, every build in the
+/// tree waits ([`wait_until_seeded`]), the tree is never a donor, and a release of the tree waits
+/// before it resets it.
+pub struct Seeding(PathBuf);
 
 impl Seeding {
-    fn start(path: PathBuf) -> Seeding {
-        SEEDING
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(path.clone());
+    /// Marks the tree `tree` at `path`.
+    pub fn start(path: PathBuf, tree: TreeId) -> Seeding {
+        seeding().push(Marker {
+            path: path.clone(),
+            tree,
+            donor: None,
+        });
         Seeding(path)
     }
 
+    /// Records the tree the copy comes from, for the message a waiting build shows.
+    fn set_donor(&self, donor: &TreeId) {
+        if let Some(marker) = seeding().iter_mut().find(|m| m.path == self.0) {
+            marker.donor = Some(donor.clone());
+        }
+    }
+
     fn contains(path: &Path) -> bool {
-        SEEDING
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .iter()
-            .any(|p| p == path)
+        seeding().iter().any(|m| m.path == path)
     }
 }
 
 impl Drop for Seeding {
     fn drop(&mut self) {
-        let mut seeding = SEEDING.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(at) = seeding.iter().position(|p| *p == self.0) {
+        let mut seeding = seeding();
+        if let Some(at) = seeding.iter().position(|m| m.path == self.0) {
             seeding.remove(at);
         }
+        SEEDED.notify_all();
     }
+}
+
+/// Returns once the tree at `path` is not being seeded, which is at once for every tree but one
+/// whose lease has just copied another tree's build. The seed deletes and replaces the tree's
+/// Cargo target directories, so a build that ran meanwhile would be deleted or mixed with the
+/// copy. While it waits, the calling work is shown as waiting for the copy. `Err` says why it
+/// stopped waiting when the work was asked to stop first.
+pub fn wait_until_seeded(path: &Path) -> std::result::Result<(), String> {
+    let mut seeding = seeding();
+    let mut waiting = None;
+    while let Some(marker) = seeding.iter().find(|m| m.path == path) {
+        let what = match &marker.donor {
+            Some(donor) => format!(
+                "{}'s build directories to be copied from {donor}",
+                marker.tree
+            ),
+            None => format!("{}'s build directories to be copied", marker.tree),
+        };
+        if crate::steps::stop_requested() {
+            return Err(format!(
+                "stopped waiting for {what}: its work was asked to stop"
+            ));
+        }
+        if waiting.as_ref().is_none_or(|(shown, _)| *shown != what) {
+            waiting = Some((what.clone(), crate::steps::waiting(&what)));
+        }
+        seeding = SEEDED
+            .wait_timeout(seeding, STOP_RECHECK)
+            .unwrap_or_else(PoisonError::into_inner)
+            .0;
+    }
+    Ok(())
 }
 
 /// The tree a build was copied from.
@@ -107,16 +168,50 @@ struct Donor {
 }
 
 impl Trees {
+    /// Starts a compiling lease's work on a thread of its own, so that the lease returns as soon
+    /// as the branch is checked out: first the seed (on macOS), then the prebuild products. The
+    /// tree is marked as being seeded before this returns, so a build asked for at once, by the
+    /// prebuild or by the session, waits for the copy instead of running under it.
+    pub(super) fn start_builds(&self, tree: &TreeId, request: &LeaseRequest) {
+        let seeding = cfg!(target_os = "macos")
+            .then(|| Seeding::start(self.inner.config.path(tree), tree.clone()));
+        if seeding.is_none() && self.inner.config.prebuild.is_empty() {
+            return;
+        }
+        let trees = self.clone();
+        let (tree, at, tip) = (tree.clone(), request.at.clone(), request.tip.clone());
+        std::thread::spawn(move || {
+            if let Some(seeding) = seeding {
+                let started = trees.inner.clock.now();
+                let seeded = trees.seed(&seeding, &tree, &tip);
+                drop(seeding);
+                let took = trees.inner.clock.now().seconds_since(started);
+                match seeded {
+                    Ok(Some(seeded)) => eprintln!(
+                        "ignite: {tree} starts from a copy of {}'s {}, made in {took:.1} s",
+                        seeded.donor,
+                        seeded.dirs.join(", ")
+                    ),
+                    Ok(None) => {}
+                    Err(error) => {
+                        eprintln!("ignite: {tree} was not seeded from another tree: {error}");
+                    }
+                }
+            }
+            if !trees.inner.config.prebuild.is_empty() {
+                trees.build(&tree, &at);
+            }
+        });
+    }
+
     /// Copies the build of the tree nearest `tip` into `tree`, if one is nearer than `tree`'s
     /// own. Returns what was copied, or `None` when nothing was.
-    pub(super) fn seed(&self, tree: &TreeId, tip: &Commit) -> Result<Option<Seeded>> {
-        if !cfg!(target_os = "macos") {
-            return Ok(None);
-        }
-        let _seeding = Seeding::start(self.inner.config.path(tree));
+    /// `seeding` marks `tree` for as long as the copy runs.
+    fn seed(&self, seeding: &Seeding, tree: &TreeId, tip: &Commit) -> Result<Option<Seeded>> {
         let Some(donor) = self.take_donor(tree, tip)? else {
             return Ok(None);
         };
+        seeding.set_donor(&id_of(&donor.row)?);
         let result = self.copy_from(&donor.row, tree);
         if donor.free {
             self.put_back(&donor.row)?;
@@ -230,8 +325,13 @@ impl Trees {
                 clone_dir(&from.join(dir), &to.join(dir))?;
                 rewrite_target(&to.join(dir), &pairs)?;
             }
-            for (file, time) in &times {
-                set_modified(&to.join(file), *time)?;
+            for (file, time, read) in &times {
+                // The session works in the tree during the copy. A file it wrote since its time
+                // was read keeps its newer time, so the units that read it are rebuilt.
+                let path = to.join(file);
+                if fs::metadata(&path).and_then(|m| m.modified()).ok() == Some(*read) {
+                    set_modified(&path, *time)?;
+                }
             }
             Ok(())
         })();
@@ -417,8 +517,8 @@ fn rewrite_dep_info(data: &[u8], old: &[u8], new: &[u8]) -> Option<Vec<u8>> {
 /// The modification time each file git lists in the tree at `to` gets: that of the file at the
 /// same path in `from` when their content is the same, and the present time when it is not or
 /// may not be (the paths that differ between the two trees' commits, or that either tree has
-/// uncommitted).
-fn file_times(from: &Path, to: &Path) -> Result<Vec<(String, SystemTime)>> {
+/// uncommitted). Each comes with the file's own modification time when it was read.
+fn file_times(from: &Path, to: &Path) -> Result<Vec<(String, SystemTime, SystemTime)>> {
     let mut differing: HashSet<String> =
         changed::between(to, &refs::head(from)?, &refs::head(to)?)?
             .into_iter()
@@ -428,9 +528,10 @@ fn file_times(from: &Path, to: &Path) -> Result<Vec<(String, SystemTime)>> {
     let now = SystemTime::now();
     let mut times = Vec::new();
     for file in tracked::files(to)? {
-        if !fs::symlink_metadata(to.join(&file)).is_ok_and(|m| m.is_file()) {
-            continue;
-        }
+        let read = match fs::symlink_metadata(to.join(&file)) {
+            Ok(meta) if meta.is_file() => meta.modified()?,
+            _ => continue,
+        };
         let time = if differing.contains(&file) {
             now
         } else {
@@ -439,7 +540,7 @@ fn file_times(from: &Path, to: &Path) -> Result<Vec<(String, SystemTime)>> {
                 _ => now,
             }
         };
-        times.push((file, time));
+        times.push((file, time, read));
     }
     Ok(times)
 }

@@ -59,6 +59,7 @@ fn a_compiling_lease_starts_from_a_copy_of_the_build_nearest_the_tip() {
     write(&own, "out/debug/.fingerprint/stale-9/lib-stale", "0");
 
     let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
 
     assert_eq!(lease.tree.as_str(), "tree-01");
     let profile = lease.path.join("out/debug");
@@ -100,6 +101,7 @@ fn a_donor_whose_cargo_lock_is_held_is_passed_over() {
     write(&own, "out/debug/.fingerprint/mine-1/lib-mine", "0");
 
     let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
 
     assert!(lease.path.join("out/debug/.fingerprint/mine-1").exists());
     assert!(!lease.path.join("out/debug/deps/libfoo-1.rlib").exists());
@@ -259,8 +261,115 @@ fn a_seeded_tree_is_forgotten_before_its_own_build_is_replaced() {
         Lease::Ready(lease) => lease,
         Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
     };
+    super::super::wait_until_seeded(&lease.path).unwrap();
 
     assert_eq!(lease.tree.as_str(), "tree-01");
     assert!(lease.path.join("out/debug/deps/libfoo-1.rlib").exists());
     assert_eq!(*builds.forgotten.lock().unwrap(), [(id("tree-01"), true)]);
+}
+
+/// Builds whose `forget`, which the seed calls partway through the copy, waits while `held`
+/// is set, and that record each call in order.
+#[derive(Default)]
+struct Held {
+    /// Whether `forget` waits, and every call so far.
+    state: std::sync::Mutex<(bool, Vec<String>)>,
+    changed: std::sync::Condvar,
+}
+
+impl Held {
+    fn set_held(&self, held: bool) {
+        self.state.lock().unwrap().0 = held;
+        self.changed.notify_all();
+    }
+
+    fn record(&self, call: String) -> std::sync::MutexGuard<'_, (bool, Vec<String>)> {
+        let mut state = self.state.lock().unwrap();
+        state.1.push(call);
+        self.changed.notify_all();
+        state
+    }
+
+    /// Waits, without a timeout, until `call` has been made.
+    fn until_called(&self, call: &str) -> Vec<String> {
+        let mut state = self.state.lock().unwrap();
+        while !state.1.iter().any(|c| c == call) {
+            state = self.changed.wait(state).unwrap();
+        }
+        state.1.clone()
+    }
+}
+
+impl ignite_core::traits::Builds for Held {
+    fn ensure(
+        &self,
+        tree: &TreeId,
+        product: &str,
+        _packages: &[String],
+    ) -> ignite_core::traits::BuildResult {
+        drop(self.record(format!("ensure {product} in {tree}")));
+        ignite_core::traits::BuildResult::Current
+    }
+
+    fn forget(&self, tree: &TreeId) {
+        let mut state = self.record(format!("forget {tree}"));
+        while state.0 {
+            state = self.changed.wait(state).unwrap();
+        }
+    }
+}
+
+/// A compiling lease returns while its tree is still being seeded, and the copy runs on the
+/// thread that prebuilds the tree afterwards. A build asked for during the copy waits for it and
+/// names the donor.
+#[cfg(target_os = "macos")]
+#[test]
+fn a_compiling_lease_returns_before_its_seed_and_a_build_waits_for_the_seed() {
+    let f = Fixture::new(2, 2);
+    let builds = Arc::new(Held::default());
+    let trees = trees_with(&f, builds.clone(), None);
+    trees.record_build(&id("tree-01"), &f.commits[0]).unwrap();
+    let other = match trees.lease(f.request("T.1", false)).unwrap() {
+        Lease::Ready(lease) => lease,
+        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
+    };
+    fake_target(&other.path);
+    trees.record_build(&other.tree, &f.tip()).unwrap();
+    builds.set_held(true);
+
+    let lease = match trees.lease(f.request("T.2", true)).unwrap() {
+        Lease::Ready(lease) => lease,
+        Lease::Waiting(waiter) => panic!("{}", waiter.reason()),
+    };
+
+    // The seed is held partway, after the lease returned.
+    assert_eq!(lease.tree.as_str(), "tree-01");
+    builds.until_called("forget tree-01");
+    let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
+    let work = steps.begin(
+        crate::steps::Kind::Verb("test".to_owned()),
+        crate::steps::Work::default(),
+    );
+    let waiter = {
+        let (path, work) = (lease.path.clone(), Arc::clone(&work));
+        std::thread::spawn(move || {
+            let _entered = work.enter();
+            super::super::wait_until_seeded(&path)
+        })
+    };
+    while work.waits().is_empty() {
+        assert!(!waiter.is_finished(), "{:?}", waiter.join());
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        work.waits(),
+        ["tree-01's build directories to be copied from tree-02"]
+    );
+
+    builds.set_held(false);
+
+    waiter.join().unwrap().unwrap();
+    assert!(lease.path.join("out/debug/deps/libfoo-1.rlib").exists());
+    let calls = builds.until_called("ensure bin in tree-01");
+    assert_eq!(calls, ["forget tree-01", "ensure bin in tree-01"]);
 }

@@ -858,6 +858,15 @@ Rules for trees:
   `cli`, test-binary and release fuzz-test builds took 5.4, 6.3 and 0.2 CPU-s
   after the copy, against medians of 947, 1,070 and 1,390 CPU-s for a cold
   build.
+- The copy runs after `ignite start` has replied, on the thread that then
+  prebuilds the tree. Under load a copy took up to 141 s, and the session could
+  do nothing while `ignite start` waited for it. Every build in the tree waits
+  for the copy, because the copy deletes and replaces the target directories,
+  and `ignite status` shows the wait as "waiting for tree-06's build directories
+  to be copied from tree-03". A release of the tree also waits for it. A file
+  the session edits during the copy keeps its own modification time, so the
+  units that read it are rebuilt. The daemon's log line for each copy says how
+  long it took.
 - While cores are idle, the daemon keeps one free ticket tree built at the tip,
   so the next lease starts with nothing to compile.
 - A tree keeps the directories that its build products declare as their output,
