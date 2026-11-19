@@ -1,6 +1,7 @@
 //! Moving the release branch after a landing (see `release` in `ignite.toml`).
 //!
-//! When a landing's commits change Ignite's own source, the landed commit may also move the
+//! When a landing's commits change Ignite's own source (not counting the check manifests, see
+//! [`crate::update::scope::ignite_change`]), the landed commit may also move the
 //! release branch, which daemons build their executable from. It moves only if every check of
 //! the release family passed on that commit. The landing decides that before it pushes
 //! ([`Landing::judge_release`]):
@@ -43,6 +44,7 @@ use super::{Landing, line, short};
 use crate::checks::{CheckRun, GateRun, RunOptions};
 use crate::server::Context;
 use crate::update::SOURCE;
+use crate::update::scope::{Source, ignite_change};
 
 /// Whether the landed commit may move the release branch, decided before the push: `Ok` when
 /// every check of the release family passed, or `Err` with the reason it may not.
@@ -50,16 +52,19 @@ pub(super) type Verdict = Result<(), String>;
 
 impl Landing {
     /// The release branch and family a landing that changed `files` must judge, or `None`
-    /// when the repository names no release or the files are all outside Ignite's source.
+    /// when the repository names no release or the files are all outside Ignite's source. The
+    /// check manifests are outside it even where their directory lies under Ignite's: no
+    /// executable compiles them, so a landing that changes only them builds no release and
+    /// restarts no daemon.
     fn release_of<'a>(ctx: &'a Context, files: &[String]) -> Option<(&'a str, &'a str)> {
         let repository = &ctx.config.repository;
         let (Some(branch), Some(family)) = (&repository.release, &repository.release_family) else {
             return None;
         };
-        let source = format!("{SOURCE}/");
+        let checks = crate::update::scope::checks_dir(&ctx.config);
         files
             .iter()
-            .any(|file| file.starts_with(&source))
+            .any(|file| ignite_change(Source::ignite(&checks), file))
             .then_some((branch.as_str(), family.as_str()))
     }
 

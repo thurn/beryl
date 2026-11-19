@@ -57,7 +57,13 @@ impl BuildManager {
         ) else {
             return false;
         };
-        if !self.settings.manifest.products.contains_key(&row.product) {
+        if !self
+            .settings
+            .manifest
+            .get()
+            .products
+            .contains_key(&row.product)
+        {
             return false;
         }
         let request = Request {

@@ -38,14 +38,15 @@ mod setup;
 mod tests;
 mod wait;
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
+use crate::manifests::Live;
 use ignite_core::config::Config;
 use ignite_core::ids::{Commit, Handle, SessionId, TicketId, TreeId};
-use ignite_core::manifest::{InputPattern, Manifest};
+use ignite_core::manifest::Manifest;
 use ignite_core::traits::{BuildResult, Builds, Clock, Error, Result};
 use ignite_git::fastforward::{self, FastForward};
 use ignite_git::save::{self, Saved};
@@ -92,10 +93,11 @@ pub struct TreeConfig {
     /// The disk the trees may use, in bytes.
     pub disk_limit: Option<u64>,
     /// The build products' output directories, relative to a tree's root: what a reset keeps.
-    pub keep: Vec<String>,
+    /// Both lists change when the manifests do ([`TreeConfig::reload`]).
+    pub keep: Live<Vec<String>>,
     /// The products built at the lease of a ticket expected to compile, and kept built at the
     /// tip in one free tree: those whose inputs name workspace packages.
-    pub prebuild: Vec<String>,
+    pub prebuild: Live<Vec<String>>,
 }
 
 impl TreeConfig {
@@ -103,22 +105,7 @@ impl TreeConfig {
         let machine = config
             .machine(hostname)
             .ok_or_else(|| Error::Invalid(format!("ignite.toml declares no machine {hostname}")))?;
-        let keep: BTreeSet<String> = manifest
-            .products
-            .values()
-            .flat_map(|product| product.outputs.iter())
-            .map(|dir| dir.trim_matches('/').to_owned())
-            .collect();
-        let prebuild = manifest
-            .products
-            .iter()
-            .filter(|(_, product)| {
-                product.inputs.iter().any(|input| {
-                    matches!(input, InputPattern::Crate(_) | InputPattern::CrateClosure)
-                })
-            })
-            .map(|(name, _)| name.clone())
-            .collect();
+        let (keep, prebuild) = Self::products(manifest);
         Ok(TreeConfig {
             repo: repo.to_path_buf(),
             dir: repo.join(&config.repository.trees),
@@ -132,8 +119,8 @@ impl TreeConfig {
             disk_limit: machine
                 .trees_disk_gb
                 .map(|gb| u64::from(gb) * 1_000_000_000),
-            keep: keep.into_iter().collect(),
-            prebuild,
+            keep: keep.into(),
+            prebuild: prebuild.into(),
         })
     }
 
@@ -401,7 +388,8 @@ impl Trees {
     fn take_free(&self, locked: &Locked, request: &LeaseRequest) -> Result<Option<TreeId>> {
         let rows = store::all(&locked.db).map_err(|e| store_error(&e))?;
         let configured = self.inner.config.configured();
-        let wanted = choice::wanted(&self.inner.config.keep, &request.files);
+        let keep = self.inner.config.keep.get();
+        let wanted = choice::wanted(&keep, &request.files);
         let mut free: Vec<(usize, Option<usize>, &rows::Tree)> = rows
             .iter()
             .filter(|row| {
@@ -491,7 +479,8 @@ impl Trees {
         let path = config.path(tree);
         // A tree given back while its last lease's copy ran may be leased again before the copy ends.
         let _ = seed::wait_until_seeded(&path);
-        if let Err(error) = worktree::reset(&path, &request.branch, &request.at, &config.keep) {
+        if let Err(error) = worktree::reset(&path, &request.branch, &request.at, &config.keep.get())
+        {
             let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
             return Err(error);
         }
@@ -509,7 +498,7 @@ impl Trees {
     /// Makes every prebuild product current in `tree` and, if all succeed, records `at` as the
     /// commit its build directories match.
     fn build(&self, tree: &TreeId, at: &Commit) -> bool {
-        let built = self.inner.config.prebuild.iter().all(|product| {
+        let built = self.inner.config.prebuild.get().iter().all(|product| {
             !matches!(
                 self.inner.builds.ensure(tree, product, &[]),
                 BuildResult::Failed { .. }
@@ -636,7 +625,7 @@ impl Trees {
     /// While cores are idle, keeps one free ticket tree built at `tip`: if none is, prebuilds
     /// the free tree nearest the tip. Returns the tree it built, if any.
     pub fn keep_one_built(&self, tip: &Commit) -> Result<Option<TreeId>> {
-        if self.inner.config.prebuild.is_empty() {
+        if self.inner.config.prebuild.get().is_empty() {
             return Ok(None);
         }
         let tree = {
@@ -681,7 +670,12 @@ impl Trees {
         };
         crate::steps::step(format!("prebuilding {tree} at {}", &tip.as_str()[..7]));
         let path = self.inner.config.path(&tree);
-        let reset = worktree::reset(&path, &park_branch(&tree), tip, &self.inner.config.keep);
+        let reset = worktree::reset(
+            &path,
+            &park_branch(&tree),
+            tip,
+            &self.inner.config.keep.get(),
+        );
         let built = reset.is_ok() && self.build(&tree, tip);
         store::release(&self.lock().db, tree.as_str(), None, &self.now())
             .map_err(|e| store_error(&e))?;
@@ -768,6 +762,11 @@ impl Trees {
             .map(|slot| slot.request().ticket.clone())
             .collect();
         Ok(Status { trees, waiting })
+    }
+
+    /// [`TreeConfig::reload`], with manifests read again from the main checkout.
+    pub fn reload_products(&self, manifest: &Manifest) {
+        self.inner.config.reload(manifest);
     }
 
     /// Fast-forwards the main checkout's local integration branches to the remote, only while

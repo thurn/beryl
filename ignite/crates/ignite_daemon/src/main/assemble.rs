@@ -52,6 +52,9 @@ pub struct Base {
     pub options: DaemonOptions,
     pub config: Config,
     pub manifest: Manifest,
+    /// The manifests the daemon's build manager, trees and idle work read, which the tip loop
+    /// replaces when those in the main checkout change (see `crate::manifests`).
+    pub live: crate::manifests::LiveManifest,
     pub declared: Machine,
     pub os: Os,
     pub machine: MachineId,
@@ -101,6 +104,7 @@ impl Base {
             trees_dir: repo.join(&config.repository.trees),
             options,
             config,
+            live: manifest.clone().into(),
             manifest,
             declared,
             os,
@@ -178,7 +182,7 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
     let builds = Arc::new(
         BuildManager::new(
             BuildSettings {
-                manifest: base.manifest.clone(),
+                manifest: base.live.clone(),
                 records: base.home("records"),
                 cores: base.limits.max_per_command(),
                 class: Class::Agent,
@@ -295,7 +299,7 @@ pub fn checking_with(
     });
     let idle = Arc::new(Idle::new(
         IdleSettings {
-            manifest: base.manifest.clone(),
+            manifest: base.live.clone(),
             os: base.os,
             families: base.families(),
             state: base.home("idle.json"),

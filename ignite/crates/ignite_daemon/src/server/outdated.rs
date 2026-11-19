@@ -44,8 +44,7 @@ use ignite_core::traits::Git;
 use super::process::Shared;
 use super::{Server, Verb};
 use crate::host::Host;
-use crate::update::SOURCE;
-use crate::update::scope::landing_changes;
+use crate::update::scope::{Source, landing_changes};
 
 /// The verbs whose verb process a restarted daemon stops and runs again under its own build.
 pub const RESTARTED_UNDER_NEW_BUILD: &[&str] = &["land"];
@@ -175,7 +174,9 @@ fn landing_code_changed(git: Option<&dyn Git>, old: &str, own: &str) -> bool {
     if !git.is_ancestor(&old, &own).unwrap_or(false) {
         return true;
     }
-    landing_changes(git, SOURCE, &old, &own).map_or(true, |changes| !changes.is_empty())
+    // The landing code is the `land` module, which never lies in the check manifests' directory,
+    // so this needs no directory to leave out.
+    landing_changes(git, Source::ignite(""), &old, &own).map_or(true, |changes| !changes.is_empty())
 }
 
 /// The first seven characters of a commit, as `ignite status` shows it.

@@ -45,7 +45,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, RecordId, TreeId};
-use ignite_core::manifest::{Kind, Manifest, Platforms};
+use ignite_core::manifest::{Kind, Platforms};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::{Class, Outcome};
 use ignite_core::time::Timestamp;
@@ -189,7 +189,9 @@ impl IdleHost for LiveHost {
 /// What the idle work is configured with.
 #[derive(Clone, Debug)]
 pub struct IdleSettings {
-    pub manifest: Manifest,
+    /// The manifests, whose exploration families idle work chooses from. The daemon reads them
+    /// again when the main checkout moves (see `crate::manifests`).
+    pub manifest: crate::manifests::LiveManifest,
     /// This machine's operating system, which decides the families it can run.
     pub os: Os,
     /// The families this machine runs, or `None` for all.
@@ -263,6 +265,7 @@ impl Idle {
     pub fn exploration_families(&self) -> Vec<String> {
         self.settings
             .manifest
+            .get()
             .families
             .iter()
             .filter(|(_, declared)| {

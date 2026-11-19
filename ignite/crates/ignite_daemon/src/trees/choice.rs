@@ -6,9 +6,47 @@
 //! builds it from nothing: a ticket on the second Cargo workspace was given the tree nearest the
 //! tip, which had never built that workspace, and its first build compiled 77 crates for ten
 //! minutes while six other free trees held a build of it.
+//!
+//! What a tree keeps and prebuilds comes from the manifests' products, and changes when the daemon
+//! reads changed manifests ([`TreeConfig::reload`]).
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
+
+use ignite_core::manifest::{InputPattern, Manifest};
+
+use super::TreeConfig;
+
+impl TreeConfig {
+    /// What a reset keeps and which products are prebuilt, from the products of `manifest`.
+    pub(super) fn products(manifest: &Manifest) -> (Vec<String>, Vec<String>) {
+        let keep: BTreeSet<String> = manifest
+            .products
+            .values()
+            .flat_map(|product| product.outputs.iter())
+            .map(|dir| dir.trim_matches('/').to_owned())
+            .collect();
+        let prebuild = manifest
+            .products
+            .iter()
+            .filter(|(_, product)| {
+                product.inputs.iter().any(|input| {
+                    matches!(input, InputPattern::Crate(_) | InputPattern::CrateClosure)
+                })
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        (keep.into_iter().collect(), prebuild)
+    }
+
+    /// Takes what a reset keeps and which products are prebuilt from `manifest`, for every clone.
+    pub fn reload(&self, manifest: &Manifest) {
+        let (keep, prebuild) = Self::products(manifest);
+        self.keep.set(keep);
+        self.prebuild.set(prebuild);
+    }
+}
 
 /// The directories of `keep` that `files` lie beside: those whose parent directory holds one of
 /// the files and which no file lies inside. A directory at the root of the checkout is beside

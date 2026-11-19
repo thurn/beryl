@@ -110,7 +110,7 @@ impl Trees {
         if unfinished.fresh && !path.join(".git").exists() {
             worktree::add(&config.repo, &path, &park, tip)?;
         } else {
-            worktree::reset(&path, &park, tip, &config.keep)?;
+            worktree::reset(&path, &park, tip, &config.keep.get())?;
         }
         let freed = store::transition(
             &self.lock().db,

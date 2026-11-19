@@ -10,6 +10,11 @@
 //! - test code: a file named `tests.rs` or `<name>_tests.rs`, or one under a `tests` directory.
 //!   Every such file is compiled only into tests.
 //! - Markdown, which nothing compiles.
+//! - the repository's check manifests (`repository.checks` in `ignite.toml`), when that directory
+//!   lies under Ignite's source. No executable compiles them: each verb process, including a tip
+//!   round's, reads them from the main checkout when it starts, and the daemon reads them again
+//!   whenever it fast-forwards the main checkout (see `crate::manifests`). A change to them
+//!   is not a change to Ignite's source at all ([`ignite_change`]), so it builds no release.
 //! - the files in [`CLIENT_ONLY`]: text compiled into the executable that only the client reads,
 //!   such as the guide topics `ignite guide` prints.
 //!
@@ -49,11 +54,59 @@ fn client_only(inside: &str) -> bool {
     })
 }
 
-/// Whether `path`, relative to the repository, is part of the code the daemon runs when Ignite's
-/// source lives in `source`.
-pub fn affects_daemon(source: &str, path: &str) -> bool {
-    let prefix = format!("{}/", source.trim_end_matches('/'));
-    let Some(inside) = path.strip_prefix(&prefix) else {
+/// Where Ignite's source and the repository's check manifests live, as directories relative to
+/// the repository.
+#[derive(Clone, Copy, Debug)]
+pub struct Source<'a> {
+    /// Ignite's source directory, `crate::update::SOURCE`.
+    pub source: &'a str,
+    /// The check manifests' directory, `repository.checks` in `ignite.toml`. It may lie inside
+    /// `source`, and then its files are still not Ignite's source.
+    pub checks: &'a str,
+}
+
+impl<'a> Source<'a> {
+    /// Ignite's source directory, [`crate::update::SOURCE`], with the manifests in `checks`.
+    pub fn ignite(checks: &'a str) -> Source<'a> {
+        Source {
+            source: crate::update::SOURCE,
+            checks,
+        }
+    }
+}
+
+/// The check manifests' directory from `config`, with `/` between its parts, as the paths Git
+/// reports have.
+pub fn checks_dir(config: &ignite_core::config::Config) -> String {
+    config
+        .repository
+        .checks
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+/// `path` relative to `dir`, when `path` lies under the directory `dir`.
+fn inside<'p>(dir: &str, path: &'p str) -> Option<&'p str> {
+    let dir = dir.trim_end_matches('/');
+    if dir.is_empty() {
+        return None;
+    }
+    path.strip_prefix(dir)?.strip_prefix('/')
+}
+
+/// Whether `path`, relative to the repository, is part of Ignite's source: under the source
+/// directory and not under the check manifests' directory. A landing that changes such a file
+/// judges the release (see `crate::land::release`).
+pub fn ignite_change(at: Source<'_>, path: &str) -> bool {
+    inside(at.source, path).is_some() && inside(at.checks, path).is_none()
+}
+
+/// Whether `path`, relative to the repository, is part of the code the daemon runs.
+pub fn affects_daemon(at: Source<'_>, path: &str) -> bool {
+    if !ignite_change(at, path) {
+        return false;
+    }
+    let Some(inside) = inside(at.source, path) else {
         return false;
     };
     if inside.starts_with(CLIENT_CRATE) || client_only(inside) {
@@ -73,14 +126,14 @@ pub fn affects_daemon(source: &str, path: &str) -> bool {
 /// Empty when a daemon built from `from` would run the same code as one built from `to`.
 pub fn daemon_changes(
     git: &dyn Git,
-    source: &str,
+    at: Source<'_>,
     from: &Commit,
     to: &Commit,
 ) -> Result<Vec<String>> {
     let mut changed: Vec<String> = git
         .changed(from, to)?
         .into_iter()
-        .filter(|path| affects_daemon(source, path))
+        .filter(|path| affects_daemon(at, path))
         .collect();
     changed.sort();
     Ok(changed)
@@ -93,16 +146,13 @@ const LANDING_CODE: &[&str] = &[
     "crates/ignite_daemon/src/land/",
 ];
 
-/// Whether `path`, relative to the repository, is part of the code a landing runs when Ignite's
-/// source lives in `source`. A landing whose verb process runs an older build than the daemon
+/// Whether `path`, relative to the repository, is part of the code a landing runs. A landing whose verb process runs an older build than the daemon
 /// goes on under that build unless the release changed such a file (see `server/outdated.rs`),
 /// and only such a release waits for the landings that run before it restarts the daemon (see
 /// `main/selfupdate.rs`).
-pub fn affects_landing(source: &str, path: &str) -> bool {
-    let prefix = format!("{}/", source.trim_end_matches('/'));
-    affects_daemon(source, path)
-        && path
-            .strip_prefix(&prefix)
+pub fn affects_landing(at: Source<'_>, path: &str) -> bool {
+    affects_daemon(at, path)
+        && inside(at.source, path)
             .is_some_and(|inside| LANDING_CODE.iter().any(|code| inside.starts_with(code)))
 }
 
@@ -110,13 +160,13 @@ pub fn affects_landing(source: &str, path: &str) -> bool {
 /// Empty when a landing started under `from` would run the same landing code under `to`.
 pub fn landing_changes(
     git: &dyn Git,
-    source: &str,
+    at: Source<'_>,
     from: &Commit,
     to: &Commit,
 ) -> Result<Vec<String>> {
-    Ok(daemon_changes(git, source, from, to)?
+    Ok(daemon_changes(git, at, from, to)?
         .into_iter()
-        .filter(|path| affects_landing(source, path))
+        .filter(|path| affects_landing(at, path))
         .collect())
 }
 

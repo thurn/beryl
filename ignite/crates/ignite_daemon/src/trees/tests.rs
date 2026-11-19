@@ -128,8 +128,8 @@ impl Fixture {
             ticket_trees,
             landing_trees,
             disk_limit: None,
-            keep: vec!["out".to_owned()],
-            prebuild: vec!["bin".to_owned()],
+            keep: vec!["out".to_owned()].into(),
+            prebuild: vec!["bin".to_owned()].into(),
         };
         let clock = Arc::new(FakeClock::new(
             Timestamp::parse("2026-11-18T00:00:00.000Z").unwrap(),

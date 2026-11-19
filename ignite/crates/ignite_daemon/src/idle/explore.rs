@@ -61,13 +61,13 @@ impl Idle {
     /// Runs one batch of `family`'s new checks. False if no landing tree was free, so nothing
     /// ran.
     pub(super) fn explore(&self, ctx: &Context, family: &str) -> Result<bool> {
-        let declared = self
-            .settings
-            .manifest
+        let manifest = self.settings.manifest.get();
+        let declared = manifest
             .families
             .get(family)
-            .ok_or_else(|| Error::NotFound(format!("family {family}")))?;
-        let declared = declared.family.clone();
+            .ok_or_else(|| Error::NotFound(format!("family {family}")))?
+            .family
+            .clone();
         if declared.adapter != Adapter::Jsonl {
             return Err(Error::Invalid(format!(
                 "the exploration family {family} must use the jsonl adapter"

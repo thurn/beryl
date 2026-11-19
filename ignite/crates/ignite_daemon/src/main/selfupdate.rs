@@ -89,7 +89,7 @@ use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 use crate::deploy::{Checked, DeployState, LocalRelease, Work};
 use crate::main::restart_window::{Decision, RestartWindow};
 use crate::server::{DRAIN_WAIT, Drain};
-use crate::update::scope::{affects_landing, daemon_changes, summary};
+use crate::update::scope::{Source, affects_landing, daemon_changes, summary};
 use crate::update::selftest::Selftest;
 use crate::update::{
     Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, record_adopted_from,
@@ -154,6 +154,9 @@ pub struct SelfUpdate {
     pub store: ExecutableStore,
     /// The branch releases come from: the repository's release branch, `master` by default.
     pub master: String,
+    /// The check manifests' directory (`repository.checks`), whose files are not the daemon's
+    /// code even where they lie under Ignite's source.
+    pub checks: String,
     pub restart: Box<dyn Restart + Send + Sync>,
     /// A stored build of a newer `master`, which the next heartbeat restarts into.
     pub ready: Mutex<Option<PathBuf>>,
@@ -523,10 +526,11 @@ impl SelfUpdate {
         // A landing goes on under the build that started it unless the release changes the
         // landing code, when the new daemon stops it and runs it again (see
         // `server/outdated.rs`): only then is a running landing worth waiting for.
+        let at = Source::ignite(&self.checks);
         let landing = busy.landing
             && changes
                 .as_ref()
-                .is_none_or(|changes| changes.iter().any(|path| affects_landing(SOURCE, path)));
+                .is_none_or(|changes| changes.iter().any(|path| affects_landing(at, path)));
         let Some(waited) = self.hold(landing, target.as_ref()) else {
             return;
         };
@@ -569,7 +573,7 @@ impl SelfUpdate {
         if !self.git.is_ancestor(own, target).unwrap_or(false) {
             return None;
         }
-        match daemon_changes(self.git.as_ref(), SOURCE, own, target) {
+        match daemon_changes(self.git.as_ref(), Source::ignite(&self.checks), own, target) {
             Ok(changes) => Some(changes),
             Err(error) => {
                 eprintln!("ignite: cannot compare {own} with release {target}: {error}");

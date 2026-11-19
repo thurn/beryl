@@ -72,7 +72,7 @@ impl Trees {
                 at: tip.clone(),
             }));
         }
-        if let Err(error) = worktree::reset(&path, &branch, tip, &self.inner.config.keep) {
+        if let Err(error) = worktree::reset(&path, &branch, tip, &self.inner.config.keep.get()) {
             let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
             return Err(error);
         }

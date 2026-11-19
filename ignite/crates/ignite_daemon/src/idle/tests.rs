@@ -328,7 +328,7 @@ impl Fixture {
             Manifest::from_files(&[(PathBuf::from("checks/seeds.toml"), EXPLORE.to_owned())])
                 .unwrap();
         let settings = IdleSettings {
-            manifest,
+            manifest: manifest.into(),
             os,
             families: None,
             state: self.dir.join("state/idle.json"),

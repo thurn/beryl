@@ -71,7 +71,7 @@ impl Trees {
         let config = &self.inner.config;
         Space::measure(config.configured().into_iter().map(|(id, _)| {
             let path = config.path(&id);
-            let dirs = config.keep.iter().map(|dir| path.join(dir)).collect();
+            let dirs = config.keep.get().iter().map(|dir| path.join(dir)).collect();
             (id, dirs)
         }))
     }
@@ -111,7 +111,7 @@ impl Trees {
                 continue;
             };
             let path = self.inner.config.path(&id_of(&row)?);
-            for dir in &self.inner.config.keep {
+            for dir in self.inner.config.keep.get().iter() {
                 report.superseded.extend(sweep_superseded(&path.join(dir)));
             }
             self.put_back(&row)?;
@@ -145,7 +145,7 @@ impl Trees {
                 // otherwise leave the record of builds whose files are half deleted.
                 self.inner.builds.forget(&id);
                 let path = self.inner.config.path(&id);
-                for dir in &self.inner.config.keep {
+                for dir in self.inner.config.keep.get().iter() {
                     remove(&path.join(dir));
                 }
                 row.built_commit = None;

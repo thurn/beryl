@@ -548,11 +548,11 @@ How the executable is installed and kept current:
   executable in a tree of its own and points `bin/current` at it, so clients and
   the hub run it. The daemon restarts into it only when the release changes the
   code the daemon runs: anything under `ignite/` except the `ignite_cli` crate,
-  test files (`tests.rs`, `*_tests.rs`, files under a `tests` directory) and
-  Markdown. A release that changes none of that, such as a fix to the client
-  alone, is taken on without a restart: the daemon reports it as its version
-  from then on and compares later releases with it. A restart that is due waits
-  for a quiet window: until no newer release has appeared for
+  test files (`tests.rs`, `*_tests.rs`, files under a `tests` directory),
+  Markdown and the check manifests. A release that changes none of that, such as
+  a fix to the client alone, is taken on without a restart: the daemon reports
+  it as its version from then on and compares later releases with it. A restart
+  that is due waits for a quiet window: until no newer release has appeared for
   `self_update.quiet_seconds` (15), no newer release is still building and, when
   the release changes the landing code (the daemon's `land` module), no landing
   runs, but at most `self_update.cap_seconds` (600) from the first release it
@@ -604,6 +604,15 @@ How the executable is installed and kept current:
   [Express landings](#express-landings)). A fix to Ignite therefore reaches
   every machine minutes after it lands, without waiting for tip verification of
   everything else, which an Ignite bug can itself be blocking.
+- The check manifests (`repository.checks`, `ignite/checks/`) are not Ignite's
+  source, although they lie under `ignite/`: no executable compiles them. A
+  landing that changes only them judges no release, so the release branch stays
+  where it is and no daemon builds or restarts. Each verb process, including a
+  landing's gate and a tip round, reads the manifests from the main checkout
+  when it starts. The daemon itself reads the build products and the exploration
+  families from them, and reads them again each time its tip loop fast-forwards
+  the main checkout. Before 2026-11-19 every manifest edit moved the release and
+  restarted every daemon, which ended the verbs running on them.
 - Whether the release moves is decided before the push. The gate's outcomes
   count when it ran every check of the release family; checks of other families
   that it left to tip verification do not matter. Otherwise the landing runs the

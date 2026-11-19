@@ -122,6 +122,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         builder: Arc::new(FakeBuilder { out: dir.clone() }),
         store: ExecutableStore::new(dir.join("bin")),
         master: "master".to_owned(),
+        checks: "ignite/checks".to_owned(),
         restart: Box::new(restart.clone()),
         ready: Mutex::new(None),
         rounds: AtomicU32::new(0),

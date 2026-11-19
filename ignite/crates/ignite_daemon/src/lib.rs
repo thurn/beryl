@@ -28,6 +28,7 @@ pub mod land;
 pub mod loop_health;
 pub mod machine_lock;
 pub mod main;
+pub mod manifests;
 pub mod metrics;
 pub mod mirror;
 pub mod monitor;

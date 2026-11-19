@@ -59,7 +59,7 @@ pub use room::{DiskRoom, NativeRoom, START_GB};
 use ignite_core::hash::{HashParts, input_hash};
 use ignite_core::ids::{InputHash, TreeId};
 use ignite_core::inputs::{self, CrateGraph};
-use ignite_core::manifest::{InputPattern, Manifest, Product};
+use ignite_core::manifest::{InputPattern, Product};
 use ignite_core::protocol::hub::CompileUnit;
 use ignite_core::protocol::{Class, Usage};
 use ignite_core::traits::{
@@ -149,7 +149,9 @@ impl TreeFacts for DirectoryTrees {
 
 /// How the manager runs builds.
 pub struct BuildSettings {
-    pub manifest: Manifest,
+    /// The manifests, whose products the manager builds. The daemon reads them again when the
+    /// main checkout moves (see `crate::manifests`).
+    pub manifest: crate::manifests::LiveManifest,
     /// Where build output notes and compile unit files are written.
     pub records: PathBuf,
     /// The cores each build asks the scheduler for.
@@ -275,6 +277,7 @@ impl BuildManager {
         let product = self
             .settings
             .manifest
+            .get()
             .products
             .get(name)
             .ok_or_else(|| Error::NotFound(format!("no product named {name:?} is declared")))?
@@ -651,6 +654,7 @@ impl Builds for BuildManager {
         }
         self.settings
             .manifest
+            .get()
             .products
             .get(product)
             .is_some_and(|declared| !declared.outputs.is_empty())
@@ -662,10 +666,9 @@ impl BuildManager {
     /// Whether `product` is declared and every directory it writes is in `tree` and not empty.
     /// A product that writes no directory has them all.
     fn outputs_present(&self, tree: &TreeId, product: &str) -> bool {
-        let (Some(declared), Some(root)) = (
-            self.settings.manifest.products.get(product),
-            self.trees.path(tree),
-        ) else {
+        let manifest = self.settings.manifest.get();
+        let (Some(declared), Some(root)) = (manifest.products.get(product), self.trees.path(tree))
+        else {
             return false;
         };
         declared.outputs.iter().all(|output| {

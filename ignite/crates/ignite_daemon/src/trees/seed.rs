@@ -175,7 +175,7 @@ impl Trees {
     pub(super) fn start_builds(&self, tree: &TreeId, request: &LeaseRequest) {
         let seeding = cfg!(target_os = "macos")
             .then(|| Seeding::start(self.inner.config.path(tree), tree.clone()));
-        if seeding.is_none() && self.inner.config.prebuild.is_empty() {
+        if seeding.is_none() && self.inner.config.prebuild.get().is_empty() {
             return;
         }
         let trees = self.clone();
@@ -198,7 +198,7 @@ impl Trees {
                     }
                 }
             }
-            if !trees.inner.config.prebuild.is_empty() {
+            if !trees.inner.config.prebuild.get().is_empty() {
                 trees.build(&tree, &at);
             }
         });
@@ -283,7 +283,7 @@ impl Trees {
     /// The directories the products write under `root` that are Cargo target directories,
     /// outermost only (a target directory inside another is copied with it).
     fn cargo_dirs(&self, root: &Path) -> Vec<String> {
-        let keep = &self.inner.config.keep;
+        let keep = self.inner.config.keep.get();
         keep.iter()
             .filter(|dir| {
                 !keep

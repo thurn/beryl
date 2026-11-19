@@ -168,3 +168,29 @@ fn the_ticket_tree_is_released_before_the_release_branch_is_pushed() {
         reply.text
     );
 }
+
+/// A landing that changes only check manifests, whose directory lies under Ignite's source,
+/// judges no release: no executable compiles them, so the release stays where it is and no
+/// daemon builds or restarts into a new one.
+#[test]
+fn a_landing_that_changes_only_check_manifests_moves_no_release() {
+    let mut world = release_world(
+        vec![("rel:smoke", vec!["ignite/checks/rest.toml"])],
+        Vec::new(),
+        Vec::new(),
+    );
+    world.ctx.config.repository.checks = "ignite/checks".into();
+    world.hold(
+        "tree-01",
+        "t.1",
+        "local_a",
+        &[("ignite/checks/rest.toml", "new")],
+    );
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(world.gate.family_runs.lock().unwrap().is_empty());
+    assert!(released(&world).is_empty(), "{}", reply.text);
+    assert!(!reply.text.contains("release  "), "{}", reply.text);
+}

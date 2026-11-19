@@ -49,7 +49,7 @@ impl Trees {
             .stop_work(tree)
             .and_then(|()| Self::end_processes(&path, caller));
         let reset = reset.and_then(|ended| {
-            worktree::reset(&path, &park_branch(tree), park_at, &config.keep)?;
+            worktree::reset(&path, &park_branch(tree), park_at, &config.keep.get())?;
             Ok(ended)
         });
         let ended = match reset {

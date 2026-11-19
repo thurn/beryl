@@ -27,6 +27,7 @@ use crate::idle::{Idle, ServerJobs};
 use crate::land::Landing;
 use crate::land::env::MachineTrees;
 use crate::loop_health::{LoopHealth, LoopTicker};
+use crate::manifests::Reload;
 use crate::sched::Scheduler;
 use crate::server::{Context, Server};
 use crate::supervise::SupervisedLauncher;
@@ -72,6 +73,8 @@ pub struct Parts {
     pub ctx: Context,
     pub client: Arc<HubClient>,
     pub trees: Trees,
+    /// Reads the main checkout's manifests again after the tip loop fast-forwards it.
+    pub manifests: Arc<Reload>,
     pub checks: Arc<Checks>,
     pub landing: Arc<Landing>,
     pub idle: Arc<Idle>,
@@ -216,11 +219,13 @@ impl Parts {
 
     /// Verifies each new tip of the integration branch, each round in a verb process of its own
     /// that outlives a restart of the daemon (see [`TipLoop`]), then keeps the main checkout's
-    /// branches fast-forwarded. A round that moved `master` has the new release built.
+    /// branches fast-forwarded and reads its check manifests again (see `crate::manifests`). A
+    /// round that moved `master` has the new release built.
     fn spawn_tip(&self, server: Arc<Server>) {
         let mut tips = TipLoop::new(server, Arc::new(self.round_verb()));
         let (ctx, trees, wait_s) = (self.ctx.clone(), self.trees.clone(), self.feed_wait_s);
         let update = self.update.clone();
+        let manifests = self.manifests.clone();
         self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
                 let round = ticker.round(|| match tips.turn(&ctx, wait_s) {
@@ -241,6 +246,11 @@ impl Parts {
                 }
                 if let Err(error) = trees.fast_forward_main() {
                     eprintln!("ignite: main checkout not fast-forwarded: {error}");
+                }
+                match manifests.run() {
+                    Ok(true) => eprintln!("ignite: read the changed check manifests"),
+                    Ok(false) => {}
+                    Err(error) => eprintln!("ignite: check manifests not read again: {error}"),
                 }
             }
         });

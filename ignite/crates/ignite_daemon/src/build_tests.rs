@@ -247,7 +247,7 @@ fn manager_in(dir: PathBuf, git: Arc<FakeGit>, gated: bool) -> Fixture {
     });
     let launcher = Arc::new(TestLauncher::new(dir.clone(), gated));
     let settings = BuildSettings {
-        manifest,
+        manifest: manifest.into(),
         records: dir.join("records"),
         cores: 8,
         class: Class::Agent,
