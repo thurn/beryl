@@ -149,3 +149,45 @@ fn an_open_regression_runs_before_master_whatever_the_budget() {
     );
     assert_eq!(world.master(), commit("aaaa000"));
 }
+
+/// Once `master` has moved, a newer `staging` tip ends the checks past the budget at the next
+/// batch, even while their family is under way. The tip loop waits for the round, so a round
+/// that ran every check past the budget kept every newer tip from being verified for hours.
+#[test]
+fn a_newer_tip_ends_the_checks_past_the_budget_at_the_next_batch() {
+    let world = World::new();
+    let mut ctx = world.ctx("m-1");
+    ctx.config.tip.seconds = 150.0 / DEFAULT_TIP_RATE;
+    *world.work.scoring.lock().unwrap() = Some(Scoring {
+        areas: vec!["src".to_owned()],
+        checks: vec![scored("a", 9), scored("b", 0)],
+    });
+    world.work.add_landing("tk.33", &["bbbb000"], &["src/b"]);
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    world
+        .work
+        .set_checks(&tip, vec![check("a", 'a'), check("b", 'b')]);
+    // A landing arrives once `master` has moved, while the family past the budget is being
+    // built and listed, before its first batch is claimed.
+    let git = world.git.clone();
+    let moved = tip.clone();
+    world.work.before_batches.lock().unwrap().insert(
+        "unit".to_owned(),
+        Arc::new(move || {
+            if git.tip("master").unwrap() == moved {
+                git.set_tip("staging", commit("cccc000"));
+            }
+        }),
+    );
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert_eq!(outcome, TipOutcome::Verified);
+    assert_eq!(world.master(), tip);
+    // Only the check within the budget ran; the one past it is left to the newer tip.
+    assert_eq!(
+        ran_with_master(&world),
+        [(vec!["unit:a".to_owned()], commit("aaaa000"))]
+    );
+}

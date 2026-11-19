@@ -489,7 +489,7 @@ impl TipVerifier {
         // The tip budget: the best-scored checks run before `master` moves, the rest after.
         let split = self.split(ctx, last, tip, &to_run, &recheck);
         tally.budget.clone_from(&split.budget);
-        let (superseded, runs) = self.run_families(ctx, tip, &split.within)?;
+        let (superseded, runs) = self.run_families(ctx, tip, &split.within, false)?;
         if let Some(by) = superseded {
             return Ok(TipOutcome::Superseded { by });
         }

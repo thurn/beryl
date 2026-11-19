@@ -12,7 +12,9 @@
 //! - When the checks within the budget, the forced ones and every check already answered pass,
 //!   `master` moves. The checks past the budget then run in the same round, in the `tip` class
 //!   on whatever cores are free. A failure among them is reported as a regression, which files
-//!   its ticket; `master` has already moved and stays.
+//!   its ticket; `master` has already moved and stays. A newer `staging` tip ends them at the
+//!   next family or batch, even with batches under way, since the tip loop starts no round
+//!   until this one ends.
 //! - Checks only another platform's machines can run, and families that cannot be listed,
 //!   still hold `master` as before: this machine cannot run them after the move, and the next
 //!   round would find `master` at the tip and run nothing.
@@ -86,8 +88,10 @@ impl TipVerifier {
     }
 
     /// Runs the checks past the budget once `master` has moved, and reports a failure among
-    /// them as a regression. A newer tip that arrives before any of their batches runs ends
-    /// this; they are in the next tip's set, since nothing stored a result for them.
+    /// them as a regression. A newer `staging` tip ends this at the next family or batch, even
+    /// with batches under way, so that the tip loop moves on to the round that can move
+    /// `master` again; the checks not yet run are in the next tip's set, since nothing stored
+    /// a result for them.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn run_after(
         &mut self,
@@ -107,7 +111,7 @@ impl TipVerifier {
             "ignite: master is at {tip}; running the {} checks past the tip budget",
             split.after.len()
         );
-        let (superseded, runs) = self.run_families(ctx, tip, &split.after)?;
+        let (superseded, runs) = self.run_families(ctx, tip, &split.after, true)?;
         tally.ran = tally
             .ran
             .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));

@@ -47,6 +47,11 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 struct Round<'a> {
     ctx: &'a Context,
     tip: &'a Commit,
+    /// Whether `master` is already at `tip`, so that the round runs only checks past the tip
+    /// budget. Such a round yields to a newer `staging` tip before any family or batch, even
+    /// with work under way: the next round is what moves `master` now, and the checks left
+    /// over are in the next tip's set.
+    after_master: bool,
     queue: Mutex<VecDeque<FamilyBatches>>,
     /// How many families have been started.
     started: Mutex<usize>,
@@ -74,28 +79,38 @@ impl Round<'_> {
         }
         let next = queue.pop_front()?;
         let mut started = lock(&self.started);
-        if *started > 0
+        let idle = *started > 0
             && !self.ran_a_batch.load(Ordering::SeqCst)
-            && self.in_flight.load(Ordering::SeqCst) == 0
-        {
-            match self.ctx.git.tip(&self.ctx.config.repository.staging) {
-                Ok(newest) if newest == *self.tip => {}
-                other => {
-                    *lock(&self.ended) = Some(other);
-                    return None;
-                }
-            }
+            && self.in_flight.load(Ordering::SeqCst) == 0;
+        if (self.after_master || idle) && self.superseded() {
+            return None;
         }
         *started += 1;
         self.in_flight.fetch_add(1, Ordering::SeqCst);
         Some(next)
     }
 
+    /// Whether `staging` has moved past the round's tip, or cannot be read; either ends the
+    /// round, recorded in `ended`.
+    fn superseded(&self) -> bool {
+        match self.ctx.git.tip(&self.ctx.config.repository.staging) {
+            Ok(newest) if newest == *self.tip => false,
+            other => {
+                *lock(&self.ended) = Some(other);
+                true
+            }
+        }
+    }
+
     /// Claims one batch from the hub. A claim the hub cannot answer is not granted, so the
-    /// batch is left for a later round.
+    /// batch is left for a later round. A round past the tip budget claims nothing more once
+    /// it has ended or `staging` has a newer tip.
     fn claim(&self, family: &str, batch: u32) -> bool {
         // A family asks for its next batch once the last one has finished.
         lock(&self.held).remove(family);
+        if self.after_master && (lock(&self.ended).is_some() || self.superseded()) {
+            return false;
+        }
         let granted = self.ask(family, batch);
         if granted {
             self.ran_a_batch.store(true, Ordering::SeqCst);
@@ -156,16 +171,20 @@ impl TipVerifier {
     /// so far, say), a newer `staging` tip ends the round and is returned instead, so the next
     /// round verifies it. A round that has run a batch, or is building or listing a family,
     /// finishes, so landings that keep arriving cannot keep every tip from being verified.
+    /// With `after_master`, `master` is already at `tip`, and a newer tip ends the round at the
+    /// next family or batch whatever is under way.
     pub(super) fn run_families(
         &self,
         ctx: &Context,
         tip: &Commit,
         to_run: &[&TipCheck],
+        after_master: bool,
     ) -> Result<(Option<Commit>, Vec<TipRun>)> {
         let costs = |family: &str| family_costs(ctx, tip, family);
         let round = Round {
             ctx,
             tip,
+            after_master,
             queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
             started: Mutex::new(0),
             in_flight: AtomicUsize::new(0),

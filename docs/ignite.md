@@ -1952,8 +1952,11 @@ How a daemon verifies a tip:
   which files its ticket; `master` has already moved and stays. From then on the
   check runs before `master` moves on every round, because its regression ticket
   is open and its cached failure is run again, so it holds `master` as any
-  cached failure does, until the fix lands. When a newer tip arrives before any
-  of their batches has run, those checks are in the newer tip's set instead.
+  cached failure does, until the fix lands. A newer tip ends this part of the
+  round before its next family or batch, even with batches under way, and the
+  checks not yet run are in the newer tip's set instead. Otherwise the tip loop,
+  which waits for the round, would verify no newer tip until every check past
+  the budget had run, which can take hours.
 
 - When nothing can be scored (git or the hub cannot be read), every check runs
   before `master` moves.
