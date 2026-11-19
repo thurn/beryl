@@ -227,9 +227,10 @@ impl Handles {
             }
         };
         self.prune(&mut state);
-        state
-            .replies
-            .insert(handle.clone(), Entry::running(verb, tree.cloned(), session.cloned()));
+        state.replies.insert(
+            handle.clone(),
+            Entry::running(verb, tree.cloned(), session.cloned()),
+        );
         self.save(&rows::Handle {
             id: handle.to_string(),
             verb: verb.to_owned(),

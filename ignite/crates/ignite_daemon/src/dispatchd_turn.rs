@@ -56,8 +56,11 @@ struct Ended {
 }
 
 fn parse(args: &[String]) -> Result<Ended> {
-    let usage =
-        || Error::Invalid("usage: ignite turn-ended --session <id> [--again] [--note <text>]".to_owned());
+    let usage = || {
+        Error::Invalid(
+            "usage: ignite turn-ended --session <id> [--again] [--note <text>]".to_owned(),
+        )
+    };
     let mut ended = Ended::default();
     let mut args = args.iter();
     while let Some(arg) = args.next() {

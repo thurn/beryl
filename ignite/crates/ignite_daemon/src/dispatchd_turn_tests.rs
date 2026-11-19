@@ -39,7 +39,13 @@ fn a_worker_that_stops_holding_its_ticket_is_told_once_to_land_or_release() {
 #[test]
 fn a_worker_that_stops_again_has_its_ticket_released_with_its_last_message() {
     let rig = holding(&[]);
-    let args = ["--session", "local_w1", "--again", "--note", "Blocked by T.9's failing check."];
+    let args = [
+        "--session",
+        "local_w1",
+        "--again",
+        "--note",
+        "Blocked by T.9's failing check.",
+    ];
     let reply = ended(&rig, &args);
     assert_eq!(verdict(&reply), "released", "{}", reply.text);
     assert!(reply.text.contains("ignite/T.1"), "{}", reply.text);
