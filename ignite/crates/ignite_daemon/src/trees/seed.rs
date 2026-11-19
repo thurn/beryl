@@ -543,6 +543,9 @@ fn set_modified(path: &Path, time: SystemTime) -> io::Result<()> {
         let permissions = fs::metadata(path)?.permissions();
         if permissions.readonly() {
             let mut writable = permissions.clone();
+            // The lint warns that this makes a Unix file world-writable; this branch runs only
+            // where there is no Unix mode, and the old permissions are restored below.
+            #[allow(clippy::permissions_set_readonly_false)]
             writable.set_readonly(false);
             fs::set_permissions(path, writable)?;
         }
