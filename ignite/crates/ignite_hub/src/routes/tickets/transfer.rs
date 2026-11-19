@@ -1,5 +1,5 @@
 //! `GET /export` and `POST /import`: every ticket with its edges, comments, history and aliases,
-//! 200 at a time, as the ticket service moved them for backups and restores.
+//! 200 at a time or about 4 MiB, whichever is less, as the ticket service moved them for backups and restores.
 //!
 //! Export writes JSON Lines ordered by ID, starting after the `after` parameter, and an empty
 //! body at the end. Given one or more `id` parameters instead, it writes those tickets (each that
@@ -26,6 +26,12 @@ use crate::routes::Response;
 /// The most tickets one page carries, either way.
 const PAGE: usize = 200;
 
+/// The most bytes of tickets one export response holds, after which the page ends early. The
+/// ticket mirror's HTTP client refuses a body over 10 MiB, and 200 tickets with long histories
+/// can exceed that, so a page stops once it has reached this size. A page always holds at least
+/// one ticket, and a client continues after the last ticket it received.
+const PAGE_BYTES: usize = 4 * 1024 * 1024;
+
 /// Columns that hold JSON text.
 const JSON_COLUMNS: &[&str] = &["labels", "metadata", "landed", "saving"];
 
@@ -41,47 +47,47 @@ pub(super) fn export(
             &format!("At most {PAGE} tickets can be exported at once"),
         ));
     }
-    let page = if ids.is_empty() {
-        whole_tickets(conn, after.unwrap_or_default())
+    let body = if ids.is_empty() {
+        let found = page_ids(conn, after.unwrap_or_default());
+        found.and_then(|found| written(conn, &found, PAGE_BYTES))
     } else {
-        named_tickets(conn, ids)
+        written(conn, ids, PAGE_BYTES)
     }
     .map_err(|e| store_failure(&e))?;
-    let mut body = String::new();
-    for ticket in page {
-        body.push_str(&json!(ticket).to_string());
-        body.push('\n');
-    }
     Ok(Response {
         status: 200,
         content_type: "application/x-ndjson",
-        body: body.into_bytes(),
+        body,
         headers: Vec::new(),
     })
 }
 
-fn whole_tickets(conn: &Connection, after: &str) -> Result<Vec<WholeTicket>> {
+/// The IDs of the next page of tickets after `after`.
+fn page_ids(conn: &Connection, after: &str) -> Result<Vec<String>> {
     let mut statement =
         conn.prepare("SELECT id FROM tickets WHERE id > ?1 ORDER BY id LIMIT ?2")?;
-    let ids: Vec<String> = statement
+    let ids = statement
         .query_map(params![after, PAGE as i64], |row| row.get(0))?
         .collect::<rusqlite::Result<_>>()?;
-    let mut page = Vec::with_capacity(ids.len());
-    for id in ids {
-        let whole = whole_ticket(conn, &id)?
-            .ok_or_else(|| StoreError::Invalid(format!("ticket {id} vanished")))?;
-        page.push(whole);
-    }
-    Ok(page)
+    Ok(ids)
 }
 
-/// Each ticket of `ids` that exists, in the order given.
-fn named_tickets(conn: &Connection, ids: &[&str]) -> Result<Vec<WholeTicket>> {
-    let mut page = Vec::with_capacity(ids.len());
+/// Each ticket of `ids` that exists, in the order given, one JSON line each. Writing stops after
+/// the line that brings the body to `budget` bytes, so the page is cut short; the tickets left
+/// out are those after the last one written.
+fn written<S: AsRef<str>>(conn: &Connection, ids: &[S], budget: usize) -> Result<Vec<u8>> {
+    let mut body = String::new();
     for id in ids {
-        page.extend(whole_ticket(conn, id)?);
+        let Some(whole) = whole_ticket(conn, id.as_ref())? else {
+            continue;
+        };
+        body.push_str(&json!(whole).to_string());
+        body.push('\n');
+        if body.len() >= budget {
+            break;
+        }
     }
-    Ok(page)
+    Ok(body.into_bytes())
 }
 
 fn whole_ticket(conn: &Connection, id: &str) -> Result<Option<WholeTicket>> {

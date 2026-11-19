@@ -143,8 +143,19 @@ impl Mirror {
         }
         let ids: Vec<TicketId> = changed.keys().cloned().collect();
         let mut fetched = Vec::new();
+        // The hub cuts a response short once it is large, so ask again for the tickets after
+        // the last one received. Tickets that no longer exist are skipped, so an empty reply
+        // means none of the rest exist.
         for chunk in ids.chunks(PAGE) {
-            fetched.extend(hub.export(None, chunk)?);
+            let mut rest = chunk;
+            while !rest.is_empty() {
+                let page = hub.export(None, rest)?;
+                let Some(last) = page.last() else { break };
+                let position = rest.iter().position(|id| *id == last.ticket.id);
+                fetched.extend(page);
+                let Some(position) = position else { break };
+                rest = &rest[position + 1..];
+            }
         }
         let now = self.now();
         // A reply holds at most a set number of changes; the position is that of the last one

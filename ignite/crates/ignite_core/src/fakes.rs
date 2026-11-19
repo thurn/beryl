@@ -135,6 +135,9 @@ pub struct FakeHub {
     tickets: Mutex<BTreeMap<TicketId, TicketDetail>>,
     /// Whole tickets, for `export` and `import` (see `whole`).
     whole: Mutex<BTreeMap<TicketId, WholeTicket>>,
+    /// The most tickets one export reply holds, as the real hub cuts a large page short; 0 for
+    /// no cap beyond the page size.
+    export_cap: Mutex<usize>,
     imports: Mutex<Vec<ImportRequest>>,
     batches: Mutex<Vec<BatchRequest>>,
     pauses: Mutex<Vec<Pause>>,

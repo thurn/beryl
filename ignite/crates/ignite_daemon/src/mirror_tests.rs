@@ -119,6 +119,30 @@ fn the_first_copy_pages_through_every_ticket_then_follows_the_feed() {
 }
 
 #[test]
+fn a_page_the_hub_cuts_short_is_continued_for_copies_and_feed_changes() {
+    let mut rig = Rig::new();
+    rig.hub.cap_export(2);
+    for n in 1..=5 {
+        rig.hub.put_whole(whole(&format!("T.{n}"), "A"));
+    }
+    rig.copy();
+    for n in 1..=5 {
+        assert_eq!(rig.titles(&format!("T.{n}")), ["A"], "T.{n} after the copy");
+    }
+    for n in 1..=5 {
+        rig.hub.put_whole(whole(&format!("T.{n}"), "B"));
+    }
+    rig.round();
+    for n in 1..=5 {
+        assert_eq!(
+            rig.titles(&format!("T.{n}")),
+            ["A", "B"],
+            "T.{n} from the feed"
+        );
+    }
+}
+
+#[test]
 fn a_change_made_during_the_first_copy_is_read_from_the_feed_afterwards() {
     let mut rig = Rig::new();
     rig.hub.put_whole(whole("T.1", "A"));

@@ -477,6 +477,36 @@ fn an_export_imports_into_an_empty_hub_once() {
 }
 
 #[test]
+fn an_export_page_ends_early_once_it_is_large() {
+    let fixture = Fixture::new("large-export");
+    let hub = fixture.start();
+    let note = "x".repeat(3 * 1024 * 1024);
+    let mut ops = vec![];
+    for n in 0..3 {
+        ops.push(json!({"op": "create", "fields": {"title": format!("Ticket {n}")}}));
+        ops.push(json!({"op": "comment", "id": format!("${}", n * 2), "text": note}));
+    }
+    hub.post("/batch", &json!({ "ops": ops }));
+    let mut seen = vec![];
+    let mut after = String::new();
+    loop {
+        let page = hub.get(&format!("/export?after={after}")).text;
+        assert!(
+            page.len() < 8 * 1024 * 1024,
+            "a page stays under the client's limit"
+        );
+        let Some(last) = page.lines().last() else {
+            break;
+        };
+        let last: Value = serde_json::from_str(last).unwrap();
+        after = last["id"].as_str().unwrap().to_owned();
+        seen.extend(page.lines().map(str::to_owned));
+        assert!(seen.len() <= 3);
+    }
+    assert_eq!(seen.len(), 3, "every ticket arrives across the pages");
+}
+
+#[test]
 fn an_export_names_tickets_and_a_forced_import_rolls_one_back() {
     let fixture = Fixture::new("rollback");
     let hub = fixture.start();

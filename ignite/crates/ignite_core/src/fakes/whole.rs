@@ -25,6 +25,12 @@ impl FakeHub {
         lock(&self.whole).get(id).cloned()
     }
 
+    /// Makes each export reply hold at most `cap` tickets, as the hub's byte limit does for
+    /// large tickets.
+    pub fn cap_export(&self, cap: usize) {
+        *lock(&self.export_cap) = cap;
+    }
+
     /// Every import received so far, in order.
     pub fn imports(&self) -> Vec<ImportRequest> {
         lock(&self.imports).clone()
@@ -46,13 +52,21 @@ impl FakeHub {
             return Err(Error::Invalid(format!("at most {PAGE} tickets at once")));
         }
         let whole = lock(&self.whole);
+        let cap = match *lock(&self.export_cap) {
+            0 => PAGE,
+            cap => cap.min(PAGE),
+        };
         if !ids.is_empty() {
-            return Ok(ids.iter().filter_map(|id| whole.get(id).cloned()).collect());
+            return Ok(ids
+                .iter()
+                .filter_map(|id| whole.get(id).cloned())
+                .take(cap)
+                .collect());
         }
         Ok(whole
             .values()
             .filter(|w| after.is_none_or(|after| w.ticket.id.as_str() > after.as_str()))
-            .take(PAGE)
+            .take(cap)
             .cloned()
             .collect())
     }
