@@ -82,6 +82,10 @@ pub fn decode(shadow: u8) -> Option<(usize, usize)> {
     (chain < CHAINS.len() && stage < shadows(chain).len()).then_some((chain, stage))
 }
 
+/// How many standard deviations a shadow's cell reaches past what casts it: past three, a
+/// Gaussian leaves under a level of 255.
+const REACH_DEVIATIONS: u8 = 3;
+
 /// The side, in physical pixels, of an icon held at `size` points at `scale`, as the glyph
 /// worker rasterizes it.
 #[must_use]
@@ -89,26 +93,28 @@ pub fn icon_pixels(size: u16, scale: f32) -> u16 {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "clamped to a cell's range first"
+        reason = "a cast from a float saturates, and an icon is far narrower than 65,536 pixels"
     )]
-    let pixels = (f32::from(size) * scale).round().clamp(1.0, 1024.0) as u16;
+    let pixels = (f32::from(size) * scale).round().max(1.0) as u16;
     pixels
 }
 
 /// How far, in physical pixels at `scale`, the cell of shadow `stage` of `shadows` reaches past
-/// the icon's square on every side: for it and each shadow before it, three deviations of its
-/// blur (past which a Gaussian leaves under a level of 255) and the longer of its offsets.
+/// the icon's square on every side: for it and each shadow before it, `REACH_DEVIATIONS`
+/// deviations of its blur and the longer of its offsets.
 #[must_use]
 pub fn stage_pad(shadows: &[Shadow], stage: usize, scale: f32) -> u16 {
     let points: f32 = (shadows.iter().take(stage + 1))
-        .map(|shadow| 3.0 * shadow.drop_sigma() + shadow.x.abs().max(shadow.y.abs()))
+        .map(|shadow| {
+            f32::from(REACH_DEVIATIONS) * shadow.drop_sigma() + shadow.x.abs().max(shadow.y.abs())
+        })
         .sum();
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "clamped to a cell's range first"
+        reason = "a cast from a float saturates, and a shadow reaches far less than 65,536 pixels"
     )]
-    let pixels = (points * scale).ceil().clamp(0.0, 512.0) as u16;
+    let pixels = (points * scale).ceil().max(0.0) as u16;
     pixels
 }
 
@@ -122,9 +128,9 @@ pub fn stage_step(shadows: &[Shadow], stage: usize, scale: f32) -> u16 {
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "clamped to a small range first"
+        reason = "a cast from a float saturates, and a deviation is a few pixels"
     )]
-    let step = (sigma * scale / 2.0).floor().clamp(1.0, 64.0) as u16;
+    let step = (sigma * scale / 2.0).floor().max(1.0) as u16;
     step
 }
 
@@ -133,7 +139,7 @@ pub fn stage_step(shadows: &[Shadow], stage: usize, scale: f32) -> u16 {
 /// side, in texels of `stage_step` pixels, rounded up.
 #[must_use]
 pub fn stage_side(size: u16, shadows: &[Shadow], stage: usize, scale: f32) -> u16 {
-    let pixels = icon_pixels(size, scale) + 2 * stage_pad(shadows, stage, scale);
+    let pixels = icon_pixels(size, scale).saturating_add(2 * stage_pad(shadows, stage, scale));
     pixels.div_ceil(stage_step(shadows, stage, scale))
 }
 
