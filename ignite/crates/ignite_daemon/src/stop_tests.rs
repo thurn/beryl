@@ -374,3 +374,45 @@ fn a_justiciar_or_the_operator_stops_a_hung_internal_verb_by_force() {
     // The operator names no session and needs no ticket.
     assert!(StopVerb::may_force(&as_session(None)).is_ok());
 }
+
+/// A session's own verb that agreed to stop and is still running after the stop wait, as a
+/// verb process held in a loop on the CPU, has its verb process ended by a plain `ignite stop`.
+#[test]
+fn a_plain_stop_ends_a_verb_process_that_does_not_stop() {
+    let gate = Arc::new((Mutex::new(false), Condvar::new()));
+    let mut registry = Registry::default();
+    registry.register(Box::new(Hangs(gate.clone())));
+    let steps = Arc::new(steps::Steps::new(Arc::new(ignite_core::time::SystemClock)));
+    let server = Server::with_steps(context(), registry, None, steps.clone()).unwrap();
+    let handle = server
+        .handle(&request("tip-round", &[], "local_a", 0))
+        .handle
+        .unwrap();
+    let activity = steps.by_handle(&handle).unwrap();
+    while activity.view().step.is_none() {
+        std::thread::yield_now();
+    }
+    let ender = Arc::new(FakeEnder(gate.clone(), Mutex::new(0)));
+    let stop = StopVerb::new(server.handles().clone(), steps.clone())
+        .with_wait(Duration::from_millis(20))
+        .ending_processes_with(ender.clone());
+
+    let stopped = stop.run(
+        &as_session(Some("local_a")),
+        &request("stop", &[handle.as_str()], "local_a", 0),
+    );
+    assert_eq!(stopped.exit, Exit::Success, "{}", stopped.text);
+    assert!(
+        stopped.text.starts_with("stopped  `ignite tip-round`"),
+        "{}",
+        stopped.text
+    );
+    assert!(
+        stopped
+            .text
+            .contains("ended    its verb process 7 and its group (1 processes), with `SIGTERM`: it had not stopped"),
+        "{}",
+        stopped.text
+    );
+    assert_eq!(*ender.1.lock().unwrap(), 1);
+}

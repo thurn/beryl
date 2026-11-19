@@ -45,7 +45,7 @@ mod process;
 mod resume;
 mod wire;
 use crate::steps::{self, Activity, Kind, Steps, Work};
-use crate::stop::StopVerb;
+use crate::stop::{NativeEndVerbProcess, StopVerb};
 pub use process::{
     DRAIN_WAIT, Drain, NativeStarter, PROCESS_VERBS, Processes, RUN_AGAIN_AFTER_DEATH, VerbChild,
     VerbStarter, is_restarting, restarting_reply,
@@ -301,9 +301,22 @@ impl Server {
             None => Handles::new(ctx.clock.clone()),
         });
         registry.register(Box::new(WaitVerb::new(handles.clone(), steps.clone())));
-        let stop = StopVerb::new(handles.clone(), steps.clone());
-        let home = processes.as_ref().map(|processes| processes.home.clone());
-        registry.register(Box::new(stop.ending_processes_in(home, db.clone())));
+        let mut processes = processes;
+        let mut stop = StopVerb::new(handles.clone(), steps.clone());
+        if let Some(processes) = &mut processes {
+            if processes.ender.is_none()
+                && let Some(db) = &db
+            {
+                processes.ender = Some(Arc::new(NativeEndVerbProcess {
+                    home: processes.home.clone(),
+                    db: db.clone(),
+                }));
+            }
+            if let Some(ender) = &processes.ender {
+                stop = stop.ending_processes_with(ender.clone());
+            }
+        }
+        registry.register(Box::new(stop));
         let server = Server {
             ctx,
             registry,

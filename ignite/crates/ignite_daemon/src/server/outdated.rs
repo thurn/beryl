@@ -19,6 +19,12 @@
 //! have reached the remote. Asking for the stop first also means a landing about to begin its push
 //! no longer can, because its refusal is then turned down.
 //!
+//! A landing that agreed to stop and is still running [`Processes::stop_wait`] later (the
+//! [`STOP_WAIT`] of `ignite stop`) never looks at its stop where it is, and its verb process is
+//! ended with its process group, as `ignite stop` ends one. On 2026-11-19 two landings spent
+//! over an hour in a loop on the CPU while planning their gates, and each restart of the daemon
+//! asked them to stop again without effect, until someone ended the verb process by hand.
+//!
 //! A landing that stops unwinds as from a failure, giving back its cores, lease and landing tree.
 //! Its `stopped` reply is not handed to whoever waits on the handle ([`Handles::hold_stopped`]):
 //! once the verb process has ended, the daemon makes the handle's row `running` again with the
@@ -34,8 +40,11 @@
 //! Its tests are in `outdated_tests.rs`, which uses the verb processes of `process_tests.rs`.
 //!
 //! [`Handles::hold_stopped`]: crate::handles::Handles::hold_stopped
+//! [`Processes::stop_wait`]: super::process::Processes::stop_wait
+//! [`STOP_WAIT`]: crate::stop::STOP_WAIT
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use ignite_core::ids::{Commit, Handle};
 use ignite_core::protocol::client::Request;
@@ -44,6 +53,7 @@ use ignite_core::traits::Git;
 use super::process::Shared;
 use super::{Server, Verb};
 use crate::host::Host;
+use crate::stop::EndVerbProcess;
 use crate::update::scope::{Source, landing_changes};
 
 /// The verbs whose verb process a restarted daemon stops and runs again under its own build.
@@ -119,10 +129,16 @@ impl Server {
              it again under ignite {own}"
         );
         let host = processes.host.clone();
+        let ending = Ending {
+            ender: processes.ender.clone(),
+            wait: processes.stop_wait,
+        };
         let (waited, name) = (handle.clone(), verb.to_owned());
         let spawned = std::thread::Builder::new()
             .name(format!("ignite-restart-{handle}"))
-            .spawn(move || run_again_once_ended(&shared, &host, &waited, &name, rerun, request));
+            .spawn(move || {
+                run_again_once_ended(&shared, &host, &waited, &name, &ending, rerun, request);
+            });
         if let Err(error) = spawned {
             // The stop was asked, so the process ends `stopped`, and that reply must reach its
             // waiters after all.
@@ -133,18 +149,45 @@ impl Server {
     }
 }
 
-/// Waits until the verb process of `handle` has ended, then runs `verb` again under the same
-/// handle with `request` if it ended `stopped`, as asked, or died without a reply. A landing that
-/// finished on its own first has its reply handed on.
+/// How a verb process asked to stop is ended when it does not.
+struct Ending {
+    ender: Option<Arc<dyn EndVerbProcess>>,
+    /// How long it has to end by itself.
+    wait: Duration,
+}
+
+/// Waits until the verb process of `handle` has ended, ending it once it has run on for
+/// `ending.wait` after the stop was asked, then runs `verb` again under the same handle with
+/// `request` if it ended `stopped`, as asked, or died without a reply. A landing that finished
+/// on its own first has its reply handed on.
 fn run_again_once_ended(
     shared: &Shared,
     host: &Arc<Host>,
     handle: &Handle,
     verb: &str,
+    ending: &Ending,
     rerun: Arc<dyn Verb>,
     request: Request,
 ) {
+    let asked = Instant::now();
+    let mut ender = ending.ender.as_ref();
     while crate::verbproc::alive(&shared.home, handle) {
+        if asked.elapsed() >= ending.wait
+            && let Some(end) = ender.take()
+        {
+            match end.end(handle) {
+                Ok(Some(what)) => eprintln!(
+                    "ignite: ended {what}: `ignite {verb}` ({handle}) had not stopped within \
+                     {} s of being asked",
+                    ending.wait.as_secs()
+                ),
+                Ok(None) => {}
+                Err(reason) => eprintln!(
+                    "ignite: `ignite {verb}` ({handle}) did not stop and could not be ended: \
+                     {reason}"
+                ),
+            }
+        }
         std::thread::sleep(shared.watch);
         if shared.server.upgrade().is_none() {
             return;

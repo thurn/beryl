@@ -194,6 +194,8 @@ impl TipMachine {
             watch: Duration::from_millis(20),
             version: None,
             git: None,
+            ender: Some(Arc::new(EndsNothing)),
+            stop_wait: crate::stop::STOP_WAIT,
         };
         let server = Arc::new(
             Server::with_processes(

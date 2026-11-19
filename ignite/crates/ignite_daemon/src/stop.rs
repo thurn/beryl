@@ -14,7 +14,11 @@
 //! registry, fed by its calls, so it is stopped, and refuses to stop, in the same way. Its
 //! commands are not on a daemon thread, so the daemon ends them itself once the stop is asked:
 //! every unfinished run whose request ID names the handle. The process sees the stop on its next
-//! `host-poll`, and the handle ends `stopped` when it has written its reply.
+//! `host-poll`, and the handle ends `stopped` when it has written its reply. A verb process that
+//! agreed to stop and is still running after [`STOP_WAIT`] never looks at its stop where it is,
+//! as in a loop on the CPU, and is ended with its process group as `--force` ends one
+//! ([`EndVerbProcess`]). Its stop was agreed, so its push has not begun, and ending it leaves
+//! nothing half done.
 //!
 //! `--force` is for an emergency, such as a tip round started by a daemon of an older release
 //! that hangs and holds `master` back. It stops a command of any session's, or of none, such as
@@ -44,7 +48,10 @@ use crate::steps::Steps;
 
 /// How long `ignite stop` waits for the command to end. Its processes get `SIGTERM`, then
 /// `SIGKILL` ten seconds later, and a request waiting for cores is withdrawn within a second, so
-/// this is only reached by a verb that does not look at its stop between commands.
+/// this is only reached by a verb that does not look at its stop between commands. A verb
+/// process still running then is ended, and the stop waits as long again for the daemon to see
+/// it finish. A daemon restarted into a new build waits as long for a landing it asked to stop
+/// (see `server/outdated.rs`).
 pub const STOP_WAIT: Duration = Duration::from_secs(60);
 
 /// How long `ignite stop --force` waits for a verb process to stop when asked before it ends
@@ -94,22 +101,6 @@ impl StopVerb {
     pub fn ending_processes_with(mut self, processes: Arc<dyn EndVerbProcess>) -> StopVerb {
         self.processes = Some(processes);
         self
-    }
-
-    /// The verb ending the verb processes whose locks are in the Ignite home `home` and whose
-    /// rows are in `db`, when the daemon runs verb processes.
-    #[must_use]
-    pub fn ending_processes_in(
-        self,
-        home: Option<PathBuf>,
-        db: Option<Arc<Mutex<Connection>>>,
-    ) -> StopVerb {
-        match (home, db) {
-            (Some(home), Some(db)) => {
-                self.ending_processes_with(Arc::new(NativeEndVerbProcess { home, db }))
-            }
-            _ => self,
-        }
     }
 
     /// Whether the asker may give `--force`: the operator, whose request names no session, or a
@@ -209,26 +200,42 @@ impl Verb for StopVerb {
                 ),
             );
         }
+        let mut ended = None;
         if !activity.wait_finished(self.wait) {
-            let view = activity.view();
-            let mut reply = still_running_at(&view.name, &handle, Some(&view));
-            reply.text = format!(
-                "stopping {handle}: its processes were told to end, and it has not finished \
-                 within {} s\n{}",
-                self.wait.as_secs(),
-                reply.text
-            );
-            return reply;
+            ended = self.end_unstopped(&handle);
+            if ended.is_none() || !activity.wait_finished(self.wait) {
+                let view = activity.view();
+                let mut reply = still_running_at(&view.name, &handle, Some(&view));
+                let what = if ended.is_some() {
+                    "its verb process was ended after it did not stop, and the daemon has not \
+                     seen it finish"
+                } else {
+                    "its processes were told to end, and it has not finished"
+                };
+                reply.text = format!(
+                    "stopping {handle}: {what} within {} s\n{}",
+                    self.wait.as_secs(),
+                    reply.text
+                );
+                return reply;
+            }
         }
         let verb = match activity.kind() {
             crate::steps::Kind::Verb(verb) | crate::steps::Kind::Loop(verb) => verb.clone(),
         };
+        let ended = ended.map_or_else(String::new, |ended| {
+            format!(
+                "\nended    {ended}: it had not stopped within {} s of being asked",
+                self.wait.as_secs()
+            )
+        });
+        let text = format!(
+            "stopped  `ignite {verb}` ({handle}); its processes were ended and its cores, trees \
+             and lease given back{ended}"
+        );
         Reply {
             exit: Exit::Success,
-            text: format!(
-                "stopped  `ignite {verb}` ({handle}); its processes were ended and its cores, \
-                 trees and lease given back"
-            ),
+            text,
             json: Some(serde_json::json!({ "handle": handle, "verb": verb, "stopped": true })),
             handle: None,
         }
@@ -236,6 +243,21 @@ impl Verb for StopVerb {
 }
 
 impl StopVerb {
+    /// Ends the verb process of `handle`, which agreed to stop and has not, and says what was
+    /// ended. `None` when no verb process runs the handle, as for a verb on a thread of the
+    /// daemon, which cannot be ended, or when it could not be ended.
+    fn end_unstopped(&self, handle: &Handle) -> Option<String> {
+        match self.processes.as_ref()?.end(handle) {
+            Ok(ended) => ended,
+            Err(reason) => {
+                eprintln!(
+                    "ignite: the verb process of {handle} did not stop and could not be ended: {reason}"
+                );
+                None
+            }
+        }
+    }
+
     /// `--force`, once the asker may give it: asks `activity` to stop, and ends its verb
     /// process if it refuses or has not finished within the force wait. A refusing verb that
     /// runs on a thread of the daemon cannot be ended.

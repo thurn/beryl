@@ -187,3 +187,48 @@ fn a_landing_runs_again_when_the_release_changed_landing_code() {
     assert_eq!(waited(&second, &land).text, "land: Some(0)");
     assert_eq!(machine.ran_in_daemon("land"), 1);
 }
+
+/// Ends a verb process as the native ender would, by letting its command finish so that it
+/// writes its `stopped` reply and lets go of its lock, and counts the calls.
+struct FinishesCommands(Arc<Commands>, AtomicUsize);
+
+impl EndVerbProcess for FinishesCommands {
+    fn end(&self, _handle: &Handle) -> std::result::Result<Option<String>, String> {
+        self.1.fetch_add(1, Ordering::SeqCst);
+        self.0.finish_all();
+        Ok(Some(
+            "its verb process 7 and its group (1 processes), with `SIGTERM`".to_owned(),
+        ))
+    }
+}
+
+/// A landing whose verb process agreed to stop but never looks at its stop where it is, as one
+/// held in a loop on the CPU, is ended after the stop wait and run again under the new build,
+/// without anyone finishing its command.
+#[test]
+fn a_landing_that_does_not_stop_when_asked_is_ended_and_runs_again() {
+    let machine = Machine::new("outdated-unstopped", false);
+    let ender = Arc::new(FinishesCommands(
+        machine.commands.clone(),
+        AtomicUsize::new(0),
+    ));
+    *lock(&machine.ender) = (ender.clone(), Duration::from_millis(100));
+    let (first, land, _test) = landing_and_test(&machine);
+    let second = restart(&machine, first);
+
+    assert!(wait_now(&second, &land).text.starts_with("restart  "));
+    assert_eq!(waited(&second, &land).text, "land: Some(0)");
+    assert_eq!(
+        ender.1.load(Ordering::SeqCst),
+        1,
+        "the verb process was ended once"
+    );
+    assert_eq!(
+        (
+            machine.ran_in_process("land"),
+            machine.ran_in_daemon("land")
+        ),
+        (1, 1),
+        "the landing ran again in the new daemon"
+    );
+}

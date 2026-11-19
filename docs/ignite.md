@@ -765,7 +765,9 @@ How a restart is survived:
   refuses to stop and finishes under its build, since a push cut short may or
   may not have reached the remote. One that stops gives back its cores, lease
   and tree, and once its process has ended the daemon runs it again itself under
-  the same handle, with the same request, so the same note and session. The
+  the same handle, with the same request, so the same note and session. A
+  landing that agreed to stop and is still running 60 seconds later has its
+  verb process ended, as `ignite stop` ends one. The
   stopped reply never reaches the session: its `ignite wait` keeps waiting and
   gets the new run's reply, and a wait that ends first starts with a line such
   as
@@ -1696,7 +1698,9 @@ from `staging`. A later gate of the change charges its budget for those checks
 when it answers them from the cache, with their families' start-ups, as if it
 had run them. So a gate of an unchanged change chooses the same checks and runs
 none of them again. A rebase over landed commits reruns only those whose inputs
-the commits changed. The `budget` line names what an earlier gate spent.
+the commits changed. The `budget` line names what an earlier gate spent. Those
+charges can take the spending past the budget, and a check whose result is
+cached is still chosen then, since answering it costs nothing.
 
 Building is outside both budgets. The gate runs checks on what its tree has
 already compiled, as Enact's worktrees did: a product the tree has built before
@@ -3264,7 +3268,10 @@ Stopping a command:
 - `ignite stop <handle>` ends a command the session started. Its processes are
   ended, a wait for cores or for another build is withdrawn (the build it waited
   on runs on), and its cores, landing tree and lease are given back. The handle
-  ends `stopped` with exit code 3.
+  ends `stopped` with exit code 3. A verb process that agreed to stop and is
+  still running after 60 seconds never looks at its stop where it is, as in a
+  loop on the CPU. It is ended with its whole process group, as `--force` ends
+  one, and the stop waits another 60 seconds for the daemon to see it finish.
 - A landing whose push has begun refuses, because a cut-short push may or may
   not have reached the remote.
 - `ignite stop <handle> --force` is for an emergency. Only the operator (a

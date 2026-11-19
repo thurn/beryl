@@ -35,6 +35,7 @@ use crate::handles::{Handles, Waited, lock};
 use crate::host::{Host, HostParts, LandingTrees, RunStarter, Timing as HostTiming};
 use crate::server::{Context, Registry, Server, Verb};
 use crate::steps::{Kind, Steps, Work};
+use crate::stop::EndVerbProcess;
 use crate::supervise::{ResultFile, SpecFile};
 use crate::trees::TreeLease;
 use crate::verbproc::{Assembled, Outcome, Process, RemoteLauncher, Timing as ProcessTiming};
@@ -402,6 +403,18 @@ struct Machine {
     in_daemon: BTreeMap<&'static str, Arc<AtomicUsize>>,
     /// What the daemons it starts compare a landing's build with theirs through, if anything.
     git: Mutex<Option<Arc<FakeGit>>>,
+    /// What ends a verb process that does not stop, and how long it has: by default an ender
+    /// that ends nothing, since the native one would signal the test's own process group.
+    ender: Mutex<(Arc<dyn EndVerbProcess>, Duration)>,
+}
+
+/// Ends no verb process, as when none runs the handle.
+struct EndsNothing;
+
+impl EndVerbProcess for EndsNothing {
+    fn end(&self, _handle: &Handle) -> std::result::Result<Option<String>, String> {
+        Ok(None)
+    }
 }
 
 const VERBS: [&str; 3] = ["land", "test", "run"];
@@ -436,6 +449,7 @@ impl Machine {
             threads,
             in_daemon: counters(),
             git: Mutex::new(None),
+            ender: Mutex::new((Arc::new(EndsNothing), crate::stop::STOP_WAIT)),
         }
     }
 
@@ -479,6 +493,7 @@ impl Machine {
             }
         }
         host.register(&mut registry);
+        let (ender, stop_wait) = lock(&self.ender).clone();
         let processes = Processes {
             host,
             starter: self.threads.clone(),
@@ -492,6 +507,8 @@ impl Machine {
             git: lock(&self.git)
                 .clone()
                 .map(|git| git as Arc<dyn ignite_core::traits::Git>),
+            ender: Some(ender),
+            stop_wait,
         };
         let server = Server::with_processes(
             context(),

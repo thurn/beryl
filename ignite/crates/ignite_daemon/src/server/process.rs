@@ -48,6 +48,7 @@ use super::{CallerProbe, Context, Server, SharedSlot, Slot, Verb};
 use crate::handles::{Handles, StepFeed, lock};
 use crate::host::Host;
 use crate::steps::Steps;
+use crate::stop::EndVerbProcess;
 
 /// The verbs that run in verb processes, the internal ones included: `idle-job` runs one idle
 /// job (see `crate::idle`) and `tip-round` one round of tip verification (see
@@ -191,6 +192,13 @@ pub struct Processes {
     /// started under an older build is run again only when the release changed what it runs
     /// (see `server/outdated.rs`). `None` runs every such landing again.
     pub git: Option<Arc<dyn Git>>,
+    /// Ends a verb process that agreed to stop and did not, for `ignite stop` and for a landing
+    /// run again under a new build. `None` until the server fills in the native one, over the
+    /// Ignite home and the local database.
+    pub ender: Option<Arc<dyn EndVerbProcess>>,
+    /// How long a landing asked to stop, so that it runs again under a new build, has to end
+    /// before its verb process is ended ([`crate::stop::STOP_WAIT`]).
+    pub stop_wait: Duration,
 }
 
 impl Processes {
@@ -203,6 +211,8 @@ impl Processes {
             watch: Duration::from_secs(1),
             version: None,
             git: None,
+            ender: None,
+            stop_wait: crate::stop::STOP_WAIT,
         }
     }
 
