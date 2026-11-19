@@ -85,7 +85,7 @@ fn a_run_in_an_agents_tree_uses_that_tree_as_it_is() {
     let (root, lane, _) = lane("in-tree", &["test -f lib.txt", "touch ran-here"]);
     let agent = lane.repo.clone();
     fs::write(agent.join("tool/uncommitted.txt"), "edit").unwrap();
-    let run = lane.run_in(&agent, &section(&lane));
+    let run = lane.run_in(&agent, &section(&lane), &[]);
     assert!(run.passed(), "{run:?}");
     assert_eq!(run.ran.len(), 2);
     assert!(agent.join("tool/ran-here").exists());
@@ -122,27 +122,27 @@ fn a_second_run_of_an_unchanged_clean_tree_skips_the_commands() {
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
     remembering(&mut lane, &clock);
-    let first = lane.run_in(&lane.repo, &section(&lane));
+    let first = lane.run_in(&lane.repo, &section(&lane), &[]);
     assert!(
         first.passed() && first.reused_after_s.is_none(),
         "{first:?}"
     );
     assert_eq!(first.ran.len(), 1);
     clock.advance(240.0);
-    let second = lane.run_in(&lane.repo, &section(&lane));
+    let second = lane.run_in(&lane.repo, &section(&lane), &[]);
     assert!(second.passed() && second.ran.is_empty(), "{second:?}");
     assert_eq!(second.reused_after_s, Some(240.0));
     assert!(second.line().1.contains("passed for this tree 4 min ago"));
     // A new commit with other content runs the commands again.
     fs::write(lane.repo.join("tool/lib.txt"), "two").unwrap();
     git(&lane.repo, &["commit", "--quiet", "-am", "two"]);
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 1);
     // An edited `[express]` section does not match the earlier pass.
-    let again = lane.run_in(&lane.repo, &section(&lane));
+    let again = lane.run_in(&lane.repo, &section(&lane), &[]);
     assert!(again.reused_after_s.is_some());
     lane.commands.push("true".to_owned());
     remembering(&mut lane, &clock);
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 2);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 2);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -154,8 +154,8 @@ fn a_dirty_tree_neither_records_nor_reuses_a_pass() {
     ));
     remembering(&mut lane, &clock);
     fs::write(lane.repo.join("tool/lib.txt"), "edited").unwrap();
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 1);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -166,9 +166,104 @@ fn a_pass_older_than_an_hour_is_not_reused() {
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
     remembering(&mut lane, &clock);
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 1);
     clock.advance(3601.0);
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane)).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 1);
+    let _ = fs::remove_dir_all(root);
+}
+
+/// Commits `files`, each written with `text`, in `repo` and returns the new commit.
+fn commit_files(repo: &Path, files: &[&str], text: &str) -> Commit {
+    for file in files {
+        fs::write(repo.join(file), text).unwrap();
+    }
+    git(repo, &["add", "-A"]);
+    git(repo, &["commit", "--quiet", "-m", text]);
+    Commit::new(git(repo, &["rev-parse", "HEAD"])).unwrap()
+}
+
+/// A lane over `name`'s repository whose clean tree passed the commands at 10:00 with the
+/// change's own file `tool/lib.txt`, its clock four minutes later, and the commit it passed on.
+fn checked(name: &str) -> (PathBuf, MachineExpress, ignite_git::GitCli, Commit) {
+    let (root, mut lane, _) = lane(name, &["true"]);
+    let clock = Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
+    ));
+    remembering(&mut lane, &clock);
+    let checked = commit_files(&lane.repo, &["tool/lib.txt"], "the change");
+    assert_eq!(
+        lane.run_in(&lane.repo, &section(&lane), &own()).ran.len(),
+        1
+    );
+    clock.advance(240.0);
+    let git = ignite_git::GitCli {
+        repo: lane.repo.clone(),
+        remote: "origin".to_owned(),
+    };
+    (root, lane, git, checked)
+}
+
+/// The change's own files in [`checked`].
+fn own() -> Vec<String> {
+    vec!["tool/lib.txt".to_owned()]
+}
+
+/// [`reused`] for a landing of `lane`'s repository at `head` whose own files are `changed`.
+fn landing_reuses(
+    lane: &MachineExpress,
+    git: &ignite_git::GitCli,
+    head: &Commit,
+    changed: &[String],
+) -> Option<ExpressRun> {
+    reused(lane, git, &section(lane), &lane.repo, head, changed).unwrap()
+}
+
+#[test]
+fn a_landing_reuses_a_checks_pass_when_the_commits_landed_since_touch_none_of_its_files() {
+    let (root, lane, git, checked) = checked("reuse-landed");
+    let head = commit_files(&lane.repo, &["tool/other.txt"], "another Ignite change");
+    let run = landing_reuses(&lane, &git, &head, &own()).expect("the pass holds");
+    assert!(run.passed() && run.ran.is_empty(), "{run:?}");
+    assert_eq!(run.reused_after_s, Some(240.0));
+    assert_eq!(run.reused_on.as_ref(), Some(&checked));
+    let text = run.line().1;
+    let expected = format!(
+        "passed for this tree 4 min ago on {}; the commits landed since touch none of its files",
+        super::super::short(&checked)
+    );
+    assert!(text.contains(&expected), "{text}");
+    // The landing's own files must be those the pass ran with.
+    let more = vec!["tool/lib.txt".to_owned(), "tool/other.txt".to_owned()];
+    assert_eq!(landing_reuses(&lane, &git, &head, &more), None);
+    // On the very commit that passed, the tree ID finds the pass instead.
+    assert_eq!(landing_reuses(&lane, &git, &checked, &own()), None);
+    // A pass of another section is not reused.
+    let mut other = section(&lane);
+    other.commands.push("true".to_owned());
+    assert_eq!(
+        reused(&lane, &git, &other, &lane.repo, &head, &own()).unwrap(),
+        None
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_landing_reruns_when_a_landed_commit_touches_one_of_the_changes_files() {
+    let (root, lane, git, _) = checked("rerun-own");
+    let head = commit_files(
+        &lane.repo,
+        &["tool/lib.txt"],
+        "a landed edit to the same file",
+    );
+    assert_eq!(landing_reuses(&lane, &git, &head, &own()), None);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_landing_reruns_when_a_landed_commit_touches_the_workspaces_lock_file() {
+    let (root, lane, git, _) = checked("rerun-lock");
+    let head = commit_files(&lane.repo, &["tool/Cargo.lock"], "a new dependency");
+    assert_eq!(landing_reuses(&lane, &git, &head, &own()), None);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -250,12 +345,12 @@ fn a_run_in_uses_the_commands_of_the_section_it_is_given() {
     // The lane's own commands fail, but the tree's section names others.
     let mut own = section(&lane);
     own.commands = vec!["touch own-ran".to_owned()];
-    let run = lane.run_in(&lane.repo, &own);
+    let run = lane.run_in(&lane.repo, &own, &[]);
     assert!(run.passed(), "{run:?}");
     assert!(lane.repo.join("tool/own-ran").exists());
     // A pass of one section is not reused for another.
     own.commands = vec!["true".to_owned(), "true".to_owned()];
-    assert_eq!(lane.run_in(&lane.repo, &own).ran.len(), 2);
+    assert_eq!(lane.run_in(&lane.repo, &own, &[]).ran.len(), 2);
     let _ = fs::remove_dir_all(root);
 }
 

@@ -429,5 +429,10 @@
     "label": "ignite test looks a bare name up in each family's newest listing, so a one-card change no longer lists and builds every family (ignite test oust took 39 minutes and 816 s of builds in 8 products; a full-gate ignite check of the same change took 229 s, and of a second card change 44 s, under full load on 2026-11-19)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "An express landing reuses its tree's `ignite check` pass when the commits landed since touch none of the change's files or build inputs: on 2026-11-18 a landing reran all four express commands (56 s) a minute after its check had passed them in 60 s, because a commit had landed meanwhile",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

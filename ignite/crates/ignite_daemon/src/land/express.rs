@@ -27,7 +27,14 @@
 //! and then `ignite land`, and on 2026-11-18 that made each Ignite change pay for the same three
 //! commands twice on a three-core lane: 17 checks averaging 213 s beside 30 landings. A run in a
 //! tree with the same tree ID and section skips the commands and says so on its `express` line.
-//! A dirty tree, a moved tip with other content and an edited section all run the commands.
+//! A dirty tree and an edited section run the commands.
+//!
+//! A pass is also remembered with the tree it ran in, the commit it was at and the change's own
+//! files. On 2026-11-18 a landing reran all four commands (56 s) a minute after `ignite check`
+//! passed them, because a commit had landed meanwhile and the rebase gave the tree a new tree ID.
+//! So when the tree ID misses, a landing reuses the tree's last pass under the rule that carries
+//! a pass over a lost race (see [`Expressed`]): the change's own files are the same, and the
+//! commits landed since that pass touch none of them and no build input.
 //!
 //! The landing then takes the integration branch's lease and pushes as any landing does, and
 //! moves the release branch on the commands' pass (see [`super::release`]). A machine whose
@@ -37,7 +44,7 @@ use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
@@ -46,9 +53,8 @@ use serde_json::json;
 use ignite_core::config::Config;
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
-use ignite_core::time::Timestamp;
-use ignite_core::traits::Clock;
-use ignite_git::{committed, worktree};
+use ignite_core::traits::{Clock, Git};
+use ignite_git::{committed, refs, worktree};
 use ignite_os::proc::Processes;
 use ignite_store::local::express_passes;
 
@@ -82,9 +88,6 @@ const LOOK_EVERY: Duration = Duration::from_millis(100);
 
 /// How many lines from the end of the output a failure shows.
 const TAIL_LINES: usize = 40;
-
-/// How long a passing run is remembered, in seconds.
-const REMEMBER_S: f64 = 60.0 * 60.0;
 
 /// Cores borrowed from the scheduler for one express run.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -141,7 +144,32 @@ pub trait ExpressLane: Send + Sync {
     /// ticket tree, and `ignite test` and `ignite check` in an agent's tree. It runs the
     /// commands and directory of `express`, the section of that tree's own `ignite.toml`
     /// (see [`section_in`]), not the lane's own.
-    fn run_in(&self, tree: &Path, express: &ignite_core::config::Express) -> ExpressRun;
+    /// `changed` is the change's own files, kept with a pass so that a later landing can
+    /// judge whether the pass still holds after a rebase (see [`reused`]).
+    fn run_in(
+        &self,
+        tree: &Path,
+        express: &ignite_core::config::Express,
+        changed: &[String],
+    ) -> ExpressRun;
+    /// The last pass of the commands of `express` remembered for `tree` within the hour, with
+    /// where it ran; `None` when there is none or the lane keeps no memory.
+    fn earlier_pass(
+        &self,
+        _tree: &Path,
+        _express: &ignite_core::config::Express,
+    ) -> Option<EarlierPass> {
+        None
+    }
+}
+
+/// An express pass remembered for a working tree: the commit it ran on, the change's own files
+/// there and how many seconds ago it passed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EarlierPass {
+    pub head: Commit,
+    pub changed: Vec<String>,
+    pub ago_s: f64,
 }
 
 /// What an express run did.
@@ -160,6 +188,9 @@ pub struct ExpressRun {
     /// When the commands were not run because they had passed for this same tree, how many
     /// seconds ago that was.
     pub reused_after_s: Option<f64>,
+    /// When the pass reused was on another commit of the tree, that commit: the commits landed
+    /// since touch nothing the pass depends on (see [`reused`]).
+    pub reused_on: Option<Commit>,
 }
 
 impl ExpressRun {
@@ -174,6 +205,17 @@ impl ExpressRun {
 
     /// The `express` line, saying that the commands ran in place of `what`.
     pub fn line_in_place_of(&self, what: &str) -> (String, String) {
+        if let (Some(ago), Some(on)) = (self.reused_after_s, &self.reused_on) {
+            return line(
+                "express",
+                format!(
+                    "passed for this tree {} ago on {}; the commits landed since touch none of \
+                     its files, so the commands did not run again, in place of {what}",
+                    ago_text(ago),
+                    super::short(on)
+                ),
+            );
+        }
         if let Some(ago) = self.reused_after_s {
             return line(
                 "express",
@@ -214,52 +256,6 @@ fn ago_text(seconds: f64) -> String {
         format!("{seconds:.0} s")
     } else {
         format!("{:.0} min", seconds / 60.0)
-    }
-}
-
-/// What the express lane remembers of the runs that passed: the daemon's database, the clock
-/// and a digest of the `[express]` section, so that an edited section never matches a pass.
-pub struct PassMemory {
-    pub db: Arc<Mutex<Connection>>,
-    pub clock: Arc<dyn Clock>,
-}
-
-impl PassMemory {
-    pub fn new(db: Arc<Mutex<Connection>>, clock: Arc<dyn Clock>) -> Self {
-        Self { db, clock }
-    }
-
-    /// The digest of `express`, covering every setting that decides what runs where, with the
-    /// machine's `cores`. It is of the section a run used, which is the tree's own.
-    pub fn digest(express: &ignite_core::config::Express, cores: u32) -> String {
-        // FNV-1a over the serialized section: stable across runs and Rust versions, unlike
-        // the standard library's hasher.
-        let text = serde_json::to_string(express).unwrap_or_default() + &cores.to_string();
-        let mut digest: u64 = 0xcbf2_9ce4_8422_2325;
-        for byte in text.bytes() {
-            digest ^= u64::from(byte);
-            digest = digest.wrapping_mul(0x0100_0000_01b3);
-        }
-        format!("{digest:016x}")
-    }
-
-    /// How many seconds ago the commands passed on `tree_id`, if they did within the hour.
-    fn passed_ago(&self, tree_id: &str, section: &str) -> Option<f64> {
-        let now = self.clock.now();
-        let since = now.plus_seconds(-REMEMBER_S).to_string();
-        let db = self.db.lock().unwrap_or_else(PoisonError::into_inner);
-        let at = express_passes::passed_at(&db, tree_id, section, &since).ok()??;
-        let at = Timestamp::parse(&at).ok()?;
-        Some(now.seconds_since(at).max(0.0))
-    }
-
-    /// Remembers that the commands passed on `tree_id`. A failure to write is ignored: the next
-    /// landing then runs the commands, as it did before there was a memory.
-    fn remember(&self, tree_id: &str, section: &str) {
-        let now = self.clock.now();
-        let forget = now.plus_seconds(-REMEMBER_S).to_string();
-        let db = self.db.lock().unwrap_or_else(PoisonError::into_inner);
-        let _ = express_passes::record(&db, tree_id, section, &now.to_string(), &forget);
     }
 }
 
@@ -336,28 +332,25 @@ impl Expressed {
     }
 
     /// The run the pass at `head`, whose own files are `changed`, may push on without running
-    /// the commands. `None` when the change's own files differ from those the run passed with
-    /// (the rebase merged a landed edit into one of them), or when the commits landed since
-    /// touch one of them or a build input.
+    /// the commands, when the earlier run [`still_holds`] there.
     pub(super) fn carried(
         &self,
         ctx: &Context,
         head: &Commit,
         changed: &[String],
     ) -> ignite_core::traits::Result<Option<ExpressRun>> {
-        if self.changed != changed {
-            return Ok(None);
-        }
         let dir = ctx
             .config
             .express
             .as_ref()
             .map_or("", |express| express.dir.trim_matches('/'));
-        let moved = ctx.git.changed(&self.head, head)?;
-        if moved
-            .iter()
-            .any(|file| changed.contains(file) || is_build_input(file, dir))
-        {
+        if !still_holds(
+            ctx.git.as_ref(),
+            dir,
+            (&self.head, &self.changed),
+            head,
+            changed,
+        )? {
             return Ok(None);
         }
         Ok(Some(ExpressRun {
@@ -365,6 +358,61 @@ impl Expressed {
             ..self.run.clone()
         }))
     }
+}
+
+/// Whether an express pass on the commit `earlier.0`, whose change's own files were
+/// `earlier.1`, still holds for `head`, whose own files are `changed`. It does not when the
+/// files differ (the rebase merged a landed edit into one of them), or when the commits between
+/// the two touch one of them or a build input of the workspace in `dir` (see
+/// [`is_build_input`]). The order of the files does not matter.
+fn still_holds(
+    git: &dyn Git,
+    dir: &str,
+    earlier: (&Commit, &[String]),
+    head: &Commit,
+    changed: &[String],
+) -> ignite_core::traits::Result<bool> {
+    let sorted = |files: &[String]| {
+        let mut files = files.to_vec();
+        files.sort();
+        files
+    };
+    if sorted(earlier.1) != sorted(changed) {
+        return Ok(false);
+    }
+    let moved = git.changed(earlier.0, head)?;
+    Ok(!moved
+        .iter()
+        .any(|file| changed.contains(file) || is_build_input(file, dir)))
+}
+
+/// The run a landing at `head`, whose own files are `changed`, may push on because the commands
+/// of `express` passed in its tree `tree` on another commit: usually `ignite check` before a
+/// commit landed and the rebase moved the tree. `None` when the tree has no such pass, when the
+/// pass was on `head` itself (then [`ExpressLane::run_in`] finds it by tree ID), or when it no
+/// longer [`still_holds`].
+pub(super) fn reused(
+    lane: &dyn ExpressLane,
+    git: &dyn Git,
+    express: &ignite_core::config::Express,
+    tree: &Path,
+    head: &Commit,
+    changed: &[String],
+) -> ignite_core::traits::Result<Option<ExpressRun>> {
+    let Some(earlier) = lane.earlier_pass(tree, express) else {
+        return Ok(None);
+    };
+    let dir = express.dir.trim_matches('/');
+    if earlier.head == *head
+        || !still_holds(git, dir, (&earlier.head, &earlier.changed), head, changed)?
+    {
+        return Ok(None);
+    }
+    Ok(Some(ExpressRun {
+        reused_after_s: Some(earlier.ago_s),
+        reused_on: Some(earlier.head),
+        ..ExpressRun::default()
+    }))
 }
 
 /// Whether `file` is a build input of the workspace in `dir`: a manifest or lock file in it, or
@@ -673,7 +721,12 @@ impl ExpressLane for MachineExpress {
         run
     }
 
-    fn run_in(&self, tree: &Path, express: &ignite_core::config::Express) -> ExpressRun {
+    fn run_in(
+        &self,
+        tree: &Path,
+        express: &ignite_core::config::Express,
+        changed: &[String],
+    ) -> ExpressRun {
         let mut run = ExpressRun {
             cores: self.cores,
             ..ExpressRun::default()
@@ -696,9 +749,23 @@ impl ExpressLane for MachineExpress {
         if let (Some(memory), Some(id)) = (&self.memory, &tree_id)
             && run.passed()
         {
-            memory.remember(id, &section);
+            let place = refs::head(tree).ok().map(|head| express_passes::Place {
+                tree_path: tree.to_string_lossy().into_owned(),
+                head: head.as_str().to_owned(),
+                changed: changed.to_vec(),
+            });
+            memory.remember(id, &section, place.as_ref());
         }
         run
+    }
+
+    fn earlier_pass(
+        &self,
+        tree: &Path,
+        express: &ignite_core::config::Express,
+    ) -> Option<EarlierPass> {
+        let section = PassMemory::digest(express, self.cores);
+        self.memory.as_ref()?.last_in(tree, &section)
     }
 }
 
@@ -718,6 +785,10 @@ fn tail(log: &Path, start: u64) -> String {
         shown
     }
 }
+
+#[path = "express_memory.rs"]
+mod memory;
+pub use memory::PassMemory;
 
 #[cfg(all(test, unix))]
 #[path = "express_tests.rs"]

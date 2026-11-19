@@ -468,13 +468,23 @@ impl Landing {
                 session: Some(session.clone()),
             };
             let (gated, expressed) = if let Some((lane, section)) = &express {
-                // A pass after one whose commands passed runs them again only when the commits
-                // landed since touch what they depend on (see `express::Expressed`).
+                // A pass after one whose commands passed, or after `ignite check` passed them in
+                // this tree, runs them again only when the commits landed since touch what they
+                // depend on (see `express::Expressed` and `express::reused`).
                 let carried = match &last_expressed {
-                    Some(earlier) => earlier.carried(ctx, &rebased.head, &changed).map_err(io)?,
-                    None => None,
+                    Some(earlier) => earlier.carried(ctx, &rebased.head, &changed),
+                    None => express::reused(
+                        *lane,
+                        ctx.git.as_ref(),
+                        section,
+                        &held.path,
+                        &rebased.head,
+                        &changed,
+                    ),
                 };
-                let run = carried.unwrap_or_else(|| lane.run_in(&held.path, section));
+                let run = carried
+                    .map_err(io)?
+                    .unwrap_or_else(|| lane.run_in(&held.path, section, &changed));
                 (GateRun::default(), Some(run))
             } else {
                 // A pass after one whose gate passed judges again only what the commits landed

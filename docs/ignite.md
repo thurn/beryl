@@ -1750,10 +1750,18 @@ express_cores = 3
   and section, as when `ignite land` follows `ignite check` at an unmoved tip,
   skips the commands, and its `express` line says "passed for this tree 4 min
   ago". A dirty tree records and reuses nothing, so commit before `ignite check`
-  for the landing to reuse it. A moved tip with other content, an edit to
-  `[express]` or an hour's wait runs the commands again. On 2026-11-18 jarvis
-  ran 17 express checks (213 s on average) beside 30 landings, so every change
-  paid for the lane twice.
+  for the landing to reuse it. An edit to `[express]` or an hour's wait runs the
+  commands again. On 2026-11-18 jarvis ran 17 express checks (213 s on average)
+  beside 30 landings, so every change paid for the lane twice.
+- A pass is also remembered with the tree it ran in, the commit it was at and
+  the change's own files there. When a commit lands between `ignite check` and
+  `ignite land`, the rebase gives the tree a new tree ID, so the landing looks
+  up the tree's last pass instead. It reuses that pass under the rule for a pass
+  that lost the race: the change's own files are the same, and the commits
+  landed since touch none of them and no build input. Its `express` line then
+  says "passed for this tree 4 min ago on 1a2b3c4d; the commits landed since
+  touch none of its files". On 2026-11-18 a landing reran all four commands,
+  taking 56 s, a minute after its `ignite check` had passed them in 60 s.
 - The last command checks that `docs/ignite.md` is formatted as `just fmt`
   formats Markdown (80 columns). It is there because `docs/ignite.md` is an
   express path and no other command reads Markdown, so a misformatted copy would

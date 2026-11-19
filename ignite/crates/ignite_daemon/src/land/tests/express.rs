@@ -48,10 +48,11 @@ impl ExpressLane for FakeExpress {
             cores: 3,
             carried: false,
             reused_after_s: None,
+            reused_on: None,
         }
     }
 
-    fn run_in(&self, tree: &std::path::Path, express: &Express) -> ExpressRun {
+    fn run_in(&self, tree: &std::path::Path, express: &Express, _changed: &[String]) -> ExpressRun {
         self.trees.lock().unwrap().push(tree.to_path_buf());
         self.commands.lock().unwrap().push(express.commands.clone());
         let hook = self.hooks.lock().unwrap().pop_front();

@@ -74,7 +74,7 @@ pub(super) fn express_reply(
     if !express.covers(&changed) {
         return None;
     }
-    Some(reply(&lane.run_in(&tree.path, &express), &what))
+    Some(reply(&lane.run_in(&tree.path, &express, &changed), &what))
 }
 
 /// The reply to an express run: the `express` line when every command passed, else exit code

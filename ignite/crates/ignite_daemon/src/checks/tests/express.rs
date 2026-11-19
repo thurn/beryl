@@ -24,7 +24,12 @@ impl ExpressLane for FakeLane {
         unreachable!("a verb runs in the agent's tree")
     }
 
-    fn run_in(&self, tree: &Path, express: &ignite_core::config::Express) -> ExpressRun {
+    fn run_in(
+        &self,
+        tree: &Path,
+        express: &ignite_core::config::Express,
+        _changed: &[String],
+    ) -> ExpressRun {
         self.ran_in.lock().unwrap().push(tree.to_path_buf());
         self.commands.lock().unwrap().push(express.commands.clone());
         ExpressRun {
@@ -35,6 +40,7 @@ impl ExpressLane for FakeLane {
             cores: 3,
             carried: false,
             reused_after_s: None,
+            reused_on: None,
         }
     }
 }

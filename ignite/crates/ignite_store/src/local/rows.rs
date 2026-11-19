@@ -165,5 +165,11 @@ crate::tables! {
         /// A digest of the `[express]` section.
         config: String,
         at: String,
+        /// The working tree the commands ran in.
+        tree_path: Option<String>,
+        /// The commit that tree had checked out.
+        head: Option<String>,
+        /// The change's own files on that commit, one per line.
+        changed: Option<String>,
     }
 }
