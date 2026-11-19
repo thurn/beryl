@@ -467,6 +467,7 @@ fn tip_costs_rounds_the_last_round_and_rates_use_their_routes() {
         cached: 0,
         checks_s: 1.0,
         listing_s: 0.0,
+        listing_alone_s: None,
         building_s: 0.0,
         waiting_s: 0.0,
         budget: None,

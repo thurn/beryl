@@ -6,8 +6,8 @@
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use crate::ids::{Commit, RecordId, Seq, TicketId};
 use crate::protocol::Usage;
@@ -78,6 +78,8 @@ impl Clock for FakeClock {
 pub struct FakeLauncher {
     scripts: Mutex<Vec<(Vec<String>, RunResult)>>,
     runs: Mutex<Vec<CommandSpec>>,
+    /// A clock each run moves on by the time its result says it waited and ran.
+    clock: Mutex<Option<Arc<FakeClock>>>,
 }
 
 impl FakeLauncher {
@@ -90,13 +92,18 @@ impl FakeLauncher {
     pub fn runs(&self) -> Vec<CommandSpec> {
         lock(&self.runs).clone()
     }
+
+    /// Makes each run move `clock` on by its result's `queued_s` and `wall_s` before it
+    /// returns, as a real command takes time while it runs.
+    pub fn advance_clock(&self, clock: Arc<FakeClock>) {
+        *lock(&self.clock) = Some(clock);
+    }
 }
 
 impl Launcher for FakeLauncher {
     fn run(&self, spec: &CommandSpec) -> RunResult {
         lock(&self.runs).push(spec.clone());
-        let scripts = lock(&self.scripts);
-        scripts
+        let result = lock(&self.scripts)
             .iter()
             .find(|(prefix, _)| spec.args.starts_with(prefix))
             .map_or_else(
@@ -107,7 +114,11 @@ impl Launcher for FakeLauncher {
                     hung: false,
                 },
                 |(_, result)| result.clone(),
-            )
+            );
+        if let Some(clock) = lock(&self.clock).as_ref() {
+            clock.advance(result.usage.queued_s + result.usage.wall_s);
+        }
+        result
     }
 }
 

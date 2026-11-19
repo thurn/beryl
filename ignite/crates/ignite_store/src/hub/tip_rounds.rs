@@ -133,8 +133,8 @@ pub fn record(conn: &Connection, round: &TipRound) -> Result<()> {
         .map_err(|e| StoreError::Invalid(e.to_string()))?;
     conn.execute(
         "INSERT INTO tip_rounds (commit_sha, machine, at, wall_s, ran, cached, checks_s,
-                                 listing_s, building_s, waiting_s, budget)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                                 listing_s, building_s, waiting_s, budget, listing_alone_s)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             round.commit.as_str(),
             round.machine.as_str(),
@@ -146,7 +146,8 @@ pub fn record(conn: &Connection, round: &TipRound) -> Result<()> {
             round.listing_s,
             round.building_s,
             round.waiting_s,
-            budget
+            budget,
+            round.listing_alone_s
         ],
     )?;
     Ok(())
@@ -156,7 +157,7 @@ pub fn record(conn: &Connection, round: &TipRound) -> Result<()> {
 pub fn recent(conn: &Connection, limit: u32) -> Result<Vec<TipRound>> {
     let mut select = conn.prepare(
         "SELECT commit_sha, machine, at, wall_s, ran, cached, checks_s, listing_s, building_s,
-                waiting_s, budget
+                waiting_s, budget, listing_alone_s
          FROM tip_rounds ORDER BY at DESC, id DESC LIMIT ?1",
     )?;
     let rows = select
@@ -174,30 +175,34 @@ pub fn recent(conn: &Connection, limit: u32) -> Result<Vec<TipRound>> {
                 ],
                 (row.get::<_, u32>(4)?, row.get::<_, u32>(5)?),
                 row.get::<_, Option<String>>(10)?,
+                row.get::<_, Option<f64>>(11)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     rows.into_iter()
-        .map(|(commit, machine, at, seconds, (ran, cached), budget)| {
-            let [wall_s, checks_s, listing_s, building_s, waiting_s] = seconds;
-            let budget = budget
-                .map(|json| serde_json::from_str(&json))
-                .transpose()
-                .map_err(|e| StoreError::Invalid(format!("a round's budget: {e}")))?;
-            Ok(TipRound {
-                commit: parse("commit", &commit)?,
-                machine: parse("machine", &machine)?,
-                at: parse("time", &at)?,
-                wall_s,
-                ran,
-                cached,
-                checks_s,
-                listing_s,
-                building_s,
-                waiting_s,
-                budget,
-            })
-        })
+        .map(
+            |(commit, machine, at, seconds, (ran, cached), budget, listing_alone_s)| {
+                let [wall_s, checks_s, listing_s, building_s, waiting_s] = seconds;
+                let budget = budget
+                    .map(|json| serde_json::from_str(&json))
+                    .transpose()
+                    .map_err(|e| StoreError::Invalid(format!("a round's budget: {e}")))?;
+                Ok(TipRound {
+                    commit: parse("commit", &commit)?,
+                    machine: parse("machine", &machine)?,
+                    at: parse("time", &at)?,
+                    wall_s,
+                    ran,
+                    cached,
+                    checks_s,
+                    listing_s,
+                    listing_alone_s,
+                    building_s,
+                    waiting_s,
+                    budget,
+                })
+            },
+        )
         .collect()
 }
 
@@ -303,6 +308,7 @@ mod tests {
             cached: 4,
             checks_s: 400.0,
             listing_s: 180.0,
+            listing_alone_s: None,
             building_s: 10.0,
             waiting_s: 5.0,
             budget: None,

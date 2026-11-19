@@ -8,7 +8,12 @@
 //!   checks, and any other command the round launches lists a family;
 //! - the time a command waited for cores is its `queued_s`, apart from the time it ran;
 //! - a build counts from when it was asked for until it is current, by the `Clock` trait, so a
-//!   build joined while another command runs it counts too.
+//!   build joined while another command runs it counts too;
+//! - listing alone is the wall time during which some `list` command was running and no check
+//!   command and no build was. Only that part counts towards a slow round, because a listing
+//!   that runs beside a build or another family's checks delays nothing. A `list` command
+//!   counts from when it is launched, so a stretch it spends waiting for cores while nothing
+//!   else of the round runs counts as listing alone too.
 //!
 //! When the round ends it sends one [`TipRound`] to the hub, which files an improvement ticket
 //! when too much of the round went to listing and to Ignite's own work between commands. Time
@@ -47,18 +52,47 @@ pub(super) struct Tally {
     pub master_at: Option<Timestamp>,
 }
 
+/// Which of the round's commands and builds are running, for timing listing alone.
+#[derive(Clone, Copy, Debug)]
+struct Running {
+    listing: u32,
+    /// Check commands and builds.
+    other: u32,
+    /// When either count last changed.
+    since: Timestamp,
+    /// Seconds during which `listing` was above zero and `other` was zero.
+    listing_alone_s: f64,
+}
+
+/// What started or ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Activity {
+    Listing,
+    Other,
+}
+
 /// Counts one round's time. See the module documentation.
 pub(super) struct Meter {
     start: Timestamp,
+    clock: Arc<dyn Clock>,
     parts: Mutex<Parts>,
+    running: Mutex<Running>,
 }
 
 impl Meter {
     /// Starts counting now, and returns the meter with the context the round runs with.
     pub(super) fn start(ctx: &Context) -> (Arc<Meter>, Context) {
+        let start = ctx.clock.now();
         let meter = Arc::new(Meter {
-            start: ctx.clock.now(),
+            start,
+            clock: ctx.clock.clone(),
             parts: Mutex::new(Parts::default()),
+            running: Mutex::new(Running {
+                listing: 0,
+                other: 0,
+                since: start,
+                listing_alone_s: 0.0,
+            }),
         });
         let mut metered = ctx.clone();
         metered.launcher = Arc::new(MeteredLauncher {
@@ -67,7 +101,6 @@ impl Meter {
         });
         metered.builds = Arc::new(MeteredBuilds {
             inner: ctx.builds.clone(),
-            clock: ctx.clock.clone(),
             meter: meter.clone(),
         });
         (meter, metered)
@@ -77,11 +110,32 @@ impl Meter {
         change(&mut self.parts.lock().unwrap_or_else(PoisonError::into_inner));
     }
 
+    /// Records that `activity` started (`+1`) or ended (`-1`) now, first adding the stretch
+    /// since the last change to listing alone when only listing was running through it.
+    fn shift(&self, activity: Activity, step: i32) {
+        let now = self.clock.now();
+        let mut running = self.running.lock().unwrap_or_else(PoisonError::into_inner);
+        if running.listing > 0 && running.other == 0 {
+            running.listing_alone_s += now.seconds_since(running.since).max(0.0);
+        }
+        let count = match activity {
+            Activity::Listing => &mut running.listing,
+            Activity::Other => &mut running.other,
+        };
+        *count = count.saturating_add_signed(step);
+        running.since = now;
+    }
+
+    /// Runs `work` as one `activity`, counted as running from start to end.
+    fn during<T>(&self, activity: Activity, work: impl FnOnce() -> T) -> T {
+        self.shift(activity, 1);
+        let result = work();
+        self.shift(activity, -1);
+        result
+    }
+
     fn command(&self, spec: &CommandSpec, usage: &Usage) {
-        let runs_checks = spec
-            .env
-            .iter()
-            .any(|(key, _)| key == RESULTS_ENV || key == NEXTEST_JSON_ENV.0);
+        let runs_checks = runs_checks(spec);
         self.add(|parts| {
             parts.waiting_s += usage.queued_s.max(0.0);
             if runs_checks {
@@ -94,8 +148,15 @@ impl Meter {
 
     /// The round's record, ended now.
     pub(super) fn finish(&self, ctx: &Context, tip: &Commit, tally: &Tally) -> TipRound {
+        // Closes the stretch since the last change, so a listing still running counts.
+        self.shift(Activity::Listing, 0);
         let now = ctx.clock.now();
         let parts = *self.parts.lock().unwrap_or_else(PoisonError::into_inner);
+        let listing_alone_s = self
+            .running
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .listing_alone_s;
         TipRound {
             commit: tip.clone(),
             machine: ctx.machine.clone(),
@@ -105,6 +166,7 @@ impl Meter {
             cached: tally.cached,
             checks_s: parts.checks_s,
             listing_s: parts.listing_s,
+            listing_alone_s: Some(listing_alone_s),
             building_s: parts.building_s,
             waiting_s: parts.waiting_s,
             budget: tally.budget.clone().map(|mut budget| {
@@ -131,6 +193,21 @@ pub(super) fn send(ctx: &Context, round: &TipRound) {
     }
 }
 
+/// Whether `spec` runs checks; any other command a round launches lists a family.
+fn runs_checks(spec: &CommandSpec) -> bool {
+    spec.env
+        .iter()
+        .any(|(key, _)| key == RESULTS_ENV || key == NEXTEST_JSON_ENV.0)
+}
+
+fn activity_of(spec: &CommandSpec) -> Activity {
+    if runs_checks(spec) {
+        Activity::Other
+    } else {
+        Activity::Listing
+    }
+}
+
 /// The round's launcher: the daemon's, counting each command.
 struct MeteredLauncher {
     inner: Arc<dyn Launcher>,
@@ -139,13 +216,17 @@ struct MeteredLauncher {
 
 impl Launcher for MeteredLauncher {
     fn run(&self, spec: &CommandSpec) -> RunResult {
-        let result = self.inner.run(spec);
+        let result = self
+            .meter
+            .during(activity_of(spec), || self.inner.run(spec));
         self.meter.command(spec, &result.usage);
         result
     }
 
     fn run_until(&self, spec: &CommandSpec, cancelled: &(dyn Fn() -> bool + Sync)) -> RunResult {
-        let result = self.inner.run_until(spec, cancelled);
+        let result = self
+            .meter
+            .during(activity_of(spec), || self.inner.run_until(spec, cancelled));
         self.meter.command(spec, &result.usage);
         result
     }
@@ -154,15 +235,14 @@ impl Launcher for MeteredLauncher {
 /// The round's builds: the daemon's, counting the time until each product is current.
 struct MeteredBuilds {
     inner: Arc<dyn Builds>,
-    clock: Arc<dyn Clock>,
     meter: Arc<Meter>,
 }
 
 impl MeteredBuilds {
     fn timed(&self, build: impl FnOnce() -> BuildResult) -> BuildResult {
-        let start = self.clock.now();
-        let result = build();
-        let seconds = self.clock.now().seconds_since(start).max(0.0);
+        let start = self.meter.clock.now();
+        let result = self.meter.during(Activity::Other, build);
+        let seconds = self.meter.clock.now().seconds_since(start).max(0.0);
         self.meter.add(|parts| parts.building_s += seconds);
         result
     }
@@ -197,5 +277,60 @@ impl Builds for MeteredBuilds {
 
     fn copy_held(&self, from: &TreeId, to: &TreeId, dirs: &[String]) {
         self.inner.copy_held(from, to, dirs);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ignite_core::fakes::FakeClock;
+
+    use super::*;
+
+    fn meter(clock: &Arc<FakeClock>) -> Meter {
+        let start = clock.now();
+        Meter {
+            start,
+            clock: clock.clone(),
+            parts: Mutex::new(Parts::default()),
+            running: Mutex::new(Running {
+                listing: 0,
+                other: 0,
+                since: start,
+                listing_alone_s: 0.0,
+            }),
+        }
+    }
+
+    fn alone(meter: &Meter) -> f64 {
+        meter.shift(Activity::Listing, 0);
+        meter.running.lock().unwrap().listing_alone_s
+    }
+
+    /// A family's `list` that runs beside another family's build delays nothing, so only the
+    /// stretches with listing and nothing else count.
+    #[test]
+    fn listing_counts_alone_only_while_nothing_else_runs() {
+        let clock = Arc::new(FakeClock::new(Timestamp::EPOCH));
+        let meter = meter(&clock);
+        // 0-10 s: one listing alone. 10-70 s: a build starts beside it. 70-80 s: the listing
+        // ends at 70 and a second one runs beside the build until 80. 80-100 s: the build ends,
+        // the second listing runs alone. 100-130 s: nothing runs.
+        meter.shift(Activity::Listing, 1);
+        clock.advance(10.0);
+        meter.shift(Activity::Other, 1);
+        clock.advance(60.0);
+        meter.shift(Activity::Listing, -1);
+        meter.shift(Activity::Listing, 1);
+        clock.advance(10.0);
+        meter.shift(Activity::Other, -1);
+        clock.advance(20.0);
+        meter.shift(Activity::Listing, -1);
+        clock.advance(30.0);
+        assert!((alone(&meter) - 30.0).abs() < 1e-9);
+        // Two listings at once count once.
+        meter.shift(Activity::Listing, 1);
+        meter.shift(Activity::Listing, 1);
+        clock.advance(5.0);
+        assert!((alone(&meter) - 35.0).abs() < 1e-9);
     }
 }

@@ -279,6 +279,8 @@ crate::tables! {
         waiting_s: f64,
         /// JSON `RoundBudget`, NULL from a daemon built before the tip budget.
         budget: Option<String>,
+        /// Listing with nothing else running, NULL from a daemon built before it was measured.
+        listing_alone_s: Option<f64>,
     }
 
     /// A check a landing found failing at a tip, which tip verification had missed.

@@ -285,6 +285,7 @@ fn tips_show_where_the_last_rounds_time_went() {
         cached: 30,
         checks_s: 400.0,
         listing_s: 180.0,
+        listing_alone_s: None,
         building_s: 0.0,
         waiting_s: 20.0,
         budget: None,

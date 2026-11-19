@@ -5,7 +5,9 @@
 //! - `POST /tips/rounds` stores one finished round. When too much of the round went to listing
 //!   and Ignite's own work ([`TipRound::overhead`]), it files one improvement ticket naming the
 //!   larger part, or reuses the open one. Waiting for cores never files: the `tip` class yields
-//!   to landings by design.
+//!   to landings by design. For [`COOLDOWN_SECONDS`] after a person closes that ticket, slow
+//!   rounds file nothing ([`closed_by_a_person_since`]); upkeep's own closes reopen as
+//!   `filing` describes.
 //! - `GET /tips/rounds/last` answers the newest round, for `ignite status`.
 //! - `GET /rates` answers each class's rate of check commands for today, which converts the
 //!   gate's and the tip's budgets from seconds to instructions. It is computed on the first
@@ -31,6 +33,11 @@ use crate::upkeep::signature::Signature;
 /// The subject and category of the one improvement ticket slow rounds share.
 pub const SUBJECT: &str = "tip-rounds";
 pub const CATEGORY: &str = "slow-tip-round";
+
+/// How long after a person closes the slow-round ticket no new one is filed: a week. Round
+/// times vary from round to round, so a ticket a person closed after finding nothing to cut was
+/// filed again by the next slow round, about once an hour.
+pub const COOLDOWN_SECONDS: f64 = 7.0 * 86_400.0;
 
 /// The response if this module owns the request's path.
 pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Option<Response> {
@@ -89,6 +96,9 @@ fn record(
             created: false,
         });
     }
+    if closed_by_a_person_since(conn, &signature.key(), now.plus_seconds(-COOLDOWN_SECONDS))? {
+        return Ok(TipRoundFiled::default());
+    }
     let percent = (share * 100.0).round();
     let body = format!(
         "Tip verification round at {commit} on {machine} spent {percent:.0}% of its time \
@@ -139,6 +149,27 @@ fn open_ticket(conn: &Connection, key: &str) -> ignite_store::Result<Option<Stri
         .optional()?)
 }
 
+/// Whether a person closed a ticket with this signature after `since`. Upkeep's closes, which
+/// carry [`filing::AUTO_CLOSED_KEY`], don't count: `filing::file` reopens those.
+fn closed_by_a_person_since(
+    conn: &Connection,
+    key: &str,
+    since: Timestamp,
+) -> ignite_store::Result<bool> {
+    Ok(conn
+        .query_row(
+            "SELECT 1 FROM tickets
+             WHERE json_extract(metadata, '$.ignite_signature') = ?1 AND status = 'closed'
+               AND closed_at > ?2
+               AND json_extract(metadata, '$.' || ?3) IS NULL
+             LIMIT 1",
+            params![key, since.to_string(), filing::AUTO_CLOSED_KEY],
+            |_| Ok(()),
+        )
+        .optional()?
+        .is_some())
+}
+
 fn failure(status: u16, message: &str) -> Response {
     Response::json(status, &json!({ "error": message }))
 }
@@ -181,6 +212,7 @@ mod tests {
             cached: 2,
             checks_s: 600.0 - listing_s,
             listing_s,
+            listing_alone_s: None,
             building_s: 0.0,
             waiting_s: 0.0,
             budget: None,
@@ -188,11 +220,11 @@ mod tests {
     }
 
     fn post_round(conn: &mut Connection, round: &TipRound) -> TipRoundFiled {
-        let reply = handle(
-            conn,
-            &request("POST", "/tips/rounds", round),
-            Timestamp::EPOCH,
-        );
+        post_round_at(conn, round, Timestamp::EPOCH)
+    }
+
+    fn post_round_at(conn: &mut Connection, round: &TipRound, now: Timestamp) -> TipRoundFiled {
+        let reply = handle(conn, &request("POST", "/tips/rounds", round), now);
         let reply = reply.unwrap();
         assert_eq!(reply.status, 200);
         serde_json::from_slice(&reply.body).unwrap()
@@ -246,6 +278,33 @@ mod tests {
         );
         let last: LastTipRound = serde_json::from_slice(&last.unwrap().body).unwrap();
         assert_eq!(last.round, Some(round("2345", 10.0)));
+    }
+
+    /// A person closed the slow-round ticket after finding nothing to cut, and the next slow
+    /// round filed it again within the hour, round after round.
+    #[test]
+    fn a_ticket_a_person_closed_is_not_filed_again_for_a_week() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let first = post_round(&mut conn, &round("abcd", 180.0)).ticket.unwrap();
+        let closed: Timestamp = "2026-11-19T08:00:00Z".parse().unwrap();
+        conn.execute(
+            "UPDATE tickets SET status = 'closed', closed_at = ?2 WHERE id = ?1",
+            params![first, closed.to_string()],
+        )
+        .unwrap();
+
+        let soon = post_round_at(
+            &mut conn,
+            &round("ef01", 180.0),
+            closed.plus_seconds(3600.0),
+        );
+        assert_eq!(soon, TipRoundFiled::default());
+        assert_eq!(improvement_tickets(&conn), 1);
+
+        let later = closed.plus_seconds(COOLDOWN_SECONDS + 3600.0);
+        let filed = post_round_at(&mut conn, &round("2345", 180.0), later);
+        assert!(filed.created, "{filed:?}");
+        assert_eq!(improvement_tickets(&conn), 2);
     }
 
     #[test]

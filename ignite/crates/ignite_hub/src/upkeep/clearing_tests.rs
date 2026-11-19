@@ -482,6 +482,7 @@ fn round(commit: &str, at: Timestamp, listing_s: f64) -> TipRound {
         cached: 2,
         checks_s: 600.0 - listing_s,
         listing_s,
+        listing_alone_s: None,
         building_s: 0.0,
         waiting_s: 0.0,
         budget: None,

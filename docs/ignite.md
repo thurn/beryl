@@ -2331,11 +2331,16 @@ single listing and the families run at once above, prevent it:
   check of the same name in the covering family passed on the same inputs, and
   is run only when the covering family has no such check.
 - **A round reports where its time went.** Its record holds the minutes spent
-  running checks, listing, building and waiting for cores. When more than 10% of
-  a round goes to listing and Ignite's own work between commands, the round
-  files an improvement ticket. Waiting for cores is shown but never files one:
-  the round's commands run in the `tip` class, which yields to landings and
-  agents by design.
+  running checks, listing, building and waiting for cores, each summed over the
+  families that ran at once, and the minutes during which a family was being
+  listed and nothing else of the round ran. When more than 10% of a round's wall
+  time goes to that lone listing and Ignite's own work between commands, the
+  round files an improvement ticket. Listing beside a build or another family's
+  checks delays nothing, so it never counts. Waiting for cores is shown but
+  never files a ticket: the round's commands run in the `tip` class, which
+  yields to landings and agents by design. For a week after a person closes that
+  ticket, slow rounds file nothing: round times vary, and a ticket closed after
+  finding nothing to cut would otherwise come back within the hour.
 
 How these work:
 

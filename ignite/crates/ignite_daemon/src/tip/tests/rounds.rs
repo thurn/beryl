@@ -237,7 +237,7 @@ fn took(wall_s: f64, queued_s: f64) -> RunResult {
 #[test]
 fn a_round_records_where_its_time_went_and_a_slow_one_files_one_ticket() {
     let world = World::new();
-    *world.work.clock.lock().unwrap() = Some(world.clock.clone());
+    world.launcher.advance_clock(world.clock.clone());
     world.launcher.script(&["list"], took(180.0, 0.0));
     world.launcher.script(&["run"], took(400.0, 20.0));
     let ctx = world.ctx("m-1");
@@ -256,6 +256,9 @@ fn a_round_records_where_its_time_went_and_a_slow_one_files_one_ticket() {
     assert_eq!((round.commit.clone(), round.ran, round.cached), (tip, 1, 1));
     assert!((round.wall_s - 600.0).abs() < 1e-6, "{round:?}");
     assert!((round.listing_s - 180.0).abs() < 1e-6, "{round:?}");
+    // Nothing else ran beside the listing, so the round waited on all of it.
+    let alone = round.listing_alone_s.unwrap();
+    assert!((alone - 180.0).abs() < 1e-6, "{round:?}");
     assert!((round.checks_s - 400.0).abs() < 1e-6, "{round:?}");
     assert!((round.waiting_s - 20.0).abs() < 1e-6, "{round:?}");
     assert!(round.building_s.abs() < 1e-6, "{round:?}");

@@ -123,6 +123,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("tip_misses.sql"),
         code: None,
     },
+    Migration {
+        version: 18,
+        sql: include_str!("listing_alone.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

@@ -47,6 +47,7 @@ fn round(conn: &Connection, clock: &FakeClock, tip: &str, unrun: u32, ended_by: 
         cached: 0,
         checks_s: 50.0,
         listing_s: 1.0,
+        listing_alone_s: None,
         building_s: 0.0,
         waiting_s: 0.0,
         budget: Some(budget),

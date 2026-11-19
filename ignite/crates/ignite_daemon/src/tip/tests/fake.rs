@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{CheckName, Commit, MachineId, RecordId};
 use ignite_core::protocol::hub::{IncompleteReason, NewResult};
 use ignite_core::protocol::{Class, Outcome};
@@ -48,8 +47,6 @@ pub(super) struct FakeWork {
     pub(super) wake: Condvar,
     /// Each family's `covered_by`.
     pub(super) covered_by: Mutex<BTreeMap<String, String>>,
-    /// The clock that each command the work launches moves on by the time it took.
-    pub(super) clock: Mutex<Option<Arc<FakeClock>>>,
     /// The class each run saw from the thread's current activity.
     pub(super) classes: Mutex<Vec<Option<ignite_core::protocol::Class>>>,
     /// What the round scores its checks by, for the tip budget; `None` runs every check before
@@ -125,14 +122,14 @@ impl FakeWork {
     }
 
     /// Launches a command as the real work does, `list` to list families and `run` with a
-    /// results file to run checks, and moves the clock on by the time the launcher says it took.
-    fn launch(&self, ctx: &Context, command: &str) {
+    /// results file to run checks.
+    fn launch(ctx: &Context, command: &str) {
         let env = if command == "run" {
             vec![("IGNITE_RESULTS".to_owned(), "/dev/null".to_owned())]
         } else {
             Vec::new()
         };
-        let result = ctx.launcher.run(&CommandSpec {
+        ctx.launcher.run(&CommandSpec {
             args: vec![command.to_owned()],
             cwd: PathBuf::from("/repo"),
             env,
@@ -144,9 +141,6 @@ impl FakeWork {
             ticket: None,
             hang_limit_s: None,
         });
-        if let Some(clock) = self.clock.lock().unwrap().as_ref() {
-            clock.advance(result.usage.wall_s + result.usage.queued_s);
-        }
     }
 
     pub(super) fn runs(&self) -> Vec<Run> {
@@ -156,7 +150,7 @@ impl FakeWork {
 
 impl TipWork for FakeWork {
     fn checks(&self, ctx: &Context, at: &Commit) -> Result<TipSet> {
-        self.launch(ctx, "list");
+        Self::launch(ctx, "list");
         Ok(TipSet {
             checks: self.listed(at),
             unlisted: self
@@ -231,7 +225,7 @@ impl TipWork for FakeWork {
                 .unwrap();
             active.0 -= 1;
         }
-        self.launch(ctx, "run");
+        Self::launch(ctx, "run");
         if let Ok(master) = ctx.git.tip(&ctx.config.repository.master) {
             self.masters.lock().unwrap().push((checks.to_vec(), master));
         }

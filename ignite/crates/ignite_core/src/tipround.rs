@@ -15,7 +15,9 @@
 //! - **Where a round's time went.** Each round sends one [`TipRound`] when it ends. A round in
 //!   which more than [`OVERHEAD_SHARE`] of the time went to listing families and Ignite's own
 //!   work between commands, and that took at least [`SMALLEST_ROUND_S`], asks the hub for an
-//!   improvement ticket naming the larger part ([`TipRound::overhead`]). Time spent waiting for
+//!   improvement ticket naming the larger part ([`TipRound::overhead`]). Only listing that
+//!   nothing else ran beside counts: families are listed, built and run at once, so a listing
+//!   that overlaps a build delays nothing. Time spent waiting for
 //!   cores is reported apart and never files a ticket: the round runs in the `tip` class, so it
 //!   waits by design whenever landings or agents hold the cores, and nothing in the round can
 //!   cut that wait.
@@ -142,8 +144,14 @@ pub struct TipRound {
     pub cached: u32,
     /// Time the check commands ran, apart from waiting for cores.
     pub checks_s: f64,
-    /// Time the families' `list` commands ran.
+    /// Time the families' `list` commands ran, summed over families listed at once.
     pub listing_s: f64,
+    /// Wall time during which some family's `list` command ran and no check command and no
+    /// build did: the listing the round waited on. Listing that overlaps a build or another
+    /// family's checks costs the round nothing, so only this part counts towards
+    /// [`TipRound::overhead`]. `None` from a daemon built before it was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub listing_alone_s: Option<f64>,
     /// Time spent making build products current, waiting for them included.
     pub building_s: f64,
     /// Time commands waited for cores before they started.
@@ -248,44 +256,61 @@ impl TipRound {
         self.checks_s + self.listing_s + self.building_s + self.waiting_s + self.other_s()
     }
 
-    /// The larger of listing and Ignite's own work, and its share of the whole round, when the
-    /// two come to more than [`OVERHEAD_SHARE`] of a round of at least [`SMALLEST_ROUND_S`].
+    /// The larger of listing and Ignite's own work, and its share of the round, when the two
+    /// come to more than [`OVERHEAD_SHARE`] of a round of at least [`SMALLEST_ROUND_S`].
     /// `None` otherwise.
+    ///
+    /// Listing counts only while nothing else of the round ran ([`TipRound::listing_alone_s`]),
+    /// as a share of the round's wall time. The summed `listing_s` once filed a ticket every
+    /// hour or so: 3.4 minutes of `list` commands, mostly beside builds, were 13% of the 26.2
+    /// minutes the parts added up to, although the round took 19.8 minutes and may not have
+    /// waited on any listing. A record from before the measure falls back to the summed time
+    /// over the summed parts.
     ///
     /// Waiting for cores is left out. The round's commands ask for cores in the `tip` class,
     /// which yields to `land` and `agent` by design, so a round that runs beside landings
     /// waits whatever the round does. The wait still shows in [`TipRound::summary`].
     pub fn overhead(&self) -> Option<(Overhead, f64)> {
-        let total = self.total_s();
-        if self.wall_s < SMALLEST_ROUND_S || total <= 0.0 {
+        let (listing, whole) = match self.listing_alone_s {
+            Some(alone) => (alone, self.wall_s),
+            None => (self.listing_s, self.total_s()),
+        };
+        if self.wall_s < SMALLEST_ROUND_S || whole <= 0.0 {
             return None;
         }
         let parts = [
-            (Overhead::Listing, self.listing_s),
+            (Overhead::Listing, listing),
             (Overhead::Other, self.other_s()),
         ];
         let overhead: f64 = parts.iter().map(|(_, s)| s).sum();
-        if overhead / total <= OVERHEAD_SHARE {
+        if overhead / whole <= OVERHEAD_SHARE {
             return None;
         }
         let (largest, seconds) = parts
             .into_iter()
             .max_by(|a, b| a.1.total_cmp(&b.1))
             .unwrap_or((Overhead::Other, 0.0));
-        Some((largest, seconds / total))
+        Some((largest, seconds / whole))
     }
 
     /// The round's figures in one line, in minutes, as `ignite status` and the dashboard show
     /// them.
     pub fn summary(&self) -> String {
         let minutes = |seconds: f64| format!("{:.1}", seconds / 60.0);
+        let listing = match self.listing_alone_s {
+            Some(alone) => format!(
+                "{} listing ({} with nothing else running)",
+                minutes(self.listing_s),
+                minutes(alone)
+            ),
+            None => format!("{} listing", minutes(self.listing_s)),
+        };
         format!(
-            "{} checks run, {} cached; minutes: {} checks, {} listing, {} building, {} waiting \
+            "{} checks run, {} cached; minutes: {} checks, {listing}, {} building, {} waiting \
              for cores, {} other, {} in all",
             self.ran,
             self.cached,
             minutes(self.checks_s),
-            minutes(self.listing_s),
             minutes(self.building_s),
             minutes(self.waiting_s),
             minutes(self.other_s()),
@@ -441,10 +466,43 @@ mod tests {
             cached: 5,
             checks_s: wall_s - listing_s,
             listing_s,
+            listing_alone_s: None,
             building_s: 0.0,
             waiting_s: 0.0,
             budget: None,
         }
+    }
+
+    /// A round at b363ee27d: 3.4 minutes of `list` commands in a 19.8-minute round whose parts, run
+    /// at once, added up to 26.2 minutes. Summed, listing was 13% and filed a ticket; what
+    /// counts is the listing nothing else ran beside.
+    #[test]
+    fn only_listing_with_nothing_else_running_files() {
+        let observed = TipRound {
+            checks_s: 612.0,
+            listing_s: 204.0,
+            building_s: 672.0,
+            waiting_s: 84.0,
+            ..round(1188.0, 0.0)
+        };
+        let mut overlapped = TipRound {
+            listing_alone_s: Some(30.0),
+            ..observed.clone()
+        };
+        assert_eq!(overlapped.overhead(), None);
+        assert!(
+            overlapped
+                .summary()
+                .contains("3.4 listing (0.5 with nothing else running)"),
+            "{}",
+            overlapped.summary()
+        );
+        overlapped.listing_alone_s = Some(180.0);
+        let (part, share) = overlapped.overhead().unwrap();
+        assert_eq!(part, Overhead::Listing);
+        assert!((share - 180.0 / 1188.0).abs() < 1e-9, "{share}");
+        // A record from a daemon that did not measure it keeps the summed rule.
+        assert_eq!(observed.overhead().unwrap().0, Overhead::Listing);
     }
 
     #[test]
