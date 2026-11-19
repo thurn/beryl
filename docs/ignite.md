@@ -286,7 +286,7 @@ tree     /Users/dthurn/beryl/.worktrees/tree-07  at staging 8c1f2ab
 title    ⚒️ [TQ44S.9.48] Counter names, untap lock
 files    rust/beryl3d/crates/beryl_scene/src/table/badges.rs  (+4, below)
 needs    TQ44S.9.31 landed 2f0c1d9: "badges draw from one record pool"
-next     cd to the tree, set the title, read the files, then edit
+next     set the title first, then cd to the tree, read the files and edit
 ```
 
 ```text

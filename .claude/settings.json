@@ -27,5 +27,19 @@
       "mcp__ccd_connectors",
       "mcp__ccd_directory"
     ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/tools/src/beryl_tools/start_title.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
   }
 }

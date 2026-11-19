@@ -9,7 +9,7 @@
 //! title    ⚒️ [Tq44s.9.48] Manual table: counter names, untap lock
 //! files    crates/scene/src/table/badges.rs
 //! needs    Tq44s.9.31 landed 2f0c1d9: "badges draw from one record pool"
-//! next     cd to the tree, set the title, read the files, then edit
+//! next     set the title first, then cd to the tree, read the files and edit
 //! ```
 
 use std::fmt::Write as _;
@@ -264,7 +264,7 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
     }
     rows.push((
         "next",
-        "cd to the tree, set the title, read the files, then edit".to_owned(),
+        "set the title first, then cd to the tree, read the files and edit".to_owned(),
     ));
     lines(&rows)
 }

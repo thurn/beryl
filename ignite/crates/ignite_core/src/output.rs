@@ -373,7 +373,7 @@ mod tests {
                 ),
             ]),
         );
-        reply.next = Some("cd to the tree, set the title, read the files, then edit".into());
+        reply.next = Some("set the title first, then cd to the tree, read the files and edit".into());
         assert_eq!(
             reply.render(),
             "\
@@ -382,7 +382,7 @@ tree     /work/repo/.worktrees/tree-07  at staging 8c1f2ab
 title    ⚒️ [Tq44s.9.48] Counter names, untap lock
 files    crates/scene/src/table/badges.rs  (+4, below)
 needs    Tq44s.9.31 landed 2f0c1d9: \"badges draw from one record pool\"
-next     cd to the tree, set the title, read the files, then edit
+next     set the title first, then cd to the tree, read the files and edit
 "
         );
     }
