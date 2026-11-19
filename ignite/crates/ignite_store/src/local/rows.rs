@@ -158,4 +158,12 @@ crate::tables! {
         refused: Option<String>,
         at: String,
     }
+
+    /// An express run that passed, by the tree it checked and the `[express]` section it ran.
+    ExpressPass = "express_passes" {
+        tree_id: String,
+        /// A digest of the `[express]` section.
+        config: String,
+        at: String,
+    }
 }

@@ -22,6 +22,13 @@
 //! to 8.5 minutes while other builds held the scheduler's cores, against about a minute when it
 //! got them, and that edit-and-test loop was most of a fix's wall time.
 //!
+//! An express run that passes in a clean tree is remembered for an hour by the git tree ID it
+//! checked and a digest of the `[express]` section (see [`PassMemory`]). Agents run `ignite check`
+//! and then `ignite land`, and on 2026-11-18 that made each Ignite change pay for the same three
+//! commands twice on a three-core lane: 17 checks averaging 213 s beside 30 landings. A run in a
+//! tree with the same tree ID and section skips the commands and says so on its `express` line.
+//! A dirty tree, a moved tip with other content and an edited section all run the commands.
+//!
 //! The landing then takes the integration branch's lease and pushes as any landing does, and
 //! moves the release branch on the commands' pass (see [`super::release`]). A machine whose
 //! `express_cores` is zero has no express lane, and its landings all go through the gate.
@@ -30,16 +37,20 @@ use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
+use rusqlite::Connection;
 use serde_json::json;
 
 use ignite_core::config::Config;
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
-use ignite_git::worktree;
+use ignite_core::time::Timestamp;
+use ignite_core::traits::Clock;
+use ignite_git::{committed, worktree};
 use ignite_os::proc::Processes;
+use ignite_store::local::express_passes;
 
 use super::env::GateTree;
 use super::{Landing, line};
@@ -63,6 +74,9 @@ const LOOK_EVERY: Duration = Duration::from_millis(100);
 
 /// How many lines from the end of the output a failure shows.
 const TAIL_LINES: usize = 40;
+
+/// How long a passing run is remembered, in seconds.
+const REMEMBER_S: f64 = 60.0 * 60.0;
 
 /// The express tree and its commands, as a landing uses them. Tests replace it with a fake.
 pub trait ExpressLane: Send + Sync {
@@ -89,6 +103,9 @@ pub struct ExpressRun {
     /// The run passed on an earlier pass of the landing and was carried over to this one,
     /// because the commits landed since touch nothing it depends on (see [`Expressed`]).
     pub carried: bool,
+    /// When the commands were not run because they had passed for this same tree, how many
+    /// seconds ago that was.
+    pub reused_after_s: Option<f64>,
 }
 
 impl ExpressRun {
@@ -103,6 +120,16 @@ impl ExpressRun {
 
     /// The `express` line, saying that the commands ran in place of `what`.
     pub fn line_in_place_of(&self, what: &str) -> (String, String) {
+        if let Some(ago) = self.reused_after_s {
+            return line(
+                "express",
+                format!(
+                    "passed for this tree {} ago, so the commands did not run again, in place \
+                     of {what}",
+                    ago_text(ago)
+                ),
+            );
+        }
         let names: Vec<&str> = self
             .ran
             .iter()
@@ -124,6 +151,67 @@ impl ExpressRun {
                 names.join("; ")
             ),
         )
+    }
+}
+
+/// `seconds` as `45 s` or `4 min`.
+fn ago_text(seconds: f64) -> String {
+    if seconds < 90.0 {
+        format!("{seconds:.0} s")
+    } else {
+        format!("{:.0} min", seconds / 60.0)
+    }
+}
+
+/// What the express lane remembers of the runs that passed: the daemon's database, the clock
+/// and a digest of the `[express]` section, so that an edited section never matches a pass.
+pub struct PassMemory {
+    pub db: Arc<Mutex<Connection>>,
+    pub clock: Arc<dyn Clock>,
+    /// The digest of the section the lane runs.
+    pub section: String,
+}
+
+impl PassMemory {
+    /// A memory for `express`, whose digest covers every setting that decides what runs where.
+    pub fn new(
+        db: Arc<Mutex<Connection>>,
+        clock: Arc<dyn Clock>,
+        express: &ignite_core::config::Express,
+        cores: u32,
+    ) -> Self {
+        // FNV-1a over the serialized section: stable across runs and Rust versions, unlike
+        // the standard library's hasher.
+        let text = serde_json::to_string(express).unwrap_or_default() + &cores.to_string();
+        let mut digest: u64 = 0xcbf2_9ce4_8422_2325;
+        for byte in text.bytes() {
+            digest ^= u64::from(byte);
+            digest = digest.wrapping_mul(0x0100_0000_01b3);
+        }
+        Self {
+            db,
+            clock,
+            section: format!("{digest:016x}"),
+        }
+    }
+
+    /// How many seconds ago the commands passed on `tree_id`, if they did within the hour.
+    fn passed_ago(&self, tree_id: &str) -> Option<f64> {
+        let now = self.clock.now();
+        let since = now.plus_seconds(-REMEMBER_S).to_string();
+        let db = self.db.lock().unwrap_or_else(PoisonError::into_inner);
+        let at = express_passes::passed_at(&db, tree_id, &self.section, &since).ok()??;
+        let at = Timestamp::parse(&at).ok()?;
+        Some(now.seconds_since(at).max(0.0))
+    }
+
+    /// Remembers that the commands passed on `tree_id`. A failure to write is ignored: the next
+    /// landing then runs the commands, as it did before there was a memory.
+    fn remember(&self, tree_id: &str) {
+        let now = self.clock.now();
+        let forget = now.plus_seconds(-REMEMBER_S).to_string();
+        let db = self.db.lock().unwrap_or_else(PoisonError::into_inner);
+        let _ = express_passes::record(&db, tree_id, &self.section, &now.to_string(), &forget);
     }
 }
 
@@ -257,12 +345,20 @@ pub struct MachineExpress {
     pub commands: Vec<String>,
     /// The machine's `express_cores`.
     pub cores: u32,
+    /// The runs that passed, when the daemon has a database to keep them in.
+    pub memory: Option<PassMemory>,
 }
 
 impl MachineExpress {
     /// The machine's express lane, or `None` when the repository configures no express
     /// commands or the machine reserves no cores for them.
-    pub fn for_config(config: &Config, repo: &Path, cores: u32) -> Option<Arc<dyn ExpressLane>> {
+    pub fn for_config(
+        config: &Config,
+        repo: &Path,
+        cores: u32,
+        db: Option<Arc<Mutex<Connection>>>,
+        clock: &Arc<dyn Clock>,
+    ) -> Option<Arc<dyn ExpressLane>> {
         let express = config.express.as_ref()?;
         if cores == 0 || express.commands.is_empty() {
             return None;
@@ -273,6 +369,7 @@ impl MachineExpress {
             dir: express.dir.clone(),
             commands: express.commands.clone(),
             cores,
+            memory: db.map(|db| PassMemory::new(db, clock.clone(), express, cores)),
         }))
     }
 
@@ -447,9 +544,25 @@ impl ExpressLane for MachineExpress {
             cores: self.cores,
             ..ExpressRun::default()
         };
+        // Only a clean tree is remembered: its tree ID says exactly what was checked.
+        let tree_id = self
+            .memory
+            .as_ref()
+            .and_then(|_| committed::clean_tree_id(tree).ok().flatten());
+        if let (Some(memory), Some(id)) = (&self.memory, &tree_id)
+            && let Some(ago) = memory.passed_ago(id)
+        {
+            run.reused_after_s = Some(ago);
+            return run;
+        }
         // No lock: each tree has its own target directory, so runs in different trees share
         // nothing, and a lock made every landing and check wait for every other one.
         self.run_commands(tree, &mut run);
+        if let (Some(memory), Some(id)) = (&self.memory, &tree_id)
+            && run.passed()
+        {
+            memory.remember(id);
+        }
         run
     }
 }

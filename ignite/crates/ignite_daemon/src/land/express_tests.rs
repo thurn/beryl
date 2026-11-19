@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 
 use super::*;
 
@@ -33,6 +34,7 @@ fn lane(name: &str, commands: &[&str]) -> (PathBuf, MachineExpress, Commit) {
         dir: "tool".to_owned(),
         commands: commands.iter().map(|c| (*c).to_owned()).collect(),
         cores: 2,
+        memory: None,
     };
     (root, lane, commit)
 }
@@ -92,5 +94,80 @@ fn a_run_in_an_agents_tree_uses_that_tree_as_it_is() {
         "nothing is checked out or cleaned"
     );
     assert!(!lane.tree.exists(), "the express tree is not made");
+    let _ = fs::remove_dir_all(root);
+}
+
+/// The lane `lane` with a pass memory over an in-memory database and a clock at `now`.
+fn remembering(lane: &mut MachineExpress, clock: &Arc<ignite_core::fakes::FakeClock>) {
+    let express = ignite_core::config::Express {
+        paths: vec!["tool/**".to_owned()],
+        tree: PathBuf::from("trees/express"),
+        dir: "tool".to_owned(),
+        commands: lane.commands.clone(),
+        families: Vec::new(),
+    };
+    let db = ignite_store::local::open_in_memory().unwrap();
+    lane.memory = Some(PassMemory::new(
+        Arc::new(Mutex::new(db)),
+        clock.clone(),
+        &express,
+        lane.cores,
+    ));
+}
+
+#[test]
+fn a_second_run_of_an_unchanged_clean_tree_skips_the_commands() {
+    let (root, mut lane, _) = lane("reuse", &["true"]);
+    let clock = Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
+    ));
+    remembering(&mut lane, &clock);
+    let first = lane.run_in(&lane.repo);
+    assert!(
+        first.passed() && first.reused_after_s.is_none(),
+        "{first:?}"
+    );
+    assert_eq!(first.ran.len(), 1);
+    clock.advance(240.0);
+    let second = lane.run_in(&lane.repo);
+    assert!(second.passed() && second.ran.is_empty(), "{second:?}");
+    assert_eq!(second.reused_after_s, Some(240.0));
+    assert!(second.line().1.contains("passed for this tree 4 min ago"));
+    // A new commit with other content runs the commands again.
+    fs::write(lane.repo.join("tool/lib.txt"), "two").unwrap();
+    git(&lane.repo, &["commit", "--quiet", "-am", "two"]);
+    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    // An edited `[express]` section does not match the earlier pass.
+    let again = lane.run_in(&lane.repo);
+    assert!(again.reused_after_s.is_some());
+    lane.commands.push("true".to_owned());
+    remembering(&mut lane, &clock);
+    assert_eq!(lane.run_in(&lane.repo).ran.len(), 2);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_dirty_tree_neither_records_nor_reuses_a_pass() {
+    let (root, mut lane, _) = lane("dirty", &["true"]);
+    let clock = Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
+    ));
+    remembering(&mut lane, &clock);
+    fs::write(lane.repo.join("tool/lib.txt"), "edited").unwrap();
+    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_pass_older_than_an_hour_is_not_reused() {
+    let (root, mut lane, _) = lane("expiry", &["true"]);
+    let clock = Arc::new(ignite_core::fakes::FakeClock::new(
+        ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
+    ));
+    remembering(&mut lane, &clock);
+    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
+    clock.advance(3601.0);
+    assert_eq!(lane.run_in(&lane.repo).ran.len(), 1);
     let _ = fs::remove_dir_all(root);
 }

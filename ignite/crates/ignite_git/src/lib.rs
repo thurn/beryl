@@ -5,6 +5,7 @@
 
 pub mod changed;
 mod cmd;
+pub mod committed;
 pub mod fastforward;
 pub mod holds;
 pub mod push;

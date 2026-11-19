@@ -275,6 +275,8 @@ pub fn checking_with(
             &base.config,
             &base.options.repo,
             base.declared.express_cores,
+            Some(Arc::new(Mutex::new(base.open()?))),
+            &base.clock,
         ),
         pause: Arc::new(|seconds| std::thread::sleep(std::time::Duration::from_secs_f64(seconds))),
     });

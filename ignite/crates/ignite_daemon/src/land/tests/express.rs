@@ -45,6 +45,7 @@ impl ExpressLane for FakeExpress {
                 .then(|| ("cargo test".to_owned(), "test x ... FAILED".to_owned())),
             cores: 3,
             carried: false,
+            reused_after_s: None,
         }
     }
 

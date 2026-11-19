@@ -80,7 +80,9 @@ fn reply(run: &ExpressRun, what: &str) -> Reply {
         return Reply {
             exit: Exit::Success,
             text: render(&[run.line_in_place_of(what)]),
-            json: Some(json!({ "express": { "ran": ran, "cores": run.cores } })),
+            json: Some(json!({
+                "express": { "ran": ran, "cores": run.cores, "reused_after_s": run.reused_after_s }
+            })),
             handle: None,
         };
     };

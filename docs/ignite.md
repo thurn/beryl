@@ -1685,6 +1685,16 @@ express_cores = 3
   that touch different files, such as one that renames a function the other
   calls: both land, and tip verification of the `ignite` family catches the
   broken tip.
+- A run in a clean tree that passes is remembered for an hour in the daemon's
+  database, by the git tree ID of `HEAD` and a digest of the `[express]` section
+  and the machine's `express_cores`. A later run of a tree with the same tree ID
+  and section, as when `ignite land` follows `ignite check` at an unmoved tip,
+  skips the commands, and its `express` line says "passed for this tree 4 min
+  ago". A dirty tree records and reuses nothing, so commit before `ignite check`
+  for the landing to reuse it. A moved tip with other content, an edit to
+  `[express]` or an hour's wait runs the commands again. On 2026-11-18 jarvis ran
+  17 express checks (213 s on average) beside 30 landings, so every change paid
+  for the lane twice.
 - The last command checks that `docs/ignite.md` is formatted as `just fmt`
   formats Markdown (80 columns). It is there because `docs/ignite.md` is an
   express path and no other command reads Markdown, so a misformatted copy would

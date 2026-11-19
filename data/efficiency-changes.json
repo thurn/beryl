@@ -399,5 +399,10 @@
     "label": "The scheduler counts the daemon's whole process tree, express runs included, as Ignite's and reads the busy fraction against all logical cores: it reported 8 to 11 cores busy outside Ignite while outside processes used 3.5 to 4, and held those cores back",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "An express landing skips the express commands when the same git tree passed them within the hour, as when `ignite land` follows `ignite check` at an unmoved tip: jarvis ran 17 express checks averaging 213 s beside 30 landings on 2026-11-18, so each Ignite change paid for the three-core lane twice",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
