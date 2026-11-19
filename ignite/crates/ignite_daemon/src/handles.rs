@@ -163,12 +163,15 @@ impl Handles {
                 request,
             });
         }
+        let highest = store::highest_number(&lock(&db)).map_err(|e| store_error(&e))?;
         let mut handles = Handles::new(clock);
         handles.db = Some(db);
         let state = handles
             .state
             .get_mut()
             .unwrap_or_else(PoisonError::into_inner);
+        // One counter numbers every verb's handles, so start above every stored number.
+        state.next = highest + 1;
         for (orphan, tree) in orphans.iter().zip(trees) {
             state
                 .replies

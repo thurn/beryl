@@ -122,6 +122,17 @@ pub fn running(conn: &Connection) -> Result<Vec<rows::Handle>> {
     Ok(handles)
 }
 
+/// The highest number in any handle's ID, such as 189 for `L-189`, or 0 with no handles. A
+/// restarted daemon numbers its next handle above it, so IDs only grow across restarts.
+pub fn highest_number(conn: &Connection) -> Result<u64> {
+    let highest: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(CAST(substr(id, instr(id, '-') + 1) AS INTEGER)), 0) FROM handles",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(u64::try_from(highest).unwrap_or(0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

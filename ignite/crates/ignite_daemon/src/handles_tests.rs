@@ -103,8 +103,8 @@ fn a_restarted_daemon_still_answers_for_a_handle_from_before() {
     };
     assert_eq!(ended.exit, Exit::Conflict);
     assert!(ended.text.starts_with("incomplete "), "{}", ended.text);
-    // A name used before the restart is skipped: `L-1` is taken, `L-2` was never used.
-    assert_eq!(handles.create("land", None, None).as_str(), "L-2");
+    // The restarted daemon numbers above every stored handle (`L-1`, `T-2` and `S-3`).
+    assert_eq!(handles.create("land", None, None).as_str(), "L-4");
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
@@ -194,4 +194,19 @@ fn a_handle_found_running_after_a_restart_still_names_its_tree() {
     );
     after.finish(&handle, Reply::text(Exit::Success, "landed"));
     assert!(after.running_in(&tree).is_empty());
+}
+
+#[test]
+fn a_restarted_daemons_first_handle_is_numbered_above_every_stored_one() {
+    let path = temp_db("numbers-grow");
+    {
+        let handles = open(&path);
+        for _ in 0..5 {
+            handles.create("land", None, None);
+        }
+        handles.create("test", None, None);
+    }
+    let handles = open(&path);
+    assert_eq!(handles.create("land", None, None).as_str(), "L-7");
+    assert_eq!(handles.create("test", None, None).as_str(), "T-8");
 }
