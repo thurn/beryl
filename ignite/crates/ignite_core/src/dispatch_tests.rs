@@ -29,6 +29,7 @@ fn machine(workers: Vec<IdleWorker>) -> MachineFree {
         idle_workers: workers,
         free_ticket_trees: 4,
         free_cores: 8.0,
+        admit_cores: None,
         families: Vec::new(),
         name: None,
         justiciar_only: false,
@@ -214,6 +215,30 @@ fn a_tools_ticket_is_admitted_where_a_third_kernel_ticket_waits() {
     let ready = [kernel, tools];
     let answer = next_for(&free, &ready, &ALL, None, &[]);
     assert_eq!(ticket_of(answer), Some("Ten2c.4".to_owned()));
+}
+
+#[test]
+fn room_is_the_admitted_cores_less_the_tickets_held_not_the_scheduler_now() {
+    // A landing fills the scheduler at this moment, but the two tickets in progress expect five
+    // of the fifteen cores the machine admits.
+    let mut free = everyone();
+    free.free_cores = 0.0;
+    free.admit_cores = Some(15.0);
+    let mut fresh = ticket("Tf", None);
+    fresh.expected_cores = 2.0;
+    let ready = [fresh];
+    free.free_cores = room(&free, &[3.0, 2.0]);
+    assert_eq!(
+        ticket_of(next_for(&free, &ready, &ALL, None, &[])),
+        Some("Tf".to_owned())
+    );
+    // Tickets in progress that expect fourteen cores leave no room for it.
+    free.free_cores = room(&free, &[8.0, 6.0]);
+    assert_eq!(next_for(&free, &ready, &ALL, None, &[]), None);
+    // A machine that sends no admitted cores has room for its scheduler's free cores.
+    free.admit_cores = None;
+    free.free_cores = 1.5;
+    assert!((room(&free, &[8.0, 6.0]) - 1.5).abs() < f64::EPSILON);
 }
 
 #[test]

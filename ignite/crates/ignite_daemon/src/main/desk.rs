@@ -394,6 +394,10 @@ impl Host for DaemonHost {
         )
     }
 
+    fn admit_cores(&self) -> f64 {
+        f64::from(self.scheduler.status().cores)
+    }
+
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {
         self.ticket_trees()
             .into_iter()

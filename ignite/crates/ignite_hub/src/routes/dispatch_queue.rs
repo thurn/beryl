@@ -79,7 +79,10 @@ pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Opt
     let mut free = free.clone();
     free.idle_workers
         .retain(|worker| !waiting.contains(worker.session.as_str()));
-    let mut ready = snapshot.ready_tickets(conn, machine, free.os, now)?;
+    let history = history(conn, machine)?;
+    let landed = landed_files(conn)?;
+    free.free_cores = dispatch::room(&free, &held_cores(conn, machine, &history, &landed, now)?);
+    let mut ready = snapshot.ready_tickets(conn, machine, free.os, &history, &landed, now)?;
     let demand = snapshot.demand(&ready);
     // Improvements go ahead of the epic order and so skip the share, but not a group's
     // `--max-workers` cap.
@@ -133,7 +136,9 @@ pub fn chain_next(
         return Ok(None);
     };
     let snapshot = Snapshot::load(conn, now)?;
-    let ready = snapshot.ready_tickets(conn, machine.as_str(), os, now)?;
+    let history = history(conn, machine.as_str())?;
+    let landed = landed_files(conn)?;
+    let ready = snapshot.ready_tickets(conn, machine.as_str(), os, &history, &landed, now)?;
     let Some(next) = dispatch::chain_next(lane, &ready) else {
         return Ok(None);
     };
@@ -289,10 +294,10 @@ impl Snapshot {
         conn: &Connection,
         machine: &str,
         os: Os,
+        history: &[Worked],
+        landed: &[String],
         now: Timestamp,
     ) -> Result<Vec<ReadyTicket>> {
-        let history = history(conn, machine)?;
-        let landed = landed_files(conn)?;
         let name = fleet::name_of(conn, machine)?;
         let has = |needed: &str| needed == os.as_str() || name.as_deref() == Some(needed);
         let mut memo = HashMap::new();
@@ -317,7 +322,7 @@ impl Snapshot {
             // operating system, which `ignite_core::dispatch` cannot do because it sees only the
             // operating system.
             ticket.labels.retain(|label| !label.starts_with(NEEDS));
-            ready.push(self.ready_ticket(ticket, &history, &landed, &mut memo, now));
+            ready.push(self.ready_ticket(ticket, history, landed, &mut memo, now));
         }
         Ok(ready)
     }
@@ -374,7 +379,7 @@ impl Snapshot {
         now: Timestamp,
     ) -> ReadyTicket {
         let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
-        let areas = areas(&files, landed);
+        let expected_cores = expected_cores(&ticket, &files, history, landed, now);
         let saving = ticket
             .saving
             .as_ref()
@@ -392,7 +397,7 @@ impl Snapshot {
             priority: ticket.priority,
             chain: self.chain(ticket.id.as_str(), memo, &mut HashSet::new()),
             created_at: ticket.created_at,
-            expected_cores: admission::expected_cores(ticket.cores, &areas, history, now),
+            expected_cores,
             families: Vec::new(),
             files,
             saving,
@@ -430,6 +435,45 @@ impl Snapshot {
         }
         groups.into_values().collect()
     }
+}
+
+/// A ticket's expected cores ([`admission::expected_cores`]) from the planner's figure, the
+/// areas of `files`, the files it names, and the machine's `history`.
+fn expected_cores(
+    ticket: &Ticket,
+    files: &[String],
+    history: &[Worked],
+    landed: &[String],
+    now: Timestamp,
+) -> f64 {
+    admission::expected_cores(ticket.cores, &areas(files, landed), history, now)
+}
+
+/// The expected cores of each ticket in progress on `machine` or reserved for it, which a new
+/// ticket must fit beside ([`dispatch::room`]). The hub cannot see what a ticket has used so
+/// far, so each counts at its expectation alone.
+fn held_cores(
+    conn: &Connection,
+    machine: &str,
+    history: &[Worked],
+    landed: &[String],
+    now: Timestamp,
+) -> Result<Vec<f64>> {
+    let mut statement = conn.prepare(
+        "SELECT id FROM tickets WHERE status = 'in_progress' AND machine = ?1
+         UNION SELECT ticket FROM reservations WHERE machine = ?1",
+    )?;
+    let ids: Vec<String> = statement
+        .query_map([machine], |row| row.get(0))?
+        .collect::<std::result::Result<_, _>>()?;
+    let mut cores = Vec::new();
+    for id in ids {
+        if let Some(ticket) = tickets::load(conn, &id)? {
+            let files = named_files(&format!("{}\n{}", ticket.body, ticket.acceptance));
+            cores.push(expected_cores(&ticket, &files, history, landed, now));
+        }
+    }
+    Ok(cores)
 }
 
 /// The paths a ticket names, in order and without repeats:

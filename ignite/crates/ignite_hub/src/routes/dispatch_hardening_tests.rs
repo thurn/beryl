@@ -242,3 +242,28 @@ fn a_lapsed_improvement_does_not_count_toward_the_improvement_share() {
     let (_, next) = post(&mut conn, "/next", &free("m-1", &["local_c"]), at(3_602.0));
     assert_eq!(next["ticket"], ids[0].as_str());
 }
+
+#[test]
+fn a_machine_whose_scheduler_is_full_is_offered_what_its_held_tickets_leave_room_for() {
+    // A landing fills the scheduler, so it has no cores free at this moment, but the machine
+    // admits two cores and each ticket expects one, the default with no history.
+    let mut conn = hub::open_in_memory().unwrap();
+    let ids = file(
+        &mut conn,
+        &[("one", &[], &[]), ("two", &[], &[]), ("three", &[], &[])],
+    );
+    let ask = |conn: &mut rusqlite::Connection, session: &str| {
+        let mut body = free("m-1", &[session]);
+        body["free_cores"] = json!(0.0);
+        body["admit_cores"] = json!(2.0);
+        post(conn, "/next", &body, start()).1
+    };
+    let first = ask(&mut conn, "local_a");
+    assert_eq!(first["ticket"], ids[0].as_str());
+    // The first ticket is claimed and in progress; the second fits beside it.
+    let (status, _) = post(&mut conn, "/claims", &claim_reserved(&first, "local_a"), start());
+    assert_eq!(status, 200);
+    assert_eq!(ask(&mut conn, "local_b")["ticket"], ids[1].as_str());
+    // One in progress and one reserved fill the two cores.
+    assert_eq!(ask(&mut conn, "local_c"), Value::Null);
+}

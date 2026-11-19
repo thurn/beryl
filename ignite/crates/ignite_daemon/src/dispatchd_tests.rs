@@ -17,6 +17,7 @@ use ignite_core::protocol::hub::WorkerState;
 pub(super) struct FakeHost {
     pub(super) trees: Mutex<u32>,
     cores: Mutex<f64>,
+    admit: Mutex<f64>,
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
     pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
     pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
@@ -35,6 +36,10 @@ impl Host for FakeHost {
 
     fn free_cores(&self) -> f64 {
         *lock(&self.cores)
+    }
+
+    fn admit_cores(&self) -> f64 {
+        *lock(&self.admit)
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {
@@ -117,6 +122,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
     let host = Arc::new(FakeHost::default());
     *lock(&host.trees) = 8;
     *lock(&host.cores) = 10.0;
+    *lock(&host.admit) = 15.0;
     let pool = Pool::new(db);
     let setup = Setup {
         os: Os::Macos,
@@ -324,13 +330,15 @@ fn nothing_is_handed_off_without_a_free_tree_or_admission() {
         "no tree free: the hub is not asked"
     );
 
-    // The hub decides admission from the cores the daemon reports, and answers nothing.
+    // The hub decides admission from the cores the daemon reports, and answers nothing. The
+    // daemon reports the scheduler's free cores at the moment and the cores it admits against.
     let rig = super::tests::rig(&["local_w1"]);
     *lock(&rig.host.cores) = 0.5;
     assert!(rig.step().is_none());
     let asked = rig.hub.asked();
     assert_eq!(asked.len(), 1);
     assert!((asked[0].free_cores - 0.5).abs() < f64::EPSILON);
+    assert_eq!(asked[0].admit_cores, Some(15.0));
     assert_eq!(asked[0].idle_workers[0].models, ["opus", "sonnet", "light"]);
     assert_eq!(rig.state_of("local_w1"), "idle");
 }

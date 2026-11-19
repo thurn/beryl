@@ -15,7 +15,7 @@
 //!
 //! A machine can take a ticket when it has a free ticket tree, an idle worker that suits the
 //! ticket (its app runs the model of the `tier:` label and is the app of a `provider:` label),
-//! room for the ticket's expected cores, and every check family the ticket's files could bring
+//! room for the ticket's expected cores ([`room`]), and every check family the ticket's files could bring
 //! into its gate. A `needs:<os>` label, which a regression ticket carries, limits it to that operating system.
 //! Among suitable workers, the one whose last ticket shared the most files gets it; dispatch
 //! never waits for a particular worker. Everything here is a pure function of its arguments, so
@@ -91,6 +91,20 @@ pub fn suits(worker: &IdleWorker, ticket: &ReadyTicket) -> bool {
     let tier = label(&ticket.labels, "tier:").is_none_or(|t| worker.models.iter().any(|m| m == t));
     let provider = label(&ticket.labels, "provider:").is_none_or(|p| worker.app == p);
     tier && provider
+}
+
+/// The cores a machine has room for, which a ticket's expected cores must fit in: its
+/// `admit_cores` less `in_progress`, the expected cores of each ticket in progress on it or
+/// reserved for it ([`admission::free_cores`]). A machine that sends no `admit_cores` has room
+/// for its `free_cores`, the scheduler's free cores at the moment it asked.
+///
+/// The scheduler's momentary figure is not the test, because every heavy command already waits
+/// for cores in the scheduler, and a new ticket uses almost none while its worker reads the
+/// ticket and the code.
+pub fn room(free: &MachineFree, in_progress: &[f64]) -> f64 {
+    free.admit_cores.map_or(free.free_cores, |admit| {
+        admission::free_cores(admit, in_progress)
+    })
 }
 
 /// Whether the machine can take the ticket, leaving aside which worker.

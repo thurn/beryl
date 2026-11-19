@@ -391,6 +391,7 @@ fn next_reads_nothing_as_no_reservation() {
         idle_workers: Vec::new(),
         free_ticket_trees: 1,
         free_cores: 4.0,
+        admit_cores: None,
         families: Vec::new(),
         name: None,
         justiciar_only: false,

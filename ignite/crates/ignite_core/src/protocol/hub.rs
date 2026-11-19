@@ -122,8 +122,17 @@ pub struct MachineFree {
     pub os: Os,
     pub idle_workers: Vec<IdleWorker>,
     pub free_ticket_trees: u32,
-    /// Cores the machine can admit beside the tickets in progress there.
+    /// The cores the machine's scheduler has free at this moment. Dispatch tests a ticket's
+    /// expected cores against it only when `admit_cores` is missing.
     pub free_cores: f64,
+    /// The cores the machine admits tickets against: all the cores its scheduler hands out. The
+    /// hub tests a ticket's expected cores against this less the expected cores of the tickets
+    /// in progress on the machine or reserved for it ([`crate::dispatch::room`]), not against
+    /// `free_cores`, because a landing that fills the scheduler for a minute says nothing about
+    /// room for a ticket whose worker will spend its first minutes reading and editing. A
+    /// daemon that predates it sends none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admit_cores: Option<f64>,
     /// The families the machine can run; empty means every family.
     pub families: Vec<String>,
     /// The machine's registered name, which a `needs:<name>` label asks for. The hub fills it

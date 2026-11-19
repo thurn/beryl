@@ -101,8 +101,11 @@ pub struct SessionCommand {
 pub trait Host: Send + Sync {
     /// Ticket trees free to lease.
     fn free_ticket_trees(&self) -> u32;
-    /// Cores the machine can admit beside the tickets in progress (see `admission`).
+    /// The cores the scheduler has free at this moment.
     fn free_cores(&self) -> f64;
+    /// The cores the machine admits tickets against: all the cores its scheduler hands out. The
+    /// hub subtracts the expected cores of the tickets in progress here.
+    fn admit_cores(&self) -> f64;
     /// The ticket each session holds a build tree for.
     fn holders(&self) -> BTreeMap<SessionId, TicketId>;
     fn command(&self, session: &SessionId) -> Option<SessionCommand>;

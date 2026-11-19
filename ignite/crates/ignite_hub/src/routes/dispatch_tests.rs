@@ -146,6 +146,7 @@ pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
             .collect(),
         free_ticket_trees: 4,
         free_cores: 16.0,
+        admit_cores: None,
         families: Vec::new(),
         name: None,
         justiciar_only: false,

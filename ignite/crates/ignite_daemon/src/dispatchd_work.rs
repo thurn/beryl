@@ -219,6 +219,7 @@ impl Dispatcher {
                     .collect(),
                 free_ticket_trees: trees,
                 free_cores: self.host.free_cores(),
+                admit_cores: Some(self.host.admit_cores()),
                 families: self.setup.families.clone(),
                 name: None,
                 // The last idle worker of a pool of several is kept for justiciar tickets.
