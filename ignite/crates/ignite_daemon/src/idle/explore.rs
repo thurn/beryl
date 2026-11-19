@@ -13,7 +13,7 @@ use ignite_core::protocol::{Class, Outcome, Usage};
 use ignite_core::traits::{BuildResult, CommandSpec, Error, Result};
 
 use super::state::{NewCheck, Report};
-use super::{Idle, IdleJob};
+use super::{Idle, IdleJob, build_failure};
 use crate::checks::adapters::{self, Reported};
 use crate::server::Context;
 
@@ -110,10 +110,10 @@ impl Idle {
         };
         for product in &family.needs {
             if let BuildResult::Failed { output, .. } = ctx.builds.ensure(tree, product, &[]) {
-                return Err(Error::Io(format!(
-                    "the build product {product} failed; its output is in {}",
-                    output.display()
-                )));
+                return Err(build_failure(
+                    &format!("the build product {product} failed"),
+                    &output,
+                ));
             }
         }
         let file = self

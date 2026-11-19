@@ -22,7 +22,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::{BuildResult, Error, Result};
 
 use super::state::Journal;
-use super::{Idle, IdleJob, REBUILD_EVERY};
+use super::{Idle, IdleJob, REBUILD_EVERY, build_failure};
 use crate::server::Context;
 
 /// Counts kept per edit; older ones are dropped.
@@ -186,6 +186,12 @@ impl Idle {
         let measured = tried.and_then(|()| self.measure(ctx, &edit, &tree, &path));
         // The tree's builds now match the edited file, which no commit holds.
         let released = self.host.release(&tree, None);
+        if let Err(Error::Conflict(_)) = &measured {
+            // A build was stopped, so nothing was measured at this commit: the edit stays due.
+            self.update(|state| {
+                state.rebuild_tried.remove(name);
+            })?;
+        }
         let units = measured?;
         released?;
         let Some(count) = RebuildCount::from_units(name, commit, self.clock.now(), &units) else {
@@ -219,10 +225,10 @@ impl Idle {
     ) -> Result<Vec<CompileUnit>> {
         for product in &edit.products {
             if let BuildResult::Failed { output, .. } = ctx.builds.ensure(tree, product, &[]) {
-                return Err(Error::Io(format!(
-                    "{product} failed to build before the edit; its output is in {}",
-                    output.display()
-                )));
+                return Err(build_failure(
+                    &format!("{product} failed to build before the edit"),
+                    &output,
+                ));
             }
         }
         let file = path.join(&edit.file);
@@ -253,10 +259,10 @@ impl Idle {
         self.restore()?;
         applied?;
         if let Some((product, output)) = failed {
-            return Err(Error::Io(format!(
-                "{product} failed to build after the edit; its output is in {}",
-                output.display()
-            )));
+            return Err(build_failure(
+                &format!("{product} failed to build after the edit"),
+                &output,
+            ));
         }
         Ok(units)
     }

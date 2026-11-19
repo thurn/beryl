@@ -140,6 +140,22 @@ pub struct ResultFile {
     pub hung: bool,
 }
 
+impl ResultFile {
+    /// Whether the command whose whole output is `output` was ended by a signal before its
+    /// hang limit, as when the scheduler stops `idle` work for a higher class or a daemon
+    /// restart cuts it. Such a failure says nothing about the source it built. `false` when
+    /// `output` is not in a run directory or the run wrote no result.
+    pub fn ended_from_outside(output: &Path) -> bool {
+        let Some(dir) = output.parent() else {
+            return false;
+        };
+        fs::read(dir.join(RESULT))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<ResultFile>(&bytes).ok())
+            .is_some_and(|result| result.exit.is_none() && !result.hung)
+    }
+}
+
 /// Runs commands by starting a supervisor for each.
 pub struct SupervisedLauncher {
     /// The program and arguments that start a supervisor; the spec file's path is appended.

@@ -40,7 +40,7 @@ mod state;
 #[cfg(test)]
 mod tests;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ignite_core::config::Os;
@@ -436,6 +436,26 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 struct Work<'a> {
     _guard: MutexGuard<'a, ()>,
     _file: Option<share::FileLock>,
+}
+
+/// The error for idle work whose build failed with its whole output in `output`; `failed`
+/// says which build failed and how, such as "rust-tests failed to build before the edit".
+///
+/// A build the scheduler stopped to give its cores to a higher class, or that a daemon restart
+/// cut, ended by a signal. That says nothing about the source, so it is a
+/// [`Error::Conflict`], which [`backoff`] does not count as a failure of the job: the job runs
+/// again on the next idle round. Before this, every landing that stopped an idle rebuild
+/// counted as a failure, and three in a row filed a justiciar report against a job that had
+/// nothing wrong with it.
+fn build_failure(failed: &str, output: &Path) -> Error {
+    if crate::supervise::ResultFile::ended_from_outside(output) {
+        Error::Conflict(format!(
+            "{failed}: the build was stopped before it finished; its output is in {}",
+            output.display()
+        ))
+    } else {
+        Error::Io(format!("{failed}; its output is in {}", output.display()))
+    }
 }
 
 /// The exit code for an error from idle work.

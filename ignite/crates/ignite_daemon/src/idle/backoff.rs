@@ -6,7 +6,9 @@
 //! failures and lets a later run of failures be reported again.
 //!
 //! A job that fails because the hub cannot be reached is not counted: the job is not at fault,
-//! and the report could not reach the hub either.
+//! and the report could not reach the hub either. Nor is a job that failed with a conflict,
+//! such as a build the scheduler stopped to give its cores to a landing: the job did not get
+//! to finish, so it runs again on the next idle round.
 
 use serde::{Deserialize, Serialize};
 
@@ -85,7 +87,7 @@ impl Idle {
     /// Counts a failure of `job`, sets its wait, and reports it to the hub once it has failed
     /// [`REPORT_AFTER`] times in a row.
     pub(super) fn note_failure(&self, ctx: &Context, job: &IdleJob, error: &Error) -> Result<()> {
-        if matches!(error, Error::Unreachable(_)) {
+        if matches!(error, Error::Unreachable(_) | Error::Conflict(_)) {
             return Ok(());
         }
         let now = self.clock.now();
