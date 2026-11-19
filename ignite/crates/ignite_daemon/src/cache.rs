@@ -32,6 +32,10 @@ use ignite_store::local::{listings, outbox as queue, passes, results, rows};
 
 use crate::outbox;
 
+/// The hash a listing that must not be kept is stored under on this machine. A listing hash is
+/// hex, so it never equals this word.
+const UNKEPT: &str = "unkept";
+
 /// How far back a command's passes count toward its hang limit: 30 days.
 const PASSES_KEPT_S: f64 = 30.0 * 24.0 * 60.0 * 60.0;
 
@@ -183,6 +187,15 @@ impl ResultCache {
     /// The newest listing of `family` in the local copy, whatever inputs it was made from.
     pub fn latest_listing(&self, family: &str) -> Option<String> {
         listings::latest(&self.conn(), family).ok().flatten()
+    }
+
+    /// Stores, on this machine only, a listing of `family` that must not be kept for its inputs
+    /// (see "Checks" in `docs/ignite.md`), so that [`Cache::latest_listing`] can still say which
+    /// checks the family holds. It is stored under [`UNKEPT`], which no listing hash equals, so
+    /// no tree is ever offered it as its listing.
+    pub fn store_unkept_listing(&self, family: &str, listing: &str) {
+        let at = self.clock.now().to_string();
+        let _ = listings::put(&self.conn(), family, UNKEPT, listing, &at);
     }
 
     /// Stores a family's listing locally and at the hub. A hub that cannot take it now is not

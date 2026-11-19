@@ -332,6 +332,17 @@ impl Checks {
         remember(&mut memory, key, Arc::new(kept));
     }
 
+    /// Stores, on this machine only, a listing that must not be kept for its inputs, such as one
+    /// whose checks carry digests, so that [`Checks::latest_listing`] names its checks. Without
+    /// it, `ignite test <word>` found no listing of such a family and listed it every time. Two
+    /// such families whose `list` needs a large build were built and listed for a test of one
+    /// card file, which took 274 s, 245 s of it listing families that held no such check.
+    pub(crate) fn keep_names(&self, family: &str, kept: &Kept) {
+        if let Ok(text) = serde_json::to_string(kept) {
+            self.cache.store_unkept_listing(family, &text);
+        }
+    }
+
     /// Forgets a kept listing that turned out not to hold for a tree, so the next tree with
     /// the same listing hash is not offered it from memory.
     pub(crate) fn forget(&self, key: &ListingKey) {

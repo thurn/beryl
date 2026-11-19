@@ -110,6 +110,49 @@ fn a_listing_with_a_digest_is_never_kept() {
     );
 }
 
+/// A listing whose checks carry digests is never kept, but `ignite test <word>` still reads
+/// which checks it names, so a word it does not name lists the family no more. Before, such a
+/// family had no newest listing and was listed for every word, building what its `list` needs.
+#[test]
+fn a_word_an_unkept_listing_does_not_name_lists_its_family_no_more() {
+    let world = jsonl_world();
+    *world.launcher.listing.lock().unwrap() =
+        format!("{{\"check\": \"unit:a\", \"digest\": \"d1\"}}\n{NEXTEST_LISTING}\n");
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$a\"}\n".to_owned();
+    assert!(run(&world, &["unit:a", "rs:core::a"]).passed());
+    assert!(world.hub.listing_keys().iter().all(|k| k.family != "unit"));
+    let listers = world.launcher.commands("lister").len();
+    let verb = TestVerb {
+        checks: world.checks.clone(),
+        express: None,
+    };
+    let request = Request {
+        verb: "test".to_owned(),
+        args: vec!["core::a".to_owned()],
+        cwd: world.dir.join("sub"),
+        session: None,
+        wait_s: 1,
+        pid: None,
+    };
+    let reply = verb.run(&world.ctx, &request);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(
+        world.launcher.commands("lister").len(),
+        listers,
+        "the family whose listing holds no such check is not listed"
+    );
+    // A word the listing names lists the family again, since its listing is not kept.
+    let request = Request {
+        args: vec!["it:a".to_owned()],
+        ..request
+    };
+    let reply = verb.run(&world.ctx, &request);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(world.launcher.commands("lister").len(), listers + 1);
+    assert!(world.hub.listing_keys().iter().all(|k| k.family != "unit"));
+}
+
 /// The oracle family's checks carry a digest of each scenario's exported input, so its listing
 /// was never kept and every landing listed it, after building what listing needs. A family
 /// that declares the files its digests are computed from has its listing kept under a hash

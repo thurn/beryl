@@ -262,15 +262,28 @@ impl Checks {
             (keyed, broken, sources) = self.key_listing(ctx, tree, family, &listing);
             run.slow(ctx, format!("keying {name}"), keying);
         }
-        if let (Origin::Made { key: Some(key) }, Some(sources)) = (&listing.origin, sources) {
-            let keeping = Stopwatch::start(ctx);
-            let kept = Kept {
-                sources,
-                checks: listing.checks,
-                reads: listing.reads,
-            };
-            self.keep(key.clone(), kept);
-            run.slow(ctx, format!("keeping the listing of {name}"), keeping);
+        match (&listing.origin, sources) {
+            (Origin::Made { key: Some(key) }, Some(sources)) => {
+                let keeping = Stopwatch::start(ctx);
+                let kept = Kept {
+                    sources,
+                    checks: listing.checks,
+                    reads: listing.reads,
+                };
+                self.keep(key.clone(), kept);
+                run.slow(ctx, format!("keeping the listing of {name}"), keeping);
+            }
+            // A listing that must not be kept still names the family's checks, which is all
+            // `ignite test <word>` asks of a family's newest listing.
+            (Origin::Made { .. }, sources) if !listing.checks.is_empty() => {
+                let kept = Kept {
+                    sources: sources.unwrap_or_else(|| Self::sources_hash(&[])),
+                    checks: listing.checks,
+                    reads: listing.reads,
+                };
+                self.keep_names(name, &kept);
+            }
+            _ => {}
         }
         Some(Prepared {
             family: name.to_owned(),

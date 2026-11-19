@@ -544,5 +544,10 @@
     "label": "The landing gate (`ignite check` and `ignite land`) builds every product its listings need while it lists the families that need none, lists families and runs them on threads of their own, and prints `slow` and `took` lines (on 2026-11-19 `ignite check` of a one-card comment change listed 26 families one after another for 137 s, ran them one after another for 123 s and took 273 s, of which its output accounted for 164 s)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite test <word>` keeps a local copy of every listing that is never kept for its inputs, such as one whose checks carry digests, so a family whose checks do not hold the word is not listed again (on 2026-11-19 `ignite test quicksilver_gargantuan` after a one-line card comment change took 198 s, 173 s of it waiting for the Beryl 3D build that `b3d-timeline-drift` needs to be listed)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

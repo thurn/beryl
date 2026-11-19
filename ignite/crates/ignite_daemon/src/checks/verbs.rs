@@ -116,7 +116,9 @@ impl TestVerb {
     /// this machine keeps of it. A change to a file many families read, such as one card, leaves
     /// most of them without a kept listing for the new inputs, and listing them all again
     /// builds every product; a check is seldom added between two listings, so the newest one
-    /// answers. A family never listed on this machine is listed, and when a word matches no
+    /// answers. The newest listing may be one that is never kept for its inputs, such as one
+    /// whose checks carry digests ([`Checks::keep_names`]). A family never listed on this
+    /// machine is listed, and when a word matches no
     /// listing, so is every family without a kept listing for the tree's inputs. When no
     /// family could hold a bare word, the reply says how checks are named.
     ///
