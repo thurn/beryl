@@ -379,5 +379,10 @@
     "label": "`ignite test` of Ignite's own checks, and `ignite check`, run the express commands on the reserved express cores when the tree changes only Ignite: through the scheduler they took 5 to 8.5 minutes while other builds held its cores, against 40 s warm on 3 express cores after a daemon edit (fmt 0 s, clippy 2 s, nextest 38 s)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The Claude dispatcher's settings deny the tools its loop never calls, which Claude Code then leaves out of its context: the desktop app's browser, simulator, chart, terminal and editing tools took about 60,000 of its 120,000-token window before its first message, so each request re-sent them and it compacted after about 27,000 tokens of loop",
+    "metric": "bead.dollars",
+    "expect": "down"
   }
 ]

@@ -2103,6 +2103,13 @@ the tool calls the daemon asks for.
   outranks `autoCompactWindow`: a dispatcher showed a 1M window and reached
   131,000 tokens without compacting until `/autocompact` was run in it. The
   environment variable outranks that window.
+- The same file denies every tool the loop never calls (`permissions.deny`): the
+  desktop app's browsers, simulator, charts, terminal, panes and task list, and
+  the built-in editing, research, subagent and artifact tools. Claude Code drops
+  a denied tool from the model's context. Without the list, about 60,000 of the
+  120,000 tokens were in use before the dispatcher's first message, most of them
+  tool definitions, which left room for only a short stretch of the loop between
+  compactions.
 - It never plans, reads tickets or decides anything.
 - Codex has no such setting. When a Codex dispatcher's context passes the same
   size, the daemon's next instruction has it open a new chat in its folder with
