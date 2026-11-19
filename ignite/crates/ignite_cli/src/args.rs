@@ -438,8 +438,12 @@ pub enum TicketCommand {
         /// Without this flag an epic, and a ticket under a pending epic, are filed
         /// `pending_approval` and the pool is never offered them until a person releases them;
         /// any other ticket is filed `open`.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "pending")]
         release: bool,
+        /// File it `pending_approval` even if it is a single ticket under no epic, so that the
+        /// pool is never offered it until a person or an agent reviewing it releases it.
+        #[arg(long)]
+        pending: bool,
     },
     /// Show one or more tickets.
     Show {

@@ -269,6 +269,9 @@ def file_bead(report: Report, priority: str) -> str:
             ",".join(labels),
             "--body-file",
             str(body),
+            # A player's report waits for the `bugfix` planner to deduplicate and group it
+            # before any worker starts on it, so it is held for release like an epic.
+            "--pending",
         )
     return str(created["results"][0]["id"])
 

@@ -72,7 +72,9 @@ reproduces it.
 1. **File them.** `just bugs` lists open and filed reports. `just bugs file`
    files a ticket for each open one (type bug, label `bug-report`, priority 1)
    holding the report's path and the player's words, and saves the issue ID in
-   the report's front matter. For closed history and work left in progress, use
+   the report's front matter. Each is filed `pending_approval`, so no worker
+   starts on a report before this run has deduplicated and grouped it; moving it
+   under the run's epic (step 4) means releasing the epic releases it. For closed history and work left in progress, use
    `ignite ticket list --label bug-report --all --json`. Reconcile the local reports with
    the tickets and establish the reports in scope for this run; do not silently
    omit blocked, deferred, or interrupted work. Leave out tickets labeled

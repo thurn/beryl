@@ -69,23 +69,27 @@ fn dependency(spec: &str) -> Result<Value> {
     Ok(json!({"on": id, "kind": kind}))
 }
 
+/// The status of a ticket filed but not yet released for implementation.
+pub const PENDING: &str = "pending_approval";
+
 /// The status a released ticket takes.
 pub const RELEASED: &str = "open";
 
-/// Files a ticket. With `release` it is filed `open` whatever it is. Without it the hub decides:
-/// an epic, or a ticket under a pending epic, waits for a person's release, and any other
-/// ticket is filed `open` (see `add_holds` in `ignite_store`).
+/// Files a ticket with `status` when one is given, such as `open` for `--release` or
+/// `pending_approval` for `--pending`. Without one the hub decides: an epic, or a ticket under a
+/// pending epic, waits for a person's release, and any other ticket is filed `open` (see
+/// `add_holds` in `ignite_store`).
 pub fn create(
     title: &str,
     fields: &TicketFieldArgs,
     labels: &[String],
     deps: &[String],
-    release: bool,
+    status: Option<&str>,
 ) -> Result<Value> {
     let mut set = Fields::new();
     set.insert("title".into(), json!(title));
-    if release {
-        set.insert("status".into(), json!(RELEASED));
+    if let Some(status) = status {
+        set.insert("status".into(), json!(status));
     }
     shared_fields(&mut set, fields)?;
     if !labels.is_empty() {
@@ -243,7 +247,7 @@ mod tests {
             &fields,
             &["tier:opus".into()],
             &["a".into(), "blocked-by:b".into(), "relates-to:c".into()],
-            false,
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -256,8 +260,8 @@ mod tests {
                          {"on": "c", "kind": "related"}],
             })
         );
-        assert!(create("x", &no_fields(), &[], &["blocks:z".into()], false).is_err());
-        let released = create("x", &no_fields(), &[], &[], true).unwrap();
+        assert!(create("x", &no_fields(), &[], &["blocks:z".into()], None).is_err());
+        let released = create("x", &no_fields(), &[], &[], Some(RELEASED)).unwrap();
         assert_eq!(released["fields"]["status"], "open");
     }
 

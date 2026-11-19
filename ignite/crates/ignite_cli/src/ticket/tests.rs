@@ -212,6 +212,7 @@ fn show_tells_a_session_to_start_a_pending_ticket_before_investigating_it() {
     let id = |reply: Value| reply["results"][0]["id"].as_str().unwrap().to_owned();
     let pending = id(hub.json("create Slow --type epic"));
     let single = id(hub.json("create Single"));
+    let held = id(hub.json("create Held --pending"));
     let released = id(hub.json("create Fast --release"));
     assert_eq!(
         hub.json(&format!("show {pending}"))["next"],
@@ -227,6 +228,11 @@ fn show_tells_a_session_to_start_a_pending_ticket_before_investigating_it() {
         hub.json(&format!("show {single}"))["status"],
         "open",
         "a ticket under no epic needs no release"
+    );
+    assert_eq!(
+        hub.json(&format!("show {held}"))["status"],
+        "pending_approval",
+        "`--pending` holds a single ticket for review"
     );
 }
 

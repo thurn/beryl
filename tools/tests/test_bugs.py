@@ -106,6 +106,7 @@ class Ignite:
                     "priority": option("--priority"),
                     "labels": option("--labels").split(","),
                     "body": Path(option("--body-file")).read_text(),
+                    "pending": "--pending" in rest,
                 }
             )
             out = {"results": [{"id": self.created}]}
@@ -136,6 +137,7 @@ def test_file_and_done(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert calls[0]["title"] == "Arrow jumps: on block"
     assert calls[0]["type"] == "bug" and calls[0]["priority"] == "P1"
     assert calls[0]["labels"] == ["bug-report", f"bug-report:{folder.name}"]
+    assert calls[0]["pending"], "a report waits for the planner's review"
     filed = bugs.load(folder)
     assert filed is not None and filed.status == "filed" and filed.bead == "by-x1"
     # Filed once only.

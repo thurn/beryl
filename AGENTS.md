@@ -127,7 +127,8 @@ situation, and a command names the topic when it applies.
   first or give it the dependency. An epic, and every ticket filed under a
   pending epic, is filed `pending_approval`, and the pool is never offered its
   tickets until the user releases it (`ignite ticket update <epic> --release`);
-  agents never pass `--release`.
+  agents never pass `--release`. Player bug reports (`just bugs file`) are filed
+  pending too, so the `bugfix` planner reviews them first.
 - Every session has to spend time learning the code it touches, so each ticket
   names the files, helpers and tests it needs by path, so that its session can
   read them all in its first message.
