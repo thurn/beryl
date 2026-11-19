@@ -5,11 +5,13 @@
 //! - [`hub`]: the hub's other routes: machines, hand-offs, the result cache, tips and records.
 //! - [`host`]: the calls a verb process makes to its machine's daemon.
 //! - [`fleet`]: the Ignite version the hub and each machine runs.
+//! - [`emergency`]: the justiciar's emergency pause, which every daemon enforces.
 //!
 //! Types that more than one of those use (the command classes, the cost of a command, a
 //! check's outcome) are defined here.
 
 pub mod client;
+pub mod emergency;
 pub mod fleet;
 pub mod host;
 pub mod hub;

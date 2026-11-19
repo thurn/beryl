@@ -85,7 +85,7 @@ pub enum Command {
         #[arg(last = true, required = true)]
         command: Vec<String>,
     },
-    /// Block until a running operation finishes.
+    /// Block until a running operation finishes, or with `emergency` until the emergency ends.
     Wait { handle: String },
     /// End a running command of this session's, such as a landing before its push begins.
     Stop { handle: String },
@@ -154,6 +154,11 @@ pub enum Command {
         /// What is broken, and the evidence.
         #[arg(required = true)]
         reason: Vec<String>,
+    },
+    /// The emergency pause, which refuses heavy verbs on every machine while it is in force.
+    Emergency {
+        #[command(subcommand)]
+        command: Option<crate::emergency::EmergencyCommand>,
     },
     /// Check an epic's ticket graph.
     Plan {
@@ -605,6 +610,7 @@ impl Command {
             Command::Pool { .. } => "pool",
             Command::Tell { .. } => "tell",
             Command::Justiciar { .. } => "justiciar",
+            Command::Emergency { .. } => "emergency",
             Command::Plan { .. } => "plan",
             Command::Gate { .. } => "gate",
             Command::Flaky { .. } => "flaky",

@@ -257,6 +257,9 @@ pub struct Server {
     late: std::sync::RwLock<Registry>,
     /// Held only by the server, so the threads it starts can tell when it is gone.
     token: Arc<()>,
+    /// The emergency pause, which refuses heavy verbs while it is in force (see
+    /// [`crate::emergency`]).
+    emergency: Option<Arc<crate::emergency::Emergencies>>,
 }
 
 impl Server {
@@ -312,6 +315,7 @@ impl Server {
             draining: AtomicBool::new(false),
             late: std::sync::RwLock::default(),
             token: Arc::new(()),
+            emergency: None,
         };
         if let Some(processes) = &server.processes {
             processes.host.set_handles(server.handles.clone());
@@ -348,6 +352,12 @@ impl Server {
                 .find(|a| a.work().session.as_ref() == Some(session)),
         }?;
         Some(activity.view().doing())
+    }
+
+    /// Refuses heavy verbs while `emergencies` has an emergency in force, and answers
+    /// `ignite wait emergency` from it.
+    pub fn enforce_emergency(&mut self, emergencies: Arc<crate::emergency::Emergencies>) {
+        self.emergency = Some(emergencies);
     }
 
     /// Adds a hook. Hooks run in the order they were added.
@@ -424,6 +434,18 @@ impl Server {
             && let Some(refusal) = self.refuse_while_held(&ctx, &req.verb)
         {
             return refusal;
+        }
+        if let Some(emergencies) = &self.emergency {
+            if req.verb == "wait" && req.args == ["emergency"] {
+                return emergencies
+                    .wait(req.wait_s, &|| caller.as_ref().is_some_and(|gone| gone()));
+            }
+            let ticket = crate::emergency::caller_ticket(self.db.as_ref(), &ctx, req);
+            if let Some(refusal) =
+                emergencies.refusal(&req.verb, req.session.as_ref(), ticket.as_ref())
+            {
+                return refusal;
+            }
         }
         if let Some(session) = &req.session {
             lock(&self.commands).insert(

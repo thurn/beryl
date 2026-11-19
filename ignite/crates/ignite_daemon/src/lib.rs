@@ -18,6 +18,7 @@ pub mod crash;
 pub mod deploy;
 pub mod dispatchd;
 pub mod doctor;
+pub mod emergency;
 pub mod handles;
 pub mod host;
 pub mod hubclient;

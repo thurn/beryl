@@ -128,6 +128,10 @@ impl Daemon {
                 health,
                 desks.dispatcher.clone(),
             )),
+            emergencies: Arc::new(crate::emergency::Emergencies::new(
+                base.clock.clone(),
+                Some(base.open()?),
+            )),
         };
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
         let _ = parts.update.drain.set(server.clone());

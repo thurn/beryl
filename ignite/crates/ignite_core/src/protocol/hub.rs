@@ -100,6 +100,10 @@ pub struct HeartbeatReply {
     /// The Ignite commit the hub runs; a daemon on another version updates before asking for
     /// work.
     pub hub_version: String,
+    /// The emergency in force, which the daemon enforces until a reply leaves it out (see
+    /// [`super::emergency`]). A hub that predates it sends none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emergency: Option<super::emergency::Emergency>,
 }
 
 /// An idle pool member that could take a ticket.

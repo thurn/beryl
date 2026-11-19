@@ -447,7 +447,12 @@ pub fn server(
         landing: parts.landing.clone(),
     }));
     registry.register(Box::new(DispatchVerb::new(parts.dispatcher.clone())));
-    registry.register(Box::new(PoolVerb::new(parts.dispatcher.clone())));
+    registry.register(Box::new(
+        PoolVerb::new(parts.dispatcher.clone()).ending(parts.emergencies.clone()),
+    ));
+    registry.register(Box::new(crate::emergency::EmergencyVerb(
+        parts.emergencies.clone(),
+    )));
     registry.register(Box::new(TellVerb));
     registry.register(Box::new(crate::justiciar::JusticiarVerb {
         home: parts.home.root.clone(),
@@ -458,6 +463,7 @@ pub fn server(
     registry.register(Box::new(DoctorVerb {
         loops: Some(parts.health.clone()),
         mirror: Some(parts.home.root.join(crate::mirror::FILE)),
+        emergency: Some(parts.emergencies.clone()),
     }));
     registry.register(Box::new(
         StatusVerb::new(status_sections(base, parts)).running_under(executable_of(base)?),
@@ -513,6 +519,7 @@ pub fn server(
     server.add_hook(Box::new(crate::session_title::TitleHook::new(
         crate::session_title::app_data(&env),
     )));
+    server.enforce_emergency(parts.emergencies.clone());
     let server = Arc::new(server);
     host.set_handles(server.handles().clone());
     claims.watch_commands(server.clone());
@@ -588,6 +595,9 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
             configured,
             host: Arc::new(NativeHost),
         }),
+        Box::new(crate::emergency::EmergencySection(
+            parts.emergencies.clone(),
+        )),
         Box::new(LoopsSection(parts.health.clone())),
         Box::new(doctor::TipRoundSection(parts.ctx.hub.clone())),
         Box::new(crate::deploy::ReleaseSection {

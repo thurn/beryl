@@ -7,6 +7,7 @@ pub mod check_state;
 pub mod checks;
 pub mod cycles;
 pub mod edges;
+pub mod emergency;
 pub mod feed;
 pub mod findings;
 pub mod fleet;

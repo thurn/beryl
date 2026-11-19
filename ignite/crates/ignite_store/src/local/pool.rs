@@ -1,4 +1,5 @@
-//! The pool: the machine's worker and dispatcher sessions, and whether hand-offs are paused.
+//! The pool: the machine's worker and dispatcher sessions, whether hand-offs are paused, and
+//! the other settings the daemon keeps beside them.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -79,6 +80,29 @@ pub fn set_paused(conn: &Connection, paused: bool) -> Result<()> {
     Ok(())
 }
 
+/// The pool setting `key`, such as the emergency this daemon last heard of.
+pub fn setting(conn: &Connection, key: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT value FROM pool_settings WHERE key = ?1",
+            [key],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// Sets the pool setting `key`, or removes it when `value` is `None`.
+pub fn set_setting(conn: &Connection, key: &str, value: Option<&str>) -> Result<()> {
+    match value {
+        Some(value) => conn.execute(
+            "INSERT OR REPLACE INTO pool_settings (key, value) VALUES (?1, ?2)",
+            [key, value],
+        )?,
+        None => conn.execute("DELETE FROM pool_settings WHERE key = ?1", [key])?,
+    };
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +155,15 @@ mod tests {
         assert!(paused(&conn).unwrap());
         set_paused(&conn, false).unwrap();
         assert!(!paused(&conn).unwrap());
+    }
+
+    #[test]
+    fn a_setting_is_kept_until_it_is_removed() {
+        let conn = open_in_memory().unwrap();
+        assert_eq!(setting(&conn, "emergency").unwrap(), None);
+        set_setting(&conn, "emergency", Some("{}")).unwrap();
+        assert_eq!(setting(&conn, "emergency").unwrap().as_deref(), Some("{}"));
+        set_setting(&conn, "emergency", None).unwrap();
+        assert_eq!(setting(&conn, "emergency").unwrap(), None);
     }
 }

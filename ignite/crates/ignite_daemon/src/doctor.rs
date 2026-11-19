@@ -482,7 +482,7 @@ impl Finding {
         }
     }
 
-    fn warning(label: &str, text: impl Into<String>, fix: impl Into<String>) -> Self {
+    pub(crate) fn warning(label: &str, text: impl Into<String>, fix: impl Into<String>) -> Self {
         Self {
             ok: true,
             warning: true,
@@ -742,6 +742,8 @@ pub struct DoctorVerb {
     pub loops: Option<LoopHealth>,
     /// The machine's ticket mirror (see [`crate::mirror`]); `None` where there is none.
     pub mirror: Option<PathBuf>,
+    /// The emergency pause this machine enforces; `None` where there is none.
+    pub emergency: Option<Arc<crate::emergency::Emergencies>>,
 }
 
 impl Verb for DoctorVerb {
@@ -779,6 +781,7 @@ impl Verb for DoctorVerb {
         if let Some(path) = &self.mirror {
             findings.push(mirror::finding(path, ctx.hub.as_ref(), ctx.clock.now()));
         }
+        findings.extend(self.emergency.as_ref().and_then(|e| e.finding()));
         report(&findings)
     }
 }

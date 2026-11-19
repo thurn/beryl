@@ -360,6 +360,16 @@ pub trait Hub: Send + Sync {
         Err(not_supported("pause hand-offs"))
     }
 
+    /// Declares, renews or adds to the emergency pause (`POST /emergency`); the reply is the
+    /// emergency after the change.
+    fn emergency(
+        &self,
+        change: &crate::protocol::emergency::EmergencyChange,
+    ) -> Result<Option<crate::protocol::emergency::Emergency>> {
+        let _ = change;
+        Err(not_supported("change the emergency"))
+    }
+
     /// The Ignite commit the hub and each registered machine runs (`GET /machines/versions`).
     fn fleet_versions(&self) -> Result<crate::protocol::fleet::FleetVersions> {
         Err(not_supported("give the fleet's versions"))

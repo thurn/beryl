@@ -143,6 +143,8 @@ pub struct FakeHub {
     imports: Mutex<Vec<ImportRequest>>,
     batches: Mutex<Vec<BatchRequest>>,
     pauses: Mutex<Vec<Pause>>,
+    /// The emergency, changed at [`Timestamp::EPOCH`] and ended by resuming every machine.
+    emergency: Mutex<Option<crate::protocol::emergency::Emergency>>,
     asked: Mutex<Vec<MachineFree>>,
     audits: Mutex<Vec<AuditReport>>,
     finds: Mutex<Vec<ExplorationFind>>,
@@ -589,7 +591,22 @@ impl Hub for FakeHub {
     fn pause(&self, pause: &Pause) -> Result<()> {
         self.reachable()?;
         lock(&self.pauses).push(pause.clone());
+        if pause.machine.is_none() && !pause.paused {
+            *lock(&self.emergency) = None;
+        }
         Ok(())
+    }
+
+    fn emergency(
+        &self,
+        change: &crate::protocol::emergency::EmergencyChange,
+    ) -> Result<Option<crate::protocol::emergency::Emergency>> {
+        self.reachable()?;
+        let mut current = lock(&self.emergency);
+        let next = crate::protocol::emergency::apply(current.take(), change, Timestamp::EPOCH)
+            .map_err(Error::Conflict)?;
+        *current = Some(next);
+        Ok(current.clone())
     }
 
     fn audit(&self, report: &AuditReport) -> Result<ReportFiled> {

@@ -90,6 +90,8 @@ pub struct Parts {
     pub health: LoopHealth,
     /// Sends crash records and stuck loops to the hub as justiciar reports.
     pub reporter: Arc<crate::justiciar::Reporter>,
+    /// The emergency pause, which each heartbeat's reply updates.
+    pub emergencies: Arc<crate::emergency::Emergencies>,
 }
 
 impl Parts {
@@ -129,6 +131,7 @@ impl Parts {
         );
         let update = self.update.clone();
         let reporter = self.reporter.clone();
+        let emergencies = self.emergencies.clone();
         self.start_loop("ignite-sender", SENDER_STALLS_AFTER, move |ticker| {
             // The hub's version from the last heartbeat it answered.
             let hub_version: RefCell<Option<String>> = RefCell::new(None);
@@ -143,6 +146,7 @@ impl Parts {
                     workers: dispatcher.view().unwrap_or_default(),
                 })?;
                 *hub_version.borrow_mut() = Some(reply.hub_version);
+                emergencies.heard(reply.emergency);
                 Ok(())
             };
             loop {

@@ -164,11 +164,26 @@ impl Pool {
 /// `ignite pool list | add | remove | pause | resume`.
 pub struct PoolVerb {
     dispatcher: Arc<Dispatcher>,
+    /// The emergency this machine enforces, which resuming every machine ends here at once
+    /// rather than at the next heartbeat.
+    emergency: Option<Arc<crate::emergency::Emergencies>>,
 }
 
 impl PoolVerb {
     pub fn new(dispatcher: Arc<Dispatcher>) -> PoolVerb {
-        PoolVerb { dispatcher }
+        PoolVerb {
+            dispatcher,
+            emergency: None,
+        }
+    }
+
+    /// The verb, ending `emergencies`' emergency when it resumes every machine.
+    #[must_use]
+    pub fn ending(self, emergencies: Arc<crate::emergency::Emergencies>) -> PoolVerb {
+        PoolVerb {
+            emergency: Some(emergencies),
+            ..self
+        }
     }
 }
 
@@ -388,7 +403,8 @@ impl PoolVerb {
     }
 
     /// Pauses or resumes this machine (kept locally and told to the hub) or, with `all`, every
-    /// machine (kept by the hub, whose `/next` then answers nothing).
+    /// machine (kept by the hub, whose `/next` then answers nothing). Resuming every machine also
+    /// ends the emergency, if one is in force.
     fn pause(&self, ctx: &Context, all: bool, paused: bool) -> Result<Reply> {
         let verb = if paused { "paused" } else { "resumed" };
         if all {
@@ -396,10 +412,14 @@ impl PoolVerb {
                 machine: None,
                 paused,
             })?;
-            return Ok(Reply::text(
-                Exit::Success,
-                format!("{verb}   hand-offs on every machine"),
-            ));
+            let mut text = format!("{verb}   hand-offs on every machine");
+            if !paused && let Some(emergencies) = &self.emergency {
+                if let Some(ended) = emergencies.in_force() {
+                    let _ = write!(text, "\nended    emergency {}", ended.ticket);
+                }
+                emergencies.heard(None);
+            }
+            return Ok(Reply::text(Exit::Success, text));
         }
         self.dispatcher.pool().set_paused(paused)?;
         let mut text = format!("{verb}   hand-offs on this machine; running workers finish");

@@ -3,6 +3,7 @@
 
 mod args;
 mod client;
+mod emergency;
 mod fallback;
 mod flaky;
 mod import;

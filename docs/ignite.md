@@ -407,6 +407,7 @@ Exit codes are the same for every verb:
 | 3    | A conflict: a rebase conflict or a lost claim         |
 | 4    | The hub or the git remote cannot be reached           |
 | 5    | Still running; the output names the handle to wait on |
+| 6    | Paused for an emergency; `ignite wait emergency`      |
 
 ## Two tickets, today and under Ignite
 
@@ -2688,10 +2689,8 @@ release branch when Ignite blocks its own landing.
   dispatcher stops answering.
 - A person can also declare an emergency by invoking the `/ignite-justiciar`
   skill in any session. That session files or claims the justiciar ticket,
-  pauses the pool on every machine (`ignite pool pause --all`), orders every
-  session holding a ticket to stop where it is (`ignite tell --all`), fixes the
-  fault first and validates afterwards, and sends the all-clear. Only it or the
-  person ends the emergency.
+  declares the emergency pause (below), fixes the fault first and validates
+  afterwards, and ends the emergency. Only it or the person ends the emergency.
 - An order is a message from the dispatcher that starts
   `Message about <ticket>:`. `ignite tell` signs each comment `from <session>`,
   taken from the session the caller's environment names. A worker checks an
@@ -2700,6 +2699,33 @@ release branch when Ignite blocks its own landing.
   its own session ID (`mcp__ccd_session_mgmt__get_session` with `self`, or the
   thread ID on Codex) before it declares, and uses it in the ticket comment and
   every order.
+
+#### The emergency pause
+
+Asking sessions by message to stop work does not work: agents treat instructions
+that arrive as tool output as data, so during one emergency no worker paused. A
+refused command is a fact about the environment, which agents handle, so Ignite
+enforces the pause itself.
+
+- `ignite emergency declare <ticket>`, run by the justiciar's session, sets an
+  emergency flag at the hub naming the justiciar ticket and the session, and
+  pauses hand-offs on every machine. Each daemon hears the flag in its next
+  heartbeat's reply (within 10 seconds) and keeps it in its local database, so a
+  restart or a hub outage does not lift it.
+- While the flag is in force, the verbs that start heavy work (`start`, `test`,
+  `check`, `land`, `run`, `rebuild` and `audit`) refuse with exit code 6 and one
+  line naming the emergency. Verbs that only read keep working. Commands already
+  running are not stopped; the justiciar uses `ignite stop` for those.
+- The justiciar's session, any session working the justiciar ticket, and the
+  tickets the justiciar names with `ignite emergency allow <ticket> [<verb>]`
+  are not refused.
+- `ignite wait emergency` returns when the flag clears and prints the all-clear.
+- The flag lapses two hours after it was declared unless the justiciar declares
+  it again, so a justiciar that dies cannot leave the fleet stopped.
+  `ignite status` and `ignite doctor` show it with its age and owner.
+  `ignite pool resume --all` ends it on every machine, and
+  `ignite emergency clear --local` lifts it on one machine alone, for an
+  operator stuck behind a flag nobody can end.
 
 ### Planning
 

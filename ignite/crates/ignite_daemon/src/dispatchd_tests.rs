@@ -408,6 +408,30 @@ fn a_paused_pool_hands_off_nothing_until_resumed() {
 }
 
 #[test]
+fn resuming_every_machine_ends_the_emergency_here_at_once() {
+    use crate::emergency::{Emergencies, EmergencyVerb};
+    let rig = rig(&[]);
+    // The fake hub declares emergencies at the epoch.
+    rig.clock.set(Timestamp::EPOCH);
+    let emergencies = Arc::new(Emergencies::new(rig.clock.clone(), None));
+    let declare = request("emergency", &["declare", "TJUS1"], Some("local_j"));
+    let declared = EmergencyVerb(emergencies.clone()).run(&rig.ctx, &declare);
+    assert_eq!(declared.exit, Exit::Success, "{}", declared.text);
+    assert!(emergencies.in_force().is_some());
+    let pool = PoolVerb::new(rig.dispatcher.clone()).ending(emergencies.clone());
+    let resumed = pool.run(
+        &rig.ctx,
+        &request("pool", &["resume", "--all"], Some("local_j")),
+    );
+    assert!(
+        resumed.text.contains("ended    emergency TJUS1"),
+        "{}",
+        resumed.text
+    );
+    assert!(emergencies.in_force().is_none());
+}
+
+#[test]
 fn a_draining_daemon_asks_the_hub_for_nothing_until_it_stops() {
     let rig = rig(&["local_w1"]);
     rig.reserve("T.1", "local_w1", &[]);

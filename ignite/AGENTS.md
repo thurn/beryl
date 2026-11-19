@@ -51,7 +51,8 @@ owns which file. These are the contract's rules.
 - No source file is over 800 lines.
 - Exit codes are the same for every verb: 0 success, 1 usage or configuration, 2
   a check failed, 3 a conflict or lost claim, 4 the hub or remote is
-  unreachable, 5 still running with a handle.
+  unreachable, 5 still running with a handle, 6 refused during an emergency
+  pause.
 
 ## The dashboard
 

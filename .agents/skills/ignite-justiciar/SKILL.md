@@ -56,7 +56,13 @@ Send these together:
    labelled `justiciar`, or comments on the open one for the same fault. Then
    `ignite start <that ticket>`, so no pool worker is handed it too, and comment
    on it: `Emergency declared by the operator; justiciar is <your session ID>`. It is the session the ticket is held by.
-4. `ignite pool pause --all`, so no machine hands out new tickets.
+4. `ignite emergency declare <ticket>`. It pauses hand-offs on every machine
+   and makes every daemon refuse `start`, `test`, `check`, `land` and the
+   other verbs that build (exit code 6), for every session but yours and any
+   session working your ticket. Running commands go on: stop the ones that
+   are the fault with `ignite stop`. The flag lapses after two hours, so
+   declare it again within two hours if the emergency lasts. When one session
+   must run a heavy verb, allow it: `ignite emergency allow <ticket> [<verb>]`.
 
 When Ignite itself is what is broken and a step fails, note the failure and go
 on: the ticket and the pause are records and brakes, never preconditions. Keep a
@@ -150,7 +156,8 @@ holds. Validation, a proper fix and the clean-up carry on as ordinary tickets.
 If the operator says it is over, do this at once even if section 4 does not yet
 hold, and record that on the ticket.
 
-1. `ignite pool resume --all`.
+1. `ignite pool resume --all`. It ends the emergency pause on every machine,
+   and every session blocked in `ignite wait emergency` gets the all-clear.
 2. Send the all-clear the same ways as the order: `ignite tell --all` and a
    message to every session you paused or gave a job:
 

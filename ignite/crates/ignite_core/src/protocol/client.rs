@@ -24,6 +24,9 @@ pub enum Exit {
     Unreachable = 4,
     /// Still running; the reply names the handle to wait on.
     Running = 5,
+    /// Refused while an emergency pauses heavy work; `ignite wait emergency` returns when it
+    /// ends.
+    Paused = 6,
 }
 
 impl Exit {
@@ -42,6 +45,7 @@ impl TryFrom<u8> for Exit {
             3 => Exit::Conflict,
             4 => Exit::Unreachable,
             5 => Exit::Running,
+            6 => Exit::Paused,
             _ => return Err(format!("unknown exit code {code}")),
         })
     }

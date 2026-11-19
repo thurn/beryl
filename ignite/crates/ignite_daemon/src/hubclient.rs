@@ -539,6 +539,15 @@ impl Hub for HubClient {
         Ok(())
     }
 
+    fn emergency(
+        &self,
+        change: &ignite_core::protocol::emergency::EmergencyChange,
+    ) -> Result<Option<ignite_core::protocol::emergency::Emergency>> {
+        let reply: ignite_core::protocol::emergency::EmergencyReply =
+            self.post("/emergency", change)?;
+        Ok(reply.emergency)
+    }
+
     fn landed_commits(&self, commits: &[Commit]) -> Result<Vec<LandedCommit>> {
         let request = LandingsRequest {
             commits: commits.to_vec(),

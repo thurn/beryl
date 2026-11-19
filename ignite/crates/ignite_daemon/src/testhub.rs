@@ -146,4 +146,11 @@ impl Hub for SpyHub {
         self.gate("pause")?;
         self.inner.pause(pause)
     }
+    fn emergency(
+        &self,
+        change: &ignite_core::protocol::emergency::EmergencyChange,
+    ) -> Result<Option<ignite_core::protocol::emergency::Emergency>> {
+        self.gate("emergency")?;
+        self.inner.emergency(change)
+    }
 }

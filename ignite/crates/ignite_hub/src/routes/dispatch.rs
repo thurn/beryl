@@ -1,5 +1,5 @@
 //! The fleet and hand-off routes: `/machines/register`, `/machines/heartbeat`, `/next`, `/claims`,
-//! `/landed`, `/release`, `/close`, `/pause` and `/session-titles`.
+//! `/landed`, `/release`, `/close`, `/pause`, `/session-titles` and `/emergency`.
 //!
 //! A ticket moves through them like this:
 //!
@@ -33,6 +33,7 @@ use serde_json::{Map, Value, json};
 
 use ignite_core::dispatch::label;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
+use ignite_core::protocol::emergency::{EmergencyChange, EmergencyReply};
 use ignite_core::protocol::hub::{
     AdhocClaim, Claim, Close, DependencyNote, Heartbeat, HeartbeatReply, Landed, LandedReply,
     MachineFree, MachineRegister, MachineRegistered, Pause, Release, SessionTitle, TicketBrief,
@@ -43,7 +44,7 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{edges, feed, findings, fleet, session_titles, tickets, tokens};
+use ignite_store::hub::{edges, emergency, feed, findings, fleet, session_titles, tickets, tokens};
 
 use super::{Request, Response};
 
@@ -75,7 +76,8 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/release"
         | "/close"
         | "/pause"
-        | "/session-titles" => true,
+        | "/session-titles"
+        | "/emergency" => true,
         _ => return None,
     };
     if request.method != "POST" {
@@ -179,6 +181,32 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
             }
             pause(conn, &parsed, now)
         }
+        "/emergency" => {
+            // Tickets are stored by their canonical ID, which is how a daemon names the
+            // ticket a tree holds.
+            let mut parsed: EmergencyChange = body(request)?;
+            match &mut parsed {
+                EmergencyChange::Declare {
+                    machine, ticket, ..
+                } => {
+                    same_machine(request, machine)?;
+                    *ticket = canonical(conn, ticket)?;
+                }
+                EmergencyChange::Allow { allowance, .. } => {
+                    allowance.ticket = canonical(conn, &allowance.ticket)?;
+                }
+            }
+            let changed = emergency::change(conn, &parsed, now).map_err(|error| match error {
+                StoreError::Rejected(message) => failure(409, &message),
+                other => store_failure(&other),
+            })?;
+            Ok(Response::json(
+                200,
+                &json!(EmergencyReply {
+                    emergency: Some(changed),
+                }),
+            ))
+        }
         other => Err(failure(404, &format!("no route {other}"))),
     }
 }
@@ -266,14 +294,19 @@ fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp) -> Answer 
         &json!(HeartbeatReply {
             // A hub that never recorded its version asks no machine to update.
             hub_version: hub_version.unwrap_or_else(|| beat.version.clone()),
+            emergency: emergency::in_force(conn, now).map_err(|e| store_failure(&e))?,
         }),
     ))
 }
 
-/// Pauses or resumes hand-offs to one machine or to every machine.
+/// Pauses or resumes hand-offs to one machine or to every machine. Resuming every machine also
+/// ends the emergency, if one is in force.
 fn pause(conn: &mut Connection, pause: &Pause, now: Timestamp) -> Answer {
     let machine = pause.machine.as_ref().map(MachineId::as_str);
     fleet::set_paused(conn, machine, pause.paused, now).map_err(|e| store_failure(&e))?;
+    if machine.is_none() && !pause.paused {
+        emergency::clear(conn).map_err(|e| store_failure(&e))?;
+    }
     Ok(done())
 }
 
@@ -752,3 +785,7 @@ mod security_tests;
 #[cfg(test)]
 #[path = "dispatch_hardening_tests.rs"]
 mod hardening_tests;
+
+#[cfg(test)]
+#[path = "dispatch_emergency_tests.rs"]
+mod emergency_tests;
