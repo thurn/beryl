@@ -138,14 +138,25 @@
   }
 }
 
-/* Page transitions: the header stays, the content crossfades with a small rise. */
+/* Page transitions: the old page and the new one crossfade in place. The page
+   content has no view-transition-name of its own, so it is part of the root
+   snapshot, which covers the viewport as the reader saw it: nothing moves,
+   grows or slides, even when the two pages differ in height or scroll position.
+   The sticky header keeps its own snapshot so it stays over the content, and
+   its group does not animate, so a change in breadcrumb width doesn't morph it. */
 
-::view-transition-old(c-main) {
-  animation: c-fade-out 120ms var(--ease-out) both;
+::view-transition-group(c-header) {
+  animation: none;
 }
 
-::view-transition-new(c-main) {
-  animation: c-fade-in 220ms var(--ease-out) 70ms both;
+::view-transition-old(root),
+::view-transition-old(c-header) {
+  animation: c-fade-out 180ms var(--ease-out) both;
+}
+
+::view-transition-new(root),
+::view-transition-new(c-header) {
+  animation: c-fade-in 180ms var(--ease-out) both;
 }
 
 @keyframes c-fade-out {
@@ -157,7 +168,6 @@
 @keyframes c-fade-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
 }
 
