@@ -141,11 +141,6 @@ window = 20
 report_only = ["tier-gap"]
 protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 
-# Ticket owners (docs/ignite.md, "Owners"). A ticket with no owner of its own or its epic's goes
-# to this machine and app until someone picks another default in the dashboard's settings.
-[pool]
-default_owner = "jarvis/claude"
-
 # The model ID each app's session tool accepts for each `tier:` label. Update the IDs here when
 # a new model is released; tier labels on tickets do not change.
 [pool.models.claude]
@@ -171,8 +166,6 @@ seconds = 300
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"
-# The app whose workers take a ticket this machine filed, such as a regression it found.
-home_app = "claude"
 # 12 ticket trees ran out on 2026-11-18, when queued express landings held every ticket tree and
 # new sessions waited in `ignite start`. A tree costs disk only while it keeps a build, and that
 # disk is bounded by `trees_disk_gb` and the sweep below, not by the number of trees, so a tree
@@ -201,7 +194,6 @@ bench-vm = 1
 # The MacBook Pro.
 [machine.multivac]
 os = "macos"
-home_app = "codex"
 ticket_trees = 8
 landing_trees = 2
 # The disk is 926 GB, and on 2026-11-19 it had about 500 GB free after a cleanup. 350 GB of
@@ -227,7 +219,6 @@ oracle = 1
 # out: 29 of its 1,021 checks assume Unix paths or Unix sockets.
 [machine.cygnus]
 os = "windows"
-home_app = "claude"
 ticket_trees = 3
 landing_trees = 2
 trees_disk_gb = 60

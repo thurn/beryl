@@ -77,9 +77,9 @@ fn seed(conn: &Connection) {
             '2026-11-16T00:00:00.000Z', '2026-11-16T00:00:00.000Z', 'x', 1);
          UPDATE tickets SET owner = 'plan9/claude' WHERE id = 'o1';
          INSERT INTO meta (key, value) VALUES ('routing', '{\"machines\":[
-           {\"name\":\"jarvis\",\"os\":\"macos\",\"home_app\":\"claude\"},
-           {\"name\":\"cygnus\",\"os\":\"windows\",\"home_app\":\"codex\"}],
-           \"apps\":[\"claude\",\"codex\"],\"default_owner\":\"jarvis/claude\"}');
+           {\"name\":\"jarvis\",\"os\":\"macos\"},
+           {\"name\":\"cygnus\",\"os\":\"windows\"}],
+           \"apps\":[\"claude\",\"codex\"]}');
          UPDATE tickets SET landed_at = '2026-11-17T10:00:00.000Z',
            landed = '{\"commits\":[\"0123456789abcdef\"],\"files\":[],\"note\":\"done\"}',
            claimed_at = '2026-11-17T09:00:00.000Z' WHERE id = 'e1.5';

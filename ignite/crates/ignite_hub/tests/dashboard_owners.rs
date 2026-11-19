@@ -26,9 +26,6 @@ project = "pj"
 threshold = 0.004
 cap = 400
 
-[pool]
-default_owner = "jarvis/claude"
-
 [pool.models.claude]
 opus = "o"
 
@@ -37,13 +34,11 @@ opus = "sol"
 
 [machine.jarvis]
 os = "macos"
-home_app = "claude"
 ticket_trees = 1
 landing_trees = 1
 
 [machine.cygnus]
 os = "windows"
-home_app = "codex"
 ticket_trees = 1
 landing_trees = 1
 "#;
@@ -82,7 +77,7 @@ fn send(
 }
 
 #[test]
-fn owners_show_on_pages_and_the_default_changes_from_the_settings_panel() {
+fn owners_show_on_pages_and_a_ticket_without_one_goes_to_any_machine() {
     let dir = std::env::temp_dir().join(format!("ignite-dashboard-owners-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -113,17 +108,18 @@ fn owners_show_on_pages_and_the_default_changes_from_the_settings_panel() {
     let reply: Value = serde_json::from_str(&reply).unwrap();
     let id = |n: usize| reply["results"][n]["id"].as_str().unwrap().to_owned();
 
-    // A child shows its epic's owner; a loose ticket shows the default.
+    // A child shows its epic's owner. The dashboard's writer has no machine, so a loose ticket
+    // it files has no owner and goes to any machine.
     let (_, child) = send(public.address(), "GET", &format!("/{}", id(1)), &[], "");
     assert!(child.contains("cygnus · Codex"), "{child}");
     assert!(child.contains("from "));
     let (_, loose) = send(public.address(), "GET", &format!("/{}", id(2)), &[], "");
-    assert!(loose.contains("jarvis · Claude"));
+    assert!(loose.contains("Any machine"), "{loose}");
     // The epic's own card in a list carries its owner chip.
     let (_, home) = send(public.address(), "GET", "/", &[], "");
     assert!(home.contains("cygnus · Codex"), "{home}");
 
-    // On the private listener the Owner row is a dropdown of Default and the four pairs.
+    // On the private listener the Owner row is a dropdown of None and the four pairs.
     let (_, editable) = send(
         private.address(),
         "GET",
@@ -135,55 +131,14 @@ fn owners_show_on_pages_and_the_default_changes_from_the_settings_panel() {
         editable.contains("data-field=\"owner\" data-kind=\"choice\""),
         "{editable}"
     );
-    assert!(editable.contains("=Default (jarvis · Claude)"));
+    assert!(editable.contains("=None"));
     assert!(editable.contains("cygnus/codex=cygnus · Codex"));
-    // Every page's settings panel names the API it loads the default owner from.
-    assert!(editable.contains("data-owners=\"/pj/api\""));
-
-    changes_the_default(public.address(), private.address(), &id(2));
+    // The settings panel offers no default owner, and its API is gone.
+    assert!(!editable.contains("data-owners"));
+    let (status, _) = send(public.address(), "GET", "/pj/api/owners", &[], "");
+    assert_eq!(status, 404);
 
     public.stop();
     private.stop();
     let _ = std::fs::remove_dir_all(dir);
-}
-
-/// The default owner, read and changed through the API the settings panel uses; `loose_id` is a
-/// ticket that follows the default.
-fn changes_the_default(public: SocketAddr, private: SocketAddr, loose_id: &str) {
-    // The default owner comes from ignite.toml until someone picks another.
-    let (status, owners) = send(public, "GET", "/pj/api/owners", &[], "");
-    assert_eq!(status, 200);
-    let owners: Value = serde_json::from_str(&owners).unwrap();
-    assert_eq!(owners["default"], "jarvis/claude");
-    assert_eq!(owners["choices"].as_array().unwrap().len(), 4);
-
-    // A Tailscale user changes it on the private listener; nobody else can.
-    let pick = json!({"owner": "jarvis/codex"}).to_string();
-    assert_eq!(
-        send(public, "POST", "/pj/api/owners/default", BROWSER, &pick).0,
-        405
-    );
-    assert_eq!(
-        send(
-            private,
-            "POST",
-            "/pj/api/owners/default",
-            &BROWSER[..1],
-            &pick
-        )
-        .0,
-        401
-    );
-    let unknown = json!({"owner": "plan9/claude"}).to_string();
-    assert_eq!(
-        send(private, "POST", "/pj/api/owners/default", BROWSER, &unknown).0,
-        400
-    );
-    let (status, picked) = send(private, "POST", "/pj/api/owners/default", BROWSER, &pick);
-    assert_eq!(status, 200, "{picked}");
-    let picked: Value = serde_json::from_str(&picked).unwrap();
-    assert_eq!(picked["default"], "jarvis/codex");
-    assert_eq!(picked["picked"]["by"], "someone");
-    let (_, loose) = send(public, "GET", &format!("/{loose_id}"), &[], "");
-    assert!(loose.contains("jarvis · Codex"));
 }

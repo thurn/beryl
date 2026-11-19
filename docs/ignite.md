@@ -3045,27 +3045,30 @@ Every ticket goes to one owner: a machine and the desktop app whose workers on
 that machine take it, such as `jarvis/claude` or `cygnus/codex`.
 
 - A ticket's owner is its own `owner` field or, when that is empty, its nearest
-  ancestor's. A ticket whose ancestors have none either follows the **default
-  owner**. `[pool] default_owner` in `ignite.toml` sets it (`jarvis/claude`),
-  and anyone on the private dashboard can pick another in the settings panel.
-  Picking one moves every ticket that follows the default.
+  ancestor's. A ticket with neither goes to any worker.
+- A ticket filed with `ignite ticket create` is owned by whoever filed it: the
+  machine and app of the session that ran the command, such as
+  `multivac/claude`. A ticket filed under an epic that has an owner takes the
+  epic's owner instead, so changing an epic's owner moves its tickets. The
+  client tells its app from `IGNITE_APP`, or from the variables Claude Code and
+  Codex set in their sessions, and the hub also knows the app of a pool
+  worker's session. When neither knows, the owner names only the machine.
 - Dispatch offers a ticket only to its owner's workers. An idle worker on
   another machine or of another app is never offered it, so the other five
   destinations get only work that is routed to them.
 - The dashboard shows each ticket's owner and where it comes from, and its Owner
-  dropdown lists Default and every machine with every app.
+  dropdown lists None and every machine with every app.
   `ignite ticket create` and `update` take `--owner <machine>/<app>`, or
-  `--owner default` to clear it.
-- An owner may name only a machine (`cygnus`). It then means the machine's home
-  app, `home_app` in its `[machine.<name>]` table.
+  `--owner none` to clear it.
+- An owner may name only a machine (`cygnus`). Then any app's workers on that
+  machine may take it.
 - A ticket the hub files from a machine's report, such as a regression, checks
   left incomplete, a machine fault or a justiciar report, is owned by that
-  machine and its home app, because the fault is often reproducible only there.
-  Upkeep's own tickets, such as `master` not moving, follow the default owner.
+  machine alone, because the fault is often reproducible only there. Upkeep's
+  own tickets, such as `master` not moving, have no owner and go to any worker.
 - A ticket that holds `master` back (each one the hub files released) falls back
-  when its owner's machine has not been heard from for 30 minutes: the default
-  owner may take it if it runs the operating system the ticket needs, and
-  otherwise any machine that does.
+  when its owner's machine has not been heard from for 30 minutes: then any
+  machine that runs the operating system the ticket needs may take it.
 - `ignite release --needs <machine>` makes that machine the owner,
   `--needs <os>` records the system the work needs, and `--needs person` sets
   the ticket aside for a person.

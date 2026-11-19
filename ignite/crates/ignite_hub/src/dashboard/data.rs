@@ -49,8 +49,7 @@ pub struct Card {
     pub priority: u8,
     pub assignee: Option<String>,
     pub updated_at: String,
-    /// The ticket's own owner, `<machine>` or `<machine>/<app>`; `None` follows its ancestors or
-    /// the default owner.
+    /// The ticket's own owner, `<machine>` or `<machine>/<app>`; `None` follows its ancestors.
     pub owner: Option<String>,
 }
 

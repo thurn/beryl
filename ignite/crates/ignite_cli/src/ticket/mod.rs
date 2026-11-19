@@ -69,6 +69,10 @@ fn write(hub: &Hub, verb: &str, mut body: Value) -> Result<Reply> {
         // The hub saves it as the session's title; a hub that predates titles ignores the key.
         body["actor_title"] = json!(title);
     }
+    if let Some(app) = &hub.actor_app {
+        // The hub makes it part of the owner of a ticket this write files.
+        body["actor_app"] = json!(app);
+    }
     let answer = hub.post(&["batch"], &body, safe)?.json()?;
     Ok(reply(answer, |answer| render::written(verb, answer)))
 }

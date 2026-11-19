@@ -10,8 +10,8 @@
 //!   `ignite.toml`, not at the hub.
 //! - The hub holds no check manifests, so a ticket's families are empty and every machine can
 //!   run them.
-//! - A ticket goes only to workers of its owner, its nearest ancestor's or the default owner,
-//!   resolved here into its destinations ([`ignite_core::owner::Routing::destinations`]).
+//! - A ticket goes only to workers of its owner or its nearest ancestor's, resolved here into
+//!   its destinations ([`ignite_core::owner::Routing::destinations`]).
 //! - The backlog's ratios for the improvement share come from `crate::rules::backlog`.
 //!
 //! Not every ready ticket is offered (see [`Snapshot::offered`]): only a ticket under an active
@@ -154,7 +154,7 @@ pub fn chain_next(
             || ticket
                 .destinations
                 .iter()
-                .any(|owner| owner.admits(&name, &app, None))
+                .any(|owner| owner.admits(&name, &app))
     });
     let Some(next) = dispatch::chain_next(lane, &ready) else {
         return Ok(None);
@@ -206,7 +206,6 @@ struct Snapshot {
     regressions: HashSet<String>,
     ready: Vec<TicketId>,
     routing: Routing,
-    default_owner: Option<Owner>,
     /// The names, in lower case, of machines heard from in the last [`FALLBACK_SECONDS`]; every
     /// other machine is silent.
     heard: HashSet<String>,
@@ -259,7 +258,6 @@ impl Snapshot {
             }
         }
         let routing = owners::routing(conn)?;
-        let default_owner = owners::default_owner(conn, &routing)?;
         let heard = heard_machines(conn, now)?;
         let mut statement =
             conn.prepare("SELECT ticket FROM regressions WHERE state IN (?1, ?2)")?;
@@ -273,7 +271,6 @@ impl Snapshot {
             regressions,
             ready: tickets::ready(conn, now)?,
             routing,
-            default_owner,
             heard,
         })
     }
@@ -353,24 +350,18 @@ impl Snapshot {
         Ok(ready)
     }
 
-    /// The owners whose workers may take `ticket`, each with its app filled in from its
-    /// machine's home app.
+    /// The owners whose workers may take `ticket`.
     fn destinations(&self, ticket: &Ticket) -> Vec<Owner> {
         let own = ticket.owner.clone().or_else(|| {
             self.ancestors(&ticket.id)
                 .find_map(|id| self.nodes.get(&id).and_then(|node| node.owner.clone()))
         });
-        self.routing
-            .destinations(
-                own.as_ref(),
-                self.default_owner.as_ref(),
-                ticket.fallback,
-                ticket.needs_os,
-                |machine| !self.heard.contains(&machine.to_ascii_lowercase()),
-            )
-            .iter()
-            .map(|owner| owner.resolved(&self.routing))
-            .collect()
+        self.routing.destinations(
+            own.as_ref(),
+            ticket.fallback,
+            ticket.needs_os,
+            |machine| !self.heard.contains(&machine.to_ascii_lowercase()),
+        )
     }
 
     /// The ticket if it may be offered: it is under an active epic, under no epic at all, or

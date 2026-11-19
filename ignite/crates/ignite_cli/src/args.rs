@@ -460,8 +460,9 @@ pub struct TicketFieldArgs {
     /// The cores the ticket is expected to use.
     #[arg(long)]
     pub cores: Option<f64>,
-    /// Who works it: `<machine>/<app>` (such as `cygnus/codex`), `<machine>` for that machine's
-    /// home app, or `default` to follow its epic's owner or the default owner.
+    /// Who works it: `<machine>/<app>` (such as `cygnus/codex`), `<machine>` for any app on that
+    /// machine, or `none` to follow its epic's owner. Without it, a new ticket under no owned
+    /// epic is owned by the machine and app of the session filing it.
     #[arg(long)]
     pub owner: Option<String>,
     /// Make it a meta-ticket, a template the hub copies into a new child ticket on this

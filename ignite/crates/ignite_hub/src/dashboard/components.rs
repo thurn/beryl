@@ -114,9 +114,6 @@ pub struct PageOptions {
     pub description: String,
     pub base: Option<String>,
     pub feed: Option<Feed>,
-    /// The hub's API address, such as `/<project>/api`, which the settings panel reads the default
-    /// owner from; `None` leaves the default owner out of the panel.
-    pub api: Option<String>,
 }
 
 /// The gear at the right of the header that opens the settings panel.
@@ -142,23 +139,11 @@ const THEME_SECTION: &str = "<section class=\"c-settings-section\" aria-labelled
 <button type=\"button\" class=\"c-settings-choice\" data-theme-choice=\"dark\" aria-pressed=\"false\">Dark</button>\
 </div></section>";
 
-/// The settings panel at the right of the header. With `api`, the hub's API address, it opens
-/// with the default owner, which `static/owners.js` loads from `GET <api>/owners` when the panel
-/// opens and changes with `POST <api>/owners/default` (see `ignite_core::owner`).
-fn settings(api: Option<&str>) -> String {
-    let owner = api.map_or_else(String::new, |api| {
-        format!(
-            "<section class=\"c-settings-section\" aria-labelledby=\"c-settings-owner\" \
-             data-owners=\"{}\"><h2 class=\"c-settings-label\" id=\"c-settings-owner\">Default owner</h2>\
-             <select class=\"c-settings-select\" aria-labelledby=\"c-settings-owner\" disabled>\
-             <option>Loading…</option></select>\
-             <p class=\"c-settings-note\" role=\"status\">Tickets with no owner go here.</p></section>",
-            esc(api)
-        )
-    });
+/// The settings panel at the right of the header.
+fn settings() -> String {
     format!(
         "<details class=\"c-settings\">{SETTINGS_BUTTON}\
-         <div class=\"c-settings-menu\">{owner}{THEME_SECTION}</div></details>"
+         <div class=\"c-settings-menu\">{THEME_SECTION}</div></details>"
     )
 }
 
@@ -208,7 +193,7 @@ pub fn page_regions(options: &PageOptions) -> String {
             .wordmark
             .as_deref()
             .map_or_else(|| esc(&options.brand), str::to_owned),
-        settings(options.api.as_deref()),
+        settings(),
         options.body
     )
 }

@@ -63,8 +63,8 @@ pub struct ReadyTicket {
     pub files: Vec<String>,
     /// An improvement ticket's estimated saving per week.
     pub saving: Option<(Unit, f64)>,
-    /// The owners whose workers may take it, with each app filled in from its machine's home app
-    /// where `ignite.toml` declares one. Empty lets any worker take it.
+    /// The owners whose workers may take it; one that names no app admits any app on its
+    /// machine. Empty lets any worker take it.
     pub destinations: Vec<Owner>,
 }
 
@@ -99,7 +99,7 @@ pub fn suits(free: &MachineFree, worker: &IdleWorker, ticket: &ReadyTicket) -> b
         || ticket
             .destinations
             .iter()
-            .any(|owner| owner.admits(machine, &worker.app, None));
+            .any(|owner| owner.admits(machine, &worker.app));
     tier && routed
 }
 

@@ -35,6 +35,24 @@ pub fn dispatch_request_wait_s(wait: u32) -> u32 {
 /// the one the Claude desktop app gives its sessions.
 pub const SESSION_VARIABLES: &[&str] = &["IGNITE_SESSION", "CLAUDE_CODE_HOST_SESSION_ID"];
 
+/// The app of the asking session, `claude` or `codex`, from the environment: `IGNITE_APP` when it
+/// is set, then the variables each app gives the commands its sessions run. `None` when none is
+/// set, as in a person's own terminal.
+pub fn app_from_env(lookup: impl Fn(&str) -> Option<String>) -> Option<String> {
+    const CLAUDE: &[&str] = &["CLAUDECODE", "CLAUDE_CODE_HOST_SESSION_ID", "CLAUDE_CODE_SESSION_ID"];
+    const CODEX: &[&str] = &["CODEX_THREAD_ID", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"];
+    let set = |name: &&str| lookup(name).is_some_and(|value| !value.is_empty());
+    if let Some(app) = lookup("IGNITE_APP").filter(|app| !app.is_empty()) {
+        Some(app.to_ascii_lowercase())
+    } else if CLAUDE.iter().any(set) {
+        Some("claude".to_owned())
+    } else if CODEX.iter().any(set) {
+        Some("codex".to_owned())
+    } else {
+        None
+    }
+}
+
 /// Verbs sent without the asking session, which names its session in its arguments instead.
 /// The daemon records each session's current command, and `turn-ended`, which a session's
 /// `Stop` hook runs, would replace a running background `land` there and look like a command
@@ -183,6 +201,26 @@ mod tests {
     fn a_dispatch_request_outlasts_its_wait() {
         assert_eq!(dispatch_request_wait_s(3600), 3610);
         assert_eq!(dispatch_request_wait_s(u32::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn the_app_comes_from_the_override_then_each_apps_variables() {
+        let from = |pairs: &'static [(&'static str, &'static str)]| {
+            app_from_env(move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| (*value).to_owned())
+            })
+        };
+        assert_eq!(from(&[("CLAUDECODE", "1")]).as_deref(), Some("claude"));
+        assert_eq!(from(&[("CODEX_SANDBOX", "seatbelt")]).as_deref(), Some("codex"));
+        assert_eq!(
+            from(&[("IGNITE_APP", "Codex"), ("CLAUDECODE", "1")]).as_deref(),
+            Some("codex")
+        );
+        assert_eq!(from(&[("CLAUDECODE", "")]), None);
+        assert_eq!(from(&[]), None);
     }
 
     #[test]

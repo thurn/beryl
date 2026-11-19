@@ -1,19 +1,17 @@
 use super::*;
 
 fn routing() -> Routing {
-    let machine = |name: &str, os: Os, home: &str| RoutedMachine {
+    let machine = |name: &str, os: Os| RoutedMachine {
         name: name.to_owned(),
         os: Some(os),
-        home_app: Some(home.to_owned()),
     };
     Routing {
         machines: vec![
-            machine("cygnus", Os::Windows, "codex"),
-            machine("jarvis", Os::Macos, "claude"),
-            machine("multivac", Os::Macos, "codex"),
+            machine("cygnus", Os::Windows),
+            machine("jarvis", Os::Macos),
+            machine("multivac", Os::Macos),
         ],
         apps: vec!["claude".to_owned(), "codex".to_owned()],
-        default_owner: Some(Owner::new("jarvis", Some("claude"))),
     }
 }
 
@@ -37,16 +35,15 @@ fn an_owner_reads_and_writes_as_machine_and_app() {
 }
 
 #[test]
-fn an_owner_without_an_app_admits_its_machines_home_app() {
-    let routing = routing();
+fn an_owner_admits_its_app_on_its_machine_or_any_app_when_it_names_none() {
     let cygnus = owner("cygnus");
-    let home = routing.home_app("cygnus");
-    assert!(cygnus.admits("CYGNUS", "codex", home));
-    assert!(!cygnus.admits("cygnus", "claude", home));
-    assert!(!cygnus.admits("jarvis", "codex", routing.home_app("jarvis")));
-    // A machine with no home app admits any app.
-    assert!(cygnus.admits("cygnus", "claude", None));
-    assert_eq!(cygnus.resolved(&routing), owner("cygnus/codex"));
+    assert!(cygnus.admits("CYGNUS", "codex"));
+    assert!(cygnus.admits("cygnus", "claude"));
+    assert!(!cygnus.admits("jarvis", "codex"));
+    let multivac_claude = owner("multivac/claude");
+    assert!(multivac_claude.admits("multivac", "Claude"));
+    assert!(!multivac_claude.admits("multivac", "codex"));
+    assert!(!multivac_claude.admits("jarvis", "claude"));
 }
 
 #[test]
@@ -70,75 +67,48 @@ fn the_choices_are_every_machine_with_every_app() {
 }
 
 #[test]
-fn a_ticket_goes_to_its_owner_and_otherwise_the_default() {
+fn a_ticket_goes_to_its_owner_and_otherwise_to_any_worker() {
     let routing = routing();
-    let default = routing.default_owner.clone();
     let never = |_: &str| false;
-    assert_eq!(
-        routing.destinations(None, default.as_ref(), false, None, never),
-        [owner("jarvis/claude")]
-    );
     let own = owner("multivac/codex");
     assert_eq!(
-        routing.destinations(Some(&own), default.as_ref(), false, None, never),
+        routing.destinations(Some(&own), false, None, never),
         std::slice::from_ref(&own)
     );
-    assert!(
-        routing
-            .destinations(None, None, false, None, never)
-            .is_empty()
-    );
+    assert!(routing.destinations(None, false, None, never).is_empty());
 }
 
 #[test]
 fn a_ticket_holding_master_falls_back_only_when_its_machine_is_silent() {
     let routing = routing();
-    let default = routing.default_owner.clone();
     let cygnus = owner("cygnus");
     let silent = |machine: &str| machine == "cygnus";
     // Not holding master: it waits for its machine.
     assert_eq!(
-        routing.destinations(Some(&cygnus), default.as_ref(), false, None, silent),
+        routing.destinations(Some(&cygnus), false, None, silent),
         std::slice::from_ref(&cygnus)
     );
-    // Portable: the default owner may take it.
+    // Portable: any machine that is heard from may take it.
     assert_eq!(
-        routing.destinations(Some(&cygnus), default.as_ref(), true, None, silent),
-        [cygnus.clone(), owner("jarvis/claude")]
+        routing.destinations(Some(&cygnus), true, None, silent),
+        [cygnus.clone(), owner("jarvis"), owner("multivac")]
     );
-    // Needs macOS: the default runs it.
+    // Needs macOS: the Macs may take it.
     assert_eq!(
-        routing.destinations(
-            Some(&cygnus),
-            default.as_ref(),
-            true,
-            Some(Os::Macos),
-            silent
-        ),
-        [cygnus.clone(), owner("jarvis/claude")]
+        routing.destinations(Some(&cygnus), true, Some(Os::Macos), silent),
+        [cygnus.clone(), owner("jarvis"), owner("multivac")]
     );
     // Needs Windows, and only the silent machine runs it: nothing more.
     assert_eq!(
-        routing.destinations(
-            Some(&cygnus),
-            default.as_ref(),
-            true,
-            Some(Os::Windows),
-            silent
-        ),
+        routing.destinations(Some(&cygnus), true, Some(Os::Windows), silent),
         std::slice::from_ref(&cygnus)
     );
-    // A Mac regression owned by multivac while the default is on Windows goes to jarvis.
-    let windows_default = owner("cygnus/codex");
-    let multivac = owner("multivac");
+    // A Mac regression owned by a silent multivac goes to the other Mac.
+    let multivac = owner("multivac/codex");
     assert_eq!(
-        routing.destinations(
-            Some(&multivac),
-            Some(&windows_default),
-            true,
-            Some(Os::Macos),
-            |machine| machine == "multivac"
-        ),
+        routing.destinations(Some(&multivac), true, Some(Os::Macos), |machine| {
+            machine == "multivac"
+        }),
         [multivac, owner("jarvis")]
     );
 }

@@ -4,7 +4,7 @@
 //!   culprit search ended with a range, to every ticket in the range. It is owned by the
 //!   machine that reported it, and records the operating system of a check that is not
 //!   portable. A regression holds `master` back, so when that machine goes silent it falls back
-//!   to the default owner or another machine with that system (see `ignite_core::owner`).
+//!   to any other machine with that system (see `ignite_core::owner`).
 //! - Failures are grouped: a newly failing check is added to an open regression ticket
 //!   ([`Outcome::Added`]) when one holds a check with the same first bad commit, or when one is
 //!   not yet held by a worker, who then gets every check on it. One bad landing often fails

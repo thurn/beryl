@@ -19,14 +19,13 @@ const STYLES: [&str; 6] = [
     include_str!("../../static/css/5-edit.css"),
     include_str!("../../static/css/6-spend.css"),
 ];
-/// The scripts, served as one file: cirrus itself and its data cards, ticket editing, the theme
-/// choice, then the default owner in the settings panel.
-const SCRIPTS: [&str; 5] = [
+/// The scripts, served as one file: cirrus itself and its data cards, ticket editing, then the
+/// theme choice.
+const SCRIPTS: [&str; 4] = [
     include_str!("../../static/cirrus.js"),
     include_str!("../../static/datacard.js"),
     include_str!("../../static/edit.js"),
     include_str!("../../static/theme.js"),
-    include_str!("../../static/owners.js"),
 ];
 const WORKER: &str = include_str!("../../static/sw.js");
 const FAVICON_SVG: &[u8] = include_bytes!("../../static/favicon.svg");

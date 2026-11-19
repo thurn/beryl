@@ -22,7 +22,8 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "cores", args.cores);
     put(fields, "every_hours", args.every);
     if let Some(owner) = &args.owner {
-        let value = if owner == "default" {
+        // `default` is the old spelling, from when an unowned ticket followed a default owner.
+        let value = if owner == "none" || owner == "default" {
             Value::Null
         } else {
             let parsed: ignite_core::owner::Owner = owner.parse().map_err(usage)?;

@@ -83,7 +83,7 @@ fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, Failure> {
 }
 
 /// The owners a ticket may name (see `ignite_core::owner`): each declared machine alone, which
-/// means its home app, and with each app the pool runs.
+/// means any app on it, and with each app the pool runs.
 fn machine_names(config: &Config) -> BTreeSet<String> {
     let routing = ignite_core::owner::Routing::from_config(config);
     let mut names: BTreeSet<String> = routing.machines.iter().map(|m| m.name.clone()).collect();

@@ -228,8 +228,8 @@ pub struct Ticket {
     pub landed: Option<LandedWork>,
     #[serde(default)]
     pub saving: Option<Saving>,
-    /// Who works it; `None` takes the nearest ancestor's owner or the default owner
-    /// ([`crate::owner`]).
+    /// Who works it; `None` takes the nearest ancestor's owner, or any worker when no ancestor
+    /// has one ([`crate::owner`]).
     #[serde(default)]
     pub owner: Option<Owner>,
     /// The operating system the work must happen on, which only decides where a ticket that

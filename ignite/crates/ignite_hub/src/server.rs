@@ -95,7 +95,7 @@ impl HubServer {
     fn start_with(&self, read_only: bool) -> io::Result<RunningHub> {
         let first = hub::open(&self.database).map_err(io::Error::other)?;
         if !read_only {
-            // Routes and upkeep read the machines' home apps and the default owner from the
+            // Routes and upkeep read the machines' operating systems and the pool's apps from the
             // database, so the facts of this `ignite.toml` replace those of the last start.
             ignite_store::hub::owners::record_routing(
                 &first,
@@ -389,7 +389,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
 
 /// Who may write with this request, and whether its pages carry the dashboard's edit controls.
 /// A machine writes with its token. The dashboard's edit controls write as the Tailscale user, on
-/// the private listener only, and only tickets (`/batch`) and the default owner (see `auth`).
+/// the private listener only, and only tickets (`/batch`; see `auth`).
 fn writer<'h>(
     conn: &Connection,
     read_only: bool,
@@ -400,7 +400,7 @@ fn writer<'h>(
     let writer = auth::authorize(conn, header("authorization"), header("x-actor"))
         .ok()
         .or_else(|| {
-            matches!(api, Some("/batch" | routes::owners::DEFAULT_PATH))
+            (api == Some("/batch"))
                 .then(|| auth::dashboard_writer(login, header(auth::DASHBOARD_HEADER)))
                 .flatten()
         });
@@ -437,7 +437,6 @@ fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Respon
         .or_else(|| routes::check_state::handle(conn, request, now))
         .or_else(|| routes::dispatch::handle(conn, request, now))
         .or_else(|| routes::commands::handle(conn, request, now))
-        .or_else(|| routes::owners::handle(conn, request, now))
         .unwrap_or_else(|| failure(404, "Unknown route"))
 }
 

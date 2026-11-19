@@ -1,30 +1,22 @@
 //! Ticket owners at the hub (see `ignite_core::owner`): the routing facts from `ignite.toml`,
-//! which the hub records at start, and the default owner, which a person changes on the
-//! dashboard. Both are values in the `meta` table.
+//! which the hub records at start as a value in the `meta` table, and the owner a new ticket
+//! takes from the session that files it.
+
+use std::collections::HashSet;
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 
 use ignite_core::config::Os;
 use ignite_core::owner::{Owner, Routing};
-use ignite_core::time::Timestamp;
+use ignite_core::protocol::tickets::{BatchRequest, Operation};
 
+use crate::hub::tickets;
 use crate::{Result, StoreError};
 
 /// The `meta` key of the routing facts from `ignite.toml`.
 const ROUTING: &str = "routing";
-
-/// The `meta` key of the default owner a person picked.
-const DEFAULT_OWNER: &str = "default_owner";
-
-/// The default owner a person picked, and who picked it when.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DefaultOwner {
-    pub owner: Owner,
-    pub by: String,
-    pub at: Timestamp,
-}
 
 fn get<T: serde::de::DeserializeOwned>(conn: &Connection, key: &str) -> Result<Option<T>> {
     let value: Option<String> = conn
@@ -60,35 +52,58 @@ pub fn routing(conn: &Connection) -> Result<Routing> {
     Ok(get(conn, ROUTING)?.unwrap_or_default())
 }
 
-/// The default owner a person picked, if any.
-pub fn picked_default(conn: &Connection) -> Result<Option<DefaultOwner>> {
-    get(conn, DEFAULT_OWNER)
-}
-
-/// The default owner in force: the one a person picked, or else `[pool] default_owner`.
-pub fn default_owner(conn: &Connection, routing: &Routing) -> Result<Option<Owner>> {
-    Ok(picked_default(conn)?
-        .map(|picked| picked.owner)
-        .or_else(|| routing.default_owner.clone()))
-}
-
-/// Makes `owner` the default owner. It must be one of [`Routing::choices`].
-pub fn set_default_owner(conn: &Connection, owner: &Owner, by: &str, now: Timestamp) -> Result<()> {
-    let routing = routing(conn)?;
-    if !routing.choices().contains(owner) {
-        return Err(StoreError::Rejected(format!(
-            "{owner} is not a machine and app of ignite.toml"
-        )));
+/// Makes `creator`, the machine and app of the session writing, the owner of each ticket that
+/// `batch` creates without an owner whose ancestors have none either. A ticket under an owned
+/// ancestor is left to inherit, so that changing the ancestor's owner moves it too. A parent
+/// created in the same batch (`$<index>`) is owned by then, by this pass or by its own field.
+/// A create that names its owner, or clears it with `null`, is kept.
+pub fn add_creator_owners(
+    conn: &Connection,
+    batch: &mut BatchRequest,
+    creator: Option<&Owner>,
+) -> Result<()> {
+    let Some(creator) = creator else {
+        return Ok(());
+    };
+    for operation in &mut batch.ops {
+        let Operation::Create { fields, parent, .. } = operation else {
+            continue;
+        };
+        if fields.owner.is_some() {
+            continue;
+        }
+        let parent_name = parent
+            .clone()
+            .or_else(|| fields.parent.clone().flatten().map(String::from));
+        let inherits = match parent_name.as_deref() {
+            None => false,
+            Some(name) if name.starts_with('$') => true,
+            Some(name) => owned_line(conn, name)?,
+        };
+        if !inherits {
+            fields.owner = Some(Some(creator.clone()));
+        }
     }
-    put(
-        conn,
-        DEFAULT_OWNER,
-        &DefaultOwner {
-            owner: owner.clone(),
-            by: by.to_owned(),
-            at: now,
-        },
-    )
+    Ok(())
+}
+
+/// Whether the ticket `name` names, or one of its ancestors, has an owner.
+fn owned_line(conn: &Connection, name: &str) -> Result<bool> {
+    let mut next = tickets::resolve(conn, name)?.map(|id| id.to_string());
+    let mut seen = HashSet::new();
+    while let Some(id) = next {
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        let Some(ticket) = tickets::load(conn, &id)? else {
+            break;
+        };
+        if ticket.owner.is_some() {
+            return Ok(true);
+        }
+        next = ticket.parent.map(|parent| parent.to_string());
+    }
+    Ok(false)
 }
 
 /// Moves the routing labels into the ticket's own fields: `needs:macos` and `needs:windows`
@@ -145,18 +160,19 @@ fn os_named(word: &str) -> Option<Os> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hub::batch::{self, BatchOutcome};
     use crate::hub::open_in_memory;
     use ignite_core::owner::RoutedMachine;
+    use ignite_core::protocol::tickets::TicketFields;
+    use ignite_core::time::Timestamp;
 
     fn routing() -> Routing {
         Routing {
             machines: vec![RoutedMachine {
                 name: "jarvis".to_owned(),
                 os: Some(Os::Macos),
-                home_app: Some("claude".to_owned()),
             }],
             apps: vec!["claude".to_owned(), "codex".to_owned()],
-            default_owner: Some("jarvis/claude".parse().unwrap()),
         }
     }
 
@@ -194,19 +210,93 @@ mod tests {
     }
 
     #[test]
-    fn the_default_owner_is_the_configured_one_until_a_person_picks_another() {
+    fn the_routing_facts_read_back_as_recorded() {
         let conn = open_in_memory().unwrap();
+        assert_eq!(super::routing(&conn).unwrap(), Routing::default());
         record_routing(&conn, &routing()).unwrap();
-        let routing = super::routing(&conn).unwrap();
+        assert_eq!(super::routing(&conn).unwrap(), routing());
+    }
+
+    /// A create of `title`, naming `owner` when it is given; `none` clears the owner.
+    fn create(title: &str, parent: Option<&str>, owner: Option<&str>) -> Operation {
+        Operation::Create {
+            fields: TicketFields {
+                title: Some(title.to_owned()),
+                owner: owner.map(|text| (text != "none").then(|| text.parse().unwrap())),
+                ..TicketFields::default()
+            },
+            parent: parent.map(str::to_owned),
+            deps: Vec::new(),
+            request_key: None,
+        }
+    }
+
+    /// The owner each create of `ops` ends up with after [`add_creator_owners`].
+    fn stamped(conn: &Connection, ops: Vec<Operation>, creator: Option<&Owner>) -> Vec<String> {
+        let mut request = BatchRequest {
+            preconditions: Vec::new(),
+            ops,
+        };
+        add_creator_owners(conn, &mut request, creator).unwrap();
+        request
+            .ops
+            .iter()
+            .map(|op| match op {
+                Operation::Create { fields, .. } => fields
+                    .owner
+                    .clone()
+                    .flatten()
+                    .map_or_else(|| "-".to_owned(), |owner| owner.to_string()),
+                _ => unreachable!(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_new_ticket_is_owned_by_its_creator_unless_it_inherits_or_names_one() {
+        let mut conn = open_in_memory().unwrap();
+        let creator: Owner = "multivac/claude".parse().unwrap();
+        let by = Some(&creator);
+        // A ticket on its own, and an epic whose child is filed in the same batch.
+        let ops = vec![
+            create("Alone", None, None),
+            create("Epic", None, None),
+            create("Child", Some("$1"), None),
+        ];
         assert_eq!(
-            default_owner(&conn, &routing).unwrap(),
-            Some("jarvis/claude".parse().unwrap())
+            stamped(&conn, ops, by),
+            ["multivac/claude", "multivac/claude", "-"]
         );
-        let codex: Owner = "jarvis/codex".parse().unwrap();
-        set_default_owner(&conn, &codex, "derek", Timestamp::from_millis(5)).unwrap();
-        assert_eq!(default_owner(&conn, &routing).unwrap(), Some(codex));
-        assert_eq!(picked_default(&conn).unwrap().unwrap().by, "derek");
-        let unknown: Owner = "nowhere/claude".parse().unwrap();
-        assert!(set_default_owner(&conn, &unknown, "derek", Timestamp::from_millis(6)).is_err());
+        // An owner the create names, or clears, is kept.
+        let ops = vec![
+            create("Named", None, Some("jarvis/codex")),
+            create("Cleared", None, Some("none")),
+        ];
+        assert_eq!(stamped(&conn, ops, by), ["jarvis/codex", "-"]);
+        // Under an existing ticket it inherits an ancestor's owner, if one has an owner.
+        let request = BatchRequest {
+            preconditions: Vec::new(),
+            ops: vec![
+                create("Owned epic", None, Some("jarvis/claude")),
+                create("Bare epic", None, None),
+            ],
+        };
+        let Ok(BatchOutcome::Applied(reply)) =
+            batch::apply(&mut conn, &request, "s", "m", Timestamp::from_millis(1))
+        else {
+            panic!("the epics were not filed");
+        };
+        let owned = reply.results[0].id.to_string();
+        let bare = reply.results[1].id.to_string();
+        let ops = vec![
+            create("Under owned", Some(&owned), None),
+            create("Under bare", Some(&bare), None),
+        ];
+        assert_eq!(stamped(&conn, ops, by), ["-", "multivac/claude"]);
+        // Without a known creator nothing changes.
+        assert_eq!(
+            stamped(&conn, vec![create("Unknown", None, None)], None),
+            ["-"]
+        );
     }
 }

@@ -3,17 +3,19 @@
 //!
 //! Owners are a ticket field of their own, not labels:
 //!
-//! - A ticket with no owner takes its nearest ancestor's, and one whose ancestors have none
-//!   either follows the **default owner**, a hub setting that a person changes on the dashboard.
-//!   Changing the default moves every ticket that follows it.
+//! - A ticket filed with no owner and no ancestor that has one is owned by whoever filed it: the
+//!   machine and app of the session that ran `ignite ticket create` (see
+//!   `ignite_store::hub::owners::add_creator_owners`). A ticket under an owned ancestor takes
+//!   the nearest ancestor's owner, so changing an epic's owner moves its tickets.
 //! - Dispatch offers a ticket only to workers of its owner. An idle worker elsewhere is never
-//!   offered it.
-//! - An owner may name a machine without an app (`cygnus`), meaning the machine's home app
-//!   (`home_app` in its `[machine.<name>]` table), or any app on it when none is declared. A
-//!   ticket the hub files itself is owned this way by the machine that saw the fault.
+//!   offered it. A ticket with no owner at all, such as one filed before owners existed, goes to
+//!   any worker.
+//! - An owner may name a machine without an app (`cygnus`), meaning any app's workers on that
+//!   machine. A ticket the hub files itself is owned this way by the machine that saw the fault,
+//!   and so is one filed from a session whose app the client could not tell.
 //! - A ticket the hub files with `fallback` set holds `master` back. When its owner's machine
-//!   has not been heard from for [`FALLBACK_SECONDS`], it may also go to the default owner, if
-//!   that runs the operating system the ticket needs, or else to any machine that does.
+//!   has not been heard from for [`FALLBACK_SECONDS`], it may also go to any machine that runs
+//!   the operating system the ticket needs.
 
 use std::fmt;
 use std::str::FromStr;
@@ -31,7 +33,7 @@ pub const FALLBACK_SECONDS: f64 = 30.0 * 60.0;
 pub struct Owner {
     /// The machine's name as `ignite.toml` declares it, compared without regard to case.
     pub machine: String,
-    /// `claude` or `codex`; `None` means the machine's home app.
+    /// `claude` or `codex`; `None` means any app on the machine.
     pub app: Option<String>,
 }
 
@@ -45,25 +47,12 @@ impl Owner {
     }
 
     /// Whether a worker of `app` on the machine named `machine` may take a ticket of this owner.
-    /// `home` is the machine's home app from `ignite.toml`, if it declares one.
-    pub fn admits(&self, machine: &str, app: &str, home: Option<&str>) -> bool {
+    pub fn admits(&self, machine: &str, app: &str) -> bool {
         self.machine.eq_ignore_ascii_case(machine)
-            && match self.app.as_deref().or(home) {
-                Some(owner_app) => owner_app.eq_ignore_ascii_case(app),
-                None => true,
-            }
-    }
-
-    /// This owner with its app filled in from the machine's home app where it names none.
-    #[must_use]
-    pub fn resolved(&self, config: &Routing) -> Owner {
-        Owner {
-            machine: self.machine.clone(),
-            app: self
+            && self
                 .app
-                .clone()
-                .or_else(|| config.home_app(&self.machine).map(str::to_owned)),
-        }
+                .as_deref()
+                .is_none_or(|owner_app| owner_app.eq_ignore_ascii_case(app))
     }
 }
 
@@ -114,16 +103,14 @@ impl<'de> Deserialize<'de> for Owner {
     }
 }
 
-/// What the hub knows about routing from `ignite.toml`: each machine's operating system and home
-/// app, the apps the pool runs and the default owner a new hub starts with. The hub records it in
-/// its database at start, so routes and upkeep read it without the configuration.
+/// What the hub knows about routing from `ignite.toml`: each machine's operating system and the
+/// apps the pool runs. The hub records it in its database at start, so routes and upkeep read it
+/// without the configuration.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Routing {
     pub machines: Vec<RoutedMachine>,
     /// The apps the pool runs: those with a `[pool.models.<app>]` table.
     pub apps: Vec<String>,
-    /// `[pool] default_owner`, the default owner until a person picks another.
-    pub default_owner: Option<Owner>,
 }
 
 /// One declared machine, as routing sees it.
@@ -131,7 +118,6 @@ pub struct Routing {
 pub struct RoutedMachine {
     pub name: String,
     pub os: Option<Os>,
-    pub home_app: Option<String>,
 }
 
 impl Routing {
@@ -144,11 +130,9 @@ impl Routing {
                 .map(|(name, machine)| RoutedMachine {
                     name: name.to_ascii_lowercase(),
                     os: machine.os,
-                    home_app: machine.home_app.clone(),
                 })
                 .collect(),
             apps: config.pool.models.keys().cloned().collect(),
-            default_owner: config.pool.default_owner.clone(),
         }
     }
 
@@ -156,10 +140,6 @@ impl Routing {
         self.machines
             .iter()
             .find(|m| m.name.eq_ignore_ascii_case(name))
-    }
-
-    pub fn home_app(&self, machine: &str) -> Option<&str> {
-        self.machine(machine).and_then(|m| m.home_app.as_deref())
     }
 
     /// Every owner a person may pick: each declared machine with each app, in order.
@@ -172,22 +152,20 @@ impl Routing {
 
     /// The owners a ticket may go to.
     ///
-    /// - `own` is the ticket's owner or, failing that, its nearest ancestor's; `default` is the
-    ///   default owner, which applies when both are missing.
+    /// - `own` is the ticket's owner or, failing that, its nearest ancestor's.
     /// - With `fallback`, when `silent` says the owner's machine has not been heard from for
-    ///   [`FALLBACK_SECONDS`], the default owner is added if its machine runs `needs_os` (or the
-    ///   ticket needs none), and otherwise every machine that runs it.
+    ///   [`FALLBACK_SECONDS`], every other machine that runs `needs_os` (or any machine, when the
+    ///   ticket needs no system) is added, with any app.
     ///
-    /// Empty only when there is no owner and no default, which leaves the ticket to any worker.
+    /// Empty only when there is no owner, which leaves the ticket to any worker.
     pub fn destinations(
         &self,
         own: Option<&Owner>,
-        default: Option<&Owner>,
         fallback: bool,
         needs_os: Option<Os>,
         silent: impl Fn(&str) -> bool,
     ) -> Vec<Owner> {
-        let Some(owner) = own.or(default) else {
+        let Some(owner) = own else {
             return Vec::new();
         };
         let mut owners = vec![owner.clone()];
@@ -197,17 +175,12 @@ impl Routing {
         let runs = |machine: &str| {
             needs_os.is_none_or(|os| self.machine(machine).and_then(|m| m.os) == Some(os))
         };
-        match default {
-            Some(default) if runs(&default.machine) && !silent(&default.machine) => {
-                owners.push(default.clone());
-            }
-            _ => owners.extend(
-                self.machines
-                    .iter()
-                    .filter(|m| runs(&m.name) && !silent(&m.name))
-                    .map(|m| Owner::new(&m.name, None)),
-            ),
-        }
+        owners.extend(
+            self.machines
+                .iter()
+                .filter(|m| runs(&m.name) && !silent(&m.name))
+                .map(|m| Owner::new(&m.name, None)),
+        );
         owners.dedup();
         owners
     }

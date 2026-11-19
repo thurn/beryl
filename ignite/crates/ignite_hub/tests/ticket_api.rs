@@ -693,3 +693,36 @@ fn writers_report_session_titles_that_the_hub_keeps() {
     assert_eq!(titles["tester"], "Planner");
     assert_eq!(titles["local_abc"], "Worker");
 }
+
+#[test]
+fn a_ticket_is_owned_by_the_machine_and_app_that_filed_it() {
+    let fixture = Fixture::new("creator");
+    hub::open(&fixture.dir.join("hub.sqlite"))
+        .unwrap()
+        .execute(
+            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+             VALUES ('m-1', 'multivac', 'macos', 8, 1, '[]', 'v', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+    let hub = fixture.start();
+    let owner = |id: &Value| hub.get(&format!("/tickets/{}", id.as_str().unwrap())).json()["owner"].clone();
+    // The client names its app: the epic is owned by multivac/claude and its child inherits.
+    let filed = hub.post(
+        "/batch",
+        &json!({"actor_app": "claude", "ops": [
+            {"op": "create", "fields": {"title": "Epic", "type": "epic"}},
+            {"op": "create", "parent": "$0", "fields": {"title": "Child"}},
+            {"op": "create", "fields": {"title": "Named", "owner": "jarvis/codex"}},
+        ]}),
+    );
+    assert_eq!(owner(&filed["results"][0]["id"]), "multivac/claude");
+    assert_eq!(owner(&filed["results"][1]["id"]), Value::Null);
+    assert_eq!(owner(&filed["results"][2]["id"]), "jarvis/codex");
+    // A client that cannot tell its app files tickets any app on its machine may take.
+    let filed = hub.post(
+        "/batch",
+        &json!({"ops": [{"op": "create", "fields": {"title": "Unknown app"}}]}),
+    );
+    assert_eq!(owner(&filed["results"][0]["id"]), "multivac");
+}

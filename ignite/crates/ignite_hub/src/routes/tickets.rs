@@ -15,11 +15,12 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use ignite_core::ids::TicketId;
+use ignite_core::owner::Owner;
 use ignite_core::protocol::tickets::{BatchRequest, LeaseOp, LeaseReply, TicketQuery};
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{feed, leases, session_titles, tickets};
+use ignite_store::hub::{feed, fleet, leases, owners, session_titles, tickets};
 
 use super::{Request, Response};
 
@@ -90,14 +91,17 @@ fn apply_batch(
     now: Timestamp,
 ) -> Result<Response, Response> {
     let mut batch: BatchRequest = body(request)?;
+    let writer = request.writer.as_ref().expect("checked in handle");
+    let raw = serde_json::from_slice::<Value>(&request.body).unwrap_or(Value::Null);
+    let creator = creator(conn, writer, raw.get(ACTOR_APP).and_then(Value::as_str))
+        .map_err(|e| store_failure(&e))?;
+    owners::add_creator_owners(conn, &mut batch, creator.as_ref())
+        .map_err(|e| store_failure(&e))?;
     tickets::add_holds(conn, &mut batch).map_err(|e| store_failure(&e))?;
     tickets::add_releases(conn, &mut batch).map_err(|e| store_failure(&e))?;
-    let writer = request.writer.as_ref().expect("checked in handle");
     // The CLI sends the writing session's title beside the operations, so the dashboard can
     // name the session by its title; see `session_titles`.
-    if let Ok(Value::Object(raw)) = serde_json::from_slice::<Value>(&request.body)
-        && let Some(title) = raw.get(ACTOR_TITLE).and_then(Value::as_str)
-    {
+    if let Some(title) = raw.get(ACTOR_TITLE).and_then(Value::as_str) {
         session_titles::record(conn, &writer.actor, title, now).map_err(|e| store_failure(&e))?;
     }
     match batch::apply(conn, &batch, &writer.actor, writer.machine.as_str(), now) {
@@ -109,6 +113,37 @@ fn apply_batch(
 
 /// The key of `POST /batch`'s body holding the title of the session writing, if it has one.
 pub const ACTOR_TITLE: &str = "actor_title";
+
+/// The key of `POST /batch`'s body holding the app of the session writing, `claude` or `codex`,
+/// when the client can tell it.
+pub const ACTOR_APP: &str = "actor_app";
+
+/// The owner of a ticket `writer` files: its machine, by the name `ignite.toml` gives it, and its
+/// app. The app is the one the client sent, or else the one the writing session registered
+/// with as a pool worker; with neither, the owner names only the machine, which admits any app
+/// there. A writer whose machine has no name, such as the dashboard, gives no owner.
+fn creator(
+    conn: &Connection,
+    writer: &crate::auth::Writer,
+    sent_app: Option<&str>,
+) -> Result<Option<Owner>, StoreError> {
+    let Some(name) = fleet::name_of(conn, writer.machine.as_str())? else {
+        return Ok(None);
+    };
+    let app = match sent_app.filter(|app| !app.is_empty()) {
+        Some(app) => Some(app.to_owned()),
+        None => fleet::workers(conn, writer.machine.as_str())?
+            .into_iter()
+            .find(|worker| worker.session == writer.actor)
+            .map(|worker| worker.app),
+    };
+    let owner = match app {
+        Some(app) => format!("{name}/{app}"),
+        None => name,
+    };
+    // A name or app that is not a word, which no owner can hold, gives no owner.
+    Ok(owner.parse().ok())
+}
 
 fn lease(
     conn: &mut Connection,

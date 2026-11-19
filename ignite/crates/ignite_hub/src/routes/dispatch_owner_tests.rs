@@ -1,6 +1,6 @@
-//! Dispatch by owner (see `ignite_core::owner`): a ticket goes only to workers of its own owner,
-//! its nearest ancestor's or the default owner, and a ticket that holds `master` back falls back
-//! when its owner's machine goes silent.
+//! Dispatch by owner (see `ignite_core::owner`): a ticket goes only to workers of its own owner
+//! or its nearest ancestor's, a ticket with neither goes to any worker, and a ticket that holds
+//! `master` back falls back when its owner's machine goes silent.
 
 use rusqlite::Connection;
 use serde_json::{Value, json};
@@ -12,18 +12,13 @@ use ignite_store::hub::{self, owners, tickets};
 use super::tests::{at, claim_reserved, file, free, landed, post, register, release, start};
 
 fn routing() -> Routing {
-    let machine = |name: &str, os: Os, home: &str| RoutedMachine {
+    let machine = |name: &str, os: Os| RoutedMachine {
         name: name.to_owned(),
         os: Some(os),
-        home_app: Some(home.to_owned()),
     };
     Routing {
-        machines: vec![
-            machine("cygnus", Os::Windows, "codex"),
-            machine("jarvis", Os::Macos, "claude"),
-        ],
+        machines: vec![machine("cygnus", Os::Windows), machine("jarvis", Os::Macos)],
         apps: vec!["claude".to_owned(), "codex".to_owned()],
-        default_owner: Some("jarvis/claude".parse().unwrap()),
     }
 }
 
@@ -56,12 +51,12 @@ fn a_ticket_goes_only_to_workers_of_its_owner() {
         &[
             ("on cygnus", &[], &[]),
             ("jarvis codex", &[], &[]),
-            ("default", &[], &[]),
+            ("unowned", &[], &[]),
         ],
     );
     set(&conn, ids[0].as_str(), "owner", "cygnus/codex");
     set(&conn, ids[1].as_str(), "owner", "jarvis/codex");
-    // jarvis's Claude worker gets only the ticket that follows the default.
+    // jarvis's Claude worker gets only the ticket nobody owns.
     let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert_eq!(first["ticket"], ids[2].as_str());
     let (_, none) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1.0));
@@ -77,7 +72,7 @@ fn a_ticket_goes_only_to_workers_of_its_owner() {
 }
 
 #[test]
-fn a_ticket_follows_its_epics_owner_and_the_default_moves_the_rest() {
+fn a_ticket_follows_its_epics_owner_and_goes_to_anyone_without_one() {
     let mut conn = hub_with_routing();
     let ids = file(&mut conn, &[("child", &[], &[])]);
     let child = tickets::load(&conn, ids[0].as_str()).unwrap().unwrap();
@@ -86,17 +81,18 @@ fn a_ticket_follows_its_epics_owner_and_the_default_moves_the_rest() {
     set(&conn, epic.as_str(), "owner", "jarvis/codex");
     let (_, none) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert_eq!(none, Value::Null);
-    set(&conn, epic.as_str(), "owner", None::<String>);
-    owners::set_default_owner(&conn, &"jarvis/codex".parse().unwrap(), "derek", start()).unwrap();
-    let (_, still) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(1.0));
-    assert_eq!(still, Value::Null);
     let (_, codex) = post(
         &mut conn,
         "/next",
         &free_app(&["local_x"], "codex"),
-        at(2.0),
+        at(1.0),
     );
     assert_eq!(codex["ticket"], ids[0].as_str());
+    // Under an epic with no owner, a Claude worker may take it too.
+    let mut conn = hub_with_routing();
+    let ids = file(&mut conn, &[("child", &[], &[])]);
+    let (_, claude) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(2.0));
+    assert_eq!(claude["ticket"], ids[0].as_str());
 }
 
 #[test]
@@ -106,7 +102,7 @@ fn a_ticket_holding_master_falls_back_when_its_machine_is_silent() {
     let id = ids[0].as_str();
     set(&conn, id, "owner", "cygnus");
     set(&conn, id, "fallback", 1);
-    // cygnus has never been heard from, so the default owner may take it.
+    // cygnus has never been heard from, so any app on a machine that is heard from may take it.
     let (_, taken) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
     assert_eq!(taken["ticket"], id);
     // Released again and needing Windows, it has nowhere else to go.
