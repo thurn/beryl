@@ -131,11 +131,18 @@ situation, and a command names the topic when it applies.
   ticket `tier:fable`, and never start a session or subagent on a Fable model,
   unless the user has explicitly asked for it. Never put a tier label on an
   epic, because its children inherit it.
+- **Long non-coding work needs an explicit ask**: before filing a ticket whose
+  work includes more than 30 minutes of anything other than writing code, such
+  as running simulations or tournaments, collecting logs, lengthy manual QA or
+  monitoring something, ask the user in chat and file it only after a clear yes.
+  This covers tickets filed as part of an epic. Running a check or test suite
+  while writing code does not count.
 - No plan, ticket or skill includes a step that waits for the user's approval.
   Where his judgement might be wanted, go ahead with a sensible default and
   record the choice on the ticket you're working on. Never file a ticket asking
   him to look at something. The exceptions are the count gate (K1 in
-  `docs/engine-architecture.md`) and adding a UI exception (see UI).
+  `docs/engine-architecture.md`), adding a UI exception (see UI) and filing a
+  ticket for long non-coding work (above).
 - `/ignite <ticket or task>` does work in the current session, and
   `/ignite <plan>` files an epic of tickets for the worker pool.
 

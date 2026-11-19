@@ -59,9 +59,9 @@ into the binary.
   styles in its pages. See it in a preview instead:
   `cargo run -p ignite_hub --example preview -- --repo ..` serves this tree's
   dashboard at `http://127.0.0.1:7399/` over a copy of the machine's hub
-  database (`--from <hub.db>` names another; `--refresh` copies it again).
-  Edits in the preview change only the copy. The assets are compiled in, so
-  restart the preview after editing `static/`.
+  database (`--from <hub.db>` names another; `--refresh` copies it again). Edits
+  in the preview change only the copy. The assets are compiled in, so restart
+  the preview after editing `static/`.
 - Drive the preview with headless Playwright. The desktop app's browser pane
   draws no frames while it is hidden, so view transitions and other animations
   never start there.
