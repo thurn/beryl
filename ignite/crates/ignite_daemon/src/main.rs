@@ -19,6 +19,7 @@ pub(crate) mod assemble;
 mod desk;
 pub mod drill;
 mod loops;
+mod restart_window;
 mod selfupdate;
 
 use std::path::{Path, PathBuf};
@@ -206,7 +207,7 @@ fn self_update(
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),
         adopted: Mutex::default(),
-        held_since: Mutex::default(),
+        window: Mutex::new(restart_window::RestartWindow::new(base.config.self_update)),
     }
 }
 

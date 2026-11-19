@@ -545,9 +545,13 @@ How the executable is installed and kept current:
   Markdown. A release that changes none of that, such as a fix to the client
   alone, is taken on without a restart: the daemon reports it as its version
   from then on and compares later releases with it. A restart that is due waits
-  while a landing runs or a newer release builds, for at most two minutes from
-  when it first waited, so that a landing's gate is not cut off and releases
-  that land meanwhile cause one restart into the newest. It never waits for
+  for a quiet window: until no newer release has appeared for
+  `self_update.quiet_seconds` (90), no landing runs and no newer release is
+  still building, but at most `self_update.cap_seconds` (600) from the first
+  release it waits with. Releases that land one after another therefore cause
+  one restart into the newest: a release that lands while another builds is
+  built as soon as that build ends, and replaces it as the one to restart into.
+  A push in progress holds the restart even past the cap. It never waits for
   running commands or verb processes, which survive it. Before it restarts, the
   daemon answers every new request, except the calls of verb processes, with a
   reply that says it is restarting, which the client sends again, and waits up
@@ -635,9 +639,10 @@ How the executable is installed and kept current:
 - `ignite status` has a `release` section: the release branch's tip, the build
   this daemon runs and what it is doing about the difference (waiting for its
   next check of the branch, with when that is due; building; self-testing;
-  restarting at its next heartbeat; failed to build; or rolled back, with the
-  reason from `bin/rollbacks.log`), then the hub's version and each machine's,
-  which the hub reports at `GET /machines/versions`.
+  restarting, with when the quiet window ends and the latest the restart can
+  wait; failed to build; or rolled back, with the reason from
+  `bin/rollbacks.log`), then the hub's version and each machine's, which the hub
+  reports at `GET /machines/versions`.
 - When `ignite land` moves the release branch, its `next` line names
   `ignite wait deploy-<commit>`. That wait asks the daemon to check the release
   branch at its next round instead of at its five-minute check. It then waits

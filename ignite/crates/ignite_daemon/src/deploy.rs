@@ -106,8 +106,15 @@ pub enum Checked {
 pub enum Work {
     Building(Commit),
     SelfTesting(Commit),
-    /// Built and tested; the daemon restarts into it at its next heartbeat.
-    Restarting(Commit),
+    /// Built and tested; the daemon restarts into it once its restart window allows.
+    Restarting {
+        commit: Commit,
+        /// When the restart goes ahead if no newer release appears and no landing holds it.
+        /// `None`, or a moment already past, means at the next heartbeat.
+        due: Option<Timestamp>,
+        /// The latest the restart can be held to, a push in progress aside.
+        cap: Option<Timestamp>,
+    },
     /// The build failed, for the reason given; it is not tried again until the branch moves.
     Failed(Commit, String),
 }
@@ -158,10 +165,7 @@ fn local_line(
     let doing = match &local.work {
         Some(Work::Building(commit)) => Some(format!("building {}", short(commit))),
         Some(Work::SelfTesting(commit)) => Some(format!("self-testing {}", short(commit))),
-        Some(Work::Restarting(commit)) => Some(format!(
-            "restarting into {} at its next heartbeat",
-            short(commit)
-        )),
+        Some(Work::Restarting { commit, due, cap }) => Some(restarting(commit, *due, *cap, now)),
         Some(Work::Failed(commit, reason)) if commit == tip => {
             Some(format!("{} failed to build: {reason}", short(commit)))
         }
@@ -195,6 +199,30 @@ fn local_line(
             );
             format!("{runs}; pending: it checks {} next {due}", local.branch)
         }
+    }
+}
+
+/// Says when the daemon restarts into `commit`: at its next heartbeat once `due` has passed,
+/// else when `due` comes, unless a newer release or a landing holds it, and at the latest at
+/// `cap`.
+fn restarting(
+    commit: &Commit,
+    due: Option<Timestamp>,
+    cap: Option<Timestamp>,
+    now: Timestamp,
+) -> String {
+    let short = short(commit);
+    match due.map(|due| due.seconds_since(now)) {
+        Some(left) if left > 0.0 => {
+            let latest = cap.map_or_else(String::new, |cap| {
+                format!(", at the latest in {}", span(cap.seconds_since(now)))
+            });
+            format!(
+                "restarting into {short} in {} unless a newer release or a landing holds it{latest}",
+                span(left)
+            )
+        }
+        _ => format!("restarting into {short} at its next heartbeat"),
     }
 }
 

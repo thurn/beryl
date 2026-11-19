@@ -34,11 +34,13 @@
 //! on without restarting: from then on it reports that release as its version, and compares
 //! later releases with it. `starts.jsonl` lists the releases each run took on this way.
 //!
-//! A restart that is due waits while a landing runs or a newer release builds, up to
-//! [`BATCH_WAIT_S`] from when it first waited, so that a landing's gate is not cut off and the
-//! releases that land meanwhile cause one restart instead of one each. A release that lands while
-//! another waits to restart is built at once, and the restart goes into the newest one ready. Each
-//! restart records its reason in `starts.jsonl`: the release and the daemon files it changed.
+//! A restart that is due waits for a quiet window (see [`crate::main::restart_window`]): until no
+//! newer release has appeared for `quiet_seconds`, no landing runs and no newer release is still
+//! building, but at most `cap_seconds` from the first release it waited with, so that releases
+//! landing one after another cause one restart into the newest instead of one each. A release
+//! that lands while a build runs is built as soon as that build ends, and a ready release is
+//! replaced by the newer one. Each restart records its reason in `starts.jsonl`: the release and
+//! the daemon files it changed.
 //!
 //! The release is built by a thread of its own, through the daemon's launcher (see
 //! [`crate::update::ReleaseBuilder`]), so the sender loop goes on sending heartbeats and the outbox
@@ -85,6 +87,7 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
 use crate::deploy::{Checked, DeployState, LocalRelease, Work};
+use crate::main::restart_window::{Decision, RestartWindow};
 use crate::server::{DRAIN_WAIT, Drain};
 use crate::update::scope::{daemon_changes, summary};
 use crate::update::selftest::Selftest;
@@ -102,18 +105,15 @@ const ROUND_S: f64 = 10.0;
 /// A hub that lags behind the daemon on its machine is kickstarted at most this often.
 pub const HUB_KICK_GAP_S: f64 = 300.0;
 
-/// A restart that is due waits at most this long, from when it first waited, for landings to
-/// end and newer releases to be built.
-pub const BATCH_WAIT_S: f64 = 120.0;
-
 /// What runs on the machine when a restart is due, as the sender loop sees it each round.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Busy {
     /// A verb is in a part that may not be cut short, such as a landing's push. The restart
     /// waits for it however long it takes.
     pub critical: bool,
-    /// A landing runs, such as one whose gate is building. The restart waits for it up to
-    /// [`BATCH_WAIT_S`].
+    /// A landing runs, such as one whose gate is building. The restart waits for it up to the
+    /// window's cap, since a restart stops a landing that has not begun its push and runs it
+    /// again.
     pub landing: bool,
 }
 
@@ -185,8 +185,9 @@ pub struct SelfUpdate {
     /// The newest release this daemon took on without restarting, because it changed none of
     /// the code the daemon runs. `None` until it takes one on.
     pub adopted: Mutex<Option<Commit>>,
-    /// When a restart that is due first waited for a landing or a newer release.
-    pub held_since: Mutex<Option<Timestamp>>,
+    /// The releases that appeared since the daemon started or last took one on, and when the
+    /// restart into them may go ahead.
+    pub window: Mutex<RestartWindow>,
 }
 
 impl SelfUpdate {
@@ -204,10 +205,8 @@ impl SelfUpdate {
         self.ready.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn held_since(&self) -> MutexGuard<'_, Option<Timestamp>> {
-        self.held_since
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+    fn window(&self) -> MutexGuard<'_, RestartWindow> {
+        self.window.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The release whose daemon code this daemon runs: the newest release it took on without
@@ -232,6 +231,7 @@ impl SelfUpdate {
         };
         match self.updater().plan(&own)? {
             Plan::Build(tip) => {
+                self.window().saw(&tip, self.clock.now());
                 if let Some(executable) = self.stage(&tip) {
                     *self.ready() = Some(executable);
                 }
@@ -358,6 +358,12 @@ impl SelfUpdate {
                 Ok(UpdateCheck::Ready { executable, .. }) => {
                     eprintln!("ignite: built release {commit}");
                     *self.ready() = Some(executable);
+                    // A release that appeared while this one built supersedes it: build it now
+                    // rather than at the next move of the branch, so one restart takes it.
+                    let newest = self.window().newest().cloned();
+                    if let Some(newest) = newest.filter(|newest| *newest != commit) {
+                        self.start_build(&newest);
+                    }
                 }
                 Ok(_) => {}
                 Err(error) => {
@@ -448,7 +454,7 @@ impl SelfUpdate {
     /// the daemon into a ready build of `master`, or into the hub's version when it differs,
     /// without waiting for commands. A release that changes none of the daemon's code is taken
     /// on without a restart. `busy` says what runs: the restart waits for a part that may not be
-    /// cut short (a push), and up to [`BATCH_WAIT_S`] for landings and a newer release's build.
+    /// cut short (a push), and for the quiet window of [`RestartWindow`] up to its cap.
     pub fn after_heartbeat(&self, hub_version: Option<&str>, busy: Busy) {
         let Some(own) = self.version() else {
             return;
@@ -477,8 +483,19 @@ impl SelfUpdate {
                 None => return,
                 Some(executable) => executable,
             },
+            // A ready release that contains the hub's version supersedes it.
+            Some(hub) if self.ready_contains(&hub) => match self.ready().clone() {
+                Some(executable) => executable,
+                None => return,
+            },
             Some(hub) => match self.hub_executable(own, &hub) {
-                Ok(Some(executable)) => executable,
+                Ok(Some(executable)) => {
+                    let mut window = self.window();
+                    if window.newest().is_none() {
+                        window.saw(&hub, self.clock.now());
+                    }
+                    executable
+                }
                 Ok(None) => return,
                 Err(error) => {
                     eprintln!("ignite: cannot update to the hub's version {hub}: {error}");
@@ -501,7 +518,7 @@ impl SelfUpdate {
             );
             return;
         }
-        let Some(waited) = self.hold(busy.landing) else {
+        let Some(waited) = self.hold(busy.landing, target.as_ref()) else {
             return;
         };
         let mut reason = match (&target, &changes) {
@@ -523,7 +540,18 @@ impl SelfUpdate {
         // Only a failed restart returns. Forget the build so the next heartbeat does not
         // retry it every few seconds; the next move of `master` prepares it again.
         *self.ready() = None;
-        *self.held_since() = None;
+        self.window().clear();
+    }
+
+    /// Whether the ready build is of a release other than `hub` that contains it.
+    fn ready_contains(&self, hub: &Commit) -> bool {
+        let ready = self
+            .ready()
+            .as_deref()
+            .and_then(ExecutableStore::version_of);
+        ready.is_some_and(|ready| {
+            ready != *hub && self.git.is_ancestor(hub, &ready).unwrap_or(false)
+        })
     }
 
     /// The files of the daemon's code that differ between `own` and `target`, or `None` when
@@ -553,34 +581,39 @@ impl SelfUpdate {
         record_adopted_from(&self.store, target);
         *self.adopted.lock().unwrap_or_else(PoisonError::into_inner) = Some(target.clone());
         *self.ready() = None;
-        *self.held_since() = None;
+        let mut window = self.window();
+        if window.newest() == Some(target) {
+            window.clear();
+        }
     }
 
-    /// Whether a restart that is due may go ahead now: `Some` with how many seconds it has
-    /// waited, or `None` while it waits because `landing` says a landing runs or a newer release
-    /// builds, until it has waited [`BATCH_WAIT_S`].
-    fn hold(&self, landing: bool) -> Option<f64> {
-        let now = self.clock.now();
-        let mut since = self.held_since();
-        let waited = since.map_or(0.0, |at| (now.millis() - at.millis()) as f64 / 1000.0);
-        let why = if landing {
-            "a landing runs"
-        } else if self.building().is_some() {
-            "a newer release builds"
-        } else {
-            return Some(waited);
+    /// Whether a restart into `target` (`None` for an executable outside the store) may go ahead
+    /// now: `Some` with how many seconds it has waited, or `None` while the quiet window has not
+    /// passed, `landing` says a landing runs or a newer release builds, until the window's cap.
+    fn hold(&self, landing: bool, target: Option<&Commit>) -> Option<f64> {
+        let Some(target) = target else {
+            return Some(0.0);
         };
-        if waited >= BATCH_WAIT_S {
-            return Some(waited);
+        // A newer release whose build failed or was rejected is not waited for.
+        let newest = self.window().newest().cloned();
+        let failed = self.failed().as_ref().map(|(commit, _)| commit.clone());
+        let newer_builds = self.building().is_some()
+            || newest.is_some_and(|newest| {
+                newest != *target
+                    && failed.as_ref() != Some(&newest)
+                    && !self.store.is_rejected(&newest)
+            });
+        let held = if landing {
+            Some("a landing runs")
+        } else if newer_builds {
+            Some("a newer release builds")
+        } else {
+            None
+        };
+        match self.window().decide(target, self.clock.now(), held) {
+            Decision::Go { waited } => Some(waited),
+            Decision::Wait => None,
         }
-        if since.is_none() {
-            eprintln!(
-                "ignite: a new release is ready; the restart waits up to {BATCH_WAIT_S:.0} s \
-                 because {why}"
-            );
-            *since = Some(now);
-        }
-        None
     }
 
     /// Restarts the daemon into `executable` now, by the same steps as a restart into a release,
@@ -676,7 +709,14 @@ impl DeployState for SelfUpdate {
                 .as_deref()
                 .and_then(ExecutableStore::version_of)
             {
-                Some(commit) => Some(Work::Restarting(commit)),
+                Some(commit) => {
+                    let window = self.window();
+                    Some(Work::Restarting {
+                        commit,
+                        due: window.due_at(),
+                        cap: window.cap_at(),
+                    })
+                }
                 None => self
                     .failed()
                     .clone()

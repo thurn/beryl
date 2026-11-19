@@ -194,12 +194,29 @@ fn status_says_the_release_is_pending_then_deployed() {
         world.section()[1],
         "this daemon runs aaaaaaa; self-testing bbbbbbb"
     );
-    world
-        .state
-        .edit(|local| local.work = Some(Work::Restarting(commit("bbbbbbb"))));
+    world.state.edit(|local| {
+        local.work = Some(Work::Restarting {
+            commit: commit("bbbbbbb"),
+            due: None,
+            cap: None,
+        });
+    });
     assert_eq!(
         world.section()[1],
         "this daemon runs aaaaaaa; restarting into bbbbbbb at its next heartbeat"
+    );
+    // A restart that waits for its quiet window says when it goes ahead and the latest it can.
+    world.state.edit(|local| {
+        local.work = Some(Work::Restarting {
+            commit: commit("bbbbbbb"),
+            due: Some(start().plus_seconds(80.0)),
+            cap: Some(start().plus_seconds(580.0)),
+        });
+    });
+    assert_eq!(
+        world.section()[1],
+        "this daemon runs aaaaaaa; restarting into bbbbbbb in 80 s unless a newer release or a \
+         landing holds it, at the latest in 10 min"
     );
 
     world.state.edit(|local| {

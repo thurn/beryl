@@ -73,6 +73,38 @@ pub struct Config {
     /// every landing through the gate.
     #[serde(default)]
     pub express: Option<Express>,
+    /// When a daemon restarts into a new release of Ignite.
+    #[serde(default)]
+    pub self_update: SelfUpdateConfig,
+}
+
+/// When a daemon restarts into a new release of Ignite (see "Processes" in the design document).
+/// A restart waits until no newer release has appeared for `quiet_seconds`, so that releases
+/// landing one after another make one restart into the newest, but never longer than
+/// `cap_seconds` after the first release it waits with.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SelfUpdateConfig {
+    #[serde(default = "default_quiet_seconds")]
+    pub quiet_seconds: f64,
+    #[serde(default = "default_cap_seconds")]
+    pub cap_seconds: f64,
+}
+
+impl Default for SelfUpdateConfig {
+    fn default() -> Self {
+        Self {
+            quiet_seconds: default_quiet_seconds(),
+            cap_seconds: default_cap_seconds(),
+        }
+    }
+}
+
+fn default_quiet_seconds() -> f64 {
+    90.0
+}
+
+fn default_cap_seconds() -> f64 {
+    600.0
 }
 
 /// The express lane (see "Express landings" in the design document). A landing whose every

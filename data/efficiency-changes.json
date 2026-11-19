@@ -409,5 +409,10 @@
     "label": "Express runs borrow the scheduler's idle cores, up to 12 in all, instead of always running on the 3 reserved ones (about 164 s on 3 cores under load against about 65 s on 12)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A daemon restarts into a new release only after 90 s with no newer release, at most 10 minutes after the first: on 2026-11-18 jarvis's daemon restarted 16 times in 103 minutes, once per Ignite landing, and each restart reran every `ignite start` in progress",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

@@ -5,6 +5,7 @@ use ignite_core::fakes::FakeClock;
 
 use super::*;
 use crate::update::{Home, start_log, started_at};
+use ignite_core::time::Timestamp;
 
 /// A third commit, after `NEW`.
 const NEWER: &str = "c7d8e9f";
@@ -137,14 +138,14 @@ fn a_release_that_does_not_follow_the_daemon_restarts_it_whatever_changed() {
 }
 
 #[test]
-fn a_restart_waits_for_a_landing_up_to_the_batching_bound() {
+fn a_restart_waits_for_a_landing_up_to_the_cap() {
     let (update, _git, restart, clock) = daemon_with_clock(NEW);
     let home = home_with_this_run(&update);
     update.after_master_moved().unwrap();
     settle(&update);
 
     update.after_heartbeat(Some(OLD), LANDING);
-    clock.advance(BATCH_WAIT_S - 1.0);
+    clock.advance(WINDOW.cap_seconds - 1.0);
     update.after_heartbeat(Some(OLD), LANDING);
     assert!(restart.started().is_empty());
     clock.advance(1.0);
@@ -152,7 +153,7 @@ fn a_restart_waits_for_a_landing_up_to_the_batching_bound() {
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
     let reason = this_run(&home).reason.unwrap();
     assert!(
-        reason.ends_with(", after waiting 120 s for landings and newer releases"),
+        reason.ends_with(", after waiting 600 s for landings and newer releases"),
         "{reason}"
     );
 }
@@ -220,4 +221,100 @@ fn a_drill_restart_drains_and_restarts_into_the_given_executable_even_unstored()
         *drain.calls.lock().unwrap(),
         ["drain 30s after 0", "undrain"]
     );
+}
+
+/// A daemon as [`daemon_with_clock`] makes it, with the restart window `ignite.toml` gets by
+/// default: a 90 s quiet window and a 10 minute cap.
+fn daemon_with_default_window(
+    master: &str,
+) -> (SelfUpdate, Arc<FakeGit>, FakeRestart, Arc<FakeClock>) {
+    let (mut update, git, restart, clock) = daemon_with_clock(master);
+    update.window = Mutex::new(RestartWindow::new(
+        ignite_core::config::SelfUpdateConfig::default(),
+    ));
+    (update, git, restart, clock)
+}
+
+/// Moves `master` to `release`, which changes the daemon's code, and builds it.
+fn land_release(update: &SelfUpdate, git: &FakeGit, release: &Commit) {
+    git.set_tip("master", release.clone());
+    git.set_changed(
+        &commit(OLD),
+        release,
+        &["ignite/crates/ignite_daemon/src/x.rs"],
+    );
+    update.after_master_moved().unwrap();
+    settle(update);
+}
+
+/// Sends `n` heartbeats 10 s apart, as the sender loop does, with nothing running.
+fn heartbeats(update: &SelfUpdate, clock: &FakeClock, n: usize) {
+    for _ in 0..n {
+        update.after_heartbeat(Some(OLD), IDLE);
+        clock.advance(10.0);
+    }
+}
+
+#[test]
+fn three_releases_30_s_apart_make_one_restart_into_the_last() {
+    let (update, git, restart, clock) = daemon_with_default_window(NEW);
+    let releases = [commit(NEW), commit(NEWER), commit("f0e1d2c")];
+    for release in &releases {
+        land_release(&update, &git, release);
+        heartbeats(&update, &clock, 3);
+        assert!(restart.started().is_empty(), "{:?}", restart.started());
+    }
+    // The last release appeared at 60 s, so the quiet window ends at 150 s.
+    heartbeats(&update, &clock, 6);
+    assert!(restart.started().is_empty(), "{:?}", restart.started());
+    assert_eq!(clock.now(), Timestamp::from_millis(150_000));
+    update.after_heartbeat(Some(OLD), IDLE);
+    assert_eq!(restart.started(), [update.store.path(&releases[2])]);
+}
+
+#[test]
+fn the_cap_forces_a_restart_under_a_constant_stream_of_releases() {
+    let (update, git, restart, clock) = daemon_with_default_window(NEW);
+    let start = clock.now();
+    let mut newest = commit(NEW);
+    // A release every 30 s, with a heartbeat every 10 s, until the daemon restarts.
+    let mut restarted_at = None;
+    for round in 0u32.. {
+        if round % 3 == 0 {
+            newest = commit(&format!("{:07x}", 0x0a0_0000 + round / 3));
+            land_release(&update, &git, &newest);
+        }
+        update.after_heartbeat(Some(OLD), IDLE);
+        if !restart.started().is_empty() {
+            restarted_at = Some(clock.now());
+            break;
+        }
+        assert!(
+            clock.now().seconds_since(start) < 700.0,
+            "the restart never came"
+        );
+        clock.advance(10.0);
+    }
+    // The heartbeat 10 minutes after the first release restarts the daemon into the newest
+    // release built by then.
+    assert_eq!(restarted_at, Some(start.plus_seconds(600.0)));
+    assert_eq!(restart.started(), [update.store.path(&newest)]);
+}
+
+#[test]
+fn status_says_when_a_pending_restart_goes_ahead() {
+    let (update, git, _restart, clock) = daemon_with_default_window(NEW);
+    land_release(&update, &git, &commit(NEW));
+    clock.advance(10.0);
+    let Some(Work::Restarting {
+        commit: target,
+        due,
+        cap,
+    }) = update.local().work
+    else {
+        panic!("{:?}", update.local().work);
+    };
+    assert_eq!(target, commit(NEW));
+    assert_eq!(due, Some(Timestamp::from_millis(90_000)));
+    assert_eq!(cap, Some(Timestamp::from_millis(600_000)));
 }

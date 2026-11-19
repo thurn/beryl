@@ -13,6 +13,13 @@ use crate::deploy::{Checked, Work};
 const OLD: &str = "a1b2c3d";
 const NEW: &str = "e4f5a6b";
 
+/// The restart window of most tests: no quiet window, so a ready release restarts the daemon at
+/// the next heartbeat unless something holds it, and the default cap.
+const WINDOW: ignite_core::config::SelfUpdateConfig = ignite_core::config::SelfUpdateConfig {
+    quiet_seconds: 0.0,
+    cap_seconds: 600.0,
+};
+
 /// Nothing runs that a restart waits for.
 const IDLE: Busy = Busy {
     critical: false,
@@ -131,7 +138,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),
         adopted: Mutex::default(),
-        held_since: Mutex::default(),
+        window: Mutex::new(RestartWindow::new(WINDOW)),
     };
     (update, git, restart)
 }
@@ -722,7 +729,11 @@ fn the_deploy_state_follows_the_build_its_selftest_and_the_restart() {
     }
     open_gate(&gate);
     settle(&update);
-    assert_eq!(update.local().work, Some(Work::Restarting(commit(NEW))));
+    assert!(
+        matches!(&update.local().work, Some(Work::Restarting { commit: c, .. }) if *c == commit(NEW)),
+        "{:?}",
+        update.local().work
+    );
 }
 
 /// A deploy wait makes the next round of the sender loop check the release branch, instead of
