@@ -81,14 +81,10 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
         }
     }
 
-    let grid = |items: &[&HomeCard], show_kind: bool, show_state: bool| -> String {
+    let grid = |items: &[&HomeCard], show_kind: bool| -> String {
         c::grid(items.iter().map(|ticket| {
             let card = &ticket.card;
-            let state = if show_state {
-                status_dot(card.status, true)
-            } else {
-                String::new()
-            };
+            let state = status_dot(card.status, true);
             let kind = if show_kind && card.ticket_type == "epic" {
                 c::chip("Epic", Tone::Violet, None)
             } else {
@@ -121,22 +117,12 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
         .enumerate()
         .filter(|(_, group)| !group.is_empty())
         .map(|(index, group)| {
-            c::subsection(
-                AUTOMATIC[index].0,
-                &grid(group, true, true),
-                Some(group.len()),
-                4,
-            )
+            c::subsection(AUTOMATIC[index].0, &grid(group, true), Some(group.len()), 4)
         })
         .collect();
     let sections = [
-        ("Epics", "epics", epics.len(), grid(&epics, false, true)),
-        (
-            "Tickets",
-            "tickets",
-            tickets.len(),
-            grid(&tickets, true, true),
-        ),
+        ("Epics", "epics", epics.len(), grid(&epics, false)),
+        ("Tickets", "tickets", tickets.len(), grid(&tickets, true)),
         (
             "Filed automatically",
             "automatic",
@@ -147,13 +133,13 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
             "Bug reports",
             "bug-reports",
             bug_reports.len(),
-            grid(&bug_reports, true, true),
+            grid(&bug_reports, true),
         ),
         (
             "Deferred",
             "deferred",
             deferred.len(),
-            grid(&deferred, true, true),
+            grid(&deferred, true),
         ),
     ];
     let shown: Vec<_> = sections
@@ -176,7 +162,7 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
     let active_body = if active.is_empty() {
         c::empty("Nothing is in progress.")
     } else {
-        grid(&active, true, false)
+        grid(&active, true)
     };
     let active_part = c::part("Active", &active_body, "active", Some(active.len()));
     let all_body: String = shown
