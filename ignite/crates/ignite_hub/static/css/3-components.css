@@ -501,3 +501,15 @@ a.c-row:hover {
   color: var(--ink-3);
   font-size: var(--text-sm);
 }
+
+/* A session's name, which opens that session in the Claude desktop app. It reads as the
+   surrounding text until hovered. */
+.c-session-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.c-session-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}

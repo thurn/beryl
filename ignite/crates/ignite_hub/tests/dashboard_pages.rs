@@ -313,7 +313,14 @@ fn a_title_naming_another_ticket_is_not_shown_for_its_assignee() {
         now,
     )
     .unwrap();
-    assert!(hub.text("/TQ44S.7.24").contains("This work"));
+    let page = hub.text("/TQ44S.7.24");
+    assert!(page.contains("This work"));
+    assert!(
+        page.contains(
+            "<a class=\"c-session-link\" href=\"claude://claude.ai/epitaxy/local_ff743711\">"
+        ),
+        "{page}"
+    );
 }
 
 #[test]

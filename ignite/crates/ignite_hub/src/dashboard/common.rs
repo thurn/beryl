@@ -122,7 +122,42 @@ fn names_another_ticket(title: &str, ticket: &str) -> bool {
     any
 }
 
+/// A Claude desktop session (`local_<uuid>`) links to the app, which opens that session; see
+/// [`session_link`]. Nothing else links, and neither does [`worker_unlinked`], whose caller is
+/// already inside a link.
 fn named(name: Option<&str>, title: Option<String>) -> String {
+    let shown = named_unlinked(name, title);
+    match name {
+        Some(name) if is_desktop_session(name) => session_link(name, &shown),
+        _ => shown,
+    }
+}
+
+/// [`worker`] without the link to the desktop app, for a name shown inside another link, such
+/// as a ticket card, where a nested link is not valid HTML.
+pub fn worker_unlinked(name: Option<&str>, ticket: &str) -> String {
+    let title = name
+        .and_then(session_title)
+        .filter(|title| !names_another_ticket(title, ticket));
+    named_unlinked(name, title)
+}
+
+/// Whether `name` is a Claude desktop session's ID, `local_` and a UUID.
+pub(crate) fn is_desktop_session(name: &str) -> bool {
+    name.strip_prefix("local_").is_some_and(|rest| {
+        !rest.is_empty() && rest.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+    })
+}
+
+/// `html` as a link that opens the desktop session `session` in the Claude app.
+pub(crate) fn session_link(session: &str, html: &str) -> String {
+    format!(
+        "<a class=\"c-session-link\" href=\"claude://claude.ai/epitaxy/{}\">{html}</a>",
+        c::esc(session)
+    )
+}
+
+fn named_unlinked(name: Option<&str>, title: Option<String>) -> String {
     let Some(name) = name.filter(|name| !name.is_empty()) else {
         return c::muted("Nobody");
     };
