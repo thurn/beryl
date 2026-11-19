@@ -49,6 +49,17 @@ impl Peaks {
         median(by_command.get(key)?)
     }
 
+    /// Whether the command's last `runs` or more recorded runs all measured under `limit`.
+    pub(super) fn all_below(&self, key: &str, limit: u64, runs: usize) -> bool {
+        let by_command = self
+            .by_command
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        by_command
+            .get(key)
+            .is_some_and(|kept| kept.len() >= runs && kept.iter().all(|&value| value < limit))
+    }
+
     /// Remembers a finished run's peak memory. A run that measured nothing is not recorded.
     pub(super) fn record(&self, key: &str, peak_mb: u64) {
         if peak_mb == 0 {

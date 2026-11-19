@@ -151,6 +151,9 @@ pub struct SupervisedLauncher {
     pruned: AtomicU64,
     /// The memory each command line usually needs, for the scheduler's memory gate.
     peaks: Peaks,
+    /// The CPU milliseconds of each command line's last runs, kept the same way, which tell
+    /// a quick command (see `begin::QUICK_CPU_MS`).
+    cpu: Peaks,
     /// Seconds an `idle` command has to exit after the scheduler stops it, before it is killed.
     stop_grace_s: f64,
 }
@@ -170,6 +173,7 @@ impl SupervisedLauncher {
         Self {
             supervisor: command,
             peaks: Peaks::load(runs.join("peaks.json")),
+            cpu: Peaks::load(runs.join("cpu.json")),
             runs,
             scheduler: None,
             next: AtomicU64::new(0),

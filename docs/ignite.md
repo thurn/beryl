@@ -943,6 +943,11 @@ Rules for cores:
   until the job succeeds. A failure because the hub cannot be reached is not
   counted.
 - Time spent waiting for cores is recorded apart from a command's own time.
+- A quick command starts at once on one core, without waiting for a grant: one
+  whose last five or more runs each used under 2 CPU-seconds, that needs no
+  shared resource, is not `idle` work and does not name Cargo. `uv sync`, which
+  builds the Python environment most families list their checks with, used at
+  most 1.2 CPU-seconds in 82 runs but had waited up to 726 s for a core.
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
   CPU for hours.

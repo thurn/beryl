@@ -324,5 +324,10 @@
     "label": "Tree sweep keeps every unit a kept build reaches (it deleted 35 live build-script runs of 23 crates in one tree), and compiling tickets prefer a tree holding the build directory beside their files",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Quick commands (last 5+ runs each under 2 CPU-s, not Cargo) start without waiting for a core: `uv sync` for the Python environment used at most 1.2 CPU-s but queued up to 726 s before listing any family",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]
