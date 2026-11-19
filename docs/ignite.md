@@ -314,10 +314,10 @@ The verbs an agent uses while working:
   behind. `ignite start "<summary>"` files a ticket first, for a session that
   was given a task and no ticket.
 - `ignite test <names>` runs the checks the agent names, in its tree. A name
-  without a known `<family>:` prefix is looked up in the kept listings, and
-  only the families that match, or that have no kept listing, are listed. A
-  name that no family could hold is refused at once with a hint on how checks
-  are named, so a Rust test function name never builds every family.
+  without a known `<family>:` prefix is looked up in the kept listings, and only
+  the families that match, or that have no kept listing, are listed. A name that
+  no family could hold is refused at once with a hint on how checks are named,
+  so a Rust test function name never builds every family.
 - `ignite check` runs what the landing gate would run on the tree as it is.
 - `ignite sync` rebases the tree's branch onto the tip.
 - `ignite land -m "<note>"` rebases, runs the gate, lands the commits, records
@@ -1989,6 +1989,16 @@ What Ignite adds to a ticket:
   next ticket's `ignite start` prints.
 - For an improvement ticket, the rule that filed it and its estimated saving.
 
+Closing a ticket closes each ancestor left with no open descendant, except an
+epic with an acceptance. When that epic's last open descendant closes, the hub
+files one more child, "Verify <epic>'s acceptance", open and released, at the
+epic's priority and with the tier label of its most recently closed child. Its
+body quotes the epic's acceptance. Its session measures the acceptance, records
+the numbers on the epic, and closes the verify ticket, which closes the epic. If
+the acceptance does not hold, the session first files the missing work under the
+epic, and when that work closes, another verify ticket is filed. An epic with an
+empty acceptance closes with its last child.
+
 A ticket that the hub files by itself is matched against open ones by a
 signature of the check, the kind of failure and its message. Host names, thread
 numbers and source line numbers are left out of the signature, and the values in
@@ -2359,8 +2369,8 @@ leased for nothing.
   shown that the session is gone. The silence clock survives a restart: each
   held tree's last activity is kept in the daemon's database, so a worker that
   died just before a restart is still looked at 30 minutes after its last
-  command. A worker removed from the pool when a new dispatcher replaces its
-  own is looked at straight away if it still holds a ticket.
+  command. A worker removed from the pool when a new dispatcher replaces its own
+  is looked at straight away if it still holds a ticket.
 - A session that is still running is left alone. An idle one is sent one message
   asking it to continue or release.
 - The daemon releases the ticket only when the app confirms that the session is

@@ -412,6 +412,10 @@ pub struct OperationResult {
     /// Ancestors closed automatically by a close.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub closed: Vec<TicketId>,
+    /// Tickets a close filed: the child that verifies an epic's acceptance, filed in place of
+    /// closing the epic.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filed: Vec<TicketId>,
     /// Ready tickets, for a close with `include_ready`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ready: Option<Vec<TicketId>>,

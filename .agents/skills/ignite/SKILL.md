@@ -65,7 +65,9 @@ start, because the person may not be there later.
 
 - **One epic** holds the summary, a link to the plan, the decisions,
   whole-plan acceptance and a short code map (modules, entry points, test
-  commands). No ticket's text states a number of workers.
+  commands). No ticket's text states a number of workers. The epic does not
+  close by itself: when its other tickets are done, the hub files a ticket that
+  measures the acceptance, so write it as something a session can measure.
 - **Milestones** are child epics when the plan has phases, each depending on the
   one before. A large or uncertain plan may file the first milestone's tickets
   and one planning ticket for each later milestone.

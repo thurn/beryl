@@ -181,22 +181,34 @@ pub fn open_children(children: &Value) -> String {
     out.join("\n")
 }
 
-/// What a write did: the tickets it touched, and any ancestors a close closed with them.
+/// What a write did: the tickets it touched, any ancestors a close closed with them, and any
+/// ticket a close filed to verify an epic's acceptance instead of closing the epic.
 pub fn written(verb: &str, reply: &Value) -> String {
     let ids: Vec<&str> = reply["results"]
         .as_array()
         .map(|rows| rows.iter().map(|row| text(row, "id")).collect())
         .unwrap_or_default();
     let mut out = format!("{verb} {}", ids.join(", "));
-    let closed: Vec<&str> = reply["results"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .flat_map(|row| row["closed"].as_array().into_iter().flatten())
-        .filter_map(Value::as_str)
-        .collect();
+    let listed = |key: &str| -> Vec<&str> {
+        reply["results"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|row| row[key].as_array().into_iter().flatten())
+            .filter_map(Value::as_str)
+            .collect()
+    };
+    let closed = listed("closed");
     if !closed.is_empty() {
         let _ = write!(out, "\nalso closed: {}", closed.join(", "));
+    }
+    let filed = listed("filed");
+    if !filed.is_empty() {
+        let _ = write!(
+            out,
+            "\nfiled to verify the epic's acceptance: {}",
+            filed.join(", ")
+        );
     }
     out
 }
@@ -264,5 +276,14 @@ mod tests {
     fn a_write_names_the_tickets_and_the_ancestors_it_closed() {
         let reply = json!({"seq": 4, "results": [{"id": "Ta.1", "closed": ["Ta"]}]});
         assert_eq!(written("closed", &reply), "closed Ta.1\nalso closed: Ta");
+    }
+
+    #[test]
+    fn a_write_names_the_ticket_filed_to_verify_an_epic() {
+        let reply = json!({"seq": 4, "results": [{"id": "Ta.1", "filed": ["Ta.2"]}]});
+        assert_eq!(
+            written("closed", &reply),
+            "closed Ta.1\nfiled to verify the epic's acceptance: Ta.2"
+        );
     }
 }

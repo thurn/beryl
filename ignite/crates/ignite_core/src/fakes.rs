@@ -546,6 +546,7 @@ impl Hub for FakeHub {
             results.push(OperationResult {
                 id,
                 closed: Vec::new(),
+                filed: Vec::new(),
                 ready: None,
             });
         }

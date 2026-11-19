@@ -8,7 +8,8 @@
 //!   too but leave the version alone, as in the ticket service.
 //! - An operation's `id` may be `$<index>`, the ticket that the create at that index made.
 //! - Closing a ticket closes each ancestor left with no live descendant, and marks the finding
-//!   filed for any of them closed.
+//!   filed for any of them closed. An epic with an acceptance is not closed but gets a child
+//!   that verifies it (`ancestors`).
 //! - At the end, `meta.seq` moves to the last position used, and the feed gets one change per
 //!   ticket touched, at that position.
 
@@ -28,6 +29,8 @@ use ignite_core::time::Timestamp;
 
 use crate::hub::{cycles, edges, feed, findings, tickets};
 use crate::{Result, StoreError};
+
+mod ancestors;
 
 /// The outcome of a batch: applied, or refused at one precondition or operation.
 #[derive(Debug)]
@@ -277,7 +280,7 @@ impl<'a> Run<'a> {
                 if ticket.status != Status::Closed {
                     self.save(&ticket, self.closing(Some(reason)))?;
                 }
-                let closed = self.close_ancestors(ticket.id.as_str(), Some(reason))?;
+                let (closed, filed) = self.close_ancestors(ticket.id.as_str(), Some(reason))?;
                 let ready = if *include_ready {
                     Some(tickets::ready(self.conn, self.now)?)
                 } else {
@@ -286,6 +289,7 @@ impl<'a> Run<'a> {
                 Ok(OperationResult {
                     id: ticket.id.clone(),
                     closed,
+                    filed,
                     ready,
                 })
             }
@@ -507,10 +511,11 @@ impl<'a> Run<'a> {
             Some(Status::Closed) if !was_closed => {
                 changes.insert("closed_at".to_owned(), self.at.clone());
                 self.save(ticket, changes)?;
-                let closed = self.close_ancestors(ticket.id.as_str(), None)?;
+                let (closed, filed) = self.close_ancestors(ticket.id.as_str(), None)?;
                 return Ok(OperationResult {
                     id: ticket.id.clone(),
                     closed,
+                    filed,
                     ready: None,
                 });
             }
@@ -524,6 +529,7 @@ impl<'a> Run<'a> {
         Ok(OperationResult {
             id: ticket.id.clone(),
             closed: Vec::new(),
+            filed: Vec::new(),
             ready: None,
         })
     }
@@ -618,58 +624,6 @@ impl<'a> Run<'a> {
             ],
         )?;
         Ok(())
-    }
-
-    /// Closes each ancestor of `id`, nearest first, until one that still has a live
-    /// descendant. Returns the ancestors it closed.
-    fn close_ancestors(&mut self, id: &str, reason: Option<&str>) -> Step<Vec<TicketId>> {
-        let mut closed = Vec::new();
-        for parent in self.ancestors(id)? {
-            let live: Option<i64> = self
-                .conn
-                .query_row(
-                    "WITH RECURSIVE below(id) AS ( \
-                       SELECT id FROM tickets WHERE parent = ?1 \
-                       UNION ALL SELECT tickets.id FROM below JOIN tickets ON tickets.parent = below.id) \
-                     SELECT 1 FROM below JOIN tickets USING (id) WHERE status != 'closed' LIMIT 1",
-                    [&parent],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if live.is_some() {
-                break;
-            }
-            if let Some(ticket) = tickets::load(self.conn, &parent)?
-                && ticket.status != Status::Closed
-            {
-                self.save(&ticket, self.closing(reason))?;
-                closed.push(ticket.id);
-            }
-        }
-        Ok(closed)
-    }
-
-    /// The ancestors of `id`, nearest first.
-    fn ancestors(&self, id: &str) -> Step<Vec<String>> {
-        let mut found: Vec<String> = Vec::new();
-        let mut current = id.to_owned();
-        loop {
-            let parent: Option<Option<String>> = self
-                .conn
-                .query_row(
-                    "SELECT parent FROM tickets WHERE id = ?1",
-                    [&current],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            match parent.flatten() {
-                Some(parent) if !found.contains(&parent) => {
-                    found.push(parent.clone());
-                    current = parent;
-                }
-                _ => return Ok(found),
-            }
-        }
     }
 
     /// Adds or removes `id` depends on `on`. Adding an edge that exists with another kind
@@ -769,6 +723,7 @@ fn plain(id: TicketId) -> OperationResult {
     OperationResult {
         id,
         closed: Vec::new(),
+        filed: Vec::new(),
         ready: None,
     }
 }
