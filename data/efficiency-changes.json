@@ -521,7 +521,7 @@
     "expect": "down"
   },
   {
-    "label": "`ignite land` after a passing `ignite check` of the same change charges its budget for the checks the check chose, now cached, so it runs no second slice of scored checks (on 2026-11-19 such a land of a one-line comment ran 398 more checks in 173 s), and the gate converts its seconds at the rate its own gates achieved in the last hour, so a 60 s budget runs in about 60 s under load",
+    "label": "An `ignite land` after a passing `ignite check` of the same change charges its budget for the checks the check chose, now cached, so it runs no second slice of scored checks (on 2026-11-19 such a land of a one-line comment ran 398 more checks in 173 s), and the gate converts its seconds at the rate its own gates achieved in the last hour, so a 60 s budget runs in about 60 s under load",
     "metric": "bead.agent-minutes",
     "expect": "down"
   },
@@ -531,7 +531,7 @@
     "expect": "down"
   },
   {
-    "label": "`ignite test` lists and runs its families on threads of their own, so their products build at once, and names every step of 5 s or more (on 2026-11-19 `ignite test fork` after a one-line comment change built three products one after another and took 300 s, of which its output accounted for 130 s)",
+    "label": "The `ignite test` command lists and runs its families on threads of their own, so their products build at once, and names every step of 5 s or more (on 2026-11-19 `ignite test fork` after a one-line comment change built three products one after another and took 300 s, of which its output accounted for 130 s)",
     "metric": "bead.agent-minutes",
     "expect": "down"
   },
@@ -546,7 +546,7 @@
     "expect": "down"
   },
   {
-    "label": "`ignite test <word>` keeps a local copy of every listing that is never kept for its inputs, such as one whose checks carry digests, so a family whose checks do not hold the word is not listed again (on 2026-11-19 `ignite test quicksilver_gargantuan` after a one-line card comment change took 198 s, 173 s of it waiting for the Beryl 3D build that `b3d-timeline-drift` needs to be listed)",
+    "label": "The `ignite test <word>` command keeps a local copy of every listing that is never kept for its inputs, such as one whose checks carry digests, so a family whose checks do not hold the word is not listed again (on 2026-11-19 `ignite test quicksilver_gargantuan` after a one-line card comment change took 198 s, 173 s of it waiting for the Beryl 3D build that `b3d-timeline-drift` needs to be listed)",
     "metric": "bead.agent-minutes",
     "expect": "down"
   },
@@ -576,7 +576,7 @@
     "expect": "down"
   },
   {
-    "label": "`ignite test <word>` lists a Rust test family for the packages of the tests it names and the packages the branch changes, and every Rust test run selects only its tests' packages, so a card file edit no longer builds every package's test binaries to run one test (on 2026-11-19 `ignite test fork` after a one-line card comment change waited 77 s for 35 crates of the `rust-tests` build)",
+    "label": "The `ignite test <word>` command lists a Rust test family for the packages of the tests it names and the packages the branch changes, and every Rust test run selects only its tests' packages, so a card file edit no longer builds every package's test binaries to run one test (on 2026-11-19 `ignite test fork` after a one-line card comment change waited 77 s for 35 crates of the `rust-tests` build)",
     "metric": "bead.agent-minutes",
     "expect": "down"
   }
