@@ -54,6 +54,8 @@ fn records(commit_hex: &str, seconds: &[f64]) -> Vec<StartRecord> {
             pid: 1,
             stopped: None,
             hung: false,
+            reason: None,
+            adopted: Vec::new(),
         })
         .collect()
 }
@@ -171,7 +173,14 @@ fn starts_after_clean_stops_are_not_a_crash_loop() {
     for (i, pid) in [(0.0, 10), (20.0, 11), (40.0, 12), (60.0, 13)] {
         assert_eq!(guard(&home, &commit(BAD), at(i), pid, &restart), None);
         assert_eq!(home.store().startup(&commit(BAD), at(i)), Startup::Proceed);
-        clean_stop(&home, &commit(BAD), at(i), pid, at(i + 10.0));
+        clean_stop(
+            &home,
+            Some(&commit(BAD)),
+            at(i),
+            pid,
+            at(i + 10.0),
+            "a release",
+        );
     }
     let store = home.store();
     assert!(restart.started.borrow().is_empty());
@@ -192,7 +201,7 @@ fn starts_after_crashes_still_roll_back_among_clean_stops() {
     // A clean stop, then two crashes: the third start that did not follow a clean stop rolls
     // back.
     assert_eq!(guard(&home, &commit(BAD), at(0.0), 10, &restart), None);
-    clean_stop(&home, &commit(BAD), at(0.0), 10, at(5.0));
+    clean_stop(&home, Some(&commit(BAD)), at(0.0), 10, at(5.0), "a release");
     assert_eq!(guard(&home, &commit(BAD), at(10.0), 11, &restart), None);
     assert_eq!(guard(&home, &commit(BAD), at(20.0), 12, &restart), None);
     assert_eq!(guard(&home, &commit(BAD), at(30.0), 13, &restart), Some(1));
@@ -216,14 +225,37 @@ fn a_clean_stop_marks_only_its_own_run_and_old_lines_still_read() {
     .unwrap();
     // The same process ID after an exec into another build is another run.
     log.record(at(30.0), &commit(BAD), 7).unwrap();
-    assert!(log.mark_stopped(7, at(30.0), at(40.0)).unwrap());
+    assert!(
+        log.mark_stopped(
+            7,
+            at(30.0),
+            at(40.0),
+            "release e4f5a6b changes the daemon's code"
+        )
+        .unwrap()
+    );
     let records = log.read();
     assert_eq!(records.len(), 2);
     assert!(records[0].counts());
     assert_eq!(records[1].stopped, Some(at(40.0)));
+    assert_eq!(
+        records[1].reason.as_deref(),
+        Some("release e4f5a6b changes the daemon's code")
+    );
     let text = std::fs::read_to_string(home.root.join("starts.jsonl")).unwrap();
     assert!(!text.lines().next().unwrap().contains("stopped"));
     assert!(!text.contains("hung"));
+}
+
+#[test]
+fn a_release_taken_on_without_a_restart_is_listed_on_its_run() {
+    let home = home();
+    let log = start_log(&home);
+    log.record(at(0.0), &commit(GOOD), 7).unwrap();
+    log.mark_adopted(7, at(0.0), &commit(BAD)).unwrap();
+    // Another run's adoption leaves this one alone.
+    log.mark_adopted(8, at(0.0), &commit(GOOD)).unwrap();
+    assert_eq!(log.read()[0].adopted, [BAD]);
 }
 
 #[test]

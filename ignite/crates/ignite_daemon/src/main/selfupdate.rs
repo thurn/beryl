@@ -28,6 +28,18 @@
 //! daemon kickstarts it again, at most every [`HUB_KICK_GAP_S`] seconds, and does not follow it
 //! back to the older version.
 //!
+//! A built release restarts the daemon only when it changes the code the daemon runs (see
+//! [`crate::update::scope`]). A release that changes only the client, tests or Markdown is still
+//! built and pointed at by `bin/current`, so clients and the hub use it, but the daemon takes it
+//! on without restarting: from then on it reports that release as its version, and compares
+//! later releases with it. `starts.jsonl` lists the releases each run took on this way.
+//!
+//! A restart that is due waits while a landing runs or a newer release builds, up to
+//! [`BATCH_WAIT_S`] from when it first waited, so that a landing's gate is not cut off and the
+//! releases that land meanwhile cause one restart instead of one each. A release that lands while
+//! another waits to restart is built at once, and the restart goes into the newest one ready. Each
+//! restart records its reason in `starts.jsonl`: the release and the daemon files it changed.
+//!
 //! The release is built by a thread of its own, through the daemon's launcher (see
 //! [`crate::update::ReleaseBuilder`]), so the sender loop goes on sending heartbeats and the outbox
 //! while Cargo runs, which takes minutes on a loaded machine. Whichever loop asks for a build
@@ -74,9 +86,11 @@ use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
 use crate::deploy::{Checked, DeployState, LocalRelease, Work};
 use crate::server::{DRAIN_WAIT, Drain};
+use crate::update::scope::{daemon_changes, summary};
 use crate::update::selftest::Selftest;
 use crate::update::{
-    Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, restart_into,
+    Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, record_adopted_from,
+    restart_into,
 };
 
 /// The sender loop runs every 10 seconds, so this many of its rounds are 5 minutes.
@@ -87,6 +101,21 @@ const ROUND_S: f64 = 10.0;
 
 /// A hub that lags behind the daemon on its machine is kickstarted at most this often.
 pub const HUB_KICK_GAP_S: f64 = 300.0;
+
+/// A restart that is due waits at most this long, from when it first waited, for landings to
+/// end and newer releases to be built.
+pub const BATCH_WAIT_S: f64 = 120.0;
+
+/// What runs on the machine when a restart is due, as the sender loop sees it each round.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Busy {
+    /// A verb is in a part that may not be cut short, such as a landing's push. The restart
+    /// waits for it however long it takes.
+    pub critical: bool,
+    /// A landing runs, such as one whose gate is building. The restart waits for it up to
+    /// [`BATCH_WAIT_S`].
+    pub landing: bool,
+}
 
 /// The hub's login service on this machine, which runs `bin/current hub`.
 pub trait HubService: Send + Sync {
@@ -153,6 +182,11 @@ pub struct SelfUpdate {
     /// The server, set once it exists, which stops taking requests and lets the verbs on the
     /// daemon's threads finish before a restart.
     pub drain: OnceLock<Arc<dyn Drain>>,
+    /// The newest release this daemon took on without restarting, because it changed none of
+    /// the code the daemon runs. `None` until it takes one on.
+    pub adopted: Mutex<Option<Commit>>,
+    /// When a restart that is due first waited for a landing or a newer release.
+    pub held_since: Mutex<Option<Timestamp>>,
 }
 
 impl SelfUpdate {
@@ -170,18 +204,33 @@ impl SelfUpdate {
         self.ready.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    fn held_since(&self) -> MutexGuard<'_, Option<Timestamp>> {
+        self.held_since
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The release whose daemon code this daemon runs: the newest release it took on without
+    /// restarting, else the commit it was built from. `None` for an executable that is not in
+    /// the store. The heartbeat reports it as the daemon's version.
+    pub fn version(&self) -> Option<Commit> {
+        let adopted = self
+            .adopted
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        adopted.or_else(|| self.own.clone())
+    }
+
     /// After tip verification moved `master`: builds and stores the new executable if Ignite's
-    /// source changed. The restart comes with the next [`SelfUpdate::after_heartbeat`].
+    /// source changed. The restart comes with the next [`SelfUpdate::after_heartbeat`]. While a
+    /// build waits to restart into, a newer tip is built too, and replaces it once ready, so
+    /// that both releases make one restart.
     pub fn after_master_moved(&self) -> Result<()> {
-        let Some(own) = &self.own else {
+        let Some(own) = self.version() else {
             return Ok(());
         };
-        if self.ready().is_some() {
-            // A newer build already waits; once the daemon runs it, the next check goes on
-            // from there.
-            return Ok(());
-        }
-        match self.updater().plan(own)? {
+        match self.updater().plan(&own)? {
             Plan::Build(tip) => {
                 if let Some(executable) = self.stage(&tip) {
                     *self.ready() = Some(executable);
@@ -397,12 +446,14 @@ impl SelfUpdate {
 
     /// After each heartbeat, with the hub's version from the last reply that arrived. Restarts
     /// the daemon into a ready build of `master`, or into the hub's version when it differs,
-    /// without waiting for commands. `critical` says that a verb is in a part that may not be cut
-    /// short (a push); the restart then waits for the next heartbeat.
-    pub fn after_heartbeat(&self, hub_version: Option<&str>, critical: bool) {
-        let Some(own) = &self.own else {
+    /// without waiting for commands. A release that changes none of the daemon's code is taken
+    /// on without a restart. `busy` says what runs: the restart waits for a part that may not be
+    /// cut short (a push), and up to [`BATCH_WAIT_S`] for landings and a newer release's build.
+    pub fn after_heartbeat(&self, hub_version: Option<&str>, busy: Busy) {
+        let Some(own) = self.version() else {
             return;
         };
+        let own = &own;
         self.collect_build();
         // A hub that reports no commit, such as one run from an unstored executable, asks for
         // no update.
@@ -435,18 +486,101 @@ impl SelfUpdate {
                 }
             },
         };
-        if critical {
+        let target = ExecutableStore::version_of(&executable);
+        let changes = target
+            .as_ref()
+            .and_then(|target| self.changes_to_daemon(own, target));
+        if let (Some(target), Some([])) = (&target, changes.as_deref()) {
+            self.adopt(target, reported.as_ref(), &executable);
+            return;
+        }
+        if busy.critical {
             eprintln!(
                 "ignite: {} is ready; restarting once a push in progress ends",
                 executable.display()
             );
             return;
         }
+        let Some(waited) = self.hold(busy.landing) else {
+            return;
+        };
+        let mut reason = match (&target, &changes) {
+            (Some(target), Some(changes)) => format!(
+                "release {target} changes the daemon's code: {}",
+                summary(changes)
+            ),
+            (Some(target), None) => {
+                format!("release {target}, which was not compared with {own}")
+            }
+            (None, _) => format!("an executable outside the store, {}", executable.display()),
+        };
+        if waited > 0.0 {
+            reason =
+                format!("{reason}, after waiting {waited:.0} s for landings and newer releases");
+        }
         self.restart_hub_first(reported.as_ref(), &executable);
-        self.drain_and_restart(&executable);
+        self.drain_and_restart(&executable, &reason);
         // Only a failed restart returns. Forget the build so the next heartbeat does not
         // retry it every few seconds; the next move of `master` prepares it again.
         *self.ready() = None;
+        *self.held_since() = None;
+    }
+
+    /// The files of the daemon's code that differ between `own` and `target`, or `None` when
+    /// `target` does not follow `own` or Git cannot tell: the daemon then restarts.
+    fn changes_to_daemon(&self, own: &Commit, target: &Commit) -> Option<Vec<String>> {
+        if !self.git.is_ancestor(own, target).unwrap_or(false) {
+            return None;
+        }
+        match daemon_changes(self.git.as_ref(), SOURCE, own, target) {
+            Ok(changes) => Some(changes),
+            Err(error) => {
+                eprintln!("ignite: cannot compare {own} with release {target}: {error}");
+                None
+            }
+        }
+    }
+
+    /// Takes on the release `target`, built at `executable`, without restarting: it changes
+    /// none of the daemon's code. The hub on this machine still restarts into it, and the
+    /// daemon reports it as its version from now on.
+    fn adopt(&self, target: &Commit, reported: Option<&Commit>, executable: &std::path::Path) {
+        eprintln!(
+            "ignite: taking on release {target} without a restart: it changes none of the \
+             daemon's code"
+        );
+        self.restart_hub_first(reported, executable);
+        record_adopted_from(&self.store, target);
+        *self.adopted.lock().unwrap_or_else(PoisonError::into_inner) = Some(target.clone());
+        *self.ready() = None;
+        *self.held_since() = None;
+    }
+
+    /// Whether a restart that is due may go ahead now: `Some` with how many seconds it has
+    /// waited, or `None` while it waits because `landing` says a landing runs or a newer release
+    /// builds, until it has waited [`BATCH_WAIT_S`].
+    fn hold(&self, landing: bool) -> Option<f64> {
+        let now = self.clock.now();
+        let mut since = self.held_since();
+        let waited = since.map_or(0.0, |at| (now.millis() - at.millis()) as f64 / 1000.0);
+        let why = if landing {
+            "a landing runs"
+        } else if self.building().is_some() {
+            "a newer release builds"
+        } else {
+            return Some(waited);
+        };
+        if waited >= BATCH_WAIT_S {
+            return Some(waited);
+        }
+        if since.is_none() {
+            eprintln!(
+                "ignite: a new release is ready; the restart waits up to {BATCH_WAIT_S:.0} s \
+                 because {why}"
+            );
+            *since = Some(now);
+        }
+        None
     }
 
     /// Restarts the daemon into `executable` now, by the same steps as a restart into a release,
@@ -458,19 +592,19 @@ impl SelfUpdate {
         while critical() {
             thread::sleep(std::time::Duration::from_secs(1));
         }
-        self.drain_and_restart(executable);
+        self.drain_and_restart(executable, "a restart drill (`ignite internal restart`)");
     }
 
     /// Stops taking requests, waits up to [`DRAIN_WAIT`] for the verbs on the daemon's threads,
-    /// records a clean stop and restarts into `executable`. Returns only if the restart failed,
-    /// after taking requests again.
-    fn drain_and_restart(&self, executable: &std::path::Path) {
+    /// records a clean stop with `reason` and restarts into `executable`. Returns only if the
+    /// restart failed, after taking requests again.
+    fn drain_and_restart(&self, executable: &std::path::Path, reason: &str) {
         let drain = self.drain.get();
         if let Some(drain) = drain {
             drain.drain(DRAIN_WAIT);
         }
-        eprintln!("ignite: restarting into {}", executable.display());
-        crate::update::record_clean_stop_from(&self.store);
+        eprintln!("ignite: restarting into {}: {reason}", executable.display());
+        crate::update::record_clean_stop_from(&self.store, reason);
         let error = restart_into(self.restart.as_ref(), executable);
         eprintln!("ignite: {error}");
         if let Some(drain) = drain {
@@ -554,7 +688,7 @@ impl DeployState for SelfUpdate {
         let rounds = self.rounds.load(Ordering::Relaxed);
         let left = (POLL_EVERY_ROUNDS - rounds % POLL_EVERY_ROUNDS) % POLL_EVERY_ROUNDS;
         LocalRelease {
-            own: self.own.clone(),
+            own: self.version(),
             branch: self.master.clone(),
             next_check: Some(self.clock.now().plus_seconds(f64::from(left) * ROUND_S)),
             work,
@@ -563,10 +697,10 @@ impl DeployState for SelfUpdate {
 
     fn check(&self) -> Result<(Commit, Checked)> {
         let tip = self.git.tip(&self.master)?;
-        let Some(own) = &self.own else {
+        let Some(own) = self.version() else {
             return Ok((tip, Checked::Current));
         };
-        Ok(match self.updater().plan(own)? {
+        Ok(match self.updater().plan(&own)? {
             Plan::Build(tip) => (tip, Checked::Build),
             Plan::Done(UpdateCheck::Ahead { tip }) => (tip, Checked::Ahead),
             Plan::Done(UpdateCheck::NotNeeded { tip }) => (tip, Checked::Unchanged),

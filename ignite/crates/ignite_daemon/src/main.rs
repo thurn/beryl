@@ -199,6 +199,8 @@ fn self_update(
         hub_service: Arc::new(NativeHubService),
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),
+        adopted: Mutex::default(),
+        held_since: Mutex::default(),
     }
 }
 
@@ -242,7 +244,7 @@ pub fn run_hub(cwd: &Path) -> i32 {
     // stop before it ends, so that neither crash-loop guard counts the restart.
     let stop_home = home.clone();
     if let Err(error) = ignite_os::terminate::on_terminate(Box::new(move || {
-        crate::update::record_clean_stop(&stop_home);
+        crate::update::record_clean_stop(&stop_home, "asked to stop (SIGTERM)");
     })) {
         eprintln!("ignite: a stop will count as a crash: {error}");
     }
@@ -312,7 +314,7 @@ pub fn run_daemon(cwd: &Path) -> i32 {
     // stop before it ends, so that neither crash-loop guard counts the restart.
     let stop_home = home.clone();
     if let Err(error) = ignite_os::terminate::on_terminate(Box::new(move || {
-        crate::update::record_clean_stop(&stop_home);
+        crate::update::record_clean_stop(&stop_home, "asked to stop (SIGTERM)");
     })) {
         eprintln!("ignite: a stop will count as a crash: {error}");
     }

@@ -529,8 +529,17 @@ How the executable is installed and kept current:
 - After that the daemon runs the executable built from the release branch,
   `repository.release` in `ignite.toml`, or `master` when that is unset. When
   the branch moves and Ignite's own source changed, each daemon builds the new
-  executable in a tree of its own and restarts into it within ten seconds,
-  without waiting for running commands or verb processes. Before it restarts,
+  executable in a tree of its own and points `bin/current` at it, so clients and
+  the hub run it. The daemon restarts into it only when the release changes the
+  code the daemon runs: anything under `ignite/` except the `ignite_cli` crate,
+  test files (`tests.rs`, `*_tests.rs`, files under a `tests` directory) and
+  Markdown. A release that changes none of that, such as a fix to the client
+  alone, is taken on without a restart: the daemon reports it as its version
+  from then on and compares later releases with it. A restart that is due waits
+  while a landing runs or a newer release builds, for at most two minutes from
+  when it first waited, so that a landing's gate is not cut off and releases
+  that land meanwhile cause one restart into the newest. It never waits for
+  running commands or verb processes, which survive it. Before it restarts,
   the daemon answers every new request, except the calls of verb processes, with
   a reply that says it is restarting, which the client sends again, and waits up
   to 30 seconds for the verbs running on its own threads, such as a `release`.
@@ -544,7 +553,8 @@ How the executable is installed and kept current:
   with a one-hour hang limit; only one runs at a time. The sender loop never
   waits for it: each round it looks whether the build has finished and shows
   "building release <commit>" as its step meanwhile, and the next heartbeat
-  after it finishes restarts the daemon into it. A failed build is logged once
+  after it finishes restarts the daemon into it, or takes it on without a
+  restart as above. A failed build is logged once
   and not retried until another commit is wanted. A daemon that restarts
   mid-build waits for Cargo's lock before it resets the update tree.
 - Before the daemon restarts into a new release, the release thread runs the new
@@ -706,6 +716,12 @@ How a broken build or a crash is survived:
   stopping the scheduled task ends the process with no chance to record
   anything, so such a stop still counts as a crash. `ignite install` starts a
   fresh trial for the build it installs.
+- A clean stop also records its `reason` on the run's line in `starts.jsonl`:
+  the release the daemon restarted into and the daemon files that release
+  changed, with how long the restart waited for landings; a drill; or
+  `SIGTERM`. A run's line lists in `adopted` the releases it took on without
+  restarting. Together they let a postmortem count the restarts releases caused
+  and the ones they avoided.
 - `ignite install` also installs a monitor, a second login service that runs
   `ignite monitor` from the last-good build every two minutes. It restarts a
   daemon that does not answer, rolls back a build that crash-loops, and when

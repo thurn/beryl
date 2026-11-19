@@ -13,6 +13,17 @@ use crate::deploy::{Checked, Work};
 const OLD: &str = "a1b2c3d";
 const NEW: &str = "e4f5a6b";
 
+/// Nothing runs that a restart waits for.
+const IDLE: Busy = Busy {
+    critical: false,
+    landing: false,
+};
+/// A landing is pushing.
+const PUSHING: Busy = Busy {
+    critical: true,
+    landing: true,
+};
+
 fn commit(hex: &str) -> Commit {
     Commit::new(hex).unwrap()
 }
@@ -87,11 +98,16 @@ impl FakeRestart {
     }
 }
 
-/// A daemon running `OLD`, with `master` at `master`.
+/// A daemon running `OLD`, with `master` at `master`. `NEW` changes the daemon's code.
 fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
     let dir = tempdir();
     let git = Arc::new(FakeGit::default());
     git.set_tip("master", commit(master));
+    git.set_changed(
+        &commit(OLD),
+        &commit(NEW),
+        &["ignite/crates/ignite_daemon/src/x.rs"],
+    );
     let restart = FakeRestart::default();
     let update = SelfUpdate {
         own: Some(commit(OLD)),
@@ -114,6 +130,8 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         hub_service: Arc::new(FakeHubService::default()),
         hub_kicked: Mutex::default(),
         drain: std::sync::OnceLock::new(),
+        adopted: Mutex::default(),
+        held_since: Mutex::default(),
     };
     (update, git, restart)
 }
@@ -176,18 +194,18 @@ fn a_daemon_on_another_version_than_the_hub_restarts_into_the_hubs_at_once() {
 
     // Commands may run; the restart does not wait for them. The hub's version is built on a
     // thread of its own, and the heartbeat after it ends restarts into it.
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     settle(&update);
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
 
 #[test]
 fn a_daemon_on_the_hubs_version_stays() {
     let (update, _git, restart) = daemon(OLD);
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     // A hub that has not answered yet changes nothing.
-    update.after_heartbeat(None, false);
+    update.after_heartbeat(None, IDLE);
     assert!(restart.started().is_empty());
 }
 
@@ -202,7 +220,7 @@ fn master_moving_with_changed_ignite_source_builds_and_restarts_at_once() {
 
     // The hub is still on this daemon's version; the new build is restarted into at the next
     // heartbeat, whatever runs.
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
 
@@ -215,7 +233,7 @@ fn on_the_hub_machine_the_hub_restarts_before_the_daemon() {
     // `bin/current` points at the new build before either restarts, so the hub starts it.
     assert_eq!(update.store.current_commit(), Some(commit(NEW)));
 
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
     // One kickstart of the hub, before any restart of the daemon.
     assert_eq!(service.kicks(), [0]);
@@ -225,9 +243,9 @@ fn on_the_hub_machine_the_hub_restarts_before_the_daemon() {
 fn a_hub_already_on_the_release_is_not_restarted_again() {
     // The hub reports `NEW` and this daemon follows it; the hub needs no restart.
     let (update, _git, restart, service, _clock) = hub_machine_daemon(NEW);
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     settle(&update);
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
     assert!(service.kicks().is_empty());
 }
@@ -242,17 +260,17 @@ fn a_hub_behind_the_daemon_on_its_machine_is_restarted_not_followed() {
     update.store.store(&commit(OLD), &built).unwrap();
     update.store.point_current_at(&commit(OLD)).unwrap();
 
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(service.kicks(), [0]);
     // Not again on every heartbeat, but again after a while.
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(service.kicks().len(), 1);
     clock.advance(HUB_KICK_GAP_S + 1.0);
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(service.kicks().len(), 2);
     // The daemon never went to the hub's build.
     settle(&update);
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert!(restart.started().is_empty());
 }
 
@@ -269,21 +287,8 @@ fn a_hub_left_on_a_rejected_release_is_moved_back_with_the_daemon() {
         .store
         .reject_with_reason(&commit(NEW), "crash loop", update.clock.now());
 
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(service.kicks(), [0]);
-}
-
-#[test]
-fn a_ready_build_waits_only_for_a_push_in_progress() {
-    let (update, git, restart) = daemon(NEW);
-    git.set_changed(&commit(OLD), &commit(NEW), &["ignite/crates/x.rs"]);
-    update.after_master_moved().unwrap();
-    settle(&update);
-
-    update.after_heartbeat(Some(OLD), true);
-    assert!(restart.started().is_empty());
-    update.after_heartbeat(Some(OLD), false);
-    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
 
 #[test]
@@ -293,7 +298,7 @@ fn master_moving_without_ignite_changes_keeps_the_executable() {
 
     update.after_master_moved().unwrap();
     settle(&update);
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert!(restart.started().is_empty());
     assert!(!update.store.has(&commit(NEW)));
 }
@@ -302,7 +307,7 @@ fn master_moving_without_ignite_changes_keeps_the_executable() {
 fn a_daemon_already_on_masters_tip_waits_for_the_hub_to_catch_up() {
     // This daemon runs `OLD`, which is `master`'s tip; the hub still reports an older commit.
     let (update, _git, restart) = daemon(OLD);
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert!(restart.started().is_empty());
 }
 
@@ -310,7 +315,7 @@ fn a_daemon_already_on_masters_tip_waits_for_the_hub_to_catch_up() {
 fn an_unstored_daemon_never_updates() {
     let (mut update, _git, restart) = daemon(NEW);
     update.own = None;
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     update.after_master_moved().unwrap();
     assert!(restart.started().is_empty());
 }
@@ -349,7 +354,7 @@ fn a_push_straight_to_the_release_branch_deploys() {
 
     poll(&update);
     assert!(update.store.has(&commit(NEW)));
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
 }
 
@@ -357,7 +362,7 @@ fn a_push_straight_to_the_release_branch_deploys() {
 fn a_release_branch_that_has_not_moved_builds_nothing() {
     let (update, _git, restart) = daemon(OLD);
     poll(&update);
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert!(restart.started().is_empty());
     assert!(!update.store.has(&commit(NEW)));
 }
@@ -367,7 +372,7 @@ fn a_release_move_without_ignite_changes_builds_nothing() {
     let (update, git, restart) = daemon(NEW);
     git.set_changed(&commit(OLD), &commit(NEW), &["docs/readme.md"]);
     poll(&update);
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert!(restart.started().is_empty());
     assert!(!update.store.has(&commit(NEW)));
 }
@@ -381,7 +386,7 @@ fn a_build_recorded_as_bad_is_never_installed_again_but_a_newer_one_is() {
     poll(&update);
     assert!(!update.store.has(&commit(NEW)));
     // Not by the hub's version either.
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert!(restart.started().is_empty());
 
     let newer = "f00dfee";
@@ -417,7 +422,7 @@ fn a_daemon_installed_ahead_of_the_release_branch_stays_on_its_build() {
     update.poll_release().unwrap();
     assert!(!update.store.has(&commit(NEW)));
     // The daemon serves the hub, so the hub reports the daemon's own version.
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert!(restart.started().is_empty());
 }
 
@@ -489,7 +494,7 @@ fn heartbeats_go_on_while_a_slow_release_builds_and_the_build_starts_once() {
     let round = |update: &SelfUpdate| {
         update.rounds.store(0, Ordering::Relaxed);
         update.poll_release().unwrap();
-        update.after_heartbeat(Some(NEW), false);
+        update.after_heartbeat(Some(NEW), IDLE);
         heartbeats.set(heartbeats.get() + 1);
     };
     let began = Instant::now();
@@ -540,7 +545,7 @@ fn a_failed_release_build_is_not_started_again_for_the_same_commit() {
     // Neither the sender's poll, the tip loop nor the hub's version tries the same commit again.
     poll(&update);
     update.after_master_moved().unwrap();
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     settle(&update);
     assert_eq!(started.load(Ordering::SeqCst), 1);
     assert!(restart.started().is_empty());
@@ -576,10 +581,10 @@ fn a_release_that_passes_its_selftest_restarts_and_is_checked_once() {
 
     // The hub's version is asked for on every heartbeat, and the tip loop asks too; one selftest
     // runs however often.
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     update.after_master_moved().unwrap();
     settle(&update);
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
     assert_eq!(selftest.runs.load(Ordering::SeqCst), 1);
     assert!(hub.justiciar_reports().is_empty());
@@ -596,8 +601,8 @@ fn a_release_that_fails_its_selftest_is_never_restarted_into_and_is_reported_onc
     settle(&update);
     for _ in 0..3 {
         poll(&update);
-        update.after_heartbeat(Some(NEW), false);
-        update.after_heartbeat(Some(OLD), false);
+        update.after_heartbeat(Some(NEW), IDLE);
+        update.after_heartbeat(Some(OLD), IDLE);
         settle(&update);
     }
 
@@ -616,7 +621,7 @@ fn a_release_that_fails_its_selftest_is_never_restarted_into_and_is_reported_onc
     git.set_tip("master", commit(newer));
     git.set_changed(&commit(OLD), &commit(newer), &["ignite/crates/x.rs"]);
     poll(&update);
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(newer))]);
     assert_eq!(hub.justiciar_reports().len(), 1);
 }
@@ -629,13 +634,13 @@ fn a_selftest_report_the_hub_did_not_take_is_sent_when_it_answers() {
 
     update.after_master_moved().unwrap();
     settle(&update);
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert!(hub.justiciar_reports().is_empty());
     assert!(update.store.is_rejected(&commit(NEW)));
 
     hub.set_unreachable(false);
-    update.after_heartbeat(Some(OLD), false);
-    update.after_heartbeat(Some(OLD), false);
+    update.after_heartbeat(Some(OLD), IDLE);
+    update.after_heartbeat(Some(OLD), IDLE);
     assert_eq!(hub.justiciar_reports().len(), 1);
     assert!(restart.started().is_empty());
 }
@@ -669,13 +674,13 @@ fn a_restart_stops_taking_requests_and_waits_for_the_daemons_own_verbs_first() {
         calls: Mutex::default(),
     });
     let _ = update.drain.set(drain.clone());
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     settle(&update);
     assert!(
         drain.calls.lock().unwrap().is_empty(),
         "nothing to restart into yet"
     );
-    update.after_heartbeat(Some(NEW), false);
+    update.after_heartbeat(Some(NEW), IDLE);
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
     // The fake restart returns, as a failed one does, so the server takes requests again.
     assert_eq!(
@@ -774,20 +779,5 @@ fn the_deploy_state_gives_why_a_build_failed_or_was_rolled_back() {
     assert!(update.reached(&commit(OLD), &commit(NEW)));
 }
 
-#[test]
-fn a_drill_restart_drains_and_restarts_into_the_given_executable_even_unstored() {
-    let (mut update, _git, restart) = daemon(OLD);
-    update.own = None;
-    let drain = Arc::new(FakeDrain {
-        restart: restart.clone(),
-        calls: Mutex::default(),
-    });
-    let _ = update.drain.set(drain.clone());
-    let own = PathBuf::from("/opt/ignite/ignite");
-    update.restart_now(&own, &|| false);
-    assert_eq!(restart.started(), [own]);
-    assert_eq!(
-        *drain.calls.lock().unwrap(),
-        ["drain 30s after 0", "undrain"]
-    );
-}
+#[path = "selfupdate_restart_tests.rs"]
+mod restart;

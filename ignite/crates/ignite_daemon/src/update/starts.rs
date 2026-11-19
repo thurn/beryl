@@ -41,6 +41,15 @@ pub struct StartRecord {
     /// Whether the monitor kickstarted this run because it did not answer.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hung: bool,
+    /// Why this run stopped on purpose, such as the release it restarted into and the files of
+    /// the daemon's code that release changed, so that a postmortem can count the restarts a
+    /// release caused and the ones that waited for a landing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Releases this run took on without restarting, because they changed nothing the daemon
+    /// runs (see `SelfUpdate::after_heartbeat`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub adopted: Vec<String>,
 }
 
 impl StartRecord {
@@ -90,13 +99,22 @@ impl StartLog {
             pid,
             stopped: None,
             hung: false,
+            reason: None,
+            adopted: Vec::new(),
         });
         self.write(&records)
     }
 
     /// Records that the run of process `pid` that started at `started` stopped cleanly at
-    /// `now`. Returns `false`, and records nothing, when the monitor marked that run hung.
-    pub fn mark_stopped(&self, pid: u32, started: Timestamp, now: Timestamp) -> io::Result<bool> {
+    /// `now`, for `reason`. Returns `false`, and records nothing, when the monitor marked that
+    /// run hung.
+    pub fn mark_stopped(
+        &self,
+        pid: u32,
+        started: Timestamp,
+        now: Timestamp,
+        reason: &str,
+    ) -> io::Result<bool> {
         let mut records = self.read();
         let Some(record) = records
             .iter_mut()
@@ -109,8 +127,24 @@ impl StartLog {
             return Ok(false);
         }
         record.stopped = Some(now);
+        record.reason = Some(reason.to_owned());
         self.write(&records)?;
         Ok(true)
+    }
+
+    /// Records that the run of process `pid` that started at `started` took on the release
+    /// `commit` without restarting. A run whose start was not logged records nothing.
+    pub fn mark_adopted(&self, pid: u32, started: Timestamp, commit: &Commit) -> io::Result<()> {
+        let mut records = self.read();
+        let Some(record) = records
+            .iter_mut()
+            .rev()
+            .find(|record| record.pid == pid && record.at == started)
+        else {
+            return Ok(());
+        };
+        record.adopted.push(commit.to_string());
+        self.write(&records)
     }
 
     /// Marks the newest run as hung, before the monitor kickstarts a daemon that does not
@@ -164,37 +198,58 @@ pub fn guard_start(home: &Home) -> Option<i32> {
     guard(home, &own, now, std::process::id(), &ExecRestart)
 }
 
-/// Records that this daemon stopped because it was asked to, in the start log and in
-/// `bin/trial`, so that neither crash-loop guard counts this run. Called on `SIGTERM` and just
-/// before the daemon restarts into another build.
-pub fn record_clean_stop(home: &Home) {
-    if let Some(own) = own_commit() {
-        clean_stop(
-            home,
-            &own,
-            started_at(),
-            std::process::id(),
-            SystemClock.now(),
-        );
-    }
+/// Records that this daemon stopped because it was asked to, and `reason`, in the start log and
+/// in `bin/trial`, so that neither crash-loop guard counts this run. Called on `SIGTERM` and
+/// just before the daemon restarts into another build.
+pub fn record_clean_stop(home: &Home, reason: &str) {
+    clean_stop(
+        home,
+        own_commit().as_ref(),
+        started_at(),
+        std::process::id(),
+        SystemClock.now(),
+        reason,
+    );
+}
+
+/// The home that holds `store`.
+fn home_of(store: &ExecutableStore) -> Option<Home> {
+    store.root.parent().map(|root| Home {
+        root: root.to_owned(),
+    })
 }
 
 /// [`record_clean_stop`] for the home that holds `store`, for a caller that has only the store:
 /// the daemon's restart into a new release.
-pub fn record_clean_stop_from(store: &ExecutableStore) {
-    if let Some(root) = store.root.parent() {
-        record_clean_stop(&Home {
-            root: root.to_owned(),
-        });
+pub fn record_clean_stop_from(store: &ExecutableStore, reason: &str) {
+    if let Some(home) = home_of(store) {
+        record_clean_stop(&home, reason);
     }
 }
 
-fn clean_stop(home: &Home, own: &Commit, started: Timestamp, pid: u32, now: Timestamp) {
+/// Records in the start log of the home that holds `store` that this run took on the release
+/// `commit` without restarting.
+pub fn record_adopted_from(store: &ExecutableStore, commit: &Commit) {
+    if let Some(home) = home_of(store) {
+        let _ = start_log(&home).mark_adopted(std::process::id(), started_at(), commit);
+    }
+}
+
+/// Records the clean stop in the start log, and in `bin/trial` when the running build is
+/// `own`, a stored one.
+fn clean_stop(
+    home: &Home,
+    own: Option<&Commit>,
+    started: Timestamp,
+    pid: u32,
+    now: Timestamp,
+    reason: &str,
+) {
     // A run whose start was not logged still records its stop in the trial.
     let clean = start_log(home)
-        .mark_stopped(pid, started, now)
+        .mark_stopped(pid, started, now, reason)
         .unwrap_or(true);
-    if clean {
+    if clean && let Some(own) = own {
         home.store().record_stop(own, started);
     }
 }

@@ -187,7 +187,10 @@ fn a_run_records_its_state_and_kickstarts_after_three_missed_probes() {
     // The run that did not answer is hung: the kickstart's SIGTERM records no clean stop.
     let log = start_log(&home);
     assert!(log.read()[0].hung);
-    assert!(!log.mark_stopped(5, at(0.0), at(250.0)).unwrap());
+    assert!(
+        !log.mark_stopped(5, at(0.0), at(250.0), "asked to stop")
+            .unwrap()
+    );
     assert!(log.read()[0].counts());
     let state: MonitorState =
         serde_json::from_slice(&fs::read(home.root.join("monitor.json")).unwrap()).unwrap();

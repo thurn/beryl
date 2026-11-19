@@ -17,7 +17,7 @@ use ignite_core::time::SystemClock;
 use ignite_core::traits::{Error, Result};
 
 use super::DaemonOptions;
-use super::selfupdate::SelfUpdate;
+use super::selfupdate::{Busy, SelfUpdate};
 use crate::checks::Checks;
 use crate::claim::Claims;
 use crate::crash;
@@ -107,7 +107,8 @@ impl Parts {
 
     /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each
     /// heartbeat it compares the daemon's version with the hub's and restarts into a new
-    /// executable as soon as one is ready, whatever runs (see [`SelfUpdate::after_heartbeat`]).
+    /// executable once one is ready and no landing holds it back (see
+    /// [`SelfUpdate::after_heartbeat`]).
     /// A release build runs on a thread of its own, so a round never waits for Cargo; the round
     /// only looks whether the build has finished and names it in the loop's step.
     fn spawn_sender(&self, db: Connection, server: Arc<Server>) {
@@ -124,9 +125,13 @@ impl Parts {
             // The hub's version from the last heartbeat it answered.
             let hub_version: RefCell<Option<String>> = RefCell::new(None);
             let beat = || {
+                // A daemon that took on a release without restarting reports that release.
+                let version = update
+                    .version()
+                    .map_or_else(|| version.clone(), |commit| commit.to_string());
                 let reply = client.heartbeat(&Heartbeat {
                     machine: ctx.machine.clone(),
-                    version: version.clone(),
+                    version,
                     workers: dispatcher.view().unwrap_or_default(),
                 })?;
                 *hub_version.borrow_mut() = Some(reply.hub_version);
@@ -139,8 +144,7 @@ impl Parts {
                     if let Err(error) = update.poll_release() {
                         eprintln!("ignite: the release branch was not checked: {error}");
                     }
-                    let critical = server.steps().critical_now();
-                    update.after_heartbeat(hub_version.borrow().as_deref(), critical);
+                    update.after_heartbeat(hub_version.borrow().as_deref(), busy(server.steps()));
                     reporter.tick(&ctx, sent.is_ok());
                     sent
                 });
@@ -377,6 +381,18 @@ impl HubAddresses {
     /// The addresses in this process's environment.
     pub fn from_env() -> Option<HubAddresses> {
         HubAddresses::from(|name| std::env::var(name).ok())
+    }
+}
+
+/// What runs that a restart waits for: a verb in a part that may not be cut short, and any
+/// landing, whether it runs on the daemon's threads or in a verb process of its own.
+fn busy(steps: &crate::steps::Steps) -> Busy {
+    let landing = steps.live().iter().any(
+        |activity| matches!(activity.kind(), crate::steps::Kind::Verb(verb) if verb == "land"),
+    );
+    Busy {
+        critical: steps.critical_now(),
+        landing,
     }
 }
 
