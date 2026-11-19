@@ -53,6 +53,11 @@ struct Sent {
     /// When the ingest last began, whether or not its round finished.
     #[serde(default)]
     last_round_at: Option<Timestamp>,
+    /// The UTC date the spend windows were last sent, which the next send starts from. It is
+    /// kept apart from `since` so that a machine whose exports began before the spend command
+    /// existed sends its whole history of windows once.
+    #[serde(default)]
+    spend_since: Option<String>,
 }
 
 /// How long a daemon that has just started waits before its first round, so that rounds stay
@@ -111,11 +116,12 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
     }
     if !metrics.spend.is_empty() {
         let spend_out = state.with_extension("spend.jsonl");
+        let spend_since = sent.spend_since.as_deref().unwrap_or("all");
         let args = metrics
             .spend
             .iter()
             .map(|arg| {
-                arg.replace("{since}", since)
+                arg.replace("{since}", spend_since)
                     .replace("{out}", &spend_out.to_string_lossy())
             })
             .collect();
@@ -129,6 +135,11 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
             stamp: now,
             since: Some(started.day()),
             last_round_at: Some(started),
+            spend_since: if metrics.spend.is_empty() {
+                sent.spend_since.clone()
+            } else {
+                Some(started.day())
+            },
         },
     )?;
     let _ = fs::remove_file(&out);
@@ -603,6 +614,32 @@ mod tests {
         assert_eq!(imports[1].machine.as_str(), "m-7f3a");
         assert_eq!(imports[1].rows.len(), 1);
         assert!(imports[1].rows[0].get("groups").is_some());
+    }
+
+    #[test]
+    fn spend_windows_are_posted_from_all_history_then_from_the_last_day_sent() {
+        let scratch = Scratch::new("spend");
+        let s = setup_with(
+            &scratch,
+            true,
+            "spend = [\"dash\", \"spend\", \"--since\", \"{since}\", \"--out\", \"{out}\"]\n",
+        );
+        let windows = s.state.with_extension("spend.jsonl");
+        for (round, name) in ["a.jsonl", "b.jsonl"].iter().enumerate() {
+            grow_transcripts(&scratch, name);
+            write_export(&s, 1);
+            fs::write(&windows, "{\"ticket\": \"TA\"}\n\n{\"ticket\": \"TB\"}\n").unwrap();
+            post_new_rows(&s.ctx, &s.state).unwrap();
+            let runs = s.launcher.runs();
+            let spend = runs.last().unwrap();
+            let since = if round == 0 { "all" } else { "2026-11-17" };
+            assert_eq!(&args(spend)[..4], ["dash", "spend", "--since", since]);
+        }
+        let imports = s.hub.metrics_imports();
+        let posted: Vec<_> = imports.iter().filter(|i| i.source == "spend").collect();
+        assert_eq!(posted.len(), 2);
+        assert_eq!(posted[0].rows.len(), 2);
+        assert!(!windows.exists(), "the windows file is removed once sent");
     }
 
     #[test]
