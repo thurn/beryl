@@ -124,6 +124,15 @@ pub(super) fn read_cores(path: &Path) -> Option<u32> {
 /// the jobserver does not control.
 pub(super) fn compiles_only(args: &[String]) -> bool {
     const COMPILES: [&str; 5] = ["build", "check", "clippy", "rustc", "doc"];
+    // `env NAME=value ... cargo ...` runs the same Cargo command: the release test build of the
+    // fuzzers starts that way, and as a non-compiling command it never gave its cores back.
+    let args = match args.split_first() {
+        Some((program, rest)) if program == "env" => {
+            let skip = rest.iter().take_while(|arg| arg.contains('=')).count();
+            &rest[skip..]
+        }
+        _ => args,
+    };
     let Some((program, rest)) = args.split_first() else {
         return false;
     };
@@ -131,10 +140,15 @@ pub(super) fn compiles_only(args: &[String]) -> bool {
     if name != Some("cargo") {
         return false;
     }
-    // The subcommand is the first argument that is not a flag or a `+toolchain`.
+    // The subcommand is the first argument that is not a flag or a `+toolchain`. A test run
+    // with `--no-run` only builds the test binaries.
+    let no_run = rest.iter().any(|arg| arg == "--no-run");
     rest.iter()
         .find(|arg| !arg.starts_with(['-', '+']))
-        .is_some_and(|sub| COMPILES.contains(&sub.as_str()))
+        .is_some_and(|sub| {
+            COMPILES.contains(&sub.as_str())
+                || (no_run && ["test", "nextest"].contains(&sub.as_str()))
+        })
 }
 
 #[cfg(test)]
@@ -153,6 +167,16 @@ mod tests {
             &["/Users/me/.cargo/bin/cargo", "clippy"],
             &["cargo", "doc"],
             &["cargo", "rustc"],
+            &[
+                "env",
+                "A=1",
+                "B=2",
+                "cargo",
+                "test",
+                "--release",
+                "--no-run",
+            ],
+            &["cargo", "nextest", "run", "--no-run", "--workspace"],
         ] {
             assert!(compiles_only(&strings(args)), "{args:?}");
         }
@@ -162,6 +186,8 @@ mod tests {
             &["cargo", "run", "--", "build"],
             &["cargo", "--version"],
             &["make", "build"],
+            &["env", "A=1", "cargo", "test"],
+            &["env", "A=1"],
             &[],
         ] {
             assert!(!compiles_only(&strings(args)), "{args:?}");

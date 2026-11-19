@@ -226,3 +226,38 @@ fn commands_taken_over_after_a_restart_never_hold_more_than_the_machine() {
     assert_eq!(fs::read_to_string(dir.join("growing")).ok(), None);
     fs::remove_dir_all(&dir).unwrap();
 }
+
+/// Agent commands that grew into every free core while no landing waited kept those cores, and
+/// landings ran on one core with three more waiting. What a grant grew by is given back while a
+/// higher class waits, down to the size it started at.
+#[test]
+fn a_grant_that_grew_gives_its_growth_back_while_land_waits() {
+    let mut ledger = Ledger::new(limits());
+    let compare = ledger.enqueue(
+        under_jobserver(Class::Agent, 16, "/runs/a/cores".into()),
+        T0,
+    );
+    let other = ledger.enqueue(ask(Class::Agent, 16), T0);
+    let step = ledger.step(T0);
+    assert_eq!(step.granted[0].cores, 12, "two agents share 24 cores");
+    ledger.release(other);
+    let step = ledger.step(at(1.0));
+    assert_eq!(step.resized, [(compare, 16)], "grew into the free cores");
+
+    let land = ledger.enqueue(ask(Class::Land, 12), at(2.0));
+    let mut sizes = Vec::new();
+    let mut now = 2.0;
+    let started = loop {
+        let step = ledger.step(at(now));
+        sizes.extend(step.resized.iter().map(|&(_, cores)| cores));
+        if let Some(grant) = step.granted.first() {
+            break grant.clone();
+        }
+        now += 0.25;
+        assert!(now < 30.0, "the landing never started");
+    };
+    assert_eq!(started.id, land);
+    // It gave back the four it grew by, one per step, and keeps the twelve it started with.
+    assert_eq!(sizes, [15, 14, 13, 12]);
+    assert_eq!(started.cores, 12);
+}

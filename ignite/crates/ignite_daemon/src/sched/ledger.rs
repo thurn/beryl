@@ -33,6 +33,9 @@ struct Waiter {
 struct Held {
     class: Class,
     cores: u32,
+    /// The size it was granted or adopted at. What it grew to beyond this was lent from free
+    /// cores and is given back while a higher class waits.
+    first: u32,
     resources: Vec<String>,
     memory_mb: Option<u64>,
     /// For a grant with a cores file, the cores it asked for, capped at two thirds of the
@@ -151,6 +154,7 @@ impl Ledger {
             Held {
                 class,
                 cores: cores.max(1),
+                first: cores.max(1),
                 resources,
                 memory_mb,
                 grows_to,
@@ -422,13 +426,12 @@ impl Ledger {
             && now.seconds_since(waiter.since) < RECLAIM_SECONDS
     }
 
-    /// The cores that shrinking grants of classes below `class` could still give back: all but
-    /// one of each.
+    /// The cores that grants of classes below `class` could still give back ([`gives_back`]).
     fn reclaimable(&self, class: Class) -> u32 {
         self.held
             .values()
-            .filter(|h| h.shrinks && h.class > class)
-            .map(|h| h.cores - 1)
+            .filter(|h| h.class > class)
+            .map(gives_back)
             .sum()
     }
 
@@ -472,10 +475,15 @@ impl Ledger {
     /// one, and returns those grants with their new sizes. The command gives the core back when
     /// one of its jobs ends, which for a compile is within seconds, so a waiting `land` request
     /// gets a long build's cores one at a time instead of after the build.
+    ///
+    /// A grant that grew also gives back what it grew by, down to its first size, whatever its
+    /// command. Growing agent commands (a screenshot comparison script, test builds started through
+    /// `env`) took every free core while no landing waited and kept them, so landings, the
+    /// highest class, ran on one core with three more waiting for half an hour.
     fn shrink_below(&mut self, class: Class) -> Vec<(u64, u32)> {
         let mut shrunk = Vec::new();
         for (&id, held) in &mut self.held {
-            if held.shrinks && held.class > class && held.cores > 1 {
+            if held.class > class && !held.stopping && gives_back(held) > 0 {
                 held.cores -= 1;
                 shrunk.push((id, held.cores));
             }
@@ -526,6 +534,7 @@ impl Ledger {
             Held {
                 class: waiter.request.class,
                 cores,
+                first: cores,
                 resources: waiter.request.resources.clone(),
                 memory_mb: waiter.request.memory_mb,
                 grows_to,
@@ -708,4 +717,14 @@ fn index_of(waiting: &[Waiter], id: u64) -> usize {
         .iter()
         .position(|w| w.id == id)
         .expect("a picked waiter is still waiting")
+}
+
+/// The cores a grant gives back while a higher class waits: all but one for a command that
+/// only compiles, and otherwise what it grew by beyond its first size.
+fn gives_back(held: &Held) -> u32 {
+    if held.shrinks {
+        held.cores.saturating_sub(1)
+    } else {
+        held.cores.saturating_sub(held.first)
+    }
 }
