@@ -138,7 +138,7 @@ mod tests {
             "Ordinary difficulty is the job",
             "Never wait for a person, for another ticket, for another machine or for verification",
             "verdict says whose failure it is",
-            "Never decide yourself that a failure is unrelated",
+            "never decide yourself that a failure is unrelated",
             "nothing will report",
             "Never work in another session's tree",
             "A `changed` line is an instruction about your ticket",
