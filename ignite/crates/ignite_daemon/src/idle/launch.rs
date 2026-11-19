@@ -1,9 +1,10 @@
 //! Running idle jobs in verb processes. The daemon's idle loop decides whether idle work may run
 //! and which job is next ([`Idle::next_job`]); [`Idle::drive`] then starts the job as the
-//! internal verb `idle-job` in a verb process with a handle (see `crate::verbproc`) and waits for
-//! the handle. The verb process outlives a restart of the daemon, so the loop of a restarted
-//! daemon finds the job's handle in the idle folder and waits for it instead of starting a
-//! second job.
+//! internal verb `idle-job` in a verb process with a handle (see `crate::verbproc`), records the
+//! handle and returns; later rounds look at the handle without waiting ([`Idle::settle`]) until
+//! the job has finished. The verb process outlives a restart of the daemon, so the loop of a
+//! restarted daemon finds the job's handle in the idle folder and settles it in the same way
+//! instead of starting a second job.
 //!
 //! A request that idle work stop (a grant of the `idle` class that a higher class needs) still
 //! ends the job's commands from the daemon's side; the job then fails, the verb process exits,
@@ -21,9 +22,6 @@ use super::{Idle, IdleJob, error_reply};
 use crate::handles::Waited;
 use crate::server::{Context, Server, Verb};
 use crate::steps;
-
-/// How long the loop waits for a job's handle before it looks again.
-const WAIT_S: u32 = 30;
 
 /// How the idle loop starts a job and waits for it: the server, or a fake in tests.
 pub trait JobRunner: Send + Sync {
@@ -101,23 +99,39 @@ impl Idle {
         let _ = std::fs::remove_file(self.handle_file());
     }
 
-    /// One round of the idle loop's work, once it has decided that idle work may run. If a
-    /// job's handle is recorded, as after a restart of the daemon, waits for that job to
-    /// finish. Otherwise starts the next job, if there is one, and waits for it. Returns the
-    /// job's failure, as [`Idle::run`] does for a job in this process.
+    /// Looks at the idle job recorded as started, as after a restart of the daemon or in an
+    /// earlier round, without waiting for it. `Ok(true)` while it still runs. When it has
+    /// finished, forgets its handle and returns `Ok(false)`, or the job's failure, as
+    /// [`Idle::run`] does for a job in this process.
+    pub fn settle(&self, runner: &dyn JobRunner) -> Result<bool> {
+        let Some(handle) = self.recorded_handle() else {
+            return Ok(false);
+        };
+        match runner.wait(&handle, 0) {
+            JobWait::Running => Ok(true),
+            JobWait::Done(reply) => {
+                self.forget_handle();
+                reply_result(&reply).map(|()| false)
+            }
+            JobWait::Gone => {
+                self.forget_handle();
+                Ok(false)
+            }
+        }
+    }
+
+    /// One round of the idle loop's work, once it has decided that idle work may run. Settles
+    /// a recorded job (see [`Idle::settle`]) and does nothing more in that round. Otherwise
+    /// starts the next job, if there is one, and returns without waiting for it: a later round
+    /// settles it.
+    ///
+    /// The round never waits for the job. A rebuild or exploration in the `idle` class yields
+    /// its cores to every other class and can run for half an hour on a busy machine; a round
+    /// that waited for it stayed open that long, and the loop's health check reported
+    /// `ignite-idle` as stuck while it was only waiting for a job that was making progress.
     pub fn drive(&self, ctx: &Context, runner: &dyn JobRunner) -> Result<()> {
-        if let Some(handle) = self.recorded_handle() {
-            return match runner.wait(&handle, 0) {
-                JobWait::Running => self.await_job(runner, &handle),
-                JobWait::Done(reply) => {
-                    self.forget_handle();
-                    reply_result(&reply)
-                }
-                JobWait::Gone => {
-                    self.forget_handle();
-                    Ok(())
-                }
-            };
+        if self.recorded_handle().is_some() {
+            return self.settle(runner).map(|_| ());
         }
         // Other processes saved their changes, which decide what is due.
         self.refresh();
@@ -125,38 +139,17 @@ impl Idle {
             return Ok(());
         };
         steps::step(format!("idle work {job:?}"));
-        let handle = runner.start(&job, &mut |handle| {
+        let started = runner.start(&job, &mut |handle| {
             let _ = std::fs::create_dir_all(self.handle_file().parent().unwrap_or(".".as_ref()));
             if let Err(error) = std::fs::write(self.handle_file(), handle.as_str()) {
                 eprintln!("ignite: cannot record the idle job {handle}: {error}");
             }
         });
-        let handle = match handle {
-            Ok(handle) => handle,
-            Err(error) => {
-                self.forget_handle();
-                return Err(error);
-            }
-        };
-        self.await_job(runner, &handle)
-    }
-
-    /// Waits until the job of `handle` has finished.
-    fn await_job(&self, runner: &dyn JobRunner, handle: &Handle) -> Result<()> {
-        steps::step(format!("idle job {handle}"));
-        loop {
-            match runner.wait(handle, WAIT_S) {
-                JobWait::Running => {}
-                JobWait::Done(reply) => {
-                    self.forget_handle();
-                    return reply_result(&reply);
-                }
-                JobWait::Gone => {
-                    self.forget_handle();
-                    return Ok(());
-                }
-            }
+        if let Err(error) = started {
+            self.forget_handle();
+            return Err(error);
         }
+        Ok(())
     }
 }
 

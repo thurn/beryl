@@ -1,6 +1,6 @@
-//! Idle jobs in verb processes: the loop's driver waits for a job it finds across a restart and
-//! starts no second one, a failed job fails the round, and the processes that share the state
-//! file lose none of each other's changes.
+//! Idle jobs in verb processes: the loop's driver starts a job without waiting for it, finds a
+//! running job across a restart and starts no second one, a failed job fails the round that
+//! settles it, and the processes that share the state file lose none of each other's changes.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -36,15 +36,6 @@ impl Processes {
 
     fn starts(&self) -> usize {
         self.started.lock().unwrap().len()
-    }
-
-    /// Waits until `count` waits on a job's handle have begun.
-    fn until_waits(&self, count: usize) {
-        let since = Instant::now();
-        while self.waits.load(Ordering::SeqCst) < count {
-            assert!(since.elapsed() < Duration::from_secs(10), "no wait began");
-            thread::sleep(Duration::from_millis(2));
-        }
     }
 }
 
@@ -89,35 +80,37 @@ impl JobRunner for Runner {
     }
 }
 
+/// A round starts a job and returns at once, so a job that runs for half an hour never holds
+/// a round open past the loop's stall limit. A restarted daemon finds the recorded handle and,
+/// while the job runs, starts nothing.
 #[test]
-fn a_job_running_across_a_restart_finishes_once_and_starts_nothing_again() {
+fn a_round_does_not_wait_for_its_job_and_a_restart_starts_no_second_one() {
     let f = Fixture::new();
     let processes = Arc::new(Processes::default());
 
-    // The first daemon starts the job, and is replaced while it runs.
-    let first = {
-        let (idle, ctx, runner) = (f.idle(), f.ctx.clone(), Runner(processes.clone()));
-        thread::spawn(move || idle.drive(&ctx, &runner))
-    };
-    processes.until_waits(1);
+    // The first daemon's round starts the job and returns while it still runs.
+    f.idle().drive(&f.ctx, &Runner(processes.clone())).unwrap();
     assert_eq!(processes.starts(), 1);
+    assert!(f.dir.join("state/idle-job.handle").exists());
+    assert_eq!(
+        processes.waits.load(Ordering::SeqCst),
+        0,
+        "the round waited"
+    );
 
-    // The restarted daemon's loop finds the recorded handle and waits for it.
-    let second = {
-        let (idle, ctx, runner) = (f.idle(), f.ctx.clone(), Runner(processes.clone()));
-        thread::spawn(move || idle.drive(&ctx, &runner))
-    };
-    processes.until_waits(2);
+    // The restarted daemon's rounds find the running job and start no second one.
+    let restarted = f.idle();
+    assert!(restarted.settle(&Runner(processes.clone())).unwrap());
+    restarted.drive(&f.ctx, &Runner(processes.clone())).unwrap();
     assert_eq!(
         processes.starts(),
         1,
         "the restarted loop started a second job"
     );
 
+    // Once the job has finished, a round settles it and forgets its handle.
     processes.finish(Reply::text(Exit::Success, "done"));
-    first.join().unwrap().unwrap();
-    second.join().unwrap().unwrap();
-    assert_eq!(processes.starts(), 1);
+    assert!(!restarted.settle(&Runner(processes.clone())).unwrap());
     assert!(
         !f.dir.join("state/idle-job.handle").exists(),
         "the finished job's handle is still recorded"
@@ -145,9 +138,10 @@ fn a_job_that_finished_while_no_daemon_ran_is_not_started_again() {
 }
 
 #[test]
-fn a_job_that_a_stop_ended_fails_the_round_and_is_run_again_later() {
+fn a_job_that_a_stop_ended_fails_the_round_that_settles_it_and_runs_again_later() {
     let f = Fixture::new();
     let processes = Arc::new(Processes::default());
+    f.idle().drive(&f.ctx, &Runner(processes.clone())).unwrap();
     // The scheduler ended the job's commands, so the job's reply says it failed.
     processes.finish(Reply::text(Exit::Unreachable, "the command was ended"));
 
@@ -157,7 +151,6 @@ fn a_job_that_a_stop_ended_fails_the_round_and_is_run_again_later() {
     assert!(!f.dir.join("state/idle-job.handle").exists());
     // The next round starts the next job.
     processes.reply.lock().unwrap().take();
-    processes.finish(Reply::text(Exit::Success, "done"));
     f.idle().drive(&f.ctx, &Runner(processes.clone())).unwrap();
     assert_eq!(processes.starts(), 2);
 }

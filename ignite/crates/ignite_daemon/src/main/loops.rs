@@ -264,11 +264,22 @@ impl Parts {
             loop {
                 thread::sleep(IDLE_EVERY);
                 ticker.round(|| {
-                    let mut failure = None;
+                    // A job a round started runs in a verb process (`idle-job`) and is not
+                    // waited for; until it finishes, the round does no other idle work. A
+                    // restarted daemon finds the job's handle and settles it the same way.
+                    match idle.settle(&jobs) {
+                        Ok(true) => return Ok(()),
+                        Ok(false) => {}
+                        Err(error) => {
+                            eprintln!("ignite: idle work: {error}");
+                            return Err(format!("idle work: {error}"));
+                        }
+                    }
                     let status = scheduler.status();
                     if status.granted > 0 || status.outside * 2 >= status.cores {
-                        return failure.map_or(Ok(()), Err);
+                        return Ok(());
                     }
+                    let mut failure = None;
                     crate::steps::step("keeping a free tree built at the tip");
                     if let Ok(tip) = ctx.git.tip(&ctx.config.repository.staging)
                         && let Err(error) = trees.keep_one_built(&tip)
@@ -276,8 +287,6 @@ impl Parts {
                         eprintln!("ignite: no tree kept built: {error}");
                         failure = Some(format!("no tree kept built: {error}"));
                     }
-                    // The job runs in a verb process (`idle-job`); a restarted daemon waits for
-                    // the job it finds instead of starting another.
                     crate::steps::step("choosing idle work");
                     if let Err(error) = idle.drive(&ctx, &jobs) {
                         eprintln!("ignite: idle work: {error}");
