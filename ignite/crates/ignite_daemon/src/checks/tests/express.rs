@@ -30,6 +30,7 @@ impl ExpressLane for FakeLane {
                 .fails
                 .then(|| ("cargo test".to_owned(), "test x ... FAILED".to_owned())),
             cores: 3,
+            carried: false,
         }
     }
 }

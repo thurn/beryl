@@ -86,6 +86,9 @@ pub struct ExpressRun {
     pub failure: Option<(String, String)>,
     /// The threads each command was given.
     pub cores: u32,
+    /// The run passed on an earlier pass of the landing and was carried over to this one,
+    /// because the commits landed since touch nothing it depends on (see [`Expressed`]).
+    pub carried: bool,
 }
 
 impl ExpressRun {
@@ -106,10 +109,16 @@ impl ExpressRun {
             .map(|(command, _)| command.as_str())
             .collect();
         let seconds: f64 = self.ran.iter().map(|(_, s)| s).sum();
+        let when = if self.carried {
+            ", on an earlier pass"
+        } else {
+            ""
+        };
         line(
             "express",
             format!(
-                "{} commands passed in {seconds:.0} s on {} reserved cores, in place of {what}: {}",
+                "{} commands passed in {seconds:.0} s on {} reserved cores{when}, in place of \
+                 {what}: {}",
                 self.ran.len(),
                 self.cores,
                 names.join("; ")
@@ -133,6 +142,82 @@ impl Landing {
         let releases = repository.release.is_some() && repository.release_family.is_some();
         (releases && !express.commands.is_empty() && express.covers(changed)).then_some(lane)
     }
+}
+
+/// Files that make a passing express run stale when another change lands them, even though
+/// the change's own files are untouched: the manifests and lock file of the workspace the
+/// commands build, and the toolchain and Cargo configuration it builds with.
+const BUILD_INPUTS: [&str; 4] = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain",
+    "rust-toolchain.toml",
+];
+
+/// The last express run of a landing that passed, and what it ran on.
+///
+/// On 2026-11-18, after express landings began to run side by side, they raced each other for
+/// the tip: L-371 took 4 passes and L-372 3, and each pass ran every command again (70 to 230 s)
+/// because another express landing had pushed meanwhile. A pass that loses the race now runs the
+/// commands again only when the commits landed since touch one of the change's own files or a
+/// build input ([`BUILD_INPUTS`], or a `.cargo` directory) in the commands' directory, and
+/// otherwise pushes the rebased commit on the earlier run's pass. The risk is a semantic conflict
+/// between two Ignite changes that touch different files (one renames a function the other
+/// calls): both land, and tip verification of the `ignite` family catches it.
+pub(super) struct Expressed {
+    /// The rebased commit the commands passed on.
+    head: Commit,
+    /// The change's own files on that commit.
+    changed: Vec<String>,
+    run: ExpressRun,
+}
+
+impl Expressed {
+    pub(super) fn new(head: Commit, changed: Vec<String>, run: ExpressRun) -> Self {
+        Self { head, changed, run }
+    }
+
+    /// The run the pass at `head`, whose own files are `changed`, may push on without running
+    /// the commands. `None` when the change's own files differ from those the run passed with
+    /// (the rebase merged a landed edit into one of them), or when the commits landed since
+    /// touch one of them or a build input.
+    pub(super) fn carried(
+        &self,
+        ctx: &Context,
+        head: &Commit,
+        changed: &[String],
+    ) -> ignite_core::traits::Result<Option<ExpressRun>> {
+        if self.changed != changed {
+            return Ok(None);
+        }
+        let dir = ctx
+            .config
+            .express
+            .as_ref()
+            .map_or("", |express| express.dir.trim_matches('/'));
+        let moved = ctx.git.changed(&self.head, head)?;
+        if moved
+            .iter()
+            .any(|file| changed.contains(file) || is_build_input(file, dir))
+        {
+            return Ok(None);
+        }
+        Ok(Some(ExpressRun {
+            carried: true,
+            ..self.run.clone()
+        }))
+    }
+}
+
+/// Whether `file` is a build input of the workspace in `dir`: a manifest or lock file in it, or
+/// a toolchain file or Cargo configuration anywhere, since Cargo also reads those from the
+/// directories above the workspace.
+pub(super) fn is_build_input(file: &str, dir: &str) -> bool {
+    let name = file.rsplit('/').next().unwrap_or(file);
+    let in_dir = dir.is_empty() || file.starts_with(&format!("{dir}/"));
+    let anywhere =
+        name.starts_with("rust-toolchain") || file.split('/').any(|part| part == ".cargo");
+    anywhere || (in_dir && BUILD_INPUTS.contains(&name))
 }
 
 /// The reply to an express run that failed: exit code 2, the command and the end of its

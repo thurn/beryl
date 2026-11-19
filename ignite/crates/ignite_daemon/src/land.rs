@@ -14,6 +14,8 @@
 //! 4. The always set and the gate run there, each check from the result cache where it can be.
 //!    A pass after one whose gate passed judges again only the families whose inputs the
 //!    commits landed since touch, and pushes without running anything when they touch none.
+//!    An express pass after one whose commands passed runs them again only when the commits
+//!    landed since touch the change's own files or the workspace's build inputs.
 //! 5. The hub's lease on the integration branch is taken (180 seconds, renewed while held), only
 //!    after the gate has passed. If the tip moved since step 2, the lease is let go and the
 //!    landing goes back to step 2. The lease is never held through a gate: a landing that lost
@@ -75,7 +77,7 @@ use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use crate::steps;
 use env::{GateTree, LandGate, LandTrees, TicketTree};
-use express::{ExpressLane, ExpressRun};
+use express::{ExpressLane, ExpressRun, Expressed};
 use lease::{HeldLease, LEASE_TTL_S};
 use passes::{GateHome, Passed};
 use records::{LandingRecord, RecordState, Records};
@@ -375,6 +377,7 @@ impl Landing {
         let mut lease: Option<HeldLease> = None;
         let mut home = GateHome::new(self.trees.clone());
         let mut last_passed: Option<Passed> = None;
+        let mut last_expressed: Option<Expressed> = None;
         let mut passes = 0;
         let mut last_cause = String::new();
         let mut first_landed_since = None;
@@ -451,7 +454,14 @@ impl Landing {
                 session: Some(session.clone()),
             };
             let (gated, expressed) = if let Some(lane) = express {
-                (GateRun::default(), Some(lane.run_in(&held.path)))
+                // A pass after one whose commands passed runs them again only when the commits
+                // landed since touch what they depend on (see `express::Expressed`).
+                let carried = match &last_expressed {
+                    Some(earlier) => earlier.carried(ctx, &rebased.head, &changed).map_err(io)?,
+                    None => None,
+                };
+                let run = carried.unwrap_or_else(|| lane.run_in(&held.path));
+                (GateRun::default(), Some(run))
             } else {
                 // A pass after one whose gate passed judges again only what the commits landed
                 // since can change (see `passes`).
@@ -498,12 +508,21 @@ impl Landing {
             if steps::stop_requested() {
                 return Err(stopped());
             }
-            if expressed.is_none() {
-                last_passed = Some(Passed::new(
-                    rebased.head.clone(),
-                    changed.clone(),
-                    gated.clone(),
-                ));
+            match &expressed {
+                Some(run) => {
+                    last_expressed = Some(Expressed::new(
+                        rebased.head.clone(),
+                        changed.clone(),
+                        run.clone(),
+                    ));
+                }
+                None => {
+                    last_passed = Some(Passed::new(
+                        rebased.head.clone(),
+                        changed.clone(),
+                        gated.clone(),
+                    ));
+                }
             }
 
             if lease.is_none() {
@@ -754,6 +773,7 @@ impl Landing {
                 "closed": closed == "ticket closed",
                 "deploy": deploy,
                 "express": summary.is_some_and(|s| s.express.is_some()),
+                "express_carried": summary.is_some_and(|s| s.express.as_ref().is_some_and(|r| r.carried)),
             })),
             handle: None,
         }

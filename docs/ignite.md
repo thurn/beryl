@@ -1674,6 +1674,17 @@ express_cores = 3
   behind it for up to 32 minutes, because each one that waited while others
   pushed found its commit stale and ran its commands again, so a queue of N cost
   about N² runs.
+- Side by side, express landings still race each other for the tip. A pass that
+  loses the race runs the commands again only when the commits landed since
+  touch one of the change's own files, a `Cargo.toml` or `Cargo.lock` in `dir`,
+  or a toolchain file or `.cargo` directory anywhere. Otherwise it pushes the
+  rebased commit on the earlier pass's run, as the gate carries over families
+  whose inputs are untouched, and its `express` line says "on an earlier pass".
+  On 2026-11-18, before this, L-371 took 4 passes and L-372 3, each a full run
+  of 70 to 230 s. The risk is a semantic conflict between two Ignite changes
+  that touch different files, such as one that renames a function the other
+  calls: both land, and tip verification of the `ignite` family catches the
+  broken tip.
 - The last command checks that `docs/ignite.md` is formatted as `just fmt`
   formats Markdown (80 columns). It is there because `docs/ignite.md` is an
   express path and no other command reads Markdown, so a misformatted copy would

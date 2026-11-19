@@ -1,5 +1,6 @@
 //! Express landings and the release branch moved over a hand-pushed commit.
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
@@ -14,6 +15,9 @@ use crate::land::env::GateTree;
 use crate::land::express::{ExpressLane, ExpressRun};
 use crate::land::records::Records;
 
+/// Runs while an express run goes, once each, in order: another machine landing.
+type Hook = Box<dyn FnOnce() + Send>;
+
 /// An express lane that records the commits it ran on and fails when told to.
 #[derive(Default)]
 struct FakeExpress {
@@ -21,6 +25,7 @@ struct FakeExpress {
     /// The trees `run_in` ran in.
     trees: Mutex<Vec<PathBuf>>,
     fails: bool,
+    hooks: Mutex<VecDeque<Hook>>,
 }
 
 impl ExpressLane for FakeExpress {
@@ -39,11 +44,16 @@ impl ExpressLane for FakeExpress {
                 .fails
                 .then(|| ("cargo test".to_owned(), "test x ... FAILED".to_owned())),
             cores: 3,
+            carried: false,
         }
     }
 
     fn run_in(&self, tree: &std::path::Path) -> ExpressRun {
         self.trees.lock().unwrap().push(tree.to_path_buf());
+        let hook = self.hooks.lock().unwrap().pop_front();
+        if let Some(hook) = hook {
+            hook();
+        }
         self.run(&Commit::new("0".repeat(40)).unwrap())
     }
 }
@@ -228,4 +238,67 @@ fn the_release_branch_is_not_moved_over_a_commit_whose_changes_the_landing_lacks
         reply.text
     );
     assert!(world.git.repo.lock().unwrap().replaces.is_empty());
+}
+
+/// While the landing's first express run goes, another machine lands `changes`.
+fn lands_during_first_run(
+    world: &Arc<World>,
+    lane: &FakeExpress,
+    changes: &'static [(&'static str, &'static str)],
+) {
+    let other = world.clone();
+    lane.hooks
+        .lock()
+        .unwrap()
+        .push_back(Box::new(move || other.git.land_other(changes)));
+}
+
+#[test]
+fn an_express_pass_that_lost_the_race_to_unrelated_files_pushes_without_running_again() {
+    let lane = Arc::new(FakeExpress::default());
+    let world = Arc::new(express_world(&lane));
+    world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+    lands_during_first_run(&world, &lane, &[("ignite/other.rs", "theirs")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert_eq!(lane.trees.lock().unwrap().len(), 1);
+    assert!(
+        reply.text.contains("reserved cores, on an earlier pass"),
+        "{}",
+        reply.text
+    );
+    let pushes = world.git.pushes();
+    assert_eq!(pushes.len(), 1);
+    let history = world.git.repo.lock().unwrap().history.clone();
+    assert_eq!(world.git.parent_of(&pushes[0].1), Some(history[1].clone()));
+    assert_eq!(released(&world), ["release"]);
+}
+
+#[test]
+fn an_express_pass_that_lost_the_race_to_a_lock_file_change_runs_the_commands_again() {
+    let lane = Arc::new(FakeExpress::default());
+    let world = Arc::new(express_world(&lane));
+    world.hold("tree-01", "t.1", "local_a", &[("ignite/lib.rs", "new")]);
+    lands_during_first_run(&world, &lane, &[("ignite/Cargo.lock", "bumped")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("landed on pass 2"), "{}", reply.text);
+    assert_eq!(lane.trees.lock().unwrap().len(), 2);
+    assert!(!reply.text.contains("earlier pass"), "{}", reply.text);
+}
+
+#[test]
+fn build_inputs_are_manifests_in_the_workspace_and_toolchain_files_anywhere() {
+    use crate::land::express::is_build_input;
+    assert!(is_build_input("ignite/Cargo.lock", "ignite"));
+    assert!(is_build_input("ignite/crates/x/Cargo.toml", "ignite"));
+    assert!(is_build_input("rust-toolchain.toml", "ignite"));
+    assert!(is_build_input(".cargo/config.toml", "ignite"));
+    assert!(!is_build_input("rust/Cargo.lock", "ignite"));
+    assert!(!is_build_input("ignite/crates/x/src/lib.rs", "ignite"));
 }
