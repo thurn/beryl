@@ -239,13 +239,7 @@ impl PoolVerb {
                         .map(|m| m.split(',').map(str::to_owned).collect::<Vec<_>>());
                 }
                 "--dispatcher" => dispatcher = true,
-                "--slots" => {
-                    let count = rest.next().copied().unwrap_or_default();
-                    let count = count
-                        .parse::<u32>()
-                        .map_err(|_| Error::Invalid(format!("not a slot count: {count:?}")))?;
-                    slots = Some(count);
-                }
+                "--slots" => slots = Some(slot_count(rest.next().copied())?),
                 session => sessions.push(
                     SessionId::new(session)
                         .map_err(|e| Error::Invalid(format!("not a session: {e}")))?,
@@ -442,4 +436,11 @@ fn format_worker(worker: &WorkerState) -> String {
         let _ = write!(line, "  `{command}` since {since}");
     }
     line
+}
+
+/// The value of `--slots`: a count of 0 or more.
+fn slot_count(word: Option<&str>) -> Result<u32> {
+    let word = word.unwrap_or_default();
+    word.parse::<u32>()
+        .map_err(|_| Error::Invalid(format!("not a slot count: {word:?}")))
 }
