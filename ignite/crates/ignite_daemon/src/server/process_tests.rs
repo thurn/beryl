@@ -672,6 +672,12 @@ fn a_draining_daemon_refuses_new_requests_and_waits_for_its_own_verbs() {
     server.drain(Duration::from_secs(120));
     assert!(since.elapsed() < Duration::from_secs(60));
     server.undrain();
+    // `finish_all` only finishes commands that have begun. Under load the verb process may not
+    // have started its command yet, and a command that begins afterwards is never finished.
+    assert!(
+        until(|| machine.commands.begun() == 1),
+        "the command started"
+    );
     machine.commands.finish_all();
     assert_eq!(waited(&server, &handle).text, "test: Some(0)");
 }
