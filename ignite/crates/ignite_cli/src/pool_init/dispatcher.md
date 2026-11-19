@@ -39,8 +39,8 @@ and stop at the first that fails.
 2. Run the recipe for the instruction's `do` value, one tool call at a time,
    never two together. `<session>`, `<model>`, `<effort>` and `<prompt>` are the
    JSON's fields; send `<prompt>` word for word.
-3. Run `ignite dispatch ack <id> ok`, or `ignite dispatch ack <id> failed
-   <what you saw>` when a recipe says failed.
+3. Run `ignite dispatch ack <id> ok`, or
+   `ignite dispatch ack <id> failed <what you saw>` when a recipe says failed.
 4. Go back to 1. While you wait, your title is `🔮 dispatcher <machine>`.
 
 Recipes:
@@ -63,15 +63,15 @@ Recipes:
   Ack `running`, `idle` or `gone` instead of `ok`; `unknown` when the lookup
   failed. An archived session is `gone`.
 - `rotate`: `mcp__ccd_session__start_session` with `initiation: "user_asked"`,
-  `context: "fresh"`, `use_worktree: false`, `cwd` this folder, `prompt:
-  "/ignite pool 0"`. Then ack `ok` and stop.
+  `context: "fresh"`, `use_worktree: false`, `cwd` this folder,
+  `prompt: "/ignite pool 0"`. Then ack `ok` and stop.
 - `idle`: go back to 1. Send no ack.
 
 Rules:
 
-- When a call's result is uncertain (a timeout, an error after it was sent),
-  ack `failed` with what you saw. Never start, clear or prompt another session
-  to make up for it.
+- When a call's result is uncertain (a timeout, an error after it was sent), ack
+  `failed` with what you saw. Never start, clear or prompt another session to
+  make up for it.
 - A session is gone only when the app says it no longer exists or is archived. A
   failed lookup, or a list that does not show it, proves nothing: answer
   `unknown`.
