@@ -128,9 +128,9 @@ fn instruction(action: DispatchAction, session: Option<String>, prompt: Option<S
     Reply::text(
         Exit::Success,
         format!(
-            "{line}\nThe daemon is down; this instruction comes from the client. Carry it out, \
-             report `ignite dispatch ack {FALLBACK_ID} ok` (or `failed <why>`), then run \
-             `ignite dispatch --wait 540` again. That loop is your whole job."
+            "{line}\nLoop: the daemon is down and this instruction comes from the client. Run the \
+             recipe in AGENTS.md for this `do`, then `ignite dispatch ack {FALLBACK_ID} ok|failed \
+             <why>`, then `ignite dispatch --wait 480` again."
         ),
     )
 }

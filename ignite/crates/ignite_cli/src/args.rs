@@ -126,8 +126,8 @@ pub enum Command {
     Dispatch {
         #[command(subcommand)]
         command: Option<DispatchCommand>,
-        /// Seconds to wait for something to do.
-        #[arg(long, default_value_t = 540)]
+        /// Seconds to wait for something to do. Below the 600 s limit of a Bash call.
+        #[arg(long, default_value_t = 480)]
         wait: u32,
     },
     /// The machine's pool of worker sessions.
@@ -755,8 +755,8 @@ mod tests {
             }
         ));
         assert!(matches!(
-            parse("ignite dispatch --wait 540"),
-            Command::Dispatch { wait: 540, .. }
+            parse("ignite dispatch --wait 480"),
+            Command::Dispatch { wait: 480, .. }
         ));
         let Command::Dispatch {
             command: Some(DispatchCommand::Ack { result, reason, .. }),

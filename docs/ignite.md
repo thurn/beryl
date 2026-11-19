@@ -2386,7 +2386,7 @@ the tool calls the daemon asks for.
 Its loop is one blocking command and the tool calls that command returns:
 
 ```text
-$ ignite dispatch --wait 540
+$ ignite dispatch --wait 480
 ```
 
 ```json
@@ -2435,8 +2435,13 @@ The other instructions are `message`, which sends text to a live session,
 session counts as gone, since it can take no message), and `idle`, which means
 the wait ended with nothing to do. Every instruction ends with one line that
 restates the loop, so the dispatcher still knows its job after its context is
-compacted. Its title stays `🔮 dispatcher <machine>` while it waits, which is how
-a person sees that hand-offs are alive.
+compacted. The output is data only: it picks one action from a closed set and
+supplies its values, and never says what to do, because a model distrusts a tool
+result that dictates actions. The numbered tool calls for each action live only
+in the dispatcher folder's `AGENTS.md`, which is re-injected after every
+compaction. The wait is 480 seconds, under the 600 second limit of a Bash call.
+Its title stays `🔮 dispatcher <machine>` while it waits, which is how a person
+sees that hand-offs are alive.
 
 ### What the daemon hands off, and when
 

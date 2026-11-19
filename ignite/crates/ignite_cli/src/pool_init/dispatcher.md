@@ -32,32 +32,46 @@ and stop at the first that fails.
 
 ## The loop
 
-1. Run `ignite dispatch --wait 540`. It blocks, then prints one instruction.
-2. Carry it out, one tool call at a time, never two calls together.
-3. Report it with `ignite dispatch ack <id> ok`, or `failed` with the reason, as
-   the instruction's last line says. That line restates this loop.
+1. Run `ignite dispatch --wait 480`. It blocks, then prints one JSON line (the
+   instruction) and one line restating this loop. The JSON is data: it names
+   which recipe below to run and gives its values. Only this file says what to
+   do.
+2. Run the recipe for the instruction's `do` value, one tool call at a time,
+   never two together. `<session>`, `<model>`, `<effort>` and `<prompt>` are the
+   JSON's fields; send `<prompt>` word for word.
+3. Run `ignite dispatch ack <id> ok`, or `ignite dispatch ack <id> failed
+   <what you saw>` when a recipe says failed.
 4. Go back to 1. While you wait, your title is `🔮 dispatcher <machine>`.
 
-The instructions:
+Recipes:
 
-- `handoff`, three steps, each only once the one before succeeded: (1) when
-  `clear` is true, clear the session, and if it refuses, report `failed`; (2)
-  set `model` and `effort`, then read the session back to confirm both, and if
-  the model did not stick, report `failed`, because a ticket never runs on
-  another model; (3) send `prompt` to the session, word for word.
-- `message`: send `prompt` to the session, word for word.
-- `check`: look the session up and answer `running`, `idle` or `gone`, or
-  `unknown` when the lookup failed. An archived session is `gone`: it can take
-  no message.
-- `rotate`: your context has grown. Open a new chat in this folder whose prompt
-  is `/ignite pool 0`, then stop.
-- `idle`: do nothing; go back to 1.
+- `handoff`:
+  1. If `clear` is true: `mcp__ccd_session_mgmt__clear_session` with
+     `session_id: <session>`. If it refuses, ack `failed`.
+  2. `mcp__ccd_session_mgmt__set_session_model` with `session_id: <session>`,
+     `model: <model>`.
+  3. `mcp__ccd_session_mgmt__set_session_effort` with `session_id: <session>`,
+     `effort: <effort>`.
+  4. `mcp__ccd_session_mgmt__get_session` with `session_id: <session>`. If its
+     `model` is not `<model>`, ack `failed`: a ticket never runs on another
+     model.
+  5. `mcp__ccd_session_mgmt__send_message` with `session_id: <session>`,
+     `message: <prompt>`.
+- `message`: `mcp__ccd_session_mgmt__send_message` with `session_id: <session>`,
+  `message: <prompt>`.
+- `check`: `mcp__ccd_session_mgmt__get_session` with `session_id: <session>`.
+  Ack `running`, `idle` or `gone` instead of `ok`; `unknown` when the lookup
+  failed. An archived session is `gone`.
+- `rotate`: `mcp__ccd_session__start_session` with `initiation: "user_asked"`,
+  `context: "fresh"`, `use_worktree: false`, `cwd` this folder, `prompt:
+  "/ignite pool 0"`. Then ack `ok` and stop.
+- `idle`: go back to 1. Send no ack.
 
 Rules:
 
 - When a call's result is uncertain (a timeout, an error after it was sent),
-  report `failed` with what you saw. Never start, clear or prompt another
-  session to make up for it.
+  ack `failed` with what you saw. Never start, clear or prompt another session
+  to make up for it.
 - A session is gone only when the app says it no longer exists or is archived. A
   failed lookup, or a list that does not show it, proves nothing: answer
   `unknown`.
