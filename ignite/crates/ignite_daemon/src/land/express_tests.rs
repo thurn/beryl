@@ -146,16 +146,72 @@ fn a_second_run_of_an_unchanged_clean_tree_skips_the_commands() {
     let _ = fs::remove_dir_all(root);
 }
 
-#[test]
-fn a_dirty_tree_neither_records_nor_reuses_a_pass() {
-    let (root, mut lane, _) = lane("dirty", &["true"]);
+/// A lane over `name`'s repository whose tree passed the commands at 10:00 with an uncommitted
+/// edit to its own file `tool/lib.txt`, as `ignite test` before a commit, and its clock four
+/// minutes later. The pass left the tree's own index as it was.
+fn tested_dirty(name: &str) -> (PathBuf, MachineExpress, ignite_git::GitCli) {
+    let (root, mut lane, _) = lane(name, &["true"]);
     let clock = Arc::new(ignite_core::fakes::FakeClock::new(
         ignite_core::time::Timestamp::parse("2026-11-18T10:00:00Z").unwrap(),
     ));
     remembering(&mut lane, &clock);
-    fs::write(lane.repo.join("tool/lib.txt"), "edited").unwrap();
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 1);
-    assert_eq!(lane.run_in(&lane.repo, &section(&lane), &[]).ran.len(), 1);
+    fs::write(lane.repo.join("tool/lib.txt"), "the change").unwrap();
+    git(&lane.repo, &["status", "--porcelain"]);
+    let index = fs::read(lane.repo.join(".git/index")).unwrap();
+    let run = lane.run_in(&lane.repo, &section(&lane), &own());
+    assert_eq!(run.ran.len(), 1, "{run:?}");
+    assert_eq!(fs::read(lane.repo.join(".git/index")).unwrap(), index);
+    assert_eq!(
+        git(&lane.repo, &["status", "--porcelain"]),
+        "M tool/lib.txt"
+    );
+    clock.advance(240.0);
+    let git = ignite_git::GitCli {
+        repo: lane.repo.clone(),
+        remote: "origin".to_owned(),
+    };
+    (root, lane, git)
+}
+
+#[test]
+fn a_pass_in_a_dirty_tree_is_reused_once_exactly_those_edits_are_committed() {
+    let (root, lane, _) = tested_dirty("dirty-commit");
+    git(&lane.repo, &["commit", "--quiet", "-am", "the change"]);
+    let run = lane.run_in(&lane.repo, &section(&lane), &own());
+    assert!(run.passed() && run.ran.is_empty(), "{run:?}");
+    assert_eq!(run.reused_after_s, Some(240.0));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_pass_in_a_dirty_tree_is_not_reused_after_a_further_edit() {
+    let (root, lane, _) = tested_dirty("dirty-edit");
+    fs::write(lane.repo.join("tool/lib.txt"), "the change, edited").unwrap();
+    assert_eq!(
+        lane.run_in(&lane.repo, &section(&lane), &own()).ran.len(),
+        1
+    );
+    // Committed, the further edit still does not match the first pass, only the second.
+    fs::write(lane.repo.join("tool/lib.txt"), "the change, edited again").unwrap();
+    git(&lane.repo, &["commit", "--quiet", "-am", "the change"]);
+    assert_eq!(
+        lane.run_in(&lane.repo, &section(&lane), &own()).ran.len(),
+        1
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_landing_reuses_a_dirty_trees_pass_after_the_commit_and_an_unrelated_landing() {
+    let (root, lane, git_cli) = tested_dirty("dirty-landed");
+    // The landed commit goes in first, as a rebase would put it under the change.
+    let edit = fs::read_to_string(lane.repo.join("tool/lib.txt")).unwrap();
+    git(&lane.repo, &["checkout", "--quiet", "--", "tool/lib.txt"]);
+    commit_files(&lane.repo, &["tool/other.txt"], "another Ignite change");
+    let head = commit_files(&lane.repo, &["tool/lib.txt"], &edit);
+    let run = landing_reuses(&lane, &git_cli, &head, &own()).expect("the pass holds");
+    assert!(run.passed() && run.ran.is_empty(), "{run:?}");
+    assert_eq!(run.reused_after_s, Some(240.0));
     let _ = fs::remove_dir_all(root);
 }
 

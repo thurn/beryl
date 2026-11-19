@@ -22,12 +22,15 @@
 //! to 8.5 minutes while other builds held the scheduler's cores, against about a minute when it
 //! got them, and that edit-and-test loop was most of a fix's wall time.
 //!
-//! An express run that passes in a clean tree is remembered for an hour by the git tree ID it
-//! checked and a digest of the `[express]` section (see [`PassMemory`]). Agents run `ignite check`
+//! An express run that passes is remembered for an hour by the git tree ID of what it checked
+//! and a digest of the `[express]` section (see [`PassMemory`]). Agents run `ignite check`
 //! and then `ignite land`, and on 2026-11-18 that made each Ignite change pay for the same three
 //! commands twice on a three-core lane: 17 checks averaging 213 s beside 30 landings. A run in a
 //! tree with the same tree ID and section skips the commands and says so on its `express` line.
-//! A dirty tree and an edited section run the commands.
+//! An edited section runs the commands. A dirty tree's tree ID is the one a commit of all its
+//! files would have (see [`committed::snapshot`]): agents run `ignite test` before they commit,
+//! and on 2026-11-19 two Ignite fixes each reran the commands once or twice after a passing
+//! `ignite test`, waiting 220 s and 379 s on Ignite.
 //!
 //! A pass is also remembered with the tree it ran in, the commit it was at and the change's own
 //! files. On 2026-11-18 a landing reran all four commands (56 s) a minute after `ignite check`
@@ -54,7 +57,7 @@ use ignite_core::config::Config;
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::traits::{Clock, Git};
-use ignite_git::{committed, refs, worktree};
+use ignite_git::{committed, worktree};
 use ignite_os::proc::Processes;
 use ignite_store::local::express_passes;
 
@@ -731,14 +734,14 @@ impl ExpressLane for MachineExpress {
             cores: self.cores,
             ..ExpressRun::default()
         };
-        // Only a clean tree is remembered: its tree ID says exactly what was checked.
-        let tree_id = self
+        // The tree ID of what is on disk, committed or not, says exactly what was checked.
+        let snapshot = self
             .memory
             .as_ref()
-            .and_then(|_| committed::clean_tree_id(tree).ok().flatten());
+            .and_then(|_| committed::snapshot(tree).ok());
         let section = PassMemory::digest(express, self.cores);
-        if let (Some(memory), Some(id)) = (&self.memory, &tree_id)
-            && let Some(ago) = memory.passed_ago(id, &section)
+        if let (Some(memory), Some(snapshot)) = (&self.memory, &snapshot)
+            && let Some(ago) = memory.passed_ago(&snapshot.tree_id, &section)
         {
             run.reused_after_s = Some(ago);
             return run;
@@ -746,15 +749,16 @@ impl ExpressLane for MachineExpress {
         // No lock: each tree has its own target directory, so runs in different trees share
         // nothing, and a lock made every landing and check wait for every other one.
         self.run_commands(tree, &express.dir, &express.commands, &mut run);
-        if let (Some(memory), Some(id)) = (&self.memory, &tree_id)
+        if let (Some(memory), Some(snapshot)) = (&self.memory, &snapshot)
             && run.passed()
         {
-            let place = refs::head(tree).ok().map(|head| express_passes::Place {
+            // A dirty tree's commit holds what was on disk, for a landing after a rebase.
+            let place = express_passes::Place {
                 tree_path: tree.to_string_lossy().into_owned(),
-                head: head.as_str().to_owned(),
+                head: snapshot.commit.as_str().to_owned(),
                 changed: changed.to_vec(),
-            });
-            memory.remember(id, &section, place.as_ref());
+            };
+            memory.remember(&snapshot.tree_id, &section, Some(&place));
         }
         run
     }

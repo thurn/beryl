@@ -100,6 +100,31 @@ fn state_key(tree: &Path) -> Result<String> {
 
 /// Writes the working tree to a temporary index and lists the tree object it describes.
 fn compute(tree: &Path) -> Result<HashMap<String, Oid>> {
+    let root = write_working_tree(tree)?;
+    let out = cmd::run(
+        tree,
+        ["ls-tree", "-r", "-t", "-z", "--full-tree", root.as_str()],
+    )?;
+    let mut listing = HashMap::new();
+    for entry in out.split('\0').filter(|e| !e.is_empty()) {
+        // Each entry reads "<mode> <type> <oid>\t<path>".
+        let (meta, path) = entry
+            .split_once('\t')
+            .ok_or_else(|| Error::Io(format!("unexpected git ls-tree line: {entry:?}")))?;
+        let oid = meta
+            .rsplit(' ')
+            .next()
+            .ok_or_else(|| Error::Io(format!("unexpected git ls-tree line: {entry:?}")))?;
+        listing.insert(path.to_owned(), cmd::oid(oid)?);
+    }
+    listing.insert(String::new(), root);
+    Ok(listing)
+}
+
+/// The ID of the tree object that the working tree's content makes, uncommitted edits and
+/// untracked files included and ignored files left out, as `git add -A` and a commit would
+/// make it. It is written through a copy of the index, so the real index is never touched.
+pub(crate) fn write_working_tree(tree: &Path) -> Result<Oid> {
     let real = cmd::run(
         tree,
         ["rev-parse", "--path-format=absolute", "--git-path", "index"],
@@ -121,27 +146,7 @@ fn compute(tree: &Path) -> Result<HashMap<String, Oid>> {
     cmd::checked(&mut add)?;
     let mut write = cmd::git(tree, ["write-tree"]);
     write.env("GIT_INDEX_FILE", &temporary.0);
-    let root = cmd::oid(&cmd::checked(&mut write)?)?;
-    drop(temporary);
-
-    let out = cmd::run(
-        tree,
-        ["ls-tree", "-r", "-t", "-z", "--full-tree", root.as_str()],
-    )?;
-    let mut listing = HashMap::new();
-    for entry in out.split('\0').filter(|e| !e.is_empty()) {
-        // Each entry reads "<mode> <type> <oid>\t<path>".
-        let (meta, path) = entry
-            .split_once('\t')
-            .ok_or_else(|| Error::Io(format!("unexpected git ls-tree line: {entry:?}")))?;
-        let oid = meta
-            .rsplit(' ')
-            .next()
-            .ok_or_else(|| Error::Io(format!("unexpected git ls-tree line: {entry:?}")))?;
-        listing.insert(path.to_owned(), cmd::oid(oid)?);
-    }
-    listing.insert(String::new(), root);
-    Ok(listing)
+    cmd::oid(&cmd::checked(&mut write)?)
 }
 
 /// A temporary index file, deleted when dropped.

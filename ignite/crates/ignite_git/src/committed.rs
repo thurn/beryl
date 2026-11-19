@@ -1,29 +1,61 @@
-//! The tree hash of a working tree that has nothing uncommitted.
+//! The tree ID of what a working tree holds, committed or not, and a commit that holds it.
 
 use std::path::Path;
 
+use ignite_core::ids::Commit;
 use ignite_core::traits::Result;
 
-use crate::cmd;
+use crate::{cmd, treehash};
 
-/// The ID of the tree that `HEAD` commits, when the working copy matches it exactly (no
-/// modified, staged or untracked file that git does not ignore); `None` for a dirty working
-/// copy. Two commits with the same content have the same tree ID, whatever their parents.
-pub fn clean_tree_id(tree: &Path) -> Result<Option<String>> {
-    // `--no-optional-locks` stops status from refreshing and rewriting the real index.
-    let status = cmd::run(
+/// What a working tree holds: the ID of the tree a commit of all of it would have, and a commit
+/// with that tree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snapshot {
+    /// The tree ID. Two commits with the same content have the same tree ID, whatever their
+    /// parents, so a later commit of exactly these files has this tree ID.
+    pub tree_id: String,
+    /// `HEAD` when the working copy matches it; otherwise a commit of the working copy whose
+    /// parent is `HEAD` and that no branch holds, so that git can compare it with later commits.
+    pub commit: Commit,
+}
+
+/// The [`Snapshot`] of `tree`. Modified, staged and untracked files count; files git ignores do
+/// not, as they would not be in a commit. Neither the real index nor any branch is touched.
+pub fn snapshot(tree: &Path) -> Result<Snapshot> {
+    let head = cmd::commit(&cmd::run(tree, ["rev-parse", "--verify", "HEAD"])?)?;
+    let head_tree = cmd::run(tree, ["rev-parse", "--verify", "HEAD^{tree}"])?;
+    let head_tree = head_tree.trim();
+    let tree_id = treehash::write_working_tree(tree)?.as_str().to_owned();
+    if tree_id == head_tree {
+        return Ok(Snapshot {
+            tree_id,
+            commit: head,
+        });
+    }
+    // A fixed author and date make the same content on the same `HEAD` the same commit.
+    let mut commit = cmd::git(
         tree,
         [
-            "--no-optional-locks",
-            "status",
-            "--porcelain",
-            "--untracked-files=all",
+            "commit-tree",
+            tree_id.as_str(),
+            "-p",
+            head.as_str(),
+            "-m",
+            "ignite: uncommitted edits",
         ],
-    )?;
-    if !status.trim().is_empty() {
-        return Ok(None);
+    );
+    for (name, value) in [
+        ("GIT_AUTHOR_NAME", "ignite"),
+        ("GIT_AUTHOR_EMAIL", "ignite@localhost"),
+        ("GIT_AUTHOR_DATE", "1970-01-01T00:00:00Z"),
+        ("GIT_COMMITTER_NAME", "ignite"),
+        ("GIT_COMMITTER_EMAIL", "ignite@localhost"),
+        ("GIT_COMMITTER_DATE", "1970-01-01T00:00:00Z"),
+    ] {
+        commit.env(name, value);
     }
-    cmd::run(tree, ["rev-parse", "--verify", "HEAD^{tree}"]).map(|id| Some(id.trim().to_owned()))
+    let commit = cmd::commit(&cmd::checked(&mut commit)?)?;
+    Ok(Snapshot { tree_id, commit })
 }
 
 #[cfg(test)]
@@ -32,7 +64,7 @@ mod tests {
     use std::fs;
     use std::process::Command;
 
-    fn git(dir: &Path, args: &[&str]) {
+    fn git(dir: &Path, args: &[&str]) -> String {
         let out = Command::new("git")
             .current_dir(dir)
             .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
@@ -40,26 +72,49 @@ mod tests {
             .output()
             .unwrap();
         assert!(out.status.success(), "{args:?}: {out:?}");
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
     }
 
     #[test]
-    fn a_dirty_working_copy_has_no_clean_tree_id() {
-        let dir = std::env::temp_dir().join(format!("ignite-clean-tree-{}", std::process::id()));
+    fn a_dirty_working_copy_has_the_tree_id_its_commit_will_have() {
+        let dir = std::env::temp_dir().join(format!("ignite-snapshot-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         git(&dir, &["init", "--quiet", "-b", "main"]);
+        fs::write(dir.join(".gitignore"), "target/\n").unwrap();
         fs::write(dir.join("a.txt"), "one").unwrap();
         git(&dir, &["add", "-A"]);
         git(&dir, &["commit", "--quiet", "-m", "one"]);
-        let first = clean_tree_id(&dir).unwrap().expect("clean");
+        let clean = snapshot(&dir).unwrap();
+        assert_eq!(clean.commit.as_str(), git(&dir, &["rev-parse", "HEAD"]));
         // An empty commit has a new commit ID but the same tree.
         git(&dir, &["commit", "--quiet", "--allow-empty", "-m", "again"]);
-        assert_eq!(clean_tree_id(&dir).unwrap(), Some(first));
+        assert_eq!(snapshot(&dir).unwrap().tree_id, clean.tree_id);
+
         fs::write(dir.join("a.txt"), "two").unwrap();
-        assert_eq!(clean_tree_id(&dir).unwrap(), None);
-        fs::write(dir.join("a.txt"), "one").unwrap();
         fs::write(dir.join("new.txt"), "x").unwrap();
-        assert_eq!(clean_tree_id(&dir).unwrap(), None);
+        fs::create_dir_all(dir.join("target")).unwrap();
+        fs::write(dir.join("target/ignored.txt"), "x").unwrap();
+        let status = git(&dir, &["status", "--porcelain"]);
+        let index = fs::read(dir.join(".git/index")).unwrap();
+        let dirty = snapshot(&dir).unwrap();
+        assert_ne!(dirty.tree_id, clean.tree_id);
+        assert_eq!(
+            snapshot(&dir).unwrap(),
+            dirty,
+            "the same content, the same commit"
+        );
+        assert_eq!(
+            git(&dir, &["rev-parse", &format!("{}^", dirty.commit)]),
+            git(&dir, &["rev-parse", "HEAD"])
+        );
+        // The real index, the status and the branch are untouched.
+        assert_eq!(fs::read(dir.join(".git/index")).unwrap(), index);
+        assert_eq!(git(&dir, &["status", "--porcelain"]), status);
+
+        git(&dir, &["add", "-A"]);
+        git(&dir, &["commit", "--quiet", "-m", "two"]);
+        assert_eq!(git(&dir, &["rev-parse", "HEAD^{tree}"]), dirty.tree_id);
         let _ = fs::remove_dir_all(&dir);
     }
 }

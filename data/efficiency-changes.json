@@ -439,5 +439,10 @@
     "label": "ignite start replies before a compiling tree's build directories are copied from another tree; the copy runs on the prebuild thread and builds in the tree wait for it (9 of 25 starts between 05:38 and 06:38 UTC on 2026-11-19 had waited 30 to 141 s for the copy)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "An express pass from `ignite test` in a tree with uncommitted edits is remembered by the tree ID of the files on disk, so the landing reuses it once exactly those edits are committed: on 2026-11-19 two Ignite fixes reran the express commands after a passing `ignite test`, waiting 220 s and 379 s",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

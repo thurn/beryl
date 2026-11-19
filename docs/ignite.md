@@ -1753,24 +1753,33 @@ express_cores = 3
   that touch different files, such as one that renames a function the other
   calls: both land, and tip verification of the `ignite` family catches the
   broken tip.
-- A run in a clean tree that passes is remembered for an hour in the daemon's
-  database, by the git tree ID of `HEAD` and a digest of the `[express]` section
-  and the machine's `express_cores`. A later run of a tree with the same tree ID
-  and section, as when `ignite land` follows `ignite check` at an unmoved tip,
-  skips the commands, and its `express` line says "passed for this tree 4 min
-  ago". A dirty tree records and reuses nothing, so commit before `ignite check`
-  for the landing to reuse it. An edit to `[express]` or an hour's wait runs the
-  commands again. On 2026-11-18 jarvis ran 17 express checks (213 s on average)
-  beside 30 landings, so every change paid for the lane twice.
+- A run that passes is remembered for an hour in the daemon's database, by the
+  git tree ID of what it checked and a digest of the `[express]` section and the
+  machine's `express_cores`. A later run of a tree with the same tree ID and
+  section, as when `ignite land` follows `ignite check` at an unmoved tip, skips
+  the commands, and its `express` line says "passed for this tree 4 min ago". An
+  edit to `[express]` or an hour's wait runs the commands again. On 2026-11-18
+  jarvis ran 17 express checks (213 s on average) beside 30 landings, so every
+  change paid for the lane twice.
+- A tree with uncommitted edits is remembered too, by the tree ID a commit of
+  every file on disk would have, apart from ignored files. Ignite computes it in
+  a copy of the index, so the tree's own index is untouched. When the agent then
+  commits exactly those edits, the commit has that tree ID and the landing
+  reuses the `ignite test` pass. A further edit before the commit gives another
+  tree ID and runs the commands again. On 2026-11-19 two Ignite fixes each reran
+  the commands once or twice after a passing `ignite test` in a dirty tree,
+  waiting 220 s and 379 s on Ignite.
 - A pass is also remembered with the tree it ran in, the commit it was at and
-  the change's own files there. When a commit lands between `ignite check` and
-  `ignite land`, the rebase gives the tree a new tree ID, so the landing looks
-  up the tree's last pass instead. It reuses that pass under the rule for a pass
-  that lost the race: the change's own files are the same, and the commits
-  landed since touch none of them and no build input. Its `express` line then
-  says "passed for this tree 4 min ago on 1a2b3c4d; the commits landed since
-  touch none of its files". On 2026-11-18 a landing reran all four commands,
-  taking 56 s, a minute after its `ignite check` had passed them in 60 s.
+  the change's own files there. For a dirty tree that commit is one Ignite
+  writes of the files on disk, on top of `HEAD`, which no branch holds. When a
+  commit lands between `ignite check` and `ignite land`, the rebase gives the
+  tree a new tree ID, so the landing looks up the tree's last pass instead. It
+  reuses that pass under the rule for a pass that lost the race: the change's
+  own files are the same, and the commits landed since touch none of them and no
+  build input. Its `express` line then says "passed for this tree 4 min ago on
+  1a2b3c4d; the commits landed since touch none of its files". On 2026-11-18 a
+  landing reran all four commands, taking 56 s, a minute after its
+  `ignite check` had passed them in 60 s.
 - The last command checks that `docs/ignite.md` is formatted as `just fmt`
   formats Markdown (80 columns). It is there because `docs/ignite.md` is an
   express path and no other command reads Markdown, so a misformatted copy would
