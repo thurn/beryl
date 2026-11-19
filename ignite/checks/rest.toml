@@ -228,8 +228,9 @@ inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 # `ignite-tests`. Through `cargo test`, which runs the binaries one after another, the same 1325
 # tests took 38 to 57 s on a warm tree on 2026-11-18, against 13 s here. The command runs in
 # ignite/, the directory of the first product the family needs. The workspace's nextest profile
-# `express` (ignite/.config/nextest.toml) ends a test that runs past 120 s, so a hung test
-# fails by name. All crates stay in the run: testing
+# `ignite` (ignite/.config/nextest.toml) ends a test that runs past 120 s, so a hung test
+# fails by name. It runs every test, including the slow ones the express lane's `express`
+# profile leaves out. All crates stay in the run: testing
 # `ignite_daemon` alone once missed a failing test in `ignite_core`.
 [family.ignite]
 kind = "regression"
@@ -237,7 +238,7 @@ adapter = "nextest"
 platforms = "any"
 needs = ["ignite-tests"]
 list = "cargo nextest list --locked --workspace --message-format json"
-run = "cargo nextest run --locked --cargo-quiet --workspace --profile express --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+run = "cargo nextest run --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "ignite/.config/nextest.toml"]
 
 # What one package's tests read beyond their own crates. ignite_core's tests/repository.rs reads

@@ -1,5 +1,5 @@
 //! What the wrapper reads from compiler arguments, and what a shim directory holds.
-//! A real build through the wrapper is tested in `ignite_cli`'s `tests/wrap.rs`.
+//! A real build through the wrapper is tested in `ignite_cli`'s `tests/integration/wrap.rs`.
 
 use super::*;
 

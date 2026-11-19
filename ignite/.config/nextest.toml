@@ -1,12 +1,39 @@
-# The profile for every nextest run of Ignite's workspace: the express lane's command in
-# ignite.toml and the `ignite` family in ignite/checks/rest.toml. A test that runs past `period`
-# is reported slow, and one that runs past `period` times `terminate-after` (120 s) is killed and
-# fails with its name. On 2026-11-18 one hung test held an express landing for the whole 1800 s
-# verb limit.
+# The profiles for nextest runs of Ignite's workspace: `express` for the express lane's command in
+# ignite.toml, and `ignite` for the `ignite` family in ignite/checks/rest.toml, which tip
+# verification and the gate run. A test that runs past `period` is reported slow, and one that
+# runs past `period` times `terminate-after` (120 s) is killed and fails with its name. On
+# 2026-11-18 one hung test held an express landing for the whole 1800 s verb limit.
 #
 # Measured on 2026-11-18 with `cargo nextest run --workspace` at a load average of 12 to 16 (1454
 # tests, 43 s in all): the slowest test took 15 s and one more took 20 s, so 120 s is six times
 # the slowest run seen and still ends a hang in about two minutes.
+[profile.ignite.slow-timeout]
+period = "30s"
+terminate-after = 4
+
+# The express lane leaves out the tests that took over 3 s each. On 2026-11-19, at a load average
+# of about 20, the workspace's 1638 tests took 257 s on one thread, and these ten took 121 s of
+# it; the build through the wrapper alone took 51 s. With them, the test run took 90 to 96 s on 3
+# or 12 threads; without them, 15 to 19 s. The `ignite` family still runs every one of them, in
+# tip verification and in the gate of any landing that is not express, so a change that breaks
+# one is caught there before `master` moves. A new slow test belongs here too.
+[profile.express]
+default-filter = """
+not (
+  (binary_id(ignite_cli::integration) & (
+    test(/^wrap::/)
+    | test(/^end_to_end::/)
+    | test(=adopt::a_command_in_a_tree_reset_at_start_is_ended_and_not_taken_over)
+    | test(=supervise::a_command_past_its_hang_limit_is_ended_with_its_children_and_reads_as_hung)
+    | test(=restart::a_restart_under_load_ends_no_command_and_runs_nothing_twice)
+  ))
+  | (binary_id(ignite_daemon) & (
+    test(=trees::tests::the_main_checkout_is_left_alone_while_it_has_a_local_change)
+    | test(=trees::tests::setup_frees_a_landing_tree_left_landing_by_a_stopped_daemon)
+  ))
+)
+"""
+
 [profile.express.slow-timeout]
 period = "30s"
 terminate-after = 4

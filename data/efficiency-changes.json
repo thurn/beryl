@@ -504,5 +504,10 @@
     "label": "The gate scores checks of families listed under Ignite from their recorded costs instead of as never run at one billion instructions, and b3d-clippy is in the always set only for changes to Beryl 3D (a one-card comment change's gate C-1642 ran 656 s of checks, 369 s of them two allocations checks planned at 2 billion that cost 3,041, and 216 s b3d-clippy)",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "The express lane's nextest profile leaves out Ignite's ten tests over 3 s, which tip verification still runs, and `ignite_cli`'s eight integration-test binaries are one, so an express test run after a daemon edit takes 15 to 19 s instead of 90 to 96 s at a load average of about 20",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

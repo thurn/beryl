@@ -1,5 +1,5 @@
 //! `ignite run`'s arguments and reply, against the fake launcher. The supervisor itself is
-//! tested through the `ignite` executable in `ignite_cli`'s `tests/supervise.rs`.
+//! tested through the `ignite` executable in `ignite_cli`'s `tests/integration/supervise.rs`.
 
 use std::fs;
 use std::path::PathBuf;

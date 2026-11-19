@@ -53,6 +53,8 @@ commands = [
   "cargo clippy --locked --all-targets -- -D warnings",
   # The `express` profile (ignite/.config/nextest.toml) kills a test after 120 s, so a hung test
   # fails in about two minutes with its name instead of holding the landing to the verb limit.
+  # It also leaves out the few tests that take over 3 s, which the `ignite` family runs in tip
+  # verification: with them the test run took 90 to 96 s under load, without them 15 to 19 s.
   "cargo nextest run --locked --cargo-quiet --workspace --profile express --status-level=fail --final-status-level=fail",
 ]
 families = ["ignite", "ignite-lint"]

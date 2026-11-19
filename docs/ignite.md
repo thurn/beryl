@@ -1947,8 +1947,21 @@ express_cores = 3
   `ignite/.config/nextest.toml`, which kills a test after 120 s (30 s, four
   times). On 2026-11-18 one hung test held a landing for the whole 1800 s verb
   limit; now it fails in about two minutes with its name. Under a load average
-  of 12 to 16 the slowest test took 15 s. The `ignite` family uses the same
-  profile.
+  of 12 to 16 the slowest test took 15 s. The `ignite` family uses the `ignite`
+  profile, which has the same limit.
+- The `express` profile leaves out the tests that took over 3 s each, by name.
+  On 2026-11-19, at a load average of about 20, the workspace's 1638 tests took
+  257 s on one thread, and ten of them took 121 s of it. With them an express
+  test run took 90 to 96 s on 3 or 12 threads, and without them 15 to 19 s. The
+  `ignite` profile runs every test, so tip verification and the gate of a
+  landing that is not express still run the slow ones, and a change that breaks
+  one is caught before `master` moves.
+- `ignite_cli`'s integration tests are one test binary,
+  `tests/integration/main.rs`. macOS checks a newly linked executable the first
+  time it runs, about 1.5 to 2 s each and one at a time, and cargo-nextest runs
+  every test binary once to list its tests. On 2026-11-19 a one-line daemon edit
+  relinked 11 test binaries, and their first runs took about 20 s of the test
+  command before any test started.
 - The commands are what the `ignite` family (every test, under cargo-nextest)
   and the `ignite-lint` family (`cargo fmt` and clippy) run. Those families
   still run in the gate when a change to Ignite lands together with other files,
@@ -3861,8 +3874,8 @@ These show that cores, trees and workers go where the rules say.
   file afterwards. The rolled-back commit is recorded as rejected, so the next
   release is what moves the machine forward.
 
-The end-to-end test `ignite_cli/tests/restart.rs` runs the first check in
-miniature on macOS and Windows.
+The end-to-end test `ignite_cli/tests/integration/restart.rs` runs the first
+check in miniature on macOS and Windows.
 
 ### Operations and measurement
 
