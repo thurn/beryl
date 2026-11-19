@@ -17,6 +17,7 @@ pub mod records;
 pub mod rejected;
 pub mod results;
 pub mod rows;
+pub mod session_titles;
 pub mod tickets;
 pub mod tip_rounds;
 pub mod tips;
@@ -91,6 +92,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 12,
         sql: include_str!("capital_ids.sql"),
         code: Some(capital_ids::rewrite_text),
+    },
+    Migration {
+        version: 13,
+        sql: include_str!("session_titles.sql"),
+        code: None,
     },
 ];
 

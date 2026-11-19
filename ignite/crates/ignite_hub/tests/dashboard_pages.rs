@@ -268,6 +268,22 @@ fn tickets_name_the_desktop_session_that_filed_them() {
 }
 
 #[test]
+fn sessions_that_reported_a_title_are_named_by_it_everywhere() {
+    let hub = seeded();
+    let now = Timestamp::parse(NOW).unwrap();
+    hub::session_titles::record(&hub.conn, "local_ff743711", "Render worker", now).unwrap();
+    hub::session_titles::record(&hub.conn, "Derek", "Derek's planner", now).unwrap();
+    let page = hub.text("/TQ44S.7.24");
+    let worker = "<span class=\"c-tip-target\" tabindex=\"0\" data-tip=\"local_ff743711\">\
+                  Render worker</span>";
+    assert!(page.contains(worker), "{page}");
+    assert!(!page.contains("session ff7437"));
+    assert!(page.contains("Derek&#39;s planner") || page.contains("Derek&#x27;s planner"));
+    let status = hub.text("/?fragment=status");
+    assert!(status.contains("Render worker"), "{status}");
+}
+
+#[test]
 fn pages_revalidate_only_when_their_content_changes() {
     let mut hub = seeded();
     let home = hub.get("/");

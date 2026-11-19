@@ -1,5 +1,5 @@
 //! The fleet and hand-off routes: `/machines/register`, `/machines/heartbeat`, `/next`, `/claims`,
-//! `/landed`, `/release`, `/close` and `/pause`.
+//! `/landed`, `/release`, `/close`, `/pause` and `/session-titles`.
 //!
 //! A ticket moves through them like this:
 //!
@@ -35,7 +35,7 @@ use ignite_core::dispatch::label;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::hub::{
     AdhocClaim, Claim, Close, DependencyNote, Heartbeat, HeartbeatReply, Landed, LandedReply,
-    MachineFree, MachineRegister, MachineRegistered, Pause, Release, TicketBrief,
+    MachineFree, MachineRegister, MachineRegistered, Pause, Release, SessionTitle, TicketBrief,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, Operation, OperationResult, Status, Ticket, TicketFields,
@@ -43,7 +43,7 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{edges, feed, findings, fleet, tickets, tokens};
+use ignite_store::hub::{edges, feed, findings, fleet, session_titles, tickets, tokens};
 
 use super::{Request, Response};
 
@@ -74,7 +74,8 @@ pub fn handle(conn: &mut Connection, request: &Request, now: Timestamp) -> Optio
         | "/landed"
         | "/release"
         | "/close"
-        | "/pause" => true,
+        | "/pause"
+        | "/session-titles" => true,
         _ => return None,
     };
     if request.method != "POST" {
@@ -121,6 +122,13 @@ type Answer = Result<Response, Response>;
 fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
     match request.path.as_str() {
         "/machines/register" => register(conn, request, &body(request)?, now),
+        "/session-titles" => {
+            let parsed: SessionTitle = body(request)?;
+            same_machine(request, &parsed.machine)?;
+            session_titles::record(conn, parsed.session.as_str(), &parsed.title, now)
+                .map_err(|e| store_failure(&e))?;
+            Ok(Response::json(200, &json!({})))
+        }
         "/machines/heartbeat" => {
             let parsed: Heartbeat = body(request)?;
             same_machine(request, &parsed.machine)?;

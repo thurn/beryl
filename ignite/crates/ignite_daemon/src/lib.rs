@@ -34,6 +34,7 @@ pub mod outbox;
 pub mod pool;
 pub mod sched;
 pub mod server;
+pub mod session_title;
 pub mod steps;
 pub mod stop;
 pub mod supervise;

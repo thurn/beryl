@@ -19,7 +19,7 @@ use ignite_core::protocol::tickets::{BatchRequest, LeaseOp, LeaseReply, TicketQu
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{feed, leases, tickets};
+use ignite_store::hub::{feed, leases, session_titles, tickets};
 
 use super::{Request, Response};
 
@@ -92,12 +92,22 @@ fn apply_batch(
     let mut batch: BatchRequest = body(request)?;
     tickets::add_releases(conn, &mut batch).map_err(|e| store_failure(&e))?;
     let writer = request.writer.as_ref().expect("checked in handle");
+    // The CLI sends the writing session's title beside the operations, so the dashboard can
+    // name the session by its title; see `session_titles`.
+    if let Ok(Value::Object(raw)) = serde_json::from_slice::<Value>(&request.body)
+        && let Some(title) = raw.get(ACTOR_TITLE).and_then(Value::as_str)
+    {
+        session_titles::record(conn, &writer.actor, title, now).map_err(|e| store_failure(&e))?;
+    }
     match batch::apply(conn, &batch, &writer.actor, writer.machine.as_str(), now) {
         Ok(BatchOutcome::Applied(reply)) => ok(&reply),
         Ok(BatchOutcome::Conflict(conflict)) => Ok(Response::json(409, &json!(conflict))),
         Err(error) => Err(store_failure(&error)),
     }
 }
+
+/// The key of `POST /batch`'s body holding the title of the session writing, if it has one.
+pub const ACTOR_TITLE: &str = "actor_title";
 
 fn lease(
     conn: &mut Connection,

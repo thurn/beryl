@@ -15,7 +15,8 @@ use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
     Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey,
-    StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting,
+    TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
@@ -126,6 +127,7 @@ pub struct FakeHub {
     records: Mutex<Vec<Record>>,
     metrics: Mutex<Vec<MetricsImport>>,
     flaky: Mutex<Vec<FlakyReport>>,
+    session_titles: Mutex<Vec<SessionTitle>>,
     tip_claims: Mutex<Vec<TipClaim>>,
     /// Every tip claim asked, renewals included.
     tip_claim_asks: Mutex<Vec<TipClaim>>,
@@ -223,6 +225,11 @@ impl FakeHub {
 
     pub fn flaky_reports(&self) -> Vec<FlakyReport> {
         lock(&self.flaky).clone()
+    }
+
+    /// Every session title reported so far, in order.
+    pub fn session_titles(&self) -> Vec<SessionTitle> {
+        lock(&self.session_titles).clone()
     }
 
     /// Every tip claim granted so far, in order. A batch is granted to the first machine that
@@ -444,6 +451,12 @@ impl Hub for FakeHub {
     fn flaky(&self, report: &FlakyReport) -> Result<()> {
         self.reachable()?;
         lock(&self.flaky).push(report.clone());
+        Ok(())
+    }
+
+    fn session_title(&self, title: &SessionTitle) -> Result<()> {
+        self.reachable()?;
+        lock(&self.session_titles).push(title.clone());
         Ok(())
     }
 

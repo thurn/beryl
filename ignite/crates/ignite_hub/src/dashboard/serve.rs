@@ -253,6 +253,17 @@ pub fn serve_with(
     site: &Site,
     now: Timestamp,
 ) -> Option<Response> {
+    // A database without the table, such as an old copy in a preview, names sessions by id.
+    let titles = ignite_store::hub::session_titles::all(conn).unwrap_or_default();
+    super::common::with_session_titles(titles, || serve_pages(conn, request, site, now))
+}
+
+fn serve_pages(
+    conn: &Connection,
+    request: &Request,
+    site: &Site,
+    now: Timestamp,
+) -> Option<Response> {
     let Site {
         project,
         wordmark,

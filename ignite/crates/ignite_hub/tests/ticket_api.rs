@@ -584,3 +584,27 @@ fn releasing_an_epic_by_one_update_releases_its_pending_tickets() {
         "the epic and its pending tickets are released; a closed one and an unrelated one are not"
     );
 }
+
+#[test]
+fn writers_report_session_titles_that_the_hub_keeps() {
+    let fixture = Fixture::new("titles");
+    let hub = fixture.start();
+    hub.post(
+        "/batch",
+        &json!({"ops": [{"op": "create", "fields": {"title": "A"}}], "actor_title": "Planner"}),
+    );
+    hub.post(
+        "/session-titles",
+        &json!({"machine": "m-1", "session": "local_abc", "title": "Worker"}),
+    );
+    let other = hub.post_raw(
+        "/session-titles",
+        &json!({"machine": "m-2", "session": "local_def", "title": "Impostor"}),
+    );
+    assert_eq!(other.status, 403);
+    let conn = hub::open(&fixture.dir.join("hub.sqlite")).unwrap();
+    let titles = hub::session_titles::all(&conn).unwrap();
+    assert_eq!(titles.len(), 2);
+    assert_eq!(titles["tester"], "Planner");
+    assert_eq!(titles["local_abc"], "Worker");
+}

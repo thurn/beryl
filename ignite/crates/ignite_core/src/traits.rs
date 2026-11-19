@@ -14,7 +14,8 @@ use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
     Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation, ResultKey,
-    StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting,
+    TipWaitingFiled,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, LeaseOp, LeaseReply, Ticket,
@@ -238,6 +239,11 @@ pub trait Hub: Send + Sync {
     fn metrics(&self, import: &MetricsImport) -> Result<()>;
     /// Reports a check that failed, then passed at once on the same inputs (`POST /flaky`).
     fn flaky(&self, report: &FlakyReport) -> Result<()>;
+    /// Reports the title a desktop session shows (`POST /session-titles`). A hub that keeps no
+    /// titles accepts and drops it.
+    fn session_title(&self, _title: &SessionTitle) -> Result<()> {
+        Ok(())
+    }
     /// Claims one batch of one family's checks at a tip, so two machines never run the same
     /// batch (`POST /tips/claim`).
     fn tip_claim(&self, claim: &TipClaim) -> Result<TipClaimReply>;

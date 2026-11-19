@@ -440,10 +440,12 @@ pub fn page(
 /// session that filed the ticket.
 const CREATED_BY_TITLE: &str = "created_by_title";
 
-/// Who filed a ticket: the filing session's title when it was saved, otherwise the actor. A
-/// Claude desktop session (`local_<uuid>`) links to the app, which opens that session.
+/// Who filed a ticket: the filing session's title saved with the ticket, else the session's
+/// latest title, otherwise the actor. A Claude desktop session (`local_<uuid>`) links to the
+/// app, which opens that session.
 fn created_by(actor: &str, title: Option<&str>) -> String {
-    let text = esc(title.unwrap_or(actor));
+    let latest = super::common::session_title(actor);
+    let text = esc(title.or(latest.as_deref()).unwrap_or(actor));
     if actor.starts_with("local_") {
         format!(
             "<a href=\"claude://claude.ai/epitaxy/{}\" title=\"{}\">{text}</a>",

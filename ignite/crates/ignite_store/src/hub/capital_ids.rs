@@ -236,7 +236,10 @@ mod tests {
     fn the_migration_rewrites_ids_text_and_the_changelog() {
         use crate::hub::MIGRATIONS;
         let mut conn = rusqlite::Connection::open_in_memory().unwrap();
-        let before = MIGRATIONS.len() - 1;
+        let before = MIGRATIONS
+            .iter()
+            .position(|migration| migration.version == 12)
+            .unwrap();
         crate::migrate::apply(&mut conn, &MIGRATIONS[..before]).unwrap();
         conn.execute_batch(
             "INSERT INTO tickets (id, parent, title, body, created_at, created_by, updated_at,

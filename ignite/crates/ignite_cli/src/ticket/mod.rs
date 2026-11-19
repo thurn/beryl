@@ -10,7 +10,6 @@ pub mod http;
 mod ids;
 mod related;
 mod render;
-mod session_title;
 mod wait;
 
 use std::io::Write;
@@ -22,6 +21,10 @@ use crate::args::{DepCommand, TicketCommand};
 use crate::client::session_from_env;
 pub(crate) use http::{Failure, Hub, find_config};
 use http::{Result, usage};
+
+/// The metadata key under which `create` saves the title of the Claude desktop session filing
+/// the ticket, which the dashboard shows as the ticket's creator.
+const CREATED_BY_TITLE: &str = "created_by_title";
 
 pub fn run(command: &TicketCommand) -> Reply {
     let env = |name: &str| std::env::var(name).ok();
@@ -62,6 +65,10 @@ fn flag(query: &mut Vec<(&'static str, String)>, name: &'static str, on: bool) {
 /// Sends one or more operations as a batch and describes what they did.
 fn write(hub: &Hub, verb: &str, mut body: Value) -> Result<Reply> {
     let safe = build::prepare_batch(&mut body, build::random_key)?;
+    if let Some(title) = &hub.actor_title {
+        // The hub saves it as the session's title; a hub that predates titles ignores the key.
+        body["actor_title"] = json!(title);
+    }
     let answer = hub.post(&["batch"], &body, safe)?.json()?;
     Ok(reply(answer, |answer| render::written(verb, answer)))
 }
@@ -79,10 +86,9 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             release,
         } => {
             let mut op = build::create(title, fields, labels, deps, *release)?;
-            let env = |name: &str| std::env::var(name).ok();
-            let filer = session_title::app_data(&env)
-                .and_then(|dir| session_title::title(&dir, &hub.actor, &env));
-            session_title::attach(&mut op, filer);
+            if let Some(filer) = &hub.actor_title {
+                op["fields"]["metadata"] = json!({ CREATED_BY_TITLE: filer });
+            }
             write(hub, "created", build::single(op))
         }
         TicketCommand::Update {

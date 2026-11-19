@@ -78,6 +78,15 @@ pub struct WorkerState {
     pub command_running: bool,
 }
 
+/// `POST /session-titles`: the title a Claude desktop session on `machine` shows, which the
+/// dashboard uses to name the session instead of its id.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionTitle {
+    pub machine: MachineId,
+    pub session: SessionId,
+    pub title: String,
+}
+
 /// `POST /machines/heartbeat`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Heartbeat {

@@ -73,6 +73,9 @@ pub struct Hub {
     agent: ureq::Agent,
     token: Option<String>,
     pub actor: String,
+    /// The title the desktop app shows for the actor's session, sent with each write so the
+    /// dashboard can name the session by its title (`ignite_daemon::session_title`).
+    pub actor_title: Option<String>,
     pub retry_for: Duration,
 }
 
@@ -99,6 +102,7 @@ impl Hub {
             agent: config.build().into(),
             token,
             actor,
+            actor_title: None,
             retry_for,
         }
     }
@@ -123,13 +127,17 @@ impl Hub {
             .or_else(|| std::fs::read_to_string(ignite_home?.join("token")).ok())
             .map(|token| token.trim().to_owned())
             .filter(|token| !token.is_empty());
-        Ok(Hub::new(
+        let actor_title = ignite_daemon::session_title::app_data(&env)
+            .and_then(|dir| ignite_daemon::session_title::title(&dir, &actor, &env));
+        let mut hub = Hub::new(
             &config.hub.url,
             &config.hub.project,
             token,
             actor,
             Duration::from_secs_f64(retry_for),
-        ))
+        );
+        hub.actor_title = actor_title;
+        Ok(hub)
     }
 
     /// `GET path?query`, retried while the hub is unreachable.

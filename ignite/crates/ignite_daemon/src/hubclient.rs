@@ -28,8 +28,8 @@ use ignite_core::protocol::hub::{
     LandingsRequest, ListingKey, ListingLookup, ListingReply, LookupReply, LookupRequest,
     MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
     Pause, Record, RecordBatch, RegressionFiled, RegressionReport, Release, ReportFiled,
-    Reservation, ResultKey, StoreRequest, StoredListing, TicketBrief, TipClaim, TipClaimReply,
-    TipVerified, TipWaiting, TipWaitingFiled,
+    Reservation, ResultKey, SessionTitle, StoreRequest, StoredListing, TicketBrief, TipClaim,
+    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -497,6 +497,11 @@ impl Hub for HubClient {
 
     fn flaky(&self, report: &FlakyReport) -> Result<()> {
         let _: serde_json::Value = self.post("/flaky", report)?;
+        Ok(())
+    }
+
+    fn session_title(&self, title: &SessionTitle) -> Result<()> {
+        let _: serde_json::Value = self.post("/session-titles", title)?;
         Ok(())
     }
 

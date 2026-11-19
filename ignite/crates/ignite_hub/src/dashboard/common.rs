@@ -4,6 +4,9 @@
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use ignite_core::protocol::tickets::Status;
 
 use super::components::{self as c, Icons, Tone};
@@ -60,12 +63,38 @@ fn is_hex(text: &str) -> bool {
         .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
 }
 
-/// A session, vizier or person as the page names them: short form with the full name as a
-/// tooltip.
+thread_local! {
+    /// The titles of the sessions the page being rendered may name, by session id. Set for the
+    /// length of one request by [`with_session_titles`], so that [`person`], which dozens of
+    /// fragments call, need not be passed them.
+    static SESSION_TITLES: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+}
+
+/// Runs `render` with `titles` as the session titles that [`person`] shows.
+pub(crate) fn with_session_titles<T>(
+    titles: HashMap<String, String>,
+    render: impl FnOnce() -> T,
+) -> T {
+    SESSION_TITLES.with(|cell| *cell.borrow_mut() = titles);
+    let rendered = render();
+    SESSION_TITLES.with(|cell| cell.borrow_mut().clear());
+    rendered
+}
+
+/// The title the session `name` last reported, if the page knows one.
+pub(crate) fn session_title(name: &str) -> Option<String> {
+    SESSION_TITLES.with(|cell| cell.borrow().get(name).cloned())
+}
+
+/// A session, vizier or person as the page names them: a session's title when it reported one,
+/// otherwise a short form, with the full name as a tooltip.
 pub fn person(name: Option<&str>) -> String {
     let Some(name) = name.filter(|name| !name.is_empty()) else {
         return c::muted("Nobody");
     };
+    if let Some(title) = session_title(name) {
+        return c::tip(&c::esc(&title), name);
+    }
     let short = if let Some(rest) = name.strip_prefix("local_")
         && rest.len() >= 6
         && rest.is_char_boundary(6)
