@@ -54,6 +54,13 @@ window = 20
 report_only = ["tier-gap"]
 protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 
+# The model ID each app's session tool accepts for each `tier:` label. Update the IDs here when
+# a new model is released; tier labels on tickets do not change.
+[pool.models.claude]
+opus = "claude-opus-5-5"
+sonnet = "claude-sonnet-5-5"
+light = "claude-sonnet-5-5"
+
 # Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
 # seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
 # instead of one command per 50 checks. `seconds` is the second budget: seconds of running the

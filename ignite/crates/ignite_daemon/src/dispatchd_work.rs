@@ -6,12 +6,13 @@
 //! short locks, because a slow hub would otherwise hold up whatever else needs the state, such
 //! as the sender's heartbeat (see [`Dispatcher::view`]).
 
+use ignite_core::config::Config;
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::hub::{IdleWorker, MachineFree, Reservation};
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
-use super::{Dispatcher, Purpose, Reserved, State, label, model_for};
+use super::{DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, label, tier_for};
 use crate::pool::Member;
 use crate::server::Context;
 use ignite_core::protocol::hub::WorkerRole;
@@ -72,7 +73,7 @@ impl Dispatcher {
             let mut state = self.state();
             for (reservation, app, detail) in unread {
                 if state.reserved.contains_key(&reservation.session) {
-                    Self::queue_handoff(&mut state, &reservation, &app, detail);
+                    Self::queue_handoff(&ctx.config, &mut state, &reservation, &app, detail);
                 }
             }
             Self::expire_given(&mut state, now);
@@ -88,7 +89,7 @@ impl Dispatcher {
         let offers = self.ask_for_work(ctx, asking);
         let mut state = self.state();
         for (reservation, app, detail) in offers {
-            Self::queue_handoff(&mut state, &reservation, &app, detail);
+            Self::queue_handoff(&ctx.config, &mut state, &reservation, &app, detail);
         }
     }
 
@@ -192,7 +193,14 @@ impl Dispatcher {
                     .map(|m| IdleWorker {
                         session: m.session.clone(),
                         app: m.app.clone(),
-                        models: m.models.clone(),
+                        // A model the app has no ID for cannot be set, so the hub is not told
+                        // the worker runs it and offers no ticket that needs it.
+                        models: m
+                            .models
+                            .iter()
+                            .filter(|tier| ctx.config.pool.model_id(&m.app, tier).is_some())
+                            .cloned()
+                            .collect(),
                     })
                     .collect(),
                 free_ticket_trees: trees,
@@ -220,6 +228,7 @@ impl Dispatcher {
     /// has it. The model comes from its labels, so until they can be read the worker stays
     /// reserved and nothing is sent, so a ticket never runs on a model it does not name.
     pub(super) fn queue_handoff(
+        config: &Config,
         state: &mut State,
         reservation: &Reservation,
         app: &str,
@@ -234,6 +243,7 @@ impl Dispatcher {
                 ticket: ticket.clone(),
                 expires_at,
                 code,
+                tier: None,
                 model: None,
                 effort: String::new(),
                 app: app.to_owned(),
@@ -243,12 +253,27 @@ impl Dispatcher {
             return;
         };
         let labels = detail.ticket.labels;
+        let tier = tier_for(&labels, app);
+        // The hub is only told about tiers the app has a model ID for (see `ask_for_work`), so
+        // a tier without one means `ignite.toml` changed after the hub was asked. Reserving the
+        // worker anyway would hand the dispatcher a model it cannot set, so the worker is left
+        // idle and the reservation lapses at the hub.
+        let model = match &tier {
+            Some(tier) => match config.pool.model_id(app, tier) {
+                Some(id) => Some(id),
+                None => return,
+            },
+            None => None,
+        };
         let reserved = Reserved {
             ticket: ticket.clone(),
             expires_at,
             code,
-            model: model_for(&labels, app),
-            effort: label(&labels, "effort:").unwrap_or("high").to_owned(),
+            tier,
+            model,
+            effort: label(&labels, "effort:")
+                .unwrap_or(DEFAULT_EFFORT)
+                .to_owned(),
             app: app.to_owned(),
         };
         Self::queue_handoff_reserved(state, session, reserved);

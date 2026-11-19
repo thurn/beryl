@@ -125,10 +125,19 @@ struct Reserved {
     /// The hub's one-time code for the reservation, which the hand-off's `ignite start` sends.
     /// `None` for a ticket the daemon points a worker at without a hub reservation.
     code: Option<String>,
+    /// The `tier:` label's value, which is what pool members' `models` lists are matched against.
+    /// `None` for a ticket that names no tier on an app with no default, and for a reservation
+    /// saved before this field existed.
+    #[serde(default)]
+    tier: Option<String>,
+    /// The model ID to ask the app for, from `[pool.models]` in `ignite.toml`.
     model: Option<String>,
     effort: String,
     app: String,
 }
+
+/// The reasoning effort of a hand-off whose ticket has no `effort:` label.
+const DEFAULT_EFFORT: &str = "medium";
 
 /// Why an instruction was queued, which decides what its acknowledgement does.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -207,11 +216,10 @@ pub fn hub_exit(error: &Error) -> Exit {
     }
 }
 
-/// The model to set for a ticket: its `tier:` label (`light` runs on `sonnet`), or `sonnet` for
-/// a Claude worker and the app's own default for a Codex one.
-fn model_for(labels: &[String], app: &str) -> Option<String> {
+/// The tier a ticket runs on: its `tier:` label, or `sonnet` for a Claude worker and nothing for
+/// a Codex one, which uses its app's own default model.
+fn tier_for(labels: &[String], app: &str) -> Option<String> {
     match label(labels, "tier:") {
-        Some("light") => Some("sonnet".to_owned()),
         Some(tier) => Some(tier.to_owned()),
         None if app == "claude" => Some("sonnet".to_owned()),
         None => None,
@@ -222,8 +230,8 @@ fn label<'a>(labels: &'a [String], prefix: &str) -> Option<&'a str> {
     labels.iter().find_map(|l| l.strip_prefix(prefix))
 }
 
-fn suits(member: &Member, model: Option<&String>, app: &str) -> bool {
-    member.app == app && model.is_none_or(|m| member.models.contains(m))
+fn suits(member: &Member, tier: Option<&String>, app: &str) -> bool {
+    member.app == app && tier.is_none_or(|t| member.models.contains(t))
 }
 
 impl Dispatcher {
@@ -320,7 +328,7 @@ impl Dispatcher {
             .map_or_else(|| "claude".to_owned(), |m| m.app);
         let detail = ctx.hub.ticket(&reservation.ticket).ok();
         let mut state = self.state();
-        Self::queue_handoff(&mut state, reservation, &app, detail);
+        Self::queue_handoff(&ctx.config, &mut state, reservation, &app, detail);
         drop(state);
         self.save();
     }
@@ -484,7 +492,7 @@ impl Dispatcher {
                 let reserved = reserved.clone();
                 match Self::idle_workers(&state, &members, now)
                     .into_iter()
-                    .find(|m| suits(m, reserved.model.as_ref(), &reserved.app))
+                    .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
                 {
                     Some(other) => {
                         let _ = write!(text, "; {} goes to {}", reserved.ticket, other.session);
@@ -573,7 +581,7 @@ impl Dispatcher {
         for reserved in orphans {
             let worker = Self::idle_workers(state, members, now)
                 .into_iter()
-                .find(|m| suits(m, reserved.model.as_ref(), &reserved.app))
+                .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
                 .map(|m| m.session.clone());
             match worker {
                 Some(session) => Self::queue_handoff_reserved(state, &session, reserved),
@@ -727,8 +735,9 @@ impl Dispatcher {
                 ticket: ticket.id.clone(),
                 expires_at: now.plus_seconds(600.0),
                 code: None,
+                tier: None,
                 model: None,
-                effort: "high".to_owned(),
+                effort: DEFAULT_EFFORT.to_owned(),
                 app: String::new(),
             },
         );
@@ -748,6 +757,9 @@ mod hub_tests;
 #[cfg(test)]
 #[path = "dispatchd_justiciar_tests.rs"]
 mod justiciar_tests;
+#[cfg(test)]
+#[path = "dispatchd_models_tests.rs"]
+mod models_tests;
 #[cfg(test)]
 #[path = "dispatchd_restart_tests.rs"]
 mod restart_tests;

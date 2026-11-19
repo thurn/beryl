@@ -594,6 +594,8 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
         ),
     });
 
+    findings.extend(model_findings(input.config));
+
     let Some(machine) = input.config.machine(&hostname) else {
         findings.push(Finding::problem(
             "machine",
@@ -614,6 +616,31 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
     trees::findings(input, machine, &mut findings);
     family_findings(input, machine, &mut findings);
     findings
+}
+
+/// A warning for each tier a Claude worker can run that `[pool.models.claude]` has no model ID
+/// for. No ticket naming that tier is handed to a Claude worker, so it would wait for a Codex one.
+fn model_findings(config: &Config) -> Option<Finding> {
+    let missing: Vec<&str> = crate::pool::CLAUDE_MODELS
+        .into_iter()
+        .filter(|tier| config.pool.model_id("claude", tier).is_none())
+        .collect();
+    (!missing.is_empty()).then(|| {
+        Finding::warning(
+            "models",
+            format!(
+                "[pool.models.claude] in ignite.toml has no model ID for {}, so no ticket \
+                 with that tier is handed to a Claude worker.",
+                missing
+                    .iter()
+                    .map(|tier| format!("`{tier}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            "add the missing tiers to [pool.models.claude] with the model IDs the desktop \
+             app's session tool accepts",
+        )
+    })
 }
 
 fn family_findings(input: &DoctorInput, machine: &Machine, findings: &mut Vec<Finding>) {

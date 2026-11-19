@@ -239,6 +239,34 @@ fn a_healthy_machine_has_no_problems() {
 }
 
 #[test]
+fn doctor_warns_about_a_claude_tier_with_no_model_id() {
+    let mut config = config();
+    config.pool.models.insert(
+        "claude".to_owned(),
+        [("opus".to_owned(), "an-id".to_owned())].into(),
+    );
+    let findings = diagnose(&DoctorInput {
+        config: &config,
+        repo: Path::new("/repo"),
+        host: &healthy_host(),
+        trees: &all_trees(),
+        hub: &FakeHub::default(),
+        probe: &Writable,
+        manifest: Ok(manifest()),
+        version: Commit::new("abc1234").ok(),
+    });
+    let lines: Vec<String> = findings
+        .iter()
+        .filter(|f| f.label == "models")
+        .map(Finding::line)
+        .collect();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].starts_with("WARNING"), "{lines:?}");
+    assert!(lines[0].contains("`sonnet`, `light`"), "{lines:?}");
+    assert!(!lines[0].contains("`opus`"), "{lines:?}");
+}
+
+#[test]
 fn an_unreachable_hub_and_a_missing_tree_each_get_a_line_with_a_fix() {
     let hub = FakeHub::default();
     hub.set_unreachable(true);

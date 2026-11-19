@@ -1929,12 +1929,34 @@ $ ignite dispatch --wait 540
 
 ```json
 {"id": 4812, "do": "handoff", "session": "local_c8470108",
- "clear": true, "model": "opus", "effort": "high",
+ "clear": true, "model": "claude-opus-5-5", "effort": "medium",
  "prompt": "Run `ignite start TQ44S.9.48 --reservation 7f3a` and follow it."}
 ```
 
 The dispatcher carries out a hand-off as separate calls, in this order, and
 reports `ignite dispatch ack 4812 ok`, or `failed` with the reason:
+
+The `model` is an ID the app's session tool accepts, not a tier name. The daemon
+looks the ticket's `tier:` label up in `[pool.models.<app>]` in `ignite.toml`:
+
+```toml
+# The model ID each app's session tool accepts for each `tier:` label.
+[pool.models.claude]
+opus = "claude-opus-5-5"
+sonnet = "claude-sonnet-5-5"
+light = "claude-sonnet-5-5"
+```
+
+Tier names stay the vocabulary for matching: ticket labels and a pool member's
+`models` list use them, and the table only says what to ask the app for once a
+worker has been chosen. When a model is released, change the IDs here and no
+ticket changes. An app with no table (Codex today) is given the tier name as it
+is. A Claude tier with no ID in the table is not reported to the hub as one the
+worker runs, so no ticket that names it is handed to a Claude worker, and
+`ignite doctor` warns about each such tier.
+
+The `effort` is the ticket's `effort:` label, or `medium` when it has none. A
+justiciar hand-off is always `high`.
 
 1. Clear the session. A session that refuses is still finishing a turn. The
    hand-off fails, the daemon tries another worker, and it comes back to this

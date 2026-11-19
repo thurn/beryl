@@ -59,6 +59,8 @@ pub struct Config {
     pub rules: Rules,
     #[serde(default)]
     pub tip: Tip,
+    #[serde(default)]
+    pub pool: PoolConfig,
     /// Machines by hostname.
     pub machine: BTreeMap<String, Machine>,
     /// Edits whose rebuild cost `ignite rebuild` measures.
@@ -237,6 +239,29 @@ impl Rules {
     }
 }
 
+/// What the worker pool's apps accept.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PoolConfig {
+    /// The model ID each app's session tool accepts for each `tier:` label, as
+    /// `app -> tier -> id`. Tier labels on tickets and in a pool member's `models` list stay the
+    /// vocabulary for matching a ticket to a worker; this table only says what to ask the app
+    /// for once a worker has been chosen.
+    #[serde(default)]
+    pub models: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+impl PoolConfig {
+    /// The model to ask `app` for when a ticket names `tier`. An app with no table here takes
+    /// the tier name itself. `None` means the app has a table and it has no ID for the tier, so
+    /// the app cannot be asked for that tier at all.
+    pub fn model_id(&self, app: &str, tier: &str) -> Option<String> {
+        match self.models.get(app) {
+            None => Some(tier.to_owned()),
+            Some(table) => table.get(tier).cloned(),
+        }
+    }
+}
+
 /// One machine's declared capacity.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Machine {
@@ -380,6 +405,13 @@ impl Config {
             }
             if !metrics.export.iter().any(|arg| arg.contains("{out}")) {
                 return fail("metrics.export", "must contain {out}");
+            }
+        }
+        for (app, table) in &self.pool.models {
+            for (tier, id) in table {
+                if id.trim().is_empty() {
+                    return fail(&format!("pool.models.{app}.{tier}"), "must not be empty");
+                }
             }
         }
         if self.machine.is_empty() {
@@ -600,6 +632,28 @@ products = ["clippy", "rust-tests"]
         let config = Config::parse("ignite.toml", &text).unwrap();
         assert!(config.machine.len() >= 3);
         assert_eq!(config.rules, Rules::default());
+    }
+
+    #[test]
+    fn a_model_id_comes_from_the_apps_table_or_is_the_tier_when_there_is_none() {
+        let text = format!("{DOCUMENT_EXAMPLES}\n[pool.models.claude]\nopus = \"the-big-one\"\n");
+        let config = Config::parse("ignite.toml", &text).unwrap();
+        assert_eq!(
+            config.pool.model_id("claude", "opus"),
+            Some("the-big-one".to_owned())
+        );
+        assert_eq!(config.pool.model_id("claude", "sonnet"), None);
+        assert_eq!(
+            config.pool.model_id("codex", "sonnet"),
+            Some("sonnet".to_owned())
+        );
+        let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
+        assert_eq!(config.pool, PoolConfig::default());
+        let text = format!("{DOCUMENT_EXAMPLES}\n[pool.models.claude]\nopus = \" \"\n");
+        assert_eq!(
+            Config::parse("ignite.toml", &text).unwrap_err().key,
+            "pool.models.claude.opus"
+        );
     }
 
     #[test]

@@ -15,6 +15,12 @@ use ignite_core::time::Timestamp;
 use super::{Dispatcher, Purpose, Queued, State};
 use crate::server::Context;
 
+/// The tier a justiciar runs on.
+const TIER: &str = "opus";
+
+/// A justiciar handles an emergency, so it keeps a high effort whatever the default is.
+const EFFORT: &str = "high";
+
 /// How long a worker given a justiciar prompt is kept from tickets.
 pub const HOLD_S: f64 = 2.0 * 3_600.0;
 
@@ -56,11 +62,13 @@ impl Dispatcher {
         {
             return None;
         }
-        let session = Self::idle_workers(&state, &members, now)
+        let (session, model) = Self::idle_workers(&state, &members, now)
             .into_iter()
-            .find(|m| m.models.iter().any(|model| model == "opus"))?
-            .session
-            .clone();
+            .filter(|m| m.models.iter().any(|tier| tier == TIER))
+            .find_map(|m| {
+                let id = ctx.config.pool.model_id(&m.app, TIER)?;
+                Some((m.session.clone(), id))
+            })?;
         let id = Self::next_id(&mut state);
         state.pending.push_back(Queued {
             body: DispatchInstruction {
@@ -68,8 +76,8 @@ impl Dispatcher {
                 action: DispatchAction::Handoff,
                 session: Some(session.clone()),
                 clear: true,
-                model: Some("opus".to_owned()),
-                effort: Some("high".to_owned()),
+                model: Some(model),
+                effort: Some(EFFORT.to_owned()),
                 prompt: Some(prompt.to_owned()),
             },
             purpose: Purpose::Message,
