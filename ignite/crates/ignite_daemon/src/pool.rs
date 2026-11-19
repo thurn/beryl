@@ -7,6 +7,7 @@
 //! holds a build tree, so it can never disagree with the trees.
 
 use std::fmt::Write as _;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use ignite_core::ids::{MachineId, SessionId};
@@ -100,12 +101,15 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
 /// The pool's members and pause, in the daemon's local database.
 pub struct Pool {
     conn: Mutex<Connection>,
+    /// The hub's last heartbeat reply said every machine is paused (`ignite pool pause --all`).
+    paused_everywhere: AtomicBool,
 }
 
 impl Pool {
     pub fn new(conn: Connection) -> Pool {
         Pool {
             conn: Mutex::new(conn),
+            paused_everywhere: AtomicBool::new(false),
         }
     }
 
@@ -158,6 +162,16 @@ impl Pool {
 
     pub fn set_paused(&self, paused: bool) -> Result<()> {
         store::set_paused(&self.conn(), paused).map_err(|e| store_error(&e))
+    }
+
+    /// Whether the hub last said every machine is paused.
+    pub fn paused_everywhere(&self) -> bool {
+        self.paused_everywhere.load(Ordering::Relaxed)
+    }
+
+    /// Records what the hub's heartbeat reply said about a pause of every machine.
+    pub fn set_paused_everywhere(&self, paused: bool) {
+        self.paused_everywhere.store(paused, Ordering::Relaxed);
     }
 }
 
@@ -218,8 +232,19 @@ impl PoolVerb {
             Err(error) => return Reply::text(hub_exit(&error), error.to_string()),
         };
         let mut lines = Vec::new();
-        if self.dispatcher.pool().paused().unwrap_or(false) {
-            lines.push("paused   no new hand-offs until `ignite pool resume`".to_owned());
+        let pool = self.dispatcher.pool();
+        if pool.paused_everywhere() {
+            lines.push(
+                "paused   every machine: no hand-offs, not even of tickets that hold master back, \
+                 until `ignite pool resume --all`"
+                    .to_owned(),
+            );
+        } else if pool.paused().unwrap_or(false) {
+            lines.push(
+                "paused   only tickets that hold master back are handed off, one at a time, \
+                 until `ignite pool resume`"
+                    .to_owned(),
+            );
         }
         if self.dispatcher.is_down() {
             lines.push("down     the dispatcher left three instructions unacknowledged".to_owned());
@@ -414,7 +439,12 @@ impl PoolVerb {
                 machine: None,
                 paused,
             })?;
+            // Known here at once rather than at the next heartbeat.
+            self.dispatcher.pool().set_paused_everywhere(paused);
             let mut text = format!("{verb}   hand-offs on every machine");
+            if paused {
+                text.push_str(", even of tickets that hold master back");
+            }
             if !paused && let Some(emergencies) = &self.emergency {
                 if let Some(ended) = emergencies.in_force() {
                     let _ = write!(text, "\nended    emergency {}", ended.ticket);
@@ -424,7 +454,10 @@ impl PoolVerb {
             return Ok(Reply::text(Exit::Success, text));
         }
         self.dispatcher.pool().set_paused(paused)?;
-        let mut text = format!("{verb}   hand-offs on this machine; running workers finish");
+        let mut text = format!(
+            "{verb}   hand-offs on this machine; running workers finish, and tickets that hold \
+             master back still go to one worker at a time (`--all` stops those too)"
+        );
         if !paused {
             text = format!("{verb}  hand-offs on this machine");
         }
@@ -438,6 +471,66 @@ impl PoolVerb {
             );
         }
         Ok(Reply::text(Exit::Success, text))
+    }
+}
+
+/// The labels of the tickets that hold `master` back: a regression (a check that tip
+/// verification found failing) and a justiciar ticket (a fault in Ignite itself).
+const HOLDING_MASTER: [&str; 2] = ["regression", ignite_core::dispatch::JUSTICIAR];
+
+/// `ignite status`'s `pool` lines, shown only while hand-offs are paused: how far the pause
+/// reaches, and the tickets that hold `master` back, which a person who paused the pool may not
+/// know are waiting.
+pub struct PauseSection {
+    pub dispatcher: Arc<Dispatcher>,
+    pub hub: Arc<dyn ignite_core::traits::Hub>,
+}
+
+impl crate::doctor::StatusSection for PauseSection {
+    fn title(&self) -> &'static str {
+        "pool"
+    }
+
+    fn lines(&self) -> Vec<String> {
+        let pool = self.dispatcher.pool();
+        let mut lines =
+            vec![if pool.paused_everywhere() {
+            "paused on every machine: nothing is handed off, not even the tickets that hold \
+             master back"
+        } else if pool.paused().unwrap_or(false) {
+            "paused on this machine: only tickets that hold master back are handed off, one at \
+             a time"
+        } else {
+            return Vec::new();
+        }
+        .to_owned()];
+        let query = ignite_core::protocol::tickets::TicketQuery {
+            label_any: HOLDING_MASTER.iter().map(|l| (*l).to_owned()).collect(),
+            ..Default::default()
+        };
+        match self.hub.tickets(&query) {
+            Err(error) => lines.push(format!("the hub did not answer: {error}")),
+            Ok(tickets) => {
+                let holding: Vec<_> = tickets
+                    .iter()
+                    .filter(|t| t.status != ignite_core::protocol::tickets::Status::Closed)
+                    .collect();
+                if holding.is_empty() {
+                    lines.push("nothing holds master back".to_owned());
+                }
+                for ticket in holding {
+                    let working = match ticket.status {
+                        ignite_core::protocol::tickets::Status::InProgress => ", being worked",
+                        _ => "",
+                    };
+                    lines.push(format!(
+                        "master held back by {}{working}: {}",
+                        ticket.id, ticket.title
+                    ));
+                }
+            }
+        }
+        lines
     }
 }
 

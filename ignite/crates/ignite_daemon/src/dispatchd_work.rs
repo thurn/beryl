@@ -25,6 +25,8 @@ struct Asking {
     trees: u32,
     /// The pool's workers that are not down and its Codex slots, idle or not.
     workers: usize,
+    /// The pool is paused, so the hub may offer only a ticket that holds `master` back.
+    master_only: bool,
 }
 
 /// Clears the flag that says a step is asking the hub, however the step ends.
@@ -169,7 +171,16 @@ impl Dispatcher {
     /// Decides whether to ask the hub for tickets, and for which workers. Only one step asks
     /// at a time.
     fn plan_asking(&self, state: &mut State, members: &[Member], now: Timestamp) -> Option<Asking> {
-        if state.down || state.draining || state.asking_hub || self.pool.paused().unwrap_or(true) {
+        // A paused pool still asks, for the tickets that hold `master` back: a regression or
+        // justiciar ticket left until `ignite pool resume` would keep `master` stuck while
+        // nobody watches. The hub offers such tickets to one worker at a time, and nothing at
+        // all while every machine is paused (`ignite pool pause --all`).
+        let master_only = self.pool.paused().unwrap_or(true);
+        if state.down
+            || state.draining
+            || state.asking_hub
+            || master_only && self.pool.paused_everywhere()
+        {
             return None;
         }
         let workers = slots::with_slots(state, members);
@@ -187,6 +198,7 @@ impl Dispatcher {
             idle,
             trees,
             workers: slots::capacity(members),
+            master_only,
         })
     }
 
@@ -197,6 +209,7 @@ impl Dispatcher {
             mut idle,
             mut trees,
             workers,
+            master_only,
         } = asking;
         let mut offers = Vec::new();
         while !idle.is_empty() && trees > 0 {
@@ -217,7 +230,9 @@ impl Dispatcher {
                 families: self.setup.families.clone(),
                 name: None,
                 // The last idle worker of a pool of several is kept for justiciar tickets.
-                justiciar_only: idle.len() == 1 && workers > 1,
+                // A paused pool asks for justiciar and regression tickets alike.
+                justiciar_only: !master_only && idle.len() == 1 && workers > 1,
+                master_only,
             };
             let Ok(Some(reservation)) = ctx.hub.next(&free) else {
                 break;

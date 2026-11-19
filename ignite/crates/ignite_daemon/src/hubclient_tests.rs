@@ -395,6 +395,7 @@ fn next_reads_nothing_as_no_reservation() {
         families: Vec::new(),
         name: None,
         justiciar_only: false,
+        master_only: false,
     };
     assert_eq!(hub.client().next(&free).unwrap(), None);
 }

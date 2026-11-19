@@ -15,8 +15,9 @@
 //! - The backlog's ratios for the improvement share come from `crate::rules::backlog`.
 //!
 //! Not every ready ticket is offered (see [`Snapshot::offered`]): only a ticket under an active
-//! epic, under no epic, or one the hub filed itself, never one set aside for a person, and
-//! nothing at all while the machine's hand-offs are paused.
+//! epic, under no epic, or one the hub filed itself, never one set aside for a person. While the
+//! machine's hand-offs are paused only a ticket that holds `master` back is offered, and nothing
+//! while every machine's are (see `dispatch_held.rs`).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -56,12 +57,19 @@ const HUB_FILED: [&str; 10] = [
 /// The label of a ticket set aside for a person, which no machine is offered.
 const NEEDS_PERSON: &str = "needs:person";
 
+#[path = "dispatch_held.rs"]
+mod held;
+use held::Paused;
+
 /// The ticket to reserve for `free`'s machine, already reserved and logged, or `None`. Call it
 /// inside an `IMMEDIATE` transaction after lapsing old reservations, so that two machines asking
 /// at once are answered one after the other and never get one ticket.
 pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Option<Reservation>> {
     let machine = free.machine.as_str();
-    if fleet::paused(conn, machine)? {
+    let paused = held::paused(conn, free)?;
+    if paused == Paused::Everything
+        || paused == Paused::MasterOnly && held::holds_one(conn, machine)?
+    {
         return Ok(None);
     }
     // A worker of this machine that already holds a reservation is asking again because the
@@ -82,6 +90,9 @@ pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Opt
     let landed = landed_files(conn)?;
     free.free_cores = dispatch::room(&free, &held_cores(conn, machine, &history, &landed, now)?);
     let mut ready = snapshot.ready_tickets(conn, &history, &landed, now)?;
+    if paused == Paused::MasterOnly {
+        ready.retain(held::holds_master);
+    }
     let demand = snapshot.demand(&ready);
     // Improvements go ahead of the epic order and so skip the share, but not a group's
     // `--max-workers` cap.
@@ -250,9 +261,10 @@ impl Snapshot {
         let routing = owners::routing(conn)?;
         let default_owner = owners::default_owner(conn, &routing)?;
         let heard = heard_machines(conn, now)?;
-        let mut statement = conn.prepare("SELECT ticket FROM regressions WHERE state = 'open'")?;
+        let mut statement =
+            conn.prepare("SELECT ticket FROM regressions WHERE state IN (?1, ?2)")?;
         let regressions = statement
-            .query_map([], |row| row.get(0))?
+            .query_map(held::FAILING, |row| row.get(0))?
             .collect::<std::result::Result<_, _>>()?;
         Ok(Snapshot {
             nodes,

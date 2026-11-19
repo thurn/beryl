@@ -197,6 +197,41 @@ fn the_first_line_lists_what_needs_a_person() {
 }
 
 #[test]
+fn a_paused_pool_names_the_tickets_holding_master_back() {
+    let conn = seeded();
+    let attention = |conn: &Connection| {
+        let body = page(conn, "/");
+        let first = &body[body.find("id=\"attention\"").expect("an attention section")..];
+        first[..first.find("</section>").unwrap()].to_owned()
+    };
+    // cygnus's pool is paused and the regression in kernel-test, ticket r1, is open.
+    let first = attention(&conn);
+    assert!(
+        first.contains("master is held back while cygnus's pool is paused"),
+        "{first}"
+    );
+    assert!(first.contains("one worker at a time"), "{first}");
+    assert!(first.contains("href=\"/r1\""), "{first}");
+    // A pause of every machine hands those tickets to nobody.
+    conn.execute(
+        "INSERT INTO pauses (machine, at) VALUES ('*', '2026-11-17T11:00:00.000Z')",
+        [],
+    )
+    .unwrap();
+    let first = attention(&conn);
+    assert!(
+        first.contains("Hand-offs are paused on every machine, so nobody takes the tickets"),
+        "{first}"
+    );
+    // With no pool paused, the line is gone.
+    conn.execute_batch(
+        "DELETE FROM pauses; UPDATE workers SET state = 'idle' WHERE state = 'paused';",
+    )
+    .unwrap();
+    assert!(!attention(&conn).contains("held back"));
+}
+
+#[test]
 fn epics_show_activity_shares_and_verification() {
     let conn = seeded();
     let body = page(&conn, "/epics");

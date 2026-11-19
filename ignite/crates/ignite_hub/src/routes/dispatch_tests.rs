@@ -150,6 +150,7 @@ pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
         families: Vec::new(),
         name: None,
         justiciar_only: false,
+        master_only: false,
     })
 }
 

@@ -104,6 +104,10 @@ pub struct HeartbeatReply {
     /// [`super::emergency`]). A hub that predates it sends none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emergency: Option<super::emergency::Emergency>,
+    /// Hand-offs are paused on every machine (`ignite pool pause --all`), so not even the
+    /// tickets that hold `master` back are handed off. `ignite status` says so.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused_everywhere: bool,
 }
 
 /// An idle pool member that could take a ticket.
@@ -144,6 +148,12 @@ pub struct MachineFree {
     /// a worker for the justiciar ticket that would free them.
     #[serde(default)]
     pub justiciar_only: bool,
+    /// Offer only a ticket that holds `master` back (a justiciar or regression ticket), and
+    /// none while the machine already holds one. A daemon asks this way while its own pool is
+    /// paused (`ignite pool pause`): a pause stops new feature work, but `master` must not stay
+    /// stuck behind it.
+    #[serde(default)]
+    pub master_only: bool,
 }
 
 /// A ticket reserved for one machine and session until `expires_at`.

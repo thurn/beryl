@@ -410,22 +410,6 @@ fn a_handoff_waits_until_its_tickets_model_can_be_read() {
 }
 
 #[test]
-fn a_paused_pool_hands_off_nothing_until_resumed() {
-    let rig = rig(&["local_w1"]);
-    rig.reserve("T.1", "local_w1", &[]);
-    assert_eq!(rig.pool(&["pause"], None).exit, Exit::Success);
-    assert!(rig.step().is_none());
-    assert!(rig.hub.asked().is_empty());
-    assert_eq!(rig.hub.pauses()[0].machine, Some(rig.ctx.machine.clone()));
-    assert!(rig.pool(&["list"], None).text.contains("paused"));
-    rig.pool(&["resume"], None);
-    assert_eq!(handoff_to(&rig.step().unwrap()), ("local_w1", "T.1"));
-
-    rig.pool(&["pause", "--all"], None);
-    assert_eq!(rig.hub.pauses().last().unwrap().machine, None);
-}
-
-#[test]
 fn resuming_every_machine_ends_the_emergency_here_at_once() {
     use crate::emergency::{Emergencies, EmergencyVerb};
     let rig = rig(&[]);

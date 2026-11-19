@@ -241,6 +241,15 @@ pub fn paused(conn: &Connection, machine: &str) -> Result<bool> {
     )?)
 }
 
+/// Whether hand-offs to every machine are paused (`ignite pool pause --all`).
+pub fn paused_everywhere(conn: &Connection) -> Result<bool> {
+    Ok(conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM pauses WHERE machine = ?1)",
+        [ALL_MACHINES],
+        |row| row.get(0),
+    )?)
+}
+
 /// The machine's hostname, if it has registered.
 pub fn name_of(conn: &Connection, machine: &str) -> Result<Option<String>> {
     Ok(conn

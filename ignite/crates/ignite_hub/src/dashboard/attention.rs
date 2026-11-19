@@ -206,6 +206,71 @@ fn regression_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>
     Ok(found)
 }
 
+/// The live tickets that hold `master` back (the tickets of failing regressions and justiciar
+/// tickets), named while any pool is paused. A paused machine still hands them to one worker at
+/// a time, but a pause of every machine hands them to nobody, so `master` stays where it is.
+fn held_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
+    let everywhere: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM pauses WHERE machine = ?1)",
+        [ignite_store::hub::fleet::ALL_MACHINES],
+        |row| row.get(0),
+    )?;
+    let mut paused = conn.prepare(
+        "SELECT m.name FROM machines m
+         WHERE EXISTS (SELECT 1 FROM pauses p WHERE p.machine = m.id)
+            OR EXISTS (SELECT 1 FROM workers d WHERE d.machine = m.id
+                       AND d.role = 'dispatcher' AND d.state = 'paused')
+         ORDER BY m.name",
+    )?;
+    let paused = paused
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if !everywhere && paused.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut holding = conn.prepare(
+        "SELECT id FROM tickets t WHERE status != 'closed'
+           AND (id IN (SELECT ticket FROM regressions WHERE state IN ('open', ?1))
+                OR EXISTS (SELECT 1 FROM json_each(t.labels) WHERE value = 'justiciar'))
+         ORDER BY id",
+    )?;
+    let holding = holding
+        .query_map([ignite_store::hub::tips::REOPENED], |row| {
+            row.get::<_, String>(0)
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    if holding.is_empty() {
+        return Ok(Vec::new());
+    }
+    let links: Vec<String> = holding
+        .iter()
+        .map(|id| c::link(&ticket_url(root, id), &esc(&display_id(id)), None, ""))
+        .collect();
+    let (tone, text) = if everywhere {
+        (
+            Tone::Red,
+            "Hand-offs are paused on every machine, so nobody takes the tickets holding \
+             master back"
+                .to_owned(),
+        )
+    } else {
+        let names: Vec<String> = paused.iter().map(|name| esc(name)).collect();
+        (
+            Tone::Amber,
+            format!(
+                "master is held back while {} paused; a paused pool still hands \
+                 these to one worker at a time",
+                if names.len() == 1 {
+                    format!("{}'s pool is", names[0])
+                } else {
+                    format!("the pools of {} are", names.join(", "))
+                }
+            ),
+        )
+    };
+    Ok(vec![(tone, format!("{text}: {}", links.join(", ")))])
+}
+
 /// Live tickets that no worker can take, because their owner names a machine or app that
 /// `ignite.toml` does not declare (see `upkeep::machines::unassignable`).
 fn stranded_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
@@ -230,6 +295,7 @@ pub fn items(
     let mut found = person_items(conn, root)?;
     found.extend(machine_items(conn, now)?);
     found.extend(regression_items(conn, root)?);
+    found.extend(held_items(conn, root)?);
     found.extend(stranded_items(conn, root)?);
     Ok(found)
 }

@@ -595,6 +595,10 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         Box::new(crate::emergency::EmergencySection(
             parts.emergencies.clone(),
         )),
+        Box::new(crate::pool::PauseSection {
+            dispatcher: parts.dispatcher.clone(),
+            hub: parts.ctx.hub.clone(),
+        }),
         Box::new(LoopsSection(parts.health.clone())),
         Box::new(doctor::TipRoundSection(parts.ctx.hub.clone())),
         Box::new(crate::deploy::ReleaseSection {

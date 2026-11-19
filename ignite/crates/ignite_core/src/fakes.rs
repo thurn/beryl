@@ -510,6 +510,9 @@ impl Hub for FakeHub {
             .map(|detail| &detail.ticket)
             .filter(|t| query.status.is_none_or(|status| t.status == status))
             .filter(|t| query.assignee.is_none() || t.assignee == query.assignee)
+            .filter(|t| {
+                query.label_any.is_empty() || query.label_any.iter().any(|l| t.labels.contains(l))
+            })
             .cloned()
             .collect())
     }

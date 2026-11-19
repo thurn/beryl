@@ -150,6 +150,9 @@ impl Parts {
                     workers: dispatcher.view().unwrap_or_default(),
                 })?;
                 *hub_version.borrow_mut() = Some(reply.hub_version);
+                dispatcher
+                    .pool()
+                    .set_paused_everywhere(reply.paused_everywhere);
                 emergencies.heard(reply.emergency);
                 Ok(())
             };

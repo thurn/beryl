@@ -1,13 +1,14 @@
 //! How the dispatcher deals with the hub: no request is made with the state locked, a hand-off
 //! whose reservation lapsed is dropped, `dispatch` ends before its caller's wait does, and the
-//! feed cursor follows a hub whose journal restarted.
+//! feed cursor follows a hub whose journal restarted, and a paused pool asks the hub only for
+//! the tickets that hold `master` back.
 
 use std::sync::TryLockError;
 
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::Clock;
 
-use super::tests::{detail, lock, request, rig, session};
+use super::tests::{detail, handoff_to, lock, request, rig, session};
 use super::*;
 use crate::server::Verb;
 use crate::testhub::SpyHub;
@@ -172,4 +173,51 @@ fn the_feed_cursor_follows_a_hub_whose_journal_restarted_lower() {
     rig.dispatcher.state().feed = Some(Seq(99));
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
     assert_eq!(rig.dispatcher.state().feed, Some(Seq(2)));
+}
+
+#[test]
+fn a_paused_pool_asks_only_for_tickets_holding_master_back() {
+    use crate::doctor::StatusSection;
+    let rig = rig(&["local_w1", "local_w2"]);
+    let status = crate::pool::PauseSection {
+        dispatcher: rig.dispatcher.clone(),
+        hub: rig.hub.clone(),
+    };
+    assert!(status.lines().is_empty(), "nothing to say while not paused");
+    assert_eq!(rig.pool(&["pause"], None).exit, Exit::Success);
+    assert_eq!(rig.hub.pauses()[0].machine, Some(rig.ctx.machine.clone()));
+    // The hub answers a paused machine only with a ticket that holds `master` back.
+    rig.reserve("T.1", "local_w1", &["regression"]);
+    assert_eq!(handoff_to(&rig.step().unwrap()), ("local_w1", "T.1"));
+    let asked = rig.hub.asked();
+    assert!(
+        asked
+            .iter()
+            .all(|free| free.master_only && !free.justiciar_only),
+        "{asked:?}"
+    );
+    assert!(
+        rig.pool(&["list"], None)
+            .text
+            .contains("only tickets that hold master back")
+    );
+    let lines = status.lines();
+    assert!(lines[0].starts_with("paused on this machine"), "{lines:?}");
+    assert!(lines[1].starts_with("master held back by T.1"), "{lines:?}");
+    rig.pool(&["resume"], None);
+    rig.step();
+    assert!(!rig.hub.asked().last().unwrap().master_only);
+
+    // A pause of every machine asks for nothing at all.
+    rig.pool(&["pause", "--all"], None);
+    rig.pool(&["pause"], None);
+    assert_eq!(
+        rig.hub.pauses().last().unwrap().machine,
+        Some(rig.ctx.machine.clone())
+    );
+    let before = rig.hub.asked().len();
+    assert!(rig.step().is_none());
+    assert_eq!(rig.hub.asked().len(), before);
+    assert!(rig.pool(&["list"], None).text.contains("every machine"));
+    assert!(status.lines()[0].starts_with("paused on every machine"));
 }

@@ -7,8 +7,8 @@
 //!    ticket with `ignite_core::dispatch` and reserves it for that machine and worker in the same
 //!    `IMMEDIATE` transaction, so two machines asking at once never get one ticket. The reply is
 //!    the [`Reservation`] with its one-time code, or `null`. Only tickets under an active epic,
-//!    or filed by the hub itself, are offered, and nothing while the machine is paused
-//!    (`POST /pause`); `dispatch_queue.rs` says which.
+//!    or filed by the hub itself, are offered, and only tickets that hold `master` back while
+//!    the machine is paused (`POST /pause`); `dispatch_queue.rs` says which.
 //! 2. `POST /claims`: the worker's `ignite start` turns the reservation into a claim held by its
 //!    session and tree. A reserved ticket is claimed only with its reservation's code, by any
 //!    session of the machine it was reserved for, since a hand-off whose worker refuses moves to
@@ -297,6 +297,7 @@ fn heartbeat(conn: &mut Connection, beat: &Heartbeat, now: Timestamp) -> Answer 
             // A hub that never recorded its version asks no machine to update.
             hub_version: hub_version.unwrap_or_else(|| beat.version.clone()),
             emergency: emergency::in_force(conn, now).map_err(|e| store_failure(&e))?,
+            paused_everywhere: fleet::paused_everywhere(conn).map_err(|e| store_failure(&e))?,
         }),
     ))
 }

@@ -2248,8 +2248,9 @@ current ticket views and adds each machine's cores and trees, the pool with what
 each worker holds and what it is running, the landing queue, the state of tip
 verification, open regressions and each exploration family's finds. Its first
 line says what needs a person: tickets marked `needs:person`, a machine with no
-dispatcher or with a paused pool, an open regression that no worker can take,
-and a ticket owned by a machine or app that `ignite.toml` does not declare.
+dispatcher or with a paused pool, the tickets that hold `master` back while a
+pool is paused, an open regression that no worker can take, and a ticket owned
+by a machine or app that `ignite.toml` does not declare.
 
 The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
 example `/TBEJE.34`). Only the API is under the project name (`/by/api`). Page
@@ -2340,9 +2341,15 @@ Each machine has one standing pool that serves every active epic.
 - Workers must run in a permission mode that never prompts. A permission prompt
   stalls a worker nobody is watching, so `/ignite pool` refuses to start workers
   in any other mode.
-- `ignite pool pause` stops new hand-offs on a machine, or on every machine with
-  `--all`, and `ignite pool resume` starts them again. Workers that are running
-  finish. Nothing but a person's `resume` ends a pause.
+- `ignite pool pause` stops new feature work on a machine, and
+  `ignite pool resume` starts it again. Workers that are running finish. A
+  paused machine is still handed the tickets that hold `master` back (regression
+  and justiciar tickets), one at a time: a person may pause to save usage or to
+  work by hand, and `master` must not stay stuck while nobody watches.
+  `ignite pool pause --all` stops every hand-off on every machine, those tickets
+  included, until `ignite pool resume --all`. While any pool is paused,
+  `ignite status` and the dashboard's first line name the tickets that hold
+  `master` back. Nothing but a person's `resume` ends a pause.
 - The pool outlives epics. Nothing is rebuilt when a plan starts or ends.
 - Claude Code workers are cleared and prompted again for each ticket. Codex has
   no clear operation, so a Codex worker is a new chat per ticket.
@@ -3511,8 +3518,9 @@ These show that cores, trees and workers go where the rules say.
   Expect no hand-off from it. Set `--workers 1` and expect one. File another
   with no `--workers` and expect hand-offs at once.
 - **A pause.** Run `ignite pool pause` with two workers busy and tickets ready.
-  Expect both to finish, no new hand-off, and hand-offs again after
-  `ignite pool resume`.
+  Expect both to finish, no new hand-off of feature work, and hand-offs again
+  after `ignite pool resume`. File a regression while paused and expect it
+  handed to one worker; with `--all`, expect it handed to nobody.
 - **A worker that only looks stalled.** Leave a worker reading for 31 minutes
   with no `ignite` command. Expect the dispatcher to look at it, find it
   running, and send nothing.

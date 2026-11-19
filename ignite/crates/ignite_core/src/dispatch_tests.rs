@@ -33,6 +33,7 @@ fn machine(workers: Vec<IdleWorker>) -> MachineFree {
         families: Vec::new(),
         name: None,
         justiciar_only: false,
+        master_only: false,
     }
 }
 
