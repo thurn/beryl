@@ -412,6 +412,36 @@ fn a_second_process_for_a_running_handle_runs_nothing() {
     assert_eq!(row(&db, &handle).state, "running");
 }
 
+/// The daemon's probe of a verb process ([`alive`]) takes the lock shared for a moment. A new
+/// verb process that tries the lock during that moment waits for it instead of exiting as if
+/// another process ran the handle, which once made the daemon run a landing again from the
+/// start.
+#[test]
+fn a_new_process_waits_out_the_daemons_probe_of_its_lock() {
+    let scratch = Scratch::new("probed");
+    let (_db, handle) = running_test();
+    let folder = super::folder(&scratch.home, &handle);
+    fs::create_dir_all(&folder).unwrap();
+    let probe = fs::File::create(folder.join("lock")).unwrap();
+    probe.try_lock_shared().unwrap();
+    let mut probe = Some(probe);
+    let mut pauses = 0;
+    let held = super::hold_trying(&scratch.home, &handle, 3, &mut || {
+        pauses += 1;
+        // The probe ends during the first pause.
+        probe.take();
+    })
+    .unwrap();
+    assert!(held.is_some(), "the lock is taken once the probe lets go");
+    assert_eq!(pauses, 1);
+
+    // A lock that stays held is still refused after the tries.
+    let mut pauses = 0;
+    let second = super::hold_trying(&scratch.home, &handle, 3, &mut || pauses += 1).unwrap();
+    assert!(second.is_none());
+    assert_eq!(pauses, 2);
+}
+
 /// A handle that has finished, or that the daemon no longer runs, is not run.
 #[test]
 fn a_handle_that_is_not_running_is_not_run() {

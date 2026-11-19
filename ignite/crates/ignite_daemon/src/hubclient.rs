@@ -5,10 +5,16 @@
 //! is tried again a few times; after that it fails with [`Error::Unreachable`], which verbs
 //! report with exit code 4.
 //!
+//! A request the hub answers with 401 is sent once more after the client reads the token again
+//! from the machine's identity file, when it was given one ([`HubClient::reading_token_from`]):
+//! an `ignite install` that registered the machine again while the daemon or a verb process ran
+//! may have saved a token other than the one they read at their start.
+//!
 //! A body larger than the hub reads ([`MAX_BODY_BYTES`]), or one the hub answers with 413, fails
 //! with [`Error::Invalid`] whose message starts with [`TOO_LARGE`] (see [`too_large`]), so that a
 //! caller can send the same content again in smaller pieces.
 
+use std::sync::{Arc, PoisonError, RwLock};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -31,6 +37,8 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::tipround::{LastTipRound, TipCosts, TipCostsRequest, TipRound, TipRoundFiled};
 use ignite_core::traits::{Error, Hub, Result};
+
+use crate::update::IdentityFile;
 
 /// How an error for a body too large for the hub begins; see [`too_large`].
 pub const TOO_LARGE: &str = "413 ";
@@ -109,7 +117,11 @@ const MAX_RETRY_PAUSE: Duration = Duration::from_secs(2);
 #[derive(Clone, Debug)]
 pub struct HubClient {
     pub base: String,
-    pub token: String,
+    /// The token sent as the bearer, shared by the client's clones so that a token read again
+    /// serves all of them.
+    token: Arc<RwLock<String>>,
+    /// The file the token is read from again after a 401 (see the module documentation).
+    token_file: Option<IdentityFile>,
     pub actor: String,
     /// How many times a failed request is tried again.
     pub retries: u32,
@@ -142,13 +154,52 @@ impl HubClient {
             .build();
         HubClient {
             base: base.into(),
-            token: token.to_owned(),
+            token: Arc::new(RwLock::new(token.to_owned())),
+            token_file: None,
             actor: actor.to_owned(),
             retries: 3,
             retry_pause: Duration::from_millis(500),
             restart_window: RESTART_WINDOW,
             agent: ureq::Agent::new_with_config(config),
         }
+    }
+
+    /// The client, reading the token again from `file` when the hub answers 401.
+    #[must_use]
+    pub fn reading_token_from(mut self, file: IdentityFile) -> HubClient {
+        self.token_file = Some(file);
+        self
+    }
+
+    /// The token the client sends.
+    pub fn token(&self) -> String {
+        self.token
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Reads the token again from the identity file, and says whether a request refused with
+    /// 401 is worth sending again: there is a file and it holds a token. The token in the file
+    /// replaces the one held even when they are the same, since the file is what
+    /// `ignite install` writes.
+    fn reread_token(&self) -> bool {
+        let Some(file) = &self.token_file else {
+            return false;
+        };
+        let token = match file.load() {
+            Ok(Some(identity)) => identity.token,
+            Ok(None) => None,
+            Err(error) => {
+                eprintln!("ignite: cannot read the machine's token again: {error}");
+                None
+            }
+        };
+        let Some(token) = token else {
+            return false;
+        };
+        *self.token.write().unwrap_or_else(PoisonError::into_inner) = token;
+        true
     }
 
     /// `POST /machines/register`.
@@ -218,13 +269,15 @@ impl HubClient {
 
     fn authorized<B>(&self, request: ureq::RequestBuilder<B>) -> ureq::RequestBuilder<B> {
         request
-            .header("Authorization", &format!("Bearer {}", self.token))
+            .header("Authorization", &format!("Bearer {}", self.token()))
             .header("X-Actor", &self.actor)
     }
 
     /// Sends a request, trying again while the hub cannot be reached or answers with a server
     /// error: `retries` times, and for as long as [`HubClient::restart_window`] while the hub
-    /// looks like it is restarting ([`restarting_status`], [`restarting_error`]).
+    /// looks like it is restarting ([`restarting_status`], [`restarting_error`]). A 401 is sent
+    /// again once, after the token is read again ([`HubClient::reading_token_from`]); `send`
+    /// builds each request afresh, so the new token goes with it.
     fn with_retries(
         &self,
         path: &str,
@@ -233,6 +286,7 @@ impl HubClient {
         let began = std::time::Instant::now();
         let mut last;
         let mut attempt: u32 = 0;
+        let mut reread = false;
         loop {
             if attempt > 0 {
                 std::thread::sleep((self.retry_pause * attempt).min(MAX_RETRY_PAUSE));
@@ -245,6 +299,14 @@ impl HubClient {
                         .read_to_vec()
                         .map_err(|e| Error::Unreachable(format!("{path}: {e}")));
                     match body {
+                        Ok(_) if status == 401 && !reread && self.reread_token() => {
+                            reread = true;
+                            eprintln!(
+                                "ignite: the hub refused this machine's token at {path}; \
+                                 sending it again with the token read again"
+                            );
+                            continue;
+                        }
                         Ok(body) if status < 500 => return Ok(Answer { status, body }),
                         Ok(body) => {
                             last = format!("{status} {}", String::from_utf8_lossy(&body));
@@ -311,9 +373,14 @@ impl HubClient {
             // not a fault of what was sent, so it is reported like an unreachable hub: callers that
             // queue work keep it queued instead of dropping it as malformed.
             401 | 403 => Err(Error::Unreachable(format!(
-                "the hub refused this machine's token ({}); run `ignite install` to register it \
+                "the hub refused this machine's token ({}){}; run `ignite install` to register it \
              again: {}",
                 answer.status,
+                if self.token_file.is_some() && answer.status == 401 {
+                    " even after it was read again"
+                } else {
+                    ""
+                },
                 message()
             ))),
             // Only 400 and 422 say that what was sent is malformed, which is the one answer after

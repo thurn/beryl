@@ -515,9 +515,12 @@ How the executable is installed and kept current:
 - `ignite install`, run once per machine from a checkout, builds the executable
   with plain Cargo, registers the machine with the hub and sets the daemon to
   start at login. Registering stores a write token in the user's configuration.
-  The hub accepts only requests that come over the Tailscale network with a
-  registered token, apart from the dashboard's ticket edits described under
-  [Tickets and the hub](#tickets-and-the-hub).
+  Running `ignite install` again on a registered machine keeps that token, so
+  the daemon and the verb processes that hold it go on writing; a client the hub
+  refuses with 401 reads the token from the file again and retries once before
+  it reports the refusal. The hub accepts only requests that come over the
+  Tailscale network with a registered token, apart from the dashboard's ticket
+  edits described under [Tickets and the hub](#tickets-and-the-hub).
 - Install runs the steps after the build (registering and writing the login
   services) in the executable it just built, so an older `ignite` never writes
   the services its own way. It records the repository's main checkout for the

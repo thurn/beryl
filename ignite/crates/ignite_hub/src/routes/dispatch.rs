@@ -175,9 +175,12 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Answer {
     }
 }
 
-/// Adds or updates the machine and issues it a new write token. A machine ID that already has a
-/// token registers again only with that token as the bearer, so that nobody who can reach the
-/// hub can replace another machine's token; a new machine ID needs no token.
+/// Adds or updates the machine and answers with its write token. A new machine ID needs no token
+/// and is issued one. A machine ID that already has a token registers again only with that token
+/// as the bearer, so that nobody who can reach the hub can replace another machine's token, and
+/// it keeps that token: `ignite install` registers the machine again while the daemon and its
+/// verb processes still send the token they read when they started, and a new token would make
+/// the hub refuse each of their writes with 401 until they restarted.
 fn register(
     conn: &mut Connection,
     request: &Request,
@@ -187,6 +190,7 @@ fn register(
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(sql_failure)?;
+    let mut kept = None;
     if tokens::has_token(&tx, &machine.machine).map_err(|e| store_failure(&e))? {
         let bearer = request
             .headers
@@ -211,9 +215,21 @@ fn register(
                 ),
             ));
         }
+        // Keeps the bearer only once it is known to be the machine's current token.
+        if let Some(token) = bearer
+            && tokens::verify(&tx, token)
+                .map_err(|e| store_failure(&e))?
+                .as_ref()
+                == Some(&machine.machine)
+        {
+            kept = Some(token.to_owned());
+        }
     }
     fleet::register(&tx, machine, now).map_err(|e| store_failure(&e))?;
-    let token = tokens::issue(&tx, &machine.machine).map_err(|e| store_failure(&e))?;
+    let token = match kept {
+        Some(token) => token,
+        None => tokens::issue(&tx, &machine.machine).map_err(|e| store_failure(&e))?,
+    };
     tx.commit().map_err(sql_failure)?;
     Ok(Response::json(
         200,

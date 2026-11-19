@@ -64,10 +64,15 @@ fn registering_a_machine_that_has_a_token_needs_that_token() {
         "the refused calls left the token alone"
     );
 
-    // The machine itself, sending only its bearer as `ignite install` does, gets a new token.
+    // The machine itself, sending only its bearer as `ignite install` does, keeps its token, so
+    // the daemon and verb processes that hold it go on writing.
     let (status, again) = register_as(&mut conn, "m-9", None, Some(&format!("Bearer {token}")));
     assert_eq!(status, 200, "{again}");
-    assert_ne!(again["token"], first["token"]);
+    assert_eq!(again["token"], first["token"]);
+    assert_eq!(
+        tokens::verify(&conn, &token).unwrap().unwrap().as_str(),
+        "m-9"
+    );
 }
 
 #[test]

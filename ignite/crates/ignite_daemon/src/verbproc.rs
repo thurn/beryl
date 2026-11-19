@@ -95,8 +95,32 @@ pub struct VerbLock {
     _file: File,
 }
 
+/// How many times [`hold`] tries a lock that someone holds, and the pause between tries: two
+/// seconds in all.
+const HOLD_TRIES: u32 = 200;
+const HOLD_PAUSE: Duration = Duration::from_millis(10);
+
 /// Takes `handle`'s lock in `home`, creating its folder. `None` when another process holds it.
+///
+/// The daemon asks whether a verb process runs by taking the same lock shared for a moment
+/// ([`alive`]), which it does every few milliseconds while it waits for a new process to take
+/// the lock. A new process whose first try falls in such a moment would otherwise find the lock
+/// held, exit saying another process runs the handle, and leave its verb to be run again from
+/// the start. So a held lock is tried for [`HOLD_TRIES`] tries: a probe lets go within
+/// microseconds, while a verb process holds the lock for its whole life.
 pub fn hold(home: &Path, handle: &Handle) -> io::Result<Option<VerbLock>> {
+    hold_trying(home, handle, HOLD_TRIES, &mut || {
+        std::thread::sleep(HOLD_PAUSE);
+    })
+}
+
+/// [`hold`], trying a held lock `tries` times with `pause` between tries.
+fn hold_trying(
+    home: &Path,
+    handle: &Handle,
+    tries: u32,
+    pause: &mut dyn FnMut(),
+) -> io::Result<Option<VerbLock>> {
     let dir = folder(home, handle);
     std::fs::create_dir_all(&dir)?;
     let file = OpenOptions::new()
@@ -104,11 +128,15 @@ pub fn hold(home: &Path, handle: &Handle) -> io::Result<Option<VerbLock>> {
         .truncate(false)
         .write(true)
         .open(dir.join("lock"))?;
-    match file.try_lock() {
-        Ok(()) => Ok(Some(VerbLock { _file: file })),
-        Err(TryLockError::WouldBlock) => Ok(None),
-        Err(TryLockError::Error(error)) => Err(error),
+    for attempt in 1..=tries.max(1) {
+        match file.try_lock() {
+            Ok(()) => return Ok(Some(VerbLock { _file: file })),
+            Err(TryLockError::WouldBlock) if attempt < tries => pause(),
+            Err(TryLockError::WouldBlock) => return Ok(None),
+            Err(TryLockError::Error(error)) => return Err(error),
+        }
     }
+    Ok(None)
 }
 
 /// Whether a verb process runs `handle`: some process holds its lock. A lock file that does

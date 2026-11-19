@@ -507,3 +507,69 @@ fn an_export_names_its_tickets_and_reads_json_lines() {
     assert_eq!(got, ["T.1", "T.2"]);
     assert_eq!(hub.seen()[0].url, "/test/api/export?id=T.1&id=T.2");
 }
+
+#[test]
+fn a_refused_token_is_read_again_from_the_identity_file_and_sent_once_more() {
+    // `ignite install` saved a new token while the client held the old one: the hub refuses the
+    // old one, and the client sends the request again with the token in the file.
+    let dir = std::env::temp_dir().join(format!("ignite-hubclient-reread-{}", std::process::id()));
+    let file = crate::update::IdentityFile {
+        path: dir.join("machine.json"),
+    };
+    file.save(&crate::update::Identity {
+        machine: MachineId::new("m-1").unwrap(),
+        token: Some("fresh".to_owned()),
+    })
+    .unwrap();
+    let answered = Arc::new(Mutex::new(0));
+    let hub = {
+        let answered = answered.clone();
+        FakeHttpHub::start(move |_, _, _| {
+            let mut count = answered.lock().unwrap();
+            *count += 1;
+            if *count == 1 {
+                (401, r#"{"error":"Missing or unknown token"}"#.to_owned())
+            } else {
+                (200, r#"{"ids": []}"#.to_owned())
+            }
+        })
+    };
+    let client = hub.client().reading_token_from(file);
+    client.records(&[]).unwrap();
+    let sent: Vec<Option<String>> = hub.seen().into_iter().map(|s| s.authorization).collect();
+    assert_eq!(
+        sent,
+        [
+            Some("Bearer secret".to_owned()),
+            Some("Bearer fresh".to_owned())
+        ]
+    );
+    assert_eq!(client.token(), "fresh", "later requests send the new token");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_token_still_refused_after_reading_it_again_fails_once_and_names_install() {
+    let dir = std::env::temp_dir().join(format!("ignite-hubclient-refused-{}", std::process::id()));
+    let file = crate::update::IdentityFile {
+        path: dir.join("machine.json"),
+    };
+    file.save(&crate::update::Identity {
+        machine: MachineId::new("m-1").unwrap(),
+        token: Some("secret".to_owned()),
+    })
+    .unwrap();
+    let hub = FakeHttpHub::start(|_, _, _| (401, "{}".to_owned()));
+    let client = hub.client().reading_token_from(file);
+    let error = client.records(&[]).unwrap_err();
+    assert!(
+        matches!(&error, Error::Unreachable(m) if m.contains("even after it was read again") && m.contains("ignite install")),
+        "{error}"
+    );
+    assert_eq!(
+        hub.seen().len(),
+        2,
+        "one request and one more after reading the token"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

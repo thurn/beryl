@@ -84,7 +84,12 @@ impl Base {
             .ok_or_else(|| Error::Invalid("this operating system is not supported".into()))?;
         options.home.create()?;
         let (machine, token) = identity(&options, &config, os, declared.families.as_deref())?;
-        let client = Arc::new(HubClient::new(&config.hub, &token, machine.as_str()));
+        // The daemon and every verb process read the token again after a 401, since an
+        // `ignite install` meanwhile may have saved another one.
+        let client = Arc::new(
+            HubClient::new(&config.hub, &token, machine.as_str())
+                .reading_token_from(options.home.identity()),
+        );
         let hub: Arc<dyn Hub> = client.clone();
         let git: Arc<dyn Git> = Arc::new(GitCli {
             repo: repo.clone(),
