@@ -574,15 +574,38 @@ impl TipVerifier {
         match ctx.git.push(&ctx.repo, tip, &repository.master)? {
             Push::Pushed { .. } => {}
             Push::Rejected { reason } => {
-                // Typically `master` holds a commit `staging` lacks, such as a push by hand.
-                // Trying again gives the same answer, so the hub is told once.
-                let name = CheckName::new("tip:move-master")
-                    .unwrap_or_else(|_| unreachable!("a family and a word make a check name"));
-                let output = format!("{} did not move to {tip}: {reason}", repository.master);
-                self.report_stuck(ctx, tip, &name, None, &output);
-                return Ok(TipOutcome::Waiting { checks: vec![name] });
+                // Another machine may have verified a later tip and moved `master` past this
+                // one first. `master` then holds the tip already, so it is verified; reporting
+                // it as stuck would hold up every landing that waits for its result.
+                let moved_past = ctx
+                    .git
+                    .tip(&repository.master)
+                    .and_then(|master| ctx.git.is_ancestor(tip, &master))
+                    .unwrap_or(false);
+                if !moved_past {
+                    return Ok(self.master_stuck(ctx, tip, &reason));
+                }
             }
         }
+        self.record_verified(ctx, tip)
+    }
+
+    /// Reports once that `master` refused the tip, and waits on it.
+    fn master_stuck(&mut self, ctx: &Context, tip: &Commit, reason: &str) -> TipOutcome {
+        // Typically `master` holds a commit `staging` lacks, such as a push by hand.
+        // Trying again gives the same answer, so the hub is told once.
+        let name = CheckName::new("tip:move-master")
+            .unwrap_or_else(|_| unreachable!("a family and a word make a check name"));
+        let output = format!(
+            "{} did not move to {tip}: {reason}",
+            ctx.config.repository.master
+        );
+        self.report_stuck(ctx, tip, &name, None, &output);
+        TipOutcome::Waiting { checks: vec![name] }
+    }
+
+    /// Records `tip` as verified with the hub and clears the waiting state.
+    fn record_verified(&mut self, ctx: &Context, tip: &Commit) -> Result<TipOutcome> {
         ctx.hub.tip_verified(&TipVerified {
             commit: tip.clone(),
             machine: ctx.machine.clone(),

@@ -315,6 +315,7 @@ fn a_refused_push_to_master_is_reported_once_and_the_tip_waits() {
     let (world, tip) = world_at(vec![check("a", 'a')]);
     let ctx = world.ctx("m-1");
     world.git.reject_pushes(Some("not a fast-forward"));
+    world.git.set_not_ancestor(&tip, &commit("aaaa000"));
     let mut verifier = world.verifier();
 
     let outcome = verifier.verify(&ctx, &tip).unwrap();
@@ -330,6 +331,20 @@ fn a_refused_push_to_master_is_reported_once_and_the_tip_waits() {
     assert_eq!(reports.len(), 1);
     assert!(reports[0].output.contains("not a fast-forward"));
     assert_eq!(world.master(), commit("aaaa000"));
+}
+
+#[test]
+fn a_tip_that_master_already_holds_is_verified_when_the_push_is_refused() {
+    let (world, tip) = world_at(vec![check("a", 'a')]);
+    let ctx = world.ctx("m-1");
+    // Another machine verified a later tip first, so `master` is past this one and the push
+    // is not a fast-forward.
+    world.git.reject_pushes(Some("non-fast-forward"));
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert_eq!(outcome, TipOutcome::Verified);
+    assert!(world.hub.incomplete_reports().is_empty());
 }
 
 #[test]
