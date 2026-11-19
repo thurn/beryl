@@ -1048,8 +1048,8 @@ The daemon runs builds so that sessions do not compete inside one tree:
   `build`, with the product as its family and one compile unit per crate the
   compiler wrapper saw (crate, mode, CPU seconds, whether it was rebuilt). The
   command's `built` line names the three crates that took the most CPU seconds,
-  as in `built ignite-tests in 319 s, 191 CPU-s, 0.6 cores busy (22 crates
-  recompiled; most CPU: ignite_daemon 80 s, ignite_core 31 s, rusqlite 12 s)`.
+  as in
+  `built ignite-tests in 319 s, 191 CPU-s, 0.6 cores busy (22 crates recompiled; most CPU: ignite_daemon 80 s, ignite_core 31 s, rusqlite 12 s)`.
   So a build that recompiled more than its change reaches says which crates it
   was, then and afterwards.
 - The gate builds test binaries only for the packages whose tests it will run. A
