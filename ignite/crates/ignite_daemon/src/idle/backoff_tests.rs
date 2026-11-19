@@ -116,7 +116,10 @@ fn a_build_stopped_from_outside_is_not_a_failure() {
 
     for _ in 0..4 {
         let error = idle.run(&f.ctx, &rebuild()).unwrap_err();
-        assert!(error.to_string().contains("stopped before it finished"), "{error}");
+        assert!(
+            error.to_string().contains("stopped before it finished"),
+            "{error}"
+        );
         // The job runs again at once, with no wait and no report.
         assert_eq!(idle.next_job(&f.ctx), Some(rebuild()));
     }
