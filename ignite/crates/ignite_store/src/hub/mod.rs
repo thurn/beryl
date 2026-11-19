@@ -24,7 +24,7 @@ pub mod tokens;
 
 use std::path::Path;
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 
 use crate::Result;
 use crate::migrate::{self, Migration};
@@ -103,13 +103,7 @@ pub fn open(path: &Path) -> Result<Connection> {
 /// nothing created. A tool run against the live hub's file, such as `ignite gate replay` built
 /// from a newer commit, must not migrate it under the running hub.
 pub fn open_read_only(path: &Path) -> Result<Connection> {
-    let conn = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
-    conn.busy_timeout(std::time::Duration::from_secs(10))?;
-    conn.pragma_update(None, "query_only", true)?;
-    Ok(conn)
+    migrate::open_read_only(path)
 }
 
 /// A migrated in-memory hub database, for tests.

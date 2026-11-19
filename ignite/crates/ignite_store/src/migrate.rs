@@ -175,6 +175,19 @@ pub fn open(path: &std::path::Path, migrations: &[Migration]) -> Result<Connecti
     Ok(conn)
 }
 
+/// Opens an existing database file for reading only: no migration, no write-ahead log setting,
+/// nothing created. A reader beside a running process that owns the file must not migrate it
+/// under that process, nor race the owner's own first migration.
+pub fn open_read_only(path: &std::path::Path) -> Result<Connection> {
+    let conn = Connection::open_with_flags(
+        path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    conn.busy_timeout(std::time::Duration::from_secs(10))?;
+    conn.pragma_update(None, "query_only", true)?;
+    Ok(conn)
+}
+
 /// Opens an in-memory database with the given schema, for tests.
 pub fn open_in_memory(migrations: &[Migration]) -> Result<Connection> {
     let mut conn = Connection::open_in_memory()?;

@@ -117,7 +117,7 @@ impl Drop for Drill {
 impl Drill {
     /// The process IDs the daemon's handles record for their verb processes.
     fn verb_processes(&self) -> Vec<u32> {
-        let Ok(db) = ignite_store::local::open(&self.home.join("daemon.db")) else {
+        let Ok(db) = ignite_store::local::open_read_only(&self.home.join("daemon.db")) else {
             return Vec::new();
         };
         let Ok(mut statement) = db.prepare("SELECT pid FROM handles WHERE pid IS NOT NULL") else {
@@ -255,7 +255,9 @@ impl Drill {
     }
 
     /// Starts `ignite daemon` in the main checkout, logging to `daemon.log`, and waits until it
-    /// answers.
+    /// answers and has created its trees. A new daemon creates its trees on a thread of its own
+    /// after it starts answering, and an `ignite start` that finds no free tree meanwhile is
+    /// told to wait (exit code 5) rather than given one.
     fn start_daemon(&mut self) {
         let log = fs::File::create(self.root.join("daemon.log")).unwrap();
         let daemon = self
@@ -269,6 +271,24 @@ impl Drill {
         until("the daemon answers", || {
             self.run(&self.root, None, &["status"]).0 == Some(0)
         });
+        until(
+            "the daemon's two ticket trees and landing tree are free",
+            || self.free_trees() == 3,
+        );
+    }
+
+    /// How many of the daemon's trees are free. The database is opened read-only: a migrating
+    /// open would race the starting daemon's own first migration.
+    fn free_trees(&self) -> i64 {
+        let Ok(db) = ignite_store::local::open_read_only(&self.home.join("daemon.db")) else {
+            return 0;
+        };
+        db.query_row(
+            "SELECT count(*) FROM trees WHERE state = 'free'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0)
     }
 
     /// `ignite start "<summary>"` for `session`: files the ticket, leases a tree and returns
@@ -405,7 +425,7 @@ fn a_restart_under_load_ends_no_command_and_runs_nothing_twice() {
 
     // One result per check and input hash: the test's `slow:one` on the seed, and the gate's
     // two checks on the change.
-    let db = ignite_store::local::open(&drill.home.join("daemon.db")).unwrap();
+    let db = ignite_store::local::open_read_only(&drill.home.join("daemon.db")).unwrap();
     let mut statement = db
         .prepare("SELECT check_name, count(*) FROM results GROUP BY check_name ORDER BY 1")
         .unwrap();

@@ -109,6 +109,12 @@ pub fn open(path: &Path) -> Result<Connection> {
     migrate::open(path, MIGRATIONS)
 }
 
+/// Opens the daemon's existing database for reading only, with no migration (see
+/// [`migrate::open_read_only`]).
+pub fn open_read_only(path: &Path) -> Result<Connection> {
+    migrate::open_read_only(path)
+}
+
 pub fn open_in_memory() -> Result<Connection> {
     migrate::open_in_memory(MIGRATIONS)
 }

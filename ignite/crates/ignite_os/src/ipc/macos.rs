@@ -5,7 +5,8 @@
 //! lock, not whether the socket answers, says whether a daemon is listening: macOS creates a
 //! socket and marks it close-on-exec in two steps, so a child started by another thread in
 //! between keeps a dead daemon's socket answering. A file opened with `O_CLOEXEC`, as Rust
-//! opens every file, never leaks that way.
+//! opens every file, never leaks that way. A daemon restarting into a new build closes every
+//! such socket as it replaces its image (see `crate::proc::replace_image`).
 
 use std::fs::{self, DirBuilder, File, OpenOptions, Permissions};
 use std::io;

@@ -2,8 +2,11 @@
 //! process it starts (unless one leaves the group on purpose with `setsid`) can be listed and
 //! signalled at once with the group's ID.
 
+use std::ffi::{CString, OsStr};
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -72,6 +75,124 @@ impl Native {
             }
             capacity *= 2;
         }
+    }
+}
+
+unsafe extern "C" {
+    /// Marks `fd` to be kept by the new image even under `POSIX_SPAWN_CLOEXEC_DEFAULT`. In
+    /// macOS's libSystem since 10.7; the `libc` crate does not declare it.
+    fn posix_spawn_file_actions_addinherit_np(
+        actions: *mut libc::posix_spawn_file_actions_t,
+        fd: libc::c_int,
+    ) -> libc::c_int;
+}
+
+/// Replaces this process's image with `executable` run with `args`, keeping its process ID, its
+/// environment and its working directory, as `exec` does. Returns only if it could not.
+///
+/// Unlike `exec`, the new image keeps only standard input, output and error. macOS creates a
+/// socket, such as one `accept` returns, and marks it close-on-exec in two steps, so a plain
+/// `exec` on one thread while another thread accepts a connection can carry that connection
+/// into the new image. Nothing there knows of it, so it is never answered and never closed, and
+/// the client waits on it for ever. `posix_spawn` with `POSIX_SPAWN_SETEXEC` replaces the
+/// image, and `POSIX_SPAWN_CLOEXEC_DEFAULT` closes every descriptor not named to be kept, in the
+/// one call. As `std::process::Command` does for a child, the new image starts with no signal
+/// blocked and with `SIGPIPE` at its default action.
+pub fn replace_image(executable: &Path, args: &[String]) -> io::Error {
+    let invalid = |_| io::Error::new(io::ErrorKind::InvalidInput, "a NUL byte in an argument");
+    let c_string = |text: &OsStr| CString::new(text.as_bytes()).map_err(invalid);
+    let built = (|| -> io::Result<(CString, Vec<CString>, Vec<CString>)> {
+        let program = c_string(executable.as_os_str())?;
+        let mut arguments = vec![program.clone()];
+        for arg in args {
+            arguments.push(c_string(OsStr::new(arg))?);
+        }
+        let mut variables = Vec::new();
+        for (name, value) in std::env::vars_os() {
+            let mut pair = name.into_encoded_bytes();
+            pair.push(b'=');
+            pair.extend(value.into_encoded_bytes());
+            variables.push(CString::new(pair).map_err(invalid)?);
+        }
+        Ok((program, arguments, variables))
+    })();
+    let (program, arguments, variables) = match built {
+        Ok(built) => built,
+        Err(error) => return error,
+    };
+    let pointers = |strings: &[CString]| -> Vec<*mut libc::c_char> {
+        strings
+            .iter()
+            .map(|s| s.as_ptr().cast_mut())
+            .chain(std::iter::once(std::ptr::null_mut()))
+            .collect()
+    };
+    let (argument_pointers, variable_pointers) = (pointers(&arguments), pointers(&variables));
+    let check = |code: libc::c_int| match code {
+        0 => Ok(()),
+        code => Err(io::Error::from_raw_os_error(code)),
+    };
+    // SAFETY: every pointer passed points into `program`, `arguments`, `variables` or the
+    // attributes and actions initialised here, all of which live until the end of the block;
+    // both pointer lists end with a null pointer. The attributes and actions are destroyed only
+    // after `posix_spawn`, which with `POSIX_SPAWN_SETEXEC` does not return when it succeeds.
+    unsafe {
+        let mut attributes: libc::posix_spawnattr_t = std::ptr::null_mut();
+        if let Err(error) = check(libc::posix_spawnattr_init(&raw mut attributes)) {
+            return error;
+        }
+        let mut actions: libc::posix_spawn_file_actions_t = std::ptr::null_mut();
+        if let Err(error) = check(libc::posix_spawn_file_actions_init(&raw mut actions)) {
+            libc::posix_spawnattr_destroy(&raw mut attributes);
+            return error;
+        }
+        let mut none: libc::sigset_t = 0;
+        libc::sigemptyset(&raw mut none);
+        let mut pipe: libc::sigset_t = 0;
+        libc::sigemptyset(&raw mut pipe);
+        libc::sigaddset(&raw mut pipe, libc::SIGPIPE);
+        let flags = libc::POSIX_SPAWN_SETEXEC
+            | libc::POSIX_SPAWN_CLOEXEC_DEFAULT
+            | libc::POSIX_SPAWN_SETSIGMASK
+            | libc::POSIX_SPAWN_SETSIGDEF;
+        let prepared = check(libc::posix_spawnattr_setflags(
+            &raw mut attributes,
+            // The flags all fit in the `short` the call takes.
+            flags as libc::c_short,
+        ))
+        .and_then(|()| {
+            check(libc::posix_spawnattr_setsigmask(
+                &raw mut attributes,
+                &raw const none,
+            ))
+        })
+        .and_then(|()| {
+            check(libc::posix_spawnattr_setsigdefault(
+                &raw mut attributes,
+                &raw const pipe,
+            ))
+        })
+        .and_then(|()| {
+            (0..=2).try_for_each(|fd| {
+                check(posix_spawn_file_actions_addinherit_np(&raw mut actions, fd))
+            })
+        });
+        let error = if let Err(error) = prepared {
+            error
+        } else {
+            let code = libc::posix_spawn(
+                std::ptr::null_mut(),
+                program.as_ptr(),
+                &raw const actions,
+                &raw const attributes,
+                argument_pointers.as_ptr(),
+                variable_pointers.as_ptr(),
+            );
+            io::Error::from_raw_os_error(code)
+        };
+        libc::posix_spawn_file_actions_destroy(&raw mut actions);
+        libc::posix_spawnattr_destroy(&raw mut attributes);
+        error
     }
 }
 
@@ -153,6 +274,56 @@ mod tests {
             assert!(!alive(pid), "grandchild {pid} survived");
         }
         assert!(Native.group_members(group.id).unwrap().is_empty());
+    }
+
+    /// Set for the copy of this test binary that [`replacing_the_image_keeps_only_standard_io`]
+    /// starts: its value is a descriptor the copy opens without close-on-exec.
+    const REPLACED: &str = "IGNITE_OS_TEST_REPLACED";
+
+    /// A replaced image keeps standard output, the environment and the working directory, and
+    /// loses a descriptor that has no close-on-exec mark, which a plain `exec` would keep.
+    #[test]
+    fn replacing_the_image_keeps_only_standard_io() {
+        let dir = std::env::temp_dir().join(format!("ign-replace-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let expected = format!(
+            "replaced 1 closed {}",
+            dir.canonicalize().unwrap().display()
+        );
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "proc::macos::tests::replaced_image",
+                "--nocapture",
+            ])
+            .env(REPLACED, "1")
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let out = String::from_utf8_lossy(&output.stdout);
+        let line = out.lines().find(|line| line.starts_with("replaced"));
+        assert_eq!(line, Some(expected.as_str()), "{out}");
+    }
+
+    /// The other half of [`replacing_the_image_keeps_only_standard_io`]: does nothing unless
+    /// that test started this binary.
+    #[test]
+    fn replaced_image() {
+        if std::env::var_os(REPLACED).is_none() {
+            return;
+        }
+        let mut fds = [0; 2];
+        // SAFETY: `pipe` writes two descriptors into `fds`; neither is marked close-on-exec.
+        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
+        let fd = fds[0];
+        let script = format!(
+            "if [ -e /dev/fd/{fd} ]; then kept=kept; else kept=closed; fi; \
+             echo \"replaced ${REPLACED} $kept $(pwd -P)\""
+        );
+        let error = replace_image(Path::new("/bin/sh"), &["-c".to_owned(), script]);
+        panic!("not replaced: {error}");
     }
 
     #[test]

@@ -595,7 +595,9 @@ pub trait Restart {
 }
 
 /// Restarts with `exec`: the process keeps its ID, so the login service sees no exit, and
-/// supervisors it started stay its children.
+/// supervisors it started stay its children. The new image keeps only standard input, output
+/// and error (see `ignite_os::proc::replace_image`), so a client connection that another thread
+/// had just accepted is closed rather than carried into a daemon that never answers it.
 ///
 /// Windows has no `exec`, so there the new daemon starts as a process of its own, apart from
 /// this one's console, and this process exits. Supervisors keep running, as they do on macOS.
@@ -613,8 +615,7 @@ const HANDOVER_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 impl Restart for ExecRestart {
     #[cfg(unix)]
     fn restart(&self, executable: &Path, args: &[String]) -> io::Result<()> {
-        use std::os::unix::process::CommandExt;
-        Err(Command::new(executable).args(args).exec())
+        Err(ignite_os::proc::replace_image(executable, args))
     }
 
     #[cfg(windows)]
