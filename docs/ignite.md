@@ -1643,17 +1643,17 @@ guards against that with reruns, which need no tracing of file access:
 - A rerun that disagrees with the cache switches caching off for that check and
   files a P1 ticket naming both runs, the cached run's record and the rerun's.
   The cause is an undeclared input or a check that is not deterministic.
-- Because the sample is small, a repository can also lint its test code.
-  Beryl's `check-inputs` source rule reads the test code of the game's and
-  Ignite's workspaces and fails a raw filesystem read of a repository file:
-  a file that names `CARGO_MANIFEST_DIR` (or Beryl 3D's `recordings::root()`)
-  and also reads with `std::fs`, or a read in a statement with a string literal
-  that names a tracked path (outside Ignite's workspace, whose tests write
-  fixture repositories under the real repository's file names). The read goes
-  through `beryl_test_files` or `ignite_core::test_files` instead, so that
-  Ignite records it (see [Observed inputs](#observed-inputs)). Compile-time
-  reads (`include_str!`, `include_bytes!`, `rerun-if-changed`) are observed
-  from Cargo's dep-info files and need nothing.
+- Because the sample is small, a repository can also lint its test code. Beryl's
+  `check-inputs` source rule reads the test code of the game's and Ignite's
+  workspaces and fails a raw filesystem read of a repository file: a file that
+  names `CARGO_MANIFEST_DIR` (or Beryl 3D's `recordings::root()`) and also reads
+  with `std::fs`, or a read in a statement with a string literal that names a
+  tracked path (outside Ignite's workspace, whose tests write fixture
+  repositories under the real repository's file names). The read goes through
+  `beryl_test_files` or `ignite_core::test_files` instead, so that Ignite
+  records it (see [Observed inputs](#observed-inputs)). Compile-time reads
+  (`include_str!`, `include_bytes!`, `rerun-if-changed`) are observed from
+  Cargo's dep-info files and need nothing.
 
 ## Where regression checks run
 

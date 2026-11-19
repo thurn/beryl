@@ -133,10 +133,9 @@ def reads(path: str, text: str, known: set[str]) -> list[str]:
         return []
     found: list[str] = []
     for i, line in code:
-        if ROOTS.search(line) and "env_remove" not in line:
-            found.append(
-                f"{path}:{i + 1}: opens the checkout through {ROOTS.search(line).group()}"
-            )
+        named = ROOTS.search(line)
+        if named is not None and "env_remove" not in line:
+            found.append(f"{path}:{i + 1}: opens the checkout through {named.group()}")
     if not path.startswith(NOT_MATCHED):
         bases = (posixpath.dirname(path), package_dir(path, known), "rust", "")
         code_lines = {i for i, _ in code}
