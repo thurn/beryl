@@ -13,7 +13,7 @@
 //! every landing its inputs touch, so it too is left out when the change touches none of them.
 //!
 //! A change that the express paths (`ignite.toml`) cover entirely also judges a family with no
-//! kept listing by its declared inputs, so a fresh tree lists no Beryl family for a change
+//! kept listing by its declared inputs, so a fresh tree lists no unrelated family for a change
 //! confined to Ignite's own files. Families in the always set are still listed.
 //!
 //! In a family with a kept listing, `crate-closure` stands for the packages its checks belong
