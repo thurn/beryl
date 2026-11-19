@@ -19,7 +19,7 @@
 //! busy machine runs fewer at once.
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -50,6 +50,8 @@ struct Round<'a> {
     queue: Mutex<VecDeque<FamilyBatches>>,
     /// How many families have been started.
     started: Mutex<usize>,
+    /// How many families a thread is working on now: building, listing or running them.
+    in_flight: AtomicUsize,
     ran_a_batch: AtomicBool,
     /// A newer tip that ended the round, or the error reading `staging`.
     ended: Mutex<Option<Result<Commit>>>,
@@ -60,7 +62,11 @@ struct Round<'a> {
 
 impl Round<'_> {
     /// The next family to run, or `None` when none is left or the round has ended. Past the
-    /// first family, while no batch has run yet, a newer `staging` tip ends the round.
+    /// first family, a newer `staging` tip ends the round only while the round has nothing
+    /// under way: no batch has run and no other family is being built, listed or run. A family
+    /// builds and lists before it claims its first batch, which can take ten minutes under
+    /// load, so ending the round then would throw that work away, and with landings arriving
+    /// more often than that, `master` would never move.
     fn next(&self) -> Option<FamilyBatches> {
         let mut queue = lock(&self.queue);
         if lock(&self.ended).is_some() {
@@ -68,7 +74,10 @@ impl Round<'_> {
         }
         let next = queue.pop_front()?;
         let mut started = lock(&self.started);
-        if *started > 0 && !self.ran_a_batch.load(Ordering::SeqCst) {
+        if *started > 0
+            && !self.ran_a_batch.load(Ordering::SeqCst)
+            && self.in_flight.load(Ordering::SeqCst) == 0
+        {
             match self.ctx.git.tip(&self.ctx.config.repository.staging) {
                 Ok(newest) if newest == *self.tip => {}
                 other => {
@@ -78,6 +87,7 @@ impl Round<'_> {
             }
         }
         *started += 1;
+        self.in_flight.fetch_add(1, Ordering::SeqCst);
         Some(next)
     }
 
@@ -142,10 +152,10 @@ impl Round<'_> {
 
 impl TipVerifier {
     /// Runs `to_run`, some of the tip's checks, at `tip` and returns the runs, in batches cut
-    /// over the round's listing. While no batch has run yet (another machine holds them all,
-    /// say), a newer `staging` tip ends the round and is returned instead, so the next round
-    /// verifies it. A round that has run a batch finishes, so a shared input that every
-    /// landing changes cannot keep any tip from being verified.
+    /// over the round's listing. While nothing is under way (another machine holds every batch
+    /// so far, say), a newer `staging` tip ends the round and is returned instead, so the next
+    /// round verifies it. A round that has run a batch, or is building or listing a family,
+    /// finishes, so landings that keep arriving cannot keep every tip from being verified.
     pub(super) fn run_families(
         &self,
         ctx: &Context,
@@ -158,6 +168,7 @@ impl TipVerifier {
             tip,
             queue: Mutex::new(by_family(batches(&self.listed, to_run, &costs)).into()),
             started: Mutex::new(0),
+            in_flight: AtomicUsize::new(0),
             ran_a_batch: AtomicBool::new(false),
             ended: Mutex::new(None),
             runs: Mutex::new(Vec::new()),
@@ -179,6 +190,7 @@ impl TipVerifier {
                                 self.work.run_batches(ctx, tip, &family, &batches, &claim);
                             lock(&round.held).remove(&family);
                             lock(&round.runs).extend(runs);
+                            round.in_flight.fetch_sub(1, Ordering::SeqCst);
                         }
                     })
                 })

@@ -56,6 +56,84 @@ fn a_round_that_has_run_nothing_starts_over_at_a_newer_tip() {
     assert!(world.work.runs().is_empty());
 }
 
+/// Under load a family can spend ten minutes building and listing before it claims its first
+/// batch. A round used to count that as having run nothing, so a landing in that window ended
+/// it, and with landings arriving more often than that, `master` never moved.
+#[test]
+fn a_round_building_a_family_is_not_ended_by_a_newer_tip() {
+    use std::sync::{Condvar, Mutex};
+    use std::time::Duration;
+
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    let checks = [("alpha", 'a'), ("beta", 'b'), ("gamma", 'c')]
+        .into_iter()
+        .map(|(family, hash)| {
+            let mut c = check(family, hash);
+            c.family = family.to_owned();
+            c
+        })
+        .collect();
+    world.work.set_checks(&tip, checks);
+    *world.work.parallel.lock().unwrap() = 2;
+    // Another machine holds beta's batch, so beta's thread finishes having run nothing and
+    // asks for the next family while alpha is still building.
+    world
+        .hub
+        .tip_claim(&TipClaim {
+            commit: tip.clone(),
+            family: "beta".to_owned(),
+            batch: 0,
+            machine: MachineId::new("m-2").unwrap(),
+        })
+        .unwrap();
+    let newer = commit("cccc000");
+    // (newer tip landed, gamma started), with a condition variable to wait on either.
+    let state = Arc::new((Mutex::new((false, false)), Condvar::new()));
+    let wait_for = |state: &Arc<(Mutex<(bool, bool)>, Condvar)>,
+                    done: fn(&(bool, bool)) -> bool| {
+        let (lock, wake) = &**state;
+        let guard = lock.lock().unwrap();
+        // The timeout only stops a hang if the round never starts gamma.
+        drop(
+            wake.wait_timeout_while(guard, Duration::from_secs(2), |s| !done(s))
+                .unwrap(),
+        );
+    };
+    let mut hooks = world.work.before_batches.lock().unwrap();
+    let (git, landed, s) = (world.git.clone(), newer.clone(), state.clone());
+    // Alpha is building when the newer tip lands, and keeps building until gamma starts.
+    hooks.insert(
+        "alpha".to_owned(),
+        Arc::new(move || {
+            git.set_tip("staging", landed.clone());
+            s.0.lock().unwrap().0 = true;
+            s.1.notify_all();
+            wait_for(&s, |s| s.1);
+        }),
+    );
+    let s = state.clone();
+    hooks.insert("beta".to_owned(), Arc::new(move || wait_for(&s, |s| s.0)));
+    let s = state.clone();
+    hooks.insert(
+        "gamma".to_owned(),
+        Arc::new(move || {
+            s.0.lock().unwrap().1 = true;
+            s.1.notify_all();
+        }),
+    );
+    drop(hooks);
+
+    let outcome = world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert_ne!(outcome, TipOutcome::Superseded { by: newer });
+    let ran: Vec<CheckName> = world.work.runs().into_iter().flat_map(|r| r.2).collect();
+    assert!(ran.contains(&name("unit:alpha")), "{ran:?}");
+    assert!(ran.contains(&name("unit:gamma")), "{ran:?}");
+}
+
 /// A world whose tip `bbbb000` has `checks` and is the newest on `staging`.
 fn world_at(checks: Vec<TipCheck>) -> (World, Commit) {
     let world = World::new();

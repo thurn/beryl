@@ -59,7 +59,13 @@ pub(super) struct FakeWork {
     pub(super) masters: Mutex<Vec<(Vec<CheckName>, Commit)>>,
     /// The checks each commit's listing finds switched off.
     pub(super) off: Mutex<HashMap<Commit, Vec<TipCheck>>>,
+    /// Called when a family's batches start, before the first claim, where the real work
+    /// builds and lists the family.
+    pub(super) before_batches: Mutex<HashMap<String, BeforeBatches>>,
 }
+
+/// What [`FakeWork::before_batches`] calls for one family.
+pub(super) type BeforeBatches = Arc<dyn Fn() + Send + Sync>;
 
 impl FakeWork {
     pub(super) fn listed(&self, at: &Commit) -> Vec<TipCheck> {
@@ -186,6 +192,29 @@ impl TipWork for FakeWork {
 
     fn covered_by(&self) -> BTreeMap<String, String> {
         self.covered_by.lock().unwrap().clone()
+    }
+
+    fn run_batches(
+        &self,
+        ctx: &Context,
+        at: &Commit,
+        family: &str,
+        batches: &[(u32, Vec<CheckName>)],
+        claim: &dyn Fn(u32) -> bool,
+    ) -> (Vec<TipRun>, usize) {
+        let before = self.before_batches.lock().unwrap().get(family).cloned();
+        if let Some(before) = before {
+            before();
+        }
+        let mut runs = Vec::new();
+        let mut ran = 0;
+        for (batch, names) in batches {
+            if claim(*batch) {
+                ran += 1;
+                runs.extend(self.run(ctx, at, names, false));
+            }
+        }
+        (runs, ran)
     }
 
     fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {

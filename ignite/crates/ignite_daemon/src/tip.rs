@@ -27,8 +27,10 @@
 //!   cannot be resolved and a push that moves `master` but is refused are reported to the hub
 //!   once per tip, and the tip waits. Telemetry the hub refuses is logged and never fails a
 //!   round.
-//! - A round that has run a batch is finished even when a newer tip arrives, so a shared input
-//!   that every landing changes cannot keep any tip from being verified.
+//! - A round that has run a batch, or is building or listing a family, is finished even when a
+//!   newer tip arrives, so landings that keep arriving cannot keep every tip from being
+//!   verified. Only a round with nothing under way (another machine holds the batches) starts
+//!   over at the newer tip.
 //! - A failure's candidates are the landings since the last verified commit that changed one
 //!   of the check's inputs. One candidate is the culprit with nothing run; several are searched
 //!   by running that check between them, at most [`MAX_RUNS`] times. A landing is one
