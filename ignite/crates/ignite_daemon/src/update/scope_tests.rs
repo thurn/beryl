@@ -3,7 +3,7 @@ use ignite_core::fakes::FakeGit;
 use super::*;
 
 #[test]
-fn the_client_tests_and_markdown_do_not_affect_the_daemon() {
+fn the_client_tests_markdown_and_guide_text_do_not_affect_the_daemon() {
     for path in [
         "ignite/crates/ignite_cli/src/reattach.rs",
         "ignite/crates/ignite_cli/Cargo.toml",
@@ -11,6 +11,7 @@ fn the_client_tests_and_markdown_do_not_affect_the_daemon() {
         "ignite/crates/ignite_daemon/src/dispatchd_models_tests.rs",
         "ignite/crates/ignite_daemon/src/land/tests/fakes.rs",
         "ignite/crates/ignite_hub/tests/dashboard_components.rs",
+        "ignite/crates/ignite_core/src/guide/justiciar.txt",
         "ignite/AGENTS.md",
         "docs/ignite.md",
         "ignite.toml",
@@ -26,7 +27,8 @@ fn the_daemons_crates_their_manifests_and_embedded_files_affect_it() {
         "ignite/crates/ignite_core/src/config.rs",
         "ignite/crates/ignite_hub/src/routes/dispatch_queue.rs",
         "ignite/crates/ignite_hub/static/cirrus.js",
-        "ignite/crates/ignite_core/src/guide/release.txt",
+        "ignite/crates/ignite_core/src/guide/mod.rs",
+        "ignite/crates/ignite_core/src/protocol/client.txt",
         "ignite/crates/ignite_daemon/src/testhub.rs",
         "ignite/Cargo.lock",
         "ignite/crates/ignite_os/Cargo.toml",

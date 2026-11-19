@@ -77,6 +77,28 @@ fn a_release_that_changes_none_of_the_daemons_code_is_taken_on_without_a_restart
 }
 
 #[test]
+fn a_release_that_changes_only_guide_text_is_taken_on_and_the_client_runs_it() {
+    let (update, git, restart) = daemon(NEW);
+    let home = home_with_this_run(&update);
+    git.set_changed(
+        &commit(OLD),
+        &commit(NEW),
+        &["ignite/crates/ignite_core/src/guide/justiciar.txt"],
+    );
+    update.after_master_moved().unwrap();
+    settle(&update);
+    update.after_heartbeat(Some(OLD), IDLE);
+    assert!(restart.started().is_empty());
+    assert_eq!(update.version(), Some(commit(NEW)));
+    assert_eq!(this_run(&home).adopted, [NEW]);
+    // `ignite guide` is answered by the client from the topics compiled into its executable,
+    // and the client runs `bin/current`: that is the release's build, so it prints the new
+    // text. The fake builder writes the commit into each build it makes.
+    let client = std::fs::read_to_string(update.store.current_link()).unwrap();
+    assert_eq!(client, NEW);
+}
+
+#[test]
 fn a_later_release_that_changes_the_daemon_restarts_it_and_records_why() {
     let (update, git, restart) = daemon(NEW);
     let home = home_with_this_run(&update);

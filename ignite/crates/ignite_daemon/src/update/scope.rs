@@ -10,6 +10,8 @@
 //! - test code: a file named `tests.rs` or `<name>_tests.rs`, or one under a `tests` directory.
 //!   Every such file is compiled only into tests.
 //! - Markdown, which nothing compiles.
+//! - the files in [`CLIENT_ONLY`]: text compiled into the executable that only the client reads,
+//!   such as the guide topics `ignite guide` prints.
 //!
 //! Everything else counts, including `ignite_hub`: the daemon links it, serves the hub itself on
 //! a machine whose hub has no login service of its own, and reads ticket bodies with its
@@ -21,6 +23,32 @@ use ignite_core::traits::{Git, Result};
 /// The crate of the command line client, under Ignite's source directory.
 const CLIENT_CRATE: &str = "crates/ignite_cli/";
 
+/// Files, relative to Ignite's source directory, that are compiled into the executable but read
+/// only by the client, as (path prefix, file extension, why the daemon never reads them). A
+/// changed file that starts with the prefix and has the extension does not restart the daemon:
+/// the client runs `bin/current`, which the release points at its new build without a restart,
+/// so the client prints the new text at once.
+const CLIENT_ONLY: &[(&str, &str, &str)] = &[(
+    "crates/ignite_core/src/guide/",
+    "txt",
+    // `ignite_core::guide` embeds each topic with `include_str!`, and only the client calls it
+    // (`ignite guide`, answered in `ignite_cli` without asking the daemon). The daemon names
+    // topics in its messages, such as a claim's brief, but never reads their text. The module's
+    // `.rs` file is not on the list: it holds the topic names and summaries, which are code.
+    "the guide topics, which only `ignite guide` in the client prints",
+)];
+
+/// Whether `inside`, relative to Ignite's source directory, is on [`CLIENT_ONLY`].
+fn client_only(inside: &str) -> bool {
+    CLIENT_ONLY.iter().any(|(prefix, extension, _)| {
+        inside.strip_prefix(prefix).is_some_and(|rest| {
+            std::path::Path::new(rest)
+                .extension()
+                .is_some_and(|found| found.eq_ignore_ascii_case(extension))
+        })
+    })
+}
+
 /// Whether `path`, relative to the repository, is part of the code the daemon runs when Ignite's
 /// source lives in `source`.
 pub fn affects_daemon(source: &str, path: &str) -> bool {
@@ -28,7 +56,7 @@ pub fn affects_daemon(source: &str, path: &str) -> bool {
     let Some(inside) = path.strip_prefix(&prefix) else {
         return false;
     };
-    if inside.starts_with(CLIENT_CRATE) {
+    if inside.starts_with(CLIENT_CRATE) || client_only(inside) {
         return false;
     }
     let mut parts: Vec<&str> = inside.split('/').collect();
