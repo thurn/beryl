@@ -30,7 +30,7 @@ pub mod scenarios {
     const FLIER: &str = Prop::Flier;
 
     /// P0 casts Oust on P1's flier, whose library is `top`. The Plains left in P0's
-    /// hand keeps the game in P0's main phase once Oust has resolved.
+    /// hand keeps the game in P0's main phase after Oust has resolved.
     const fn oust_onto(name: &'static str, top: &'static [&'static str]) -> Scenario {
         Scenario::new(name)
             .battlefield(P0, &[Card::Plains])
