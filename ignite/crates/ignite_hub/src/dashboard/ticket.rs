@@ -126,6 +126,46 @@ pub fn page(
         entries.push(entry);
         main.push(section);
     }
+    let row = |card: &Card| -> String {
+        let label = format!(
+            "{}<span class=\"c-row-id c-mono c-hide-narrow\">{}</span><span class=\"c-row-text\">{}</span>",
+            status_dot(card.status, false),
+            esc(&display_id(&card.id)),
+            esc(&card.title)
+        );
+        c::row(
+            &label,
+            &(children_progress(progress.get(card.id.as_str()).copied())
+                + &priority_chip(i64::from(card.priority))),
+            Some(&ticket_url(root, &card.id)),
+        )
+    };
+    let is_container = |card: &&Card| card.ticket_type == "epic" || card.ticket_type == "milestone";
+    // Closed tickets follow the open ones in the same list, with no
+    // collapsed group or count header.
+    let list_html = |cards: &Vec<&Card>| -> String {
+        let (closed, open): (Vec<&Card>, Vec<&Card>) =
+            cards.iter().partition(|card| card.status == Status::Closed);
+        c::rows(open.iter().chain(closed.iter()).map(|card| row(card)))
+    };
+    let lists: Vec<(String, Vec<&Card>)> = vec![
+        (
+            "Milestones".to_owned(),
+            children.iter().filter(is_container).collect(),
+        ),
+        (
+            "Subtasks".to_owned(),
+            children.iter().filter(|card| !is_container(card)).collect(),
+        ),
+    ];
+    for (heading, cards) in &lists {
+        if cards.is_empty() {
+            continue;
+        }
+        let (entry, section) = plain_section(heading, &list_html(cards), Some(cards.len()));
+        entries.push(entry);
+        main.push(section);
+    }
     let mut missing: Vec<(&str, &str)> = Vec::new();
     for (heading, field, text) in [
         ("Description", "body", &ticket.body),
@@ -163,31 +203,7 @@ pub fn page(
         main.push(section);
     };
 
-    let row = |card: &Card| -> String {
-        let label = format!(
-            "{}<span class=\"c-row-id c-mono c-hide-narrow\">{}</span><span class=\"c-row-text\">{}</span>",
-            status_dot(card.status, false),
-            esc(&display_id(&card.id)),
-            esc(&card.title)
-        );
-        c::row(
-            &label,
-            &(children_progress(progress.get(card.id.as_str()).copied())
-                + &priority_chip(i64::from(card.priority))),
-            Some(&ticket_url(root, &card.id)),
-        )
-    };
-    let is_container = |card: &&Card| card.ticket_type == "epic" || card.ticket_type == "milestone";
-    let mut lists: Vec<(String, Vec<&Card>)> = vec![
-        (
-            "Milestones".to_owned(),
-            children.iter().filter(is_container).collect(),
-        ),
-        (
-            "Subtasks".to_owned(),
-            children.iter().filter(|card| !is_container(card)).collect(),
-        ),
-    ];
+    let mut lists: Vec<(String, Vec<&Card>)> = Vec::new();
     for (name, ids) in groups {
         let mut cards: Vec<&Card> = ids
             .iter()
@@ -200,16 +216,7 @@ pub fn page(
         if cards.is_empty() {
             continue;
         }
-        let (closed, open): (Vec<&Card>, Vec<&Card>) =
-            cards.iter().partition(|card| card.status == Status::Closed);
-        // Closed tickets follow the open ones in the same list, with no
-        // collapsed group or count header.
-        let ordered = open.iter().chain(closed.iter());
-        add(
-            heading,
-            &c::rows(ordered.map(|card| row(card))),
-            Some(cards.len()),
-        );
+        add(heading, &list_html(cards), Some(cards.len()));
     }
 
     if !comments.is_empty() || editable {

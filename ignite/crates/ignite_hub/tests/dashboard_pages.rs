@@ -201,6 +201,17 @@ fn a_ticket_page_shows_its_sections_links_and_changelog() {
 }
 
 #[test]
+fn subtasks_come_before_the_description() {
+    let hub = seeded();
+    let page = hub.text("/TQ44S");
+    let subtasks = page.find("id=\"subtasks\"").expect("subtasks section");
+    let description = page
+        .find("id=\"description\"")
+        .expect("description section");
+    assert!(subtasks < description);
+}
+
+#[test]
 fn closed_subtasks_are_listed_without_a_collapsed_group() {
     let hub = seeded();
     // This epic has closed children. They used to sit behind a "<n> closed" disclosure.
