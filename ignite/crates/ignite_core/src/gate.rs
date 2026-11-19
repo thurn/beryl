@@ -328,8 +328,12 @@ fn choose<'a>(
         if score < budget.threshold {
             break;
         }
-        let startup = unpaid(input, &units[index], started);
-        if plan.scored_cost + plan.paid_cost + units[index].run_cost + startup > limit {
+        // A unit that adds nothing always fits. Charges for checks an earlier gate chose
+        // (`paid_cost`) are never refused, so they can take the spending past the limit; a free
+        // unit refused then would stay eligible and be chosen again forever. With this, each
+        // pass takes a unit, stops, or sets `spent_out` once.
+        let adds = units[index].run_cost + unpaid(input, &units[index], started);
+        if adds > 0.0 && plan.scored_cost + plan.paid_cost + adds > limit {
             spent_out = true;
             continue;
         }

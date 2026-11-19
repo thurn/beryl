@@ -435,3 +435,38 @@ fn checks_an_earlier_gate_of_the_change_chose_still_count_when_cached() {
     let unpaid = plan_for(&checks, &none(), &gate(0.0, 10.0));
     assert_eq!(names(&unpaid.run), ["tests:c3", "tests:c4", "tests:c5"]);
 }
+
+/// Checks an earlier gate chose count against the budget without being refused, so they can
+/// take the spending past it, as when the hub's costs rose between `ignite check` and `ignite
+/// land`. A cached check that adds nothing must still be answered from the cache then. It used
+/// to fail the budget test without leaving the candidates, so the selection chose it again
+/// forever and the gate's verb process spun until it was killed.
+#[test]
+fn a_cached_check_is_answered_when_earlier_charges_passed_the_budget() {
+    // Chosen first, by name among equal scores, it charges its family's start-up of 20.
+    let paid_check = GateCheck {
+        cached: true,
+        family_startup: Cost::Billions(20.0),
+        ..likely("a:paid", 1.0)
+    };
+    let free = GateCheck {
+        cached: true,
+        ..likely("tests:free", 1.0)
+    };
+    let checks = vec![paid_check, free, likely("tests:new", 1.0)];
+    let areas = [AREA.to_owned()];
+    let paid = BTreeSet::from([name("a:paid")]);
+    let unbuilt = none();
+    let input = GateInput {
+        areas: &areas,
+        checks: &checks,
+        unbuilt: &unbuilt,
+        landing: None,
+        paid: &paid,
+        billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
+    };
+    let plan = plan(&input, &gate(0.0, 10.0));
+    assert_eq!(names(&plan.cached), ["a:paid", "tests:free"], "{plan:?}");
+    assert!(plan.run.is_empty(), "{plan:?}");
+    assert_eq!(left_names(&plan.past_budget), ["tests:new"]);
+}
