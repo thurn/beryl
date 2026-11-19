@@ -183,20 +183,19 @@ impl Checks {
                 ..GateRun::default()
             };
         }
-        // A family that must be listed even though listing it builds a product the tree has
-        // never built: one in the always set, or one that holds the check whose regression this
-        // landing fixes.
+        // A family listed even if that builds a product the tree has never built: one in the
+        // always set for this change, or one holding the check whose regression this fixes.
         let fixing: BTreeSet<String> = open_regressions(ctx)
             .into_iter()
             .filter(|(_, ticket)| options.ticket.as_ref() == Some(ticket))
             .map(|(check, _)| check.family().to_owned())
             .collect();
         let unbuilt = unbuilt(ctx, tree, among.iter().map(|(_, family)| *family));
-        let listed_anyway = |name: &str, family: &Family| family.always || fixing.contains(name);
+        let listed = |name: &str, f: &Family| f.always_for(&changed) || fixing.contains(name);
         let mut prepared =
             self.prepare_gate(ctx, tree, &among, options, &mut run, &|name, family| {
                 let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
-                needs.iter().any(|need| unbuilt.contains(need)) && !listed_anyway(name, family)
+                needs.iter().any(|need| unbuilt.contains(need)) && !listed(name, family)
             });
         for family in &mut prepared {
             family.keep(|_| true, &mut run);

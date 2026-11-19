@@ -150,3 +150,42 @@ fn a_product_the_tree_never_built_is_built_only_for_checks_that_must_run() {
     let text = verbs::render(&verbs::gate_lines(&gated));
     assert!(text.contains("never built here before: deps"), "{text}");
 }
+
+/// A family in the always set whose `always_when` the change touches none of is scored: a check
+/// that costs more than the budget and never failed goes to tip verification. A change to a
+/// path `always_when` names runs it whatever it costs.
+#[test]
+fn always_when_leaves_a_costly_lint_to_the_tip_for_other_changes() {
+    let narrowed = family("unit", "", true).replace(
+        "always = true\n",
+        "always = true\nalways_when = [\"src/viewer/**\"]\n",
+    );
+    let history = || {
+        let mut history = FakeHistory::default();
+        history.replies.insert(
+            "unit".to_owned(),
+            CheckStatsReply {
+                startup_billions: None,
+                startup_cpu_s: None,
+                family: "unit".to_owned(),
+                family_rate: 0.0,
+                checks: vec![stats("unit:lint", 0, 2000.0)],
+            },
+        );
+        history
+    };
+
+    let other = world(&narrowed, &["src/a.py"], history());
+    list(&other, &["unit:lint".to_owned()]);
+    let gated = other.checks.gate(&other.ctx, &tree(), &landing());
+    assert!(gated.run.passed(), "{gated:?}");
+    assert_eq!(gated.run.ran, 0);
+    assert_eq!(gated.left, 1);
+
+    let viewer = world(&narrowed, &["src/viewer/main.py"], history());
+    list(&viewer, &["unit:lint".to_owned()]);
+    let gated = viewer.checks.gate(&viewer.ctx, &tree(), &landing());
+    assert!(gated.run.passed(), "{gated:?}");
+    assert_eq!(gated.run.ran, 1);
+    assert_eq!(gated.budget.unwrap().forced.0, 1);
+}

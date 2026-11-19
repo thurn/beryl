@@ -232,11 +232,26 @@ pub fn regression_families(conn: &Connection) -> Result<Vec<String>> {
 
 /// Every check of `family` with its state, area counts and median cost, and the family's
 /// failure rate over all those counts (zero before any run).
+///
+/// A check is one of the family's when the `checks` table names it, or when a cost or an area
+/// count is recorded under a name with the family's prefix (`<family>:`). Only the import of
+/// the old systems' history and the flaky switch write `checks`, so a family first listed under
+/// Ignite has its record only in `check_costs` and `check_stats`. Reading `checks` alone made
+/// every such check look never run to the gate, which then planned it as certain to fail at a
+/// cost of one billion instructions: two `allocations` checks that cost 3,041 billion were
+/// chosen within a budget of 470. A check `checks` does not name is on.
 pub fn stats(conn: &Connection, family: &str) -> Result<CheckStatsReply> {
     let mut select = conn.prepare(
-        "SELECT c.name, c.state, k.median, k.unit FROM checks c
-         LEFT JOIN check_costs k ON k.check_name = c.name
-         WHERE c.family = ?1 ORDER BY c.name",
+        "WITH names AS (
+           SELECT name FROM checks WHERE family = ?1
+           UNION SELECT check_name FROM check_costs
+             WHERE check_name > ?1 || ':' AND check_name < ?1 || ';'
+           UNION SELECT check_name FROM check_stats
+             WHERE check_name > ?1 || ':' AND check_name < ?1 || ';')
+         SELECT n.name, COALESCE(c.state, 'on'), k.median, k.unit FROM names n
+         LEFT JOIN checks c ON c.name = n.name
+         LEFT JOIN check_costs k ON k.check_name = n.name
+         ORDER BY n.name",
     )?;
     let listed = select
         .query_map(params![family], |row| {
@@ -545,6 +560,26 @@ mod tests {
         let reply = stats(&conn, "rust").unwrap();
         assert_eq!(reply.checks[0].median_cost, Some(2.0));
         assert_eq!(reply.checks[0].unit, "instructions");
+    }
+
+    #[test]
+    fn a_check_only_its_runs_and_costs_name_is_in_its_family() {
+        // Results of a family first listed under Ignite record costs and area counts, but no
+        // row in `checks`.
+        let mut conn = hub::open_in_memory().unwrap();
+        add_cost(&conn, "alloc:a", 1500.0, "instructions").unwrap();
+        count_run(&mut conn, "alloc:a", &["crates/x".to_owned()], false).unwrap();
+        count_run(&mut conn, "alloc:b", &["crates/x".to_owned()], true).unwrap();
+        // Another family whose name starts the same is not counted.
+        add_cost(&conn, "alloc-x:c", 1.0, "instructions").unwrap();
+        let reply = stats(&conn, "alloc").unwrap();
+        let names: Vec<&str> = reply.checks.iter().map(|c| c.check.as_str()).collect();
+        assert_eq!(names, ["alloc:a", "alloc:b"]);
+        assert_eq!(reply.checks[0].median_cost, Some(1500.0));
+        assert_eq!(reply.checks[0].unit, "instructions");
+        assert_eq!(reply.checks[0].state, CheckState::On);
+        assert_eq!(reply.checks[1].median_cost, None);
+        assert!((reply.family_rate - 0.5).abs() < 1e-9);
     }
 
     #[test]

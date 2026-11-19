@@ -499,5 +499,10 @@
     "label": "The `rust` check family hashes each test over the repository files its build was observed to read, from Cargo's dep-info files and build-script outputs, instead of eleven hand-listed data paths that every test hashed, so an edit to the table commands or the save breaks reruns only the tests of the packages that embed them, and an edit to the card store or UI conventions reruns only the packages that depend on the embedding crate or read the file at run time, instead of all of the workspace's tests",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "The gate scores checks of families listed under Ignite from their recorded costs instead of as never run at one billion instructions, and b3d-clippy is in the always set only for changes to Beryl 3D (a one-card comment change's gate C-1642 ran 656 s of checks, 369 s of them two allocations checks planned at 2 billion that cost 3,041, and 216 s b3d-clippy)",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

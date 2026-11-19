@@ -143,9 +143,28 @@ pub struct Family {
     /// Blocks every landing its inputs touch.
     #[serde(default)]
     pub always: bool,
+    /// Path patterns that narrow `always`: when there are any, the family is in the always set
+    /// only for a change that touches one of them, and for any other change its checks are
+    /// scored like those of any other family. A lint over one workspace that reads a second
+    /// workspace only through the packages it depends on declares the first workspace here,
+    /// so a change to the second does not spend its run on every landing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub always_when: Vec<String>,
 }
 
 impl Family {
+    /// Whether the family is in the always set for a change to `changed`: `always`, narrowed by
+    /// `always_when` when that names any paths.
+    pub fn always_for(&self, changed: &[String]) -> bool {
+        self.always
+            && (self.always_when.is_empty()
+                || changed.iter().any(|path| {
+                    self.always_when
+                        .iter()
+                        .any(|pattern| crate::inputs::path_matches(pattern, path))
+                }))
+    }
+
     /// The family's extra inputs for the checks of `package`, from `package_inputs`; none for a
     /// check that belongs to no package.
     pub fn package_patterns(&self, package: Option<&str>) -> &[InputPattern] {
@@ -701,5 +720,30 @@ outputs = ["ui/node_modules"]
         );
         let error = Manifest::from_files(&cycle).unwrap_err();
         assert!(error.message.contains("covers itself"), "{error}");
+    }
+
+    #[test]
+    fn always_when_narrows_the_always_set_to_changes_it_names() {
+        let lint = RUST.replacen(
+            "needs = [\"rust-tests\"]\n",
+            "needs = [\"rust-tests\"]\nalways = true\nalways_when = [\"rust/viewer/**\"]\n",
+            1,
+        );
+        let (manifest, unknown) =
+            Manifest::from_files_with_unknown(&files(&[("checks/rust.toml", &lint)])).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        let family = &manifest.families["rust"].family;
+        let changed = |paths: &[&str]| paths.iter().map(|p| (*p).to_owned()).collect::<Vec<_>>();
+        assert!(family.always_for(&changed(&["rust/viewer/src/main.rs"])));
+        assert!(family.always_for(&changed(&["rust/game/a.rs", "rust/viewer/Cargo.toml"])));
+        assert!(!family.always_for(&changed(&["rust/game/a.rs"])));
+
+        // Without `always_when`, `always` holds for every change, and without `always`, for none.
+        let plain = Manifest::from_files(&files(&[("checks/rust.toml", RUST)])).unwrap();
+        let plain = &plain.families["rust"].family;
+        assert!(!plain.always_for(&changed(&["rust/viewer/src/main.rs"])));
+        let mut always = plain.clone();
+        always.always = true;
+        assert!(always.always_for(&changed(&["rust/game/a.rs"])));
     }
 }

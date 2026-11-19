@@ -132,6 +132,7 @@ impl GateView {
                 };
                 let record = reply.and_then(|r| r.checks.iter().find(|s| s.check == *check));
                 let check_state = record.map_or(CheckState::On, |s| s.state);
+                scored.always = declared.always_for(changed);
                 scored.edited = edited(check, changed);
                 scored.cached = hit.is_some() && check_state == CheckState::On;
                 view.checks.push(scored);
@@ -236,7 +237,10 @@ impl super::Checks {
             .filter_map(|(check, family)| {
                 let declared = &self.settings.manifest.families.get(family)?.family;
                 let reply = stats.get(family.as_str());
-                scored_check(check, declared, reply, regressions.get(check).cloned())
+                let mut scored =
+                    scored_check(check, declared, reply, regressions.get(check).cloned())?;
+                scored.always = declared.always_for(changed);
+                Some(scored)
             })
             .collect();
         Ok(Scoring {

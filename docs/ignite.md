@@ -1305,6 +1305,9 @@ The fields:
   touches none of them leaves the family out of scope.
 - `always = true` marks a family that blocks every landing its inputs touch. See
   [Where regression checks run](#where-regression-checks-run).
+- `always_when` narrows `always` to changes that touch one of its path patterns.
+  For any other change the family's checks are scored. See
+  [The always set](#the-always-set).
 - `covered_by` names a family whose checks find every fault this family's checks
   find. Tip verification then runs the covering family only. See
   [How long a round takes](#how-long-a-round-takes).
@@ -1574,6 +1577,21 @@ two ways:
   product one of them needs is built even when the tree has never built it.
 - They are looked up or run for the exact commit that lands, so a tip that does
   not compile cannot be produced.
+
+A family can be in the always set only for some changes. `always_when` lists
+path patterns, and a change that touches none of them has the family's checks
+scored like any other. `b3d-clippy` uses it. Its run checks the game's crates
+again in its own target directory, so it cost about 1,900 billion instructions
+on every change to the game, about four times the gate's budget. It had never
+failed after a change that touched only the game. It stays in the always set for
+changes to Beryl 3D itself, its toolchain and its commands.
+
+The hub's record of a check, which scoring reads, is every cost and area count
+stored under the check's name. Before 2026-11-19 the hub read only the checks
+that the import of the old systems' history had registered. Every family listed
+under Ignite therefore looked as if it had never run, and each of its checks was
+planned as certain to fail at one billion instructions. A one-card change then
+ran both `allocations` checks: 369 s of checks that cost 3,041 billion.
 
 A check of the always set that already fails at the tip, because it has an open
 regression ticket or the landing found it failing at the tip it was rebased onto

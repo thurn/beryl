@@ -109,12 +109,28 @@ inputs = [
 # directory it would share no work with the `b3d` build, only Cargo's lock on it, and wait for
 # it. Lints are capped at warnings so that cargo keeps every unit's result and a later run
 # replays them (`CLIPPY` in tools/src/beryl_tools/ignite/beryl3d.py).
+#
+# It is in the always set only for a change to Beryl 3D's own files, its toolchain or this
+# family's commands. Its run checks the game's crates once more in its own target directory, so
+# on every change to the game it cost about 1,900 billion instructions, four times the gate's
+# whole budget: four minutes of a one-card change's landing. It never failed after a change
+# that touched only the game's crates. Such a change can break it only through the API Beryl 3D
+# calls, which the `b3d` build of the scored Beryl 3D families also compiles; otherwise it is
+# scored, and tip verification runs it.
 [family.b3d-clippy]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env"]
 always = true
+always_when = [
+  "rust/beryl3d/**",
+  "rust-toolchain.toml",
+  "ignite/checks/beryl3d.toml",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-clippy list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-clippy run {checks}"
 inputs = [
