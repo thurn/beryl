@@ -48,7 +48,8 @@ const BRANCH: &str = "ignite-tree/express";
 const TREE_NAME: &str = "express";
 
 /// A command still running after this long is taken to hang and is ended. Ignite's own test
-/// build takes about a minute when the target directory is warm, and a cold one a few minutes.
+/// build and run took 2 to 3 minutes on three cores after a change to the daemon, with the
+/// target directory warm, and a cold one a few minutes.
 const HANG_LIMIT: Duration = Duration::from_mins(30);
 
 /// How often a running command is looked at, for its exit and for `ignite stop`.
