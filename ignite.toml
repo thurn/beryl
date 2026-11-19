@@ -42,15 +42,18 @@ paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.
 tree = ".worktrees/express" # unused since express landings run in their own trees; kept for older daemons
 dir = "ignite"
 commands = [
+  # The formatting checks come first, because they take a second or so and the commands after
+  # them take 90 to 140 s under load: a misformatted file must cost seconds, not a whole run.
   "cargo fmt --check",
+  # Every Markdown file under the express paths (`docs/ignite.md` and `ignite/**/*.md`), checked
+  # as the landing's Markdown rule in `[format]` formats it (`just fmt`, 80 columns), so a pass
+  # here means the landing's formatters change nothing. The command is split on whitespace and
+  # run without a shell, so the pattern is unquoted; `target` holds build output, not sources.
+  "uv run --quiet --project ../tools mdformat --check --exclude target/** ../docs/ignite.md .",
   "cargo clippy --locked --all-targets -- -D warnings",
   # The `express` profile (ignite/.config/nextest.toml) kills a test after 120 s, so a hung test
   # fails in about two minutes with its name instead of holding the landing to the verb limit.
   "cargo nextest run --locked --cargo-quiet --workspace --profile express --status-level=fail --final-status-level=fail",
-  # `docs/ignite.md` is an express path, and none of the commands above reads Markdown, so
-  # without this a misformatted copy would land and fail only in tip verification. It is the
-  # command `just fmt` runs on Markdown, in check mode.
-  "uv run --quiet --project ../tools mdformat --check ../docs/ignite.md",
 ]
 families = ["ignite", "ignite-lint"]
 

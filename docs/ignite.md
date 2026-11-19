@@ -1702,9 +1702,9 @@ tree = ".worktrees/express"
 dir = "ignite"
 commands = [
   "cargo fmt --check",
+  "uv run --quiet --project ../tools mdformat --check --exclude target/** ../docs/ignite.md .",
   "cargo clippy --locked --all-targets -- -D warnings",
   "cargo nextest run --locked --cargo-quiet --workspace --profile express --status-level=fail --final-status-level=fail",
-  "uv run --quiet --project ../tools mdformat --check ../docs/ignite.md",
 ]
 families = ["ignite", "ignite-lint"]
 
@@ -1780,11 +1780,20 @@ express_cores = 3
   1a2b3c4d; the commits landed since touch none of its files". On 2026-11-18 a
   landing reran all four commands, taking 56 s, a minute after its
   `ignite check` had passed them in 60 s.
-- The last command checks that `docs/ignite.md` is formatted as `just fmt`
-  formats Markdown (80 columns). It is there because `docs/ignite.md` is an
-  express path and no other command reads Markdown, so a misformatted copy would
-  otherwise land and fail only in tip verification. `ignite test ignite:` and
-  `ignite check` run it too, so the agent sees the failure before landing.
+- The two formatting commands come first, because they take a second or so and
+  clippy and nextest take 90 to 140 s under load. On 2026-11-19 an Ignite-only
+  fix lost a full run of 144 s to a misformatted `docs/ignite.md`, which the
+  Markdown check, then last, reported only after clippy and nextest had run.
+- The Markdown command checks `docs/ignite.md` and every `.md` file under
+  `ignite/` (except `ignite/target`), formatted as `just fmt` formats Markdown
+  (80 columns). Those are all the Markdown files under the express paths, and
+  the same files the landing's Markdown rule in `[format]` rewrites, so an
+  express pass means the landing's formatters change nothing. On 2026-11-19 a
+  landing's `style: format` commit rewrote
+  `ignite/crates/ignite_cli/src/pool_init/dispatcher.md`, which the old command
+  did not check, so the tree changed and the landing had to run all commands
+  again (87 s). `ignite test ignite:` and `ignite check` run it too, so the
+  agent sees the failure before landing.
 - The nextest command uses the `express` profile in
   `ignite/.config/nextest.toml`, which kills a test after 120 s (30 s, four
   times). On 2026-11-18 one hung test held a landing for the whole 1800 s verb
