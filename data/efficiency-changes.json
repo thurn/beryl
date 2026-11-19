@@ -579,5 +579,10 @@
     "label": "The `ignite test <word>` command lists a Rust test family for the packages of the tests it names and the packages the branch changes, and every Rust test run selects only its tests' packages, so a card file edit no longer builds every package's test binaries to run one test (on 2026-11-19 `ignite test fork` after a one-line card comment change waited 77 s for 35 crates of the `rust-tests` build)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A card edit no longer compiles `beryl_search`, `beryl_session` and `beryl_cli` in full for the `b3d` product, and the Beryl 3D families find each recording's cards from the pack, rereading only recordings that changed, instead of exporting 450 MB (`ignite test fork` after a comment edit: b3d build 162 to about 20-47 CPU-s, b3d listing 20 s to about 1 s)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

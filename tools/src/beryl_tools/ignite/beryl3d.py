@@ -24,16 +24,14 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 import tomllib
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from .. import card_files, card_store, paths, set_groups
-from ..beryl3d import gate, purity, timeline
+from ..beryl3d import gate, pack, purity, timeline
 from ..beryl3d import paths as b3d_paths
 from . import Listed, Result, listed, report
 from .rust import asked, clippy_results, parse_packages, unformatted
@@ -160,9 +158,6 @@ def main_crates(repo: Path = paths.REPO) -> list[str]:
 # The deck a fixture names `wu-control`: `decks::WU_CONTROL` is this list's main deck.
 WU_CONTROL: Path = DECKS / "2025-11-18-17lands-cb8d5d5f-wu-control.txt"
 
-# A JSON string, its text between the quotes.
-STRING: re.Pattern[str] = re.compile(r'"((?:[^"\\]|\\.)*)"')
-
 
 def card_names() -> dict[str, str]:
     """Each card file by its card's name and by each face's name, from the card store."""
@@ -221,34 +216,42 @@ def fixture_decks(
 
 
 def recording_cards(
-    exported: dict[str, list[str]], names: dict[str, str], decks: dict[str, set[str]]
+    seen: dict[str, set[str]], names: dict[str, str], decks: dict[str, set[str]]
 ) -> dict[str, list[str]]:
     """The card files each recording plays, by recording: those whose card a message of it
-    names, from either seat (`exported` holds each recording's message files), and those of the
-    decks its fixture plays from (`decks`, from [`fixture_decks`])."""
+    names, from either seat (`seen` holds the names each recording's messages spell, from
+    [`pack.names_in`]), and those of the decks its fixture plays from (`decks`, from
+    [`fixture_decks`])."""
     found: dict[str, list[str]] = {}
-    for recording, texts in exported.items():
+    for recording, spelled in seen.items():
         cards = set(decks.get(recording, set()))
-        for text in texts:
-            cards |= {names[s] for s in set(STRING.findall(text)) if s in names}
+        cards |= {names[s] for s in spelled if s in names}
         found[recording] = sorted(cards)
     return found
 
 
-def pack_name() -> str:
-    """The recordings pack's file name, which `record` prints the path of last."""
+def pack_path() -> Path:
+    """The present recordings pack, whose path `record` prints last."""
     done = run_out([str(DEBUG / "record")])
     if done.returncode != 0:
         raise SystemExit(done.stderr.strip() or f"record: exit {done.returncode}")
-    return Path(done.stdout.strip().splitlines()[-1]).name
+    return Path(done.stdout.strip().splitlines()[-1])
+
+
+def pack_name() -> str:
+    """The recordings pack's file name."""
+    return pack_path().name
 
 
 def cards_by_recording() -> dict[str, list[str]]:
     """[`recording_cards`] for every recording in the present pack. The pack's name is a hash
     of everything a recording reads, so the result is kept beside it in Beryl 3D's cache, as
-    `ignite-cards-<pack>.json`, and exporting every recording (about 400 MB) is done once a
-    pack."""
-    kept = b3d_paths.cache() / f"ignite-cards-{pack_name()}.json"
+    `ignite-cards-<pack>.json`. The pack is read here rather than through `b3d export`, which
+    wrote 450 MB of files and took 8 CPU-seconds, run on few threads while the machine is busy.
+    The screens and stress boards that `b3d` makes itself are not in the pack, so they read no
+    card file: `beryl_inspect` links no card crate."""
+    path = pack_path()
+    kept = b3d_paths.cache() / f"ignite-cards-{path.name}.json"
     if kept.exists():
         return json.loads(kept.read_text())
     defined = json.loads((paths.REPO / "ui" / "fixtures.json").read_text())["fixtures"]
@@ -256,18 +259,11 @@ def cards_by_recording() -> dict[str, list[str]]:
     decks["wu-control"] = WU_CONTROL.read_text(encoding="utf-8")
     names = card_names()
     by_deck = fixture_decks(defined, decks, sorted(set(names.values())))
-    directory = Path(tempfile.mkdtemp(prefix="b3d-cards-"))
     try:
-        b3d_text(["export", str(directory)])
-        exported: dict[str, list[str]] = {}
-        for file in sorted(directory.glob("*.json")):
-            stem = file.name.removesuffix(".json").rsplit(".", 1)[0]
-            exported.setdefault(stem.replace("__", "/"), []).append(
-                file.read_text(encoding="utf-8", errors="replace")
-            )
-    finally:
-        shutil.rmtree(directory, ignore_errors=True)
-    found = recording_cards(exported, names, by_deck)
+        entries = pack.read(path.read_bytes())
+    except ValueError as error:
+        raise SystemExit(f"{path}: {error}") from error
+    found = recording_cards(pack.names_seen(entries, names), names, by_deck)
     partial = kept.with_name(f"{kept.name}.{os.getpid()}.tmp")
     partial.write_text(json.dumps(found))
     os.replace(partial, kept)

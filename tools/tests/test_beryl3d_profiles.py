@@ -109,7 +109,9 @@ def test_native_profiles_relink_changed_path_dependencies_without_incremental_re
     assert build_and_run() == "2"
     incremental = target / "debug" / "incremental"
     caches = {path.name.rsplit("-", 1)[0] for path in incremental.iterdir()}
-    assert caches == {"beryl_scene", "beryl_inspect"}
+    # The main-workspace dependencies compile in full, except the crates between the card
+    # crates and `record`, which every card edit recompiles.
+    assert caches == {"beryl_scene", "beryl_inspect", "beryl_cli"}
     # A second revision must rebuild and relink the main-workspace dependency chain,
     # while an edited native member must continue to use its incremental cache.
     (kernel / "src" / "lib.rs").write_text("pub fn value() -> u32 { 20 }\n")

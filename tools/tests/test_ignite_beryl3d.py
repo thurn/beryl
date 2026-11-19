@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from beryl_tools import paths
-from beryl_tools.beryl3d import gate, timeline
+from beryl_tools.beryl3d import gate, pack, timeline
 from beryl_tools.beryl3d.match import reference, score
 from beryl_tools.beryl3d.match.target import Target
 from beryl_tools.ignite import Result
@@ -107,7 +107,11 @@ def test_a_recording_reads_the_cards_either_seat_saw_and_no_other() -> None:
         ],
         "verbs-zones": ['{"text":"no card here"}'],
     }
-    found = adapter.recording_cards(exported, names, {})
+    seen = {
+        recording: set().union(*(pack.names_in(text, names) for text in texts))
+        for recording, texts in exported.items()
+    }
+    found = adapter.recording_cards(seen, names, {})
     assert found == {
         "counterspell/cast": [
             "rust/cards/a/lea/counterspell.rs",
@@ -133,7 +137,7 @@ def test_an_agents_fixture_reads_its_whole_deck_and_a_fuzz_deck_every_card() -> 
         "fuzzed": set(files),
         "table-opening": {"rust/cards/a/lea/island.rs"},
     }
-    cards = adapter.recording_cards({"opening-play": ["{}"]}, {}, found)
+    cards = adapter.recording_cards({"opening-play": set()}, {}, found)
     assert cards == {"opening-play": ["rust/cards/a/lea/counterspell.rs"]}
 
 

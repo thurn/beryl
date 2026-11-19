@@ -80,6 +80,18 @@ opt-level = 1
 # Native members such as `beryl_scene` keep incremental compilation for quick edits.
 # Registry crates already build without it, so the wildcard needs no maintained package list.
 incremental = false
+# The crates between the card crates and `record` keep incremental compilation all the same.
+# Every edit to a card file recompiles them, and compiled in full they took about 120 of the
+# build's 160 CPU-seconds and 45 s on the clock; incrementally they take a few seconds, as they
+# do in the main workspace, which compiles them so at the same opt-level. If a link fails again
+# with missing `_anon.*.llvm.*` symbols, delete these crates' directories under
+# `target/debug/incremental` and record it in docs/bugs.md.
+[profile.dev.package.beryl_search]
+incremental = true
+[profile.dev.package.beryl_session]
+incremental = true
+[profile.dev.package.beryl_cli]
+incremental = true
 # The face encoders and the scaler they use, at opt-level 3. `just b3d png` compresses a
 # placeholder on every run for each face whose scan is missing, since placeholders are never
 # cached: unoptimized, 11 placeholders took 1.4 s of the program's 2.6 CPU-seconds.
