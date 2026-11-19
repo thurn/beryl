@@ -420,7 +420,8 @@
     ],
     "tools/tests/test_ignite_beryl3d.py": [
       "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
-      "ignite/checks/beryl3d.toml"
+      "ignite/checks/beryl3d.toml",
+      "rust/beryl3d/crates"
     ],
     "tools/tests/test_ignite_browser.py": [
       "data/ui-counts.json"
