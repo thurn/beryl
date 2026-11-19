@@ -6,3 +6,5 @@
 data/card-store.tsv linguist-generated=true
 # Merged as numbers by tools/src/beryl_tools/beryl3d/gates_merge.py, which `by` registers.
 data/beryl3d/gates.json merge=b3d-gates
+# Both sides' new entries are kept by tools/src/beryl_tools/efficiency_merge.py, which `by` registers.
+data/efficiency-changes.json merge=efficiency-changes

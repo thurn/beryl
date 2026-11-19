@@ -22,6 +22,7 @@ from . import (
     coverage,
     deps,
     design_tokens,
+    efficiency_merge,
     fseventsd,
     mobile,
     mobile_bugs,
@@ -130,6 +131,8 @@ def entry() -> int:
     """
     # So that a rebase merges data/beryl3d/gates.json's limits as numbers (gates_merge.py).
     gates_merge.install(paths.REPO)
+    # So that a rebase keeps both sides' new entries of data/efficiency-changes.json.
+    efficiency_merge.install(paths.REPO)
     return main()
 
 
