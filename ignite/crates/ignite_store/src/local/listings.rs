@@ -19,6 +19,17 @@ pub fn get(conn: &Connection, family: &str, hash: &str) -> Result<Option<String>
         .optional()?)
 }
 
+/// The newest listing stored for `family` under any hash, if any.
+pub fn latest(conn: &Connection, family: &str) -> Result<Option<String>> {
+    Ok(conn
+        .query_row(
+            "SELECT listing FROM listings WHERE family = ?1 ORDER BY at DESC, rowid DESC LIMIT 1",
+            params![family],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 /// Stores a listing, replacing one under the same family and hash, and forgets all but the
 /// [`KEPT`] newest listings of the family.
 pub fn put(conn: &Connection, family: &str, hash: &str, listing: &str, at: &str) -> Result<()> {
@@ -58,5 +69,8 @@ mod tests {
         );
         assert!(get(&conn, "unit", &format!("h{KEPT}")).unwrap().is_some());
         assert!(get(&conn, "other", "h0").unwrap().is_some(), "per family");
+        assert_eq!(latest(&conn, "unit").unwrap().as_deref(), Some("[n]"));
+        assert_eq!(latest(&conn, "other").unwrap().as_deref(), Some("[x]"));
+        assert_eq!(latest(&conn, "none").unwrap(), None);
     }
 }

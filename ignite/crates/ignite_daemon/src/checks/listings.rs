@@ -264,6 +264,13 @@ impl Checks {
         found
     }
 
+    /// The newest listing of `family` this machine keeps, whatever inputs it was made from. It
+    /// may be out of date, so it only says which checks the family probably holds.
+    pub(crate) fn latest_listing(&self, family: &str) -> Option<Kept> {
+        let text = self.cache.latest_listing(family)?;
+        serde_json::from_str(&text).ok()
+    }
+
     /// The patterns that a listing's sources hash covers: each check's own inputs, and the
     /// directory holding each tracked file among them.
     pub(crate) fn source_patterns(tree: &OpenTree, checks: &[Listed]) -> Vec<InputPattern> {

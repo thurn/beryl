@@ -101,10 +101,14 @@ impl Verb for TestVerb {
 
 impl TestVerb {
     /// The families whose checks `words` could name, found without building anything. A word
-    /// with a known `<family>:` prefix names that family. Any other word is looked up in the
-    /// kept listings; it could also name a check of a family with no kept listing, so those
-    /// families are listed too. When no family could hold a bare word, the reply says how
-    /// checks are named.
+    /// with a known `<family>:` prefix names that family. Any other word is looked up in each
+    /// family's kept listing for the tree's inputs or, when it has none, in the newest listing
+    /// this machine keeps of it. A change to a file many families read, such as one card, leaves
+    /// most of them without a kept listing for the new inputs, and listing them all again
+    /// builds every product; a check is seldom added between two listings, so the newest one
+    /// answers. A family never listed on this machine is listed, and when a word matches no
+    /// listing, so is every family without a kept listing for the tree's inputs. When no
+    /// family could hold a bare word, the reply says how checks are named.
     fn test_families<'a>(
         &'a self,
         ctx: &Context,
@@ -127,18 +131,37 @@ impl TestVerb {
         }
         let all: Vec<(&str, &Family)> = self.checks.families().collect();
         let kept = self.checks.kept_listings(ctx, tree, &all);
+        let mut found = vec![false; bare.len()];
+        let mut not_current = Vec::new();
         for (name, _) in &all {
-            match kept.get(*name) {
-                None => families.push(name),
-                Some((_, listing)) => {
-                    let named = bare
-                        .iter()
-                        .any(|w| listing.checks.iter().any(|l| matches(w, l.check.as_str())));
-                    if named {
+            let listing = match kept.get(*name) {
+                Some((_, listing)) => Arc::clone(listing),
+                None => {
+                    not_current.push(*name);
+                    let Some(latest) = self.checks.latest_listing(name) else {
                         families.push(name);
-                    }
+                        continue;
+                    };
+                    Arc::new(latest)
+                }
+            };
+            let mut named = false;
+            for (word, found) in bare.iter().zip(&mut found) {
+                if listing
+                    .checks
+                    .iter()
+                    .any(|l| matches(word, l.check.as_str()))
+                {
+                    *found = true;
+                    named = true;
                 }
             }
+            if named {
+                families.push(name);
+            }
+        }
+        if found.contains(&false) {
+            families.extend(not_current);
         }
         if families.is_empty() {
             let names: Vec<&str> = all.iter().map(|(n, _)| *n).collect();

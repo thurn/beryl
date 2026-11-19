@@ -692,3 +692,46 @@ fn test_resolves_names_by_substring_and_pattern() {
     assert_eq!(world.launcher.commands("lister").len(), listers);
     assert_eq!(world.launcher.commands("runner").len(), runners);
 }
+
+#[test]
+fn test_finds_a_bare_name_in_a_familys_newest_listing_after_its_inputs_change() {
+    let world = jsonl_world();
+    let request = |args: &[&str]| Request {
+        verb: "test".to_owned(),
+        args: args.iter().map(|s| (*s).to_owned()).collect(),
+        cwd: world.dir.join("sub"),
+        session: None,
+        wait_s: 1,
+        pid: None,
+    };
+    let verb = TestVerb {
+        checks: world.checks.clone(),
+        express: None,
+    };
+    let reply = verb.run(&world.ctx, &request(&["it:b"]));
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    // A change to a file every family reads, as a change to one card is in a game's checkout,
+    // leaves no family with a kept listing for the tree's inputs.
+    world
+        .git
+        .set_object("src", Oid::new("e".repeat(40)).unwrap());
+    let listers = world.launcher.commands("lister").len();
+    let cargo = world.launcher.commands("cargo").len();
+    let reply = verb.run(&world.ctx, &request(&["it:b"]));
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(
+        world.launcher.commands("lister").len(),
+        listers + 1,
+        "the family whose newest listing holds the check is listed again"
+    );
+    assert_eq!(
+        world.launcher.commands("cargo").len(),
+        cargo,
+        "the Rust family, whose newest listing holds no such check, is neither listed nor run"
+    );
+    // A name no listing holds may name a check added since, so every family without a kept
+    // listing for the tree's inputs is listed to find out.
+    let reply = verb.run(&world.ctx, &request(&["zzz"]));
+    assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
+    assert!(world.launcher.commands("cargo").len() > cargo);
+}

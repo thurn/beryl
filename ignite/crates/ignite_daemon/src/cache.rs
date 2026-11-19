@@ -178,6 +178,11 @@ impl ResultCache {
         found
     }
 
+    /// The newest listing of `family` in the local copy, whatever inputs it was made from.
+    pub fn latest_listing(&self, family: &str) -> Option<String> {
+        listings::latest(&self.conn(), family).ok().flatten()
+    }
+
     /// Stores a family's listing locally and at the hub. A hub that cannot take it now is not
     /// asked again: a missing listing only costs another machine a listing of its own.
     pub fn store_listing(&self, key: &ListingKey, listing: &str) {
