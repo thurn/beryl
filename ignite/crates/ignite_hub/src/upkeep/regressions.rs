@@ -1,8 +1,10 @@
 //! Regression tickets: one P0 ticket per failing check, linked to the landing that caused it.
 //!
 //! - A check with no regression gets a new ticket, linked to the culprit's ticket or, when the
-//!   culprit search ended with a range, to every ticket in the range. A check that is not
-//!   portable carries a `needs:<os>` label so that only a worker on that system takes it.
+//!   culprit search ended with a range, to every ticket in the range. It is owned by the
+//!   machine that reported it, and records the operating system of a check that is not
+//!   portable. A regression holds `master` back, so when that machine goes silent it falls back
+//!   to the default owner or another machine with that system (see `ignite_core::owner`).
 //! - A check whose regression ticket is still open keeps it, and a second failure changes
 //!   nothing.
 //! - When the fix has landed and closed the ticket but the check still fails, the ticket is
@@ -14,6 +16,7 @@ use std::fmt::Write as _;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
+use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::RegressionReport;
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, EdgeKind, Operation, Status, TicketFields, TicketType,
@@ -23,7 +26,7 @@ use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{tickets, tips};
 use ignite_store::{Result, StoreError};
 
-use super::filing::Author;
+use super::filing::{self, Author};
 
 /// The lines of a regression's output kept in its ticket.
 pub const OUTPUT_LINES: usize = 40;
@@ -53,7 +56,10 @@ pub fn file(
         )
         .optional()?;
     let (ops, outcome) = match &existing {
-        None => (vec![create(report)], Outcome::Created),
+        None => (
+            vec![create(report, filing::origin(conn, author.machine)?)],
+            Outcome::Created,
+        ),
         Some(ticket) => {
             let loaded = tickets::load(conn, ticket)?;
             if !loaded.as_ref().is_some_and(|t| t.status == Status::Closed) {
@@ -120,7 +126,7 @@ pub fn mark_fixed(conn: &Connection) -> Result<Vec<String>> {
     Ok(fixed)
 }
 
-fn create(report: &RegressionReport) -> Operation {
+fn create(report: &RegressionReport, origin: Option<Owner>) -> Operation {
     let mut linked: Vec<String> = report.caused_by.iter().map(ToString::to_string).collect();
     for suspect in &report.suspects {
         let suspect = suspect.to_string();
@@ -135,13 +141,10 @@ fn create(report: &RegressionReport) -> Operation {
             kind: Some(EdgeKind::DiscoveredFrom),
         })
         .collect();
-    let mut labels = vec![
+    let labels = vec![
         "regression".to_owned(),
         format!("check:{}", report.check.family()),
     ];
-    if let Some(os) = report.platform {
-        labels.push(format!("needs:{}", os.as_str()));
-    }
     Operation::Create {
         fields: TicketFields {
             title: Some(format!("Regression: {}", report.check)),
@@ -152,6 +155,9 @@ fn create(report: &RegressionReport) -> Operation {
             ticket_type: Some(TicketType::Bug),
             priority: Some(0),
             labels: Some(labels),
+            owner: Some(origin),
+            needs_os: Some(report.platform),
+            fallback: Some(true),
             ..TicketFields::default()
         },
         parent: None,

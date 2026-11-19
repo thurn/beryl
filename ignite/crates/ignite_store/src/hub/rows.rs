@@ -40,6 +40,10 @@ crate::tables! {
         landed: Option<String>,
         /// JSON: rule, subject, unit, amount.
         saving: Option<String>,
+        /// `<machine>` or `<machine>/<app>`.
+        owner: Option<String>,
+        needs_os: Option<String>,
+        fallback: bool,
     }
 
     Edge = "edges" { src: String, dst: String, kind: String }

@@ -7,7 +7,6 @@
 use rusqlite::Connection;
 
 use ignite_core::time::Timestamp;
-use ignite_store::hub::tickets;
 
 use super::common::{SITE_ICONS, brand};
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
@@ -207,15 +206,11 @@ fn regression_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>
     Ok(found)
 }
 
-/// Live tickets that no registered machine can take (see `upkeep::machines::unassignable`),
-/// and ready tickets that only an app no worker uses can run.
-fn stranded_items(
-    conn: &Connection,
-    root: &str,
-    now: Timestamp,
-) -> Result<Vec<(Tone, String)>, ReadError> {
+/// Live tickets that no worker can take, because their owner names a machine or app that
+/// `ignite.toml` does not declare (see `upkeep::machines::unassignable`).
+fn stranded_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
     let link = |id: &str| c::link(&ticket_url(root, id), &esc(&display_id(id)), None, "");
-    let mut found: Vec<(Tone, String)> = crate::upkeep::machines::unassignable(conn)?
+    Ok(crate::upkeep::machines::unassignable(conn)?
         .into_iter()
         .map(|(id, reason)| {
             (
@@ -223,31 +218,7 @@ fn stranded_items(
                 format!("No machine can run {}: {}", link(&id), esc(&reason)),
             )
         })
-        .collect();
-    let mut apps = conn.prepare("SELECT DISTINCT app FROM workers WHERE role = 'worker'")?;
-    let apps = apps
-        .query_map([], |row| row.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()?;
-    for id in tickets::ready(conn, now)? {
-        let Some(ticket) = tickets::load(conn, id.as_str())? else {
-            continue;
-        };
-        let missing = ticket.labels.iter().find(|label| {
-            label
-                .strip_prefix("provider:")
-                .is_some_and(|app| !apps.iter().any(|a| a == app))
-        });
-        if let Some(label) = missing {
-            found.push((
-                Tone::Orange,
-                format!(
-                    "No machine can run {}: it needs an app no worker uses ({label})",
-                    link(id.as_str())
-                ),
-            ));
-        }
-    }
-    Ok(found)
+        .collect())
 }
 
 /// The things that need a person, each with the tone it is shown in.
@@ -259,7 +230,7 @@ pub fn items(
     let mut found = person_items(conn, root)?;
     found.extend(machine_items(conn, now)?);
     found.extend(regression_items(conn, root)?);
-    found.extend(stranded_items(conn, root, now)?);
+    found.extend(stranded_items(conn, root)?);
     Ok(found)
 }
 

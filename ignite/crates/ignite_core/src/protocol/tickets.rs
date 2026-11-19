@@ -7,7 +7,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::config::Os;
 use crate::ids::{Commit, MachineId, Seq, SessionId, TicketId, TreeId};
+use crate::owner::Owner;
 use crate::time::Timestamp;
 
 /// A ticket's type.
@@ -127,6 +129,21 @@ pub struct TicketFields {
         skip_serializing_if = "Option::is_none"
     )]
     pub cores: Option<Option<f64>>,
+    /// Who works it; `null` makes it follow its ancestors' owner or the default.
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub owner: Option<Option<Owner>>,
+    #[serde(
+        default,
+        deserialize_with = "present",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub needs_os: Option<Option<Os>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<bool>,
 }
 
 /// Reads a field that is present, so that `null` means "clear it" and absence (through
@@ -200,6 +217,28 @@ pub struct Ticket {
     pub landed: Option<LandedWork>,
     #[serde(default)]
     pub saving: Option<Saving>,
+    /// Who works it; `None` takes the nearest ancestor's owner or the default owner
+    /// ([`crate::owner`]).
+    #[serde(default)]
+    pub owner: Option<Owner>,
+    /// The operating system the work must happen on, which only decides where a ticket that
+    /// holds `master` back may fall back to.
+    #[serde(default)]
+    pub needs_os: Option<Os>,
+    /// Whether the ticket holds `master` back, so that it may go to another machine when its
+    /// owner's machine goes silent ([`crate::owner::FALLBACK_SECONDS`]).
+    #[serde(default, deserialize_with = "flag")]
+    pub fallback: bool,
+}
+
+/// Reads a flag stored as `true`/`false` or as the integer 0 or 1, as SQLite stores it.
+fn flag<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::Bool(flag) => Ok(flag),
+        serde_json::Value::Number(n) => Ok(n.as_i64().is_some_and(|n| n != 0)),
+        serde_json::Value::Null => Ok(false),
+        other => Err(serde::de::Error::custom(format!("not a flag: {other}"))),
+    }
 }
 
 /// A dependency edge's kind.

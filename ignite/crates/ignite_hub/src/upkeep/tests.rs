@@ -177,7 +177,9 @@ fn a_range_links_every_suspect_and_a_platform_check_needs_its_system() {
     });
     let (id, _) = regressions::file(&mut conn, UPKEEP, &report, clock.now()).unwrap();
     let filed = ticket(&conn, &id);
-    assert!(filed.labels.contains(&"needs:macos".to_owned()));
+    assert_eq!(filed.needs_os, Some(Os::Macos));
+    assert!(filed.fallback);
+    assert!(!filed.labels.iter().any(|label| label.starts_with("needs:")));
     assert!(filed.body.contains("failed on macos"));
     // The ticket says the range is a range, so its first bad commit is not read as the culprit.
     assert!(
@@ -456,7 +458,9 @@ fn an_incomplete_check_and_a_disagreeing_audit_file_p1_tickets() {
     let filed = stuck::incomplete(&mut conn, UPKEEP, &incomplete, clock.now()).unwrap();
     let held = ticket(&conn, &filed.ticket);
     assert_eq!(held.priority, 1);
-    assert!(held.title.contains("multivac") && held.labels.contains(&"needs:macos".to_owned()));
+    assert!(held.title.contains("multivac"));
+    assert_eq!(held.needs_os, Some(Os::Macos));
+    assert_eq!(held.owner, Some("multivac".parse().unwrap()));
 
     list_check(&mut conn, "rust:x");
     let audit = AuditReport {
@@ -565,7 +569,8 @@ fn a_tip_waiting_on_another_platform_names_its_machine_on_one_ticket() {
     assert!(named.title.contains("cygnus"), "{}", named.title);
     assert!(named.body.contains("rust:windows_paths") && named.body.contains("abcd"));
     assert_eq!(named.priority, 1);
-    assert!(named.labels.contains(&"needs:windows".to_owned()));
+    assert_eq!(named.needs_os, Some(Os::Windows));
+    assert_eq!(named.owner, Some("cygnus".parse().unwrap()));
 
     // A later tip waiting on the same machine adds to its ticket.
     clock.advance(600.0);

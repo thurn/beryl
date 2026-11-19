@@ -71,10 +71,15 @@ fn seed(conn: &Connection) {
             '2026-11-16T00:00:00.000Z', '2026-11-16T00:00:00.000Z', 'x', 1),
            ('p1', NULL, 'Choose a vendor', 'task', 'open', '[\"needs:person\"]', 'Pick one by Friday',
             NULL, NULL, NULL, NULL, '2026-11-16T00:00:00.000Z', '2026-11-16T00:00:00.000Z', 'x', 1),
-           ('o1', NULL, 'Needs another system', 'task', 'open', '[\"needs:linux\"]', '', NULL, NULL, NULL, NULL,
+           ('o1', NULL, 'Owned elsewhere', 'task', 'open', '[]', '', NULL, NULL, NULL, NULL,
             '2026-11-16T00:00:00.000Z', '2026-11-16T00:00:00.000Z', 'x', 1),
            ('r1', NULL, 'Fix kernel-test', 'bug', 'open', '[]', '', NULL, NULL, NULL, NULL,
             '2026-11-16T00:00:00.000Z', '2026-11-16T00:00:00.000Z', 'x', 1);
+         UPDATE tickets SET owner = 'plan9/claude' WHERE id = 'o1';
+         INSERT INTO meta (key, value) VALUES ('routing', '{\"machines\":[
+           {\"name\":\"jarvis\",\"os\":\"macos\",\"home_app\":\"claude\"},
+           {\"name\":\"cygnus\",\"os\":\"windows\",\"home_app\":\"codex\"}],
+           \"apps\":[\"claude\",\"codex\"],\"default_owner\":\"jarvis/claude\"}');
          UPDATE tickets SET landed_at = '2026-11-17T10:00:00.000Z',
            landed = '{\"commits\":[\"0123456789abcdef\"],\"files\":[],\"note\":\"done\"}',
            claimed_at = '2026-11-17T09:00:00.000Z' WHERE id = 'e1.5';
@@ -188,7 +193,7 @@ fn the_first_line_lists_what_needs_a_person() {
     assert!(first.contains("cygnus has no dispatcher"));
     assert!(first.contains("The regression in kernel-test"));
     assert!(first.contains("No machine can run"));
-    assert!(first.contains("needs:linux"));
+    assert!(first.contains("plan9/claude"));
 }
 
 #[test]

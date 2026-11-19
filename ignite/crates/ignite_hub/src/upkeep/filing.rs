@@ -14,6 +14,10 @@
 //! newest sighting came ([`SIGHTED_KEY`]) and, for a fault that holds checks back, which checks
 //! ([`CHECKS_KEY`]).
 //!
+//! Each new ticket is owned by the machine whose report filed it (see `ignite_core::owner`),
+//! unless its filing names another owner; one that upkeep files on its own follows the default
+//! owner. A released ticket also falls back to another machine when its owner goes silent.
+//!
 //! A ticket is filed `pending_approval`, so the pool never takes it before a person releases it,
 //! unless its filing says it is [`Filing::released`]: a fault that holds `master` back cannot
 //! wait for a person. A later released sighting releases a ticket still waiting for a person.
@@ -26,12 +30,14 @@ use std::collections::BTreeMap;
 use rusqlite::{Connection, params};
 use serde_json::Value;
 
+use ignite_core::owner::Owner;
+
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, Operation, Precondition, Status, TicketFields,
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::feed;
+use ignite_store::hub::{feed, fleet};
 use ignite_store::{Result, StoreError};
 
 use super::signature::Signature;
@@ -143,6 +149,7 @@ pub fn file(
 ) -> Result<Filed> {
     let key = filing.signature.key();
     let body = filing.fields.body.clone().unwrap_or_default();
+    let origin = origin(conn, author.machine)?;
     for _ in 0..ATTEMPTS {
         let seq = feed::current(conn)?;
         let matches = matching(conn, &key)?;
@@ -185,6 +192,7 @@ pub fn file(
                         filing,
                         &key,
                         author,
+                        origin.as_ref(),
                         previous.map(|m| m.id.as_str()),
                         now,
                     )],
@@ -288,14 +296,30 @@ pub fn release_holding(
     Ok(ids)
 }
 
+/// The owner of a ticket that the machine `machine` (its ID) files: that machine with its home
+/// app. `None` for upkeep itself and for a machine the hub has no registration of.
+pub fn origin(conn: &Connection, machine: &str) -> Result<Option<Owner>> {
+    if machine == UPKEEP.machine {
+        return Ok(None);
+    }
+    Ok(fleet::name_of(conn, machine)?.map(|name| Owner::new(&name, None)))
+}
+
 fn create(
     filing: &Filing,
     key: &str,
     author: Author,
+    origin: Option<&Owner>,
     previous: Option<&str>,
     now: Timestamp,
 ) -> Operation {
     let mut fields = filing.fields.clone();
+    if fields.owner.is_none() {
+        fields.owner = origin.map(|owner| Some(owner.clone()));
+    }
+    if filing.released {
+        fields.fallback = Some(true);
+    }
     let mut metadata = fields.metadata.take().unwrap_or_default();
     metadata.insert(SIGNATURE_KEY.to_owned(), Value::from(key));
     metadata.insert(FAULT_KEY.to_owned(), fault_value(&filing.signature));

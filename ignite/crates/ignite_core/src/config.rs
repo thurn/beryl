@@ -324,6 +324,10 @@ pub struct PoolConfig {
     /// for once a worker has been chosen.
     #[serde(default)]
     pub models: BTreeMap<String, BTreeMap<String, String>>,
+    /// The owner of a ticket that neither it nor any ancestor names, until a person picks
+    /// another default on the dashboard (see [`crate::owner`]).
+    #[serde(default)]
+    pub default_owner: Option<crate::owner::Owner>,
 }
 
 impl PoolConfig {
@@ -359,6 +363,11 @@ pub struct Machine {
     /// [`Express`]). Zero turns the express lane off on the machine.
     #[serde(default)]
     pub express_cores: u32,
+    /// The app whose workers take a ticket owned by this machine without an app named, such as
+    /// one the hub filed for a fault seen here (see [`crate::owner`]). `None` lets any app's
+    /// workers on the machine take it.
+    #[serde(default)]
+    pub home_app: Option<String>,
 }
 
 /// Cores reserved for the `batch` and `tip` classes.

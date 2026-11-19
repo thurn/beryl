@@ -41,6 +41,9 @@ fn ticket(text: &str) -> Ticket {
         landed_at: None,
         landed: None,
         saving: None,
+        owner: None,
+        needs_os: None,
+        fallback: false,
     }
 }
 

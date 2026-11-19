@@ -14,6 +14,7 @@ fn ticket(id: &str, labels: &[&str]) -> HomeCard {
             priority: 1,
             assignee: None,
             updated_at: "2026-11-17T00:00:00Z".to_owned(),
+            owner: None,
         },
         labels: labels.iter().map(|label| (*label).to_owned()).collect(),
     }

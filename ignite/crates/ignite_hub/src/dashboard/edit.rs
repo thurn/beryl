@@ -62,6 +62,16 @@ pub fn property(field: &str, label: &str, kind: &str, view: &str, raw: &str) -> 
     unit(field, kind, view, raw, false) + &pencil(field, label)
 }
 
+/// A rail value picked from a list, with its pencil after it: `choices` holds one `value=label`
+/// line per choice, which the script turns into a dropdown.
+pub fn choice_property(field: &str, label: &str, view: &str, raw: &str, choices: &str) -> String {
+    unit(field, "choice", view, raw, false).replacen(
+        " data-kind=\"choice\"",
+        &format!(" data-kind=\"choice\" data-choices=\"{}\"", esc(choices)),
+        1,
+    ) + &pencil(field, label)
+}
+
 /// A Markdown text section whose heading carries a pencil, built like
 /// `components::section`. An `empty` section starts hidden until its "add" button shows it.
 pub fn section(heading: &str, anchor: &str, field: &str, view: &str, raw: &str) -> String {

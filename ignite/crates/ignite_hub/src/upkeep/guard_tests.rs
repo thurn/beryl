@@ -5,6 +5,7 @@ use rusqlite::Connection;
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId};
+use ignite_core::owner::{RoutedMachine, Routing};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     FlakyReport, MachineRegister, NewResult, ResultKey, StoreRequest,
@@ -12,7 +13,7 @@ use ignite_core::protocol::hub::{
 use ignite_core::protocol::tickets::{Operation, TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
-use ignite_store::hub::{self, checks, fleet, results};
+use ignite_store::hub::{self, checks, fleet, owners, results};
 
 use super::tests::{all_tickets, apply, check_state, comment_count, list_check, start, ticket};
 use super::{Upkeep, machines};
@@ -92,7 +93,7 @@ fn many_checks_flaking_in_one_command_switch_none_off_and_file_one_machine_ticke
     assert_eq!(report.tickets_filed.len(), 1);
     let machine = ticket(&conn, &report.tickets_filed[0]);
     assert_eq!(machine.priority, 1);
-    assert!(machine.labels.contains(&"needs:jarvis".to_owned()));
+    assert_eq!(machine.owner, Some("jarvis".parse().unwrap()));
     assert!(machine.body.contains("ui:a, ui:b"));
 
     // The same machine does it again on another commit: still no check is switched off, and
@@ -175,7 +176,7 @@ fn a_pass_that_replaces_another_machines_failure_files_one_p1_for_that_machine()
     let filed = all_tickets(&conn, clock.now());
     assert_eq!(filed.len(), 1);
     assert_eq!(filed[0].priority, 1);
-    assert!(filed[0].labels.contains(&"needs:cygnus".to_owned()));
+    assert_eq!(filed[0].owner, Some("cygnus".parse().unwrap()));
     assert!(filed[0].body.contains("/outputs/run-7.log"));
 
     // A pass after a pass, or after the same machine's own failure, files nothing.
@@ -187,15 +188,14 @@ fn a_pass_that_replaces_another_machines_failure_files_one_p1_for_that_machine()
 }
 
 #[test]
-fn a_ticket_needing_a_system_no_machine_runs_is_unassignable() {
+fn a_ticket_owned_by_an_undeclared_machine_or_app_is_unassignable() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
-    register(&conn, "m-1", "jarvis", Os::Macos, clock.now());
-    let with = |title: &str, label: &str| Operation::Create {
+    let owned = |title: &str, owner: &str| Operation::Create {
         fields: TicketFields {
             title: Some(title.to_owned()),
             ticket_type: Some(TicketType::Task),
-            labels: Some(vec![label.to_owned()]),
+            owner: Some(Some(owner.parse().unwrap())),
             ..TicketFields::default()
         },
         parent: None,
@@ -205,20 +205,30 @@ fn a_ticket_needing_a_system_no_machine_runs_is_unassignable() {
     let ids = apply(
         &mut conn,
         vec![
-            with("Windows only", "needs:windows"),
-            with("Mac only", "needs:macos"),
-            with("On jarvis", "needs:jarvis"),
-            with("Ask a person", "needs:person"),
+            owned("On a machine nobody declared", "plan9/claude"),
+            owned("With an app the pool lacks", "jarvis/gemini"),
+            owned("On jarvis", "jarvis/claude"),
+            owned("On jarvis's home app", "jarvis"),
         ],
         clock.now(),
     );
-
-    let stranded = machines::unassignable(&conn).unwrap();
-    assert_eq!(stranded.len(), 1);
-    assert_eq!(stranded[0].0, ids[0]);
-    assert!(stranded[0].1.contains("needs:windows"));
-
-    // A machine that runs the system makes the ticket assignable.
-    register(&conn, "m-2", "cygnus", Os::Windows, clock.now());
+    // A hub that has recorded no routing facts reports nothing.
     assert!(machines::unassignable(&conn).unwrap().is_empty());
+
+    let routing = Routing {
+        machines: vec![RoutedMachine {
+            name: "jarvis".to_owned(),
+            os: Some(Os::Macos),
+            home_app: Some("claude".to_owned()),
+        }],
+        apps: vec!["claude".to_owned()],
+        default_owner: None,
+    };
+    owners::record_routing(&conn, &routing).unwrap();
+    // Listed by ticket ID, which is random, so each is found by its ID.
+    let stranded = machines::unassignable(&conn).unwrap();
+    assert_eq!(stranded.len(), 2, "{stranded:?}");
+    let reason = |id: &str| &stranded.iter().find(|(t, _)| t == id).unwrap().1;
+    assert!(reason(&ids[0]).contains("plan9/claude"));
+    assert!(reason(&ids[1]).contains("gemini"));
 }

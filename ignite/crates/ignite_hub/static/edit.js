@@ -106,9 +106,19 @@
         return el;
     }
 
-    // The control for a value of `kind`, starting at `raw`.
-    function control(kind, raw, label) {
+    // The control for a value of `kind`, starting at `raw`. A `choice` value lists its options in
+    // `data-choices`, one `value=label` line each.
+    function control(kind, raw, label, unit) {
         switch (kind) {
+            case "choice": {
+                const options = (unit.dataset.choices ?? "").split("\n").map((line) => {
+                    const at = line.indexOf("=");
+                    return [line.slice(0, at), line.slice(at + 1)];
+                });
+                const el = select(options, raw);
+                el.setAttribute("aria-label", label);
+                return el;
+            }
             case "markdown": {
                 const area = element("textarea", { value: raw, rows: 8 });
                 area.setAttribute("aria-label", label);
@@ -158,6 +168,9 @@
                 return [{ op: "update", id, set: { [field]: value.trim() } }];
             case "priority":
                 return [{ op: "update", id, set: { priority: Number(value) } }];
+            case "choice":
+                // The empty choice clears the field, such as an owner that then follows the default.
+                return [{ op: "update", id, set: { [field]: value || null } }];
             case "labels": {
                 const before = new Set(words(raw));
                 const after = new Set(words(value));
@@ -193,7 +206,7 @@
         const raw = rawOf(unit);
         const pencil = document.querySelector(`[data-edit="${CSS.escape(field)}"]`);
         const label = (pencil?.getAttribute("aria-label") ?? field).replace(/^Edit /, "");
-        const input = control(kind, raw, label);
+        const input = control(kind, raw, label, unit);
         const error = element("div", { className: "c-edit-error", role: "alert" });
         const form = element("form", { className: "c-edit-form" }, [input, error]);
         const section = unit.closest("section[data-edit-empty]");

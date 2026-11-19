@@ -2,22 +2,21 @@
 //!
 //! - A failure that one machine stored and another machine then passed on the same inputs
 //!   belongs to the first machine's own state, such as a stale cache or a broken tool. The pass
-//!   replaces the failure in the result cache, and the first machine gets a P1 ticket labelled
-//!   `needs:<its name>`, so only it can work the ticket ([`disagreement`]).
-//! - A live ticket with a `needs:` label that names neither the operating system nor the name of
-//!   any registered machine can never be dispatched. [`unassignable`] lists those tickets for the
-//!   first line of the dashboard. The hub holds no check manifests, so the families a ticket's
-//!   files bring in are not considered.
-
-use std::collections::BTreeSet;
+//!   replaces the failure in the result cache, and the first machine gets a P1 ticket that it
+//!   owns, so only its workers can work the ticket ([`disagreement`]).
+//! - A live ticket whose owner names a machine or app that `ignite.toml` does not declare can
+//!   never be dispatched. [`unassignable`] lists those tickets for the first line of the
+//!   dashboard. The hub holds no check manifests, so the families a ticket's files bring in are
+//!   not considered.
 
 use rusqlite::{Connection, OptionalExtension, params};
 
+use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::ResultKey;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::fleet;
+use ignite_store::hub::owners;
 
 use super::filing::{self, Author, Filed, Filing};
 use super::signature::Signature;
@@ -74,7 +73,8 @@ pub fn disagreement(
             body: Some(body),
             ticket_type: Some(TicketType::Bug),
             priority: Some(1),
-            labels: Some(vec!["machine".to_owned(), format!("needs:{failed}")]),
+            labels: Some(vec!["machine".to_owned()]),
+            owner: Some(Some(Owner::new(&failed, None))),
             ..TicketFields::default()
         },
         deps: Vec::new(),
@@ -83,35 +83,36 @@ pub fn disagreement(
     filing::file(conn, author, &filing, now)
 }
 
-/// Every live ticket that no registered machine can take, with the reason, ordered by ticket.
-/// A `needs:` label must name the operating system or the name of some machine; `needs:person`
-/// asks for a person, not a machine, and is left out.
+/// Every live ticket that no worker can take, with the reason, ordered by ticket: its own owner
+/// names a machine that `ignite.toml` does not declare, or an app the pool does not run. A hub
+/// that has recorded no routing facts reports nothing.
 pub fn unassignable(conn: &Connection) -> Result<Vec<(String, String)>> {
-    let mut known = BTreeSet::new();
-    for machine in fleet::machines(conn)? {
-        known.insert(machine.os);
-        known.insert(machine.name);
+    let routing = owners::routing(conn)?;
+    if routing.machines.is_empty() {
+        return Ok(Vec::new());
     }
     let mut select = conn.prepare(
-        "SELECT t.id, l.value FROM tickets t, json_each(t.labels) l
-         WHERE t.status != 'closed' AND l.value LIKE 'needs:%' AND l.value != 'needs:person'
-         ORDER BY t.id, l.value",
+        "SELECT id, owner FROM tickets WHERE status != 'closed' AND owner IS NOT NULL ORDER BY id",
     )?;
-    let needs = select
+    let owned = select
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(needs
+    Ok(owned
         .into_iter()
-        .filter(|(_, label)| {
-            label
-                .strip_prefix("needs:")
-                .is_some_and(|need| !known.contains(need))
-        })
-        .map(|(ticket, label)| {
-            let reason = format!("it needs {label}, which no registered machine has");
-            (ticket, reason)
+        .filter_map(|(ticket, owner)| {
+            let reason = match owner.parse::<Owner>() {
+                Err(_) => format!("its owner {owner:?} is not a machine and app"),
+                Ok(parsed) if routing.machine(&parsed.machine).is_none() => {
+                    format!("it is owned by {owner}, a machine ignite.toml does not declare")
+                }
+                Ok(Owner { app: Some(app), .. }) if !routing.apps.contains(&app) => {
+                    format!("it is owned by {owner}, and the pool runs no {app} workers")
+                }
+                Ok(_) => return None,
+            };
+            Some((ticket, reason))
         })
         .collect())
 }

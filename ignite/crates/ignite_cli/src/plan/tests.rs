@@ -9,6 +9,12 @@ use super::Graphs;
 
 const EPIC: &str = "ig9a";
 
+fn owned(id: &str, owner: &str) -> Ticket {
+    let mut ticket = ticket(id, EPIC, "`a.rs`", &[]);
+    ticket.owner = Some(owner.parse().unwrap());
+    ticket
+}
+
 fn ticket(id: &str, parent: &str, body: &str, labels: &[&str]) -> Ticket {
     serde_json::from_value(json!({
         "id": id, "parent": (!parent.is_empty()).then_some(parent), "next_child": 1, "title": id, "body": body,
@@ -30,7 +36,7 @@ fn id(n: u32) -> String {
 
 fn report(tickets: &[Ticket], edges: &[Edge], ready: &[String]) -> Vec<String> {
     let ready: HashSet<String> = ready.iter().cloned().collect();
-    let machines: BTreeSet<String> = ["jarvis", "macos"].map(str::to_owned).into();
+    let machines: BTreeSet<String> = ["jarvis", "jarvis/claude"].map(str::to_owned).into();
     Graphs {
         epic: EPIC,
         tickets,
@@ -101,16 +107,16 @@ fn a_clean_epic_reports_only_its_shape() {
 }
 
 #[test]
-fn a_ticket_that_no_machine_can_take_is_reported_but_person_and_known_names_are_not() {
+fn a_ticket_that_no_machine_can_take_is_reported_but_known_owners_are_not() {
     let tickets = [
-        ticket(&id(1), EPIC, "`a.rs`", &["needs:windows"]),
-        ticket(&id(2), EPIC, "`a.rs`", &["needs:macos", "needs:jarvis"]),
+        owned(&id(1), "cygnus/codex"),
+        owned(&id(2), "jarvis/claude"),
         ticket(&id(3), EPIC, "`a.rs`", &["needs:person"]),
     ];
     let lines = report(&tickets, &[], &[]);
     assert_eq!(
         lines[2..],
-        ["no machine     .1 needs windows, which no registered machine has"]
+        ["no machine     .1 is owned by cygnus/codex, which ignite.toml does not declare"]
     );
 }
 

@@ -117,12 +117,23 @@ window = 20
 report_only = ["tier-gap"]
 protected = ["app", "ui-smoke", "clippy", "pyre", "ui-types", "source"]
 
+# Ticket owners (docs/ignite.md, "Owners"). A ticket with no owner of its own or its epic's goes
+# to this machine and app until someone picks another default in the dashboard's settings.
+[pool]
+default_owner = "jarvis/claude"
+
 # The model ID each app's session tool accepts for each `tier:` label. Update the IDs here when
 # a new model is released; tier labels on tickets do not change.
 [pool.models.claude]
 opus = "claude-opus-5-5"
 sonnet = "claude-sonnet-5-5"
 light = "claude-sonnet-5-5"
+
+# Codex runs every tier on one model.
+[pool.models.codex]
+opus = "sol"
+sonnet = "sol"
+light = "sol"
 
 # Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
 # seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
@@ -136,6 +147,8 @@ seconds = 300
 # The Mac Studio that runs the hub.
 [machine.jarvis]
 os = "macos"
+# The app whose workers take a ticket this machine filed, such as a regression it found.
+home_app = "claude"
 # 12 ticket trees ran out on 2026-11-18, when queued express landings held every ticket tree and
 # new sessions waited in `ignite start`. A tree costs disk only while it keeps a build, and that
 # disk is bounded by `trees_disk_gb` and the sweep below, not by the number of trees, so a tree
@@ -164,6 +177,7 @@ bench-vm = 1
 # The MacBook Pro.
 [machine.multivac]
 os = "macos"
+home_app = "codex"
 ticket_trees = 8
 landing_trees = 2
 trees_disk_gb = 200
@@ -178,6 +192,7 @@ oracle = 1
 # Lima machines or a desktop window system, which only the Macs have.
 [machine.cygnus]
 os = "windows"
+home_app = "codex"
 ticket_trees = 6
 landing_trees = 2
 families = ["rust", "clippy", "format", "source-rules", "python"]

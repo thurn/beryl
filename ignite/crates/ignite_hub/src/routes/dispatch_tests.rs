@@ -604,19 +604,18 @@ fn only_an_active_epic_loose_or_the_hub_s_own_tickets_are_offered() {
 }
 
 #[test]
-fn a_ticket_needing_a_person_or_another_machine_is_not_offered() {
+fn a_ticket_needing_a_person_is_not_offered() {
     let mut conn = hub::open_in_memory().unwrap();
     register(&mut conn);
     let ids = file(
         &mut conn,
         &[
             ("sign the build", &["needs:person", "machine"], &[]),
-            ("on cygnus", &["needs:cygnus"], &[]),
-            ("on jarvis", &["needs:jarvis"], &[]),
+            ("anything", &[], &[]),
         ],
     );
     let (_, first) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
-    assert_eq!(first["ticket"], ids[2].as_str());
+    assert_eq!(first["ticket"], ids[1].as_str());
     let (_, second) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1.0));
     assert_eq!(second, Value::Null);
 }
@@ -705,7 +704,8 @@ fn a_release_saves_its_branch_note_and_need_for_the_next_claim() {
     let (status, reply) = post(&mut conn, "/release", &body, at(2.0));
     assert_eq!(status, 200, "{reply}");
     let ticket = tickets::load(&conn, id.as_str()).unwrap().unwrap();
-    assert_eq!(ticket.labels, vec!["needs:macos"]);
+    assert!(ticket.labels.is_empty());
+    assert_eq!(ticket.needs_os, Some(Os::Macos));
     assert_eq!(
         tickets::comments(&conn, id.as_str()).unwrap()[0].text,
         "Released: blocked"

@@ -47,6 +47,9 @@ pub struct Card {
     pub priority: u8,
     pub assignee: Option<String>,
     pub updated_at: String,
+    /// The ticket's own owner, `<machine>` or `<machine>/<app>`; `None` follows its ancestors or
+    /// the default owner.
+    pub owner: Option<String>,
 }
 
 /// A card on the home page, which also needs the labels to place it.
@@ -135,7 +138,7 @@ pub fn by_recency(left: &Card, right: &Card) -> std::cmp::Ordering {
         .then(left.id.cmp(&right.id))
 }
 
-const CARD_FIELDS: &str = "id, parent, title, type, status, priority, assignee, updated_at";
+const CARD_FIELDS: &str = "id, parent, title, type, status, priority, assignee, updated_at, owner";
 
 fn card(row: &Row) -> rusqlite::Result<Card> {
     Ok(Card {
@@ -147,6 +150,7 @@ fn card(row: &Row) -> rusqlite::Result<Card> {
         priority: row.get::<_, i64>(5)?.clamp(0, 255) as u8,
         assignee: row.get(6)?,
         updated_at: row.get(7)?,
+        owner: row.get(8)?,
     })
 }
 
@@ -192,7 +196,7 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Vec<Progress>), Re
     let rows = statement.query_map([], |row| {
         Ok(HomeCard {
             card: card(row)?,
-            labels: labels_of(&row.get::<_, String>(8)?),
+            labels: labels_of(&row.get::<_, String>(9)?),
         })
     })?;
     let mut cards: Vec<HomeCard> = rows.collect::<Result<_, _>>()?;
@@ -244,22 +248,22 @@ pub fn ticket_row(conn: &Connection, id: &str) -> Result<Option<TicketRow>, Read
          FROM tickets WHERE id = ?1"
     ))?;
     let mut rows = statement.query_map([id], |row| {
-        let metadata: String = row.get(13)?;
+        let metadata: String = row.get(14)?;
         Ok(TicketRow {
             card: card(row)?,
-            body: row.get(8)?,
-            acceptance: row.get(9)?,
-            design: row.get(10)?,
-            notes: row.get(11)?,
-            labels: labels_of(&row.get::<_, String>(12)?),
+            body: row.get(9)?,
+            acceptance: row.get(10)?,
+            design: row.get(11)?,
+            notes: row.get(12)?,
+            labels: labels_of(&row.get::<_, String>(13)?),
             metadata: ordered_object(&metadata),
-            close_reason: row.get(14)?,
-            created_at: row.get(15)?,
-            created_by: row.get(16)?,
-            closed_at: row.get(17)?,
-            version: u64::try_from(row.get::<_, i64>(18)?).unwrap_or_default(),
-            workers: row.get(19)?,
-            max_workers: row.get(20)?,
+            close_reason: row.get(15)?,
+            created_at: row.get(16)?,
+            created_by: row.get(17)?,
+            closed_at: row.get(18)?,
+            version: u64::try_from(row.get::<_, i64>(19)?).unwrap_or_default(),
+            workers: row.get(20)?,
+            max_workers: row.get(21)?,
         })
     })?;
     Ok(rows.next().transpose()?)

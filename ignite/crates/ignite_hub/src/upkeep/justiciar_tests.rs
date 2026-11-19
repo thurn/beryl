@@ -60,18 +60,16 @@ fn a_machine_only_report_needs_that_machine_and_has_a_ticket_per_machine() {
     let a = justiciar::report(&mut conn, UPKEEP, &jarvis, clock.now()).unwrap();
     let b = justiciar::report(&mut conn, UPKEEP, &cygnus, clock.now()).unwrap();
     assert_ne!(a.ticket, b.ticket);
-    assert!(
-        ticket(&conn, &a.ticket)
-            .labels
-            .iter()
-            .any(|l| l == "needs:jarvis")
+    assert_eq!(
+        ticket(&conn, &a.ticket).owner,
+        Some("jarvis".parse().unwrap())
     );
-    assert!(
-        ticket(&conn, &b.ticket)
-            .labels
-            .iter()
-            .any(|l| l == "needs:cygnus")
+    assert_eq!(
+        ticket(&conn, &b.ticket).owner,
+        Some("cygnus".parse().unwrap())
     );
+    // It holds work back, so it may fall back when its machine goes silent.
+    assert!(ticket(&conn, &a.ticket).fallback);
 }
 
 fn land(conn: &mut rusqlite::Connection, id: &str, at: &str) {

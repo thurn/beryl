@@ -58,7 +58,9 @@ pub enum Command {
         /// The ticket's exact state, for whoever starts it next.
         #[arg(short = 'm', long = "message")]
         note: Option<String>,
-        /// What the ticket needs: a machine's name, `macos`, or `person` (which needs a note).
+        /// What the ticket needs: `person` (which needs a note) sets it aside for a person, an
+        /// operating system such as `windows` records the system it needs, and a machine, as
+        /// `<machine>` or `<machine>/<app>`, becomes its owner.
         #[arg(long)]
         needs: Option<String>,
     },
@@ -429,6 +431,10 @@ pub struct TicketFieldArgs {
     /// The cores the ticket is expected to use.
     #[arg(long)]
     pub cores: Option<f64>,
+    /// Who works it: `<machine>/<app>` (such as `cygnus/codex`), `<machine>` for that machine's
+    /// home app, or `default` to follow its epic's owner or the default owner.
+    #[arg(long)]
+    pub owner: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]

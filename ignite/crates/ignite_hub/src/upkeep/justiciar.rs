@@ -19,6 +19,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
+use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::JusticiarReport;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
@@ -47,9 +48,8 @@ pub const MASTER_LAG_SECONDS: f64 = 30.0 * 60.0;
 const LAG_HORIZON_SECONDS: f64 = 7.0 * 86_400.0;
 
 /// The ticket fields of a justiciar ticket.
-fn fields(title: String, body: String, labels: Vec<String>) -> TicketFields {
-    let mut all = vec![LABEL.to_owned(), TIER.to_owned()];
-    all.extend(labels);
+fn fields(title: String, body: String) -> TicketFields {
+    let all = vec![LABEL.to_owned(), TIER.to_owned()];
     TicketFields {
         title: Some(title),
         body: Some(body),
@@ -67,22 +67,25 @@ pub fn report(
     report: &JusticiarReport,
     now: Timestamp,
 ) -> Result<Filed> {
-    let (subject, labels) = if report.on_machine {
-        (
-            format!("{}@{}", report.subject, report.machine),
-            vec![format!("needs:{}", report.host)],
-        )
+    // The ticket is owned by the machine that reported it (see `filing`), and falls back to
+    // another machine when that one goes silent, since it is filed released.
+    let subject = if report.on_machine {
+        format!("{}@{}", report.subject, report.machine)
     } else {
-        (report.subject.clone(), Vec::new())
+        report.subject.clone()
     };
     let body = format!(
         "Reported by {} ({}).\n\n{}\n\nRead `ignite guide justiciar` before anything else.",
         report.host, report.machine, report.details
     );
+    let mut fields = fields(report.title.clone(), body);
+    if report.on_machine {
+        fields.owner = Some(Some(Owner::new(&report.host, None)));
+    }
     let filing = Filing {
         signature: Signature::of_subject(&subject, LABEL),
         evidence: report.evidence.clone(),
-        fields: fields(report.title.clone(), body, labels),
+        fields,
         deps: Vec::new(),
         released: true,
     };
@@ -159,7 +162,6 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         fields: fields(
             format!("master has not moved for {minutes:.0} minutes"),
             body,
-            Vec::new(),
         ),
         deps: Vec::new(),
         released: true,

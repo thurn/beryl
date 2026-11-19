@@ -223,7 +223,7 @@ pub fn ticket_heading(ticket: &Card) -> String {
     format!(
         "<div class=\"c-card-top\">{}{}</div>",
         c::mono(&display_id(&ticket.id)),
-        priority_chip(i64::from(ticket.priority))
+        priority_chip(i64::from(ticket.priority)) + &super::owners::chip(ticket.owner.as_deref())
     )
 }
 

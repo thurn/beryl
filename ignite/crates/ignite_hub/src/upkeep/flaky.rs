@@ -15,6 +15,7 @@
 
 use rusqlite::{Connection, params};
 
+use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::CheckState;
 use ignite_core::protocol::tickets::{TicketFields, TicketType};
 use ignite_core::time::Timestamp;
@@ -137,7 +138,8 @@ fn machine_faults(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
                 body: Some(body),
                 ticket_type: Some(TicketType::Bug),
                 priority: Some(1),
-                labels: Some(vec!["machine".to_owned(), format!("needs:{name}")]),
+                labels: Some(vec!["machine".to_owned()]),
+                owner: Some(Some(Owner::new(&name, None))),
                 ..TicketFields::default()
             },
             deps: Vec::new(),

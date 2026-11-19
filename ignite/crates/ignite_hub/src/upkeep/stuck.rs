@@ -9,8 +9,8 @@
 //!   are filed released;
 //! - an epic with open tickets of which none is ready or in progress, nor waits (through any
 //!   chain of dependencies and epics) on a ticket that is. A ready ticket that no machine can
-//!   take (its `needs:` label names no registered machine or operating system, or is
-//!   `needs:person`) does not count as ready. An epic with a ticket still `pending_approval` is
+//!   take (its owner names a machine that is not registered, or it is labelled `needs:person`)
+//!   does not count as ready. An epic with a ticket still `pending_approval` is
 //!   waiting for a person, not stuck;
 //! - a loop of tickets that wait on one another and are under no epic;
 //! - a ticket held in progress for more than six hours, which is reported for the justiciar to
@@ -21,8 +21,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rusqlite::{Connection, params};
 
 use ignite_core::ids::{CheckName, TicketId};
+use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::{AuditReport, CheckState, TipWaiting};
-use ignite_core::protocol::tickets::{Graph, GraphTicket, Status, TicketFields, TicketType};
+use ignite_core::protocol::tickets::{
+    Graph, GraphTicket, Status, Ticket, TicketFields, TicketType,
+};
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
 use ignite_store::hub::{checks, fleet, tickets};
@@ -176,7 +179,7 @@ pub fn tip_waiting(
         report.waited_s / 60.0,
         report.machine
     );
-    let labels = vec!["fleet".to_owned(), format!("needs:{os}")];
+    let labels = vec!["fleet".to_owned()];
     let machines: Vec<_> = fleet::machines(conn)?
         .into_iter()
         .filter(|machine| machine.os == os)
@@ -193,6 +196,7 @@ pub fn tip_waiting(
                 ticket_type: Some(TicketType::Bug),
                 priority: Some(1),
                 labels: Some(labels),
+                needs_os: Some(Some(report.platform)),
                 ..TicketFields::default()
             },
             deps: Vec::new(),
@@ -217,6 +221,10 @@ pub fn tip_waiting(
                     ticket_type: Some(TicketType::Bug),
                     priority: Some(1),
                     labels: Some(labels.clone()),
+                    // The silent machine's own workers can tell why it stopped reporting; the
+                    // ticket falls back elsewhere once it has been silent long enough.
+                    owner: Some(Some(Owner::new(&machine.name, None))),
+                    needs_os: Some(Some(report.platform)),
                     ..TicketFields::default()
                 },
                 deps: Vec::new(),
@@ -239,15 +247,12 @@ pub const HELD_SECONDS: f64 = 6.0 * 3_600.0;
 /// The label on a ticket for the justiciar to look at.
 const JUSTICIAR: &str = ignite_core::dispatch::JUSTICIAR;
 
-/// The names that a `needs:` label can ask for and some registered machine has: each machine's
-/// operating system and name.
+/// The names, in lower case, of the registered machines, which a ticket's owner must name.
 fn machine_names(conn: &Connection) -> Result<BTreeSet<String>> {
-    let mut known = BTreeSet::new();
-    for machine in fleet::machines(conn)? {
-        known.insert(machine.os);
-        known.insert(machine.name);
-    }
-    Ok(known)
+    Ok(fleet::machines(conn)?
+        .into_iter()
+        .map(|machine| machine.name.to_ascii_lowercase())
+        .collect())
 }
 
 /// Files one ticket for each epic whose open tickets are all blocked, one for each loop of
@@ -298,26 +303,26 @@ pub(super) fn stuck_now(conn: &Connection, now: Timestamp) -> Result<StuckNow> {
     })
 }
 
-/// Whether some registered machine could take a ticket with these labels: every `needs:` label
-/// names a known machine or operating system, and none is `needs:person`.
-fn takeable(labels: &[String], known: &BTreeSet<String>) -> bool {
-    labels
-        .iter()
-        .filter_map(|label| label.strip_prefix("needs:"))
-        .all(|need| need != "person" && known.contains(need))
+/// Whether some registered machine could take the ticket: it is not set aside for a person, and
+/// its own owner, if it has one, names a registered machine.
+fn takeable(ticket: &Ticket, known: &BTreeSet<String>) -> bool {
+    unmet(ticket, known).is_empty()
 }
 
-/// The `needs:` labels of a ticket that no registered machine meets.
-fn unmet(labels: &[String], known: &BTreeSet<String>) -> Vec<String> {
-    labels
-        .iter()
-        .filter(|label| {
-            label
-                .strip_prefix("needs:")
-                .is_some_and(|need| need == "person" || !known.contains(need))
-        })
-        .cloned()
-        .collect()
+/// What a ticket needs that no registered machine gives: a person, or an owner's machine.
+fn unmet(ticket: &Ticket, known: &BTreeSet<String>) -> Vec<String> {
+    let mut needs = Vec::new();
+    if ticket.labels.iter().any(|label| label == "needs:person") {
+        needs.push("a person (needs:person)".to_owned());
+    }
+    if let Some(owner) = &ticket.owner
+        && !known.contains(&owner.machine)
+    {
+        needs.push(format!(
+            "its owner {owner}, which is not a registered machine"
+        ));
+    }
+    needs
 }
 
 /// Each innermost stuck epic, with a line per waiting ticket saying what it waits on.
@@ -348,7 +353,7 @@ fn find_stuck(
         .tickets
         .iter()
         .filter(|t| {
-            t.ticket.status == Status::InProgress || (t.ready && takeable(&t.ticket.labels, known))
+            t.ticket.status == Status::InProgress || (t.ready && takeable(&t.ticket, known))
         })
         .map(|t| t.ticket.id.as_str())
         .collect();
@@ -428,13 +433,7 @@ fn find_stuck(
 /// One line saying what a waiting ticket waits on.
 fn waiting_line(entry: &GraphTicket, known: &BTreeSet<String>) -> String {
     let mut by: Vec<String> = entry.blocked_by.iter().map(|b| b.id.to_string()).collect();
-    by.extend(unmet(&entry.ticket.labels, known).into_iter().map(|label| {
-        if label == "needs:person" {
-            "a person (needs:person)".to_owned()
-        } else {
-            format!("{label}, which no registered machine has")
-        }
-    }));
+    by.extend(unmet(&entry.ticket, known));
     let by = if by.is_empty() {
         "nothing listed".to_owned()
     } else {

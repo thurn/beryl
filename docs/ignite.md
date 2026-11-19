@@ -942,10 +942,11 @@ work lost at release has to be done again from nothing.
   whether the last one is unfinished work saved at release.
 - The branch is deleted when the ticket lands or closes.
 - `ignite release --needs <what>` also records why the ticket was given back.
-  `--needs macos`, or the name of a machine, keeps it for a machine that has
-  what it needs. `--needs person` sets it aside for the person: no worker is
-  handed it, the dashboard lists it, and the note must state the exact need and
-  what was tried.
+  `--needs <machine>` (or `<machine>/<app>`) makes that machine the ticket's
+  owner, so only its workers take it, and `--needs macos` records the operating
+  system the work needs (see [Owners](#owners)). `--needs person` sets it aside
+  for the person: no worker is handed it, the dashboard lists it, and the note
+  must state the exact need and what was tried.
 - A ticket that waits on another ticket's work is released with a dependency on
   that ticket, never held while its session watches `staging`. It is handed out
   again when the other ticket closes.
@@ -2060,8 +2061,9 @@ output (last 40 lines; whole output on jarvis at ...)
 
 - It links to the ticket whose commit caused it. When the search ended with a
   range, it links to every ticket in the range.
-- It names the operating system the check failed on, and carries a `needs:`
-  label for it when the check is not portable.
+- It names the operating system the check failed on, and records that system
+  when the check is not portable. It is owned by the machine that found it (see
+  [Owners](#owners)).
 - If the worker that landed the culprit has not yet been given another ticket,
   that machine's daemon has the regression sent to that session, which still
   holds the context. Otherwise it goes first in the dispatch order.
@@ -2232,9 +2234,10 @@ ignite ticket wait TIG9A.1 --status closed
 ```
 
 Labels carry what the dispatcher needs to know about a ticket: `tier:opus`,
-`tier:sonnet` or `tier:light` names the model it needs, `needs:macos` an
-operating system, and `lane:<name>` a chain. `ignite ticket batch` creates or
-changes many tickets in one request that succeeds or fails as a whole.
+`tier:sonnet` or `tier:light` names the model it needs, and `lane:<name>` a
+chain. Which machine and app work it is the ticket's owner, a field of its own
+(see [Owners](#owners)). `ignite ticket batch` creates or changes many tickets
+in one request that succeeds or fails as a whole.
 
 Every change to anything in Beryl has a ticket. `ignite start "<summary>"` makes
 that cheap for a session that was handed a task directly: it files the ticket
@@ -2246,7 +2249,7 @@ each worker holds and what it is running, the landing queue, the state of tip
 verification, open regressions and each exploration family's finds. Its first
 line says what needs a person: tickets marked `needs:person`, a machine with no
 dispatcher or with a paused pool, an open regression that no worker can take,
-and a ticket that no machine is able to run.
+and a ticket owned by a machine or app that `ignite.toml` does not declare.
 
 The dashboard is at the hub's root and a ticket's page is at `/T<id>` (for
 example `/TBEJE.34`). Only the API is under the project name (`/by/api`). Page
@@ -2513,16 +2516,14 @@ machine can take:
 
 A machine can take a ticket when all of these hold:
 
-- A pool member that suits the ticket is idle: one whose app can run the model
-  the ticket's `tier:` label names, and the app a `provider:claude` or
-  `provider:codex` label names, if the ticket has one. A worker is idle when it
-  holds no ticket.
+- A pool member that suits the ticket is idle: one of the ticket's owner (see
+  [Owners](#owners)) whose app can run the model the ticket's `tier:` label
+  names. A worker is idle when it holds no ticket.
 - A ticket tree is free.
 - The ticket's expected use of cores fits beside the tickets already in progress
   there. See [Light and heavy tickets](#light-and-heavy-tickets).
 - The machine can run every check family that the ticket's named files could
-  bring into its gate. Cygnus never takes a ticket that names UI files, or one
-  labeled `needs:macos`.
+  bring into its gate. Cygnus never takes a ticket that names UI files.
 
 Not every ticket is offered:
 
@@ -2559,6 +2560,39 @@ Not every ticket is offered:
   regressions, improvements and repairs to a machine. So is a ticket that a
   session starts by name.
 - A ticket marked `needs:person` is never offered.
+
+### Owners
+
+Every ticket goes to one owner: a machine and the desktop app whose workers on
+that machine take it, such as `jarvis/claude` or `cygnus/codex`.
+
+- A ticket's owner is its own `owner` field or, when that is empty, its nearest
+  ancestor's. A ticket whose ancestors have none either follows the **default
+  owner**. `[pool] default_owner` in `ignite.toml` sets it (`jarvis/claude`),
+  and anyone on the private dashboard can pick another in the settings panel.
+  Picking one moves every ticket that follows the default.
+- Dispatch offers a ticket only to its owner's workers. An idle worker on
+  another machine or of another app is never offered it, so the other five
+  destinations get only work that is routed to them.
+- The dashboard shows each ticket's owner and where it comes from, and its Owner
+  dropdown lists Default and every machine with every app.
+  `ignite ticket create` and `update` take `--owner <machine>/<app>`, or
+  `--owner default` to clear it.
+- An owner may name only a machine (`cygnus`). It then means the machine's home
+  app, `home_app` in its `[machine.<name>]` table.
+- A ticket the hub files from a machine's report, such as a regression, checks
+  left incomplete, a machine fault or a justiciar report, is owned by that
+  machine and its home app, because the fault is often reproducible only there.
+  Upkeep's own tickets, such as `master` not moving, follow the default owner.
+- A ticket that holds `master` back (each one the hub files released) falls back
+  when its owner's machine has not been heard from for 30 minutes: the default
+  owner may take it if it runs the operating system the ticket needs, and
+  otherwise any machine that does.
+- `ignite release --needs <machine>` makes that machine the owner,
+  `--needs <os>` records the system the work needs, and `--needs person` sets
+  the ticket aside for a person.
+- Each app's workers run the tiers its `[pool.models.<app>]` table names. Codex
+  runs every tier on `sol`.
 
 The hub reserves the ticket for that machine in the same request, so two
 machines never take one ticket. What happens next:
@@ -2787,8 +2821,9 @@ release branch when Ignite blocks its own landing.
   minutes or a ticket has been held for six hours, and from `POST /justiciar`,
   which daemons send for a crash record or a loop that keeps failing, and which
   `ignite justiciar "<reason>"` sends for a session that meets an emergency.
-- A report about one machine, such as its daemon's crash, is labelled
-  `needs:<machine>`, so only that machine's pool works it.
+- A report about one machine, such as its daemon's crash, is owned by that
+  machine, so its pool works it unless the machine goes silent (see
+  [Owners](#owners)).
 - Justiciar tickets are offered before every other ticket, whether or not an
   epic is active. So are all the other tickets the hub files by itself, which
   carry the label `hub`.

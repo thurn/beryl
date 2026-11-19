@@ -31,8 +31,10 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value, json};
 
+use ignite_core::config::Os;
 use ignite_core::dispatch::label;
 use ignite_core::ids::{MachineId, SessionId, TicketId};
+use ignite_core::owner::Owner;
 use ignite_core::protocol::emergency::{EmergencyChange, EmergencyReply};
 use ignite_core::protocol::hub::{
     AdhocClaim, Claim, Close, DependencyNote, Heartbeat, HeartbeatReply, Landed, LandedReply,
@@ -555,8 +557,10 @@ fn closing(ticket: &Ticket, reason: &str) -> Vec<Operation> {
 }
 
 /// Gives a ticket back to the queue with the note as a comment, records the branch its work was
-/// saved to and, with `needs`, labels it `needs:<needs>` in place of any earlier `needs:` label.
-/// A session may also give back a reservation it has not claimed yet.
+/// saved to and, with `needs`, records what it needs: `person` labels it `needs:person`, which
+/// sets it aside for a person; an operating system sets the system it needs; a machine's name
+/// makes that machine its owner (see `ignite_core::owner`). A session may also give back a
+/// reservation it has not claimed yet.
 fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
     let id = release.ticket.as_str();
     let mut tx = conn
@@ -576,19 +580,24 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
         }
     }
     holds(&ticket, &release.session)?;
-    let (add_labels, remove_labels) = match &release.needs {
-        Some(needs) => {
-            let label = format!("needs:{needs}");
-            let earlier = ticket
-                .labels
-                .iter()
-                .filter(|l| l.starts_with("needs:") && **l != label)
-                .cloned()
-                .collect();
-            (vec![label], earlier)
-        }
-        None => (Vec::new(), Vec::new()),
+    let mut set = TicketFields {
+        status: Some(Status::Open),
+        assignee: Some(None),
+        ..TicketFields::default()
     };
+    let mut add_labels = Vec::new();
+    match release.needs.as_deref() {
+        None => {}
+        Some("person") => add_labels.push("needs:person".to_owned()),
+        Some(needs) => {
+            if let Ok(os) = serde_json::from_value::<Os>(Value::String(needs.to_owned())) {
+                set.needs_os = Some(Some(os));
+            } else {
+                let owner = needs.parse::<Owner>().map_err(|e| failure(400, &e))?;
+                set.owner = Some(Some(owner));
+            }
+        }
+    }
     let set_meta = release
         .branch
         .iter()
@@ -597,13 +606,9 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
     let ops = vec![
         Operation::Update {
             id: id.to_owned(),
-            set: Some(TicketFields {
-                status: Some(Status::Open),
-                assignee: Some(None),
-                ..TicketFields::default()
-            }),
+            set: Some(set),
             add_labels,
-            remove_labels,
+            remove_labels: Vec::new(),
             set_meta,
             unset_meta: Vec::new(),
         },
@@ -791,3 +796,7 @@ mod hardening_tests;
 #[cfg(test)]
 #[path = "dispatch_emergency_tests.rs"]
 mod emergency_tests;
+
+#[cfg(test)]
+#[path = "dispatch_owner_tests.rs"]
+mod owner_tests;

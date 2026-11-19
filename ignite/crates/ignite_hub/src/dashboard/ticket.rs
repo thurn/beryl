@@ -22,6 +22,7 @@ use super::data::{
 use super::edit;
 use super::history::timeline;
 use super::markdown::render as render_markdown;
+use super::owners;
 use super::references::{display_id, mentions, rewrite_ticket_paths, ticket_url};
 
 /// A ticket's page for the project `project` at `root`, at feed position `seq`. An `editable`
@@ -31,6 +32,7 @@ pub fn page(
     root: &str,
     project: &str,
     data: &TicketData,
+    owner: &owners::OwnerView,
     seq: &str,
     editable: bool,
 ) -> PageOptions {
@@ -345,6 +347,26 @@ pub fn page(
             worker(card.assignee.as_deref(), &card.id),
         ),
     ];
+    let owner_view = owners::property_view(owner, |id| {
+        references.get(id).map_or_else(
+            || esc(&display_id(id)),
+            |card| hover_link(card, &esc(&display_id(id))),
+        )
+    });
+    properties.push((
+        "Owner".into(),
+        if editable {
+            edit::choice_property(
+                "owner",
+                "Owner",
+                &owner_view,
+                owner.own.as_deref().unwrap_or_default(),
+                &owners::choices(owner),
+            )
+        } else {
+            owner_view
+        },
+    ));
     if editable && card.ticket_type == "epic" {
         for (label, field, value) in [
             ("Workers", "workers", ticket.workers),
@@ -541,5 +563,6 @@ pub(crate) fn options(
         return Ok(None);
     };
     let data = ticket_data(conn, project, row)?;
-    Ok(Some(page(root, project, &data, seq, editable)))
+    let owner = owners::view(conn, id)?;
+    Ok(Some(page(root, project, &data, &owner, seq, editable)))
 }

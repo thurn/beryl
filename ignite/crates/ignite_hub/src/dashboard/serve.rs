@@ -280,6 +280,7 @@ fn serve_pages(
     let seq = feed_position(conn);
     let brand = |options: PageOptions| PageOptions {
         wordmark: wordmark.map(str::to_owned),
+        api: Some(format!("/{project}/api")),
         ..options
     };
     Some(match route {

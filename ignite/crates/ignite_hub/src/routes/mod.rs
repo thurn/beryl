@@ -7,6 +7,7 @@ pub mod commands;
 pub mod dispatch;
 pub mod feed;
 pub mod listings;
+pub mod owners;
 pub mod tickets;
 pub mod tip_rounds;
 pub mod versions;

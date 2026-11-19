@@ -20,6 +20,15 @@ fn shared_fields(fields: &mut Fields, args: &TicketFieldArgs) -> Result<()> {
     put(fields, "workers", args.workers);
     put(fields, "max_workers", args.max_workers);
     put(fields, "cores", args.cores);
+    if let Some(owner) = &args.owner {
+        let value = if owner == "default" {
+            Value::Null
+        } else {
+            let parsed: ignite_core::owner::Owner = owner.parse().map_err(usage)?;
+            json!(parsed.to_string())
+        };
+        fields.insert("owner".to_owned(), value);
+    }
     Ok(())
 }
 
@@ -229,6 +238,30 @@ mod tests {
             workers: None,
             max_workers: None,
             cores: None,
+            owner: None,
+        }
+    }
+
+    #[test]
+    fn an_owner_is_set_checked_or_cleared() {
+        let owned = |owner: &str| TicketFieldArgs {
+            owner: Some(owner.to_owned()),
+            ..no_fields()
+        };
+        let set = create("x", &owned("Cygnus/Codex"), &[], &[], false).unwrap();
+        assert_eq!(set["fields"]["owner"], "cygnus/codex");
+        assert!(create("x", &owned("a b"), &[], &[], false).is_err());
+        let cleared = update("t1", &owned("default"), &no_changes()).unwrap();
+        assert_eq!(cleared["set"]["owner"], Value::Null);
+    }
+
+    fn no_changes() -> Changes<'static> {
+        Changes {
+            title: None,
+            status: None,
+            assignee: None,
+            add_labels: &[],
+            remove_labels: &[],
         }
     }
 

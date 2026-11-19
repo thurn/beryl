@@ -82,15 +82,12 @@ fn decode<T: serde::de::DeserializeOwned>(value: Value) -> Result<T, Failure> {
     serde_json::from_value(value).map_err(|error| Failure::new(Exit::Usage, error))
 }
 
-/// The names a `needs:` label may use: each registered machine's hostname and operating system.
+/// The owners a ticket may name (see `ignite_core::owner`): each declared machine alone, which
+/// means its home app, and with each app the pool runs.
 fn machine_names(config: &Config) -> BTreeSet<String> {
-    let mut names = BTreeSet::new();
-    for (hostname, machine) in &config.machine {
-        names.insert(hostname.clone());
-        if let Some(os) = machine.os {
-            names.insert(os.as_str().to_owned());
-        }
-    }
+    let routing = ignite_core::owner::Routing::from_config(config);
+    let mut names: BTreeSet<String> = routing.machines.iter().map(|m| m.name.clone()).collect();
+    names.extend(routing.choices().iter().map(ToString::to_string));
     names
 }
 
@@ -111,6 +108,7 @@ struct Graphs<'a> {
     everything: &'a [Ticket],
     edges: &'a [Edge],
     ready: &'a HashSet<String>,
+    /// The owners a ticket may name.
     machines: &'a BTreeSet<String>,
     /// The repository the named paths are in; `None` when unknown.
     repository: Option<&'a Repository>,
@@ -301,27 +299,23 @@ impl Graphs<'_> {
         lines
     }
 
-    /// A ticket that needs something, by a `needs:` label, that no registered machine has.
+    /// A ticket owned by a machine and app that `ignite.toml` does not declare, which no worker
+    /// can take.
     fn unplaceable(&self, live: &[&Ticket]) -> Vec<String> {
-        let mut lines = Vec::new();
-        for ticket in live {
-            for need in ticket
-                .labels
-                .iter()
-                .filter_map(|l| l.strip_prefix("needs:"))
-            {
-                if need != "person" && !self.machines.contains(need) {
-                    lines.push(row(
+        live.iter()
+            .filter_map(|ticket| {
+                let owner = ticket.owner.as_ref()?.to_string();
+                (!self.machines.contains(&owner)).then(|| {
+                    row(
                         "no machine",
                         &format!(
-                            "{} needs {need}, which no registered machine has",
+                            "{} is owned by {owner}, which ignite.toml does not declare",
                             self.short(ticket.id.as_str())
                         ),
-                    ));
-                }
-            }
-        }
-        lines
+                    )
+                })
+            })
+            .collect()
     }
 
     /// A dependency on a ticket that has children, which holds the dependent until every

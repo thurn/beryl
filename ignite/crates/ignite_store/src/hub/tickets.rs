@@ -36,7 +36,7 @@ const JSON_COLUMNS: &[&str] = &["labels", "metadata", "landed", "saving"];
 pub(crate) const TICKET_COLUMNS: &str = "id, parent, next_child, title, body, acceptance, design, notes, \
     type, status, priority, assignee, last, labels, metadata, defer_until, close_reason, \
     created_at, created_by, updated_at, closed_at, version, workers, max_workers, cores, \
-    machine, session, tree, claimed_at, landed_at, landed, saving";
+    machine, session, tree, claimed_at, landed_at, landed, saving, owner, needs_os, fallback";
 
 /// One ticket, found by ID or by any alias, with its edges, children and readiness.
 pub fn get(
@@ -727,5 +727,8 @@ pub(crate) fn blank(
         landed_at: None,
         landed: None,
         saving: None,
+        owner: None,
+        needs_os: None,
+        fallback: false,
     }
 }

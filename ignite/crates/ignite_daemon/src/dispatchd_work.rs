@@ -208,14 +208,7 @@ impl Dispatcher {
                     .map(|m| IdleWorker {
                         session: m.session.clone(),
                         app: m.app.clone(),
-                        // A model the app has no ID for cannot be set, so the hub is not told
-                        // the worker runs it and offers no ticket that needs it.
-                        models: m
-                            .models
-                            .iter()
-                            .filter(|tier| ctx.config.pool.model_id(&m.app, tier).is_some())
-                            .cloned()
-                            .collect(),
+                        models: offered_models(&ctx.config.pool, &m.app, &m.models),
                     })
                     .collect(),
                 free_ticket_trees: trees,
@@ -293,5 +286,62 @@ impl Dispatcher {
             app: app.to_owned(),
         };
         Self::queue_handoff_reserved(state, session, reserved);
+    }
+}
+
+/// The tiers the hub is told a worker of `app` runs. A model the app has no ID for cannot be
+/// set, so the hub is not told the worker runs it and offers no ticket that needs it. A member
+/// added without a list, as a Codex worker is, runs every tier its app's `[pool.models.<app>]`
+/// table names, so that a ticket routed to that app is not held back by its `tier:` label.
+fn offered_models(
+    pool: &ignite_core::config::PoolConfig,
+    app: &str,
+    listed: &[String],
+) -> Vec<String> {
+    if listed.is_empty() {
+        return pool
+            .models
+            .get(app)
+            .map(|table| table.keys().cloned().collect())
+            .unwrap_or_default();
+    }
+    listed
+        .iter()
+        .filter(|tier| pool.model_id(app, tier).is_some())
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod offered_models_tests {
+    use super::offered_models;
+    use ignite_core::config::PoolConfig;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn a_worker_without_a_list_runs_every_tier_of_its_app() {
+        let table = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                .collect()
+        };
+        let pool = PoolConfig {
+            models: BTreeMap::from([
+                (
+                    "claude".to_owned(),
+                    table(&[("opus", "o"), ("sonnet", "s")]),
+                ),
+                (
+                    "codex".to_owned(),
+                    table(&[("opus", "sol"), ("sonnet", "sol")]),
+                ),
+            ]),
+            default_owner: None,
+        };
+        assert_eq!(offered_models(&pool, "codex", &[]), ["opus", "sonnet"]);
+        let listed = ["opus".to_owned(), "light".to_owned()];
+        assert_eq!(offered_models(&pool, "claude", &listed), ["opus"]);
+        assert!(offered_models(&pool, "other", &[]).is_empty());
     }
 }

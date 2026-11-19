@@ -13,6 +13,7 @@ pub mod findings;
 pub mod fleet;
 pub mod leases;
 pub mod listings;
+pub mod owners;
 pub mod rates;
 pub mod records;
 pub mod rejected;
@@ -98,6 +99,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 13,
         sql: include_str!("session_titles.sql"),
         code: None,
+    },
+    Migration {
+        version: 14,
+        sql: include_str!("owners.sql"),
+        code: Some(owners::retire_labels),
     },
 ];
 

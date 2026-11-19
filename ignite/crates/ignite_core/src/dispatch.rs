@@ -14,9 +14,10 @@
 //!    longest chain of tickets waiting behind it, then the oldest.
 //!
 //! A machine can take a ticket when it has a free ticket tree, an idle worker that suits the
-//! ticket (its app runs the model of the `tier:` label and is the app of a `provider:` label),
-//! room for the ticket's expected cores ([`room`]), and every check family the ticket's files could bring
-//! into its gate. A `needs:<os>` label, which a regression ticket carries, limits it to that operating system.
+//! ticket (its machine and app are one of the ticket's destinations, its owners as the hub
+//! resolved them through [`crate::owner::Routing::destinations`], and its app runs the model of
+//! the `tier:` label), room for the ticket's expected cores ([`room`]), and every check family
+//! the ticket's files could bring into its gate.
 //! Among suitable workers, the one whose last ticket shared the most files gets it; dispatch
 //! never waits for a particular worker. Everything here is a pure function of its arguments, so
 //! the same snapshot always gives the same answer.
@@ -25,6 +26,7 @@ use std::cmp::Ordering;
 
 use crate::admission;
 use crate::ids::{SessionId, TicketId};
+use crate::owner::Owner;
 use crate::protocol::hub::{IdleWorker, MachineFree};
 use crate::shares::{Group, Unit};
 use crate::time::Timestamp;
@@ -61,6 +63,9 @@ pub struct ReadyTicket {
     pub files: Vec<String>,
     /// An improvement ticket's estimated saving per week.
     pub saving: Option<(Unit, f64)>,
+    /// The owners whose workers may take it, with each app filled in from its machine's home app
+    /// where `ignite.toml` declares one. Empty lets any worker take it.
+    pub destinations: Vec<Owner>,
 }
 
 /// A ticket and the idle worker it goes to.
@@ -70,7 +75,7 @@ pub struct Handoff {
     pub session: SessionId,
 }
 
-/// The value of the first label with `prefix` (`tier:`, `provider:`, `lane:`), if any.
+/// The value of the first label with `prefix` (`tier:`, `lane:`), if any.
 pub fn label<'a>(labels: &'a [String], prefix: &str) -> Option<&'a str> {
     labels.iter().find_map(|l| l.strip_prefix(prefix))
 }
@@ -85,12 +90,17 @@ fn queue_order(a: &ReadyTicket, b: &ReadyTicket) -> Ordering {
         .then(a.id.cmp(&b.id))
 }
 
-/// Whether `worker` can work `ticket`: its app runs the model the `tier:` label names and is
-/// the app the `provider:` label names.
-pub fn suits(worker: &IdleWorker, ticket: &ReadyTicket) -> bool {
+/// Whether `worker`, on the machine `free` describes, can work `ticket`: its machine and app
+/// are one of the ticket's destinations, and its app runs the model the `tier:` label names.
+pub fn suits(free: &MachineFree, worker: &IdleWorker, ticket: &ReadyTicket) -> bool {
     let tier = label(&ticket.labels, "tier:").is_none_or(|t| worker.models.iter().any(|m| m == t));
-    let provider = label(&ticket.labels, "provider:").is_none_or(|p| worker.app == p);
-    tier && provider
+    let machine = free.name.as_deref().unwrap_or_default();
+    let routed = ticket.destinations.is_empty()
+        || ticket
+            .destinations
+            .iter()
+            .any(|owner| owner.admits(machine, &worker.app, None));
+    tier && routed
 }
 
 /// The cores a machine has room for, which a ticket's expected cores must fit in: its
@@ -111,16 +121,9 @@ pub fn room(free: &MachineFree, in_progress: &[f64]) -> f64 {
 fn machine_fits(free: &MachineFree, ticket: &ReadyTicket) -> bool {
     let families =
         free.families.is_empty() || ticket.families.iter().all(|f| free.families.contains(f));
-    // Every `needs:` label names the machine's operating system or its name; `needs:person`
-    // tickets are never ready for a worker.
-    let os = ticket
-        .labels
-        .iter()
-        .filter_map(|l| l.strip_prefix("needs:"))
-        .all(|needed| needed == free.os.as_str() || free.name.as_deref() == Some(needed));
     let cores = ticket.kind == TicketKind::Regression
         || admission::fits(free.free_cores, ticket.expected_cores);
-    free.free_ticket_trees > 0 && families && os && cores
+    free.free_ticket_trees > 0 && families && cores
 }
 
 /// The idle worker that gets the ticket: of those that suit it, the one whose last ticket shared
@@ -140,7 +143,7 @@ pub fn pick_worker(
             })
     };
     let mut best: Option<(&IdleWorker, usize)> = None;
-    for worker in free.idle_workers.iter().filter(|w| suits(w, ticket)) {
+    for worker in free.idle_workers.iter().filter(|w| suits(free, w, ticket)) {
         let score = shared(worker);
         if best.is_none_or(|(_, top)| score > top) {
             best = Some((worker, score));
