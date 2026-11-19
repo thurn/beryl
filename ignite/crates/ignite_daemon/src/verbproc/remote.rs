@@ -234,6 +234,10 @@ impl LandTrees for RemoteLandTrees {
         self.local.commits(path, from, to)
     }
 
+    fn subjects(&self, path: &Path, from: &Commit, to: &Commit) -> Result<Vec<String>> {
+        self.local.subjects(path, from, to)
+    }
+
     fn is_ancestor(&self, path: &Path, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
         self.local.is_ancestor(path, ancestor, descendant)
     }

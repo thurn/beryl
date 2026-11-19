@@ -1,6 +1,6 @@
 //! Landing: `ignite land` and `ignite sync` (see "Landing" in `docs/ignite.md`).
 //!
-//! `ignite land -m "<note>"` is the only way commits reach the integration branch. In order:
+//! `ignite land` is the only way commits reach the integration branch. In order:
 //!
 //! 1. The session must hold the tree's ticket, the tree must be on the ticket's branch, and no
 //!    file may be neither committed nor ignored.
@@ -100,7 +100,8 @@ pub struct Landing {
     pub pause: Arc<dyn Fn(f64) + Send + Sync>,
 }
 
-/// `ignite land -m "<note>" [--fresh]`: rebases, runs the gate and lands the commits.
+/// `ignite land [-m "<note>"] [--fresh]`: rebases, runs the gate and lands the commits. Without
+/// a note, the landed commits' subjects, one per line, are the note.
 pub struct LandVerb {
     pub landing: Arc<Landing>,
 }
@@ -118,7 +119,7 @@ impl Verb for LandVerb {
 
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let Some(args) = LandArgs::parse(&req.args) else {
-            return Reply::text(Exit::Usage, "usage: ignite land -m \"<note>\" [--fresh]");
+            return Reply::text(Exit::Usage, "usage: ignite land [-m \"<note>\"] [--fresh]");
         };
         self.landing.land(ctx, req, &args)
     }
@@ -145,7 +146,8 @@ impl Verb for SyncVerb {
 /// The arguments of `ignite land`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct LandArgs {
-    note: String,
+    /// The explicit note; `None` when the note is the landed commits' subjects.
+    note: Option<String>,
     fresh: bool,
 }
 
@@ -161,7 +163,9 @@ impl LandArgs {
                 _ => return None,
             }
         }
-        let note = note.filter(|n| !n.is_empty())?;
+        if note.as_ref().is_some_and(|n: &String| n.is_empty()) {
+            return None;
+        }
         Some(LandArgs { note, fresh })
     }
 }
@@ -511,13 +515,21 @@ impl Landing {
                 continue;
             }
 
+            let note = match &args.note {
+                Some(note) => note.clone(),
+                None => self
+                    .trees
+                    .subjects(&held.path, &rebased.onto, &rebased.head)
+                    .map_err(io)?
+                    .join("\n"),
+            };
             let work = LandedWork {
                 commits: self
                     .trees
                     .commits(&held.path, &rebased.onto, &rebased.head)
                     .map_err(io)?,
                 files: changed.clone(),
-                note: args.note.clone(),
+                note: note.clone(),
             };
             let mut record = LandingRecord {
                 landed: Landed {
@@ -594,7 +606,7 @@ impl Landing {
                 &record,
                 settled,
                 Some(&summary),
-                Some(&args.note),
+                Some(&note),
             ));
         }
     }

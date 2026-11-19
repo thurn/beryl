@@ -48,9 +48,9 @@ pub enum Command {
     Sync,
     /// Rebase, run the gate, land the commits, close the ticket and release the tree.
     Land {
-        /// The note dependent tickets will read.
+        /// The note dependent tickets will read; the landed commits' subjects when omitted.
         #[arg(short = 'm', long = "message")]
-        note: String,
+        note: Option<String>,
     },
     /// Give the ticket back unfinished: save the tree's work as `ignite/<ticket>` and release
     /// the tree.
@@ -672,13 +672,22 @@ mod tests {
     }
 
     #[test]
+    fn land_needs_no_message() {
+        let parsed = Cli::try_parse_from(["ignite", "land"]).unwrap().command;
+        assert!(matches!(parsed, Command::Land { note: None }));
+        let parsed = Cli::try_parse_from(["ignite", "land", "-m", "n"])
+            .unwrap()
+            .command;
+        assert!(matches!(parsed, Command::Land { note: Some(_) }));
+    }
+
+    #[test]
     fn parses_the_documented_commands() {
         let parse = |line: &str| {
             Cli::try_parse_from(line.split_whitespace())
                 .unwrap()
                 .command
         };
-        assert!(matches!(parse("ignite land -m note"), Command::Land { note } if note == "note"));
         assert!(matches!(parse("ignite stop L-2"), Command::Stop { handle } if handle == "L-2"));
         assert!(matches!(
             parse("ignite start Tq44s.9.48 --reservation 7f3a"),

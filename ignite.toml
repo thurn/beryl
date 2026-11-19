@@ -45,6 +45,10 @@ commands = [
   "cargo fmt --check",
   "cargo clippy --locked --all-targets -- -D warnings",
   "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
+  # `docs/ignite.md` is an express path, and none of the commands above reads Markdown, so
+  # without this a misformatted copy would land and fail only in tip verification. It is the
+  # command `just fmt` runs on Markdown, in check mode.
+  "uv run --quiet --project ../tools mdformat --check ../docs/ignite.md",
 ]
 families = ["ignite", "ignite-lint"]
 

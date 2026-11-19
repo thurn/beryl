@@ -453,6 +453,9 @@ impl LandTrees for TestTrees {
     fn commits(&self, _path: &Path, _from: &Commit, to: &Commit) -> Result<Vec<Commit>> {
         Ok(vec![to.clone()])
     }
+    fn subjects(&self, _path: &Path, _from: &Commit, to: &Commit) -> Result<Vec<String>> {
+        Ok(vec![format!("subject of {to}")])
+    }
     fn is_ancestor(&self, _path: &Path, ancestor: &Commit, _descendant: &Commit) -> Result<bool> {
         // The integration branch is linear, so its history is the commits that reached it.
         Ok(self.git.repo.lock().unwrap().history.contains(ancestor))

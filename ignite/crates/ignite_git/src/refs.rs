@@ -95,6 +95,15 @@ pub fn commits_between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<Co
         .collect()
 }
 
+/// The subject lines of the commits after `from` up to and including `to`, oldest first.
+pub fn subjects_between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<String>> {
+    let range = format!("{from}..{to}");
+    Ok(cmd::run(repo, ["log", "--reverse", "--format=%s", &range])?
+        .lines()
+        .map(str::to_owned)
+        .collect())
+}
+
 /// Whether `ancestor` is `descendant` or one of its ancestors (`git merge-base --is-ancestor`).
 ///
 /// Exit status 0 means yes and 1 means no. A commit this repository does

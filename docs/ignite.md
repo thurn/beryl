@@ -320,8 +320,9 @@ The verbs an agent uses while working:
   so a Rust test function name never builds every family.
 - `ignite check` runs what the landing gate would run on the tree as it is.
 - `ignite sync` rebases the tree's branch onto the tip.
-- `ignite land -m "<note>"` rebases, runs the gate, lands the commits, records
-  the note for dependent tickets, closes the ticket and releases the tree.
+- `ignite land` rebases, runs the gate, lands the commits, records the note for
+  dependent tickets, closes the ticket and releases the tree. The note is the
+  landed commits' subjects, one per line; `-m "<note>"` gives an explicit one.
 - `ignite run -- <command>` runs any other heavy command with cores from the
   daemon, and records it. A `cargo` on the tree's `PATH` does the same for plain
   `cargo` calls.
@@ -1642,6 +1643,7 @@ commands = [
   "cargo fmt --check",
   "cargo clippy --locked --all-targets -- -D warnings",
   "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
+  "uv run --quiet --project ../tools mdformat --check ../docs/ignite.md",
 ]
 families = ["ignite", "ignite-lint"]
 
@@ -1663,6 +1665,11 @@ express_cores = 3
 - One express run goes at a time on a machine, under a lock on a file beside the
   tree. The tree keeps its ignored files between landings, so Ignite's target
   directory stays warm: the test build takes about 56 CPU-seconds then.
+- The last command checks that `docs/ignite.md` is formatted as `just fmt`
+  formats Markdown (80 columns). It is there because `docs/ignite.md` is an
+  express path and no other command reads Markdown, so a misformatted copy would
+  otherwise land and fail only in tip verification. `ignite test ignite:` and
+  `ignite check` run it too, so the agent sees the failure before landing.
 - The commands are what the `ignite` family (every test, under cargo-nextest)
   and the `ignite-lint` family (`cargo fmt` and clippy) run. Those families
   still run in the gate when a change to Ignite lands together with other files,
