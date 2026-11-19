@@ -91,6 +91,12 @@ pub struct Express {
     /// The commands, each split on whitespace and run without a shell, in order. The landing
     /// passes when every one exits 0.
     pub commands: Vec<String>,
+    /// The check families the commands stand in for. `ignite test` of checks only in these
+    /// families, and `ignite check`, run the commands on the express cores in the agent's own
+    /// tree when the tree changes only `paths`, instead of asking the scheduler for cores.
+    /// None leaves both verbs to the scheduler.
+    #[serde(default)]
+    pub families: Vec<String>,
 }
 
 impl Express {
@@ -593,7 +599,8 @@ products = ["clippy", "rust-tests"]
     fn the_express_lane_covers_a_landing_only_when_every_changed_file_matches() {
         let text = format!(
             "{DOCUMENT_EXAMPLES}\n[express]\npaths = [\"ignite/**\", \"ignite.toml\"]\n\
-             tree = \".worktrees/express\"\ndir = \"ignite\"\ncommands = [\"cargo fmt --check\"]\n"
+             tree = \".worktrees/express\"\ndir = \"ignite\"\ncommands = [\"cargo fmt --check\"]\n\
+             families = [\"ignite\"]\n"
         );
         let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
         assert!(unknown.is_empty(), "{unknown:?}");
@@ -602,6 +609,7 @@ products = ["clippy", "rust-tests"]
         assert!(express.covers(&paths(&["ignite/crates/a.rs", "ignite.toml"])));
         assert!(!express.covers(&paths(&["ignite/crates/a.rs", "rust/Cargo.toml"])));
         assert!(!express.covers(&[]));
+        assert_eq!(express.families, ["ignite"]);
         assert_eq!(config.machine["jarvis"].express_cores, 0);
     }
 

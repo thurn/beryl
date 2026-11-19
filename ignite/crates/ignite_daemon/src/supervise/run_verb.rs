@@ -132,8 +132,37 @@ impl Verb for RunVerb {
             Some(gone) => ctx.launcher.run_until(&spec, &*gone),
             None => ctx.launcher.run(&spec),
         };
-        render(&args.command, &result)
+        let mut reply = render(&args.command, &result);
+        if let Some(hint) = express_hint(ctx, &req.cwd) {
+            let _ = writeln!(reply.text, "hint     {hint}");
+        }
+        reply
     }
+}
+
+/// A hint naming `ignite test` of the express families, for a command run in the express
+/// commands' directory of a build tree. Such a command asks the scheduler for cores like any
+/// build, and on 2026-11-18 Ignite's own test build waited minutes for them behind other
+/// builds, while `ignite test` of those families runs on the express cores the scheduler never
+/// hands out (see `crate::checks::express`).
+fn express_hint(ctx: &Context, cwd: &Path) -> Option<String> {
+    let express = ctx.config.express.as_ref()?;
+    if express.families.is_empty() {
+        return None;
+    }
+    let trees = ctx.repo.join(&ctx.config.repository.trees);
+    let in_dir = cwd.strip_prefix(&trees).is_ok_and(|rest| {
+        let in_tree: std::path::PathBuf = rest.components().skip(1).collect();
+        in_tree.starts_with(&express.dir)
+    });
+    let names: Vec<String> = express.families.iter().map(|f| format!("{f}:")).collect();
+    in_dir.then(|| {
+        format!(
+            "`ignite test {}` runs Ignite's checks on reserved cores when your tree changes \
+             only Ignite",
+            names.join(" ")
+        )
+    })
 }
 
 /// The reply for a finished command: the verdict, the end of its output and where the rest is.

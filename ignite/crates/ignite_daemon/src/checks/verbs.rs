@@ -13,11 +13,13 @@ use ignite_core::protocol::hub::CachedResult;
 use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::protocol::{Class, Outcome};
 
+use super::express::{Asked, express_reply};
 pub(crate) use super::gate::gate_lines;
 use super::gate::scope_line;
 use super::plan::{self, GateView};
 use super::why_record;
 use super::{Built, CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
+use crate::land::express::ExpressLane;
 use crate::server::{Context, Verb};
 
 /// The most failures a reply lists; the rest are in its JSON.
@@ -25,9 +27,12 @@ const SHOWN_FAILURES: usize = 8;
 
 /// `ignite test <names>`: runs the checks the agent names, in its tree. A name matches every
 /// check whose name contains it, or, when it holds `*` or `?`, every check it matches as a
-/// pattern.
+/// pattern. Names only in the express families run the express commands instead, in a tree
+/// that changes only Ignite (see [`super::express`]).
 pub struct TestVerb {
     pub checks: Arc<Checks>,
+    /// The machine's express lane, if it has one.
+    pub express: Option<Arc<dyn ExpressLane>>,
 }
 
 impl Verb for TestVerb {
@@ -45,6 +50,10 @@ impl Verb for TestVerb {
             Ok(tree) => tree,
             Err(reply) => return reply,
         };
+        let asked = Asked::Named(&words);
+        if let Some(reply) = express_reply(self.express.as_ref(), &self.checks, ctx, &tree, asked) {
+            return reply;
+        }
         let known = |w: &&str| {
             w.split_once(':')
                 .is_some_and(|(f, _)| self.checks.families().any(|(n, _)| n == f))
@@ -100,9 +109,12 @@ impl Verb for TestVerb {
 }
 
 /// `ignite check [--plan] [--rerun]`: runs what the landing gate would run on the tree as it is,
-/// or with `--plan` prints which checks it would choose and why.
+/// or with `--plan` prints which checks it would choose and why. In a tree that changes only
+/// Ignite it runs the express commands, as the landing would (see [`super::express`]).
 pub struct CheckVerb {
     pub checks: Arc<Checks>,
+    /// The machine's express lane, if it has one.
+    pub express: Option<Arc<dyn ExpressLane>>,
 }
 
 impl Verb for CheckVerb {
@@ -118,6 +130,10 @@ impl Verb for CheckVerb {
             Err(reply) => return reply,
         };
         if !flags.contains(&"--plan") {
+            let lane = self.express.as_ref();
+            if let Some(reply) = express_reply(lane, &self.checks, ctx, &tree, Asked::Gate) {
+                return reply;
+            }
             let gated = self.checks.gate_in(ctx, &tree, &options, None);
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));

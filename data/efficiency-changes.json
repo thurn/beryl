@@ -374,5 +374,10 @@
     "label": "The monitor rewrites a daemon launchd agent an older build wrote: hours after the agent became Interactive, jarvis still ran every rustc at utility priority, ten of them at a quarter core each with 40% of the CPU idle, because only `ignite install` wrote the agent",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite test` of Ignite's own checks, and `ignite check`, run the express commands on the reserved express cores when the tree changes only Ignite: through the scheduler they took 5 to 8.5 minutes while other builds held its cores, against 40 s warm on 3 express cores after a daemon edit (fmt 0 s, clippy 2 s, nextest 38 s)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

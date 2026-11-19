@@ -31,6 +31,12 @@ checks = "ignite/checks"
 # reads its thread count from the `NEXTEST_TEST_THREADS` the daemon sets; `cargo test` ran the
 # binaries one after another. Ignite's test build is about 56 CPU-seconds with the tree's target
 # directory warm.
+#
+# `families` are the check families the commands stand in for. `ignite test` of names only in
+# them (`ignite test ignite: ignite-lint:`), and `ignite check`, run the commands in the agent's
+# own tree on the same cores and under the same lock when the tree changes only `paths`. On
+# 2026-11-18 `ignite test` of these checks took 5 to 8.5 minutes through the scheduler while Beryl
+# builds held its cores, against about a minute when it got them.
 [express]
 paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.json"]
 tree = ".worktrees/express"
@@ -40,6 +46,7 @@ commands = [
   "cargo clippy --locked --all-targets -- -D warnings",
   "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
 ]
+families = ["ignite", "ignite-lint"]
 
 [hub]
 url = "https://jarvis.tail4b0774.ts.net:8443"

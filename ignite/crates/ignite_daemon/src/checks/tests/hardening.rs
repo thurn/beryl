@@ -214,6 +214,7 @@ fn a_failing_check_tells_the_agent_to_rerun_with_the_flag_that_bypasses_the_cach
         .script("unit:b", &[Some("fail"), Some("fail")]);
     let verb = TestVerb {
         checks: world.checks.clone(),
+        express: None,
     };
     let request = |args: &[&str]| Request {
         verb: "test".to_owned(),

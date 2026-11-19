@@ -76,3 +76,21 @@ fn a_failing_command_stops_the_run_and_reports_its_output() {
     );
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn a_run_in_an_agents_tree_uses_that_tree_as_it_is() {
+    let (root, lane, _) = lane("in-tree", &["test -f lib.txt", "touch ran-here"]);
+    let agent = lane.repo.clone();
+    fs::write(agent.join("tool/uncommitted.txt"), "edit").unwrap();
+    let run = lane.run_in(&agent);
+    assert!(run.passed(), "{run:?}");
+    assert_eq!(run.ran.len(), 2);
+    assert!(agent.join("tool/ran-here").exists());
+    assert!(agent.join("tool/target/express.log").exists());
+    assert!(
+        agent.join("tool/uncommitted.txt").exists(),
+        "nothing is checked out or cleaned"
+    );
+    assert!(!lane.tree.exists(), "the express tree is not made");
+    let _ = fs::remove_dir_all(root);
+}

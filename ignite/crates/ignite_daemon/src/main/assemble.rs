@@ -507,12 +507,14 @@ pub fn long_verbs(checks: &Arc<Checks>, landing: &Arc<Landing>, idle: &Arc<Idle>
         (
             Box::new(TestVerb {
                 checks: checks.clone(),
+                express: landing.express.clone(),
             }),
             true,
         ),
         (
             Box::new(CheckVerb {
                 checks: checks.clone(),
+                express: landing.express.clone(),
             }),
             true,
         ),

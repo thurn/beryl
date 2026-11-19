@@ -39,6 +39,10 @@ impl ExpressLane for FakeExpress {
             cores: 3,
         }
     }
+
+    fn run_in(&self, _tree: &std::path::Path) -> ExpressRun {
+        unreachable!("a landing runs in the express tree")
+    }
 }
 
 /// A world with a release branch, the express commands configured for `ignite/**`, and the
@@ -56,6 +60,7 @@ fn express_world(lane: &Arc<FakeExpress>) -> World {
         tree: PathBuf::from("trees/express"),
         dir: "ignite".to_owned(),
         commands: vec!["cargo test".to_owned()],
+        families: Vec::new(),
     });
     let pause_clock = world.clock.clone();
     world.landing = Arc::new(Landing {

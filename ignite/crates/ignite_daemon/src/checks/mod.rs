@@ -41,6 +41,7 @@
 pub mod adapters;
 mod batches;
 mod execute;
+mod express;
 mod gate;
 pub(crate) mod listings;
 pub(crate) mod plan;

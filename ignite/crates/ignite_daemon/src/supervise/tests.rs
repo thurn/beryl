@@ -181,3 +181,27 @@ fn a_command_ended_as_hung_is_reported_as_failed() {
         reply.text
     );
 }
+
+#[test]
+fn a_run_in_the_express_directory_of_a_tree_names_ignite_test_of_the_express_families() {
+    let mut ctx = context(Arc::new(FakeLauncher::default()));
+    ctx.config.express = Some(ignite_core::config::Express {
+        paths: strings(&["tool/**"]),
+        tree: PathBuf::from("trees/express"),
+        dir: "tool".to_owned(),
+        commands: strings(&["cargo test"]),
+        families: strings(&["tool", "tool-lint"]),
+    });
+    let run_in = |cwd: &str| {
+        let mut req = request(&["--", "cargo", "test"]);
+        req.cwd = PathBuf::from(cwd);
+        RunVerb.run(&ctx, &req).text
+    };
+    let hinted = run_in("/repo/trees/tree-01/tool/crates");
+    assert!(
+        hinted.contains("hint     `ignite test tool: tool-lint:` runs"),
+        "{hinted}"
+    );
+    assert!(!run_in("/repo/trees/tree-01/rust").contains("hint"));
+    assert!(!run_in("/repo/tool").contains("hint"), "the main checkout");
+}

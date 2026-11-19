@@ -1639,6 +1639,7 @@ commands = [
   "cargo clippy --locked --all-targets -- -D warnings",
   "cargo nextest run --locked --cargo-quiet --workspace --status-level=fail --final-status-level=fail",
 ]
+families = ["ignite", "ignite-lint"]
 
 [machine.jarvis]
 express_cores = 3
@@ -1662,6 +1663,22 @@ express_cores = 3
   and the `ignite-lint` family (`cargo fmt` and clippy) run. Those families
   still run in the gate when a change to Ignite lands together with other files,
   and in tip verification.
+- `ignite test` and `ignite check` use the express lane too, for a tree whose
+  every changed file matches `paths`. `ignite test` does so when every name it
+  is given is in one of `families` (`ignite test ignite: ignite-lint:`), and
+  `ignite check` does so for any such tree, because its landing would take the
+  express lane. They run `commands` in the agent's own tree as it is, with no
+  checkout, on the same cores and under the same lock, and reply with the
+  `express` line or with the failed command and the end of its output. The whole
+  command list runs whatever names were given, and no result goes into the check
+  cache. While an express landing holds the lock the verb waits for it rather
+  than asking the scheduler. On 2026-11-18 `ignite test` of these checks took 5
+  to 8.5 minutes through the scheduler while Beryl builds held its cores: one
+  test build got 4 cores for 319 s and its run 1 core for 180 s, against 65 s in
+  all when it got 12 cores.
+- `ignite run` of a command in the commands' directory of a build tree still
+  asks the scheduler, and its reply ends with a hint naming
+  `ignite test ignite: ignite-lint:`.
 - `ignite check` and the gate also use `paths` for scope. When every changed
   file matches, a family with no kept listing (a fresh tree has none) is judged
   by its declared inputs instead of being listed, so a change to Ignite alone

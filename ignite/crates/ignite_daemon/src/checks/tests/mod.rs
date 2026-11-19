@@ -4,6 +4,7 @@
 mod budget;
 mod compile;
 mod costs;
+mod express;
 mod fail_fast;
 mod hardening;
 mod listings;
@@ -668,6 +669,7 @@ fn test_resolves_names_by_substring_and_pattern() {
     };
     let verb = TestVerb {
         checks: world.checks.clone(),
+        express: None,
     };
     let reply = verb.run(&world.ctx, &request(&["it:b"]));
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);

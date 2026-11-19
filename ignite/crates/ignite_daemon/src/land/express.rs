@@ -16,6 +16,12 @@
 //! exclusive lock on a file beside the tree, because each landing runs in a verb process of its
 //! own.
 //!
+//! `ignite test` and `ignite check` use the same commands, cores and lock for a tree that changes
+//! only Ignite (see `crate::checks::express`), but run them in the agent's own tree with no
+//! checkout ([`ExpressLane::run_in`]). On 2026-11-18 `ignite test` of Ignite's own checks took 5
+//! to 8.5 minutes while other builds held the scheduler's cores, against about a minute when it
+//! got them, and that edit-and-test loop was most of a fix's wall time.
+//!
 //! The landing then takes the integration branch's lease and pushes as any landing does, and
 //! moves the release branch on the commands' pass (see [`super::release`]). A machine whose
 //! `express_cores` is zero has no express lane, and its landings all go through the gate.
@@ -65,6 +71,11 @@ pub trait ExpressLane: Send + Sync {
     /// Checks `commit` out in the tree and runs the commands there, waiting for any other
     /// express run on the machine to finish first.
     fn run(&self, commit: &Commit) -> ExpressRun;
+    /// Runs the commands in `tree` as it is, with no checkout, under the same lock as [`run`]
+    /// (`ignite test` and `ignite check` in an agent's tree).
+    ///
+    /// [`run`]: ExpressLane::run
+    fn run_in(&self, tree: &Path) -> ExpressRun;
 }
 
 /// What an express run did.
@@ -86,6 +97,11 @@ impl ExpressRun {
 
     /// The landing's `express` line.
     pub fn line(&self) -> (String, String) {
+        self.line_in_place_of("the gate")
+    }
+
+    /// The `express` line, saying that the commands ran in place of `what`.
+    pub fn line_in_place_of(&self, what: &str) -> (String, String) {
         let names: Vec<&str> = self
             .ran
             .iter()
@@ -95,8 +111,7 @@ impl ExpressRun {
         line(
             "express",
             format!(
-                "{} commands passed in {seconds:.0} s on {} reserved cores, in place of the \
-                 gate: {}",
+                "{} commands passed in {seconds:.0} s on {} reserved cores, in place of {what}: {}",
                 self.ran.len(),
                 self.cores,
                 names.join("; ")
@@ -179,7 +194,7 @@ impl MachineExpress {
     }
 
     /// Takes the exclusive lock on the file beside the tree, held until the file is dropped,
-    /// so that two landings never share the tree. `Err` says why it was not taken.
+    /// so that two express runs never share the tree or the cores. `Err` says why it was not taken.
     fn lock(&self) -> Result<File, String> {
         let path = self.tree.with_extension("lock");
         if let Some(parent) = path.parent() {
@@ -191,7 +206,7 @@ impl MachineExpress {
             .write(true)
             .open(&path)
             .map_err(|e| format!("cannot open {}: {e}", path.display()))?;
-        let _waiting = steps::waiting("the express tree, which another landing is using");
+        let _waiting = steps::waiting("the express cores, which another express run is using");
         loop {
             match file.try_lock() {
                 Ok(()) => return Ok(file),
@@ -201,7 +216,7 @@ impl MachineExpress {
                 }
             }
             if steps::stop_requested() {
-                return Err("the landing was stopped".to_owned());
+                return Err("the run was stopped".to_owned());
             }
             std::thread::sleep(LOOK_EVERY);
         }
@@ -222,8 +237,34 @@ impl MachineExpress {
         done.map_err(|error| error.to_string())
     }
 
-    /// Runs one command, its output appended to `log`; `Err` holds why it failed.
-    fn run_one(&self, command: &str, log: &Path) -> Result<(), String> {
+    /// Runs the commands in order in `tree`'s commands directory, logging to `express.log` in
+    /// its `target` directory, and records each in `run`; stops at the first failure.
+    fn run_commands(&self, tree: &Path, run: &mut ExpressRun) {
+        let dir = tree.join(&self.dir);
+        let target = dir.join("target");
+        let log = target.join("express.log");
+        if let Err(error) = fs::create_dir_all(&target).and_then(|()| File::create(&log)) {
+            run.failure = Some((
+                "writing the express log".to_owned(),
+                format!("{}: {error}", log.display()),
+            ));
+            return;
+        }
+        for command in &self.commands {
+            steps::step(format!("running `{command}` on the express cores"));
+            let began = Instant::now();
+            let result = self.run_one(command, &dir, &log);
+            run.ran
+                .push((command.clone(), began.elapsed().as_secs_f64()));
+            if let Err(why) = result {
+                run.failure = Some((command.clone(), why));
+                return;
+            }
+        }
+    }
+
+    /// Runs one command in `dir`, its output appended to `log`; `Err` holds why it failed.
+    fn run_one(&self, command: &str, dir: &Path, log: &Path) -> Result<(), String> {
         let mut words = command.split_whitespace();
         let program = words.next().ok_or("an empty command")?;
         let mut out = OpenOptions::new()
@@ -238,7 +279,7 @@ impl MachineExpress {
         let mut process = Command::new(program);
         process
             .args(words)
-            .current_dir(self.tree.join(&self.dir))
+            .current_dir(dir)
             .stdin(Stdio::null())
             .stdout(out)
             .stderr(err)
@@ -268,7 +309,7 @@ impl MachineExpress {
                 Err(error) => return Err(format!("cannot wait for `{command}`: {error}")),
             }
             let why = if steps::stop_requested() {
-                Some("the landing was stopped".to_owned())
+                Some("the run was stopped".to_owned())
             } else if began.elapsed() > HANG_LIMIT {
                 Some(format!("it ran past {} s", HANG_LIMIT.as_secs()))
             } else {
@@ -314,26 +355,23 @@ impl ExpressLane for MachineExpress {
             run.failure = Some(("checking out the express tree".to_owned(), why));
             return run;
         }
-        let target = self.tree.join(&self.dir).join("target");
-        let log = target.join("express.log");
-        if let Err(error) = fs::create_dir_all(&target).and_then(|()| File::create(&log)) {
-            run.failure = Some((
-                "writing the express log".to_owned(),
-                format!("{}: {error}", log.display()),
-            ));
-            return run;
-        }
-        for command in &self.commands {
-            steps::step(format!("running `{command}` in the express tree"));
-            let began = Instant::now();
-            let result = self.run_one(command, &log);
-            run.ran
-                .push((command.clone(), began.elapsed().as_secs_f64()));
-            if let Err(why) = result {
-                run.failure = Some((command.clone(), why));
+        self.run_commands(&self.tree, &mut run);
+        run
+    }
+
+    fn run_in(&self, tree: &Path) -> ExpressRun {
+        let mut run = ExpressRun {
+            cores: self.cores,
+            ..ExpressRun::default()
+        };
+        let _held = match self.lock() {
+            Ok(file) => file,
+            Err(why) => {
+                run.failure = Some(("locking the express tree".to_owned(), why));
                 return run;
             }
-        }
+        };
+        self.run_commands(tree, &mut run);
         run
     }
 }

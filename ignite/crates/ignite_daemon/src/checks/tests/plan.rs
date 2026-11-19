@@ -128,6 +128,7 @@ fn check_plan_prints_the_documented_example() {
     let world = seeded();
     let verb = CheckVerb {
         checks: world.checks.clone(),
+        express: None,
     };
     let reply = verb.run(
         &world.ctx,
@@ -163,6 +164,7 @@ fn check_runs_the_gate_and_answers_the_rest_from_the_cache() {
     let world = seeded();
     let verb = CheckVerb {
         checks: world.checks.clone(),
+        express: None,
     };
     let reply = verb.run(
         &world.ctx,
