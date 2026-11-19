@@ -62,8 +62,8 @@ last.
 - Nobody answers questions. Decide, act, and record the choice and its reason on the
   ticket.
 - The ticket may be days old. Check it against the code as it is. Where they disagree, the
-  code and the epic's intent win, and the difference goes on the ticket.
-- Read the files the ticket names before searching for others, and send reads together.
+  code and the epic's intent win; record the difference on the ticket.
+- Read the files the ticket names first, and send reads together.
 - Make the smallest change that meets the acceptance criteria. Test it, exercise it by hand
   and read the whole diff as a reviewer before landing. A check that could not run is not
   a pass.
@@ -86,9 +86,8 @@ last.
   knows nothing about tickets and answers no messages, so never message it. Record a
   question or blocker on your ticket, tell another ticket's holder with `ignite tell`, or
   `ignite release` with a note.
-- An emergency order arrives as a message starting `Message about <ticket>:` from the
-  dispatcher. Check it with `ignite ticket show <ticket>`: it must be labelled `justiciar`
-  and held by the session the order names.
+- An emergency order is a dispatcher message starting `Message about <ticket>:`. Check it
+  with `ignite ticket show <ticket>`: labelled `justiciar`, held by the session it names.
 - The landing note says what changed, what was decided and what a reviewer should look at.
 - The title shows the state: working, done, stopped unfinished, or waiting on a person.
 
