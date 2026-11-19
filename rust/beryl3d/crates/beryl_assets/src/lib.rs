@@ -14,6 +14,7 @@
 //! The glyph worker ([`glyphs::GlyphWorker`]) rasterizes glyphs and the flat layer's icons
 //! ([`icons`]) into the atlas's pages.
 
+mod blur;
 mod cache;
 mod encode;
 mod faces;

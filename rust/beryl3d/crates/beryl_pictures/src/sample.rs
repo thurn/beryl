@@ -10,8 +10,16 @@
 //! ```text
 //! {"scale": 2, "out": "<directory>", "samples": [{"name", "window": [w, h], "page": [r, g, b, a],
 //!   "box": [w, h], "web": "<png>", "style": {"background": [r, g, b, a] | null,
-//!   "border": [[r, g, b, a], width] | null, "radius": r, "opacity": o}}]}
+//!   "border": [[r, g, b, a], width] | null, "radius": r, "opacity": o,
+//!   "box_shadow": [shadow], "drop_shadow": [shadow]},
+//!   "text": {"string", "color": [r, g, b, a], "size"} | null}]}
 //! ```
+//!
+//! where a shadow is `{"x", "y", "blur", "spread", "color": [r, g, b, a], "inset"}`. Text is set
+//! in Open Sans at the line height of Beryl 3D's body text, centred in the box, and its glyphs
+//! are rasterized by the real glyph worker. Glyph pixels are left out of the score (decision
+//! M2): every pixel Beryl 3D's glyphs cover, found by drawing the text alone in white on black,
+//! and the pixels beside those, since the two rasterizers' antialiasing differs.
 //!
 //! Colors are channels from 0 to 255. For each sample it prints one line of JSON, `{"name",
 //! "max", "mean", "p995", "picture"}`: the largest and the mean difference of any color channel,
@@ -23,11 +31,19 @@ use std::path::{Path, PathBuf};
 
 use beryl_inspect::cli::{Options, Usage};
 use beryl_render::{Limits, Renderer, Target};
-use beryl_scene::element::{Element, Position, holder, row};
+use std::sync::mpsc::{self, Receiver};
+
+use beryl_assets::Prepared;
+use beryl_assets::glyphs::GlyphWorker;
+use beryl_assets::light;
+use beryl_scene::element::{Align, Element, Justify, Position, Shadow, holder, row};
 use beryl_scene::frame::{Frame, FrameBuilder};
+use beryl_scene::input::AssetReady;
 use beryl_scene::input::{Insets, Size, Tier};
 use beryl_scene::layout::Layer;
 use beryl_scene::table::{Camera, DESKTOP, Window};
+use beryl_scene::text::TypeStyle;
+use beryl_scene::text::fonts::Font;
 use serde_json::Value;
 
 use crate::Error;
@@ -50,6 +66,16 @@ struct Sample {
     border: Option<([u8; 4], f32)>,
     radius: f32,
     opacity: f32,
+    box_shadow: Vec<Shadow>,
+    drop_shadow: Vec<Shadow>,
+    text: Option<SampleText>,
+}
+
+/// A sample's text.
+struct SampleText {
+    string: String,
+    color: [u8; 4],
+    size: f32,
 }
 
 /// How far one sample's picture is from the web's.
@@ -81,19 +107,24 @@ pub(crate) fn sample(options: &Options) -> Result<String, Error> {
         .iter()
         .map(read_sample)
         .collect::<Result<Vec<_>, _>>()?;
-    let mut renderer = Renderer::headless(Limits::Default)
+    let renderer = Renderer::headless(Limits::Default)
         .map_err(|why| Error::Failed(format!("no GPU to draw with: {why}")))?;
+    let mut drawer = Drawer::new(renderer, scale);
     let mut printed = String::new();
     for sample in &samples {
         let web = beryl_render::read_rgba_png(&sample.web).map_err(Error::Failed)?;
-        let (pixels, width, height) = draw(&mut renderer, sample, scale);
+        let (pixels, width, height) = drawer.draw(sample, scale, false);
+        let mask = sample
+            .text
+            .is_some()
+            .then(|| glyph_mask(&drawer.draw(sample, scale, true)));
         if (web.width, web.height) != (width, height) {
             return Err(failed(&format!(
                 "{}: the web's picture is {}x{} px and Beryl 3D's {width}x{height}",
                 sample.name, web.width, web.height
             )));
         }
-        let score = score(&web.pixels, &pixels);
+        let score = score(&web.pixels, &pixels, mask.as_deref());
         let picture = out.join(format!("{}.png", sample.name));
         write_beside(&picture, &web.pixels, &pixels, width, height)?;
         let line = serde_json::json!({
@@ -143,7 +174,23 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
         Value::Null => None,
         given => Some(color(given).ok_or_else(|| bad("background"))?),
     };
+    let box_shadow = shadows(&style["box_shadow"]).ok_or_else(|| bad("box_shadow"))?;
+    let drop_shadow = shadows(&style["drop_shadow"]).ok_or_else(|| bad("drop_shadow"))?;
+    let text = match &value["text"] {
+        Value::Null => None,
+        given => Some(SampleText {
+            string: given["string"]
+                .as_str()
+                .ok_or_else(|| bad("text"))?
+                .to_owned(),
+            color: color(&given["color"]).ok_or_else(|| bad("text color"))?,
+            size: given["size"].as_f64().ok_or_else(|| bad("text size"))? as f32,
+        }),
+    };
     Ok(Sample {
+        box_shadow,
+        drop_shadow,
+        text,
         window: pair(&value["window"]).ok_or_else(|| bad("window"))?,
         page: color(&value["page"]).ok_or_else(|| bad("page"))?,
         size: pair(&value["box"]).ok_or_else(|| bad("box"))?,
@@ -156,63 +203,178 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
     })
 }
 
+/// A list of shadows as the job writes them, or `None` if one is malformed. A missing list is
+/// empty.
+fn shadows(value: &Value) -> Option<Vec<Shadow>> {
+    let Some(list) = value.as_array() else {
+        return value.is_null().then(Vec::new);
+    };
+    list.iter()
+        .map(|shadow| {
+            let length = |name: &str| shadow[name].as_f64().map(|v| v as f32);
+            Some(Shadow {
+                x: length("x")?,
+                y: length("y")?,
+                blur: length("blur")?,
+                spread: length("spread")?,
+                color: color(&shadow["color"])?,
+                inset: shadow["inset"].as_bool()?,
+            })
+        })
+        .collect()
+}
+
 /// Fills the whole window from its corner: an element placed at offsets of 0 from every edge.
 fn filling(element: Element) -> Element {
     element.position(Position::Absolute).inset([Some(0.0); 4])
 }
 
 /// The sample as the screen the flat layer shows: the page's color filling the window and the
-/// sample's element in its middle. The screen's own element is a clear holder, since a screen's
-/// top element is otherwise drawn on the usual panel.
-fn screen(sample: &Sample) -> Element {
+/// sample's element in its middle, with its text centred in it. The screen's own element is a
+/// clear holder, since a screen's top element is otherwise drawn on the usual panel. A `mask`
+/// screen draws only the text, in white on black, to find the glyphs' pixels.
+fn screen(sample: &Sample, mask: bool) -> Element {
     let mut element = row()
         .width(sample.size.width)
         .height(sample.size.height)
-        .opacity(sample.opacity);
-    element.style.background = sample.background;
-    element.style.border = sample.border;
-    // A radius of 0 means the usual one, which is square for an element that is not a button.
-    element.style.radius = sample.radius;
-    let page = filling(row().background(sample.page))
-        .align_items(beryl_scene::element::Align::Center)
-        .justify_content(beryl_scene::element::Justify::Center)
+        .align_items(Align::Center)
+        .justify_content(Justify::Center);
+    if !mask {
+        element.style.opacity = sample.opacity;
+        element.style.background = sample.background;
+        element.style.border = sample.border;
+        // A radius of 0 means the usual one, which is square for an element that is not a
+        // button.
+        element.style.radius = sample.radius;
+        element.style.box_shadow.clone_from(&sample.box_shadow);
+    }
+    if let Some(text) = &sample.text {
+        let mut words = beryl_scene::element::text(&text.string)
+            .style(TypeStyle {
+                font: Font::OpenSans,
+                weight: 400,
+                size: text.size,
+                line_height: TEXT_LINE_HEIGHT,
+            })
+            .color(if mask { [255; 4] } else { text.color });
+        if !mask {
+            words.style.drop_shadow.clone_from(&sample.drop_shadow);
+        }
+        element = element.child(words);
+    }
+    let page = if mask { [0, 0, 0, 255] } else { sample.page };
+    let page = filling(row().background(page))
+        .align_items(Align::Center)
+        .justify_content(Justify::Center)
         .child(element);
     filling(holder()).child(page)
 }
 
-/// Draws `sample` at `scale` and returns its pixels and their size.
-fn draw(renderer: &mut Renderer, sample: &Sample, scale: f32) -> (Vec<u8>, u32, u32) {
-    let window = Window {
-        size: sample.window,
-        scale,
-        safe_area: Insets::default(),
-    };
-    let mut layer = Layer::new();
-    layer.resize(window);
-    layer.show(Some(screen(sample)));
-    let camera = Camera::fit(DESKTOP.camera, window);
-    let mut frame = Frame::with_capacity(16, 16, 64);
-    let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
-    builder.camera(camera.view_projection);
-    layer.write(&mut builder, &camera, true);
-    let frame = builder.finish();
-    let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
-    let (width, height) = (pixels(sample.window.width), pixels(sample.window.height));
-    let mut target = Target::offscreen(renderer, width, height);
-    renderer.render(frame, &mut target);
-    (renderer.read(&target), width, height)
+/// The line height a sample's text is set at, which `match samples` gives the web's page too:
+/// Beryl 3D's body text's.
+const TEXT_LINE_HEIGHT: f32 = 1.4;
+
+/// The renderer the samples are drawn with, and the glyph worker that rasterizes their text.
+struct Drawer {
+    renderer: Renderer,
+    glyphs: GlyphWorker,
+    pages: Receiver<Prepared>,
+    /// The glyphs and icons the worker has delivered, which every sample's layer is given.
+    ready: Vec<AssetReady>,
 }
 
-/// How far `found` is from `expected`, two RGBA pictures of one size, by their color channels.
-fn score(expected: &[u8], found: &[u8]) -> Score {
+impl Drawer {
+    fn new(mut renderer: Renderer, scale: f32) -> Self {
+        renderer.upload_page(&light::prepared());
+        let (out, pages) = mpsc::channel();
+        let glyphs = GlyphWorker::spawn(out, || {}, || {});
+        glyphs.icons(scale);
+        Self {
+            renderer,
+            glyphs,
+            pages,
+            ready: Vec::new(),
+        }
+    }
+
+    /// Draws `sample` (or its `mask` screen) at `scale` and returns its pixels and their size.
+    fn draw(&mut self, sample: &Sample, scale: f32, mask: bool) -> (Vec<u8>, u32, u32) {
+        let window = Window {
+            size: sample.window,
+            scale,
+            safe_area: Insets::default(),
+        };
+        let mut layer = Layer::new();
+        layer.resize(window);
+        self.give(&mut layer);
+        layer.show(Some(screen(sample, mask)));
+        // Laying the screen out asked for its glyphs; the worker rasterizes them before the
+        // frame is drawn, as the headless host's does.
+        let wanted: Vec<_> = layer.glyphs_mut().drain_wanted().collect();
+        self.glyphs.request(wanted);
+        self.glyphs.flush();
+        while let Ok(prepared) = self.pages.try_recv() {
+            if self.renderer.upload_page(&prepared) {
+                self.ready.push(prepared.ready);
+            }
+        }
+        self.give(&mut layer);
+        let camera = Camera::fit(DESKTOP.camera, window);
+        let mut frame = Frame::with_capacity(16, 16, 64);
+        let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
+        builder.camera(camera.view_projection);
+        layer.write(&mut builder, &camera, true);
+        let frame = builder.finish();
+        let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
+        let (width, height) = (pixels(sample.window.width), pixels(sample.window.height));
+        let mut target = Target::offscreen(&self.renderer, width, height);
+        self.renderer.render(frame, &mut target);
+        (self.renderer.read(&target), width, height)
+    }
+
+    /// Gives `layer` every glyph and icon delivered so far.
+    fn give(&self, layer: &mut Layer) {
+        for ready in &self.ready {
+            match ready {
+                AssetReady::Glyphs { page, glyphs } => layer.glyphs_mut().add(*page, glyphs),
+                AssetReady::Icons { page, cells } => layer.icons_mut().add(*page, cells),
+                _ => {}
+            }
+        }
+    }
+}
+
+/// Which pixels of a mask screen's picture (`screen`) a glyph covers, or lies next to one that
+/// does: those left out of the score.
+fn glyph_mask((pixels, width, height): &(Vec<u8>, u32, u32)) -> Vec<bool> {
+    let (width, height) = (*width as usize, *height as usize);
+    let inked = |x: usize, y: usize| pixels[(y * width + x) * 4..][..3].iter().any(|&c| c > 0);
+    let mut mask = vec![false; width * height];
+    for y in 0..height {
+        for x in 0..width {
+            let near = (y.saturating_sub(1)..=(y + 1).min(height - 1))
+                .any(|ny| (x.saturating_sub(1)..=(x + 1).min(width - 1)).any(|nx| inked(nx, ny)));
+            mask[y * width + x] = near;
+        }
+    }
+    mask
+}
+
+/// How far `found` is from `expected`, two RGBA pictures of one size, by their color channels,
+/// leaving out the pixels `mask` marks.
+fn score(expected: &[u8], found: &[u8], mask: Option<&[bool]>) -> Score {
     let mut counts = [0_u64; 256];
     let mut total = 0_u64;
-    for (a, b) in expected
+    for (at, (a, b)) in expected
         .as_chunks::<4>()
         .0
         .iter()
         .zip(found.as_chunks::<4>().0.iter())
+        .enumerate()
     {
+        if mask.is_some_and(|mask| mask[at]) {
+            continue;
+        }
         let worst = (0..3).map(|c| a[c].abs_diff(b[c])).max().unwrap_or(0);
         counts[usize::from(worst)] += 1;
         total += u64::from(worst);
@@ -286,14 +448,15 @@ mod tests {
         found[1] = 40;
         found[6] = 13;
         found[10] = 13;
-        let score = score(&expected, &found);
+        let score = score(&expected, &found, None);
         assert_eq!((score.max, score.p995), (30, 3));
         assert!((score.mean - 36.0 / 400.0).abs() < 1e-9);
     }
 
     #[test]
     fn a_plain_panel_draws_its_color_on_the_page() {
-        let mut renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+        let renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+        let mut drawer = Drawer::new(renderer, 2.0);
         let sample = Sample {
             name: "plain".to_owned(),
             window: Size {
@@ -310,8 +473,11 @@ mod tests {
             border: None,
             radius: 0.0,
             opacity: 1.0,
+            box_shadow: Vec::new(),
+            drop_shadow: Vec::new(),
+            text: None,
         };
-        let (pixels, width, height) = draw(&mut renderer, &sample, 2.0);
+        let (pixels, width, height) = drawer.draw(&sample, 2.0, false);
         assert_eq!((width, height), (80, 60));
         let at = |x: u32, y: u32| {
             let i = ((y * width + x) * 4) as usize;

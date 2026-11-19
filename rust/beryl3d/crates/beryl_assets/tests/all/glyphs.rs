@@ -18,6 +18,7 @@ const HANG: Duration = Duration::from_mins(1);
 fn open_sans(character: char, size: u16) -> GlyphKey {
     let font = FontRef::from_index(Font::OpenSans.file().data, 0).unwrap();
     GlyphKey {
+        blur: 0,
         font: Font::OpenSans as u8,
         weight: 400,
         glyph: font.charmap().map(character),
@@ -189,6 +190,7 @@ fn a_mana_symbol_is_inked() {
     let glyph = font.charmap().map('\u{e601}');
     assert_ne!(glyph, 0, "the Mana font has the blue symbol");
     let key = GlyphKey {
+        blur: 0,
         font: Font::Mana as u8,
         weight: 400,
         glyph,
@@ -215,6 +217,7 @@ fn prepared_then_demanded(scale: f32) -> (Vec<u16>, Vec<GlyphCell>, usize, Vec<G
     let size = (32.0 * scale) as u16;
     let mana = FontRef::from_index(Font::Mana.file().data, 0).expect("the Mana font parses");
     let mut demanded = vec![GlyphKey {
+        blur: 0,
         font: Font::Mana as u8,
         weight: 400,
         glyph: mana.charmap().map('\u{e601}'),

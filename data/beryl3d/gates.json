@@ -18,16 +18,16 @@
       "total_elements": 34678,
       "worst_frame_segments": 75,
       "total_segments": 6880,
-      "worst_frame_records": 142,
-      "total_records": 16169,
+      "worst_frame_records": 146,
+      "total_records": 16739,
       "worst_frame_layout_nodes": 46,
       "total_layout_nodes": 46,
       "worst_frame_text_runs": 18,
       "total_text_runs": 18,
       "worst_frame_draw_calls": 4,
-      "worst_frame_upload_bytes": 11360,
-      "worst_frame_blended_area": 0.0732,
-      "handle_allocations": 3279,
+      "worst_frame_upload_bytes": 11680,
+      "worst_frame_blended_area": 0.0813,
+      "handle_allocations": 3286,
       "frame_allocations": 0,
       "worst_frame_instructions": 1989925,
       "total_instructions": 49159919,
@@ -41,16 +41,16 @@
       "total_elements": 132341,
       "worst_frame_segments": 75,
       "total_segments": 6880,
-      "worst_frame_records": 142,
-      "total_records": 16156,
+      "worst_frame_records": 146,
+      "total_records": 16726,
       "worst_frame_layout_nodes": 46,
       "total_layout_nodes": 46,
       "worst_frame_text_runs": 19,
       "total_text_runs": 19,
       "worst_frame_draw_calls": 4,
-      "worst_frame_upload_bytes": 11360,
-      "worst_frame_blended_area": 0.0717,
-      "handle_allocations": 9055,
+      "worst_frame_upload_bytes": 11680,
+      "worst_frame_blended_area": 0.0797,
+      "handle_allocations": 9062,
       "frame_allocations": 0,
       "worst_frame_instructions": 6424479,
       "total_instructions": 104122963,
@@ -64,16 +64,16 @@
       "total_elements": 475875,
       "worst_frame_segments": 23,
       "total_segments": 17317,
-      "worst_frame_records": 94,
-      "total_records": 73055,
+      "worst_frame_records": 100,
+      "total_records": 80780,
       "worst_frame_layout_nodes": 54,
       "total_layout_nodes": 194,
       "worst_frame_text_runs": 29,
       "total_text_runs": 60,
       "worst_frame_draw_calls": 7,
-      "worst_frame_upload_bytes": 7520,
-      "worst_frame_blended_area": 0.1965,
-      "handle_allocations": 17323,
+      "worst_frame_upload_bytes": 8000,
+      "worst_frame_blended_area": 0.2745,
+      "handle_allocations": 17493,
       "frame_allocations": 0,
       "worst_frame_instructions": 4816173,
       "total_instructions": 187017745,
@@ -87,16 +87,16 @@
       "total_elements": 28724,
       "worst_frame_segments": 3,
       "total_segments": 115,
-      "worst_frame_records": 39,
-      "total_records": 2655,
+      "worst_frame_records": 45,
+      "total_records": 3540,
       "worst_frame_layout_nodes": 48,
       "total_layout_nodes": 60,
       "worst_frame_text_runs": 24,
       "total_text_runs": 28,
       "worst_frame_draw_calls": 5,
-      "worst_frame_upload_bytes": 3120,
-      "worst_frame_blended_area": 0.1741,
-      "handle_allocations": 2050,
+      "worst_frame_upload_bytes": 3600,
+      "worst_frame_blended_area": 0.252,
+      "handle_allocations": 2074,
       "frame_allocations": 0,
       "worst_frame_instructions": 1954384,
       "total_instructions": 9442478,
@@ -110,8 +110,8 @@
       "total_elements": 15575,
       "worst_frame_segments": 107,
       "total_segments": 7731,
-      "worst_frame_records": 403,
-      "total_records": 29401,
+      "worst_frame_records": 410,
+      "total_records": 30189,
       "worst_frame_layout_nodes": 46,
       "total_layout_nodes": 52,
       "worst_frame_text_runs": 20,
@@ -119,9 +119,9 @@
       "worst_frame_placed": 1924,
       "total_placed": 2024,
       "worst_frame_draw_calls": 13,
-      "worst_frame_upload_bytes": 32240,
-      "worst_frame_blended_area": 0.7923,
-      "handle_allocations": 2245,
+      "worst_frame_upload_bytes": 32800,
+      "worst_frame_blended_area": 0.8104,
+      "handle_allocations": 2254,
       "frame_allocations": 0,
       "worst_frame_instructions": 2803575,
       "total_instructions": 46982881,
@@ -133,8 +133,8 @@
       "total_elements": 23862,
       "worst_frame_segments": 0,
       "total_segments": 0,
-      "worst_frame_records": 123,
-      "total_records": 30258,
+      "worst_frame_records": 127,
+      "total_records": 31242,
       "worst_frame_layout_nodes": 40,
       "total_layout_nodes": 40,
       "worst_frame_text_runs": 16,
@@ -142,9 +142,9 @@
       "worst_frame_placed": 60,
       "total_placed": 60,
       "worst_frame_draw_calls": 3,
-      "worst_frame_upload_bytes": 9840,
-      "worst_frame_blended_area": 0.003,
-      "handle_allocations": 871,
+      "worst_frame_upload_bytes": 10160,
+      "worst_frame_blended_area": 0.0111,
+      "handle_allocations": 873,
       "frame_allocations": 0,
       "worst_frame_instructions": 1192017,
       "total_instructions": 35465750,
@@ -156,8 +156,8 @@
       "total_elements": 23234,
       "worst_frame_segments": 50,
       "total_segments": 800,
-      "worst_frame_records": 1029,
-      "total_records": 148098,
+      "worst_frame_records": 1035,
+      "total_records": 149076,
       "worst_frame_layout_nodes": 44,
       "total_layout_nodes": 44,
       "worst_frame_text_runs": 17,
@@ -165,9 +165,9 @@
       "worst_frame_placed": 75,
       "total_placed": 150,
       "worst_frame_draw_calls": 4,
-      "worst_frame_upload_bytes": 82320,
-      "worst_frame_blended_area": 0.1123,
-      "handle_allocations": 2135,
+      "worst_frame_upload_bytes": 82800,
+      "worst_frame_blended_area": 0.1244,
+      "handle_allocations": 2145,
       "frame_allocations": 0,
       "worst_frame_instructions": 1552139,
       "total_instructions": 126868703,
@@ -202,49 +202,53 @@
     }
   },
   "materials": {
+    "box_shadow": {
+      "samples": 1,
+      "expressions": 177
+    },
     "card": {
       "samples": 1,
-      "expressions": 100
+      "expressions": 107
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 93
+      "expressions": 100
     },
     "glow": {
       "samples": 1,
-      "expressions": 79
+      "expressions": 86
     },
     "glyph": {
       "samples": 1,
-      "expressions": 73
+      "expressions": 80
     },
     "icon": {
       "samples": 1,
-      "expressions": 73
+      "expressions": 80
     },
     "panel": {
       "samples": 1,
-      "expressions": 129
+      "expressions": 136
     },
     "table": {
       "samples": 1,
-      "expressions": 71
+      "expressions": 78
     },
     "streak": {
       "samples": 1,
-      "expressions": 96
+      "expressions": 103
     },
     "card_lit": {
       "samples": 5,
-      "expressions": 280
+      "expressions": 287
     },
     "table_lit": {
       "samples": 5,
-      "expressions": 224
+      "expressions": 231
     },
     "particle": {
       "samples": 5,
-      "expressions": 199
+      "expressions": 206
     }
   },
   "tests": {

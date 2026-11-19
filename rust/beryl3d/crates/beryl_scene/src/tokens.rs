@@ -7,6 +7,15 @@
 //! written as prose for the CSS comment too, so clippy's `doc_markdown` is allowed on the
 //! generated modules.
 
+/// Box shadows and drop shadows, each a list as CSS's `box-shadow` or a `filter`'s
+/// `drop-shadow()`s give it.
+#[allow(clippy::doc_markdown)]
+pub mod shadow {
+    use crate::element::Shadow;
+
+    include!(concat!(env!("OUT_DIR"), "/tokens/shadow.rs"));
+}
+
 /// Gaps and padding, in logical points.
 #[allow(clippy::doc_markdown)]
 pub mod space {

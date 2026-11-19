@@ -314,7 +314,8 @@ impl Layer {
             Some(text::plain_block(layout, base, width))
         };
         if let Some(block) = &node.block {
-            self.glyphs.want(block, self.window.scale);
+            let shadows = &node.element.style.drop_shadow;
+            self.glyphs.want_with(block, self.window.scale, shadows);
         }
     }
 

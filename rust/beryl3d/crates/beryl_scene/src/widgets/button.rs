@@ -8,7 +8,7 @@
 
 use crate::element::{Element, TextAlign};
 use crate::frame::Role;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, shadow, size, type_style};
 
 /// A button showing `label`, named by it: as tall as every action button and at least 8 ems
 /// wide, with its label centred.
@@ -22,6 +22,7 @@ pub fn button(label: &str) -> Element {
     element.style.min_width = Some(size::BUTTON_MIN_WIDTH);
     element.style.padding = [0.0, size::BUTTON_PADDING, 0.0, size::BUTTON_PADDING];
     element.style.fit = true;
+    element.style.box_shadow = shadow::SECONDARY.to_vec();
     element
         .background(color::SECONDARY)
         .border((color::SECONDARY_RIM, size::BORDER))
@@ -37,5 +38,6 @@ pub fn primary(label: &str) -> Element {
         .border((color::PRIMARY_RIM, size::BORDER))
         .color(color::PRIMARY_INK);
     element.primary = true;
+    element.style.box_shadow = shadow::PRIMARY.to_vec();
     element
 }

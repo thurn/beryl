@@ -9,9 +9,10 @@ use beryl_protocol::protocol::Side;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
+use super::shadows::{ShadowBox, write_box_shadows};
 use super::{Layer, Node, has_panel, text_top};
 use crate::art::orb;
-use crate::element::{Display, Element, Overflow, Shown, TextAlign};
+use crate::element::{Display, Element, Overflow, Shadow, Shown, TextAlign};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{
     Band, Draw, ElementLook, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits,
@@ -19,7 +20,7 @@ use crate::frame::{
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera};
 use crate::text::{self, BlockLook, faded};
-use crate::tokens::{color, size};
+use crate::tokens::{color, shadow, size};
 
 /// How a node and everything under it is drawn: where its tree's top left corner stands, how
 /// opaque it is, the color of its text, the clip it is drawn under, whether the pointer goes
@@ -155,16 +156,13 @@ impl Layer {
             },
         );
         if builder.looking() {
-            builder.look(look_of(
-                node,
-                index,
-                panel.as_ref(),
-                ink(node, state, look.tint),
-            ));
+            builder.look(
+                look_of(node, index, panel.as_ref(), ink(node, state, look.tint)),
+                box_shadows(node, state),
+                &element.style.drop_shadow,
+            );
         }
-        if let Some(panel) = panel {
-            write_panel(&panel, rect, &look, builder, camera);
-        }
+        write_box(node, state, panel.as_ref(), rect, &look, builder, camera);
         let shown = Look {
             point: look.point + node.offset() + sink,
             ..look
@@ -401,6 +399,7 @@ impl Layer {
             glyphs: &self.glyphs,
             camera,
             clip: look.clip.map_or(0, |(_, entry)| entry),
+            shadows: &element.style.drop_shadow,
         };
         let missing = text::write_block(builder, block, origin, &block_look);
         if missing > 0 {
@@ -542,6 +541,55 @@ fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> Option<Panel
         },
         border,
     })
+}
+
+/// The box shadows `node` is drawn with in `state`, as `buttons.css` and `icon-button.css`
+/// change them: a disabled button with words has a faint dark ring whatever its style says, and
+/// an icon button's rim brightens under the pointer or with the focus. Any other element has
+/// its style's.
+fn box_shadows(node: &Node, state: StateBits) -> &[Shadow] {
+    let element = &node.element;
+    let icon = matches!(element.shows, Some(Shown::Icon(..)));
+    if element.role != Role::Button || element.style.box_shadow.is_empty() {
+        return &element.style.box_shadow;
+    }
+    if state.has(StateBits::DISABLED) && !icon {
+        &shadow::DISABLED
+    } else if icon && (state.has(StateBits::HOVERED) || state.has(StateBits::FOCUSED)) {
+        &shadow::ICON_BUTTON_HOVERED
+    } else {
+        &element.style.box_shadow
+    }
+}
+
+/// Writes `node`'s box, which fills `rect`: its outer box shadows (in `state`), its `panel` if
+/// it has one, and its inset box shadows, faded and clipped by `look`.
+fn write_box(
+    node: &Node,
+    state: StateBits,
+    panel: Option<&Panel>,
+    rect: Rect,
+    look: &Look,
+    builder: &mut FrameBuilder,
+    camera: &Camera,
+) {
+    let style = &node.element.style;
+    let shadows = box_shadows(node, state);
+    let cast = ShadowBox {
+        rect,
+        radius: panel.map_or(style.radius, |panel| panel.radius),
+        border: panel.map_or_else(
+            || style.border.map_or(0.0, |(_, width)| width),
+            |panel| panel.border,
+        ),
+        opacity: look.opacity,
+        clip: look.clip.map_or(0, |(_, entry)| entry),
+    };
+    write_box_shadows(shadows, &cast, false, builder, camera);
+    if let Some(panel) = panel {
+        write_panel(panel, rect, look, builder, camera);
+    }
+    write_box_shadows(shadows, &cast, true, builder, camera);
 }
 
 /// Writes the record of `panel` filling `rect`, faded and clipped by `look`.

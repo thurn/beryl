@@ -18,7 +18,7 @@ use crate::element::{Align, Element, Justify, column, floats, text};
 use crate::frame::Role;
 use crate::layout::{FloatLook, Layer};
 use crate::table::Window;
-use crate::tokens::{color, ratio, size, type_style};
+use crate::tokens::{color, ratio, shadow, size, type_style};
 
 /// The banner's title, the same for every detail.
 const TITLE: &str = "Combat";
@@ -152,7 +152,8 @@ fn banner(detail: usize) -> Element {
             text(&title.to_uppercase())
                 .name(title)
                 .style(type_style::BANNER_TITLE)
-                .color(color::BANNER_TITLE),
+                .color(color::BANNER_TITLE)
+                .drop_shadow(shadow::BANNER_TITLE.to_vec()),
         )
         .child(
             text(detail)

@@ -171,9 +171,11 @@ through the client with no window or GPU (the `b3d` skill has the details):
   through the flat layer and the real renderer. It prints each sample's `p995`
   (the difference in levels that 99.5% of pixels are within), its largest and
   mean difference and a picture of web, Beryl 3D and the difference amplified; a
-  sample passes at a `p995` of 4 or less. A sample whose CSS `Style` cannot say
-  yet is `unsupported`, with what it lacks and the web's picture.
-  `data/beryl3d/web-match.json` holds the results; `--update` lowers them.
+  sample passes at a `p995` of 4 or less. A sample's text is set in Open Sans on
+  both sides, rasterized by the real glyph worker, and its glyph pixels are left
+  out of the score. A sample whose CSS `Style` cannot say yet is `unsupported`,
+  with what it lacks and the web's picture. `data/beryl3d/web-match.json` holds
+  the results; `--update` lowers them.
 
 These tools lay the frame out at scale 1 unless `--scale` gives another, while
 the desktop app on a Retina Mac runs at scale 2, so a picture of a look you

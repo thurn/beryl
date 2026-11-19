@@ -18,6 +18,7 @@ mod objects;
 mod pointed;
 mod reconcile;
 mod scroll;
+mod shadows;
 mod style;
 mod tip;
 mod write;
@@ -546,7 +547,7 @@ impl Node {
 /// Asks `glyphs` for the glyphs of the text at and under `node` at `scale`.
 fn want_node(node: &Node, scale: f32, glyphs: &mut Glyphs) {
     if let Some(block) = &node.block {
-        glyphs.want(block, scale);
+        glyphs.want_with(block, scale, &node.element.style.drop_shadow);
     }
     for child in &node.children {
         want_node(child, scale, glyphs);

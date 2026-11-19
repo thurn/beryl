@@ -6,10 +6,11 @@
 
 use glam::Vec2;
 
-use super::Block;
-use super::glyphs::{Glyphs, key};
+use super::glyphs::{Glyphs, blurred, key};
+use super::{Block, PlacedGlyph};
+use crate::element::{DropLayers, Shadow};
 use crate::frame::{Band, Draw, FrameBuilder, Sprite};
-use crate::input::Rect;
+use crate::input::{GlyphKey, Rect};
 use crate::table::Camera;
 
 /// How a block of text is drawn.
@@ -28,6 +29,9 @@ pub struct BlockLook<'a> {
     pub camera: &'a Camera,
     /// The clip rectangle the glyphs are drawn under (`FrameBuilder::clip`), or 0 for none.
     pub clip: u8,
+    /// The drop shadows the glyphs cast (`Style::drop_shadow`), whose layers (`DropLayers`)
+    /// are drawn under them as their blurred cells in the layer's color, moved by its offset.
+    pub shadows: &'a [Shadow],
 }
 
 /// Writes the symbols and glyphs of `block` whose top left corner, in logical points of the
@@ -58,45 +62,67 @@ pub fn write_block(
         }
         builder.draw(Band::Layer, draw);
     }
-    let scale = look.scale;
     let mut missing = 0;
+    // The layers of the drop shadows, under the glyphs, bottom first.
+    for layer in DropLayers::new(look.shadows).iter() {
+        let tint = faded(layer.color, look.opacity);
+        let offset = Vec2::new(layer.x, layer.y);
+        for glyph in &block.glyphs {
+            let sharp = key(block.run(glyph.run).style, look.scale, glyph.glyph);
+            let wanted = blurred(sharp, layer.sigma, look.scale);
+            missing += write_glyph(builder, look, wanted, origin + offset, glyph, tint);
+        }
+    }
     for glyph in &block.glyphs {
         let run = block.run(glyph.run);
-        let key = key(run.style, scale, glyph.glyph);
-        let found = if let Some(placed) = look.glyphs.get(key) {
-            Some((placed, 1.0))
-        } else {
-            missing += 1;
-            look.glyphs.nearest(key)
-        };
-        let Some((placed, larger)) = found else {
-            continue;
-        };
-        // Physical pixels of the cell to logical points of the window.
-        let points = larger / scale;
-        let [_, _, width, height] = placed.rect;
-        let rect = Rect {
-            x: origin.x + glyph.x + f32::from(placed.bearing[0]) * points,
-            y: origin.y + glyph.y + f32::from(placed.bearing[1]) * points,
-            width: f32::from(width) * points,
-            height: f32::from(height) * points,
-        };
+        let key = key(run.style, look.scale, glyph.glyph);
         let tint = run
             .color
             .map_or(look.tint, |color| faded(color, look.opacity));
-        let mut draw = Draw::glyph(
-            look.camera.layer_transform(rect),
-            tint,
-            Sprite {
-                page: placed.page,
-                rect: placed.rect,
-            },
-        );
-        if look.clip > 0 {
-            draw = draw.with_clip(look.clip);
-        }
-        builder.draw(Band::Layer, draw);
+        missing += write_glyph(builder, look, key, origin, glyph, tint);
     }
+    missing
+}
+
+/// Writes the record of glyph `glyph` from the atlas cell of `key`, with the block's top left
+/// corner at `origin`, in `tint`. Returns 1 if no page holds that cell, when the glyph is drawn
+/// from another size of it or not at all, and 0 otherwise.
+fn write_glyph(
+    builder: &mut FrameBuilder,
+    look: &BlockLook,
+    key: GlyphKey,
+    origin: Vec2,
+    glyph: &PlacedGlyph,
+    tint: [u8; 4],
+) -> u32 {
+    let (found, missing) = match look.glyphs.get(key) {
+        Some(placed) => (Some((placed, 1.0)), 0),
+        None => (look.glyphs.nearest(key), 1),
+    };
+    let Some((placed, larger)) = found else {
+        return missing;
+    };
+    // Physical pixels of the cell to logical points of the window.
+    let points = larger / look.scale;
+    let [_, _, width, height] = placed.rect;
+    let rect = Rect {
+        x: origin.x + glyph.x + f32::from(placed.bearing[0]) * points,
+        y: origin.y + glyph.y + f32::from(placed.bearing[1]) * points,
+        width: f32::from(width) * points,
+        height: f32::from(height) * points,
+    };
+    let mut draw = Draw::glyph(
+        look.camera.layer_transform(rect),
+        tint,
+        Sprite {
+            page: placed.page,
+            rect: placed.rect,
+        },
+    );
+    if look.clip > 0 {
+        draw = draw.with_clip(look.clip);
+    }
+    builder.draw(Band::Layer, draw);
     missing
 }
 

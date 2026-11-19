@@ -1,8 +1,9 @@
 //! The design tokens the build script writes from `data/design-tokens.json`, against the CSS
 //! values the web interface draws with.
 
+use beryl_scene::element::Shadow;
 use beryl_scene::text::fonts::Font;
-use beryl_scene::tokens::{color, size, space, type_style};
+use beryl_scene::tokens::{color, shadow, size, space, type_style};
 
 #[test]
 fn colors_are_the_css_values() {
@@ -28,6 +29,21 @@ fn flat_values_follow_the_tokens_they_name() {
     exactly(space::M, 10.0);
     exactly(size::BUTTON_HEIGHT, 48.0);
     assert!(type_style::ALL.contains(&type_style::TITLE));
+}
+
+#[test]
+fn shadows_are_the_css_lists() {
+    // `.tip`: `0 3px 8px rgb(0 0 0 / 50%)`, the alpha rounded from 127.5.
+    assert_eq!(shadow::TIP, [Shadow::new(0.0, 3.0, 8.0, [0, 0, 0, 128])]);
+    // `flat.shadow.LIFTED` names `--shadow-lifted`: two layers.
+    assert_eq!(shadow::LIFTED.len(), 2);
+    // An inset ring: `inset 0 0 0 1px rgb(214 192 150 / 16%)`.
+    assert_eq!(
+        shadow::ICON_BUTTON[0],
+        Shadow::new(0.0, 0.0, 0.0, [214, 192, 150, 41])
+            .spread(1.0)
+            .inset()
+    );
 }
 
 /// Asserts that `a` is exactly `b`: a token's pixels are written as they are, not computed.

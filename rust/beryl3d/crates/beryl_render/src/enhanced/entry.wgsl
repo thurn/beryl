@@ -99,6 +99,7 @@ fn fs_lit(in: LitOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f
         case GLYPH: { color = shade_glyph(face, in.tint); }
         case ICON: { color = shade_icon(face, in.tint); }
         case PARTICLE: { color = shade_particle(face, in.tint, in.params); }
+        case BOX_SHADOW: { color = shade_box_shadow(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.layers.x, in.params); }
         default: {}
     }
     return color * (1.0 - in.edge);

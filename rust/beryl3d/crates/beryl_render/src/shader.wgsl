@@ -25,6 +25,7 @@ const STREAK: u32 = 4u;
 const PANEL: u32 = 5u;
 const GLYPH: u32 = 6u;
 const ICON: u32 = 7u;
+const BOX_SHADOW: u32 = 9u;
 
 // A card's printed size and corner radius, in millimetres, as the card mesh is built.
 const CARD_SIZE: vec2<f32> = vec2<f32>(63.0, 88.0);
@@ -199,6 +200,93 @@ fn shade_panel(
     return (vec4<f32>(edge.rgb, 1.0) * ring + fill * (1.0 - ring)) * outer;
 }
 
+// The error function, to within 5e-4 (Abramowitz and Stegun's 7.1.27), for each component.
+fn erf2(x: vec2<f32>) -> vec2<f32> {
+    let s = sign(x);
+    let a = abs(x);
+    var t = 1.0 + (0.278393 + (0.230389 + 0.078108 * (a * a)) * a) * a;
+    t = t * t;
+    return s - s / (t * t);
+}
+
+// The Gaussian of standard deviation `sigma` at `x`.
+fn gaussian(x: f32, sigma: f32) -> f32 {
+    return exp(-(x * x) / (2.0 * sigma * sigma)) / (2.5066283 * sigma);
+}
+
+// How much of a rounded rectangle centred on the origin, `half` its half size with corners of
+// `radius`, covers the point `p` once blurred by a Gaussian of standard deviation `sigma`. Across
+// x the blur of each horizontal slice is exact (the difference of two error functions); down y
+// it is summed at four points within three deviations, which is Evan Wallace's closed form for a
+// blurred rounded rectangle. A deviation under a quarter of a pixel is drawn sharp, with the edge
+// antialiased over one `pixel`.
+fn blurred_box(p: vec2<f32>, half: vec2<f32>, radius: f32, sigma: f32, pixel: f32) -> f32 {
+    let corner = min(radius, min(half.x, half.y));
+    if (sigma < 0.25 * pixel) {
+        return clamp(0.5 - rounded_box(p, half, corner) / pixel, 0.0, 1.0);
+    }
+    let low = p.y - half.y;
+    let high = p.y + half.y;
+    let start = clamp(-3.0 * sigma, low, high);
+    let end = clamp(3.0 * sigma, low, high);
+    let step = (end - start) / 4.0;
+    var y = start + step * 0.5;
+    var value = 0.0;
+    for (var i = 0; i < 4; i++) {
+        let slice = p.y - y;
+        let inward = min(half.y - corner - abs(slice), 0.0);
+        let reach = half.x - corner + sqrt(max(0.0, corner * corner - inward * inward));
+        let ends = 0.5 + 0.5 * erf2((p.x + vec2<f32>(-reach, reach)) * (0.70710678 / sigma));
+        value += (ends.y - ends.x) * gaussian(y, sigma) * step;
+        y += step;
+    }
+    return value;
+}
+
+// A sixteenth-of-a-point length as `Draw::box_shadow` stores it in the record's `uv`.
+fn fixed_points(value: u32) -> f32 {
+    return (f32(value) - 32768.0) / 16.0;
+}
+
+// A CSS box shadow of an element whose border box (padding box when inset) is `params.xy`
+// logical points large with corners of `params.z`, blurred with standard deviation `params.w`.
+// The record's `uv` holds the offset, the spread and the shadow shape's corner radius
+// (`fixed_points`), and `inset` is its layer. An outer shadow's quad is the box moved by the
+// offset and grown by the spread and three deviations, and it is cut away inside the box, as CSS
+// draws an outer shadow only outside the border box. An inset shadow's quad is the box, darkened
+// everywhere but under the shape (the box moved by the offset and shrunk by the spread).
+fn shade_box_shadow(
+    mesh_uv: vec2<f32>,
+    mesh_pixel: vec2<f32>,
+    tint: vec4<f32>,
+    shape: vec4<u32>,
+    inset: u32,
+    params: vec4<f32>,
+) -> vec4<f32> {
+    let size = params.xy;
+    let sigma = params.w;
+    let offset = vec2<f32>(fixed_points(shape.x), fixed_points(shape.y));
+    let spread = fixed_points(shape.z);
+    let shape_radius = fixed_points(shape.w);
+    var a = 0.0;
+    if (inset == 1u) {
+        let pixel = max(max(mesh_pixel.x * size.x, mesh_pixel.y * size.y), 1e-4);
+        let p = (mesh_uv - vec2<f32>(0.5)) * size;
+        let inside = clamp(0.5 - rounded_box(p, size * 0.5, params.z) / pixel, 0.0, 1.0);
+        let half = max(size * 0.5 - vec2<f32>(spread), vec2<f32>(0.0));
+        a = (1.0 - blurred_box(p - offset, half, shape_radius, sigma, pixel)) * inside;
+    } else {
+        let half = max(size * 0.5 + vec2<f32>(spread), vec2<f32>(0.0));
+        let quad = 2.0 * (half + vec2<f32>(3.0 * sigma));
+        let pixel = max(max(mesh_pixel.x * quad.x, mesh_pixel.y * quad.y), 1e-4);
+        let p = (mesh_uv - vec2<f32>(0.5)) * quad;
+        let own = clamp(0.5 - rounded_box(p + offset, size * 0.5, params.z) / pixel, 0.0, 1.0);
+        a = blurred_box(p, half, shape_radius, sigma, pixel) * (1.0 - own);
+    }
+    a *= tint.a;
+    return vec4<f32>(tint.rgb * a, a);
+}
+
 // A glyph: its coverage (the atlas's one channel) times the tint.
 fn shade_glyph(sprite: vec4<f32>, tint: vec4<f32>) -> vec4<f32> {
     let a = sprite.r * tint.a;
@@ -234,6 +322,7 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
         case PANEL: { color = shade_panel(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.params); }
         case GLYPH: { color = shade_glyph(picture, in.tint); }
         case ICON: { color = shade_icon(picture, in.tint); }
+        case BOX_SHADOW: { color = shade_box_shadow(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.layers.x, in.params); }
         default: {}
     }
     return color * (1.0 - in.edge);

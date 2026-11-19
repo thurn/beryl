@@ -310,7 +310,8 @@ pub enum FaceSize {
     Full,
 }
 
-/// One glyph of one bundled font at one weight and one size in physical pixels.
+/// One glyph of one bundled font at one weight and one size in physical pixels, sharp or
+/// blurred for a drop shadow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GlyphKey {
     /// The font's index in `text::fonts::ALL`.
@@ -318,6 +319,12 @@ pub struct GlyphKey {
     /// The CSS weight the variable font is drawn at.
     pub weight: u16,
     pub glyph: u16,
+    /// 0 for the glyph itself, or the standard deviation of the Gaussian its coverage is
+    /// blurred with, in quarters of a physical pixel: the shape of a drop shadow
+    /// (`Style::drop_shadow`). A blurred cell is larger than the glyph's by three deviations
+    /// on every side, and its bearing says so. It comes before `size` so that one blur's sizes
+    /// of a glyph sort together (`Glyphs::nearest`).
+    pub blur: u8,
     pub size: u16,
 }
 

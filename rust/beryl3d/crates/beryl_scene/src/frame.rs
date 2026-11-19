@@ -10,10 +10,11 @@ mod undrawn;
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
-pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, sprites};
-pub use look::ElementLook;
+pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, box_shadow_reach, fixed, sprites};
+pub use look::{ElementLook, LookShadow, Looks};
 pub use undrawn::{Missing, Undrawn};
 
+use crate::element::Shadow;
 use crate::input::{Rect, Tier};
 
 /// A card's element id is its object's slot in the view, and the face of that card in the
@@ -372,7 +373,7 @@ pub struct Frame {
     /// tools that compare Beryl 3D with the web interface. Building a frame keeps it as it is.
     pub looking: bool,
     /// How each flat-layer element was drawn, while `looking`.
-    pub looks: Vec<ElementLook>,
+    pub looks: Looks,
     /// While `looking`, the index in `resolved` of the element each record of `draws` belongs
     /// to, in drawing order, so that a tool can draw one element alone (`keep_only`). A record
     /// belongs to the element added last before it was pushed, or to none (`u32::MAX`), as the
@@ -485,7 +486,7 @@ impl Frame {
             sounds: Vec::with_capacity(SOUNDS),
             lines: Vec::with_capacity(elements),
             looking: false,
-            looks: Vec::new(),
+            looks: Looks::default(),
             owners: Vec::new(),
             undrawn: Vec::with_capacity(elements),
             lifted: Vec::with_capacity(LIFTED),
@@ -731,10 +732,11 @@ impl<'a> FrameBuilder<'a> {
         self.frame.looking
     }
 
-    /// Records how a flat-layer element was drawn, while the frame is `looking`.
-    pub fn look(&mut self, look: ElementLook) {
+    /// Records how a flat-layer element was drawn, with the shadows of its style, while the
+    /// frame is `looking`.
+    pub fn look(&mut self, look: ElementLook, box_shadow: &[Shadow], drop_shadow: &[Shadow]) {
         if self.frame.looking {
-            self.frame.looks.push(look);
+            self.frame.looks.push(look, box_shadow, drop_shadow);
         }
     }
 

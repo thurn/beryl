@@ -6,6 +6,7 @@
 )]
 
 use beryl_scene::command::Reply;
+use beryl_scene::element::Shadow;
 use beryl_scene::frame::{Draw, Frame, Material, Sprite, Wake};
 use beryl_scene::input::{
     Button, FaceSize, Input, Insets, Modifiers, Pointer, PointerKind, PointerPhase, Size,
@@ -117,6 +118,29 @@ fn each_constructor_fills_only_its_materials_fields() {
             "{material:?}"
         );
     }
+}
+
+/// A box shadow keeps its lengths in `uv` as sixteenths of a point plus 32,768, its inset in
+/// `layer`, and its box and deviation in `params`.
+#[test]
+fn a_box_shadow_fills_only_its_fields() {
+    let draw = Draw::box_shadow(
+        transform(),
+        TINT,
+        Vec2::new(100.0, 40.0),
+        8.0,
+        &Shadow::new(-1.0, 6.0, 16.0, [0, 0, 0, 128])
+            .spread(2.0)
+            .inset(),
+        8.5,
+    );
+    assert_eq!(draw.material, Material::BoxShadow as u8);
+    // -1, 6, 2 and 8.5 points.
+    assert_eq!(draw.uv, [32_752, 32_864, 32_800, 32_904]);
+    assert_eq!(draw.layer, 1);
+    // A blur of 16 points is a deviation of 8 by CSS, 6.8 as WebKit draws it.
+    assert_eq!(draw.params, [100.0, 40.0, 8.0, 6.8]);
+    assert_eq!(draw.tint, TINT);
 }
 
 #[test]

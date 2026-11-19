@@ -30,8 +30,9 @@ glam = "0.34.3"
 # file, which `beryl_inspect` writes with the same crate, in place of a parser of our own.
 serde_json = "1.0.154"
 
-[dev-dependencies]
-# Counts the faces and glyphs the tests' runs prepare.
+# The glyph worker that rasterizes `sample`'s text, which `beryl_host` links already.
 beryl_assets = { path = "../beryl_assets" }
+
+[dev-dependencies]
 # The seat a recording is seen from.
 beryl_protocol = { path = "../../../crates/beryl_protocol" }

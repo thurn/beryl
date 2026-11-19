@@ -15,8 +15,9 @@ use beryl_inspect::pages;
 use beryl_protocol::protocol::Side;
 use beryl_scene::agent::{Layout, hit, uncovered};
 use beryl_scene::driver::Moment;
-use beryl_scene::frame::StateBits;
+use beryl_scene::frame::{StateBits, box_shadow_reach};
 use beryl_scene::input::Size;
+use beryl_scene::tokens::shadow;
 
 const WINDOW: Size = Size {
     width: 1600.0,
@@ -205,13 +206,18 @@ fn an_element_drawn_alone_leaves_the_rest_of_the_window_black() {
     let button = head.page().find(r#"button "Next""#);
     let (index, rect) = (button.index, button.rect());
     let pixels = head.pixels_keeping(|frame, at| at == index || hit::is_within(frame, at, index));
-    // A point of slack around the box, for the edge's antialiasing.
+    // A point of slack around the box, for the edge's antialiasing, and as far as the primary
+    // button's box shadows reach past it.
+    let reach = (shadow::PRIMARY.iter())
+        .map(|shadow| box_shadow_reach(shadow) + shadow.x.abs().max(shadow.y.abs()))
+        .fold(0.0_f32, f32::max);
+    let slack = 1.0 + reach;
     let inside = |x: u32, y: u32| {
         let (x, y) = (x as f32, y as f32);
-        x + 1.0 >= rect.x
-            && y + 1.0 >= rect.y
-            && x <= rect.x + rect.width + 1.0
-            && y <= rect.y + rect.height + 1.0
+        x + slack >= rect.x
+            && y + slack >= rect.y
+            && x <= rect.x + rect.width + slack
+            && y <= rect.y + rect.height + slack
     };
     let (mut lit_inside, mut lit_outside) = (0, 0);
     for y in 0..WINDOW.height as u32 {

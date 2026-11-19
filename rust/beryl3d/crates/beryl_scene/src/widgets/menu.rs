@@ -10,7 +10,7 @@ use glam::Vec2;
 
 use crate::element::{Align, Anchor, Element, Press, column, row, text};
 use crate::frame::Role;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, shadow, size, type_style};
 
 /// Which menu is open, so that a press on a row (`Press::Menu`) says whose row it was.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -102,6 +102,9 @@ fn build(
         size::MENU_TITLE_PADDING_SIDE,
     ];
     let mut panel = panel(title).child(heading);
+    if sheet {
+        panel.style.box_shadow = shadow::SHEET.to_vec();
+    }
     if !whose.is_empty() {
         let mut line = text(whose)
             .style(type_style::MENU_HINT)
@@ -170,6 +173,7 @@ fn panel(name: &str) -> Element {
         .background(color::SURFACE)
         .border((color::METAL, size::MENU_BORDER))
         .radius(size::MENU_RADIUS);
+    panel.style.box_shadow = shadow::LIFTED.to_vec();
     panel.role = Role::List;
     panel
 }

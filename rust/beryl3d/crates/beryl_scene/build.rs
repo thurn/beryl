@@ -153,8 +153,8 @@ fn write_credits(manifest: &std::path::Path, out_dir: &std::path::Path) {
 /// The modules of `src/tokens.rs` from `design-tokens.json`, each as its name and its
 /// constants. `color` holds a constant for every token of kind `color`, named for the token in
 /// upper case with `_` for `-`, then the colors of `flat.color`. `space`, `type_style` and
-/// `size` and `ratio` hold the entries of `flat` under the same names, and `mana` the colors of
-/// `flat.mana`. A number in `flat` is a `value`, or the `token` of kind `length` whose pixels it
+/// `size` and `ratio` hold the entries of `flat` under the same names, `mana` the colors of
+/// `flat.mana`, and `shadow` the shadow lists of `flat.shadow`. A number in `flat` is a `value`, or the `token` of kind `length` whose pixels it
 /// takes; a `note` becomes the doc comment.
 fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
     let tokens = Tokens {
@@ -181,7 +181,93 @@ fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
         ("ratio", ratio),
         ("color", write_colors(&tokens)),
         ("mana", write_mana(&tokens)),
+        ("shadow", write_shadows(&tokens)),
     ]
+}
+
+/// The module `shadow`: each entry of `flat.shadow`, a list of CSS shadows as `box-shadow` or
+/// a chain of `drop-shadow()` filters gives them, as an array of `Shadow`. The list is the
+/// entry's `value`, or the value of the token of kind `css` its `token` names.
+fn write_shadows(tokens: &Tokens) -> String {
+    let find = |name: &str| tokens.find(name);
+    let mut out = String::new();
+    for (key, entry) in tokens.entries("shadow") {
+        let css = match (entry["token"].as_str(), entry["value"].as_str()) {
+            (Some(token), _) => find(token)["value"].as_str().unwrap(),
+            (None, Some(value)) => value,
+            (None, None) => panic!("`flat.shadow.{key}` names its `token` or gives its `value`"),
+        };
+        let shadows: Vec<String> = top_level_commas(css)
+            .into_iter()
+            .map(|part| parse_shadow(part, &find))
+            .collect();
+        let doc = entry["note"]
+            .as_str()
+            .map_or(format!("`{css}`."), str::to_string);
+        writeln!(
+            out,
+            "/// {doc}\npub const {key}: [Shadow; {}] = [{}];",
+            shadows.len(),
+            shadows.join(", ")
+        )
+        .unwrap();
+    }
+    out
+}
+
+/// `text` split at the commas outside parentheses.
+fn top_level_commas(text: &str) -> Vec<&str> {
+    let (mut parts, mut depth, mut start) = (Vec::new(), 0_i32, 0);
+    for (at, character) in text.char_indices() {
+        match character {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                parts.push(text[start..at].trim());
+                start = at + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(text[start..].trim());
+    parts
+}
+
+/// One CSS shadow, `[inset] <x> <y> [<blur> [<spread>]] <color>`, with lengths of `0` or in
+/// `px`, as the Rust expression of a `Shadow`.
+fn parse_shadow<'a>(text: &str, find: &dyn Fn(&str) -> &'a serde_json::Value) -> String {
+    let (color, rest) = match text.find("rgb(").or_else(|| text.find('#')) {
+        Some(at) => {
+            let end = if text[at..].starts_with('#') {
+                at + 7
+            } else {
+                at + text[at..].find(')').expect("a closed `rgb(`") + 1
+            };
+            (
+                parse_color(&text[at..end], find),
+                format!("{} {}", &text[..at], &text[end..]),
+            )
+        }
+        None => panic!("the shadow `{text}` names its color"),
+    };
+    let inset = rest.split_whitespace().any(|word| word == "inset");
+    let lengths: Vec<f32> = (rest.split_whitespace())
+        .filter(|word| *word != "inset")
+        .map(|word| {
+            word.strip_suffix("px")
+                .unwrap_or(word)
+                .parse()
+                .unwrap_or_else(|_| panic!("`{word}` in the shadow `{text}` is not a length"))
+        })
+        .collect();
+    let length = |at: usize| lengths.get(at).copied().unwrap_or(0.0);
+    format!(
+        "Shadow {{ x: {:?}, y: {:?}, blur: {:?}, spread: {:?}, color: {color:?}, inset: {inset} }}",
+        length(0),
+        length(1),
+        length(2),
+        length(3)
+    )
 }
 
 /// The module `mana`: each entry of `flat.mana`, a mana symbol's disc or ink as the hex color

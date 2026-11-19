@@ -181,8 +181,9 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   with `p995` (the difference 99.5% of pixels are within; at most 4 passes),
   the largest and mean difference and a picture of web, Beryl 3D and their
   difference amplified. A sample `Style` cannot say yet prints `unsupported`
-  with what it lacks and the web's picture. Use it to tune a shadow, gradient,
-  filter or mask without replaying a recording; `--update` records the new
+  with what it lacks and the web's picture. A sample's text is set in Open Sans
+  on both sides and its glyph pixels are masked out. Use it to tune a shadow,
+  gradient, filter or mask without replaying a recording; `--update` records the new
   values in `data/beryl3d/web-match.json`, which may only go down.
 
 Every command that takes a recording also takes `--seat you|opponent`,

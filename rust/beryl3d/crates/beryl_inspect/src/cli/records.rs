@@ -3,12 +3,14 @@
 //! record is `{key, role, name, object, box, z, parent, style, text}`, with `style` in CSS's
 //! property names and values normalized as the web side's dump script writes them
 //! (`tools/src/beryl_tools/beryl3d/match/dump.mjs`): colors as `[r, g, b, a]` with the alpha
-//! from 0 to 1, lengths in points, and `"none"` for what Beryl 3D's `Style` cannot say yet
-//! (gradients, shadows, filters, masks and transforms).
+//! from 0 to 1, lengths in points, shadows as `{inset, x, y, blur, spread, color}` (`box-shadow`
+//! and each `drop-shadow` of `filter`), and `"none"` for what Beryl 3D's `Style` cannot say yet
+//! (gradients, other filters, masks and transforms).
 
 use beryl_scene::agent::hit::bounds;
 use beryl_scene::agent::tree::locator_of;
-use beryl_scene::frame::{ElementLook, Frame, Place, REVEALED_FACE, Role};
+use beryl_scene::element::Shadow;
+use beryl_scene::frame::{ElementLook, Frame, LookShadow, Place, REVEALED_FACE, Role};
 use serde_json::{Map, Value, json};
 
 /// Rounds `value` to hundredths, as the web side rounds its boxes.
@@ -20,6 +22,40 @@ fn round(value: f32) -> Value {
 fn color(rgba: [u8; 4]) -> Value {
     let alpha = (f64::from(rgba[3]) / 255.0 * 1000.0).round() / 1000.0;
     json!([rgba[0], rgba[1], rgba[2], alpha])
+}
+
+/// A shadow as the web side's records write one (`css.py`'s `shadow`).
+fn shadow(shadow: &Shadow) -> Value {
+    json!({
+        "inset": shadow.inset,
+        "x": round(shadow.x),
+        "y": round(shadow.y),
+        "blur": round(shadow.blur),
+        "spread": round(shadow.spread),
+        "color": color(shadow.color),
+    })
+}
+
+/// The `box-shadow` and `filter` values of element `at`'s shadows, each `"none"` when it has
+/// none of that kind.
+fn shadows(at: u32, all: &[LookShadow]) -> (Value, Value) {
+    let mine = || all.iter().filter(move |look| look.element == at);
+    let boxes: Vec<Value> = mine()
+        .filter(|look| !look.drop)
+        .map(|look| shadow(&look.shadow))
+        .collect();
+    let drops: Vec<Value> = mine()
+        .filter(|look| look.drop)
+        .map(|look| json!({"fn": "drop-shadow", "shadow": shadow(&look.shadow)}))
+        .collect();
+    let value = |list: Vec<Value>| {
+        if list.is_empty() {
+            Value::from("none")
+        } else {
+            Value::Array(list)
+        }
+    };
+    (value(boxes), value(drops))
 }
 
 /// Each element's place in the order the frame paints it: the table's elements farthest first,
@@ -41,7 +77,7 @@ fn paint_order(frame: &Frame) -> Vec<usize> {
 /// The element's style in CSS's names, from how it was drawn (`look`) where the frame recorded
 /// that, and its opacity, which includes its ancestors' as the web side's does. No panel is a
 /// transparent background, as the web's computed style says.
-fn style(opacity: f32, look: Option<&ElementLook>) -> Value {
+fn style(opacity: f32, look: Option<&ElementLook>, shadows: (Value, Value)) -> Value {
     let mut style = Map::new();
     let none = || Value::from("none");
     style.insert(
@@ -63,8 +99,9 @@ fn style(opacity: f32, look: Option<&ElementLook>) -> Value {
         "border-radius".into(),
         round(look.map_or(0.0, |look| look.radius)),
     );
-    style.insert("box-shadow".into(), none());
-    style.insert("filter".into(), none());
+    let (box_shadow, filter) = shadows;
+    style.insert("box-shadow".into(), box_shadow);
+    style.insert("filter".into(), filter);
     style.insert(
         "opacity".into(),
         json!((f64::from(opacity) * 1000.0).round() / 1000.0),
@@ -86,7 +123,7 @@ fn style(opacity: f32, look: Option<&ElementLook>) -> Value {
 pub fn records(frame: &Frame) -> Vec<Value> {
     let z = paint_order(frame);
     let mut looks: Vec<Option<&ElementLook>> = vec![None; frame.resolved.len()];
-    for look in &frame.looks {
+    for look in &frame.looks.elements {
         if let Some(slot) = looks.get_mut(look.element as usize) {
             *slot = Some(look);
         }
@@ -125,7 +162,11 @@ pub fn records(frame: &Frame) -> Vec<Value> {
                 "box": [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 "z": z[at],
                 "parent": (element.parent != u32::MAX).then_some(element.parent),
-                "style": style(element.opacity, look),
+                "style": style(
+                    element.opacity,
+                    look,
+                    shadows(at as u32, &frame.looks.shadows),
+                ),
                 "text": text,
             })
         })

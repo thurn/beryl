@@ -6,6 +6,7 @@
 
 use glam::{Affine3A, Vec2};
 
+use crate::element::Shadow;
 use crate::input::FaceSize;
 
 /// One shape to draw. 80 bytes, laid out as the renderer's instance buffer expects.
@@ -46,6 +47,7 @@ pub enum Material {
     Glyph = 6,
     Icon = 7,
     Particle = 8,
+    BoxShadow = 9,
 }
 
 /// The texture array a record samples, in bits 0 to 1 of `Draw::flags`.
@@ -252,6 +254,40 @@ impl Draw {
         draw
     }
 
+    /// One CSS box shadow of a flat-layer element whose border box, or padding box for an inset
+    /// shadow, is `size` logical points large with corners of `radius`. `shadow` gives its
+    /// offset, spread and blur, which `Shadow::sigma` turns into a standard deviation, and
+    /// `shape_radius` is the corner radius of the shadow's shape, the box grown by the spread.
+    /// The offsets, spread and shape radius go in `uv` as `fixed` lengths, and `layer` is 1 for
+    /// an inset shadow. `transform` takes the unit quad to the box moved by the offset and grown
+    /// by `box_shadow_reach`.
+    #[must_use]
+    pub fn box_shadow(
+        transform: Affine3A,
+        tint: [u8; 4],
+        size: Vec2,
+        radius: f32,
+        shadow: &Shadow,
+        shape_radius: f32,
+    ) -> Self {
+        let mut draw = Self::new(
+            transform,
+            tint,
+            Material::BoxShadow,
+            TextureArray::Atlas,
+            Mesh::Quad,
+        );
+        draw.uv = [
+            fixed(shadow.x),
+            fixed(shadow.y),
+            fixed(shadow.spread),
+            fixed(shape_radius),
+        ];
+        draw.layer = u16::from(shadow.inset);
+        draw.params = [size.x, size.y, radius, shadow.sigma()];
+        draw
+    }
+
     /// One glyph of laid-out text. It reads no `params`.
     #[must_use]
     pub fn glyph(transform: Affine3A, tint: [u8; 4], sprite: Sprite) -> Self {
@@ -332,6 +368,32 @@ impl Draw {
             params: [0.0; 4],
         }
     }
+}
+
+/// How far past the box a box shadow's quad reaches on each side, in logical points: the spread
+/// and three standard deviations of its blur, past which the Gaussian leaves under a level of
+/// 255. An inset shadow's quad is the padding box itself. The shader works out the same quad
+/// from the record's `params` and `uv`, so the two must agree.
+#[must_use]
+pub fn box_shadow_reach(shadow: &Shadow) -> f32 {
+    if shadow.inset {
+        0.0
+    } else {
+        shadow.spread + 3.0 * shadow.sigma()
+    }
+}
+
+/// A length in logical points as a `u16` of sixteenths of a point plus 32,768, which covers
+/// 2,048 points either way.
+#[must_use]
+pub fn fixed(points: f32) -> u16 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to the range of u16 first"
+    )]
+    let value = (points * 16.0 + 32_768.0).round().clamp(0.0, 65_535.0) as u16;
+    value
 }
 
 /// `transform` as three rows of four numbers.

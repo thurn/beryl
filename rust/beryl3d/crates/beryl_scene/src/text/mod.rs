@@ -24,7 +24,7 @@ use parley::{
 use crate::element::Span;
 use crate::input::Rect;
 use fonts::Font;
-pub use glyphs::{Glyphs, key as glyph_key};
+pub use glyphs::{Glyphs, blurred as blurred_glyph_key, key as glyph_key};
 pub(crate) use write::faded;
 pub use write::{BlockLook, write_block};
 

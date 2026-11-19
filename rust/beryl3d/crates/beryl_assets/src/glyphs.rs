@@ -20,7 +20,7 @@ use swash::zeno::Format;
 
 use crate::packer::{ATLAS_PAGES, Full, PAGE_SIZE, Shelves};
 use crate::{Prepared, Upload};
-use crate::{icons, orb};
+use crate::{blur, icons, orb};
 
 /// The atlas page the worker fills first. Page 0 holds the shapes of light ([`crate::light`]).
 pub const FIRST_PAGE: u16 = 1;
@@ -380,8 +380,14 @@ impl Atlas {
     }
 
     /// Draws the glyph `key` as coverage, without hinting, with the variable font's weight
-    /// axis set to the key's weight.
+    /// axis set to the key's weight, and blurred by its `blur` (`blur::blurred`).
     fn rasterize(&mut self, key: GlyphKey) -> Option<Bitmap> {
+        if key.blur > 0 {
+            let sharp = self.rasterize(GlyphKey { blur: 0, ..key })?;
+            let blurred = blur::blurred(&sharp, f32::from(key.blur) / 4.0);
+            let too_large = |length: u16| length >= PAGE_SIZE;
+            return (!too_large(blurred.width) && !too_large(blurred.height)).then_some(blurred);
+        }
         GLYPHS_RASTERIZED.with(|count| count.set(count.get() + 1));
         let file = ALL.get(usize::from(key.font))?;
         let font = FontRef::from_index(file.data, 0)?;

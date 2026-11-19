@@ -3,7 +3,50 @@
 //! text. A frame records these only while `Frame::looking` is set, so the app's frames do no
 //! work for them.
 
+use crate::element::Shadow;
 use crate::text::TypeStyle;
+
+/// How each flat-layer element of a frame was drawn, and its shadows.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Looks {
+    /// One for each flat-layer element, in the order they were added.
+    pub elements: Vec<ElementLook>,
+    /// The shadows of every element of `elements` that has any, in its style's order.
+    pub shadows: Vec<LookShadow>,
+}
+
+/// One shadow of a flat-layer element's style.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LookShadow {
+    /// The index in `Frame::resolved` of the element.
+    pub element: u32,
+    /// Whether it is one of the element's drop shadows (`Style::drop_shadow`) rather than its
+    /// box shadows.
+    pub drop: bool,
+    pub shadow: Shadow,
+}
+
+impl Looks {
+    pub fn clear(&mut self) {
+        self.elements.clear();
+        self.shadows.clear();
+    }
+
+    /// Records `look` and its element's shadows.
+    pub fn push(&mut self, look: ElementLook, box_shadow: &[Shadow], drop_shadow: &[Shadow]) {
+        let element = look.element;
+        self.elements.push(look);
+        let shadows = (box_shadow.iter().map(|shadow| (false, shadow)))
+            .chain(drop_shadow.iter().map(|shadow| (true, shadow)));
+        for (drop, &shadow) in shadows {
+            self.shadows.push(LookShadow {
+                element,
+                drop,
+                shadow,
+            });
+        }
+    }
+}
 
 /// How a flat-layer element was drawn: its panel, if it had one, the color of its text and
 /// icon, and the style of its text.

@@ -351,7 +351,10 @@ fn dock(forward: Option<&PromptButton>, pass_on: Option<&PromptButton>) -> Eleme
         .align_items(Align::Center)
         .children(forward.map(phone_button))
         .children(pass_on.map(|button_view| {
+            // The web's pass-on button is not an icon button: its face (`.pass-on-face` in
+            // `controls.css`) casts no box shadow.
             icon_button(icons::PASS_ON, &button_view.label)
+                .box_shadow(Vec::new())
                 .enabled(button_view.enabled)
                 .on_press(Press::Button(button_view.id))
         }))

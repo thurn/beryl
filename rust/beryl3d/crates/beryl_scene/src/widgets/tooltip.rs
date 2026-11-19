@@ -6,7 +6,7 @@
 
 use crate::element::{Anchor, Element, text};
 use crate::layout::TIP_PREFIX;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, shadow, size, type_style};
 
 /// The tooltip saying `words` about the element named `of`, named `tooltip <of>`. It never
 /// takes a press.
@@ -21,6 +21,7 @@ pub fn tooltip(words: &str, of: &str) -> Element {
         .color(color::TEXT);
     let (y, x) = (size::TIP_PADDING_Y, size::TIP_PADDING_X);
     element.style.padding = [y, x, y, x];
+    element.style.box_shadow = shadow::TIP.to_vec();
     element.anchor = Some(Anchor::Tip);
     element
 }

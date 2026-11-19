@@ -516,19 +516,24 @@ The bits of `flags`:
 What `uv`, `layer` and `params` hold for each material. A field not named is
 zero. The numbers in the first column are the values of `material`:
 
-| Material         | `uv`                             | `layer`    | `params`                                                          |
-| ---------------- | -------------------------------- | ---------- | ----------------------------------------------------------------- |
-| 0 table          | unused                           | unused     | unused                                                            |
-| 1 card           | `uv[0]` is the back's layer      | the face   | `[dissolve, whiten, 0, 0]`, each from 0 to 1                      |
-| 2 contact shadow | unused                           | unused     | `[blur in millimetres, 0, 0, 0]`                                  |
-| 3 glow           | the sprite's rectangle in texels | atlas page | `[progress from 0 to 1, 0, 0, 0]`                                 |
-| 4 streak         | the sprite's rectangle in texels | atlas page | `[head from 0 to 1, tail length from 0 to 1, 0, 0]`               |
-| 5 panel          | the border's color, as RGBA      | unused     | `[width, height, corner radius, border width]`, in logical points |
-| 6 glyph          | the glyph's rectangle in texels  | atlas page | unused                                                            |
-| 7 icon           | the icon's rectangle in texels   | atlas page | unused                                                            |
-| 8 particle       | the sprite's rectangle in texels | atlas page | `[age from 0 to 1, seed, 0, 0]`                                   |
+| Material         | `uv`                                                   | `layer`    | `params`                                                            |
+| ---------------- | ------------------------------------------------------ | ---------- | ------------------------------------------------------------------- |
+| 0 table          | unused                                                 | unused     | unused                                                              |
+| 1 card           | `uv[0]` is the back's layer                            | the face   | `[dissolve, whiten, 0, 0]`, each from 0 to 1                        |
+| 2 contact shadow | unused                                                 | unused     | `[blur in millimetres, 0, 0, 0]`                                    |
+| 3 glow           | the sprite's rectangle in texels                       | atlas page | `[progress from 0 to 1, 0, 0, 0]`                                   |
+| 4 streak         | the sprite's rectangle in texels                       | atlas page | `[head from 0 to 1, tail length from 0 to 1, 0, 0]`                 |
+| 5 panel          | the border's color, as RGBA                            | unused     | `[width, height, corner radius, border width]`, in logical points   |
+| 6 glyph          | the glyph's rectangle in texels                        | atlas page | unused                                                              |
+| 7 icon           | the icon's rectangle in texels                         | atlas page | unused                                                              |
+| 8 particle       | the sprite's rectangle in texels                       | atlas page | `[age from 0 to 1, seed, 0, 0]`                                     |
+| 9 box shadow     | offset x, offset y, spread, shape radius, each `fixed` | 1 if inset | `[box width, box height, box radius, deviation]`, in logical points |
 
 - **A rectangle in texels** is `[x, y, width, height]` within one atlas page.
+- **A box shadow's** box is the element's border box, or its padding box for an
+  inset shadow, and its deviation is the Gaussian's standard deviation. `fixed`
+  is a length in sixteenths of a point plus 32,768. The shape radius is the
+  corner radius of the box grown by the spread, as WebKit scales it.
 - **`dissolve`** is how far a card has broken up (the `dissolve` effect), and
   **`whiten`** how far its face is replaced by white light (`settle`, `blanch`
   and `cover`). A card with either above zero, or with a `tint` opacity under
@@ -577,9 +582,9 @@ The rules for building a frame:
 
 - **Closed materials.** A **material** is one way of shading a shape. The list
   is closed and short: table, card, contact shadow, glow, streak, panel, glyph,
-  icon and particle. A record's `material` selects a branch of a shader, so
-  shapes of different materials can be drawn by one call. Every GPU pipeline is
-  created at startup, and nothing is compiled during play.
+  icon, particle and box shadow. A record's `material` selects a branch of a
+  shader, so shapes of different materials can be drawn by one call. Every GPU
+  pipeline is created at startup, and nothing is compiled during play.
 
 - **Opaque first, nearest first.** Cards and the table are opaque. Their records
   come first in the list, cards nearest the camera first and the table last, and
@@ -935,7 +940,8 @@ pub struct FaceId(pub u16);
 pub enum FaceSize { Board, Full }
 /// One glyph of one bundled font at one weight and one size in physical
 /// pixels. The text fonts are variable, so the weight is the axis value.
-pub struct GlyphKey { pub font: u8, pub weight: u16, pub glyph: u16, pub size: u16 }
+/// `blur` is 0, or the deviation of the drop shadow's blur in quarter pixels.
+pub struct GlyphKey { pub font: u8, pub weight: u16, pub glyph: u16, pub blur: u8, pub size: u16 }
 
 impl Client {
     /// The glyphs that laid-out text needs and no page holds yet. Each is
@@ -4335,12 +4341,40 @@ reference is the web interface as WebKit draws it, at scale 2.
   centred on a page color. WebKit shoots it at scale 2, and `b3d-render sample`
   lays it out as a flat-layer element with the `Style` its CSS stands for and
   draws it with the real renderer. A sample passes when 99.5% of its pixels are
-  within 4 levels in every channel; text glyph pixels are to be masked out
-  (decision M2) once a sample with text can be drawn. A sample using a property
-  `Style` cannot say is recorded as unsupported. `web-match.json`'s `samples`
-  holds each sample's result under the ratchet rule. The suite's first run found
-  that a translucent border was blended over what lay behind the panel, where
-  CSS blends it over the panel's own fill.
+  within 4 levels in every channel. A sample's text is set in Open Sans at a
+  line height of 1.4 on both sides, from the web's own font file in the page,
+  and its glyph pixels are masked out (decision M2): every pixel Beryl 3D's
+  glyphs cover, drawn alone in white on black, and the pixels beside them. A
+  sample using a property `Style` cannot say is recorded as unsupported.
+  `web-match.json`'s `samples` holds each sample's result under the ratchet
+  rule. The suite's first run found that a translucent border was blended over
+  what lay behind the panel, where CSS blends it over the panel's own fill.
+- **Shadows.** `Style::box_shadow` and `Style::drop_shadow` hold CSS's
+  `box-shadow` and `drop-shadow()` filters as lists of `Shadow` (offset, blur,
+  spread, color, inset). WebKit blurs both with a Gaussian about 0.85 times as
+  wide as the one CSS names (a box shadow's blur length is two standard
+  deviations, a drop shadow's one), which the samples measured on box shadows of
+  blurs 16 and 24 and drop shadows of blurs 3 and 8; `Shadow::sigma` and
+  `drop_sigma` apply it. A box shadow is one `BoxShadow` record, shaded with the
+  closed form of a blurred rounded rectangle (Evan Wallace's: exact across x,
+  four samples down y), so it needs no texture. An outer shadow's quad is the
+  border box moved by the offset and grown by the spread and three deviations,
+  and the shader cuts the border box out of it; an inset shadow's quad is the
+  padding box. A spread scales the shape's corner radius by how much the box's
+  shorter side grew, as WebKit's `FloatRoundedRect::inflateWithRadii` does, not
+  by adding the spread as the CSS specification says. Outer shadows are written
+  before the element's panel and inset ones after it, last first. A drop shadow
+  cannot blur as it draws, since a Baseline material takes one texture sample,
+  so the glyph worker rasterizes a blurred copy of each glyph (`GlyphKey::blur`,
+  the deviation in quarter pixels) into a cell grown by three deviations, and
+  the client draws it with the `Glyph` material in the shadow's color under the
+  text. CSS applies each drop shadow of a `filter` to the result of the ones
+  before it, so a chain is drawn as `DropLayers`: shadow `k` adds a layer for
+  the text and one for each earlier layer, offsets and variances added and
+  opacities multiplied, which treats the shadows' overlap with the text and with
+  each other as sums. Overlapping halos of neighbouring glyphs are drawn over
+  each other rather than blurred together, which the text sample's offsets of a
+  point or two keep within the tolerance.
 - **Pixels.** What is left after boxes and styles agree is compared as pixels,
   with glyph pixels masked, because glyph antialiasing differs between WebKit
   and parley with swash. `just b3d match pixels <target> --at <moment>` takes

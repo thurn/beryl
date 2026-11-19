@@ -5,7 +5,7 @@
     "border-width": ["uniform"],
     "border-color": ["color"],
     "border-radius": ["uniform"],
-    "box-shadow": [],
+    "box-shadow": ["*"],
     "filter": [],
     "opacity": ["*"],
     "color": ["color"],

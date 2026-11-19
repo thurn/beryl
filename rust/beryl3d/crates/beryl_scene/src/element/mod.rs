@@ -13,7 +13,10 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 pub use keys::{Chord, Shortcuts, describe};
-pub use style::{Align, Direction, Display, Justify, Overflow, Position, Style, TextAlign, Track};
+pub use style::{
+    Align, Direction, Display, DropLayer, DropLayers, Justify, MOST_DROP_SHADOWS, Overflow,
+    Position, Shadow, Style, TextAlign, Track,
+};
 
 use crate::frame::{ElementId, Role};
 use crate::input::{FaceId, FaceSize};

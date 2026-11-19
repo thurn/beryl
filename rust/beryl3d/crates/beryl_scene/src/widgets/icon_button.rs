@@ -7,7 +7,7 @@
 use super::{IconId, icons};
 use crate::element::{Element, Shown};
 use crate::frame::Role;
-use crate::tokens::{color, size};
+use crate::tokens::{color, shadow, size};
 
 /// A button showing the icon `icon`, named `name` because it has no words.
 #[must_use]
@@ -22,8 +22,9 @@ pub(super) fn round(role: Role, icon: IconId, name: &str) -> Element {
         .width(size::ICON_BUTTON)
         .height(size::ICON_BUTTON)
         .background(color::ICON_BUTTON)
-        .border((color::ICON_BUTTON_RIM, size::ICON_BUTTON_RIM))
         .radius(size::ICON_BUTTON / 2.0);
+    // The rim is an inset ring of the box shadow, as the web draws it, not a border.
+    element.style.box_shadow = shadow::ICON_BUTTON.to_vec();
     // At the one size the atlas holds the icon: 22 points for most, as `size::ICON` is, and 28
     // for full control's mark, whose artwork is drawn larger.
     element.shows = Some(Shown::Icon(icon, icons::atlas_size(icon)));

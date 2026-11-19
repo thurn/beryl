@@ -8,6 +8,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use super::{Block, TypeStyle};
+use crate::element::{DropLayers, Shadow};
 use crate::input::{GlyphCell, GlyphKey};
 
 /// Where a rasterized glyph is.
@@ -63,6 +64,7 @@ impl Glyphs {
             ..key
         };
         (self.table.range(sizes))
+            .filter(|(cell, _)| cell.blur == key.blur)
             .min_by_key(|(cell, _)| cell.size.abs_diff(key.size))
             .map(|(cell, placed)| (*placed, f32::from(key.size) / f32::from(cell.size.max(1))))
     }
@@ -70,12 +72,24 @@ impl Glyphs {
     /// Asks for each glyph of `block`, in its run's style at `scale` physical pixels per point,
     /// that no page holds and that has not been asked for.
     pub fn want(&mut self, block: &Block, scale: f32) {
+        self.want_with(block, scale, &[]);
+    }
+
+    /// `want`, and each glyph blurred for each layer of `shadows`, the drop shadows its text is
+    /// drawn with (`Style::drop_shadow`, `DropLayers`).
+    pub fn want_with(&mut self, block: &Block, scale: f32, shadows: &[Shadow]) {
+        let layers = DropLayers::new(shadows);
         for glyph in &block.glyphs {
             let style = block.run(glyph.run).style;
-            let key = key(style, scale, glyph.glyph);
-            if !self.table.contains_key(&key) && self.asked.insert(key) {
-                self.wanted.push_back(key);
-                self.missing += 1;
+            let sharp = key(style, scale, glyph.glyph);
+            let blurs = layers
+                .iter()
+                .map(|layer| blurred(sharp, layer.sigma, scale));
+            for key in std::iter::once(sharp).chain(blurs) {
+                if !self.table.contains_key(&key) && self.asked.insert(key) {
+                    self.wanted.push_back(key);
+                    self.missing += 1;
+                }
             }
         }
     }
@@ -101,8 +115,23 @@ pub fn key(style: TypeStyle, scale: f32, glyph: u16) -> GlyphKey {
         font: style.font as u8,
         weight: style.weight,
         glyph,
+        blur: 0,
         size: pixels(style.size * scale),
     }
+}
+
+/// `key` blurred with a Gaussian of standard deviation `sigma` logical points at `scale`, as a
+/// drop shadow of it is drawn: the deviation in quarters of a physical pixel, at least one
+/// quarter, at most 255.
+#[must_use]
+pub fn blurred(key: GlyphKey, sigma: f32, scale: f32) -> GlyphKey {
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to the range of u8 first"
+    )]
+    let blur = (sigma * scale * 4.0).round().clamp(1.0, 255.0) as u8;
+    GlyphKey { blur, ..key }
 }
 
 /// A size in physical pixels, rounded to the nearest whole pixel. A font size in pixels is

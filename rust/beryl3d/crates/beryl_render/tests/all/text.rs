@@ -88,6 +88,7 @@ fn rasterize(text: &str) -> (Prepared, Vec<GlyphCell>) {
     let keys: Vec<GlyphKey> = text
         .chars()
         .map(|character| GlyphKey {
+            blur: 0,
             font: Font::OpenSans as u8,
             weight: 400,
             glyph: font.charmap().map(character),

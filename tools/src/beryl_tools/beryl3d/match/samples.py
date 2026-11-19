@@ -10,9 +10,10 @@ pixels, Beryl 3D's and their difference amplified, side by side. A sample passes
 at most `TOLERANCE`.
 
 A sample whose CSS `Style` cannot say yet (`unsupported`) is not drawn; it is reported as
-unsupported, with the properties it lacks. Text is unsupported for now: glyph pixels would be
-masked out of the score (decision M2), and no sample with text uses only properties `Style`
-has.
+unsupported, with the properties it lacks. A sample's text is set in Open Sans, the web
+interface's sans-serif face, from the web's own font file on the web side and Beryl 3D's bundled
+copy on the other, and its glyph pixels are left out of the score (decision M2): `b3d-render
+sample` masks every pixel Beryl 3D's glyphs cover, and the pixels next to them.
 
 Results go under `samples` in `data/beryl3d/web-match.json`, each sample's `p995` or
 `"unsupported"`, held by the ratchet rule of `timeline-parity.json`: a value may only go down,
@@ -27,6 +28,7 @@ page, so a run shoots only the samples whose page changed.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import re
@@ -39,6 +41,7 @@ from pathlib import Path
 from ... import paths as repo_paths
 from ... import shots
 from .. import paths as beryl3d_paths
+from . import css
 
 HERE: Path = Path(__file__).resolve().parent
 SAMPLES: Path = repo_paths.REPO / "data" / "beryl3d" / "match" / "samples.json"
@@ -51,20 +54,35 @@ MARGIN = 48
 # A sample passes when 99.5% of its pixels are within this many levels in every channel.
 TOLERANCE = 4
 UNSUPPORTED = "unsupported"
-# The CSS properties Beryl 3D's `Style` can say, as `background`, `border`, `radius` and
-# `opacity`.
+# The CSS properties Beryl 3D's `Style` can say, as `background`, `border`, `radius`,
+# `opacity` and `box_shadow`.
 SUPPORTED: frozenset[str] = frozenset(
-    {"background-color", "border", "border-radius", "opacity"}
+    {"background-color", "border", "border-radius", "opacity", "box-shadow"}
 )
-# The web interface's sans-serif stack, which a sample's text is set in.
-SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+# The web interface's sans-serif face, which a sample's text is set in, and the web's file of it
+# (`ui/src/design/fonts.ts` loads the same one), which the page embeds. Its name is quoted with
+# single quotes, since it goes inside the element's double-quoted `style` attribute.
+SANS = "'Open Sans Variable'"
+SANS_FILE: Path = (
+    repo_paths.UI
+    / "node_modules"
+    / "@fontsource-variable"
+    / "open-sans"
+    / "files"
+    / "open-sans-latin-wght-normal.woff2"
+)
+# The line height a sample's text is set at on both sides: Beryl 3D's body text's.
+LINE_HEIGHT = 1.4
 
 HEX: re.Pattern[str] = re.compile(r"^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 RGB: re.Pattern[str] = re.compile(
     r"^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[/,]\s*([\d.]+)(%?))?\s*\)$"
 )
 BORDER: re.Pattern[str] = re.compile(r"^([\d.]+)px\s+solid\s+(.+)$")
-PIXELS: re.Pattern[str] = re.compile(r"^([\d.]+)px$")
+PIXELS: re.Pattern[str] = re.compile(r"^(-?[\d.]+)px$")
+SHADOW_COLOR: re.Pattern[str] = re.compile(
+    r"rgba?\([^()]*\)|#[0-9a-fA-F]{3,6}\b|transparent"
+)
 
 
 def color(text: str) -> list[int]:
@@ -96,14 +114,63 @@ def length(text: str) -> float:
     return float(found[1])
 
 
+def shadows(text: str) -> list[dict[str, object]]:
+    """A `box-shadow` list as `Style`'s `Shadow`s: `{"x", "y", "blur", "spread", "color",
+    "inset"}`, lengths in points and the color's channels from 0 to 255."""
+    out: list[dict[str, object]] = []
+    for part in css.commas(text):
+        inset = bool(re.search(r"\binset\b", part))
+        part = re.sub(r"\binset\b", " ", part)
+        found = SHADOW_COLOR.search(part)
+        shade = color(found[0]) if found else [0, 0, 0, 255]
+        rest = part if found is None else part[: found.start()] + part[found.end() :]
+        numbers = [0.0 if t == "0" else length(t) for t in rest.split()]
+        x, y, blur, spread = (numbers + [0.0] * 4)[:4]
+        out.append(
+            {
+                "x": x,
+                "y": y,
+                "blur": blur,
+                "spread": spread,
+                "color": shade,
+                "inset": inset,
+            }
+        )
+    return out
+
+
+def drop_shadows(text: str) -> list[dict[str, object]] | None:
+    """A `filter` of only `drop-shadow()` functions as `Style`'s drop shadows, or None when it
+    has any other function."""
+    functions = re.findall(r"([a-z-]+)\(((?:[^()]|\([^()]*\))*)\)", text)
+    if not functions or any(name != "drop-shadow" for name, _ in functions):
+        return None
+    return [shadows(argument)[0] for _, argument in functions]
+
+
 def lacking(sample: dict[str, object]) -> list[str]:
-    """What of `sample` Beryl 3D cannot draw yet: each CSS property `Style` lacks, and `text`."""
+    """What of `sample` Beryl 3D cannot draw yet: each CSS property `Style` lacks. A `filter`
+    is drawn when it is only drop shadows."""
     style = sample["style"]
     assert isinstance(style, dict)
-    out = sorted(name for name in style if name not in SUPPORTED)
-    if "text" in sample:
-        out.append("text")
-    return out
+    return sorted(
+        name
+        for name in style
+        if name not in SUPPORTED
+        and not (name == "filter" and drop_shadows(str(style[name])) is not None)
+    )
+
+
+def native_text(sample: dict[str, object]) -> dict[str, object] | None:
+    """A sample's text as `b3d-render sample` reads it: `{"string", "color", "size"}`."""
+    text = sample.get("text")
+    if not isinstance(text, dict):
+        return None
+    return {
+        "string": str(text["string"]),
+        "color": color(str(text["color"])),
+        "size": length(str(text["font-size"])),
+    }
 
 
 def native_style(style: dict[str, str]) -> dict[str, object]:
@@ -121,6 +188,8 @@ def native_style(style: dict[str, str]) -> dict[str, object]:
         "border": border,
         "radius": length(style["border-radius"]) if "border-radius" in style else 0.0,
         "opacity": float(style.get("opacity", "1")),
+        "box_shadow": shadows(style.get("box-shadow", "")),
+        "drop_shadow": drop_shadows(style.get("filter", "")) or [],
     }
 
 
@@ -150,6 +219,7 @@ def html(sample: dict[str, object]) -> str:
             "align-items: center",
             "justify-content: center",
             f"font-family: {SANS}",
+            f"line-height: {LINE_HEIGHT}",
             f"font-size: {text['font-size']}",
             f"color: {text['color']}",
         ]
@@ -158,8 +228,15 @@ def html(sample: dict[str, object]) -> str:
         f"margin: 0; background: {sample['page']}; width: 100vw; height: 100vh; "
         "display: flex; align-items: center; justify-content: center"
     )
+    head = ""
+    if isinstance(text, dict):
+        font = base64.b64encode(SANS_FILE.read_bytes()).decode()
+        head = (
+            f"<style>@font-face {{ font-family: {SANS}; font-weight: 300 800; "
+            f'src: url(data:font/woff2;base64,{font}) format("woff2"); }}</style>'
+        )
     return (
-        f'<!doctype html><html><body style="{body}">'
+        f'<!doctype html><html><head>{head}</head><body style="{body}">'
         f"<div style=\"{'; '.join(declarations)}\">{inner}</div></body></html>"
     )
 
@@ -224,6 +301,7 @@ def drawn(
                 "box": sample["box"],
                 "web": str(pictures[str(sample["name"])]),
                 "style": native_style(sample["style"]),  # pyre-ignore[6]: CSS from JSON
+                "text": native_text(sample),
             }
             for sample in samples
         ],

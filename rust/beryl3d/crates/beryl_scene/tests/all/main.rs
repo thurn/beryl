@@ -7,6 +7,7 @@
 
 mod agent;
 mod badges_manual;
+mod box_shadows;
 mod bug_report;
 mod checks;
 #[path = "../common/mod.rs"]
