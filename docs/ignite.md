@@ -539,9 +539,9 @@ How the executable is installed and kept current:
   while a landing runs or a newer release builds, for at most two minutes from
   when it first waited, so that a landing's gate is not cut off and releases
   that land meanwhile cause one restart into the newest. It never waits for
-  running commands or verb processes, which survive it. Before it restarts,
-  the daemon answers every new request, except the calls of verb processes, with
-  a reply that says it is restarting, which the client sends again, and waits up
+  running commands or verb processes, which survive it. Before it restarts, the
+  daemon answers every new request, except the calls of verb processes, with a
+  reply that says it is restarting, which the client sends again, and waits up
   to 30 seconds for the verbs running on its own threads, such as a `release`.
   It does not wait for a `start` that only waits for a free tree: the new daemon
   runs that `start` again under its handle, and the rerun claims the tree if one
@@ -554,9 +554,9 @@ How the executable is installed and kept current:
   waits for it: each round it looks whether the build has finished and shows
   "building release <commit>" as its step meanwhile, and the next heartbeat
   after it finishes restarts the daemon into it, or takes it on without a
-  restart as above. A failed build is logged once
-  and not retried until another commit is wanted. A daemon that restarts
-  mid-build waits for Cargo's lock before it resets the update tree.
+  restart as above. A failed build is logged once and not retried until another
+  commit is wanted. A daemon that restarts mid-build waits for Cargo's lock
+  before it resets the update tree.
 - Before the daemon restarts into a new release, the release thread runs the new
   executable's selftest, `bin/<commit>/ignite internal selftest`, as a
   supervised command. It parses `ignite.toml` and every check manifest as the
@@ -718,10 +718,10 @@ How a broken build or a crash is survived:
   fresh trial for the build it installs.
 - A clean stop also records its `reason` on the run's line in `starts.jsonl`:
   the release the daemon restarted into and the daemon files that release
-  changed, with how long the restart waited for landings; a drill; or
-  `SIGTERM`. A run's line lists in `adopted` the releases it took on without
-  restarting. Together they let a postmortem count the restarts releases caused
-  and the ones they avoided.
+  changed, with how long the restart waited for landings; a drill; or `SIGTERM`.
+  A run's line lists in `adopted` the releases it took on without restarting.
+  Together they let a postmortem count the restarts releases caused and the ones
+  they avoided.
 - `ignite install` also installs a monitor, a second login service that runs
   `ignite monitor` from the last-good build every two minutes. It restarts a
   daemon that does not answer, rolls back a build that crash-loops, and when
