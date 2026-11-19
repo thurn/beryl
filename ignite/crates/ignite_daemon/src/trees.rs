@@ -277,7 +277,23 @@ fn store_error(error: &ignite_store::StoreError) -> Error {
 /// This is the only place that decides it. A handle the restarted daemon finds running but
 /// cannot run again is ended `incomplete` just after start; its tree is freed by the next
 /// landing lease ([`Trees::lease_landing`]).
+///
+/// A verb process that still holds its lock is alive whatever its handle's row says: a daemon
+/// that took a hung process for dead and ended its handle must not give its trees to the next
+/// verb while the process, and the commands it runs, still work in them.
 pub fn owner_alive(db: &Connection, owner: &str) -> bool {
+    owner_alive_in(db, owner, &crate::update::Home::from_env().root)
+}
+
+/// [`owner_alive`], with the verb processes' locks in the Ignite home `home`.
+pub fn owner_alive_in(db: &Connection, owner: &str, home: &Path) -> bool {
+    let handle = Handle::new(owner).ok();
+    if handle
+        .as_ref()
+        .is_some_and(|handle| crate::verbproc::alive(home, handle))
+    {
+        return true;
+    }
     let Ok(Some(row)) = handle_store::get(db, owner) else {
         return false;
     };
@@ -285,12 +301,7 @@ pub fn owner_alive(db: &Connection, owner: &str) -> bool {
         return false;
     }
     // A verb run by the daemon itself names no process.
-    if row.pid.is_none() {
-        return true;
-    }
-    let home = crate::update::Home::from_env().root;
-    Handle::new(owner).is_ok_and(|handle| crate::verbproc::alive(&home, &handle))
-        || crate::server::RUN_AGAIN_AFTER_DEATH.contains(&row.verb.as_str())
+    row.pid.is_none() || crate::server::RUN_AGAIN_AFTER_DEATH.contains(&row.verb.as_str())
 }
 
 /// Whether a restarted daemon resets `row`'s tree: it was being prebuilt or reset, or it is a

@@ -92,7 +92,13 @@ pub enum Command {
     /// Block until a running operation finishes, or with `emergency` until the emergency ends.
     Wait { handle: String },
     /// End a running command of this session's, such as a landing before its push begins.
-    Stop { handle: String },
+    Stop {
+        handle: String,
+        /// End a command of any session's, or a daemon's internal verb, and its verb process if
+        /// it does not stop when asked. Only for a justiciar or the operator.
+        #[arg(long)]
+        force: bool,
+    },
     /// Create, show, list, link and comment on tickets.
     Ticket {
         #[command(subcommand)]
@@ -763,7 +769,9 @@ mod tests {
                 .unwrap()
                 .command
         };
-        assert!(matches!(parse("ignite stop L-2"), Command::Stop { handle } if handle == "L-2"));
+        assert!(
+            matches!(parse("ignite stop L-2"), Command::Stop { handle, force: false } if handle == "L-2")
+        );
         assert!(matches!(
             parse("ignite start Tq44s.9.48 --reservation 7f3a"),
             Command::Start { ticket, reservation: Some(code) } if ticket == "Tq44s.9.48" && code == "7f3a"
@@ -856,6 +864,15 @@ mod tests {
             }
         ));
         assert!(Cli::try_parse_from(["ignite", "ticket", "create", "x", "-p", "P7"]).is_err());
+    }
+
+    #[test]
+    fn parses_a_forced_stop() {
+        let line = ["ignite", "stop", "T-3", "--force"];
+        assert!(matches!(
+            Cli::try_parse_from(line).unwrap().command,
+            Command::Stop { handle, force: true } if handle == "T-3"
+        ));
     }
 
     #[test]

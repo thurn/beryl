@@ -328,3 +328,18 @@ fn a_handle_gets_back_the_tree_of_each_holder_and_no_other() {
     assert_eq!(lease("tip c unit").tree, first.tree);
     assert_eq!(lease("tip c lint").tree, second.tree);
 }
+
+/// A verb process that still holds its lock owns its trees even after the daemon ended its
+/// handle, as a daemon does that takes a hung tip round for dead: the next verb must not reset
+/// a tree that the process, and the commands it runs, still work in.
+#[test]
+fn a_verb_process_holding_its_lock_owns_its_tree_after_its_handle_ended() {
+    let f = Fixture::new(1, 1);
+    record_handle(&f, "T-9", "incomplete");
+    let home = f.scratch.0.join("home");
+    let owner = handle("T-9");
+    let held = crate::verbproc::hold(&home, &owner).unwrap().unwrap();
+    assert!(owner_alive_in(&f.trees.lock().db, "T-9", &home));
+    drop(held);
+    assert!(!owner_alive_in(&f.trees.lock().db, "T-9", &home));
+}

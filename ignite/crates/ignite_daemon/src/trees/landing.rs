@@ -164,6 +164,18 @@ impl Trees {
                     "ignite: freeing landing tree {}: {owner} finished without freeing it",
                     row.id
                 );
+                // Commands its owner left, such as those of a verb process that was killed,
+                // may still run there; the next lease resets the tree under them otherwise.
+                let tree =
+                    TreeId::new(row.id.clone()).map_err(|e| Error::Invalid(e.to_string()))?;
+                let ended = Self::end_processes(&self.inner.config.path(&tree), None)?;
+                if !ended.is_empty() {
+                    eprintln!(
+                        "ignite: ended {} process(es) {owner} left in {}",
+                        ended.len(),
+                        row.id
+                    );
+                }
                 store::release(&locked.db, &row.id, None, &self.now())
                     .map_err(|e| store_error(&e))?;
             }

@@ -251,3 +251,126 @@ fn a_wait_that_ends_first_names_the_step_and_how_long_it_has_lasted() {
     scheduler.release(&held);
     assert!(activity.wait_finished(Duration::from_secs(60)));
 }
+
+/// A verb that never looks at its stop, as a hung verb process does, until the test's fake
+/// ender ends it.
+struct Hangs(Arc<(Mutex<bool>, Condvar)>);
+
+impl Verb for Hangs {
+    fn name(&self) -> &'static str {
+        "tip-round"
+    }
+
+    fn run(&self, _ctx: &Context, _req: &Request) -> Reply {
+        steps::step("running checks past the tip budget");
+        let (done, changed) = &*self.0;
+        let mut done = done.lock().unwrap();
+        while !*done {
+            done = changed.wait(done).unwrap();
+        }
+        Reply::text(Exit::Success, "tip verified")
+    }
+}
+
+/// Ends a [`Hangs`] as ending its verb process would, and counts the calls.
+struct FakeEnder(Arc<(Mutex<bool>, Condvar)>, Mutex<u32>);
+
+impl EndVerbProcess for FakeEnder {
+    fn end(&self, _handle: &Handle) -> Result<Option<String>, String> {
+        *self.1.lock().unwrap() += 1;
+        *self.0.0.lock().unwrap() = true;
+        self.0.1.notify_all();
+        Ok(Some(
+            "its verb process 7 and its group (1 processes), with `SIGTERM`".to_owned(),
+        ))
+    }
+}
+
+/// An `in_progress` ticket labelled `justiciar` that `holder` holds.
+fn justiciar_ticket(holder: &str) -> ignite_core::protocol::tickets::TicketDetail {
+    serde_json::from_value(serde_json::json!({
+        "id": "T.1", "parent": null, "next_child": 1, "title": "Master is stuck",
+        "body": "", "type": "task", "status": "in_progress", "priority": 0, "assignee": holder,
+        "labels": ["justiciar"], "defer_until": null, "close_reason": null,
+        "created_at": "2027-01-01T00:00:00.000Z", "created_by": "test",
+        "updated_at": "2027-01-01T00:00:00.000Z", "closed_at": null, "version": 1,
+        "session": holder, "edges": [], "children": [], "ready": false, "blocked_by": [],
+    }))
+    .unwrap()
+}
+
+fn as_session(session: Option<&str>) -> Context {
+    let mut ctx = context();
+    ctx.session = session.map(|s| SessionId::new(s).unwrap());
+    ctx
+}
+
+/// `--force` stops a verb that belongs to no session, as a daemon loop's tip round does, for
+/// a session holding a justiciar ticket or for the operator, ending its verb process when it
+/// does not stop when asked; any other session is refused.
+#[test]
+fn a_justiciar_or_the_operator_stops_a_hung_internal_verb_by_force() {
+    let gate = Arc::new((Mutex::new(false), Condvar::new()));
+    let mut registry = Registry::default();
+    registry.register(Box::new(Hangs(gate.clone())));
+    let steps = Arc::new(steps::Steps::new(Arc::new(ignite_core::time::SystemClock)));
+    let server = Server::with_steps(context(), registry, None, steps.clone()).unwrap();
+    let mut started = request("tip-round", &[], "local_a", 0);
+    started.session = None;
+    let handle = server.handle(&started).handle.unwrap();
+    let activity = steps.by_handle(&handle).unwrap();
+    while activity.view().step.is_none() {
+        std::thread::yield_now();
+    }
+    let ender = Arc::new(FakeEnder(gate.clone(), Mutex::new(0)));
+    let stop = StopVerb::new(server.handles().clone(), steps.clone())
+        .with_wait(Duration::from_millis(20))
+        .ending_processes_with(ender.clone());
+    let force = request("stop", &[handle.as_str(), "--force"], "local_w", 0);
+
+    let plain = stop.run(
+        &as_session(Some("local_j")),
+        &request("stop", &[handle.as_str()], "local_j", 0),
+    );
+    assert_eq!(plain.exit, Exit::Conflict, "{}", plain.text);
+    assert!(
+        plain.text.contains("belongs to no session"),
+        "{}",
+        plain.text
+    );
+    assert!(plain.text.contains("--force"), "{}", plain.text);
+
+    let worker = stop.run(&as_session(Some("local_w")), &force);
+    assert_eq!(worker.exit, Exit::Conflict, "{}", worker.text);
+    assert!(
+        worker.text.contains("holds no in_progress ticket"),
+        "{}",
+        worker.text
+    );
+    assert_eq!(*ender.1.lock().unwrap(), 0);
+
+    let justiciar = as_session(Some("local_j"));
+    let hub = FakeHub::default();
+    hub.insert_ticket(justiciar_ticket("local_j"));
+    let justiciar = Context {
+        hub: Arc::new(hub),
+        ..justiciar
+    };
+    let stopped = stop.run(&justiciar, &force);
+    assert_eq!(stopped.exit, Exit::Success, "{}", stopped.text);
+    assert!(
+        stopped.text.starts_with("stopped  `ignite tip-round`")
+            && stopped.text.contains("by force"),
+        "{}",
+        stopped.text
+    );
+    assert!(
+        stopped.text.contains("ended    its verb process 7"),
+        "{}",
+        stopped.text
+    );
+    assert_eq!(*ender.1.lock().unwrap(), 1);
+
+    // The operator names no session and needs no ticket.
+    assert!(StopVerb::may_force(&as_session(None)).is_ok());
+}

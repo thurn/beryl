@@ -25,8 +25,9 @@ For the length of the emergency, these rules from the root `AGENTS.md` and
   fix straight to `ignite-release`, `staging` or `master` (in that order of
   preference, see [Fix](#3-fix-it-fast));
 - "work only in your own tree" and "never take over another session's ticket":
-  you may enter any tree, stop any command (`ignite stop`, or `kill` for a
-  runaway process), and release, close, rewrite or re-wire any ticket;
+  you may enter any tree, stop any command (`ignite stop <handle> --force`,
+  which also ends a hung verb process and its group, or `kill` for a runaway
+  process outside Ignite), and release, close, rewrite or re-wire any ticket;
 - "never wait for a person": sessions refused during the emergency wait for it
   to end;
 - running heavy commands outside Ignite, when Ignite is what is broken.
@@ -61,7 +62,7 @@ Send these together:
    and makes every daemon refuse `start`, `test`, `check`, `land` and the
    other verbs that build (exit code 6), for every session but yours and any
    session working your ticket. Running commands go on: stop the ones that
-   are the fault with `ignite stop`. The flag lapses after two hours, so
+   are the fault with `ignite stop <handle> --force`. The flag lapses after two hours, so
    declare it again within two hours if the emergency lasts. When one session
    must run a heavy verb, allow it: `ignite emergency allow <ticket> [<verb>]`.
 

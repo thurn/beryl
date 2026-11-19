@@ -2900,6 +2900,18 @@ Stopping a command:
   ends `stopped` with exit code 3.
 - A landing whose push has begun refuses, because a cut-short push may or may
   not have reached the remote.
+- `ignite stop <handle> --force` is for an emergency. Only the operator (a
+  request from a terminal, which names no session) or a session holding an
+  `in_progress` ticket labelled `justiciar` may give it. It stops a command of
+  any session, or one with no session such as a tip round a daemon loop started.
+  It asks the command to stop, and if the command refuses or has not finished
+  within 10 seconds, it ends the command's verb process and the process's whole
+  group with `SIGTERM`, then `SIGKILL` 5 seconds later. The daemon then ends the
+  commands the process left and its handle.
+- A landing tree stays leased while the verb process that holds it still holds
+  its lock, even after the daemon ended its handle. When the daemon frees a
+  landing tree whose owner has finished, it first ends any process still running
+  inside the tree.
 - `ignite close` and `ignite release` first stop every command still running
   from the tree and wait for them. If one refuses or does not end, the tree
   stays leased and the command says why.
@@ -3021,7 +3033,7 @@ enforces the pause itself.
 - While the flag is in force, the verbs that start heavy work (`start`, `test`,
   `check`, `land`, `run`, `rebuild` and `audit`) refuse with exit code 6 and one
   line naming the emergency. Verbs that only read keep working. Commands already
-  running are not stopped; the justiciar uses `ignite stop` for those.
+  running are not stopped; the justiciar uses `ignite stop --force` for those.
 - The justiciar's session, any session working the justiciar ticket, and the
   tickets the justiciar names with `ignite emergency allow <ticket> [<verb>]`
   are not refused.

@@ -301,7 +301,9 @@ impl Server {
             None => Handles::new(ctx.clock.clone()),
         });
         registry.register(Box::new(WaitVerb::new(handles.clone(), steps.clone())));
-        registry.register(Box::new(StopVerb::new(handles.clone(), steps.clone())));
+        let stop = StopVerb::new(handles.clone(), steps.clone());
+        let home = processes.as_ref().map(|processes| processes.home.clone());
+        registry.register(Box::new(stop.ending_processes_in(home, db.clone())));
         let server = Server {
             ctx,
             registry,
