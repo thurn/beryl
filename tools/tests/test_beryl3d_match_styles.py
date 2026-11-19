@@ -147,9 +147,9 @@ def test_only_the_shapes_the_supported_table_lists_can_be_expressed() -> None:
     assert support.can_express("border-radius", 12)
     assert not support.can_express("border-radius", [12, 12, 0, 0])
     assert support.can_express("box-shadow", "none")
-    assert not support.can_express(
-        "box-shadow", css.parsed("box-shadow", "0px 1px red")
-    )
+    # Shadows are drawn now; transforms are not.
+    assert support.can_express("box-shadow", css.parsed("box-shadow", "0px 1px red"))
+    assert not support.can_express("transform", [1, 0, 0, 1, 5, 5])
     assert support.shape("transform", [1, 0, 0, 1, 5, 5]) == "translate"
     assert support.shape("transform", [0.5, 0, 0, 0.5, 0, 0]) == "scale"
     assert support.shape("transform", [0.4, 0.1, -0.1, 0.4, 0, 0]) == "rotate or skew"
@@ -195,14 +195,14 @@ def element(
 def test_the_style_diff_lists_differences_and_counts_what_style_cannot_express() -> (
     None
 ):
-    shadow = css.parsed("box-shadow", "rgba(0, 0, 0, 0.3) 0px 2px 6px 0px")
+    moved = [1, 0, 0, 1, 5, 5]
     web = [
         element(
             "Play",
             [0, 0, 200, 48],
             text=True,
             background_color=[180, 94, 18, 1],
-            box_shadow=shadow,
+            transform=moved,
             # The web computes a border color even where no border is drawn.
             border_color=[245, 243, 240, 1],
             font_family="Times New Roman",
@@ -229,7 +229,7 @@ def test_the_style_diff_lists_differences_and_counts_what_style_cannot_express()
         'button "Play" #1  font-family  Times New Roman  Crimson Pro',
         'button "Back" #1  background-color  rgba(0,0,0,0)  rgba(9,9,9,1)',
     ]
-    assert found.unsupported == {"box-shadow": 1}
+    assert found.unsupported == {"transform": 1}
     assert found.total() == "styles 2, unsupported 1"
 
 
@@ -237,24 +237,22 @@ def test_gaps_group_values_by_shape_and_rank_them_by_area_on_screen() -> None:
     parser = argparse.ArgumentParser()
     target.arguments(parser)
     t = target.target(parser.parse_args(["opening-play", "--at", "end"]))
-    one = css.parsed("box-shadow", "rgb(0, 0, 0) 0px 2px 4px 0px")
-    two = css.parsed(
-        "box-shadow", "rgb(0, 0, 0) 0px 2px 4px 0px, red 0px 0px 1px inset"
-    )
+    move = [1, 0, 0, 1, 5, 5]
+    scale = [0.5, 0, 0, 0.5, 0, 0]
     web = [
-        element("Small", [0, 0, 10, 10], box_shadow=one),
-        element("Large", [0, 0, 100, 100], box_shadow=two),
+        element("Small", [0, 0, 10, 10], transform=move),
+        element("Large", [0, 0, 100, 100], transform=scale),
         # Half of it lies left of the window.
-        element("Edge", [-50, 0, 100, 10], box_shadow=one),
+        element("Edge", [-50, 0, 100, 10], transform=move),
         # Transparent: no area.
-        element("Gone", [0, 0, 500, 500], box_shadow=one, opacity=0),
+        element("Gone", [0, 0, 500, 500], transform=move, opacity=0),
         element("Corners", [0, 0, 20, 20], border_radius=[4, 4, 0, 0]),
         element("Flat", [0, 0, 20, 20], border_radius=4, background_color=[1, 1, 1, 1]),
     ]
     groups = gaps.grouped(gaps.uses(t, web))
     assert [(g.name, g.shape, len(g.uses), g.area()) for g in groups] == [
-        ("box-shadow", "2 layers, 1 inset", 1, 10000.0),
-        ("box-shadow", "1 layer", 3, 600.0),
+        ("transform", "scale", 1, 10000.0),
+        ("transform", "translate", 3, 600.0),
         ("border-radius", "corners differ", 1, 400.0),
     ]
     examples = groups[1].examples()
@@ -263,4 +261,4 @@ def test_gaps_group_values_by_shape_and_rank_them_by_area_on_screen() -> None:
         'button "Small" #1',
         'button "Gone" #1',
     ]
-    assert examples[0].value == "rgba(0,0,0,1) 0 2 4 0"
+    assert examples[0].value == "1 0 0 1 5 5"
