@@ -375,9 +375,13 @@ CHECKS: tuple[Check, ...] = (
         # A literal in a Rust file may name a path anywhere the Rust code reads from, and the
         # check reads the manifests and the Cargo workspaces. Of docs/, the Rust code reads
         # only the sample decks and the incident reports, so a change to the rest of the
-        # documentation leaves this check alone.
+        # documentation leaves this check alone. Ignite's crates are scanned too, so their
+        # sources and workspace manifest are inputs: without them, a test added under
+        # ignite/crates/ that read an undeclared path kept this check's cached pass.
         (
             "rust/**",
+            "ignite/crates/**",
+            "ignite/Cargo.toml",
             "ui/**",
             "data/**",
             "docs/sample-decks/**",
