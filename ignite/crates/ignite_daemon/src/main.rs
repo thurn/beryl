@@ -322,6 +322,8 @@ pub fn run_daemon(cwd: &Path) -> i32 {
         }
     };
     let (ignite, version) = running_executable();
+    // A newer release must not delete this one while it runs.
+    crate::update::hold_release(&ignite);
     // From here on, a panic anywhere in the daemon leaves a record in the home folder.
     crate::crash::install_hook(home.root.clone(), version.clone());
     // A daemon asked to stop (`launchctl kickstart -k`, `bootout`, an install) records a clean

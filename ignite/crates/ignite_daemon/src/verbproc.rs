@@ -354,6 +354,9 @@ pub fn run(handle: &str, cwd: &Path) -> i32 {
         .unwrap_or_default();
     let version = crate::update::ExecutableStore::version_of(&ignite)
         .map_or_else(|| "unknown".to_owned(), |commit| commit.to_string());
+    // This process outlives daemon restarts and points the shared test runner script at its
+    // own executable, so its release must outlive the daemon's updates too.
+    crate::update::hold_release(&ignite);
     crate::crash::install_hook(home.root.clone(), version.clone());
     let db = match ignite_store::local::open(&home.root.join("daemon.db")) {
         Ok(db) => Arc::new(Mutex::new(db)),

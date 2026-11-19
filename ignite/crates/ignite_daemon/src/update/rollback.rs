@@ -17,10 +17,17 @@
 //! called from `starts::record_clean_stop`). So a person or a drill that restarts the daemon
 //! twice in a minute leaves the release in place, while a release that exits on its own is
 //! still rolled back.
+//!
+//! A process running from a stored release holds a shared lock on the release's [`IN_USE`]
+//! file for its whole life ([`hold_release`]), and [`ExecutableStore::prune`] never deletes a
+//! release whose lock is held. A verb process outlives the daemon's restarts and points the
+//! shared compiler-wrapper and test-runner scripts at its own executable before it runs checks,
+//! so deleting its release would make every test those scripts start fail at once.
 
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use ignite_core::ids::Commit;
 use ignite_core::time::Timestamp;
@@ -34,6 +41,10 @@ pub const HEALTHY_AFTER_S: f64 = 60.0;
 pub const CRASH_WINDOW_S: f64 = 300.0;
 /// Stored releases kept besides the current and previous ones.
 pub const KEEP_EXTRA: usize = 2;
+
+/// The file in a release's directory that each process running the release holds a shared
+/// lock on.
+pub const IN_USE: &str = "in-use";
 
 const PREVIOUS: &str = "previous";
 const TRIAL: &str = "trial";
@@ -219,9 +230,10 @@ impl ExecutableStore {
         }
     }
 
-    /// Deletes stored releases other than `keep`, the current, previous and last-good ones and the
-    /// [`KEEP_EXTRA`] newest of the rest. A release a supervisor still runs keeps working on
-    /// macOS, which holds a deleted file open; Windows refuses to delete it, which is ignored.
+    /// Deletes stored releases other than `keep`, the current, previous and last-good ones, those
+    /// a live process runs ([`in_use`]) and the [`KEEP_EXTRA`] newest of the rest. A process
+    /// whose release was deleted keeps running on macOS, which holds a deleted file open, but
+    /// nothing can start that executable again.
     pub fn prune(&self, keep: &[&Commit]) {
         let Ok(entries) = fs::read_dir(&self.root) else {
             return;
@@ -235,7 +247,10 @@ impl ExecutableStore {
             .filter_map(Result::ok)
             .filter(|e| {
                 let name = e.file_name().to_string_lossy().into_owned();
-                Commit::new(&name).is_ok() && e.path().is_dir() && !kept.contains(&name)
+                Commit::new(&name).is_ok()
+                    && e.path().is_dir()
+                    && !kept.contains(&name)
+                    && !in_use(&e.path())
             })
             .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
             .collect();
@@ -262,6 +277,49 @@ impl ExecutableStore {
         }
         Ok(())
     }
+}
+
+/// Takes a shared lock on the [`IN_USE`] file of the stored release that `executable` was
+/// started from, and keeps it until the process ends, so that [`ExecutableStore::prune`] leaves
+/// the release in place. Does nothing for an executable outside the store. The lock's file is
+/// closed when the process replaces its image with another release, so a restarted daemon
+/// holds only its new release.
+pub fn hold_release(executable: &Path) {
+    static HELD: OnceLock<Option<fs::File>> = OnceLock::new();
+    HELD.get_or_init(|| {
+        ExecutableStore::version_of(executable)?;
+        let dir = executable.canonicalize().ok()?.parent()?.to_path_buf();
+        let file = lock_shared(&dir.join(IN_USE));
+        if let Err(error) = &file {
+            eprintln!(
+                "ignite: a newer release may delete {} while it runs: {error}",
+                dir.display()
+            );
+        }
+        file.ok()
+    });
+}
+
+/// Opens `path`, creating it, and takes a shared lock on it.
+pub(super) fn lock_shared(path: &Path) -> io::Result<fs::File> {
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)?;
+    file.lock_shared()?;
+    Ok(file)
+}
+
+/// Whether a live process holds the lock on the [`IN_USE`] file of the release in `dir`. A
+/// release with no such file, from before releases were locked, counts as unused.
+fn in_use(dir: &Path) -> bool {
+    let Ok(file) = fs::OpenOptions::new().write(true).open(dir.join(IN_USE)) else {
+        return false;
+    };
+    // A lock held elsewhere, or one that cannot be taken at all: keep the release rather than
+    // risk deleting a running one.
+    file.try_lock().is_err()
 }
 
 #[cfg(test)]

@@ -148,6 +148,26 @@ fn pruning_keeps_the_current_previous_and_two_other_releases() {
 }
 
 #[test]
+fn pruning_keeps_a_release_a_live_process_runs() {
+    let store = store_with("aaaaaaa", "bbbbbbb");
+    for hex in ["ccccccc", "ddddddd", "eeeeeee", "fffffff"] {
+        fs::create_dir_all(store.root.join(hex)).unwrap();
+    }
+    // The oldest other release is still run by a verb process that outlived its daemon.
+    let held = super::lock_shared(&store.root.join("ccccccc").join(super::IN_USE)).unwrap();
+    // It is also the oldest, so pruning would take it first.
+    fs::File::open(store.root.join("ccccccc"))
+        .unwrap()
+        .set_modified(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1))
+        .unwrap();
+    store.prune(&[&commit("bbbbbbb")]);
+    assert!(store.root.join("ccccccc").exists());
+    drop(held);
+    store.prune(&[&commit("bbbbbbb")]);
+    assert!(!store.root.join("ccccccc").exists());
+}
+
+#[test]
 fn the_rejection_reason_is_the_newest_log_line_naming_the_commit() {
     let store = store_with("aaaaaaa", "bbbbbbb");
     let bad = commit("bbbbbbb");

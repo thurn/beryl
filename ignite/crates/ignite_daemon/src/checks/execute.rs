@@ -178,6 +178,11 @@ impl Checks {
                 &mut repaired,
             );
             run.wall_s += output.usage.wall_s;
+            if !unbuilt && super::unstarted::looks_unstarted(&reported, &output, pending.len()) {
+                // The cause is gone by the time anyone looks, so the machine is described now.
+                let machine = super::unstarted::Machine::read(&tree.path);
+                super::unstarted::record(&output, &reported, &machine);
+            }
             if unbuilt {
                 // Running it again would fail the same way: the checks wait on the build, which
                 // the round reports once, and are never held off as if they had hung.

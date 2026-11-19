@@ -55,7 +55,7 @@ pub trait Host {
 /// The running machine.
 pub struct NativeHost;
 
-fn command_output(program: &str, args: &[&str]) -> Option<String> {
+pub(crate) fn command_output(program: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(program).args(args).output().ok()?;
     output
         .status

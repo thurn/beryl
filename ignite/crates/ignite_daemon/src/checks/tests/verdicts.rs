@@ -179,3 +179,38 @@ fn the_hang_limit_is_four_times_the_slowest_pass_within_its_bounds() {
     assert_eq!(hang_limit_s(Some(300.0)), 20 * 60);
     assert_eq!(hang_limit_s(Some(3600.0)), 40 * 60);
 }
+
+#[test]
+fn a_run_in_which_every_check_failed_has_the_machine_described_in_its_output() {
+    let world = jsonl_world();
+    *world.launcher.listing.lock().unwrap() = format!(
+        "{{\"check\": \"unit:a\"}}\n{{\"check\": \"unit:b\"}}\n{{\"check\": \"unit:c\"}}\n\
+         {NEXTEST_LISTING}\n"
+    );
+    for check in ["unit:a", "unit:b", "unit:c"] {
+        world.launcher.script(check, &[Some("fail"), Some("pass")]);
+    }
+    let run = run(&world, &["unit:a", "unit:b", "unit:c"]);
+    assert_eq!(outcome(&run, "unit:a"), Outcome::Flaky);
+    // The flaky reports carry the end of the failed run's output, which the hub quotes in the
+    // ticket it files for the machine.
+    let flaky = world.hub.flaky_reports();
+    assert_eq!(flaky.len(), 3);
+    assert!(
+        flaky[0].output.contains("all 3 checks in this run failed")
+            && flaky[0].output.contains("processes of this user"),
+        "{}",
+        flaky[0].output
+    );
+}
+
+#[test]
+fn a_run_in_which_one_check_failed_is_not_described() {
+    let world = jsonl_world();
+    world
+        .launcher
+        .script("unit:b", &[Some("fail"), Some("pass")]);
+    run(&world, &["unit:a", "unit:b"]);
+    let flaky = world.hub.flaky_reports();
+    assert!(!flaky[0].output.contains("processes of this user"));
+}
