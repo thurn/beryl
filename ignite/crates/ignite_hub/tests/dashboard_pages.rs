@@ -582,3 +582,39 @@ fn a_configured_wordmark_replaces_the_brand_and_the_home_page_has_no_crumb() {
         assert!(!other.contains(">Ignite<"), "{target}: {other}");
     }
 }
+
+#[test]
+fn an_epic_lists_its_milestones_in_plan_order() {
+    let hub = seeded();
+    // M0 was filed last and is closed, M7 is the most urgent and the review gate has no
+    // number; the blocking edges and the title numbers still put M0 first.
+    hub.conn
+        .execute_batch(
+            "INSERT INTO tickets (id, parent, title, type, status, priority, created_at, updated_at, created_by, version)
+             VALUES
+              ('TPLAN', NULL, 'Plan', 'epic', 'open', 2, '', '2026-11-16T19:30:00.000Z', 'Derek', 1),
+              ('TPLAN.1', 'TPLAN', 'M1: foundations', 'epic', 'closed', 2, '', '2026-11-16T19:30:00.000Z', 'Derek', 1),
+              ('TPLAN.2', 'TPLAN', 'Final review gate', 'epic', 'open', 2, '', '2026-11-16T19:30:00.000Z', 'Derek', 1),
+              ('TPLAN.3', 'TPLAN', 'M7: tools', 'epic', 'open', 0, '', '2026-11-16T19:30:00.000Z', 'Derek', 1),
+              ('TPLAN.4', 'TPLAN', 'M2: the table plays', 'epic', 'open', 2, '', '2026-11-16T19:30:00.000Z', 'Derek', 1),
+              ('TPLAN.14', 'TPLAN', 'M0: a prototype', 'epic', 'closed', 1, '', '2026-11-16T19:30:00.000Z', 'Derek', 1);
+             INSERT INTO edges VALUES ('TPLAN.1', 'TPLAN.14', 'blocks'), ('TPLAN.4', 'TPLAN.1', 'blocks'),
+               ('TPLAN.2', 'TPLAN.4', 'waits-for');",
+        )
+        .unwrap();
+    let page = hub.text("/TPLAN");
+    let at = |title: &str| {
+        page.find(title)
+            .unwrap_or_else(|| panic!("{title} missing"))
+    };
+    let order = [
+        "M0: a prototype",
+        "M1: foundations",
+        "M2: the table plays",
+        "M7: tools",
+        "Final review gate",
+    ];
+    for pair in order.windows(2) {
+        assert!(at(pair[0]) < at(pair[1]), "{} before {}", pair[0], pair[1]);
+    }
+}

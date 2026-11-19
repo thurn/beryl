@@ -336,6 +336,13 @@ pub fn ticket_data(
     let history = history_rows(conn, &id)?;
     let mut children = cards_where(conn, "parent = ?1", &id)?;
     children.sort_by(by_attention);
+    // Milestones come first, in plan order; the subtasks follow in attention order.
+    let (mut milestones, subtasks): (Vec<Card>, Vec<Card>) = children
+        .into_iter()
+        .partition(super::milestones::is_milestone);
+    super::milestones::order(&mut milestones, &sibling_dependencies(conn, &id)?);
+    milestones.extend(subtasks);
+    let children = milestones;
     let edge_list = edges::of(conn, &id)?;
 
     let mut ids = Ordered::default();
@@ -437,6 +444,23 @@ pub fn ticket_data(
         next_copy: next_copy(conn, &ticket)?,
         ticket,
     })
+}
+
+/// The `(dependent, dependency)` pairs between children of `parent`, from the edges that
+/// hold a ticket back (`blocks`, `conditional-blocks` and `waits-for`).
+fn sibling_dependencies(
+    conn: &Connection,
+    parent: &str,
+) -> Result<Vec<(String, String)>, ReadError> {
+    let mut statement = conn.prepare(
+        "SELECT edges.src, edges.dst FROM edges
+         JOIN tickets AS dependent ON dependent.id = edges.src
+         JOIN tickets AS dependency ON dependency.id = edges.dst
+         WHERE dependent.parent = ?1 AND dependency.parent = ?1
+           AND edges.kind IN ('blocks', 'conditional-blocks', 'waits-for')",
+    )?;
+    let rows = statement.query_map([parent], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 fn comments(conn: &Connection, id: &str) -> Result<Vec<CommentRow>, ReadError> {

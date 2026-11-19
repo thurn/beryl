@@ -23,6 +23,7 @@ use super::data::{
 use super::edit;
 use super::history::timeline;
 use super::markdown::render as render_markdown;
+use super::milestones::is_milestone;
 use super::owners;
 use super::references::{display_id, mentions, rewrite_ticket_paths, ticket_url};
 
@@ -143,7 +144,6 @@ pub fn page(
             Some(&ticket_url(root, &card.id)),
         )
     };
-    let is_container = |card: &&Card| card.ticket_type == "epic" || card.ticket_type == "milestone";
     // Closed tickets follow the open ones in the same list, with no
     // collapsed group or count header.
     let list_html = |cards: &Vec<&Card>| -> String {
@@ -151,21 +151,21 @@ pub fn page(
             cards.iter().partition(|card| card.status == Status::Closed);
         c::rows(open.iter().chain(closed.iter()).map(|card| row(card)))
     };
-    let lists: Vec<(String, Vec<&Card>)> = vec![
+    // Milestones stay in plan order (see `milestones::order`), finished ones included.
+    let milestones: Vec<&Card> = children.iter().filter(|card| is_milestone(card)).collect();
+    let subtasks: Vec<&Card> = children.iter().filter(|card| !is_milestone(card)).collect();
+    for (heading, html, count) in [
         (
-            "Milestones".to_owned(),
-            children.iter().filter(is_container).collect(),
+            "Milestones",
+            c::rows(milestones.iter().map(|card| row(card))),
+            milestones.len(),
         ),
-        (
-            "Subtasks".to_owned(),
-            children.iter().filter(|card| !is_container(card)).collect(),
-        ),
-    ];
-    for (heading, cards) in &lists {
-        if cards.is_empty() {
+        ("Subtasks", list_html(&subtasks), subtasks.len()),
+    ] {
+        if count == 0 {
             continue;
         }
-        let (entry, section) = plain_section(heading, &list_html(cards), Some(cards.len()));
+        let (entry, section) = plain_section(heading, &html, Some(count));
         entries.push(entry);
         main.push(section);
     }
