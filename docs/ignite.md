@@ -2483,8 +2483,9 @@ Not every ticket is offered:
   when a later tip waits on them. `ignite ticket update <id> --release`, or the
   Release button on the dashboard, makes the ticket and every descendant still
   pending `open`: the hub adds the descendants to any update that releases a
-  pending ticket. `ignite ticket create --release` files a ticket
-  `open` even when it is an epic or sits under a pending one. A session may still start a pending ticket by name.
+  pending ticket. `ignite ticket create --release` files a ticket `open` even
+  when it is an epic or sits under a pending one. A session may still start a
+  pending ticket by name.
 - An epic is worked only once it is active, which means it has a `--workers`
   number above 0. An epic filed without one gets a share of 3, so releasing it
   is enough; the share is bounded by the pool, so it reserves nothing. An epic
