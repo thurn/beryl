@@ -310,14 +310,18 @@ fn launchctl(args: &[&str]) -> io::Result<std::process::Output> {
 /// The agent's property list: run `program` with `environment` at load and login, and then as
 /// `launch` says.
 ///
-/// Both agents are `ProcessType` `Standard`. Every supervisor and build the daemon starts
-/// inherits its agent's process type, and with `Background` macOS gives them low CPU and I/O
-/// priority and keeps them mostly on the efficiency cores. On a Mac with 6 performance and 12
-/// efficiency cores at load 20 to 35, a cold `cargo build -p ignite_daemon -j 6` took 205 s and
-/// 213 s of wall time (0.7 cores busy) under a `Background` agent, 28 s and 15 s (2.2 and 3.7
-/// cores) under a `Standard` one, and 13 s (3.7 cores) from a shell. The monitor is
-/// `Standard` too, so that it still runs on time when the machine is busy, which is when the
-/// daemon is most likely to stop answering.
+/// The daemon's agent is `ProcessType` `Interactive`; the monitor's and the hub's are
+/// `Standard`. Every supervisor and build the daemon starts inherits its agent's process type.
+/// With `Background`, macOS gives them low CPU and I/O priority and keeps them mostly on the
+/// slower cores: a cold `cargo build -p ignite_daemon -j 6` took 205 s and 213 s of wall time
+/// (0.7 cores busy) under a `Background` agent, 28 s and 15 s (2.2 and 3.7 cores) under a
+/// `Standard` one, and 13 s (3.7 cores) from a shell. `Standard` still runs them at utility
+/// priority (20, where a shell's commands get 31), on the slower cores: on 2026-11-18, with
+/// load at 53 on an 18-core M5 Max and 56% of the CPU idle, a spin loop did 124M iterations in
+/// 10.8 CPU-s under a `Standard` agent and 262M in 12.0 CPU-s under an `Interactive` one. A
+/// process cannot lift this itself (`setpriority(PRIO_DARWIN_ROLE, ...)` fails with ENOTSUP).
+/// The monitor stays `Standard` and still runs on time when the machine is busy, which is when
+/// the daemon is most likely to stop answering; it and the hub use little CPU.
 fn plist(
     label: &str,
     launch: Launch,
@@ -345,6 +349,11 @@ fn plist(
         );
     }
     let log = escape(&log.to_string_lossy());
+    let process_type = if label == LABEL {
+        "Interactive"
+    } else {
+        "Standard"
+    };
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -361,7 +370,7 @@ fn plist(
   <key>RunAtLoad</key>
   <true/>
 {schedule}  <key>ProcessType</key>
-  <string>Standard</string>
+  <string>{process_type}</string>
   <key>StandardOutPath</key>
   <string>{log}</string>
   <key>StandardErrorPath</key>
@@ -561,7 +570,15 @@ mod tests {
             Path::new("/tmp/ignite.log"),
         );
         assert!(text.contains("<key>KeepAlive</key>"));
-        assert!(text.contains("<key>ProcessType</key>\n  <string>Standard</string>"));
+        assert!(text.contains("<key>ProcessType</key>\n  <string>Interactive</string>"));
+        let monitor = plist(
+            MONITOR_LABEL,
+            Launch::Interval(120),
+            &program,
+            &environment,
+            Path::new("/tmp/ignite.log"),
+        );
+        assert!(monitor.contains("<key>ProcessType</key>\n  <string>Standard</string>"));
         assert!(text.contains("<string>daemon</string>"));
         assert!(text.contains("<string>a&lt;&amp;b&gt;</string>"));
 
