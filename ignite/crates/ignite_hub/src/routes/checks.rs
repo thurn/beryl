@@ -159,6 +159,11 @@ fn store(
         }
     }
     results::store(conn, &request.results, now).map_err(|e| store_failure(&e))?;
+    for result in &request.results {
+        if matches!(result.outcome, Outcome::Pass | Outcome::Fail) {
+            checks::register(conn, result.key.check.as_str()).map_err(|e| store_failure(&e))?;
+        }
+    }
     let writer = http.writer.as_ref().expect("checked in handle");
     let author = Author {
         actor: &writer.actor,

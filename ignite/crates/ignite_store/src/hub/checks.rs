@@ -58,7 +58,23 @@ pub fn upsert(conn: &mut Connection, checks: &[rows::Check]) -> Result<()> {
     Ok(())
 }
 
+/// Registers a check no family has listed, as an `on` regression check of the family named by
+/// the part of its name before the first colon. A check already registered is left as it is.
+/// A check first listed under Ignite has no row until its first result or state change, so
+/// every reader of `checks` (flaky and stuck upkeep, catches, the tips page) would miss it.
+pub fn register(conn: &Connection, check: &str) -> Result<()> {
+    let family = check.split_once(':').map_or("", |(family, _)| family);
+    conn.execute(
+        "INSERT OR IGNORE INTO checks (name, family, kind, state, check_group)
+         VALUES (?1, ?2, 'regression', 'on', ?2)",
+        params![check, family],
+    )?;
+    Ok(())
+}
+
+/// Sets a check's state, registering the check first when it has no row.
 pub fn set_state(conn: &Connection, check: &str, state: CheckState) -> Result<()> {
+    register(conn, check)?;
     conn.execute(
         "UPDATE checks SET state = ?2 WHERE name = ?1",
         params![check, state_text(state)],

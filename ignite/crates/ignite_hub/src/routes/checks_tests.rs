@@ -635,3 +635,58 @@ fn a_regression_that_fails_again_after_its_fix_reopens_the_same_ticket() {
         (ticket, "9999".to_owned(), "reopened".to_owned())
     );
 }
+
+#[test]
+fn a_check_only_known_from_a_stored_result_is_registered_and_can_be_switched_off() {
+    let hub = TestHub::start("register");
+    hub.post(
+        "/results/store",
+        &json!({"results": [new_result("allocations:kernel", 1, "fail", 1)]}),
+    );
+    let conn = hub.conn.lock().unwrap();
+    let row = |sql: &str| -> (String, String, String) {
+        conn.query_row(sql, [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap()
+    };
+    assert_eq!(
+        row("SELECT family, kind, state FROM checks WHERE name = 'allocations:kernel'"),
+        (
+            "allocations".to_owned(),
+            "regression".to_owned(),
+            "on".to_owned()
+        )
+    );
+
+    // The join the catch replay uses finds the failure only because the check is registered.
+    let failures: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM results r JOIN checks c ON c.name = r.check_name
+             WHERE r.outcome = 'fail' AND c.kind = 'regression'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(failures, 1);
+
+    hub::checks::set_state(
+        &conn,
+        "allocations:kernel",
+        ignite_core::protocol::hub::CheckState::Off,
+    )
+    .unwrap();
+    assert_eq!(
+        row("SELECT family, kind, state FROM checks WHERE name = 'allocations:kernel'").2,
+        "off"
+    );
+    // A check with no row at all is registered by `set_state`.
+    hub::checks::set_state(
+        &conn,
+        "clippy:x",
+        ignite_core::protocol::hub::CheckState::Uncached,
+    )
+    .unwrap();
+    assert_eq!(
+        row("SELECT family, kind, state FROM checks WHERE name = 'clippy:x'").2,
+        "uncached"
+    );
+}
