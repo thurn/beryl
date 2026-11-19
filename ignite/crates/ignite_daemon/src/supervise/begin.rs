@@ -75,6 +75,11 @@ impl SupervisedLauncher {
         // Released when the guard is dropped, however the caller ends.
         let held = GrantGuard::new(self.scheduler.clone(), grant);
         let grant = held.grant();
+        // The scheduler reads the CPU the command uses, from the group its supervisor records
+        // once it starts, so cores the command leaves idle can go to waiting requests.
+        if let Some(scheduler) = &self.scheduler {
+            scheduler.watch(grant.id, dir.join(super::GROUP));
+        }
         let follows = cores_file.is_some();
         let jobserver = cores_file
             .filter(|_| fifo::AVAILABLE)

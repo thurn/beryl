@@ -329,5 +329,10 @@
     "label": "Quick commands (last 5+ runs each under 2 CPU-s, not Cargo) start without waiting for a core: `uv sync` for the Python environment used at most 1.2 CPU-s but queued up to 726 s before listing any family",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "Grants whose commands leave cores idle lend them to waiting requests: every core was granted for an hour while the machine stayed half idle and requests queued",
+    "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
   }
 ]

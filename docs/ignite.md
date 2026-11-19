@@ -918,12 +918,26 @@ Rules for cores:
 - One command takes at most two thirds of the machine's cores. Waiting commands
   of one class share what is free evenly.
 - The daemon reads the machine's total CPU use from the operating system about
-  once a second. What its own commands do not account for belongs to processes
-  outside Ignite, such as the desktop app, and it grants only what is left. The
-  reading compares the operating system's counters with the previous reading,
-  and reports no reading, not zero, when none of them moved. The daemon counts
-  every granted core as used by its own commands, so when a command leaves its
-  cores idle the outside load shown by `ignite status` is a lower bound.
+  once a second, and with it the CPU each command has used: its process group,
+  every process those started (even one that left the group), and the children
+  they reaped. What its own commands do not use belongs to processes outside
+  Ignite, such as the desktop app or a virtual machine, and it grants only what
+  is left. The reading compares the operating system's counters with the
+  previous reading, and reports no reading, not zero, when none of them moved. A
+  command whose use has not been read yet counts all its cores.
+- A command that uses well below its grant lends the idle cores to waiting
+  requests. After 30 seconds of measurement a grant counts as using its measured
+  use plus one core, rounded up: the larger of its average over the last 30
+  seconds and over the last 5. So a grant lends slowly and takes its cores back
+  within seconds when its use rises, and `idle` work is stopped first if the
+  machine is then over. A grant that grows counts all its cores again until its
+  use at the new size is known. Over an hour on 2026-11-18, before this rule,
+  every core was granted while the machine stayed half idle and requests queued:
+  Ignite's commands used about one core on average. `ignite status` shows the
+  cores granted, used and counted.
+- While swap grows by a quarter of a gigabyte within a minute, or free memory is
+  under a gigabyte, nothing new starts and no grant grows, unless Ignite runs
+  nothing.
 - `land`, and a class with a floor, always get one core while they hold none,
   even when processes outside Ignite fill the machine, so a landing and `master`
   always make progress.
@@ -1087,6 +1101,9 @@ The fields:
 - `platforms` is `any` when one pass on any operating system is enough, as for
   pure engine logic, or a list when the check must pass on each one named.
 - `needs` names build products. `resources` names shared resources.
+- `cores`, when set, is what a `run` command asks for instead of the machine's
+  usual share, for a family whose work runs elsewhere, such as in a virtual
+  machine, while its own process only waits.
 - `inputs` lists what the checks read: path patterns, `crate:<package>` for a
   package with every workspace package it depends on, and `crate-closure` for
   the same computed per test from the package that holds it. The lock file, the

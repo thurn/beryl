@@ -403,10 +403,15 @@ impl Host for DaemonHost {
             .count() as u32
     }
 
-    /// The cores neither Ignite's grants nor outside work are using.
+    /// The cores neither Ignite's grants nor outside work are using. A grant that leaves cores
+    /// idle lends them, so they count as free.
     fn free_cores(&self) -> f64 {
         let status = self.scheduler.status();
-        f64::from(status.cores.saturating_sub(status.granted + status.outside))
+        f64::from(
+            status
+                .cores
+                .saturating_sub(status.committed + status.outside),
+        )
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {

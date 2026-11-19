@@ -114,6 +114,11 @@ pub struct Family {
     /// more threads as its grant grows, so the scheduler gives it cores as they free up.
     #[serde(default)]
     pub grows: bool,
+    /// The cores a `run` command asks for, when fewer than the machine's usual share would be
+    /// used: a family whose work runs elsewhere, such as in a virtual machine, and whose own
+    /// process only waits for it.
+    #[serde(default)]
+    pub cores: Option<u32>,
     /// Prints the family's checks, each with any inputs of its own.
     pub list: Option<String>,
     /// Runs the checks named in `{checks}`.

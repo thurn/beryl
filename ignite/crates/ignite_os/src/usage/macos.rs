@@ -120,12 +120,62 @@ impl TreeMeter {
     }
 }
 
+impl Native {
+    /// See `HostCpu::tree_cpu_seconds`: every member of process group `group` and, through
+    /// their child lists, every process they started that left the group, each counted once
+    /// with the time of the children it reaped. A process that exits between the listing and
+    /// its reading is skipped.
+    pub(crate) fn tree_cpu_seconds_of(self, group: u64) -> io::Result<f64> {
+        let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        let mut pending = self.group_members(group)?;
+        let mut total = 0.0;
+        while let Some(pid) = pending.pop() {
+            if !seen.insert(pid) {
+                continue;
+            }
+            let Ok(reading) = read(pid) else { continue };
+            total += reading.usage.cpu_s + reading.children_cpu_s;
+            pending.extend(children(pid).unwrap_or_default());
+        }
+        Ok(total)
+    }
+}
+
+/// The PIDs of the processes whose parent is `pid`.
+fn children(pid: u32) -> io::Result<Vec<u32>> {
+    let pid = to_pid(pid)?;
+    let mut capacity = 16;
+    loop {
+        let mut pids: Vec<libc::pid_t> = vec![0; capacity];
+        let bytes = libc::c_int::try_from(capacity * size_of::<libc::pid_t>())
+            .map_err(|_| io::Error::other("too many children to list"))?;
+        // SAFETY: `pids` is a writable buffer of `bytes` bytes; the call writes at most that.
+        let count = unsafe { libc::proc_listchildpids(pid, pids.as_mut_ptr().cast(), bytes) };
+        if count < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // The call returns a count of PIDs; a full buffer may have been cut short.
+        let count = count as usize;
+        if count < capacity {
+            pids.truncate(count);
+            return Ok(pids
+                .into_iter()
+                .filter(|&pid| pid > 0)
+                .map(|pid| pid as u32)
+                .collect());
+        }
+        capacity *= 2;
+    }
+}
+
 struct Reading {
     usage: ProcessUsage,
     /// The memory footprint now, where `usage.peak_bytes` is the largest it has been.
     current_bytes: u64,
     /// When the process started, in Mach absolute time.
     start: u64,
+    /// CPU seconds of the children it has reaped.
+    children_cpu_s: f64,
 }
 
 fn read(pid: u32) -> io::Result<Reading> {
@@ -147,6 +197,7 @@ fn read(pid: u32) -> io::Result<Reading> {
         },
         current_bytes: info.ri_phys_footprint,
         start: info.ri_proc_start_abstime,
+        children_cpu_s: seconds(info.ri_child_user_time + info.ri_child_system_time),
     })
 }
 
@@ -285,5 +336,35 @@ mod tests {
             "descendant counted {descendants} instructions"
         );
         assert!(total.cpu_s > leader.cpu_s);
+    }
+
+    /// A process that starts a process group of its own escapes `TreeMeter`, which reads only
+    /// the command's group, but not the scheduler's reading of the whole tree.
+    #[test]
+    fn the_tree_cpu_counts_a_descendant_that_left_the_group() {
+        // Perl leaves the group, works, prints its PID and waits for its input to close.
+        let perl = "setpgrp(0, 0); $| = 1; my $i = 0; $i++ while $i < 3000000; \
+                    print \"$$\\n\"; <STDIN>";
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", &format!("perl -e '{perl}'; true")])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped());
+        let mut group = Native.spawn_group(&mut command).unwrap();
+        let mut lines = BufReader::new(group.child.stdout.take().unwrap()).lines();
+        let escaped: u32 = lines.next().unwrap().unwrap().trim().parse().unwrap();
+
+        assert!(!Native.group_members(group.id).unwrap().contains(&escaped));
+        let its_own = read(escaped).unwrap().usage.cpu_s;
+        assert!(its_own > 0.0);
+        let tree = Native.tree_cpu_seconds_of(group.id).unwrap();
+        assert!(
+            tree >= its_own,
+            "the tree used {tree} s, its descendant {its_own} s"
+        );
+
+        drop(group.child.stdin.take());
+        let (status, _) = Native.reap(&mut group.child).unwrap();
+        assert!(status.success());
     }
 }

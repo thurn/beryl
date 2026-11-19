@@ -306,6 +306,10 @@ fn status_shows_the_sections_its_flags_ask_for() {
         cores: 10,
         outside: 1,
         granted: 4,
+        committed: 3,
+        used: 1,
+        swap_used_mb: Some(512),
+        memory_pressed: false,
         max_per_command: 6,
         free_memory_mb: Some(2048),
         classes: vec![],
@@ -316,7 +320,13 @@ fn status_shows_the_sections_its_flags_ask_for() {
         Box::new(AdmissionSection(status)),
     ]);
     let plain = verb.render("m-1", None, &[]);
-    assert!(plain.text.contains("4 of 10 granted"), "{}", plain.text);
+    assert!(
+        plain
+            .text
+            .contains("4 of 10 granted to Ignite (using 1, 3 counted)"),
+        "{}",
+        plain.text
+    );
     assert!(
         !plain
             .json

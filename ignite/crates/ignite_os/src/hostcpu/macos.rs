@@ -51,6 +51,14 @@ impl HostCpu for HostMeter {
     fn free_memory_mb(&self) -> io::Result<u64> {
         Native.free_memory_mb()
     }
+
+    fn swap_used_mb(&self) -> io::Result<u64> {
+        Native.swap_used_mb()
+    }
+
+    fn tree_cpu_seconds(&self, group: u64) -> io::Result<f64> {
+        Native.tree_cpu_seconds(group)
+    }
 }
 
 impl HostCpu for Native {
@@ -107,6 +115,33 @@ impl HostCpu for Native {
             + u64::from(info.inactive_count)
             + u64::from(info.purgeable_count);
         Ok(pages * page.max(0) as u64 / (1024 * 1024))
+    }
+
+    /// The `vm.swapusage` sysctl, which `sysctl vm.swapusage` prints.
+    fn swap_used_mb(&self) -> io::Result<u64> {
+        let mut usage = MaybeUninit::<libc::xsw_usage>::zeroed();
+        let mut size = size_of::<libc::xsw_usage>();
+        // SAFETY: the name is a NUL-terminated string, and `usage` holds `size` bytes, which is
+        // what the call may write.
+        let result = unsafe {
+            libc::sysctlbyname(
+                c"vm.swapusage".as_ptr(),
+                usage.as_mut_ptr().cast(),
+                &raw mut size,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
+        if result != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: the call succeeded and the record was zeroed before.
+        let usage = unsafe { usage.assume_init() };
+        Ok(usage.xsu_used / (1024 * 1024))
+    }
+
+    fn tree_cpu_seconds(&self, group: u64) -> io::Result<f64> {
+        self.tree_cpu_seconds_of(group)
     }
 }
 
@@ -194,6 +229,8 @@ mod tests {
     fn the_machine_has_cores_and_free_memory() {
         assert!(Native.cores() >= 1);
         assert!(Native.free_memory_mb().unwrap() > 0);
+        // Swap may be zero, but it can be read.
+        Native.swap_used_mb().unwrap();
     }
 
     /// Free memory counts the inactive pages that `vm_stat` reports. Leaving them out once made

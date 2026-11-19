@@ -247,9 +247,18 @@ impl StatusSection for CoresSection {
         let memory = s
             .free_memory_mb
             .map_or_else(String::new, |mb| format!(", {mb} MB memory free"));
+        let swap = s
+            .swap_used_mb
+            .map_or_else(String::new, |mb| format!(", {mb} MB swap"));
+        let pressed = if s.memory_pressed {
+            "; memory short, admitting nothing"
+        } else {
+            ""
+        };
         vec![format!(
-            "{} of {} granted to Ignite, {} busy outside it, at most {} per command{memory}",
-            s.granted, s.cores, s.outside, s.max_per_command
+            "{} of {} granted to Ignite (using {}, {} counted), {} busy outside it, \
+             at most {} per command{memory}{swap}{pressed}",
+            s.granted, s.cores, s.used, s.committed, s.outside, s.max_per_command
         )]
     }
 }

@@ -40,6 +40,10 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env"]
 resources = ["bench-vm"]
+# The count runs in the Lima machine, so this process only waits: over an hour on 2026-11-18
+# its runs held about five cores each and used 0.14. The machine's own CPU shows as load
+# outside Ignite, which the scheduler already leaves alone.
+cores = 1
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list counts"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run counts {checks}"
 inputs = [

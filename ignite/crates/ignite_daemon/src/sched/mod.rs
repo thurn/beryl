@@ -16,7 +16,12 @@
 //!   classes cannot take while the class has work running or waiting.
 //! - Each named resource is held by at most its capacity of grants at once. A resource the
 //!   machine does not declare has capacity 1.
-//! - CPU busy beyond what Ignite granted belongs to processes outside Ignite and is not granted.
+//! - CPU busy beyond what Ignite's commands use belongs to processes outside Ignite and is not
+//!   granted.
+//! - A grant whose command has used well below its cores for [`LEND_WINDOW_SECONDS`] lends the
+//!   idle ones to waiting requests, and counts them again within [`RECENT_SECONDS`] of its use
+//!   rising; `idle` work is stopped first when the machine is then over.
+//! - While swap grows fast or free memory runs out, nothing new starts and no grant grows.
 //! - `idle` work starts only while the machine is under 70% busy, and is the first thing stopped
 //!   when a higher class waits for cores or for a resource the idle work holds. Stopping ends
 //!   the command, so idle work must be safe to restart.
@@ -36,6 +41,7 @@
 //!   at low priority on a loaded machine once got almost no CPU for hours.
 
 mod ledger;
+mod measured;
 
 #[cfg(test)]
 mod tests;
@@ -57,6 +63,7 @@ use ignite_os::hostcpu::HostCpu;
 use serde::Serialize;
 
 pub use ledger::{Ledger, RECLAIM_SECONDS, Step};
+pub use measured::{LEND_WINDOW_SECONDS, RECENT_SECONDS};
 
 /// How often [`Scheduler::sample_every`] reads the machine. Each reading is also a step, and a
 /// shrinking grant gives back one core per step, so a waiting landing gets a 12-core build's
@@ -183,6 +190,14 @@ pub struct Status {
     pub outside: u32,
     /// Cores held by Ignite's commands.
     pub granted: u32,
+    /// Of those, the cores counted as in use when deciding what is free: grants whose commands
+    /// use fewer than they hold lend the rest to waiting requests.
+    pub committed: u32,
+    /// Cores Ignite's commands used at the last reading, of the grants whose use is read.
+    pub used: u32,
+    pub swap_used_mb: Option<u64>,
+    /// Swap grew fast or free memory ran out, so nothing new is admitted.
+    pub memory_pressed: bool,
     pub max_per_command: u32,
     pub free_memory_mb: Option<u64>,
     pub classes: Vec<ClassStatus>,
@@ -226,6 +241,9 @@ struct State {
     stop: BTreeSet<u64>,
     /// The cores file of each grant that has one, until it is released.
     files: BTreeMap<u64, PathBuf>,
+    /// The file holding the process group ID of each grant's command, whose CPU use each sample
+    /// reads ([`Scheduler::watch`]), until the grant is released.
+    groups: BTreeMap<u64, PathBuf>,
     /// The grants exceeded the machine's cores at the last step, so the log line that says so
     /// is written once each time they go over.
     over: bool,
@@ -243,6 +261,7 @@ impl Scheduler {
                 ready: BTreeMap::new(),
                 stop: BTreeSet::new(),
                 files: BTreeMap::new(),
+                groups: BTreeMap::new(),
                 over: false,
             }),
             changed: Condvar::new(),
@@ -312,15 +331,48 @@ impl Scheduler {
         state.ledger.release(grant.id);
         state.stop.remove(&grant.id);
         state.files.remove(&grant.id);
+        state.groups.remove(&grant.id);
         self.advance(&mut state);
     }
 
-    /// Reads the machine's CPU use and free memory, and starts or stops what that changes. A
-    /// failed reading keeps the previous one.
+    /// Measures grant `id`'s command from now on: each sample reads the process group ID in
+    /// `group_file` (written once the command starts) and the CPU time of that group and every
+    /// process it started, so a grant that leaves cores idle lends them.
+    pub fn watch(&self, id: u64, group_file: PathBuf) {
+        let mut state = self.lock();
+        if state.ledger.holds(id) || state.ready.contains_key(&id) {
+            state.groups.insert(id, group_file);
+        }
+    }
+
+    /// Reads the CPU each watched grant's command has used, the machine's CPU use, free memory
+    /// and swap, and starts or stops what that changes. A failed reading keeps the previous one;
+    /// a grant whose use cannot be read keeps all its cores counted.
     pub fn sample(&self) {
+        let groups: Vec<(u64, PathBuf)> = self
+            .lock()
+            .groups
+            .iter()
+            .map(|(&id, file)| (id, file.clone()))
+            .collect();
+        let used: Vec<(u64, f64)> = groups
+            .into_iter()
+            .filter_map(|(id, file)| {
+                let group = fs::read_to_string(file).ok()?.trim().parse().ok()?;
+                Some((id, self.host.tree_cpu_seconds(group).ok()?))
+            })
+            .collect();
         let busy = self.host.busy().ok();
         let memory = self.host.free_memory_mb().ok();
+        let swap = self.host.swap_used_mb().ok();
+        let now = self.clock.now();
         let mut state = self.lock();
+        for (id, cpu_s) in used {
+            state.ledger.observe_use(id, now, cpu_s);
+        }
+        if let Some(swap) = swap {
+            state.ledger.observe_swap(now, swap);
+        }
         state.ledger.observe(busy, memory);
         self.advance(&mut state);
     }
@@ -492,13 +544,15 @@ impl Scheduler {
     }
 }
 
-/// Writes one log line, each time the grants go past the machine's cores, naming every grant
-/// held. After a restart on 2026-11-18 the daemon showed 25 of 18 cores granted, and nothing
-/// recorded which grants made up the 25: ones adopted from the previous daemon or ones this
-/// daemon made. The line says, for the next time it happens.
+/// Writes one log line, each time the cores the grants count as using go past the machine's
+/// cores, naming every grant held. After a restart on 2026-11-18 the daemon showed 25 of 18
+/// cores granted, and nothing recorded which grants made up the 25: ones adopted from the
+/// previous daemon or ones this daemon made. The line says, for the next time it happens. The
+/// grants alone may exceed the cores without a line, because a grant that leaves cores idle
+/// lends them.
 fn log_overcommit(state: &mut State) {
     let status = state.ledger.status();
-    let over = status.granted > status.cores;
+    let over = status.committed > status.cores;
     if over && !state.over {
         let holders: Vec<String> = state
             .ledger
@@ -510,9 +564,10 @@ fn log_overcommit(state: &mut State) {
             })
             .collect();
         eprintln!(
-            "ignite: {} of {} cores granted, past the machine's cores: {}",
-            status.granted,
+            "ignite: {} of {} cores counted in use ({} granted), past the machine's cores: {}",
+            status.committed,
             status.cores,
+            status.granted,
             holders.join(", ")
         );
     }

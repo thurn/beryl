@@ -134,6 +134,7 @@ impl SupervisedLauncher {
             if class == Class::Idle {
                 watch_for_stop(scheduler, grant.id, run.clone(), self.stop_grace_s);
             }
+            scheduler.watch(grant.id, run.dir().join(super::GROUP));
             let held = GrantGuard::new(Some(Arc::clone(scheduler)), grant);
             thread::spawn(move || {
                 run.wait();

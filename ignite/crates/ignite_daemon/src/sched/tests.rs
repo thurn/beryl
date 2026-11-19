@@ -466,6 +466,7 @@ fn a_stopped_grant_is_killed_when_it_is_still_held_after_the_grace() {
 }
 
 mod elastic;
+mod lending;
 
 /// A verb process asks again for a command after the daemon restarted, passing the moment it
 /// first asked. The new daemon's queue puts it ahead of a request first asked for later, even

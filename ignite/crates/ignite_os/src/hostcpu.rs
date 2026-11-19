@@ -39,4 +39,16 @@ pub trait HostCpu {
     fn busy(&self) -> io::Result<f64>;
     /// Memory not in use, in megabytes.
     fn free_memory_mb(&self) -> io::Result<u64>;
+    /// Swap in use, in megabytes. Unsupported unless an implementation reads it.
+    fn swap_used_mb(&self) -> io::Result<u64> {
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+    /// The CPU seconds used so far by the process group `group` and every process its members
+    /// started, including processes that left the group, and the children they reaped. A
+    /// process that exits unreaped by the tree takes its time with it, so the total can fall.
+    /// Unsupported unless an implementation reads it.
+    fn tree_cpu_seconds(&self, group: u64) -> io::Result<f64> {
+        let _ = group;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
 }

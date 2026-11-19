@@ -651,7 +651,7 @@ impl Checks {
             cwd: cwd.to_path_buf(),
             env,
             class: options.class,
-            cores: cores_for(command, self.settings.cores),
+            cores: cores_for(command, family.cores.unwrap_or(self.settings.cores)),
             resources: family.resources.clone(),
             grows: family.grows,
             tree: Some(tree.id.clone()),
@@ -794,7 +794,7 @@ fn incomplete_message(
 
 /// The cores a check command asks the scheduler for. A `list` command only prints what the
 /// family has, so it asks for one core and starts at once; a `run` command asks for the
-/// settings' cores. A gate whose checks are all cached launches neither, so it asks for none.
+/// family's `cores`, or else the settings' cores. A gate whose checks are all cached launches neither, so it asks for none.
 fn cores_for(command: &str, run_cores: u32) -> u32 {
     if command == LIST { 1 } else { run_cores }
 }

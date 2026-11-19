@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 
+use super::measured::{GrantUse, Pressure};
 use super::{Grant, GrantRequest, Limits, Status};
 
 /// `idle` work starts only while the machine is under this share of its cores busy.
@@ -48,6 +49,22 @@ struct Held {
     stopping: bool,
     /// Whether this daemon granted it or [`Ledger::adopt`] recorded a previous daemon's grant.
     origin: Origin,
+    /// The CPU its command has used, when the caller reads it ([`Ledger::observe_use`]).
+    usage: GrantUse,
+}
+
+impl Held {
+    /// The cores this grant counts as using when the scheduler decides what is free: all of
+    /// them until its command's use has been measured long enough, then its measured use with
+    /// a margin ([`GrantUse::lendable`]). A grant asked to stop counts all of them until it is
+    /// released.
+    fn committed(&self) -> u32 {
+        if self.stopping {
+            self.cores
+        } else {
+            self.usage.lendable(self.cores)
+        }
+    }
 }
 
 /// Where a held grant came from.
@@ -75,6 +92,8 @@ pub struct Ledger {
     outside: u32,
     /// Free memory at the last reading; `None` until one succeeds.
     free_memory_mb: Option<u64>,
+    /// Swap use over the last minute, to stop admitting work while the machine pages.
+    pressure: Pressure,
     next_id: u64,
     /// In the order the requests were first asked for (see [`Ledger::enqueue`]).
     waiting: Vec<Waiter>,
@@ -90,6 +109,7 @@ impl Ledger {
             limits,
             outside: 0,
             free_memory_mb: None,
+            pressure: Pressure::default(),
             next_id: 1,
             waiting: Vec::new(),
             held: BTreeMap::new(),
@@ -162,6 +182,7 @@ impl Ledger {
                 unseen_memory: false,
                 stopping: false,
                 origin: Origin::Adopted,
+                usage: GrantUse::default(),
             },
         );
         id
@@ -175,20 +196,22 @@ impl Ledger {
     }
 
     /// Records a reading of the machine: the fraction of all cores busy, from 0 to 1, and the
-    /// free memory, each if it could be read. Whatever is busy beyond the cores Ignite granted
+    /// free memory, each if it could be read. Whatever is busy beyond what Ignite's commands use
     /// belongs to processes outside Ignite, and is not granted until they finish.
     ///
-    /// The ledger does not know how much of a grant its command really uses, so it counts every
-    /// granted core as used by Ignite. That only matters when a command leaves cores idle
-    /// (waiting for input or output): then the cores busy beyond the grants are fewer than the
-    /// outside load, so `outside` is a lower bound and `status` can show less outside load than
-    /// there is. What the scheduler hands out is not affected: a core is free when the machine
-    /// reads idle there, or when a grant holds it, and both cases are counted exactly. A grant
-    /// that sits idle is therefore never taken for outside load and starved of its own cores.
+    /// A grant whose command's use has been read ([`Self::observe_use`]) counts what it used
+    /// over the last reading; one not yet read counts all its cores. Counting every granted core
+    /// as Ignite's made the outside load read 0 whenever every core was granted, though Ignite's
+    /// commands used about one core and seven were busy outside it. Read the grants' use before
+    /// calling this, so both readings cover the same second.
     pub fn observe(&mut self, busy: Option<f64>, free_memory_mb: Option<u64>) {
         if let Some(busy) = busy {
             let busy_cores = busy.clamp(0.0, 1.0) * f64::from(self.limits.cores);
-            let ours = f64::from(self.granted_cores());
+            let ours: f64 = self
+                .held
+                .values()
+                .map(|h| h.usage.latest().unwrap_or(f64::from(h.cores)))
+                .sum();
             self.outside = (busy_cores - ours).max(0.0).round() as u32;
         }
         if free_memory_mb.is_some() {
@@ -197,6 +220,21 @@ impl Ledger {
                 held.unseen_memory = false;
             }
         }
+    }
+
+    /// Records that grant `id`'s command and every process it started have used `cpu_s`
+    /// seconds of CPU so far, read at `now`. Unknown IDs are ignored: the grant was released
+    /// while its use was read.
+    pub fn observe_use(&mut self, id: u64, now: Timestamp, cpu_s: f64) {
+        if let Some(held) = self.held.get_mut(&id) {
+            held.usage.record(now, cpu_s);
+        }
+    }
+
+    /// Records the swap in use at `now`. While swap grows fast, or free memory runs out, no
+    /// new work is admitted ([`Pressure`]).
+    pub fn observe_swap(&mut self, now: Timestamp, used_mb: u64) {
+        self.pressure.record_swap(now, used_mb);
     }
 
     /// Grants what can be granted now and names the `idle` grants to stop.
@@ -218,7 +256,11 @@ impl Ledger {
             .limits
             .cores
             .saturating_sub(self.outside)
-            .saturating_sub(self.granted_cores());
+            .saturating_sub(self.committed_cores());
+        // While the machine pages or runs out of memory, nothing new starts and no grant grows,
+        // unless Ignite holds nothing, so that a reading that never recovers cannot stop all
+        // work.
+        let pressed = self.pressure.pressed(self.free_memory_mb) && !self.held.is_empty();
         let mut blocked = false;
         // Cores the higher classes' blocked requests want, to decide how much `idle` to stop.
         let mut wanted_by_blocked = 0;
@@ -251,10 +293,13 @@ impl Ledger {
             // Only outside load counts: when Ignite's own grants fill the machine, the class
             // waits for them, and `idle` work is stopped for it.
             if usable == 0
-                && self.granted_cores() < self.limits.cores
+                && self.committed_cores() < self.limits.cores
                 && self.guarantees_a_core(class)
             {
                 usable = 1;
+            }
+            if pressed {
+                usable = 0;
             }
             let (picked, mut left) = self.pick(class, usable);
             let grants = self.fill(&picked, usable);
@@ -272,7 +317,8 @@ impl Ledger {
                 }
                 step.granted.push(self.hold(waiter, cores, now));
             }
-            for (id, cores, extra) in self.grow(class, usable.min(free)) {
+            let room = if pressed { 0 } else { usable.min(free) };
+            for (id, cores, extra) in self.grow(class, room) {
                 free = free.saturating_sub(extra);
                 if let Some(left) = reserve.get_mut(&class) {
                     *left = left.saturating_sub(extra);
@@ -301,7 +347,10 @@ impl Ledger {
         if let Some(class) = highest_waiting {
             step.resized.extend(self.shrink_to_share(class));
         }
-        step.stop = self.stop_idle(wanted_by_blocked.saturating_sub(free));
+        // When grants that lent cores use them again, the machine is over: `idle` work gives
+        // them back first.
+        let over = (self.outside + self.committed_cores()).saturating_sub(self.limits.cores);
+        step.stop = self.stop_idle(wanted_by_blocked.saturating_sub(free).max(over));
         step.stop.extend(self.stop_idle_holding_wanted_resources());
         if self.draining {
             step.stop.extend(self.stop_all_idle());
@@ -352,6 +401,15 @@ impl Ledger {
             cores: self.limits.cores,
             outside: self.outside,
             granted: self.granted_cores(),
+            committed: self.committed_cores(),
+            used: self
+                .held
+                .values()
+                .filter_map(|h| h.usage.latest())
+                .sum::<f64>()
+                .round() as u32,
+            swap_used_mb: self.pressure.swap_used_mb(),
+            memory_pressed: self.pressure.pressed(self.free_memory_mb),
             max_per_command: self.limits.max_per_command(),
             free_memory_mb: self.free_memory_mb,
             classes,
@@ -457,6 +515,8 @@ impl Ledger {
             }
             let held = self.held.get_mut(&id).expect("a short grant is held");
             held.cores += extra;
+            // A grant that grew counts all its cores until its use at the new size is known.
+            held.usage.reset();
             grown.push((id, held.cores, extra));
         }
         grown
@@ -542,6 +602,7 @@ impl Ledger {
                 unseen_memory: true,
                 stopping: false,
                 origin: Origin::Granted,
+                usage: GrantUse::default(),
             },
         );
         Grant {
@@ -661,11 +722,16 @@ impl Ledger {
     /// The cores `idle` work may take before the machine reaches the idle busy limit.
     fn idle_room(&self) -> u32 {
         let limit = (f64::from(self.limits.cores) * IDLE_BUSY_LIMIT).floor() as u32;
-        limit.saturating_sub(self.outside + self.granted_cores())
+        limit.saturating_sub(self.outside + self.committed_cores())
     }
 
     fn granted_cores(&self) -> u32 {
         self.held.values().map(|h| h.cores).sum()
+    }
+
+    /// The cores held less those lent: what the grants count as using ([`Held::committed`]).
+    fn committed_cores(&self) -> u32 {
+        self.held.values().map(Held::committed).sum()
     }
 
     fn class_cores(&self, class: Class) -> u32 {
