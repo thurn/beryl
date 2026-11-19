@@ -30,7 +30,7 @@ import json
 import re
 from pathlib import Path
 
-from . import claude, paths, timing, tokens, windows
+from . import claude, kinds, paths, timing, tokens, windows
 from .ingest import LineSource, Row
 
 PROVIDER = "codex"
@@ -242,7 +242,7 @@ class Rollouts(LineSource):
             if isinstance(value, list):
                 value = " ".join(str(v) for v in value)
             commands = [value] if isinstance(value, str) and value else []
-        command = "\n".join(commands)
+        command = kinds.without_heredocs("\n".join(commands))
         rows: list[Row] = [
             (
                 "tool_calls",

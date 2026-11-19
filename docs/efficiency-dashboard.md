@@ -486,6 +486,13 @@ changing code. The first matching pattern wins. This excerpt shows the format:
   part is matched with its leading `cd <path>`, environment assignments and
   wrappers such as `timeout 600` removed, so a path that happens to contain a
   word such as `enact` does not decide the kind.
+- A here-document's body, such as a commit message passed with
+  `git commit -F - <<'EOF'`, is data and is left out before the command is
+  stored or split: the store keeps a command's first 300 characters, and a long
+  message used to push an `ignite land` after it out of them, so a three-minute
+  landing was counted as `git`. The store keeps the operator as
+  `<<(EOF body left out)`. Commands stored with their bodies before this were
+  read again once from the transcripts that still exist.
 - A command that chains several heavy commands is given the kind of the first
   heavy one, and is flagged as chained, since its parts cannot be timed apart.
   An entry is heavy when it has `"heavy": true`. A command with no heavy part
@@ -1291,6 +1298,11 @@ without opening this page.
 - Each segment names a colour group (model, checks, tools, Ignite, background,
   agents, queued, and the breaks person and idle), so the hub colours segments
   without knowing this project's command kinds.
+- A segment names a command only when it is tool time and the command is of its
+  own kind, so a segment coalesced from thinking and a short `grep` never shows
+  the grep. When the time accounting, the command kinds table or the segments'
+  format changes, every window is written again, whatever `--since` says, so the
+  hub's copy follows.
 - Ignite's daemon runs the command after each export and posts its lines to the
   hub, which keeps the latest post of each window. The page draws the time strip
   and the dollar strip side by side, with a timeline view, a view by kind and,

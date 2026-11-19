@@ -114,3 +114,35 @@ def test_coalescing_keeps_the_total_and_every_break(tmp_path: Path) -> None:
     ]
     mixed = [s for s in found if s.mix]
     assert mixed and all(set(s.mix) <= {"git", "read and search"} for s in mixed)
+
+
+def test_a_merged_segment_names_no_command_of_another_kind(tmp_path: Path) -> None:
+    """Thinking with a short `grep` in it, coalesced into one segment, keeps the grep out of
+    its command and its tool calls."""
+    head = spend.Segment("model", "", "", 0.0, 40.0)
+    grep = spend.Segment("tool", "read and search", "", 40.0, 0.5)
+    grep.calls.add("g")
+    grep.by_call["g"] = 0.5
+    head.absorb(grep, mixing=True)
+    found = spend.encoded(
+        head, {"g": "grep -n x"}, {"g": "read and search"}, False, frozenset()
+    )
+    assert "x" not in found and "n" not in found
+    tool = spend.Segment("tool", "read and search", "", 0.0, 0.5)
+    tool.absorb(grep)
+    found = spend.encoded(
+        tool, {"g": "grep -n x"}, {"g": "read and search"}, False, frozenset()
+    )
+    assert found["x"] == "grep -n x" and found["n"] == 1
+
+
+def test_every_window_is_written_again_when_the_derivation_changes(
+    tmp_path: Path,
+) -> None:
+    marker = tmp_path / "spend.derivation"
+    since = "2026-11-19T00:00:00.000Z"
+    assert spend.since_for(marker, since) is None
+    marker.write_text(spend.derivation())
+    assert spend.since_for(marker, since) == since
+    marker.write_text("1:2:old")
+    assert spend.since_for(marker, since) is None

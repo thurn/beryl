@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 
 use super::components::esc;
 use super::references::{display_id, ticket_url};
-use super::spend::{Band, Block, GROUPS, Item, Spend, Strip, label};
+use super::spend::{Band, Block, GROUPS, Item, Spend, Strip, label, part_name};
 
 /// The smallest share of a strip whose segment prints its name beside it.
 const LABEL_SHARE: f64 = 0.035;
@@ -37,10 +37,13 @@ pub fn placeholder(url: &str) -> String {
     )
 }
 
-/// A duration: `2h 05m`, `4m 12s`, `38s`.
+/// A duration: `2h 05m`, `4m 12s`, `38s`, or `<1s` for a moment shorter than half a second.
 pub fn duration(seconds: f64) -> String {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let whole = seconds.max(0.0).round() as u64;
+    if whole == 0 && seconds > 0.0 {
+        return "<1s".to_owned();
+    }
     match whole {
         0..60 => format!("{whole}s"),
         60..600 => format!("{}m {:02}s", whole / 60, whole % 60),
@@ -412,12 +415,27 @@ fn card(
     is_break: bool,
     ctx: &Context,
 ) -> Value {
+    let amount = |weight: f64| {
+        if dollars {
+            money(weight)
+        } else {
+            duration(weight)
+        }
+    };
+    let mixed = !block.mix.is_empty();
     let mut rows: Vec<Value> = Vec::new();
     if let Some(at) = block.at {
         rows.push(json!(["Started", {"time": at.to_string()}]));
     }
-    if block.runs > 1 {
-        rows.push(json!(["Runs", block.runs.to_string()]));
+    if mixed {
+        // A coalesced block: name each part with its own amount, since its parts were too
+        // short to draw one by one.
+        let parts: Vec<String> = block
+            .mix
+            .iter()
+            .map(|(name, weight)| format!("{} {}", part_name(name), amount(*weight)))
+            .collect();
+        rows.push(json!(["Made of", parts.join(" · ")]));
     }
     if dollars {
         rows.push(json!(["Requests", block.requests.to_string()]));
@@ -439,31 +457,23 @@ fn card(
                 ]));
             }
         }
-    } else if block.calls > 0 {
+    } else if !mixed && block.calls > 0 && matches!(block.category.as_str(), "tool" | "queued") {
         rows.push(json!(["Tool calls", block.calls.to_string()]));
-    }
-    if !block.mix.is_empty() {
-        let total: f64 = block.weight.max(f64::MIN_POSITIVE);
-        let mix: Vec<String> = block
-            .mix
-            .iter()
-            .map(|(name, weight)| format!("{name} {}", percent(weight / total)))
-            .collect();
-        rows.push(json!(["Mostly", mix.join(", ")]));
     }
     if let Some(line) = ctx.ticket_line(ticket) {
         rows.push(line);
     }
     if ctx.private
+        && matches!(block.category.as_str(), "tool" | "queued")
         && let Some(command) = &block.command
     {
-        rows.push(json!(["Command", {"code": command}]));
+        let name = if block.calls > 1 {
+            "Longest command"
+        } else {
+            "Command"
+        };
+        rows.push(json!([name, {"code": command}]));
     }
-    let figure = if dollars {
-        money(block.weight)
-    } else {
-        duration(block.weight)
-    };
     let context = if is_break {
         "not agent time".to_owned()
     } else {
@@ -473,14 +483,67 @@ fn card(
             if dollars { "dollars" } else { "agent time" }
         )
     };
+    let name = if dollars {
+        dollar_label(block)
+    } else {
+        label(block)
+    };
+    let title = if mixed {
+        format!("Mostly {}", lower_first(&name))
+    } else {
+        name
+    };
     json!({
         "group": block.group,
         "kicker": group_label(&block.group),
-        "title": label(block),
-        "figure": figure,
+        "title": title,
+        "note": note(block, dollars, mixed),
+        "figure": amount(block.weight),
         "context": context,
         "rows": rows,
     })
+}
+
+/// What a block of the dollar strip paid for: the requests whose reply called its kind of tool,
+/// or that called none.
+fn dollar_label(block: &Block) -> String {
+    match block.category.as_str() {
+        "model" => "Replies with no tool call".to_owned(),
+        _ => format!("Requests that called {}", label(block)),
+    }
+}
+
+/// One sentence under a card's title saying how to read its figure.
+fn note(block: &Block, dollars: bool, mixed: bool) -> &'static str {
+    if mixed {
+        return "Several stretches too short to draw one by one, shown as one segment.";
+    }
+    match (dollars, block.category.as_str()) {
+        (true, "model") => "Requests whose reply called no tool, such as a final answer.",
+        (true, _) => {
+            "Requests whose reply called this tool, priced by all their tokens, most of which \
+             re-read the conversation."
+        }
+        (false, "model") => {
+            "The model writing its next message, thinking included, while no tool ran."
+        }
+        (false, "queued") => "A command waiting for the cores it needs before it could start.",
+        (false, "background") => "The session waited for a command it ran in the background.",
+        (false, "person") => "The session waited for a person's answer.",
+        (false, "idle") => "The session was idle until something woke it.",
+        _ => "A tool running, from its call to its result.",
+    }
+}
+
+/// `text` with its first letter in lower case, unless it starts a word in capitals.
+fn lower_first(text: &str) -> String {
+    let mut chars = text.chars();
+    match (chars.next(), chars.next()) {
+        (Some(first), Some(second)) if first.is_uppercase() && second.is_lowercase() => {
+            first.to_lowercase().chain(text.chars().skip(1)).collect()
+        }
+        _ => text.to_owned(),
+    }
 }
 
 /// A table of the merged view (or the single ticket's kinds): each kind's time and dollars,

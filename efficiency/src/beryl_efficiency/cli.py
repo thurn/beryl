@@ -166,7 +166,8 @@ def run_export(args: argparse.Namespace) -> Result:
 def run_spend(args: argparse.Namespace) -> Result:
     fresh(args)
     host = paths.host()
-    since = parse_since(str(args.since)).since
+    marker = paths.folder() / f"spend-{host}.derivation"
+    since = spend.since_for(marker, parse_since(str(args.since)).since)
     out = Path(args.out) if args.out else paths.folder() / f"spend-{host}.jsonl"
     db = reader()
     try:
@@ -174,6 +175,7 @@ def run_spend(args: argparse.Namespace) -> Result:
     finally:
         db.close()
     spend.write(found, out)
+    marker.write_text(spend.derivation())
     return Result(
         "spend",
         {"host": host, "since": since, "file": str(out), "windows": len(found)},

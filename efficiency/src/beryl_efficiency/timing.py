@@ -53,7 +53,7 @@ AGENT_CATEGORIES: frozenset[str] = frozenset({"queued", "tool", "model", "backgr
 QUESTION_TOOLS: frozenset[str] = frozenset({"AskUserQuestion"})
 # Raised whenever a change to this file changes the split, so that the next ingest gives
 # every call its kind and splits every window again, as it does when the kinds table changes.
-VERSION = 2
+VERSION = 3
 # Stop reasons of a request that ends a turn: anything but stopping to run a tool.
 TOOL_STOP = "tool_use"
 # The kinds a call's lock waits and syncs in the stored `lock_waits` rows move to.

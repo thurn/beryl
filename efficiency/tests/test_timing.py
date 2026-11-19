@@ -236,6 +236,14 @@ def test_a_change_to_the_kinds_table_gives_every_call_its_kind_again(
         ("ignite sync", "ignite", False),
         ('ignite ticket create "x" -p P2', "ignite", False),
         ("frobnicate --all", kinds.OTHER, False),
+        # A here-document's body is data: the land after a long commit message counts, and a
+        # message line that reads like a command does not.
+        (
+            "git commit -F - <<'EOF'\nfix: x\n\ncargo test passes now\nEOF\nignite land 2>&1",
+            "push",
+            False,
+        ),
+        ("git commit -F - <<EOF\ncargo build ran\nEOF", "git", False),
     ],
 )
 def test_a_command_is_classified_by_what_follows_its_prefix(
@@ -268,3 +276,52 @@ def test_the_kinds_table_is_valid() -> None:
         kinds.parse(twice.encode())
     with pytest.raises(Exception):
         kinds.parse(json.dumps([{"kind": "a", "pattern": "("}]).encode())
+
+
+def test_a_stored_command_keeps_what_follows_its_here_document(tmp_path: Path) -> None:
+    message = "fix: x\n\n" + "A long body line.\n" * 40
+    command = f"git add -A && git commit -F - <<'EOF'\n{message}EOF\nignite land 2>&1"
+    (
+        transcript(tmp_path)
+        .bash(at(0), "m1", "c", command)
+        .result(at(200), "c")
+        .request(at(201), "m2")
+        .save()
+    )
+    db = ingested(tmp_path)
+    stored, kind = db.execute("SELECT command, kind FROM tool_calls").fetchone()
+    assert (
+        stored
+        == "git add -A && git commit -F - <<(EOF body left out)\nignite land 2>&1"
+    )
+    assert kind == "push"
+
+
+def test_commands_cut_before_here_documents_were_dropped_are_read_again(
+    tmp_path: Path,
+) -> None:
+    message = "fix: x\n\n" + "A long body line.\n" * 40
+    command = f"git commit -F - <<'EOF'\n{message}EOF\nignite land 2>&1"
+    (
+        transcript(tmp_path)
+        .bash(at(0), "m1", "c", command)
+        .result(at(200), "c")
+        .request(at(201), "m2")
+        .save()
+    )
+    db = ingested(tmp_path)
+    # The row as the store kept it before: the first characters, with the body in.
+    db.execute(
+        "UPDATE tool_calls SET command = ?, kind = 'git'",
+        (command[: claude.COMMAND_CHARACTERS],),
+    )
+    db.execute("DELETE FROM settings WHERE key LIKE 'commands_without_heredocs:%'")
+    db.execute("DELETE FROM settings WHERE key LIKE 'command_kinds:%'")
+    # Any change to the transcripts runs the source's finish step, which repairs once.
+    transcript(tmp_path, "t2").bash(at(300), "m3", "d", "ls").save()
+    ingest.ingest(db, [claude.Transcripts(tmp_path / "projects", CHECKOUT, HOST)], HOST)
+    stored, kind = db.execute(
+        "SELECT command, kind FROM tool_calls WHERE call = 'c'"
+    ).fetchone()
+    assert stored.endswith("ignite land 2>&1")
+    assert kind == "push"

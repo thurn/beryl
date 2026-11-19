@@ -119,6 +119,9 @@ fn the_fragment_draws_both_strips_with_figures_hovercards_and_views() {
         "data-view=\"timeline\"",
         "data-view=\"kind\"",
         "c-spend-hatch",
+        "Thinking",
+        "Requests that called rust tests",
+        "thinking included",
     ] {
         assert!(fragment.contains(expected), "missing {expected}");
     }

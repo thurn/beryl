@@ -90,6 +90,33 @@ def load(path: Path | None = None) -> tuple[list[Kind], str]:
     return parse(data), hashlib.sha256(data).hexdigest()[:16]
 
 
+# The start of a here-document: `<<EOF`, `<<-EOF`, `<<'EOF'` or `<<"EOF"`, and its delimiter.
+HEREDOC: re.Pattern[str] = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+def without_heredocs(command: str) -> str:
+    """`command` without the bodies of its here-documents, which are data such as a commit
+    message, not commands. A body that never reaches its delimiter, as in a command the store
+    cut short, runs to the end. Without this, a long commit message pushed the commands after
+    it past the characters the store keeps, and a body line such as `cargo test passes` was
+    read as a command."""
+    lines = command.split("\n")
+    kept: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        index += 1
+        for found in HEREDOC.finditer(line):
+            delimiter = found.group(2)
+            while index < len(lines) and lines[index].strip() != delimiter:
+                index += 1
+            index += 1  # the delimiter line
+        # The operator is rewritten so that a command already without its bodies, as the
+        # store keeps it, is not read as opening one again.
+        kept.append(HEREDOC.sub(lambda m: f"<<({m.group(2)} body left out)", line))
+    return "\n".join(kept)
+
+
 def strip(part: str) -> str:
     """`part` without its leading `cd <path>`, assignments and wrappers."""
     while True:
@@ -111,7 +138,11 @@ def classify(table: list[Kind], tool: str, command: str | None) -> tuple[str, bo
         return OTHER, False
     found = [
         k
-        for k in (match(table, strip(p)) for p in SEPARATOR.split(command) if p.strip())
+        for k in (
+            match(table, strip(p))
+            for p in SEPARATOR.split(without_heredocs(command))
+            if p.strip()
+        )
         if k is not None
     ]
     heavy = [k for k in found if k.heavy]

@@ -23,7 +23,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import paths, ticket_ids, timing, tokens, windows
+from . import kinds, paths, ticket_ids, timing, tokens, windows
 from .ingest import FileSource, LineSource, Row
 
 PROVIDER = "claude"
@@ -220,6 +220,8 @@ def target(tool: str, given: object) -> str | None:
     for key in ("command", "file_path", "notebook_path", "path", "pattern", "url"):
         value = given.get(key)
         if isinstance(value, str) and (key != "command" or tool == "Bash"):
+            if key == "command":
+                value = kinds.without_heredocs(value)
             return value[:COMMAND_CHARACTERS]
     return None
 
@@ -430,7 +432,67 @@ class Transcripts(LineSource):
                 ]
         return rows
 
+    def repair_commands(self, db: windows.Connection) -> None:
+        """Once per host, reads again the shell commands that the store cut at
+        `COMMAND_CHARACTERS` with their here-document bodies still in, and stores them without
+        the bodies, so that a command after a long commit message is classified by what it
+        ran. The transcripts that providers have deleted keep their rows as they were.
+        """
+        setting = f"commands_without_heredocs:{self.host}"
+        if db.execute("SELECT 1 FROM settings WHERE key = ?", (setting,)).fetchone():
+            return
+        cut = {
+            str(r[0])
+            for r in db.execute(
+                "SELECT DISTINCT transcript FROM tool_calls WHERE host = ? AND provider = ? "
+                "AND length(command) = ?",
+                (self.host, PROVIDER, COMMAND_CHARACTERS),
+            )
+        }
+        for path in self.files():
+            transcript = transcript_of(path)[0]
+            if transcript not in cut:
+                continue
+            try:
+                with path.open("rb") as file:
+                    for line in file:
+                        if b'"tool_use"' not in line or b'"Bash"' not in line:
+                            continue
+                        self.repair_line(db, transcript, line)
+            except OSError:
+                continue
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (setting, "1")
+        )
+
+    def repair_line(self, db: windows.Connection, transcript: str, line: bytes) -> None:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            return
+        message = record.get("message") if isinstance(record, dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
+        for block in content if isinstance(content, list) else []:
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            command = target(str(block.get("name") or ""), block.get("input"))
+            if command is None:
+                continue
+            db.execute(
+                "UPDATE tool_calls SET command = ? WHERE host = ? AND provider = ? "
+                "AND transcript = ? AND call = ? AND length(command) = ?",
+                (
+                    command,
+                    self.host,
+                    PROVIDER,
+                    transcript,
+                    str(block.get("id")),
+                    COMMAND_CHARACTERS,
+                ),
+            )
+
     def finish(self, db: windows.Connection, changed: list[Path]) -> int:
+        self.repair_commands(db)
         found = [transcript_of(p) for p in changed]
         written = windows.derive(db, self.host, PROVIDER, found)
         tops = sorted({parent or transcript for transcript, parent in found})

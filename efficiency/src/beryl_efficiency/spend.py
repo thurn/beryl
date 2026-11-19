@@ -295,7 +295,11 @@ def dollar_segments(
 
 
 def encoded(
-    segment: Segment, commands: dict[str, str], dollars: bool, heavy: frozenset[str]
+    segment: Segment,
+    commands: dict[str, str],
+    kind_of: dict[str, str],
+    dollars: bool,
+    heavy: frozenset[str],
 ) -> dict[str, object]:
     """One segment as the hub stores it. Keys are short because a large epic has thousands."""
     found: dict[str, object] = {
@@ -315,10 +319,17 @@ def encoded(
             found["m"] = max(segment.models.items(), key=lambda item: item[1])[0]
     else:
         found["s"] = round(segment.weight, 2)
-        if segment.calls:
-            found["n"] = len(segment.calls)
-        if segment.by_call:
-            call = max(segment.by_call.items(), key=lambda item: item[1])[0]
+        # Only the calls of the segment's own kind count, and only for a segment of tool
+        # time: a segment coalesced from thinking and a short `grep` must not show the grep
+        # as though it ran for the whole segment.
+        own = {
+            call: seconds
+            for call, seconds in segment.by_call.items()
+            if kind_of.get(call) == segment.kind
+        }
+        if segment.category in ("tool", "queued") and own:
+            found["n"] = len(own)
+            call = max(own.items(), key=lambda item: item[1])[0]
             command = commands.get(call)
             if command:
                 found["x"] = command[:COMMAND_CHARS]
@@ -350,6 +361,7 @@ def windows(
     spans: list[timing.Span] = []
     calls: list[tuple[str, str, str]] = []
     commands: dict[str, str] = {}
+    kind_of: dict[str, str] = {}
     for provider, session, transcript, start, end, bead in rows:
         key = (host, str(provider), str(transcript))
         if loaded != key[1:]:
@@ -362,6 +374,7 @@ def windows(
             ).fetchall()
             calls = [(str(c[0]), str(c[1]), str(c[2])) for c in listed]
             commands = {str(c[0]): str(c[3]) for c in listed if c[3]}
+            kind_of = {call: kind for call, _, kind in calls}
         low, high = timing.seconds(str(start)), timing.seconds(str(end))
         time = coalesced(time_segments(spans, low, high))
         dollars = coalesced(dollar_segments(db, key, str(start), str(end), calls))
@@ -373,11 +386,37 @@ def windows(
                 "session": str(session),
                 "start": str(start),
                 "end": str(end),
-                "time": [encoded(s, commands, False, heavy) for s in time],
-                "dollars": [encoded(s, commands, True, heavy) for s in dollars],
+                "time": [encoded(s, commands, kind_of, False, heavy) for s in time],
+                "dollars": [
+                    encoded(s, commands, kind_of, True, heavy) for s in dollars
+                ],
             }
         )
     return found
+
+
+# Raised whenever a change here changes the segments of windows already sent.
+FORMAT = 2
+
+
+def derivation() -> str:
+    """What every window's segments are derived by: this file's format, the time accounting's
+    version and the command kinds table. When it changes, every window changed with it.
+    """
+    _, digest = kinds.load()
+    return f"{FORMAT}:{timing.VERSION}:{digest}"
+
+
+def since_for(marker: Path, since: str | None) -> str | None:
+    """`since`, or None (every window) when the windows were last written under another
+    derivation than the current one, which `marker` records. Without this, a change that
+    gave old calls new kinds would reach the hub only for windows that ended after it.
+    """
+    try:
+        written = marker.read_text().strip()
+    except OSError:
+        written = ""
+    return since if written == derivation() else None
 
 
 def write(found: list[dict[str, object]], out: Path) -> None:

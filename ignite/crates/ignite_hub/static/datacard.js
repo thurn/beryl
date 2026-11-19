@@ -2,7 +2,7 @@
 // instead of pointing at a <template>, so a chart with hundreds of marks needs no template
 // apiece. cirrus.js shows the card this builds as it shows any hovercard.
 //
-// The JSON is {group, kicker, title, figure, context, rows}, where each row is [label, value]
+// The JSON is {group, kicker, title, note, figure, context, rows}, where each row is [label, value]
 // and a value is text, {time: iso} (shown in the viewer's clock, to the minute) or
 // {code: text}. Every string is set as text, never parsed as HTML.
 (() => {
@@ -55,12 +55,9 @@
             item.append(make("dt", "", label), dd);
             rows.append(item);
         }
-        card.append(
-            kicker,
-            make("div", "c-hovercard-title", data.title || ""),
-            figure,
-            rows,
-        );
+        card.append(kicker, make("div", "c-hovercard-title", data.title || ""));
+        if (data.note) card.append(make("p", "c-datacard-note", data.note));
+        card.append(figure, rows);
         return card;
     };
 })();

@@ -27,7 +27,7 @@ use super::data::ReadError;
 /// The colour groups, in the order the legend lists them, and the label of each. The breaks
 /// come last.
 pub const GROUPS: [(&str, &str); 10] = [
-    ("model", "Model"),
+    ("model", "Thinking"),
     ("checks", "Checks"),
     ("tools", "Tools"),
     ("ignite", "Ignite"),
@@ -129,7 +129,9 @@ impl Block {
             self.class_dollars[index] += other.class_dollars[index];
         }
         self.runs += other.runs;
-        if self.command.is_none() {
+        // Only a run of the same kind lends its command: a block led by thinking that took in
+        // a short `grep` did not spend its time on the grep.
+        if self.command.is_none() && self.key() == other.key() {
             self.command.clone_from(&other.command);
         }
         if self.model.is_none() {
@@ -153,6 +155,18 @@ impl Block {
     }
 }
 
+/// The name of a part of a coalesced block, as the producer named it (a kind, or a category
+/// for a block with no kind), in the words [`label`] uses.
+pub fn part_name(name: &str) -> String {
+    match name {
+        "model" => "Thinking".to_owned(),
+        "reply" => "Reply".to_owned(),
+        "person" => "Waiting on a person".to_owned(),
+        "idle" => "Idle".to_owned(),
+        _ => name.to_owned(),
+    }
+}
+
 /// A block's name: its kind, or its category's name, with its part.
 pub fn label(block: &Block) -> String {
     let kind = block
@@ -161,7 +175,8 @@ pub fn label(block: &Block) -> String {
         .and_then(|rest| rest.rsplit("__").next())
         .unwrap_or(&block.kind);
     let name = match (block.category.as_str(), kind) {
-        ("model", "" | "reply") => "Model".to_owned(),
+        ("model", "reply") => "Reply".to_owned(),
+        ("model", _) => "Thinking".to_owned(),
         ("person", "question") => "Question".to_owned(),
         ("person", _) => "Waiting on a person".to_owned(),
         ("idle", _) => "Idle".to_owned(),

@@ -289,6 +289,14 @@
   margin: var(--space-1) 0;
 }
 
+.c-datacard-note {
+  max-width: 300px;
+  margin: 0 0 var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
 .c-datacard-figure {
   margin-bottom: var(--space-3);
   font-size: var(--text-xl);

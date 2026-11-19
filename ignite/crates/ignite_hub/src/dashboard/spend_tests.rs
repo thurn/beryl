@@ -84,8 +84,8 @@ fn labels_name_categories_and_shorten_tool_names() {
         part: part.to_owned(),
         ..Block::default()
     };
-    assert_eq!(label(&block("model", "", "")), "Model");
-    assert_eq!(label(&block("model", "reply", "")), "Model");
+    assert_eq!(label(&block("model", "", "")), "Thinking");
+    assert_eq!(label(&block("model", "reply", "")), "Reply");
     assert_eq!(
         label(&block("queued", "rust tests", "")),
         "Queued: rust tests"
@@ -99,4 +99,35 @@ fn labels_name_categories_and_shorten_tool_names() {
         "update_plan"
     );
     assert_eq!(label(&block("person", "question", "")), "Question");
+}
+
+#[test]
+fn a_merged_block_takes_no_command_from_a_part_of_another_kind() {
+    let thinking = Item::Segment(Block {
+        group: "model".to_owned(),
+        category: "model".to_owned(),
+        weight: 40.0,
+        runs: 1,
+        ..Block::default()
+    });
+    let grep = Item::Segment(Block {
+        group: "tools".to_owned(),
+        category: "tool".to_owned(),
+        kind: "read and search".to_owned(),
+        weight: 0.5,
+        calls: 1,
+        command: Some("grep -n x".to_owned()),
+        runs: 1,
+        ..Block::default()
+    });
+    let mut items = Vec::new();
+    for _ in 0..6 {
+        items.push(thinking.clone());
+        items.push(grep.clone());
+    }
+    let found = coalesced(items, 1);
+    assert_eq!(found.len(), 1);
+    let block = found[0].block();
+    assert_eq!(block.category, "model");
+    assert_eq!(block.command, None);
 }
