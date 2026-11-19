@@ -9,7 +9,8 @@
 //! - an epic with open tickets of which none is ready or in progress, nor waits (through any
 //!   chain of dependencies and epics) on a ticket that is. A ready ticket that no machine can
 //!   take (its `needs:` label names no registered machine or operating system, or is
-//!   `needs:person`) does not count as ready;
+//!   `needs:person`) does not count as ready. An epic with a ticket still `pending_approval` is
+//!   waiting for a person, not stuck;
 //! - a loop of tickets that wait on one another and are under no epic;
 //! - a ticket held in progress for more than six hours, which is reported for the justiciar to
 //!   look at.
@@ -337,10 +338,16 @@ fn find_stuck(
     // For each ancestor: its waiting tickets, and whether any of its tickets can move.
     let mut waiting: BTreeMap<&str, Vec<&GraphTicket>> = BTreeMap::new();
     let mut moving: BTreeSet<&str> = BTreeSet::new();
+    // Epics with a ticket that waits for a person to release it. That is not stuck: the
+    // release is the next step, so nothing is reported until it happens.
+    let mut awaiting_approval: BTreeSet<&str> = BTreeSet::new();
     for entry in &graph.tickets {
         let ticket = &entry.ticket;
         if ticket.ticket_type == TicketType::Epic {
             continue;
+        }
+        if ticket.status == Status::PendingApproval {
+            awaiting_approval.extend(ancestors(ticket.id.as_str()));
         }
         let deferred =
             ticket.status == Status::Deferred || ticket.defer_until.is_some_and(|t| t > now);
@@ -358,7 +365,11 @@ fn find_stuck(
         .iter()
         .filter(|t| t.ticket.ticket_type == TicketType::Epic)
         .map(|t| t.ticket.id.as_str())
-        .filter(|epic| waiting.contains_key(epic) && !moving.contains(epic))
+        .filter(|epic| {
+            waiting.contains_key(epic)
+                && !moving.contains(epic)
+                && !awaiting_approval.contains(epic)
+        })
         .collect();
     stuck
         .iter()

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use ignite_core::protocol::tickets::{EdgeKind, Operation, TicketType};
+use ignite_core::protocol::tickets::{EdgeKind, Operation, Status, TicketType};
 use ignite_core::traits::Clock;
 use ignite_store::hub::{self, edges};
 
@@ -56,6 +56,30 @@ fn an_epic_waiting_only_on_a_person_or_an_absent_machine_is_stuck() {
     assert!(filed.body.contains("needs:person"), "{}", filed.body);
     assert!(filed.labels.contains(&"graph-repair".to_owned()));
     assert!(filed.labels.contains(&"hub".to_owned()));
+}
+
+#[test]
+fn an_epic_whose_children_await_approval_is_not_stuck() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let epic = apply(
+        &mut conn,
+        vec![create("Epic", TicketType::Epic, None, &[])],
+        clock.now(),
+    );
+    let mut child = create("Child", TicketType::Task, Some(&epic[0]), &[]);
+    if let Operation::Create { fields, .. } = &mut child {
+        fields.status = Some(Status::PendingApproval);
+    }
+    apply(&mut conn, vec![child], clock.now());
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
 }
 
 #[test]
