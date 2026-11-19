@@ -111,7 +111,9 @@ def test_the_ignite_workspace_is_not_scanned(tmp_path: Path) -> None:
     assert check_inputs.families(tmp_path) == []
 
 
-def test_an_include_in_a_nextest_family_is_observed_not_declared(tmp_path: Path) -> None:
+def test_an_include_in_a_nextest_family_is_observed_not_declared(
+    tmp_path: Path,
+) -> None:
     tracked = workspace(tmp_path)
     write(
         tmp_path,

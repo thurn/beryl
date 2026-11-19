@@ -1401,9 +1401,9 @@ not hash file contents itself:
 - A directory input contributes its git tree ID, and a file input its blob ID.
 - A check's inputs are its family's `inputs`, the `package_inputs` of the
   package that holds it, the inputs its own `list` line names, and the inputs of
-  the products its family needs. A `nextest` family's checks take only the
-  crate patterns of its products' inputs, and add what their builds were
-  observed to read (see [Observed inputs](#observed-inputs)).
+  the products its family needs. A `nextest` family's checks take only the crate
+  patterns of its products' inputs, and add what their builds were observed to
+  read (see [Observed inputs](#observed-inputs)).
 - The input hash is SHA-256 over the sorted inputs, the family's commands, the
   toolchain version and, for a check that is not `platforms = "any"`, the
   operating system.
@@ -1458,8 +1458,8 @@ process.
   which rebuilds the tests and observes them afresh. A build script may generate
   tests from the files it reads, so the listing itself depends on them.
 - **Scope.** The landing gate counts a kept listing's observed paths among the
-  family's inputs, so a landing that edits only an embedded data file still
-  runs the tests that embed it.
+  family's inputs, so a landing that edits only an embedded data file still runs
+  the tests that embed it.
 
 What observation does not see, which stays declared:
 
