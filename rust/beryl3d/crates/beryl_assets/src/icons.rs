@@ -12,14 +12,14 @@
 
 use std::cell::Cell;
 
-use beryl_scene::input::IconCell;
 use beryl_scene::element::Shadow;
-use beryl_scene::widgets::{IconId, icon_shadows};
+use beryl_scene::input::IconCell;
 use beryl_scene::widgets::icons::{
     BUG, BUTTON_SIDE, CLOSE, FULL_CONTROL, FULL_CONTROL_SIDE, GEAR, LOCK, LOCK_SIDE, LOG, MENU,
     MINUS, PASS_ON, PHASE_SIDE, PHASES, PLUS, SPEAKER, SPEAKER_OFF, STEPS, STEPS_OUTLINED, UNDO,
     WHOLE,
 };
+use beryl_scene::widgets::{IconId, icon_shadows};
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, Pixmap, Stroke, Transform};
 
 use crate::blur;

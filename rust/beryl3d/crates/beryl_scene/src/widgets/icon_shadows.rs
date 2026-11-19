@@ -41,7 +41,10 @@ pub const CHAINS: [(&[IconId], &[Shadow]); 8] = [
 /// which is the icon's own cell.
 #[must_use]
 pub const fn code(chain: usize, stage: usize) -> u8 {
-    #[expect(clippy::cast_possible_truncation, reason = "eight chains of four shadows")]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "eight chains of four shadows"
+    )]
     let code = (1 + chain * MOST_DROP_SHADOWS + stage) as u8;
     code
 }

@@ -21,7 +21,10 @@ pub(crate) fn blurred(bitmap: &Bitmap, sigma: f32) -> Bitmap {
             grown[(y + pad) * wide + x + pad] = f32::from(bitmap.coverage[y * width + x]) / 255.0;
         }
     }
-    let coverage = blur_plane(&grown, wide, sigma).iter().map(|&value| level(value)).collect();
+    let coverage = blur_plane(&grown, wide, sigma)
+        .iter()
+        .map(|&value| level(value))
+        .collect();
     let shift = i16::try_from(pad).unwrap_or(i16::MAX);
     Bitmap {
         width: u16::try_from(wide).unwrap_or(u16::MAX),
@@ -130,5 +133,4 @@ mod tests {
         // The same ink, spread out: within rounding of 16 full texels.
         assert!((i64::from(total) - 16 * 255).abs() < 128, "{total}");
     }
-
 }

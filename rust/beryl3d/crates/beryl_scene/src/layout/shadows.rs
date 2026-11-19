@@ -110,7 +110,10 @@ pub fn shape_radius(size: Vec2, radius: f32, spread: f32) -> f32 {
 /// above and left of the icon's, and each of its texels is `stage_step` pixels; its offset is
 /// already in it. Returns a note of the first cell no page holds, which draws nothing, or of the
 /// chain when none is listed.
-#[expect(clippy::too_many_arguments, reason = "one icon's draw, as `write_shown` has it")]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one icon's draw, as `write_shown` has it"
+)]
 pub(super) fn write_icon_shadows(
     shadows: &[Shadow],
     icons: &Icons,

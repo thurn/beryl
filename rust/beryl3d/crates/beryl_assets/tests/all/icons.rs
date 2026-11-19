@@ -89,8 +89,15 @@ fn every_icon_rasterizes_to_a_cell_partly_inked_on_another_thread() {
         .filter(|(_, cell)| cell.shadow > 0)
         .map(|(_, cell)| {
             let (chain, stage) = icon_shadows::decode(cell.shadow).expect("a listed shadow");
-            let side = icon_shadows::stage_side(cell.size, icon_shadows::shadows(chain), stage, 2.0);
-            assert_eq!(cell.rect[2..], [side, side], "{:?} {}", cell.icon, cell.shadow);
+            let side =
+                icon_shadows::stage_side(cell.size, icon_shadows::shadows(chain), stage, 2.0);
+            assert_eq!(
+                cell.rect[2..],
+                [side, side],
+                "{:?} {}",
+                cell.icon,
+                cell.shadow
+            );
             (cell.icon, cell.shadow)
         })
         .collect();
@@ -173,7 +180,6 @@ fn a_new_scale_adds_new_cells_and_the_same_scale_adds_none() {
     }
 }
 
-
 #[test]
 fn every_icon_and_its_shadows_fit_in_the_atlas_at_a_phones_scale() {
     // At three pixels a point, packed tallest first, the icons, their drop shadows' cells and
@@ -182,4 +188,3 @@ fn every_icon_and_its_shadows_fit_in_the_atlas_at_a_phones_scale() {
     let pages = rasterize(3.0);
     assert!(pages.len() <= 5, "the icons took {} pages", pages.len());
 }
-

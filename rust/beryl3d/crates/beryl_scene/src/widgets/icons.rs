@@ -111,7 +111,8 @@ impl Icons {
                 page,
                 rect: cell.rect,
             };
-            self.table.insert((cell.icon, cell.size, cell.shadow), sprite);
+            self.table
+                .insert((cell.icon, cell.size, cell.shadow), sprite);
         }
     }
 

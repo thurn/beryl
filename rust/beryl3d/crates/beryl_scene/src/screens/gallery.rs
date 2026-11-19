@@ -251,23 +251,22 @@ fn phase_tracker() -> Element {
                     "End",
                 ])
                 .map(|(icon, label)| {
-                    let mut sample =
-                        row()
-                            .name(label)
-                            .width(side)
-                            .height(side)
-                            .color(if label == "Combat" {
-                                color::GOLD
-                            } else {
-                                color::TEXT_DIM
-                            })
-                            // The web gallery's tracker lights combat
-                            // (`.phase-current .phase-icon`).
-                            .drop_shadow(if label == "Combat" {
-                                shadow::CURRENT_GLOW.to_vec()
-                            } else {
-                                shadow::PHASE_ICON.to_vec()
-                            });
+                    let mut sample = row()
+                        .name(label)
+                        .width(side)
+                        .height(side)
+                        .color(if label == "Combat" {
+                            color::GOLD
+                        } else {
+                            color::TEXT_DIM
+                        })
+                        // The web gallery's tracker lights combat
+                        // (`.phase-current .phase-icon`).
+                        .drop_shadow(if label == "Combat" {
+                            shadow::CURRENT_GLOW.to_vec()
+                        } else {
+                            shadow::PHASE_ICON.to_vec()
+                        });
                     sample.shows = Some(Shown::Icon(icon, icons::PHASE_SIDE));
                     sample
                 }),

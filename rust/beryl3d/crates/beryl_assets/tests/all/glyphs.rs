@@ -8,9 +8,9 @@ use beryl_assets::glyphs::{
 };
 use beryl_assets::packer::{ATLAS_PAGES, PAGE_SIZE};
 use beryl_assets::{Prepared, Upload};
-use beryl_scene::widgets::icon_shadows;
 use beryl_scene::input::{AssetReady, GlyphCell, GlyphKey};
 use beryl_scene::text::fonts::Font;
+use beryl_scene::widgets::icon_shadows;
 use swash::FontRef;
 
 /// Only catches a hung worker; a page normally arrives in milliseconds.
