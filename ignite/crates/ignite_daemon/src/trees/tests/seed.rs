@@ -31,7 +31,30 @@ fn modified(path: &Path) -> SystemTime {
 }
 
 fn set_time(path: &Path, time: SystemTime) {
-    File::open(path).unwrap().set_modified(time).unwrap();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(time)
+        .unwrap();
+}
+
+/// Whether copies in the temporary directory, where every fixture is, are clones, which seeding
+/// needs. On Windows that is a Dev Drive (`ReFS`); a test that needs it passes there and is
+/// skipped elsewhere, with a line that says so.
+fn copies_are_clones_here() -> bool {
+    use ignite_os::clones::Clones as _;
+    let here = ignite_os::Native.copies_are_clones(&std::env::temp_dir());
+    if !here {
+        eprintln!("skipped: copies in the temporary directory are not clones");
+    }
+    here
+}
+
+/// Copies `from` to `to` as a seed does: a clone that keeps the source's modification time.
+fn clone_file(from: &Path, to: &Path) {
+    fs::copy(from, to).unwrap();
+    set_time(to, modified(from));
 }
 
 /// tree-01 last built a commit behind the tip; tree-02, leased to another ticket, holds a build
@@ -46,9 +69,11 @@ fn donor_at_the_tip() -> (Fixture, PathBuf) {
     (f, other.path)
 }
 
-#[cfg(target_os = "macos")]
 #[test]
 fn a_compiling_lease_starts_from_a_copy_of_the_build_nearest_the_tip() {
+    if !copies_are_clones_here() {
+        return;
+    }
     let (f, donor) = donor_at_the_tip();
     let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000);
     // `.gitignore` is the same in both trees; `a.txt` is edited in the donor and not committed.
@@ -225,9 +250,11 @@ fn watching(f: &Fixture) -> Arc<Watching> {
 /// A free tree whose files are clones of a leased tree's frees almost nothing when deleted, so
 /// the disk loop keeps it, as a donor for the next lease, and clears a free tree whose bytes are
 /// its own, although that one was used more recently.
-#[cfg(target_os = "macos")]
 #[test]
 fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_cleared() {
+    if !copies_are_clones_here() {
+        return;
+    }
     let f = Fixture::new(3, 1);
     let builds = watching(&f);
     let probe = trees_with(&f, builds.clone(), None);
@@ -248,13 +275,7 @@ fn a_free_tree_whose_blocks_a_clone_shares_is_kept_and_one_with_its_own_is_clear
     );
     write(&donor, "out/big", &"x".repeat(4_000_000));
     fs::create_dir_all(leased.path.join("out")).unwrap();
-    let status = Command::new("cp")
-        .arg("-c")
-        .arg(donor.join("out/big"))
-        .arg(leased.path.join("out/big"))
-        .status()
-        .unwrap();
-    assert!(status.success());
+    clone_file(&donor.join("out/big"), &leased.path.join("out/big"));
     write(&own, "out/own", &"y".repeat(2_000_000));
     let total = probe.hold_disk(0).unwrap().before;
     assert!(total < 7_000_000, "the clone counts once: {total}");
@@ -299,9 +320,11 @@ fn a_cleared_tree_is_forgotten_before_its_directories_are_deleted() {
 
 /// Seeding forgets the leased tree's builds before it replaces the tree's target directories,
 /// so that a copy that fails partway, which deletes them, leaves no record of them either.
-#[cfg(target_os = "macos")]
 #[test]
 fn a_seeded_tree_is_forgotten_before_its_own_build_is_replaced() {
+    if !copies_are_clones_here() {
+        return;
+    }
     let f = Fixture::new(2, 2);
     let builds = watching(&f);
     let trees = trees_with(&f, builds.clone(), None);
@@ -383,9 +406,11 @@ impl ignite_core::traits::Builds for Held {
 /// A compiling lease returns while its tree is still being seeded, and the copy runs on the
 /// thread that prebuilds the tree afterwards. A build asked for during the copy waits for it and
 /// names the donor.
-#[cfg(target_os = "macos")]
 #[test]
 fn a_compiling_lease_returns_before_its_seed_and_a_build_waits_for_the_seed() {
+    if !copies_are_clones_here() {
+        return;
+    }
     let f = Fixture::new(2, 2);
     let builds = Arc::new(Held::default());
     let trees = trees_with(&f, builds.clone(), None);

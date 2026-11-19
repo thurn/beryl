@@ -1,7 +1,8 @@
 //! How much of a file's disk space it shares with clones of it. On APFS a copy made with
 //! `clonefile` shares every block with its source until either is written, so the block count
 //! that `stat` reports counts the shared blocks once in each copy.
-//! Windows makes no clones, so there every byte of a file is its own.
+//! On Windows only a volume that counts block references (`ReFS`, as on a Dev Drive) clones a
+//! copy; see `clones/windows.rs` for how such a file's sharing is reported.
 
 use std::io;
 use std::path::Path;
@@ -25,4 +26,8 @@ pub trait Clones {
     /// What of the file at `path` is its own, not following a symbolic link. `None` when the
     /// file system cannot say, and the caller counts every allocated byte as the file's own.
     fn sharing(&self, path: &Path) -> io::Result<Option<Sharing>>;
+
+    /// Whether `std::fs::copy` to a file beside `path` clones the source's blocks instead of
+    /// writing them again, so that copying a tree's build costs seconds and almost no disk.
+    fn copies_are_clones(&self, path: &Path) -> bool;
 }

@@ -53,6 +53,12 @@ impl Clones for Native {
             clone_id: Some(clone_id),
         }))
     }
+
+    /// The startup disk is APFS on every Mac Ignite runs on, and `std::fs::copy` clones there
+    /// (it calls `fclonefileat` first).
+    fn copies_are_clones(&self, _path: &Path) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

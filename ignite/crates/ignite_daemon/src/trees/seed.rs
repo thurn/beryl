@@ -43,7 +43,8 @@
 //! target directories (`node_modules`, a Python environment) are left alone: they are current
 //! by their input hash, not by modification times.
 //!
-//! Elsewhere than macOS a copy would write every byte again, so nothing is seeded there.
+//! On Windows the copy is a clone only on a volume that counts block references, such as a Dev
+//! Drive (`ReFS`); elsewhere a copy would write every byte again, so nothing is seeded there.
 
 use std::collections::{BTreeSet, HashSet};
 use std::fs::{self, File};
@@ -55,6 +56,8 @@ use std::time::{Duration, SystemTime};
 use ignite_core::ids::{Commit, TreeId};
 use ignite_core::traits::Result;
 use ignite_git::{changed, refs, tracked};
+use ignite_os::Native;
+use ignite_os::clones::Clones as _;
 use ignite_store::local::{rows, trees as store};
 
 use super::disk::{id_of, profile_dirs};
@@ -206,12 +209,14 @@ struct Donor {
 
 impl Trees {
     /// Starts a compiling lease's work on a thread of its own, so that the lease returns as soon
-    /// as the branch is checked out: first the seed (on macOS), then the prebuild products. The
+    /// as the branch is checked out: first the seed (where copies are clones), then the prebuild products. The
     /// tree is marked as being seeded before this returns, so a build asked for at once, by the
     /// prebuild or by the session, waits for the copy instead of running under it.
     pub(super) fn start_builds(&self, tree: &TreeId, request: &LeaseRequest) {
-        let seeding = cfg!(target_os = "macos")
-            .then(|| Seeding::start(self.inner.config.path(tree), tree.clone()));
+        let path = self.inner.config.path(tree);
+        let seeding = Native
+            .copies_are_clones(&path)
+            .then(|| Seeding::start(path, tree.clone()));
         if seeding.is_none() && self.inner.config.prebuild.get().is_empty() {
             return;
         }
@@ -494,7 +499,7 @@ fn remove(path: &Path) -> io::Result<()> {
 }
 
 /// Copies the directory `from` to `to`, which must not exist, keeping each file's modification
-/// time. On APFS each file is a clone.
+/// time. On APFS and on a block-cloning `ReFS` volume each file is a clone.
 fn clone_dir(from: &Path, to: &Path) -> io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
@@ -518,13 +523,19 @@ fn copy_link(from: &Path, to: &Path) -> io::Result<()> {
     std::os::unix::fs::symlink(fs::read_link(from)?, to)
 }
 
+/// Windows makes a symbolic link only with Developer Mode or an administrator's rights, and
+/// Cargo writes none there, so a link is copied as the file it points at.
 #[cfg(not(unix))]
-fn copy_link(_from: &Path, _to: &Path) -> io::Result<()> {
-    Ok(())
+fn copy_link(from: &Path, to: &Path) -> io::Result<()> {
+    fs::copy(from, to).map(drop)
 }
 
 fn set_modified(path: &Path, time: SystemTime) -> io::Result<()> {
-    File::open(path)?.set_modified(time)
+    // Windows sets a file's times only through a handle that may write its attributes.
+    fs::OpenOptions::new()
+        .write(true)
+        .open(path)?
+        .set_modified(time)
 }
 
 /// Rewrites the donor's paths to the tree's in the Cargo target directory `target`: in each

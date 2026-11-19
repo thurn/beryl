@@ -2,7 +2,6 @@
 
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 use super::*;
 
@@ -39,18 +38,25 @@ const MB: u64 = 1_000_000;
 
 /// Tree a holds a file and tree b a clone of it; tree c a file of its own. The clone's blocks
 /// count once, and deleting either tree of the pair frees almost nothing while the other stays.
-#[cfg(target_os = "macos")]
+/// Skipped where copies in the temporary directory are not clones (Windows off a Dev Drive).
 #[test]
 fn a_clone_counts_once_and_frees_its_blocks_only_with_its_source() {
+    use ignite_os::clones::Clones as _;
+    if !ignite_os::Native.copies_are_clones(&std::env::temp_dir()) {
+        eprintln!("skipped: copies in the temporary directory are not clones");
+        return;
+    }
     let s = Scratch::new("clone");
     fs::write(s.0.join("a/big"), "x".repeat(4_000_000)).unwrap();
-    let status = Command::new("cp")
-        .arg("-c")
-        .arg(s.0.join("a/big"))
-        .arg(s.0.join("b/big"))
-        .status()
+    // `fs::copy` clones on APFS and on ReFS; a seed keeps the source's modification time.
+    fs::copy(s.0.join("a/big"), s.0.join("b/big")).unwrap();
+    let time = fs::metadata(s.0.join("a/big")).unwrap().modified().unwrap();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(s.0.join("b/big"))
+        .unwrap()
+        .set_modified(time)
         .unwrap();
-    assert!(status.success());
     fs::write(s.0.join("c/own"), "y".repeat(1_000_000)).unwrap();
 
     let mut space = s.measure();
