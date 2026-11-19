@@ -25,12 +25,12 @@ fn repository() -> (PathBuf, String) {
     std::fs::write(
         repo.join("ignite.toml"),
         "[repository]\nremote = \"origin\"\nstaging = \"staging\"\nmaster = \"master\"\n\
-         trees = \".trees\"\nchecks = \"ignite/checks\"\n\n[hub]\nurl = \"https://hub\"\n\
+         trees = \".trees\"\nchecks = \"manifests\"\n\n[hub]\nurl = \"https://hub\"\n\
          project = \"p\"\n\n[gate]\nthreshold = 0.1\ncap = 10\n\n[machine.m]\nticket_trees = 1\n\
          landing_trees = 1\nfloor = { batch = 1, tip = 1 }\n",
     )
     .unwrap();
-    let checks = repo.join("ignite/checks");
+    let checks = repo.join("manifests");
     std::fs::create_dir_all(&checks).unwrap();
     std::fs::write(
         checks.join("py.toml"),
@@ -71,7 +71,7 @@ fn a_machine_with_no_database_yet_passes() {
 fn a_manifest_that_does_not_parse_fails() {
     let (repo, machine) = repository();
     std::fs::write(
-        repo.join("ignite/checks/broken.toml"),
+        repo.join("manifests/broken.toml"),
         "[family.x\nnot toml",
     )
     .unwrap();
