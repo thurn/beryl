@@ -25,13 +25,9 @@ pub use beryl_card_shared::{props, tokens};
 use beryl_card::CardDef;
 use beryl_engine::CardTable;
 
-/// Every card name as a constant, so a misspelled card is a compile error: the cards of the
-/// decklists in `docs/sample-decks`, the basic lands, every card with a file, every card
-/// complete from the card store and each card this crate's sources name (`beryl_card_build`'s
-/// `names_source`).
-pub mod names {
-    include!(concat!(env!("OUT_DIR"), "/names.rs"));
-}
+/// Every card name as a constant, so a misspelled card is a compile error: one for each card
+/// of the card store. They live in `beryl_card_names`, which no card file is an input of.
+pub use beryl_card_names::names;
 
 // `SET_CARDS` and `SET_SCENARIOS`: each set crate's table.
 include!(concat!(env!("OUT_DIR"), "/tables.rs"));

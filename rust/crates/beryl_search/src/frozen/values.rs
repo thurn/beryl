@@ -7,7 +7,7 @@
 //! flags of card knowledge. Built once per game, indexed by game-table index (§6.4), so a
 //! decision reads it with one load.
 
-use beryl_cards::names;
+use beryl_card_names::names;
 use beryl_engine::card::{Face, Keywords, Types};
 use beryl_engine::{CardIx, GameTable};
 

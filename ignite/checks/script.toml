@@ -38,6 +38,7 @@ inputs = [
   "rust/Cargo.lock",
   "rust/crates/beryl_card/**",
   "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_names/**",
   "rust/crates/beryl_card_records/**",
   "rust/crates/beryl_card_shared/**",
   "rust/crates/beryl_card_store/**",

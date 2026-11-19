@@ -594,5 +594,10 @@
     "label": "The landing gate asks the hub for every family's check record at once and only for the areas its change touches, sends new listings to the hub in the background, and converts its budget at the rate its running stage achieved, so `ignite check` of a one-card change stops spending 85 s planning and four budgets running",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A comment edit in one card file no longer recompiles the search crate and everything above it (about 150 CPU-seconds with beryl_session and beryl_cli), because beryl_search takes its card names from a new crate, beryl_card_names, built from the card store alone, and depends on beryl_cards only for its tests",
+    "metric": "machine.queued-core-hours-per-day",
+    "expect": "down"
   }
 ]

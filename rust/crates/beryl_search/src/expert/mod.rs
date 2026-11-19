@@ -47,7 +47,7 @@ use beryl_engine::two_player::TwoPlayerSeat as _;
 use beryl_engine::{Large, Layout, Small, ZoneKey};
 use std::cell::OnceCell;
 
-use beryl_cards::names;
+use beryl_card_names::names;
 use beryl_engine::card::{
     Ability, CastingKind, CastingOption, Castings, Face, FaceIx, Keywords, ManaColor,
     ObjectAbility, Purpose, Types,

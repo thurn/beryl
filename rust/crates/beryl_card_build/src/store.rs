@@ -165,6 +165,20 @@ impl Store {
         }
     }
 
+    /// Every name the store answers to that [`Store::by_constant`] finds, a card's own or an
+    /// alias such as a double-faced card's front face, with its module
+    /// ([`crate::names::card_module`]). A module that more than one name is spelled as is left
+    /// out.
+    pub fn unambiguous(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.by_module.iter().filter_map(|(module, cards)| {
+            let name = cards.first()?.name.as_str();
+            cards
+                .iter()
+                .all(|card| card.name == name)
+                .then_some((module.as_str(), name))
+        })
+    }
+
     /// The cards first printed in one of `sets`, by name: each card's own name, not its faces'.
     pub fn first_printed_in<'s>(&'s self, sets: &'s [String]) -> impl Iterator<Item = &'s str> {
         self.cards

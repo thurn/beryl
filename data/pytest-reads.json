@@ -132,6 +132,7 @@
       "rust/cards/cards_2026_q4/Cargo.toml",
       "rust/crates/beryl_card/Cargo.toml",
       "rust/crates/beryl_card_build/Cargo.toml",
+      "rust/crates/beryl_card_names/Cargo.toml",
       "rust/crates/beryl_card_records/Cargo.toml",
       "rust/crates/beryl_card_shared/Cargo.toml",
       "rust/crates/beryl_card_store/Cargo.toml",

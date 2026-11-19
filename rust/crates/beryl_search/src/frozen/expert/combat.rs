@@ -12,7 +12,7 @@
 //! weighs again. The engine offers interchangeable creatures as one option (§7.2), so a
 //! plan's creature stands for any of its kind.
 
-use beryl_cards::names;
+use beryl_card_names::names;
 use beryl_engine::card::{Keywords, Types};
 use beryl_engine::state::CombatRole;
 use beryl_engine::two_player::TwoPlayerSeat as _;

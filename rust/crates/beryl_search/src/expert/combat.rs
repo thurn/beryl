@@ -1,6 +1,6 @@
 //! Card-specific judgments for the expert's combat planner.
 
-use beryl_cards::names;
+use beryl_card_names::names;
 use beryl_engine::card::Types;
 
 use beryl_engine::{GameTable, Layout, Seat, State};

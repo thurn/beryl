@@ -12,6 +12,8 @@ workspace = true
 [dependencies]
 # The vocabulary a card's effect data is written in.
 beryl_card = { path = "../beryl_card" }
+# The card names and the fixed decklists, re-exported here.
+beryl_card_names = { path = "../beryl_card_names" }
 # The tokens and props card files share, re-exported here.
 beryl_card_shared = { path = "../beryl_card_shared" }
 beryl_engine = { path = "../beryl_engine" }

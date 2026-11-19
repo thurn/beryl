@@ -29,16 +29,18 @@ heavy command.
   it was first printed in. `just card path <name>` prints the path. Card crates
   depend only on the shared vocabulary crate.
 - Nobody maintains lists of card files by hand. Build scripts
-  (`beryl_card_build`) generate each set crate's module list and tables, and
-  `beryl_cards`' registry and `names` from them. A creature whose rules text is
-  only keywords the engine has needs no file: its set crate's build writes it
-  from the card store (`just card path <name>` says so), and `just card crates`
-  writes the set crates.
+  (`beryl_card_build`) generate each set crate's module list and tables,
+  `beryl_cards`' registry from them, and `beryl_card_names`' `names` from the
+  card store. A creature whose rules text is only keywords the engine has needs
+  no file: its set crate's build writes it from the card store
+  (`just card path <name>` says so), and `just card crates` writes the set
+  crates.
 - Nobody types a mana cost or type line either. Each card face starts from a
   `Printed::` constant generated from the card store, and each card file's
   header comment is generated too (`just card header`). Card files name cards as
   `Card::Counterspell` and import everything with `use crate::prelude::*;`; code
-  outside the card files uses `beryl_cards::names`.
+  outside the card files uses `beryl_card_names::names` (also re-exported as
+  `beryl_cards::names`).
 - `ui/src/generated/protocol.ts` uses the shared types in `beryl_protocol`. The
   TypeScript generation test runs in `beryl_session`. The generated file's
   header gives the regeneration command.

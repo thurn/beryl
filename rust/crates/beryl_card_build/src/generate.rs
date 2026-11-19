@@ -11,11 +11,6 @@ use crate::names::{camel, constant, constant_of_camel};
 use crate::printed::{Subtypes, faces};
 use crate::store::{Record, Store};
 
-/// The basic lands, which every `names` module of the registry has: the rules name them
-/// ([CR 305.6](https://yawgatog.com/resources/magic-rules/#R3056): "The basic land types are
-/// Plains, Island, Swamp, Mountain, and Forest").
-const BASIC_LANDS: [&str; 5] = ["Plains", "Island", "Swamp", "Mountain", "Forest"];
-
 /// The constants `text` reads from a module: each `<module>::<CONSTANT>`, where `module` is
 /// `names::` or `printed::token::`.
 fn constants_used<'a>(text: &'a str, module: &str) -> Vec<&'a str> {
@@ -487,54 +482,6 @@ pub fn shared_source(dir: &Path, printed: &mut Printed) -> Result<String, String
     printed.source()
 }
 
-/// The card names of the decklists in `dir`, main deck and sideboard: each `<count> <name>`
-/// line of its `.txt` files.
-fn deck_names(dir: &Path) -> Result<Vec<String>, String> {
-    let mut names = Vec::new();
-    let listing = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    for path in listing.filter_map(Result::ok).map(|entry| entry.path()) {
-        if path.extension().is_none_or(|e| e != "txt") {
-            continue;
-        }
-        let text =
-            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        for line in text.lines() {
-            if let Some((count, name)) = line.split_once(' ')
-                && count.parse::<u8>().is_ok()
-            {
-                names.push(name.trim().to_string());
-            }
-        }
-    }
-    Ok(names)
-}
-
-/// The `names::` constants the Rust files under `dir` use, read as text: the registry's own
-/// sources, whose scenarios may name a card with no file, one complete from the store.
-fn constants_in(dir: &Path) -> Vec<String> {
-    let mut found = Vec::new();
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                pending.push(path);
-            } else if path.extension().is_some_and(|e| e == "rs")
-                && let Ok(text) = std::fs::read_to_string(&path)
-            {
-                found.extend(
-                    constants_used(&text, "names::")
-                        .into_iter()
-                        .map(String::from),
-                );
-            }
-        }
-    }
-    found.sort_unstable();
-    found.dedup();
-    found
-}
-
 /// The registry's tables: their parts, one per set crate of `cards_dir`, in the crates' order.
 pub fn registry_source(cards_dir: &Path) -> String {
     let crates = set_crates(cards_dir);
@@ -560,60 +507,25 @@ pub fn registry_source(cards_dir: &Path) -> String {
     )
 }
 
-/// The registry's `names` module: every set crate's own names (`own_names`, the cards with a
-/// file and those complete from the card store), and as constants of its own the cards of the
-/// decklists in `decks_dir`, the basic lands and each card the sources under `own_dir` name that
-/// the store has, such as a card a library scenario plays. A constant of its own shadows a set
-/// crate's of the same name, which spells the same card.
+/// `beryl_card_names`' `names` module: a constant for each name the card store answers to, a
+/// card's own or an alias such as a double-faced card's front face, as a card file's own
+/// constant spells it. A constant two names would share is left out, as
+/// [`Store::by_constant`] refuses it.
 ///
-/// The set crates' names are re-exported rather than listed, so that this module changes only
-/// when a set crate is added, a decklist changes or the registry's own sources do. Listing every
-/// card with a file here made the build script watch `rust/cards`, and Cargo reran it, then
-/// rechecked its 50,000 constants, after an edit to any card file (the scale rehearsal,
-/// `just scale`).
-///
-/// # Errors
-///
-/// When a decklist cannot be read, or two names give one constant.
-pub fn names_source(
-    cards_dir: &Path,
-    decks_dir: &Path,
-    own_dir: &Path,
-    store: &Store,
-) -> Result<String, String> {
-    let mut names = deck_names(decks_dir)?;
-    names.extend(BASIC_LANDS.map(str::to_string));
-    // A constant no card spells is left to the compiler, which names the file that uses it.
-    for used in constants_in(own_dir) {
-        if let Ok(name) = store.by_constant(&used) {
-            names.push(name.to_string());
-        }
-    }
-    let mut constants = BTreeMap::new();
-    for name in names {
-        let spelled = constant(&name)?;
-        if let Some(other) = constants.insert(spelled.clone(), name.clone())
-            && other != name
-        {
-            return Err(format!("{other:?} and {name:?} both give names::{spelled}"));
-        }
-    }
-    let mut out = String::from(
-        "// Generated by beryl_card_build from the set crates, docs/sample-decks and the card \
-         store.\n\n",
-    );
-    // A set crate whose cards are all among the constants below re-exports nothing here, which
-    // Rust reports as an unused import.
-    for (name, _) in set_crates(cards_dir) {
-        writeln!(
-            out,
-            "#[allow(unused_imports)]\npub use {name}::own_names::*;"
-        )
-        .unwrap();
-    }
-    out.push('\n');
+/// It names every card in the store rather than only those with a file, because the module
+/// must not change when a card file does. Cargo reruns a build script when a file it watches
+/// changes and then recompiles every crate that depends on that crate, even when the script
+/// writes the same source again. Listing the card files would make this crate watch
+/// `rust/cards`, so a comment edit in one card file would recompile the search, the session
+/// and every crate above them. The store changes only when `just cards` rebuilds it.
+pub fn names_source(store: &Store) -> String {
+    let constants: BTreeMap<String, String> = store
+        .unambiguous()
+        .map(|(module, name)| (module.to_ascii_uppercase(), name.to_string()))
+        .collect();
+    let mut out = String::from("// Generated by beryl_card_build from the card store.\n\n");
     out.push_str(&constants_source(&constants, ""));
-    Ok(out)
+    out
 }
 
 /// A path of the environment Cargo gives a build script.
@@ -716,25 +628,20 @@ pub fn shared() {
     write_out("printed.rs", source);
 }
 
-/// The registry's whole build script: writes `OUT_DIR/tables.rs` and `OUT_DIR/names.rs`
-/// ([`names_source`]), and runs again when a set crate is added, a decklist changes, the card
-/// store changes or the registry's own sources do. No edit to a card file reruns it.
+/// The registry's whole build script: writes `OUT_DIR/tables.rs`, and runs again when a set
+/// crate is added. No edit to a card file reruns it.
 ///
 /// # Panics
 ///
 /// When a set crate is one that the registry's manifest does not depend on with its
-/// `scenarios` feature passed on, the one list Cargo makes a person keep; and with
-/// [`names_source`]'s errors.
+/// `scenarios` feature passed on, the one list Cargo makes a person keep.
 pub fn registry() {
     let manifest_dir = env_path("CARGO_MANIFEST_DIR");
-    let (root, store) = repository(&manifest_dir);
-    let cards_dir = root.join("rust/cards");
+    let cards_dir = manifest_dir.join("../../cards");
     // A new set crate is a new workspace member, which Cargo writes into the lock file before it
     // builds. Watching `rust/cards` instead would make Cargo look at every card file's time
     // before every build, 50,000 of them in the scale rehearsal (`just scale`).
     println!("cargo:rerun-if-changed=../../Cargo.lock");
-    println!("cargo:rerun-if-changed=../../../docs/sample-decks");
-    println!("cargo:rerun-if-changed=src");
     let manifest = std::fs::read_to_string(manifest_dir.join("Cargo.toml")).expect("a manifest");
     for (name, _) in set_crates(&cards_dir) {
         assert!(
@@ -745,13 +652,15 @@ pub fn registry() {
         );
     }
     write_out("tables.rs", Ok(registry_source(&cards_dir)));
-    let names = store.and_then(|store| {
-        names_source(
-            &cards_dir,
-            &root.join("docs/sample-decks"),
-            &manifest_dir.join("src"),
-            &store,
-        )
-    });
-    write_out("names.rs", names);
+}
+
+/// `beryl_card_names`' whole build script: writes `OUT_DIR/names.rs` ([`names_source`]), and
+/// runs again only when the card store changes.
+///
+/// # Panics
+///
+/// When the store cannot be read.
+pub fn card_names() {
+    let (_, store) = repository(&env_path("CARGO_MANIFEST_DIR"));
+    write_out("names.rs", store.map(|store| names_source(&store)));
 }

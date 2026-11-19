@@ -233,6 +233,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "beryl_card_names"
+version = "0.1.0"
+dependencies = [
+ "beryl_card_build",
+]
+
+[[package]]
 name = "beryl_card_records"
 version = "0.1.0"
 dependencies = [
@@ -263,6 +270,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_card",
  "beryl_card_build",
+ "beryl_card_names",
  "beryl_card_shared",
  "beryl_engine",
  "beryl_kernel",
@@ -496,7 +504,7 @@ dependencies = [
 name = "beryl_search"
 version = "0.1.0"
 dependencies = [
- "beryl_cards",
+ "beryl_card_names",
  "beryl_engine",
  "serde",
 ]

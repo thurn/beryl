@@ -243,7 +243,6 @@ fn a_new_file_is_listed_with_no_other_edit() {
         assert!(after.contains(line), "no {line:?} in:\n{after}");
     }
 
-    scratch.write("decks/a.txt", "4 Lim-Dûl's Vault\n\n1 Island\n");
     scratch.write("not_a_crate/lea/island.rs", "");
     let crates: Vec<String> = set_crates(&scratch.0)
         .into_iter()
@@ -251,30 +250,26 @@ fn a_new_file_is_listed_with_no_other_edit() {
         .collect();
     assert_eq!(crates, ["cards_1993"]);
     let tables = registry_source(&scratch.0);
-    let names = names_source(
-        &scratch.0,
-        &scratch.0.join("decks"),
-        &scratch.0.join("own"),
-        &store,
-    )
-    .unwrap();
     assert!(tables.contains("    &cards_1993::CARDS,\n"), "{tables}");
     assert!(tables.contains("    &cards_1993::SCENARIOS,\n"), "{tables}");
-    // The files' cards reach the registry's names through their crate's own names, so that no
-    // edit to a file changes the registry's.
-    assert!(
-        names.contains("pub use cards_1993::own_names::*;"),
-        "{names}"
-    );
     let own = after.split("pub mod names").next().unwrap();
     assert!(own.contains("pub const FIRE_ICE: &str = "), "{after}");
-    for constant in ["FOREST", "ISLAND", "LIM_DULS_VAULT", "PLAINS"] {
-        assert!(
-            names.contains(&format!("pub const {constant}: &str = ")),
-            "{names}"
-        );
+}
+
+/// `beryl_card_names` names every card of the store, whether or not it has a file, so that no card file is one of its inputs.
+#[test]
+fn the_names_crate_names_every_card_of_the_store() {
+    let store = Store::parse(&store_text()).unwrap();
+    let names = names_source(&store);
+    for line in [
+        "pub const FIRE_ICE: &str = \"Fire // Ice\";",
+        "pub const ISLAND: &str = \"Island\";",
+        "pub const LIM_DULS_VAULT: &str = \"Lim-D\u{fb}l's Vault\";",
+        // An alias, as a double-faced card's front face is.
+        "pub const ICE: &str = \"Ice\";",
+    ] {
+        assert!(names.contains(line), "no {line:?} in:\n{names}");
     }
-    assert!(!names.contains("FIRE_ICE"), "{names}");
 }
 
 #[test]

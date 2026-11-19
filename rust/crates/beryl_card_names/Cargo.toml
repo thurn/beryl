@@ -1,0 +1,17 @@
+[package]
+name = "beryl_card_names"
+version = "0.1.0"
+description = "Every card name as a constant, and the decklists, which name cards and nothing more"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# No dependencies: the crates that name cards, such as the search's heuristics, depend on this
+# one instead of `beryl_cards`, so that an edit to a card file does not recompile them.
+
+[build-dependencies]
+# Reads the card store and writes the names.
+beryl_card_build = { path = "../beryl_card_build" }

@@ -11,8 +11,7 @@ reads where it reads it in the tree:
   `printed` faces from the scratch store, and checks each clone as it checks a real file.
 - `rust/crates/beryl_cards`: the registry over the set crates, whose build script is
   `beryl_card_build::registry`, as `beryl_cards`' is, and whose `lib.rs` joins the set
-  crates' tables in a `CardTable` and includes the generated `names`, which re-export each set
-  crate's, as `beryl_cards` does. Its binary, `all`, reads every card through
+  crates' tables in a `CardTable`, as `beryl_cards` does. Its binary, `all`, reads every card through
   `std::hint::black_box`, so a release build links every definition.
 - `data/card-store.tsv`: a scratch store with a record for each clone (its original's, renamed
   and placed in its scratch set), the real records of the cards the clones' files name, and
@@ -218,10 +217,6 @@ def set_crate_files(name: str) -> dict[str, str]:
 REGISTRY_LIB = """//! The rehearsal's registry: the set crates' tables joined as `beryl_cards` joins them.
 
 use beryl_kernel::table::CardTable;
-
-pub mod names {
-    include!(concat!(env!("OUT_DIR"), "/names.rs"));
-}
 
 include!(concat!(env!("OUT_DIR"), "/tables.rs"));
 

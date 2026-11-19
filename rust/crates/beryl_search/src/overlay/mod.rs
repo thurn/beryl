@@ -12,7 +12,7 @@
 //! already states: a value, a card never worth casting, an ability never worth activating,
 //! and the abilities the decks were tuned as though they did not draw.
 
-use beryl_cards::names;
+use beryl_card_names::names;
 use beryl_engine::card::{Ability, AbilityKind, Behavior, CardDef, CostAction, Effect};
 
 use crate::values::CardInfo;
