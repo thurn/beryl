@@ -14,7 +14,12 @@
 //!   posts a notification, because a person or a repair session has to look;
 //! - on the hub's machine, where the hub is a login service of its own, kickstarts the hub when
 //!   two runs in a row got no HTTP answer from it ([`decide_hub`]). The login service already
-//!   restarts a hub that exits; this catches one that runs and does not answer.
+//!   restarts a hub that exits; this catches one that runs and does not answer;
+//! - rewrites the daemon's login service when it was written by an older build
+//!   ([`Service::refresh_daemon`]), on a run where the daemon answered and the monitor runs the
+//!   daemon's own build. An update replaces the daemon's executable but not its login service:
+//!   on 2026-11-18 the daemon's commands still ran on the slower cores hours after a release
+//!   changed the service to put them on the faster ones, because nobody had run `ignite install`.
 //!
 //! It holds no agent logic and calls the hub only to see that it answers. The decision ([`decide`]) is a function of what
 //! was observed; the observations and actions are the [`Machine`] trait, so the tests run the
@@ -170,6 +175,9 @@ pub trait Machine {
     fn probe_hub(&self) -> bool;
     /// Kills the hub and starts it again through its login service.
     fn kickstart_hub(&self) -> std::io::Result<()>;
+    /// Rewrites and reloads the daemon's login service if an older build wrote it, and says
+    /// whether it did ([`Service::refresh_daemon`]).
+    fn refresh_daemon(&self) -> std::io::Result<bool>;
 }
 
 fn state_file(home: &Home) -> PathBuf {
@@ -242,6 +250,26 @@ pub fn run_once(home: &Home, machine: &dyn Machine, now: Timestamp) -> Vec<Strin
     }
     if seen.running && seen.answered {
         let _ = fs::remove_file(home.root.join("justiciar-needed.json"));
+    }
+    // The monitor runs the last-good build, and writes the service as that build would. While it
+    // is older than the current build, rewriting would undo what the current build's install
+    // wrote, so this waits until the current build is marked good.
+    if seen.running
+        && seen.answered
+        && done.is_empty()
+        && current.is_some()
+        && current == store.last_good()
+    {
+        match machine.refresh_daemon() {
+            Ok(true) => done.push(
+                "an older build wrote the daemon's login service; rewrote and reloaded it"
+                    .to_owned(),
+            ),
+            Ok(false) => {}
+            Err(error) => done.push(format!(
+                "cannot rewrite the daemon's login service: {error}"
+            )),
+        }
     }
     let hub_here = machine.hub_here();
     if decide_hub(&mut state, hub_here, hub_here && machine.probe_hub(), now) {
@@ -344,6 +372,10 @@ impl Machine for NativeMachine {
 
     fn kickstart_hub(&self) -> std::io::Result<()> {
         Native.kickstart_hub()
+    }
+
+    fn refresh_daemon(&self) -> std::io::Result<bool> {
+        Native.refresh_daemon()
     }
 }
 

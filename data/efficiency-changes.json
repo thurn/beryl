@@ -369,5 +369,10 @@
     "label": "Ignite's own tests run under cargo-nextest, from the test build, and fmt and clippy no longer wait for that build: warm on 2026-11-18 at load 30 to 43 the 1325 tests took 13.2 s wall and 59 CPU-s against 35 s and 91 CPU-s through `cargo test`, which ran the 29 test binaries one after another; clippy re-checked the workspace in about 4 s",
     "metric": "ignite.gate-seconds",
     "expect": "down"
+  },
+  {
+    "label": "The monitor rewrites a daemon launchd agent an older build wrote: hours after the agent became Interactive, jarvis still ran every rustc at utility priority, ten of them at a quarter core each with 40% of the CPU idle, because only `ignite install` wrote the agent",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

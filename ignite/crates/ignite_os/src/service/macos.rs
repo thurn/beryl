@@ -12,6 +12,9 @@ use std::time::Duration;
 use super::Service;
 use crate::Native;
 
+#[path = "macos_agent.rs"]
+mod agent;
+
 /// The agent's launchd label, which also names its property list file.
 const LABEL: &str = "ignite.daemon";
 /// The monitor agent's launchd label.
@@ -188,6 +191,20 @@ impl Service for Native {
 
     fn is_installed(&self) -> io::Result<bool> {
         Ok(plist_path(LABEL)?.exists())
+    }
+
+    fn refresh_daemon(&self) -> io::Result<bool> {
+        let path = plist_path(LABEL)?;
+        let text = match fs::read_to_string(&path) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            read => read?,
+        };
+        let Some(current) = refreshed(&text) else {
+            return Ok(false);
+        };
+        fs::write(&path, current)?;
+        reload(&SystemLaunchctl, &domain(), LABEL, &path)?;
+        Ok(true)
     }
 
     fn install_monitor(&self, executable: &Path, args: &[String]) -> io::Result<()> {
@@ -379,6 +396,21 @@ fn plist(
 </plist>
 "#
     )
+}
+
+/// The daemon agent's property list as this build writes it, running the program with the
+/// environment and log file that `text` records, or `None` when `text` already says that or
+/// cannot be read ([`agent::read`]).
+fn refreshed(text: &str) -> Option<String> {
+    let recorded = agent::read(text)?;
+    let current = plist(
+        LABEL,
+        Launch::KeepAlive,
+        &recorded.program,
+        &recorded.environment,
+        Path::new(&recorded.log),
+    );
+    (current != text).then_some(current)
 }
 
 fn escape(text: &str) -> String {
@@ -680,5 +712,50 @@ mod tests {
             .unwrap();
         fs::remove_file(&path).unwrap();
         assert!(lint.status.success());
+    }
+
+    /// A daemon agent written by a build whose agents were `Standard`, before the daemon's became
+    /// `Interactive`.
+    fn standard_daemon_agent(program: &[String], environment: &[(String, String)]) -> String {
+        plist(
+            LABEL,
+            Launch::KeepAlive,
+            program,
+            environment,
+            Path::new("/Users/x/Library/Logs/ignite.daemon.log"),
+        )
+        .replace("<string>Interactive</string>", "<string>Standard</string>")
+    }
+
+    #[test]
+    fn an_agent_from_an_older_build_is_rewritten_keeping_its_program_and_environment() {
+        let program = ["/opt/ignite/bin/current".to_owned(), "a<&b>".to_owned()];
+        // Out of alphabetical order, as the install writes them, which must survive.
+        let environment = [
+            ("PATH".to_owned(), "/opt/homebrew/bin:/usr/bin".to_owned()),
+            ("IGNITE_HOME".to_owned(), "/opt/ignite".to_owned()),
+        ];
+        let old = standard_daemon_agent(&program, &environment);
+        let current = refreshed(&old).expect("the old agent is rewritten");
+        assert_eq!(
+            current,
+            plist(
+                LABEL,
+                Launch::KeepAlive,
+                &program,
+                &environment,
+                Path::new("/Users/x/Library/Logs/ignite.daemon.log"),
+            )
+        );
+        assert!(current.contains("<string>Interactive</string>"));
+        // Written once, it is current: the monitor does not reload the daemon on every run.
+        assert_eq!(refreshed(&current), None);
+    }
+
+    #[test]
+    fn an_agent_in_another_layout_is_left_alone() {
+        let old = standard_daemon_agent(&["/opt/ignite/bin/current".to_owned()], &[]);
+        assert_eq!(refreshed(&old.replace('\n', " ")), None);
+        assert_eq!(refreshed(""), None);
     }
 }

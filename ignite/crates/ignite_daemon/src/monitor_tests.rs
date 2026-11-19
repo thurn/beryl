@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -23,6 +23,8 @@ struct FakeMachine {
     answers: bool,
     /// On the hub's machine, whether its hub answers; `None` elsewhere.
     hub: Option<bool>,
+    /// Whether an older build wrote the daemon's login service; a refresh makes it current.
+    stale_service: Cell<bool>,
     log: RefCell<Vec<String>>,
 }
 
@@ -32,6 +34,7 @@ impl FakeMachine {
             running,
             answers,
             hub: None,
+            stale_service: Cell::new(true),
             log: RefCell::default(),
         }
     }
@@ -70,6 +73,13 @@ impl Machine for FakeMachine {
     fn kickstart_hub(&self) -> std::io::Result<()> {
         self.log.borrow_mut().push("kickstart hub".to_owned());
         Ok(())
+    }
+    fn refresh_daemon(&self) -> std::io::Result<bool> {
+        let stale = self.stale_service.replace(false);
+        if stale {
+            self.log.borrow_mut().push("refresh daemon".to_owned());
+        }
+        Ok(stale)
     }
 }
 
@@ -316,4 +326,53 @@ fn the_hub_probe_takes_any_http_answer_and_not_a_closed_port() {
         .local_addr()
         .unwrap();
     assert!(!hub_answers(&closed.to_string()));
+}
+
+/// A home whose store holds `GOOD` and `BAD`, with `current` current and `last_good` marked good.
+#[cfg(unix)]
+fn home_running(current: &str, last_good: &str) -> Home {
+    let home = home();
+    let store = home.store();
+    for hex in [GOOD, BAD] {
+        let built = home.root.join(format!("built-{hex}"));
+        fs::write(&built, hex).unwrap();
+        store.store(&commit(hex), &built).unwrap();
+    }
+    store.mark_last_good(&commit(last_good)).unwrap();
+    store.point_current_at(&commit(current)).unwrap();
+    home
+}
+
+#[cfg(unix)]
+#[test]
+fn a_service_an_older_build_wrote_is_rewritten_once_while_the_daemon_answers() {
+    let home = home_running(GOOD, GOOD);
+    let machine = FakeMachine::new(true, true);
+    let done = run_once(&home, &machine, at(0.0));
+    assert_eq!(
+        done,
+        ["an older build wrote the daemon's login service; rewrote and reloaded it"]
+    );
+    assert!(run_once(&home, &machine, at(120.0)).is_empty());
+    assert_eq!(machine.log(), ["refresh daemon"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn the_service_is_not_rewritten_by_a_monitor_older_than_the_current_build() {
+    // The monitor runs the last-good build, GOOD, while the daemon runs BAD, which is newer and
+    // not marked good yet: GOOD would write the service as it did, undoing BAD's install.
+    let home = home_running(BAD, GOOD);
+    let machine = FakeMachine::new(true, true);
+    assert!(run_once(&home, &machine, at(0.0)).is_empty());
+    assert!(machine.log().is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn the_service_is_not_rewritten_while_the_daemon_does_not_answer() {
+    let home = home_running(GOOD, GOOD);
+    let machine = FakeMachine::new(false, false);
+    run_once(&home, &machine, at(0.0));
+    assert_eq!(machine.log(), ["kickstart"]);
 }

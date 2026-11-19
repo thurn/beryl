@@ -45,6 +45,17 @@ pub trait Service {
         Err(unsupported())
     }
 
+    /// Rewrites the daemon's login service as this build would write it, keeping the program,
+    /// environment and log file it records, and reloads it, which restarts the daemon. Returns
+    /// whether it changed anything. Only `install` writes the service, and an update replaces
+    /// the daemon's executable without it, so a setting the service carries (such as the macOS
+    /// process type, which decides which cores the daemon's commands run on) otherwise waits
+    /// for someone to run `ignite install` again. A platform whose service carries no such
+    /// setting, or a service this cannot read, answers `false`.
+    fn refresh_daemon(&self) -> io::Result<bool> {
+        Ok(false)
+    }
+
     /// Registers the hub: `executable args` starts at login with `environment` (the
     /// [`HUB_VARIABLES`] that are set) and again whenever it exits, replacing an earlier
     /// registration. A platform without one answers [`io::ErrorKind::Unsupported`].
