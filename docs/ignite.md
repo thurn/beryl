@@ -2483,16 +2483,16 @@ it:
   unknown, which proves nothing.
 
 This also lets the dispatcher run on a cheaper model. A Codex dispatcher still
-answers a `check` with `running`, `idle`, `gone` or `unknown`, and its
-hand-offs open new chats, which have nothing to read back. Every instruction ends with one line that
-restates the loop, so the dispatcher still knows its job after its context is
-compacted. The output is data only: it picks one action from a closed set and
-supplies its values, and never says what to do, because a model distrusts a tool
-result that dictates actions. The numbered tool calls for each action live only
-in the dispatcher folder's `AGENTS.md`, which is re-injected after every
-compaction. The wait is 480 seconds, under the 600 second limit of a Bash call.
-Its title stays `🔮 dispatcher <machine>` while it waits, which is how a person
-sees that hand-offs are alive.
+answers a `check` with `running`, `idle`, `gone` or `unknown`, and its hand-offs
+open new chats, which have nothing to read back. Every instruction ends with one
+line that restates the loop, so the dispatcher still knows its job after its
+context is compacted. The output is data only: it picks one action from a closed
+set and supplies its values, and never says what to do, because a model
+distrusts a tool result that dictates actions. The numbered tool calls for each
+action live only in the dispatcher folder's `AGENTS.md`, which is re-injected
+after every compaction. The wait is 480 seconds, under the 600 second limit of a
+Bash call. Its title stays `🔮 dispatcher <machine>` while it waits, which is how
+a person sees that hand-offs are alive.
 
 ### What the daemon hands off, and when
 
