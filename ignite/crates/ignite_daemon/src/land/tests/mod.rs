@@ -227,7 +227,11 @@ fn two_landings_on_one_tip_both_land_and_the_second_reruns_only_checks_reading_b
 }
 
 #[test]
-fn a_landing_that_loses_three_races_holds_the_lease_and_lands_on_its_fourth_pass() {
+/// A landing that lost three races used to hold the lease through its next gate, and every
+/// other landing then waited for that gate. The lease is now never held through a gate: the
+/// other machine lands on every pass, and this landing gets through on the first pass in which
+/// the tip stays put.
+fn a_landing_that_loses_races_never_holds_the_lease_through_a_gate() {
     let world = Arc::new(world());
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
     let outcomes = Arc::new(Mutex::new(Vec::new()));
@@ -261,10 +265,10 @@ fn a_landing_that_loses_three_races_holds_the_lease_and_lands_on_its_fourth_pass
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
     assert_eq!(
         *outcomes.lock().unwrap(),
-        ["landed", "landed", "landed", "blocked"]
+        ["landed", "landed", "landed", "landed"]
     );
-    assert_eq!(world.gate.passes.lock().unwrap().len(), 4);
-    assert!(reply.text.contains("landed on pass 4"), "{}", reply.text);
+    assert_eq!(world.gate.passes.lock().unwrap().len(), 5);
+    assert!(reply.text.contains("landed on pass 5"), "{}", reply.text);
     assert_eq!(world.git.pushes().len(), 1);
     assert_eq!(world.hub.holder("staging"), None);
 }

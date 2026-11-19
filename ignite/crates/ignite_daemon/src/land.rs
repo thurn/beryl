@@ -10,11 +10,14 @@
 //! 4. The always set and the gate run there, each check from the result cache where it can be.
 //!    On a rebase, only a check that reads both the ticket's change and what landed meanwhile
 //!    has a new input hash, so a second pass is mostly cache hits.
-//! 5. The hub's lease on the integration branch is taken (180 seconds, renewed while held). If
-//!    the tip moved since step 2, the lease is let go and the landing goes back to step 2. A
-//!    landing that loses this race three times takes the lease before its next pass and holds
-//!    it through the gate, so it cannot lose again. The lease is renewed once more just before
-//!    the push; if the hub says another landing holds it now, the landing starts over.
+//! 5. The hub's lease on the integration branch is taken (180 seconds, renewed while held), only
+//!    after the gate has passed. If the tip moved since step 2, the lease is let go and the
+//!    landing goes back to step 2. The lease is never held through a gate: a landing that lost
+//!    three races used to take it before its next pass and hold it through the gate, and then
+//!    every other landing waited for that gate, even those whose own gates had passed and only
+//!    needed to push, so landings ran one at a time for the length of a gate each (15 minutes
+//!    and more under load). The lease is renewed once more just before the push; if the hub
+//!    says another landing holds it now, the landing starts over.
 //! 6. A record of the landing is written to disk, and the rebased commit is pushed from the
 //!    gate's tree. A push the remote refuses because the tip moved deletes the record and goes
 //!    back to step 2. A remote that cannot be reached exits with code 4 and keeps the record,
@@ -69,8 +72,6 @@ use records::{LandingRecord, RecordState, Records};
 
 /// The longest wait between two tries for a busy lease.
 const BUSY_WAIT_S: f64 = 10.0;
-/// Races lost before a landing holds the lease through its gate.
-const LOSSES_BEFORE_HOLDING: u32 = 3;
 
 /// The passes after which a landing gives up, so a branch that never gets a push through
 /// (the tip keeps moving, or the remote keeps answering that it moved) ends with a message.
@@ -355,7 +356,6 @@ impl Landing {
         }
 
         let mut lease: Option<HeldLease> = None;
-        let mut losses = 0;
         let mut passes = 0;
         let mut last_cause = String::new();
         let mut first_landed_since = None;
@@ -469,10 +469,7 @@ impl Landing {
             if now != tip {
                 free_landing(None);
                 last_cause = format!("the tip moved from {} to {}", short(&tip), short(&now));
-                losses += 1;
-                if losses < LOSSES_BEFORE_HOLDING {
-                    lease = None;
-                }
+                lease = None;
                 continue;
             }
 
@@ -527,10 +524,7 @@ impl Landing {
                         .remove_if(&ticket, &record.commit)
                         .map_err(fail)?;
                     free_landing(None);
-                    losses += 1;
-                    if losses < LOSSES_BEFORE_HOLDING {
-                        lease = None;
-                    }
+                    lease = None;
                     continue;
                 }
                 // The remote answered that it refuses the commit (a hook, a protected branch, a
