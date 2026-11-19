@@ -1492,9 +1492,9 @@ The steps, in order:
    remaining checks need, and run the always set and the gate. The output's
    `scope` line says how many families were left out.
 5. Take the hub's short `staging` lease. If the tip moved since step 2, release
-   it and go back to step 2. The second pass is mostly cache hits. The lease is
-   taken only after the gate passes and held only for the push, so landings gate
-   in parallel and never wait for another landing's gate.
+   it and go back to step 2. The lease is taken only after the gate passes and
+   held only for the push, so landings gate in parallel and never wait for
+   another landing's gate.
 6. Push the commit from the landing tree to `staging` on the git remote, and
    release the lease.
 7. Record the commits and the files they touch on the ticket with the agent's
@@ -1519,6 +1519,19 @@ The gate stops at the first fault it knows of:
 - While a landing runs in a tree, `ignite land` and every other verb that acts
   on that tree are refused there with exit code 3, naming the running handle to
   `ignite wait` or `ignite stop`.
+
+A landing that loses the race for the tip makes its next pass cheap:
+
+- Every pass gates in the tree the first pass chose. A landing tree stays leased
+  to the landing until it ends and is checked out at each new rebased commit, so
+  it builds only what the commits landed since changed. A landing that started
+  in its ticket tree stays there, because the rebase moves that tree too.
+- A pass after one whose gate passed judges again only the families whose inputs
+  the files changed since that pass touch, by the same rule as step 4, and
+  carries the others over. When the files touch none, it pushes the rebased
+  commit without running anything. The output's `carried` line says how many
+  families were carried over. A rebase that changes the change's own files gates
+  in full.
 
 The machine's daemon carries out these steps for the client. The `staging` lease
 lasts 180 seconds and is renewed while it is held, so a daemon that dies holding

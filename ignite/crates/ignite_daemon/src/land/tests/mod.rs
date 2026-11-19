@@ -3,6 +3,7 @@
 mod express;
 mod fakes;
 mod more;
+mod races;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -106,6 +107,7 @@ fn world_with(
         }]),
         released: Mutex::new(Vec::new()),
         deleted: Mutex::new(Vec::new()),
+        ..TestTrees::default()
     });
     let gate = Arc::new(CacheGate {
         checks,
@@ -526,7 +528,8 @@ fn a_landing_whose_pushes_are_always_rejected_gives_up_after_ten_passes() {
         reply.text
     );
     assert!(reply.text.contains("fetch first"), "{}", reply.text);
-    assert_eq!(world.gate.passes.lock().unwrap().len(), 10);
+    // The tip never moved, so every pass after the first carries the first pass's gate over.
+    assert_eq!(world.gate.passes.lock().unwrap().len(), 1);
     assert!(world.landings().is_empty());
     assert_eq!(world.hub.holder("staging"), None);
 }

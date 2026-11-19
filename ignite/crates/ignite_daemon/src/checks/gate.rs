@@ -33,6 +33,30 @@ pub struct GateRun {
     pub left: usize,
     /// How the gate spent its budget; `None` when it stopped before choosing.
     pub budget: Option<GateBudget>,
+    /// The families the change can affect, which the gate judged (see [`Checks::scope`]),
+    /// including those it carried over from an earlier pass.
+    pub scoped: Vec<String>,
+    /// The families an earlier passing gate of the same landing judged, and that the commits
+    /// landed since touch none of the inputs of, so they were not judged again (see
+    /// [`Carried`]).
+    pub carried: Vec<String>,
+}
+
+/// What an earlier gate of the same landing, which passed, lets a later pass skip.
+///
+/// A landing that lost the race for the tip rebases onto the new tip and gates again. The
+/// rebased commit differs from the one that passed only in `moved`, the files the commits
+/// landed since changed, so a family the change could affect, and whose inputs `moved` touches
+/// none of, would read exactly what it read before. Such a family is carried over instead of
+/// being listed, hashed and looked up again; when every family is, the gate runs nothing and
+/// the landing pushes at once. The landing passes this only when the change's own files are
+/// the same as in the pass that passed, because the scope is judged from them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Carried {
+    /// The families the passing gate judged: its [`GateRun::scoped`].
+    pub families: Vec<String>,
+    /// The paths that differ between the commit whose gate passed and the commit gated now.
+    pub moved: Vec<String>,
 }
 
 /// How the gate spent its budget, in billions of instructions from each check's recorded cost.
@@ -70,8 +94,19 @@ impl Checks {
     /// Runs what the landing gate runs on `tree` as it is: the always set and the checks whose
     /// score passes the threshold, within the cap, each from the cache where it can be.
     pub fn gate(&self, ctx: &Context, tree: &TreeId, options: &RunOptions) -> GateRun {
+        self.gate_carrying(ctx, tree, options, None)
+    }
+
+    /// [`Checks::gate`], judging again only the families `carried` does not carry over.
+    pub fn gate_carrying(
+        &self,
+        ctx: &Context,
+        tree: &TreeId,
+        options: &RunOptions,
+        carried: Option<&Carried>,
+    ) -> GateRun {
         match self.open(tree) {
-            Ok(tree) => self.gate_in(ctx, &tree, options),
+            Ok(tree) => self.gate_in(ctx, &tree, options, carried),
             Err(error) => {
                 let mut gated = GateRun::default();
                 gated
@@ -83,7 +118,13 @@ impl Checks {
         }
     }
 
-    pub(super) fn gate_in(&self, ctx: &Context, tree: &OpenTree, options: &RunOptions) -> GateRun {
+    pub(super) fn gate_in(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        options: &RunOptions,
+        carried: Option<&Carried>,
+    ) -> GateRun {
         let mut run = CheckRun::default();
         // Without the changed paths the gate cannot tell which checks the change edited, and
         // would drop them silently, so it fails instead.
@@ -108,6 +149,21 @@ impl Checks {
             .collect();
         let (among, left_out) = self.scope(ctx, tree, &regression, &changed);
         run.out_of_scope = left_out;
+        let scoped: Vec<String> = among.iter().map(|(name, _)| (*name).to_owned()).collect();
+        let (among, carried) = match carried {
+            Some(carried) => self.carry(ctx, tree, among, carried),
+            None => (among, Vec::new()),
+        };
+        // Nothing the commits landed since touch can change a verdict, so nothing is listed,
+        // built or run.
+        if among.is_empty() && !carried.is_empty() {
+            return GateRun {
+                run,
+                scoped,
+                carried,
+                ..GateRun::default()
+            };
+        }
         // A family that must be listed even though listing it builds a product the tree has
         // never built: one in the always set, or one that holds the check whose regression this
         // landing fixes.
@@ -178,7 +234,34 @@ impl Checks {
             run,
             left: gate_plan.past_budget.len() + gate_plan.cold.len() + gate_plan.tip.len(),
             budget: Some(budget),
+            scoped,
+            carried,
         }
+    }
+
+    /// Splits the families the change can affect into those to judge again and the names of
+    /// those `carried` carries over: a family the earlier gate judged, whose inputs the files
+    /// in `carried.moved` touch none of. A family the earlier gate did not judge, such as one
+    /// the commits landed since declared, is always judged.
+    fn carry<'a>(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        among: Vec<(&'a str, &'a Family)>,
+        carried: &Carried,
+    ) -> (Vec<(&'a str, &'a Family)>, Vec<String>) {
+        let (judged, new): (Vec<_>, Vec<_>) = among
+            .iter()
+            .copied()
+            .partition(|(name, _)| carried.families.iter().any(|f| f == name));
+        let (touched, untouched) = self.scope(ctx, tree, &judged, &carried.moved);
+        let again = among
+            .into_iter()
+            .filter(|(name, _)| {
+                new.iter().any(|(n, _)| n == name) || touched.iter().any(|(n, _)| n == name)
+            })
+            .collect();
+        (again, untouched)
     }
 }
 
@@ -232,8 +315,25 @@ pub(crate) fn gate_lines(gated: &GateRun) -> Vec<(String, String)> {
     lines.extend(failure_lines(run));
     lines.extend(stopped_line(run));
     lines.extend(scope_line(run));
+    lines.extend(carried_line(gated));
     lines.extend(tip_line(gated));
     lines
+}
+
+/// The `carried` line: the families an earlier pass of the landing judged, which this pass
+/// did not judge again because the commits landed since touch none of their inputs.
+fn carried_line(gated: &GateRun) -> Option<(String, String)> {
+    let n = gated.carried.len();
+    let families = if n == 1 { "family" } else { "families" };
+    (n > 0).then(|| {
+        (
+            "carried".to_owned(),
+            format!(
+                "{n} {families} from the earlier pass: the commits landed since touch none of \
+                 their inputs"
+            ),
+        )
+    })
 }
 
 /// `(3, 1204.4)` as `3 checks (1,204 billion)`.

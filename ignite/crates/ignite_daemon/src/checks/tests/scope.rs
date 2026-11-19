@@ -2,6 +2,7 @@
 //! listed or built, and the builds a command starts run in its class.
 
 use super::*;
+use crate::checks::Carried;
 
 /// A repository shaped like the one Ignite was built for: a Rust test family, a family that
 /// needs a native client's build, and an always-run family whose checks read the docs.
@@ -177,6 +178,74 @@ fn a_change_to_one_crate_lists_only_the_families_that_read_it() {
         ["client-interface"],
         "its inputs changed, so it is listed"
     );
+}
+
+/// A landing that lost the race for the tip gated its whole change again. A later pass now
+/// judges again only the families whose inputs the commits landed since touch, and carries the
+/// others over from the pass that passed.
+#[test]
+fn a_later_pass_judges_only_the_families_the_landed_commits_touch() {
+    let world = repository();
+    listed_at_the_tip(&world);
+    world
+        .git
+        .set_object("rust/crates/core", Oid::new("b".repeat(40)).unwrap());
+    world
+        .git
+        .set_object("rust/crates", Oid::new("b".repeat(40)).unwrap());
+    let changed = ["rust/crates/core/src/lib.rs"];
+    let tree = TreeId::new("tree-01").unwrap();
+    let first = daemon(&world, memory(), tree_with(&world, &changed));
+    let gated = first.gate(&world.ctx, &tree, &landing());
+    assert_eq!(gated.scoped, ["client-interface", "rust"]);
+    assert!(gated.carried.is_empty());
+
+    // What landed since changed the client's data, which only `client-interface` reads.
+    let cargo_lists = || {
+        world
+            .launcher
+            .commands("cargo")
+            .iter()
+            .filter(|args| args[2] == "list")
+            .count()
+    };
+    let rust_lists = cargo_lists();
+    let carried = Carried {
+        families: gated.scoped.clone(),
+        moved: vec!["data/client/layout.json".to_owned()],
+    };
+    let again = first.gate_carrying(&world.ctx, &tree, &landing(), Some(&carried));
+    assert_eq!(again.scoped, ["client-interface", "rust"]);
+    assert_eq!(again.carried, ["rust"]);
+    assert!(
+        again
+            .run
+            .outcomes
+            .iter()
+            .all(|(check, _)| check.family() == "client-interface"),
+        "{:?}",
+        again.run.outcomes
+    );
+    assert_eq!(cargo_lists(), rust_lists, "the rust family was not listed");
+    let text = verbs::render(&verbs::gate_lines(&again));
+    assert!(
+        text.contains("carried  1 family from the earlier pass"),
+        "{text}"
+    );
+
+    // What landed since touched no input of either family: nothing is judged at all.
+    let builds = world.builds.requests().len();
+    let lists = list_commands(&world);
+    let carried = Carried {
+        families: gated.scoped.clone(),
+        moved: vec!["tools/unread.py".to_owned()],
+    };
+    let none = first.gate_carrying(&world.ctx, &tree, &landing(), Some(&carried));
+    assert_eq!(none.carried, ["client-interface", "rust"]);
+    assert!(none.run.outcomes.is_empty());
+    assert!(none.run.passed());
+    assert_eq!(list_commands(&world), lists, "nothing was listed");
+    assert_eq!(world.builds.requests().len(), builds, "nothing was built");
 }
 
 #[test]

@@ -372,7 +372,14 @@ fn a_landing_refuses_to_stop_once_its_push_has_begun() {
 fn a_landing_whose_push_was_rejected_can_be_stopped_on_its_next_pass() {
     let world = world();
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
-    world.git.push_always_rejected.store(true, Ordering::SeqCst);
+    // Another machine lands a file a check reads just before the first push, which is
+    // rejected, so the second pass gates again.
+    world
+        .git
+        .landed_before_push
+        .lock()
+        .unwrap()
+        .push_back(vec![("c.txt", "raced")]);
     let activity = landing_activity();
     let _entered = activity.enter();
     // The first pass's gate does nothing; the second pass's, after the rejected push, asks the

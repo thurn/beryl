@@ -24,7 +24,7 @@ use ignite_core::protocol::tickets::{
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Push, Rebase, Result};
 
-use crate::checks::{CheckRun, Failure, GateRun, RunOptions};
+use crate::checks::{Carried, CheckRun, Failure, GateRun, RunOptions};
 use crate::land::env::{GateTree, LandGate, LandTrees, TicketTree};
 use crate::server::Context;
 
@@ -72,6 +72,9 @@ pub struct TestGit {
     pub other_branch_rejected: AtomicBool,
     /// Makes every commit hold the changes of every other, as if each were a rebased copy.
     pub copies_hold: AtomicBool,
+    /// Changes another machine lands just before each of the next pushes to the integration
+    /// branch, first queued first, so that push is rejected because the tip moved.
+    pub landed_before_push: Mutex<VecDeque<Vec<(&'static str, &'static str)>>>,
 }
 
 impl Repo {
@@ -215,6 +218,10 @@ impl Git for TestGit {
                 "the remote refused the push to staging: [remote rejected] (hook declined)"
                     .to_owned(),
             ));
+        }
+        let before = self.landed_before_push.lock().unwrap().pop_front();
+        if let Some(changes) = before {
+            self.land_other(&changes);
         }
         let mut repo = self.repo.lock().unwrap();
         if self.push_always_rejected.load(Ordering::SeqCst)
@@ -403,12 +410,18 @@ impl Hub for LeaseHub {
 }
 
 /// Ticket trees in a map, and free landing trees in a list.
+#[derive(Default)]
 pub struct TestTrees {
     pub git: Arc<TestGit>,
     pub tickets: Mutex<HashMap<TreeId, TicketTree>>,
     pub branches: Mutex<HashMap<PathBuf, String>>,
     pub uncommitted: Mutex<HashMap<PathBuf, Vec<String>>>,
     pub landing: Mutex<Vec<GateTree>>,
+    /// The landing trees leased, by holder: a holder asking again gets its tree back, as a
+    /// landing's handle does from the machine's trees.
+    pub held: Mutex<Vec<(String, GateTree)>>,
+    /// Every landing tree taken from the free list, in order.
+    pub leased: Mutex<Vec<TreeId>>,
     pub released: Mutex<Vec<TreeId>>,
     pub deleted: Mutex<Vec<TicketId>>,
 }
@@ -438,14 +451,27 @@ impl LandTrees for TestTrees {
         // The integration branch is linear, so its history is the commits that reached it.
         Ok(self.git.repo.lock().unwrap().history.contains(ancestor))
     }
-    fn lease_landing(&self, _holder: &str, at: &Commit) -> Result<Option<GateTree>> {
-        let tree = self.landing.lock().unwrap().pop();
+    fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>> {
+        let mut held = self.held.lock().unwrap();
+        let kept = held
+            .iter()
+            .find(|(h, _)| h == holder)
+            .map(|(_, t)| t.clone());
+        let tree = kept.or_else(|| {
+            let tree = self.landing.lock().unwrap().pop();
+            if let Some(tree) = &tree {
+                held.push((holder.to_owned(), tree.clone()));
+                self.leased.lock().unwrap().push(tree.tree.clone());
+            }
+            tree
+        });
         if let Some(tree) = &tree {
             self.git.check_out(&tree.path, at);
         }
         Ok(tree)
     }
     fn release_landing(&self, tree: &TreeId, _built_at: Option<&Commit>) -> Result<()> {
+        self.held.lock().unwrap().retain(|(_, t)| t.tree != *tree);
         self.landing.lock().unwrap().push(GateTree {
             tree: tree.clone(),
             path: PathBuf::from(format!("/trees/{tree}")),
@@ -479,6 +505,8 @@ pub struct CacheGate {
     pub family_only: Vec<&'static str>,
     /// The families `run_family` was asked to run.
     pub family_runs: Mutex<Vec<String>>,
+    /// The families each gate judged, in order, and the tree it ran in.
+    pub judged: Mutex<Vec<(PathBuf, Vec<String>)>>,
 }
 
 impl LandGate for CacheGate {
@@ -492,7 +520,44 @@ impl LandGate for CacheGate {
         self.family_run(family)
     }
 
-    fn run(&self, ctx: &Context, tree: &GateTree, _options: &RunOptions) -> GateRun {
+    /// Each check's family is the part of its name before the colon; every family is in scope.
+    /// A family `carried` names, whose checks read none of its moved files, is carried over.
+    fn run(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        _options: &RunOptions,
+        carried: Option<&Carried>,
+    ) -> GateRun {
+        let mut scoped: Vec<String> = Vec::new();
+        for (name, _) in &self.checks {
+            let family = CheckName::new(*name).unwrap().family().to_owned();
+            if !scoped.contains(&family) {
+                scoped.push(family);
+            }
+        }
+        let carry = |family: &str| {
+            carried.is_some_and(|c| {
+                c.families.iter().any(|f| f == family)
+                    && !self.checks.iter().any(|(name, paths)| {
+                        CheckName::new(*name).unwrap().family() == family
+                            && paths.iter().any(|p| c.moved.iter().any(|m| m == p))
+                    })
+            })
+        };
+        let (carried, judged): (Vec<String>, Vec<String>) =
+            scoped.iter().cloned().partition(|f| carry(f));
+        if judged.is_empty() && !carried.is_empty() {
+            return GateRun {
+                scoped,
+                carried,
+                ..GateRun::default()
+            };
+        }
+        self.judged
+            .lock()
+            .unwrap()
+            .push((tree.path.clone(), judged.clone()));
         let hook = self.hooks.lock().unwrap().pop_front();
         if let Some(hook) = hook {
             hook();
@@ -500,6 +565,11 @@ impl LandGate for CacheGate {
         let keys: Vec<ResultKey> = self
             .checks
             .iter()
+            .filter(|(name, _)| {
+                judged
+                    .iter()
+                    .any(|f| f == CheckName::new(*name).unwrap().family())
+            })
             .map(|(name, paths)| {
                 let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
                 let ids = ctx.git.object_ids(&tree.path, &paths).unwrap();
@@ -549,6 +619,8 @@ impl LandGate for CacheGate {
         self.passes.lock().unwrap().push(ran);
         GateRun {
             run,
+            scoped,
+            carried,
             ..GateRun::default()
         }
     }

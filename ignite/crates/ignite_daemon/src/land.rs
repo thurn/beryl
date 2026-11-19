@@ -7,10 +7,13 @@
 //! 2. The branch is rebased onto the remote tip. A conflict exits with code 3 and the files.
 //! 3. The gate runs in a landing tree checked out at the rebased commit, or in the ticket tree
 //!    when the branch was already at the tip. A landing that changes only Ignite runs the
-//!    express commands in the express tree instead (see [`express`]).
+//!    express commands in the express tree instead (see [`express`]). Every later pass gates in
+//!    the tree the first pass chose: a landing tree stays leased to the landing until it ends
+//!    and is checked out at each new rebased commit, so it builds only what changed (see
+//!    [`passes`]).
 //! 4. The always set and the gate run there, each check from the result cache where it can be.
-//!    On a rebase, only a check that reads both the ticket's change and what landed meanwhile
-//!    has a new input hash, so a second pass is mostly cache hits.
+//!    A pass after one whose gate passed judges again only the families whose inputs the
+//!    commits landed since touch, and pushes without running anything when they touch none.
 //! 5. The hub's lease on the integration branch is taken (180 seconds, renewed while held), only
 //!    after the gate has passed. If the tip moved since step 2, the lease is let go and the
 //!    landing goes back to step 2. The lease is never held through a gate: a landing that lost
@@ -45,6 +48,7 @@
 pub mod env;
 pub mod express;
 mod lease;
+mod passes;
 pub mod records;
 mod release;
 mod replies;
@@ -68,9 +72,10 @@ use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use crate::steps;
-use env::{GateTree, LandGate, LandTrees, TicketTree};
+use env::{LandGate, LandTrees, TicketTree};
 use express::{ExpressLane, ExpressRun};
 use lease::{HeldLease, LEASE_TTL_S};
+use passes::{GateHome, Passed};
 use records::{LandingRecord, RecordState, Records};
 use replies::{done_title, failed_gate};
 
@@ -362,6 +367,8 @@ impl Landing {
         }
 
         let mut lease: Option<HeldLease> = None;
+        let mut home = GateHome::new(self.trees.clone());
+        let mut last_passed: Option<Passed> = None;
         let mut passes = 0;
         let mut last_cause = String::new();
         let mut first_landed_since = None;
@@ -416,21 +423,12 @@ impl Landing {
             passes += 1;
             let changed = ctx.git.changed(&rebased.onto, &rebased.head).map_err(io)?;
             let express = self.express_for(ctx, &changed);
-            let landing_tree = if express.is_some() || rebased.landed_since == 0 {
-                None
-            } else {
-                steps::step("taking a landing tree");
-                self.trees
-                    .lease_landing(&holder, &rebased.head)
-                    .map_err(io)?
+            let gate_tree = match express {
+                Some(lane) => lane.tree(),
+                None => home
+                    .for_pass(&holder, &rebased.head, rebased.landed_since, &held)
+                    .map_err(io)?,
             };
-            let gate_tree = express
-                .map(ExpressLane::tree)
-                .or_else(|| landing_tree.clone())
-                .unwrap_or_else(|| GateTree {
-                    tree: held.tree.clone(),
-                    path: held.path.clone(),
-                });
             let options = RunOptions {
                 verb: "land".to_owned(),
                 class: Class::Land,
@@ -441,29 +439,36 @@ impl Landing {
             let (gated, expressed) = if let Some(lane) = express {
                 (GateRun::default(), Some(lane.run(&rebased.head)))
             } else {
+                // A pass after one whose gate passed judges again only what the commits landed
+                // since can change (see `passes`).
+                let carried = match &last_passed {
+                    Some(earlier) => earlier.carried(ctx, &rebased.head, &changed).map_err(io)?,
+                    None => None,
+                };
                 steps::step(format!("running the gate in {}", gate_tree.tree));
-                (self.gate.run(ctx, &gate_tree, &options), None)
-            };
-            let free_landing = |built: Option<&Commit>| {
-                if let Some(tree) = &landing_tree
-                    && let Err(error) = self.trees.release_landing(&tree.tree, built)
-                {
-                    eprintln!("ignite: landing tree {} not freed: {error}", tree.tree);
+                let gated = self.gate.run(ctx, &gate_tree, &options, carried.as_ref());
+                let gated = match &last_passed {
+                    Some(earlier) if carried.is_some() => earlier.merge(gated),
+                    _ => gated,
+                };
+                if gated.run.passed() {
+                    last_passed = Some(Passed::new(
+                        rebased.head.clone(),
+                        changed.clone(),
+                        gated.clone(),
+                    ));
                 }
+                (gated, None)
             };
-            let fail = |error: Error| {
-                free_landing(None);
-                io(error)
-            };
+            // The landing tree, if the landing holds one, stays leased while the landing goes
+            // back to rebase, and is freed when `home` is dropped as the landing ends.
             if steps::stop_requested() {
-                free_landing(None);
                 return Err(stopped());
             }
             if let Some(run) = expressed.as_ref().filter(|run| !run.passed()) {
                 return Err(Box::new(express::failed_express(ctx, run)));
             }
             if !gated.run.passed() {
-                free_landing(None);
                 return Err(Box::new(failed_gate(
                     &staging,
                     &rebased,
@@ -473,19 +478,17 @@ impl Landing {
             }
 
             if lease.is_none() {
-                lease = Some(self.acquire(ctx, &holder, &ticket).map_err(fail)?);
+                lease = Some(self.acquire(ctx, &holder, &ticket).map_err(io)?);
             }
             // A lease that expired while the gate ran, or that another landing took over, is not
             // this landing's any more: pushing now could race the new holder.
             if lease.as_ref().is_some_and(|held| !held.still_held()) {
-                free_landing(None);
                 last_cause = format!("the {staging} lease was lost to another landing");
                 lease = None;
                 continue;
             }
-            let now = ctx.git.tip(&staging).map_err(fail)?;
+            let now = ctx.git.tip(&staging).map_err(io)?;
             if now != tip {
-                free_landing(None);
                 last_cause = format!("the tip moved from {} to {}", short(&tip), short(&now));
                 lease = None;
                 continue;
@@ -495,7 +498,7 @@ impl Landing {
                 commits: self
                     .trees
                     .commits(&held.path, &rebased.onto, &rebased.head)
-                    .map_err(fail)?,
+                    .map_err(io)?,
                 files: changed.clone(),
                 note: args.note.clone(),
             };
@@ -515,19 +518,18 @@ impl Landing {
             // A push cut short may or may not have reached the remote, so from here on the
             // landing refuses `ignite stop`, `ignite close` and `ignite release`.
             if !steps::refuse_stop(&format!("its push to {staging} has begun")) {
-                free_landing(None);
                 return Err(stopped());
             }
             // The daemon does not restart into a new build from the record's write until the
             // push has been recorded either way.
             let critical = steps::critical();
-            self.records.write(&record).map_err(fail)?;
+            self.records.write(&record).map_err(io)?;
             steps::step(format!("pushing {} to {staging}", short(&rebased.head)));
             let pushed = ctx.git.push(&gate_tree.path, &rebased.head, &staging);
             match pushed {
                 Ok(Push::Pushed { .. }) => {
                     record.state = RecordState::Pushed;
-                    self.records.write(&record).map_err(fail)?;
+                    self.records.write(&record).map_err(io)?;
                     drop(critical);
                 }
                 // Nothing was pushed, so the landing may be stopped again while it goes back
@@ -537,8 +539,7 @@ impl Landing {
                     last_cause = reason;
                     self.records
                         .remove_if(&ticket, &record.commit)
-                        .map_err(fail)?;
-                    free_landing(None);
+                        .map_err(io)?;
                     lease = None;
                     continue;
                 }
@@ -548,14 +549,14 @@ impl Landing {
                 Err(error @ Error::Conflict(_)) => {
                     self.records
                         .remove_if(&ticket, &record.commit)
-                        .map_err(fail)?;
-                    return Err(fail(error));
+                        .map_err(io)?;
+                    return Err(io(error));
                 }
                 // The push may have reached the remote before the error, so the record stays
                 // `pushing`: the next landing, or the daemon's sender, finds the commit on the
                 // branch if it did, and closes the ticket without pushing again, or drops the
                 // record and starts over if not.
-                Err(error) => return Err(fail(error)),
+                Err(error) => return Err(io(error)),
             }
             drop(lease);
             let release = self.move_release(
@@ -569,7 +570,7 @@ impl Landing {
                     express: expressed.is_some(),
                 },
             );
-            free_landing(Some(&rebased.head));
+            home.release(Some(&rebased.head));
             let summary = Summary {
                 tip,
                 landed_since: first_landed_since.unwrap_or(0),

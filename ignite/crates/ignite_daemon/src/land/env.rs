@@ -9,7 +9,7 @@ use ignite_core::ids::{Commit, SessionId, TicketId, TreeId};
 use ignite_core::traits::{Error, Result};
 use ignite_git::{push, refs, save};
 
-use crate::checks::{CheckRun, Checks, GateRun, RunOptions};
+use crate::checks::{Carried, CheckRun, Checks, GateRun, RunOptions};
 use crate::server::Context;
 use crate::trees::{self, Trees};
 
@@ -44,7 +44,9 @@ pub trait LandTrees: Send + Sync {
     fn commits(&self, path: &Path, from: &Commit, to: &Commit) -> Result<Vec<Commit>>;
     /// Whether `ancestor` is in the history of `descendant`, as `path`'s repository sees it.
     fn is_ancestor(&self, path: &Path, ancestor: &Commit, descendant: &Commit) -> Result<bool>;
-    /// Leases a free landing tree checked out at `at`; `None` when every one is busy.
+    /// Leases a free landing tree checked out at `at`; `None` when every one is busy. Asked
+    /// again by a landing that holds a tree, it returns that tree checked out at `at`, so the
+    /// landing's next pass builds only what changed since its last.
     fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>>;
     /// Frees a landing tree; `built_at` is the commit its builds now match.
     fn release_landing(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
@@ -57,8 +59,15 @@ pub trait LandTrees: Send + Sync {
 
 /// The landing gate.
 pub trait LandGate: Send + Sync {
-    /// Runs the always set and the gate in `tree` as it is.
-    fn run(&self, ctx: &Context, tree: &GateTree, options: &RunOptions) -> GateRun;
+    /// Runs the always set and the gate in `tree` as it is, judging again only the families
+    /// `carried` does not carry over from an earlier pass that passed.
+    fn run(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        options: &RunOptions,
+        carried: Option<&Carried>,
+    ) -> GateRun;
     /// Runs every check of one family in `tree` as it is, each from the result cache where it
     /// can be. A family the manifests do not declare is incomplete.
     fn run_family(
@@ -160,8 +169,14 @@ pub struct ChecksGate {
 }
 
 impl LandGate for ChecksGate {
-    fn run(&self, ctx: &Context, tree: &GateTree, options: &RunOptions) -> GateRun {
-        self.checks.gate(ctx, &tree.tree, options)
+    fn run(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        options: &RunOptions,
+        carried: Option<&Carried>,
+    ) -> GateRun {
+        self.checks.gate_carrying(ctx, &tree.tree, options, carried)
     }
 
     fn run_family(

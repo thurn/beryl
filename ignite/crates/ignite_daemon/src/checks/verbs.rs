@@ -118,7 +118,7 @@ impl Verb for CheckVerb {
             Err(reply) => return reply,
         };
         if !flags.contains(&"--plan") {
-            let gated = self.checks.gate_in(ctx, &tree, &options);
+            let gated = self.checks.gate_in(ctx, &tree, &options, None);
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
             return reply(&gated.run, render(&lines));
