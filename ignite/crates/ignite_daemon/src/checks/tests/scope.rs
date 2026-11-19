@@ -380,7 +380,7 @@ fn a_change_to_another_workspaces_crate_leaves_the_rust_families_out() {
     assert_eq!(list_commands(&world), lists, "nothing was listed");
 }
 
-/// A one-card Beryl change listed Ignite's own test family and built its tests, because Ignite
+/// A change to one card file of the game listed Ignite's own test family and built its tests, because Ignite
 /// changes land every few minutes and that family rarely had a kept listing for the tree. A
 /// `nextest` family with no kept listing is now judged by its declared inputs, with
 /// `crate-closure` standing for its own workspace's packages: a change to another workspace
