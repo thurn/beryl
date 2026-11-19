@@ -54,9 +54,12 @@ pub(crate) struct GateView {
     pub landing: Option<TicketId>,
     /// Build products the tree has never built.
     pub unbuilt: BTreeSet<String>,
-    /// Billions of instructions per second of wall time that `land`-class check commands
+    /// Billions of instructions per second of wall time that the gate's check commands
     /// achieve, which converts `[gate] seconds` to instructions.
     pub rate: f64,
+    /// The checks the last passing gate of the same change chose by score, which count against
+    /// the budget when cached (see `ignite_core::gate`).
+    pub paid: BTreeSet<CheckName>,
 }
 
 /// Each class's rate for today from the hub, or the defaults when the hub cannot answer.
@@ -115,6 +118,7 @@ impl GateView {
             landing: None,
             unbuilt: BTreeSet::new(),
             rate: ClassRates::default().land(),
+            paid: BTreeSet::new(),
         };
         let mut hits = hits.iter();
         for prepared in prepared {
@@ -144,7 +148,7 @@ impl GateView {
         view
     }
 
-    /// The gate's budget: `[gate] seconds` at the `land` class's rate.
+    /// The gate's budget: `[gate] seconds` at [`GateView::rate`].
     pub(crate) fn budget(&self, gate: &Gate) -> Budget {
         Budget {
             threshold: gate.threshold,
@@ -160,6 +164,7 @@ impl GateView {
                 checks: &self.checks,
                 unbuilt: &self.unbuilt,
                 landing: self.landing.as_ref(),
+                paid: &self.paid,
                 billions_per_cpu_second: score::BILLIONS_PER_CPU_SECOND,
             },
             &self.budget(gate),

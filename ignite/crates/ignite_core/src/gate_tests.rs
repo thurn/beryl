@@ -62,11 +62,13 @@ fn plan_landing(
     gate: &Budget,
 ) -> GatePlan {
     let areas = [AREA.to_owned()];
+    let paid = BTreeSet::new();
     let input = GateInput {
         areas: &areas,
         checks,
         unbuilt,
         landing,
+        paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };
     plan(&input, gate)
@@ -392,4 +394,44 @@ fn a_free_check_that_would_start_a_family_is_left_once_the_budget_is_spent() {
     let plan = plan_for(&checks, &none(), &gate(0.0, 6.0));
     assert!(plan.run.is_empty(), "{plan:?}");
     assert_eq!(plan.past_budget.len(), 2);
+}
+
+/// A second gate of an unchanged change finds what the first chose cached. Those checks still
+/// count against the budget, with their family's start-up, so it runs nothing new; without
+/// them it would spend a second budget on the next checks.
+#[test]
+fn checks_an_earlier_gate_of_the_change_chose_still_count_when_cached() {
+    let mut checks: Vec<GateCheck> = (0..6u32)
+        .map(|i| GateCheck {
+            family_startup: Cost::Billions(1.0),
+            ..check(&format!("tests:c{i}"), 10 - i, 20, 0.1, 3.0)
+        })
+        .collect();
+    let first = plan_for(&checks, &none(), &gate(0.0, 10.0));
+    assert_eq!(names(&first.run), ["tests:c0", "tests:c1", "tests:c2"]);
+    for check in &mut checks[..3] {
+        check.cached = true;
+    }
+    let areas = [AREA.to_owned()];
+    let paid: BTreeSet<CheckName> = first.run.iter().map(|p| p.check.clone()).collect();
+    let unbuilt = none();
+    let input = GateInput {
+        areas: &areas,
+        checks: &checks,
+        unbuilt: &unbuilt,
+        landing: None,
+        paid: &paid,
+        billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
+    };
+    let second = plan(&input, &gate(0.0, 10.0));
+    assert!(second.run.is_empty(), "{second:?}");
+    assert_eq!(second.cached.len(), 3);
+    assert!(
+        (second.paid_cost - 10.0).abs() < 1e-9,
+        "{}",
+        second.paid_cost
+    );
+
+    let unpaid = plan_for(&checks, &none(), &gate(0.0, 10.0));
+    assert_eq!(names(&unpaid.run), ["tests:c3", "tests:c4", "tests:c5"]);
 }

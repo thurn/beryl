@@ -220,12 +220,14 @@ fn split_by<'a>(
         }
     }
     let unbuilt = std::collections::BTreeSet::new();
+    let paid = std::collections::BTreeSet::new();
     let plan = gate::plan(
         &GateInput {
             areas,
             checks: &candidates,
             unbuilt: &unbuilt,
             landing: None,
+            paid: &paid,
             billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
         },
         budget,

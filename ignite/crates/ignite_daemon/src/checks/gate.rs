@@ -2,7 +2,10 @@
 //! they can be, stopping at the first fault (see "Landing" in `docs/ignite.md`).
 //!
 //! The gate spends the first budget, `[gate] seconds` of running checks (see "Where regression
-//! checks run"). It builds no product its tree has never built for a check chosen by score: a
+//! checks run"). The budget belongs to the change: a gate after one that passed for the same
+//! change charges it again for the checks that gate chose, so `ignite land` after
+//! `ignite check` runs no second slice of checks, and its seconds convert at the rate the
+//! gates of the last hour achieved (see [`super::spent`]). It builds no product its tree has never built for a check chosen by score: a
 //! family whose listing needs such a product, and that has no kept listing, is not listed at
 //! all unless it is in the always set or holds the check of the regression being landed, and
 //! its checks are left to tip verification. The output prints the seconds spent building and
@@ -89,6 +92,9 @@ pub struct GateBudget {
     pub forced: (usize, f64),
     /// Answered from the cache, with what running them would have cost.
     pub cached: (usize, f64),
+    /// Billions of the budget an earlier passing gate of the same change spent on checks this
+    /// gate answered from the cache (see `ignite_core::gate`).
+    pub paid: f64,
     /// Left to tip verification because the budget was spent.
     pub past_budget: (usize, f64),
     /// Left to tip verification because they need a product the tree has never built.
@@ -185,11 +191,7 @@ impl Checks {
         }
         // A family listed even if that builds a product the tree has never built: one in the
         // always set for this change, or one holding the check whose regression this fixes.
-        let fixing: BTreeSet<String> = open_regressions(ctx)
-            .into_iter()
-            .filter(|(_, ticket)| options.ticket.as_ref() == Some(ticket))
-            .map(|(check, _)| check.family().to_owned())
-            .collect();
+        let fixing = fixing(ctx, options);
         let unbuilt = unbuilt(ctx, tree, among.iter().map(|(_, family)| *family));
         let listed = |name: &str, f: &Family| f.always_for(&changed) || fixing.contains(name);
         let mut prepared =
@@ -248,6 +250,7 @@ impl Checks {
             }
             self.execute(ctx, tree, &family, items, options, &mut run, true);
         }
+        self.remember(ctx, &changed, &gate_plan, &run);
         GateRun {
             run,
             left: gate_plan.past_budget.len() + gate_plan.cold.len() + gate_plan.tip.len(),
@@ -258,6 +261,32 @@ impl Checks {
             known_failing: gate_plan.known_failing,
             base: None,
         }
+    }
+
+    /// When the gate passed, remembers what it chose by score, so the change's next gate spends no second
+    /// budget, and the rate its check commands achieved, so the next budget's seconds convert
+    /// at the load of the moment (see `spent`).
+    fn remember(
+        &self,
+        ctx: &Context,
+        changed: &[String],
+        gate_plan: &ignite_core::gate::GatePlan,
+        run: &CheckRun,
+    ) {
+        use ignite_core::gate::Why;
+        if !run.passed() {
+            return;
+        }
+        let chosen = gate_plan
+            .run
+            .iter()
+            .chain(&gate_plan.cached)
+            .filter(|planned| planned.why == Why::Scored)
+            .map(|planned| planned.check.clone())
+            .collect();
+        self.gates.passed(changed, chosen);
+        let billions = gate_plan.scored_cost + gate_plan.forced_cost;
+        self.gates.observe(ctx.clock.now(), billions, run.wall_s);
     }
 
     /// Splits the families the change can affect into those to judge again and the names of
@@ -284,6 +313,15 @@ impl Checks {
             .collect();
         (again, untouched)
     }
+}
+
+/// The families holding a check whose open regression ticket is the one being landed.
+fn fixing(ctx: &Context, options: &RunOptions) -> BTreeSet<String> {
+    open_regressions(ctx)
+        .into_iter()
+        .filter(|(_, ticket)| options.ticket.as_ref() == Some(ticket))
+        .map(|(check, _)| check.family().to_owned())
+        .collect()
 }
 
 /// Names the ticket being landed in `view`, and gives each check in `excused` its regression
@@ -324,6 +362,7 @@ fn gate_budget(
         scored: (scored.len(), plan.scored_cost),
         forced: (forced.len(), plan.forced_cost),
         cached: part(&cached),
+        paid: plan.paid_cost,
         past_budget: (plan.past_budget.len(), cost_of(&plan.past_budget)),
         cold: (plan.cold.len(), cost_of(&plan.cold)),
         below: (plan.tip.len(), cost_of(&plan.tip)),
@@ -412,12 +451,22 @@ fn part_text((count, billions): (usize, f64)) -> String {
     )
 }
 
-/// The `budget` line: the budget, the rate it converted at, and what was spent within it.
+/// The `budget` line: the budget, the rate it converted at, and what was spent within it,
+/// including what an earlier gate of the change spent on checks now cached.
 fn budget_line(budget: &GateBudget) -> (String, String) {
+    let paid = if budget.paid > 0.0 {
+        format!(
+            ", {} billion spent by an earlier gate of this change",
+            billions_text(budget.paid)
+        )
+    } else {
+        String::new()
+    };
     (
         "budget".to_owned(),
         format!(
-            "{:.0} s at {:.1} billion/s = {} billion: {} within it, {} outside it, {} cached",
+            "{:.0} s at {:.1} billion/s = {} billion: {} within it, {} outside it, {} \
+             cached{paid}",
             budget.seconds,
             budget.rate,
             billions_text(budget.billions()),

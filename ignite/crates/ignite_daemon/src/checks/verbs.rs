@@ -411,7 +411,12 @@ pub(super) fn gate_view_of(
     let regressions = open_regressions(ctx);
     let mut view = GateView::new(prepared, hits, family, &stats, &regressions, changed, areas);
     view.unbuilt = unbuilt(ctx, tree, prepared.iter().filter_map(|p| family(&p.family)));
-    view.rate = plan::class_rates(ctx).land();
+    // The rate of the gates of the last hour on this daemon, or the hub's for the day, and the
+    // checks the change's last passing gate chose (see `spent`).
+    view.rate = checks
+        .gates
+        .rate(ctx.clock.now(), plan::class_rates(ctx).land());
+    view.paid = checks.gates.paid(changed);
     view
 }
 

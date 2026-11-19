@@ -224,11 +224,13 @@ pub fn without_catch(check: &GateCheck, catch: &Catch) -> GateCheck {
 /// The gate's plan for a change to `areas`, with every build current and nothing cached.
 fn plan_for(areas: &[String], checks: &[GateCheck], gate: &Budget) -> GatePlan {
     let no_builds = BTreeSet::new();
+    let paid = BTreeSet::new();
     let input = GateInput {
         areas,
         checks,
         unbuilt: &no_builds,
         landing: None,
+        paid: &paid,
         billions_per_cpu_second: BILLIONS_PER_CPU_SECOND,
     };
     plan(&input, gate)

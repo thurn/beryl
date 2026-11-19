@@ -23,7 +23,11 @@
 //!   with their summed cost, and are chosen or left together.
 //!   A member that must run anyway (always, edited or being fixed) leaves its group first.
 //! - A chosen check whose result is cached is answered from the cache and costs nothing against
-//!   the budget.
+//!   the budget, unless an earlier passing gate of the same change chose it by score
+//!   ([`GateInput::paid`]). That gate already spent the change's budget on it, so the check
+//!   counts against this gate's budget as well, with its family's start-up, and a second gate
+//!   of an unchanged change (`ignite check` and then `ignite land`) chooses the same checks
+//!   instead of spending a second budget on checks with lower scores.
 //! - A check's cost leaves out the start-up of the command it runs in, which its family pays
 //!   once ([`GateCheck::family_startup`]): with the first check of the family that must run, or
 //!   else with the first one chosen by score, when it counts against the budget. A score
@@ -87,6 +91,9 @@ pub struct GateInput<'a> {
     pub unbuilt: &'a BTreeSet<String>,
     /// The ticket being landed.
     pub landing: Option<&'a TicketId>,
+    /// The checks an earlier passing gate of the same change chose by score. The budget belongs
+    /// to the change, not to each gate: such a check, when cached, still counts against it.
+    pub paid: &'a BTreeSet<CheckName>,
     /// The rate at which a cost known only in CPU seconds converts to billions of instructions
     /// ([`crate::score::BILLIONS_PER_CPU_SECOND`]).
     pub billions_per_cpu_second: f64,
@@ -149,6 +156,10 @@ pub struct GatePlan {
     /// Billions of instructions the always set and the other checks that must run spend, with
     /// the start-ups of their families.
     pub forced_cost: f64,
+    /// Billions of the budget that an earlier passing gate of the same change spent on checks
+    /// chosen by score that this gate answers from the cache, with their families' start-ups
+    /// ([`GateInput::paid`]).
+    pub paid_cost: f64,
 }
 
 /// The summed cost of `left`, in billions of instructions.
@@ -300,6 +311,8 @@ fn choose<'a>(
     // members are all cached spends no instructions, so the budget has no reason to leave it out.
     // A unit that would start a family costs its start-up.
     let mut spent_out = false;
+    // The families whose start-up an earlier gate of the change paid for a check it chose.
+    let mut paid_started: BTreeSet<&str> = BTreeSet::new();
     loop {
         let best = units
             .iter()
@@ -316,13 +329,14 @@ fn choose<'a>(
             break;
         }
         let startup = unpaid(input, &units[index], started);
-        if plan.scored_cost + units[index].run_cost + startup > limit {
+        if plan.scored_cost + plan.paid_cost + units[index].run_cost + startup > limit {
             spent_out = true;
             continue;
         }
         let unit = units.swap_remove(index);
         let running = unit.members.iter().copied().filter(|m| !m.cached);
         plan.scored_cost += unit.run_cost + startups(input, running, started);
+        plan.paid_cost += paid_charge(input, &unit, started, &mut paid_started);
         for member in unit.members {
             let planned = Planned {
                 check: member.check.clone(),
@@ -362,6 +376,33 @@ fn choose<'a>(
             cost: cost(input, member),
         }));
     }
+}
+
+/// What the cached members of `unit` that an earlier gate of the change chose by score charge
+/// the budget: their costs, and the start-up of each of their families that neither a check
+/// this gate runs nor an earlier such charge has paid, adding those families to `paid_started`.
+fn paid_charge<'a>(
+    input: &GateInput<'a>,
+    unit: &Unit<'a>,
+    started: &BTreeSet<&'a str>,
+    paid_started: &mut BTreeSet<&'a str>,
+) -> f64 {
+    unit.members
+        .iter()
+        .copied()
+        .filter(|member| member.cached && input.paid.contains(&member.check))
+        .map(|member| {
+            let family = member.check.family();
+            let startup = if started.contains(family) || !paid_started.insert(family) {
+                0.0
+            } else {
+                member
+                    .family_startup
+                    .billions(input.billions_per_cpu_second)
+            };
+            cost(input, member) + startup
+        })
+        .sum()
 }
 
 /// The cost of one run of `check`, in billions of instructions.

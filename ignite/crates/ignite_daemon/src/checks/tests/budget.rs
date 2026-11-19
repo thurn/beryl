@@ -189,3 +189,44 @@ fn always_when_leaves_a_costly_lint_to_the_tip_for_other_changes() {
     assert_eq!(gated.run.ran, 1);
     assert_eq!(gated.budget.unwrap().forced.0, 1);
 }
+
+/// `ignite check` and then `ignite land` of the same change used to spend two budgets: the
+/// second gate found the first one's checks cached, at no cost, and ran the next three. The
+/// budget belongs to the change, so the second gate charges those cached checks again and runs
+/// nothing new.
+#[test]
+fn a_second_gate_of_the_same_change_spends_no_second_budget() {
+    let names: Vec<String> = (0..9).map(|i| format!("unit:c{i}")).collect();
+    let mut history = FakeHistory::default();
+    history.replies.insert(
+        "unit".to_owned(),
+        CheckStatsReply {
+            startup_billions: None,
+            startup_cpu_s: None,
+            family: "unit".to_owned(),
+            family_rate: 0.01,
+            checks: (0..9u32)
+                .map(|i| stats(&names[i as usize], 9 - i, 350.0))
+                .collect(),
+        },
+    );
+    let mut world = world(&family("unit", "", false), &["src/a.py"], history);
+    world.ctx.config.gate.threshold = 1e-6;
+    list(&world, &names);
+
+    let first = world.checks.gate(&world.ctx, &tree(), &landing());
+    assert!(first.run.passed(), "{first:?}");
+    assert_eq!(first.run.ran, 3);
+
+    let second = world.checks.gate(&world.ctx, &tree(), &landing());
+
+    assert!(second.run.passed(), "{second:?}");
+    assert_eq!(second.run.ran, 0, "{second:?}");
+    assert_eq!(second.run.from_cache, 3);
+    assert_eq!(second.left, 6);
+    let text = verbs::render(&verbs::gate_lines(&second));
+    assert!(
+        text.contains("1,050 billion spent by an earlier gate of this change"),
+        "{text}"
+    );
+}

@@ -519,5 +519,10 @@
     "label": "A seeded tree copies the build of the donor that never built the fewest products and differs from the tip in the fewest files, instead of the one nearest by commits, which after a one-card change left 85 crates to rebuild for Beryl 3D and 98 for clippy",
     "metric": "bead.core-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite land` after a passing `ignite check` of the same change charges its budget for the checks the check chose, now cached, so it runs no second slice of scored checks (on 2026-11-19 such a land of a one-line comment ran 398 more checks in 173 s), and the gate converts its seconds at the rate its own gates achieved in the last hour, so a 60 s budget runs in about 60 s under load",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

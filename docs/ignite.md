@@ -1575,9 +1575,30 @@ median, over the seven whole days before, of each day's instructions retired per
 second of wall time by that class's check commands. On 2026-11-18, landing
 commands retired 17.5 billion instructions a second and tip commands 39.5, so
 the gate's budget was about 1,050 billion and the tip's about 11,850 billion.
-Those figures stand in until the hub has a week of its own. Because the rate is
-fixed for the day, the same checks are chosen whatever the load of the moment;
-under load the seconds stretch.
+Those figures stand in until the hub has a week of its own.
+
+The daily rate is only a starting point, because under load the seconds stretch.
+On 2026-11-19, at a load average of 12 to 17, a landing spent the 469 billion
+instructions its budget allowed in 173 s, 2.7 billion a second against the day's
+7.8. Each daemon therefore remembers the rate its own gates achieved: the
+instructions their checks were planned to cost, divided by the seconds the check
+commands ran. A gate that ran checks for at least 10 s sets it, and each later
+gate moves it halfway to what that gate achieved. Within an hour of the last
+such gate, the next one converts its seconds at that rate, kept between a tenth
+of the daily rate and twice it, so a 60 s budget runs in about 60 s.
+
+The gate's budget belongs to the change, not to each command that gates it.
+`ignite check` and then `ignite land` of the same change used to spend it twice.
+The land found the checks the check had chosen in the cache, where they cost
+nothing, and spent a fresh budget on the next slice of checks with lower scores.
+For a one-line comment in a card file that was 398 more checks and 173 more
+seconds. Each daemon now remembers, for each change, the checks its last passing
+gate chose by score. A change is known by its own files: the paths that differ
+from `staging`. A later gate of the change charges its budget for those checks
+when it answers them from the cache, with their families' start-ups, as if it
+had run them. So a gate of an unchanged change chooses the same checks and runs
+none of them again. A rebase over landed commits reruns only those whose inputs
+the commits changed. The `budget` line names what an earlier gate spent.
 
 Building is outside both budgets. The gate runs checks on what its tree has
 already compiled, as Enact's worktrees did: a product the tree has built before
