@@ -204,7 +204,9 @@ os = "macos"
 home_app = "codex"
 ticket_trees = 8
 landing_trees = 2
-trees_disk_gb = 200
+# The disk is 926 GB, and on 2026-11-19 it had about 500 GB free after a cleanup. 350 GB of
+# trees still leaves room above the 50 GB at which the daemon sweeps free trees.
+trees_disk_gb = 350
 floor = { batch = 2, tip = 2 }
 express_cores = 2
 
