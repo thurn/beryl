@@ -221,9 +221,16 @@ inputs = [
   "tools/src/beryl_tools/xmage_classes.py",
 ]
 
-# The test binaries of the packages named, in the `test` profile.
+# The test binaries of the packages named, in the `test` profile. With no packages named, as
+# when a family is listed or a subset would change shared features, it builds the whole
+# workspace less beryl_link_iroh (`exclude`): the same packages the `rust` family's `list` and
+# `run`, `cli` and `scenario-dump` select. Cargo enables a dependency's features over the packages
+# a command selects, so on 2026-11-19 a build with beryl_link_iroh gave 18 dependencies (`syn`,
+# `tokio`, `hashbrown` among them) other features than the `rust` family's commands, and each of
+# them compiled the whole workspace again inside an unreported listing.
 [product.rust-tests]
 build = "cargo nextest run --no-run --locked --cargo-quiet {packages}"
+exclude = ["beryl_link_iroh"]
 dir = "rust"
 inputs = ["crate-closure", "rust/Cargo.toml", "data/card-store.tsv", "data/catalogs.json", "data/table-commands.json", "data/save-breaks.json", "data/ui-conventions.json", "ui/src/generated/**", "docs/sample-decks/**", "data/set-groups.json"]
 outputs = ["rust/target"]

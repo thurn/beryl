@@ -40,7 +40,12 @@ def test_the_manifest_declares_the_families_and_products() -> None:
         "ignite",
         "ignite-lint",
     }
-    assert set(declared["product"]) == {"fuzz-tests", "exhaust-tests", "ignite-tests"}
+    assert set(declared["product"]) == {
+        "fuzz-tests",
+        "exhaust-tests",
+        "ignite-tests",
+        "iroh-tests",
+    }
     for name, family in declared["family"].items():
         assert family["inputs"], name
         if family["adapter"] == "jsonl":
@@ -84,14 +89,22 @@ def matches(pattern: str, path: str) -> bool:
 
 
 def test_a_change_under_ignite_selects_only_ignites_families() -> None:
+    declared = [tomllib.loads(file.read_text()) for file in CHECKS.glob("*.toml")]
+    products = {n: p for d in declared for n, p in d.get("product", {}).items()}
     selected: set[str] = set()
-    for file in CHECKS.glob("*.toml"):
-        for name, family in tomllib.loads(file.read_text()).get("family", {}).items():
-            if any(
-                matches(str(i), "ignite/crates/ignite_core/src/lib.rs")
-                for i in family["inputs"]
-            ):
-                selected.add(name)
+    for name, family in (
+        (n, f) for d in declared for n, f in d.get("family", {}).items()
+    ):
+        # `crate-closure` names the crates of the workspace that the family's products build in.
+        dirs = {
+            products[p].get("dir") for p in family.get("needs", []) if p in products
+        }
+        if any(
+            matches(str(i), "ignite/crates/ignite_core/src/lib.rs")
+            or (i == "crate-closure" and "ignite" in dirs)
+            for i in family["inputs"]
+        ):
+            selected.add(name)
     assert selected == {"ignite", "ignite-lint"}
 
 

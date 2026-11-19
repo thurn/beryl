@@ -200,6 +200,7 @@ fn product(build: &str, inputs: &[&str]) -> Product {
             .collect(),
         outputs: vec!["target".to_owned()],
         grows: false,
+        exclude: Vec::new(),
     }
 }
 
@@ -232,6 +233,13 @@ fn manager_in(dir: PathBuf, git: Arc<FakeGit>, gated: bool) -> Fixture {
     manifest.products.insert(
         "lint".to_owned(),
         product("cargo clippy {packages}", &["crate-closure"]),
+    );
+    let mut less_b = product("cargo test --no-run {packages}", &["crate-closure"]);
+    less_b.exclude = names(&["b"]);
+    manifest.products.insert("tests-less-b".to_owned(), less_b);
+    manifest.products.insert(
+        "fixed".to_owned(),
+        product("cargo test --no-run -p b", &["crate-closure"]),
     );
     let package = |name: &str, deps: &[&str]| Package {
         name: name.to_owned(),
@@ -366,31 +374,6 @@ fn products_sharing_a_target_directory_never_overlap() {
     );
 }
 
-/// Every tip round's Rust batches failed with "enables different features than the whole
-/// workspace", because a batch builds a few packages and the repository's workspace enables different
-/// features for nearly every subset. Such a subset now builds the whole workspace instead.
-#[test]
-fn a_subset_that_changes_shared_features_builds_the_whole_workspace() {
-    let f = fixture("features", false);
-    f.launcher.with(|s| {
-        s.subset_tree = "a v0.1.0 (/t/a)|\nserde v1.0.0|default,std (*)\nlibc v0.2.0|\n".into();
-        s.whole_tree = "a v0.1.0 (/t/a)|\nserde v1.0.0|default,derive,std\nlibc v0.2.0|\n".into();
-    });
-    let result = f.manager.ensure(&tree(), "tests", &names(&["a"]));
-    assert!(matches!(result, BuildResult::Built { .. }), "{result:?}");
-    let builds = f.launcher.builds();
-    assert_eq!(builds.len(), 1);
-    assert!(builds[0].contains(&"--workspace".to_owned()), "{builds:?}");
-    assert!(!builds[0].contains(&"-p".to_owned()), "{builds:?}");
-    // The comparison is remembered until a Cargo file changes, and the whole build is current.
-    f.manager.ensure(&tree(), "tests", &names(&["a"]));
-    assert_eq!(f.launcher.tree_runs(), 2);
-    assert_eq!(f.launcher.builds().len(), 1);
-    f.git.set_object("Cargo.lock", oid('2'));
-    f.manager.ensure(&tree(), "tests", &names(&["a"]));
-    assert_eq!(f.launcher.tree_runs(), 4);
-}
-
 #[test]
 fn matching_features_build_and_report_the_crates_recompiled() {
     let f = fixture("units", false);
@@ -499,13 +482,6 @@ fn a_tree_has_built_a_product_it_built_or_whose_outputs_it_holds() {
     fs::write(fresh.dir.join("target").join("CACHEDIR.TAG"), "x").unwrap();
     assert!(fresh.manager.has_built(&tree(), "lint"));
     assert!(!fresh.manager.has_built(&tree(), "no-such-product"));
-}
-
-#[test]
-fn feature_differences_ignore_feature_nodes_and_repeats() {
-    let whole = "x v1|a,b\nx feature \"a\"\nx v1|a,b (*)\ny v2|\n";
-    assert!(feature_differences(whole, "x v1|a,b\ny v2|\n").is_empty());
-    assert_eq!(feature_differences(whole, "x v1|a\n"), ["x"]);
 }
 
 #[test]
@@ -773,3 +749,6 @@ mod repair;
 
 #[path = "build/room_tests.rs"]
 mod room;
+
+#[path = "build/cargo_tests.rs"]
+mod cargo;

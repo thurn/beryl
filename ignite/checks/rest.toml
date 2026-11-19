@@ -3,8 +3,7 @@
 # transport and Ignite's own workspace. Their adapter is tools/src/beryl_tools/ignite/rest.py
 # (the iroh tests and Ignite's tests use the `nextest` adapter instead), which lists each family's checks and
 # reports results as JSON lines. See docs/ignite.md, "Declaring a family", "Reporting results"
-# and "Exploration checks". The `python-env` product is in python.toml and `rust-tests` in
-# rust.toml.
+# and "Exploration checks". The `python-env` product is in python.toml.
 
 # Lessons from the checks Ignite replaces:
 #
@@ -22,8 +21,8 @@
 #   build plays too few games and a plain release build skips the invariants. Their results never
 #   block anything; a failure is a bug found, not a commit to blame.
 # - The package beryl_link_iroh is left out of every other family because the cold build of its
-#   iroh dependency alone can outlast a fast check. Here it is one build, cached with the other
-#   test binaries, and the checks hold no cores while it builds.
+#   iroh dependency alone can outlast a fast check. Here it is one build (`iroh-tests`), cached
+#   with the other test binaries, and the checks hold no cores while it builds.
 
 # The rollout benchmark's instruction count against the bar in
 # rust/crates/beryl_bench/count-gate.toml (that file's comments say when the bar may move), as
@@ -207,7 +206,7 @@ inputs = [
 kind = "regression"
 adapter = "nextest"
 platforms = ["macos"]
-needs = ["rust-tests"]
+needs = ["iroh-tests"]
 list = "cargo nextest list --locked -p beryl_link_iroh --message-format json"
 run = "cargo nextest run --locked --cargo-quiet -p beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
@@ -278,6 +277,17 @@ inputs = [
   "tools/src/beryl_tools/paths.py",
   "tools/src/beryl_tools/system.py",
 ]
+
+# The iroh transport's test binaries. The `iroh` family's commands select beryl_link_iroh alone,
+# which enables other features on 28 shared dependencies (`serde`, `libc`, `proc-macro2` among
+# them) than the `rust-tests` build does, so its listing compiled them again without reporting
+# it. Built here, that compile is a reported build that holds rust/target once. The command
+# names its package, so the build is the same whichever checks asked for it.
+[product.iroh-tests]
+build = "cargo nextest run --no-run --locked --cargo-quiet -p beryl_link_iroh"
+dir = "rust"
+inputs = ["crate:beryl_link_iroh", "rust/Cargo.toml"]
+outputs = ["rust/target"]
 
 # The test binaries of the fuzzers, optimized with debug assertions and overflow checks on (the
 # build `just fuzz` makes). They land in rust/target/release.

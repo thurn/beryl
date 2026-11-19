@@ -1035,6 +1035,17 @@ it uses with the whole workspace's. When they differ, Ignite builds the whole
 workspace instead of the subset, because almost every subset of Beryl's
 workspace enables different features.
 
+A product's `exclude` names packages its whole-workspace build leaves out:
+`exclude = ["beryl_link_iroh"]` makes `{packages}` stand for
+`--workspace --exclude beryl_link_iroh` when no packages are named, and the
+comparison uses the same set. Every Cargo command that selects the same packages
+then builds with the same features. On 2026-11-19 the `rust-tests` build took
+the whole workspace while the `rust` family's `list` and `run` left
+`beryl_link_iroh` out, which gave 18 dependencies other features. Each listing
+then compiled the whole workspace a second time, unreported: about 1,000 s of
+one landing's 1,160 s. A command without `{packages}` builds the same thing for
+any caller, so Ignite compares no features for it.
+
 Every compiler process runs through Ignite as Cargo's `RUSTC_WRAPPER`, which
 records each unit's cost and whether it was rebuilt.
 

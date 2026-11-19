@@ -29,6 +29,8 @@
 //! rebuild those dependencies and the next whole build would rebuild them again. Whenever the
 //! tree's Cargo manifests, lock files or toolchain files differ from any state already checked,
 //! the manager compares `cargo tree -e features` for the subset with the whole workspace's.
+//! The whole workspace leaves out the packages in the product's `exclude`, so products and
+//! families that select the same packages share one feature configuration (see `cargo`).
 //! When they differ, it builds the whole workspace instead of the subset. Failing the request
 //! instead would fail every check that needs the product, because a large workspace enables
 //! different features for almost every subset.
@@ -40,18 +42,20 @@
 //! unfinished run with that variable back into a running build that requests join (see
 //! `rejoin`).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
+mod cargo;
 mod flight;
 mod rejoin;
 pub mod repair;
 mod room;
 mod store;
+use cargo::{WholeKey, command, feature_differences, package_args};
 use flight::{Flight, FlightGuard, STOP_RECHECK};
 pub use rejoin::BUILD_KEY_ENV;
 pub use room::{DiskRoom, NativeRoom, START_GB};
@@ -205,9 +209,9 @@ struct State {
     graphs: HashMap<InputHash, CrateGraph>,
     /// Feature comparisons already made, by directory, Cargo file state and packages: the
     /// crates that differ, empty when none do.
-    features: HashMap<(String, InputHash, Vec<String>), Vec<String>>,
-    /// The whole workspace's `cargo tree -e features` output, by directory and Cargo file state.
-    whole_trees: HashMap<(String, InputHash), String>,
+    features: HashMap<(WholeKey, Vec<String>), Vec<String>>,
+    /// The whole workspace's `cargo tree -e features` output.
+    whole_trees: HashMap<WholeKey, String>,
     /// Requests waiting for a running build of the same state.
     joined: usize,
     /// Requests waiting for an output directory to be free.
@@ -286,7 +290,13 @@ impl BuildManager {
             .trees
             .path(tree)
             .ok_or_else(|| Error::NotFound(format!("no build tree {tree}")))?;
-        let mut packages = packages.to_vec();
+        // A command without `{packages}` builds the same thing whatever the caller needs, so
+        // every request for it is one request, and there is no subset whose features to check.
+        let mut packages = if product.build.split_whitespace().any(|w| w == PACKAGES) {
+            packages.to_vec()
+        } else {
+            Vec::new()
+        };
         packages.sort();
         packages.dedup();
         let tracked = self.trees.tracked(&path)?;
@@ -305,7 +315,7 @@ impl BuildManager {
         let paths = inputs::resolve(&patterns, None, &graph, &tracked)
             .map_err(|e| Error::Invalid(format!("product.{name}.inputs: {e}")))?;
         let ids = inputs::object_ids(self.git.as_ref(), &path, &paths)?;
-        let args = command(&product.build, &packages);
+        let args = command(&product.build, &packages, &product.exclude);
         let hash = hash_of(&ids, &[args.join(" ")]);
         Ok(Plan {
             request: Request {
@@ -418,29 +428,29 @@ impl BuildManager {
         if !plan.reads_crates || plan.request.packages.is_empty() {
             return Ok(Vec::new());
         }
-        let dir = plan.product.dir.clone().unwrap_or_default();
-        let key = (
-            dir.clone(),
-            plan.cargo_state.clone(),
-            plan.request.packages.clone(),
-        );
+        let whole_key = WholeKey {
+            dir: plan.product.dir.clone().unwrap_or_default(),
+            cargo_state: plan.cargo_state.clone(),
+            exclude: plan.product.exclude.clone(),
+        };
+        let key = (whole_key.clone(), plan.request.packages.clone());
         if let Some(differing) = lock(&self.state).features.get(&key).cloned() {
             return Ok(differing);
         }
-        let whole = self.whole_feature_tree(plan, dir)?;
+        let whole = self.whole_feature_tree(plan, whole_key)?;
         let subset = self.feature_tree(plan, &plan.request.packages)?;
         let differing = feature_differences(&whole, &subset);
         lock(&self.state).features.insert(key, differing.clone());
         Ok(differing)
     }
 
-    /// The whole workspace's `cargo tree -e features`, run once per state of the Cargo files.
+    /// The whole workspace's `cargo tree -e features`, less the product's excluded packages,
+    /// run once per state of the Cargo files.
     fn whole_feature_tree(
         &self,
         plan: &Plan,
-        dir: String,
+        key: WholeKey,
     ) -> std::result::Result<String, BuildResult> {
-        let key = (dir, plan.cargo_state.clone());
         if let Some(tree) = lock(&self.state).whole_trees.get(&key) {
             return Ok(tree.clone());
         }
@@ -449,7 +459,8 @@ impl BuildManager {
         Ok(tree)
     }
 
-    /// The output of `cargo tree -e features` for `packages`, or the whole workspace when none.
+    /// The output of `cargo tree -e features` for `packages`, or the whole workspace less the
+    /// product's excluded packages when none.
     fn feature_tree(
         &self,
         plan: &Plan,
@@ -461,7 +472,7 @@ impl BuildManager {
         .iter()
         .map(|s| (*s).to_owned())
         .collect();
-        args.extend(package_args(packages));
+        args.extend(package_args(packages, &plan.product.exclude));
         let run = self.launcher.run(&self.spec(plan, args, 1, Vec::new()));
         if run.exit != Some(0) {
             return Err(BuildResult::Failed {
@@ -702,7 +713,7 @@ fn expand(product: &Product, packages: &[String], graph: &CrateGraph) -> Result<
             graph
                 .packages
                 .iter()
-                .filter(|p| p.workspace == workspace)
+                .filter(|p| p.workspace == workspace && !product.exclude.contains(&p.name))
                 .map(|p| p.name.clone())
                 .collect()
         } else {
@@ -718,61 +729,6 @@ fn expand(product: &Product, packages: &[String], graph: &CrateGraph) -> Result<
         patterns.extend(names.into_iter().map(InputPattern::Crate));
     }
     Ok(patterns)
-}
-
-/// Cargo's arguments selecting `packages`, or the whole workspace when none are named.
-fn package_args(packages: &[String]) -> Vec<String> {
-    if packages.is_empty() {
-        return vec!["--workspace".to_owned()];
-    }
-    packages
-        .iter()
-        .flat_map(|p| ["-p".to_owned(), p.clone()])
-        .collect()
-}
-
-/// The build command split at whitespace, with `{packages}` replaced by Cargo's package
-/// arguments. The command runs directly, not through a shell.
-fn command(build: &str, packages: &[String]) -> Vec<String> {
-    build
-        .split_whitespace()
-        .flat_map(|word| {
-            if word == PACKAGES {
-                package_args(packages)
-            } else {
-                vec![word.to_owned()]
-            }
-        })
-        .collect()
-}
-
-/// Each package in `cargo tree -e features --format '{p}|{f}'` output with the feature sets it
-/// is built with. A package can appear with more than one set, for example once as a build
-/// dependency and once as a normal one. Lines without `|` are feature nodes and are skipped.
-fn feature_sets(text: &str) -> BTreeMap<&str, BTreeSet<&str>> {
-    let mut sets: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for line in text.lines() {
-        let Some((package, features)) = line.split_once('|') else {
-            continue;
-        };
-        let features = features.trim_end().trim_end_matches("(*)").trim_end();
-        sets.entry(package.trim()).or_default().insert(features);
-    }
-    sets
-}
-
-/// The names of the crates whose features in the subset's tree differ from the whole
-/// workspace's, sorted.
-fn feature_differences(whole: &str, subset: &str) -> Vec<String> {
-    let whole = feature_sets(whole);
-    let mut differing: BTreeSet<String> = BTreeSet::new();
-    for (package, sets) in feature_sets(subset) {
-        if whole.get(package) != Some(&sets) {
-            let name = package.split_whitespace().next().unwrap_or(package);
-            differing.insert(name.to_owned());
-        }
-    }
-    differing.into_iter().collect()
 }
 
 /// The compile units in a units file, skipping lines that are not one. A missing file holds

@@ -169,6 +169,12 @@ pub struct Product {
     /// more threads as its grant grows, as `grows` on a family.
     #[serde(default)]
     pub grows: bool,
+    /// Workspace packages a build of the whole workspace leaves out: with no packages named,
+    /// `{packages}` stands for `--workspace --exclude <package>` for each. Products and families
+    /// that select the same set of packages build with the same Cargo features, so they reuse
+    /// each other's compiled crates instead of rebuilding them.
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 /// An `[[rebuild]]` entry of `ignite.toml`: an edit whose rebuild cost is measured.
