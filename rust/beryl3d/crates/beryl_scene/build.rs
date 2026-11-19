@@ -7,6 +7,9 @@
 //! writes the manual table's commands and the deck a solo table starts with to
 //! `OUT_DIR/table_commands.rs` (`write_table_commands`).
 
+#[path = "build/gradients.rs"]
+mod gradients;
+
 use std::fmt::Write;
 use std::fs;
 use std::path::PathBuf;
@@ -154,7 +157,8 @@ fn write_credits(manifest: &std::path::Path, out_dir: &std::path::Path) {
 /// constants. `color` holds a constant for every token of kind `color`, named for the token in
 /// upper case with `_` for `-`, then the colors of `flat.color`. `space`, `type_style` and
 /// `size` and `ratio` hold the entries of `flat` under the same names, `mana` the colors of
-/// `flat.mana`, and `shadow` the shadow lists of `flat.shadow`. A number in `flat` is a `value`, or the `token` of kind `length` whose pixels it
+/// `flat.mana`, `shadow` the shadow lists of `flat.shadow`, and `gradient` the gradients of
+/// `flat.gradient` (`build/gradients.rs`). A number in `flat` is a `value`, or the `token` of kind `length` whose pixels it
 /// takes; a `note` becomes the doc comment.
 fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
     let tokens = Tokens {
@@ -182,6 +186,7 @@ fn write_tokens(json: &serde_json::Value) -> Vec<(&'static str, String)> {
         ("color", write_colors(&tokens)),
         ("mana", write_mana(&tokens)),
         ("shadow", write_shadows(&tokens)),
+        ("gradient", gradients::write_gradients(&tokens)),
     ]
 }
 

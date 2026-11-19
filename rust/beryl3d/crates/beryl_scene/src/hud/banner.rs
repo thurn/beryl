@@ -18,7 +18,7 @@ use crate::element::{Align, Element, Justify, column, floats, text};
 use crate::frame::Role;
 use crate::layout::{FloatLook, Layer};
 use crate::table::Window;
-use crate::tokens::{color, ratio, shadow, size, type_style};
+use crate::tokens::{color, gradient, ratio, shadow, size, type_style};
 
 /// The banner's title, the same for every detail.
 const TITLE: &str = "Combat";
@@ -133,7 +133,7 @@ impl Banner {
 }
 
 /// The banner with the detail at `detail`: the gold title in capitals over the detail, on a
-/// smoky shade.
+/// smoky shade that fades out toward its edges (`.step-banner`'s radial gradient).
 fn banner(detail: usize) -> Element {
     let (title, detail) = words(detail);
     let mut element = column()
@@ -143,8 +143,7 @@ fn banner(detail: usize) -> Element {
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .gap(crate::tokens::space::M)
-        .radius(size::BANNER_HEIGHT / 2.0)
-        .background(color::BANNER)
+        .background_image(vec![gradient::BANNER])
         // It takes no pointer, so the permanents under it stay at hand, as the web's
         // `.step-banner` has `pointer-events: none`.
         .passes(true)

@@ -287,6 +287,7 @@ fn grid(boxes: Vec<Element>) -> Element {
         .name("cards")
         .max_height(size::VIEWER_HEIGHT)
         .overflow(Overflow::Scroll)
+        .scroll_fade(size::VIEWER_FADE)
 }
 
 /// The grids of `sections`, each under its label, in one column that scrolls past the grid's
@@ -308,6 +309,7 @@ fn sections_grid(sections: Vec<(Option<String>, Vec<Element>)>) -> Element {
         .gap(space::M)
         .max_height(size::VIEWER_HEIGHT)
         .overflow(Overflow::Scroll)
+        .scroll_fade(size::VIEWER_FADE)
         .children(sections)
 }
 

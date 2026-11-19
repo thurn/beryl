@@ -16,6 +16,14 @@ pub mod shadow {
     include!(concat!(env!("OUT_DIR"), "/tokens/shadow.rs"));
 }
 
+/// Gradients, each as CSS's `linear-gradient()` or `radial-gradient()` gives it.
+#[allow(clippy::doc_markdown)]
+pub mod gradient {
+    use crate::element::{Extent, Gradient, Length, Stop};
+
+    include!(concat!(env!("OUT_DIR"), "/tokens/gradient.rs"));
+}
+
 /// Gaps and padding, in logical points.
 #[allow(clippy::doc_markdown)]
 pub mod space {

@@ -55,9 +55,18 @@ MARGIN = 48
 TOLERANCE = 4
 UNSUPPORTED = "unsupported"
 # The CSS properties Beryl 3D's `Style` can say, as `background`, `border`, `radius`,
-# `opacity` and `box_shadow`.
+# `opacity` and `box_shadow`. `background-image`, `mask-image` and `filter` are drawn when
+# `gradients`, `mask` and `filters` can read them.
 SUPPORTED: frozenset[str] = frozenset(
     {"background-color", "border", "border-radius", "opacity", "box-shadow"}
+)
+# The filter functions `Style::filter` holds, besides the drop shadows of `Style::drop_shadow`.
+FILTERS: frozenset[str] = frozenset({"brightness", "grayscale", "saturate", "blur"})
+STOP_COLOR: re.Pattern[str] = re.compile(
+    r"rgba?\([^()]*\)|#[0-9a-fA-F]{3,6}\b|transparent"
+)
+EXTENTS: frozenset[str] = frozenset(
+    {"closest-side", "closest-corner", "farthest-side", "farthest-corner"}
 )
 # The web interface's sans-serif face, which a sample's text is set in, and the web's file of it
 # (`ui/src/design/fonts.ts` loads the same one), which the page embeds. Its name is quoted with
@@ -139,6 +148,75 @@ def shadows(text: str) -> list[dict[str, object]]:
     return out
 
 
+def position(text: str) -> float | str:
+    """A gradient length as `b3d-render sample` reads it: points, or a percentage as text."""
+    text = text.strip()
+    if text.endswith("%"):
+        return text
+    return 0.0 if text == "0" else length(text)
+
+
+def gradient(text: str) -> dict[str, object] | None:
+    """A sample's `linear-gradient()` or `radial-gradient()` as `Style`'s `Gradient`, as
+    `b3d-render sample` reads it (`{"kind", "angle"}` or `{"kind", "circle", "extent", "at"}`,
+    with `"stops"`), or None when it is repeating or any other image."""
+    found = re.fullmatch(r"(linear|radial)-gradient\((.*)\)", text.strip(), re.S)
+    if not found:
+        return None
+    kind, parts = found[1], css.commas(found[2])
+    shape = None if STOP_COLOR.match(parts[0]) else parts.pop(0)
+    stops: list[dict[str, object]] = []
+    for part in parts:
+        hit = STOP_COLOR.search(part)
+        if hit is None:
+            return None
+        shade = color(hit[0])
+        places = (part[: hit.start()] + " " + part[hit.end() :]).split()
+        # A stop with two positions is two stops of its color.
+        for place in places or [None]:
+            stops.append(
+                {"color": shade, "at": None if place is None else position(place)}
+            )
+    out: dict[str, object] = {"kind": kind, "stops": stops}
+    if kind == "linear":
+        words = " ".join((shape or "to bottom").split())
+        out["angle"] = (
+            css.SIDES[words] if words in css.SIDES else float(words.removesuffix("deg"))
+        )
+        return out
+    words = (shape or "").split()
+    at: list[float | str] = ["50%", "50%"]
+    if "at" in words:
+        index = words.index("at")
+        at = [position(w) for w in words[index + 1 :]]
+        words = words[:index]
+    circle = "circle" in words
+    words = [w for w in words if w not in ("circle", "ellipse")]
+    extent: object = "farthest-corner"
+    if words and words[0] in EXTENTS:
+        extent = words[0]
+    elif words:
+        sizes = [position(w) for w in words]
+        extent = sizes if len(sizes) == 2 else [sizes[0], sizes[0]]
+    out.update({"circle": circle, "extent": extent, "at": at})
+    return out
+
+
+def filter_functions(text: str) -> list[dict[str, object]] | None:
+    """A `filter` of only the functions `Style::filter` holds, as `{"fn", "value"}` with a blur
+    in points, or None when it has any other function, a drop shadow among them."""
+    functions = re.findall(r"([a-z-]+)\(((?:[^()]|\([^()]*\))*)\)", text)
+    if not functions or any(name not in FILTERS for name, _ in functions):
+        return None
+    return [
+        {
+            "fn": name,
+            "value": length(argument) if name == "blur" else css.filter_value(argument),
+        }
+        for name, argument in functions
+    ]
+
+
 def drop_shadows(text: str) -> list[dict[str, object]] | None:
     """A `filter` of only `drop-shadow()` functions as `Style`'s drop shadows, or None when it
     has any other function."""
@@ -150,15 +228,27 @@ def drop_shadows(text: str) -> list[dict[str, object]] | None:
 
 def lacking(sample: dict[str, object]) -> list[str]:
     """What of `sample` Beryl 3D cannot draw yet: each CSS property `Style` lacks. A `filter`
-    is drawn when it is only drop shadows."""
+    is drawn when it is only drop shadows or only the functions of `FILTERS`, a
+    `background-image` when it is gradients, and a `mask-image` when it is a linear gradient.
+    """
     style = sample["style"]
     assert isinstance(style, dict)
-    return sorted(
-        name
-        for name in style
-        if name not in SUPPORTED
-        and not (name == "filter" and drop_shadows(str(style[name])) is not None)
-    )
+
+    def drawn(name: str, value: str) -> bool:
+        if name in SUPPORTED:
+            return True
+        if name == "filter":
+            return (
+                drop_shadows(value) is not None or filter_functions(value) is not None
+            )
+        if name == "background-image":
+            return all(gradient(layer) is not None for layer in css.commas(value))
+        if name == "mask-image":
+            found = gradient(value)
+            return found is not None and found["kind"] == "linear"
+        return False
+
+    return sorted(name for name in style if not drawn(name, str(style[name])))
 
 
 def native_text(sample: dict[str, object]) -> dict[str, object] | None:
@@ -190,6 +280,11 @@ def native_style(style: dict[str, str]) -> dict[str, object]:
         "opacity": float(style.get("opacity", "1")),
         "box_shadow": shadows(style.get("box-shadow", "")),
         "drop_shadow": drop_shadows(style.get("filter", "")) or [],
+        "background_image": [
+            gradient(layer) for layer in css.commas(style.get("background-image", ""))
+        ],
+        "mask": gradient(style["mask-image"]) if "mask-image" in style else None,
+        "filter": filter_functions(style.get("filter", "")) or [],
     }
 
 

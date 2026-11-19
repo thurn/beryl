@@ -3,7 +3,8 @@
 //! text. A frame records these only while `Frame::looking` is set, so the app's frames do no
 //! work for them.
 
-use crate::element::Shadow;
+use super::FrameBuilder;
+use crate::element::{Filter, Gradient, Shadow};
 use crate::text::TypeStyle;
 
 /// How each flat-layer element of a frame was drawn, and its shadows.
@@ -13,6 +14,32 @@ pub struct Looks {
     pub elements: Vec<ElementLook>,
     /// The shadows of every element of `elements` that has any, in its style's order.
     pub shadows: Vec<LookShadow>,
+    /// The gradients, masks and filters of every element of `elements` that has any, in its
+    /// style's order.
+    pub paints: Vec<LookPaint>,
+}
+
+/// One gradient, mask or filter function of a flat-layer element, as it was drawn.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LookPaint {
+    /// One layer of its `background-image`, with the index in `Frame::resolved` of the element.
+    Gradient(u32, Gradient),
+    /// Its `mask-image`.
+    Mask(u32, Gradient),
+    /// One function of its `filter`.
+    Filter(u32, Filter),
+}
+
+impl LookPaint {
+    /// The index in `Frame::resolved` of the element it belongs to.
+    #[must_use]
+    pub fn element(&self) -> u32 {
+        match *self {
+            Self::Gradient(element, _) | Self::Mask(element, _) | Self::Filter(element, _) => {
+                element
+            }
+        }
+    }
 }
 
 /// One shadow of a flat-layer element's style.
@@ -30,6 +57,7 @@ impl Looks {
     pub fn clear(&mut self) {
         self.elements.clear();
         self.shadows.clear();
+        self.paints.clear();
     }
 
     /// Records `look` and its element's shadows.
@@ -66,4 +94,24 @@ pub struct ElementLook {
     /// How its text looks, with the size its laid-out text has: a text that shrinks to fit
     /// has shrunk.
     pub text: TypeStyle,
+}
+
+impl FrameBuilder<'_> {
+    /// Records how the flat-layer element at `element` was painted, while the frame is
+    /// `looking`: its gradients, its mask and its filter.
+    pub fn look_paints(
+        &mut self,
+        element: u32,
+        gradients: &[Gradient],
+        mask: Option<&Gradient>,
+        filter: &[Filter],
+    ) {
+        if !self.frame.looking {
+            return;
+        }
+        let paints = &mut self.frame.looks.paints;
+        paints.extend(gradients.iter().map(|g| LookPaint::Gradient(element, *g)));
+        paints.extend(mask.map(|g| LookPaint::Mask(element, *g)));
+        paints.extend(filter.iter().map(|f| LookPaint::Filter(element, *f)));
+    }
 }

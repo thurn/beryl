@@ -5,13 +5,18 @@
 mod draw;
 mod look;
 mod order;
+mod paint;
 mod undrawn;
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
 use glam::{Mat4, Vec2};
 
-pub use draw::{Draw, Material, Mesh, Sprite, TextureArray, box_shadow_reach, fixed, sprites};
-pub use look::{ElementLook, LookShadow, Looks};
+pub use draw::{
+    Draw, Material, Mesh, RADIAL, Sprite, TextureArray, box_shadow_reach, fixed, gradient_reach,
+    sprites,
+};
+pub use look::{ElementLook, LookPaint, LookShadow, Looks};
+pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
 pub use undrawn::{Missing, Undrawn};
 
 use crate::element::Shadow;
@@ -363,6 +368,8 @@ pub struct Frame {
     /// Whether a clip was asked for after all 15 entries were taken. The records that wanted it
     /// are drawn unclipped, and the checks report it as a fault.
     pub clips_full: bool,
+    /// The stops of the frame's gradients and the masks of its clips (`paint`).
+    pub paints: Paints,
     /// How far the whole picture is shaken, in physical pixels.
     pub shake: Vec2,
     /// The sounds that begin in this frame.
@@ -482,6 +489,7 @@ impl Frame {
             view_projection: Mat4::IDENTITY,
             clips: [Rect::default(); CLIPS],
             clips_full: false,
+            paints: Paints::default(),
             shake: Vec2::ZERO,
             sounds: Vec::with_capacity(SOUNDS),
             lines: Vec::with_capacity(elements),
@@ -559,6 +567,7 @@ impl<'a> FrameBuilder<'a> {
         frame.view_projection = Mat4::IDENTITY;
         frame.clips = [Rect::default(); CLIPS];
         frame.clips_full = false;
+        frame.paints = Paints::default();
         frame.shake = Vec2::ZERO;
         frame.sounds.clear();
         frame.lines.clear();

@@ -211,7 +211,13 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
     row()
         .name("opening screen")
         .passes(passes)
-        .child(super::backdrop(input))
+        // The opening's backdrop is a gradient that leaves the opponent's side of the table
+        // clear, in place of the backdrop's flat color.
+        .child(
+            super::backdrop(input)
+                .background([0; 4])
+                .background_image(vec![crate::tokens::gradient::OPENING_BACKDROP]),
+        )
         .child(screen)
 }
 

@@ -9,33 +9,33 @@ use beryl_protocol::protocol::Side;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
-use super::shadows::{ShadowBox, write_box_shadows};
-use super::{Layer, Node, has_panel, text_top};
+use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
+use super::{Layer, Node, text_top};
 use crate::art::orb;
-use crate::element::{Display, Element, Overflow, Shadow, Shown, TextAlign};
+use crate::element::{Display, Element, Overflow, Shown, TextAlign};
 use crate::faces::{CARD_BACK, Faces};
-use crate::frame::{
-    Band, Draw, ElementLook, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits,
-};
+use crate::frame::{Band, Draw, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits};
 use crate::input::{FaceId, FaceSize, Rect};
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera};
 use crate::text::{self, BlockLook, faded};
-use crate::tokens::{color, shadow, size};
+use crate::tokens::color;
 
 /// How a node and everything under it is drawn: where its tree's top left corner stands, how
 /// opaque it is, the color of its text, the clip it is drawn under, whether the pointer goes
-/// through it, and the faces its cards are drawn from.
+/// through it, the faces its cards are drawn from, and the filters it is drawn through.
 #[derive(Clone, Copy)]
-struct Look<'a> {
+pub(super) struct Look<'a> {
     point: Vec2,
-    opacity: f32,
+    pub(super) opacity: f32,
     tint: Option<[u8; 4]>,
     /// The clip's rectangle on the window, in logical points, and its entry in the frame's
     /// clips (`FrameBuilder::clip`), 0 when the frame's clips were all taken.
-    clip: Option<(Rect, u8)>,
+    pub(super) clip: Option<(Rect, u8)>,
     /// It or an element over it lets the pointer through (`Style::passes`).
     passes: bool,
     faces: Option<&'a Faces>,
+    /// The filter functions of it and the elements over it (`Style::filter`).
+    pub(super) filters: Chain,
 }
 
 /// Whether `element`, drawn as `look` in `rect`, takes a press. An element scrolled out of its
@@ -77,6 +77,7 @@ impl Layer {
                     clip: None,
                     passes: false,
                     faces,
+                    filters: Chain::default(),
                 };
                 self.write_node(node, u32::MAX, true, look, builder, camera);
             }
@@ -89,6 +90,7 @@ impl Layer {
                 clip: None,
                 passes: false,
                 faces,
+                filters: Chain::default(),
             };
             self.write_node(&float.node, u32::MAX, true, look, builder, camera);
         }
@@ -115,6 +117,7 @@ impl Layer {
         builder.visit();
         look.opacity *= node.opacity();
         look.passes |= node.element.style.passes;
+        look.filters = look.filters.inner(&node.element.style.filter);
         let element = &node.element;
         let mut state = self.state(node);
         if look.passes {
@@ -155,12 +158,22 @@ impl Layer {
                 note: crate::frame::NameRef::default(),
             },
         );
+        let mask = mask_of(node);
         if builder.looking() {
-            builder.look(
-                look_of(node, index, panel.as_ref(), ink(node, state, look.tint)),
-                box_shadows(node, state),
-                &element.style.drop_shadow,
+            let ink = ink(node, state, look.tint);
+            look_of(
+                node,
+                (index, state),
+                (panel.as_ref(), mask.as_ref()),
+                ink,
+                builder,
             );
+        }
+        // A mask puts the element and everything under it in a clip of its box.
+        let masked = (mask.as_ref())
+            .and_then(|mask| write_mask(mask, rect, &look, self.window.scale, builder));
+        if masked.is_some() {
+            look.clip = masked;
         }
         write_box(node, state, panel.as_ref(), rect, &look, builder, camera);
         let shown = Look {
@@ -180,16 +193,10 @@ impl Layer {
         }
         let mut inside = look;
         if element.style.overflow != Overflow::Visible {
-            let cut = look
-                .clip
-                .map_or(Some(rect), |(clip, _)| intersection(clip, rect));
-            let cut = cut.unwrap_or(Rect {
-                width: 0.0,
-                height: 0.0,
-                ..rect
-            });
-            let entry = builder.clip(scaled(cut, self.window.scale)).unwrap_or(0);
-            inside.clip = Some((cut, entry));
+            // A mask's clip is already the box.
+            if masked.is_none() {
+                inside.clip = Some(clip_inside(rect, &look, self.window.scale, builder));
+            }
             inside.point -= node.scroll;
         }
         for child in &node.children {
@@ -241,7 +248,10 @@ impl Layer {
                     width: side,
                     height: side,
                 };
-                let tint = faded(ink(node, state, look.tint), look.opacity);
+                let tint = faded(
+                    look.filters.color(ink(node, state, look.tint)),
+                    look.opacity,
+                );
                 Draw::icon(camera.layer_transform(at), tint, sprite)
             }
             Some(Shown::Face(face, size) | Shown::TappedFace(face, size)) => {
@@ -258,7 +268,11 @@ impl Layer {
                 // A face's color, where it has one, darkens it, as a way that cannot be chosen
                 // is dimmed (`prompts::choose`).
                 let tint = node.element.style.color.unwrap_or([255; 4]);
+                let (tint, desaturate) = look.filters.face(tint);
                 draw.tint = faded(tint, look.opacity);
+                if desaturate > 0.0 {
+                    draw = draw.desaturated(desaturate);
+                }
                 draw
             }
             Some(Shown::Orb {
@@ -323,7 +337,7 @@ impl Layer {
             };
             let draw = Draw::icon(
                 camera.layer_transform(at),
-                faded(layer.color, look.opacity),
+                faded(look.filters.color(layer.color), look.opacity),
                 sprite,
             );
             builder.draw(
@@ -349,7 +363,7 @@ impl Layer {
             return;
         };
         let element = &node.element;
-        let fade = |color: [u8; 4]| faded(color, look.opacity);
+        let fade = |color: [u8; 4]| faded(look.filters.color(color), look.opacity);
         let free = Vec2::new(
             node.content.width - block.width,
             node.content.height - block.height,
@@ -408,6 +422,26 @@ impl Layer {
     }
 }
 
+/// The clip the children of an element that clips or scrolls are drawn under: its box `rect`
+/// cut to the clip `look` is under, and its entry in the frame's clips (0 when they were all
+/// taken). A clip made under a masked one keeps its mask.
+fn clip_inside(rect: Rect, look: &Look, scale: f32, builder: &mut FrameBuilder) -> (Rect, u8) {
+    let cut = look
+        .clip
+        .map_or(Some(rect), |(clip, _)| intersection(clip, rect));
+    let cut = cut.unwrap_or(Rect {
+        width: 0.0,
+        height: 0.0,
+        ..rect
+    });
+    let entry = builder.clip(scaled(cut, scale)).unwrap_or(0);
+    let mask = look.clip.and_then(|(_, outer)| builder.mask_of(outer));
+    if let (Some((rect, angle, gradient)), true) = (mask, entry > 0) {
+        builder.mask(entry, rect, angle, gradient);
+    }
+    (cut, entry)
+}
+
 /// Writes the marks of the field `node` while it is edited, moved and clipped by `look`:
 /// the selection, drawn `behind` its text, or the caret and the composing text's underline,
 /// drawn over it.
@@ -424,7 +458,7 @@ fn write_marks(
     let clip = look.clip.map_or(0, |(_, entry)| entry);
     let mut mark = |rect: Rect, tint: [u8; 4]| {
         let rect = moved(rect, origin);
-        let tint = faded(tint, look.opacity);
+        let tint = faded(look.filters.color(tint), look.opacity);
         let size = Vec2::new(rect.width, rect.height);
         let mut draw = Draw::panel(camera.layer_transform(rect), tint, tint, size, 0.0, 0.0);
         if clip > 0 {
@@ -473,170 +507,8 @@ fn face_draw(faces: &Faces, face: FaceId, size: FaceSize, transform: Affine3A) -
     ))
 }
 
-/// The panel an element is drawn on.
-struct Panel {
-    tint: [u8; 4],
-    edge: [u8; 4],
-    radius: f32,
-    border: f32,
-}
-
-/// The panel `node` is drawn on, if any: the usual one under every button and the top element
-/// of a screen or a float, and one under any element with a `background` or a `border`. Its
-/// style's colors, border width and radius replace the usual ones where it gives them; a radius
-/// of 0 keeps the usual one, a panel's or a button's, and is square on any other element.
-///
-/// The widgets' states change it as `buttons.css` and `icon-button.css` do: a disabled button
-/// is flat stone under a dim rim whatever its style says; under the pointer a button is 10%
-/// brighter (`filter: brightness(1.1)`), while an icon button's rim brightens instead, and
-/// an icon button held down darkens. A highlighted menu row, `active`, is drawn on the gold
-/// tint of `.table-menu-row[data-active]` under a soft gold rim.
-fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> Option<Panel> {
-    if active {
-        return Some(Panel {
-            tint: color::MENU_ACTIVE,
-            edge: color::GOLD_SOFT,
-            radius: size::MENU_ROW_RADIUS,
-            border: size::MENU_BORDER,
-        });
-    }
-    let style = &node.element.style;
-    let usual = has_panel(node.element.role, top);
-    if !usual && style.background.is_none() && style.border.is_none() {
-        return None;
-    }
-    let (tint, radius, border) = match (usual, top) {
-        (true, true) => (color::PANEL, size::PANEL_RADIUS, size::BORDER),
-        (true, false) => (color::BUTTON, node.rect.height / 2.0, size::BORDER),
-        (false, _) => ([0; 4], 0.0, 0.0),
-    };
-    let mut tint = style.background.unwrap_or(tint);
-    let mut edge = style.border.map_or(color::METAL, |(edge, _)| edge);
-    let icon = matches!(node.element.shows, Some(Shown::Icon(..)));
-    if state.has(StateBits::DISABLED) && node.element.role == Role::Button && !icon {
-        (tint, edge) = (color::DISABLED, color::DISABLED_RIM);
-    } else if icon {
-        if state.has(StateBits::HELD) {
-            tint = color::ICON_BUTTON_PRESSED;
-        }
-        if state.has(StateBits::HOVERED) || state.has(StateBits::FOCUSED) {
-            edge = color::ICON_BUTTON_RIM_HOVERED;
-        }
-    } else if state.has(StateBits::HOVERED) && pressable(node) {
-        tint = brighter(tint);
-        edge = brighter(edge);
-    }
-    let border = style.border.map_or(border, |(_, width)| width);
-    // A panel with a clear face and no visible edge draws nothing (`element::holder`).
-    if tint[3] == 0 && (edge[3] == 0 || border == 0.0) {
-        return None;
-    }
-    Some(Panel {
-        tint,
-        edge,
-        radius: if style.radius > 0.0 {
-            style.radius
-        } else {
-            radius
-        },
-        border,
-    })
-}
-
-/// The box shadows `node` is drawn with in `state`, as `buttons.css` and `icon-button.css`
-/// change them: a disabled button with words has a faint dark ring whatever its style says, and
-/// an icon button's rim brightens under the pointer or with the focus. Any other element has
-/// its style's.
-fn box_shadows(node: &Node, state: StateBits) -> &[Shadow] {
-    let element = &node.element;
-    let icon = matches!(element.shows, Some(Shown::Icon(..)));
-    if element.role != Role::Button || element.style.box_shadow.is_empty() {
-        return &element.style.box_shadow;
-    }
-    if state.has(StateBits::DISABLED) && !icon {
-        &shadow::DISABLED
-    } else if icon && (state.has(StateBits::HOVERED) || state.has(StateBits::FOCUSED)) {
-        &shadow::ICON_BUTTON_HOVERED
-    } else {
-        &element.style.box_shadow
-    }
-}
-
-/// Writes `node`'s box, which fills `rect`: its outer box shadows (in `state`), its `panel` if
-/// it has one, and its inset box shadows, faded and clipped by `look`.
-fn write_box(
-    node: &Node,
-    state: StateBits,
-    panel: Option<&Panel>,
-    rect: Rect,
-    look: &Look,
-    builder: &mut FrameBuilder,
-    camera: &Camera,
-) {
-    let style = &node.element.style;
-    let shadows = box_shadows(node, state);
-    let cast = ShadowBox {
-        rect,
-        radius: panel.map_or(style.radius, |panel| panel.radius),
-        border: panel.map_or_else(
-            || style.border.map_or(0.0, |(_, width)| width),
-            |panel| panel.border,
-        ),
-        opacity: look.opacity,
-        clip: look.clip.map_or(0, |(_, entry)| entry),
-    };
-    write_box_shadows(shadows, &cast, false, builder, camera);
-    if let Some(panel) = panel {
-        write_panel(panel, rect, look, builder, camera);
-    }
-    write_box_shadows(shadows, &cast, true, builder, camera);
-}
-
-/// Writes the record of `panel` filling `rect`, faded and clipped by `look`.
-fn write_panel(
-    panel: &Panel,
-    rect: Rect,
-    look: &Look,
-    builder: &mut FrameBuilder,
-    camera: &Camera,
-) {
-    let fade = |color: [u8; 4]| faded(color, look.opacity);
-    let mut draw = Draw::panel(
-        camera.layer_transform(rect),
-        fade(panel.tint),
-        fade(panel.edge),
-        Vec2::new(rect.width, rect.height),
-        panel.radius,
-        panel.border,
-    );
-    let clip = look.clip.map_or(0, |(_, entry)| entry);
-    if clip > 0 {
-        draw = draw.with_clip(clip);
-    }
-    builder.draw(Band::Layer, draw);
-}
-
-/// How `node`, the resolved element at `index`, is drawn on `panel` in `ink`, for the tools that
-/// compare Beryl 3D with the web interface (`Frame::looks`).
-fn look_of(node: &Node, index: u32, panel: Option<&Panel>, ink: [u8; 4]) -> ElementLook {
-    let mut text = node.element.style.text;
-    if let Some(block) = &node.block {
-        text.size = block.base.style.size;
-    }
-    ElementLook {
-        element: index,
-        background: panel.map(|panel| panel.tint),
-        border: panel
-            .filter(|panel| panel.border > 0.0)
-            .map(|panel| (panel.edge, panel.border)),
-        radius: panel.map_or(0.0, |panel| panel.radius),
-        color: ink,
-        text,
-    }
-}
-
 /// Whether a press on `node` does something now.
-fn pressable(node: &Node) -> bool {
+pub(super) fn pressable(node: &Node) -> bool {
     node.element.press.is_some() && node.element.enabled
 }
 
@@ -646,16 +518,6 @@ fn sinks(node: &Node) -> bool {
     node.element.role == Role::Button
         && pressable(node)
         && !matches!(node.element.shows, Some(Shown::Icon(..)))
-}
-
-/// `color` 10% brighter, as CSS's `brightness(1.1)` makes it.
-fn brighter(color: [u8; 4]) -> [u8; 4] {
-    let lift = |channel: u8| {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let lifted = (f32::from(channel) * 1.1).round().min(255.0) as u8;
-        lifted
-    };
-    [lift(color[0]), lift(color[1]), lift(color[2]), color[3]]
 }
 
 /// The color of `node`'s text and icon: `tint`, a float's, if given; while it is disabled,
@@ -719,7 +581,7 @@ impl Layer {
 }
 
 /// The part of the window that both `a` and `b` cover, if any.
-fn intersection(a: Rect, b: Rect) -> Option<Rect> {
+pub(super) fn intersection(a: Rect, b: Rect) -> Option<Rect> {
     let (left, top) = (a.x.max(b.x), a.y.max(b.y));
     let right = (a.x + a.width).min(b.x + b.width);
     let bottom = (a.y + a.height).min(b.y + b.height);
@@ -737,7 +599,7 @@ fn overlaps(a: Rect, b: Rect) -> bool {
 }
 
 /// A rectangle in logical points as physical pixels, at `scale` pixels to the point.
-fn scaled(rect: Rect, scale: f32) -> Rect {
+pub(super) fn scaled(rect: Rect, scale: f32) -> Rect {
     Rect {
         x: rect.x * scale,
         y: rect.y * scale,

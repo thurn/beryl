@@ -46,7 +46,8 @@ pub(crate) const VERTEX_BUFFERS: [Option<wgpu::VertexBufferLayout<'static>>; 2] 
     }),
 ];
 
-/// The layout of bind group 0: the uniforms, one texture array and its sampler.
+/// The layout of bind group 0: the uniforms, one texture array, its sampler and the frame's
+/// paint table.
 pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("beryl_render"),
@@ -76,6 +77,17 @@ pub fn bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
                 binding: 2,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            // The frame's paint table: gradients' stops and clips' masks.
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: std::num::NonZeroU64::new(crate::renderer::PAINT_TABLE),
+                },
                 count: None,
             },
         ],

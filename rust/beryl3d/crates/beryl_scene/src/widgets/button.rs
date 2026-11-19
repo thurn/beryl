@@ -1,14 +1,14 @@
 //! Action buttons, with the looks of the web interface's `buttons.css`
 //! (`ui/src/design/components/buttons.css`): a pill of one height and type under a 1.5-point
-//! rim. The ordinary button is near black under a pale rim, as the prompt bar shows the
-//! session's buttons; the primary one is deep amber under a gold rim, the action a prompt
-//! expects. A disabled one of either is flat stone with dim type, and one under the pointer is
+//! rim. The ordinary button is a near-black gradient under a pale rim, as the prompt bar shows
+//! the session's buttons; the primary one is a deep amber gradient under a gold rim, the action a
+//! prompt expects. Neither has a background color under its gradient, as on the web. A disabled one of either is flat stone with dim type, and one under the pointer is
 //! a little brighter (the flat layer's `write` draws those states). A label too long for its
 //! button shrinks to fit (`Style::fit`), as the web's `TurnButton` shrinks its label.
 
 use crate::element::{Element, TextAlign};
 use crate::frame::Role;
-use crate::tokens::{color, shadow, size, type_style};
+use crate::tokens::{color, gradient, shadow, size, type_style};
 
 /// A button showing `label`, named by it: as tall as every action button and at least 8 ems
 /// wide, with its label centred.
@@ -23,8 +23,9 @@ pub fn button(label: &str) -> Element {
     element.style.padding = [0.0, size::BUTTON_PADDING, 0.0, size::BUTTON_PADDING];
     element.style.fit = true;
     element.style.box_shadow = shadow::SECONDARY.to_vec();
+    element.style.background_image = vec![gradient::SECONDARY];
     element
-        .background(color::SECONDARY)
+        .background([0; 4])
         .border((color::SECONDARY_RIM, size::BORDER))
         .color(color::SECONDARY_INK)
 }
@@ -34,10 +35,10 @@ pub fn button(label: &str) -> Element {
 #[must_use]
 pub fn primary(label: &str) -> Element {
     let mut element = button(label)
-        .background(color::PRIMARY)
         .border((color::PRIMARY_RIM, size::BORDER))
         .color(color::PRIMARY_INK);
     element.primary = true;
     element.style.box_shadow = shadow::PRIMARY.to_vec();
+    element.style.background_image = vec![gradient::PRIMARY];
     element
 }

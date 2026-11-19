@@ -11,11 +11,17 @@
 //! {"scale": 2, "out": "<directory>", "samples": [{"name", "window": [w, h], "page": [r, g, b, a],
 //!   "box": [w, h], "web": "<png>", "style": {"background": [r, g, b, a] | null,
 //!   "border": [[r, g, b, a], width] | null, "radius": r, "opacity": o,
-//!   "box_shadow": [shadow], "drop_shadow": [shadow]},
+//!   "box_shadow": [shadow], "drop_shadow": [shadow], "background_image": [gradient],
+//!   "mask": gradient | null, "filter": [{"fn", "value"}]},
 //!   "text": {"string", "color": [r, g, b, a], "size"} | null}]}
 //! ```
 //!
-//! where a shadow is `{"x", "y", "blur", "spread", "color": [r, g, b, a], "inset"}`. Text is set
+//! where a shadow is `{"x", "y", "blur", "spread", "color": [r, g, b, a], "inset"}`, a gradient
+//! is `{"kind": "linear", "angle"}` or `{"kind": "radial", "circle", "extent", "at": [x, y]}`
+//! with `"stops": [{"color", "at"}]`, an extent is a keyword such as `"farthest-corner"` or two
+//! lengths, a length is a number of points or a percentage as text such as `"75%"`, and a
+//! stop's `at` is a length or null. A filter function is `brightness`, `grayscale`, `saturate`
+//! or `blur`. Text is set
 //! in Open Sans at the line height of Beryl 3D's body text, centred in the box, and its glyphs
 //! are rasterized by the real glyph worker. Glyph pixels are left out of the score (decision
 //! M2): every pixel Beryl 3D's glyphs cover, found by drawing the text alone in white on black,
@@ -36,7 +42,10 @@ use std::sync::mpsc::{self, Receiver};
 use beryl_assets::Prepared;
 use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::light;
-use beryl_scene::element::{Align, Element, Justify, Position, Shadow, holder, row};
+use beryl_scene::element::{
+    Align, Element, Extent, Filter, Gradient, Justify, Length, Position, Shadow, Shape, Stop,
+    holder, row,
+};
 use beryl_scene::frame::{Frame, FrameBuilder};
 use beryl_scene::input::AssetReady;
 use beryl_scene::input::{Insets, Size, Tier};
@@ -68,6 +77,9 @@ struct Sample {
     opacity: f32,
     box_shadow: Vec<Shadow>,
     drop_shadow: Vec<Shadow>,
+    background_image: Vec<Gradient>,
+    mask: Option<Gradient>,
+    filter: Vec<Filter>,
     text: Option<SampleText>,
 }
 
@@ -176,6 +188,25 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
     };
     let box_shadow = shadows(&style["box_shadow"]).ok_or_else(|| bad("box_shadow"))?;
     let drop_shadow = shadows(&style["drop_shadow"]).ok_or_else(|| bad("drop_shadow"))?;
+    let background_image = match &style["background_image"] {
+        Value::Null => Vec::new(),
+        given => (given
+            .as_array()
+            .ok_or_else(|| bad("background_image"))?
+            .iter())
+        .map(|layer| gradient(layer).ok_or_else(|| bad("background_image")))
+        .collect::<Result<_, _>>()?,
+    };
+    let mask = match &style["mask"] {
+        Value::Null => None,
+        given => Some(gradient(given).ok_or_else(|| bad("mask"))?),
+    };
+    let filter = match &style["filter"] {
+        Value::Null => Vec::new(),
+        given => (given.as_array().ok_or_else(|| bad("filter"))?.iter())
+            .map(|function| filter_function(function).ok_or_else(|| bad("filter")))
+            .collect::<Result<_, _>>()?,
+    };
     let text = match &value["text"] {
         Value::Null => None,
         given => Some(SampleText {
@@ -190,6 +221,9 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
     Ok(Sample {
         box_shadow,
         drop_shadow,
+        background_image,
+        mask,
+        filter,
         text,
         window: pair(&value["window"]).ok_or_else(|| bad("window"))?,
         page: color(&value["page"]).ok_or_else(|| bad("page"))?,
@@ -224,6 +258,67 @@ fn shadows(value: &Value) -> Option<Vec<Shadow>> {
         .collect()
 }
 
+/// A gradient length as the job writes it: a number of points, or a percentage as text.
+fn length(value: &Value) -> Option<Length> {
+    if let Some(points) = value.as_f64() {
+        return Some(Length::Points(points as f32));
+    }
+    let percent = value.as_str()?.strip_suffix('%')?.parse().ok()?;
+    Some(Length::Percent(percent))
+}
+
+/// A gradient as the job writes it, or `None` if it is malformed.
+fn gradient(value: &Value) -> Option<Gradient> {
+    let stops = (value["stops"].as_array()?.iter())
+        .map(|stop| {
+            Some(Stop {
+                color: color(&stop["color"])?,
+                at: match &stop["at"] {
+                    Value::Null => None,
+                    at => Some(length(at)?),
+                },
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let shape = match value["kind"].as_str()? {
+        "linear" => Shape::Linear {
+            angle: value["angle"].as_f64()? as f32,
+        },
+        "radial" => {
+            let extent = match &value["extent"] {
+                Value::String(word) => match word.as_str() {
+                    "closest-side" => Extent::ClosestSide,
+                    "closest-corner" => Extent::ClosestCorner,
+                    "farthest-side" => Extent::FarthestSide,
+                    "farthest-corner" => Extent::FarthestCorner,
+                    _ => return None,
+                },
+                sizes => Extent::Size(length(&sizes[0])?, length(&sizes[1])?),
+            };
+            Shape::Radial {
+                circle: value["circle"].as_bool()?,
+                extent,
+                at: (length(&value["at"][0])?, length(&value["at"][1])?),
+            }
+        }
+        _ => return None,
+    };
+    Some(Gradient::of(shape, &stops))
+}
+
+/// A filter function as the job writes it, or `None` if it is malformed or not one `Style`
+/// holds.
+fn filter_function(value: &Value) -> Option<Filter> {
+    let amount = value["value"].as_f64()? as f32;
+    Some(match value["fn"].as_str()? {
+        "brightness" => Filter::Brightness(amount),
+        "grayscale" => Filter::Grayscale(amount),
+        "saturate" => Filter::Saturate(amount),
+        "blur" => Filter::Blur(amount),
+        _ => return None,
+    })
+}
+
 /// Fills the whole window from its corner: an element placed at offsets of 0 from every edge.
 fn filling(element: Element) -> Element {
     element.position(Position::Absolute).inset([Some(0.0); 4])
@@ -247,6 +342,12 @@ fn screen(sample: &Sample, mask: bool) -> Element {
         // button.
         element.style.radius = sample.radius;
         element.style.box_shadow.clone_from(&sample.box_shadow);
+        element
+            .style
+            .background_image
+            .clone_from(&sample.background_image);
+        element.style.mask = sample.mask;
+        element.style.filter.clone_from(&sample.filter);
     }
     if let Some(text) = &sample.text {
         let mut words = beryl_scene::element::text(&text.string)
@@ -475,6 +576,9 @@ mod tests {
             opacity: 1.0,
             box_shadow: Vec::new(),
             drop_shadow: Vec::new(),
+            background_image: Vec::new(),
+            mask: None,
+            filter: Vec::new(),
             text: None,
         };
         let (pixels, width, height) = drawer.draw(&sample, 2.0, false);
@@ -492,5 +596,59 @@ mod tests {
             at(40, 30)
         );
         assert!(near(at(2, 2), [20, 40, 60]), "the corner {:?}", at(2, 2));
+    }
+
+    #[test]
+    fn a_gradient_runs_from_its_first_stop_to_its_last_under_its_mask() {
+        let renderer = Renderer::headless(Limits::Default).expect("a GPU adapter and device");
+        let mut drawer = Drawer::new(renderer, 1.0);
+        let (red, blue) = ([255, 0, 0, 255], [0, 0, 255, 255]);
+        let sample = Sample {
+            name: "gradient".to_owned(),
+            window: Size {
+                width: 60.0,
+                height: 60.0,
+            },
+            page: [0, 0, 0, 255],
+            size: Size {
+                width: 40.0,
+                height: 40.0,
+            },
+            web: PathBuf::new(),
+            background: None,
+            border: None,
+            radius: 0.0,
+            opacity: 1.0,
+            box_shadow: Vec::new(),
+            drop_shadow: Vec::new(),
+            background_image: vec![Gradient::linear(180.0, &[Stop::new(red), Stop::new(blue)])],
+            // The mask hides the box's left half.
+            mask: Some(Gradient::linear(
+                90.0,
+                &[
+                    Stop::percent([0; 4], 50.0),
+                    Stop::percent([0, 0, 0, 255], 50.0),
+                ],
+            )),
+            filter: Vec::new(),
+            text: None,
+        };
+        let (pixels, width, _) = drawer.draw(&sample, 1.0, false);
+        let at = |x: u32, y: u32| {
+            let i = ((y * width + x) * 4) as usize;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+        // The box runs from 10 to 50; its top row is nearly red, its bottom row nearly blue,
+        // and its middle row half of each, interpolated in premultiplied sRGB.
+        let top = at(40, 10);
+        assert!(top[0] > 245 && top[2] < 10, "the top {top:?}");
+        let bottom = at(40, 49);
+        assert!(bottom[2] > 245 && bottom[0] < 10, "the bottom {bottom:?}");
+        let middle = at(40, 30);
+        assert!(
+            middle[0].abs_diff(127) <= 4 && middle[2].abs_diff(127) <= 4,
+            "{middle:?}"
+        );
+        assert_eq!(at(20, 30), [0, 0, 0], "the masked half shows the page");
     }
 }

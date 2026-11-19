@@ -29,13 +29,16 @@ use crate::input::{FaceId, FaceSize};
 use crate::screens::ScreenIn;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, DESKTOP};
 use crate::text::TypeStyle;
-use crate::tokens::{color, size, space, type_style};
+use crate::tokens::{color, ratio, size, space, type_style};
 use crate::widgets::{icon_button, icons};
 
-/// The tint of the face of a way that cannot be chosen, as the web's `.stage-way:disabled`
-/// darkens it (`brightness(0.55)` in `ui/src/stage/choose.css`) rather than making it
-/// translucent, which would let the cards behind it show through.
-const DIMMED: [u8; 4] = [140, 140, 140, 255];
+/// The filter of the face of a way that cannot be chosen, as the web's `.stage-way:disabled`
+/// dims and desaturates it (`grayscale(0.85) brightness(0.55)` in `ui/src/stage/choose.css`)
+/// rather than making it translucent, which would let the cards behind it show through.
+const DIMMED: [crate::element::Filter; 2] = [
+    crate::element::Filter::Grayscale(ratio::WAY_DISABLED_GRAYSCALE),
+    crate::element::Filter::Brightness(ratio::WAY_DISABLED_BRIGHTNESS),
+];
 
 /// What the flat layer shows for `prompt`: the prompt bar, with a number's steps before its
 /// primary button, and, over the table, the ways to use a card where it chooses among them.
@@ -218,7 +221,7 @@ fn way_element(way: &PromptButton, face: Option<FaceId>, width: f32) -> Element 
         if way.enabled {
             element
         } else {
-            element.color(DIMMED)
+            element.filter(DIMMED.to_vec())
         }
     });
     let label = text(&way.label)

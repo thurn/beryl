@@ -396,8 +396,12 @@ def test_a_sample_lists_what_style_cannot_say_and_draws_what_it_can() -> None:
         "opacity": 0.5,
         "box_shadow": [],
         "drop_shadow": [],
+        "background_image": [],
+        "mask": None,
+        "filter": [],
     }
-    # Box shadows, drop shadows and text are drawn; any other filter is not.
+    # Box shadows, drop shadows and text are drawn, and a filter of only drop shadows or only
+    # brightness, grayscale, saturate and blur; a mix of the two kinds is not.
     shadowed = sample(
         **{
             "box-shadow": "inset 0 0 0 1px rgb(214 192 150 / 30%), 0 6px 16px #000",
@@ -446,6 +450,65 @@ def test_a_sample_lists_what_style_cannot_say_and_draws_what_it_can() -> None:
         "color": [251, 240, 216, 255],
         "size": 24.0,
     }
+
+
+def test_a_sample_reads_gradients_masks_and_color_filters_as_style_does() -> None:
+    painted = sample(
+        **{
+            "background-image": "linear-gradient(to bottom, transparent 15%, #e4a242 60% 70%),"
+            " radial-gradient(ellipse 52% 54% at 50% 45%, rgb(12 10 9 / 88%), transparent)",
+            "mask-image": "linear-gradient(90deg, transparent, #000 40px)",
+            "filter": "grayscale(0.85) brightness(55%) blur(2.5px)",
+        }
+    )
+    assert samples.lacking(painted) == []
+    style = samples.native_style(painted["style"])  # pyre-ignore[6]
+    gold = [228, 162, 66, 255]
+    assert style["background_image"] == [
+        {
+            "kind": "linear",
+            "angle": 180.0,
+            "stops": [
+                {"color": [0, 0, 0, 0], "at": "15%"},
+                # A stop with two positions is two stops.
+                {"color": gold, "at": "60%"},
+                {"color": gold, "at": "70%"},
+            ],
+        },
+        {
+            "kind": "radial",
+            "circle": False,
+            "extent": ["52%", "54%"],
+            "at": ["50%", "45%"],
+            "stops": [
+                {"color": [12, 10, 9, 224], "at": None},
+                {"color": [0, 0, 0, 0], "at": None},
+            ],
+        },
+    ]
+    assert style["mask"] == {
+        "kind": "linear",
+        "angle": 90.0,
+        "stops": [
+            {"color": [0, 0, 0, 0], "at": None},
+            {"color": [0, 0, 0, 255], "at": 40.0},
+        ],
+    }
+    assert style["filter"] == [
+        {"fn": "grayscale", "value": 0.85},
+        {"fn": "brightness", "value": 0.55},
+        {"fn": "blur", "value": 2.5},
+    ]
+    # A repeating gradient, an image and a radial mask are not drawn.
+    assert samples.lacking(
+        sample(**{"background-image": "repeating-linear-gradient(#000, #fff 4px)"})
+    ) == ["background-image"]
+    assert samples.lacking(sample(**{"background-image": "url(a.png)"})) == [
+        "background-image"
+    ]
+    assert samples.lacking(
+        sample(**{"mask-image": "radial-gradient(#000, transparent)"})
+    ) == ["mask-image"]
 
 
 def test_the_ratchet_lets_a_sample_improve_or_become_supported_but_not_worsen() -> None:

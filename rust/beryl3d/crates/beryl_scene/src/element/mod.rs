@@ -3,6 +3,7 @@
 //! return elements; the client keeps the tree they return and lays it out (`layout`).
 
 mod keys;
+pub mod paint;
 mod style;
 
 use std::ops::Range;
@@ -13,6 +14,7 @@ use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 pub use keys::{Chord, Shortcuts, describe};
+pub use paint::{Extent, Filter, Gradient, Length, Shape, Stop};
 pub use style::{
     Align, Direction, Display, DropLayer, DropLayers, Justify, MOST_DROP_SHADOWS, Overflow,
     Position, Shadow, Style, TextAlign, Track,

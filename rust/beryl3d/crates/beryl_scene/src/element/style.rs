@@ -3,6 +3,7 @@
 //! element is laid out as if it had its default, until that track builds it.
 
 use super::Element;
+use super::paint::{Filter, Gradient};
 use crate::text::TypeStyle;
 use crate::tokens::type_style;
 
@@ -273,6 +274,23 @@ pub struct Style {
     /// The color of the element's panel in place of the usual one. An element that is not
     /// usually drawn on a panel is drawn on one of this color.
     pub background: Option<[u8; 4]>,
+    /// Its gradients, CSS's `background-image`, the first drawn on top, over its `background`
+    /// color and under its border. An element with gradients is drawn on a panel, as with a
+    /// `background`.
+    pub background_image: Vec<Gradient>,
+    /// A gradient whose opacity, at each point of its box, scales the opacity of the element and
+    /// everything under it there, as CSS's `mask-image`; outside its box they are cut off. Only a
+    /// linear gradient is drawn.
+    pub mask: Option<Gradient>,
+    /// How far, in points, a scrolling element's content fades out at each end that has more
+    /// beyond it, as the web's pile viewer masks its list (`.zone-viewer-cards[data-more]` in
+    /// `ui/src/screens/styles/zone-viewer.css`). The flat layer draws it as a mask in place of
+    /// `mask`, chosen by where the element is scrolled.
+    pub scroll_fade: Option<f32>,
+    /// The functions of CSS's `filter` other than `drop-shadow()`, in order. The color filters
+    /// change every color the element and everything under it is drawn in; a blur softens the
+    /// edges of its own panel and gradients.
+    pub filter: Vec<Filter>,
     /// The color and width of the element's border, which takes room inside its box as CSS's
     /// does.
     pub border: Option<([u8; 4], f32)>,
@@ -331,6 +349,10 @@ impl Default for Style {
             overflow: Overflow::Visible,
             opacity: 1.0,
             background: None,
+            background_image: Vec::new(),
+            mask: None,
+            scroll_fade: None,
+            filter: Vec::new(),
             border: None,
             radius: 0.0,
             box_shadow: Vec::new(),
@@ -375,6 +397,8 @@ setters! {
     radius: f32,
     box_shadow: Vec<Shadow>,
     drop_shadow: Vec<Shadow>,
+    background_image: Vec<Gradient>,
+    filter: Vec<Filter>,
     fit: bool,
     passes: bool,
 }
@@ -410,6 +434,8 @@ optional_setters! {
     background: [u8; 4],
     border: ([u8; 4], f32),
     color: [u8; 4],
+    mask: Gradient,
+    scroll_fade: f32,
 }
 
 impl Element {

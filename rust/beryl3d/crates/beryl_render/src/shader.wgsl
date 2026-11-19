@@ -11,6 +11,29 @@ struct Uniforms {
     target_size: vec2<f32>,
     // How far the picture of the table is shaken, in physical pixels, x right and y down.
     shake: vec2<f32>,
+    // In x, 1 when a clip of the frame has a mask (`paints.masks`), or 0 when none does and the
+    // masks were not written this frame.
+    masked: vec4<u32>,
+};
+
+// One gradient's stops (`GradientEntry`): eight colors as RGBA bytes, red in the low byte, not
+// premultiplied, and their offsets along the gradient line. Stops past the last repeat it.
+struct Gradient {
+    colors: array<vec4<u32>, 2>,
+    offsets: array<vec4<f32>, 2>,
+};
+
+// One clip's mask (`MaskEntry`): a linear gradient over `rect` (physical pixels: x, y, width,
+// height), and in `line` its angle in radians, its gradient's entry and 1 when it is in use.
+struct Mask {
+    rect: vec4<f32>,
+    line: vec4<f32>,
+};
+
+// The frame's paint table (`PaintTable`): the masks by clip entry, then the gradients.
+struct Paints {
+    masks: array<Mask, 16>,
+    gradients: array<Gradient, 32>,
 };
 
 // Whether this pipeline's records are shaken: those drawn with the depth test are, the flat
@@ -26,6 +49,9 @@ const PANEL: u32 = 5u;
 const GLYPH: u32 = 6u;
 const ICON: u32 = 7u;
 const BOX_SHADOW: u32 = 9u;
+const GRADIENT: u32 = 10u;
+// What a gradient record's layer is raised by when its gradient is radial (`frame::RADIAL`).
+const RADIAL: u32 = 32768u;
 
 // A card's printed size and corner radius, in millimetres, as the card mesh is built.
 const CARD_SIZE: vec2<f32> = vec2<f32>(63.0, 88.0);
@@ -34,6 +60,7 @@ const CARD_RADIUS: f32 = 3.0;
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var pictures: texture_2d_array<f32>;
 @group(0) @binding(2) var picture_sampler: sampler;
+@group(0) @binding(3) var<uniform> paints: Paints;
 
 struct VertexIn {
     // The mesh.
@@ -67,6 +94,8 @@ struct VertexOut {
     @location(6) edge: f32,
     // The record's `uv` as it was written: a panel's border color, from 0 to 255.
     @location(7) @interpolate(flat) rect: vec4<u32>,
+    // The record's clip entry when the frame has masks, whose mask scales its opacity, or 0.
+    @location(8) @interpolate(flat) masked_by: u32,
 };
 
 fn world(v: VertexIn, p: vec2<f32>) -> vec3<f32> {
@@ -96,6 +125,8 @@ fn vs(v: VertexIn) -> VertexOut {
     out.params = v.params;
     out.edge = v.edge;
     out.rect = v.rect;
+    // The clip is bits 4 to 7 of the flags, the high byte.
+    out.masked_by = select(0u, (v.layer_material.y >> 12u) & 15u, u.masked.x != 0u);
     if (out.material == CARD) {
         // A card's face fills its layer; its back's layer is in the record's `uv[0]`.
         out.uv = v.uv;
@@ -129,13 +160,19 @@ const DISSOLVE_SCATTER: f32 = 0.25;
 // How wide the soft edge between kept and dropped pixels is, on the stipple's scale of 0 to 1.
 const DISSOLVE_EDGE: f32 = 0.05;
 
-// A card: its face times its tint, turned toward white by `whiten` (params.y), and broken up
+// A color's luminance, by the weights of CSS's `grayscale()` filter.
+const LUMINANCE: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
+
+// A card: its face times its tint, moved toward its luminance by `desaturate` (params.z) as
+// CSS's `grayscale()` moves it, turned toward white by `whiten` (params.y), and broken up
 // from the top down by `dissolve` (params.x): a pixel is dropped where its stipple, from the
 // card's own texture coordinates `mesh_uv` (0 at the top), is under the threshold. A dropped
 // pixel has zero opacity. No second texture is read and nothing is discarded, since a
 // dissolving card is among the blended records. No lighting.
 fn shade_card(face: vec4<f32>, mesh_uv: vec2<f32>, tint: vec4<f32>, params: vec4<f32>) -> vec4<f32> {
-    let color = mix(face.rgb * tint.rgb, vec3<f32>(1.0), params.y);
+    let tinted = face.rgb * tint.rgb;
+    let gray = mix(tinted, vec3<f32>(dot(tinted, LUMINANCE)), params.z);
+    let color = mix(gray, vec3<f32>(1.0), params.y);
     let cell = floor(mesh_uv * DISSOLVE_GRID);
     let scatter = fract(sin(dot(cell, vec2<f32>(12.9898, 78.233))) * 43758.547);
     let stipple = mix(mesh_uv.y, scatter, DISSOLVE_SCATTER);
@@ -287,6 +324,89 @@ fn shade_box_shadow(
     return vec4<f32>(tint.rgb * a, a);
 }
 
+// Stop `at` of `gradient`, premultiplied by its opacity.
+fn stop_color(gradient: Gradient, at: u32) -> vec4<f32> {
+    let bytes = gradient.colors[at / 4u][at % 4u];
+    let color = vec4<f32>(
+        f32(bytes & 255u),
+        f32((bytes >> 8u) & 255u),
+        f32((bytes >> 16u) & 255u),
+        f32(bytes >> 24u),
+    ) / 255.0;
+    return vec4<f32>(color.rgb * color.a, color.a);
+}
+
+// The color, premultiplied, of entry `entry` of the frame's gradients at `t` along its line,
+// where one pixel spans `step` of the line. Colors between two stops are interpolated in
+// premultiplied sRGB, as CSS interpolates them, and a step narrower than a pixel, as at two stops
+// in one place, is spread over one pixel.
+fn gradient_at(entry: u32, t: f32, step: f32) -> vec4<f32> {
+    let gradient = paints.gradients[entry];
+    var color = stop_color(gradient, 0u);
+    for (var at = 1u; at < 8u; at++) {
+        let low = gradient.offsets[(at - 1u) / 4u][(at - 1u) % 4u];
+        let high = gradient.offsets[at / 4u][at % 4u];
+        let span = max(high - low, step);
+        let middle = (low + high) * 0.5;
+        let along = clamp((t - middle) / span + 0.5, 0.0, 1.0);
+        let between = mix(stop_color(gradient, at - 1u), stop_color(gradient, at), along);
+        color = select(color, between, t > middle - span * 0.5);
+    }
+    return color;
+}
+
+// A rounded rectangle `params.xy` logical points large with corners of `params.z`, filled with
+// the gradient whose entry is `layer` (less `RADIAL`) and blurred at its edges with standard
+// deviation `params.w`; the tint's opacity scales it. Its quad is the rectangle grown by three
+// deviations. A linear gradient's angle is `shape.x` in 65,536ths of a turn, 0 up and clockwise,
+// and its line runs through the rectangle's middle as long as the rectangle's extent along it. A
+// radial gradient's centre (from the top left corner) and radii are `shape`, as `fixed` lengths.
+fn shade_gradient(
+    mesh_uv: vec2<f32>,
+    mesh_pixel: vec2<f32>,
+    tint: vec4<f32>,
+    shape: vec4<u32>,
+    layer: u32,
+    params: vec4<f32>,
+) -> vec4<f32> {
+    let size = params.xy;
+    let sigma = params.w;
+    let quad = size + vec2<f32>(6.0 * sigma);
+    let pixel_size = mesh_pixel * quad;
+    let pixel = max(max(pixel_size.x, pixel_size.y), 1e-4);
+    let p = (mesh_uv - vec2<f32>(0.5)) * quad;
+    let cover = blurred_box(p, size * 0.5, params.z, sigma, pixel);
+    var t = 0.0;
+    var step = 0.0;
+    if ((layer & RADIAL) != 0u) {
+        let centre = vec2<f32>(fixed_points(shape.x), fixed_points(shape.y));
+        let radii = max(vec2<f32>(fixed_points(shape.z), fixed_points(shape.w)), vec2<f32>(1e-3));
+        t = length((p + size * 0.5 - centre) / radii);
+        step = pixel / min(radii.x, radii.y);
+    } else {
+        let angle = f32(shape.x) / 65536.0 * 6.2831853;
+        let direction = vec2<f32>(sin(angle), -cos(angle));
+        let line = max(dot(abs(direction), size), 1e-4);
+        t = dot(p, direction) / line + 0.5;
+        step = dot(abs(direction), pixel_size) / line;
+    }
+    return gradient_at(layer & (RADIAL - 1u), t, step) * (tint.a * cover);
+}
+
+// How much the mask of clip entry `entry` keeps of a fragment at `fragment`, in physical pixels:
+// its linear gradient's opacity there, 1 for a clip with no mask.
+fn mask_at(entry: u32, fragment: vec2<f32>) -> f32 {
+    let mask = paints.masks[entry];
+    if (mask.line.z == 0.0) {
+        return 1.0;
+    }
+    let size = mask.rect.zw;
+    let p = fragment - mask.rect.xy - size * 0.5;
+    let direction = vec2<f32>(sin(mask.line.x), -cos(mask.line.x));
+    let line = max(dot(abs(direction), size), 1e-4);
+    return gradient_at(u32(mask.line.y), dot(p, direction) / line + 0.5, 1.0 / line).a;
+}
+
 // A glyph: its coverage (the atlas's one channel) times the tint.
 fn shade_glyph(sprite: vec4<f32>, tint: vec4<f32>) -> vec4<f32> {
     let a = sprite.r * tint.a;
@@ -323,7 +443,11 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
         case GLYPH: { color = shade_glyph(picture, in.tint); }
         case ICON: { color = shade_icon(picture, in.tint); }
         case BOX_SHADOW: { color = shade_box_shadow(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.layers.x, in.params); }
+        case GRADIENT: { color = shade_gradient(in.mesh_uv, mesh_pixel, in.tint, in.rect, in.layers.x, in.params); }
         default: {}
+    }
+    if (in.masked_by != 0u) {
+        color *= mask_at(in.masked_by, in.clip.xy);
     }
     return color * (1.0 - in.edge);
 }

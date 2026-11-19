@@ -157,7 +157,10 @@ pub fn log(input: &ScreenIn) -> Option<Element> {
         button
     });
     let list = (shown && !entries.is_empty()).then(|| {
-        let mut panel = panel(entries).width(size::LOG_WIDTH).max_height(height);
+        // On the desktop the oldest lines fade out under the list's top edge, as
+        // `.game-log-list`'s mask fades them; the phone's sheet has no mask.
+        let mut panel = (panel(entries).width(size::LOG_WIDTH).max_height(height))
+            .mask(crate::tokens::gradient::LOG_MASK);
         panel.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
         panel
     });

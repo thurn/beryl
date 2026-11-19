@@ -22,16 +22,25 @@ use crate::mesh::meshes;
 use crate::pipeline::{DEPTH, RECORD, bind_group_layout, pipelines};
 use crate::slots::{Slots, mapped_features};
 use crate::target::Target;
+use beryl_scene::frame::PaintTable;
 
 /// How many records the instance buffer holds: the most a frame of the engine's largest board
 /// holds (`beryl_scene::frame::DRAWS`), so that the buffer is made once, at startup, and never
 /// again during play.
 const RECORDS: u64 = beryl_scene::frame::DRAWS as u64;
-/// The Baseline uniforms' size: the view and projection, the target's size and the shake.
-const UNIFORMS: u64 = 80;
-/// The size of a frame's uniform buffer: the Baseline uniforms, then the Enhanced tier's `Lit`
-/// at `LIT_OFFSET`.
-const UNIFORM_BUFFER: u64 = LIT_OFFSET + size_of::<Lit>() as u64;
+/// The Baseline uniforms' size: the view and projection, the target's size, the shake, and
+/// whether the frame has masks.
+const UNIFORMS: u64 = 96;
+/// Where the frame's paint table (`beryl_scene::frame::PaintTable`) starts in the uniform
+/// buffer: after the Enhanced tier's `Lit`, at the next offset a uniform binding may start at.
+const PAINT_OFFSET: u64 = 512;
+/// The paint table's size.
+pub(crate) const PAINT_TABLE: u64 = size_of::<PaintTable>() as u64;
+/// The size of a frame's uniform buffer: the Baseline uniforms, the Enhanced tier's `Lit` at
+/// `LIT_OFFSET`, then the paint table at `PAINT_OFFSET`.
+const UNIFORM_BUFFER: u64 = PAINT_OFFSET + PAINT_TABLE;
+
+const _: () = assert!(LIT_OFFSET + size_of::<Lit>() as u64 <= PAINT_OFFSET);
 
 /// The limits a headless device is created with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -357,20 +366,29 @@ impl Renderer {
         let enhanced = frame.tier == Tier::Enhanced && self.enhanced.is_some();
         let mut baseline = [0.0_f32; (UNIFORMS / 4) as usize];
         baseline[..16].copy_from_slice(&frame.view_projection.to_cols_array());
-        baseline[16..].copy_from_slice(&[
+        baseline[16..20].copy_from_slice(&[
             width as f32,
             height as f32,
             frame.shake.x,
             frame.shake.y,
         ]);
+        baseline[20] = f32::from_bits(u32::from(frame.paints.masked));
         let mut uniforms = [0_u8; UNIFORM_BUFFER as usize];
         uniforms[..UNIFORMS as usize].copy_from_slice(bytemuck::cast_slice(&baseline));
-        let written = if enhanced {
-            uniforms[LIT_OFFSET as usize..].copy_from_slice(bytemuck::bytes_of(&Lit::of(frame)));
-            UNIFORM_BUFFER
-        } else {
-            UNIFORMS
-        };
+        let mut written = UNIFORMS;
+        if enhanced {
+            let lit = LIT_OFFSET as usize..LIT_OFFSET as usize + size_of::<Lit>();
+            uniforms[lit.clone()].copy_from_slice(bytemuck::bytes_of(&Lit::of(frame)));
+            written = lit.end as u64;
+        }
+        // Only the part of the paint table the frame uses is written: none when it draws no
+        // gradient or mask, whose records then read nothing of it.
+        let paints = frame.paints.bytes();
+        if !paints.is_empty() {
+            let start = PAINT_OFFSET as usize;
+            uniforms[start..start + paints.len()].copy_from_slice(paints);
+            written = (start + paints.len()) as u64;
+        }
         // A client made with `Config::LARGEST` never writes more records than the buffer holds.
         // Records past it are not drawn, rather than making a buffer during play.
         let kept = frame.draws.len().min(RECORDS as usize);
@@ -534,6 +552,14 @@ fn bind_groups(
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: uniforms,
+                        offset: PAINT_OFFSET,
+                        size: std::num::NonZeroU64::new(PAINT_TABLE),
+                    }),
                 },
             ],
         })

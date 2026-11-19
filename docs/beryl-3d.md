@@ -432,6 +432,8 @@ pub struct Frame {
     pub view_projection: Mat4,    // the camera, for every record
     pub clips: [Rect; 16],        // physical pixels; entry 0 is not used
     pub clips_full: bool,         // a sixteenth clip was asked for: a fault
+    pub paints: Paints,           // gradients' stops and clips' masks, which
+                                  // the shader reads by index (see below)
     pub shake: Vec2,              // physical pixels, see Effects
     pub sounds: Vec<Sound>,       // the sounds that begin in this frame, each
                                   // with whether it is the opponent's
@@ -519,7 +521,7 @@ zero. The numbers in the first column are the values of `material`:
 | Material         | `uv`                                                   | `layer`    | `params`                                                            |
 | ---------------- | ------------------------------------------------------ | ---------- | ------------------------------------------------------------------- |
 | 0 table          | unused                                                 | unused     | unused                                                              |
-| 1 card           | `uv[0]` is the back's layer                            | the face   | `[dissolve, whiten, 0, 0]`, each from 0 to 1                        |
+| 1 card           | `uv[0]` is the back's layer                            | the face   | `[dissolve, whiten, desaturate, 0]`, each from 0 to 1               |
 | 2 contact shadow | unused                                                 | unused     | `[blur in millimetres, 0, 0, 0]`                                    |
 | 3 glow           | the sprite's rectangle in texels                       | atlas page | `[progress from 0 to 1, 0, 0, 0]`                                   |
 | 4 streak         | the sprite's rectangle in texels                       | atlas page | `[head from 0 to 1, tail length from 0 to 1, 0, 0]`                 |
@@ -528,6 +530,7 @@ zero. The numbers in the first column are the values of `material`:
 | 7 icon           | the icon's rectangle in texels                         | atlas page | unused                                                              |
 | 8 particle       | the sprite's rectangle in texels                       | atlas page | `[age from 0 to 1, seed, 0, 0]`                                     |
 | 9 box shadow     | offset x, offset y, spread, shape radius, each `fixed` | 1 if inset | `[box width, box height, box radius, deviation]`, in logical points |
+| 10 gradient      | linear: the angle; radial: centre and radii, `fixed`   | the entry  | `[box width, box height, box radius, deviation]`, in logical points |
 
 - **A rectangle in texels** is `[x, y, width, height]` within one atlas page.
 - **A box shadow's** box is the element's border box, or its padding box for an
@@ -537,7 +540,24 @@ zero. The numbers in the first column are the values of `material`:
 - **`dissolve`** is how far a card has broken up (the `dissolve` effect), and
   **`whiten`** how far its face is replaced by white light (`settle`, `blanch`
   and `cover`). A card with either above zero, or with a `tint` opacity under
-  255, is drawn with the blended records.
+  255, is drawn with the blended records. **`desaturate`** is how far a face
+  drawn in the flat layer moves toward its luminance, which CSS's `grayscale()`
+  and `saturate()` filters ask for.
+- **A gradient's** `layer` is its entry in the frame's paint table, plus 32,768
+  for a radial gradient. A linear gradient's `uv[0]` is its angle in 65,536ths
+  of a turn, 0 up and clockwise; a radial one's `uv` is its centre, from the
+  box's top left corner, and its two radii, each `fixed`. Its deviation blurs
+  the box's edges, and its quad is the box grown by three deviations.
+- **The paint table** (`Frame::paints`) holds what does not fit in a record: the
+  color stops of every gradient the frame draws (up to 32, shared by gradients
+  with the same stops, each up to 8 stops as RGBA bytes and offsets) and a mask
+  for each clip (a linear gradient over a box in physical pixels). The renderer
+  uploads the part the frame uses beside its uniforms, at offset 512, as its own
+  uniform binding, and the shader reads it by index. A record's clip entry,
+  which every record already has in its flags, names the mask that scales its
+  opacity; the Baseline uniforms say whether the frame has any mask, so a frame
+  with none writes none of the table. A gradient past the 32nd is not drawn, and
+  the "clips" check reports it.
 - **A new material or a new meaning for a field** is added to this table in the
   same change as the code. No material may read a field this table does not give
   it.
@@ -4306,8 +4326,8 @@ reference is the web interface as WebKit draws it, at scale 2.
   fixed list of CSS properties and each line of text with its baseline. Beryl
   3D's records come from `b3d tree --records`, which builds the frame with
   `Frame::looking` set so that it records how each flat-layer element was drawn
-  (its panel, text color and type) and each line's words; what `Style` cannot
-  say yet (gradients, shadows, filters, masks, transforms) is written as `none`.
+  (its panel, text color and type, shadows, gradients, mask and filter) and each
+  line's words; what `Style` cannot say yet (transforms) is written as `none`.
   The web side is read by a script that Playwright evaluates in the page, so
   nothing under `ui/` changes, and its roles come from the ARIA role or from
   `data/beryl3d/match/roles.json`. The page runs on Playwright's paused clock: a
@@ -4375,6 +4395,34 @@ reference is the web interface as WebKit draws it, at scale 2.
   each other as sums. Overlapping halos of neighbouring glyphs are drawn over
   each other rather than blurred together, which the text sample's offsets of a
   point or two keep within the tolerance.
+- **Gradients, masks and filters.** `Style::background_image` holds CSS's
+  `background-image` as a list of `Gradient` (linear at an angle, or radial with
+  a shape, an extent and a centre, each through up to 8 color stops), drawn over
+  the element's `background` color and under its border. `Style::mask` is
+  `mask-image`, and `Style::filter` the functions of `filter` other than drop
+  shadows (brightness, grayscale, saturate and blur). A gradient is resolved
+  against its box on the CPU, as CSS Images 3 places its stops (the gradient
+  line's length, default positions, stops placed before earlier ones, and a
+  radial extent's radii), and drawn by one `Gradient` record whose stops are an
+  entry of the frame's paint table. The shader interpolates between stops in
+  premultiplied sRGB, as CSS does, and spreads a step narrower than a pixel over
+  one pixel, which the hard-stop sample needed. A mask puts the element and
+  everything under it in a clip of its border box, whose paint table entry holds
+  the mask's gradient; every fragment drawn under that clip is scaled by the
+  gradient's opacity, and a clip made inside it carries the mask on. Only a
+  linear mask is drawn, which is all the web uses. A color filter is applied on
+  the CPU to every color the element and everything under it is drawn in (its
+  panel, gradients, shadows, text and icons, each ancestor's filter after its
+  own), on sRGB values as WebKit applies CSS's filter functions; a face, which
+  no color holds, takes the brightness in its tint and the grayscale as the card
+  material's `desaturate`. A blur is the expensive one: it would need the
+  subtree drawn offscreen and blurred. The web blurs one thing, the whole table
+  under the game's end screen (`.table-dimmed`), which Beryl 3D draws in 3D, so
+  a flat-layer element's blur blurs only the edges of its own panel and
+  gradients (a blurred flat color is drawn as a gradient of one stop), by the
+  closed form the box shadows use; the inside of a gradient changes too little
+  under a blur of a few points to matter, which the blur sample confirms at a
+  `p995` of 3. Drop shadows of text under a filter keep their colors.
 - **Pixels.** What is left after boxes and styles agree is compared as pixels,
   with glyph pixels masked, because glyph antialiasing differs between WebKit
   and parley with swash. `just b3d match pixels <target> --at <moment>` takes

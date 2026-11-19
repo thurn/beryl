@@ -27,7 +27,7 @@
       "worst_frame_draw_calls": 4,
       "worst_frame_upload_bytes": 11680,
       "worst_frame_blended_area": 0.0813,
-      "handle_allocations": 3286,
+      "handle_allocations": 3288,
       "frame_allocations": 0,
       "worst_frame_instructions": 1989925,
       "total_instructions": 49159919,
@@ -50,7 +50,7 @@
       "worst_frame_draw_calls": 4,
       "worst_frame_upload_bytes": 11680,
       "worst_frame_blended_area": 0.0797,
-      "handle_allocations": 9062,
+      "handle_allocations": 9064,
       "frame_allocations": 0,
       "worst_frame_instructions": 6424479,
       "total_instructions": 104122963,
@@ -65,15 +65,15 @@
       "worst_frame_segments": 23,
       "total_segments": 17317,
       "worst_frame_records": 100,
-      "total_records": 80780,
+      "total_records": 80890,
       "worst_frame_layout_nodes": 54,
       "total_layout_nodes": 194,
       "worst_frame_text_runs": 29,
       "total_text_runs": 60,
       "worst_frame_draw_calls": 7,
       "worst_frame_upload_bytes": 8000,
-      "worst_frame_blended_area": 0.2745,
-      "handle_allocations": 17493,
+      "worst_frame_blended_area": 0.2887,
+      "handle_allocations": 17542,
       "frame_allocations": 0,
       "worst_frame_instructions": 4816173,
       "total_instructions": 187017745,
@@ -88,15 +88,15 @@
       "worst_frame_segments": 3,
       "total_segments": 115,
       "worst_frame_records": 45,
-      "total_records": 3540,
+      "total_records": 3607,
       "worst_frame_layout_nodes": 48,
       "total_layout_nodes": 60,
       "worst_frame_text_runs": 24,
       "total_text_runs": 28,
       "worst_frame_draw_calls": 5,
-      "worst_frame_upload_bytes": 3600,
-      "worst_frame_blended_area": 0.252,
-      "handle_allocations": 2074,
+      "worst_frame_upload_bytes": 4080,
+      "worst_frame_blended_area": 0.2663,
+      "handle_allocations": 2087,
       "frame_allocations": 0,
       "worst_frame_instructions": 1954384,
       "total_instructions": 9442478,
@@ -110,8 +110,8 @@
       "total_elements": 15575,
       "worst_frame_segments": 107,
       "total_segments": 7731,
-      "worst_frame_records": 410,
-      "total_records": 30189,
+      "worst_frame_records": 411,
+      "total_records": 30275,
       "worst_frame_layout_nodes": 46,
       "total_layout_nodes": 52,
       "worst_frame_text_runs": 20,
@@ -119,9 +119,9 @@
       "worst_frame_placed": 1924,
       "total_placed": 2024,
       "worst_frame_draw_calls": 13,
-      "worst_frame_upload_bytes": 32800,
-      "worst_frame_blended_area": 0.8104,
-      "handle_allocations": 2254,
+      "worst_frame_upload_bytes": 33456,
+      "worst_frame_blended_area": 0.8129,
+      "handle_allocations": 2258,
       "frame_allocations": 0,
       "worst_frame_instructions": 2803575,
       "total_instructions": 46982881,
@@ -144,7 +144,7 @@
       "worst_frame_draw_calls": 3,
       "worst_frame_upload_bytes": 10160,
       "worst_frame_blended_area": 0.0111,
-      "handle_allocations": 873,
+      "handle_allocations": 875,
       "frame_allocations": 0,
       "worst_frame_instructions": 1192017,
       "total_instructions": 35465750,
@@ -167,7 +167,7 @@
       "worst_frame_draw_calls": 4,
       "worst_frame_upload_bytes": 82800,
       "worst_frame_blended_area": 0.1244,
-      "handle_allocations": 2145,
+      "handle_allocations": 2147,
       "frame_allocations": 0,
       "worst_frame_instructions": 1552139,
       "total_instructions": 126868703,
@@ -204,43 +204,47 @@
   "materials": {
     "box_shadow": {
       "samples": 1,
-      "expressions": 177
+      "expressions": 193
+    },
+    "gradient": {
+      "samples": 1,
+      "expressions": 174
     },
     "card": {
       "samples": 1,
-      "expressions": 107
+      "expressions": 128
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 100
+      "expressions": 116
     },
     "glow": {
       "samples": 1,
-      "expressions": 86
+      "expressions": 102
     },
     "glyph": {
       "samples": 1,
-      "expressions": 80
+      "expressions": 96
     },
     "icon": {
       "samples": 1,
-      "expressions": 80
+      "expressions": 96
     },
     "panel": {
       "samples": 1,
-      "expressions": 136
+      "expressions": 152
     },
     "table": {
       "samples": 1,
-      "expressions": 78
+      "expressions": 94
     },
     "streak": {
       "samples": 1,
-      "expressions": 103
+      "expressions": 119
     },
     "card_lit": {
       "samples": 5,
-      "expressions": 287
+      "expressions": 292
     },
     "table_lit": {
       "samples": 5,

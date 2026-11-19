@@ -7,6 +7,7 @@
 use glam::{Affine3A, Vec2};
 
 use crate::element::Shadow;
+use crate::element::paint::Geometry;
 use crate::input::FaceSize;
 
 /// One shape to draw. 80 bytes, laid out as the renderer's instance buffer expects.
@@ -48,6 +49,7 @@ pub enum Material {
     Icon = 7,
     Particle = 8,
     BoxShadow = 9,
+    Gradient = 10,
 }
 
 /// The texture array a record samples, in bits 0 to 1 of `Draw::flags`.
@@ -168,7 +170,8 @@ impl Draw {
     /// A card showing `face` on its front and `back` on its back, both layers of the array for
     /// `size`. The back's layer goes in `uv[0]`, because a face fills its layer and needs no
     /// rectangle. `dissolve` is how far the card has broken up and `whiten` how far its face is
-    /// replaced by white light, each from 0 to 1.
+    /// replaced by white light, each from 0 to 1. `desaturate` (`params.z`, 0 here) is set by
+    /// `Draw::desaturated`.
     #[must_use]
     pub fn card(
         transform: Affine3A,
@@ -188,6 +191,19 @@ impl Draw {
         draw.layer = face;
         draw.params = [dissolve, whiten, 0.0, 0.0];
         draw
+    }
+
+    /// The same card record with its face's colors moved `amount` of the way, from 0 to 1, to
+    /// their luminance (`params.z`), as CSS's `grayscale()` and `saturate()` filters move them.
+    #[must_use]
+    pub fn desaturated(mut self, amount: f32) -> Self {
+        debug_assert_eq!(
+            self.material,
+            Material::Card as u8,
+            "only a card desaturates"
+        );
+        self.params[2] = amount;
+        self
     }
 
     /// The soft shadow under a card above the table, blurred by `blur` millimetres.
@@ -288,6 +304,57 @@ impl Draw {
         draw
     }
 
+    /// A rounded rectangle of the flat layer, `size` logical points large with corners of
+    /// `radius`, filled with entry `entry` of the frame's gradients (`Frame::paints`) along
+    /// `geometry`, measured from the rectangle's top left corner, and its edges blurred with a
+    /// Gaussian of standard deviation `sigma` points (0 for sharp ones). The tint's opacity
+    /// scales the gradient's. A radial gradient's centre and radii go in `uv` as `fixed`
+    /// lengths, and a linear one's angle in `uv[0]` in 65,536ths of a turn; `layer` is the entry,
+    /// plus `RADIAL` for a radial gradient. `transform` takes the unit quad to the rectangle grown
+    /// by `gradient_reach(sigma)` on every side.
+    #[must_use]
+    pub fn gradient(
+        transform: Affine3A,
+        tint: [u8; 4],
+        size: Vec2,
+        radius: f32,
+        sigma: f32,
+        geometry: &Geometry,
+        entry: u16,
+    ) -> Self {
+        let mut draw = Self::new(
+            transform,
+            tint,
+            Material::Gradient,
+            TextureArray::Atlas,
+            Mesh::Quad,
+        );
+        match *geometry {
+            Geometry::Linear { angle } => {
+                let turns = angle.rem_euclid(std::f32::consts::TAU) / std::f32::consts::TAU;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "a fraction of a turn, from 0 to 1, times 65,536 wraps to u16"
+                )]
+                let angle = ((turns * 65_536.0).round() as u32 % 65_536) as u16;
+                draw.uv = [angle, 0, 0, 0];
+                draw.layer = entry;
+            }
+            Geometry::Radial { centre, radii } => {
+                draw.uv = [
+                    fixed(centre.x),
+                    fixed(centre.y),
+                    fixed(radii.x),
+                    fixed(radii.y),
+                ];
+                draw.layer = entry | RADIAL;
+            }
+        }
+        draw.params = [size.x, size.y, radius, sigma];
+        draw
+    }
+
     /// One glyph of laid-out text. It reads no `params`.
     #[must_use]
     pub fn glyph(transform: Affine3A, tint: [u8; 4], sprite: Sprite) -> Self {
@@ -381,6 +448,17 @@ pub fn box_shadow_reach(shadow: &Shadow) -> f32 {
     } else {
         shadow.spread + 3.0 * shadow.sigma()
     }
+}
+
+/// What a `Gradient` record's `layer` is raised by when its gradient is radial.
+pub const RADIAL: u16 = 1 << 15;
+
+/// How far past its rectangle a `Gradient` record's quad reaches on each side, in logical
+/// points: three standard deviations of its blur, past which the Gaussian leaves under a level of
+/// 255. The shader works out the same quad from the record's `params`, so the two must agree.
+#[must_use]
+pub fn gradient_reach(sigma: f32) -> f32 {
+    3.0 * sigma.max(0.0)
 }
 
 /// A length in logical points as a `u16` of sixteenths of a point plus 32,768, which covers

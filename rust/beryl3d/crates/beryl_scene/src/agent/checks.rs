@@ -588,22 +588,36 @@ fn in_window(draw: &Draw, projection: glam::Mat4) -> bool {
     clip.w > 0.0 && clip.x.abs() <= clip.w && clip.y.abs() <= clip.w
 }
 
-/// Clips fit: the frame asked for no more clip rectangles than `Frame::clips` holds. A clip
-/// asked for past the last entry is dropped, and what it should have cut off is drawn whole.
+/// Clips fit: the frame asked for no more clip rectangles than `Frame::clips` holds, and no
+/// more gradients than its paint table holds (`Paints`). A clip asked for past the last entry is
+/// dropped, and what it should have cut off is drawn whole; a gradient past the last is not
+/// drawn.
 #[must_use]
 pub fn clips(frame: &Frame, context: &Context) -> Vec<Fault> {
-    if !frame.clips_full {
-        return Vec::new();
+    let mut faults = Vec::new();
+    if frame.clips_full {
+        faults.push(fault(
+            Rule::Clips,
+            context,
+            format!(
+                "the frame asked for more than {} clip rectangles",
+                crate::frame::CLIPS - 1
+            ),
+            Vec::new(),
+        ));
     }
-    vec![fault(
-        Rule::Clips,
-        context,
-        format!(
-            "the frame asked for more than {} clip rectangles",
-            crate::frame::CLIPS - 1
-        ),
-        Vec::new(),
-    )]
+    if frame.paints.full {
+        faults.push(fault(
+            Rule::Clips,
+            context,
+            format!(
+                "the frame asked for more than {} gradients",
+                crate::frame::GRADIENTS
+            ),
+            Vec::new(),
+        ));
+    }
+    faults
 }
 
 /// An arrow as one frame drew it, kept for "lines hold" to compare with the next frame's, since

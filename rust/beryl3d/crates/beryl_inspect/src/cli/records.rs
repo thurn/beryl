@@ -4,13 +4,14 @@
 //! property names and values normalized as the web side's dump script writes them
 //! (`tools/src/beryl_tools/beryl3d/match/dump.mjs`): colors as `[r, g, b, a]` with the alpha
 //! from 0 to 1, lengths in points, shadows as `{inset, x, y, blur, spread, color}` (`box-shadow`
-//! and each `drop-shadow` of `filter`), and `"none"` for what Beryl 3D's `Style` cannot say yet
-//! (gradients, other filters, masks and transforms).
+//! and each `drop-shadow` of `filter`), gradients as `{kind, repeating, shape, stops}`
+//! (`background-image` and `mask-image`), the other filter functions as `{fn, value}`, and
+//! `"none"` for what Beryl 3D's `Style` cannot say yet (transforms).
 
 use beryl_scene::agent::hit::bounds;
 use beryl_scene::agent::tree::locator_of;
-use beryl_scene::element::Shadow;
-use beryl_scene::frame::{ElementLook, Frame, LookShadow, Place, REVEALED_FACE, Role};
+use beryl_scene::element::{Extent, Filter, Gradient, Length, Shadow, Shape};
+use beryl_scene::frame::{ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Role};
 use serde_json::{Map, Value, json};
 
 /// Rounds `value` to hundredths, as the web side rounds its boxes.
@@ -58,6 +59,106 @@ fn shadows(at: u32, all: &[LookShadow]) -> (Value, Value) {
     (value(boxes), value(drops))
 }
 
+/// A number as CSS writes it: no decimals when it is whole.
+fn css_number(value: f32) -> String {
+    let rounded = (f64::from(value) * 100.0).round() / 100.0;
+    if rounded.fract() == 0.0 {
+        format!("{rounded:.0}")
+    } else {
+        format!("{rounded}")
+    }
+}
+
+/// A gradient length as `WebKit` computes one: `40px` or `75%`.
+fn css_length(length: Length) -> String {
+    match length {
+        Length::Points(points) => format!("{}px", css_number(points)),
+        Length::Percent(percent) => format!("{}%", css_number(percent)),
+    }
+}
+
+/// A stop's position as the web side's records write one: a percentage as text, a length as
+/// a number of points.
+fn stop_position(length: Length) -> Value {
+    match length {
+        Length::Points(points) => round(points),
+        Length::Percent(_) => Value::from(css_length(length)),
+    }
+}
+
+/// A radial gradient's first argument as `WebKit` serializes it, or null when it has none:
+/// `circle` for a circle (an ellipse is the default), its extent unless `farthest-corner`, and
+/// its centre unless the middle.
+fn radial_shape(circle: bool, extent: Extent, at: (Length, Length)) -> Value {
+    let mut words = Vec::new();
+    if circle {
+        words.push("circle".to_owned());
+    }
+    match extent {
+        Extent::FarthestCorner => {}
+        Extent::ClosestSide => words.push("closest-side".to_owned()),
+        Extent::ClosestCorner => words.push("closest-corner".to_owned()),
+        Extent::FarthestSide => words.push("farthest-side".to_owned()),
+        Extent::Size(x, _) if circle => words.push(css_length(x)),
+        Extent::Size(x, y) => words.push(format!("{} {}", css_length(x), css_length(y))),
+    }
+    if at != (Length::Percent(50.0), Length::Percent(50.0)) {
+        words.push(format!("at {} {}", css_length(at.0), css_length(at.1)));
+    }
+    if words.is_empty() {
+        Value::Null
+    } else {
+        Value::from(words.join(" "))
+    }
+}
+
+/// A gradient as the web side's records write one (`css.py`'s `image`).
+fn gradient(gradient: &Gradient) -> Value {
+    let (kind, shape) = match gradient.shape {
+        Shape::Linear { angle } => ("linear", round(angle.rem_euclid(360.0))),
+        Shape::Radial { circle, extent, at } => ("radial", radial_shape(circle, extent, at)),
+    };
+    let stops: Vec<Value> = (gradient.stops().iter())
+        .map(|stop| {
+            json!({
+                "color": color(stop.color),
+                "at": stop.at.map(|at| vec![stop_position(at)]),
+            })
+        })
+        .collect();
+    json!({"kind": kind, "repeating": false, "shape": shape, "stops": stops})
+}
+
+/// A filter function other than a drop shadow as the web side's records write one.
+fn filter_function(filter: Filter) -> Value {
+    let (name, value) = match filter {
+        Filter::Brightness(amount) => ("brightness", amount),
+        Filter::Grayscale(amount) => ("grayscale", amount),
+        Filter::Saturate(amount) => ("saturate", amount),
+        Filter::Blur(points) => ("blur", points),
+    };
+    json!({"fn": name, "value": (f64::from(value) * 10_000.0).round() / 10_000.0})
+}
+
+/// The `background-image`, `mask-image` and the filter functions other than drop shadows of
+/// element `at`, each image `"none"` when it has none.
+fn paints(at: u32, all: &[LookPaint]) -> (Value, Value, Vec<Value>) {
+    let (mut images, mut mask, mut filters) = (Vec::new(), Value::from("none"), Vec::new());
+    for paint in all.iter().filter(|paint| paint.element() == at) {
+        match paint {
+            LookPaint::Gradient(_, layer) => images.push(gradient(layer)),
+            LookPaint::Mask(_, layer) => mask = Value::Array(vec![gradient(layer)]),
+            LookPaint::Filter(_, filter) => filters.push(filter_function(*filter)),
+        }
+    }
+    let images = if images.is_empty() {
+        Value::from("none")
+    } else {
+        Value::Array(images)
+    };
+    (images, mask, filters)
+}
+
 /// Each element's place in the order the frame paints it: the table's elements farthest first,
 /// then the flat layer's in tree order, which is the order its records are drawn in.
 fn paint_order(frame: &Frame) -> Vec<usize> {
@@ -77,7 +178,12 @@ fn paint_order(frame: &Frame) -> Vec<usize> {
 /// The element's style in CSS's names, from how it was drawn (`look`) where the frame recorded
 /// that, and its opacity, which includes its ancestors' as the web side's does. No panel is a
 /// transparent background, as the web's computed style says.
-fn style(opacity: f32, look: Option<&ElementLook>, shadows: (Value, Value)) -> Value {
+fn style(
+    opacity: f32,
+    look: Option<&ElementLook>,
+    shadows: (Value, Value),
+    (images, mask, filters): (Value, Value, Vec<Value>),
+) -> Value {
     let mut style = Map::new();
     let none = || Value::from("none");
     style.insert(
@@ -85,7 +191,7 @@ fn style(opacity: f32, look: Option<&ElementLook>, shadows: (Value, Value)) -> V
         look.and_then(|look| look.background)
             .map_or_else(|| color([0; 4]), color),
     );
-    style.insert("background-image".into(), none());
+    style.insert("background-image".into(), images);
     let border = look.and_then(|look| look.border);
     style.insert(
         "border-width".into(),
@@ -99,9 +205,21 @@ fn style(opacity: f32, look: Option<&ElementLook>, shadows: (Value, Value)) -> V
         "border-radius".into(),
         round(look.map_or(0.0, |look| look.radius)),
     );
-    let (box_shadow, filter) = shadows;
+    let (box_shadow, drops) = shadows;
     style.insert("box-shadow".into(), box_shadow);
-    style.insert("filter".into(), filter);
+    let mut filter = match drops {
+        Value::Array(drops) => drops,
+        _ => Vec::new(),
+    };
+    filter.extend(filters);
+    style.insert(
+        "filter".into(),
+        if filter.is_empty() {
+            none()
+        } else {
+            Value::Array(filter)
+        },
+    );
     style.insert(
         "opacity".into(),
         json!((f64::from(opacity) * 1000.0).round() / 1000.0),
@@ -112,7 +230,7 @@ fn style(opacity: f32, look: Option<&ElementLook>, shadows: (Value, Value)) -> V
         style.insert("font-size".into(), round(look.text.size));
         style.insert("font-weight".into(), look.text.weight.into());
     }
-    style.insert("mask-image".into(), none());
+    style.insert("mask-image".into(), mask);
     style.insert("transform".into(), none());
     Value::Object(style)
 }
@@ -166,6 +284,7 @@ pub fn records(frame: &Frame) -> Vec<Value> {
                     element.opacity,
                     look,
                     shadows(at as u32, &frame.looks.shadows),
+                    paints(at as u32, &frame.looks.paints),
                 ),
                 "text": text,
             })

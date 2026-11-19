@@ -226,13 +226,19 @@ fn actions() -> Element {
         .child(specimen_row().child(phase_tracker()))
 }
 
+/// The phase tracker's thin grey rim, the top and bottom color of `.phase-tracker`'s border in
+/// `ui/src/design/components/phase-tracker.css` (its sides are darker on the web).
+const PHASE_TRACKER_RIM: [u8; 4] = [0x8a, 0x83, 0x7c, 0xff];
+
 fn phase_tracker() -> Element {
     let side = f32::from(icons::PHASE_SIDE);
     row()
         .name("Phase tracker")
         .padding(space::S)
         .gap(space::S)
-        .background(color::SURFACE)
+        .background([0; 4])
+        .background_image(vec![crate::tokens::gradient::PHASE_TRACKER])
+        .border((PHASE_TRACKER_RIM, 1.0))
         .radius(size::PILL_HEIGHT / 2.0)
         .children(
             icons::PHASES

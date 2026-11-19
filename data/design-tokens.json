@@ -1074,6 +1074,10 @@
       "TIMING_REFUSAL_GAP": {
         "value": 6,
         "note": "The gap between the bottom of the permanent and that word, as the web's `noticePlace` leaves it."
+      },
+      "VIEWER_FADE": {
+        "value": 56,
+        "note": "How far the cards fade out at an end of a pile viewer's list with more beyond it: `--fade` of `.zone-viewer-cards` in `ui/src/screens/styles/zone-viewer.css`."
       }
     },
     "color": {
@@ -1321,6 +1325,14 @@
       "NANOS_PER_MS": {
         "value": 1000000,
         "note": "Nanoseconds in a millisecond."
+      },
+      "WAY_DISABLED_GRAYSCALE": {
+        "value": 0.85,
+        "note": "How far a way that cannot be chosen is desaturated: `grayscale(0.85)` of `.stage-way:disabled .stage-way-face` in `ui/src/stage/choose.css`."
+      },
+      "WAY_DISABLED_BRIGHTNESS": {
+        "value": 0.55,
+        "note": "How far a way that cannot be chosen is darkened: `brightness(0.55)` of `.stage-way:disabled .stage-way-face`."
       }
     },
     "shadow": {
@@ -1359,6 +1371,32 @@
       "BANNER_TITLE": {
         "value": "0 1px 1px rgb(0 0 0 / 85%), 0 2px 5px rgb(0 0 0 / 50%)",
         "note": "The step banner title's drop shadows: `.step-banner-title`'s `filter` in `ui/src/screens/styles/step-banner.css`, a tight dark one under a soft one."
+      }
+    },
+    "gradient": {
+      "PRIMARY": {
+        "value": "linear-gradient(180deg, #e28322, #cc6f1c 12%, #b45e12 30%, #a7570f 48%, #ad5b10 60%, #c46a18 74%, #e08122 87%, #f6a83c 100%)",
+        "note": "The primary action button's face: `.button-primary` in `ui/src/design/components/buttons.css`, deep amber darkest just above its middle and bright at its foot."
+      },
+      "SECONDARY": {
+        "value": "linear-gradient(180deg, #2a2522, #1d1917 55%, #262120)",
+        "note": "Any other action button's near-black face: `.button-secondary` in `buttons.css`."
+      },
+      "BANNER": {
+        "value": "radial-gradient(ellipse 52% 54% at 50% 45%, rgb(12 10 9 / 88%), rgb(12 10 9 / 70%) 45%, rgb(12 10 9 / 30%) 75%, transparent)",
+        "note": "The smoky shade under a step announcement: `.step-banner` in `ui/src/screens/styles/step-banner.css`, darkest a little above its middle and fading out before its edges."
+      },
+      "PHASE_TRACKER": {
+        "value": "linear-gradient(180deg, #1e1b18 40%, #2a2522 80%, #2e2926)",
+        "note": "The phase tracker's dark pill, lighter toward its foot: `.phase-tracker` in `ui/src/design/components/phase-tracker.css`."
+      },
+      "OPENING_BACKDROP": {
+        "value": "linear-gradient(180deg, transparent 12%, rgb(14 13 12 / 65%) 28%)",
+        "note": "The opening hand's backdrop, which leaves the opponent's side of the table clear: `.opening > .overlay-backdrop` in `ui/src/screens/styles/table.css`."
+      },
+      "LOG_MASK": {
+        "value": "linear-gradient(to bottom, transparent, #000 40px)",
+        "note": "The game log's mask, which fades its oldest lines out over its top 40 points: `.game-log-list`'s `mask-image` in `table.css`."
       }
     }
   }

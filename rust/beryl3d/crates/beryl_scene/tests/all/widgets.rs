@@ -6,15 +6,15 @@
 use beryl_scene::agent::checks::{on_screen, phone_sizes, reachable, text_fits};
 use beryl_scene::agent::{Layout, Rule};
 use beryl_scene::command::Request;
-use beryl_scene::element::{Press, describe, row, text};
-use beryl_scene::frame::{Frame, Material, Role, StateBits, Wake};
+use beryl_scene::element::{Gradient, Press, describe, row, text};
+use beryl_scene::frame::{Frame, Material, RADIAL, Role, StateBits, Wake};
 use beryl_scene::input::{
     IconCell, Input, Insets, Key, KeyCode, KeyPhase, Modifiers, PointerPhase, Size,
 };
 use beryl_scene::layout::{Layer, Navigation};
 use beryl_scene::settings::Setting;
 use beryl_scene::table::Window;
-use beryl_scene::tokens::{color, size, type_style};
+use beryl_scene::tokens::{color, gradient, size, type_style};
 use beryl_scene::widgets::{self, MenuGroup, MenuId, MenuRow, icons};
 use glam::Vec2;
 
@@ -64,27 +64,24 @@ fn a_disabled_button_is_drawn_faint_and_a_press_on_it_sends_nothing() {
 }
 
 #[test]
-fn a_primary_button_is_drawn_on_the_primary_color() {
+fn a_primary_button_is_drawn_on_the_primary_gradient() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
     client.frame(0);
     let frame = client.frame(OPEN);
-    let panels = panels(frame);
-    // "Auto Pay" is the prompt's primary button; "Cancel" is drawn as an ordinary one.
-    assert_eq!(
-        panels
-            .iter()
-            .filter(|&&tint| tint == color::PRIMARY)
-            .count(),
-        1
-    );
-    assert_eq!(
-        panels
-            .iter()
-            .filter(|&&tint| tint == color::SECONDARY)
-            .count(),
-        1
-    );
+    // "Auto Pay" is the prompt's primary button; "Cancel" is drawn as an ordinary one. Each is
+    // drawn with a gradient record, whose entry holds its gradient's first stop.
+    let first_stops: Vec<[u8; 4]> = (frame.draws.iter())
+        .filter(|draw| draw.material == Material::Gradient as u8)
+        .map(|draw| {
+            let entry = usize::from(draw.layer & (RADIAL - 1));
+            frame.paints.table.gradients[entry].colors[0].to_le_bytes()
+        })
+        .collect();
+    let first = |gradient: Gradient| gradient.stops()[0].color;
+    let count = |color: [u8; 4]| first_stops.iter().filter(|&&stop| stop == color).count();
+    assert_eq!(count(first(gradient::PRIMARY)), 1, "{first_stops:?}");
+    assert_eq!(count(first(gradient::SECONDARY)), 1, "{first_stops:?}");
 }
 
 #[test]

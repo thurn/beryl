@@ -16,7 +16,7 @@ use beryl_protocol::protocol::Side;
 use beryl_scene::agent::{Layout, hit};
 use beryl_scene::art::orb::Shape;
 use beryl_scene::driver::{Moment, Page};
-use beryl_scene::frame::{Draw, Frame, Material, Role};
+use beryl_scene::frame::{Draw, Frame, Material, RADIAL, Role};
 use beryl_scene::input::{AssetReady, GlyphCell, Rect, Size};
 use glam::{Vec2, Vec3};
 
@@ -211,8 +211,9 @@ fn glyph_tints(frame: &Frame, rect: Rect) -> Vec<[u8; 4]> {
         .collect()
 }
 
-/// How a web rule draws a button: its face, rim, label and rim width. A gradient face or a
-/// rim lit unevenly lists every colour the web uses; the flat layer draws one of them.
+/// How a web rule draws a button: its face, rim, label and rim width. A gradient face lists its
+/// stops' colours in order, which the flat layer's gradient draws; a rim lit unevenly lists
+/// every colour the web uses, and the flat layer draws one of them.
 struct ButtonLook {
     faces: Vec<[u8; 4]>,
     rims: Vec<[u8; 4]>,
@@ -239,13 +240,39 @@ fn first_button(frame: &Frame, name: &str) -> Rect {
         .map_or_else(|| panic!("no button named \"{name}\""), hit::bounds)
 }
 
-/// Checks that the first button named `name` on `page` is drawn as `look` says.
+/// The index and the stop colors of the gradient drawn on exactly `rect`, if any, without the
+/// repeats of its last stop that fill its entry of the frame's gradients.
+fn gradient_on(frame: &Frame, rect: Rect) -> Option<(usize, Vec<[u8; 4]>)> {
+    let index = (frame.layer as usize..frame.draws.len()).find(|&index| {
+        let draw = &frame.draws[index];
+        draw.material == Material::Gradient as u8 && same_rect(drawn_rect(frame, draw), rect)
+    })?;
+    let entry = usize::from(frame.draws[index].layer & (RADIAL - 1));
+    let mut colors: Vec<[u8; 4]> = (frame.paints.table.gradients[entry].colors.iter())
+        .map(|bytes| bytes.to_le_bytes())
+        .collect();
+    while colors.len() > 1 && colors[colors.len() - 1] == colors[colors.len() - 2] {
+        colors.pop();
+    }
+    Some((index, colors))
+}
+
+/// Checks that the first button named `name` on `page` is drawn as `look` says: a gradient
+/// face in the web's colors, or a flat face in one of them.
 fn assert_button_drawn(page: &mut Page, name: &str, look: &ButtonLook, what: &str) {
     let frame = page.frame();
     let rect = first_button(frame, name);
     let panel = panel_on(frame, rect);
     let mut faults = Vec::new();
-    if !look.faces.contains(&panel.tint) {
+    let gradient = gradient_on(frame, rect);
+    if let Some((_, colors)) = &gradient {
+        if *colors != look.faces {
+            faults.push(format!(
+                "its gradient's stops are {colors:?}, not the web's {:?}",
+                look.faces
+            ));
+        }
+    } else if !look.faces.contains(&panel.tint) {
         faults.push(format!(
             "its face is {:?}, not one of the web's {:?}",
             panel.tint, look.faces
@@ -265,7 +292,16 @@ fn assert_button_drawn(page: &mut Page, name: &str, look: &ButtonLook, what: &st
     }
     let middle = Vec2::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
     let (shown, over) = shown_at(frame, middle, &panel);
-    if shown != [panel.tint[0], panel.tint[1], panel.tint[2]] {
+    if gradient.is_some() {
+        // A gradient face shows under its own rim, a clear panel; nothing may cover it.
+        let over: Vec<String> = (over.iter())
+            .filter(|p| p.tint[3] > 0)
+            .map(|p| format!("a panel of {:?} on {:?}", p.tint, p.rect))
+            .collect();
+        if !over.is_empty() {
+            faults.push(format!("its face is under {}", over.join(", ")));
+        }
+    } else if shown != [panel.tint[0], panel.tint[1], panel.tint[2]] {
         let over: Vec<String> = over
             .iter()
             .map(|p| format!("a panel of {:?} on {:?}", p.tint, p.rect))

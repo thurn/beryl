@@ -41,6 +41,7 @@ mod notices;
 mod object_states;
 mod orb;
 mod own;
+mod paints;
 mod particles;
 mod piles;
 mod play;

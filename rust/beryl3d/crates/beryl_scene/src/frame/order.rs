@@ -119,7 +119,8 @@ pub(super) fn finish(frame: &mut Frame) {
 
     let records = super::index(frame.draws.len());
     frame.load.instances = records;
-    frame.load.upload_bytes = records * super::index(size_of::<Draw>());
+    frame.load.upload_bytes =
+        records * super::index(size_of::<Draw>()) + super::index(frame.paints.bytes().len());
     frame.load.draw_calls = draw_calls(&frame.draws, opaque, layer);
 }
 

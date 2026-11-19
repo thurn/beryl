@@ -25,6 +25,8 @@ pub(super) struct ShadowBox {
     pub opacity: f32,
     /// The clip's entry in the frame's clips, or 0 for none.
     pub clip: u8,
+    /// The filters each shadow's color is drawn through.
+    pub filters: super::panel::Chain,
 }
 
 /// Writes the outer box shadows of `shadows`, or the `inset` ones, cast from `cast`.
@@ -59,7 +61,7 @@ pub(super) fn write_box_shadows(
         };
         let mut draw = Draw::box_shadow(
             camera.layer_transform(quad),
-            faded(shadow.color, cast.opacity),
+            faded(cast.filters.color(shadow.color), cast.opacity),
             size,
             radius,
             shadow,

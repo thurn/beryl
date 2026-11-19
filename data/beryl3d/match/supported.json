@@ -1,18 +1,18 @@
 {
   "supported": {
     "background-color": ["color"],
-    "background-image": [],
+    "background-image": ["linear", "radial", "linear + linear", "linear + radial", "radial + linear", "radial + radial"],
     "border-width": ["uniform"],
     "border-color": ["color"],
     "border-radius": ["uniform"],
     "box-shadow": ["*"],
-    "filter": [],
+    "filter": ["brightness", "grayscale", "saturate", "blur", "grayscale + brightness", "brightness + saturate", "blur + brightness + saturate"],
     "opacity": ["*"],
     "color": ["color"],
     "font-family": ["*"],
     "font-size": ["*"],
     "font-weight": ["*"],
-    "mask-image": [],
+    "mask-image": ["linear"],
     "transform": []
   }
 }
