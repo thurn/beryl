@@ -1,10 +1,152 @@
 //! The lines of `ignite test`, `ignite check` and `ignite land` that say where time went apart
-//! from running checks: a `built` line per product built, and the `listed` line for the
-//! families whose `list` command ran.
+//! from running checks: a `built` line per product built, the `listed` line for the families
+//! whose `list` command ran, the `took` line that splits the command's time into its stages,
+//! and the `slow` line that names every other step of five seconds or more.
+//!
+//! A step that is neither a build, a listing nor a check run, such as hashing a large family's
+//! inputs or waiting for a build another command started, was once reported nowhere: on
+//! 2026-11-19 `ignite test` of a one-line card change took 300 s, and its lines accounted for
+//! 130 s of them.
 
 use std::collections::BTreeMap;
 
+use ignite_core::time::Timestamp;
+
 use super::{Built, CheckRun, ListingTime, plan};
+use crate::server::Context;
+
+/// The shortest step that [`CheckRun::slow`] keeps, in seconds.
+const KEPT_S: f64 = 1.0;
+
+/// The shortest step the `slow` line names, in seconds.
+const SHOWN_S: f64 = 5.0;
+
+/// When a step started, read from the context's clock.
+#[derive(Clone, Copy)]
+pub(crate) struct Stopwatch(Timestamp);
+
+impl Stopwatch {
+    pub(crate) fn start(ctx: &Context) -> Self {
+        Self(ctx.clock.now())
+    }
+
+    /// Seconds since the step started.
+    pub(crate) fn seconds(self, ctx: &Context) -> f64 {
+        ctx.clock.now().seconds_since(self.0).max(0.0)
+    }
+}
+
+impl CheckRun {
+    /// Records one of the command's stages, which run one after another, as having taken the
+    /// seconds since `started`.
+    pub(crate) fn stage(&mut self, ctx: &Context, what: &str, started: Stopwatch) {
+        self.stages.push((what.to_owned(), started.seconds(ctx)));
+    }
+
+    /// Records a step inside a stage as having taken the seconds since `started`, if it took at
+    /// least a second; the `slow` line names the steps of [`SHOWN_S`] or more.
+    pub(crate) fn slow(&mut self, ctx: &Context, what: impl Into<String>, started: Stopwatch) {
+        let seconds = started.seconds(ctx);
+        if seconds >= KEPT_S {
+            self.slow_steps.push((what.into(), seconds));
+        }
+    }
+
+    /// Adds `other`, what one family's work found on a thread of its own, after what this run
+    /// holds. A build failure already recorded is not recorded again.
+    pub(crate) fn absorb(&mut self, other: CheckRun) {
+        // Taken apart field by field, so a field added to `CheckRun` cannot be forgotten here.
+        let CheckRun {
+            outcomes,
+            from_cache,
+            ran,
+            failures,
+            builds,
+            build_failures,
+            incomplete_families,
+            out_of_scope,
+            skipped,
+            unlisted,
+            cold_families,
+            wall_s,
+            listings,
+            listings_kept,
+            records,
+            stages,
+            slow_steps,
+        } = other;
+        self.outcomes.extend(outcomes);
+        self.from_cache += from_cache;
+        self.ran += ran;
+        self.failures.extend(failures);
+        self.builds.extend(builds);
+        for (product, output) in build_failures {
+            if !self.build_failures.iter().any(|(p, _)| *p == product) {
+                self.build_failures.push((product, output));
+            }
+        }
+        self.incomplete_families.extend(incomplete_families);
+        self.out_of_scope.extend(out_of_scope);
+        self.skipped += skipped;
+        self.unlisted.extend(unlisted);
+        self.cold_families.extend(cold_families);
+        self.wall_s += wall_s;
+        self.listings.extend(listings);
+        self.listings_kept += listings_kept;
+        self.records.extend(records);
+        self.stages.extend(stages);
+        self.slow_steps.extend(slow_steps);
+    }
+}
+
+/// The `took` line: the command's seconds, `total`, split into its stages, with what no stage
+/// covers as `other`. `None` for a command quicker than [`SHOWN_S`], which needs no account.
+///
+/// `took     301 s: opening the tree 3 s, finding families 14 s, listing 130 s, running 154 s`
+pub(crate) fn took_line(run: &CheckRun, total: f64) -> Option<(String, String)> {
+    if total < SHOWN_S {
+        return None;
+    }
+    let mut parts: Vec<String> = run
+        .stages
+        .iter()
+        .filter(|(_, seconds)| *seconds >= KEPT_S)
+        .map(|(what, seconds)| format!("{what} {seconds:.0} s"))
+        .collect();
+    let covered: f64 = run.stages.iter().map(|(_, seconds)| seconds).sum();
+    let other = total - covered;
+    if other >= KEPT_S {
+        parts.push(format!("other {other:.0} s"));
+    }
+    let text = if parts.is_empty() {
+        format!("{total:.0} s")
+    } else {
+        format!("{total:.0} s: {}", parts.join(", "))
+    };
+    Some(("took".to_owned(), text))
+}
+
+/// The `slow` line: every step of [`SHOWN_S`] seconds or more that no `built` or `listed` line
+/// names, longest first, or `None` when there is none. Steps on threads of their own may
+/// overlap, so their seconds can add up to more than the command took.
+///
+/// `slow     waiting for the build of b3d 92 s, keying b3d-every-tick 25 s`
+pub(crate) fn slow_line(run: &CheckRun) -> Option<(String, String)> {
+    let mut slow: Vec<&(String, f64)> = run
+        .slow_steps
+        .iter()
+        .filter(|(_, seconds)| *seconds >= SHOWN_S)
+        .collect();
+    if slow.is_empty() {
+        return None;
+    }
+    slow.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let named: Vec<String> = slow
+        .iter()
+        .map(|(what, seconds)| format!("{what} {seconds:.0} s"))
+        .collect();
+    Some(("slow".to_owned(), named.join(", ")))
+}
 
 /// How many families the `listed` line names.
 const SLOWEST: usize = 3;
@@ -224,6 +366,66 @@ mod tests {
             text,
             "30 s listing 1 family afresh, 0 kept; slowest: rust 30 s (3 crates compiled in 13 s)"
         );
+    }
+
+    #[test]
+    fn the_took_line_splits_the_time_into_stages_and_names_the_rest_other() {
+        let run = CheckRun {
+            stages: vec![
+                ("opening the tree".to_owned(), 0.4),
+                ("finding families".to_owned(), 14.2),
+                ("listing".to_owned(), 130.0),
+                ("running".to_owned(), 150.0),
+            ],
+            ..CheckRun::default()
+        };
+        assert_eq!(
+            took_line(&run, 301.0),
+            Some((
+                "took".to_owned(),
+                "301 s: finding families 14 s, listing 130 s, running 150 s, other 6 s".to_owned()
+            ))
+        );
+        assert_eq!(took_line(&run, 4.0), None);
+    }
+
+    #[test]
+    fn the_slow_line_names_steps_of_five_seconds_or_more_longest_first() {
+        let mut run = CheckRun {
+            slow_steps: vec![
+                ("keying b3d-every-tick".to_owned(), 25.0),
+                ("reading kept listings".to_owned(), 2.0),
+                ("waiting for the build of b3d".to_owned(), 92.0),
+            ],
+            ..CheckRun::default()
+        };
+        assert_eq!(
+            slow_line(&run).unwrap().1,
+            "waiting for the build of b3d 92 s, keying b3d-every-tick 25 s"
+        );
+        run.slow_steps.clear();
+        assert_eq!(slow_line(&run), None);
+    }
+
+    #[test]
+    fn absorbing_a_run_adds_its_findings_and_reports_a_failed_build_once() {
+        let output = std::path::PathBuf::from("out");
+        let mut run = CheckRun {
+            from_cache: 1,
+            build_failures: vec![("b3d".to_owned(), output.clone())],
+            ..CheckRun::default()
+        };
+        run.absorb(CheckRun {
+            from_cache: 2,
+            build_failures: vec![("b3d".to_owned(), output)],
+            listings: vec![listing("rust", 3.0, 0, 0.0, 0.0)],
+            slow_steps: vec![("keying rust".to_owned(), 6.0)],
+            ..CheckRun::default()
+        });
+        assert_eq!(run.from_cache, 3);
+        assert_eq!(run.build_failures.len(), 1);
+        assert_eq!(run.listings.len(), 1);
+        assert_eq!(run.slow_steps.len(), 1);
     }
 
     #[test]

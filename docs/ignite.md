@@ -313,6 +313,7 @@ The verbs an agent uses while working:
   starts building it, and prints the ticket with what its dependencies left
   behind. `ignite start "<summary>"` files a ticket first, for a session that
   was given a task and no ticket.
+
 - `ignite test <names>` runs the checks the agent names, in its tree. A name
   without a known `<family>:` prefix is looked up in each family's kept listing
   for the tree's inputs or, when it has none, in the newest listing the machine
@@ -324,22 +325,41 @@ The verbs an agent uses while working:
   every family without a kept listing for the tree's inputs is listed too. A
   name that no family could hold is refused at once with a hint on how checks
   are named, so a Rust test function name never builds every family.
+
+  The families are listed, and then run, each on a thread of its own, so a
+  family whose `list` needs no product is listed while another family's product
+  builds, and the products of different families build at once where the
+  scheduler grants the cores. Two families that ask for one product share its
+  build, which is reported once. A command that took 5 s or more ends with a
+  `took` line that splits its time into its stages (opening the tree, finding
+  families, listing, running, and `other` for what none of them covers), and a
+  `slow` line that names every other step of 5 s or more, such as keying a large
+  family's checks or waiting for a build another command started. On 2026-11-19
+  `ignite test fork` after a one-line comment change took 300 s, its lines
+  accounted for 130 s, and its three products had built one after another.
+
 - `ignite check` runs what the landing gate would run on the tree as it is.
+
 - `ignite sync` rebases the tree's branch onto the tip.
+
 - `ignite land` rebases, runs the gate, lands the commits, records the note for
   dependent tickets, closes the ticket and releases the tree. The note is the
   landed commits' subjects, one per line; `-m "<note>"` gives an explicit one.
+
 - `ignite run -- <command>` runs any other heavy command with cores from the
   daemon, and records it. A `cargo` on the tree's `PATH` does the same for plain
   `cargo` calls.
+
 - `ignite ticket <verb>` creates, shows, lists, links and comments on tickets.
   `ignite ticket children <epic> --open` lists an epic's unfinished tickets with
   their assignees, blockers and last comments, and `ignite ticket dep list <id>`
   shows what a ticket waits on and what waits on it.
+
 - `ignite why <check>` prints a check's record: its cost, its failures, where it
   runs and why. Outside a build tree, such as in the main checkout, it prints
   only the hub's record, since the cache and the gate's choice depend on a
   tree's change.
+
 - `ignite status` and `ignite doctor` print the machine's state and health. If
   `[hub] url` reaches the hub's read-only listener, every write is answered 405;
   the daemon does not retry it, logs one line naming the URL and the fix, and
@@ -348,13 +368,17 @@ The verbs an agent uses while working:
   writable hub refuses it with 401, while the read-only public listener
   (`IGNITE_HUB_PUBLIC_LISTEN`) answers 405, and `doctor` then reports a
   `listener` problem naming the URL to point at the writable listener.
+
 - `ignite tell <ticket | session | --all> "<text>"` sends a correction to work
   that is under way. See [Steering work in flight](#steering-work-in-flight).
+
 - `ignite close -m "<reason>"` closes the ticket without landing anything, for a
   ticket that is obsolete, already done or needs no change to the repository,
   and releases the tree.
+
 - `ignite release -m "<note>"` gives the ticket back unfinished and keeps its
   work. See [Releasing work](#releasing-work).
+
 - `ignite guide <topic>` prints the guidance for one situation. See
   [Guidance for agents](#guidance-for-agents).
 

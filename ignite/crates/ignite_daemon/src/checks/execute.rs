@@ -14,14 +14,14 @@ use ignite_core::protocol::hub::{
     CachedResult, CompileUnit, FlakyReport, IncompleteReason, NewResult, Record, ResultCost,
 };
 use ignite_core::protocol::{Outcome, Usage};
-use ignite_core::traits::{BuildFor, BuildResult, CommandSpec, Error, RunResult};
+use ignite_core::traits::{BuildFor, CommandSpec, Error, RunResult};
 
 use super::units::CompileSpan;
 use crate::build::repair;
 
 use super::{
-    Built, CheckRun, Checks, Failure, Final, Keyed, Listed, OpenTree, Reported, RunOptions, TRIES,
-    Target, adapters, base_env, failure, hang_limit_s, incomplete, path_text, units,
+    CheckRun, Checks, Failure, Final, Keyed, Listed, OpenTree, Reported, RunOptions, TRIES, Target,
+    adapters, base_env, failure, hang_limit_s, incomplete, path_text, units,
 };
 use crate::server::Context;
 use crate::supervise;
@@ -410,60 +410,6 @@ impl Checks {
         self.cache.store(&stored);
     }
 
-    /// Makes each product the family needs current. `Err` holds a failed build's output.
-    pub(super) fn build(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        family: &Family,
-        packages: &[String],
-        who: &BuildFor,
-        run: &mut CheckRun,
-    ) -> std::result::Result<(), PathBuf> {
-        self.build_products(ctx, tree, &family.needs, packages, who, run)
-    }
-
-    /// Makes each of `products` current, in the class of the command `who` names and charged
-    /// to its ticket and session. Each product built is sent to the hub as a record of verb
-    /// `build` with its compile units, so which crates a build recompiled can be read later.
-    /// `Err` holds a failed build's output.
-    pub(super) fn build_products(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        products: &[String],
-        packages: &[String],
-        who: &BuildFor,
-        run: &mut CheckRun,
-    ) -> std::result::Result<(), PathBuf> {
-        for product in products {
-            match ctx.builds.ensure_for(&tree.id, product, packages, who) {
-                BuildResult::Current => {}
-                BuildResult::Built { usage, units } => {
-                    run.builds.push(Built {
-                        product: product.clone(),
-                        wall_s: usage.wall_s,
-                        rebuilt: (!units.is_empty() || usage.cpu_s < 1.0)
-                            .then(|| crate::build::recompiled(&units)),
-                        costliest: crate::build::costliest(&units, super::time_lines::COSTLIEST),
-                        cpu_s: usage.cpu_s,
-                        queued_s: usage.queued_s,
-                    });
-                    self.record_build(ctx, tree, product, who, &usage, units);
-                }
-                BuildResult::Failed { output, .. } => {
-                    // Every family that needs a product gets its remembered failure, which
-                    // the run reports once.
-                    if !run.build_failures.iter().any(|(p, _)| p == product) {
-                        run.build_failures.push((product.clone(), output.clone()));
-                    }
-                    return Err(output);
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Runs the family's `run` command for `checks` as [`Checks::run_family`] does, and says
     /// whether the Cargo build that a cargo-nextest run starts failed, so no check ran.
     ///
@@ -707,36 +653,6 @@ impl Checks {
             compile_units,
         };
         self.cache.record(&record)
-    }
-
-    /// Sends the hub a record of one product's build, verb `build` and the product as its
-    /// family, holding the build's compile units.
-    fn record_build(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        product: &str,
-        who: &BuildFor,
-        usage: &Usage,
-        compile_units: Vec<CompileUnit>,
-    ) {
-        let options = RunOptions {
-            verb: "build".to_owned(),
-            class: who.class,
-            rerun: false,
-            ticket: who.ticket.clone(),
-            session: who.session.clone(),
-        };
-        self.record(
-            ctx,
-            tree,
-            product,
-            &options,
-            usage,
-            "build",
-            None,
-            compile_units,
-        );
     }
 }
 

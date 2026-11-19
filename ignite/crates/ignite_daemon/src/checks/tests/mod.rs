@@ -3,6 +3,7 @@
 
 mod budget;
 mod compile;
+mod concurrency;
 mod costs;
 mod express;
 mod fail_fast;

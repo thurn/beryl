@@ -529,5 +529,10 @@
     "label": "An express landing names its rebased commit as the release candidate and the daemon builds that release while the landing runs its express commands, the sender loop starts a round as soon as the release moves or its build ends instead of every 10 s, the restart's quiet window is 5 s instead of 15, and express `ignite test` and `ignite check` run the formatters first instead of failing on `cargo fmt --check` or mdformat (on 2026-11-19 two Ignite-only fixes waited 45 to 47 s from landing to restart, 36 s of it the release build, and lost a round trip each to formatting)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite test` lists and runs its families on threads of their own, so their products build at once, and names every step of 5 s or more (on 2026-11-19 `ignite test fork` after a one-line comment change built three products one after another and took 300 s, of which its output accounted for 130 s)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

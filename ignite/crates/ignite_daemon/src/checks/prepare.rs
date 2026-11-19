@@ -1,14 +1,21 @@
-//! Listing and keying the checks of a set of families, for every verb and for the landing gate,
-//! which stops at the first fault it knows of (see "Landing" in `docs/ignite.md`).
+//! Listing and keying the checks of a set of families, and running the prepared checks, for
+//! every verb and for the landing gate, which stops at the first fault it knows of (see
+//! "Landing" in `docs/ignite.md`). Outside the landing gate each family is listed, and run, on
+//! a thread of its own ([`on_threads`]).
+
+use std::panic::resume_unwind;
+use std::sync::Arc;
+use std::thread;
 
 use ignite_core::manifest::Family;
-use ignite_core::protocol::hub::ListingKey;
+use ignite_core::protocol::hub::{CachedResult, ListingKey};
 
 use super::listings::{Kept, Listing, Origin};
+use super::time_lines::Stopwatch;
 
 /// The landing gate's test for a family it leaves unlisted, given its name and declaration.
 pub(crate) type Cold<'a> = &'a dyn Fn(&str, &Family) -> bool;
-use super::{CheckRun, Checks, ListError, OpenTree, Prepared, RunOptions};
+use super::{CheckRun, Checks, Keyed, ListError, OpenTree, Prepared, RunOptions};
 use crate::server::Context;
 
 impl Checks {
@@ -65,6 +72,13 @@ impl Checks {
 
     /// `gate` is the landing gate's test for a family it leaves unlisted; `None` for every
     /// other caller, which lists every family and does not stop at the first fault.
+    ///
+    /// Outside the landing gate each family is listed on a thread of its own, so a family whose
+    /// `list` needs no product, or a product already current, is listed while another family's
+    /// product builds, and the products of different families build at once where the
+    /// scheduler grants the cores. What the threads find is added to `run` in the families'
+    /// order, as if they had been listed one after another. The landing gate lists them one
+    /// at a time, because it stops at the first fault.
     fn prepare_families(
         &self,
         ctx: &Context,
@@ -78,8 +92,12 @@ impl Checks {
         // Every family's listing hash from one reading of the tree, and one request for every
         // kept listing, so a hub that cannot be reached costs its timeout once, not once per
         // family.
+        let hashing = Stopwatch::start(ctx);
         let hashes = self.listing_hashes(ctx, tree, among);
+        run.slow(ctx, "hashing the families' inputs", hashing);
+        let reading = Stopwatch::start(ctx);
         let mut kept = self.kept_for(hashes.clone());
+        run.slow(ctx, "reading kept listings", reading);
         let mut among = among.to_vec();
         if let Some(cold) = gate {
             among.retain(|&(name, family)| {
@@ -90,68 +108,149 @@ impl Checks {
                 !unlisted
             });
         }
-        if fail_fast {
-            // A stable sort: the families that build nothing to be listed come first.
-            among.sort_by_key(|&(name, family)| {
-                let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
-                !(kept.contains_key(name) || needs.is_empty())
-            });
+        let work: Vec<FamilyWork> = among
+            .iter()
+            .map(|&(name, family)| FamilyWork {
+                name,
+                family,
+                key: hashes.get(name).map(|hash| ListingKey {
+                    family: name.to_owned(),
+                    hash: hash.clone(),
+                }),
+                kept: kept.remove(name),
+            })
+            .collect();
+        if !fail_fast {
+            return self.prepare_at_once(ctx, tree, work, options, run);
         }
+        let mut work = work;
+        // A stable sort: the families that build nothing to be listed come first.
+        work.sort_by_key(|w| {
+            let needs = w.family.list_needs.as_ref().unwrap_or(&w.family.needs);
+            !(w.kept.is_some() || needs.is_empty())
+        });
         let mut prepared: Vec<Prepared> = Vec::new();
-        for &(name, family) in &among {
-            if fail_fast && known_fault(&prepared, run) {
-                run.unlisted.push(name.to_owned());
+        for one in work {
+            if known_fault(&prepared, run) {
+                run.unlisted.push(one.name.to_owned());
                 continue;
             }
-            let key = hashes.get(name).map(|hash| ListingKey {
-                family: name.to_owned(),
-                hash: hash.clone(),
-            });
-            let listed = self.list_remembering_foreign(
-                ctx,
-                tree,
-                (name, family),
-                options,
-                run,
-                key.clone(),
-                kept.remove(name),
-            );
-            let Some(mut listing) = Self::listed_or_noted(name, listed, run) else {
-                continue;
-            };
-            let (mut keyed, mut broken, mut sources) =
-                self.key_listing(ctx, tree, family, &listing);
-            if let Origin::Kept {
-                key: old,
-                sources: kept,
-            } = &listing.origin
-                && sources.as_ref() != Some(kept)
-            {
-                // The listing was made from other files than the tree's: list the family again.
-                self.forget(old);
-                self.forget_foreign(name);
-                let listed = self.list(ctx, tree, name, family, options, run, key, None);
-                let Some(fresh) = Self::listed_or_noted(name, listed, run) else {
-                    continue;
-                };
-                listing = fresh;
-                (keyed, broken, sources) = self.key_listing(ctx, tree, family, &listing);
-            }
-            if let (Origin::Made { key: Some(key) }, Some(sources)) = (&listing.origin, sources) {
-                let kept = Kept {
-                    sources,
-                    checks: listing.checks,
-                    reads: listing.reads,
-                };
-                self.keep(key.clone(), kept);
-            }
-            prepared.push(Prepared {
-                family: name.to_owned(),
-                keyed,
-                broken,
-            });
+            prepared.extend(self.prepare_family(ctx, tree, one, options, run));
         }
         prepared
+    }
+
+    /// Prepares each family of `work` on a thread of its own, and adds what each found to
+    /// `run` in order.
+    fn prepare_at_once(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        work: Vec<FamilyWork>,
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) -> Vec<Prepared> {
+        let found = on_threads(work, |one, own| {
+            self.prepare_family(ctx, tree, one, options, own)
+        });
+        let mut prepared = Vec::new();
+        for (one, own) in found {
+            run.absorb(own);
+            prepared.extend(one);
+        }
+        prepared
+    }
+
+    /// Lists one family, or takes its kept listing, and keys its checks. `None` when it has
+    /// no listing, after recording why in `run`.
+    fn prepare_family(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        work: FamilyWork,
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) -> Option<Prepared> {
+        let FamilyWork {
+            name,
+            family,
+            key,
+            kept,
+        } = work;
+        let listed = self.list_remembering_foreign(
+            ctx,
+            tree,
+            (name, family),
+            options,
+            run,
+            key.clone(),
+            kept,
+        );
+        let mut listing = Self::listed_or_noted(name, listed, run)?;
+        let keying = Stopwatch::start(ctx);
+        let (mut keyed, mut broken, mut sources) = self.key_listing(ctx, tree, family, &listing);
+        run.slow(ctx, format!("keying {name}"), keying);
+        if let Origin::Kept {
+            key: old,
+            sources: kept,
+        } = &listing.origin
+            && sources.as_ref() != Some(kept)
+        {
+            // The listing was made from other files than the tree's: list the family again.
+            self.forget(old);
+            self.forget_foreign(name);
+            let listed = self.list(ctx, tree, name, family, options, run, key, None);
+            listing = Self::listed_or_noted(name, listed, run)?;
+            let keying = Stopwatch::start(ctx);
+            (keyed, broken, sources) = self.key_listing(ctx, tree, family, &listing);
+            run.slow(ctx, format!("keying {name}"), keying);
+        }
+        if let (Origin::Made { key: Some(key) }, Some(sources)) = (&listing.origin, sources) {
+            let keeping = Stopwatch::start(ctx);
+            let kept = Kept {
+                sources,
+                checks: listing.checks,
+                reads: listing.reads,
+            };
+            self.keep(key.clone(), kept);
+            run.slow(ctx, format!("keeping the listing of {name}"), keeping);
+        }
+        Some(Prepared {
+            family: name.to_owned(),
+            keyed,
+            broken,
+        })
+    }
+
+    /// Looks up every prepared check in one request, then runs each family's misses, each
+    /// family on a thread of its own so that the products they need build at once where the
+    /// scheduler grants the cores. What each found is added to `run` in the families' order.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn run_prepared(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        prepared: Vec<Prepared>,
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) {
+        let looking = Stopwatch::start(ctx);
+        let hits = self.lookup(&prepared, options);
+        run.slow(ctx, "looking up cached results", looking);
+        let mut hits = hits.into_iter();
+        let families: Vec<(String, Vec<(Keyed, Option<CachedResult>)>)> = prepared
+            .into_iter()
+            .map(|family| {
+                let items = family.keyed.into_iter().map(|k| (k, hits.next().flatten()));
+                (family.family, items.collect())
+            })
+            .collect();
+        let ran = on_threads(families, |(name, items), own| {
+            self.execute(ctx, tree, &name, items, options, own, false);
+        });
+        for ((), own) in ran {
+            run.absorb(own);
+        }
     }
 
     /// The listing, or `None` after recording in `run` why there is none.
@@ -171,6 +270,45 @@ impl Checks {
             }
         }
     }
+}
+
+/// Calls `work` on each item on a thread of its own, each with a fresh [`CheckRun`] to record
+/// in, and returns what each call returned with its run, in the items' order. Each thread works
+/// for the calling thread's activity, so its builds are charged to the same command and
+/// `ignite status` shows what it does. A panic on a thread is raised again here.
+pub(super) fn on_threads<I: Send, T: Send>(
+    items: Vec<I>,
+    work: impl Fn(I, &mut CheckRun) -> T + Sync,
+) -> Vec<(T, CheckRun)> {
+    let activity = crate::steps::current();
+    let work = &work;
+    thread::scope(|scope| {
+        let threads: Vec<_> = items
+            .into_iter()
+            .map(|item| {
+                let activity = activity.clone();
+                scope.spawn(move || {
+                    let _entered = activity.as_ref().map(crate::steps::Activity::enter);
+                    let mut own = CheckRun::default();
+                    let found = work(item, &mut own);
+                    (found, own)
+                })
+            })
+            .collect();
+        threads
+            .into_iter()
+            .map(|thread| thread.join().unwrap_or_else(|panic| resume_unwind(panic)))
+            .collect()
+    })
+}
+
+/// One family to prepare: its name and declaration, the key its listing is kept under, and the
+/// kept listing found for it, if any.
+struct FamilyWork<'a> {
+    name: &'a str,
+    family: &'a Family,
+    key: Option<ListingKey>,
+    kept: Option<(ListingKey, Arc<Kept>)>,
 }
 
 /// Whether listing has already found a fault that refuses a landing: a failed build or

@@ -47,6 +47,7 @@ pub(crate) mod listings;
 mod observed;
 pub(crate) mod plan;
 mod prepare;
+mod products;
 mod regression;
 mod scope;
 pub mod sources;
@@ -203,6 +204,10 @@ pub struct CheckRun {
     /// For each check a run gave a verdict, the hub's ID for that run's record, when the hub
     /// took it.
     pub records: Vec<(CheckName, ignite_core::ids::RecordId)>,
+    /// The command's stages, which run one after another, with their seconds (the `took` line).
+    pub stages: Vec<(String, f64)>,
+    /// Steps of at least a second inside the stages, with their seconds (the `slow` line).
+    pub slow_steps: Vec<(String, f64)>,
 }
 
 impl CheckRun {
@@ -319,6 +324,10 @@ pub trait HitSink: Send + Sync {
 pub struct Checks {
     settings: CheckSettings,
     shared: Arc<Shared>,
+    /// The builds this view's command was answered with, by product and usage. Families on
+    /// threads of their own that ask for one product share its build, and each is answered
+    /// with the same result; only the first reports and records it.
+    builds_seen: Mutex<HashSet<(String, u64, u64)>>,
 }
 
 /// What every view of one runner shares: the cache, the trees, the history and what the
@@ -375,6 +384,7 @@ impl Checks {
                 hits: OnceLock::new(),
                 gates: spent::GateMemory::default(),
             }),
+            builds_seen: Mutex::default(),
         }
     }
 
@@ -435,27 +445,6 @@ impl Checks {
         run
     }
 
-    /// Looks up every prepared check in one request, then runs each family's misses.
-    pub(crate) fn run_prepared(
-        &self,
-        ctx: &Context,
-        tree: &OpenTree,
-        prepared: Vec<Prepared>,
-        options: &RunOptions,
-        run: &mut CheckRun,
-    ) {
-        let hits = self.lookup(&prepared, options);
-        let mut hits = hits.into_iter();
-        for family in prepared {
-            let items: Vec<(Keyed, Option<CachedResult>)> = family
-                .keyed
-                .into_iter()
-                .map(|k| (k, hits.next().flatten()))
-                .collect();
-            self.execute(ctx, tree, &family.family, items, options, run, false);
-        }
-    }
-
     /// The cached result of each prepared check, in order, or nothing when rerunning.
     pub(crate) fn lookup(
         &self,
@@ -495,6 +484,7 @@ impl Checks {
         let view = Checks {
             settings,
             shared: self.shared.clone(),
+            builds_seen: Mutex::default(),
         };
         let tree = OpenTree {
             id: tree.clone(),

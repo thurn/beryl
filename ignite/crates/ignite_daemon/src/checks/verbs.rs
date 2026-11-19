@@ -17,6 +17,7 @@ use super::express::{Asked, express_reply};
 pub(crate) use super::gate::gate_lines;
 use super::gate::scope_line;
 use super::plan::{self, GateView};
+use super::time_lines::{Stopwatch, slow_line, took_line};
 pub(crate) use super::time_lines::{built_lines, listed_line};
 use super::why_record;
 use super::{CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
@@ -47,20 +48,26 @@ impl Verb for TestVerb {
             return Reply::text(Exit::Usage, "usage: ignite test <names> [--rerun]");
         }
         let options = options("test", req, flags.contains(&"--rerun"));
+        let mut run = CheckRun::default();
+        let started = Stopwatch::start(ctx);
         let (checks, tree) = match self.tree(ctx, req) {
             Ok(opened) => opened,
             Err(reply) => return reply,
         };
+        run.stage(ctx, "opening the tree", started);
         let asked = Asked::Named(&words);
         if let Some(reply) = express_reply(self.express.as_ref(), &checks, ctx, &tree, asked) {
             return reply;
         }
-        let families = match Self::test_families(&checks, ctx, &tree, &words) {
+        let finding = Stopwatch::start(ctx);
+        let families = match Self::test_families(&checks, ctx, &tree, &words, &mut run) {
             Ok(found) => found,
             Err(reply) => return reply,
         };
-        let mut run = CheckRun::default();
+        run.stage(ctx, "finding families", finding);
+        let listing = Stopwatch::start(ctx);
         let mut prepared = checks.prepare(ctx, &tree, &families, &options, &mut run);
+        run.stage(ctx, "listing", listing);
         let unmatched: Vec<&str> = words
             .iter()
             .copied()
@@ -83,9 +90,13 @@ impl Verb for TestVerb {
                 &mut run,
             );
         }
+        let running = Stopwatch::start(ctx);
         checks.run_prepared(ctx, &tree, prepared, &options, &mut run);
+        run.stage(ctx, "running", running);
         let mut lines = built_lines(&run);
         lines.extend(listed_line(&run));
+        lines.extend(slow_line(&run));
+        lines.extend(took_line(&run, started.seconds(ctx)));
         lines.push(("ran".to_owned(), ran_line(&run)));
         lines.extend(failure_lines(&run));
         if let Some(first) = run.failures.first() {
@@ -108,11 +119,15 @@ impl TestVerb {
     /// answers. A family never listed on this machine is listed, and when a word matches no
     /// listing, so is every family without a kept listing for the tree's inputs. When no
     /// family could hold a bare word, the reply says how checks are named.
+    ///
+    /// Steps of a second or more, such as reading a large family's newest listing, are recorded
+    /// in `run` for the `slow` line.
     fn test_families<'a>(
         checks: &'a Checks,
         ctx: &Context,
         tree: &OpenTree,
         words: &[&str],
+        run: &mut CheckRun,
     ) -> Result<Vec<&'a str>, Reply> {
         let prefixed = |w: &str| {
             w.split_once(':')
@@ -129,7 +144,9 @@ impl TestVerb {
             return Ok(families);
         }
         let all: Vec<(&str, &Family)> = checks.families().collect();
+        let reading = Stopwatch::start(ctx);
         let kept = checks.kept_listings(ctx, tree, &all);
+        run.slow(ctx, "reading kept listings", reading);
         let mut found = vec![false; bare.len()];
         let mut not_current = Vec::new();
         for (name, _) in &all {
@@ -137,7 +154,14 @@ impl TestVerb {
                 Arc::clone(listing)
             } else {
                 not_current.push(*name);
-                let Some(latest) = checks.latest_listing(name) else {
+                let reading = Stopwatch::start(ctx);
+                let latest = checks.latest_listing(name);
+                run.slow(
+                    ctx,
+                    format!("reading the newest listing of {name}"),
+                    reading,
+                );
+                let Some(latest) = latest else {
                     families.push(name);
                     continue;
                 };
@@ -208,6 +232,7 @@ impl Verb for CheckVerb {
             let gated = checks.gate_in(ctx, &tree, &options, None, &super::Excused::new());
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
+            lines.extend(slow_line(&gated.run));
             return reply(&gated.run, render(&lines));
         }
         let regression: Vec<(&str, &Family)> = checks
