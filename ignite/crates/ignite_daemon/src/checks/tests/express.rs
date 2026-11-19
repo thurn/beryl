@@ -242,7 +242,11 @@ fn verb_check(world: &World, lane: &Arc<FakeLane>) -> ignite_core::protocol::cli
 
 /// The landing's formatters run on the changed files before the express commands, so a
 /// misformatted file is fixed in the tree instead of failing `cargo fmt --check`.
+///
+/// The formatter is a `sh` script, and a Windows daemon runs commands without Git Bash's `sh` on
+/// its path, so the test runs only on Unix.
 #[test]
+#[cfg_attr(windows, ignore = "the formatter is a sh script")]
 fn the_formatters_run_in_the_tree_before_the_express_commands() {
     let mut world = express_world(&["ignite/src/lib.rs", "ignite/src/main.rs"]);
     let tree = world.dir.clone();
