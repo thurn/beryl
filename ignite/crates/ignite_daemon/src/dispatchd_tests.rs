@@ -494,9 +494,14 @@ fn tell_on_a_held_ticket_messages_its_session_once_and_ends_its_wait() {
     assert_eq!(message.session, Some(session("local_w1")));
     let text = "Message about T.1: Land when the gate passes.";
     assert_eq!(message.prompt.as_deref(), Some(text));
+    // The wait's reply is tool output, so it names the message without carrying its text.
     assert_eq!(
         lock(&rig.host.interrupts).clone(),
-        [(session("local_w1"), text.to_owned())]
+        [(
+            session("local_w1"),
+            "T.1 has a message for you from the dispatcher. End your turn to receive it."
+                .to_owned()
+        )]
     );
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
     assert!(rig.step().is_none());

@@ -103,6 +103,32 @@ fn another_authors_comment_shows_once_and_the_sessions_own_never() {
 }
 
 #[test]
+fn a_told_comment_is_recorded_as_a_message_and_not_printed_as_its_text() {
+    let world = started();
+    world.desk.comment(
+        "Tq.48",
+        "local_teller",
+        "Stop your landing.\nRun ignite land again.",
+    );
+    // `ignite tell` marks its comment for delivery in the ticket's metadata.
+    world.desk.edit(
+        "Tq.48",
+        "local_teller",
+        json!({"metadata": [{}, {"tell": 1}]}),
+    );
+    world.desk.comment("Tq.48", "derek", "An ordinary note.");
+    world.hub.push_change("ticket", Some(id("Tq.48")));
+    assert_eq!(
+        command(&world),
+        [
+            "changed  comment: message from local_teller, delivered by the dispatcher, \
+             starting \"Stop your landing.\"",
+            "changed  comment by derek: An ordinary note."
+        ]
+    );
+}
+
+#[test]
 fn start_shows_nothing_as_changed_and_the_hub_is_read_only_after_the_feed() {
     let world = World::new();
     world.desk.add(ticket("Tq.48", "Counter names", ""));

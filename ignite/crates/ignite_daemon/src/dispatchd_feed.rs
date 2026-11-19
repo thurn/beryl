@@ -7,9 +7,12 @@ use ignite_core::protocol::tickets::TicketDetail;
 
 use super::{Dispatcher, Purpose, State};
 
-/// Sends a new `tell` on `detail`'s ticket to `holder`, the session working it here: as a
-/// `message` instruction, and as the reply that ends its `ignite wait` if it is in one. A tell
-/// made before the session claimed the ticket is already in its brief and is not sent.
+/// Sends a new `tell` on `detail`'s ticket to `holder`, the session working it here, as a
+/// `message` instruction. If the session is inside `ignite wait`, the wait ends with a reply that
+/// says a message is waiting but does not carry its text: a wait's reply is tool output, which
+/// agents rightly treat as data rather than instructions, while the dispatcher's message reaches
+/// them as a teammate's request once their turn ends. A tell made before the session claimed the
+/// ticket is already in its brief and is not sent.
 pub(super) fn deliver_tell(
     dispatcher: &Dispatcher,
     state: &mut State,
@@ -50,9 +53,13 @@ pub(super) fn deliver_tell(
         &text,
         Purpose::Message,
     );
+    let notice = format!(
+        "{} has a message for you from the dispatcher. End your turn to receive it.",
+        ticket.id
+    );
     dispatcher
         .host
-        .interrupt(holder, Reply::text(Exit::Success, text));
+        .interrupt(holder, Reply::text(Exit::Success, notice));
 }
 
 /// The ticket named on a regression's `caused-by <ticket>` line.

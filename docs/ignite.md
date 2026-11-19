@@ -2517,8 +2517,16 @@ ignite tell --all "The oracle engines are down until noon. Skip oracle checks."
 - `ignite tell <ticket>` records the text as a comment on the ticket and marks
   it for delivery. The daemon of the machine where the ticket is being worked
   has its dispatcher send the text to that session as a message.
-- A session that is inside `ignite wait` gets its wait ended at once, with the
-  message as the reply, so it does not sit out the rest of the wait.
+- A session that is inside `ignite wait` gets its wait ended at once, so it does
+  not sit out the rest of the wait. The reply says only "<ticket> has a message
+  for you from the dispatcher. End your turn to receive it." It does not carry
+  the text, because a command's reply is tool output, which agents rightly treat
+  as data and not as instructions. The dispatcher's message, which the session
+  receives when its turn ends, is the only copy that carries the text.
+- The told comment's `changed` line records that the message exists, who sent it
+  and its first line in quotes:
+  `changed  comment: message from <sender>, delivered by the dispatcher, starting "<first line>"`.
+  Other comments print as before.
 - `ignite tell <session>` does the same for the ticket that session holds, and
   `--all` for every ticket in progress, on every machine.
 - Another session can use it too. A worker that learns something the holder of

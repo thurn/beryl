@@ -5,7 +5,9 @@
 //! - [`Claims::changed`] returns the `changed` lines: the comments and edits that someone other
 //!   than the session made to its ticket since the session's previous command. The hub is read
 //!   only when the change feed names the ticket, or once after the daemon starts. What was shown
-//!   is recorded per tree in the local database, so a restart shows nothing twice.
+//!   is recorded per tree in the local database, so a restart shows nothing twice. A comment
+//!   made by `ignite tell` is printed as a record of the message, not as its text, because the
+//!   session receives the text as the dispatcher's message.
 //! - The silence clock (`active_at`) is saved in the local database as it changes and read when
 //!   the daemon starts (see `activity`), so a restart does not give a silent session another 30
 //!   minutes.
@@ -13,6 +15,7 @@
 //!   a long `ignite run` or `ignite wait`, is active however long it runs. The dispatcher's stall
 //!   procedure (see `dispatchd_stall`) decides what to do with a session that went silent.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -82,11 +85,47 @@ struct Change {
     edit: bool,
 }
 
+/// The numbers of the comments that `ignite tell` marked for delivery: every value the
+/// ticket's metadata key `tell` has held. The history records each metadata change as
+/// `{"metadata": [before, after]}`.
+fn tell_comments(detail: &TicketDetail) -> BTreeSet<u64> {
+    let tell = |metadata: &Value| metadata.get("tell").and_then(Value::as_u64);
+    let mut numbers: BTreeSet<u64> = detail
+        .history
+        .iter()
+        .flatten()
+        .filter_map(|entry| tell(entry.change.get("metadata")?.get(1)?))
+        .collect();
+    numbers.extend(detail.ticket.metadata.get("tell").and_then(Value::as_u64));
+    numbers
+}
+
 /// The changes in `detail` after `marks` by anyone but `session`.
 fn changes_after(detail: &TicketDetail, marks: &rows::Shown, session: &SessionId) -> Vec<Change> {
     let mut changes = Vec::new();
+    let tells = tell_comments(detail);
     for comment in detail.comments.iter().flatten() {
         if i64::from(comment.n) <= marks.comment || comment.author == session.as_str() {
+            continue;
+        }
+        if tells.contains(&u64::from(comment.n)) {
+            // A tell reaches the session as the dispatcher's message, which agents treat as a
+            // teammate's request. Here it is tool output, which they rightly treat as data, so
+            // the line records that the message exists and quotes only its first line.
+            let first = comment
+                .text
+                .lines()
+                .map(str::trim)
+                .find(|l| !l.is_empty())
+                .unwrap_or("");
+            changes.push(Change {
+                at: comment.at,
+                lines: vec![format!(
+                    "comment: message from {}, delivered by the dispatcher, starting \"{first}\"",
+                    comment.author
+                )],
+                edit: false,
+            });
             continue;
         }
         let mut text = comment.text.lines().filter(|l| !l.trim().is_empty());
