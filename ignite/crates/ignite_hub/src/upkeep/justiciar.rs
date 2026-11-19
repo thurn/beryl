@@ -10,8 +10,9 @@
 //! - Upkeep, when `master` has not moved for [`MASTER_LAG_SECONDS`] although commits landed
 //!   on `staging` ([`master_lag`]). Tip verification is the only thing that moves `master`, so
 //!   when it is stuck, for any reason, nothing reaches `master` and no fix to Ignite itself is
-//!   released from it. Upkeep files nothing while an open regression ticket explains the stall,
-//!   since that ticket's worker is already fixing it, and nothing for a stuck landing whose
+//!   released from it. While open regression tickets explain the stall, upkeep tells them
+//!   instead of filing a ticket, so the sessions already fixing the failing checks hear how
+//!   long `master` has waited ([`tell_regressions`]). It files nothing for a stuck landing whose
 //!   ticket a worker closed less than [`MASTER_LAG_SECONDS`] ago.
 //!
 //! Every filing goes through [`filing`] with a signature of its subject, so a repeated sighting
@@ -26,12 +27,15 @@ use serde_json::Value;
 
 use ignite_core::owner::Owner;
 use ignite_core::protocol::hub::JusticiarReport;
-use ignite_core::protocol::tickets::{TicketFields, TicketType};
+use ignite_core::protocol::tickets::{
+    BatchRequest, Operation, Precondition, TicketFields, TicketType,
+};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::tips;
+use ignite_store::hub::batch::{self, BatchOutcome};
+use ignite_store::hub::{feed, tips};
 use ignite_store::{Result, StoreError};
 
-use super::filing::{self, Author, Filed, Filing, UPKEEP};
+use super::filing::{self, Author, Change, Filed, Filing, UPKEEP};
 use super::parse_time;
 use super::signature::Signature;
 
@@ -144,19 +148,110 @@ pub(super) fn master_lagging(conn: &Connection, now: Timestamp) -> Result<bool> 
         .is_some_and(|(landed_at, _)| now.seconds_since(landed_at) >= MASTER_LAG_SECONDS))
 }
 
-/// The open regression ticket of a check that is still failing, if there is one. Every tip
-/// that holds the failing landing fails that check, so such a ticket explains why `master` has
-/// not moved, and its worker is already fixing it.
-fn covering_regression(conn: &Connection) -> Result<Option<String>> {
-    Ok(conn
-        .query_row(
-            "SELECT r.ticket FROM regressions r JOIN tickets t ON t.id = r.ticket
-             WHERE r.state != ?1 AND t.status != 'closed'
-             ORDER BY r.ticket LIMIT 1",
-            [tips::FIXED],
-            |row| row.get(0),
-        )
-        .optional()?)
+/// The ticket metadata key that lists the stuck landings a regression ticket was told about.
+pub const TOLD_KEY: &str = "ignite_master_lag_told";
+
+/// The metadata key whose new comment number the holding machine's daemon delivers to the
+/// session working the ticket, as `ignite tell` sets it.
+const TELL_KEY: &str = "tell";
+
+/// How often a tell is tried when other writes keep coming between its read and its write.
+const ATTEMPTS: usize = 8;
+
+/// The open regression tickets of checks that are still failing. Every tip that holds a
+/// failing landing fails its check, so these tickets explain why `master` has not moved, and
+/// their workers are already fixing them.
+fn covering_regressions(conn: &Connection) -> Result<Vec<String>> {
+    let mut select = conn.prepare(
+        "SELECT DISTINCT r.ticket FROM regressions r JOIN tickets t ON t.id = r.ticket
+         WHERE r.state != ?1 AND t.status != 'closed'
+         ORDER BY r.ticket",
+    )?;
+    let tickets = select
+        .query_map([tips::FIXED], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()?;
+    Ok(tickets)
+}
+
+/// Tells each regression ticket in `tickets` that `master` has waited for the stuck landing
+/// `landing`, once per landing: a comment, with [`TELL_KEY`] set to its number so the session
+/// working the ticket gets it as a message. A ticket nobody holds keeps the comment for
+/// whoever starts it. Upkeep's own comments do not stop a ticket from closing once its fault
+/// clears (see `super::clearing`).
+fn tell_regressions(
+    conn: &mut Connection,
+    tickets: &[String],
+    landing: &str,
+    text: &str,
+    now: Timestamp,
+) -> Result<Vec<Filed>> {
+    let mut told = Vec::new();
+    for ticket in tickets {
+        told.push(tell_one(conn, ticket, landing, text, now)?);
+    }
+    Ok(told)
+}
+
+fn tell_one(
+    conn: &mut Connection,
+    ticket: &str,
+    landing: &str,
+    text: &str,
+    now: Timestamp,
+) -> Result<Filed> {
+    for _ in 0..ATTEMPTS {
+        let seq = feed::current(conn)?;
+        let (metadata, last): (Option<String>, i64) = conn.query_row(
+            "SELECT t.metadata, (SELECT coalesce(max(n), 0) FROM comments c WHERE c.ticket = t.id)
+             FROM tickets t WHERE t.id = ?1",
+            [ticket],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let metadata: BTreeMap<String, Value> = match metadata {
+            Some(json) => serde_json::from_str(&json)
+                .map_err(|error| StoreError::Invalid(format!("metadata of {ticket}: {error}")))?,
+            None => BTreeMap::new(),
+        };
+        let mut landings = filing::strings(&metadata, TOLD_KEY);
+        if landings.iter().any(|seen| seen == landing) {
+            return Ok(Filed {
+                ticket: ticket.to_owned(),
+                change: Change::Unchanged,
+            });
+        }
+        landings.push(landing.to_owned());
+        let request = BatchRequest {
+            preconditions: vec![Precondition::Seq { seq }],
+            ops: vec![
+                Operation::Comment {
+                    id: ticket.to_owned(),
+                    text: text.to_owned(),
+                },
+                Operation::Update {
+                    id: ticket.to_owned(),
+                    set: None,
+                    add_labels: Vec::new(),
+                    remove_labels: Vec::new(),
+                    set_meta: BTreeMap::from([
+                        (TELL_KEY.to_owned(), Value::from(last + 1)),
+                        (TOLD_KEY.to_owned(), Value::from(landings)),
+                    ]),
+                    unset_meta: Vec::new(),
+                },
+            ],
+        };
+        if let BatchOutcome::Applied(_) =
+            batch::apply(conn, &request, UPKEEP.actor, UPKEEP.machine, now)?
+        {
+            return Ok(Filed {
+                ticket: ticket.to_owned(),
+                change: Change::Commented,
+            });
+        }
+    }
+    Err(StoreError::Invalid(format!(
+        "telling {ticket} about master lag did not commit after {ATTEMPTS} attempts"
+    )))
 }
 
 /// Whether a master-lag ticket that reported the stuck landing `landing` was closed less than
@@ -191,21 +286,32 @@ fn recently_closed_for(conn: &Connection, landing: &str, now: Timestamp) -> Resu
         .any(|seen| seen == landing))
 }
 
-/// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`,
-/// unless an open regression ticket explains the stall or a worker closed a ticket about the
-/// same stuck landing within that time.
+/// Files a justiciar ticket when a landing has waited [`MASTER_LAG_SECONDS`] for `master`.
+/// When open regression tickets explain the stall it tells them instead, and when a worker
+/// closed a ticket about the same stuck landing within that time it does nothing.
 pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
     let Some((landed_at, ticket)) = oldest_unverified_landing(conn, now)? else {
         return Ok(Vec::new());
     };
     let waited = now.seconds_since(landed_at);
-    if waited < MASTER_LAG_SECONDS
-        || covering_regression(conn)?.is_some()
-        || recently_closed_for(conn, &ticket, now)?
-    {
+    if waited < MASTER_LAG_SECONDS {
         return Ok(Vec::new());
     }
     let minutes = waited / 60.0;
+    let regressions = covering_regressions(conn)?;
+    if !regressions.is_empty() {
+        let text = format!(
+            "`master` has not moved for {minutes:.0} minutes: ticket {ticket} landed on \
+             `staging` at {landed_at} and no tip since has been verified. The open regression \
+             tickets ({}) explain why, so Ignite filed no justiciar ticket: fixing them is what \
+             moves `master`.",
+            regressions.join(", ")
+        );
+        return tell_regressions(conn, &regressions, &ticket, &text, now);
+    }
+    if recently_closed_for(conn, &ticket, now)? {
+        return Ok(Vec::new());
+    }
     let body = format!(
         "`master` has not moved for {minutes:.0} minutes: ticket {ticket} landed at {landed_at} \
          and no tip since has been verified. Tip verification is the only thing that moves \

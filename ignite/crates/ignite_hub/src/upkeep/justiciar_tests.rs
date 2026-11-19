@@ -182,7 +182,7 @@ fn close(conn: &mut rusqlite::Connection, id: &str, at: &str) {
 }
 
 #[test]
-fn an_open_regression_ticket_explains_the_lag_and_files_nothing() {
+fn an_open_regression_ticket_is_told_once_per_stuck_landing_instead_of_a_new_ticket() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();
     landing(&mut conn, &clock);
@@ -198,18 +198,27 @@ fn an_open_regression_ticket_explains_the_lag_and_files_nothing() {
     )
     .unwrap();
     clock.advance(MASTER_LAG_SECONDS + 60.0);
-    assert!(
-        justiciar::master_lag(&mut conn, clock.now())
-            .unwrap()
-            .is_empty()
-    );
+    let told = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(told.len(), 1);
+    assert_eq!(told[0].ticket, regression[0]);
+    assert_eq!(told[0].change, Change::Commented);
+    assert_eq!(lag_tickets(&conn, &clock), 0);
+    let held = ticket(&conn, &regression[0]);
+    // The daemon holding the ticket delivers the comment with this number to its session.
+    assert_eq!(held.metadata.get("tell"), Some(&serde_json::json!(1)));
+    assert_eq!(comment_count(&conn, &regression[0]), 1);
+
+    // Later passes about the same stuck landing tell it nothing more.
+    clock.advance(600.0);
+    let again = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(again[0].change, Change::Unchanged);
+    assert_eq!(comment_count(&conn, &regression[0]), 1);
 
     // Once the regression ticket is closed, a lag that remains is no longer explained.
     close(&mut conn, &regression[0], &clock.now().to_string());
-    assert_eq!(
-        justiciar::master_lag(&mut conn, clock.now()).unwrap().len(),
-        1
-    );
+    let filed = justiciar::master_lag(&mut conn, clock.now()).unwrap();
+    assert_eq!(filed[0].change, Change::Created);
+    assert_eq!(lag_tickets(&conn, &clock), 1);
 }
 
 #[test]
