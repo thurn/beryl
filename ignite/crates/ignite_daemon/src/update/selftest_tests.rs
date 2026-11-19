@@ -17,22 +17,28 @@ fn tempdir() -> PathBuf {
     dir
 }
 
-/// A copy of this repository's `ignite.toml` and check manifests, and a machine it declares.
+/// A repository with a small `ignite.toml` and one check manifest, and the machine it declares.
+/// The real `ignite.toml` and manifests are parsed by `ignite_core`'s tests; reading them here
+/// would make every test of this crate rerun whenever a check manifest changes.
 fn repository() -> (PathBuf, String) {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let repo = tempdir();
-    std::fs::copy(root.join("ignite.toml"), repo.join("ignite.toml")).unwrap();
+    std::fs::write(
+        repo.join("ignite.toml"),
+        "[repository]\nremote = \"origin\"\nstaging = \"staging\"\nmaster = \"master\"\n\
+         trees = \".trees\"\nchecks = \"ignite/checks\"\n\n[hub]\nurl = \"https://hub\"\n\
+         project = \"p\"\n\n[gate]\nthreshold = 0.1\ncap = 10\n\n[machine.m]\nticket_trees = 1\n\
+         landing_trees = 1\nfloor = { batch = 1, tip = 1 }\n",
+    )
+    .unwrap();
     let checks = repo.join("ignite/checks");
     std::fs::create_dir_all(&checks).unwrap();
-    for entry in std::fs::read_dir(root.join("ignite/checks")).unwrap() {
-        let path = entry.unwrap().path();
-        if path.extension().is_some_and(|e| e == "toml") {
-            std::fs::copy(&path, checks.join(path.file_name().unwrap())).unwrap();
-        }
-    }
-    let config = crate::main::read_config(&repo).unwrap();
-    let machine = config.machine.keys().next().unwrap().clone();
-    (repo, machine)
+    std::fs::write(
+        checks.join("py.toml"),
+        "[family.py]\nkind = \"regression\"\nadapter = \"jsonl\"\nplatforms = \"any\"\n\
+         list = \"l\"\nrun = \"r\"\ninputs = [\"src/**\"]\n",
+    )
+    .unwrap();
+    (repo, "m".to_owned())
 }
 
 fn home_with_database() -> Home {

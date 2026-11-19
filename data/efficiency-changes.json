@@ -464,5 +464,10 @@
     "label": "A daemon restarts into a new release 15 s after the last release appeared instead of 90 s; the restart still waits while any landing runs or a newer release builds, which already merges releases landing one after another. On 2026-11-19 a lone Ignite landing's `ignite wait deploy-<commit>` took 100 to 116 s, of which the build was about 40 s and the rest the 90 s quiet window",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The `ignite` check family hashes each test over its own crate's dependency closure (`crate-closure`) instead of all of `ignite/`, so a landing that edits a check manifest under ignite/checks/, or that rebases over another landing's Ignite change, reruns only the tests whose crates changed instead of all 1562. On 2026-11-19 a Beryl 3D change that edited beryl3d.toml ran the whole workspace's tests on each of four landing passes, 40 to 200 s each",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

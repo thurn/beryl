@@ -213,10 +213,16 @@ run = "cargo nextest run --locked --cargo-quiet -p beryl_link_iroh --profile ign
 inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 
 # Every test of Ignite's own workspace, as `ignite:<binary id>::<test>`. The workspace shares
-# nothing with the game's, so only a change under `ignite/` (or to `ignite.toml`, which its tests
-# read with the manifests in this directory) selects these checks, and no other family reads
-# those paths. This is the family `release_family` names in ignite.toml: a commit that changed
-# Ignite moves the release branch only once every test here passed on it.
+# nothing with the game's, so only a change under `ignite/` (or to `ignite.toml`) selects these
+# checks, and no other family reads those paths. This is the family `release_family` names in
+# ignite.toml: a commit that changed Ignite moves the release branch only once every test here
+# passed on it.
+#
+# Each test hashes its own package and the packages that package depends on (`crate-closure`),
+# not all of `ignite/`. With `ignite/**` as the input, every edit to a check manifest in this
+# directory, and every Ignite change that landed before a landing, changed the hash of all 1562
+# tests: on 2026-11-19 a Beryl 3D change that edited beryl3d.toml ran the whole workspace's tests
+# on each of its four landing passes, 40 to 200 s each.
 #
 # The tests run under cargo-nextest, which runs every test binary at once, from the build of
 # `ignite-tests`. Through `cargo test`, which runs the binaries one after another, the same 1325
@@ -232,7 +238,15 @@ platforms = "any"
 needs = ["ignite-tests"]
 list = "cargo nextest list --locked --workspace --message-format json"
 run = "cargo nextest run --locked --cargo-quiet --workspace --profile express --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
-inputs = ["ignite/**", "ignite.toml"]
+inputs = ["crate-closure", "ignite/.config/nextest.toml"]
+
+# What one package's tests read beyond their own crates. ignite_core's tests/repository.rs reads
+# the source of every crate (no file may name the repository) and parses every manifest in this
+# directory, and prime.rs's tests parse ignite.toml. ignite_store's no_deferred_transactions.rs
+# reads ignite_hub's source, which ignite_store does not depend on.
+[family.ignite.package_inputs]
+ignite_core = ["ignite/crates/**", "ignite/checks/**", "ignite.toml"]
+ignite_store = ["ignite/crates/ignite_hub/src/**"]
 
 # Formatting and clippy over Ignite's workspace, as `ignite-lint:fmt` and `ignite-lint:clippy`.
 # Neither reads the test build, so they need only the Python environment and run while
@@ -281,9 +295,11 @@ inputs = ["crate:beryl_cards", "rust/Cargo.toml", "data/card-store.tsv", "data/c
 outputs = ["rust/target"]
 
 # The test binaries of Ignite's workspace, which has its own lock file and target directory. The
-# `ignite` family's nextest run reuses this build.
+# `ignite` family's nextest run reuses this build. Its inputs are the workspace's crates, which
+# `crate-closure` names one by one, so that a test's hash covers only its own crate's closure
+# (see the `ignite` family).
 [product.ignite-tests]
 build = "cargo test --locked --no-run"
 dir = "ignite"
-inputs = ["ignite/**", "ignite.toml"]
+inputs = ["crate-closure"]
 outputs = ["ignite/target"]
