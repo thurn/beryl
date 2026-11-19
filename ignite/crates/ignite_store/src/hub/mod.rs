@@ -20,6 +20,7 @@ pub mod rejected;
 pub mod results;
 pub mod rows;
 pub mod session_titles;
+pub mod ticket_spend;
 pub mod tickets;
 pub mod tip_rounds;
 pub mod tips;
@@ -104,6 +105,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 14,
         sql: include_str!("owners.sql"),
         code: Some(owners::retire_labels),
+    },
+    Migration {
+        version: 15,
+        sql: include_str!("ticket_spend.sql"),
+        code: None,
     },
 ];
 

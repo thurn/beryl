@@ -1,0 +1,376 @@
+/* The efficiency section of a ticket's page: two tall strips of coloured segments, time on the
+   left and dollars on the right, with a label beside each segment large enough to hold one. */
+
+.c-spend,
+.c-spend-include {
+  --c-spend-height: max(440px, 80vh);
+  --c-spend-bar: 56px;
+  --c-spend-break: 14px;
+}
+
+.c-spend-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin-bottom: var(--space-5);
+}
+
+.c-spend-figure {
+  display: flex;
+  flex-direction: column;
+}
+
+.c-spend-figure-label {
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.c-spend-figure-value {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.c-spend-choice {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.c-spend-view {
+  display: none;
+}
+
+.c-spend:has(.c-spend-choice[value="timeline"]:checked) [data-view="timeline"],
+.c-spend:has(.c-spend-choice[value="kind"]:checked) [data-view="kind"],
+.c-spend:has(.c-spend-choice[value="merged"]:checked) [data-view="merged"] {
+  display: block;
+}
+
+.c-spend:has(.c-spend-choice[value="timeline"]:checked) label[for$="-timeline"],
+.c-spend:has(.c-spend-choice[value="kind"]:checked) label[for$="-kind"],
+.c-spend:has(.c-spend-choice[value="merged"]:checked) label[for$="-merged"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
+.c-spend:has(.c-spend-choice:focus-visible) .c-segmented {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.c-spend-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.c-spend-strip-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.c-spend-strip[data-side="left"] .c-spend-strip-head {
+  justify-content: flex-end;
+}
+
+.c-spend-strip-title {
+  color: var(--ink-3);
+}
+
+.c-spend-strip-total {
+  font-weight: 600;
+}
+
+.c-spend-column {
+  display: flex;
+  flex-direction: column;
+  height: var(--c-spend-height);
+}
+
+.c-spend-band {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.c-spend-band + .c-spend-band {
+  margin-top: var(--space-1);
+}
+
+.c-spend-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--c-spend-bar);
+  flex: 1 1 0;
+  min-height: 0;
+  padding-block: 1px;
+  overflow: hidden;
+}
+
+.c-spend-strip[data-side="right"] .c-spend-row {
+  grid-template-columns: var(--c-spend-bar) minmax(0, 1fr);
+}
+
+.c-spend-strip[data-side="right"] .c-spend-bar {
+  order: -1;
+}
+
+.c-spend-row.c-spend-break {
+  flex: 0 0 var(--c-spend-break);
+}
+
+.c-spend-label {
+  align-self: center;
+  padding-inline: var(--space-2);
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.c-spend-strip[data-side="right"] .c-spend-label {
+  text-align: left;
+}
+
+.c-spend-amount {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.c-spend-bar {
+  display: block;
+  min-height: 0;
+  border-radius: 4px;
+  background: var(--c-spend-color, var(--tone-muted));
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+.c-spend-column:hover .c-spend-bar {
+  opacity: 0.45;
+}
+
+.c-spend-column .c-spend-bar:hover,
+.c-spend-column .c-spend-bar:focus-visible {
+  opacity: 1;
+}
+
+.c-spend-band-label {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  max-width: calc(100% - var(--c-spend-bar) - var(--space-2));
+  padding-inline: var(--space-2);
+  overflow: hidden;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-top: 1px solid var(--hairline);
+}
+
+.c-spend-strip[data-side="left"] .c-spend-band-label {
+  right: var(--c-spend-bar);
+  text-align: right;
+}
+
+.c-spend-strip[data-side="right"] .c-spend-band-label {
+  left: var(--c-spend-bar);
+}
+
+.c-spend-band-label:hover {
+  color: var(--accent);
+}
+
+[data-group="model"] {
+  --c-spend-color: var(--series-1);
+}
+[data-group="checks"] {
+  --c-spend-color: var(--series-2);
+}
+[data-group="tools"] {
+  --c-spend-color: var(--series-3);
+}
+[data-group="ignite"] {
+  --c-spend-color: var(--series-4);
+}
+[data-group="background"] {
+  --c-spend-color: var(--series-5);
+}
+[data-group="agents"] {
+  --c-spend-color: var(--series-6);
+}
+[data-group="queued"] {
+  --c-spend-color: var(--series-7);
+}
+
+/* Waits on a person and idle stretches are not agent time: they are hatched, not filled. */
+.c-spend-hatch,
+.c-spend-bar[data-group="person"],
+.c-spend-bar[data-group="idle"],
+.c-spend-swatch[data-group="person"],
+.c-spend-swatch[data-group="idle"],
+.c-datacard-swatch[data-group="person"],
+.c-datacard-swatch[data-group="idle"] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--tone-muted) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+.c-spend-swatch,
+.c-datacard-swatch {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-right: var(--space-2);
+  border-radius: 3px;
+  background: var(--c-spend-color, var(--tone-muted));
+  vertical-align: -1px;
+}
+
+.c-spend-beside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-3);
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.c-spend-beside ul {
+  display: contents;
+  list-style: none;
+}
+
+.c-spend-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-5);
+}
+
+.c-spend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  padding: 0;
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  list-style: none;
+}
+
+/* A data card (cirrus.js builds it from a mark's [data-card]): the mark's colour group, its
+   name, its figure and a few facts. */
+.c-datacard {
+  min-width: 220px;
+}
+
+.c-datacard-kicker {
+  display: flex;
+  align-items: center;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.c-datacard .c-hovercard-title {
+  margin: var(--space-1) 0;
+}
+
+.c-datacard-figure {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.c-datacard-figure span {
+  margin-left: var(--space-2);
+  color: var(--ink-3);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.c-datacard .c-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.c-datacard .c-meta-item {
+  display: contents;
+}
+
+.c-datacard dt {
+  color: var(--ink-3);
+}
+
+.c-datacard dd {
+  margin: 0;
+}
+
+.c-datacard-code {
+  font: var(--text-xs) / 1.4 var(--font-mono);
+  word-break: break-all;
+}
+
+.c-spend-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.c-spend-table th {
+  color: var(--ink-3);
+  font-weight: 400;
+  text-align: left;
+}
+
+.c-spend-table td,
+.c-spend-table th {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.c-spend-table td + td,
+.c-spend-table th + th {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-spend-skeleton {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  height: var(--c-spend-height);
+}
+
+.c-spend-skeleton .c-skeleton-line {
+  width: var(--c-spend-bar);
+  height: 100%;
+  justify-self: end;
+}
+
+.c-spend-skeleton .c-skeleton-line + .c-skeleton-line {
+  justify-self: start;
+}
+
+@media (max-width: 640px) {
+  .c-spend,
+  .c-spend-include {
+    --c-spend-bar: 40px;
+    --c-spend-height: max(420px, 70vh);
+  }
+}

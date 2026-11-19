@@ -220,3 +220,5 @@ watch = ["~/.claude/projects", "~/.codex/sessions"]
 ingest = ["just", "efficiency", "ingest"]
 export = ["just", "efficiency", "export", "--no-ingest", "--since", "{since}", "--out", "{out}"]
 findings = ["just", "efficiency", "findings", "--no-ingest", "--json"]
+# Each ticket window's time and dollar segments for the efficiency section of ticket pages.
+spend = ["just", "efficiency", "spend", "--no-ingest", "--since", "{since}", "--out", "{out}"]

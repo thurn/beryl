@@ -3001,6 +3001,12 @@ to the hub as they are made:
   waits. The export goes in parts of about 4 MB, each with its own header,
   because a machine's first export holds its whole history (426 MB on jarvis),
   more than the hub reads in one request.
+- Each round also runs the dashboard's `spend` command and posts what it writes
+  under the source `spend`: one line per session window that worked a ticket,
+  holding that window's time and dollar segments in order. The hub keeps the
+  latest post of each window in `ticket_spend`, and a ticket's page draws them
+  in its efficiency section, rolling an epic's subtree up into one band per
+  ticket. A segment may name a command, which only the private listener shows.
 
 The measures under [What Ignite must achieve](#what-ignite-must-achieve) are
 named series in that store, each by machine, provider and ticket label. Three

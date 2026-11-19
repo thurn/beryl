@@ -11,17 +11,19 @@ use std::sync::OnceLock;
 
 use sha2::{Digest, Sha256};
 
-const STYLES: [&str; 5] = [
+const STYLES: [&str; 6] = [
     include_str!("../../static/css/1-tokens.css"),
     include_str!("../../static/css/2-layout.css"),
     include_str!("../../static/css/3-components.css"),
     include_str!("../../static/css/4-motion.css"),
     include_str!("../../static/css/5-edit.css"),
+    include_str!("../../static/css/6-spend.css"),
 ];
-/// The scripts, served as one file: cirrus itself, ticket editing, the theme choice, then the
-/// default owner in the settings panel.
-const SCRIPTS: [&str; 4] = [
+/// The scripts, served as one file: cirrus itself and its data cards, ticket editing, the theme
+/// choice, then the default owner in the settings panel.
+const SCRIPTS: [&str; 5] = [
     include_str!("../../static/cirrus.js"),
+    include_str!("../../static/datacard.js"),
     include_str!("../../static/edit.js"),
     include_str!("../../static/theme.js"),
     include_str!("../../static/owners.js"),

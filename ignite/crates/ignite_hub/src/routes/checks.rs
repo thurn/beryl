@@ -26,7 +26,7 @@ use ignite_core::protocol::hub::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
-use ignite_store::hub::{checks, records, results, tips};
+use ignite_store::hub::{checks, records, results, ticket_spend, tips};
 
 use super::{Request, Response};
 use crate::upkeep::filing::Author;
@@ -358,6 +358,17 @@ fn import_metrics(
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|e| store_failure(&e.into()))?;
     let mut stored = 0_usize;
+    if request.source == ticket_spend::SOURCE {
+        for row in &request.rows {
+            if ticket_spend::record(&tx, request.machine.as_str(), row, now)
+                .map_err(|e| store_failure(&e))?
+            {
+                stored += 1;
+            }
+        }
+        tx.commit().map_err(|e| store_failure(&e.into()))?;
+        return Ok(Response::json(200, &json!({ "stored": stored })));
+    }
     {
         let mut insert = tx
             .prepare_cached(

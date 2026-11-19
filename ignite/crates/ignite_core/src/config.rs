@@ -164,6 +164,12 @@ pub struct Metrics {
     /// `findings`, which the hub's improvement rules read. Empty runs nothing.
     #[serde(default)]
     pub findings: Vec<String>,
+    /// The ticket pages' spend windows as JSON lines, one session window per line, with
+    /// `{since}` and `{out}` as for `export`. It runs after each export is sent, and its windows
+    /// are posted to the hub from the source `spend`, which the hub keeps in `ticket_spend`
+    /// for the ticket pages' efficiency section. Empty runs nothing.
+    #[serde(default)]
+    pub spend: Vec<String>,
 }
 
 /// The repository Ignite delivers to.

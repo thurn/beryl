@@ -285,6 +285,9 @@ crate::tables! {
 
     Metric = "metrics" { machine: String, source: String, data: String, at: String }
 
+    /// One ticket window's time and dollar segments, as a machine posted them.
+    TicketSpend = "ticket_spend" { machine: String, window: String, ticket: String, start: String, end: String, data: String, at: String }
+
     /// The latest title a Claude desktop session reported.
     SessionTitle = "session_titles" { session: String, title: String, updated_at: String }
 

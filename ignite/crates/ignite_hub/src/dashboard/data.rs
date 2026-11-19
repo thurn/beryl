@@ -238,6 +238,9 @@ pub struct TicketData {
     /// `Blocked by`, `Blocking` and `Related`, each with the IDs in it.
     pub groups: Vec<(&'static str, Vec<String>)>,
     pub counts: Vec<Progress>,
+    /// Whether the ticket or any ticket under it has efficiency windows, which the page shows
+    /// in its efficiency section (see [`super::spend`]).
+    pub spend: bool,
 }
 
 /// One ticket by exact ID.
@@ -284,6 +287,7 @@ fn cards_where(conn: &Connection, clause: &str, argument: &str) -> Result<Vec<Ca
 }
 
 /// Reads a ticket's page data. `project` is the name that ticket names in text may carry.
+#[allow(clippy::too_many_lines)]
 pub fn ticket_data(
     conn: &Connection,
     project: &str,
@@ -392,6 +396,7 @@ pub fn ticket_data(
         watched: ids.members,
         groups,
         counts,
+        spend: super::spend::exists(conn, &super::spend::subtree(conn, &id)?),
     })
 }
 

@@ -1271,6 +1271,33 @@ time, coloured by category from left to right. Under it, a line shows the
 context size at each request. Together they show at a glance a session that sat
 in a long test run, or one whose context climbed to the limit and was compacted.
 
+## Ticket pages on the hub
+
+Each ticket's page on Ignite's dashboard has an efficiency section, between its
+comments and its changelog, that shows the same accounting for that ticket
+without opening this page.
+
+- `just efficiency spend --since <date> --out <file>` writes each ticket window
+  of this host that ended since the date as one JSON line: the window's
+  ticket, session and times, and two lists in time order. `time` holds the
+  window's seconds split as in [Time accounting](#time-accounting), each run of
+  one category, kind and part as one segment; a tool call's queued seconds come
+  first, then its compile seconds. `dollars` holds the window's requests, each
+  under the kind of the tool calls it made, or `reply` when it made none.
+- A list longer than 120 segments is coalesced: runs are gathered into buckets
+  of at least 1/120 of the window, each named after its largest part, with its
+  three largest parts kept for the hovercard. Waits on a person and idle
+  stretches are never merged, since the page draws them as breaks.
+- Each segment names a colour group (model, checks, tools, Ignite, background,
+  agents, queued, and the breaks person and idle), so the hub colours segments
+  without knowing this project's command kinds.
+- Ignite's daemon runs the command after each export and posts its lines to the
+  hub, which keeps the latest post of each window. The page draws the time
+  strip and the dollar strip side by side, with a timeline view, a view by
+  kind and, for an epic, a merged view of its whole subtree. Segments carry the
+  command that took most of their time; the hub shows it only on its private
+  listener.
+
 ## Other machines
 
 Tickets are also worked on a second Mac and on a Windows PC. The store on each

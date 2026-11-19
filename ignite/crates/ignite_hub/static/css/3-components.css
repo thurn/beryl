@@ -513,3 +513,35 @@ a.c-row:hover {
   color: var(--accent);
   text-decoration: underline;
 }
+
+/* A segmented control: a row of labels for radio buttons, one of them chosen. The radios sit
+   elsewhere in the component, hidden, and the component marks the chosen label. */
+.c-segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--sunk);
+}
+
+.c-segmented label {
+  padding: var(--space-1) var(--space-3);
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+
+.c-segmented label:hover {
+  color: var(--ink);
+}
+
+.c-segmented label[aria-current="true"],
+.c-segmented label.c-chosen {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}

@@ -19,6 +19,8 @@ pub mod owners;
 pub mod pool;
 pub mod references;
 pub mod serve;
+pub mod spend;
+pub mod spend_view;
 pub mod status;
 pub mod ticket;
 pub mod tips;

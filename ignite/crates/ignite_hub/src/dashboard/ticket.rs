@@ -238,6 +238,16 @@ pub fn page(
         }
         add("Comments", &body, Some(comments.len()));
     }
+    if data.spend {
+        add(
+            "Efficiency",
+            &super::spend_view::placeholder(&format!(
+                "{}?fragment=spend",
+                ticket_url(root, &card.id)
+            )),
+            None,
+        );
+    }
 
     // Tickets imported from the old tracker keep its owner and start time under one key.
     let legacy = ticket

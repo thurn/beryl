@@ -109,6 +109,20 @@ pub fn post_new_rows(ctx: &Context, state: &Path) -> Result<u32> {
     if !metrics.findings.is_empty() {
         post_findings(ctx, metrics.findings.clone())?;
     }
+    if !metrics.spend.is_empty() {
+        let spend_out = state.with_extension("spend.jsonl");
+        let args = metrics
+            .spend
+            .iter()
+            .map(|arg| {
+                arg.replace("{since}", since)
+                    .replace("{out}", &spend_out.to_string_lossy())
+            })
+            .collect();
+        run(ctx, args)?;
+        post_spend(ctx, &spend_out, CHUNK_BYTES)?;
+        let _ = fs::remove_file(&spend_out);
+    }
     save(
         state,
         &Sent {
@@ -138,6 +152,39 @@ fn post_findings(ctx: &Context, args: Vec<String>) -> Result<()> {
         rows: vec![report],
     })?;
     Ok(())
+}
+
+/// Posts the spend windows at `path`, one JSON object per line, in parts of about
+/// `chunk_bytes`, from the source `spend`. The hub keeps the latest post of each window, so
+/// sending one again changes nothing.
+fn post_spend(ctx: &Context, path: &Path, chunk_bytes: usize) -> Result<u32> {
+    let reading = |error: std::io::Error| Error::Io(format!("reading {}: {error}", path.display()));
+    let invalid = |error: serde_json::Error| Error::Invalid(format!("{}: {error}", path.display()));
+    let post = |rows: Vec<serde_json::Value>| {
+        ctx.hub.metrics(&MetricsImport {
+            machine: ctx.machine.clone(),
+            source: ignite_store::hub::ticket_spend::SOURCE.to_owned(),
+            rows,
+        })
+    };
+    let (mut count, mut rows, mut bytes) = (0u32, Vec::new(), 0usize);
+    for line in BufReader::new(File::open(path).map_err(reading)?).lines() {
+        let line = line.map_err(reading)?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        bytes += line.len();
+        rows.push(serde_json::from_str(&line).map_err(invalid)?);
+        count = count.saturating_add(1);
+        if bytes >= chunk_bytes {
+            post(std::mem::take(&mut rows))?;
+            bytes = 0;
+        }
+    }
+    if !rows.is_empty() {
+        post(rows)?;
+    }
+    Ok(count)
 }
 
 /// Runs one of the dashboard's commands from the main checkout in the `batch` class, which the

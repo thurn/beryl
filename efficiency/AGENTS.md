@@ -157,6 +157,10 @@ store" and "Isolation" before changing anything here.
   `paths.project_name` builds a provider's project folder from the checkout path
   (every non-alphanumeric character becomes `-`), and `paths.inside` compares
   working directories as text with either separator, so nothing assumes `/`.
+- `spend.py` is the `spend` command: each ticket window of this host as JSON
+  lines of time and dollar segments in order, coalesced to at most 120 per list,
+  each with a colour group, for the efficiency section of Ignite's ticket pages.
+  Ignite's daemon runs it after each export and posts its lines to the hub.
 - `cli.py`: the command and its queries.
 - The page: `serve.py` is `just efficiency serve`, a standard-library server on
   127.0.0.1 that answers `GET` only. An address is a query

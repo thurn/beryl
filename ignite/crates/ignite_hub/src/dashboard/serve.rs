@@ -16,6 +16,7 @@ use ignite_store::hub::{feed, tickets};
 use super::attention::PAGES;
 use super::common::{SITE_ICONS, brand};
 use super::components::{self as c, PageOptions, esc};
+use super::data::ReadError;
 use super::references::{dashboard_root, percent_encode, ticket_url};
 use super::{assets, explore, home, landings, machines, pool, status, ticket, tips};
 use crate::routes::{Request, Response};
@@ -145,6 +146,21 @@ fn fragment(seq: &str, body: String, head: bool) -> Response {
     html(200, body, head)
         .with_header("Cache-Control", "no-store".to_owned())
         .with_header("X-Cirrus-Sequence", seq.to_owned())
+}
+
+/// The efficiency section of the ticket `id`'s page (see [`super::spend_view`]): its windows and
+/// those of every ticket under it. Commands show only on an `editable` (private) page.
+fn spend_fragment(
+    conn: &Connection,
+    root: &str,
+    id: &str,
+    editable: bool,
+) -> Result<String, ReadError> {
+    let ids = super::spend::subtree(conn, id)?;
+    Ok(match super::spend::load(conn, id, &ids)? {
+        Some(spend) => super::spend_view::fragment(&spend, root, editable, id),
+        None => c::empty("No sessions have reported spending on this ticket yet."),
+    })
 }
 
 fn page_reply(options: &PageOptions, if_none_match: Option<&str>, head: bool) -> Response {
@@ -332,6 +348,12 @@ fn serve_pages(
             let canonical = ticket_url(&root, id.as_str());
             if canonical != request.path {
                 return Some(redirect(&canonical, &request.query));
+            }
+            if fragment_kind == Some("spend") {
+                return Some(
+                    spend_fragment(conn, &root, id.as_str(), editable)
+                        .map_or_else(|error| failed(&error), |body| fragment(&seq, body, head)),
+                );
             }
             match ticket::options(conn, &root, project, id.as_str(), &seq, editable)
                 .map(|o| o.map(brand))

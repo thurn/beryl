@@ -3,8 +3,8 @@
 //   header and <main> inside a view transition, and keeps scroll positions;
 // - links are prefetched on hover, focus and touch, and cards as they scroll
 //   into view while the browser is idle;
-// - [data-tip] shows a tooltip and [data-hovercard] a card from a <template>,
-//   on hover, keyboard focus or a tap;
+// - [data-tip] shows a tooltip, [data-hovercard] a card from a <template> and
+//   [data-card] a data card built from JSON, on hover, keyboard focus or a tap;
 // - [data-include] fragments load after the page, replacing a skeleton;
 // - <time> shows a relative time in the viewer's clock;
 // - a service worker (sw.js) answers from its cache at once and revalidates.
@@ -478,7 +478,12 @@
         hidePopover();
         const el = document.createElement("div");
         const cardId = owner.getAttribute("data-hovercard");
-        if (cardId) {
+        if (owner.hasAttribute("data-card")) {
+            const card = window.cirrusDataCard?.(owner.getAttribute("data-card"));
+            if (!card) return;
+            el.className = "c-popover c-interactive";
+            el.append(card);
+        } else if (cardId) {
             const template = document.getElementById(cardId);
             if (!template) return;
             el.className = "c-popover c-interactive";
@@ -504,11 +509,22 @@
 
     // Beside the owner's first line box, so a link that wraps gets its card under
     // where it starts, not under the whole paragraph's width.
+    // An owner marked [data-hover-side], such as a segment of a tall strip, gets its card
+    // beside it, centred on it, so the card never covers the strip.
     function place(el, owner) {
         const r = owner.getClientRects()[0] || owner.getBoundingClientRect();
         const w = el.offsetWidth;
         const h = el.offsetHeight;
         const gap = 8;
+        if (owner.hasAttribute("data-hover-side")) {
+            let left = r.right + gap;
+            if (left + w > innerWidth - gap) left = r.left - gap - w;
+            const middle = Math.max(r.top, 0) / 2 + Math.min(r.bottom, innerHeight) / 2;
+            const top = Math.min(Math.max(gap, middle - h / 2), innerHeight - h - gap);
+            el.style.top = `${Math.round(top)}px`;
+            el.style.left = `${Math.round(Math.max(gap, left))}px`;
+            return;
+        }
         let top = r.bottom + gap;
         if (top + h > innerHeight - gap && r.top - gap - h > gap)
             top = r.top - gap - h;
@@ -517,7 +533,8 @@
         el.style.left = `${Math.round(left)}px`;
     }
 
-    const owner = (t) => t.closest?.("[data-tip], [data-hovercard]");
+    const owner = (t) =>
+        t.closest?.("[data-tip], [data-hovercard], [data-card]");
 
     document.addEventListener("pointerover", (e) => {
         if (e.pointerType === "touch") return;

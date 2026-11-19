@@ -36,6 +36,7 @@ from . import (
     pushes,
     rollups,
     session,
+    spend,
     store,
     timings,
 )
@@ -159,6 +160,28 @@ def run_export(args: argparse.Namespace) -> Result:
             "commit or publish it.",
         ],
         [f"efficiency import {out}"],
+    )
+
+
+def run_spend(args: argparse.Namespace) -> Result:
+    fresh(args)
+    host = paths.host()
+    since = parse_since(str(args.since)).since
+    out = Path(args.out) if args.out else paths.folder() / f"spend-{host}.jsonl"
+    db = reader()
+    try:
+        found = spend.windows(db, host, since)
+    finally:
+        db.close()
+    spend.write(found, out)
+    return Result(
+        "spend",
+        {"host": host, "since": since, "file": str(out), "windows": len(found)},
+        [
+            f"wrote {len(found)} ticket windows of {host} to {out}",
+            "Its segments name commands: Ignite's hub shows them only on its private "
+            "listener.",
+        ],
     )
 
 
@@ -621,6 +644,10 @@ QUERIES: dict[str, tuple[str, Callable[[argparse.Namespace], Result]]] = {
         "write this host's rows to a compressed file for another machine",
         run_export,
     ),
+    "spend": (
+        "each ticket window as time and dollar segments for Ignite's ticket pages",
+        run_spend,
+    ),
     "import": ("add the rows of another machine's export to the store", run_import),
     "ingest": ("update the store from the sources", run_ingest),
     "sql": ("run a read-only SQL query against the store", run_sql),
@@ -677,6 +704,13 @@ def parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="answer from the store as it is",
             )
+        if name == "spend":
+            p.add_argument(
+                "--since",
+                default="all",
+                help="windows that ended since: 24h, 7d, all or a date (default all)",
+            )
+            p.add_argument("--out", help="the file to write (default: in the cache)")
         if name == "export":
             p.add_argument(
                 "--since", default="all", help="24h, 7d, all or a date (default all)"
