@@ -36,6 +36,7 @@ use ignite_core::inputs;
 use ignite_core::manifest::{Adapter, Family, InputPattern};
 use ignite_core::protocol::hub::ListingKey;
 
+use super::observed::{self, Reads};
 use super::{
     CheckRun, Checks, ListError, Listed, ListingTime, OpenTree, RunOptions, TRIES, adapters,
     base_env, execute,
@@ -61,6 +62,10 @@ pub(crate) struct Kept {
     /// The hash of the listing's sources in the tree it was made in (see [`Checks::sources`]).
     pub sources: InputHash,
     pub checks: Vec<Listed>,
+    /// For a `nextest` family, what each package's compile units were observed to read (see
+    /// [`observed`]). A `nextest` listing without it, as older daemons kept, is not used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reads: Option<Reads>,
 }
 
 /// Where a family's checks came from.
@@ -77,6 +82,9 @@ pub(crate) enum Origin {
 pub(crate) struct Listing {
     pub checks: Vec<Listed>,
     pub origin: Origin,
+    /// What each package's compile units were observed to read, for a `nextest` family whose
+    /// target directory could be read; `None` otherwise.
+    pub reads: Option<Reads>,
 }
 
 impl Checks {
@@ -254,7 +262,9 @@ impl Checks {
         let answers = self.cache.listings(&asked);
         let mut memory = self.listings.lock().unwrap_or_else(PoisonError::into_inner);
         for (key, answer) in asked.into_iter().zip(answers) {
-            let Some(kept) = answer.and_then(|text| serde_json::from_str::<Kept>(&text).ok())
+            let Some(kept) = answer
+                .and_then(|text| serde_json::from_str::<Kept>(&text).ok())
+                .filter(|kept| kept.reads.is_some() || !self.observes(&key.family))
             else {
                 continue;
             };
@@ -352,6 +362,7 @@ impl Checks {
                     key,
                     sources: kept.sources.clone(),
                 },
+                reads: kept.reads.clone(),
             });
         }
         let _listing = crate::steps::during(format!("listing family {name} in {}", tree.id));
@@ -431,15 +442,44 @@ impl Checks {
                     }
                     keepable
                 });
+                // `cargo nextest list` has just compiled every test binary it listed, so the
+                // dep-info of every unit they use is current.
+                let reads = (family.adapter == Adapter::Nextest)
+                    .then(|| self.target_dir(family))
+                    .flatten()
+                    .and_then(|target| {
+                        observed::observe(&tree.path, &target, &tree.graph, &tree.tracked)
+                    });
                 return Ok(Listing {
                     checks: listed,
                     origin: Origin::Made { key },
+                    reads,
                 });
             }
             Err(ListError::Output(output))
         })();
         run.listings.push(time);
         listing
+    }
+
+    /// Whether the family's listings carry observed reads: a `nextest` family whose target
+    /// directory is known.
+    pub(crate) fn observes(&self, name: &str) -> bool {
+        self.settings
+            .manifest
+            .families
+            .get(name)
+            .is_some_and(|declared| {
+                declared.family.adapter == Adapter::Nextest
+                    && self.target_dir(&declared.family).is_some()
+            })
+    }
+
+    /// The target directory of a `nextest` family's builds, relative to the checkout's root:
+    /// the first output of the first product it needs.
+    pub(crate) fn target_dir(&self, family: &Family) -> Option<String> {
+        let product = self.settings.manifest.products.get(family.needs.first()?)?;
+        product.outputs.first().cloned()
     }
 
     /// Remembers that `name` has listed checks, if it has, so a later empty listing of it is

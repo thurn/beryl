@@ -8,6 +8,7 @@ mod express;
 mod fail_fast;
 mod hardening;
 mod listings;
+mod observed;
 mod plan;
 mod scope;
 mod verdicts;

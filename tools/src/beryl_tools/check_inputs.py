@@ -16,6 +16,12 @@ for that package, counting the family's `package_inputs` for that package (the e
 that only its checks hash). A literal is tried relative to its file's directory, to its package's
 directory, to its workspace's root and to the checkout's root, in that order.
 
+A cargo-nextest family's compile-time reads are observed rather than declared: after listing
+its tests, Ignite reads Cargo's dep-info files and build-script outputs and hashes each
+package's `include_str!`, `include_bytes!` and `rerun-if-changed` paths into its tests
+(docs/ignite.md, "Observed inputs"). So in such a family a literal in one of those statements
+needs no declaration, and only the reads a test makes at run time are compared.
+
 It cannot see a path built from parts it cannot read, such as a name passed in as an argument;
 those reads stay the family's to declare. A literal that names a path it does not read is listed
 in `data/check-inputs-allowlist.json`, by file, with how many such literals the file may hold;
@@ -47,6 +53,11 @@ READS: re.Pattern[str] = re.compile(
 )
 # A plain string literal on one line.
 LITERAL: re.Pattern[str] = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
+# A statement whose paths Ignite observes from Cargo's dep-info files and build-script outputs
+# in a cargo-nextest family, so that they need no declaration there.
+OBSERVED: re.Pattern[str] = re.compile(r"include_str!|include_bytes!|rerun-if-changed")
+# A read at run time, which no dep-info file records.
+AT_RUN_TIME: re.Pattern[str] = re.compile(r"fs::read|read_to_string|read_dir|\.join\(")
 # How many lines before a literal still belong to its statement.
 STATEMENT_LINES = 3
 # Workspaces whose literals this check does not read. Ignite's code is given the checkout's path
@@ -81,6 +92,8 @@ class Family:
     # that package's checks hash.
     package_patterns: dict[str, tuple[str, ...]]
     package_crates: dict[str, tuple[str, ...]]
+    # Whether Ignite observes its compile-time reads: a cargo-nextest family.
+    observed: bool = False
 
 
 @dataclass(frozen=True)
@@ -132,6 +145,7 @@ def families(root: Path) -> list[Family]:
                 ),
                 package_patterns={p: path_patterns(i) for p, i in per_package.items()},
                 package_crates={p: crate_patterns(i) for p, i in per_package.items()},
+                observed=family.get("adapter") == "nextest",
             )
         )
     return found
@@ -247,8 +261,11 @@ def resolve(literal: str, bases: Iterable[str], known: set[str]) -> str | None:
     return None
 
 
-def reads(root: Path, file: str, package: Package, known: set[str]) -> list[Read]:
-    """The repository paths `file` reads through a literal (see the module's docs)."""
+def reads(
+    root: Path, file: str, package: Package, known: set[str], observed: bool = False
+) -> list[Read]:
+    """The repository paths `file` reads through a literal (see the module's docs). With
+    `observed`, a literal in a compile-time read that Ignite observes is left out."""
     lines = (root / file).read_text(errors="replace").splitlines()
     bases = (posixpath.dirname(file), package.dir, package.workspace, "")
     found: list[Read] = []
@@ -257,6 +274,8 @@ def reads(root: Path, file: str, package: Package, known: set[str]) -> list[Read
             continue
         statement = "\n".join(lines[max(0, number - STATEMENT_LINES) : number])
         if not READS.search(statement):
+            continue
+        if observed and OBSERVED.search(statement) and not AT_RUN_TIME.search(line):
             continue
         for literal in LITERAL.findall(line):
             path = resolve(literal, bases, known)
@@ -312,7 +331,7 @@ def uncovered(root: Path, tracked: Sequence[str]) -> list[str]:
                 and next(d for d in package_dirs if within(f, d)) == package.dir
             ]
             for file in own:
-                for read in reads(root, file, package, known):
+                for read in reads(root, file, package, known, family.observed):
                     if not any(covers(p, read.path) for p in patterns):
                         found.append(
                             f"{read.file}:{read.line}: {read.path} "

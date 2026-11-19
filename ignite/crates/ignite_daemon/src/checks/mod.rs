@@ -44,6 +44,7 @@ mod execute;
 mod express;
 mod gate;
 pub(crate) mod listings;
+mod observed;
 pub(crate) mod plan;
 mod prepare;
 mod regression;
@@ -499,18 +500,29 @@ impl Checks {
         // Checks of one package usually share every pattern, and matching patterns against
         // every tracked file is the costly part, so each distinct set is matched once.
         let mut memo: HashMap<String, Vec<String>> = HashMap::new();
+        // The observed reads that are tracked in this tree: a file the build read that is gone
+        // now names no path, which changes the hash.
+        let reads = listing
+            .reads
+            .as_ref()
+            .map(|reads| observed::tracked_only(reads, &tree.tracked));
         for listed in &listing.checks {
             if let Some(why) = &listed.refused {
                 eprintln!("ignite: {why}");
                 broken.push(invalid_entry(&listed.check, &Error::Invalid(why.clone())));
                 continue;
             }
-            match self.key_paths(tree, family, listed, &mut memo) {
+            match self.key_paths(tree, family, listed, reads.as_ref(), &mut memo) {
                 Ok(paths) => resolved.push((listed, paths)),
                 Err(error) => broken.push(invalid_entry(&listed.check, &error)),
             }
         }
-        let sources = Self::source_paths(tree, &listing.checks);
+        let mut sources = Self::source_paths(tree, &listing.checks);
+        // A kept listing holds only while the files its build was observed to read are as they
+        // were, since a build script may generate tests from them.
+        sources.extend(reads.iter().flat_map(observed::every_path));
+        sources.sort();
+        sources.dedup();
         let mut every: Vec<String> = resolved
             .iter()
             .flat_map(|(_, paths)| paths.iter().cloned())
@@ -612,31 +624,63 @@ impl Checks {
     }
 
     /// The paths a check's input hash covers: its family's inputs, the family's
-    /// `package_inputs` for the check's package, and the check's own inputs.
+    /// `package_inputs` for the check's package, the check's own inputs and, where the listing
+    /// carries observed reads, what the packages of the check's closure were observed to read.
     /// `memo` holds the paths already resolved for a set of patterns and a package.
     fn key_paths(
         &self,
         tree: &OpenTree,
         family: &Family,
         listed: &Listed,
+        reads: Option<&observed::Reads>,
         memo: &mut HashMap<String, Vec<String>>,
     ) -> Result<Vec<String>> {
-        let mut patterns = hash::input_patterns(family, &self.settings.manifest);
+        let mut patterns = self.check_patterns(family, reads.is_some());
         patterns.extend_from_slice(family.package_patterns(listed.package.as_deref()));
         patterns.extend(listed.inputs.iter().cloned().map(InputPattern::from));
         let memo_key = format!("{:?}\0{patterns:?}", listed.package);
         if let Some(paths) = memo.get(&memo_key) {
             return Ok(paths.clone());
         }
-        let paths = inputs::resolve(
+        let mut paths = inputs::resolve(
             &patterns,
             listed.package.as_deref(),
             &tree.graph,
             &tree.tracked,
         )
         .map_err(|e| Error::Invalid(e.to_string()))?;
+        if let (Some(reads), Some(package)) = (reads, listed.package.as_deref()) {
+            // A package the crate graph does not hold has no compile units of its own to read.
+            let closure =
+                inputs::closure(package, &tree.graph).unwrap_or_else(|_| vec![package.to_owned()]);
+            paths.extend(observed::paths_for(reads, &closure));
+            paths.sort();
+            paths.dedup();
+        }
         memo.insert(memo_key, paths.clone());
         Ok(paths)
+    }
+
+    /// The patterns every check of a family hashes: its inputs and those of the products it
+    /// needs. With observed reads, a product's path patterns are left out and its crate
+    /// patterns kept: a product lists the files its build reads so that it is rebuilt when they
+    /// change, and the observed reads already name every repository file a Cargo build read.
+    fn check_patterns(&self, family: &Family, observed: bool) -> Vec<InputPattern> {
+        let manifest = &self.settings.manifest;
+        if !observed {
+            return hash::input_patterns(family, manifest);
+        }
+        let mut patterns = family.inputs.clone();
+        for product in family.needs.iter().filter_map(|n| manifest.products.get(n)) {
+            patterns.extend(
+                product
+                    .inputs
+                    .iter()
+                    .filter(|p| !matches!(p, InputPattern::Path(_)))
+                    .cloned(),
+            );
+        }
+        patterns
     }
 
     /// The check's key from the object IDs of its paths, sorted by path.

@@ -141,6 +141,7 @@ impl Checks {
                 let kept = Kept {
                     sources,
                     checks: listing.checks,
+                    reads: listing.reads,
                 };
                 self.keep(key.clone(), kept);
             }

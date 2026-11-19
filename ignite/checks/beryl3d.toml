@@ -217,6 +217,10 @@ inputs = [
 # does not follow into. The tests read the recordings, so they need the `b3d` product, whose
 # shared build is the one nextest would make. As for the `rust` family (rust.toml), Ignite
 # appends the filterset of the tests to run and reads their outcomes from the libtest JSON.
+#
+# Ignite hashes a `nextest` family's tests over what their builds were observed to read rather
+# than over the path inputs of the products the family needs (docs/ignite.md, "Observed
+# inputs"), so the script that builds the `b3d` product and the recordings is listed here too.
 [family.b3d-test]
 kind = "regression"
 adapter = "nextest"
@@ -243,6 +247,7 @@ inputs = [
   "ui/src/audio/manifest.json",
   "ui/src/audio/loops.json",
   "docs/sample-decks/**",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
 ]
 
 # Every interface test (`just b3d test`): each recording from each seat in each desktop window,

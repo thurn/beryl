@@ -1280,6 +1280,9 @@ The fields:
   package with every workspace package it depends on, and `crate-closure` for
   the same computed per test from the package that holds it. The lock file, the
   toolchain version and the family's own commands are always included.
+- A `nextest` family's checks also hash what their builds were observed to read,
+  so `inputs` names only what its tests read at run time. See
+  [Observed inputs](#observed-inputs).
 - `package_inputs` maps a package to what only its checks read beyond `inputs`,
   in the same syntax except `crate-closure`, as in
   `beryl_card_build = ["rust/cards/**"]` under `[family.rust.package_inputs]`.
@@ -1398,7 +1401,9 @@ not hash file contents itself:
 - A directory input contributes its git tree ID, and a file input its blob ID.
 - A check's inputs are its family's `inputs`, the `package_inputs` of the
   package that holds it, the inputs its own `list` line names, and the inputs of
-  the products its family needs.
+  the products its family needs. A `nextest` family's checks take only the
+  crate patterns of its products' inputs, and add what their builds were
+  observed to read (see [Observed inputs](#observed-inputs)).
 - The input hash is SHA-256 over the sorted inputs, the family's commands, the
   toolchain version and, for a check that is not `platforms = "any"`, the
   operating system.
@@ -1411,6 +1416,60 @@ crate    beryl_card    tree 90be3f4   (+2 more crates)
 file     rust/Cargo.lock  blob 5d0a1c2
 hash     b7e2…41aa   passed on jarvis at 3a9e4c1, 2026-11-17 14:12
 ```
+
+### Observed inputs
+
+A family's declared `inputs` are a claim nothing enforces. A Rust test that
+embeds a data file with `include_str!` reads a file outside `crate-closure`, and
+the old way to say so was a path in the family's `inputs`, which every test of
+the family then hashed. For `nextest` families Ignite instead hashes what each
+test's build was observed to read. Tracing system calls is ruled out: on macOS
+it needs root and a weakened System Integrity Protection, and it slows every
+process.
+
+- **Where the reads come from.** The compiler writes a dep-info file beside each
+  compile unit (`<target>/<profile>/deps/<unit>.d`) that lists every source file
+  and every file an `include_str!` or `include_bytes!` names. A build script
+  names the files it reads with `cargo:rerun-if-changed=` lines in its output
+  (`<target>/<profile>/build/<package>-<hash>/output`). The target directory is
+  the first `outputs` entry of the family's first product.
+- **When they are read.** Right after a fresh listing: `cargo nextest list`
+  compiles every test binary it lists, so the dep-info of every unit the tests
+  use is current. For each workspace package Ignite keeps the tracked paths its
+  units name outside the package's own directory. A path is a file, or a
+  directory when a build script watches one. Dep-info files that an earlier
+  build with other features left behind are read too, which only adds paths.
+- **Where they are kept.** In the family's kept listing, beside its checks. A
+  listing is already kept in memory, in the local database and at the hub under
+  the family's listing hash, which covers every package of the workspace, so one
+  machine's observation serves every machine whose tree has that hash. This is
+  ccache's depfile mode in two steps: the listing hash finds the listing, and
+  the listing says which further files to hash. A `nextest` listing kept without
+  observed reads, as older daemons kept them, is not used.
+- **What a check hashes.** `crate-closure`, the family's other inputs, the
+  `package_inputs` of its package, and the observed reads of every package in
+  its closure. Its products' path inputs are left out: a product lists the files
+  its build reads so that it is rebuilt when they change, and the observed reads
+  already name every repository file a Cargo build reads. A product built by a
+  script that chooses how the tests are built, such as Beryl 3D's, has that
+  script in the family's own `inputs`.
+- **When a listing no longer holds.** The observed paths join the listing's
+  sources hash, so a kept listing whose observed files changed is listed again,
+  which rebuilds the tests and observes them afresh. A build script may generate
+  tests from the files it reads, so the listing itself depends on them.
+- **Scope.** The landing gate counts a kept listing's observed paths among the
+  family's inputs, so a landing that edits only an embedded data file still
+  runs the tests that embed it.
+
+What observation does not see, which stays declared:
+
+- Files a test opens at run time. These go in the family's `package_inputs` for
+  the package whose tests read them, and Beryl's `check-inputs` source rule
+  holds those lists to the literals the package's Rust files read.
+- Anything a `jsonl` family reads, such as a Python adapter or a browser check.
+  Those families keep their declared inputs.
+- A build that writes outside the product's first output directory: Ignite then
+  observes nothing, and only the cache audits would notice.
 
 ### The result cache
 
@@ -1455,7 +1514,9 @@ guards against that with reruns, which need no tracing of file access:
   build scripts read through a literal (`include_str!`, `fs::read`, a `join` on
   `CARGO_MANIFEST_DIR`) with the inputs of each `crate-closure` family that runs
   them, counting the family's `package_inputs` for the package that holds the
-  file.
+  file. In a `nextest` family it leaves out `include_str!`, `include_bytes!` and
+  `rerun-if-changed` literals, whose files are observed (see
+  [Observed inputs](#observed-inputs)).
 
 ## Where regression checks run
 

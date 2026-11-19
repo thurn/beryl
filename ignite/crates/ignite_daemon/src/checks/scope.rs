@@ -16,6 +16,9 @@
 //! kept listing by its declared inputs, so a fresh tree lists no unrelated family for a change
 //! confined to Ignite's own files. Families in the always set are still listed.
 //!
+//! A `nextest` family's kept listing also names what its builds were observed to read (see
+//! `observed`), which counts like an input the family declares.
+//!
 //! In a family with a kept listing, `crate-closure` stands for the packages its checks belong
 //! to, with the packages each depends on, not for every package of every workspace. A change
 //! to Ignite's own crates once kept the game's Rust test families in scope, because their
@@ -26,7 +29,7 @@ use std::path::Path;
 use ignite_core::inputs;
 use ignite_core::manifest::{Family, InputPattern};
 
-use super::{Checks, Listed, OpenTree, plan};
+use super::{Checks, Listed, OpenTree, observed, plan};
 use crate::server::Context;
 
 impl Checks {
@@ -72,6 +75,15 @@ impl Checks {
                 Some((_, listing)) => {
                     let mut patterns = self.listing_patterns(family);
                     patterns.extend(Self::source_patterns(tree, &listing.checks));
+                    // What the family's builds were observed to read, which its declared
+                    // inputs no longer name.
+                    patterns.extend(
+                        listing
+                            .reads
+                            .iter()
+                            .flat_map(observed::every_path)
+                            .map(InputPattern::Path),
+                    );
                     let mut patterns = listed_packages(patterns, &listing.checks);
                     patterns.extend(self.manifest_file(ctx, name).map(InputPattern::Path));
                     // A pattern that cannot be matched, such as a crate that is gone, says

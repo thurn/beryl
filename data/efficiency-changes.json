@@ -494,5 +494,10 @@
     "label": "Ignite release builds and selftests run on the express cores instead of queueing for the scheduler's, the daemon notices a landing's release move at the next sender round instead of its five-minute fetch, and the restart cap is 30 s instead of 600 s (on 2026-11-19 the median release reached jarvis 395 s after its landing moved it)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The `rust` check family hashes each test over the repository files its build was observed to read, from Cargo's dep-info files and build-script outputs, instead of eleven hand-listed data paths that every test hashed, so an edit to the table commands or the save breaks reruns only the tests of the packages that embed them, and an edit to the card store or UI conventions reruns only the packages that depend on the embedding crate or read the file at run time, instead of all of the workspace's tests",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

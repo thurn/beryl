@@ -16,7 +16,11 @@
 # dependency versions), and the files crates embed or their tests read at run time, which
 # `crate-closure` cannot see: the card store and set groups (beryl_card_store, beryl_card_build),
 # the table commands (beryl_table), the save breaks, UI conventions and generated TypeScript
-# (beryl_session, beryl_protocol) and the sample decks (beryl_app, beryl_cli).
+# (beryl_session, beryl_protocol) and the sample decks (beryl_app, beryl_cli). The `jsonl`
+# families and the products list them. The `rust` family lists only what its tests read at run
+# time: Ignite observes what each package's build reads (`include_str!`, `include_bytes!` and
+# build scripts' `rerun-if-changed`) from Cargo's dep-info files, and hashes it into the tests of
+# every package that depends on it (docs/ignite.md, "Observed inputs").
 
 # Every test of the workspace that cargo-nextest runs, each hashed over the package that holds
 # it and the workspace packages it depends on. Tests marked #[ignore] are the fuzzer's and
@@ -42,30 +46,28 @@ platforms = "any"
 needs = ["rust-tests"]
 list = "cargo nextest list --locked --workspace --exclude beryl_link_iroh --message-format json -E !binary(allocations)"
 run = "cargo nextest run --locked --cargo-quiet --workspace --exclude beryl_link_iroh --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
-inputs = [
-  "crate-closure",
-  "rust/Cargo.toml",
-  "rust/.config/nextest.toml",
+inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
+
+# What one package's tests read at run time beyond the inputs above, hashed into that package's
+# tests alone, so that a card file or an incident report reruns only the tests that read it.
+# The `check-inputs` source rule holds these lists to the paths each package's Rust files read
+# through a literal. beryl_card_build's tests walk every card file, read the engine's keyword
+# list from beryl_card's source, which is not among its dependencies, and read the card store,
+# set groups, catalogs and sample decks themselves. beryl_cli's blunder tests read the blunder
+# list and positions and check that each blunder's incident report exists, and its fixtures
+# read the sample decks. beryl_session's tests compare the UI conventions and the generated
+# TypeScript with what the code says.
+[family.rust.package_inputs]
+beryl_card_build = [
+  "rust/cards/**",
+  "rust/crates/beryl_card/src/characteristics.rs",
   "data/card-store.tsv",
   "data/catalogs.json",
-  "data/blunders.json",
-  "data/blunders/**",
   "data/set-groups.json",
-  "data/table-commands.json",
-  "data/save-breaks.json",
-  "data/ui-conventions.json",
-  "ui/src/generated/**",
   "docs/sample-decks/**",
 ]
-
-# What one package's tests read beyond the inputs above, hashed into that package's tests alone,
-# so that a card file or an incident report reruns only the tests that read it.
-# beryl_card_build's tests walk every card file and read the engine's keyword list from
-# beryl_card's source, which is not among its dependencies; beryl_cli's blunder tests check
-# that each blunder's incident report exists.
-[family.rust.package_inputs]
-beryl_card_build = ["rust/cards/**", "rust/crates/beryl_card/src/characteristics.rs"]
-beryl_cli = ["docs/incidents/**"]
+beryl_cli = ["docs/incidents/**", "data/blunders.json", "data/blunders/**", "docs/sample-decks/**"]
+beryl_session = ["data/ui-conventions.json", "ui/src/generated/**"]
 
 # The doctests of each package whose library has any, which cargo-nextest does not run. They
 # are where a `compile_fail` block holds that one index type cannot pass for another.

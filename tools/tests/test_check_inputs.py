@@ -51,7 +51,7 @@ def workspace(root: Path) -> list[str]:
         "\n".join(
             [
                 'const A: &str = include_str!("../../../data/declared.json");',
-                'const B: &str = include_str!("../../../data/secret.json");',
+                'let b = fs::read_to_string(root().join("data/secret.json"));',
                 'let c = root().join("assets/x/y.png");',
                 'let d = Path::new(env!("CARGO_MANIFEST_DIR")).join("../b/src/table.txt");',
                 'let e = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");',
@@ -90,7 +90,9 @@ def test_the_allowlist_holds_a_file_to_its_count_which_only_goes_down(
 def test_a_package_input_covers_that_package_alone(tmp_path: Path) -> None:
     tracked = workspace(tmp_path)
     write(
-        tmp_path, "ws/b/tests/reads.rs", 'include_str!("../../../data/secret.json");\n'
+        tmp_path,
+        "ws/b/tests/reads.rs",
+        'fs::read_to_string(root().join("data/secret.json"));\n',
     )
     tracked.append("ws/b/tests/reads.rs")
     manifest = MANIFEST + '\n[family.unit.package_inputs]\na = ["data/secret.json"]\n'
@@ -107,3 +109,29 @@ def test_the_ignite_workspace_is_not_scanned(tmp_path: Path) -> None:
     write(tmp_path, "ignite/checks/unit.toml", manifest)
     # Ignite's tests write fixture files under the real repository's names, which are not reads.
     assert check_inputs.families(tmp_path) == []
+
+
+def test_an_include_in_a_nextest_family_is_observed_not_declared(tmp_path: Path) -> None:
+    tracked = workspace(tmp_path)
+    write(
+        tmp_path,
+        "ws/b/tests/reads.rs",
+        "\n".join(
+            [
+                'const S: &[u8] = include_bytes!("../../../data/secret.json");',
+                'println!("cargo:rerun-if-changed=../../data/secret.json");',
+                "",
+            ]
+        ),
+    )
+    tracked.append("ws/b/tests/reads.rs")
+    found = check_inputs.uncovered(tmp_path, tracked)
+    assert not any(line.startswith("ws/b/") for line in found), found
+    # A family whose builds Ignite does not observe still declares the same reads.
+    write(
+        tmp_path,
+        "ignite/checks/unit.toml",
+        MANIFEST.replace('adapter = "nextest"', 'adapter = "jsonl"'),
+    )
+    found = check_inputs.uncovered(tmp_path, tracked)
+    assert "ws/b/tests/reads.rs:1: data/secret.json (unit, b)" in found, found
