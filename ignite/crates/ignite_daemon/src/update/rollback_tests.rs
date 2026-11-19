@@ -156,8 +156,7 @@ fn pruning_keeps_a_release_a_live_process_runs() {
     // The oldest other release is still run by a verb process that outlived its daemon.
     let held = super::lock_shared(&store.root.join("ccccccc").join(super::IN_USE)).unwrap();
     // It is also the oldest, so pruning would take it first.
-    fs::File::open(store.root.join("ccccccc"))
-        .unwrap()
+    open_dir_for_times(&store.root.join("ccccccc"))
         .set_modified(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1))
         .unwrap();
     store.prune(&[&commit("bbbbbbb")]);
@@ -178,4 +177,21 @@ fn the_rejection_reason_is_the_newest_log_line_naming_the_commit() {
         store.rejection(&bad).as_deref(),
         Some("bbbbbbb failed its selftest: migrations failed")
     );
+}
+
+/// A directory opened so that its times can be set. Windows opens a directory only with
+/// `FILE_FLAG_BACKUP_SEMANTICS`, and sets times only through a handle that may write.
+fn open_dir_for_times(dir: &std::path::Path) -> fs::File {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt as _;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+            .open(dir)
+            .unwrap()
+    }
+    #[cfg(not(windows))]
+    fs::File::open(dir).unwrap()
 }

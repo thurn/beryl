@@ -138,7 +138,6 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use ignite_core::protocol::Class;
 
     /// Lends what it is asked for, up to `free`, and records what it was asked.
     struct Lender {
@@ -211,7 +210,7 @@ mod tests {
             ],
             cwd: std::env::temp_dir(),
             env: vec![("WHO".to_owned(), "release".to_owned())],
-            class: Class::Agent,
+            class: ignite_core::protocol::Class::Agent,
             cores: 16,
             resources: Vec::new(),
             grows: true,

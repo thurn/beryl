@@ -120,9 +120,11 @@ fn a_compiling_lease_starts_from_a_copy_of_the_build_nearest_the_tip() {
 /// A tree that never built a product another tree holds would pass it on to be built cold, so
 /// a donor that holds every product is taken although another is nearer the tip. The seeded
 /// tree then holds what its donor held, so it can be a donor in turn.
-#[cfg(target_os = "macos")]
 #[test]
 fn a_donor_holding_every_product_is_preferred_to_one_nearer_the_tip() {
+    if !copies_are_clones_here() {
+        return;
+    }
     let (f, _) = donor_at_the_tip();
     let landing = f.repo.join(".worktrees/landing-1");
     fake_target(&landing);
@@ -149,9 +151,11 @@ fn a_donor_holding_every_product_is_preferred_to_one_nearer_the_tip() {
 /// A leased tree's build was made from its ticket's edits, which the commit its row records
 /// does not show. Its uncommitted files count as differing from the tip, so a free tree built a
 /// commit behind the tip, with fewer files differing, is taken instead.
-#[cfg(target_os = "macos")]
 #[test]
 fn a_leased_donor_whose_ticket_changed_more_files_is_passed_over() {
+    if !copies_are_clones_here() {
+        return;
+    }
     let f = Fixture::new(2, 3);
     f.trees.record_build(&id("tree-01"), &f.commits[0]).unwrap();
     let other = f.lease("T.1", false);
