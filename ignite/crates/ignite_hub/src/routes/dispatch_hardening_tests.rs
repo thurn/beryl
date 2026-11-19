@@ -11,7 +11,7 @@ use super::tests::{
 };
 
 #[test]
-fn every_label_the_hub_files_with_is_offered_with_no_epic() {
+fn every_label_the_hub_files_with_is_offered_under_an_inactive_epic() {
     for label in [
         "hub",
         "incomplete",
@@ -22,15 +22,16 @@ fn every_label_the_hub_files_with_is_offered_with_no_epic() {
         "justiciar",
     ] {
         let mut conn = hub::open_in_memory().unwrap();
-        let (_, ids) = file_under(&mut conn, Parent::Loose, &[("fault", &[label], &[])]);
+        let (_, ids) = file_under(&mut conn, Parent::Epic(None), &[("fault", &[label], &[])]);
         let (_, reply) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
         assert_eq!(reply["ticket"], ids[0].as_str(), "label {label}");
     }
-    // A ticket with no such label and no epic is still not offered, and `needs:` still applies.
+    // A ticket with no such label under an inactive epic is still not offered, and `needs:` still
+    // applies.
     let mut conn = hub::open_in_memory().unwrap();
     file_under(
         &mut conn,
-        Parent::Loose,
+        Parent::Epic(None),
         &[
             ("plain", &[], &[]),
             ("for a person", &["hub", "needs:person"], &[]),

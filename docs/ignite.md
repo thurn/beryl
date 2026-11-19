@@ -1995,7 +1995,8 @@ Not every ticket is offered:
 - An epic is worked only once it is active, which means it has a `--workers`
   number. `/ignite` sets one when it files an epic or is given one. Until then
   the epic's tickets wait, however ready they are, so the pool never starts on a
-  backlog that nobody asked for.
+  backlog that nobody asked for. A ticket under no epic has nothing to activate,
+  so releasing it is enough.
 - Once released, tickets that the hub files itself are always offered:
   regressions, improvements and repairs to a machine. So is a ticket that a
   session starts by name.

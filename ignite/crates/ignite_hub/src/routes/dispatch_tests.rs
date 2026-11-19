@@ -573,11 +573,10 @@ pub(super) fn set_workers(conn: &mut Connection, epic: &TicketId, workers: u32) 
 }
 
 #[test]
-fn only_an_active_epic_or_the_hub_s_own_tickets_are_offered() {
+fn only_an_active_epic_loose_or_the_hub_s_own_tickets_are_offered() {
     let mut conn = hub::open_in_memory().unwrap();
     let (epic, waiting) = file_under(&mut conn, Parent::Epic(None), &[("backlog", &[], &[])]);
     let (_, stopped) = file_under(&mut conn, Parent::Epic(Some(0)), &[("stopped", &[], &[])]);
-    file_under(&mut conn, Parent::Loose, &[("loose", &[], &[])]);
     // A new idle worker each time, since a worker holding a reservation is offered nothing.
     let ask = |conn: &mut Connection, seconds: f64| {
         let session = format!("local_{seconds}");
@@ -591,6 +590,9 @@ fn only_an_active_epic_or_the_hub_s_own_tickets_are_offered() {
         &[("repair jarvis", &["machine"], &[])],
     );
     assert_eq!(ask(&mut conn, 2.0)["ticket"], repair[0].as_str());
+    // So is an open ticket under no epic: releasing it is the only way a person can ask for it.
+    let (_, loose) = file_under(&mut conn, Parent::Loose, &[("loose", &[], &[])]);
+    assert_eq!(ask(&mut conn, 2.5)["ticket"], loose[0].as_str());
     set_workers(&mut conn, &epic.unwrap(), 1);
     assert_eq!(ask(&mut conn, 3.0)["ticket"], waiting[0].as_str());
     // The epic set to 0 workers still holds its ticket back.

@@ -13,7 +13,7 @@
 //! - The backlog's ratios for the improvement share come from `crate::rules::backlog`.
 //!
 //! Not every ready ticket is offered (see [`Snapshot::offered`]): only a ticket under an active
-//! epic or one the hub filed itself, never one set aside for a person or kept for something the
+//! epic, under no epic, or one the hub filed itself, never one set aside for a person or kept for something the
 //! asking machine lacks, and nothing at all while the machine's hand-offs are paused.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -323,23 +323,26 @@ impl Snapshot {
     }
 
     /// The ticket if it may be offered to a machine that `has` each thing a `needs:` label
-    /// names: it is under an active epic or the hub filed it itself, and no `needs:` label sets
-    /// it aside for a person or names something the machine lacks.
+    /// names: it is under an active epic, under no epic at all, or the hub filed it itself, and
+    /// no `needs:` label sets it aside for a person or names something the machine lacks.
     ///
     /// An epic is active when it has a `workers` number greater than zero: the nearest ancestor
     /// with a `workers` number decides, so an epic set to 0 stops its milestones however their
-    /// parent is set. A ticket started by name skips these rules, because `/claims` does not
-    /// ask the queue.
+    /// parent is set. A ticket with no parent has no epic a person could activate, so a person
+    /// releasing it (only an `open` ticket gets here) is what asks for it to be worked. A ticket
+    /// started by name skips these rules, because `/claims` does not ask the queue.
     fn offered(&self, ticket: Ticket, has: impl Fn(&str) -> bool) -> Option<Ticket> {
         let filed_by_hub = self.regressions.contains(ticket.id.as_str())
             || ticket
                 .labels
                 .iter()
                 .any(|label| HUB_FILED.contains(&label.as_str()));
-        let active = self
-            .ancestors(&ticket.id)
-            .find_map(|id| self.nodes.get(&id).and_then(|node| node.workers))
-            .is_some_and(|workers| workers > 0);
+        let mut ancestors = self.ancestors(&ticket.id).peekable();
+        let loose = ancestors.peek().is_none();
+        let active = loose
+            || ancestors
+                .find_map(|id| self.nodes.get(&id).and_then(|node| node.workers))
+                .is_some_and(|workers| workers > 0);
         let needs_met = ticket
             .labels
             .iter()
