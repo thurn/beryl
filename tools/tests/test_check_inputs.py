@@ -99,3 +99,11 @@ def test_a_package_input_covers_that_package_alone(tmp_path: Path) -> None:
     assert check_inputs.uncovered(tmp_path, tracked) == [
         "ws/b/tests/reads.rs:1: data/secret.json (unit, b)"
     ]
+
+
+def test_the_ignite_workspace_is_not_scanned(tmp_path: Path) -> None:
+    tracked = workspace(tmp_path)
+    manifest = MANIFEST.replace('dir = "ws"', 'dir = "ignite"')
+    write(tmp_path, "ignite/checks/unit.toml", manifest)
+    # Ignite's tests write fixture files under the real repository's names, which are not reads.
+    assert check_inputs.families(tmp_path) == []
