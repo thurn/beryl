@@ -134,16 +134,15 @@ impl TestVerb {
         let mut found = vec![false; bare.len()];
         let mut not_current = Vec::new();
         for (name, _) in &all {
-            let listing = match kept.get(*name) {
-                Some((_, listing)) => Arc::clone(listing),
-                None => {
-                    not_current.push(*name);
-                    let Some(latest) = self.checks.latest_listing(name) else {
-                        families.push(name);
-                        continue;
-                    };
-                    Arc::new(latest)
-                }
+            let listing = if let Some((_, listing)) = kept.get(*name) {
+                Arc::clone(listing)
+            } else {
+                not_current.push(*name);
+                let Some(latest) = self.checks.latest_listing(name) else {
+                    families.push(name);
+                    continue;
+                };
+                Arc::new(latest)
             };
             let mut named = false;
             for (word, found) in bare.iter().zip(&mut found) {
