@@ -128,24 +128,31 @@ pub(crate) fn took_line(run: &CheckRun, total: f64) -> Option<(String, String)> 
 
 /// The `slow` line: every step of [`SHOWN_S`] seconds or more that no `built` or `listed` line
 /// names, longest first, or `None` when there is none. Steps on threads of their own may
-/// overlap, so their seconds can add up to more than the command took.
+/// overlap, so their seconds can add up to more than the command took. A step that several
+/// families took, such as waiting for the one build they all need, is named once, with its
+/// longest time and how many times it was taken.
 ///
-/// `slow     waiting for the build of b3d 92 s, keying b3d-every-tick 25 s`
+/// `slow     waiting for the build of b3d 92 s, 3 times; keying b3d-every-tick 25 s`
 pub(crate) fn slow_line(run: &CheckRun) -> Option<(String, String)> {
-    let mut slow: Vec<&(String, f64)> = run
-        .slow_steps
-        .iter()
-        .filter(|(_, seconds)| *seconds >= SHOWN_S)
-        .collect();
-    if slow.is_empty() {
+    let mut steps: BTreeMap<&str, (f64, usize)> = BTreeMap::new();
+    for (what, seconds) in run.slow_steps.iter().filter(|(_, s)| *s >= SHOWN_S) {
+        let step = steps.entry(what.as_str()).or_insert((0.0, 0));
+        step.0 = step.0.max(*seconds);
+        step.1 += 1;
+    }
+    if steps.is_empty() {
         return None;
     }
-    slow.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let mut slow: Vec<(&str, (f64, usize))> = steps.into_iter().collect();
+    slow.sort_by(|a, b| b.1.0.total_cmp(&a.1.0));
     let named: Vec<String> = slow
         .iter()
-        .map(|(what, seconds)| format!("{what} {seconds:.0} s"))
+        .map(|(what, (seconds, times))| match times {
+            1 => format!("{what} {seconds:.0} s"),
+            _ => format!("{what} {seconds:.0} s, {times} times"),
+        })
         .collect();
-    Some(("slow".to_owned(), named.join(", ")))
+    Some(("slow".to_owned(), named.join("; ")))
 }
 
 /// How many families the `listed` line names.
@@ -390,18 +397,19 @@ mod tests {
     }
 
     #[test]
-    fn the_slow_line_names_steps_of_five_seconds_or_more_longest_first() {
+    fn the_slow_line_names_each_step_of_five_seconds_or_more_once_longest_first() {
         let mut run = CheckRun {
             slow_steps: vec![
                 ("keying b3d-every-tick".to_owned(), 25.0),
                 ("reading kept listings".to_owned(), 2.0),
                 ("waiting for the build of b3d".to_owned(), 92.0),
+                ("waiting for the build of b3d".to_owned(), 90.0),
             ],
             ..CheckRun::default()
         };
         assert_eq!(
             slow_line(&run).unwrap().1,
-            "waiting for the build of b3d 92 s, keying b3d-every-tick 25 s"
+            "waiting for the build of b3d 92 s, 2 times; keying b3d-every-tick 25 s"
         );
         run.slow_steps.clear();
         assert_eq!(slow_line(&run), None);
