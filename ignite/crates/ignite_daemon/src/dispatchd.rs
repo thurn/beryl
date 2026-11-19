@@ -403,11 +403,14 @@ impl Dispatcher {
         let mut queued = state.pending.remove(index)?;
         queued.gives += 1;
         let body = queued.body.clone();
-        state.given.insert(body.id, Given {
+        state.given.insert(
+            body.id,
+            Given {
                 queued,
                 at: now,
                 verified: false,
-            });
+            },
+        );
         if let Some(session) = asking {
             *state.given_to.entry(session.clone()).or_default() += 1;
         }

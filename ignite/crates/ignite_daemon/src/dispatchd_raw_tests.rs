@@ -51,7 +51,10 @@ fn a_check_reads_the_session_from_get_sessions_result() {
     let w1 = session("local_w1");
     let raw = |fields: serde_json::Value| fields.to_string();
     let cases = [
-        (raw(json!({"sessionId": "local_w1", "isRunning": true})), "running"),
+        (
+            raw(json!({"sessionId": "local_w1", "isRunning": true})),
+            "running",
+        ),
         (
             raw(json!({"sessionId": "local_w1", "isRunning": false, "isArchived": false})),
             "idle",
@@ -63,7 +66,10 @@ fn a_check_reads_the_session_from_get_sessions_result() {
         ("Session local_w1 not found.".to_owned(), "gone"),
         ("Request timed out".to_owned(), "unknown"),
         ("Tool get_session not found".to_owned(), "unknown"),
-        (raw(json!({"sessionId": "local_w2", "isRunning": true})), "unknown"),
+        (
+            raw(json!({"sessionId": "local_w2", "isRunning": true})),
+            "unknown",
+        ),
         (raw(json!({"sessionId": "local_w1"})), "unknown"),
         ("[]".to_owned(), "unknown"),
     ];
@@ -77,7 +83,11 @@ fn a_raw_gone_releases_the_ticket_and_a_raw_error_does_not() {
     let rig = rig(&["local_w1"]);
     let check = rig.silent("local_w1");
     let reply = rig.ack(check.id, "raw", "Request timed out");
-    assert!(reply.text.starts_with("read local_w1 as unknown"), "{}", reply.text);
+    assert!(
+        reply.text.starts_with("read local_w1 as unknown"),
+        "{}",
+        reply.text
+    );
     assert!(lock(&rig.host.releases).is_empty());
 
     let rig = super::tests::rig(&["local_w1"]);
@@ -117,10 +127,18 @@ fn a_read_back_on_another_model_or_effort_fails_the_handoff() {
         "{}",
         reply.text
     );
-    assert!(reply.text.contains("Do not send the prompt"), "{}", reply.text);
+    assert!(
+        reply.text.contains("Do not send the prompt"),
+        "{}",
+        reply.text
+    );
     let moved = rig.step().unwrap();
     assert_eq!(handoff_to(&moved), ("local_w2", "T.1"));
-    assert_eq!(rig.ack(handoff.id, "ok", "").exit, Exit::Usage, "already failed");
+    assert_eq!(
+        rig.ack(handoff.id, "ok", "").exit,
+        Exit::Usage,
+        "already failed"
+    );
 }
 
 #[test]

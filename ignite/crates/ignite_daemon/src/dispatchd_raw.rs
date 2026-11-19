@@ -58,7 +58,10 @@ pub(super) fn check_answer(session: &SessionId, raw: &str) -> &'static str {
 /// Why a hand-off's raw read-back does not match what `body` asked for, or `None` when it does.
 pub(super) fn readback_mismatch(body: &DispatchInstruction, raw: &str) -> Option<String> {
     let Ok(Value::Object(fields)) = serde_json::from_str::<Value>(raw.trim()) else {
-        return Some(format!("the read-back is not get_session's JSON: {}", short(raw)));
+        return Some(format!(
+            "the read-back is not get_session's JSON: {}",
+            short(raw)
+        ));
     };
     let field = |name: &str| fields.get(name).and_then(Value::as_str).map(str::to_owned);
     if let Some(session) = &body.session
@@ -93,7 +96,10 @@ pub(super) fn readback_mismatch(body: &DispatchInstruction, raw: &str) -> Option
 /// A model ID without a context-window suffix such as `[1m]`, which picks the same model.
 fn base_model(model: &str) -> &str {
     let model = model.trim();
-    match model.strip_suffix(']').and_then(|m| m.rfind('[').map(|at| &model[..at])) {
+    match model
+        .strip_suffix(']')
+        .and_then(|m| m.rfind('[').map(|at| &model[..at]))
+    {
         Some(base) => base,
         None => model,
     }
@@ -110,7 +116,8 @@ fn short(raw: &str) -> String {
 /// Whether the instruction is a hand-off to a named session, whose model and effort the daemon
 /// checks from a read-back. A Codex slot's hand-off opens a new chat and names no session.
 fn reads_back(body: &DispatchInstruction) -> bool {
-    body.action == DispatchAction::Handoff && body.session.as_ref().is_some_and(|s| !slots::is_slot(s))
+    body.action == DispatchAction::Handoff
+        && body.session.as_ref().is_some_and(|s| !slots::is_slot(s))
 }
 
 fn body_of(state: &State, id: u64) -> Option<DispatchInstruction> {
@@ -207,7 +214,9 @@ impl Dispatcher {
                     "hand-off {id} has no read-back: call get_session on {} and report \
                      `ignite dispatch ack {id} raw '<its JSON>'`, and send the prompt only when \
                      the reply says to",
-                    body.session.as_ref().map_or("the session", SessionId::as_str)
+                    body.session
+                        .as_ref()
+                        .map_or("the session", SessionId::as_str)
                 ),
             )
         })
