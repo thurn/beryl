@@ -172,6 +172,11 @@ impl Fuzz {
 fn rng() -> TestRng {
     let first =
         std::env::var("BERYL_FUZZ_FIRST_SEED").map_or(0, |n| n.parse::<u64>().expect("a seed"));
+    rng_from(first)
+}
+
+/// The generator's randomness starting from `first`; zero is the fixed default.
+fn rng_from(first: u64) -> TestRng {
     if first == 0 {
         return TestRng::deterministic_rng(RngAlgorithm::ChaCha);
     }
@@ -182,14 +187,14 @@ fn rng() -> TestRng {
 
 /// Runs `cases` fuzz games of at most `most` choices, deterministically, and returns the game
 /// proptest shrank a failure to, with each choice as the index it took, and why it fails.
-fn shrink(cases: u32, most: usize) -> Option<(Fuzz, String)> {
+fn shrink(cases: u32, most: usize, rng: TestRng) -> Option<(Fuzz, String)> {
     let config = Config {
         cases,
         failure_persistence: None,
         max_shrink_iters: 100_000,
         ..Config::default()
     };
-    let mut runner = TestRunner::new_with_rng(config, rng());
+    let mut runner = TestRunner::new_with_rng(config, rng);
     let games = (0..u64::from(u32::MAX), vec(any::<u16>(), 0..most))
         .prop_map(|(seed, choices)| Fuzz { seed, choices });
     match runner.run(&games, |game| game.play().1.map_err(TestCaseError::fail)) {
@@ -235,12 +240,13 @@ fn report(game: &Fuzz, why: &str) -> String {
 #[test]
 #[ignore = "a handful of session games, about 4.5 CPU seconds: `just fuzz` plays them"]
 fn session_games_keep_the_script_checks() {
-    if let Some((game, why)) = shrink(games(3), MOST_CHOICES) {
+    if let Some((game, why)) = shrink(games(3), MOST_CHOICES, rng()) {
         panic!("{}", report(&game, &why));
     }
 }
 
-/// A builder that drops every step tapping a card shrinks to a game of a handful of choices,
+/// A builder that drops every step tapping a card shrinks (from the fixed generator, whatever
+/// `BERYL_FUZZ_FIRST_SEED` says, since the bound on the shrunk length depends on the games) to a game of a handful of choices,
 /// whose report names the seed, the choices and the script that failed the replay check. The
 /// nightly's `just fuzz` runs it; no check does.
 #[test]
@@ -261,7 +267,7 @@ fn a_planted_builder_fault_shrinks_to_a_few_choices() {
     }
     PLANTED.set(Some(untapped));
     let _planted = Planted;
-    let (game, why) = shrink(8, FEW_CHOICES).expect("a card is tapped in some game");
+    let (game, why) = shrink(8, FEW_CHOICES, rng_from(0)).expect("a card is tapped in some game");
     let report = report(&game, &why);
     println!("{report}");
     assert!(game.choices.len() <= 12, "{report}");
