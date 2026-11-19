@@ -455,6 +455,8 @@ CHECKS: tuple[Check, ...] = (
             "data/card-store.tsv",
             "rust/cards/**",
             "rust/crates/beryl_cards/src/library/**",
+            "data/set-groups.json",
+            "rust/crates/beryl_card/src/**",
             module("rulings"),
         ),
     ),

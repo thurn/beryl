@@ -60,6 +60,7 @@ inputs = [
   "docs/sample-decks/**",
   "tools/src/beryl_tools/bench.py",
   "tools/src/beryl_tools/vm_host.py",
+  "tools/src/beryl_tools/deps.py",
   "tools/src/beryl_tools/count_trend.py",
   "tools/src/beryl_tools/ignite/rest.py",
   "tools/src/beryl_tools/__init__.py",

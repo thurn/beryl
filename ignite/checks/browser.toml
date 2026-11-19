@@ -70,6 +70,8 @@ inputs = [
   "ui/package.json",
   "ui/public/**",
   "ui/fixtures.json",
+  "ui/verbs.json",
+  "ui/shapes.json",
   "crate:beryl_cli",
   "tools/src/beryl_tools/ignite/browser.py",
   "tools/src/beryl_tools/suites.py",

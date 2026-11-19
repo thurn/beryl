@@ -768,5 +768,17 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     p.set_defaults(func=count_gate)
 
 
+def count_gate_main(argv: list[str]) -> int:
+    """`python -m beryl_tools.bench count-gate ...`: the count gate without `cli.py`, so that
+    Ignite's `counts` family loads only this module and the ones it declares as inputs.
+    """
+    parser = argparse.ArgumentParser(prog="beryl_tools.bench")
+    register(parser.add_subparsers(dest="command", required=True))
+    args = parser.parse_args(argv)
+    if args.command != "count-gate":
+        parser.error("only count-gate runs this way; run the others as `by <command>`")
+    return int(count_gate(args))
+
+
 if __name__ == "__main__":
-    sys.exit(f"run it as `by bench`, not {os.path.basename(sys.argv[0])}")
+    sys.exit(count_gate_main(sys.argv[1:]))

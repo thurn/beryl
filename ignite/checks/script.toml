@@ -85,6 +85,7 @@ inputs = [
   "crate:beryl_app",
   "ui/**",
   "data/**",
+  "docs/sample-decks/**",
   "justfile",
   "tools/src/beryl_tools/app.py",
   "tools/src/beryl_tools/ignite/script.py",

@@ -386,9 +386,9 @@ def verified_commit(root: Path) -> str | None:
     return git(root, "rev-parse", "HEAD") or None
 
 
-# What the count gate says: `by count-gate` command lines, which tests replace.
+# What the count gate says: `python -m beryl_tools.bench count-gate` command lines, which tests replace.
 def count_gate_command(*args: str) -> list[str]:
-    return [sys.executable, "-m", "beryl_tools.cli", "count-gate", *args]
+    return [sys.executable, "-m", "beryl_tools.bench", "count-gate", *args]
 
 
 def run_gate(args: Sequence[str], root: Path) -> tuple[int, str]:
