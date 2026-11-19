@@ -551,7 +551,7 @@
     "expect": "down"
   },
   {
-    "label": "Windows trees on a Dev Drive (ReFS) start from a block-clone copy of the build nearest the tip, as APFS trees on macOS do; before, every Windows tree built from nothing (about 950 to 1,400 CPU-seconds per product). Windows Rust builds also link with rust-lld and keep only line tables, since PDB files were 6 GB of an 11 GB test build",
+    "label": "Windows trees on a Dev Drive (ReFS) start from a block-clone copy of the build nearest the tip as APFS trees on macOS do, where before each built every product from nothing (about 950 to 1,400 CPU-seconds each), and Windows Rust builds link with rust-lld and keep only line tables, since PDB files were 6 GB of an 11 GB test build",
     "metric": "machine.queued-core-hours-per-day",
     "expect": "down"
   },
