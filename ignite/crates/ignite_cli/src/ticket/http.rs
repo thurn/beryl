@@ -118,9 +118,10 @@ impl Hub {
             .and_then(|seconds| seconds.parse::<f64>().ok())
             .filter(|seconds| Duration::try_from_secs_f64(*seconds).is_ok())
             .unwrap_or(DEFAULT_RETRY_S);
-        let ignite_home = env("IGNITE_HOME")
-            .map(PathBuf::from)
-            .or_else(|| Some(PathBuf::from(env("HOME")?).join(".config/ignite")));
+        let ignite_home = env("IGNITE_HOME").map(PathBuf::from).or_else(|| {
+            ignite_core::config::home_dir(|name| env(name).map(Into::into))
+                .map(|home| home.join(".config").join("ignite"))
+        });
         let token = env("IGNITE_TOKEN")
             .filter(|token| !token.is_empty())
             .or_else(|| machine_token(&ignite_home.clone()?.join("machine.json")))

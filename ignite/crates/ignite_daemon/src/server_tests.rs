@@ -333,11 +333,11 @@ fn a_claim_while_the_hub_is_stopped_exits_with_code_four() {
     let mut registry = Registry::default();
     registry.register(Box::new(Start));
     let server = Server::new(ctx, registry, None).unwrap();
-    let reply = server.handle(&from(
-        request("start", &[]),
-        "/repo/trees/tree-01",
-        "local_a",
-    ));
+    // On Windows a connection to a closed local port is refused only after about two seconds of
+    // retried attempts, longer than a request's default wait, so this one waits for the reply.
+    let mut req = request("start", &[]);
+    req.wait_s = 60;
+    let reply = server.handle(&from(req, "/repo/trees/tree-01", "local_a"));
     assert_eq!(reply.exit, Exit::Unreachable);
     assert!(
         reply.text.starts_with("offline  unreachable: "),

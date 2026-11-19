@@ -278,7 +278,9 @@ mod tests {
         let mut meter = TreeMeter::new(group.id, group.child.id());
         let lines = BufReader::new(group.child.stdout.take().unwrap()).lines();
         let mut lines = lines.map(Result::unwrap);
-        assert!(lines.any(|line| line == "done"));
+        // libtest has already printed `test <name> ... ` on the helper's first line, without a
+        // newline, so `done` can end a longer line.
+        assert!(lines.any(|line| line.ends_with("done")));
 
         meter.sample().unwrap();
         let running = Native.sample(group.child.id()).unwrap();

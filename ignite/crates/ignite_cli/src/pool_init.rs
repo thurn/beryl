@@ -161,10 +161,9 @@ then the loop.
 
 /// `~/ignite`: the folder `ignite pool init` writes when it is given none.
 pub fn default_folder() -> PathBuf {
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .unwrap_or_default();
-    PathBuf::from(home).join("ignite")
+    ignite_core::config::home_dir(|name| std::env::var_os(name))
+        .unwrap_or_default()
+        .join("ignite")
 }
 
 /// Writes the dispatcher folder at `folder` for the main checkout at `checkout`.

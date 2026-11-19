@@ -71,12 +71,14 @@ pub struct Home {
 }
 
 impl Home {
-    /// `$IGNITE_HOME`, or `~/.config/ignite`.
+    /// `$IGNITE_HOME`, or `~/.config/ignite` (see [`ignite_core::config::home_dir`]).
     pub fn from_env() -> Home {
         let root = std::env::var_os("IGNITE_HOME").map_or_else(
             || {
-                let home = std::env::var_os("HOME").unwrap_or_default();
-                PathBuf::from(home).join(".config").join("ignite")
+                ignite_core::config::home_dir(|name| std::env::var_os(name))
+                    .unwrap_or_default()
+                    .join(".config")
+                    .join("ignite")
             },
             PathBuf::from,
         );
@@ -245,9 +247,13 @@ pub trait Builder {
 
 /// The `cargo` to run: the one in `~/.cargo/bin` when the service's minimal `PATH` lacks it.
 fn cargo_program() -> PathBuf {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = ignite_core::config::home_dir(|name| std::env::var_os(name));
     let cargo = home
-        .map(|h| h.join(".cargo").join("bin").join("cargo"))
+        .map(|h| {
+            h.join(".cargo")
+                .join("bin")
+                .join(if cfg!(windows) { "cargo.exe" } else { "cargo" })
+        })
         .filter(|p| p.is_file());
     cargo.unwrap_or_else(|| PathBuf::from("cargo"))
 }

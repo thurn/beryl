@@ -194,6 +194,8 @@ mod tests {
         }
     }
 
+    // The jobserver's FIFO exists only on Unix; Windows has no FIFOs (`ignite_os::fifo`).
+    #[cfg(unix)]
     fn scratch(name: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("ignite-jobserver-{name}-{}", std::process::id()));
@@ -204,6 +206,7 @@ mod tests {
 
     /// Whether the FIFO holds no byte, read through the jobserver's own descriptor, which does
     /// not block.
+    #[cfg(unix)]
     fn empty(jobserver: &mut Jobserver) -> bool {
         let mut byte = [0];
         matches!(jobserver.fifo.read(&mut byte), Err(e) if e.kind() == io::ErrorKind::WouldBlock)
@@ -211,6 +214,7 @@ mod tests {
 
     /// A smaller grant takes back only the slots in the pipe. The one a job holds comes back on
     /// a later resize, once the job has ended and returned it.
+    #[cfg(unix)]
     #[test]
     fn shrinking_takes_back_only_the_slots_no_job_holds() {
         let dir = scratch("shrink");
@@ -238,6 +242,7 @@ mod tests {
 
     /// The FIFO gains a byte for each core the cores file adds, and gives the bytes back when the
     /// file falls.
+    #[cfg(unix)]
     #[test]
     fn the_fifo_follows_the_cores_file() {
         let dir = scratch("follow");

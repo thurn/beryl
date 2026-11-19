@@ -339,6 +339,8 @@ mod tests {
         let conn = open(&path).unwrap();
         let trees = all(&conn).unwrap();
         assert_eq!(trees, vec![sample("tree-01"), tree]);
+        // Windows deletes no file that a connection still holds open.
+        drop(conn);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

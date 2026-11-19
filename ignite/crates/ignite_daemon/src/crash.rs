@@ -275,8 +275,10 @@ mod tests {
         assert_eq!(record.message, "the tip loop broke");
         assert_eq!(record.commit, "abc1234");
         assert!(
+            // `file!()` separates with backslashes on Windows.
             record
                 .location
+                .replace('\\', "/")
                 .starts_with("crates/ignite_daemon/src/crash.rs:"),
             "{}",
             record.location

@@ -63,10 +63,32 @@ pub(crate) fn command_output(program: &str, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
+/// The bytes `df` reports as available on the disk that holds `path`.
+#[cfg(not(windows))]
+fn df_available_bytes(path: &Path) -> Option<u64> {
+    let text = command_output("df", &["-Pk", &path.to_string_lossy()])?;
+    let kilobytes: u64 = text
+        .lines()
+        .nth(1)?
+        .split_whitespace()
+        .nth(3)?
+        .parse()
+        .ok()?;
+    Some(kilobytes * 1024)
+}
+
 impl Host for NativeHost {
     /// The short hostname in lower case, the way `ignite.toml` names machines: macOS reports
     /// the computer name's case, such as `JARVIS`.
+    ///
+    /// Windows's `hostname` takes no `-s`, and the computer name is in `COMPUTERNAME` in upper
+    /// case, such as `CYGNUS`.
     fn hostname(&self) -> String {
+        if cfg!(windows) {
+            return std::env::var("COMPUTERNAME")
+                .unwrap_or_default()
+                .to_lowercase();
+        }
         command_output("hostname", &["-s"])
             .unwrap_or_default()
             .to_lowercase()
@@ -77,21 +99,20 @@ impl Host for NativeHost {
     }
 
     fn memory_mb(&self) -> u64 {
-        command_output("sysctl", &["-n", "hw.memsize"])
-            .and_then(|text| text.parse::<u64>().ok())
-            .map_or(0, |bytes| bytes / (1024 * 1024))
+        #[cfg(windows)]
+        let bytes = ignite_os::system::total_memory_bytes().ok();
+        #[cfg(not(windows))]
+        let bytes = command_output("sysctl", &["-n", "hw.memsize"])
+            .and_then(|text| text.parse::<u64>().ok());
+        bytes.map_or(0, |bytes| bytes / (1024 * 1024))
     }
 
     fn disk_free_gb(&self, path: &Path) -> Option<u64> {
-        let text = command_output("df", &["-Pk", &path.to_string_lossy()])?;
-        let kilobytes: u64 = text
-            .lines()
-            .nth(1)?
-            .split_whitespace()
-            .nth(3)?
-            .parse()
-            .ok()?;
-        Some(kilobytes / (1024 * 1024))
+        #[cfg(windows)]
+        let bytes = ignite_os::system::disk_free_bytes(path).ok();
+        #[cfg(not(windows))]
+        let bytes = df_available_bytes(path);
+        bytes.map(|bytes| bytes / (1024 * 1024 * 1024))
     }
 
     fn trees_used_gb(&self, dir: &Path) -> Option<u64> {
@@ -102,8 +123,8 @@ impl Host for NativeHost {
         let mut dirs: Vec<PathBuf> = std::env::split_paths(&std::env::var_os("PATH")?).collect();
         // A login service starts with a short `PATH`, so also look where the usual installers put
         // tools.
-        if let Some(home) = std::env::var_os("HOME") {
-            dirs.push(PathBuf::from(home).join(".cargo").join("bin"));
+        if let Some(home) = ignite_core::config::home_dir(|name| std::env::var_os(name)) {
+            dirs.push(home.join(".cargo").join("bin"));
         }
         dirs.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
         dirs.into_iter()

@@ -101,7 +101,19 @@ fn a_release_that_changes_only_guide_text_is_taken_on_and_the_client_runs_it() {
     // `ignite guide` is answered by the client from the topics compiled into its executable,
     // and the client runs `bin/current`: that is the release's build, so it prints the new
     // text. The fake builder writes the commit into each build it makes.
-    let client = std::fs::read_to_string(update.store.current_link()).unwrap();
+    let current = update.store.current_link();
+    // On Windows `current_link` is the launcher `bin/current.cmd`, which runs the executable
+    // whose path `bin/current` holds.
+    let current = if cfg!(windows) {
+        std::path::PathBuf::from(
+            std::fs::read_to_string(current.with_extension(""))
+                .unwrap()
+                .trim(),
+        )
+    } else {
+        current
+    };
+    let client = std::fs::read_to_string(current).unwrap();
     assert_eq!(client, NEW);
 }
 

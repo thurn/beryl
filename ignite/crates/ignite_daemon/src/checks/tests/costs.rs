@@ -166,11 +166,11 @@ fn a_nextest_run_records_its_test_processes_one_by_one() {
         nextest
             .env
             .iter()
-            .any(|(k, v)| k.ends_with("_RUNNER") && v.ends_with("test-runner")),
+            .any(|(k, v)| k.ends_with("_RUNNER") && shim(v).ends_with("test-runner")),
         "the target runner is set: {:?}",
         nextest.env
     );
-    assert!(env("RUSTC_WRAPPER").is_some_and(|v| v.ends_with("rustc-wrap")));
+    assert!(env("RUSTC_WRAPPER").is_some_and(|v| shim(v).ends_with("rustc-wrap")));
     let units_file = env(crate::wrap::UNITS_ENV).expect("the units file");
     assert!(
         !Path::new(units_file).exists(),
@@ -268,4 +268,9 @@ fn a_product_build_is_recorded_with_its_compile_units() {
     assert_eq!(build.family.as_deref(), Some("deps"));
     assert_eq!(build.tree, Some(tree_id));
     assert_eq!(build.compile_units.len(), 2);
+}
+
+/// A shim's path without the `.cmd` that Windows shims end in.
+fn shim(path: &str) -> &str {
+    path.strip_suffix(".cmd").unwrap_or(path)
 }

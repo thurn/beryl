@@ -94,6 +94,8 @@ mod tests {
             .map(|e| e.body)
             .collect();
         assert_eq!(bodies, ["{\"a\":1}", "{\"b\":2}"]);
+        // Windows deletes no file that a connection still holds open.
+        drop(conn);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

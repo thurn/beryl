@@ -34,12 +34,41 @@ use windows_sys::Win32::System::JobObjects::{
     QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, OpenThread, ResumeThread,
-    THREAD_SUSPEND_RESUME,
+    CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, OpenProcess, OpenThread,
+    PROCESS_SYNCHRONIZE, ResumeThread, THREAD_SUSPEND_RESUME, WaitForSingleObject,
 };
 
 use super::{ENDED_EXIT_CODE, Group, Processes};
 use crate::Native;
+
+/// How long [`Processes::end_group`] waits for the processes of a terminated job to exit.
+const END_WAIT: Duration = Duration::from_secs(10);
+
+/// A process opened so that its exit can be waited for.
+struct Exiting(HANDLE);
+
+impl Exiting {
+    fn open(pid: u32) -> Option<Exiting> {
+        // SAFETY: plain call; the handle, if any, is closed when the `Exiting` is dropped.
+        let handle = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, pid) };
+        (!handle.is_null()).then_some(Exiting(handle))
+    }
+
+    /// Waits until the process has exited or `deadline` has passed.
+    fn wait_until(&self, deadline: Instant) {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let millis = u32::try_from(left.as_millis()).unwrap_or(u32::MAX);
+        // SAFETY: the handle is open with the right to wait on it.
+        unsafe { WaitForSingleObject(self.0, millis) };
+    }
+}
+
+impl Drop for Exiting {
+    fn drop(&mut self) {
+        // SAFETY: the handle is open and owned here.
+        unsafe { CloseHandle(self.0) };
+    }
+}
 
 /// The right to read a job's information. `windows-sys` has it only in its large
 /// `SystemServices` module.
@@ -212,7 +241,20 @@ impl Processes for Native {
             None => Job::open(group.id, JOB_OBJECT_TERMINATE | JOB_OBJECT_QUERY)?,
         };
         if let Some(job) = job {
+            // `TerminateJobObject` returns before the processes have exited, and a process that
+            // is exiting has already left the job's list, so a caller that then deleted the tree
+            // they ran in found their files still open. So each member is opened first and
+            // waited for afterwards, for a bounded time.
+            let members: Vec<Exiting> = job
+                .members()?
+                .into_iter()
+                .filter_map(Exiting::open)
+                .collect();
             job.terminate()?;
+            let deadline = Instant::now() + END_WAIT;
+            for member in members {
+                member.wait_until(deadline);
+            }
         }
         group.child.wait()?;
         Ok(())
@@ -410,7 +452,12 @@ mod tests {
         let lines = BufReader::new(group.child.stdout.take().unwrap()).lines();
         let grandchildren: Vec<u32> = lines
             .map(Result::unwrap)
-            .filter_map(|line| line.strip_prefix("pid ").map(|pid| pid.parse().unwrap()))
+            // libtest has already printed `test <name> ... ` on the helper's first line, without
+            // a newline, so a `pid` line can start partway.
+            .filter_map(|line| {
+                line.rsplit_once("pid ")
+                    .map(|(_, pid)| pid.parse().unwrap())
+            })
             .take(2)
             .collect();
         assert_eq!(grandchildren.len(), 2);

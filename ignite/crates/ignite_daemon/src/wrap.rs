@@ -359,8 +359,9 @@ impl CompileArgs {
 
 /// The crate a Cargo test binary belongs to: its file name without Cargo's `-<hash>` suffix.
 fn test_binary_crate(binary: &Path) -> String {
+    // The stem, not the whole name: a test binary on Windows ends in `.exe`.
     let name = binary
-        .file_name()
+        .file_stem()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     match name.rsplit_once('-') {
         Some((stem, hash)) if !hash.is_empty() && hash.chars().all(|c| c.is_ascii_hexdigit()) => {

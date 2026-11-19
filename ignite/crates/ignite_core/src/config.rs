@@ -41,6 +41,17 @@ impl Os {
     }
 }
 
+/// The user's home directory: `HOME`, or on Windows, where only Git Bash sets `HOME`,
+/// `USERPROFILE`. A login service started by the Task Scheduler and a client run from
+/// PowerShell have no `HOME`, so without the fallback each would find Ignite's files under a
+/// different relative directory and the client could not reach the daemon's pipe.
+pub fn home_dir(var: impl Fn(&str) -> Option<std::ffi::OsString>) -> Option<PathBuf> {
+    var("HOME")
+        .filter(|home| !home.is_empty())
+        .or_else(|| var("USERPROFILE").filter(|home| !home.is_empty()))
+        .map(PathBuf::from)
+}
+
 impl fmt::Display for Os {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())

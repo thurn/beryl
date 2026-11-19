@@ -25,7 +25,13 @@ impl Scratch {
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).unwrap();
         // The temp directory can sit behind a symlink (/var on macOS); git reports real paths.
-        Scratch(path.canonicalize().unwrap())
+        // Windows canonicalizes to a verbatim path (one that starts `\\?\`), which git cannot
+        // create directories under.
+        if cfg!(windows) {
+            Scratch(path)
+        } else {
+            Scratch(path.canonicalize().unwrap())
+        }
     }
 
     pub fn path(&self, relative: &str) -> PathBuf {

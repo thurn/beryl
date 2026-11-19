@@ -105,6 +105,8 @@ fn a_restarted_daemon_still_answers_for_a_handle_from_before() {
     assert!(ended.text.starts_with("incomplete "), "{}", ended.text);
     // The restarted daemon numbers above every stored handle (`L-1`, `T-2` and `S-3`).
     assert_eq!(handles.create("land", None, None).as_str(), "L-4");
+    // Windows deletes no file that the database still holds open.
+    drop(handles);
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 
@@ -139,6 +141,8 @@ fn a_reply_that_was_read_leaves_memory_but_the_database_still_answers() {
     let in_memory: Vec<Handle> = lock(&handles.state).replies.keys().cloned().collect();
     assert_eq!(in_memory, [next]);
     assert_eq!(handles.wait(&handle, 0, None), Waited::Done(reply));
+    // Windows deletes no file that the database still holds open.
+    drop(handles);
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }
 

@@ -709,6 +709,8 @@ fn backups_are_hourly_and_exports_daily() {
         .query_row("SELECT count(*) FROM tickets", [], |r| r.get(0))
         .unwrap();
     assert_eq!(count, 1);
+    // Windows removes no snapshot that a connection holds open, and the passes below prune them.
+    drop(copy);
     let manifest = std::fs::read_to_string(snapshot.join("manifest.json")).unwrap();
     assert!(manifest.contains("\"sha256\""));
 

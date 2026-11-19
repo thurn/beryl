@@ -94,7 +94,13 @@ impl Fixture {
         ));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
-        let scratch = Scratch(root.canonicalize().unwrap());
+        // `/var` is a link on macOS, and git reports real paths. Windows canonicalizes to a
+        // verbatim path (one that starts `\\?\`), which git cannot create directories under.
+        let scratch = Scratch(if cfg!(windows) {
+            root
+        } else {
+            root.canonicalize().unwrap()
+        });
         let remote = scratch.0.join("remote.git");
         let seed = scratch.0.join("seed");
         let repo = scratch.0.join("clone");

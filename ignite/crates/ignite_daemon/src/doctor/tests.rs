@@ -290,7 +290,9 @@ fn an_unreachable_hub_and_a_missing_tree_each_get_a_line_with_a_fix() {
     let tree_line = reply.text.lines().find(|l| l.contains("tree-02")).unwrap();
     assert!(tree_line.starts_with("PROBLEM"), "{tree_line}");
     assert!(
-        tree_line.contains("/repo/trees/tree-02 is missing"),
+        tree_line
+            .replace('\\', "/")
+            .contains("/repo/trees/tree-02 is missing"),
         "{tree_line}"
     );
     assert!(
@@ -310,7 +312,8 @@ fn a_missing_tree_directory_is_one_problem() {
     let findings = diagnose_with(&host, &FakeHub::default(), &FakeTrees(vec![]));
     let line = findings.iter().find(|f| f.label == "trees").unwrap().line();
     assert!(
-        line.contains("tree directory /repo/trees is missing"),
+        line.replace('\\', "/")
+            .contains("tree directory /repo/trees is missing"),
         "{line}"
     );
     assert!(line.contains("To fix: restart the daemon"), "{line}");

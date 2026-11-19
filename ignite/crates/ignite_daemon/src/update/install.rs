@@ -497,7 +497,7 @@ pub fn install_checkout(repo: &Path, config: &Config) -> Reply {
     match outcome {
         Ok(Outcome::HandedOff(reply)) => reply,
         Ok(Outcome::Installed(done)) => {
-            let home_dir = std::env::var_os("HOME").map(PathBuf::from);
+            let home_dir = ignite_core::config::home_dir(|name| std::env::var_os(name));
             let link = link_onto_path(
                 &store.current_link(),
                 home_dir.as_deref(),

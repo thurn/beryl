@@ -93,7 +93,8 @@ fn a_build_through_the_wrapper_records_each_unit_and_only_the_touched_one_again(
         assert_eq!(unit.mode, "build");
         assert!(!unit.rebuilt, "{unit:?}");
         assert!(unit.cpu_s > 0.0);
-        assert!(unit.instructions.unwrap_or(0.0) > 0.0);
+        // Windows counts no instructions, only CPU time.
+        assert!(cfg!(windows) || unit.instructions.unwrap_or(0.0) > 0.0);
     }
 
     // Touch one crate: only it compiles again, and it counts as rebuilt.

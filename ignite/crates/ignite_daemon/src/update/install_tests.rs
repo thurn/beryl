@@ -591,7 +591,9 @@ fn git(dir: &Path, args: &[&str]) {
 
 #[test]
 fn the_main_checkout_of_a_linked_worktree_is_the_repository() {
-    let dir = tempdir("main-checkout").canonicalize().unwrap();
+    // Not canonicalized: on Windows that makes a verbatim path (`\\?\C:\...`), which git
+    // cannot create a worktree under. Paths are compared canonicalized instead.
+    let dir = tempdir("main-checkout");
     let repo = dir.join("repo");
     std::fs::create_dir_all(&repo).unwrap();
     git(&repo, &["init", "--quiet", "-b", "main"]);
@@ -610,6 +612,7 @@ fn the_main_checkout_of_a_linked_worktree_is_the_repository() {
             linked.to_str().unwrap(),
         ],
     );
+    let repo = repo.canonicalize().unwrap();
     assert_eq!(main_checkout(&linked).canonicalize().unwrap(), repo);
     assert_eq!(main_checkout(&repo).canonicalize().unwrap(), repo);
     // Outside any repository, the directory itself.

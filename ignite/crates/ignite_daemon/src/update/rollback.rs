@@ -269,7 +269,11 @@ impl ExecutableStore {
     /// Writes `file` and flushes it to disk, then renames it into place and flushes the
     /// directory, so a crash after the rename cannot leave an empty executable.
     pub(super) fn sync_rename(partial: &Path, dest: &Path) -> io::Result<()> {
-        fs::File::open(partial)?.sync_all()?;
+        // Windows flushes a file only through a handle that may write it.
+        fs::OpenOptions::new()
+            .write(true)
+            .open(partial)?
+            .sync_all()?;
         fs::rename(partial, dest)?;
         #[cfg(unix)]
         if let Some(dir) = dest.parent() {

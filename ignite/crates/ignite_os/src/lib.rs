@@ -12,6 +12,7 @@ pub mod notify;
 pub mod occupants;
 pub mod proc;
 pub mod service;
+pub mod system;
 pub mod terminate;
 pub mod usage;
 

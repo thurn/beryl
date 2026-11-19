@@ -276,7 +276,8 @@ mod tests {
         let text = prompt(&needed(), Path::new("/home/ignite"));
         assert!(text.contains("ignite guide justiciar"));
         assert!(text.contains("the daemon does not answer"));
-        assert!(text.contains("/home/ignite/crash"));
+        let crash = Path::new("/home/ignite").join("crash");
+        assert!(text.contains(&crash.display().to_string()), "{text}");
     }
 
     #[test]

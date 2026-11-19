@@ -312,7 +312,7 @@ impl Part<'_> {
 
 /// The watched directories, with a leading `~` made the home directory.
 fn watched(metrics: &Metrics) -> Vec<PathBuf> {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let home = ignite_core::config::home_dir(|name| std::env::var_os(name));
     metrics
         .watch
         .iter()
