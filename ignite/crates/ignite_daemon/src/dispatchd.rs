@@ -12,6 +12,7 @@
 //!   such failures marks the dispatcher down and queues no new hand-offs;
 //! - moves a hand-off whose worker refused it to another idle worker, and leaves the refusing
 //!   worker alone for a minute;
+//! - leaves a worker whose ticket just ended alone for 3 minutes while it finishes its turn;
 //! - reads the hub's feed: a new `tell` on a ticket held here becomes a `message` to its session
 //!   and ends that session's `ignite wait`; a regression whose culprit's worker is still idle
 //!   here becomes a `message` to that worker;
@@ -67,6 +68,10 @@ pub const ACK_WAIT_S: f64 = 120.0;
 pub const MAX_FAILURES: u32 = 3;
 /// Seconds a worker that refused a hand-off is left alone.
 pub const REFUSED_S: f64 = 60.0;
+/// Seconds a worker whose ticket just ended is left alone before it is handed another. The
+/// session is usually still finishing its turn after `ignite land`, and the app refuses to clear
+/// a session that is working: about one hand-off in four failed that way.
+pub const SETTLE_S: f64 = 180.0;
 /// Seconds without a command after which a working session is checked.
 pub const SILENT_S: f64 = 1800.0;
 /// Seconds an idle session has, after being asked to continue, before its ticket is released.
@@ -197,6 +202,8 @@ struct State {
     /// Who held a tree at the last look, to notice who finished.
     held: BTreeMap<SessionId, TicketId>,
     last_ticket: BTreeMap<SessionId, TicketId>,
+    /// When each session's ticket last ended, to let it settle (see [`SETTLE_S`]).
+    finished_at: BTreeMap<SessionId, Timestamp>,
     feed: Option<Seq>,
     tells: BTreeMap<TicketId, u64>,
     seen: BTreeSet<TicketId>,
@@ -275,6 +282,7 @@ impl Dispatcher {
         state.reserved.remove(session);
         state.stalls.remove(session);
         state.refused.remove(session);
+        state.finished_at.remove(session);
         state
             .pending
             .retain(|q| q.body.session.as_ref() != Some(session));
@@ -531,6 +539,12 @@ impl Dispatcher {
                     .is_none_or(|at| now.seconds_since(*at) >= REFUSED_S)
             })
             .filter(|m| {
+                state
+                    .finished_at
+                    .get(&m.session)
+                    .is_none_or(|at| now.seconds_since(*at) >= SETTLE_S)
+            })
+            .filter(|m| {
                 !state
                     .pending
                     .iter()
@@ -619,8 +633,8 @@ impl Dispatcher {
 
     fn queue_check(state: &mut State, session: &SessionId) {
         let prompt = format!(
-            "Look up the session {session}: is it running, idle or gone? A lookup that failed is \
-             `unknown`, never `gone`."
+            "Look up the session {session}: is it running, idle or gone? An archived session is \
+             `gone`. A lookup that failed is `unknown`, never `gone`."
         );
         Self::queue(
             state,
@@ -767,6 +781,9 @@ mod restart_tests;
 #[cfg(test)]
 #[path = "dispatchd_slots_tests.rs"]
 mod slots_tests;
+#[cfg(test)]
+#[path = "dispatchd_stall_tests.rs"]
+mod stall_tests;
 #[cfg(test)]
 #[path = "dispatchd_tests.rs"]
 mod tests;

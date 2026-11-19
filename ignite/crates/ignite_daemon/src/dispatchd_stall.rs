@@ -2,6 +2,12 @@
 //! is checked through the dispatcher. A running one is left alone, an idle one is asked once to
 //! continue or release, and its ticket is released only when the app says the session is gone,
 //! or that it is still idle 15 minutes after the reminder. A failed lookup proves nothing.
+//!
+//! Every answer leaves a record of when the session was checked, so the next check comes 30
+//! minutes later. A `running` answer used to remove the record, and the next step found the same
+//! silence and asked again: one worker writing code without running `ignite` was checked about
+//! twice a minute. A release that failed did the same, which reminded an archived session every
+//! 15 minutes for hours.
 
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::DispatchAction;
@@ -42,7 +48,13 @@ impl Dispatcher {
         let holding = self.host.holders().get(session).cloned();
         match answer {
             "running" => {
-                state.stalls.remove(session);
+                state.stalls.insert(
+                    session.clone(),
+                    Stall {
+                        checked_at: now,
+                        messaged_at: None,
+                    },
+                );
                 (format!("; {session} is running"), None)
             }
             "gone" => {
@@ -77,8 +89,11 @@ impl Dispatcher {
                         );
                         (format!("; asked {session} to continue or release"), None)
                     }
+                    // The record stays, so that a release that fails is tried again only at the
+                    // next check, 30 minutes on. A release that works ends the hold, and with it
+                    // the record (see `notice_holders`).
                     Some(at) if now.seconds_since(at) >= IDLE_AFTER_MESSAGE_S => {
-                        state.stalls.remove(session);
+                        stall.checked_at = now;
                         let reason = "the session stayed idle after a reminder";
                         (
                             String::new(),
@@ -128,10 +143,12 @@ impl Dispatcher {
                     state.stalls.remove(&session);
                     now.seconds_since(since) >= SILENT_S
                 }
+                // Reminded and not checked since: the check after the reminder is due 15 minutes
+                // after it.
                 Some(Stall {
                     messaged_at: Some(at),
                     checked_at,
-                }) => now.seconds_since(*at) >= IDLE_AFTER_MESSAGE_S && checked_at <= at,
+                }) if checked_at <= at => now.seconds_since(*at) >= IDLE_AFTER_MESSAGE_S,
                 Some(stall) => now.seconds_since(stall.checked_at) >= SILENT_S,
                 None => now.seconds_since(since) >= SILENT_S,
             };

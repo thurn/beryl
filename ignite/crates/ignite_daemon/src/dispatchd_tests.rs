@@ -23,6 +23,8 @@ pub(super) struct FakeHost {
     pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
     interrupts: Mutex<Vec<(SessionId, String)>>,
     pub(super) releases: Mutex<Vec<(SessionId, TicketId)>>,
+    /// Every release fails, as one at the hub does when the hub is unreachable.
+    pub(super) fail_release: Mutex<bool>,
 }
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -61,6 +63,9 @@ impl Host for FakeHost {
 
     /// Releasing frees the session's tree, as the real release does.
     fn release(&self, session: &SessionId, ticket: &TicketId, _reason: &str) -> Result<()> {
+        if *lock(&self.fail_release) {
+            return Err(Error::Unreachable("the hub is away".to_owned()));
+        }
         lock(&self.holders).remove(session);
         lock(&self.releases).push((session.clone(), ticket.clone()));
         Ok(())
@@ -290,6 +295,11 @@ fn four_idle_workers_take_four_of_six_tickets_and_the_rest_as_they_finish() {
     assert_eq!(rig.state_of("local_w1"), "working");
     rig.finish("local_w1");
     rig.finish("local_w2");
+    assert!(
+        rig.step().is_none(),
+        "a worker whose ticket just ended settles first"
+    );
+    rig.clock.advance(SETTLE_S);
     let later: Vec<DispatchInstruction> = std::iter::from_fn(|| rig.step()).collect();
     let pairs: Vec<(&str, &str)> = later.iter().map(handoff_to).collect();
     assert_eq!(pairs, [("local_w1", "T.5"), ("local_w2", "T.6")]);
@@ -635,6 +645,7 @@ fn a_regression_goes_to_the_idle_worker_whose_ticket_caused_it() {
     rig.finish("local_w1");
     *lock(&rig.host.trees) = 0;
     assert!(rig.step().is_none());
+    rig.clock.advance(SETTLE_S);
     let body = "caused-by T.1 (commit 5e1b0aa)\nfirst bad 5e1b0aa, last good 77c2d14";
     rig.hub
         .insert_ticket(detail("R", "open", None, &["regression"], body));

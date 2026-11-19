@@ -109,6 +109,7 @@ impl Dispatcher {
             if !holders.contains_key(session) {
                 state.last_ticket.insert(session.clone(), ticket.clone());
                 state.stalls.remove(session);
+                state.finished_at.insert(session.clone(), now);
                 finished.push((session.clone(), ticket.clone()));
             }
         }

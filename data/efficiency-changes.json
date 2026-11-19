@@ -449,5 +449,10 @@
     "label": "The dispatcher's release frees a tree leased under an ad hoc placeholder that no `ignite start` claimed before a daemon restart, and the dispatcher answers `gone` for an archived session: on 2026-11-19 about 95 of the Claude dispatcher's 426 instructions were reminders to three archived sessions whose trees the hub could not release, one every 15 minutes for up to 9 hours",
     "metric": "ignite.dispatch-dollars",
     "expect": "down"
+  },
+  {
+    "label": "The dispatcher's stall watch keeps a record of every check, so a worker answered `running`, or one whose release failed, is checked again only after another 30 minutes of silence; and a worker whose ticket just ended settles 3 minutes before its next hand-off. On 2026-11-19, from 04:00 to 14:30, the Claude dispatcher received about 44 instructions an hour, 231 of them `check`s: 30 repeated `running` checks of one worker in 4 minutes, and two checks plus a reminder every 15 minutes for each worker whose release failed; and 32 of its 114 hand-offs failed because the app refused to clear a session still finishing its turn",
+    "metric": "ignite.dispatch-dollars",
+    "expect": "down"
   }
 ]
