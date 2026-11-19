@@ -51,4 +51,12 @@ pub trait HostCpu {
         let _ = group;
         Err(io::Error::from(io::ErrorKind::Unsupported))
     }
+    /// The CPU seconds used so far by process `pid` and every process it started, through any
+    /// number of generations, each counted with the children it reaped. As with
+    /// [`Self::tree_cpu_seconds`], a process that exits unreaped by the tree takes its time with
+    /// it. Unsupported unless an implementation reads it.
+    fn process_tree_cpu_seconds(&self, pid: u32) -> io::Result<f64> {
+        let _ = pid;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
 }

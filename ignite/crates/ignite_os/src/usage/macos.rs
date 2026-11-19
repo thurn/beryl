@@ -126,19 +126,32 @@ impl Native {
     /// with the time of the children it reaped. A process that exits between the listing and
     /// its reading is skipped.
     pub(crate) fn tree_cpu_seconds_of(self, group: u64) -> io::Result<f64> {
-        let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
-        let mut pending = self.group_members(group)?;
-        let mut total = 0.0;
-        while let Some(pid) = pending.pop() {
-            if !seen.insert(pid) {
-                continue;
-            }
-            let Ok(reading) = read(pid) else { continue };
-            total += reading.usage.cpu_s + reading.children_cpu_s;
-            pending.extend(children(pid).unwrap_or_default());
-        }
-        Ok(total)
+        Ok(descendants_cpu_seconds(self.group_members(group)?))
     }
+
+    /// See `HostCpu::process_tree_cpu_seconds`: `pid` and every process it started, through any
+    /// number of generations, whatever their process groups.
+    pub(crate) fn process_tree_cpu_seconds_of(pid: u32) -> f64 {
+        descendants_cpu_seconds(vec![pid])
+    }
+}
+
+/// The CPU seconds of every process in `start` and, through their child lists, every process
+/// they started, each counted once with the time of the children it reaped. A process that
+/// exits between the listing and its reading is skipped.
+fn descendants_cpu_seconds(start: Vec<u32>) -> f64 {
+    let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let mut pending = start;
+    let mut total = 0.0;
+    while let Some(pid) = pending.pop() {
+        if !seen.insert(pid) {
+            continue;
+        }
+        let Ok(reading) = read(pid) else { continue };
+        total += reading.usage.cpu_s + reading.children_cpu_s;
+        pending.extend(children(pid).unwrap_or_default());
+    }
+    total
 }
 
 /// The PIDs of the processes whose parent is `pid`.
@@ -366,5 +379,32 @@ mod tests {
         drop(group.child.stdin.take());
         let (status, _) = Native.reap(&mut group.child).unwrap();
         assert!(status.success());
+    }
+
+    #[test]
+    fn the_process_tree_cpu_counts_a_grandchild_in_another_group() {
+        // The shell is an ordinary child, in the test's own process group. Perl, its child,
+        // leaves for a group of its own, works, prints its PID and waits for its input to close.
+        let perl = "setpgrp(0, 0); $| = 1; my $i = 0; $i++ while $i < 3000000; \
+                    print \"$$\\n\"; <STDIN>";
+        let mut shell = Command::new("/bin/sh")
+            .args(["-c", &format!("perl -e '{perl}'; true")])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut lines = BufReader::new(shell.stdout.take().unwrap()).lines();
+        let grandchild: u32 = lines.next().unwrap().unwrap().trim().parse().unwrap();
+
+        let its_own = read(grandchild).unwrap().usage.cpu_s;
+        assert!(its_own > 0.0);
+        let tree = Native::process_tree_cpu_seconds_of(shell.id());
+        assert!(
+            tree >= its_own,
+            "the tree used {tree} s, its grandchild {its_own} s"
+        );
+
+        drop(shell.stdin.take());
+        assert!(shell.wait().unwrap().success());
     }
 }

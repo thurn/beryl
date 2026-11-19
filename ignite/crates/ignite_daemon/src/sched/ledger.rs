@@ -12,6 +12,8 @@ use ignite_core::time::Timestamp;
 use super::measured::{GrantUse, Pressure};
 use super::{Grant, GrantRequest, Limits, Status};
 
+mod observe;
+
 /// `idle` work starts only while the machine is under this share of its cores busy.
 const IDLE_BUSY_LIMIT: f64 = 0.7;
 
@@ -101,6 +103,8 @@ pub struct Ledger {
     /// An update waits for the daemon's commands to finish: no `idle` work starts, and what
     /// runs is stopped.
     draining: bool,
+    /// The CPU the daemon's whole process tree has used ([`Self::observe_tree`]).
+    tree: GrantUse,
 }
 
 impl Ledger {
@@ -114,6 +118,7 @@ impl Ledger {
             waiting: Vec::new(),
             held: BTreeMap::new(),
             draining: false,
+            tree: GrantUse::default(),
         }
     }
 
@@ -193,48 +198,6 @@ impl Ledger {
     /// on an unloaded machine.
     pub fn set_draining(&mut self, draining: bool) {
         self.draining = draining;
-    }
-
-    /// Records a reading of the machine: the fraction of all cores busy, from 0 to 1, and the
-    /// free memory, each if it could be read. Whatever is busy beyond what Ignite's commands use
-    /// belongs to processes outside Ignite, and is not granted until they finish.
-    ///
-    /// A grant whose command's use has been read ([`Self::observe_use`]) counts what it used
-    /// over the last reading; one not yet read counts all its cores. Counting every granted core
-    /// as Ignite's made the outside load read 0 whenever every core was granted, though Ignite's
-    /// commands used about one core and seven were busy outside it. Read the grants' use before
-    /// calling this, so both readings cover the same second.
-    pub fn observe(&mut self, busy: Option<f64>, free_memory_mb: Option<u64>) {
-        if let Some(busy) = busy {
-            let busy_cores = busy.clamp(0.0, 1.0) * f64::from(self.limits.cores);
-            let ours: f64 = self
-                .held
-                .values()
-                .map(|h| h.usage.latest().unwrap_or(f64::from(h.cores)))
-                .sum();
-            self.outside = (busy_cores - ours).max(0.0).round() as u32;
-        }
-        if free_memory_mb.is_some() {
-            self.free_memory_mb = free_memory_mb;
-            for held in self.held.values_mut() {
-                held.unseen_memory = false;
-            }
-        }
-    }
-
-    /// Records that grant `id`'s command and every process it started have used `cpu_s`
-    /// seconds of CPU so far, read at `now`. Unknown IDs are ignored: the grant was released
-    /// while its use was read.
-    pub fn observe_use(&mut self, id: u64, now: Timestamp, cpu_s: f64) {
-        if let Some(held) = self.held.get_mut(&id) {
-            held.usage.record(now, cpu_s);
-        }
-    }
-
-    /// Records the swap in use at `now`. While swap grows fast, or free memory runs out, no
-    /// new work is admitted ([`Pressure`]).
-    pub fn observe_swap(&mut self, now: Timestamp, used_mb: u64) {
-        self.pressure.record_swap(now, used_mb);
     }
 
     /// Grants what can be granted now and names the `idle` grants to stop.

@@ -394,5 +394,10 @@
     "label": "Beryl's `.claude/settings.json` denies tools that 1,737 sessions over 14 days called at most twice (Artifact, Workflow, the built-in browser pane and Chrome, the iOS simulator, charts, plugin suggestions, the app's panes and pull requests), and Claude Code leaves a denied tool out of every request's context",
     "metric": "bead.dollars",
     "expect": "down"
+  },
+  {
+    "label": "The scheduler counts the daemon's whole process tree, express runs included, as Ignite's and reads the busy fraction against all logical cores: it reported 8 to 11 cores busy outside Ignite while outside processes used 3.5 to 4, and held those cores back",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

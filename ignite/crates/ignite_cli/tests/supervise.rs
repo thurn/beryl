@@ -141,6 +141,7 @@ fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
     let scheduler = Arc::new(Scheduler::new(
         Limits {
             cores: 6,
+            reserved: 0,
             floor: Floor::default(),
             resources: BTreeMap::new(),
         },
@@ -299,6 +300,7 @@ mod grants {
     fn six_cores() -> Arc<Scheduler> {
         let limits = Limits {
             cores: 6,
+            reserved: 0,
             floor: Floor::default(),
             resources: BTreeMap::new(),
         };
@@ -583,6 +585,7 @@ mod stop_grace {
         let scheduler = Arc::new(Scheduler::new(
             Limits {
                 cores: 6,
+                reserved: 0,
                 floor: Floor::default(),
                 resources: BTreeMap::new(),
             },

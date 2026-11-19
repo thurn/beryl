@@ -21,6 +21,7 @@ fn at(seconds: f64) -> Timestamp {
 fn limits() -> Limits {
     Limits {
         cores: 24,
+        reserved: 0,
         floor: Floor { batch: 8, tip: 2 },
         resources: BTreeMap::from([("oracle".to_owned(), 1), ("browser-pages".to_owned(), 3)]),
     }
@@ -60,9 +61,14 @@ fn the_express_cores_are_never_handed_out() {
     )
     .unwrap();
     let machine = &config.machine["m"];
-    assert_eq!(Limits::for_machine(machine, 18).cores, 14);
+    let limits = Limits::for_machine(machine, 18);
+    assert_eq!((limits.cores, limits.reserved), (14, 4));
+    // The machine's busy fraction is still read against all 18.
+    assert_eq!(limits.machine_cores(), 18);
     // At least one core is left to hand out, whatever the machine reserves.
-    assert_eq!(Limits::for_machine(machine, 4).cores, 1);
+    let small = Limits::for_machine(machine, 4);
+    assert_eq!((small.cores, small.reserved), (1, 3));
+    assert_eq!(small.machine_cores(), 4);
 }
 
 #[test]
@@ -483,6 +489,7 @@ fn a_stopped_grant_is_killed_when_it_is_still_held_after_the_grace() {
 
 mod elastic;
 mod lending;
+mod outside;
 
 /// A verb process asks again for a command after the daemon restarted, passing the moment it
 /// first asked. The new daemon's queue puts it ahead of a request first asked for later, even

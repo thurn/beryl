@@ -16,8 +16,9 @@
 //!   classes cannot take while the class has work running or waiting.
 //! - Each named resource is held by at most its capacity of grants at once. A resource the
 //!   machine does not declare has capacity 1.
-//! - CPU busy beyond what Ignite's commands use belongs to processes outside Ignite and is not
-//!   granted.
+//! - CPU busy beyond what Ignite uses belongs to processes outside Ignite and is not granted.
+//!   Ignite's use is everything the daemon's process tree uses, express runs and verb processes
+//!   included, not only its grants' commands (see `Ledger::observe`).
 //! - A grant whose command has used well below its cores for [`LEND_WINDOW_SECONDS`] lends the
 //!   idle ones to waiting requests, and counts them again within [`RECENT_SECONDS`] of its use
 //!   rising; `idle` work is stopped first when the machine is then over.
@@ -153,8 +154,12 @@ impl Grant {
 /// What one machine may hand out.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Limits {
-    /// Logical cores.
+    /// The logical cores the scheduler hands out.
     pub cores: u32,
+    /// The machine's other logical cores, which it never hands out: the express lane's (see
+    /// [`Limits::for_machine`]). Work on them still makes the machine busy, so the machine's
+    /// busy fraction is read against [`Limits::machine_cores`], not [`Limits::cores`].
+    pub reserved: u32,
     pub floor: Floor,
     /// Each resource's capacity.
     pub resources: BTreeMap<String, u32>,
@@ -166,11 +171,18 @@ impl Limits {
     /// itself, so a saturated or broken scheduler can never hold them (see
     /// `crate::land::express`). At least one core is always left to hand out.
     pub fn for_machine(machine: &Machine, cores: u32) -> Self {
+        let handed_out = cores.saturating_sub(machine.express_cores).max(1);
         Self {
-            cores: cores.saturating_sub(machine.express_cores).max(1),
+            cores: handed_out,
+            reserved: cores.saturating_sub(handed_out),
             floor: machine.floor,
             resources: machine.resources.clone(),
         }
+    }
+
+    /// Every logical core of the machine, the express lane's included.
+    pub fn machine_cores(&self) -> u32 {
+        self.cores + self.reserved
     }
 
     /// The most cores one command may hold: two thirds of the machine, and at least one.
@@ -365,6 +377,8 @@ impl Scheduler {
                 Some((id, self.host.tree_cpu_seconds(group).ok()?))
             })
             .collect();
+        // The daemon's whole tree: grants' commands, verb processes, express runs and the daemon.
+        let tree = self.host.process_tree_cpu_seconds(std::process::id()).ok();
         let busy = self.host.busy().ok();
         let memory = self.host.free_memory_mb().ok();
         let swap = self.host.swap_used_mb().ok();
@@ -376,6 +390,7 @@ impl Scheduler {
         if let Some(swap) = swap {
             state.ledger.observe_swap(now, swap);
         }
+        state.ledger.observe_tree(now, tree);
         state.ledger.observe(busy, memory);
         self.advance(&mut state);
     }
