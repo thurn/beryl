@@ -12,6 +12,10 @@
 //! declares `digest_inputs`. A family in the always set is treated the same way: it blocks
 //! every landing its inputs touch, so it too is left out when the change touches none of them.
 //!
+//! A change that the express paths (`ignite.toml`) cover entirely also judges a family with no
+//! kept listing by its declared inputs, so a fresh tree lists no Beryl family for a change
+//! confined to Ignite's own files. Families in the always set are still listed.
+//!
 //! In a family with a kept listing, `crate-closure` stands for the packages its checks belong
 //! to, with the packages each depends on, not for every package of every workspace. A change
 //! to Ignite's own crates once kept the game's Rust test families in scope, because their
@@ -36,10 +40,25 @@ impl Checks {
         changed: &[String],
     ) -> (Vec<(&'a str, &'a Family)>, Vec<String>) {
         let kept = self.kept_listings(ctx, tree, families);
+        let express_only = ctx
+            .config
+            .express
+            .as_ref()
+            .is_some_and(|express| express.covers(changed));
         let mut affected = Vec::new();
         let mut left_out = Vec::new();
         for &(name, family) in families {
             let in_scope = match kept.get(name) {
+                // A family without a kept listing cannot be judged from what its checks
+                // printed. When the express paths cover the whole change, the family's
+                // declared inputs are judged instead, unless it is in the always set, whose
+                // checks read repository-wide files its inputs do not name.
+                None if express_only && !family.always => {
+                    let mut patterns = self.listing_patterns(family);
+                    patterns.extend(self.manifest_file(ctx, name).map(InputPattern::Path));
+                    inputs::touched(&patterns, &tree.graph, changed)
+                        .map_or(true, |touched| !touched.is_empty())
+                }
                 None => true,
                 // A check named after a file the change edits always runs in the gate.
                 Some((_, listing))

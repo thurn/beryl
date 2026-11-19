@@ -261,6 +261,35 @@ fn a_family_with_no_kept_listing_is_listed() {
     assert_eq!(gated.run.out_of_scope, ["client-interface", "rust"]);
 }
 
+/// A change confined to Ignite's own files (the express paths) selected 637 checks, the game's
+/// families among them, because a family with no kept listing is always listed and a fresh
+/// tree has none. Here `docs/**` stands for the express paths: with the change inside them, a
+/// family without a kept listing is judged by its declared inputs, and only the always-set
+/// family is listed. A change that leaves the express paths lists every family again.
+#[test]
+fn a_change_inside_the_express_paths_lists_no_family_it_does_not_name() {
+    let mut world = repository();
+    world.ctx.config.express = Some(ignite_core::config::Express {
+        paths: vec!["docs/**".to_owned()],
+        tree: "express".into(),
+        dir: "ignite".to_owned(),
+        commands: vec!["true".to_owned()],
+    });
+    let tree = TreeId::new("tree-01").unwrap();
+    let fresh = daemon(&world, memory(), tree_with(&world, &["docs/ignite.md"]));
+    let gated = fresh.gate(&world.ctx, &tree, &landing());
+    assert_eq!(gated.run.out_of_scope, ["client-interface", "rust"]);
+    assert_eq!(list_commands(&world), 1, "only the always-set family");
+
+    let mixed = daemon(
+        &world,
+        memory(),
+        tree_with(&world, &["docs/ignite.md", "rust/Cargo.toml"]),
+    );
+    let gated = mixed.gate(&world.ctx, &tree, &landing());
+    assert!(gated.run.out_of_scope.is_empty());
+}
+
 /// The builds a landing's listings needed ran in the agents' class with no ticket, so the
 /// landing showed no work while they compiled. They now run as the command that needs them.
 #[test]

@@ -359,5 +359,10 @@
     "label": "A compiling lease starts from an APFS copy of the build of the tree nearest the tip: in a second tree the cli, test-binary and release fuzz-test builds took 5.4, 6.3 and 0.2 CPU-s, against cold medians of 947, 1,070 and 1,390 CPU-s",
     "metric": "bead.core-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A change confined to the express paths judges a family with no kept listing by its declared inputs: a change touching only Ignite's files selected 637 checks, built `b3d` (310 CPU-s) and gated twice, about 95 s each",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

@@ -1630,6 +1630,11 @@ express_cores = 3
 - The commands are what the `ignite` family runs, without its Python adapter.
   The family still runs in the gate when a change to Ignite lands together with
   other files, and in tip verification.
+- `ignite check` and the gate also use `paths` for scope. When every changed file
+  matches, a family with no kept listing (a fresh tree has none) is judged by
+  its declared inputs instead of being listed, so a change to Ignite alone
+  selects the `ignite` family and the always-set families, and builds nothing
+  for the game.
 - A machine whose `express_cores` is 0, or a repository with no `[express]` or
   no release branch, sends every landing through the gate.
 - The integration branch's lease and the push are the same as for any landing.
