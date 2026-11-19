@@ -373,7 +373,8 @@ mod tests {
                 ),
             ]),
         );
-        reply.next = Some("set the title first, then cd to the tree, read the files and edit".into());
+        reply.next =
+            Some("set the title first, then cd to the tree, read the files and edit".into());
         assert_eq!(
             reply.render(),
             "\
