@@ -21,6 +21,7 @@ use super::*;
 
 mod owners;
 mod retire;
+mod seed;
 mod setup;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);

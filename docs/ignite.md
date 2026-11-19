@@ -717,9 +717,9 @@ to exit.
 ## Build trees
 
 Build trees keep Cargo's incremental builds usable, which the measurements above
-show is worth about 25 times on a small edit to a core crate. This is the reason
-Ignite does not share compiled output between trees: `rustc` discards an
-incremental build made at another path, and no shared cache offers one.
+show is worth about 25 times on a small edit to a core crate. A tree keeps its
+own build directories, and no cache is shared between trees. Instead, a lease
+can start from a copy of another tree's build (see the rule on seeding below).
 
 Each machine has a fixed number of trees of two kinds:
 
@@ -776,6 +776,21 @@ Rules for trees:
   free tree with the oldest build, so that it does not take a prebuilt tree from
   a ticket that needs one. See
   [Light and heavy tickets](#light-and-heavy-tickets).
+- A ticket expected to compile starts from a copy of the Cargo target
+  directories of the tree whose build is nearest the tip, when that build is
+  nearer than the leased tree's own. The donor is a free tree or a leased ticket
+  tree, and Cargo's own lock files are held while it is copied, so no build
+  writes it meanwhile. On macOS each file is an APFS clone, so the copy takes a
+  few seconds and almost no disk; elsewhere nothing is copied. Cargo judges a
+  unit by the modification times of the files it read and by a few absolute
+  paths. So every file of the leased tree whose content is the donor's takes the
+  donor file's time, every other file is touched, and the donor's paths in
+  Cargo's dependency files and build-script output are rewritten. The leased
+  tree's own target directories are replaced, not merged, so that none of its
+  older units looks current. Measured with two trees 14 commits apart, the
+  `cli`, test-binary and release fuzz-test builds took 5.4, 6.3 and 0.2 CPU-s
+  after the copy, against medians of 947, 1,070 and 1,390 CPU-s for a cold
+  build.
 - While cores are idle, the daemon keeps one free ticket tree built at the tip,
   so the next lease starts with nothing to compile.
 - A tree keeps the directories that its build products declare as their output,

@@ -354,5 +354,10 @@
     "label": "The daemon's launchd agent is Interactive: under Standard every Ignite command ran at utility priority on the slower cores, doing half the work per CPU-second while load reached 53 with 56% of the CPU idle",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A compiling lease starts from an APFS copy of the build of the tree nearest the tip: in a second tree the cli, test-binary and release fuzz-test builds took 5.4, 6.3 and 0.2 CPU-s, against cold medians of 947, 1,070 and 1,390 CPU-s",
+    "metric": "bead.core-minutes",
+    "expect": "down"
   }
 ]

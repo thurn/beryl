@@ -2,7 +2,8 @@
 //! kept built near the tip and held under the machine's disk limit.
 //!
 //! Cargo's incremental builds are only reused at the path they were made at, so each tree keeps
-//! its build directories between tickets. Which directories those are comes from the build
+//! its build directories between tickets, and a compiling lease starts from a copy of the build
+//! of the tree nearest the tip when that is nearer than its own ([`seed`]). Which directories those are comes from the build
 //! products' `outputs` in the check manifests; no directory name is written here. Ignite never
 //! builds anywhere but these trees: when every ticket tree is leased, a caller gets a [`Waiter`]
 //! that says why, and the next release serves it.
@@ -31,6 +32,7 @@ pub mod head;
 mod landing;
 mod reset;
 mod retire;
+mod seed;
 mod setup;
 #[cfg(test)]
 mod tests;
@@ -489,6 +491,18 @@ impl Trees {
         if let Err(error) = worktree::reset(&path, &request.branch, &request.at, &config.keep) {
             let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
             return Err(error);
+        }
+        if request.compiles {
+            // A copy of a build nearer the tip leaves the builds below only the difference.
+            match self.seed(tree, &request.tip) {
+                Ok(Some(seeded)) => eprintln!(
+                    "ignite: {tree} starts from a copy of {}'s {}",
+                    seeded.donor,
+                    seeded.dirs.join(", ")
+                ),
+                Ok(None) => {}
+                Err(error) => eprintln!("ignite: {tree} was not seeded from another tree: {error}"),
+            }
         }
         if request.compiles && !config.prebuild.is_empty() {
             let trees = self.clone();

@@ -126,3 +126,17 @@ pub fn group(commits: Vec<CommitPaths>, ends: &[Commit]) -> Vec<Landing> {
 fn same_commit(a: &Commit, b: &Commit) -> bool {
     a.as_str().starts_with(b.as_str()) || b.as_str().starts_with(a.as_str())
 }
+
+/// The paths in the checkout at `root` whose files differ from its `HEAD`: tracked files with
+/// changes staged or not, deleted files, and untracked files git does not ignore. Sorted.
+pub fn uncommitted(root: &Path) -> Result<Vec<String>> {
+    let modified = cmd::run(root, ["diff", "--name-only", "-z", "--no-renames", "HEAD"])?;
+    let untracked = cmd::run(root, ["ls-files", "-z", "--others", "--exclude-standard"])?;
+    let paths: BTreeSet<String> = modified
+        .split('\0')
+        .chain(untracked.split('\0'))
+        .filter(|p| !p.is_empty())
+        .map(str::to_owned)
+        .collect();
+    Ok(paths.into_iter().collect())
+}

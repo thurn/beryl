@@ -417,7 +417,7 @@ fn skipped(file_name: &str) -> bool {
 }
 
 /// The directories one or two levels under `target` that hold a fingerprint folder.
-fn profile_dirs(target: &Path) -> Vec<PathBuf> {
+pub(super) fn profile_dirs(target: &Path) -> Vec<PathBuf> {
     let children = |dir: &Path| -> Vec<PathBuf> {
         fs::read_dir(dir)
             .map(|entries| {

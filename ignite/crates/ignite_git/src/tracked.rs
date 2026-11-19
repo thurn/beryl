@@ -25,6 +25,14 @@ pub fn toplevel(dir: &Path) -> Result<PathBuf> {
     ))
 }
 
+/// The git directory of the checkout that holds `dir`: `<repository>/.git/worktrees/<name>` for
+/// a linked worktree. Build scripts that watch the checked-out commit name files in it.
+pub fn git_dir(dir: &Path) -> Result<PathBuf> {
+    Ok(PathBuf::from(
+        git(dir, &["rev-parse", "--absolute-git-dir"])?.trim_end(),
+    ))
+}
+
 /// Every file git tracks in the checkout at `root`, and every untracked file it does not ignore,
 /// relative to it with `/` separators.
 ///
