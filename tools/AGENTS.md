@@ -14,3 +14,9 @@ family). An adapter imports only domain modules, never a command's own
 scheduling or reporting, so that its input hashes cover what it runs.
 `tools/tests/test_ignite_inputs.py` holds each family's declared inputs to the
 modules its adapter imports.
+
+A pytest check's inputs are its test file, the modules it imports and the files
+`data/pytest-reads.json` says those modules read at run time. A test whose code
+opens a tracked file that the record does not list fails with the entry to add,
+so when new code reads a data file, add it there or run
+`uv run --project tools python -m beryl_tools.ignite.python reads`.

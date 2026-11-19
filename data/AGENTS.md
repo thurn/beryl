@@ -12,6 +12,12 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   `recording` field left out, written by
   `just b3d timeline-parity --fixtures --refresh-web` and read by the
   `b3d-timeline` check in place of the live web interface.
+- `pytest-reads.json` maps each Python module of `tools/` and `efficiency/` to
+  the tracked files and directories it reads at run time, so a pytest check's
+  input hash covers them (`tools/src/beryl_tools/ignite/pytest_reads.py`). A
+  test that reads a file the record lacks fails with the entry to add;
+  `uv run --project tools python -m beryl_tools.ignite.python reads` runs every
+  test and adds what they read.
 - `card-store.tsv` is the card store, built by `just cards` from Scryfall's bulk
   data. It has a record for every card in the pool and every token those cards
   make, sorted so it can be searched by seeking

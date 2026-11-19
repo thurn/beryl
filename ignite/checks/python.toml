@@ -46,7 +46,9 @@ inputs = [
 ]
 
 # Tests: one check per test. A test's own inputs are its file, the modules it imports
-# (directly or not) and its conftest files; these are what every test reads.
+# (directly or not), its conftest files and the files data/pytest-reads.json says those
+# modules read at run time; these are what every test reads. The adapter's reads plugin
+# fails a test that reads a tracked file the record does not list.
 [family.pytest]
 kind = "regression"
 adapter = "jsonl"
@@ -61,7 +63,9 @@ inputs = [
   "efficiency/pyproject.toml",
   "data/card-store.tsv",
   "data/catalogs.json",
+  "data/pytest-reads.json",
   "tools/src/beryl_tools/ignite/python.py",
+  "tools/src/beryl_tools/ignite/pytest_reads.py",
   "tools/src/beryl_tools/__init__.py",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/names.py",

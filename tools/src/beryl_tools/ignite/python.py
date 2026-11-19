@@ -6,6 +6,8 @@ Run from the repository's root as `python -m beryl_tools.ignite.python <verb> <f
 - `list <family>` prints one JSON line per check: `{"check": "pytest:tools/tests/test_x.py::t",
   "inputs": ["tools/src/beryl_tools/x.py", ...]}`. The inputs are the paths that check reads, in
   addition to the family's own `inputs` in the manifest.
+- `reads` runs both projects' tests and adds the repository files their modules read at run
+  time to `data/pytest-reads.json` (see `beryl_tools.ignite.pytest_reads`).
 - `run <family> <check>...` runs the checks named and writes one JSON line per check that
   reached a verdict to the file named by `IGNITE_RESULTS`: `{"check", "outcome"}` and, for a
   failure, `at` and `message`. A check the tool ended without judging (a crash of black, a
@@ -17,7 +19,10 @@ cannot check a part of one, and one test for `pytest` (`pytest:<project>/<node i
 A pytest test's inputs are its file, the modules its file imports directly or indirectly (found
 with `ast`, from `tools/src` or `efficiency/src` and the test files), and its fixtures: the
 `conftest.py` files that apply to it, with what they import. Editing one module therefore
-changes the input hash of the tests that reach it and of no others.
+changes the input hash of the tests that reach it and of no others. To those it adds the files
+that `data/pytest-reads.json` says the reached modules read at run time, and the reads plugin
+(`beryl_tools.ignite.pytest_reads`, loaded for every pytest check) fails a test that reads a
+tracked file the record does not list.
 
 `pytest` has no skipped outcome in Ignite's vocabulary, and a skipped test is neither a failure
 nor evidence of a regression, so a skipped test (and an expected failure) is reported as a pass
@@ -53,6 +58,52 @@ PARALLEL_FROM = 8
 WORKERS = 4
 # The longest message a result carries.
 MESSAGE_LIMIT = 300
+
+
+# --- The record of run-time reads (see `beryl_tools.ignite.pytest_reads`) ---
+
+# The record, relative to the repository's root.
+RECORD = "data/pytest-reads.json"
+RECORD_ENV = "IGNITE_RECORD_READS"
+# The repository's root, set by the adapter's `run`; without it the plugin asks git.
+ROOT_ENV = "IGNITE_REPO_ROOT"
+
+
+def load_record(root: Path) -> dict[str, list[str]]:
+    """The record: each module file mapped to the paths it reads. A missing record is empty."""
+    path = root / RECORD
+    if not path.exists():
+        return {}
+    table = json.loads(path.read_text())
+    return {module: list(paths) for module, paths in table["reads"].items()}
+
+
+def outermost(paths: Iterable[str]) -> list[str]:
+    """The paths, sorted, without any that lie inside another: a directory's tree ID already
+    covers every file below it."""
+    kept: list[str] = []
+    for path in sorted(set(paths)):
+        if not any(path.startswith(f"{outer}/") for outer in kept):
+            kept.append(path)
+    return kept
+
+
+def write_record(root: Path, record: Mapping[str, Iterable[str]]) -> None:
+    reads = {
+        module: outermost(paths) for module, paths in sorted(record.items()) if paths
+    }
+    text = json.dumps({"reads": reads}, indent=2) + "\n"
+    (root / RECORD).write_text(text)
+
+
+def module_reads(
+    record: Mapping[str, Iterable[str]], modules: Iterable[str], exists: Any
+) -> set[str]:
+    """The paths the record lists for `modules`, keeping only those `exists` accepts, so an
+    entry for a deleted file never names an input that cannot be hashed."""
+    return {
+        path for module in modules for path in record.get(module, ()) if exists(path)
+    }
 
 
 @dataclass(frozen=True)
@@ -169,15 +220,22 @@ def test_inputs(
     files: Mapping[str, Path],
     graph: Mapping[str, set[str]],
     root: Path,
+    record: Mapping[str, Iterable[str]] | None = None,
 ) -> list[str]:
     """The paths, from `root`, that the tests in `test_file` (relative to `project`) read: the
-    file, its fixtures, and every module either imports."""
+    file, its fixtures, every module either imports, and the files those modules read at run
+    time according to `record` (see `beryl_tools.ignite.pytest_reads`)."""
     module = module_name(project / test_file, project)
     if module is None:
         return [(project / test_file).relative_to(root).as_posix()]
     starts = [module, *conftests(module, set(files))]
-    inputs = {files[name] for name in reached(graph, starts) if name in files}
-    return sorted(p.relative_to(root).as_posix() for p in inputs)
+    modules = {
+        files[name].relative_to(root).as_posix()
+        for name in reached(graph, starts)
+        if name in files
+    }
+    data = module_reads(record or {}, modules, lambda path: (root / path).exists())
+    return sorted(modules | data)
 
 
 # --- list ---
@@ -240,11 +298,14 @@ def list_checks(family: str, root: Path) -> list[dict[str, Any]]:
             path = root / folder
             files = project_files(path)
             graph = import_graph(files)
+            record = load_record(root)
             cache: dict[str, list[str]] = {}
             for node in collect(project, root):
                 test_file = node.split("::", 1)[0]
                 if test_file not in cache:
-                    cache[test_file] = test_inputs(test_file, path, files, graph, root)
+                    cache[test_file] = test_inputs(
+                        test_file, path, files, graph, root, record
+                    )
                 out.append(
                     {
                         "check": f"pytest:{folder}/{check_part(node)}",
@@ -304,18 +365,55 @@ def run_pyre(project: Project, root: Path) -> dict[str, Any] | None:
 def run_pytest(project: Project, nodes: list[str], root: Path, results: Path) -> None:
     """Runs the tests in `nodes`; the plugin below appends their lines to `results`."""
     command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
-    command += ["-p", "beryl_tools.ignite.python"]
+    command += [
+        "-p",
+        "beryl_tools.ignite.python",
+        "-p",
+        "beryl_tools.ignite.pytest_reads",
+    ]
     if len(nodes) >= PARALLEL_FROM:
         command += ["-n", str(WORKERS)]
     subprocess.run(
         [*command, *nodes],
         cwd=root / project.folder,
         env={
-            **os.environ,
+            **{k: v for k, v in os.environ.items() if k != RECORD_ENV},
             RESULTS_ENV: str(results),
             PREFIX_ENV: f"{project.folder}/",
+            ROOT_ENV: str(root),
         },
     )
+
+
+def record_reads(root: Path) -> int:
+    """Runs every test of both projects in one process each with the reads plugin recording,
+    which adds what they read to the record. Returns the worst pytest exit code."""
+    worst = 0
+    for project in PROJECTS:
+        if not (root / project.folder).is_dir():
+            continue
+        done = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "-o",
+                "addopts=",
+                "-p",
+                "no:cacheprovider",
+                "-p",
+                "beryl_tools.ignite.pytest_reads",
+            ],
+            cwd=root / project.folder,
+            env={
+                **os.environ,
+                RECORD_ENV: "1",
+                ROOT_ENV: str(root),
+            },
+        )
+        worst = max(worst, done.returncode)
+    return worst
 
 
 def append(results: Path, lines: Iterable[dict[str, Any]]) -> None:
@@ -396,6 +494,8 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
 
 def main(argv: Sequence[str]) -> int:
     root = Path.cwd()
+    if argv[:1] == ["reads"]:
+        return record_reads(root)
     if len(argv) < 2 or argv[0] not in ("list", "run") or argv[1] not in FAMILIES:
         print(__doc__, file=sys.stderr)
         return 1

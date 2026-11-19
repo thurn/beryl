@@ -1,0 +1,457 @@
+{
+  "reads": {
+    "efficiency/src/beryl_efficiency/changes.py": [
+      "data/efficiency-changes.json"
+    ],
+    "efficiency/src/beryl_efficiency/kinds.py": [
+      "data/efficiency-command-kinds.json"
+    ],
+    "efficiency/src/beryl_efficiency/tokens.py": [
+      "data/efficiency-prices.json"
+    ],
+    "tools/src/beryl_tools/audio.py": [
+      "ui/public/audio",
+      "ui/src/audio/loops.json",
+      "ui/src/audio/manifest.json"
+    ],
+    "tools/src/beryl_tools/bench.py": [
+      "rust-toolchain.toml"
+    ],
+    "tools/src/beryl_tools/beryl3d/camera.py": [
+      "data/beryl3d/camera-fit.json"
+    ],
+    "tools/src/beryl_tools/beryl3d/match/reference.py": [
+      "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
+      "data/beryl3d/screens.json",
+      "data/beryl3d/web-match.json"
+    ],
+    "tools/src/beryl_tools/beryl3d/match/support.py": [
+      "data/beryl3d/match/supported.json"
+    ],
+    "tools/src/beryl_tools/beryl3d/match/target.py": [
+      "data/beryl3d/space.json"
+    ],
+    "tools/src/beryl_tools/beryl3d/motion_film.py": [
+      "data/beryl3d/parity.json"
+    ],
+    "tools/src/beryl_tools/beryl3d/tiers.py": [
+      "data/beryl3d/space.json"
+    ],
+    "tools/src/beryl_tools/beryl3d/timeline.py": [
+      "data/ui-conventions.json"
+    ],
+    "tools/src/beryl_tools/card_crates.py": [
+      "rust/cards",
+      "rust/crates/beryl_cards/Cargo.toml"
+    ],
+    "tools/src/beryl_tools/card_files.py": [
+      "docs/sample-decks",
+      "rust/cards"
+    ],
+    "tools/src/beryl_tools/card_header.py": [
+      "rust/cards/cards_1993/lea/counterspell.rs"
+    ],
+    "tools/src/beryl_tools/card_store.py": [
+      "data/card-store.tsv"
+    ],
+    "tools/src/beryl_tools/card_text.py": [
+      "data/card-escalations.json",
+      "data/card-text-allowlist.json"
+    ],
+    "tools/src/beryl_tools/cards.py": [
+      "data/card-pool-exclusions.json",
+      "data/card-printings.csv",
+      "docs/sample-decks/2025-11-18-17lands-cb8d5d5f-wu-control.txt",
+      "docs/sample-decks/2026-10-17-PrinceJools-wu-control.txt"
+    ],
+    "tools/src/beryl_tools/catalogs.py": [
+      "data/catalogs.json"
+    ],
+    "tools/src/beryl_tools/census.py": [
+      "data/census-coverage.json"
+    ],
+    "tools/src/beryl_tools/conventions.py": [
+      "data/arena-motion.json",
+      "data/ui-conventions.json",
+      "docs/ui-conventions.md"
+    ],
+    "tools/src/beryl_tools/design_tokens.py": [
+      "data/design-tokens.json",
+      "ui/src/design/tokens.css"
+    ],
+    "tools/src/beryl_tools/forge.py": [
+      "data/oracle-divergences.json"
+    ],
+    "tools/src/beryl_tools/ignite/beryl3d.py": [
+      "rust/beryl3d/crates/beryl_inspect/Cargo.toml",
+      "rust/beryl3d/crates/beryl_record/Cargo.toml",
+      "rust/beryl3d/crates/beryl_scene/Cargo.toml",
+      "rust/cards/cards_1993/Cargo.toml",
+      "rust/cards/cards_1994/Cargo.toml",
+      "rust/cards/cards_1995/Cargo.toml",
+      "rust/cards/cards_1996/Cargo.toml",
+      "rust/cards/cards_1997/Cargo.toml",
+      "rust/cards/cards_1998/Cargo.toml",
+      "rust/cards/cards_1999/Cargo.toml",
+      "rust/cards/cards_2000/Cargo.toml",
+      "rust/cards/cards_2001/Cargo.toml",
+      "rust/cards/cards_2002/Cargo.toml",
+      "rust/cards/cards_2003/Cargo.toml",
+      "rust/cards/cards_2004/Cargo.toml",
+      "rust/cards/cards_2005/Cargo.toml",
+      "rust/cards/cards_2006/Cargo.toml",
+      "rust/cards/cards_2007/Cargo.toml",
+      "rust/cards/cards_2008/Cargo.toml",
+      "rust/cards/cards_2009/Cargo.toml",
+      "rust/cards/cards_2010/Cargo.toml",
+      "rust/cards/cards_2011/Cargo.toml",
+      "rust/cards/cards_2012/Cargo.toml",
+      "rust/cards/cards_2013/Cargo.toml",
+      "rust/cards/cards_2014/Cargo.toml",
+      "rust/cards/cards_2015/Cargo.toml",
+      "rust/cards/cards_2016/Cargo.toml",
+      "rust/cards/cards_2017/Cargo.toml",
+      "rust/cards/cards_2018/Cargo.toml",
+      "rust/cards/cards_2019_h1/Cargo.toml",
+      "rust/cards/cards_2019_h2/Cargo.toml",
+      "rust/cards/cards_2020_h1/Cargo.toml",
+      "rust/cards/cards_2020_h2/Cargo.toml",
+      "rust/cards/cards_2021_h1/Cargo.toml",
+      "rust/cards/cards_2021_h2/Cargo.toml",
+      "rust/cards/cards_2022_h1/Cargo.toml",
+      "rust/cards/cards_2022_h2/Cargo.toml",
+      "rust/cards/cards_2023_h1/Cargo.toml",
+      "rust/cards/cards_2023_h2/Cargo.toml",
+      "rust/cards/cards_2024_h1/Cargo.toml",
+      "rust/cards/cards_2024_h2/Cargo.toml",
+      "rust/cards/cards_2025_h1/Cargo.toml",
+      "rust/cards/cards_2025_h2/Cargo.toml",
+      "rust/cards/cards_2026_q1/Cargo.toml",
+      "rust/cards/cards_2026_q2/Cargo.toml",
+      "rust/cards/cards_2026_q3/Cargo.toml",
+      "rust/cards/cards_2026_q4/Cargo.toml",
+      "rust/crates/beryl_card/Cargo.toml",
+      "rust/crates/beryl_card_build/Cargo.toml",
+      "rust/crates/beryl_card_records/Cargo.toml",
+      "rust/crates/beryl_card_shared/Cargo.toml",
+      "rust/crates/beryl_card_store/Cargo.toml",
+      "rust/crates/beryl_cards/Cargo.toml",
+      "rust/crates/beryl_cli/Cargo.toml",
+      "rust/crates/beryl_engine/Cargo.toml",
+      "rust/crates/beryl_kernel/Cargo.toml",
+      "rust/crates/beryl_link/Cargo.toml",
+      "rust/crates/beryl_link_iroh/Cargo.toml",
+      "rust/crates/beryl_protocol/Cargo.toml",
+      "rust/crates/beryl_rules/Cargo.toml",
+      "rust/crates/beryl_scenario/Cargo.toml",
+      "rust/crates/beryl_scenario_types/Cargo.toml",
+      "rust/crates/beryl_search/Cargo.toml",
+      "rust/crates/beryl_session/Cargo.toml",
+      "rust/crates/beryl_table/Cargo.toml",
+      "rust/crates/beryl_table_session/Cargo.toml"
+    ],
+    "tools/src/beryl_tools/ignite/beryl3d_match.py": [
+      "data/beryl3d/match/web/game-over_you_1600x900@2.json",
+      "data/beryl3d/match/web/game-over_you_393x759.json",
+      "data/beryl3d/match/web/opening-keep_you_1600x900@2.json",
+      "data/beryl3d/match/web/opening-keep_you_393x759.json",
+      "data/beryl3d/match/web/pay-default_you_1600x900@2.json",
+      "data/beryl3d/match/web/pay-default_you_393x759.json",
+      "data/beryl3d/match/web/screen_bug-report_you_1600x900@2.json",
+      "data/beryl3d/match/web/screen_bug-report_you_393x759.json",
+      "data/beryl3d/match/web/screen_gallery_you_1600x900@2.json",
+      "data/beryl3d/match/web/screen_gallery_you_393x759.json",
+      "data/beryl3d/match/web/screen_lobby_you_1600x900@2.json",
+      "data/beryl3d/match/web/screen_lobby_you_393x759.json",
+      "data/beryl3d/match/web/screen_settings_you_1600x900@2.json",
+      "data/beryl3d/match/web/screen_settings_you_393x759.json",
+      "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
+      "data/beryl3d/match/web/screen_start_you_393x759.json",
+      "data/beryl3d/match/web/screen_table_you_1600x900@2.json",
+      "data/beryl3d/match/web/screen_table_you_393x759.json"
+    ],
+    "tools/src/beryl_tools/ignite/browser.py": [
+      "data/ui-counts.json",
+      "ui/scripts/audit.mjs",
+      "ui/scripts/capture.mjs",
+      "ui/scripts/check-report.mjs",
+      "ui/scripts/hang.mjs",
+      "ui/scripts/kept-aim.mjs",
+      "ui/scripts/kept-bug-reports.mjs",
+      "ui/scripts/kept-command-list.mjs",
+      "ui/scripts/kept-crowded.mjs",
+      "ui/scripts/kept-harness.mjs",
+      "ui/scripts/kept-mobile.mjs",
+      "ui/scripts/kept-opening.mjs",
+      "ui/scripts/kept-pile-look.mjs",
+      "ui/scripts/kept-piles.mjs",
+      "ui/scripts/kept-play.mjs",
+      "ui/scripts/kept-pointer.mjs",
+      "ui/scripts/kept-result.mjs",
+      "ui/scripts/kept-screens.mjs",
+      "ui/scripts/kept-table-abilities.mjs",
+      "ui/scripts/kept-table-arrows.mjs",
+      "ui/scripts/kept-table-assists-play.mjs",
+      "ui/scripts/kept-table-assists.mjs",
+      "ui/scripts/kept-table-cardstate.mjs",
+      "ui/scripts/kept-table-click.mjs",
+      "ui/scripts/kept-table-drag.mjs",
+      "ui/scripts/kept-table-flows.mjs",
+      "ui/scripts/kept-table-keys.mjs",
+      "ui/scripts/kept-table-link.mjs",
+      "ui/scripts/kept-table-lobby-pair.mjs",
+      "ui/scripts/kept-table-lobby.mjs",
+      "ui/scripts/kept-table-log.mjs",
+      "ui/scripts/kept-table-menu.mjs",
+      "ui/scripts/kept-table-players.mjs",
+      "ui/scripts/kept-table-prompts.mjs",
+      "ui/scripts/kept-table-qa.mjs",
+      "ui/scripts/kept-table-select.mjs",
+      "ui/scripts/kept-table-start.mjs",
+      "ui/scripts/kept-table-touch-2.mjs",
+      "ui/scripts/kept-table-touch.mjs",
+      "ui/scripts/kept-table-turn.mjs",
+      "ui/scripts/kept-table-viewers.mjs",
+      "ui/scripts/kept-table.mjs",
+      "ui/scripts/kept.mjs",
+      "ui/scripts/phone-faults.mjs",
+      "ui/scripts/screen-faults.mjs",
+      "ui/scripts/slots.mjs",
+      "ui/scripts/table.mjs"
+    ],
+    "tools/src/beryl_tools/motion_film.py": [
+      "ui/verbs.json"
+    ],
+    "tools/src/beryl_tools/motion_measure.py": [
+      "data/arena-motion.json"
+    ],
+    "tools/src/beryl_tools/oracles.py": [
+      "data/oracle-exporter-gaps.json"
+    ],
+    "tools/src/beryl_tools/scale_workspace.py": [
+      "data/card-store.tsv",
+      "data/catalogs.json",
+      "rust/Cargo.lock",
+      "rust/Cargo.toml",
+      "rust/cards/cards_1993/arn/dandan.rs",
+      "rust/cards/cards_1993/lea/animate_dead.rs",
+      "rust/cards/cards_1993/lea/braingeyser.rs",
+      "rust/cards/cards_1993/lea/circle_of_protection_red.rs",
+      "rust/cards/cards_1993/lea/counterspell.rs",
+      "rust/cards/cards_1993/lea/death_ward.rs",
+      "rust/cards/cards_1993/lea/drudge_skeletons.rs",
+      "rust/cards/cards_1993/lea/forest.rs",
+      "rust/cards/cards_1993/lea/fork.rs",
+      "rust/cards/cards_1993/lea/holy_strength.rs",
+      "rust/cards/cards_1993/lea/island.rs",
+      "rust/cards/cards_1993/lea/lightning_bolt.rs",
+      "rust/cards/cards_1993/lea/lord_of_atlantis.rs",
+      "rust/cards/cards_1993/lea/mountain.rs",
+      "rust/cards/cards_1993/lea/plains.rs",
+      "rust/cards/cards_1993/lea/swamp.rs",
+      "rust/cards/cards_1993/lea/timetwister.rs",
+      "rust/cards/cards_1993/lea/tundra.rs",
+      "rust/cards/cards_1993/lea/white_knight.rs",
+      "rust/cards/cards_1994/atq/strip_mine.rs",
+      "rust/cards/cards_1994/drk/blood_moon.rs",
+      "rust/cards/cards_1994/drk/tormods_crypt.rs",
+      "rust/cards/cards_1994/leg/chains_of_mephistopheles.rs",
+      "rust/cards/cards_1994/leg/mana_drain.rs",
+      "rust/cards/cards_1995/ice/snow_covered_island.rs",
+      "rust/cards/cards_1996/all/force_of_will.rs",
+      "rust/cards/cards_1996/mir/lions_eye_diamond.rs",
+      "rust/cards/cards_1996/mir/mind_bend.rs",
+      "rust/cards/cards_1997/tmp/furnace_of_rath.rs",
+      "rust/cards/cards_1997/tmp/humility.rs",
+      "rust/cards/cards_1997/tmp/time_warp.rs",
+      "rust/cards/cards_1997/vis/helm_of_awakening.rs",
+      "rust/cards/cards_1998/usg/glorious_anthem.rs",
+      "rust/cards/cards_1998/usg/show_and_tell.rs",
+      "rust/cards/cards_1998/usg/time_spiral.rs",
+      "rust/cards/cards_1999/uds/opalescence.rs",
+      "rust/cards/cards_1999/ulg/mother_of_runes.rs",
+      "rust/cards/cards_2000/inv/crystal_spray.rs",
+      "rust/cards/cards_2000/inv/urborg_emissary.rs",
+      "rust/cards/cards_2002/jud/worldgorger_dragon.rs",
+      "rust/cards/cards_2003/mrd/gold_myr.rs",
+      "rust/cards/cards_2003/mrd/leonin_scimitar.rs",
+      "rust/cards/cards_2003/mrd/mindslaver.rs",
+      "rust/cards/cards_2003/scg/brain_freeze.rs",
+      "rust/cards/cards_2003/scg/stifle.rs",
+      "rust/cards/cards_2003/scg/tendrils_of_agony.rs",
+      "rust/cards/cards_2004/chk/vigilance.rs",
+      "rust/cards/cards_2004/dst/angels_feather.rs",
+      "rust/cards/cards_2004/dst/trinisphere.rs",
+      "rust/cards/cards_2004/set_5dn/nights_whisper.rs",
+      "rust/cards/cards_2004/set_5dn/trinket_mage.rs",
+      "rust/cards/cards_2005/bok/mending_hands.rs",
+      "rust/cards/cards_2005/rav/life_from_the_loam.rs",
+      "rust/cards/cards_2005/sok/pithing_needle.rs",
+      "rust/cards/cards_2005/sok/reki_the_history_of_kamigawa.rs",
+      "rust/cards/cards_2006/csp/dark_depths.rs",
+      "rust/cards/cards_2006/csp/deathmark.rs",
+      "rust/cards/cards_2006/gpt/cerebral_vortex.rs",
+      "rust/cards/cards_2007/fut/tarmogoyf.rs",
+      "rust/cards/cards_2007/lrw/tarfire.rs",
+      "rust/cards/cards_2007/plc/life_and_limb.rs",
+      "rust/cards/cards_2007/plc/mana_tithe.rs",
+      "rust/cards/cards_2007/plc/urborg_tomb_of_yawgmoth.rs",
+      "rust/cards/cards_2008/ala/wild_nacatl.rs",
+      "rust/cards/cards_2008/eve/flickerwisp.rs",
+      "rust/cards/cards_2008/shm/painters_servant.rs",
+      "rust/cards/cards_2009/zen/bloodghast.rs",
+      "rust/cards/cards_2010/roe/aura_finesse.rs",
+      "rust/cards/cards_2010/roe/oust.rs",
+      "rust/cards/cards_2010/som/platinum_emperion.rs",
+      "rust/cards/cards_2010/som/quicksilver_gargantuan.rs",
+      "rust/cards/cards_2010/som/seachrome_coast.rs",
+      "rust/cards/cards_2010/som/twisted_image.rs",
+      "rust/cards/cards_2010/wwk/bojuka_bog.rs",
+      "rust/cards/cards_2010/wwk/jace_the_mind_sculptor.rs",
+      "rust/cards/cards_2011/isd/fiend_hunter.rs",
+      "rust/cards/cards_2011/isd/snapcaster_mage.rs",
+      "rust/cards/cards_2011/m12/phantasmal_image.rs",
+      "rust/cards/cards_2012/avr/blood_artist.rs",
+      "rust/cards/cards_2012/avr/builders_blessing.rs",
+      "rust/cards/cards_2012/avr/cavern_of_souls.rs",
+      "rust/cards/cards_2012/avr/griselbrand.rs",
+      "rust/cards/cards_2012/dka/thalia_guardian_of_thraben.rs",
+      "rust/cards/cards_2012/m13/lilianas_shade.rs",
+      "rust/cards/cards_2012/rtr/rest_in_peace.rs",
+      "rust/cards/cards_2013/dgm/notion_thief.rs",
+      "rust/cards/cards_2013/gtc/thespians_stage.rs",
+      "rust/cards/cards_2014/c14/containment_priest.rs",
+      "rust/cards/cards_2014/ktk/clever_impersonator.rs",
+      "rust/cards/cards_2015/frf/gurmag_angler.rs",
+      "rust/cards/cards_2015/ori/jace_vryns_prodigy.rs",
+      "rust/cards/cards_2016/ema/mana_crypt.rs",
+      "rust/cards/cards_2017/c17/fractured_identity.rs",
+      "rust/cards/cards_2017/c17/teferis_protection.rs",
+      "rust/cards/cards_2018/bbd/spellseeker.rs",
+      "rust/cards/cards_2018/dom/teferi_hero_of_dominaria.rs",
+      "rust/cards/cards_2019_h1/mh1/winds_of_abandon.rs",
+      "rust/cards/cards_2019_h1/war/jace_wielder_of_mysteries.rs",
+      "rust/cards/cards_2019_h1/war/teferi_time_raveler.rs",
+      "rust/cards/cards_2019_h2/eld/oko_thief_of_crowns.rs",
+      "rust/cards/cards_2020_h1/iko/gemrazer.rs",
+      "rust/cards/cards_2020_h1/thb/underworld_breach.rs",
+      "rust/cards/cards_2020_h2/cmr/hullbreacher.rs",
+      "rust/cards/cards_2020_h2/jmp/supply_runners.rs",
+      "rust/cards/cards_2020_h2/znr/glasspool_mimic.rs",
+      "rust/cards/cards_2020_h2/znr/thieving_skydiver.rs",
+      "rust/cards/cards_2021_h1/mh2/damn.rs",
+      "rust/cards/cards_2021_h1/mh2/dress_down.rs",
+      "rust/cards/cards_2021_h1/mh2/subtlety.rs",
+      "rust/cards/cards_2021_h1/stx/double_major.rs",
+      "rust/cards/cards_2021_h1/stx/elite_spellbinder.rs",
+      "rust/cards/cards_2021_h2/afr/portable_hole.rs",
+      "rust/cards/cards_2021_h2/mid/adeline_resplendent_cathar.rs",
+      "rust/cards/cards_2021_h2/vow/thirst_for_discovery.rs",
+      "rust/cards/cards_2022_h1/ncc/currency_converter.rs",
+      "rust/cards/cards_2022_h1/nec/swift_reconfiguration.rs",
+      "rust/cards/cards_2022_h1/neo/the_wandering_emperor.rs",
+      "rust/cards/cards_2022_h1/snc/sparas_headquarters.rs",
+      "rust/cards/cards_2023_h1/ltr/reprieve.rs",
+      "rust/cards/cards_2023_h1/onc/staff_of_the_storyteller.rs",
+      "rust/cards/cards_2023_h2/lci/get_lost.rs",
+      "rust/cards/cards_2023_h2/lci/malcolm_alluring_scoundrel.rs",
+      "rust/cards/cards_2024_h1/mh3/sink_into_stupor.rs",
+      "rust/cards/cards_2024_h1/mkm/no_more_lies.rs",
+      "rust/cards/cards_2024_h2/blb/beza_the_bounding_spring.rs",
+      "rust/cards/cards_2024_h2/blb/thundertrap_trainer.rs",
+      "rust/cards/cards_2024_h2/dsk/abhorrent_oculus.rs",
+      "rust/cards/cards_2024_h2/dsk/floodfarm_verge.rs",
+      "rust/cards/cards_2024_h2/dsk/overlord_of_the_mistmoors.rs",
+      "rust/cards/cards_2025_h1/dft/stock_up.rs",
+      "rust/cards/cards_2025_h2/tla/aangs_iceberg.rs",
+      "rust/cards/cards_2026_q4/fra/sphinx_of_false_conclusions.rs",
+      "rust/crates/beryl_card/src/characteristics.rs"
+    ],
+    "tools/src/beryl_tools/scryfall.py": [
+      "tools/tests/fixtures/scryfall-sample.jsonl"
+    ],
+    "tools/src/beryl_tools/set_groups.py": [
+      "data/set-groups.json"
+    ],
+    "tools/src/beryl_tools/set_plan.py": [
+      "data/catalogs.json"
+    ],
+    "tools/src/beryl_tools/store_cards.py": [
+      "rust/crates/beryl_card/src/characteristics.rs"
+    ],
+    "tools/src/beryl_tools/suites.py": [
+      "ui/shapes.json",
+      "ui/verbs.json"
+    ],
+    "tools/src/beryl_tools/vocabulary.py": [
+      "rust/crates/beryl_card/src"
+    ],
+    "tools/src/beryl_tools/xmage_java.py": [
+      "tools/src/beryl_tools/BerylScenarioTest.java"
+    ],
+    "tools/tests/test_bench.py": [
+      "rust/crates/beryl_bench/count-gate.toml"
+    ],
+    "tools/tests/test_beryl3d_camera.py": [
+      "data/beryl3d/space.json"
+    ],
+    "tools/tests/test_beryl3d_profiles.py": [
+      "rust/beryl3d/Cargo.toml"
+    ],
+    "tools/tests/test_card.py": [
+      "rust/crates/beryl_card/src/effect/build.rs",
+      "rust/crates/beryl_card/src/effect/mod.rs",
+      "rust/crates/beryl_card/src/target.rs"
+    ],
+    "tools/tests/test_card_header.py": [
+      "rust/cards/cards_1993/lea/counterspell.rs"
+    ],
+    "tools/tests/test_card_store.py": [
+      "data/card-store.tsv"
+    ],
+    "tools/tests/test_design_tokens.py": [
+      "ui/src/design/tokens.css"
+    ],
+    "tools/tests/test_draft.py": [
+      "tools/tests/fixtures/phase-draft.json"
+    ],
+    "tools/tests/test_forge.py": [
+      "tools/tests/fixtures/scenarios-forge.json"
+    ],
+    "tools/tests/test_ignite_beryl3d.py": [
+      "data/beryl3d/match/web/screen_start_you_1600x900@2.json",
+      "ignite/checks/beryl3d.toml"
+    ],
+    "tools/tests/test_ignite_browser.py": [
+      "data/ui-counts.json"
+    ],
+    "tools/tests/test_ignite_commands.py": [
+      "ignite/checks"
+    ],
+    "tools/tests/test_ignite_inputs.py": [
+      "ignite/checks",
+      "rust",
+      "tools/src",
+      "tools/tests"
+    ],
+    "tools/tests/test_ignite_rest.py": [
+      "ignite/checks"
+    ],
+    "tools/tests/test_ignite_rules.py": [
+      "ignite/checks/rules.toml"
+    ],
+    "tools/tests/test_ignite_script.py": [
+      "ignite/checks/script.toml"
+    ],
+    "tools/tests/test_phase_draft.py": [
+      "tools/tests/fixtures/phase-draft.json"
+    ],
+    "tools/tests/test_ui_counts.py": [
+      "data/ui-counts.json"
+    ],
+    "tools/tests/test_xmage.py": [
+      "tools/tests/fixtures/scenario-xmage-paid-onto-stack.json",
+      "tools/tests/fixtures/scenarios-xmage.json"
+    ]
+  }
+}

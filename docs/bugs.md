@@ -988,3 +988,21 @@ fixed in the same session. Newest first.
   test `a_link_failure_in_a_dependency_clears_the_dependency`; a repair that
   reads a failure's output should be tested against a real output, not one
   written for the test.
+
+- **The gate reused a pytest pass after the data file the test reads changed.**
+  A landing that taught Beryl 3D's `Style` to draw box shadows also edited
+  `data/beryl3d/match/supported.json`, which lists the style shapes Beryl 3D can
+  express. Its gate took 19 seconds because every pytest check was a cache hit,
+  and tip verification then failed four tests in `test_beryl3d_match.py` and
+  `test_beryl3d_match_styles.py`, which held `master` back for over an hour. A
+  pytest check's input hash covered the test's file, the modules it imports and
+  its conftest files, but `beryl_tools.beryl3d.match.support` opens
+  `supported.json` at run time, which no import names. Fixed:
+  `data/pytest-reads.json` records the tracked files each module reads at run
+  time, and the adapter adds a module's entries to the inputs of every test that
+  imports it. Prevention: the guard is the pytest plugin
+  `beryl_tools.ignite.pytest_reads`, which the adapter loads for every pytest
+  check. Its audit hook sees every file a test's code opens and fails the test
+  when the record does not list the file for the module that opened it. The same
+  gap remains for check families whose run-time reads happen in a subprocess
+  (node, a browser, a Rust binary), which a Python audit hook cannot see.
