@@ -152,6 +152,106 @@ fn two_failures_of_one_check_give_one_regression_ticket() {
     assert_eq!(all_tickets(&conn, clock.now()).len(), 2);
 }
 
+fn failing(check: &str, first_bad: &str) -> RegressionReport {
+    let mut report = regression(first_bad, "assertion failed");
+    report.check = CheckName::new(check).unwrap();
+    report
+}
+
+fn file(
+    conn: &mut Connection,
+    clock: &FakeClock,
+    report: &RegressionReport,
+) -> (String, regressions::Outcome) {
+    clock.advance(60.0);
+    regressions::file(conn, UPKEEP, report, clock.now()).unwrap()
+}
+
+fn regression_ticket_of(conn: &Connection, check: &str) -> String {
+    conn.query_row(
+        "SELECT ticket FROM regressions WHERE check_name = ?1",
+        [check],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
+/// A worker takes the ticket.
+fn hold(conn: &Connection, id: &str) {
+    conn.execute(
+        "UPDATE tickets SET status = 'in_progress', assignee = 'local_w' WHERE id = ?1",
+        [id],
+    )
+    .unwrap();
+}
+
+#[test]
+fn failing_checks_share_a_ticket_unless_another_landing_finds_every_ticket_worked() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let (a, outcome) = file(&mut conn, &clock, &failing("rust:a::one", "1111"));
+    assert_eq!(outcome, regressions::Outcome::Created);
+    // Another check from the same landing, and one from another landing while nobody has taken
+    // the ticket yet, both join it.
+    for (check, sha) in [("pytest:t.py::two", "1111"), ("rust:a::three", "2222")] {
+        let (joined, outcome) = file(&mut conn, &clock, &failing(check, sha));
+        assert_eq!(
+            (joined.as_str(), outcome),
+            (a.as_str(), regressions::Outcome::Added)
+        );
+    }
+    let joined = ticket(&conn, &a);
+    assert!(joined.labels.contains(&"check:pytest".to_owned()));
+    assert!(joined.metadata.contains_key(regressions::ADDED_KEY));
+    let comments = tickets::comments(&conn, &a).unwrap();
+    assert!(
+        comments[0]
+            .text
+            .contains("Another check fails: pytest:t.py::two")
+    );
+    // Once a worker holds it, a check from a landing already on it still joins it...
+    hold(&conn, &a);
+    let (joined, _) = file(&mut conn, &clock, &failing("rust:a::four", "2222"));
+    assert_eq!(joined, a);
+    assert_eq!(regression_ticket_of(&conn, "rust:a::four"), a);
+    // ...but one from a new landing gets a ticket of its own, up to three.
+    let (b, outcome) = file(&mut conn, &clock, &failing("rust:a::five", "5555"));
+    assert_eq!(outcome, regressions::Outcome::Created);
+    hold(&conn, &b);
+    let (c, _) = file(&mut conn, &clock, &failing("rust:a::six", "6666"));
+    hold(&conn, &c);
+    assert_eq!(all_tickets(&conn, clock.now()).len(), 3);
+    // With three open, the next joins the ticket with the fewest checks, the first of a tie.
+    let (fewest, outcome) = file(&mut conn, &clock, &failing("rust:a::seven", "7777"));
+    assert_eq!(outcome, regressions::Outcome::Added);
+    assert_eq!(fewest, [&b, &c].into_iter().min().unwrap().clone());
+    assert_eq!(all_tickets(&conn, clock.now()).len(), 3);
+}
+
+#[test]
+fn a_closed_check_failing_again_joins_an_open_ticket_instead_of_reopening() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let (old, _) = file(&mut conn, &clock, &failing("rust:a::one", "1111"));
+    close(&mut conn, &old, clock.now());
+    let (open, _) = file(&mut conn, &clock, &failing("rust:a::two", "2222"));
+    let (moved, outcome) = file(&mut conn, &clock, &failing("rust:a::one", "9999"));
+    assert_eq!(
+        (moved.as_str(), outcome),
+        (open.as_str(), regressions::Outcome::Added)
+    );
+    assert_eq!(ticket(&conn, &old).status, Status::Closed);
+    assert_eq!(regression_ticket_of(&conn, "rust:a::one"), open);
+    let state: String = conn
+        .query_row(
+            "SELECT state FROM regressions WHERE check_name = 'rust:a::one'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(state, tips::REOPENED);
+}
+
 #[test]
 fn a_range_links_every_suspect_and_a_platform_check_needs_its_system() {
     let clock = start();

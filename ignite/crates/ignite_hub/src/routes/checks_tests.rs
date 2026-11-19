@@ -12,8 +12,9 @@ use serde_json::{Value, json};
 use tiny_http::{Response as HttpResponse, Server};
 
 use ignite_core::ids::MachineId;
+use ignite_core::protocol::tickets::{BatchRequest, Operation, TicketFields};
 use ignite_core::time::Timestamp;
-use ignite_store::hub;
+use ignite_store::hub::{self, batch};
 
 use super::{Request, handle};
 use crate::auth::Writer;
@@ -458,13 +459,25 @@ fn writes_need_a_writer_and_every_route_checks_its_method_and_body() {
 }
 
 /// Files a ticket to stand for the landing that caused a regression, and returns its ID.
+/// A landed ticket to name as the culprit.
 fn culprit(hub: &TestHub) -> String {
-    let report = json!({"check": "rust:culprit", "first_bad": "c001", "last_good": "0000",
-                        "caused_by": null, "output": ""});
-    hub.post("/regressions", &report)["ticket"]
-        .as_str()
-        .unwrap()
-        .to_owned()
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Create {
+            fields: TicketFields {
+                title: Some("Ward counts".to_owned()),
+                ..TicketFields::default()
+            },
+            parent: None,
+            deps: Vec::new(),
+            request_key: None,
+        }],
+    };
+    let mut conn = hub.conn.lock().unwrap();
+    match batch::apply(&mut conn, &request, "person", "", Timestamp::from_millis(0)).unwrap() {
+        batch::BatchOutcome::Applied(reply) => reply.results[0].id.to_string(),
+        batch::BatchOutcome::Conflict(_) => panic!("creating the culprit conflicted"),
+    }
 }
 
 fn regression_report(culprit: &str, first_bad: &str, output: &str) -> Value {

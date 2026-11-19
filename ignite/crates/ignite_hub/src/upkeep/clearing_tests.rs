@@ -562,6 +562,71 @@ fn a_regression_closes_once_a_later_tip_passes_and_is_marked_fixed() {
 }
 
 #[test]
+fn a_ticket_given_another_check_waits_for_a_tip_seen_after_it() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    let report = |check: &str, first_bad: &str| RegressionReport {
+        check: CheckName::new(check).unwrap(),
+        first_bad: Commit::new(first_bad).unwrap(),
+        last_good: Commit::new("0000").unwrap(),
+        caused_by: None,
+        output: "x".to_owned(),
+        suspects: Vec::new(),
+        platform: None,
+        search: None,
+    };
+    let (id, _) = regressions::file(
+        &mut conn,
+        UPKEEP,
+        &report("rust:a::one", "1111"),
+        clock.now(),
+    )
+    .unwrap();
+    clock.advance(60.0);
+    tips::seen(&conn, "4444", clock.now()).unwrap();
+    conn.execute(
+        "UPDATE tips SET state = 'verified', verified = seen WHERE commit_sha = '4444'",
+        [],
+    )
+    .unwrap();
+    // A check from the first ticket's landing fails after tip 4444 was seen, and another
+    // machine's report adds it to the ticket.
+    clock.advance(60.0);
+    let other = filing::Author {
+        actor: "daemon-m-2",
+        machine: "m-2",
+    };
+    let (joined, outcome) = regressions::file(
+        &mut conn,
+        other,
+        &report("rust:a::four", "1111"),
+        clock.now(),
+    )
+    .unwrap();
+    assert_eq!(
+        (joined.as_str(), outcome),
+        (id.as_str(), regressions::Outcome::Added)
+    );
+    assert!(!passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS).contains(&id));
+    tips::seen(&conn, "5555", clock.now()).unwrap();
+    conn.execute(
+        "UPDATE tips SET state = 'verified', verified = seen WHERE commit_sha = '5555'",
+        [],
+    )
+    .unwrap();
+    assert!(passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS).contains(&id));
+    let fixed: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM regressions WHERE ticket = ?1 AND state = ?2",
+            params![id, tips::FIXED],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(fixed, 2);
+}
+
+#[test]
 fn a_loop_ticket_closes_once_an_edge_of_the_loop_is_removed() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();

@@ -18,8 +18,9 @@
 //!   close a ticket on every pass. The ticket then closes with a reason that says what cleared.
 //! - A fault that returns within [`filing::REOPEN_SECONDS`] reopens the ticket ([`filing::file`]).
 //!
-//! A regression ticket is cleared when a tip first seen after the ticket was filed or last
-//! reopened passed verification, and closing it marks the regression fixed.
+//! A regression ticket is cleared when a tip first seen after the ticket was filed, last
+//! reopened or last given another check passed verification, and closing it marks each of its
+//! checks fixed.
 //!
 //! Tickets filed before tickets recorded their fault get it here when their signature is one
 //! upkeep can rebuild from a subject it can list (an epic, a ticket, a machine or a fixed
@@ -41,8 +42,8 @@ use super::filing::{
     self, AUTO_CLOSED_KEY, CLEARED_SINCE_KEY, FAULT_KEY, FILERS_KEY, RETURNS_KEY,
     STATUS_BEFORE_KEY, UPKEEP, strings,
 };
-use super::justiciar;
 use super::signature::Signature;
+use super::{justiciar, regressions};
 use crate::routes::tip_rounds as rounds_route;
 
 /// How long a fault must stay clear before its ticket closes.
@@ -70,7 +71,7 @@ pub fn close_cleared(conn: &mut Connection, now: Timestamp) -> Result<Vec<String
         };
         let regression = regressions.get(&id);
         let verdict = match (regression, Fault::of(&ticket.metadata)) {
-            (Some(check), _) => regression_verdict(conn, &ticket, check)?,
+            (Some(checks), _) => regression_verdict(conn, &ticket, checks)?,
             (None, Some(fault)) => clearing_kinds::verdict(conn, &world, &fault, &ticket)?,
             (None, None) => Verdict::Unwatched,
         };
@@ -80,7 +81,7 @@ pub fn close_cleared(conn: &mut Connection, now: Timestamp) -> Result<Vec<String
             continue;
         }
         if act(conn, &ticket, verdict, now)? {
-            if let Some(check) = regression {
+            for check in regression.into_iter().flatten() {
                 tips::regression_fixed(conn, check)?;
             }
             closed.push(id);
@@ -105,20 +106,29 @@ fn watched(conn: &Connection) -> Result<Vec<String>> {
     Ok(ids)
 }
 
-/// Each open regression's ticket, with its check.
-fn open_regressions(conn: &Connection) -> Result<BTreeMap<String, String>> {
-    let mut select =
-        conn.prepare("SELECT ticket, check_name FROM regressions WHERE state != ?1")?;
-    let rows = select
-        .query_map(params![tips::FIXED], |row| Ok((row.get(0)?, row.get(1)?)))?
-        .collect::<rusqlite::Result<BTreeMap<String, String>>>()?;
-    Ok(rows)
+/// Each ticket of an open regression, with its open checks; one ticket can hold several.
+fn open_regressions(conn: &Connection) -> Result<BTreeMap<String, Vec<String>>> {
+    let mut select = conn.prepare(
+        "SELECT ticket, check_name FROM regressions WHERE state != ?1 ORDER BY check_name",
+    )?;
+    let mut open: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for row in select.query_map(params![tips::FIXED], |row| Ok((row.get(0)?, row.get(1)?)))? {
+        let (ticket, check): (String, String) = row?;
+        open.entry(ticket).or_default().push(check);
+    }
+    Ok(open)
 }
 
-/// A regression's check passes again when a tip first seen after the ticket was filed, or last
-/// reopened, was verified: verification passes only when every check passes.
-fn regression_verdict(conn: &Connection, ticket: &Ticket, check: &str) -> Result<Verdict> {
-    let mut since = ticket.created_at;
+/// A regression ticket's checks pass again when a tip first seen after the ticket was filed,
+/// last reopened or last given another check was verified: verification passes only when every
+/// check passes.
+fn regression_verdict(conn: &Connection, ticket: &Ticket, checks: &[String]) -> Result<Verdict> {
+    let added = ticket
+        .metadata
+        .get(regressions::ADDED_KEY)
+        .and_then(Value::as_str)
+        .and_then(|at| Timestamp::parse(at).ok());
+    let mut since = added.map_or(ticket.created_at, |at| at.max(ticket.created_at));
     for row in tickets::history(conn, ticket.id.as_str())? {
         let status = row.change.get("status");
         if status == Some(&json!([Status::Closed, Status::Open])) && row.at > since {
@@ -136,7 +146,8 @@ fn regression_verdict(conn: &Connection, ticket: &Ticket, check: &str) -> Result
     Ok(match tip {
         Some(tip) => Verdict::Cleared(format!(
             "tip {tip}, first seen after this regression was filed, passed verification, so \
-             {check} passes again."
+             {} passes again.",
+            checks.join(", ")
         )),
         None => Verdict::Present,
     })

@@ -2070,8 +2070,8 @@ and what each commit changed:
 
 ### Regression tickets
 
-The hub then files a **regression ticket**. It is an ordinary P0 ticket that any
-worker can take:
+The hub then files a **regression ticket**, or adds the check to one already
+open. It is an ordinary P0 ticket that any worker can take:
 
 ```text
 TK3FC  P0 bug  regression  check:rust
@@ -2091,6 +2091,16 @@ output (last 40 lines; whole output on jarvis at ...)
 - If the worker that landed the culprit has not yet been given another ticket,
   that machine's daemon has the regression sent to that session, which still
   holds the context. Otherwise it goes first in the dispatch order.
+- Failing checks share as few tickets as they can. One bad landing often fails
+  several checks, and when each check had a ticket and a worker of its own, most
+  of those workers closed their ticket as fixed by another. A check is added to
+  an open regression ticket, as a comment with its output, when that ticket
+  holds a check with the same first bad commit, or when no worker holds that
+  ticket yet. It gets a ticket of its own only when it comes from another
+  landing and every open regression ticket is being worked. At most three are
+  open (`OPEN_TICKETS` in the hub's `upkeep::regressions`); past that, it joins
+  the open ticket for the same operating system, else the one with the fewest
+  checks. The ticket is done when every check on it passes.
 - `master` stays at the last verified commit until the check passes again.
   Landings on `staging` continue.
 - The fix lands like any other change and closes the ticket. Tip verification
