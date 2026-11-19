@@ -86,10 +86,55 @@ pub trait VerbChild: Send {
     fn exited(&mut self) -> bool;
 }
 
-impl VerbChild for Child {
-    fn exited(&mut self) -> bool {
-        !matches!(self.try_wait(), Ok(None))
+/// A verb process that is waited for even when nobody looks at it again. The watcher thread
+/// stops watching once the verb's reply is delivered, which happens before the process has
+/// exited, and a `Child` dropped without `wait` stays a zombie (a `<defunct>` entry that holds a
+/// process table slot) until the daemon exits. Dropping this waits for the process on a thread
+/// of its own, so a process that is slow to exit never blocks the watcher.
+struct ReapedChild(Option<Child>);
+
+impl ReapedChild {
+    fn new(child: Child) -> ReapedChild {
+        ReapedChild(Some(child))
     }
+}
+
+impl VerbChild for ReapedChild {
+    fn exited(&mut self) -> bool {
+        self.0
+            .as_mut()
+            .is_none_or(|child| !matches!(child.try_wait(), Ok(None)))
+    }
+}
+
+impl Drop for ReapedChild {
+    fn drop(&mut self) {
+        if let Some(child) = self.0.take() {
+            reap_in_background(child);
+        }
+    }
+}
+
+/// Waits for `child` on a new thread, so that it does not stay a zombie once it exits. Returns
+/// the thread, which ends when the child has been reaped. If no thread can be started the wait
+/// happens here instead, since an unreaped child is worse than a short delay.
+fn reap_in_background(child: Child) -> Option<std::thread::JoinHandle<()>> {
+    let child = Arc::new(Mutex::new(Some(child)));
+    let handed = Arc::clone(&child);
+    let spawned = std::thread::Builder::new()
+        .name("ignite-reap".to_owned())
+        .spawn(move || {
+            if let Some(mut child) = lock(&handed).take() {
+                let _ = child.wait();
+            }
+        });
+    if let Ok(thread) = spawned {
+        return Some(thread);
+    }
+    if let Some(mut child) = lock(&child).take() {
+        let _ = child.wait();
+    }
+    None
 }
 
 /// Starts `<executable> internal verb <handle>` from the repository's main checkout, never from
@@ -123,7 +168,7 @@ impl VerbStarter for NativeStarter {
             .stdout(Stdio::null())
             .stderr(log)
             .spawn()?;
-        Ok(Box::new(child))
+        Ok(Box::new(ReapedChild::new(child)))
     }
 }
 
@@ -567,6 +612,40 @@ fn died(shared: &Shared, handle: &Handle, rerun: Option<Arc<dyn Verb>>) {
     shared.bury(handle);
     let rerun = rerun.ok_or("it cannot be run again safely");
     super::resume::run_again(shared, handle, &verb, rerun.map(|verb| (verb, request)));
+}
+
+#[cfg(all(test, unix))]
+mod reap_tests {
+    use super::*;
+
+    /// The process table's state letters for `pid`, empty once it is gone.
+    fn state(pid: u32) -> String {
+        let out = Command::new("ps")
+            .args(["-o", "stat=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    }
+
+    #[test]
+    fn a_dropped_verb_process_is_reaped() {
+        let child = Command::new("sh").args(["-c", "exit 0"]).spawn().unwrap();
+        let pid = child.id();
+        reap_in_background(child).unwrap().join().unwrap();
+        assert_eq!(state(pid), "", "the process is still in the process table");
+    }
+
+    #[test]
+    fn an_unreaped_process_stays_a_zombie() {
+        // Guards the test above: without a wait, the state is `Z`.
+        let child = Command::new("sh").args(["-c", "exit 0"]).spawn().unwrap();
+        let pid = child.id();
+        while !state(pid).starts_with('Z') {
+            std::thread::yield_now();
+        }
+        drop(child);
+        assert!(state(pid).starts_with('Z'));
+    }
 }
 
 #[cfg(test)]
