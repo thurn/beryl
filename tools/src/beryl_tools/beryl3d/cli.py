@@ -381,6 +381,10 @@ OWN_COMMANDS: tuple[Command, ...] = (
                 "just b3d timeline-parity --fixtures",
                 "the recorded fixtures only",
             ),
+            (
+                "just b3d timeline-parity --fixtures --refresh-web",
+                "rewrite the committed web timelines the b3d-timeline check reads",
+            ),
         ),
         lambda args: timeline.run_parity(args),
         timeline.parity_arguments,

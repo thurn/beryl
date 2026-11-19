@@ -217,7 +217,11 @@ def test_parity_reuses_the_binary_built_and_leaves_no_files(
     monkeypatch.setattr(timeline, "load_allowlist", dict)
 
     assert (
-        timeline.run_parity(argparse.Namespace(prefix="", fixtures=False, update=False))
+        timeline.run_parity(
+            argparse.Namespace(
+                prefix="", fixtures=False, update=False, refresh_web=False
+            )
+        )
         == 0
     )
     assert builds == [cli.SHARED_BUILD]

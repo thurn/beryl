@@ -1,0 +1,84 @@
+{"seat":"opponent","view":2,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"opponent","view":3,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"opponent","view":5,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[["attack","start",null]]}
+{"seat":"opponent","view":7,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[["attack","start",null]]}
+{"seat":"opponent","view":9,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[["attack","start",null]]}
+{"seat":"opponent","view":11,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"opponent","view":11,"beat":0,"step":1,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"opponent","view":11,"beat":0,"step":2,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"opponent","view":13,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"opponent","view":15,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"opponent","view":16,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"opponent","view":16,"beat":0,"step":1,"verb":"point","case":"block line","start":0,"end":66,"effects":[],"sounds":[]}
+{"seat":"opponent","view":16,"beat":0,"step":2,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"opponent","view":17,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"opponent","view":18,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"opponent","view":18,"beat":0,"step":1,"verb":"point","case":"block line","start":0,"end":66,"effects":[],"sounds":[]}
+{"seat":"opponent","view":19,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"opponent","view":20,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"opponent","view":20,"beat":0,"step":1,"verb":"point","case":"block line","start":0,"end":66,"effects":[],"sounds":[]}
+{"seat":"opponent","view":20,"beat":0,"step":2,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":2,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[["attack","start",null]]}
+{"seat":"you","view":7,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[["attack","start",null]]}
+{"seat":"you","view":9,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[["attack","start",null]]}
+{"seat":"you","view":11,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":11,"beat":0,"step":1,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":11,"beat":0,"step":2,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":12,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":12,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":13,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":13,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":13,"beat":0,"step":0,"verb":"set","case":"step begins","start":0,"end":58,"effects":[],"sounds":[["step","start",null]]}
+{"seat":"you","view":14,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":14,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":14,"beat":0,"step":2,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":14,"beat":0,"step":3,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":15,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":15,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":15,"beat":0,"step":2,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":15,"beat":0,"step":3,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":15,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":15,"beat":0,"step":0,"verb":"mark","case":"selected","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":15,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":15,"beat":0,"step":2,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":16,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":16,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":16,"beat":0,"step":2,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":16,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":16,"beat":0,"step":1,"verb":"point","case":"block line","start":0,"end":66,"effects":[],"sounds":[]}
+{"seat":"you","view":16,"beat":0,"step":2,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":16,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":16,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":16,"beat":0,"step":2,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":17,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":17,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":17,"beat":0,"step":2,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":17,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":17,"beat":0,"step":0,"verb":"mark","case":"selected","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":17,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":17,"beat":0,"step":2,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":18,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":18,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":18,"beat":0,"step":2,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":18,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":18,"beat":0,"step":1,"verb":"point","case":"block line","start":0,"end":66,"effects":[],"sounds":[]}
+{"seat":"you","view":18,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":18,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":19,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":19,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":19,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":19,"beat":0,"step":0,"verb":"mark","case":"selected","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":19,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":19,"beat":0,"step":2,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":20,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":20,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":20,"beat":0,"step":2,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":20,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":20,"beat":0,"step":1,"verb":"point","case":"block line","start":0,"end":66,"effects":[],"sounds":[]}
+{"seat":"you","view":20,"beat":0,"step":2,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":20,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":21,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":22,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":22,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}

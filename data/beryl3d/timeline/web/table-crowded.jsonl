@@ -1,0 +1,38 @@
+{"seat":"you","view":1,"beat":0,"step":0,"verb":"announce","case":null,"start":116,"end":1316,"effects":[],"sounds":[]}
+{"seat":"you","view":2,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":2,"beat":0,"step":1,"verb":"fly","case":"land played","start":326,"end":641,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":2,"beat":0,"step":2,"verb":"fly","case":"land played","start":652,"end":967,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":2,"beat":0,"step":3,"verb":"fly","case":"land played","start":978,"end":1293,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":2,"beat":0,"step":4,"verb":"fly","case":"land played","start":1304,"end":1619,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":3,"beat":0,"step":0,"verb":"fly","case":"draw of several","start":0,"end":700,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":1,"verb":"fly","case":"draw of several","start":233,"end":933,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":2,"verb":"fly","case":"draw of several","start":466,"end":1166,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":3,"verb":"fly","case":"draw of several","start":699,"end":1399,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":4,"verb":"fly","case":"draw of several","start":932,"end":1632,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":5,"verb":"fly","case":"draw of several","start":1165,"end":1865,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":6,"verb":"fly","case":"draw of several","start":1398,"end":2098,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":7,"verb":"fly","case":"draw of several","start":1631,"end":2331,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":4,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":4,"beat":0,"step":1,"verb":"fly","case":"land played","start":326,"end":641,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":4,"beat":0,"step":2,"verb":"fly","case":"land played","start":652,"end":967,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":4,"beat":0,"step":3,"verb":"fly","case":"land played","start":978,"end":1293,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":5,"beat":0,"step":0,"verb":"fly","case":"draw of several","start":0,"end":700,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":1,"verb":"fly","case":"draw of several","start":233,"end":933,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":2,"verb":"fly","case":"draw of several","start":466,"end":1166,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":3,"verb":"fly","case":"draw of several","start":699,"end":1399,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":4,"verb":"fly","case":"draw of several","start":932,"end":1632,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":5,"verb":"fly","case":"draw of several","start":1165,"end":1865,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":6,"verb":"fly","case":"draw of several","start":1398,"end":2098,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":7,"verb":"fly","case":"draw of several","start":1631,"end":2331,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":8,"verb":"fly","case":"draw of several","start":1864,"end":2564,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":6,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":6,"beat":0,"step":1,"verb":"fly","case":"land played","start":326,"end":641,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":6,"beat":0,"step":2,"verb":"fly","case":"land played","start":652,"end":967,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":6,"beat":0,"step":3,"verb":"fly","case":"land played","start":978,"end":1293,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":6,"beat":0,"step":4,"verb":"fly","case":"land played","start":1304,"end":1619,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":7,"beat":0,"step":0,"verb":"appear","case":"token","start":140,"end":173,"effects":["glow@start"],"sounds":[["place","start",null]]}
+{"seat":"you","view":7,"beat":0,"step":1,"verb":"appear","case":"token","start":173,"end":206,"effects":["glow@start"],"sounds":[["place","start",null]]}
+{"seat":"you","view":7,"beat":0,"step":2,"verb":"appear","case":"token","start":206,"end":239,"effects":["glow@start"],"sounds":[["place","start",null]]}
+{"seat":"you","view":7,"beat":0,"step":3,"verb":"appear","case":"token","start":239,"end":272,"effects":["glow@start"],"sounds":[["place","start",null]]}
+{"seat":"you","view":7,"beat":0,"step":4,"verb":"appear","case":"token","start":272,"end":305,"effects":["glow@start"],"sounds":[["place","start",null]]}
+{"seat":"you","view":7,"beat":0,"step":5,"verb":"appear","case":"token","start":305,"end":338,"effects":["glow@start"],"sounds":[["place","start",null]]}

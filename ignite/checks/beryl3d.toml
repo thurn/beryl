@@ -482,17 +482,20 @@ inputs = [
   "tools/src/beryl_tools/xmage_classes.py",
 ]
 
-# Timeline parity of the recorded fixtures (`just b3d timeline-parity --fixtures`): one check
-# per fixture of ui/fixtures.json, failing when one of its seats differs from the web
-# interface's timeline (`ui/scripts/timeline.mjs`) by more steps than
-# data/beryl3d/timeline-parity.json allows. Each check reads the web timeline's sources and the
-# card files its recording plays. The card spec moments are compared by no family: Beryl 3D's
-# own timeline of every recording takes minutes.
+# Timeline parity of the recorded fixtures: one check per fixture of ui/fixtures.json, failing
+# when one of its seats differs from the web interface's timeline by more steps than
+# data/beryl3d/timeline-parity.json allows. The web side is the committed copy,
+# data/beryl3d/timeline/web/<fixture>.jsonl, so the check starts no `node` and reads no file
+# under ui/ beyond `ui/fixtures.json` and `ui/src/generated/**`, which every Beryl 3D family
+# reads. A change to the web interface therefore runs none of Beryl 3D's checks (decision C17),
+# and `b3d-timeline-drift` finds when the copy no longer matches the web interface. Each check
+# reads its copy and the card files its recording plays. The card spec moments are compared by
+# no family: Beryl 3D's own timeline of every recording takes minutes.
 [family.b3d-timeline]
 kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
-needs = ["python-env", "b3d", "ui-deps"]
+needs = ["python-env", "b3d"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline run {checks}"
 inputs = [
@@ -531,10 +534,8 @@ inputs = [
   "data/save-breaks.json",
   "data/ui-conventions.json",
   "ui/fixtures.json",
-  "ui/package.json",
-  "ui/scripts/**",
-  "ui/src/**",
   "docs/sample-decks/**",
+  "data/beryl3d/timeline/web/**",
   "tools/src/beryl_tools/beryl3d/timeline.py",
   "tools/src/beryl_tools/ignite/__init__.py",
   "tools/src/beryl_tools/ignite/rust.py",
@@ -564,6 +565,96 @@ inputs = [
   "tools/src/beryl_tools/vocabulary.py",
   "tools/src/beryl_tools/xmage_classes.py",
 ]
+
+# The web interface's timeline against its committed copy: each check plays its fixture through
+# `ui/scripts/timeline.mjs` and fails when any step of either seat differs from
+# data/beryl3d/timeline/web/<fixture>.jsonl, naming the fixture, the first step that differs
+# and the command that rewrites the copy. `next` yields every fixture with a digest of the web
+# timeline's sources, the recordings pack and the copy, so a fixture runs again only after one
+# of them changed. It runs only in the idle class and never blocks a landing (docs/ignite.md,
+# "Exploration checks").
+[family.b3d-timeline-drift]
+kind = "exploration"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d", "ui-deps"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline-drift list"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline-drift next"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline-drift run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "ui/src/generated/**",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "data/beryl3d/timeline/web/**",
+  "tools/src/beryl_tools/beryl3d/timeline.py",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/gate.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/purity.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+  "tools/src/beryl_tools/ignite/beryl3d_timeline_drift.py",
+  "tools/src/beryl_tools/deps.py",
+  "ui/scripts/timeline.mjs",
+  "ui/src/**",
+  "ui/package.json",
+  "ui/package-lock.json",
+]
+
 
 # How far Beryl 3D's look is from the web interface's on the reference targets (one desktop and
 # one phone window of every screen kind, `reference.targets()` in the match tools), held to

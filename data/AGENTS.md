@@ -7,6 +7,11 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   reference targets of `just b3d match score`, one file per target, written by
   `just b3d match score --refresh-web` and read by the `b3d-web-match` check;
   `beryl3d/web-match.json` holds each target's counts, which may only go down.
+  `beryl3d/timeline/web/` holds the web interface's timeline of each recorded
+  fixture (`ui/scripts/timeline.mjs`), one JSONL file per fixture with the
+  `recording` field left out, written by
+  `just b3d timeline-parity --fixtures --refresh-web` and read by the
+  `b3d-timeline` check in place of the live web interface.
 - `card-store.tsv` is the card store, built by `just cards` from Scryfall's bulk
   data. It has a record for every card in the pool and every token those cards
   make, sorted so it can be searched by seeking

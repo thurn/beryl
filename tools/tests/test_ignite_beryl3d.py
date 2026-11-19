@@ -242,7 +242,12 @@ def step(start: float) -> dict[str, object]:
     }
 
 
-def test_timeline_results_name_each_fixture_over_its_allowance() -> None:
+def test_timeline_results_name_each_fixture_over_its_allowance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(timeline, "WEB_COPIES", tmp_path)
+    for name in ("allowed", "differs", "empty"):
+        timeline.copy_path(name).write_text("")
     web = timeline.parse(
         [json.dumps({"recording": r, "seat": s, **step(0)}) for r, s in KEYS]
     )
@@ -253,14 +258,75 @@ def test_timeline_results_name_each_fixture_over_its_allowance() -> None:
     found = timeline.differences(web, native, scope)
     allowed = {timeline.key_of("allowed", "p0"): 1}
     results = adapter.timeline_results(
-        found, KEYS, allowed, ["allowed", "differs", "missing"]
+        found, KEYS, allowed, ["allowed", "differs", "empty"]
     )
     assert [(r.check, r.outcome) for r in results] == [
         ("b3d-timeline:allowed", "pass"),
         ("b3d-timeline:differs", "fail"),
-        ("b3d-timeline:missing", "fail"),
+        ("b3d-timeline:empty", "pass"),
     ]
     assert "differs/p0" in results[1].message
+    assert "committed copy" in results[1].message
+
+
+def test_a_fixture_with_no_committed_web_timeline_fails_with_the_command_that_writes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(timeline, "WEB_COPIES", tmp_path)
+    results = adapter.timeline_results({}, KEYS, {}, ["allowed"])
+    assert results[0].outcome == "fail"
+    assert "--refresh-web" in results[0].message
+
+
+def test_committed_web_timelines_round_trip_and_prune(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(timeline, "WEB_COPIES", tmp_path / "web")
+    lines = [
+        json.dumps({"recording": r, "seat": s, **step(start)})
+        for r, s, start in [("a", "you", 0), ("a", "opponent", 5), ("b", "you", 9)]
+    ]
+    web = timeline.parse(lines)
+    (tmp_path / "web").mkdir()
+    timeline.copy_path("gone").write_text("")
+    assert timeline.write_copies(web, {"a", "b"}, prune=True) == 2
+    assert not timeline.copy_path("gone").exists()
+    assert '"recording"' not in timeline.copy_path("a").read_text()
+    assert timeline.load_copy("a") == {
+        k: v for k, v in web.items() if k.startswith("a/")
+    }
+    assert timeline.load_copy("c") is None
+
+
+def test_web_timeline_drift_counts_every_step_that_is_not_equal() -> None:
+    committed = [
+        {"recording": "a", "seat": "you", **step(s), "step": i}
+        for i, s in enumerate((0, 100, 200))
+    ]
+    assert timeline.drifted(committed, committed) is None
+    live = [committed[0], {**committed[1], "end": 101}]
+    found = timeline.drifted(live, committed)
+    assert found is not None
+    assert found.count == 2
+    assert found.web == live[1] and found.native == committed[1]
+
+
+def test_timeline_drift_fails_a_fixture_whose_web_timeline_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from beryl_tools.ignite import beryl3d_timeline_drift as drift
+
+    monkeypatch.setattr(timeline, "WEB_COPIES", tmp_path)
+    live = timeline.parse([json.dumps({"recording": "a", "seat": "you", **step(0)})])
+    timeline.write_copies(live, {"a"}, prune=False)
+    assert drift.drift_one("a", live).outcome == "pass"
+    moved = timeline.parse([json.dumps({"recording": "a", "seat": "you", **step(5)})])
+    failed = drift.drift_one("a", moved)
+    assert failed.check == "b3d-timeline-drift:a"
+    assert failed.outcome == "fail"
+    assert "a/you: 1 step(s)" in failed.message
+    assert "--refresh-web" in failed.message
+    assert drift.drift_one("b", live).outcome == "fail"
 
 
 KEYS: list[tuple[str, str]] = [("allowed", "p0"), ("differs", "p0")]
@@ -288,18 +354,42 @@ def test_format_results_blame_the_package_that_holds_the_file() -> None:
 # The web-match families: Beryl 3D's look held against the web interface's.
 
 
-def test_web_match_reads_no_web_file_beyond_the_recordings_definitions() -> None:
-    """A change to the web interface must run none of Beryl 3D's checks, so `b3d-web-match`
-    declares nothing under ui/ but what every Beryl 3D family reads."""
-    declared = manifest()["family"]["b3d-web-match"]["inputs"]
-    assert isinstance(declared, list)
-    inputs = [str(i) for i in declared]
-    assert [i for i in inputs if i.startswith("ui/")] == [
-        "ui/src/generated/**",
-        "ui/fixtures.json",
-    ]
-    assert "data/beryl3d/**" in inputs
-    assert "tools/src/beryl_tools/beryl3d/match/**" in inputs
+# What every Beryl 3D family reads under ui/: the fixtures' definitions and the generated
+# protocol types, which the recordings are made from.
+UI_READ_BY_EVERY_FAMILY = ["ui/src/generated/**", "ui/fixtures.json"]
+
+
+def test_no_regression_family_reads_the_web_interface() -> None:
+    """A change to the web interface must run none of Beryl 3D's checks (docs/beryl-3d.md,
+    decision C17), so a regression family declares nothing under ui/ but what every Beryl 3D
+    family reads. The web side of a comparison is a committed copy under data/beryl3d/, and an
+    exploration family compares that copy with the live web interface."""
+    for name, family in manifest()["family"].items():
+        if family["kind"] != "regression":
+            continue
+        declared = family.get("inputs", [])
+        assert isinstance(declared, list)
+        under_ui = [str(i) for i in declared if str(i).startswith("ui/")]
+        assert set(under_ui) <= set(UI_READ_BY_EVERY_FAMILY), (name, under_ui)
+        assert "ui-deps" not in str(family.get("needs", [])), name
+
+
+def test_web_match_and_timeline_read_their_committed_web_copies() -> None:
+    families = manifest()["family"]
+    match = [str(i) for i in families["b3d-web-match"]["inputs"]]  # type: ignore[union-attr]
+    assert "tools/src/beryl_tools/beryl3d/match/**" in match
+    assert "data/beryl3d/match/web/**" in match
+    parity = [str(i) for i in families["b3d-timeline"]["inputs"]]  # type: ignore[union-attr]
+    assert "data/beryl3d/timeline/web/**" in parity
+
+
+def test_timeline_drift_is_an_exploration_family_that_reads_the_web_timeline() -> None:
+    family = manifest()["family"]["b3d-timeline-drift"]
+    assert family["kind"] == "exploration"
+    inputs = str(family["inputs"])
+    assert "ui/src/**" in inputs and "ui/scripts/timeline.mjs" in inputs
+    assert "tools/src/beryl_tools/ignite/beryl3d_timeline_drift.py" in inputs
+    assert str(family["next"]).endswith("beryl3d b3d-timeline-drift next")
 
 
 def test_web_drift_is_an_exploration_family_that_reads_the_web_interface() -> None:

@@ -1,0 +1,26 @@
+{"seat":"you","view":1,"beat":0,"step":0,"verb":"announce","case":null,"start":116,"end":1316,"effects":[],"sounds":[]}
+{"seat":"you","view":2,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":2,"beat":0,"step":1,"verb":"fly","case":"land played","start":326,"end":641,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":3,"beat":0,"step":0,"verb":"fly","case":null,"start":0,"end":475,"effects":["settle@end"],"sounds":[]}
+{"seat":"you","view":4,"beat":0,"step":0,"verb":"fly","case":"draw of several","start":0,"end":700,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":4,"beat":0,"step":1,"verb":"fly","case":"draw of several","start":233,"end":933,"effects":[],"sounds":[["slide","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":5,"beat":0,"step":1,"verb":"fly","case":"land played","start":326,"end":641,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":6,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":7,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":8,"beat":0,"step":0,"verb":"count","case":"counter","start":125,"end":430,"effects":["pulse@start"],"sounds":[["chip","start",null]]}
+{"seat":"you","view":9,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":10,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":11,"beat":0,"step":0,"verb":"appear","case":"token","start":140,"end":173,"effects":["glow@start"],"sounds":[["place","start",null]]}
+{"seat":"you","view":12,"beat":0,"step":0,"verb":"flip","case":null,"start":0,"end":1130,"effects":["cover@start"],"sounds":[]}
+{"seat":"you","view":13,"beat":0,"step":0,"verb":"count","case":"counter","start":125,"end":430,"effects":["pulse@start"],"sounds":[["chip","start",null]]}
+{"seat":"you","view":14,"beat":0,"step":0,"verb":"count","case":null,"start":125,"end":525,"effects":["pulse@start"],"sounds":[]}
+{"seat":"you","view":15,"beat":0,"step":0,"verb":"set","case":null,"start":0,"end":25,"effects":[],"sounds":[]}
+{"seat":"you","view":16,"beat":0,"step":0,"verb":"count","case":null,"start":125,"end":525,"effects":["pulse@start"],"sounds":[["mana","start",null]]}
+{"seat":"you","view":17,"beat":0,"step":0,"verb":"count","case":null,"start":125,"end":525,"effects":["pulse@start"],"sounds":[]}
+{"seat":"you","view":18,"beat":0,"step":0,"verb":"emerge","case":"activated ability","start":130,"end":430,"effects":[],"sounds":[["ability","start",null]]}
+{"seat":"you","view":19,"beat":0,"step":0,"verb":"fly","case":null,"start":0,"end":475,"effects":["settle@end"],"sounds":[["place","end",null]]}
+{"seat":"you","view":20,"beat":0,"step":0,"verb":"fly","case":"land played","start":0,"end":315,"effects":[],"sounds":[["place","end",null]]}
+{"seat":"you","view":21,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":22,"beat":0,"step":0,"verb":"flip","case":null,"start":0,"end":0,"effects":["cover@start"],"sounds":[]}
+{"seat":"you","view":23,"beat":0,"step":0,"verb":"fly","case":"discard","start":0,"end":165,"effects":[],"sounds":[["shove","start",null]]}

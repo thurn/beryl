@@ -231,7 +231,8 @@ the client they describe, and later sections refer to them by number.
   client that is not yet the app. The cost is that a change to the session can
   break Beryl 3D without its author being told. The exploration families of
   Ignite find that afterwards, which for a change to the web interface's look is
-  `b3d-web-drift`, and Beryl 3D's own work fixes it (see
+  `b3d-web-drift` and for a change to its timeline `b3d-timeline-drift`, and
+  Beryl 3D's own work fixes it (see
   [Checks and isolation](#checks-and-isolation) and
   [Matching the web interface's look](#matching-the-web-interfaces-look)).
 
@@ -4116,8 +4117,11 @@ What isolation costs, and who pays:
   first, and a session whose own check fails on such a break fixes the break in
   its own change.
 - **The two timelines can drift.** A change to how the web interface lays a beat
-  out in time is not held to Beryl 3D's. The `b3d-timeline` family lists the
-  recordings that now differ, and Beryl 3D follows.
+  out in time is not held to Beryl 3D's, and never runs Beryl 3D's checks:
+  `b3d-timeline` compares Beryl 3D's timeline with a committed copy of the web
+  interface's. The `b3d-timeline-drift` exploration family plays the live web
+  timeline and files a ticket when it no longer matches that copy, and Beryl 3D
+  follows (see [Timeline parity](#timeline-parity)).
 - **The two looks can drift.** A change to the web interface's CSS or layout
   never runs Beryl 3D's checks. The `b3d-web-drift` exploration family shoots
   the live web interface and files a ticket when it no longer matches the
@@ -4471,10 +4475,19 @@ on Beryl 3D's from `sound::cues`.
 - **Recordings that do not agree yet are listed** in
   `data/beryl3d/timeline-parity.json`, each with the number of its steps that
   differ. Like every allowlist under `data/`, its counts may only go down.
-- **It runs in the `beryl3d-timeline` lane** when a Beryl 3D path changes, and
-  in the sweep. It never runs for a change to the web interface (decision C17).
-  When the web interface's timeline moves, the sweep lists the recordings that
-  now differ, and Beryl 3D follows.
+- **The `b3d-timeline` family** runs the check on every recorded fixture against
+  a committed copy of the web interface's timeline,
+  `data/beryl3d/timeline/web/<fixture>.jsonl`, rather than the live one. It
+  declares no file under `ui/` but the fixtures' definitions and the generated
+  protocol types, so a change to the web interface never runs it (decision C17).
+  `just b3d timeline-parity` by hand still plays the live web interface.
+- **The `b3d-timeline-drift` exploration family** plays each fixture through the
+  live web interface and files a ticket when its timeline no longer matches the
+  committed copy. If the web change was meant,
+  `just b3d timeline-parity --fixtures --refresh-web` rewrites the copies, and
+  `b3d-timeline` then says whether Beryl 3D still agrees. A change to the
+  session that changes a fixture's recording changes both clients' timelines, so
+  it needs the copies rewritten too when the recording's timing moved.
 
 Some beat ends depend on where a client lays cards out, which the two clients do
 differently on purpose: a beat lasts until the cards that close up after a card

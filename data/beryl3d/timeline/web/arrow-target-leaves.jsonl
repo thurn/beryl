@@ -1,0 +1,50 @@
+{"seat":"opponent","view":2,"beat":0,"step":0,"verb":"fly","case":"opponent spell cast","start":0,"end":400,"effects":[],"sounds":[["cast","start",null]]}
+{"seat":"opponent","view":3,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"opponent","view":3,"beat":0,"step":1,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"opponent","view":3,"beat":0,"step":2,"verb":"streak","case":"mana","start":0,"end":275,"effects":["glow@start","flash@end"],"sounds":[["mana","start",null]]}
+{"seat":"opponent","view":3,"beat":0,"step":3,"verb":"streak","case":"mana","start":0,"end":275,"effects":["glow@start","flash@end"],"sounds":[["mana","start",null]]}
+{"seat":"opponent","view":3,"beat":1,"step":0,"verb":"set","case":null,"start":370,"end":395,"effects":[],"sounds":[]}
+{"seat":"opponent","view":3,"beat":1,"step":1,"verb":"point","case":"target arrow","start":370,"end":403,"effects":[],"sounds":[]}
+{"seat":"opponent","view":4,"beat":0,"step":0,"verb":"emerge","case":"activated ability","start":130,"end":430,"effects":[],"sounds":[["ability","start",null]]}
+{"seat":"opponent","view":4,"beat":0,"step":1,"verb":"point","case":"source line","start":580,"end":613,"effects":[],"sounds":[]}
+{"seat":"opponent","view":5,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"opponent","view":5,"beat":1,"step":0,"verb":"point","case":"source line end","start":540,"end":573,"effects":[],"sounds":[]}
+{"seat":"opponent","view":5,"beat":2,"step":0,"verb":"vanish","case":"sacrificed","start":833,"end":1203,"effects":["dissolve@start"],"sounds":[["shove","start",null]]}
+{"seat":"opponent","view":5,"beat":3,"step":0,"verb":"set","case":null,"start":1203,"end":1228,"effects":[],"sounds":[]}
+{"seat":"opponent","view":5,"beat":3,"step":1,"verb":"point","case":"target arrow","start":1203,"end":1236,"effects":[],"sounds":[]}
+{"seat":"opponent","view":5,"beat":4,"step":0,"verb":"point","case":"end","start":1236,"end":1269,"effects":[],"sounds":[]}
+{"seat":"opponent","view":5,"beat":5,"step":0,"verb":"fly","case":null,"start":1269,"end":1744,"effects":[],"sounds":[["exile","start",null]]}
+{"seat":"opponent","view":5,"beat":5,"step":1,"verb":"fly","case":null,"start":1595,"end":2070,"effects":[],"sounds":[["exile","start",null]]}
+{"seat":"opponent","view":5,"beat":6,"step":0,"verb":"point","case":"end","start":2070,"end":2103,"effects":[],"sounds":[]}
+{"seat":"opponent","view":5,"beat":7,"step":0,"verb":"vanish","case":"ability finished","start":2103,"end":2103,"effects":["dissolve@start"],"sounds":[]}
+{"seat":"opponent","view":5,"beat":8,"step":0,"verb":"vanish","case":"resolved instant or sorcery","start":2588,"end":2938,"effects":["dim@start"],"sounds":[["resolve","start",null]]}
+{"seat":"you","view":1,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":1,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":2,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":2,"beat":0,"step":1,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":2,"beat":0,"step":0,"verb":"fly","case":"own spell cast","start":0,"end":370,"effects":[],"sounds":[["cast","start",null]]}
+{"seat":"you","view":2,"beat":0,"step":0,"verb":"lift","case":"tray","start":0,"end":300,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":2,"beat":0,"step":1,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":3,"beat":0,"step":0,"verb":"mark","case":"end","start":0,"end":0,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":3,"beat":0,"step":0,"verb":"lift","case":"tray","start":0,"end":300,"effects":[],"sounds":[],"own":true}
+{"seat":"you","view":3,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":1,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":2,"verb":"streak","case":"mana","start":0,"end":275,"effects":["glow@start","flash@end"],"sounds":[["mana","start",null]]}
+{"seat":"you","view":3,"beat":0,"step":3,"verb":"streak","case":"mana","start":0,"end":275,"effects":["glow@start","flash@end"],"sounds":[["mana","start",null]]}
+{"seat":"you","view":3,"beat":1,"step":0,"verb":"set","case":null,"start":370,"end":395,"effects":[],"sounds":[]}
+{"seat":"you","view":3,"beat":1,"step":1,"verb":"point","case":"target arrow","start":370,"end":403,"effects":[],"sounds":[]}
+{"seat":"you","view":4,"beat":0,"step":0,"verb":"emerge","case":"activated ability","start":130,"end":430,"effects":[],"sounds":[["ability","start",null]]}
+{"seat":"you","view":4,"beat":0,"step":1,"verb":"point","case":"source line","start":580,"end":613,"effects":[],"sounds":[]}
+{"seat":"you","view":5,"beat":0,"step":0,"verb":"tap","case":"tap","start":0,"end":370,"effects":[],"sounds":[["tap","start",null]]}
+{"seat":"you","view":5,"beat":1,"step":0,"verb":"point","case":"source line end","start":540,"end":573,"effects":[],"sounds":[]}
+{"seat":"you","view":5,"beat":2,"step":0,"verb":"vanish","case":"sacrificed","start":833,"end":1203,"effects":["dissolve@start"],"sounds":[["shove","start",null]]}
+{"seat":"you","view":5,"beat":3,"step":0,"verb":"set","case":null,"start":1203,"end":1228,"effects":[],"sounds":[]}
+{"seat":"you","view":5,"beat":3,"step":1,"verb":"point","case":"target arrow","start":1203,"end":1236,"effects":[],"sounds":[]}
+{"seat":"you","view":5,"beat":4,"step":0,"verb":"dwell","case":null,"start":1236,"end":2036,"effects":[],"sounds":[]}
+{"seat":"you","view":5,"beat":5,"step":0,"verb":"point","case":"end","start":2036,"end":2069,"effects":[],"sounds":[]}
+{"seat":"you","view":5,"beat":6,"step":0,"verb":"fly","case":null,"start":2069,"end":2544,"effects":[],"sounds":[["exile","start",null]]}
+{"seat":"you","view":5,"beat":6,"step":1,"verb":"fly","case":null,"start":2395,"end":2870,"effects":[],"sounds":[["exile","start",null]]}
+{"seat":"you","view":5,"beat":7,"step":0,"verb":"point","case":"end","start":2870,"end":2903,"effects":[],"sounds":[]}
+{"seat":"you","view":5,"beat":8,"step":0,"verb":"vanish","case":"ability finished","start":2903,"end":2903,"effects":["dissolve@start"],"sounds":[]}
+{"seat":"you","view":5,"beat":9,"step":0,"verb":"vanish","case":"resolved instant or sorcery","start":3388,"end":3738,"effects":["dim@start"],"sounds":[["resolve","start",null]]}
+{"seat":"you","view":5,"beat":0,"step":0,"verb":"mark","case":"eligible","start":125,"end":250,"effects":[],"sounds":[],"own":true}

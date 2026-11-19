@@ -23,6 +23,15 @@ A run leaves nothing else behind: it deletes the exported recordings and Beryl 3
 when it is done. Both used to stay, about 400 MB a run in the temporary folder and 12 MB in
 `$BERYL_CACHE/b3d/out`, and after some 700 runs the disk was full.
 
+This command plays the live web interface. The `b3d-timeline` check does not: it compares
+Beryl 3D's timeline of each recorded fixture with the committed copy of the web interface's in
+`data/beryl3d/timeline/web/<fixture>.jsonl` ([`load_copy`]), so that a change to the web
+interface runs none of Beryl 3D's checks (docs/beryl-3d.md, decision C17). `--refresh-web`
+rewrites the copies of the fixtures it compares from the live web interface, and without a
+prefix deletes those of fixtures that no longer exist. The `b3d-timeline-drift` exploration
+family files a ticket when the live web interface's timeline no longer matches a copy
+([`drifted`]).
+
 `--fixtures` compares only the recorded fixtures, which takes about 25 to 60 s depending on
 machine load; without it the command compares every recording, since Beryl 3D's own
 `timeline --all` is most of the time.
@@ -50,6 +59,14 @@ from .. import paths as repo_paths
 from . import paths
 
 ALLOWLIST: Path = paths.DATA / "timeline-parity.json"
+# The committed copy of the web interface's timeline of each recorded fixture, one JSONL file a
+# fixture, which the `b3d-timeline` check compares Beryl 3D's with ([`load_copy`]).
+WEB_COPIES: Path = paths.DATA / "timeline" / "web"
+# What to do when a fixture's committed web timeline is missing or the web changed on purpose.
+REFRESH_WEB = (
+    "`just b3d timeline-parity --fixtures --refresh-web` rewrites it from the live web "
+    "interface"
+)
 # How long a cached web timeline is kept after it was written. Worktrees on different commits
 # share the cache, so a file another worktree still uses is kept for a while.
 WEB_CACHE_DAYS = 2
@@ -484,6 +501,73 @@ def fixture(name: str) -> bool:
     return "/" not in name
 
 
+def copy_path(name: str) -> Path:
+    """The committed copy of the web interface's timeline of the fixture `name`."""
+    return WEB_COPIES / f"{name}.jsonl"
+
+
+def copy_shown(name: str) -> str:
+    """[`copy_path`] as a message names it: from the checkout's root."""
+    path = copy_path(name)
+    root = repo_paths.REPO
+    return path.relative_to(root).as_posix() if path.is_relative_to(root) else str(path)
+
+
+def load_copy(name: str) -> Timelines | None:
+    """The committed web timeline of the fixture `name`, by recording and seat, or None when
+    it has no copy. A copy's lines leave out `recording`, which is the file's name."""
+    path = copy_path(name)
+    if not path.is_file():
+        return None
+    found: Timelines = {}
+    for line in path.read_text().splitlines():
+        step = {"recording": name, **json.loads(line)}
+        found.setdefault(key_of(name, step["seat"]), []).append(step)
+    return found
+
+
+def write_copies(web: Timelines, names: set[str], prune: bool) -> int:
+    """Writes the committed web timeline of each fixture in `names` from `web`, the live web
+    interface's, seat by seat in name order and each seat's steps in the order printed. With
+    `prune`, deletes the copies of fixtures not in `names`. Returns how many it wrote.
+    """
+    WEB_COPIES.mkdir(parents=True, exist_ok=True)
+    for name in sorted(names):
+        lines = [
+            json.dumps(
+                {k: v for k, v in step.items() if k != "recording"},
+                separators=(",", ":"),
+            )
+            for key in sorted(k for k in web if k.rsplit("/", 1)[0] == name)
+            for step in web[key]
+        ]
+        copy_path(name).write_text("".join(f"{line}\n" for line in lines))
+    if prune:
+        for path in WEB_COPIES.glob("*.jsonl"):
+            if path.name.removesuffix(".jsonl") not in names:
+                path.unlink()
+    return len(names)
+
+
+def drifted(live: list[Step], committed: list[Step]) -> Difference | None:
+    """How the live web timeline of one recording and seat differs from its committed copy,
+    or None when they are equal. Unlike [`compare`], nothing is tolerated: both are the web
+    interface's."""
+    by_live = {place(s): s for s in live}
+    by_committed = {place(s): s for s in committed}
+    count = 0
+    first: tuple[Step | None, Step | None] | None = None
+    for at in [*by_live, *(p for p in by_committed if p not in by_live)]:
+        a, b = by_live.get(at), by_committed.get(at)
+        if a == b:
+            continue
+        count += 1
+        first = first or (a, b)
+    if first is None:
+        return None
+    return Difference("", count, first[0], first[1])
+
+
 def report(found: list[Difference], web_command: str) -> str:
     lines: list[str] = []
     for d in found[:MOST_PRINTED]:
@@ -519,6 +603,15 @@ def parity(args: argparse.Namespace, pack: str, directory: Path) -> int:
     ]
     scope = {key_of(n, s) for n, s in selected}
     web = parse(web_all)
+    if args.refresh_web:
+        # Only the fixtures of ui/fixtures.json have a `b3d-timeline` check; the stress boards
+        # are recordings with no `/` too.
+        defined = json.loads((repo_paths.REPO / "ui" / "fixtures.json").read_text())
+        names_written = {n for n, _ in selected} & {
+            str(f["name"]) for f in defined["fixtures"]
+        }
+        count = write_copies(web, names_written, prune=not args.prefix)
+        print(f"wrote the committed web timelines of {count} fixtures to {WEB_COPIES}")
     native = parse(native_lines())
     found = differences(web, native, scope)
     allowed = load_allowlist()
@@ -560,6 +653,11 @@ def parity_arguments(parser: argparse.ArgumentParser) -> None:
         help="only recorded fixtures, not spec moments",
     )
     parser.add_argument("--update", action="store_true", help="lower the allowlist")
+    parser.add_argument(
+        "--refresh-web",
+        action="store_true",
+        help="rewrite the committed web timelines of the fixtures compared",
+    )
     parser.add_argument(
         "--raise",
         dest="raise_",

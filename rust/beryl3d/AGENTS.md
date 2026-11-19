@@ -47,19 +47,22 @@ Beryl 3D's checks are the `b3d-*` families in `ignite/checks/beryl3d.toml`;
 `just b3d timeline-parity [--fixtures] [prefix]` compares the web interface's
 and Beryl 3D's timelines of the recordings (see
 `data/beryl3d/timeline-parity.json`, below). The `b3d-timeline` family runs it
-per fixture. `just b3d parity` prints the parity list (docs/beryl-3d.md, "The
-parity list"): for each kind of item the web interface shows (fixtures, card
-specs, timelines, verbs, effects, marks, prompt shapes, screens, UI Conventions
-entries, tools and launch tests), how many Beryl 3D has and the first few it
-lacks; `--full` names all of them and `--json` prints the whole report. It runs
-`just b3d test` on the desktop and phone windows, or reads their `--json`
-outputs from `--results <dir>` (`desktop.json`, `phone.json`).
-`just b3d parity --check` fails when `data/beryl3d/parity.json` misses a skill
-directory or a web screen file or names something gone; it runs as a repository
-check on every change. `just b3d bug <report>` prints a Beryl 3D bug report and
-the commands that bring the app back to its state;
-`just b3d app --replay <replay.json>` resumes the game of a replay file, such as
-a report's, at its latest decision and saves nothing.
+per fixture against the committed web timelines in `data/beryl3d/timeline/web/`,
+which `--refresh-web` rewrites from the live web interface, and
+`b3d-timeline-drift` finds when they are out of date. `just b3d parity` prints
+the parity list (docs/beryl-3d.md, "The parity list"): for each kind of item the
+web interface shows (fixtures, card specs, timelines, verbs, effects, marks,
+prompt shapes, screens, UI Conventions entries, tools and launch tests), how
+many Beryl 3D has and the first few it lacks; `--full` names all of them and
+`--json` prints the whole report. It runs `just b3d test` on the desktop and
+phone windows, or reads their `--json` outputs from `--results <dir>`
+(`desktop.json`, `phone.json`). `just b3d parity --check` fails when
+`data/beryl3d/parity.json` misses a skill directory or a web screen file or
+names something gone; it runs as a repository check on every change.
+`just b3d bug <report>` prints a Beryl 3D bug report and the commands that bring
+the app back to its state; `just b3d app --replay <replay.json>` resumes the
+game of a replay file, such as a report's, at its latest decision and saves
+nothing.
 
 Each crate's integration tests are one binary, `tests/all/main.rs` with one
 module per file, because every test binary links the crate and its dependencies
