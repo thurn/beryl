@@ -42,20 +42,153 @@ fn a_source_error_is_not_damage_and_an_output_without_crates_is_no_compile_failu
 }
 
 #[test]
-fn outputs_of_a_crate_are_its_hashed_files_and_unit_objects() {
-    assert!(is_output_of("session-1d2e56b5d8df6699", "session"));
-    assert!(is_output_of("session-1d2e56b5d8df6699.d", "session"));
-    assert!(is_output_of("libsession-1d2e56b5d8df6699.rlib", "session"));
-    assert!(is_output_of(
+fn the_units_of_a_crate_are_its_hashed_deps_files() {
+    let dir = scratch("units");
+    let profile = dir.join("debug");
+    for name in [
+        "session-1d2e56b5d8df6699",
+        "session-1d2e56b5d8df6699.d",
+        "libsession-2d2e56b5d8df6699.rlib",
+        "session-3d2e56b5d8df6699.0syg23f.06txj64.rcgu.o",
+        "session.02hjnukd9tark93exg4ca0ha2.0syg23f.rcgu.o",
+        "session_types-4d2e56b5d8df6699",
+        "session-notahash",
+        "libgame_session-5d2e56b5d8df6699.rlib",
+    ] {
+        touch(&profile.join("deps").join(name));
+    }
+    assert_eq!(
+        units_of(&profile, "session"),
+        [
+            "session-1d2e56b5d8df6699",
+            "session-2d2e56b5d8df6699",
+            "session-3d2e56b5d8df6699"
+        ]
+    );
+    assert!(is_loose_object(
         "session.02hjnukd9tark93exg4ca0ha2.0syg23f.rcgu.o",
         "session"
     ));
-    assert!(!is_output_of("session_types-1d2e56b5d8df6699", "session"));
-    assert!(!is_output_of("session-notahash", "session"));
-    assert!(!is_output_of(
-        "libgame_session-1d2e56b5d8df6699.rlib",
+    assert!(!is_loose_object(
+        "session-3d2e56b5d8df6699.0syg23f.06txj64.rcgu.o",
         "session"
     ));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+/// A fresh scratch directory for one test.
+fn scratch(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("ignite-repair-{}-{name}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    dir
+}
+
+/// Writes an empty file, creating its folders.
+fn touch(path: &Path) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, "").unwrap();
+}
+
+/// A profile directory with two units of crate `proto`: the library `proto-aaaaaaaaaaaaaaaa`,
+/// whose last compile was ended partway, and the test build `proto-bbbbbbbbbbbbbbbb`, which
+/// finished. Each has a fingerprint folder, `deps` files, codegen unit objects and an
+/// incremental folder holding the same codegen units.
+fn two_units(dir: &Path) -> PathBuf {
+    let profile = dir.join("debug");
+    for (unit, cgu, incremental, session) in [
+        (
+            "proto-aaaaaaaaaaaaaaaa",
+            "0libcgu",
+            "proto-0lib",
+            "s-hoam-1-working",
+        ),
+        (
+            "proto-bbbbbbbbbbbbbbbb",
+            "0testcgu",
+            "proto-1test",
+            "s-hoam-2-abcdef",
+        ),
+    ] {
+        touch(&profile.join(".fingerprint").join(unit).join("lib-proto"));
+        touch(&profile.join("deps").join(format!("{unit}.d")));
+        touch(&profile.join("deps").join(format!("lib{unit}.rlib")));
+        touch(
+            &profile
+                .join("deps")
+                .join(format!("{unit}.{cgu}.06txj64.rcgu.o")),
+        );
+        touch(
+            &profile
+                .join("incremental")
+                .join(incremental)
+                .join(session)
+                .join(format!("{cgu}.o")),
+        );
+    }
+    touch(&dir.join(SUSPECT_FILE));
+    profile
+}
+
+#[test]
+fn a_build_ended_partway_clears_only_the_unit_it_left_unfinished() {
+    let dir = scratch("one-unit");
+    let profile = two_units(&dir);
+    assert_eq!(clear_if_suspect(&dir), ["proto-aaaaaaaaaaaaaaaa"]);
+    let deps = names(&profile.join("deps"));
+    assert!(deps.iter().all(|n| !n.contains("aaaa")), "{deps:?}");
+    assert_eq!(deps.len(), 3, "the test build keeps its files: {deps:?}");
+    assert_eq!(
+        names(&profile.join(".fingerprint")),
+        ["proto-bbbbbbbbbbbbbbbb"]
+    );
+    assert_eq!(names(&profile.join("incremental")), ["proto-1test"]);
+    assert!(!dir.join(SUSPECT_FILE).exists());
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_unfinished_first_compile_loses_only_its_incremental_folder() {
+    let dir = scratch("first");
+    let profile = two_units(&dir);
+    touch(
+        &profile
+            .join("incremental")
+            .join("proto-2new")
+            .join("s-hoam-3-working")
+            .join("dep-graph.part.bin"),
+    );
+    fs::remove_dir_all(profile.join("incremental").join("proto-0lib")).unwrap();
+    assert_eq!(clear_if_suspect(&dir), ["proto-2new"]);
+    assert_eq!(names(&profile.join("deps")).len(), 6);
+    assert_eq!(names(&profile.join(".fingerprint")).len(), 2);
+    assert_eq!(names(&profile.join("incremental")), ["proto-1test"]);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn clearing_a_crate_deletes_its_fingerprints_with_its_files() {
+    let dir = scratch("crate");
+    let profile = two_units(&dir);
+    clear_crates(&dir, &["proto".to_owned()]);
+    for folder in [".fingerprint", "deps", "incremental"] {
+        assert!(names(&profile.join(folder)).is_empty(), "{folder}");
+    }
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_unit_whose_fingerprint_cannot_be_deleted_keeps_its_files() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("stuck");
+    let profile = two_units(&dir);
+    let fingerprints = profile.join(".fingerprint");
+    fs::set_permissions(&fingerprints, fs::Permissions::from_mode(0o555)).unwrap();
+    clear_crates(&dir, &["proto".to_owned()]);
+    fs::set_permissions(&fingerprints, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(names(&fingerprints).len(), 2);
+    assert_eq!(names(&profile.join("deps")).len(), 6);
+    let _ = fs::remove_dir_all(&dir);
 }
 
 #[test]

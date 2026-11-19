@@ -133,9 +133,9 @@ fn a_failure_of_inputs_another_tree_built_clears_the_crate() {
 }
 
 /// A build ended partway marks its target directory, and the next build first clears each
-/// crate whose compile it left unfinished.
+/// unit whose compile it left unfinished, and no other build of that crate.
 #[test]
-fn a_build_ended_partway_leaves_the_next_build_to_clear_its_unfinished_crates() {
+fn a_build_ended_partway_leaves_the_next_build_to_clear_its_unfinished_units() {
     let f = fixture("repair-ended", false);
     let debug = damaged_target(&f);
     f.launcher.with(|s| s.failing = Some((None, false)));
@@ -150,6 +150,20 @@ fn a_build_ended_partway_leaves_the_next_build_to_clear_its_unfinished_crates() 
         .join("session_types-3nuzzneutc6f3")
         .join("s-hoa6v2nlqi-0qrw2mj-working");
     fs::create_dir_all(&working).unwrap();
+    // The session's codegen unit is one of the unit `session_types-0123456789abcdef`, which has
+    // a fingerprint folder; another build of the crate has nothing unfinished.
+    fs::write(working.join("1cgu.o"), "x").unwrap();
+    let deps = debug.join("deps");
+    fs::write(
+        deps.join("session_types-0123456789abcdef.1cgu.0q9if7e.rcgu.o"),
+        "x",
+    )
+    .unwrap();
+    fs::write(deps.join("session_types-fedcba9876543210"), "x").unwrap();
+    let fingerprint = debug
+        .join(".fingerprint")
+        .join("session_types-0123456789abcdef");
+    fs::create_dir_all(&fingerprint).unwrap();
     f.launcher.with(|s| s.failing = None);
     let built = f.manager.ensure(&tree(), "tests", &names(&["b"]));
     assert!(matches!(built, BuildResult::Built { .. }), "{built:?}");
@@ -158,5 +172,11 @@ fn a_build_ended_partway_leaves_the_next_build_to_clear_its_unfinished_crates() 
         present(&debug.join("incremental")),
         ["session-1imqhd34qdwcf"]
     );
-    assert!(!present(&debug.join("deps")).contains(&"session_types-0123456789abcdef".to_owned()));
+    let deps = present(&deps);
+    assert!(
+        deps.iter().all(|name| !name.contains("0123456789abcdef")),
+        "{deps:?}"
+    );
+    assert!(deps.contains(&"session_types-fedcba9876543210".to_owned()));
+    assert!(!fingerprint.exists());
 }

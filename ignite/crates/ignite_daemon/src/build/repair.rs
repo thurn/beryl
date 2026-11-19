@@ -1,8 +1,7 @@
 //! Repairing a Cargo target directory whose incremental build of one crate is damaged.
 //!
-//! rustc keeps each crate's incremental work in `<profile>/incremental/<crate>-<hash>/`, and its
-//! codegen units there are hard links to the object files in `<profile>/deps` (a `deps` object
-//! of a workspace crate has a link count of 2 or more, all inside the same tree). When a compile
+//! rustc keeps each crate's incremental work in `<profile>/incremental/<crate>-<hash>/`, with a
+//! copy or hard link of each codegen unit's object file in `<profile>/deps`. When a compile
 //! is ended partway, for example by a daemon restart, or when objects from two compiles get
 //! mixed, the next compile can reuse a damaged unit: on 2026-11-18 the test target `session`
 //! failed to link in one landing tree with "Undefined symbols for architecture arm64" for its
@@ -16,8 +15,9 @@
 //!   error, a compiler crash, unreadable metadata). The caller clears those crates
 //!   ([`clear_crates`]) and builds once more before it reports the failure.
 //! - A build that was ended partway marks its target directory ([`mark_suspect`]). The next build
-//!   there first clears every crate that a compile left unfinished ([`clear_if_suspect`]): rustc
-//!   names a session folder `s-…-working` until the compile finishes.
+//!   there first clears each unit (one build of a crate, `<crate>-<hash>`) that a compile left
+//!   unfinished ([`clear_if_suspect`]): rustc names a session folder `s-…-working` until the
+//!   compile finishes.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -141,49 +141,140 @@ fn hashed(rest: &str) -> bool {
     rest.len() >= 16 && rest.as_bytes()[..16].iter().all(u8::is_ascii_hexdigit)
 }
 
-/// Whether `name`, in a `deps` folder, is an output of crate `krate`: `<crate>-<hash>…`,
-/// `lib<crate>-<hash>…`, or a codegen unit object `<crate>.<unit>….rcgu.o`.
-fn is_output_of(name: &str, krate: &str) -> bool {
-    let after = |prefix: &str| name.strip_prefix(prefix).and_then(|r| r.strip_prefix('-'));
-    after(krate).is_some_and(hashed)
-        || after(&format!("lib{krate}")).is_some_and(hashed)
-        || (name.strip_prefix(krate).is_some_and(|r| r.starts_with('.'))
-            && name.ends_with(".rcgu.o"))
+/// Whether `name`, in a `deps` folder, is a codegen unit object of crate `krate` named without
+/// a unit hash, `<crate>.<unit>….rcgu.o`, which belongs to no one unit.
+fn is_loose_object(name: &str, krate: &str) -> bool {
+    name.strip_prefix(krate).is_some_and(|r| r.starts_with('.')) && name.ends_with(".rcgu.o")
 }
 
-/// Deletes the incremental folders and `deps` files of each of `crates` in every profile of the
-/// target directory `target`, and returns what it deleted. Cargo then compiles each from scratch:
-/// a crate whose outputs are missing is out of date.
+/// The folder of per-unit fingerprints in a profile directory. Cargo names each unit's folder
+/// there `<crate>-<hash>`, as it names the unit's files in `deps`.
+const FINGERPRINTS: &str = ".fingerprint";
+
+/// Deletes `path`, a file or a folder, and adds it to `deleted` when it was there.
+fn remove(path: &Path, deleted: &mut Vec<PathBuf>) {
+    let removed = if fs::symlink_metadata(path).is_ok_and(|m| m.is_dir()) {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    };
+    if removed.is_ok() {
+        deleted.push(path.to_owned());
+    }
+}
+
+/// Deletes one unit, `<crate>-<hash>`, of a profile directory: its fingerprint folder first, and
+/// its `deps` files only once that is gone. Returns what it deleted.
+///
+/// The order is the one `sweep_superseded` in `trees/disk.rs` keeps. Stopped partway, or with a
+/// fingerprint folder that cannot be deleted, it leaves either the whole unit or files that no
+/// fingerprint names, which Cargo never reads. The other order could leave a fingerprint whose
+/// outputs are gone, which Cargo reports as `FailedToReadMetadata`.
+fn clear_unit(profile: &Path, unit: &str) -> Vec<PathBuf> {
+    let mut deleted = Vec::new();
+    let fingerprint = profile.join(FINGERPRINTS).join(unit);
+    remove(&fingerprint, &mut deleted);
+    if fs::symlink_metadata(&fingerprint).is_ok() {
+        return deleted;
+    }
+    let deps = profile.join("deps");
+    for name in names(&deps) {
+        let stem = name.split('.').next().unwrap_or(&name);
+        if stem == unit || stem.strip_prefix("lib") == Some(unit) {
+            remove(&deps.join(&name), &mut deleted);
+        }
+    }
+    deleted
+}
+
+/// The units of crate `krate` in a profile's `deps` folder, as `<crate>-<hash>`.
+fn units_of(profile: &Path, krate: &str) -> Vec<String> {
+    let mut units: Vec<String> = Vec::new();
+    for name in names(&profile.join("deps")) {
+        let stem = name.split('.').next().unwrap_or(&name);
+        let unit = stem
+            .strip_prefix("lib")
+            .filter(|s| s.starts_with(krate))
+            .unwrap_or(stem);
+        let is_unit = unit
+            .strip_prefix(krate)
+            .and_then(|r| r.strip_prefix('-'))
+            .is_some_and(|hash| hash.len() == 16 && hashed(hash));
+        if is_unit && !units.iter().any(|u| u == unit) {
+            units.push(unit.to_owned());
+        }
+    }
+    units.sort();
+    units
+}
+
+/// Deletes the units, incremental folders and other `deps` files of each of `crates` in every
+/// profile of the target directory `target`, and returns what it deleted. Cargo then compiles
+/// each from scratch: a unit without a fingerprint is out of date.
+///
+/// This clears every build of each crate, because a failed build's output names crates, not
+/// units ([`compile_failure`]).
 pub fn clear_crates(target: &Path, crates: &[String]) -> Vec<PathBuf> {
     let mut deleted = Vec::new();
     for profile in profile_dirs(target) {
-        let incremental = profile.join("incremental");
-        for name in names(&incremental) {
-            let Some((krate, _)) = name.rsplit_once('-') else {
-                continue;
-            };
-            let path = incremental.join(&name);
-            if crates.iter().any(|c| c == krate) && fs::remove_dir_all(&path).is_ok() {
-                deleted.push(path);
+        for krate in crates {
+            for unit in units_of(&profile, krate) {
+                deleted.extend(clear_unit(&profile, &unit));
             }
         }
+        // What is left is no unit's: codegen unit objects named without a hash, and the
+        // incremental folders, which rustc rebuilds from nothing when they are missing.
         let deps = profile.join("deps");
         for name in names(&deps) {
-            if !crates.iter().any(|c| is_output_of(&name, c)) {
-                continue;
+            if crates.iter().any(|c| is_loose_object(&name, c)) {
+                remove(&deps.join(&name), &mut deleted);
             }
-            let path = deps.join(&name);
-            let removed = if path.is_dir() {
-                fs::remove_dir_all(&path)
-            } else {
-                fs::remove_file(&path)
-            };
-            if removed.is_ok() {
-                deleted.push(path);
+        }
+        let incremental = profile.join("incremental");
+        for name in names(&incremental) {
+            if let Some((krate, _)) = name.rsplit_once('-')
+                && crates.iter().any(|c| c == krate)
+            {
+                remove(&incremental.join(&name), &mut deleted);
             }
         }
     }
     deleted
+}
+
+/// Whether an incremental folder holds a session that a compile left unfinished: rustc names a
+/// session folder `s-…-working` until the compile finishes.
+fn unfinished(folder: &Path) -> bool {
+    names(folder)
+        .iter()
+        .any(|session| session.starts_with("s-") && session.ends_with("-working"))
+}
+
+/// The unit, `<crate>-<hash>`, whose incremental work is in `folder`, an incremental folder of
+/// `profile`, or `None` when no `deps` object shares a codegen unit with it.
+///
+/// The incremental folder's hash is not the unit's: rustc derives it from the crate's stable ID.
+/// But each session keeps its codegen units as `<cgu>.o`, and the unit's objects in `deps` are
+/// `<crate>-<hash>.<cgu>.<suffix>.rcgu.o`, and the codegen unit names of different units of one
+/// crate differ. rustc starts a session by linking in the files of the one before, so a session
+/// left unfinished still holds the units of the last compile that finished.
+fn unit_of_incremental(profile: &Path, folder: &Path) -> Option<String> {
+    let crate_name = folder.file_name()?.to_str()?.rsplit_once('-')?.0.to_owned();
+    let mut codegen_units: Vec<String> = Vec::new();
+    for session in subdirectories(folder) {
+        for name in names(&session) {
+            if let Some(cgu) = name.strip_suffix(".o") {
+                codegen_units.push(cgu.to_owned());
+            }
+        }
+    }
+    names(&profile.join("deps")).into_iter().find_map(|name| {
+        let object = name.strip_suffix(".rcgu.o")?;
+        let (unit, rest) = object.split_once('.')?;
+        let cgu = rest.split('.').next()?;
+        let hash = unit.strip_prefix(&crate_name)?.strip_prefix('-')?;
+        (hashed(hash) && codegen_units.iter().any(|c| c == cgu)).then(|| unit.to_owned())
+    })
 }
 
 /// Marks `target` as holding a build that was ended partway, when it is a directory.
@@ -196,38 +287,49 @@ pub fn mark_suspect(target: &Path) {
     }
 }
 
-/// If `target` is marked as holding a build that was ended partway, clears each crate whose
-/// incremental session a compile left unfinished (`s-…-working`) and removes the mark. Returns
-/// the crates cleared.
+/// If `target` is marked as holding a build that was ended partway, clears each unit whose
+/// incremental session a compile left unfinished ([`unfinished`]) and removes the mark. Returns
+/// the units cleared, as `<crate>-<hash>`, or the incremental folder's name for one whose unit
+/// is not known.
+///
+/// Only the unit whose compile was cut off can be damaged; the other builds of its crate, such
+/// as its test build or a build with other features, are left alone. A unit is cleared
+/// fingerprint first ([`clear_unit`]), and its incremental folder last. When no `deps` object
+/// names the unit, its compile was the first and wrote no codegen unit, so only the incremental
+/// folder goes. Should anything damaged survive this, the build fails with a link error and
+/// [`BuildManager::run`] clears that crate whole and builds once more.
 pub fn clear_if_suspect(target: &Path) -> Vec<String> {
     let mark = target.join(SUSPECT_FILE);
     if !mark.is_file() {
         return Vec::new();
     }
-    let mut unfinished: Vec<String> = Vec::new();
+    let mut cleared: Vec<String> = Vec::new();
     for profile in profile_dirs(target) {
         let incremental = profile.join("incremental");
         for name in names(&incremental) {
-            let working = names(&incremental.join(&name))
-                .iter()
-                .any(|session| session.starts_with("s-") && session.ends_with("-working"));
-            if let (true, Some((krate, _))) = (working, name.rsplit_once('-'))
-                && !unfinished.iter().any(|c| c == krate)
-            {
-                unfinished.push(krate.to_owned());
+            let folder = incremental.join(&name);
+            if !unfinished(&folder) {
+                continue;
             }
+            match unit_of_incremental(&profile, &folder) {
+                Some(unit) => {
+                    clear_unit(&profile, &unit);
+                    cleared.push(unit);
+                }
+                None => cleared.push(name),
+            }
+            let _ = fs::remove_dir_all(&folder);
         }
     }
-    if !unfinished.is_empty() {
-        clear_crates(target, &unfinished);
+    if !cleared.is_empty() {
         eprintln!(
             "ignite: cleared {} in {}: a build there was ended partway",
-            unfinished.join(", "),
+            cleared.join(", "),
             target.display()
         );
     }
     let _ = fs::remove_file(mark);
-    unfinished
+    cleared
 }
 
 /// Marks the target directories of a command that was ended partway, when it may have been
