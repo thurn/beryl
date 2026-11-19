@@ -23,7 +23,7 @@ checks = "ignite/checks"
 # Express landings (docs/ignite.md, "Express landings"). On 2026-11-18 every fix to Ignite's own
 # scheduling waited 10 to 30 minutes for `ignite land` in the queue it was fixing, and three were
 # pushed to `ignite-release` by hand instead. A landing whose every changed file matches `paths`
-# runs these commands in one fixed tree, on each machine's `express_cores`, which the scheduler
+# runs these commands in its own ticket tree, side by side with others, on each machine's `express_cores`, which the scheduler
 # never hands out, instead of the gate; it then pushes and moves `ignite-release` on their pass.
 # The commands are those of the `ignite` and `ignite-lint` families (ignite/checks/rest.toml):
 # the whole workspace's tests, because `cargo test -p ignite_daemon` alone once missed a failing
@@ -34,12 +34,12 @@ checks = "ignite/checks"
 #
 # `families` are the check families the commands stand in for. `ignite test` of names only in
 # them (`ignite test ignite: ignite-lint:`), and `ignite check`, run the commands in the agent's
-# own tree on the same cores and under the same lock when the tree changes only `paths`. On
+# own tree on the same cores when the tree changes only `paths`. On
 # 2026-11-18 `ignite test` of these checks took 5 to 8.5 minutes through the scheduler while Beryl
 # builds held its cores, against about a minute when it got them.
 [express]
 paths = ["ignite/**", "ignite.toml", "docs/ignite.md", "data/efficiency-changes.json"]
-tree = ".worktrees/express"
+tree = ".worktrees/express" # unused since express landings run in their own trees; kept for older daemons
 dir = "ignite"
 commands = [
   "cargo fmt --check",

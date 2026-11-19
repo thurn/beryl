@@ -1656,10 +1656,11 @@ families = ["ignite", "ignite-lint"]
 express_cores = 3
 ```
 
-- A landing whose every changed file matches `paths` checks the rebased commit
-  out in one fixed worktree, `tree`, and runs `commands` there in order, in
-  `dir`. It lands when every command exits 0, and moves the release branch at
-  once. A failure exits with code 2 and shows the end of the command's output.
+- A landing whose every changed file matches `paths` runs `commands` in order,
+  in `dir`, in its own ticket tree, which the rebase has already put at the
+  rebased commit, and pushes from there. It lands when every command exits 0,
+  and moves the release branch at once. A failure exits with code 2 and shows
+  the end of the command's output.
 - The commands run as the daemon's own processes, never through a supervisor or
   the scheduler, with `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS`,
   `NEXTEST_TEST_THREADS` and `IGNITE_CORES` set to the machine's
@@ -1667,9 +1668,12 @@ express_cores = 3
   a saturated or broken scheduler cannot hold them. While an express run goes,
   the scheduler also sees its CPU as load outside Ignite and hands out that much
   less.
-- One express run goes at a time on a machine, under a lock on a file beside the
-  tree. The tree keeps its ignored files between landings, so Ignite's target
-  directory stays warm: the test build takes about 56 CPU-seconds then.
+- Express runs take no lock and run side by side, each in its own tree with its
+  own warm target directory. Until 2026-11-18 they all ran in one shared tree,
+  `.worktrees/express`, under one file lock; that evening eight landings queued
+  behind it for up to 32 minutes, because each one that waited while others
+  pushed found its commit stale and ran its commands again, so a queue of N cost
+  about N² runs.
 - The last command checks that `docs/ignite.md` is formatted as `just fmt`
   formats Markdown (80 columns). It is there because `docs/ignite.md` is an
   express path and no other command reads Markdown, so a misformatted copy would
@@ -1684,14 +1688,12 @@ express_cores = 3
   is given is in one of `families` (`ignite test ignite: ignite-lint:`), and
   `ignite check` does so for any such tree, because its landing would take the
   express lane. They run `commands` in the agent's own tree as it is, with no
-  checkout, on the same cores and under the same lock, and reply with the
-  `express` line or with the failed command and the end of its output. The whole
-  command list runs whatever names were given, and no result goes into the check
-  cache. While an express landing holds the lock the verb waits for it rather
-  than asking the scheduler. On 2026-11-18 `ignite test` of these checks took 5
-  to 8.5 minutes through the scheduler while Beryl builds held its cores: one
-  test build got 4 cores for 319 s and its run 1 core for 180 s, against 65 s in
-  all when it got 12 cores.
+  checkout, on the same cores, and reply with the `express` line or with the
+  failed command and the end of its output. The whole command list runs whatever
+  names were given, and no result goes into the check cache. On 2026-11-18
+  `ignite test` of these checks took 5 to 8.5 minutes through the scheduler
+  while Beryl builds held its cores: one test build got 4 cores for 319 s and
+  its run 1 core for 180 s, against 65 s in all when it got 12 cores.
 - `ignite run` of a command in the commands' directory of a build tree still
   asks the scheduler, and its reply ends with a hint naming
   `ignite test ignite: ignite-lint:`.
