@@ -328,7 +328,23 @@ impl Claims {
         }
         .ok_or_else(|| Error::NotFound(format!("{session} holds no tree for {ticket}")))?;
         let note = |saved: &Saved| format!("{reason} Its work is saved as {}.", saved.branch);
-        self.give_back(ctx, &held, note, None, None).map(|_| ())
+        match self.give_back(ctx, &held, note, None, None) {
+            Ok(_) => Ok(()),
+            // A tree that a waiting `ignite start "<summary>"` was given keeps the ad hoc
+            // placeholder name until the session runs `start` again and claims it. When the
+            // daemon restarts in between, nothing claims it: the hub has never heard of the
+            // name and answers every release with "Unknown ticket", so the tree stayed leased
+            // and the dispatcher reminded the session every 15 minutes, for hours. There is
+            // nothing to release at the hub, and `give_back` saved the work before asking, so
+            // the tree is freed here.
+            Err(Error::NotFound(_)) if is_placeholder(ticket) => {
+                if let Some(error) = self.free(&held, None) {
+                    eprintln!("ignite: {} not reset: {error}", held.tree);
+                }
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
     }
 
     fn start(&self, ctx: &Context, req: &Request) -> Reply {
@@ -603,6 +619,18 @@ fn held_at<'a>(state: &'a State, cwd: &Path) -> Option<&'a Held> {
     state.held.values().find(|h| cwd.starts_with(&h.path))
 }
 
+/// The prefix of [`adhoc_branch_name`].
+const PLACEHOLDER_PREFIX: &str = "adhoc";
+
+/// Whether `ticket` is an ad hoc placeholder from [`adhoc_branch_name`], not a ticket the hub
+/// filed.
+fn is_placeholder(ticket: &TicketId) -> bool {
+    ticket
+        .as_str()
+        .strip_prefix(PLACEHOLDER_PREFIX)
+        .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// The branch name for an ad hoc ticket's tree before the hub has numbered the ticket.
 fn adhoc_branch_name(now: Timestamp) -> TicketId {
     let digits: String = now
@@ -610,7 +638,8 @@ fn adhoc_branch_name(now: Timestamp) -> TicketId {
         .chars()
         .filter(char::is_ascii_digit)
         .collect();
-    TicketId::new(format!("adhoc{digits}")).unwrap_or_else(|_| unreachable!("letters and digits"))
+    TicketId::new(format!("{PLACEHOLDER_PREFIX}{digits}"))
+        .unwrap_or_else(|_| unreachable!("letters and digits"))
 }
 
 /// `ignite start`: claims a ticket, leases a build tree at the tip and prints the ticket.

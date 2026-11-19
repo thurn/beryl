@@ -47,7 +47,8 @@ The instructions:
   another model; (3) send `prompt` to the session, word for word.
 - `message`: send `prompt` to the session, word for word.
 - `check`: look the session up and answer `running`, `idle` or `gone`, or
-  `unknown` when the lookup failed.
+  `unknown` when the lookup failed. An archived session is `gone`: it can take
+  no message.
 - `rotate`: your context has grown. Open a new chat in this folder whose prompt
   is `/ignite pool 0`, then stop.
 - `idle`: do nothing; go back to 1.
@@ -57,8 +58,9 @@ Rules:
 - When a call's result is uncertain (a timeout, an error after it was sent),
   report `failed` with what you saw. Never start, clear or prompt another
   session to make up for it.
-- A session is gone only when the app says it no longer exists. A failed lookup,
-  or a list that does not show it, proves nothing: answer `unknown`.
+- A session is gone only when the app says it no longer exists or is archived.
+  A failed lookup, or a list that does not show it, proves nothing: answer
+  `unknown`.
 - Notices from worker sessions get no reply but going on with the loop.
 
 ## In Codex

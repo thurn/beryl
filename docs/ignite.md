@@ -2431,11 +2431,12 @@ justiciar hand-off is always `high`.
    went elsewhere, claims nothing.
 
 The other instructions are `message`, which sends text to a live session,
-`check`, which asks whether a session is running, idle or gone, and `idle`,
-which means the wait ended with nothing to do. Every instruction ends with one
-line that restates the loop, so the dispatcher still knows its job after its
-context is compacted. Its title stays `🔮 dispatcher <machine>` while it waits,
-which is how a person sees that hand-offs are alive.
+`check`, which asks whether a session is running, idle or gone (an archived
+session counts as gone, since it can take no message), and `idle`, which means
+the wait ended with nothing to do. Every instruction ends with one line that
+restates the loop, so the dispatcher still knows its job after its context is
+compacted. Its title stays `🔮 dispatcher <machine>` while it waits, which is how
+a person sees that hand-offs are alive.
 
 ### What the daemon hands off, and when
 

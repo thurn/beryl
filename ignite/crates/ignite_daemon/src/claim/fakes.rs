@@ -222,6 +222,13 @@ impl TicketDesk for FakeDesk {
     }
 
     fn release(&self, release: &ReleaseRequest) -> Result<()> {
+        // The hub answers a release of a ticket it never filed with "Unknown ticket".
+        if !lock(&self.details).contains_key(&release.ticket) {
+            return Err(Error::NotFound(format!(
+                "{}: Unknown ticket",
+                release.ticket
+            )));
+        }
         self.refuse_closed(&release.ticket)?;
         lock(&self.holders).remove(&release.ticket);
         lock(&self.releases).push(release.clone());

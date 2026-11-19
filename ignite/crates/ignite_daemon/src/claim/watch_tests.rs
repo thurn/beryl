@@ -290,3 +290,60 @@ fn a_failed_save_keeps_the_ticket_held() {
     assert!(lock(&world.desk.releases).is_empty());
     assert!(world.claims.holder(TREE.as_ref()).is_some());
 }
+
+/// A tree leased under an ad hoc placeholder that no `start` claimed before the daemon
+/// restarted is unknown at the hub. The dispatcher's release used to fail on it forever.
+#[test]
+fn an_unclaimed_placeholder_tree_is_freed_by_the_dispatchers_release() {
+    let path = std::env::temp_dir().join(format!(
+        "ignite-claim-placeholder-{}.db",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    let placeholder = "adhoc20261119050041883";
+    tree_rows::upsert(
+        &ignite_store::local::open(&path).unwrap(),
+        &rows::Tree {
+            id: "tree-01".to_owned(),
+            path: TREE.to_owned(),
+            kind: "ticket".to_owned(),
+            ticket: Some(placeholder.to_owned()),
+            session: Some(WORKER.to_owned()),
+            branch: Some(placeholder.to_owned()),
+            built_commit: None,
+            leased_at: None,
+            last_used: None,
+            owner: None,
+            state: tree_rows::State::Leased.as_str().to_owned(),
+        },
+    )
+    .unwrap();
+    let world = restarted_at(&path, 0.0);
+    assert!(world.claims.holder(TREE.as_ref()).is_some());
+    world
+        .claims
+        .release_session(
+            &world.ctx,
+            &session(WORKER),
+            &id(placeholder),
+            "The session is gone.",
+        )
+        .unwrap();
+    assert!(world.claims.holder(TREE.as_ref()).is_none());
+    assert!(lock(&world.desk.releases).is_empty());
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn a_filed_ticket_the_hub_does_not_know_stays_held() {
+    let world = started();
+    lock(&world.desk.details).remove(&id("Tq.48"));
+    let released = world.claims.release_session(
+        &world.ctx,
+        &session(WORKER),
+        &id("Tq.48"),
+        "The session is gone.",
+    );
+    assert!(released.is_err());
+    assert!(world.claims.holder(TREE.as_ref()).is_some());
+}

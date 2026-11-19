@@ -400,7 +400,9 @@ fn a_write_between_reservation_and_claim_does_not_fail_the_holders_claim() {
     assert_eq!(status, 409);
     assert_eq!(
         reply["error"],
-        format!("{id} is reserved; claim it with its reservation's code")
+        format!(
+            "{id} is reserved for a worker the dispatcher is starting; nobody else can claim it, so take another ticket"
+        )
     );
     let (status, brief) = post(
         &mut conn,
