@@ -120,7 +120,7 @@ pub fn file(
         preconditions: Vec::new(),
         ops,
     };
-    let ticket = match batch::apply(conn, &request, author.actor, author.machine, now)? {
+    let ticket = match batch::apply_automatic(conn, &request, author.actor, author.machine, now)? {
         BatchOutcome::Applied(reply) => target.unwrap_or_else(|| reply.results[0].id.to_string()),
         BatchOutcome::Conflict(conflict) => {
             return Err(StoreError::Rejected(format!(

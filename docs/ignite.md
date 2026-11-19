@@ -2460,13 +2460,15 @@ digits, and one dotted number for each level below the root: `EQ44S` is an epic
 and `EQ44S.7.24` a ticket two levels under it. The letter is `E` for a root
 ticket created as an epic, `M` for a meta-ticket (`MAB12`, whose copies are
 numbered under it as `MAB12.3`; see [Scheduled tickets](#scheduled-tickets)),
-and `T` for any other root ticket, such as `TR2D2`. A child takes its parent's
-ID, so every ticket in an epic's tree starts with `E`. The `E` records the type
-at creation: changing a ticket's type to or from epic later keeps its ID, and
-epics created before the `E` existed keep their `T`. IDs are stored and printed
-this way.
+`A` for a root ticket that Ignite filed on its own, such as a regression, a
+flaky check or a rule's finding (`AR2D2`, whatever its type), and `T` for any
+other root ticket, such as `TR2D2`. Tickets filed automatically before the `A`
+existed keep their `T`. A child takes its parent's ID, so every ticket in an
+epic's tree starts with `E`. The `E` records the type at creation: changing a
+ticket's type to or from epic later keeps its ID, and epics created before the
+`E` existed keep their `T`. IDs are stored and printed this way.
 
-The roots of all three letters are one space: a new root is never one already
+The roots of all four letters are one space: a new root is never one already
 used under any letter, by a ticket or an alias. Lookups ignore case, accept a
 bare root without its letter (`q44s.7` finds `EQ44S.7` or `TQ44S.7`, whichever
 exists) and accept the spelling from before IDs were stored in capitals

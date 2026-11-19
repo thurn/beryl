@@ -131,6 +131,9 @@ fn two_failures_of_one_check_give_one_regression_ticket() {
     report.caused_by = Some(TicketId::new(&culprit[0]).unwrap());
     let (first, outcome) = regressions::file(&mut conn, UPKEEP, &report, clock.now()).unwrap();
     assert_eq!(outcome, regressions::Outcome::Created);
+    // Ignite filed the regression on its own, so its ID starts with `A`; the culprit a session
+    // filed keeps its `T`.
+    assert!(first.starts_with('A') && culprit[0].starts_with('T'), "{first} {}", culprit[0]);
 
     clock.advance(600.0);
     let (second, outcome) =
@@ -450,6 +453,7 @@ fn two_finds_with_one_signature_give_one_ticket_and_one_comment() {
     let mut conn = hub::open_in_memory().unwrap();
     let first = explore::find(&mut conn, UPKEEP, &find("17", 210, "jarvis"), clock.now()).unwrap();
     assert_eq!(first.change, Change::Created);
+    assert!(first.ticket.starts_with('A'), "{}", first.ticket);
     clock.advance(60.0);
     let second =
         explore::find(&mut conn, UPKEEP, &find("94", 214, "multivac"), clock.now()).unwrap();

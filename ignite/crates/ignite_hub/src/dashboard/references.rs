@@ -93,11 +93,12 @@ fn collect(chars: &[char]) -> String {
     chars.iter().collect()
 }
 
-/// Whether `name` has the shape of a meta-ticket's root ID: `M` and four capitals or digits
-/// (`MAB12`), which ordinary words written in capitals rarely are.
-fn meta_root(name: &str) -> bool {
+/// Whether `name` has the shape of the root ID of a meta-ticket or of a ticket Ignite filed on
+/// its own: `M` or `A` and four capitals or digits (`MAB12`, `AR2D2`), which ordinary words
+/// written in capitals rarely are.
+fn lettered_root(name: &str) -> bool {
     name.len() == 5
-        && name.starts_with('M')
+        && name.starts_with(['M', 'A'])
         && name
             .chars()
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
@@ -105,7 +106,7 @@ fn meta_root(name: &str) -> bool {
 
 /// Calls `replace` on each ticket-like word of `text` and keeps the result. Bare names are
 /// replaced only when they begin with `T` or `E`, begin with `<project>-`, are dotted IDs or
-/// have a meta-ticket's shape, because a lone root such as `fix` is an ordinary word.
+/// have the shape of a meta-ticket's or an automatic ticket's root, because a lone root such as `fix` is an ordinary word.
 pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> String) -> String {
     let chars: Vec<char> = text.chars().collect();
     let prefix = format!("{project}-");
@@ -127,7 +128,7 @@ pub fn mentions(project: &str, text: &str, replace: &mut dyn FnMut(&str) -> Stri
             if name.starts_with(['T', 'E'])
                 || name.starts_with(&prefix)
                 || dotted_id
-                || meta_root(&name)
+                || lettered_root(&name)
             {
                 out.push_str(&replace(&name));
             } else {
@@ -204,5 +205,15 @@ mod tests {
             format!("<{name}>")
         });
         assert_eq!(seen, ["EQ44S.7", "TR2D2"]);
+    }
+
+    #[test]
+    fn automatic_and_meta_root_ids_are_found_but_other_capital_words_are_not() {
+        let mut seen = Vec::new();
+        mentions("proj", "AR2D2 and MAB12 filed, ALL ACTIVE.", &mut |name| {
+            seen.push(name.to_owned());
+            name.to_owned()
+        });
+        assert_eq!(seen, ["AR2D2", "MAB12"]);
     }
 }

@@ -190,7 +190,7 @@ fn apply(conn: &mut Connection, ops: Vec<Operation>, now: Timestamp) -> Result<S
         preconditions: Vec::new(),
         ops,
     };
-    match batch::apply(conn, &request, ACTOR, "", now)? {
+    match batch::apply_automatic(conn, &request, ACTOR, "", now)? {
         BatchOutcome::Applied(reply) => Ok(reply.results[0].id.to_string()),
         BatchOutcome::Conflict(conflict) => Err(StoreError::Invalid(format!(
             "the rules' batch conflicted: {conflict:?}"

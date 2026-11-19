@@ -204,7 +204,7 @@ pub fn file(
             preconditions: vec![Precondition::Seq { seq }],
             ops,
         };
-        match batch::apply(conn, &request, author.actor, author.machine, now)? {
+        match batch::apply_automatic(conn, &request, author.actor, author.machine, now)? {
             BatchOutcome::Applied(reply) => {
                 return Ok(Filed {
                     ticket: reply.results[0].id.to_string(),

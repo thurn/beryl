@@ -1,5 +1,6 @@
 //! How ticket IDs are spelled in output. The hub stores an ID as it is printed, a `T` (an `E`
-//! for a root created as an epic, an `M` for a meta-ticket) and then capitals (`TQ44S.7`,
+//! for a root created as an epic, an `M` for a meta-ticket, an `A` for a ticket Ignite filed on
+//! its own) and then capitals (`TQ44S.7`,
 //! `EQ44S.7`), and accepts any case, with or without the letter, on input. A hub from
 //! before that stored a bare lowercase ID (`q44s.7`), so an ID without its `T` still gets one.
 //! Aliases from earlier trackers and anything a person wrote are printed as stored.
@@ -87,7 +88,8 @@ pub fn display(value: &mut Value) {
     }
 }
 
-/// One ticket ID spelled with its letter: `T`, or the `E` or `M` of an epic or meta-ticket.
+/// One ticket ID spelled with its letter: `T`, or the `E`, `M` or `A` of an epic, a meta-ticket
+/// or a ticket Ignite filed on its own.
 pub fn spelled(id: &str) -> String {
     let mut value = Value::String(id.to_owned());
     prefix(&mut value);
@@ -95,11 +97,12 @@ pub fn spelled(id: &str) -> String {
 }
 
 /// Adds the `T` an ID from before IDs were stored in capitals lacks. An epic's ID may start
-/// with a capital `E` (`EQ44S`) and a meta-ticket's with a capital `M` (`MAB12`), which no
-/// such older ID does, since those were lowercase.
+/// with a capital `E` (`EQ44S`), a meta-ticket's with a capital `M` (`MAB12`) and an automatic
+/// ticket's with a capital `A` (`AR2D2`), which no such older ID does, since those were
+/// lowercase.
 fn prefix(value: &mut Value) {
     if let Value::String(id) = value
-        && !id.starts_with(['T', 'E', 'M'])
+        && !id.starts_with(['T', 'E', 'M', 'A'])
     {
         id.insert(0, 'T');
     }
@@ -137,6 +140,12 @@ mod tests {
     #[test]
     fn meta_ticket_ids_keep_their_m() {
         assert_eq!(spelled("MAB12.3"), "MAB12.3");
+    }
+
+    #[test]
+    fn automatic_ticket_ids_keep_their_a() {
+        assert_eq!(spelled("AR2D2"), "AR2D2");
+        assert_eq!(spelled("ar2d2"), "Tar2d2");
     }
 
     #[test]

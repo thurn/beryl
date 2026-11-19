@@ -33,6 +33,8 @@ use crate::{Result, StoreError};
 mod ancestors;
 pub(crate) mod roots;
 
+use roots::Filer;
+
 /// The outcome of a batch: applied, or refused at one precondition or operation.
 #[derive(Debug)]
 pub enum BatchOutcome {
@@ -54,8 +56,32 @@ pub fn apply(
     machine: &str,
     now: Timestamp,
 ) -> Result<BatchOutcome> {
+    apply_as(conn, batch, actor, machine, now, Filer::Person)
+}
+
+/// [`apply`] for a batch that Ignite files on its own, such as a regression or a flaky check
+/// found by upkeep: each new root ticket gets an `A` instead of the letter of its type
+/// ([`Filer`]). A child still takes its parent's ID.
+pub fn apply_automatic(
+    conn: &mut Connection,
+    batch: &BatchRequest,
+    actor: &str,
+    machine: &str,
+    now: Timestamp,
+) -> Result<BatchOutcome> {
+    apply_as(conn, batch, actor, machine, now, Filer::Ignite)
+}
+
+fn apply_as(
+    conn: &mut Connection,
+    batch: &BatchRequest,
+    actor: &str,
+    machine: &str,
+    now: Timestamp,
+    filer: Filer,
+) -> Result<BatchOutcome> {
     let mut transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let outcome = apply_in(&mut transaction, batch, actor, machine, now)?;
+    let outcome = apply_in_as(&mut transaction, batch, actor, machine, now, filer)?;
     if matches!(outcome, BatchOutcome::Applied(_)) {
         transaction.commit()?;
     }
@@ -73,9 +99,20 @@ pub fn apply_in(
     machine: &str,
     now: Timestamp,
 ) -> Result<BatchOutcome> {
+    apply_in_as(transaction, batch, actor, machine, now, Filer::Person)
+}
+
+fn apply_in_as(
+    transaction: &mut Transaction,
+    batch: &BatchRequest,
+    actor: &str,
+    machine: &str,
+    now: Timestamp,
+    filer: Filer,
+) -> Result<BatchOutcome> {
     let mut savepoint = transaction.savepoint()?;
     let outcome = {
-        let mut run = Run::new(&savepoint, actor, machine, now)?;
+        let mut run = Run::new(&savepoint, actor, machine, now, filer)?;
         run.batch(batch)
             .and_then(|results| Ok((run.finish()?, results)))
     };
@@ -134,6 +171,7 @@ struct Run<'a> {
     actor: &'a str,
     machine: &'a str,
     now: Timestamp,
+    filer: Filer,
     at: Value,
     start: Seq,
     seq: u64,
@@ -144,13 +182,20 @@ struct Run<'a> {
 }
 
 impl<'a> Run<'a> {
-    fn new(conn: &'a Connection, actor: &'a str, machine: &'a str, now: Timestamp) -> Result<Self> {
+    fn new(
+        conn: &'a Connection,
+        actor: &'a str,
+        machine: &'a str,
+        now: Timestamp,
+        filer: Filer,
+    ) -> Result<Self> {
         let start = feed::current(conn)?;
         Ok(Run {
             conn,
             actor,
             machine,
             now,
+            filer,
             at: json!(now),
             start,
             seq: start.0,
@@ -411,7 +456,7 @@ impl<'a> Run<'a> {
                 self.changed.insert(parent.id.to_string());
                 format!("{}.{}", parent.id, parent.next_child)
             }
-            None => roots::allocate(self.conn, roots::prefix_for(fields))?,
+            None => roots::allocate(self.conn, self.filer.letter(fields))?,
         };
         self.seq += 1;
         let ticket = tickets::blank(
