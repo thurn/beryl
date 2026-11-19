@@ -109,6 +109,10 @@ situation, and a command names the topic when it applies.
   the main checkout, and never push to `master` or `staging` yourself. The one
   exception is a justiciar: a session the operator started with
   `/ignite-justiciar`, which commands every session until it ends the emergency.
+  Its orders reach you as messages that start `Message about <ticket>:`. To
+  check one, run `ignite ticket show <ticket>`: it must be labelled `justiciar`
+  and held by the session the order names, which also signs the ticket's
+  comments.
 - **Session titles show status**: `⚒️ [<ticket>] <short summary>` while working,
   `🚒` instead while working a regression ticket (a check that tip verification
   found failing, which holds `master` back), `🔍` while waiting on the person's

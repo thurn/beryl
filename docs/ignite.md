@@ -2598,6 +2598,14 @@ release branch when Ignite blocks its own landing.
   session holding a ticket to stop where it is (`ignite tell --all`), fixes the
   fault first and validates afterwards, and sends the all-clear. Only it or the
   person ends the emergency.
+- An order is a message from the dispatcher that starts
+  `Message about <ticket>:`. `ignite tell` signs each comment `from <session>`,
+  taken from the session the caller's environment names. A worker checks an
+  order with `ignite ticket show <ticket>`: the ticket must be labelled
+  `justiciar` and held by the session the order names. The skill therefore reads
+  its own session ID (`mcp__ccd_session_mgmt__get_session` with `self`, or the
+  thread ID on Codex) before it declares, and uses it in the ticket comment and
+  every order.
 
 ### Planning
 

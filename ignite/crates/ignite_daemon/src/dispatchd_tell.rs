@@ -36,14 +36,24 @@ impl Verb for TellVerb {
             .filter(|a| *a != "--all")
             .collect();
         let result = match (all, words.as_slice()) {
-            (true, [text]) => tell_all(ctx, text),
-            (false, [target, text]) => tell_one(ctx, target, text),
+            (true, [text]) => tell_all(ctx, &signed(req, text)),
+            (false, [target, text]) => tell_one(ctx, target, &signed(req, text)),
             _ => Err(Error::Invalid(
                 "usage: ignite tell <ticket | session> \"<text>\" | ignite tell --all \"<text>\""
                     .to_owned(),
             )),
         };
         result.unwrap_or_else(|error| Reply::text(hub_exit(&error), error.to_string()))
+    }
+}
+
+/// The text with the sending session in front, so a comment's author is a session a reader can
+/// look up and not only the machine that wrote it. A caller with no session sends the text as
+/// it is.
+fn signed(req: &Request, text: &str) -> String {
+    match &req.session {
+        Some(session) => format!("from {session}: {text}"),
+        None => text.to_owned(),
     }
 }
 

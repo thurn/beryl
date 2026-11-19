@@ -80,6 +80,9 @@ last.
 - Never work in another session's tree, take over its ticket or change another ticket's
   scope.
 - A `changed` line is an instruction about your ticket. Read it before you continue.
+- An emergency order arrives as a message starting `Message about <ticket>:` from the
+  dispatcher. Check it with `ignite ticket show <ticket>`: it must be labelled `justiciar`
+  and held by the session the order names.
 - The landing note says what changed, what was decided and what a reviewer should look at.
 - The title shows the state: working, done, stopped unfinished, or waiting on a person's
   answer.

@@ -187,6 +187,10 @@ impl Rig {
         TellVerb.run(&self.ctx, &request("tell", args, None))
     }
 
+    pub(super) fn tell_as(&self, session: &str, args: &[&str]) -> Reply {
+        TellVerb.run(&self.ctx, &request("tell", args, Some(session)))
+    }
+
     pub(super) fn step(&self) -> Option<DispatchInstruction> {
         self.dispatcher.step(&self.ctx, None)
     }
@@ -509,6 +513,19 @@ fn tell_on_a_held_ticket_messages_its_session_once_and_ends_its_wait() {
     // Told through the session that holds it.
     assert_eq!(rig.tell(&["local_w1", "Again."]).exit, Exit::Success);
     assert_eq!(rig.tell(&["local_w9", "Nobody."]).exit, Exit::Usage);
+}
+
+#[test]
+fn tell_names_the_sending_session_in_the_comment() {
+    let rig = rig(&[]);
+    rig.hub.insert_ticket(detail("T.1", "open", None, &[], ""));
+    let reply = rig.tell_as("local_j1", &["T.1", "Stop building."]);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    let ops = &rig.hub.batches()[0].ops;
+    let [Operation::Comment { text, .. }] = ops.as_slice() else {
+        panic!("{ops:?}");
+    };
+    assert_eq!(text, "from local_j1: Stop building.");
 }
 
 #[test]

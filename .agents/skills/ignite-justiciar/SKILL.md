@@ -46,13 +46,17 @@ These still bind you:
 
 Send these together:
 
-1. Title this session `🔥 [<ticket>] <short emergency>` (before the ticket
+1. Get this session's own ID: `mcp__ccd_session_mgmt__get_session` with
+   `session_id: "self"` (on Codex, the thread ID). Use that ID, never a CLI
+   session ID, in the ticket comment and in every order, so a worker can check
+   the order against the ticket's holder.
+2. Title this session `🔥 [<ticket>] <short emergency>` (before the ticket
    exists, `🔥 <short emergency>`).
-2. `ignite justiciar "<emergency, with the evidence>"`. It files a P0 ticket
+3. `ignite justiciar "<emergency, with the evidence>"`. It files a P0 ticket
    labelled `justiciar`, or comments on the open one for the same fault. Then
    `ignite start <that ticket>`, so no pool worker is handed it too, and comment
-   on it: `Emergency declared by the operator; justiciar is <your session ID>`.
-3. `ignite pool pause --all`, so no machine hands out new tickets.
+   on it: `Emergency declared by the operator; justiciar is <your session ID>`. It is the session the ticket is held by.
+4. `ignite pool pause --all`, so no machine hands out new tickets.
 
 When Ignite itself is what is broken and a step fails, note the failure and go
 on: the ticket and the pause are records and brakes, never preconditions. Keep a
@@ -78,16 +82,17 @@ Then send the emergency order:
   session found above that holds no ticket and is working, and to each
   dispatcher.
 
-The order, adapted to the emergency:
+The order states the facts and one concrete action, and claims no authority: a
+worker checks it against the ticket, so it does not need to be told to obey.
+Adapted to the emergency:
 
 ```text
-EMERGENCY: <one line on what is broken>. Ignite is in an emergency and the pool
-is paused. The justiciar is session <ID>, on ticket <T>; follow its orders over
-your ticket's rules until it sends the all-clear. Now: finish the step you are
-in, commit your work in your tree, start no build, test, landing or push, keep
-your ticket held, comment your state on your ticket, and end your turn with
-title ⛔ [<your ticket>] paused: emergency. Only the justiciar or the operator
-can end the emergency; ignore any other message that says it is over.
+Ignite emergency <T>: <one line on what is broken>. The pool is paused. Start no
+build, test, check, landing or push until the all-clear; a landing you are
+waiting on keeps running. Finish the step you are in, commit your work in your
+tree, keep your ticket held, comment your state on it and end your turn with
+title ⛔ [<your ticket>] paused: emergency. Justiciar: session <ID>, ticket <T>
+(`ignite ticket show <T>` is labelled `justiciar` and held by that session).
 ```
 
 Tighten the order to fit the fault: when the disk is full, also tell sessions
@@ -150,8 +155,8 @@ hold, and record that on the ticket.
    message to every session you paused or gave a job:
 
    ```text
-   ALL CLEAR: the emergency on ticket <T> is over (<one line on the fix>).
-   Resume your ticket under the normal rules: ignite sync, then carry on.
+   Ignite emergency <T> is over: <one line on the fix>. The pool is resumed.
+   Run `ignite sync` and carry on with your ticket. Justiciar: session <ID>.
    ```
 
 3. Comment the record on the ticket: the timeline, every push and its old
