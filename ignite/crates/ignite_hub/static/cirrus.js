@@ -156,7 +156,35 @@
     let navigation = 0;
     let navigating = false;
 
+    // The home page's last scroll position. A link back to the home page (the
+    // wordmark or a breadcrumb) returns to it, as the Back button does, instead
+    // of opening the page at its top. It is kept in sessionStorage, so it also
+    // outlives a full page load.
+    const HOME_SCROLL = "cirrus-home-scroll";
+    const isHome = (url) => new URL(url, location.href).pathname === rootUrl().pathname;
+
+    function rememberHomeScroll() {
+        if (!isHome(location.href)) return;
+        try {
+            sessionStorage.setItem(HOME_SCROLL, String(scrollY));
+        } catch {}
+    }
+
+    function homeScroll() {
+        try {
+            const value = Number(sessionStorage.getItem(HOME_SCROLL));
+            return Number.isFinite(value) ? value : 0;
+        } catch {
+            return 0;
+        }
+    }
+
+    addEventListener("pagehide", rememberHomeScroll);
+
     async function navigate(url, { push = true, scroll = null } = {}) {
+        if (push) rememberHomeScroll();
+        if (push && scroll === null && isHome(url) && !new URL(url, location.href).hash)
+            scroll = homeScroll();
         const ticket = ++navigation;
         navigating = true;
         const progress = setTimeout(() => {
