@@ -104,8 +104,9 @@ pub mod scenarios {
                 ME.has(Zone::Hand, BOLT, 1),
             ]),
         // The copy's effect exiles the copy first, and the copy is still in exile while each
-        // player wheels and its controller untaps lands; then it ceases to exist (CR 704.5e).
-        // The spell resolves after it, for its own controller, and stays in exile.
+        // player wheels and its controller untaps lands; then it ceases to exist
+        // ([CR 704.5e](https://yawgatog.com/resources/magic-rules/#R7045e)). The spell
+        // resolves after it, for its own controller, and stays in exile.
         Scenario::new("Fork copies Time Spiral, which exiles the copy first")
             .interaction(&[Card::TimeSpiral])
             .battlefield(P0, &[MOUNTAIN, MOUNTAIN])
