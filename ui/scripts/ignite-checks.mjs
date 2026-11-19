@@ -15,21 +15,14 @@
 // `scripts/*.test.mjs`, which `npm test` runs together).
 
 import { spawnSync } from "node:child_process";
-import { appendFileSync, readdirSync, readFileSync } from "node:fs";
+import { appendFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { testInputs } from "./test-inputs.mjs";
 
 const ui = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = join(ui, "..");
 const bin = (name) => join(ui, "node_modules", ".bin", name);
-
-// Files a unit test reads beyond the family's inputs (`ui/**`), found from its source.
-function extraInputs(file) {
-    const source = readFileSync(join(ui, "scripts", file), "utf8");
-    const paths = [...source.matchAll(/"(?:\.\.\/)+((?:docs|data)\/[^"]+)"/g)];
-    return [...paths, ...source.matchAll(/read\("(data\/[^"]+)"\)/g)].map(
-        (m) => m[1],
-    );
-}
 
 function unitFiles() {
     return readdirSync(join(ui, "scripts"))
@@ -50,7 +43,7 @@ const families = {
         checks: () =>
             unitFiles().map((file) => ({
                 name: file.replace(/\.test\.mjs$/, ""),
-                inputs: extraInputs(file),
+                inputs: testInputs(join(ui, "scripts", file), ui, root),
             })),
         command: (name) => [
             process.execPath,

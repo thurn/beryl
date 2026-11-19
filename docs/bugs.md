@@ -1010,3 +1010,23 @@ fixed in the same session. Newest first.
   `test_ignite_rest.py` reads `ignite/checks/rest.toml` and `test_changes.py`
   reads `data/efficiency-changes.json`, and changes to those files had broken
   both tests without the gate noticing.
+||||||| parent of ccfd1370a (fix: ui checks declare the data files they read)
+
+- **The UI checks could reuse a pass after a data file they read changed.** An
+  audit of every check family's declared inputs, made after the gate reused a
+  pytest pass whose data file had changed, found three UI families in
+  `ignite/checks/ui.toml` with the same gap. `ui-types` runs `tsc -b`, which
+  follows `src/stage/timing.ts` and `src/table/commands.ts` into
+  `data/ui-conventions.json` and `data/table-commands.json`, but the family
+  listed only `ui/` files. `ui-unit` gave each test's check the data paths named
+  in the test's own source, so the 17 stage tests and four table tests that
+  reach those JSON files through `src/` modules did not declare them.
+  `ui-format` runs prettier, which honors the root `.editorconfig`, outside
+  `ui/**`. Fixed: `ui-types` and `ui-format` list those files, and
+  `ui/scripts/test-inputs.mjs` follows each unit test's relative imports
+  transitively and lists every file it reaches outside `ui/`. Prevention: the
+  import walk keeps `ui-unit` right as tests and modules change, and its test,
+  `ui/scripts/test-inputs.test.mjs`, checks that a stage test declares
+  `data/ui-conventions.json`. No guard sees what `tsc` or prettier read, since
+  they run as subprocesses that a Python audit hook cannot watch, so their
+  inputs stay a hand-kept list.

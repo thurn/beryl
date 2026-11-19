@@ -15,7 +15,8 @@ needs = ["ui-deps"]
 always = true
 list = "node ui/scripts/ignite-checks.mjs ui-format --list"
 run = "node ui/scripts/ignite-checks.mjs ui-format {checks}"
-inputs = ["ui/**", "ui/scripts/ignite-checks.mjs"]
+# prettier, run in ui/, also honors the repository's root .editorconfig.
+inputs = ["ui/**", "ui/scripts/ignite-checks.mjs", ".editorconfig"]
 
 [family.ui-types]
 kind = "regression"
@@ -31,10 +32,15 @@ inputs = [
     "ui/vite.config.ts",
     "ui/package.json",
     "ui/scripts/ignite-checks.mjs",
+    # tsc follows src/ imports into these (resolveJsonModule): src/stage/timing.ts and
+    # src/table/commands.ts.
+    "data/ui-conventions.json",
+    "data/table-commands.json",
 ]
 
-# One check per ui/scripts/*.test.mjs. A test may read more than ui/; the adapter lists those
-# files as the check's own inputs.
+# One check per ui/scripts/*.test.mjs. A test may read more than ui/; the adapter follows each
+# test's imports (ui/scripts/test-inputs.mjs) and lists the files it reaches outside ui/ as the
+# check's own inputs.
 [family.ui-unit]
 kind = "regression"
 adapter = "jsonl"
