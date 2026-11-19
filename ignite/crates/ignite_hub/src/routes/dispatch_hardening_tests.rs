@@ -261,7 +261,12 @@ fn a_machine_whose_scheduler_is_full_is_offered_what_its_held_tickets_leave_room
     let first = ask(&mut conn, "local_a");
     assert_eq!(first["ticket"], ids[0].as_str());
     // The first ticket is claimed and in progress; the second fits beside it.
-    let (status, _) = post(&mut conn, "/claims", &claim_reserved(&first, "local_a"), start());
+    let (status, _) = post(
+        &mut conn,
+        "/claims",
+        &claim_reserved(&first, "local_a"),
+        start(),
+    );
     assert_eq!(status, 200);
     assert_eq!(ask(&mut conn, "local_b")["ticket"], ids[1].as_str());
     // One in progress and one reserved fill the two cores.
