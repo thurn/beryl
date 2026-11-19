@@ -23,7 +23,8 @@ fn status_display(status: Status) -> (Tone, &'static str) {
     match status {
         Status::InProgress => (Tone::Blue, "In progress"),
         Status::Blocked => (Tone::Amber, "Blocked"),
-        Status::Open => (Tone::Neutral, "Open"),
+        // An open ticket has been released by a person, so it is shown as approved.
+        Status::Open => (Tone::Orange, "Approved"),
         Status::Deferred => (Tone::Muted, "Deferred"),
         Status::PendingApproval => (Tone::Muted, "Pending approval"),
         Status::Closed => (Tone::Green, "Closed"),
@@ -126,4 +127,23 @@ pub fn ticket_heading(ticket: &Card) -> String {
         c::mono(&display_id(&ticket.id)),
         priority_chip(i64::from(ticket.priority))
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A ticket's lifecycle reads as gray (pending approval), orange (approved), blue (in
+    /// progress) and green (done).
+    #[test]
+    fn status_dots_follow_the_ticket_lifecycle_colors() {
+        for (status, tone) in [
+            (Status::PendingApproval, "c-tone-muted"),
+            (Status::Open, "c-tone-orange"),
+            (Status::InProgress, "c-tone-blue"),
+            (Status::Closed, "c-tone-green"),
+        ] {
+            assert!(status_dot(status, true).contains(tone), "{status:?}");
+        }
+    }
 }

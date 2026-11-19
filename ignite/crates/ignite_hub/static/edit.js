@@ -15,7 +15,7 @@
 
     const PRIORITIES = ["Critical", "High", "Medium", "Low", "Backlog"];
     const STATUSES = [
-        ["open", "Open"],
+        ["open", "Approved"],
         ["in_progress", "In progress"],
         ["blocked", "Blocked"],
         ["deferred", "Deferred"],

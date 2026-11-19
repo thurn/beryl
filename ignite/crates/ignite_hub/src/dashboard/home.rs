@@ -84,7 +84,7 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
     let grid = |items: &[&HomeCard], show_kind: bool, show_state: bool| -> String {
         c::grid(items.iter().map(|ticket| {
             let card = &ticket.card;
-            let state = if show_state && card.status != Status::Open {
+            let state = if show_state {
                 status_dot(card.status, true)
             } else {
                 String::new()
