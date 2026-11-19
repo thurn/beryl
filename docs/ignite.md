@@ -869,7 +869,16 @@ Each machine has a fixed number of trees of two kinds:
   its ticket started, often 20 to 30 commits earlier. When nothing landed since
   the base, the landing gates in the ticket tree instead: the rebase changed
   nothing, so that tree already holds the branch's own build at the tip, and a
-  landing tree would only build it again.
+  landing tree would only build it again. It also gates in the ticket tree when
+  that leaves less to build than every free landing tree: first fewer of the
+  build directories the change's files want are missing, then fewer files that
+  lie beside them differ between the tree's build and the rebased commit. A
+  one-card change rebased over commits to another Cargo workspace has nothing to
+  rebuild in its ticket tree, and its card crate's dependents to rebuild in a
+  landing tree. That holds because a rebase writes the branch's own files again
+  even where their content ends up as it was, and Ignite gives each such file
+  back the modification time it had, so Cargo rebuilds only what reads the files
+  that the landed commits changed.
 - Idle work (exploration, cache audits and rebuild counts) also borrows a
   landing tree, but only while another landing tree stays free. Nothing stops
   idle work for a tree, and a rebuild count can hold one for a long build, so a
@@ -1824,9 +1833,10 @@ The steps, in order:
    On the first pass, run the formatters of `[format]` on the changed files and
    commit what they change (see
    [Formatting at landing](#formatting-at-landing)).
-3. Take a landing tree, unless the ticket tree is already at the tip. Check out
-   the rebased commit there. The rest of the landing reads the check families
-   and products from that commit, not from the main checkout.
+3. Take a landing tree, unless the ticket tree is already at the tip or leaves
+   less to build (see [Build trees](#build-trees)). Check out the rebased commit
+   there. The rest of the landing reads the check families and products from
+   that commit, not from the main checkout.
 4. Decide which families the change can affect, from the paths that differ
    between the rebased commit and the tip, before anything is listed or built. A
    family is left out when no changed path matches its inputs, its

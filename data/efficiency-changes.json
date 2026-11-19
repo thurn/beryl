@@ -554,5 +554,10 @@
     "label": "Windows trees on a Dev Drive (ReFS) start from a block-clone copy of the build nearest the tip, as APFS trees on macOS do; before, every Windows tree built from nothing (about 950 to 1,400 CPU-seconds per product). Windows Rust builds also link with rust-lld and keep only line tables, since PDB files were 6 GB of an 11 GB test build",
     "metric": "machine.queued-core-hours-per-day",
     "expect": "down"
+  },
+  {
+    "label": "A rebase gives each file it writes back unchanged its old modification time, and a landing rebased over other commits gates in its ticket tree when that leaves less to build than every free landing tree (on 2026-11-19 the landing of a one-card comment change rebased over Ignite-only commits rebuilt 74 crates for 76 s in a landing tree after `ignite check` had built the change in its ticket tree)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

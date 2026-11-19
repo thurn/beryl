@@ -265,6 +265,16 @@ impl LandTrees for RemoteLandTrees {
         self.remote.link.release_landing(&call).map(|_| ())
     }
 
+    fn ticket_builds_less(
+        &self,
+        ticket: &TreeId,
+        built: Option<&Commit>,
+        head: &Commit,
+        change: &[String],
+    ) -> Result<bool> {
+        self.local.ticket_builds_less(ticket, built, head, change)
+    }
+
     fn release_ticket(&self, tree: &TreeId, park_at: &Commit, caller: Option<u32>) -> Result<()> {
         self.local.release_ticket(tree, park_at, caller)
     }

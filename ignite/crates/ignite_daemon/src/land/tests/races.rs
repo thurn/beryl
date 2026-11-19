@@ -98,6 +98,29 @@ fn a_landing_keeps_its_landing_tree_across_passes() {
 }
 
 #[test]
+fn a_rebased_landing_gates_in_its_ticket_tree_when_that_builds_less() {
+    let world = two_families();
+    world.trees.landing.lock().unwrap().push(GateTree {
+        tree: TreeId::new("landing-2").unwrap(),
+        path: PathBuf::from("/trees/landing-2"),
+    });
+    world
+        .trees
+        .ticket_builds_less
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    // Something landed before the landing started, which alone would take a landing tree.
+    world.git.land_other(&[("c.txt", "before")]);
+
+    let reply = world.land_as("tree-01", "local_a");
+
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(world.trees.leased.lock().unwrap().is_empty());
+    let ticket = PathBuf::from("/trees/tree-01");
+    let judged = judged(&world);
+    assert!(judged.iter().all(|(tree, _)| *tree == ticket), "{judged:?}");
+}
+
+#[test]
 fn a_landing_that_started_in_its_ticket_tree_stays_there_after_a_lost_race() {
     let world = two_families();
     lands_during_first_gate(&world, &[("b.txt", "theirs")]);

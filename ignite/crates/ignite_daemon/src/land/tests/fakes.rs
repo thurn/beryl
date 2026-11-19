@@ -444,6 +444,8 @@ pub struct TestTrees {
     pub leased: Mutex<Vec<TreeId>>,
     pub released: Mutex<Vec<TreeId>>,
     pub deleted: Mutex<Vec<TicketId>>,
+    /// What [`LandTrees::ticket_builds_less`] answers.
+    pub ticket_builds_less: std::sync::atomic::AtomicBool,
 }
 
 impl LandTrees for TestTrees {
@@ -500,6 +502,17 @@ impl LandTrees for TestTrees {
             path: PathBuf::from(format!("/trees/{tree}")),
         });
         Ok(())
+    }
+    fn ticket_builds_less(
+        &self,
+        _ticket: &TreeId,
+        _built: Option<&Commit>,
+        _head: &Commit,
+        _change: &[String],
+    ) -> Result<bool> {
+        Ok(self
+            .ticket_builds_less
+            .load(std::sync::atomic::Ordering::SeqCst))
     }
     fn release_ticket(&self, tree: &TreeId, _park_at: &Commit, _caller: Option<u32>) -> Result<()> {
         self.tickets.lock().unwrap().remove(tree);

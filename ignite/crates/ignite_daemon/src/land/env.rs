@@ -55,6 +55,18 @@ pub trait LandTrees: Send + Sync {
     fn lease_landing(&self, holder: &str, at: &Commit) -> Result<Option<GateTree>>;
     /// Frees a landing tree; `built_at` is the commit its builds now match.
     fn release_landing(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()>;
+    /// Whether a landing that changes `change` builds less at `head` in its ticket tree, whose
+    /// build matches `built`, than in any free landing tree (see [`Trees::ticket_builds_less`]).
+    /// Never when `built` is unknown.
+    fn ticket_builds_less(
+        &self,
+        _ticket: &TreeId,
+        _built: Option<&Commit>,
+        _head: &Commit,
+        _change: &[String],
+    ) -> Result<bool> {
+        Ok(false)
+    }
     /// Frees a ticket tree after its landing, parked at `park_at`. `caller` is the client's
     /// process, which is spared with its ancestors when the tree's processes are ended.
     fn release_ticket(&self, tree: &TreeId, park_at: &Commit, caller: Option<u32>) -> Result<()>;
@@ -178,6 +190,19 @@ impl LandTrees for MachineTrees {
 
     fn release_landing(&self, tree: &TreeId, built_at: Option<&Commit>) -> Result<()> {
         self.trees.release_landing(tree, built_at)
+    }
+
+    fn ticket_builds_less(
+        &self,
+        ticket: &TreeId,
+        built: Option<&Commit>,
+        head: &Commit,
+        change: &[String],
+    ) -> Result<bool> {
+        match built {
+            Some(built) => self.trees.ticket_builds_less(ticket, built, head, change),
+            None => Ok(false),
+        }
     }
 
     /// A landed tree has no work left to save (the landing refused stray files), so it is reset

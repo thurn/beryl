@@ -19,6 +19,7 @@ use ignite_store::local::open_in_memory;
 
 use super::*;
 
+mod landing;
 mod owners;
 mod retire;
 mod seed;

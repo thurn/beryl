@@ -73,7 +73,7 @@ pub(super) fn missing(root: &Path, wanted: &[&str]) -> usize {
         .count()
 }
 
-fn within(path: &str, dir: &str) -> bool {
+pub(super) fn within(path: &str, dir: &str) -> bool {
     dir.is_empty()
         || path
             .strip_prefix(dir)

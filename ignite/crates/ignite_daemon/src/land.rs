@@ -385,7 +385,7 @@ impl Landing {
         }
 
         let mut lease: Option<HeldLease> = None;
-        let mut home = GateHome::new(self.trees.clone());
+        let mut home = GateHome::new(self.trees.clone(), ignite_git::refs::head(&held.path).ok());
         let mut last_passed: Option<Passed> = None;
         let mut last_expressed: Option<Expressed> = None;
         let mut passes = 0;
@@ -464,7 +464,7 @@ impl Landing {
                     path: held.path.clone(),
                 },
                 None => home
-                    .for_pass(&holder, &rebased.head, rebased.landed_since, &held)
+                    .for_pass(&holder, &rebased, &held, &changed)
                     .map_err(io)?,
             };
             let options = RunOptions {

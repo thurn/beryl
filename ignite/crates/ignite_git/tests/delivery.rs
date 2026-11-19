@@ -50,6 +50,39 @@ fn a_clean_rebase_counts_the_commits_that_landed_since() {
 }
 
 #[test]
+fn a_rebase_keeps_the_times_of_files_it_writes_back_unchanged() {
+    let scratch = Scratch::new("rebase-times");
+    let repo = scratch.path("repo");
+    fs::create_dir_all(&repo).unwrap();
+    init(&repo);
+    write(&repo, "mine.txt", "base\n");
+    write(&repo, "theirs.txt", "base\n");
+    let base = commit_all(&repo, "base");
+    write(&repo, "theirs.txt", "tip\n");
+    let tip = commit_all(&repo, "landed");
+    git(&repo, &["checkout", "--quiet", "-b", "work", base.as_str()]);
+    write(&repo, "mine.txt", "work\n");
+    commit_all(&repo, "work");
+    let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+    for file in ["mine.txt", "theirs.txt"] {
+        fs::File::options()
+            .write(true)
+            .open(repo.join(file))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+    }
+
+    let outcome = cli(&repo).rebase_onto(&repo, &tip).unwrap();
+    assert!(matches!(outcome, Rebase::Clean { .. }), "{outcome:?}");
+    let modified = |file: &str| fs::metadata(repo.join(file)).unwrap().modified().unwrap();
+    // The branch's own edit has the content it had, so Cargo must see the time it built.
+    assert_eq!(modified("mine.txt"), old);
+    // The landed edit is new to this tree, so whatever reads it is rebuilt.
+    assert_ne!(modified("theirs.txt"), old);
+}
+
+#[test]
 fn a_conflicting_rebase_names_the_files_and_leaves_the_branch_as_it_was() {
     let scratch = Scratch::new("rebase-conflict");
     let repo = scratch.path("repo");

@@ -8,7 +8,9 @@
 //! - [`GateHome`]: a landing gates every pass in the tree it gated its first pass in. A landing
 //!   tree stays leased to the landing until it ends and is checked out at each new rebased
 //!   commit, so its builds are incremental from the last pass; a landing that started in its
-//!   ticket tree stays there, because the rebase moves that tree too.
+//!   ticket tree stays there, because the rebase moves that tree too. A landing whose branch
+//!   was rebased over other commits starts in its ticket tree too when that tree leaves less to
+//!   build than any free landing tree (see [`LandTrees::ticket_builds_less`]).
 //! - [`Passed`]: the last gate that passed, so the next pass judges again only the families
 //!   whose inputs the commits landed since touch (see [`Carried`]).
 
@@ -17,6 +19,7 @@ use std::sync::Arc;
 use ignite_core::ids::Commit;
 use ignite_core::traits::Result;
 
+use super::Rebased;
 use super::env::{GateTree, LandTrees, TicketTree};
 use crate::checks::{Carried, GateRun};
 use crate::server::Context;
@@ -35,25 +38,37 @@ enum Place {
 pub(super) struct GateHome {
     trees: Arc<dyn LandTrees>,
     place: Option<Place>,
+    /// The commit the ticket tree had checked out before the landing's first rebase, which is
+    /// what its builds match; `None` when it could not be read.
+    built: Option<Commit>,
 }
 
 impl GateHome {
-    pub(super) fn new(trees: Arc<dyn LandTrees>) -> Self {
-        Self { trees, place: None }
+    pub(super) fn new(trees: Arc<dyn LandTrees>, built: Option<Commit>) -> Self {
+        Self {
+            trees,
+            place: None,
+            built,
+        }
     }
 
-    /// The tree this pass gates `head` in. The first pass gates in the ticket tree when nothing
-    /// landed since the branch's base, because the ticket tree has built that commit already,
-    /// and otherwise in the free landing tree built nearest it, or in the ticket tree when
-    /// every landing tree is busy. Later passes keep that tree; a landing tree is checked out
-    /// at `head`.
+    /// The tree this pass gates the rebased commit `head`, which changes `change` from the tip,
+    /// in. The first pass
+    /// gates in the ticket tree when nothing landed since the branch's base, because the ticket
+    /// tree has built that commit already, or when it leaves less to build than any free
+    /// landing tree; otherwise in the free landing tree built nearest it, or in the ticket tree
+    /// when every landing tree is busy. Later passes keep that tree; a landing tree is checked
+    /// out at `head`.
     pub(super) fn for_pass(
         &mut self,
         holder: &str,
-        head: &Commit,
-        landed_since: u32,
+        rebased: &Rebased,
         ticket_tree: &TicketTree,
+        change: &[String],
     ) -> Result<GateTree> {
+        let Rebased {
+            head, landed_since, ..
+        } = rebased;
         let ticket = GateTree {
             tree: ticket_tree.tree.clone(),
             path: ticket_tree.path.clone(),
@@ -63,7 +78,7 @@ impl GateHome {
                 self.place = Some(Place::Ticket);
                 return Ok(ticket);
             }
-            None if landed_since == 0 => {
+            None if *landed_since == 0 || self.ticket_builds_less(ticket_tree, head, change) => {
                 self.place = Some(Place::Ticket);
                 return Ok(ticket);
             }
@@ -92,6 +107,29 @@ impl GateHome {
             Some(Place::Landing(tree)) => tree.clone(),
             _ => ticket,
         })
+    }
+
+    /// Whether the ticket tree leaves less to build at `head` than any free landing tree. A
+    /// failure to measure keeps the landing tree, as before there was a measure.
+    fn ticket_builds_less(&self, ticket: &TicketTree, head: &Commit, change: &[String]) -> bool {
+        match self
+            .trees
+            .ticket_builds_less(&ticket.tree, self.built.as_ref(), head, change)
+        {
+            Ok(less) => {
+                if less {
+                    steps::step(format!(
+                        "gating in {}, which leaves less to build than any free landing tree",
+                        ticket.tree
+                    ));
+                }
+                less
+            }
+            Err(error) => {
+                eprintln!("ignite: the landing trees' builds were not measured: {error}");
+                false
+            }
+        }
     }
 
     /// Frees the landing tree the landing holds, if any; `built` is the commit its builds now

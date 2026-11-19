@@ -1,12 +1,14 @@
 //! Landing trees: they stay at the tip, and a landing or a tip verification leases one so that
 //! it builds only what one change added.
 
+use std::path::Path;
+
 use ignite_core::ids::{Commit, Handle, TicketId, TreeId};
 use ignite_core::traits::{Error, Result};
-use ignite_git::worktree;
+use ignite_git::{changed, worktree};
 use ignite_store::local::trees as store;
 
-use super::{Kind, Locked, TreeLease, Trees, head, owner_alive, park_branch, store_error};
+use super::{Kind, Locked, TreeLease, Trees, choice, head, owner_alive, park_branch, store_error};
 
 impl Trees {
     /// Leases a free landing tree at `tip` to a holder without a handle, such as tip
@@ -82,6 +84,63 @@ impl Trees {
             branch,
             at: tip.clone(),
         }))
+    }
+
+    /// Whether a landing that changes `change` builds less at `head` in its ticket tree
+    /// `ticket`, whose build matches `built`, than in any free landing tree.
+    ///
+    /// A landing whose branch was rebased over other commits gated in a landing tree, which
+    /// stays near the tip, so that it builds only what the change adds. On 2026-11-19 a
+    /// one-card comment change, rebased over commits that touched only another Cargo
+    /// workspace, rebuilt 74 crates downstream of the card's crate in a landing tree, while its
+    /// ticket tree, where `ignite check` had just built that change, had nothing to rebuild.
+    ///
+    /// Each tree is measured as [`choice`] measures one for a ticket: first the build
+    /// directories the change's files want that the tree lacks, then the files that differ
+    /// between the commit its build matches and `head` and that lie in a directory holding one
+    /// of those build directories (a commit to another workspace rebuilds nothing the gate
+    /// needs). A tie goes to the landing tree, which then moves nearer the tip.
+    pub fn ticket_builds_less(
+        &self,
+        ticket: &TreeId,
+        built: &Commit,
+        head: &Commit,
+        change: &[String],
+    ) -> Result<bool> {
+        let keep = self.inner.config.keep.get();
+        let wanted = choice::wanted(&keep, change);
+        let roots: Vec<&str> = wanted
+            .iter()
+            .map(|dir| dir.rsplit_once('/').map_or("", |(parent, _)| parent))
+            .collect();
+        let cost = |path: &Path, base: Option<&str>| {
+            let changed = base
+                .and_then(|base| Commit::new(base).ok())
+                .and_then(|base| changed::between(&self.inner.config.repo, &base, head).ok())
+                .map_or(usize::MAX, |files| {
+                    files
+                        .iter()
+                        .filter(|file| roots.iter().any(|root| choice::within(file, root)))
+                        .count()
+                });
+            (choice::missing(path, &wanted), changed)
+        };
+        let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
+        let best = rows
+            .iter()
+            .filter(|row| {
+                row.kind == Kind::Landing.as_str() && row.state == store::State::Free.as_str()
+            })
+            .filter_map(|row| {
+                let tree = TreeId::new(row.id.clone()).ok()?;
+                Some(cost(
+                    &self.inner.config.path(&tree),
+                    row.built_commit.as_deref(),
+                ))
+            })
+            .min();
+        let own = cost(&self.inner.config.path(ticket), Some(built.as_str()));
+        Ok(best.is_some_and(|best| own < best))
     }
 
     /// The landing tree `owner` holds for `holder`, if any: one a previous daemon leased to the
