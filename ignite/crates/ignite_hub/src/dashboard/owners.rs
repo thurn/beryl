@@ -91,9 +91,12 @@ pub fn property_view(view: &OwnerView, link: impl Fn(&str) -> String) -> String 
     let Some(effective) = &view.effective else {
         return c::muted("Any machine");
     };
-    let source = view.inherited_from.as_deref().map_or_else(String::new, |ancestor| {
-        format!(" <span class=\"c-muted\">from {}</span>", link(ancestor))
-    });
+    let source = view
+        .inherited_from
+        .as_deref()
+        .map_or_else(String::new, |ancestor| {
+            format!(" <span class=\"c-muted\">from {}</span>", link(ancestor))
+        });
     format!("{}{source}", esc(&label(effective)))
 }
 

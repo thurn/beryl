@@ -356,12 +356,10 @@ impl Snapshot {
             self.ancestors(&ticket.id)
                 .find_map(|id| self.nodes.get(&id).and_then(|node| node.owner.clone()))
         });
-        self.routing.destinations(
-            own.as_ref(),
-            ticket.fallback,
-            ticket.needs_os,
-            |machine| !self.heard.contains(&machine.to_ascii_lowercase()),
-        )
+        self.routing
+            .destinations(own.as_ref(), ticket.fallback, ticket.needs_os, |machine| {
+                !self.heard.contains(&machine.to_ascii_lowercase())
+            })
     }
 
     /// The ticket if it may be offered: it is under an active epic, under no epic at all, or

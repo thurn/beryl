@@ -39,8 +39,16 @@ pub const SESSION_VARIABLES: &[&str] = &["IGNITE_SESSION", "CLAUDE_CODE_HOST_SES
 /// is set, then the variables each app gives the commands its sessions run. `None` when none is
 /// set, as in a person's own terminal.
 pub fn app_from_env(lookup: impl Fn(&str) -> Option<String>) -> Option<String> {
-    const CLAUDE: &[&str] = &["CLAUDECODE", "CLAUDE_CODE_HOST_SESSION_ID", "CLAUDE_CODE_SESSION_ID"];
-    const CODEX: &[&str] = &["CODEX_THREAD_ID", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"];
+    const CLAUDE: &[&str] = &[
+        "CLAUDECODE",
+        "CLAUDE_CODE_HOST_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
+    ];
+    const CODEX: &[&str] = &[
+        "CODEX_THREAD_ID",
+        "CODEX_SANDBOX",
+        "CODEX_SANDBOX_NETWORK_DISABLED",
+    ];
     let set = |name: &&str| lookup(name).is_some_and(|value| !value.is_empty());
     if let Some(app) = lookup("IGNITE_APP").filter(|app| !app.is_empty()) {
         Some(app.to_ascii_lowercase())
@@ -214,7 +222,10 @@ mod tests {
             })
         };
         assert_eq!(from(&[("CLAUDECODE", "1")]).as_deref(), Some("claude"));
-        assert_eq!(from(&[("CODEX_SANDBOX", "seatbelt")]).as_deref(), Some("codex"));
+        assert_eq!(
+            from(&[("CODEX_SANDBOX", "seatbelt")]).as_deref(),
+            Some("codex")
+        );
         assert_eq!(
             from(&[("IGNITE_APP", "Codex"), ("CLAUDECODE", "1")]).as_deref(),
             Some("codex")

@@ -706,7 +706,11 @@ fn a_ticket_is_owned_by_the_machine_and_app_that_filed_it() {
         )
         .unwrap();
     let hub = fixture.start();
-    let owner = |id: &Value| hub.get(&format!("/tickets/{}", id.as_str().unwrap())).json()["owner"].clone();
+    let owner = |id: &Value| {
+        hub.get(&format!("/tickets/{}", id.as_str().unwrap()))
+            .json()["owner"]
+            .clone()
+    };
     // The client names its app: the epic is owned by multivac/claude and its child inherits.
     let filed = hub.post(
         "/batch",

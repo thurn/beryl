@@ -3051,15 +3051,14 @@ that machine take it, such as `jarvis/claude` or `cygnus/codex`.
   `multivac/claude`. A ticket filed under an epic that has an owner takes the
   epic's owner instead, so changing an epic's owner moves its tickets. The
   client tells its app from `IGNITE_APP`, or from the variables Claude Code and
-  Codex set in their sessions, and the hub also knows the app of a pool
-  worker's session. When neither knows, the owner names only the machine.
+  Codex set in their sessions, and the hub also knows the app of a pool worker's
+  session. When neither knows, the owner names only the machine.
 - Dispatch offers a ticket only to its owner's workers. An idle worker on
   another machine or of another app is never offered it, so the other five
   destinations get only work that is routed to them.
 - The dashboard shows each ticket's owner and where it comes from, and its Owner
-  dropdown lists None and every machine with every app.
-  `ignite ticket create` and `update` take `--owner <machine>/<app>`, or
-  `--owner none` to clear it.
+  dropdown lists None and every machine with every app. `ignite ticket create`
+  and `update` take `--owner <machine>/<app>`, or `--owner none` to clear it.
 - An owner may name only a machine (`cygnus`). Then any app's workers on that
   machine may take it.
 - A ticket the hub files from a machine's report, such as a regression, checks
