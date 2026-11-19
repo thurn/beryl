@@ -64,9 +64,9 @@ last.
 - The ticket may be days old. Check it against the code as it is. Where they disagree, the
   code and the epic's intent win, and the difference goes on the ticket.
 - Read the files the ticket names before searching for others, and send reads together.
-- Make the smallest change that meets the acceptance criteria. Run the focused tests,
-  exercise the change by hand, and read the whole diff as a reviewer before landing. A
-  check that could not run is not a pass.
+- Make the smallest change that meets the acceptance criteria. Test it, exercise it by hand
+  and read the whole diff as a reviewer before landing. A check that could not run is not
+  a pass.
 - Run every build, test suite and other heavy command through Ignite: `ignite test <names>`
   for checks and `ignite run -- <cmd>` for anything else. A command run directly competes
   for the cores that Ignite has already granted to other sessions.
@@ -75,9 +75,8 @@ last.
   a person, for another ticket, for another machine or for verification. When the ticket
   needs something outside itself, finish what you can and land, or `ignite release` with
   a note.
-- When a landing is refused, the verdict says whose failure it is. Do what its `next` line
-  says (`ignite guide blocked`). Never decide yourself that a failure is unrelated or was
-  already there.
+- A refused landing's verdict says whose failure it is. Do what its `next` line says
+  (`ignite guide blocked`); never decide yourself that a failure is unrelated.
 - Never end a turn on work that nothing will report. Never leave a ticket held when
   stopping for good: release it with its exact state.
 - Never work in another session's tree, take over its ticket or change another ticket's
@@ -91,8 +90,7 @@ last.
   dispatcher. Check it with `ignite ticket show <ticket>`: it must be labelled `justiciar`
   and held by the session the order names.
 - The landing note says what changed, what was decided and what a reviewer should look at.
-- The title shows the state: working, done, stopped unfinished, or waiting on a person's
-  answer.
+- The title shows the state: working, done, stopped unfinished, or waiting on a person.
 
 ## Verbs
 "
@@ -139,7 +137,7 @@ mod tests {
             "never depend on the machine's speed",
             "Ordinary difficulty is the job",
             "Never wait for a person, for another ticket, for another machine or for verification",
-            "the verdict says whose failure it is",
+            "verdict says whose failure it is",
             "Never decide yourself that a failure is unrelated",
             "nothing will report",
             "Never work in another session's tree",
