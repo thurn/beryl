@@ -13,7 +13,7 @@ use ignite_core::protocol::tickets::Status;
 
 use super::common::{
     PRIORITY_NAMES, SITE_ICONS, brand, children_progress, person, priority_chip, status_dot,
-    ticket_heading,
+    ticket_heading, worker,
 };
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{
@@ -340,7 +340,10 @@ pub fn page(
                 &card.priority.to_string(),
             ),
         ),
-        ("Assignee".into(), person(card.assignee.as_deref())),
+        (
+            "Assignee".into(),
+            worker(card.assignee.as_deref(), &card.id),
+        ),
     ];
     if editable && card.ticket_type == "epic" {
         for (label, field, value) in [

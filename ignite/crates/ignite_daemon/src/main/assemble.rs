@@ -515,10 +515,7 @@ pub fn server(
         Some(processes),
     )?;
     server.add_hook(Box::new(ClaimHook(claims.clone())));
-    let env = |name: &str| std::env::var(name).ok();
-    server.add_hook(Box::new(crate::session_title::TitleHook::new(
-        crate::session_title::app_data(&env),
-    )));
+    server.add_hook(Box::new(parts.titles.clone()));
     server.enforce_emergency(parts.emergencies.clone());
     let server = Arc::new(server);
     host.set_handles(server.handles().clone());

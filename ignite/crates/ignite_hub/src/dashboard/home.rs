@@ -12,7 +12,7 @@ use ignite_core::protocol::tickets::Status;
 use ignite_core::time::Timestamp;
 
 use super::attention;
-use super::common::{SITE_ICONS, brand, children_progress, person, status_dot, ticket_heading};
+use super::common::{SITE_ICONS, brand, children_progress, status_dot, ticket_heading, worker};
 use super::components::{self as c, Feed, PageOptions, Tone, esc};
 use super::data::{HomeCard, Progress, ReadError, home_data};
 use super::references::ticket_url;
@@ -93,7 +93,7 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
             let assignee = card
                 .assignee
                 .as_deref()
-                .map_or(String::new(), |name| person(Some(name)));
+                .map_or(String::new(), |name| worker(Some(name), &card.id));
             let foot = format!(
                 "{state}{kind}{}{assignee}<span class=\"c-card-time\">{}</span>",
                 children_progress(progress.get(card.id.as_str()).copied()),

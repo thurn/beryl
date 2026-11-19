@@ -89,10 +89,44 @@ pub(crate) fn session_title(name: &str) -> Option<String> {
 /// A session, vizier or person as the page names them: a session's title when it reported one,
 /// otherwise a short form, with the full name as a tooltip.
 pub fn person(name: Option<&str>) -> String {
+    named(name, name.and_then(session_title))
+}
+
+/// The session, vizier or person working on `ticket`, as [`person`] names them, except that a
+/// title naming another ticket in brackets is not shown. A reused worker claims its next ticket
+/// while its title still reads `⚒️ [<previous ticket>] ...`, and the daemon reports the new title
+/// only at its next heartbeat; until then the short form is shown instead of the wrong ticket.
+pub fn worker(name: Option<&str>, ticket: &str) -> String {
+    let title = name
+        .and_then(session_title)
+        .filter(|title| !names_another_ticket(title, ticket));
+    named(name, title)
+}
+
+/// Whether `title` has a bracketed ticket ID, such as `[TW4YS]`, and none of them is `ticket`.
+fn names_another_ticket(title: &str, ticket: &str) -> bool {
+    let mut named = title.split('[').skip(1).filter_map(|rest| {
+        let (id, _) = rest.split_once(']')?;
+        let looks_like_id = !id.is_empty()
+            && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '.')
+            && id.chars().any(|c| c.is_ascii_alphabetic());
+        looks_like_id.then_some(id)
+    });
+    let mut any = false;
+    for id in named.by_ref() {
+        if id.eq_ignore_ascii_case(ticket) {
+            return false;
+        }
+        any = true;
+    }
+    any
+}
+
+fn named(name: Option<&str>, title: Option<String>) -> String {
     let Some(name) = name.filter(|name| !name.is_empty()) else {
         return c::muted("Nobody");
     };
-    if let Some(title) = session_title(name) {
+    if let Some(title) = title {
         return c::tip(&c::esc(&title), name);
     }
     let short = if let Some(rest) = name.strip_prefix("local_")

@@ -92,6 +92,9 @@ pub struct Parts {
     pub reporter: Arc<crate::justiciar::Reporter>,
     /// The emergency pause, which each heartbeat's reply updates.
     pub emergencies: Arc<crate::emergency::Emergencies>,
+    /// Reports session titles to the hub, both as a hook on each command and from the sender
+    /// loop for the sessions holding trees.
+    pub titles: Arc<crate::session_title::TitleHook>,
 }
 
 impl Parts {
@@ -132,6 +135,7 @@ impl Parts {
         let update = self.update.clone();
         let reporter = self.reporter.clone();
         let emergencies = self.emergencies.clone();
+        let titles = self.titles.clone();
         self.start_loop("ignite-sender", SENDER_STALLS_AFTER, move |ticker| {
             // The hub's version from the last heartbeat it answered.
             let hub_version: RefCell<Option<String>> = RefCell::new(None);
@@ -152,6 +156,7 @@ impl Parts {
             loop {
                 ticker.round(|| {
                     let sent = crate::outbox::tick(&db, ctx.hub.as_ref(), &beat);
+                    titles.report_holders(&ctx, &db);
                     landing.deliver_pending(&ctx);
                     if let Err(error) = update.poll_release() {
                         eprintln!("ignite: the release branch was not checked: {error}");

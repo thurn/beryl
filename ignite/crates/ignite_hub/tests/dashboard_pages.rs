@@ -295,6 +295,28 @@ fn sessions_that_reported_a_title_are_named_by_it_everywhere() {
 }
 
 #[test]
+fn a_title_naming_another_ticket_is_not_shown_for_its_assignee() {
+    let hub = seeded();
+    let now = Timestamp::parse(NOW).unwrap();
+    hub::session_titles::record(&hub.conn, "local_ff743711", "⚒️ [TW4YS] Earlier work", now)
+        .unwrap();
+    let page = hub.text("/TQ44S.7.24");
+    assert!(!page.contains("Earlier work"), "{page}");
+    assert!(page.contains("session ff7437"), "{page}");
+    let status = hub.text("/?fragment=status");
+    assert!(!status.contains("Earlier work"), "{status}");
+
+    hub::session_titles::record(
+        &hub.conn,
+        "local_ff743711",
+        "⚒️ [TQ44S.7.24] This work",
+        now,
+    )
+    .unwrap();
+    assert!(hub.text("/TQ44S.7.24").contains("This work"));
+}
+
+#[test]
 fn pages_revalidate_only_when_their_content_changes() {
     let mut hub = seeded();
     let home = hub.get("/");

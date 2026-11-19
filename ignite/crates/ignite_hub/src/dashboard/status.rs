@@ -10,7 +10,7 @@ use rusqlite::Connection;
 use ignite_core::time::Timestamp;
 use ignite_store::hub::leases;
 
-use super::common::person;
+use super::common::{person, worker};
 use super::components::{self as c, esc};
 use super::data::ReadError;
 use super::references::{display_id, ticket_url};
@@ -45,7 +45,7 @@ fn active_sessions(conn: &Connection, root: &str) -> Result<String, ReadError> {
             };
             let label = c::link(&ticket_url(root, id), &esc(&shown), None, "");
             c::row(
-                &(person(Some(session)) + &c::muted(" · ") + &label),
+                &(worker(Some(session), id) + &c::muted(" · ") + &label),
                 &esc(machine),
                 None,
             )

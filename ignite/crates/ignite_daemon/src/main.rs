@@ -132,6 +132,9 @@ impl Daemon {
                 base.clock.clone(),
                 Some(base.open()?),
             )),
+            titles: Arc::new(crate::session_title::TitleHook::new(
+                crate::session_title::app_data(&|name: &str| std::env::var(name).ok()),
+            )),
         };
         let server = assemble::server(&base, &ctx, &parts, &desks)?;
         let _ = parts.update.drain.set(server.clone());

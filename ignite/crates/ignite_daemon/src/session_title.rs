@@ -13,9 +13,11 @@
 //! The format belongs to the app and is undocumented, so every failure here means "no title", and
 //! the caller goes on as it would without one.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
+
+use rusqlite::Connection;
 
 use serde_json::Value;
 
@@ -90,6 +92,11 @@ fn search(sessions: &Path, file: &str) -> Option<PathBuf> {
 /// Reports to the hub the title of each session that runs a command from a build tree, whenever
 /// it differs from the title last reported for that session. Workers set their title after
 /// `ignite start`, and again when they finish, so a title read once at the claim would be stale.
+///
+/// A session renames itself without running a command: a reused worker claims its next ticket
+/// under the old ticket's title, then sets the new one. So the sender loop also calls
+/// [`TitleHook::report_holders`] after each heartbeat, and the dashboard never names a ticket's
+/// assignee by the previous ticket's title for longer than one heartbeat.
 pub struct TitleHook {
     app_data: Option<PathBuf>,
     reported: Mutex<HashMap<SessionId, String>>,
@@ -127,6 +134,28 @@ impl TitleHook {
             reported.insert(session.clone(), title);
         }
         sent.is_ok()
+    }
+
+    /// Reports the title of each session that holds a build tree in the local database `db`,
+    /// where it changed. A tree the database cannot list is skipped until the next round.
+    pub fn report_holders(&self, ctx: &Context, db: &Connection) {
+        let Ok(trees) = ignite_store::local::trees::all(db) else {
+            return;
+        };
+        let holders: BTreeSet<SessionId> = trees
+            .iter()
+            .filter_map(|tree| tree.session.as_deref())
+            .filter_map(|session| SessionId::new(session).ok())
+            .collect();
+        for session in &holders {
+            self.report(ctx, session);
+        }
+    }
+}
+
+impl Hook for Arc<TitleHook> {
+    fn run(&self, ctx: &Context, req: &Request, tree: &rows::Tree) -> Vec<String> {
+        self.as_ref().run(ctx, req, tree)
     }
 }
 
@@ -181,16 +210,12 @@ mod tests {
         assert_eq!(title(&dir, SESSION, &env).as_deref(), Some("Status check"));
     }
 
-    #[test]
-    fn the_hook_reports_a_title_only_when_it_changes() {
-        use std::sync::Arc;
-
+    fn context() -> (Context, Arc<ignite_core::fakes::FakeHub>) {
         use ignite_core::config::Config;
         use ignite_core::fakes::{FakeBuilds, FakeClock, FakeGit, FakeHub, FakeLauncher};
         use ignite_core::ids::MachineId;
         use ignite_core::time::Timestamp;
 
-        let dir = app_data("hook", Some(r#"{"title":"Before"}"#));
         let hub = Arc::new(FakeHub::default());
         let text = "[repository]\nremote = \"origin\"\nstaging = \"staging\"\n\
                     master = \"master\"\ntrees = \"trees\"\nchecks = \"checks\"\n\
@@ -209,6 +234,13 @@ mod tests {
             session: None,
             tree: None,
         };
+        (ctx, hub)
+    }
+
+    #[test]
+    fn the_hook_reports_a_title_only_when_it_changes() {
+        let dir = app_data("hook", Some(r#"{"title":"Before"}"#));
+        let (ctx, hub) = context();
         let session = SessionId::new(SESSION).unwrap();
         let hook = TitleHook::new(Some(dir.clone()));
         assert!(hook.report(&ctx, &session));
@@ -219,6 +251,37 @@ mod tests {
         let titles: Vec<String> = hub.session_titles().into_iter().map(|t| t.title).collect();
         assert_eq!(titles, ["Before", "After"]);
         assert!(!TitleHook::new(None).report(&ctx, &session));
+    }
+
+    #[test]
+    fn reports_the_titles_of_sessions_holding_trees() {
+        let dir = app_data("holders", Some(r#"{"title":"Holder"}"#));
+        let (ctx, hub) = context();
+        let db = ignite_store::local::open_in_memory().unwrap();
+        for (id, session) in [("t-1", Some(SESSION)), ("t-2", None)] {
+            ignite_store::local::trees::upsert(
+                &db,
+                &rows::Tree {
+                    id: id.to_owned(),
+                    path: format!("/trees/{id}"),
+                    kind: "ticket".to_owned(),
+                    ticket: None,
+                    session: session.map(str::to_owned),
+                    branch: None,
+                    built_commit: None,
+                    leased_at: None,
+                    last_used: None,
+                    state: "leased".to_owned(),
+                    owner: None,
+                },
+            )
+            .unwrap();
+        }
+        let hook = TitleHook::new(Some(dir));
+        hook.report_holders(&ctx, &db);
+        hook.report_holders(&ctx, &db);
+        let titles: Vec<String> = hub.session_titles().into_iter().map(|t| t.title).collect();
+        assert_eq!(titles, ["Holder"]);
     }
 
     #[test]
