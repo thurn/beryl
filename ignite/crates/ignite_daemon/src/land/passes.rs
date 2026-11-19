@@ -167,6 +167,14 @@ impl Passed {
         gated.run.from_cache += u32::try_from(carried.len()).unwrap_or(u32::MAX);
         gated.run.outcomes.extend(carried);
         gated.left = gated.left.max(self.gated.left);
+        for family in &gated.carried {
+            if let Some(left) = self.gated.left_by_family.get(family) {
+                gated.left_by_family.insert(family.clone(), *left);
+            }
+            if self.gated.run.cold_families.contains(family) {
+                gated.run.cold_families.push(family.clone());
+            }
+        }
         gated
     }
 }

@@ -4,6 +4,7 @@ mod express;
 mod fakes;
 mod more;
 mod races;
+mod release;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

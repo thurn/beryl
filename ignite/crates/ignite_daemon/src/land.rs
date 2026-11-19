@@ -31,12 +31,14 @@
 //!    its record and releases the lease, and a landing gives up after [`MAX_PASSES`] passes.
 //!    Records that a landing left `pushing` are settled by the daemon's sender (see
 //!    [`resolve`]).
-//! 7. If the release branch is configured and the landed commits changed Ignite's own source,
-//!    the commit also moves the release branch once its family's checks have passed (see
-//!    [`release`]). This never fails the landing.
-//! 8. The hub is told what landed, which closes the ticket. If it cannot be reached, the record
+//! 7. The hub is told what landed, which closes the ticket. If it cannot be reached, the record
 //!    stays on disk and the ticket closes when the hub returns (see [`records`]). The ticket
 //!    tree is released and the branch its work was saved to at a release is deleted.
+//! 8. If the release branch is configured and the landed commits changed Ignite's own source,
+//!    the commit also moves the release branch, if the release family's checks passed. That
+//!    was decided after step 4 and before the lease, running the family there if the gate did
+//!    not run all of it, so only a push is left here (see [`release`]). This never fails the
+//!    landing.
 //!
 //! `ignite sync` does step 1's checks and step 2 alone.
 //!
@@ -360,7 +362,7 @@ impl Landing {
         let mut interrupted = None;
         match self.records.get(&ticket).map_err(io)? {
             Some(record) if record.state == RecordState::Pushed => {
-                return Ok(self.finish(ctx, req, &held, &record, None, None));
+                return Ok(self.finish(ctx, req, &held, &record));
             }
             Some(record) => interrupted = Some(record),
             None => {}
@@ -400,7 +402,7 @@ impl Landing {
                 {
                     record.state = RecordState::Pushed;
                     self.records.write(&record).map_err(io)?;
-                    return Ok(self.finish(ctx, req, &held, &record, None, None));
+                    return Ok(self.finish(ctx, req, &held, &record));
                 }
                 // The interrupted push never landed: start again from nothing.
                 self.records.remove(&record.landed.ticket).map_err(io)?;
@@ -451,13 +453,6 @@ impl Landing {
                     Some(earlier) if carried.is_some() => earlier.merge(gated),
                     _ => gated,
                 };
-                if gated.run.passed() {
-                    last_passed = Some(Passed::new(
-                        rebased.head.clone(),
-                        changed.clone(),
-                        gated.clone(),
-                    ));
-                }
                 (gated, None)
             };
             // The landing tree, if the landing holds one, stays leased while the landing goes
@@ -475,6 +470,28 @@ impl Landing {
                     &gated,
                     &gate_tree.path,
                 )));
+            }
+            // Whether the commit may move the release branch is settled now, running the
+            // release family if the gate did not, so nothing but a push is left after the
+            // landing's own push (see `release`).
+            let mut gated = gated;
+            let verdict = self.judge_release(
+                ctx,
+                &gate_tree,
+                &changed,
+                &mut gated,
+                &options,
+                expressed.is_some(),
+            );
+            if steps::stop_requested() {
+                return Err(stopped());
+            }
+            if expressed.is_none() {
+                last_passed = Some(Passed::new(
+                    rebased.head.clone(),
+                    changed.clone(),
+                    gated.clone(),
+                ));
             }
 
             if lease.is_none() {
@@ -559,17 +576,10 @@ impl Landing {
                 Err(error) => return Err(io(error)),
             }
             drop(lease);
-            let release = self.move_release(
-                ctx,
-                &release::Landed {
-                    tree: &gate_tree,
-                    commit: &rebased.head,
-                    files: &record.landed.work.files,
-                    gated: &gated,
-                    options: &options,
-                    express: expressed.is_some(),
-                },
-            );
+            // The ticket closes and its tree is freed before the release branch moves, which
+            // needs neither.
+            let settled = self.settle(ctx, req, &held, &record);
+            let release = self.move_release(ctx, &gate_tree, &rebased.head, verdict);
             home.release(Some(&rebased.head));
             let summary = Summary {
                 tip,
@@ -579,20 +589,36 @@ impl Landing {
                 release,
                 express: expressed,
             };
-            return Ok(self.finish(ctx, req, &held, &record, Some(&summary), Some(&args.note)));
+            return Ok(Self::reply(
+                ctx,
+                &record,
+                settled,
+                Some(&summary),
+                Some(&args.note),
+            ));
         }
     }
 
-    /// Step 7: tells the hub, releases the ticket tree and deletes the saved branch.
+    /// Step 7 for a landing pushed earlier, which has nothing else to report.
     fn finish(
         &self,
         ctx: &Context,
         req: &Request,
         held: &TicketTree,
         record: &LandingRecord,
-        summary: Option<&Summary>,
-        note: Option<&str>,
     ) -> Reply {
+        let settled = self.settle(ctx, req, held, record);
+        Self::reply(ctx, record, settled, None, None)
+    }
+
+    /// Step 7: tells the hub, releases the ticket tree and deletes the saved branch.
+    fn settle(
+        &self,
+        ctx: &Context,
+        req: &Request,
+        held: &TicketTree,
+        record: &LandingRecord,
+    ) -> Settled {
         let ticket = &record.landed.ticket;
         let closed = match self.records.deliver(ctx.hub.as_ref(), record) {
             Ok(()) => "ticket closed".to_owned(),
@@ -619,6 +645,27 @@ impl Landing {
                 format!("the saved branch of {ticket} was not deleted: {error}"),
             ));
         }
+        Settled {
+            closed,
+            released,
+            problems,
+        }
+    }
+
+    /// The reply of a landing that has pushed and settled.
+    fn reply(
+        ctx: &Context,
+        record: &LandingRecord,
+        settled: Settled,
+        summary: Option<&Summary>,
+        note: Option<&str>,
+    ) -> Reply {
+        let Settled {
+            closed,
+            released,
+            problems,
+        } = settled;
+        let ticket = &record.landed.ticket;
         let staging = &ctx.config.repository.staging;
         let mut lines = Vec::new();
         if let Some(summary) = summary {
@@ -742,7 +789,17 @@ struct Rebased {
     landed_since: u32,
 }
 
-/// What a landing did before step 7, for its output.
+/// What step 7 did, for the landing's output.
+struct Settled {
+    /// What became of the ticket at the hub.
+    closed: String,
+    /// What became of the ticket tree.
+    released: String,
+    /// Warnings about what could not be done.
+    problems: Vec<(String, String)>,
+}
+
+/// What a landing did besides step 7, for its output.
 struct Summary {
     tip: Commit,
     landed_since: u32,

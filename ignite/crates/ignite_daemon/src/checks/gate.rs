@@ -8,7 +8,7 @@
 //! its checks are left to tip verification. The output prints the seconds spent building and
 //! the seconds spent running checks on lines of their own.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ignite_core::budget::billions_text;
 use ignite_core::gate::cost_of;
@@ -31,6 +31,9 @@ pub struct GateRun {
     /// Checks past the budget, needing a product the tree has never built, or below the
     /// threshold, which tip verification runs.
     pub left: usize,
+    /// How many of [`GateRun::left`] each family has, for the families with any. A family in
+    /// `run.cold_families` is not here: it was never listed, so its checks are not counted.
+    pub left_by_family: BTreeMap<String, usize>,
     /// How the gate spent its budget; `None` when it stopped before choosing.
     pub budget: Option<GateBudget>,
     /// The families the change can affect, which the gate judged (see [`Checks::scope`]),
@@ -233,6 +236,7 @@ impl Checks {
         GateRun {
             run,
             left: gate_plan.past_budget.len() + gate_plan.cold.len() + gate_plan.tip.len(),
+            left_by_family: left_by_family(&gate_plan),
             budget: Some(budget),
             scoped,
             carried,
@@ -263,6 +267,15 @@ impl Checks {
             .collect();
         (again, untouched)
     }
+}
+
+/// How many checks of each family `plan` leaves to tip verification.
+fn left_by_family(plan: &ignite_core::gate::GatePlan) -> BTreeMap<String, usize> {
+    let mut left = BTreeMap::new();
+    for check in plan.past_budget.iter().chain(&plan.cold).chain(&plan.tip) {
+        *left.entry(check.check.family().to_owned()).or_insert(0) += 1;
+    }
+    left
 }
 
 /// The counts and costs of each part of `plan`.

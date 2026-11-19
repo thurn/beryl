@@ -573,6 +573,19 @@ How the executable is installed and kept current:
   [Express landings](#express-landings)). A fix to Ignite therefore reaches
   every machine minutes after it lands, without waiting for tip verification of
   everything else, which an Ignite bug can itself be blocking.
+- Whether the release moves is decided before the push. The gate's outcomes
+  count when it ran every check of the release family; checks of other families
+  that it left to tip verification do not matter. Otherwise the landing runs the
+  whole family in the gate's tree before it takes the lease, building any
+  product the family needs that the tree has never built, and a passing run
+  counts with the gate's checks. A failing run does not refuse the landing; the
+  release stays where it is and the `release` line says why. After the push the
+  ticket closes and its tree is released first, and the only work left before
+  the reply is the push to the release branch. On 2026-11-18 two landings each
+  spent 80 to 135 seconds after their push building and running the `ignite`
+  family, with their ticket trees still leased: one because its gate had left
+  unrelated checks to tip verification, the other because its gate had not
+  listed the family for lack of a built product.
 - A release survives a rebase. A commit pushed to the release branch by hand is
   rebased when its ticket lands, so the release branch then holds a commit that
   the landed one does not contain. The landing moves the release branch over it

@@ -75,6 +75,8 @@ pub struct TestGit {
     /// Changes another machine lands just before each of the next pushes to the integration
     /// branch, first queued first, so that push is rejected because the tip moved.
     pub landed_before_push: Mutex<VecDeque<Vec<(&'static str, &'static str)>>>,
+    /// Run at the next push to a branch other than the integration branch, before it lands.
+    pub on_branch_push: Mutex<Option<Hook>>,
 }
 
 impl Repo {
@@ -199,6 +201,10 @@ impl Git for TestGit {
 
     fn push(&self, tree: &Path, commit: &Commit, branch: &str) -> Result<Push> {
         if branch != "staging" {
+            let hook = self.on_branch_push.lock().unwrap().take();
+            if let Some(hook) = hook {
+                hook();
+            }
             if self.other_branch_rejected.load(Ordering::SeqCst) {
                 return Ok(Push::Rejected {
                     reason: "[rejected] (non-fast-forward)".to_owned(),
@@ -507,6 +513,13 @@ pub struct CacheGate {
     pub family_runs: Mutex<Vec<String>>,
     /// The families each gate judged, in order, and the tree it ran in.
     pub judged: Mutex<Vec<(PathBuf, Vec<String>)>>,
+    /// Checks the gate leaves to tip verification instead of running them.
+    pub left: Vec<&'static str>,
+    /// Families the gate does not list, as if listing them needed a product the tree has
+    /// never built.
+    pub cold: Vec<&'static str>,
+    /// Run at the next `run_family`, before it runs.
+    pub on_family: Mutex<Option<Hook>>,
 }
 
 impl LandGate for CacheGate {
@@ -517,6 +530,10 @@ impl LandGate for CacheGate {
         family: &str,
         _options: &RunOptions,
     ) -> CheckRun {
+        let hook = self.on_family.lock().unwrap().take();
+        if let Some(hook) = hook {
+            hook();
+        }
         self.family_run(family)
     }
 
@@ -566,9 +583,10 @@ impl LandGate for CacheGate {
             .checks
             .iter()
             .filter(|(name, _)| {
-                judged
-                    .iter()
-                    .any(|f| f == CheckName::new(*name).unwrap().family())
+                let family = CheckName::new(*name).unwrap().family().to_owned();
+                judged.contains(&family)
+                    && !self.left.contains(name)
+                    && !self.cold.contains(&family.as_str())
             })
             .map(|(name, paths)| {
                 let paths: Vec<String> = paths.iter().map(|p| (*p).to_owned()).collect();
@@ -617,16 +635,36 @@ impl LandGate for CacheGate {
             }
         }
         self.passes.lock().unwrap().push(ran);
-        GateRun {
+        let mut gated = GateRun {
             run,
             scoped,
             carried,
             ..GateRun::default()
-        }
+        };
+        self.leave(&judged, &mut gated);
+        gated
     }
 }
 
 impl CacheGate {
+    /// Records the checks in `left` and the families in `cold` among `judged` as left to tip
+    /// verification.
+    fn leave(&self, judged: &[String], gated: &mut GateRun) {
+        for name in &self.left {
+            let family = CheckName::new(*name).unwrap().family().to_owned();
+            if judged.contains(&family) {
+                *gated.left_by_family.entry(family).or_insert(0) += 1;
+                gated.left += 1;
+            }
+        }
+        gated.run.cold_families = self
+            .cold
+            .iter()
+            .filter(|family| judged.iter().any(|f| f == *family))
+            .map(|family| (*family).to_owned())
+            .collect();
+    }
+
     /// A pass of one family's checks, which fails the ones in `failing`.
     fn family_run(&self, family: &str) -> CheckRun {
         self.family_runs.lock().unwrap().push(family.to_owned());
