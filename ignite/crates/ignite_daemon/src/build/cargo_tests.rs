@@ -55,6 +55,23 @@ fn a_command_without_packages_compares_no_features() {
     assert_eq!((second, f.launcher.tree_runs()), (BuildResult::Current, 0));
 }
 
+/// A cargo-nextest run selects the packages the build selected, so it compiles nothing more:
+/// the packages named when their features match the whole workspace's, and none, the whole
+/// workspace, when they differ.
+#[test]
+fn a_command_selects_the_packages_its_build_selects() {
+    let f = fixture("selected", false);
+    let a = names(&["a"]);
+    assert_eq!(f.manager.selected(&tree(), "tests", &a), a);
+    assert_eq!(f.manager.selected(&tree(), "fixed", &a), a);
+    let f = fixture("selected-whole", false);
+    f.launcher.with(|s| {
+        s.subset_tree = "serde v1.0.0|std\n".into();
+        s.whole_tree = "serde v1.0.0|derive,std\n".into();
+    });
+    assert!(f.manager.selected(&tree(), "tests", &a).is_empty());
+}
+
 #[test]
 fn feature_differences_ignore_feature_nodes_and_repeats() {
     let whole = "x v1|a,b\nx feature \"a\"\nx v1|a,b (*)\ny v2|\n";

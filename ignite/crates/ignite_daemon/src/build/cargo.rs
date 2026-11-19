@@ -3,9 +3,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ignite_core::ids::InputHash;
+use ignite_core::ids::{InputHash, TreeId};
 
-use super::PACKAGES;
+use super::{BuildManager, PACKAGES};
 
 /// What a whole-workspace feature tree depends on: the workspace's directory, the state of its
 /// Cargo files and the packages the product leaves out of it.
@@ -36,7 +36,7 @@ pub(super) fn package_args(packages: &[String], exclude: &[String]) -> Vec<Strin
 
 /// The build command split at whitespace, with `{packages}` replaced by Cargo's package
 /// arguments. The command runs directly, not through a shell.
-pub(super) fn command(build: &str, packages: &[String], exclude: &[String]) -> Vec<String> {
+pub(crate) fn command(build: &str, packages: &[String], exclude: &[String]) -> Vec<String> {
     build
         .split_whitespace()
         .flat_map(|word| {
@@ -76,4 +76,28 @@ pub(super) fn feature_differences(whole: &str, subset: &str) -> Vec<String> {
         }
     }
     differing.into_iter().collect()
+}
+
+impl BuildManager {
+    /// [`ignite_core::traits::Builds::selected`]: `packages`, or none when the product's build
+    /// would build the whole workspace for them because their features differ from the whole
+    /// workspace's, or when that cannot be told. A product whose build says no `{packages}`
+    /// builds the same thing for any caller, so `packages` are what the caller selects.
+    pub(super) fn selected_packages(
+        &self,
+        tree: &TreeId,
+        product: &str,
+        packages: &[String],
+    ) -> Vec<String> {
+        let Ok(plan) = self.plan(tree, product, packages) else {
+            return Vec::new();
+        };
+        if plan.request.packages.is_empty() {
+            return packages.to_vec();
+        }
+        match self.differing_features(&plan) {
+            Ok(differing) if differing.is_empty() => plan.request.packages,
+            _ => Vec::new(),
+        }
+    }
 }

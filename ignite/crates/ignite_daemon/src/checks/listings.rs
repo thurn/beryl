@@ -75,6 +75,10 @@ pub(crate) enum Origin {
     Kept { key: ListingKey, sources: InputHash },
     /// Listed now; `key` is where to keep it, or `None` when it must not be kept.
     Made { key: Option<ListingKey> },
+    /// Listed now for some of the family's packages only (see [`Checks::list`]). It names
+    /// none of the other packages' checks, so it is neither kept nor stored as the family's
+    /// newest listing.
+    Scoped,
 }
 
 /// A family's checks and where they came from.
@@ -352,7 +356,14 @@ impl Checks {
 
     /// The family's checks: `kept` when there is a kept listing, or else a new listing, to be
     /// kept under `key` if it may be. `Err` holds the output of the last failed try.
-    #[allow(clippy::too_many_arguments)]
+    ///
+    /// With `scope`, a `nextest` family whose `list` says `{packages}` is built and listed for
+    /// those packages only, unless building them alone would build the whole workspace anyway
+    /// ([`ignite_core::traits::Builds::selected`]). A Rust test family's listing builds every
+    /// test binary it lists, so after a change to one card file a listing of the whole
+    /// workspace's tests recompiled 35 crates, 33 s alone and 77 s beside other builds, to run
+    /// one test of one package.
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub(super) fn list(
         &self,
         ctx: &Context,
@@ -363,6 +374,7 @@ impl Checks {
         run: &mut CheckRun,
         key: Option<ListingKey>,
         kept: Option<(ListingKey, Arc<Kept>)>,
+        scope: Option<&[String]>,
     ) -> std::result::Result<Listing, ListError> {
         if let Some((key, kept)) = kept {
             run.listings_kept += 1;
@@ -379,8 +391,16 @@ impl Checks {
         let _listing = crate::steps::during(format!("listing family {name} in {}", tree.id));
         // `list` may read what a product builds, so it waits for the products it needs.
         let needs = family.list_needs.as_ref().unwrap_or(&family.needs);
+        let packages = match scope {
+            Some(packages) if Self::lists_packages(family) => {
+                Self::selected(ctx, tree, family, packages)
+            }
+            _ => Vec::new(),
+        };
+        let scoped = !packages.is_empty();
+        let key = key.filter(|_| !scoped);
         let who = execute::build_for(options);
-        self.build_products(ctx, tree, needs, &[], &who, run)
+        self.build_products(ctx, tree, needs, &packages, &who, run)
             .map_err(|_| ListError::Build)?;
         let (args, cwd) = match family.adapter {
             Adapter::Jsonl => (
@@ -388,7 +408,11 @@ impl Checks {
                 tree.path.clone(),
             ),
             Adapter::Nextest => (
-                adapters::nextest_list_command(family.list.as_deref()),
+                adapters::nextest_list_command(
+                    family.list.as_deref(),
+                    &packages,
+                    &self.nextest_exclude(family),
+                ),
                 self.nextest_dir(tree, family),
             ),
         };
@@ -462,9 +486,14 @@ impl Checks {
                     .and_then(|target| {
                         observed::observe(&tree.path, &target, &tree.graph, &tree.tracked)
                     });
+                let origin = if scoped {
+                    Origin::Scoped
+                } else {
+                    Origin::Made { key }
+                };
                 return Ok(Listing {
                     checks: listed,
-                    origin: Origin::Made { key },
+                    origin,
                     reads,
                 });
             }
@@ -492,6 +521,41 @@ impl Checks {
     pub(crate) fn target_dir(&self, family: &Family) -> Option<String> {
         let product = self.settings.manifest.products.get(family.needs.first()?)?;
         product.outputs.first().cloned()
+    }
+
+    /// The packages to list a family for when `ignite test` named only checks of `matched`, as
+    /// its newest listing has them: those packages, and every package of their workspaces
+    /// that holds a path of `changed`, the files the tree's branch changes, so that a test the
+    /// branch added to a package is listed too.
+    pub(crate) fn test_scope(
+        tree: &OpenTree,
+        matched: &BTreeSet<String>,
+        changed: &[String],
+    ) -> Vec<String> {
+        let packages = &tree.graph.packages;
+        let workspaces: BTreeSet<&str> = packages
+            .iter()
+            .filter(|p| matched.contains(&p.name))
+            .map(|p| p.workspace.as_str())
+            .collect();
+        let mut scope = matched.clone();
+        for package in packages {
+            let holds = changed.iter().any(|path| within(path, &package.dir));
+            if holds && workspaces.contains(package.workspace.as_str()) {
+                scope.insert(package.name.clone());
+            }
+        }
+        scope.into_iter().collect()
+    }
+
+    /// Whether the family's `list` can list some of its packages: a `nextest` family whose
+    /// `list` says `{packages}`.
+    pub(crate) fn lists_packages(family: &Family) -> bool {
+        family.adapter == Adapter::Nextest
+            && family
+                .list
+                .as_deref()
+                .is_some_and(|list| list.split_whitespace().any(|w| w == "{packages}"))
     }
 
     /// Remembers that `name` has listed checks, if it has, so a later empty listing of it is

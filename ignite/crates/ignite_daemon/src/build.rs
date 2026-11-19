@@ -58,7 +58,8 @@ mod rejoin;
 pub mod repair;
 mod room;
 mod store;
-use cargo::{WholeKey, command, feature_differences, package_args};
+pub(crate) use cargo::command;
+use cargo::{WholeKey, feature_differences, package_args};
 use flight::{Flight, FlightGuard, STOP_RECHECK};
 pub use rejoin::BUILD_KEY_ENV;
 pub use room::{DiskRoom, NativeRoom, START_GB};
@@ -673,6 +674,10 @@ impl Builds for BuildManager {
     /// a daemon restart and are kept between tickets, and deleting a tree's builds deletes them. Products that write the same directory (the Rust workspace's test
     /// binaries and its command-line programs share `rust/target`) count as built together; the
     /// dependencies they share are compiled already, so building the other is incremental too.
+    fn selected(&self, tree: &TreeId, product: &str, packages: &[String]) -> Vec<String> {
+        self.selected_packages(tree, product, packages)
+    }
+
     fn has_built(&self, tree: &TreeId, product: &str) -> bool {
         if lock(&self.state)
             .held

@@ -24,6 +24,9 @@ use super::{CheckRun, Checks, Keyed, OpenTree, Prepared, RunOptions};
 use crate::land::express::ExpressLane;
 use crate::server::{Context, Verb};
 
+/// The families `ignite test` lists, and the packages to list some of them for.
+type TestFamilies<'a> = (Vec<&'a str>, BTreeMap<String, Vec<String>>);
+
 /// The most failures a reply lists; the rest are in its JSON.
 const SHOWN_FAILURES: usize = 8;
 
@@ -60,13 +63,14 @@ impl Verb for TestVerb {
             return reply;
         }
         let finding = Stopwatch::start(ctx);
-        let families = match Self::test_families(&checks, ctx, &tree, &words, &mut run) {
+        let (families, scopes) = match Self::test_families(&checks, ctx, &tree, &words, &mut run) {
             Ok(found) => found,
             Err(reply) => return reply,
         };
         run.stage(ctx, "finding families", finding);
         let listing = Stopwatch::start(ctx);
-        let mut prepared = checks.prepare(ctx, &tree, &families, &options, &mut run);
+        let mut prepared =
+            checks.prepare_scoped(ctx, &tree, &families, &scopes, &options, &mut run);
         run.stage(ctx, "listing", listing);
         let unmatched: Vec<&str> = words
             .iter()
@@ -122,6 +126,11 @@ impl TestVerb {
     /// listing, so is every family without a kept listing for the tree's inputs. When no
     /// family could hold a bare word, the reply says how checks are named.
     ///
+    /// When every bare word matched, a `nextest` family found through its newest listing
+    /// alone is listed for the packages of its matching checks only, and the packages the
+    /// branch changes ([`Checks::test_scope`]); these are the second value. Listing a Rust test
+    /// family builds every test binary it lists.
+    ///
     /// Steps of a second or more, such as reading a large family's newest listing, are recorded
     /// in `run` for the `slow` line.
     fn test_families<'a>(
@@ -130,7 +139,7 @@ impl TestVerb {
         tree: &OpenTree,
         words: &[&str],
         run: &mut CheckRun,
-    ) -> Result<Vec<&'a str>, Reply> {
+    ) -> Result<TestFamilies<'a>, Reply> {
         let prefixed = |w: &str| {
             w.split_once(':')
                 .and_then(|(f, _)| checks.families().find(|(n, _)| *n == f))
@@ -143,7 +152,7 @@ impl TestVerb {
             .filter(|w| prefixed(w).is_none())
             .collect();
         if bare.is_empty() {
-            return Ok(families);
+            return Ok((families, BTreeMap::new()));
         }
         let all: Vec<(&str, &Family)> = checks.families().collect();
         let reading = Stopwatch::start(ctx);
@@ -151,7 +160,9 @@ impl TestVerb {
         run.slow(ctx, "reading kept listings", reading);
         let mut found = vec![false; bare.len()];
         let mut not_current = Vec::new();
-        for (name, _) in &all {
+        // The packages of the matching checks of each family found through its newest listing.
+        let mut matched: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (name, family) in &all {
             let listing = if let Some((_, listing)) = kept.get(*name) {
                 Arc::clone(listing)
             } else {
@@ -181,12 +192,37 @@ impl TestVerb {
                 }
             }
             if named {
+                if !kept.contains_key(*name) && Checks::lists_packages(family) {
+                    let packages = listing
+                        .checks
+                        .iter()
+                        .filter(|l| bare.iter().any(|w| matches(w, l.check.as_str())))
+                        .filter_map(|l| l.package.clone());
+                    matched.insert((*name).to_owned(), packages.collect());
+                }
                 families.push(name);
             }
         }
         if found.contains(&false) {
             families.extend(not_current);
+            matched.clear();
         }
+        // A family a word names by its prefix is asked for whole.
+        matched.retain(|name, packages| {
+            !packages.is_empty() && !words.iter().any(|w| prefixed(w) == Some(name.as_str()))
+        });
+        let changed = if matched.is_empty() {
+            Vec::new()
+        } else {
+            changed_paths(checks, ctx, tree).unwrap_or_else(|_| {
+                matched.clear();
+                Vec::new()
+            })
+        };
+        let scopes = matched
+            .iter()
+            .map(|(name, packages)| (name.clone(), Checks::test_scope(tree, packages, &changed)))
+            .collect();
         if families.is_empty() {
             let names: Vec<&str> = all.iter().map(|(n, _)| *n).collect();
             return Err(Reply::text(
@@ -201,7 +237,7 @@ impl TestVerb {
         }
         families.sort_unstable();
         families.dedup();
-        Ok(families)
+        Ok((families, scopes))
     }
 }
 

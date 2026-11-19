@@ -147,6 +147,17 @@ pub trait Builds: Send + Sync {
         self.ensure(tree, product, packages)
     }
 
+    /// The packages a build of `product` for `packages` selects: `packages` themselves, or none,
+    /// standing for the whole workspace, when building them alone would enable other features
+    /// on shared dependencies than the whole workspace's build does, and [`Builds::ensure`]
+    /// builds the whole workspace instead. A command that compiles what it needs before it
+    /// runs, such as a cargo-nextest run, selects the same packages, so that it compiles nothing
+    /// the build did not. An implementation that cannot tell selects `packages`.
+    fn selected(&self, tree: &TreeId, product: &str, packages: &[String]) -> Vec<String> {
+        let _ = (tree, product);
+        packages.to_vec()
+    }
+
     /// Whether `tree` has built `product` before, so that making it current is an incremental
     /// rebuild rather than a cold build. The landing gate builds no product a tree has never
     /// built for checks chosen by score. An implementation that cannot tell says it has.

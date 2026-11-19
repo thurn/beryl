@@ -546,11 +546,13 @@ impl Checks {
         run: &mut CheckRun,
         key: Option<ListingKey>,
         kept: Option<(ListingKey, Arc<Kept>)>,
+        scope: Option<&[String]>,
     ) -> std::result::Result<Listing, ListError> {
-        let foreign = !self.families().any(|(own, _)| own == name);
+        // A listing of some packages is not the family's listing for its inputs.
+        let foreign = scope.is_none() && !self.families().any(|(own, _)| own == name);
         let hash = key.as_ref().filter(|_| foreign).map(|k| k.hash.clone());
         let Some(hash) = hash else {
-            return self.list(ctx, tree, name, family, options, run, key, kept);
+            return self.list(ctx, tree, name, family, options, run, key, kept, scope);
         };
         let remembered = self
             .foreign_listings
@@ -569,7 +571,7 @@ impl Checks {
             };
         }
         let before = run.build_failures.len();
-        let result = self.list(ctx, tree, name, family, options, run, key, kept);
+        let result = self.list(ctx, tree, name, family, options, run, key, kept, None);
         let outcome = match &result {
             Ok(listing) => Foreign::Listed(listing.clone()),
             Err(failure) => Foreign::Failed(failure.clone(), run.build_failures[before..].to_vec()),

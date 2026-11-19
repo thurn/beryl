@@ -326,6 +326,15 @@ The verbs an agent uses while working:
   name that no family could hold is refused at once with a hint on how checks
   are named, so a Rust test function name never builds every family.
 
+  When every name matched, a `nextest` family found only through its newest
+  listing, whose `list` says `{packages}`, is built and listed for the packages
+  of the matching tests and the packages the branch changes, and that listing is
+  not kept. Listing a Rust test family builds every test binary it lists: on
+  2026-11-19 `ignite test fork` after a one-line change to a card file
+  recompiled 35 crates (33 s alone, 77 s beside other builds) to run one test of
+  one package. A test added in a package the branch does not change, whose name
+  matches as well, is left out until the family is listed whole.
+
   The families are listed, and then run, each on a thread of its own, so a
   family whose `list` needs no product is listed while another family's product
   builds, and the products of different families build at once where the
@@ -1370,7 +1379,14 @@ The fields:
 - `list` prints the family's checks, each with any inputs of its own. A check
   that reads something no file holds, such as the commit subjects since the
   branch left staging, also prints a `digest` of it, which enters its input
-  hash. `run` runs the checks named.
+  hash. `run` runs the checks named. In a `nextest` family's `list` and `run`,
+  `{packages}` stands for Cargo's arguments that select packages, as in a
+  product's build: `-p` for each package of the checks a run runs, or the whole
+  workspace less the `exclude` of the first product in `needs`. cargo-nextest
+  compiles every test binary of the packages it selects before it lists or runs,
+  so a run of one package's tests that selected the whole workspace compiled
+  every package's. A run selects the whole workspace when building its packages
+  alone would enable other features on shared dependencies.
 - A listing is kept under the family's name and the hash of everything `list`
   can read, in the daemon's memory, its local database and the hub, so a listing
   one machine made serves every machine whose tree has that hash. A listing is

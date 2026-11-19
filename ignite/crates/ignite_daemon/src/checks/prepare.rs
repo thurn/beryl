@@ -4,6 +4,7 @@
 //! ([`on_threads`]); the landing gate lists in two rounds, so a fault found without building
 //! anything stops it before the families that need a product are listed.
 
+use std::collections::BTreeMap;
 use std::panic::resume_unwind;
 use std::sync::Arc;
 use std::thread;
@@ -31,11 +32,25 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Prepared> {
+        self.prepare_scoped(ctx, tree, families, &BTreeMap::new(), options, run)
+    }
+
+    /// [`Checks::prepare`], listing each family in `scopes` for the packages it names only
+    /// (see [`Checks::list`]), which `ignite test <names>` asks for.
+    pub(crate) fn prepare_scoped(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        families: &[&str],
+        scopes: &BTreeMap<String, Vec<String>>,
+        options: &RunOptions,
+        run: &mut CheckRun,
+    ) -> Vec<Prepared> {
         let among: Vec<(&str, &Family)> = self
             .families()
             .filter(|(n, _)| families.contains(n))
             .collect();
-        self.prepare_among(ctx, tree, &among, options, run)
+        self.prepare_families(ctx, tree, &among, options, run, None, scopes)
     }
 
     /// [`Checks::prepare`] for exactly the families given, whether or not this machine runs
@@ -48,7 +63,7 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
     ) -> Vec<Prepared> {
-        self.prepare_families(ctx, tree, among, options, run, None)
+        self.prepare_families(ctx, tree, among, options, run, None, &BTreeMap::new())
     }
 
     /// [`Checks::prepare_among`] for the landing gate, which stops at the first fault it knows
@@ -69,11 +84,12 @@ impl Checks {
         run: &mut CheckRun,
         cold: Cold<'_>,
     ) -> Vec<Prepared> {
-        self.prepare_families(ctx, tree, among, options, run, Some(cold))
+        self.prepare_families(ctx, tree, among, options, run, Some(cold), &BTreeMap::new())
     }
 
     /// `gate` is the landing gate's test for a family it leaves unlisted; `None` for every
-    /// other caller, which lists every family and does not stop at the first fault.
+    /// other caller, which lists every family and does not stop at the first fault. `scopes`
+    /// names the packages to list some families for.
     ///
     /// Outside the landing gate each family is listed on a thread of its own, so a family whose
     /// `list` needs no product, or a product already current, is listed while another family's
@@ -87,6 +103,7 @@ impl Checks {
     /// fault, it lists the other families at once, whose products are by then current. A
     /// fault in the first round leaves the other families unlisted, but the gate still waits
     /// for the builds already started; their products are current for the next attempt.
+    #[allow(clippy::too_many_arguments)]
     fn prepare_families(
         &self,
         ctx: &Context,
@@ -95,6 +112,7 @@ impl Checks {
         options: &RunOptions,
         run: &mut CheckRun,
         gate: Option<Cold<'_>>,
+        scopes: &BTreeMap<String, Vec<String>>,
     ) -> Vec<Prepared> {
         let fail_fast = gate.is_some();
         // Every family's listing hash from one reading of the tree, and one request for every
@@ -126,6 +144,7 @@ impl Checks {
                     hash: hash.clone(),
                 }),
                 kept: kept.remove(name),
+                scope: scopes.get(name).cloned(),
             })
             .collect();
         if !fail_fast {
@@ -233,6 +252,7 @@ impl Checks {
             family,
             key,
             kept,
+            scope,
         } = work;
         let listed = self.list_remembering_foreign(
             ctx,
@@ -242,6 +262,7 @@ impl Checks {
             run,
             key.clone(),
             kept,
+            scope.as_deref(),
         );
         let mut listing = Self::listed_or_noted(name, listed, run)?;
         let keying = Stopwatch::start(ctx);
@@ -257,7 +278,7 @@ impl Checks {
             // The listing was made from other files than the tree's: list the family again.
             self.forget(old);
             self.forget_foreign(name);
-            let listed = self.list(ctx, tree, name, family, options, run, key, None);
+            let listed = self.list(ctx, tree, name, family, options, run, key, None, None);
             listing = Self::listed_or_noted(name, listed, run)?;
             let keying = Stopwatch::start(ctx);
             (keyed, broken, sources) = self.key_listing(ctx, tree, (name, family), &listing);
@@ -373,13 +394,14 @@ pub(super) fn on_threads<I: Send, T: Send>(
     })
 }
 
-/// One family to prepare: its name and declaration, the key its listing is kept under, and the
-/// kept listing found for it, if any.
+/// One family to prepare: its name and declaration, the key its listing is kept under, the
+/// kept listing found for it, if any, and the packages to list it for, if only some.
 struct FamilyWork<'a> {
     name: &'a str,
     family: &'a Family,
     key: Option<ListingKey>,
     kept: Option<(ListingKey, Arc<Kept>)>,
+    scope: Option<Vec<String>>,
 }
 
 /// One piece of the landing gate's first round of listing: a product to build, or a family to

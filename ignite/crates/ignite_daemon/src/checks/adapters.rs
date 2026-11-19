@@ -267,14 +267,28 @@ fn parsed_results(text: &str) -> (Vec<Reported>, Option<CheckName>) {
     (reported, last)
 }
 
-/// A `nextest` family's list command.
-pub fn nextest_list_command(list: Option<&str>) -> Vec<String> {
-    words(list.unwrap_or(NEXTEST_LIST))
+/// A `nextest` family's list command, with `{packages}` standing for Cargo's arguments that
+/// select `packages`, or the whole workspace less `exclude` when none are named, as in a
+/// product's build (see `crate::build`).
+pub fn nextest_list_command(
+    list: Option<&str>,
+    packages: &[String],
+    exclude: &[String],
+) -> Vec<String> {
+    crate::build::command(list.unwrap_or(NEXTEST_LIST), packages, exclude)
 }
 
-/// A `nextest` family's run command for `targets`, selected with a filterset.
-pub fn nextest_run_command(run: Option<&str>, targets: &[&Target]) -> Vec<String> {
-    let mut args = words(run.unwrap_or(NEXTEST_RUN));
+/// A `nextest` family's run command for `targets`, selected with a filterset, with
+/// `{packages}` replaced as in [`nextest_list_command`]. cargo-nextest compiles every test
+/// binary of the packages a run selects before it runs any test, so a run of one package's
+/// tests that selected the whole workspace compiled every package's.
+pub fn nextest_run_command(
+    run: Option<&str>,
+    packages: &[String],
+    exclude: &[String],
+    targets: &[&Target],
+) -> Vec<String> {
+    let mut args = crate::build::command(run.unwrap_or(NEXTEST_RUN), packages, exclude);
     let filter: Vec<String> = targets
         .iter()
         .map(|t| format!("(binary_id(={}) & test(={}))", t.binary_id, t.test))
@@ -549,10 +563,27 @@ mod tests {
     fn nextest_run_selects_each_test_exactly() {
         let listed = listing();
         let targets: Vec<&Target> = listed.iter().filter_map(|l| l.target.as_ref()).collect();
-        let args = nextest_run_command(None, &targets);
+        let args = nextest_run_command(None, &[], &[], &targets);
         assert_eq!(
             args.last().unwrap(),
             "(binary_id(=cli::cli) & test(=runs)) | (binary_id(=core) & test(=ids::tests::a))"
+        );
+    }
+
+    #[test]
+    fn nextest_commands_select_the_packages_named_or_the_whole_workspace() {
+        let exclude = ["slow".to_owned()];
+        let list = "cargo nextest list {packages} --message-format json";
+        assert_eq!(
+            nextest_list_command(Some(list), &[], &exclude).join(" "),
+            "cargo nextest list --workspace --exclude slow --message-format json"
+        );
+        let packages = ["cli".to_owned(), "core".to_owned()];
+        let run = "cargo nextest run {packages} --message-format libtest-json-plus";
+        let args = nextest_run_command(Some(run), &packages, &exclude, &[]);
+        assert_eq!(
+            args[..8].join(" "),
+            "cargo nextest run -p cli -p core --message-format"
         );
     }
 }

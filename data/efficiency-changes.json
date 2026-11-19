@@ -574,5 +574,10 @@
     "label": "Rust tests that open a repository file through `beryl_test_files` or `ignite_core::test_files` are hashed over the files they were seen to open, so a data file reruns only the tests that opened it, not every test of the package that lists it in `package_inputs`",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite test <word>` lists a Rust test family for the packages of the tests it names and the packages the branch changes, and every Rust test run selects only its tests' packages, so a card file edit no longer builds every package's test binaries to run one test (on 2026-11-19 `ignite test fork` after a one-line card comment change waited 77 s for 35 crates of the `rust-tests` build)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

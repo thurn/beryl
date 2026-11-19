@@ -542,7 +542,20 @@ impl Checks {
                     .iter()
                     .filter_map(|k| k.listed.target.as_ref())
                     .collect();
-                let args = adapters::nextest_run_command(family.run.as_deref(), &targets);
+                let mut packages: Vec<String> = checks
+                    .iter()
+                    .filter_map(|k| k.listed.package.clone())
+                    .collect();
+                packages.sort();
+                packages.dedup();
+                let packages = Self::selected(ctx, tree, family, &packages);
+                let exclude = self.nextest_exclude(family);
+                let args = adapters::nextest_run_command(
+                    family.run.as_deref(),
+                    &packages,
+                    &exclude,
+                    &targets,
+                );
                 let mut env = vec![(
                     adapters::NEXTEST_JSON_ENV.0.to_owned(),
                     adapters::NEXTEST_JSON_ENV.1.to_owned(),
@@ -575,6 +588,35 @@ impl Checks {
             .and_then(|n| self.settings.manifest.products.get(n))
             .and_then(|p| p.dir.as_deref())
             .map_or_else(|| tree.path.clone(), |dir| tree.path.join(dir))
+    }
+
+    /// The packages a `nextest` family's command selects to list or run the checks of
+    /// `packages`: those the build of the first product it needs selects for them
+    /// ([`ignite_core::traits::Builds::selected`]), so the command compiles nothing that build
+    /// did not. None, standing for the whole workspace, when `packages` is empty.
+    pub(super) fn selected(
+        ctx: &Context,
+        tree: &OpenTree,
+        family: &Family,
+        packages: &[String],
+    ) -> Vec<String> {
+        match family.needs.first() {
+            Some(product) if !packages.is_empty() => {
+                ctx.builds.selected(&tree.id, product, packages)
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The packages a `nextest` family's whole-workspace command leaves out: the `exclude` of
+    /// the first product it needs, so that it selects what that product's build selects.
+    pub(super) fn nextest_exclude(&self, family: &Family) -> Vec<String> {
+        family
+            .needs
+            .first()
+            .and_then(|n| self.settings.manifest.products.get(n))
+            .map(|p| p.exclude.clone())
+            .unwrap_or_default()
     }
 
     /// Runs one command of the family through the launcher, with its class in [`CLASS_ENV`] and

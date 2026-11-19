@@ -234,3 +234,79 @@ fn tip_batches_run_from_a_kept_listing() {
     }
     assert_eq!(world.launcher.commands("lister").len(), 1);
 }
+
+/// After a change to one card file, `ignite test fork` listed the Rust test family for the
+/// whole workspace, which built every package's test binaries (35 crates, 33 to 77 s) to run
+/// one test of one package. A family whose `list` and `run` say `{packages}`, found through its
+/// newest listing, is now listed and run for the packages of the matching tests and those the
+/// branch changes, and that listing is not kept.
+#[test]
+fn a_named_test_lists_and_runs_only_its_packages() {
+    let manifest = MANIFEST.replace(
+        "[family.rs]\n",
+        "[family.rs]\nlist = \"cargo nextest list {packages} --message-format json\"\n\
+         run = \"cargo nextest run {packages} --message-format libtest-json-plus\"\n",
+    );
+    let world = world(&manifest, &[], FakeHistory::default());
+    *world.launcher.listing.lock().unwrap() = NEXTEST_LISTING.to_owned();
+    *world.launcher.nextest_run.lock().unwrap() =
+        "{\"type\":\"test\",\"event\":\"ok\",\"name\":\"core::core$a\"}\n".to_owned();
+    let package = |name: &str| ignite_core::inputs::Package {
+        name: name.to_owned(),
+        dir: format!("game/{name}"),
+        deps: Vec::new(),
+        workspace: "game".to_owned(),
+    };
+    let trees = FakeTrees {
+        graph: CrateGraph {
+            packages: vec![package("core"), package("other"), package("idle")],
+        },
+        ..FakeTrees::new(&world.dir, &["game/other/src/new.rs"])
+    };
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        trees,
+    );
+    // The first listing, of the whole workspace, is the family's newest.
+    assert!(run_on(&checks, &world, &["rs:core::a"]).passed());
+    let whole = world.launcher.commands("cargo");
+    assert!(whole[0].contains(&"--workspace".to_owned()), "{whole:?}");
+    let kept = world.hub.listing_keys().len();
+
+    // A change to what the family reads leaves it without a listing for the tree's inputs.
+    world
+        .git
+        .set_object("src", Oid::new("e".repeat(40)).unwrap());
+    let verb = TestVerb {
+        checks,
+        express: None,
+    };
+    let request = Request {
+        verb: "test".to_owned(),
+        args: vec!["core::a".to_owned()],
+        cwd: world.dir.join("sub"),
+        session: None,
+        wait_s: 1,
+        pid: None,
+    };
+    let reply = verb.run(&world.ctx, &request);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    let commands = world.launcher.commands("cargo");
+    let selected = ["-p", "core", "-p", "other"].map(str::to_owned);
+    let (list, run) = (&commands[commands.len() - 2], &commands[commands.len() - 1]);
+    assert_eq!((list[2].as_str(), &list[3..7]), ("list", &selected[..]));
+    // The run builds and runs the package of the test it runs.
+    assert_eq!((run[2].as_str(), &run[3..5]), ("run", &selected[..2]));
+    let scoped = world
+        .builds
+        .requests()
+        .iter()
+        .any(|r| r.2 == ["core", "other"]);
+    assert!(scoped, "the listing builds the packages it lists");
+    assert_eq!(
+        world.hub.listing_keys().len(),
+        kept,
+        "a scoped listing is not kept"
+    );
+}
