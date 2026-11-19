@@ -3391,8 +3391,8 @@ Each topic is printed by the command that makes it relevant.
 - `blocked`, on a refused landing and on a landing that went past a
   `known-failing` check. The verdict says whose failure it is: a check that
   passes at the tip is the change's to fix, a `known-failing` check is nobody's
-  in this ticket, and a tip that could not be asked is one rerun, then a
-  release with a note. Never end a turn holding the ticket.
+  in this ticket, and a tip that could not be asked is one rerun, then a release
+  with a note. Never end a turn holding the ticket.
 - `review`, on `ignite start` of a review ticket or one labeled `review:inline`.
   What a review looks for, when to rewrite, what is not a finding, and that the
   reviewer fixes what it finds.
