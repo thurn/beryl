@@ -59,7 +59,9 @@ impl ResultCache {
         }
     }
 
-    fn conn(&self) -> MutexGuard<'_, Connection> {
+    /// The daemon's local database, which the landing gate's memory also lives in (see
+    /// `checks::spent`).
+    pub(crate) fn conn(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(PoisonError::into_inner)
     }
 

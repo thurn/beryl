@@ -277,16 +277,18 @@ impl Checks {
         if !run.passed() {
             return;
         }
-        let chosen = gate_plan
+        let chosen: BTreeSet<CheckName> = gate_plan
             .run
             .iter()
             .chain(&gate_plan.cached)
             .filter(|planned| planned.why == Why::Scored)
             .map(|planned| planned.check.clone())
             .collect();
-        self.gates.passed(changed, chosen);
+        let conn = self.cache.conn();
+        let memory = super::spent::GateMemory(&conn);
+        memory.passed(ctx.clock.now(), changed, &chosen);
         let billions = gate_plan.scored_cost + gate_plan.forced_cost;
-        self.gates.observe(ctx.clock.now(), billions, run.wall_s);
+        memory.observe(ctx.clock.now(), billions, run.wall_s);
     }
 
     /// Splits the families the change can affect into those to judge again and the names of

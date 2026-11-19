@@ -351,8 +351,6 @@ pub struct Shared {
     foreign_listings: Mutex<HashMap<String, (InputHash, Foreign)>>,
     next_file: AtomicU64,
     hits: OnceLock<Arc<dyn HitSink>>,
-    /// What the landing gate remembers between gates (see [`spent`]).
-    gates: spent::GateMemory,
 }
 
 impl std::ops::Deref for Checks {
@@ -382,7 +380,6 @@ impl Checks {
                 foreign_listings: Mutex::new(HashMap::new()),
                 next_file: AtomicU64::new(0),
                 hits: OnceLock::new(),
-                gates: spent::GateMemory::default(),
             }),
             builds_seen: Mutex::default(),
         }

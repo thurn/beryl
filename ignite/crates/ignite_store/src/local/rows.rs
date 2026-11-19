@@ -172,4 +172,23 @@ crate::tables! {
         /// The change's own files on that commit, one per line.
         changed: Option<String>,
     }
+
+    /// The checks a change's last passing gate chose by score.
+    GateChoice = "gate_choices" {
+        /// The change's own files, sorted, one per line.
+        change: String,
+        /// The checks, one per line.
+        checks: String,
+        /// Milliseconds since the Unix epoch.
+        at: i64,
+    }
+
+    /// The rate the landing gates' check commands achieved lately.
+    GateRate = "gate_rate" {
+        id: i64,
+        /// Milliseconds since the Unix epoch.
+        at: i64,
+        /// Billions of instructions per second of running checks.
+        rate: f64,
+    }
 }

@@ -534,5 +534,10 @@
     "label": "`ignite test` lists and runs its families on threads of their own, so their products build at once, and names every step of 5 s or more (on 2026-11-19 `ignite test fork` after a one-line comment change built three products one after another and took 300 s, of which its output accounted for 130 s)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The landing gate's memory of what a change's last passing gate chose, and of the rate its gates achieved, lives in the daemon's database instead of the process, so `ignite land` finds what `ignite check` chose: both run in verb processes of their own, and on 2026-11-19 the land of a one-card comment change after a passing check spent a fresh budget of 468 billion instructions in 177 s",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
