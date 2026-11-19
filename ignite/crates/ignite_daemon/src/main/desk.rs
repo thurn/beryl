@@ -5,7 +5,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError, Weak};
 use std::time::{Duration, Instant};
 
@@ -14,12 +13,13 @@ use ignite_core::ids::{Commit, MachineId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::hub::{AdhocClaim, Claim, Close, Release, TicketBrief};
 use ignite_core::protocol::tickets::TicketDetail;
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Hub, Result};
 use ignite_git::{push, refs, save};
 
 use crate::claim::{
-    self, ClaimRequest, Claims, Leased, Liveness, ReleaseRequest, Resumed, Saved, Target,
-    TicketDesk, TreeDesk,
+    self, ClaimRequest, Claims, Leased, ReleaseRequest, Resumed, Saved, Target, TicketDesk,
+    TreeDesk,
 };
 use crate::dispatchd::{Host, SessionCommand};
 use crate::handles::Handles;
@@ -348,26 +348,6 @@ fn release_unclaimed(served: &Served, trees: &Trees, key: &(TicketId, SessionId)
     }
 }
 
-/// The dispatcher endpoint runs the stall procedure for working sessions itself (see
-/// `dispatchd_stall`), so the copy in [`Claims::tick`] is given a dispatcher that never answers
-/// its checks, and it never releases anything on its own.
-#[derive(Default)]
-pub struct QuietDispatcher {
-    next: AtomicU64,
-}
-
-impl claim::Dispatcher for QuietDispatcher {
-    fn check(&self, _session: &SessionId) -> u64 {
-        self.next.fetch_add(1, Ordering::Relaxed)
-    }
-
-    fn answer(&self, _check: u64) -> Option<Liveness> {
-        None
-    }
-
-    fn message(&self, _session: &SessionId, _text: &str) {}
-}
-
 /// The dispatcher's [`Host`]: the trees, the scheduler, the server and the claims.
 pub struct DaemonHost {
     pub trees: Trees,
@@ -437,6 +417,10 @@ impl Host for DaemonHost {
             since: command.ended_at.unwrap_or(command.started_at),
             running: command.ended_at.is_none(),
         })
+    }
+
+    fn quiet_since(&self, session: &SessionId) -> Option<Timestamp> {
+        self.claims.quiet_since(session)
     }
 
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {

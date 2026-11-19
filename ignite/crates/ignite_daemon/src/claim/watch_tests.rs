@@ -3,11 +3,11 @@ use serde_json::json;
 use ignite_core::ids::TreeId;
 use ignite_core::protocol::client::Exit;
 use ignite_core::time::Timestamp;
+use ignite_core::traits::Clock;
 use ignite_store::local::{rows, trees as tree_rows};
 
 use super::fakes::{World, id, session, ticket};
-use super::watch::{GRACE_S, NUDGE, QUIET_S, RETRY_S};
-use super::{Liveness, StartVerb, lock};
+use super::{StartVerb, lock};
 use crate::server::Verb;
 
 const WORKER: &str = "local_worker";
@@ -38,119 +38,29 @@ fn minutes(world: &World, minutes: f64) {
 }
 
 #[test]
-fn an_idle_session_gets_one_message_then_its_ticket_is_released() {
+fn a_command_resets_the_silence_clock() {
     let world = started();
-    *lock(&world.dispatcher.answer) = Some(Liveness::Idle);
-    world.trees.touch("tree-01", "src/wip.rs");
-    minutes(&world, 29.0);
-    assert!(lock(&world.dispatcher.checks).is_empty());
-    minutes(&world, 1.0);
-    assert_eq!(lock(&world.dispatcher.checks).len(), 1);
-    minutes(&world, 1.0);
-    for _ in 0..10 {
-        minutes(&world, 1.0);
-    }
-    let messages = lock(&world.dispatcher.messages).clone();
-    assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0].1, NUDGE);
-    assert!(lock(&world.desk.releases).is_empty());
-    minutes(&world, GRACE_S / 60.0 - 10.0);
-    assert_eq!(lock(&world.dispatcher.checks).len(), 2);
-    minutes(&world, 1.0);
-    let releases = lock(&world.desk.releases).clone();
-    assert_eq!(releases.len(), 1, "released once");
-    assert!(
-        releases[0].note.contains("the session is idle"),
-        "{}",
-        releases[0].note
+    let start = world.clock.now();
+    assert_eq!(world.claims.quiet_since(&session(WORKER)), Some(start));
+    minutes(&world, 40.0);
+    assert_eq!(world.claims.quiet_since(&session(WORKER)), Some(start));
+    command(&world);
+    assert_eq!(
+        world.claims.quiet_since(&session(WORKER)),
+        Some(world.clock.now())
     );
-    assert!(releases[0].note.contains("uncommitted src/wip.rs"));
-    assert_eq!(releases[0].saved.uncommitted, ["src/wip.rs"]);
-    assert_eq!(lock(&world.trees.resets).len(), 1);
-    assert_eq!(lock(&world.dispatcher.messages).len(), 1);
-    assert!(world.claims.holder(TREE.as_ref()).is_none());
 }
 
 #[test]
-fn a_running_session_is_left_alone() {
+fn a_long_command_keeps_the_silence_clock_moving() {
     let world = started();
-    *lock(&world.dispatcher.answer) = Some(Liveness::Running);
-    for _ in 0..90 {
-        minutes(&world, 1.0);
-    }
-    assert!(lock(&world.desk.releases).is_empty());
-    assert!(lock(&world.dispatcher.messages).is_empty());
-    // Each running answer restarts the 30 minutes.
-    assert_eq!(lock(&world.dispatcher.checks).len(), 2);
-}
-
-#[test]
-fn a_failed_lookup_releases_nothing() {
-    let world = started();
-    *lock(&world.dispatcher.answer) = Some(Liveness::Unknown);
-    for _ in 0..120 {
-        minutes(&world, 1.0);
-    }
-    assert!(lock(&world.desk.releases).is_empty());
-    assert!(lock(&world.dispatcher.messages).is_empty());
-    // It is asked again every few minutes, not every tick.
-    let checks = lock(&world.dispatcher.checks).len();
-    let most = 2 + ((120.0 * 60.0 - QUIET_S) / RETRY_S) as usize;
-    assert!(checks > 1 && checks <= most, "{checks} checks");
-}
-
-#[test]
-fn a_gone_session_is_released_at_once() {
-    let world = started();
-    *lock(&world.dispatcher.answer) = Some(Liveness::Gone);
-    minutes(&world, 30.0);
-    minutes(&world, 1.0);
-    assert_eq!(lock(&world.desk.releases).len(), 1);
-    assert!(lock(&world.dispatcher.messages).is_empty());
-}
-
-#[test]
-fn a_failed_save_keeps_the_ticket_held() {
-    let world = started();
-    *lock(&world.dispatcher.answer) = Some(Liveness::Gone);
-    *lock(&world.trees.save_fails) = true;
-    minutes(&world, 30.0);
-    minutes(&world, 1.0);
-    assert!(lock(&world.desk.releases).is_empty());
-    assert!(world.claims.holder(TREE.as_ref()).is_some());
-}
-
-#[test]
-fn a_long_command_keeps_the_ticket_alive() {
-    let world = started();
-    *lock(&world.dispatcher.answer) = Some(Liveness::Idle);
     lock(&world.commands.running).push(session(WORKER));
-    for _ in 0..60 {
-        minutes(&world, 1.0);
-    }
-    assert!(lock(&world.dispatcher.checks).is_empty());
-    // The command ends; the server's hook records it, and the 30 minutes start then.
-    lock(&world.commands.running).clear();
-    command(&world);
-    minutes(&world, 29.0);
-    assert!(lock(&world.dispatcher.checks).is_empty());
-    minutes(&world, 1.0);
-    assert_eq!(lock(&world.dispatcher.checks).len(), 1);
-}
-
-#[test]
-fn a_command_after_the_message_starts_the_quiet_time_again() {
-    let world = started();
-    *lock(&world.dispatcher.answer) = Some(Liveness::Idle);
-    minutes(&world, 30.0);
-    minutes(&world, 1.0);
-    assert_eq!(lock(&world.dispatcher.messages).len(), 1);
-    command(&world);
-    for _ in 0..29 {
-        minutes(&world, 1.0);
-    }
-    assert!(lock(&world.desk.releases).is_empty());
-    assert_eq!(lock(&world.dispatcher.checks).len(), 1);
+    minutes(&world, 40.0);
+    assert_eq!(
+        world.claims.quiet_since(&session(WORKER)),
+        Some(world.clock.now())
+    );
+    assert!(world.claims.quiet_since(&session("local_other")).is_none());
 }
 
 #[test]
@@ -296,52 +206,17 @@ fn a_restart_keeps_how_long_a_session_has_been_quiet() {
     world.desk.add(ticket("Tq.48", "Counter names", ""));
     start(&world);
     record_lease(&ignite_store::local::open(&path).unwrap());
+    let last_command = world.clock.now();
     minutes(&world, 20.0);
-    assert!(lock(&world.dispatcher.checks).is_empty());
 
     // The daemon restarts 20 minutes after the session's last command. Before the clock was
     // saved, the restarted daemon counted the 30 minutes from its own start.
     let restarted = restarted_at(&path, 20.0);
     assert!(restarted.claims.holder(TREE.as_ref()).is_some());
     minutes(&restarted, 9.0);
-    assert!(
-        lock(&restarted.dispatcher.checks).is_empty(),
-        "not yet 30 minutes"
-    );
-    minutes(&restarted, 1.0);
     assert_eq!(
-        lock(&restarted.dispatcher.checks).len(),
-        1,
-        "checked at 30 minutes"
-    );
-    let _ = std::fs::remove_file(&path);
-}
-
-#[test]
-fn a_restart_keeps_the_message_already_sent_to_an_idle_session() {
-    let path = std::env::temp_dir().join(format!("ignite-claim-nudge-{}.db", std::process::id()));
-    let _ = std::fs::remove_file(&path);
-    let world = World::with_db(ignite_store::local::open(&path).unwrap());
-    world.desk.add(ticket("Tq.48", "Counter names", ""));
-    start(&world);
-    record_lease(&ignite_store::local::open(&path).unwrap());
-    *lock(&world.dispatcher.answer) = Some(Liveness::Idle);
-    minutes(&world, 30.0);
-    minutes(&world, 1.0);
-    assert_eq!(lock(&world.dispatcher.messages).len(), 1);
-
-    // 31 minutes in, the daemon restarts. The second look is due 15 minutes after the message.
-    let restarted = restarted_at(&path, 31.0);
-    *lock(&restarted.dispatcher.answer) = Some(Liveness::Idle);
-    minutes(&restarted, 14.0);
-    assert!(lock(&restarted.dispatcher.checks).is_empty());
-    minutes(&restarted, 1.0);
-    assert_eq!(lock(&restarted.dispatcher.checks).len(), 1);
-    minutes(&restarted, 1.0);
-    assert_eq!(lock(&restarted.desk.releases).len(), 1);
-    assert!(
-        lock(&restarted.dispatcher.messages).is_empty(),
-        "no second message"
+        restarted.claims.quiet_since(&session(WORKER)),
+        Some(last_command)
     );
     let _ = std::fs::remove_file(&path);
 }
@@ -355,14 +230,37 @@ fn a_freed_tree_leaves_no_clock_behind() {
     start(&world);
     let conn = ignite_store::local::open(&path).unwrap();
     assert_eq!(ignite_store::local::activity::all(&conn).unwrap().len(), 1);
-    *lock(&world.dispatcher.answer) = Some(Liveness::Gone);
-    minutes(&world, 30.0);
+    world
+        .claims
+        .release_session(
+            &world.ctx,
+            &session(WORKER),
+            &id("Tq.48"),
+            "The session is gone.",
+        )
+        .unwrap();
     minutes(&world, 1.0);
     assert!(world.claims.holder(TREE.as_ref()).is_none());
+    assert!(world.claims.quiet_since(&session(WORKER)).is_none());
     assert!(
         ignite_store::local::activity::all(&conn)
             .unwrap()
             .is_empty()
     );
     let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn a_failed_save_keeps_the_ticket_held() {
+    let world = started();
+    *lock(&world.trees.save_fails) = true;
+    let released = world.claims.release_session(
+        &world.ctx,
+        &session(WORKER),
+        &id("Tq.48"),
+        "The session is gone.",
+    );
+    assert!(released.is_err());
+    assert!(lock(&world.desk.releases).is_empty());
+    assert!(world.claims.holder(TREE.as_ref()).is_some());
 }

@@ -106,27 +106,34 @@ impl Dispatcher {
     pub(super) fn watch_silence(&self, state: &mut State, now: Timestamp) {
         let sessions: Vec<SessionId> = state.held.keys().cloned().collect();
         for session in sessions {
-            let Some(command) = self.host.command(&session) else {
-                continue;
+            let since = match self.host.command(&session) {
+                Some(command) if command.running => {
+                    state.stalls.remove(&session);
+                    continue;
+                }
+                Some(command) => command.since,
+                // The server keeps commands in memory, so after a restart it knows nothing of a
+                // session that has run nothing since. The claims' saved clock still does; without
+                // it, a worker that died before the restart was never checked again.
+                None => match self.host.quiet_since(&session) {
+                    Some(at) => at,
+                    None => continue,
+                },
             };
-            if command.running {
-                state.stalls.remove(&session);
-                continue;
-            }
             if Self::check_outstanding(state, &session) {
                 continue;
             }
             let due = match state.stalls.get(&session) {
-                Some(stall) if command.since > stall.checked_at => {
+                Some(stall) if since > stall.checked_at => {
                     state.stalls.remove(&session);
-                    now.seconds_since(command.since) >= SILENT_S
+                    now.seconds_since(since) >= SILENT_S
                 }
                 Some(Stall {
                     messaged_at: Some(at),
                     checked_at,
                 }) => now.seconds_since(*at) >= IDLE_AFTER_MESSAGE_S && checked_at <= at,
                 Some(stall) => now.seconds_since(stall.checked_at) >= SILENT_S,
-                None => now.seconds_since(command.since) >= SILENT_S,
+                None => now.seconds_since(since) >= SILENT_S,
             };
             if due {
                 let stall = state.stalls.entry(session.clone()).or_insert(Stall {
@@ -139,7 +146,7 @@ impl Dispatcher {
         }
     }
 
-    fn check_outstanding(state: &State, session: &SessionId) -> bool {
+    pub(super) fn check_outstanding(state: &State, session: &SessionId) -> bool {
         state
             .pending
             .iter()

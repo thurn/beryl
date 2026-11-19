@@ -6,18 +6,13 @@
 //!   than the session made to its ticket since the session's previous command. The hub is read
 //!   only when the change feed names the ticket, or once after the daemon starts. What was shown
 //!   is recorded per tree in the local database, so a restart shows nothing twice.
-//! - The silence clock (`active_at` and the stall's place) is saved in the local database as it
-//!   changes and read when the daemon starts (see `activity`), so a restart does not give a
-//!   silent session another 30 minutes.
-//! - [`Claims::tick`] runs the stall procedure. A session whose command is still running, such
-//!   as a long `ignite run` or `ignite wait`, is active however long it runs. After 30 minutes
-//!   with no command running or ended, it queues a `check` of the session with the dispatcher and acts on the answer:
-//!   running, nothing; idle, one message, then a second `check` 15 minutes later and a release
-//!   only if the session is still idle; gone, a release. A lookup that failed is no answer, so
-//!   it is asked again 5 minutes later. A release saves the tree's work first, like
-//!   `ignite release`.
+//! - The silence clock (`active_at`) is saved in the local database as it changes and read when
+//!   the daemon starts (see `activity`), so a restart does not give a silent session another 30
+//!   minutes.
+//! - [`Claims::tick`] keeps the clock current: a session whose command is still running, such as
+//!   a long `ignite run` or `ignite wait`, is active however long it runs. The dispatcher's stall
+//!   procedure (see `dispatchd_stall`) decides what to do with a session that went silent.
 
-use std::fmt::Write as _;
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -28,24 +23,13 @@ use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 use ignite_store::local::{rows, shown};
 
-use super::{Claims, Held, Liveness, Saved, Stall, lock};
+use super::{Claims, lock};
 use crate::server::{Context, Hook};
 
-/// Seconds with no command before the dispatcher is asked to look at the session.
-pub const QUIET_S: f64 = 30.0 * 60.0;
-/// Seconds after the message before the second look.
-pub const GRACE_S: f64 = 15.0 * 60.0;
-/// Seconds before a `check` whose lookup failed is asked again.
-pub const RETRY_S: f64 = 5.0 * 60.0;
 /// The most changes printed on one command; the rest are counted.
 pub const MAX_CHANGES: usize = 5;
 /// The most lines of one comment printed.
 const COMMENT_LINES: usize = 3;
-
-/// The message an idle session gets.
-pub const NUDGE: &str = "No `ignite` command has come from your tree for 30 minutes. Continue \
-                         your ticket, or give it back with `ignite release -m \"<its exact \
-                         state>\"`.";
 
 /// The server hook: renews the lease of the request's ticket and returns its `changed` lines.
 pub struct ClaimHook(pub Arc<Claims>);
@@ -163,11 +147,6 @@ fn render(changes: &[Change], ticket: &TicketId) -> Vec<String> {
     out
 }
 
-/// What the stall procedure decided for one ticket.
-enum Verdict {
-    Release(Held, Liveness),
-}
-
 impl Claims {
     /// Records a command from a leased tree as activity, and returns the `changed` lines to
     /// print before the verb's own output. A failure to reach the hub prints nothing and fails
@@ -185,7 +164,6 @@ impl Claims {
                 return Vec::new();
             };
             held.active_at = now;
-            held.stall = Stall::Active;
             (
                 held.tree.clone(),
                 held.ticket.clone(),
@@ -244,110 +222,26 @@ impl Claims {
         render(&changes, &ticket)
     }
 
-    /// Runs the stall procedure on every held ticket; the daemon calls it about once a minute.
-    pub fn tick(&self, ctx: &Context) {
+    /// Tidies the held tickets and moves the silence clock of every session with a command
+    /// running; the daemon calls it about once a minute.
+    pub fn tick(&self, _ctx: &Context) {
         self.forget_released();
         self.retry_failed_resets();
         self.free_closed_tickets();
         let now = self.clock.now();
-        let mut verdicts = Vec::new();
-        {
+        let trees: Vec<_> = {
             let mut state = lock(&self.state);
             for held in state.held.values_mut() {
-                if let Some(verdict) = self.step(held, now) {
-                    verdicts.push(verdict);
-                }
-            }
-        }
-        let trees: Vec<_> = lock(&self.state).held.keys().cloned().collect();
-        self.save_activity(&trees);
-        for Verdict::Release(held, liveness) in verdicts {
-            let quiet = (now.seconds_since(held.active_at) / 60.0).round();
-            let state = if liveness == Liveness::Gone {
-                "gone"
-            } else {
-                "idle"
-            };
-            let note = |saved: &Saved| {
-                let mut note = format!(
-                    "Released by the daemon: no `ignite` command for {quiet} minutes, and the \
-                     desktop app says the session is {state}. The tree held the branch {} with \
-                     {} commits",
-                    held.branch, saved.commits
-                );
-                if saved.uncommitted.is_empty() {
-                    note.push_str(" and no uncommitted files");
-                } else {
-                    let _ = write!(note, " and uncommitted {}", saved.uncommitted.join(", "));
-                }
-                let _ = write!(note, "; all of it is saved as {}.", saved.branch);
-                note
-            };
-            if self.give_back(ctx, &held, note, None, None).is_err() {
-                // The work could not be saved or the hub not told. The session keeps the
-                // ticket, and the procedure starts again.
-                let mut state = lock(&self.state);
-                if let Some(h) = state.held.get_mut(&held.tree) {
-                    h.stall = Stall::Active;
-                    h.active_at = now;
-                }
-                drop(state);
-                self.save_activity([&held.tree]);
-            }
-        }
-    }
-
-    /// Moves one ticket through the stall procedure.
-    fn step(&self, held: &mut Held, now: Timestamp) -> Option<Verdict> {
-        match held.stall {
-            Stall::Active => {
                 let running = self
                     .commands
                     .get()
                     .is_some_and(|commands| commands.running(&held.session));
                 if running {
                     held.active_at = now;
-                } else if now.seconds_since(held.active_at) >= QUIET_S {
-                    held.stall = Stall::Asked {
-                        check: self.dispatcher.check(&held.session),
-                        second: false,
-                        at: now,
-                    };
                 }
             }
-            Stall::Asked { check, second, .. } => match self.dispatcher.answer(check)? {
-                Liveness::Running => {
-                    held.stall = Stall::Active;
-                    held.active_at = now;
-                }
-                Liveness::Unknown => held.stall = Stall::Retry { at: now, second },
-                Liveness::Idle if !second => {
-                    self.dispatcher.message(&held.session, NUDGE);
-                    held.stall = Stall::Messaged { at: now };
-                }
-                liveness @ (Liveness::Idle | Liveness::Gone) => {
-                    return Some(Verdict::Release(held.clone(), liveness));
-                }
-            },
-            Stall::Messaged { at } => {
-                if now.seconds_since(at) >= GRACE_S {
-                    held.stall = Stall::Asked {
-                        check: self.dispatcher.check(&held.session),
-                        second: true,
-                        at: now,
-                    };
-                }
-            }
-            Stall::Retry { at, second } => {
-                if now.seconds_since(at) >= RETRY_S {
-                    held.stall = Stall::Asked {
-                        check: self.dispatcher.check(&held.session),
-                        second,
-                        at: now,
-                    };
-                }
-            }
-        }
-        None
+            state.held.keys().cloned().collect()
+        };
+        self.save_activity(&trees);
     }
 }

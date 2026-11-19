@@ -313,6 +313,7 @@ impl PoolVerb {
             if old.contains(&&member.session) || orphan {
                 pool.remove(&member.session)?;
                 self.dispatcher.forget(&member.session);
+                self.dispatcher.check_holder(&member.session);
                 removed.push(member.session.clone());
             }
         }

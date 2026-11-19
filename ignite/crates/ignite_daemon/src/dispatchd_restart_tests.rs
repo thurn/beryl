@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::Clock;
 
-use super::tests::{START, detail, handoff_to, rig_on, session, ticket_id};
+use super::tests::{START, detail, handoff_to, lock, rig_on, session, ticket_id};
 use super::*;
 
 /// A database file for a test that restarts the daemon, removed when the test ends.
@@ -126,5 +126,43 @@ fn a_refusal_and_a_silent_workers_stall_survive_a_restart() {
             .unwrap()
             .messaged_at
             .is_some()
+    );
+}
+
+#[test]
+fn a_worker_that_died_before_a_restart_is_checked_and_released() {
+    let file = DbFile::new("died");
+    let first = rig_on(&["local_w1"], file.open(), Timestamp::from_millis(START));
+    let claimed_at = first.clock.now();
+    first.hold("local_w1", "T.1");
+    lock(&first.host.commands).insert(
+        session("local_w1"),
+        SessionCommand {
+            command: "start T.1".to_owned(),
+            since: claimed_at,
+            running: false,
+        },
+    );
+    assert!(first.step().is_none());
+
+    // The daemon restarts 15 minutes after the claim. The server's record of commands is lost,
+    // but the claims' saved clock still says when the worker last ran one. The worker is dead
+    // and never runs another command.
+    let restarted = rig_on(&[], file.open(), claimed_at.plus_seconds(15.0 * 60.0));
+    restarted.hold("local_w1", "T.1");
+    lock(&restarted.host.quiet).insert(session("local_w1"), claimed_at);
+    assert!(restarted.step().is_none());
+    restarted.clock.advance(14.0 * 60.0);
+    assert!(restarted.step().is_none(), "not yet 30 minutes");
+    restarted.clock.advance(60.0);
+    let check = restarted
+        .step()
+        .expect("checked 30 minutes after the claim");
+    assert_eq!(check.action, DispatchAction::Check);
+    assert_eq!(check.session, Some(session("local_w1")));
+    restarted.ack(check.id, "gone", "");
+    assert_eq!(
+        lock(&restarted.host.releases).clone(),
+        [(session("local_w1"), ticket_id("T.1"))]
     );
 }

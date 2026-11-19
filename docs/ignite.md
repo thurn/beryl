@@ -2357,8 +2357,10 @@ leased for nothing.
   dispatcher look at the session. Silence proves nothing: a healthy worker can
   read and think for a long time, and an app that cannot find a session has not
   shown that the session is gone. The silence clock survives a restart: each
-  held tree's last activity and its place in this procedure are kept in the
-  daemon's database.
+  held tree's last activity is kept in the daemon's database, so a worker that
+  died just before a restart is still looked at 30 minutes after its last
+  command. A worker removed from the pool when a new dispatcher replaces its
+  own is looked at straight away if it still holds a ticket.
 - A session that is still running is left alone. An idle one is sent one message
   asking it to continue or release.
 - The daemon releases the ticket only when the app confirms that the session is

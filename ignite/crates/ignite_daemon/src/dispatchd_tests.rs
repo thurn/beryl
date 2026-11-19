@@ -17,9 +17,10 @@ pub(super) struct FakeHost {
     trees: Mutex<u32>,
     cores: Mutex<f64>,
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
-    commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
+    pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
+    pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
     interrupts: Mutex<Vec<(SessionId, String)>>,
-    releases: Mutex<Vec<(SessionId, TicketId)>>,
+    pub(super) releases: Mutex<Vec<(SessionId, TicketId)>>,
 }
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -41,6 +42,10 @@ impl Host for FakeHost {
 
     fn command(&self, session: &SessionId) -> Option<SessionCommand> {
         lock(&self.commands).get(session).cloned()
+    }
+
+    fn quiet_since(&self, session: &SessionId) -> Option<Timestamp> {
+        lock(&self.quiet).get(session).copied()
     }
 
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {
@@ -677,4 +682,43 @@ fn a_new_dispatcher_replaces_the_old_one_and_its_workers() {
     );
     assert!(second.text.contains("removed"), "{}", second.text);
     assert_eq!(members(&rig), ["local_codex", "local_new"]);
+}
+
+#[test]
+fn a_replaced_dispatchers_worker_holding_a_ticket_is_still_checked_and_released() {
+    let rig = rig(&[]);
+    rig.pool(
+        &["add", "--app", "claude", "--dispatcher"],
+        Some("local_dispatcher"),
+    );
+    rig.pool(
+        &["add", "local_w1", "--app", "claude"],
+        Some("local_dispatcher"),
+    );
+    rig.hold("local_w1", "T.1");
+    lock(&rig.host.commands).insert(
+        session("local_w1"),
+        SessionCommand {
+            command: "start T.1".to_owned(),
+            since: rig.clock.now(),
+            running: false,
+        },
+    );
+    assert!(rig.step().is_none());
+
+    // A new dispatcher removes the old one's workers from the pool. The worker still holds its
+    // ticket, so the new dispatcher is asked whether it is still there.
+    let replaced = rig.pool(
+        &["add", "--app", "claude", "--dispatcher"],
+        Some("local_new"),
+    );
+    assert!(replaced.text.contains("removed"), "{}", replaced.text);
+    let check = rig.step().expect("the removed worker is checked");
+    assert_eq!(check.action, DispatchAction::Check);
+    assert_eq!(check.session, Some(session("local_w1")));
+    rig.ack(check.id, "gone", "");
+    assert_eq!(
+        lock(&rig.host.releases).clone(),
+        [(session("local_w1"), ticket_id("T.1"))]
+    );
 }

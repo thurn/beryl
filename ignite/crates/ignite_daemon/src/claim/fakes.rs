@@ -1,4 +1,4 @@
-//! Fakes of the hub's hand-off routes, the build trees and the dispatcher, and the context the
+//! Fakes of the hub's hand-off routes and the build trees, and the context the
 //! claim tests share.
 
 use std::collections::BTreeMap;
@@ -18,8 +18,8 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 
 use super::{
-    ClaimRequest, Claims, Dispatcher, Lease, Leased, Liveness, ReleaseRequest, Resumed,
-    RunningCommands, Saved, Target, TicketDesk, TreeDesk, lock,
+    ClaimRequest, Claims, Lease, Leased, ReleaseRequest, Resumed, RunningCommands, Saved, Target,
+    TicketDesk, TreeDesk, lock,
 };
 use crate::server::Context;
 
@@ -347,30 +347,6 @@ impl TreeDesk for FakeTrees {
     }
 }
 
-/// A dispatcher whose every `check` gets the scripted answer, or none while it is `None`.
-#[derive(Default)]
-pub struct FakeDispatcher {
-    pub answer: Mutex<Option<Liveness>>,
-    pub checks: Mutex<Vec<SessionId>>,
-    pub messages: Mutex<Vec<(SessionId, String)>>,
-}
-
-impl Dispatcher for FakeDispatcher {
-    fn check(&self, session: &SessionId) -> u64 {
-        let mut checks = lock(&self.checks);
-        checks.push(session.clone());
-        checks.len() as u64
-    }
-
-    fn answer(&self, _check: u64) -> Option<Liveness> {
-        *lock(&self.answer)
-    }
-
-    fn message(&self, session: &SessionId, text: &str) {
-        lock(&self.messages).push((session.clone(), text.to_owned()));
-    }
-}
-
 /// The server's view of running commands: the sessions listed are in the middle of one.
 #[derive(Default)]
 pub struct FakeCommands {
@@ -389,7 +365,6 @@ pub struct World {
     pub hub: Arc<FakeHub>,
     pub desk: Arc<FakeDesk>,
     pub trees: Arc<FakeTrees>,
-    pub dispatcher: Arc<FakeDispatcher>,
     pub commands: Arc<FakeCommands>,
     pub ctx: Context,
     pub claims: Arc<Claims>,
@@ -445,15 +420,7 @@ impl World {
         };
         let desk = Arc::new(FakeDesk::default());
         let trees = Arc::new(FakeTrees::with_trees(2));
-        let dispatcher = Arc::new(FakeDispatcher::default());
-        let claims = Claims::new(
-            clock.clone(),
-            desk.clone(),
-            trees.clone(),
-            dispatcher.clone(),
-            db,
-        )
-        .unwrap();
+        let claims = Claims::new(clock.clone(), desk.clone(), trees.clone(), db).unwrap();
         let commands = Arc::new(FakeCommands::default());
         claims.watch_commands(commands.clone());
         World {
@@ -461,7 +428,6 @@ impl World {
             hub,
             desk,
             trees,
-            dispatcher,
             commands,
             ctx,
             claims,

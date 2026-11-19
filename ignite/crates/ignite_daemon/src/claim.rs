@@ -12,13 +12,14 @@
 //!
 //! [`ClaimHook`], a hook the server runs after every request from a leased tree, renews the
 //! ticket's lease and prints the comments and edits that others made to the ticket since the
-//! session's previous command (see `watch`). [`Claims::tick`] releases the tickets of sessions
-//! that have stopped, but only on the dispatcher's word that the session is idle or gone, never
-//! on silence alone, and never while the server says a command of the session is running.
+//! session's previous command (see `watch`). Each held ticket keeps a silence clock, when its
+//! session last ran a command, saved across restarts (see `activity`). The dispatcher's stall
+//! procedure (see `dispatchd_stall`) reads it through [`Claims::quiet_since`] when the server has
+//! no record of the session's last command, and releases a stopped session's ticket through
+//! [`Claims::release_session`].
 //!
-//! The hub's hand-off routes, the build trees and the dispatcher are reached through
-//! [`TicketDesk`], [`TreeDesk`] and [`Dispatcher`], so this module is tested against fakes of
-//! them.
+//! The hub's hand-off routes and the build trees are reached through [`TicketDesk`] and
+//! [`TreeDesk`], so this module is tested against fakes of them.
 
 mod activity;
 mod brief;
@@ -180,29 +181,6 @@ pub trait TreeDesk: Send + Sync {
     fn set_ticket(&self, tree: &TreeId, ticket: &TicketId) -> Result<()>;
 }
 
-/// What the desktop app says of a session.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Liveness {
-    /// In the middle of a turn.
-    Running,
-    /// Waiting for a prompt.
-    Idle,
-    /// The app confirms that the session no longer exists.
-    Gone,
-    /// The lookup failed. This is not an answer.
-    Unknown,
-}
-
-/// The dispatcher session, through the daemon's queue of instructions.
-pub trait Dispatcher: Send + Sync {
-    /// Queues a `check` of the session; returns the instruction's ID.
-    fn check(&self, session: &SessionId) -> u64;
-    /// The answer to a `check`, once the dispatcher has acknowledged it.
-    fn answer(&self, check: u64) -> Option<Liveness>;
-    /// Queues a `message` to the session.
-    fn message(&self, session: &SessionId, text: &str);
-}
-
 /// Whether a session has an `ignite` command running, `ignite wait` included.
 pub trait RunningCommands: Send + Sync {
     fn running(&self, session: &SessionId) -> bool;
@@ -213,24 +191,6 @@ impl RunningCommands for crate::server::Server {
         self.current_command(session)
             .is_some_and(|command| command.ended_at.is_none())
     }
-}
-
-/// Where a quiet ticket is in the stall procedure (see `watch`).
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum Stall {
-    /// Commands are recent, or one is running.
-    Active,
-    /// A `check` is queued. `second` is set for the check after the message.
-    Asked {
-        check: u64,
-        second: bool,
-        /// When the check was queued.
-        at: Timestamp,
-    },
-    /// The session was idle and has been sent one message.
-    Messaged { at: Timestamp },
-    /// A `check`'s lookup failed at `at`; it is asked again later.
-    Retry { at: Timestamp, second: bool },
 }
 
 /// One ticket held on this machine.
@@ -247,7 +207,6 @@ struct Held {
     brief: Option<TicketBrief>,
     /// When the last command ended, or when a running one was last seen.
     active_at: Timestamp,
-    stall: Stall,
     /// Whether this daemon has read the ticket's comments and history since it started.
     synced: bool,
 }
@@ -266,12 +225,11 @@ struct State {
     saved: BTreeMap<TreeId, rows::ClaimActivity>,
 }
 
-/// The tickets held on this machine, shared by the verbs, the request hooks and the stall check.
+/// The tickets held on this machine, shared by the verbs, the request hooks and the dispatcher.
 pub struct Claims {
     clock: Arc<dyn Clock>,
     desk: Arc<dyn TicketDesk>,
     trees: Arc<dyn TreeDesk>,
-    dispatcher: Arc<dyn Dispatcher>,
     /// The server, once it exists: it is built with verbs that hold these claims.
     commands: OnceLock<Arc<dyn RunningCommands>>,
     db: Mutex<Connection>,
@@ -290,7 +248,6 @@ impl Claims {
         clock: Arc<dyn Clock>,
         desk: Arc<dyn TicketDesk>,
         trees: Arc<dyn TreeDesk>,
-        dispatcher: Arc<dyn Dispatcher>,
         db: Connection,
     ) -> Result<Arc<Claims>> {
         let now = clock.now();
@@ -321,17 +278,28 @@ impl Claims {
             clock,
             desk,
             trees,
-            dispatcher,
             commands: OnceLock::new(),
             db: Mutex::new(db),
             state: Mutex::new(state),
         }))
     }
 
-    /// Tells the stall check which sessions have a command running. Until this is called, none
+    /// Tells the silence clock which sessions have a command running. Until this is called, none
     /// counts as running. A second call changes nothing.
     pub fn watch_commands(&self, commands: Arc<dyn RunningCommands>) {
         let _ = self.commands.set(commands);
+    }
+
+    /// When `session`, which holds a ticket tree, last ran a command or was last seen running
+    /// one. The clock is saved, so after a restart it still counts from before the restart.
+    pub fn quiet_since(&self, session: &SessionId) -> Option<Timestamp> {
+        let state = lock(&self.state);
+        state
+            .held
+            .values()
+            .filter(|h| &h.session == session)
+            .map(|h| h.active_at)
+            .max()
     }
 
     /// The tree a working directory is inside, with the ticket and session holding it.
@@ -549,7 +517,6 @@ impl Claims {
                 at: Some(leased.at.clone()),
                 brief: Some(brief.clone()),
                 active_at: now,
-                stall: Stall::Active,
                 synced: true,
             },
         );
@@ -628,7 +595,6 @@ fn held_from_row(row: &rows::Tree, now: Timestamp) -> Option<Held> {
         at: None,
         brief: None,
         active_at: now,
-        stall: Stall::Active,
         synced: false,
     })
 }

@@ -365,12 +365,10 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
         hub: base.client.clone(),
         machine: base.machine.clone(),
     });
-    let quiet = Arc::new(desk::QuietDispatcher::default());
     let claims = Claims::new(
         base.clock.clone(),
         ticket_desk,
         tree_desk.clone(),
-        quiet,
         base.open()?,
     )?;
     let host = Arc::new(desk::DaemonHost {

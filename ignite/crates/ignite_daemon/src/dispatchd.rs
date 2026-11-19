@@ -103,6 +103,10 @@ pub trait Host: Send + Sync {
     /// The ticket each session holds a build tree for.
     fn holders(&self) -> BTreeMap<SessionId, TicketId>;
     fn command(&self, session: &SessionId) -> Option<SessionCommand>;
+    /// When a session that holds a ticket tree last ran a command, from a clock that is saved
+    /// across daemon restarts. [`Host::command`] comes from memory, so it knows nothing of a
+    /// session whose last command ran before the daemon started.
+    fn quiet_since(&self, session: &SessionId) -> Option<Timestamp>;
     /// Ends the session's `ignite wait` at once with `reply`. Returns whether it was waiting.
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
     /// Gives back the ticket of a session that is gone or idle, keeping its work.
@@ -270,6 +274,22 @@ impl Dispatcher {
         state
             .pending
             .retain(|q| q.body.session.as_ref() != Some(session));
+        drop(state);
+        self.save();
+    }
+
+    /// Queues a `check` of a session removed from the pool that still holds a ticket, so that
+    /// its ticket is released if the session is gone. Without it, a worker of a replaced
+    /// dispatcher that died holding a ticket kept it until someone released it by hand.
+    pub fn check_holder(&self, session: &SessionId) {
+        if !self.host.holders().contains_key(session) {
+            return;
+        }
+        let mut state = self.state();
+        if Self::check_outstanding(&state, session) {
+            return;
+        }
+        Self::queue_check(&mut state, session);
         drop(state);
         self.save();
     }
