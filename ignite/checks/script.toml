@@ -77,6 +77,8 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "ui-deps"]
+# The list is the one check `app:smoke`, so it needs no `npm ci`.
+list_needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.script list app"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.script run app {checks}"
 inputs = [

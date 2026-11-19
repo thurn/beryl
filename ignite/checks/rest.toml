@@ -81,6 +81,8 @@ kind = "exploration"
 adapter = "jsonl"
 platforms = "any"
 needs = ["fuzz-tests", "python-env"]
+# The list prints nothing (the checks come from `next`), so it needs no test build.
+list_needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list fuzz"
 next = "uv run --quiet --project tools python -m beryl_tools.ignite.rest next fuzz"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run fuzz {checks}"
@@ -117,6 +119,8 @@ kind = "exploration"
 adapter = "jsonl"
 platforms = "any"
 needs = ["exhaust-tests", "python-env"]
+# The list prints nothing (the checks come from `next`), so it needs no test build.
+list_needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rest list exhaust"
 next = "uv run --quiet --project tools python -m beryl_tools.ignite.rest next exhaust"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rest run exhaust {checks}"
