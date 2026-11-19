@@ -2035,6 +2035,30 @@ How a daemon verifies a tip:
   whose inputs have not changed since the tip where it failed. A failure that a
   later landing already repaired files nothing.
 
+- A landing whose gate finds a check failing at the tip it was rebased onto
+  reports it as a regression itself (see [Landing](#landing)). Tip verification
+  should have found it first, so when that report opens or joins a regression
+  ticket, the hub records why tip verification missed the check, from what it
+  knows of the tip and of the tips it saw after it:
+
+  - **Stale pass:** a round passed the check at one of those tips. The check's
+    declared inputs miss something it reads, or it is not deterministic.
+  - **Not run:** a round finished at one of them without running the check and
+    left none of its family's checks unrun. By its declared inputs nothing
+    changed since the last verified commit, so an earlier pass stood.
+  - **Skipped:** every round that finished there left checks of the family
+    unrun, because a newer tip ended it or because `master` did not move and the
+    checks past the budget wait for a later round. Each round's record lists how
+    many checks of each family it left unrun, and the tip that ended it.
+  - When no round has finished at the tip or after it, tip verification has not
+    reached that tip yet. That is not a miss, and nothing is recorded.
+
+  The reason is added to the regression ticket as a comment, and the dashboard's
+  tips page counts the last seven days' misses by family. When one family is
+  missed three times within seven days, the hub files one `hub` ticket for it,
+  naming each miss and its reason. Its signature is the family, so a later miss
+  adds a comment to the open ticket instead of filing another.
+
 Because results are cached by input, a check that only the sweeps ran every
 three hours now runs exactly when something it reads changes. Every family's
 listing is kept as [Declaring a family](#declaring-a-family) describes, so a

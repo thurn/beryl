@@ -23,6 +23,7 @@ pub mod schedules;
 pub mod session_titles;
 pub mod ticket_spend;
 pub mod tickets;
+pub mod tip_misses;
 pub mod tip_rounds;
 pub mod tips;
 pub mod tokens;
@@ -115,6 +116,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 16,
         sql: include_str!("schedules.sql"),
+        code: None,
+    },
+    Migration {
+        version: 17,
+        sql: include_str!("tip_misses.sql"),
         code: None,
     },
 ];

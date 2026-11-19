@@ -297,3 +297,38 @@ fn tips_show_where_the_last_rounds_time_went() {
     assert!(body.contains("3.0 listing"), "{body}");
     assert!(body.contains("slow"), "{body}");
 }
+
+/// A check a landing found failing before tip verification did is counted by family.
+#[test]
+fn tips_count_the_checks_tip_verification_missed_by_family() {
+    use ignite_store::hub::rows::TipMiss;
+    let conn = seeded();
+    assert!(page(&conn, "/tips").contains("Tip verification missed no check this week."));
+    let miss = |check: &str, family: &str, at: &str| TipMiss {
+        check_name: check.to_owned(),
+        family: family.to_owned(),
+        tip: "4444444444".to_owned(),
+        kind: "skipped".to_owned(),
+        reason: format!("{check} was past the tip budget."),
+        ticket: "Tabc1".to_owned(),
+        at: at.to_owned(),
+    };
+    for (check, family, at) in [
+        ("source:a", "source", "2026-11-17T10:00:00.000Z"),
+        ("source:b", "source", "2026-11-17T11:00:00.000Z"),
+        ("unit:a", "unit", "2026-11-17T11:30:00.000Z"),
+        // Older than seven days: not counted.
+        ("unit:old", "unit", "2026-11-01T11:30:00.000Z"),
+    ] {
+        hub::tip_misses::record(&conn, &miss(check, family, at)).unwrap();
+    }
+    let body = page(&conn, "/tips");
+    assert!(
+        body.contains("Missed by tip verification (7 days)"),
+        "{body}"
+    );
+    assert!(body.contains("2 misses"), "{body}");
+    assert!(body.contains("source:b was past the tip budget."), "{body}");
+    assert!(body.contains("1 miss "), "{body}");
+    assert!(!body.contains("unit:old"), "{body}");
+}

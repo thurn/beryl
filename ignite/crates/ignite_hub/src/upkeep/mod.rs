@@ -15,7 +15,8 @@
 //!   person touched it or a worker holds it ([`clearing`]);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
-//! The routes call the rest as reports arrive: a regression ([`regressions::file`]), a check
+//! The routes call the rest as reports arrive: a regression ([`regressions::file`], which
+//! records why tip verification missed a check a landing found failing, in [`missed`]), a check
 //! still incomplete after its attempts ([`stuck::incomplete`]), a cache audit that disagreed
 //! ([`stuck::audit`]), an exploration find ([`explore::find`]) and a pass that replaced another
 //! machine's failure ([`machines::disagreement`]). The dashboard asks [`machines::unassignable`]
@@ -32,6 +33,7 @@ pub mod filing;
 pub mod flaky;
 pub mod justiciar;
 pub mod machines;
+pub mod missed;
 pub mod offline;
 pub mod regressions;
 pub mod schedules;
@@ -44,6 +46,8 @@ mod clearing_tests;
 mod guard_tests;
 #[cfg(test)]
 mod justiciar_tests;
+#[cfg(test)]
+mod missed_tests;
 #[cfg(test)]
 mod schedules_tests;
 #[cfg(test)]

@@ -1,6 +1,6 @@
 //! The `tips` page: the newest `staging` commit, the last verified one, where the last rounds'
-//! time went, the batches each machine holds, open regressions and the checks switched off as
-//! flaky.
+//! time went, the batches each machine holds, open regressions, the checks tip verification
+//! missed in the last seven days by family, and the checks switched off as flaky.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
@@ -8,7 +8,7 @@
 use rusqlite::Connection;
 
 use ignite_core::time::Timestamp;
-use ignite_store::hub::tip_rounds;
+use ignite_store::hub::{tip_misses, tip_rounds};
 
 use super::attention::{age, frame};
 use super::components::{self as c, PageOptions, Tone, esc};
@@ -134,6 +134,43 @@ fn regressions_section(conn: &Connection, root: &str) -> Result<(String, usize),
     Ok((open, regressions.len()))
 }
 
+/// How many checks tip verification missed in the last seven days, by family, most first, and
+/// how many misses there were. A miss is a check a landing found failing at the tip it was
+/// rebased onto before tip verification reported it (`crate::upkeep::missed`).
+fn misses_section(conn: &Connection, now: Timestamp) -> Result<(String, usize), ReadError> {
+    let misses = tip_misses::since(conn, None, now.plus_seconds(-WEEK_SECONDS))?;
+    let mut families: Vec<(String, usize, String)> = Vec::new();
+    for miss in &misses {
+        match families
+            .iter_mut()
+            .find(|(family, _, _)| *family == miss.family)
+        {
+            Some((_, count, last)) => {
+                *count += 1;
+                last.clone_from(&miss.reason);
+            }
+            None => families.push((miss.family.clone(), 1, miss.reason.clone())),
+        }
+    }
+    families.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let shown = if families.is_empty() {
+        c::empty("Tip verification missed no check this week.")
+    } else {
+        c::rows(families.iter().map(|(family, count, last)| {
+            let label = if *count == 1 { "miss" } else { "misses" };
+            c::row(
+                &(esc(family) + &c::muted(&format!(" · {count} {label} · last: ")) + &esc(last)),
+                "",
+                None,
+            )
+        }))
+    };
+    Ok((shown, misses.len()))
+}
+
+/// The window the missed checks are counted over.
+const WEEK_SECONDS: f64 = 7.0 * 86_400.0;
+
 /// The checks switched off as flaky, and how many there are.
 fn flaky_section(conn: &Connection) -> Result<(String, usize), ReadError> {
     let mut flaky =
@@ -210,11 +247,19 @@ pub(crate) fn options(
     let (running, held) = claims_section(conn, now)?;
     let (open, regression_count) = regressions_section(conn, root)?;
     let (off, flaky_count) = flaky_section(conn)?;
+    let (missed, miss_count) = misses_section(conn, now)?;
     let body = summary
         + &c::section("Recent tips", &recent, Some(tips.len()), None, 3)
         + &c::section("Recent rounds", &rounds, Some(round_count), None, 3)
         + &c::section("Batches machines hold", &running, Some(held), None, 3)
         + &c::section("Open regressions", &open, Some(regression_count), None, 3)
+        + &c::section(
+            "Missed by tip verification (7 days)",
+            &missed,
+            Some(miss_count),
+            None,
+            3,
+        )
         + &c::section("Switched off as flaky", &off, Some(flaky_count), None, 3);
     Ok(frame(
         root,

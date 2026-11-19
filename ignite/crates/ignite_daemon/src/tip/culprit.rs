@@ -10,7 +10,7 @@
 
 use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::RegressionReport;
+use ignite_core::protocol::hub::{FoundBy, RegressionReport};
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::Result;
 
@@ -184,6 +184,7 @@ impl TipVerifier {
             suspects,
             platform: check.key.platform,
             search: Some(search),
+            found_by: FoundBy::TipVerification,
         })?;
         self.reported.insert(check.key.clone());
         Ok(())

@@ -63,6 +63,11 @@ fn a_check_that_fails_at_the_tip_too_is_known_failing_and_its_regression_is_file
     assert_eq!(regressions.len(), 1, "{regressions:?}");
     assert_eq!(regressions[0].check.as_str(), "unit:both");
     assert_eq!(regressions[0].first_bad, tip);
+    // The hub records why tip verification missed a check that a landing found failing.
+    assert_eq!(
+        regressions[0].found_by,
+        ignite_core::protocol::hub::FoundBy::Landing
+    );
     assert_eq!(
         checks_runs(&world),
         [(PathBuf::from(LANDING_TREE), vec!["unit:both".to_owned()])]

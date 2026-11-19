@@ -176,6 +176,16 @@ pub struct RoundBudget {
     pub after_billions: f64,
     /// Seconds from the start of the round until `master` moved; `None` when it did not.
     pub master_s: Option<f64>,
+    /// For each family, how many of the checks the round set out to run it never ran: those a
+    /// newer tip kept from running ([`RoundBudget::ended_by`]), or, when `master` did not move,
+    /// the checks past the budget, which wait for a later round. Empty when the round ran every
+    /// check it set out to. The hub reads it to say why tip verification missed a check that a
+    /// landing then found failing (see "Tip verification" in `docs/ignite.md`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub unrun: BTreeMap<String, u32>,
+    /// The newer `staging` tip that ended the round before it ran every check it set out to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_by: Option<Commit>,
 }
 
 impl RoundBudget {
@@ -499,6 +509,7 @@ mod tests {
             after: 1_200,
             after_billions: 200_000.0,
             master_s: Some(270.0),
+            ..RoundBudget::default()
         });
         let summary = round.summary();
         assert!(

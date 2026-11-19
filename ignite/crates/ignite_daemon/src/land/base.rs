@@ -21,7 +21,7 @@
 
 use ignite_core::ids::{CheckName, TicketId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::RegressionReport;
+use ignite_core::protocol::hub::{FoundBy, RegressionReport};
 use ignite_core::tipround::CulpritSearch;
 
 use super::env::{CheckVerdict, GateTree};
@@ -192,6 +192,7 @@ fn file(ctx: &Context, rebased: &Rebased, verdict: &CheckVerdict) -> Option<Tick
                 repository.staging
             ),
         }),
+        found_by: FoundBy::Landing,
     };
     match ctx.hub.regression(&report) {
         Ok(filed) => Some(filed.ticket),

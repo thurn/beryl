@@ -98,6 +98,11 @@ fn master_moves_once_the_budgeted_checks_pass_and_a_later_failure_holds_it() {
     assert!((budget.within_billions - 200.0).abs() < 1e-9);
     assert!((budget.after_billions - 200.0).abs() < 1e-9);
     assert!(budget.master_s.is_some());
+    // Every check past the budget ran, so the round left none unrun.
+    assert!(
+        budget.unrun.is_empty() && budget.ended_by.is_none(),
+        "{budget:?}"
+    );
 
     // The next landing leaves the failing check's inputs alone: its cached failure is run
     // again before `master` moves, fails, and holds `master` at the last tip.
@@ -190,4 +195,9 @@ fn a_newer_tip_ends_the_checks_past_the_budget_at_the_next_batch() {
         ran_with_master(&world),
         [(vec!["unit:a".to_owned()], commit("aaaa000"))]
     );
+    // The round's record names the check it left and the tip that ended it, which the hub
+    // reads when a landing later finds that check failing.
+    let budget = world.hub.tip_rounds().pop().unwrap().budget.unwrap();
+    assert_eq!(budget.unrun, BTreeMap::from([("unit".to_owned(), 1)]));
+    assert_eq!(budget.ended_by, Some(commit("cccc000")));
 }

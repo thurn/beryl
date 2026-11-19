@@ -7,8 +7,8 @@ use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId, TicketId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    AuditReport, CheckState, ExplorationFind, FlakyReport, IncompleteReason, IncompleteReport,
-    MachineRegister, NewResult, RegressionReport, ResultKey, TipWaiting,
+    AuditReport, CheckState, ExplorationFind, FlakyReport, FoundBy, IncompleteReason,
+    IncompleteReport, MachineRegister, NewResult, RegressionReport, ResultKey, TipWaiting,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, Dependency, Operation, Status, Ticket, TicketFields, TicketQuery, TicketType,
@@ -96,6 +96,7 @@ fn regression(first_bad: &str, output: &str) -> RegressionReport {
         suspects: Vec::new(),
         platform: None,
         search: None,
+        found_by: FoundBy::TipVerification,
     }
 }
 

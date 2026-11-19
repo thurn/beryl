@@ -9,8 +9,8 @@ use ignite_core::fakes::FakeClock;
 use ignite_core::ids::{CheckName, Commit, InputHash, MachineId, RecordId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
-    IncompleteReason, IncompleteReport, MachineRegister, NewResult, RegressionReport, ResultCost,
-    ResultKey,
+    FoundBy, IncompleteReason, IncompleteReport, MachineRegister, NewResult, RegressionReport,
+    ResultCost, ResultKey,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, EdgeKind, Operation, Status, TicketFields, TicketType,
@@ -530,6 +530,7 @@ fn a_regression_closes_once_a_later_tip_passes_and_is_marked_fixed() {
         suspects: Vec::new(),
         platform: None,
         search: None,
+        found_by: FoundBy::TipVerification,
     };
     let (id, _) = regressions::file(&mut conn, UPKEEP, &report, clock.now()).unwrap();
     assert!(passes(&mut conn, &mut upkeep, &clock, 2.0 * HOLD_SECONDS).is_empty());
@@ -575,6 +576,7 @@ fn a_ticket_given_another_check_waits_for_a_tip_seen_after_it() {
         suspects: Vec::new(),
         platform: None,
         search: None,
+        found_by: FoundBy::TipVerification,
     };
     let (id, _) = regressions::file(
         &mut conn,

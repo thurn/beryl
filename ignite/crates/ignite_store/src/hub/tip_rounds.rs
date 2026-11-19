@@ -317,6 +317,9 @@ mod tests {
             after: 12,
             after_billions: 30_000.0,
             master_s: Some(200.0),
+            // What a round left unrun is kept for the hub to explain a missed check.
+            unrun: std::collections::BTreeMap::from([("unit".to_owned(), 3)]),
+            ended_by: Some(Commit::new("ff00").unwrap()),
             ..Default::default()
         });
         record(&conn, &newest).unwrap();

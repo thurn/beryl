@@ -19,7 +19,7 @@ pub struct Signature {
     pub subject: String,
     /// The kind of failure: `regression`, `flaky`, `flaky-always`, `machine-flaky`,
     /// `disagreement`, `incomplete`, `cannot-run`, `hung`, `build-failed`, `invalid-entry`,
-    /// `incomplete-overflow`, `audit`, `found`, `unreachable` or `stuck-epic`. For incomplete
+    /// `incomplete-overflow`, `audit`, `found`, `unreachable`, `stuck-epic` or `tip-miss`. For incomplete
     /// checks the subject is the cause (a product or a family), never one check's name.
     pub category: String,
     /// The operating system, empty for a portable check.

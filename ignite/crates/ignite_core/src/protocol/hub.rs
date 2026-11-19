@@ -516,6 +516,21 @@ pub struct RegressionReport {
     /// How the culprit search ended; `None` from a daemon built before it said.
     #[serde(default)]
     pub search: Option<crate::tipround::CulpritSearch>,
+    /// Who found the failure. A landing that finds it means tip verification missed it, and
+    /// the hub records why.
+    #[serde(default)]
+    pub found_by: FoundBy,
+}
+
+/// Who found a regression.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FoundBy {
+    /// A tip verification round, at the tip it verified.
+    #[default]
+    TipVerification,
+    /// A landing's gate, at the `staging` tip the landing was rebased onto.
+    Landing,
 }
 
 /// A check whose regression is open, with the open ticket that holds it. One ticket can hold

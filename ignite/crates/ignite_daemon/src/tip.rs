@@ -491,6 +491,8 @@ impl TipVerifier {
         tally.budget.clone_from(&split.budget);
         let (superseded, runs) = self.run_families(ctx, tip, &split.within, false)?;
         if let Some(by) = superseded {
+            let left = split::unrun(split.within.iter().chain(&split.after), &runs);
+            split::note_unrun(tally, left, Some(by.clone()));
             return Ok(TipOutcome::Superseded { by });
         }
         tally.ran = u32::try_from(runs.len()).unwrap_or(u32::MAX);

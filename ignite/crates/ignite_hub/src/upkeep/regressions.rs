@@ -18,6 +18,8 @@
 //!   nothing.
 //! - When the fix has landed and closed the ticket but the check still fails, the ticket is
 //!   reopened with the new output, unless the rules above add the check to an open ticket.
+//! - A regression a landing found, not tip verification, also records why tip verification
+//!   missed it (`super::missed`).
 //! - An upkeep pass marks a regression fixed once its ticket is closed and the check has passed
 //!   since.
 
@@ -138,6 +140,13 @@ pub fn file(
         tips::regression_fixed(conn, check)?;
     }
     tips::regression(conn, report, &ticket)?;
+    if outcome != Outcome::Unchanged {
+        // A landing found the failure before tip verification did. Recording why must not
+        // keep the regression from being filed.
+        if let Err(error) = super::missed::record(conn, author, report, &ticket, now) {
+            eprintln!("ignite-hub: why tip verification missed {check} was not recorded: {error}");
+        }
+    }
     Ok((ticket, outcome))
 }
 

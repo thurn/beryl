@@ -21,7 +21,7 @@
 //! - When nothing can be scored (the hub or git cannot be read), every check runs before
 //!   `master` moves, as before the budget.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use ignite_core::budget::Budget;
 use ignite_core::gate::{self, GateCheck, GateInput};
@@ -112,6 +112,9 @@ impl TipVerifier {
             split.after.len()
         );
         let (superseded, runs) = self.run_families(ctx, tip, &split.after, true)?;
+        // Until now every check past the budget counted as unrun (see `split_by`).
+        let left = unrun(split.after.iter(), &runs);
+        note_unrun(tally, left, superseded.clone());
         tally.ran = tally
             .ran
             .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));
@@ -144,6 +147,28 @@ impl TipVerifier {
             }
         }
         Ok(())
+    }
+}
+
+/// For each family, how many of `set` have no run among `runs`.
+pub(super) fn unrun<'a>(
+    set: impl Iterator<Item = &'a &'a TipCheck>,
+    runs: &[TipRun],
+) -> BTreeMap<String, u32> {
+    let ran: HashSet<&CheckName> = runs.iter().map(|run| &run.check).collect();
+    let mut left: BTreeMap<String, u32> = BTreeMap::new();
+    for check in set.filter(|check| !ran.contains(&check.check)) {
+        *left.entry(check.family.clone()).or_default() += 1;
+    }
+    left
+}
+
+/// Records in the round's budget the checks it set out to run and did not, and the newer tip
+/// that ended it, if one did. The hub reads them to say why tip verification missed a check.
+pub(super) fn note_unrun(tally: &mut Tally, left: BTreeMap<String, u32>, ended_by: Option<Commit>) {
+    if let Some(budget) = tally.budget.as_mut() {
+        budget.unrun = left;
+        budget.ended_by = ended_by;
     }
 }
 
@@ -219,6 +244,9 @@ fn split_by<'a>(
         .iter()
         .copied()
         .partition(|check| !forced.contains(&check.check) && after_names.contains(&check.check));
+    // The checks past the budget count as unrun until they run after `master` moves; a round
+    // that does not move `master` leaves them for a later round.
+    figures.unrun = unrun(after.iter(), &[]);
     Split {
         after_keys: after.iter().map(|c| c.key.clone()).collect(),
         within,

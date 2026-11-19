@@ -281,6 +281,18 @@ crate::tables! {
         budget: Option<String>,
     }
 
+    /// A check a landing found failing at a tip, which tip verification had missed.
+    TipMiss = "tip_misses" {
+        check_name: String,
+        family: String,
+        tip: String,
+        /// `stale-pass`, `skipped` or `not-run`.
+        kind: String,
+        reason: String,
+        ticket: String,
+        at: String,
+    }
+
     /// Each class's rate of check commands for one day, in billions of instructions per second.
     ClassRate = "class_rates" { day: String, class: String, rate: Option<f64> }
 
