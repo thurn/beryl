@@ -3044,16 +3044,15 @@ Not every ticket is offered:
   pending, as `just bugs file` does for a player's bug report, so an agent can
   deduplicate and group the reports before any of them runs. A session may still
   start a pending ticket by name.
-- An epic is worked only once it is active, which means it has an
-  `--allocation` above 0. An epic filed without one gets an allocation of 3, so
-  releasing it is enough; an allocation is a weight bounded by the pool, so it
-  reserves nothing. An epic that has no allocation, such as one imported from
-  Enact, gets the same allocation when it is released, so releasing one epic
-  inside a larger project works it even when the project's epic has no
-  allocation either. File it with `--allocation 0`, or
-  set that later, to park a backlog: its tickets then wait, however ready they
-  are. A ticket under no epic has nothing to activate, so releasing it is
-  enough.
+- An epic is worked only once it is active, which means it has an `--allocation`
+  above 0. An epic filed without one gets an allocation of 3, so releasing it is
+  enough; an allocation is a weight bounded by the pool, so it reserves nothing.
+  An epic that has no allocation, such as one imported from Enact, gets the same
+  allocation when it is released, so releasing one epic inside a larger project
+  works it even when the project's epic has no allocation either. File it with
+  `--allocation 0`, or set that later, to park a backlog: its tickets then wait,
+  however ready they are. A ticket under no epic has nothing to activate, so
+  releasing it is enough.
 - Once released, tickets that the hub files itself are always offered:
   regressions, improvements and repairs to a machine. So is a ticket that a
   session starts by name.
