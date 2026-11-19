@@ -100,6 +100,12 @@ impl Reply {
     }
 }
 
+/// The seconds `ignite dispatch --wait` waits for an instruction by default. The wait ends as
+/// soon as there is something to do, so a longer one delays nothing; it only means fewer `idle`
+/// answers, each of which costs the dispatcher a full request over its context. The dispatcher
+/// runs it as a background command, because a foreground tool call is cut off after 600 s.
+pub const DISPATCH_WAIT_S: u32 = 3600;
+
 /// What a dispatcher is told to do next, printed by `ignite dispatch --wait`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DispatchInstruction {

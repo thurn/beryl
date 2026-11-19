@@ -98,7 +98,14 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         } => restart(current_dir()),
         _ => {
             let session = client::session_from_env(|name| std::env::var(name).ok());
-            let request = client::request(verb, raw, current_dir(), session);
+            let mut request = client::request(verb, raw, current_dir(), session);
+            if let Command::Dispatch {
+                command: None,
+                wait,
+            } = &cli.command
+            {
+                request.wait_s = client::dispatch_request_wait_s(*wait);
+            }
             if verb == "dispatch" {
                 // The dispatcher keeps calling while the daemon is down; see `fallback`.
                 let home = ignite_daemon::update::Home::from_env().root;

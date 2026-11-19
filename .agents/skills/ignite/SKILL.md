@@ -174,7 +174,7 @@ started a worker can clear and prompt it. Tell the person:
    `~/ignite` with the dispatcher's instructions and the main checkout's path,
    so the workers start in the checkout. Run it again after Ignite's
    instructions change.
-2. Open a session in `~/ignite` on Sonnet, in a permission mode that never
+2. Open a session in `~/ignite` on Haiku, in a permission mode that never
    prompts, and send `/ignite pool <n>` there. That session registers itself
    as the dispatcher, starts `n` workers and runs the dispatch loop. Sending it
    again adds more workers. In Codex, `n` is the number of slots: how many

@@ -128,8 +128,9 @@ pub enum Command {
     Dispatch {
         #[command(subcommand)]
         command: Option<DispatchCommand>,
-        /// Seconds to wait for something to do. Below the 600 s limit of a Bash call.
-        #[arg(long, default_value_t = 480)]
+        /// Seconds to wait for something to do. Run it in the background: a foreground tool
+        /// call is cut off after 600 s.
+        #[arg(long, default_value_t = ignite_core::protocol::client::DISPATCH_WAIT_S)]
         wait: u32,
     },
     /// The machine's pool of worker sessions.
@@ -734,6 +735,18 @@ mod tests {
                 r#"{"sessionId":"local_a","isRunning":true}"#.to_owned()
             )
         );
+    }
+
+    #[test]
+    fn dispatch_waits_the_default_when_no_wait_is_given() {
+        let command = Cli::try_parse_from(["ignite", "dispatch"]).unwrap().command;
+        assert!(matches!(
+            command,
+            Command::Dispatch {
+                wait: ignite_core::protocol::client::DISPATCH_WAIT_S,
+                command: None,
+            }
+        ));
     }
 
     #[test]

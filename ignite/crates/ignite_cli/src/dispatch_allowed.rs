@@ -54,8 +54,8 @@ fn ask(tool: &str, session: Option<&str>) -> Reply {
                 Exit::CheckFailed,
                 format!(
                     "blocked  {tool}: the daemon did not answer, and no hand-off from the client \
-                     calls for it. Run `ignite dispatch --wait 540` and carry out only what it \
-                     prints."
+                     calls for it. Start the next wait as AGENTS.md says and carry out only \
+                     what it prints."
                 ),
             )
         })

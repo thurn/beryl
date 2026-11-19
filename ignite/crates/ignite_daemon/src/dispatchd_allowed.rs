@@ -162,7 +162,7 @@ impl Dispatcher {
         }
         text.push_str(
             "\nnext     carry out only the current instruction, report it with `ignite dispatch \
-             ack`, then run `ignite dispatch --wait 540`",
+             ack`, then start the next wait as AGENTS.md says",
         );
         Reply::text(Exit::CheckFailed, text)
     }

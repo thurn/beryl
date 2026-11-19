@@ -454,5 +454,10 @@
     "label": "The dispatcher's stall watch keeps a record of every check, so a worker answered `running`, or one whose release failed, is checked again only after another 30 minutes of silence; and a worker whose ticket just ended settles 3 minutes before its next hand-off. On 2026-11-19, from 04:00 to 14:30, the Claude dispatcher received about 44 instructions an hour, 231 of them `check`s: 30 repeated `running` checks of one worker in 4 minutes, and two checks plus a reminder every 15 minutes for each worker whose release failed; and 32 of its 114 hand-offs failed because the app refused to clear a session still finishing its turn",
     "metric": "ignite.dispatch-dollars",
     "expect": "down"
+  },
+  {
+    "label": "The Claude dispatcher runs `ignite dispatch --wait 3600` as a background command instead of an 8-minute foreground wait, so it wakes once an hour when there is nothing to do instead of about 7 times. On 2026-11-19 197 of its 426 instructions were `idle` wake-ups, each a full request over its context; the daemon now keeps only the newest wait from each dispatcher, so a second wait started after a worker's notice is harmless",
+    "metric": "ignite.dispatch-dollars",
+    "expect": "down"
   }
 ]

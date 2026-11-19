@@ -20,6 +20,17 @@ pub const NOT_BUILT: &[(&str, &str)] = &[];
 /// tool timeout.
 pub const DEFAULT_WAIT_S: u32 = 540;
 
+/// Seconds a `dispatch` request waits beyond its `--wait`. The daemon answers idle a few
+/// seconds before the request's own wait ends (`CALLER_MARGIN_S` in the daemon's dispatch
+/// verb), so the request has to outlast the wait it asks for.
+pub const DISPATCH_MARGIN_S: u32 = 10;
+
+/// The request's own wait for `ignite dispatch --wait <wait>`. Without it, every request waits
+/// [`DEFAULT_WAIT_S`], and the daemon would cut a longer dispatch wait short.
+pub fn dispatch_request_wait_s(wait: u32) -> u32 {
+    wait.saturating_add(DISPATCH_MARGIN_S)
+}
+
 /// Environment variables that name the asking session, first match wins: Ignite's own, then
 /// the one the Claude desktop app gives its sessions.
 pub const SESSION_VARIABLES: &[&str] = &["IGNITE_SESSION", "CLAUDE_CODE_HOST_SESSION_ID"];
@@ -160,6 +171,12 @@ mod tests {
         assert_eq!(args_after_verb(&raw, "land"), ["-m", "a note"]);
         let request = request("land", &raw, PathBuf::from("/t"), None);
         assert_eq!(request.wait_s, DEFAULT_WAIT_S);
+    }
+
+    #[test]
+    fn a_dispatch_request_outlasts_its_wait() {
+        assert_eq!(dispatch_request_wait_s(3600), 3610);
+        assert_eq!(dispatch_request_wait_s(u32::MAX), u32::MAX);
     }
 
     #[test]

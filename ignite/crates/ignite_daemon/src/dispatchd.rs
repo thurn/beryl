@@ -88,8 +88,8 @@ pub const FEED_WAIT_S: u32 = 30;
 
 /// The line every instruction ends with, so the dispatcher keeps its loop after compaction.
 pub const LOOP: &str = "Loop: run the recipe in AGENTS.md for this `do`, then `ignite dispatch ack \
-                        <id> ok|failed <why>|raw '<result>'`, then `ignite dispatch --wait 480` \
-                        again.";
+                        <id> ok|failed <why>|raw '<result>'`, then start `ignite dispatch --wait \
+                        3600` again in the background and end your turn.";
 
 /// The message an idle worker gets when it has run nothing for 30 minutes.
 pub const CONTINUE: &str = "You have run no `ignite` command for 30 minutes. Continue the \

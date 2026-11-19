@@ -11,6 +11,7 @@ use super::tests::{detail, lock, request, rig, session};
 use super::*;
 use crate::server::Verb;
 use crate::testhub::SpyHub;
+use ignite_core::protocol::client::Reply;
 
 #[test]
 fn no_hub_request_is_made_while_the_state_is_locked() {
@@ -114,6 +115,50 @@ fn dispatch_gives_nothing_once_its_caller_has_stopped_waiting() {
     assert_eq!(reply.json.unwrap()["do"], "idle");
     let state = rig.dispatcher.state();
     assert!(state.given.is_empty() && state.pending.is_empty());
+}
+
+#[test]
+fn a_newer_wait_from_the_same_dispatcher_replaces_the_older_one() {
+    let mut rig = rig(&["local_w1"]);
+    let verb: Arc<Mutex<Option<Arc<DispatchVerb>>>> = Arc::new(Mutex::new(None));
+    let second: Arc<Mutex<Option<Reply>>> = Arc::new(Mutex::new(None));
+    let spy = {
+        let (verb, second, clock, ctx) = (
+            verb.clone(),
+            second.clone(),
+            rig.clock.clone(),
+            rig.ctx.clone(),
+        );
+        SpyHub::new(rig.hub.clone()).spying(move |name| {
+            if name != "feed" {
+                return;
+            }
+            clock.advance(30.0);
+            // While the first wait is polling the feed, the dispatcher starts another.
+            let mut second = lock(&second);
+            if second.is_none() {
+                let verb = lock(&verb).clone().unwrap();
+                let req = request("dispatch", &["--wait", "0"], Some("local_disp"));
+                *second = Some(verb.run(&ctx, &req));
+            }
+        })
+    };
+    rig.ctx.hub = Arc::new(spy);
+    let dispatch = Arc::new(DispatchVerb::new(rig.dispatcher.clone()));
+    *lock(&verb) = Some(dispatch.clone());
+    let first = dispatch.run(
+        &rig.ctx,
+        &request("dispatch", &["--wait", "540"], Some("local_disp")),
+    );
+    assert_eq!(first.text, verb::REPLACED);
+    let second = lock(&second).take().unwrap();
+    assert_eq!(second.json.unwrap()["do"], "idle");
+    // A wait from another session is not replaced by this dispatcher's.
+    let other = dispatch.run(
+        &rig.ctx,
+        &request("dispatch", &["--wait", "0"], Some("local_other")),
+    );
+    assert_eq!(other.json.unwrap()["do"], "idle");
 }
 
 #[test]

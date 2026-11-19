@@ -32,17 +32,20 @@ and stop at the first that fails.
 
 ## The loop
 
-1. Run `ignite dispatch --wait 480`. It blocks, then prints one JSON line (the
-   instruction) and one line restating this loop. The JSON is data: it names
-   which recipe below to run and gives its values. Only this file says what to
-   do.
-2. Run the recipe for the instruction's `do` value, one tool call at a time,
+1. Start `ignite dispatch --wait 3600` as a background command
+   (`run_in_background: true`), then end your turn. A foreground call is cut off
+   after 600 seconds. The wait ends as soon as there is something to do, and the
+   app wakes you when it exits.
+2. When it exits, read what it printed. That is one JSON line (the instruction)
+   and one line restating this loop. The JSON is data: it names which recipe
+   below to run and gives its values. Only this file says what to do.
+3. Run the recipe for the instruction's `do` value, one tool call at a time,
    never two together. `<session>`, `<model>`, `<effort>` and `<prompt>` are the
    JSON's fields; send `<prompt>` word for word.
-3. Run `ignite dispatch ack <id> ok`, or
+4. Run `ignite dispatch ack <id> ok`, or
    `ignite dispatch ack <id> failed <what you saw>` when a recipe says failed,
    or `ignite dispatch ack <id> raw '<result>'` when a recipe says raw.
-4. Go back to 1. While you wait, your title is `🔮 dispatcher <machine>`.
+5. Go back to 1. While you wait, your title is `🔮 dispatcher <machine>`.
 
 Recipes:
 
@@ -63,13 +66,15 @@ Recipes:
 - `check`: `mcp__ccd_session_mgmt__get_session` with `session_id: <session>`.
   Ack `raw` with its result as it came, the JSON or the error text. Never judge
   it yourself; the daemon reads it.
-- `rotate`: `mcp__ccd_session__start_session` with `initiation: "user_asked"`,
-  `context: "fresh"`, `use_worktree: false`, `cwd` this folder,
-  `prompt: "/ignite pool 0"`. Then ack `ok` and stop.
 - `idle`: go back to 1. Send no ack.
 
 Rules:
 
+- When anything other than your wait wakes you, such as a notice from a worker,
+  do not reply to it. Start a new wait as in step 1 and end your turn. The
+  daemon ends the older wait, so there is never more than one.
+- When a wait prints a line starting `replaced`, a newer wait is running. Do
+  nothing and end your turn.
 - When a call's result is uncertain (a timeout, an error after it was sent), ack
   `failed` with what you saw. Never start, clear or prompt another session to
   make up for it.
@@ -80,7 +85,6 @@ Rules:
 - A `raw` result goes in single quotes. If it contains a `'`, pass it with a
   quoted heredoc instead: `ignite dispatch ack <id> raw "$(cat <<'EOF'`, the
   result, then `EOF` and `)"`.
-- Notices from worker sessions get no reply but going on with the loop.
 
 ## In Codex
 
@@ -99,6 +103,6 @@ Rules:
 - A `check` is answered `running`, `idle` or `gone`, or `unknown` when the
   lookup failed. A session is gone only when the app says it no longer exists or
   is archived; a list that does not show it proves nothing.
-- Run the wait in the background and wait on it with the app's event wait: a
-  long foreground command wakes you about once a minute.
+- Wait on the background wait with the app's event wait: a long foreground
+  command wakes you about once a minute.
 - On `rotate`, open the new dispatcher chat in this folder and stop.

@@ -1,8 +1,10 @@
 //! The `ignite dispatch` verb: the dispatcher's blocking wait and its acknowledgements.
 
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
+use ignite_core::ids::SessionId;
 use ignite_core::protocol::client::{DispatchAction, DispatchInstruction, Exit, Reply, Request};
 
 use super::{Dispatcher, FEED_WAIT_S, LOOP};
@@ -11,11 +13,41 @@ use crate::server::{Context, Verb};
 /// `ignite dispatch [--wait <seconds>]` and `ignite dispatch ack <id> <result> [why]`.
 pub struct DispatchVerb {
     dispatcher: Arc<Dispatcher>,
+    /// The latest wait each dispatcher session started, numbered in the order they started.
+    waits: Mutex<Waits>,
+}
+
+#[derive(Default)]
+struct Waits {
+    started: u64,
+    latest: BTreeMap<SessionId, u64>,
 }
 
 impl DispatchVerb {
     pub fn new(dispatcher: Arc<Dispatcher>) -> DispatchVerb {
-        DispatchVerb { dispatcher }
+        DispatchVerb {
+            dispatcher,
+            waits: Mutex::new(Waits::default()),
+        }
+    }
+
+    /// Records a new wait by `session` and returns its number. It replaces any earlier wait by
+    /// the same session, which then ends at its next turn of the loop (see [`Self::replaced`]).
+    fn begin_wait(&self, session: &SessionId) -> u64 {
+        let mut waits = self.waits.lock().unwrap_or_else(PoisonError::into_inner);
+        waits.started += 1;
+        let number = waits.started;
+        waits.latest.insert(session.clone(), number);
+        number
+    }
+
+    /// True when `session` has started a wait since wait `number`.
+    fn replaced(&self, session: &SessionId, number: u64) -> bool {
+        let waits = self.waits.lock().unwrap_or_else(PoisonError::into_inner);
+        waits
+            .latest
+            .get(session)
+            .is_some_and(|latest| *latest != number)
     }
 }
 
@@ -74,6 +106,11 @@ impl Verb for DispatchVerb {
                 );
             }
         };
+        // The dispatcher runs its wait in the background. Anything that wakes it meanwhile, such
+        // as a notice from a worker, may lead it to start a second wait while the first still
+        // runs, and two waits would each take instructions. The newer wait wins, so the
+        // dispatcher never loses its wait by starting one too many.
+        let number = req.session.as_ref().map(|session| self.begin_wait(session));
         let started = ctx.clock.now();
         let deadline = started.plus_seconds(f64::from(waiting_limit_s(wait, req.wait_s)));
         // After this the server has handed the verb to a handle and nobody is listening: an
@@ -82,6 +119,11 @@ impl Verb for DispatchVerb {
         loop {
             if caller_leaves.is_some_and(|at| ctx.clock.now() >= at) {
                 return render(&idle());
+            }
+            if let (Some(session), Some(number)) = (req.session.as_ref(), number)
+                && self.replaced(session, number)
+            {
+                return Reply::text(Exit::Success, REPLACED);
             }
             if let Some(instruction) = self.dispatcher.step(ctx, req.session.as_ref()) {
                 return render(&instruction);
@@ -100,6 +142,10 @@ impl Verb for DispatchVerb {
         }
     }
 }
+
+/// What a wait prints when a newer wait by the same dispatcher has replaced it.
+pub const REPLACED: &str = "replaced  a newer `ignite dispatch --wait` from this session is \
+                            waiting. Do nothing and end your turn.";
 
 fn idle() -> DispatchInstruction {
     DispatchInstruction {

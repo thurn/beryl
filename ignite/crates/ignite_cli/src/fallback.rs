@@ -130,7 +130,7 @@ fn instruction(action: DispatchAction, session: Option<String>, prompt: Option<S
         format!(
             "{line}\nLoop: the daemon is down and this instruction comes from the client. Run the \
              recipe in AGENTS.md for this `do`, then `ignite dispatch ack {FALLBACK_ID} ok|failed \
-             <why>`, then `ignite dispatch --wait 480` again."
+             <why>`, then start `ignite dispatch --wait 3600` again in the background."
         ),
     )
 }

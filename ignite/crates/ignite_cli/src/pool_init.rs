@@ -163,7 +163,7 @@ pub fn run(folder: &Path, checkout: &Path) -> Reply {
         Ok(()) => Reply::text(
             Exit::Success,
             format!(
-                "wrote    {}\nnext     open a session in that folder on Sonnet, in a permission \
+                "wrote    {}\nnext     open a session in that folder on Haiku, in a permission \
                  mode that never prompts, and send `/ignite pool <n>`",
                 folder.display()
             ),
@@ -281,6 +281,18 @@ fn with_hook(settings: &mut serde_json::Map<String, serde_json::Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The instructions, the line every instruction ends with and the CLI's default all name
+    /// the same wait, so the dispatcher is never told two different ones.
+    #[test]
+    fn every_text_names_the_default_wait() {
+        let wait = format!(
+            "ignite dispatch --wait {}",
+            ignite_core::protocol::client::DISPATCH_WAIT_S
+        );
+        assert!(INSTRUCTIONS.contains(&wait));
+        assert!(ignite_daemon::dispatchd::LOOP.contains(&wait));
+    }
 
     fn scratch(name: &str) -> PathBuf {
         let dir =

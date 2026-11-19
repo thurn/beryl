@@ -2371,7 +2371,7 @@ Each machine has one standing pool that serves every active epic.
 The dispatcher is one session per machine and per app whose whole job is to make
 the tool calls the daemon asks for.
 
-- It runs on Sonnet 5.5, in `~/ignite`, a folder outside the repository, so its
+- It runs on Haiku 5.5, in `~/ignite`, a folder outside the repository, so its
   fixed prefix holds none of Beryl's instruction files. The folder's
   instructions name the main checkout, because a session started from the
   dispatcher otherwise runs in the dispatcher's folder.
@@ -2417,8 +2417,19 @@ the tool calls the daemon asks for.
 Its loop is one blocking command and the tool calls that command returns:
 
 ```text
-$ ignite dispatch --wait 480
+$ ignite dispatch --wait 3600
 ```
+
+The dispatcher runs the wait as a background command and ends its turn, and the
+app wakes it when the command exits. A foreground tool call is cut off after 600
+seconds, and every wait that ends `idle` costs a full request over the
+dispatcher's context, so the wait is as long as an hour; it ends as soon as
+there is something to do. Anything else that wakes the dispatcher meanwhile,
+such as a notice from a worker, may lead it to start a second wait. The daemon
+keeps only the newest wait from each dispatcher session: the older one ends
+printing `replaced`, and the dispatcher then does nothing. Two waits never both
+take instructions, and starting one too many never leaves the dispatcher without
+a wait.
 
 ```json
 {"id": 4812, "do": "handoff", "session": "local_c8470108",
