@@ -5,6 +5,8 @@
 //! 1. The session must hold the tree's ticket, the tree must be on the ticket's branch, and no
 //!    file may be neither committed nor ignored.
 //! 2. The branch is rebased onto the remote tip. A conflict exits with code 3 and the files.
+//!    On the first pass, the formatters of `[format]` run on the changed files in the ticket
+//!    tree, and what they change is committed on the branch (see [`format`]).
 //! 3. The gate runs in a landing tree checked out at the rebased commit, or in the ticket tree
 //!    when the branch was already at the tip. A landing that changes only Ignite runs the
 //!    express commands in the express tree instead (see [`express`]). Every later pass gates in
@@ -51,6 +53,7 @@
 
 pub mod env;
 pub mod express;
+pub mod format;
 mod lease;
 mod passes;
 pub mod records;
@@ -72,16 +75,17 @@ use ignite_core::protocol::hub::Landed;
 use ignite_core::protocol::tickets::{LandedWork, LeaseOp, LeaseReply};
 use ignite_core::traits::{Error, Push, Rebase};
 
-use crate::checks::verbs::{built_lines, gate_lines, render};
+use crate::checks::verbs::render;
 use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use crate::steps;
 use env::{GateTree, LandGate, LandTrees, TicketTree};
 use express::{ExpressLane, ExpressRun, Expressed};
+use format::{Formatted, Formatter};
 use lease::{HeldLease, LEASE_TTL_S};
 use passes::{GateHome, Passed};
 use records::{LandingRecord, RecordState, Records};
-use replies::{done_title, failed_gate};
+use replies::failed_gate;
 
 /// The longest wait between two tries for a busy lease.
 const BUSY_WAIT_S: f64 = 10.0;
@@ -97,6 +101,8 @@ pub struct Landing {
     pub records: Records,
     /// The machine's express lane; `None` sends every landing through the gate.
     pub express: Option<Arc<dyn ExpressLane>>,
+    /// The repository's formatters; `None` formats nothing.
+    pub format: Option<Arc<dyn Formatter>>,
     /// Waits this many seconds before trying a busy lease again: a sleep in the daemon, a move
     /// of the fake clock in tests.
     pub pause: Arc<dyn Fn(f64) + Send + Sync>,
@@ -381,6 +387,7 @@ impl Landing {
         let mut passes = 0;
         let mut last_cause = String::new();
         let mut first_landed_since = None;
+        let mut formatted: Option<Formatted> = None;
         loop {
             if passes >= MAX_PASSES {
                 return Err(stop(
@@ -415,7 +422,7 @@ impl Landing {
                 self.records.remove(&record.landed.ticket).map_err(io)?;
             }
             steps::step(format!("rebasing onto {staging} {}", short(&tip)));
-            let rebased = Self::rebase(ctx, &held, &tip)?;
+            let mut rebased = Self::rebase(ctx, &held, &tip)?;
             first_landed_since.get_or_insert(rebased.landed_since);
             if rebased.head == rebased.onto {
                 return Err(stop(
@@ -430,7 +437,14 @@ impl Landing {
                 ));
             }
             passes += 1;
-            let changed = ctx.git.changed(&rebased.onto, &rebased.head).map_err(io)?;
+            let mut changed = ctx.git.changed(&rebased.onto, &rebased.head).map_err(io)?;
+            if formatted.is_none() {
+                formatted = self.format_changes(ctx, &held, &mut rebased, &mut changed)?;
+            }
+            let format_onto = |reply: Reply| match &formatted {
+                Some(done) => Box::new(done.onto(reply)),
+                None => Box::new(reply),
+            };
             let express = self.express_for(ctx, &changed);
             // An express landing runs its commands in its own ticket tree, which the rebase has
             // put at the rebased commit, so express landings run side by side. They once all ran
@@ -483,10 +497,10 @@ impl Landing {
                 return Err(stopped());
             }
             if let Some(run) = expressed.as_ref().filter(|run| !run.passed()) {
-                return Err(Box::new(express::failed_express(ctx, run)));
+                return Err(format_onto(express::failed_express(ctx, run)));
             }
             if !gated.run.passed() {
-                return Err(Box::new(failed_gate(
+                return Err(format_onto(failed_gate(
                     &staging,
                     &rebased,
                     &gated,
@@ -627,6 +641,7 @@ impl Landing {
                 gated,
                 release,
                 express: expressed,
+                formatted,
             };
             return Ok(Self::reply(
                 ctx,
@@ -688,94 +703,6 @@ impl Landing {
             closed,
             released,
             problems,
-        }
-    }
-
-    /// The reply of a landing that has pushed and settled.
-    fn reply(
-        ctx: &Context,
-        record: &LandingRecord,
-        settled: Settled,
-        summary: Option<&Summary>,
-        note: Option<&str>,
-    ) -> Reply {
-        let Settled {
-            closed,
-            released,
-            problems,
-        } = settled;
-        let ticket = &record.landed.ticket;
-        let staging = &ctx.config.repository.staging;
-        let mut lines = Vec::new();
-        if let Some(summary) = summary {
-            lines.push(line(
-                "rebased",
-                format!(
-                    "onto {staging} {} ({} commits landed since start)",
-                    short(&summary.tip),
-                    summary.landed_since
-                ),
-            ));
-            if summary.passes > 1 {
-                lines.push(line(
-                    "raced",
-                    format!(
-                        "the tip moved during {} passes; landed on pass {}",
-                        summary.passes - 1,
-                        summary.passes
-                    ),
-                ));
-            }
-            if let Some(run) = &summary.express {
-                lines.push(run.line());
-            } else {
-                lines.extend(built_lines(&summary.gated.run));
-                lines.extend(gate_lines(&summary.gated));
-            }
-        }
-        lines.push(line(
-            "landed",
-            format!(
-                "{} on {staging}; {closed}; {released}",
-                short(&record.commit)
-            ),
-        ));
-        if let Some(release) = summary.and_then(|summary| summary.release.clone()) {
-            lines.push(release);
-        }
-        lines.extend(problems);
-        lines.push(line("title", done_title(ctx, ticket)));
-        // A landing that moved the release names the wait for it to reach every machine.
-        let (next, deploy) = crate::deploy::landed_next(
-            ctx.config.repository.release.as_deref(),
-            summary
-                .and_then(|s| s.release.as_ref())
-                .map(|(_, r)| r.as_str()),
-            &record.commit,
-        );
-        lines.push(line("next", next));
-        let budget = summary.and_then(|s| s.gated.budget.as_ref());
-        Reply {
-            exit: Exit::Success,
-            text: render(&lines),
-            json: Some(json!({
-                "ticket": ticket,
-                "commit": record.commit,
-                "note": note,
-                "passes": summary.map(|s| s.passes),
-                "from_cache": summary.map(|s| s.gated.run.from_cache),
-                "ran": summary.map(|s| s.gated.run.ran),
-                "left_to_tip": summary.map(|s| s.gated.left),
-                "checks_s": summary.map(|s| s.gated.run.wall_s),
-                "build_s": summary.map(|s| s.gated.run.builds.iter().map(|b| b.wall_s).sum::<f64>()),
-                "budget_billions": budget.map(crate::checks::GateBudget::billions),
-                "rate": budget.map(|b| b.rate),
-                "closed": closed == "ticket closed",
-                "deploy": deploy,
-                "express": summary.is_some_and(|s| s.express.is_some()),
-                "express_carried": summary.is_some_and(|s| s.express.as_ref().is_some_and(|r| r.carried)),
-            })),
-            handle: None,
         }
     }
 
@@ -849,4 +776,6 @@ struct Summary {
     release: Option<(String, String)>,
     /// The express run that took the gate's place, if the landing took the express lane.
     express: Option<ExpressRun>,
+    /// What the formatters did, if the machine has any.
+    formatted: Option<Formatted>,
 }

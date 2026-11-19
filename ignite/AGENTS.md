@@ -17,6 +17,11 @@ owns which file. These are the contract's rules.
 - Check it with `cd ignite && cargo nextest run -p <crate>` for one crate, or
   `ignite test ignite: ignite-lint:` for every test (the `ignite` family),
   formatting and clippy (the `ignite-lint` family).
+- After changing Ignite's Rust code, run
+  `cargo clippy -p <crate> --all-targets -- -D warnings` in `ignite/` in your
+  tree before `ignite test` or `ignite land`; it takes seconds, and a clippy
+  failure found by Ignite costs a whole round trip. Formatting needs no step:
+  `ignite land` runs the formatters of `[format]` and commits what they change.
 
 ## Rules
 

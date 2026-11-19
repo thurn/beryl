@@ -54,6 +54,24 @@ commands = [
 ]
 families = ["ignite", "ignite-lint"]
 
+# Formatters `ignite land` runs on the files a landing changes, before the gate or the express
+# commands, committing what they change as `style: format` (docs/ignite.md, "Formatting at
+# landing"). On 2026-11-18 formatting failures found by the checks cost workers on one epic about
+# 25 minutes, one round trip at a time. The commands are those of `just fmt`; `{files}` is the
+# changed files a rule matches, relative to its `dir`. A rule whose formatter is missing from a
+# tree (no `ui/node_modules`) gives a warning and the landing goes on.
+[format]
+rules = [
+  { paths = ["ignite/**/*.rs"], dir = "ignite", command = "cargo fmt" },
+  # `cargo fmt` does not reach the card files, whose `mod` lines a build script writes, so the
+  # files are named directly, as `beryl_tools.card_files rustfmt` does.
+  { paths = ["rust/**/*.rs"], dir = "rust", command = "rustfmt --edition 2024 {files}" },
+  { paths = ["**/*.md"], exclude = [".agents/**"], command = "uv run --quiet --project tools mdformat {files}" },
+  { paths = ["tools/**/*.py", "efficiency/**/*.py"], command = "uv run --quiet --project tools black --quiet {files}" },
+  { paths = ["ui/**"], dir = "ui", command = "node_modules/.bin/prettier --write --log-level warn --ignore-unknown {files}" },
+  { paths = ["justfile"], command = "just --fmt --unstable" },
+]
+
 # When a daemon restarts into a new release (docs/ignite.md, "Processes"). On 2026-11-18 the
 # daemon on jarvis restarted 16 times between 20:28 and 22:11 PST, once per landed release that
 # changed its code, and each restart reran every `ignite start` in progress. A restart now waits

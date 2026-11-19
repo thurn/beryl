@@ -2,6 +2,7 @@
 
 mod express;
 mod fakes;
+mod format;
 mod more;
 mod races;
 mod release;
@@ -124,6 +125,7 @@ fn world_with(
         gate: gate.clone(),
         records: Records::new(&records),
         express: None,
+        format: None,
         pause: Arc::new(move |seconds| pause_clock.advance(seconds)),
     });
     let ctx = Context {

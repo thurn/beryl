@@ -1,5 +1,5 @@
-//! The replies of a landing that are built from its results alone: a failed gate's, and the
-//! session title of a landed ticket.
+//! The replies of a landing that are built from its results alone: a landed one's, a failed
+//! gate's, and the session title of a landed ticket.
 
 use std::path::Path;
 
@@ -8,7 +8,8 @@ use serde_json::json;
 use ignite_core::ids::TicketId;
 use ignite_core::protocol::client::{Exit, Reply};
 
-use super::{Rebased, line, short};
+use super::records::LandingRecord;
+use super::{Landing, Rebased, Settled, Summary, line, short};
 use crate::checks::GateRun;
 use crate::checks::verbs::{built_lines, gate_lines, render};
 use crate::server::Context;
@@ -60,5 +61,100 @@ pub(super) fn done_title(ctx: &Context, ticket: &TicketId) -> String {
             format!("✅ [{ticket}] {title}")
         }
         Err(_) => format!("✅ [{ticket}]"),
+    }
+}
+
+impl Landing {
+    /// The reply of a landing that has pushed and settled.
+    pub(super) fn reply(
+        ctx: &Context,
+        record: &LandingRecord,
+        settled: Settled,
+        summary: Option<&Summary>,
+        note: Option<&str>,
+    ) -> Reply {
+        let Settled {
+            closed,
+            released,
+            problems,
+        } = settled;
+        let ticket = &record.landed.ticket;
+        let staging = &ctx.config.repository.staging;
+        let mut lines = Vec::new();
+        if let Some(summary) = summary {
+            lines.push(line(
+                "rebased",
+                format!(
+                    "onto {staging} {} ({} commits landed since start)",
+                    short(&summary.tip),
+                    summary.landed_since
+                ),
+            ));
+            if summary.passes > 1 {
+                lines.push(line(
+                    "raced",
+                    format!(
+                        "the tip moved during {} passes; landed on pass {}",
+                        summary.passes - 1,
+                        summary.passes
+                    ),
+                ));
+            }
+            if let Some(formatted) = &summary.formatted {
+                lines.extend(formatted.line());
+                lines.extend(formatted.warnings());
+            }
+            if let Some(run) = &summary.express {
+                lines.push(run.line());
+            } else {
+                lines.extend(built_lines(&summary.gated.run));
+                lines.extend(gate_lines(&summary.gated));
+            }
+        }
+        lines.push(line(
+            "landed",
+            format!(
+                "{} on {staging}; {closed}; {released}",
+                short(&record.commit)
+            ),
+        ));
+        if let Some(release) = summary.and_then(|summary| summary.release.clone()) {
+            lines.push(release);
+        }
+        lines.extend(problems);
+        lines.push(line("title", done_title(ctx, ticket)));
+        // A landing that moved the release names the wait for it to reach every machine.
+        let (next, deploy) = crate::deploy::landed_next(
+            ctx.config.repository.release.as_deref(),
+            summary
+                .and_then(|s| s.release.as_ref())
+                .map(|(_, r)| r.as_str()),
+            &record.commit,
+        );
+        lines.push(line("next", next));
+        let budget = summary.and_then(|s| s.gated.budget.as_ref());
+        Reply {
+            exit: Exit::Success,
+            text: render(&lines),
+            json: Some(json!({
+                "ticket": ticket,
+                "commit": record.commit,
+                "note": note,
+                "passes": summary.map(|s| s.passes),
+                "from_cache": summary.map(|s| s.gated.run.from_cache),
+                "ran": summary.map(|s| s.gated.run.ran),
+                "left_to_tip": summary.map(|s| s.gated.left),
+                "checks_s": summary.map(|s| s.gated.run.wall_s),
+                "build_s": summary.map(|s| s.gated.run.builds.iter().map(|b| b.wall_s).sum::<f64>()),
+                "budget_billions": budget.map(crate::checks::GateBudget::billions),
+                "rate": budget.map(|b| b.rate),
+                "closed": closed == "ticket closed",
+                "deploy": deploy,
+                "express": summary.is_some_and(|s| s.express.is_some()),
+                "formatted": summary.and_then(|s| s.formatted.as_ref()).and_then(|f| f.commit.clone()),
+                "express_carried": summary.is_some_and(|s| s.express.as_ref().is_some_and(|r| r.carried)),
+            })),
+            handle: None,
+        }
     }
 }

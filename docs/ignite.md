@@ -1572,6 +1572,9 @@ The steps, in order:
 1. Check that the session holds the ticket and the tree has no uncommitted
    edits.
 2. Rebase the branch onto the tip. A conflict exits with code 3 and the files.
+   On the first pass, run the formatters of `[format]` on the changed files and
+   commit what they change (see
+   [Formatting at landing](#formatting-at-landing)).
 3. Take a landing tree, unless the ticket tree is already at the tip. Check out
    the rebased commit there.
 4. Decide which families the change can affect, from the paths that differ
@@ -1771,6 +1774,36 @@ express_cores = 3
 - A machine whose `express_cores` is 0, or a repository with no `[express]` or
   no release branch, sends every landing through the gate.
 - The integration branch's lease and the push are the same as for any landing.
+
+### Formatting at landing
+
+On 2026-11-18 workers on one epic lost about 25 minutes to formatting and lint
+failures that Ignite found one round trip at a time: two `ignite test` runs
+failed `cargo fmt --check` after 512 and 759 s, a landing failed the Markdown
+format check on this document, and one worker hit clippy's 100-line function
+limit four times in a row at 54 to 555 s a round. A formatter fixes in a second
+what those checks only report, so `ignite land` runs the formatters itself.
+
+- `[format] rules` in `ignite.toml` lists them. Each rule has `paths` (patterns
+  as in a family's `inputs`), an optional `exclude`, an optional `dir` to run in
+  (the checkout's root when empty) and a `command`, split on whitespace and run
+  without a shell. The word `{files}` in a command becomes the changed files the
+  rule matches that still exist, relative to `dir`.
+- After the first pass's rebase, the landing runs each rule that matches a file
+  it changes, in the ticket tree. If they changed any tracked file, it commits
+  the result on the ticket's branch as `style: format`, and the gate or the
+  express commands run on that commit. Later passes rebase the format commit
+  with the rest of the branch and do not run the formatters again.
+- The reply's `format` line says how many formatters ran and names the commit,
+  or says there was nothing to change. A landing that fails after formatting
+  still shows the line, because the commit stays on the tree's branch.
+- A formatter that fails (missing from the machine, or unable to parse a file)
+  becomes a `warning` line and the landing goes on: the checks then report what
+  is wrong, as they would have without formatting.
+- Lint cannot fix itself. When an agent has changed Ignite's Rust code, it runs
+  `cargo clippy -p <crate> --all-targets -- -D warnings` in `ignite/` in its
+  tree before `ignite test` or `ignite land`. A failed express clippy command's
+  reply ends with that command for the crate that failed.
 
 ## Tip verification
 

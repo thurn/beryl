@@ -22,7 +22,7 @@ use ignite_core::protocol::client::{Exit, Reply};
 use super::OpenTree;
 use super::verbs::{changed_paths, render};
 use crate::checks::Checks;
-use crate::land::express::{ExpressLane, ExpressRun};
+use crate::land::express::{ExpressLane, ExpressRun, rerun_command};
 use crate::server::Context;
 
 /// What the verb was asked to run.
@@ -103,6 +103,13 @@ fn reply(run: &ExpressRun, what: &str) -> Reply {
         ),
     )];
     lines.extend(output.lines().map(|text| (String::new(), text.to_owned())));
+    lines.push((
+        "rerun".to_owned(),
+        format!(
+            "{}, in the commands' directory",
+            rerun_command(&command, &output)
+        ),
+    ));
     Reply {
         exit: Exit::CheckFailed,
         text: render(&lines),

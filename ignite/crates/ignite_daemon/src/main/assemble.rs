@@ -36,6 +36,7 @@ use crate::hubclient::HubClient;
 use crate::idle::{AuditVerb, Idle, IdleHost, IdleJobVerb, IdleSettings, LiveHost, RebuildVerb};
 use crate::land::env::{ChecksGate, LandTrees, MachineTrees};
 use crate::land::express::{CoreLender, MachineExpress};
+use crate::land::format::MachineFormat;
 use crate::land::records::Records;
 use crate::land::{LandVerb, Landing, SyncVerb};
 use crate::pool::{Pool, PoolVerb};
@@ -289,6 +290,7 @@ pub fn checking_with(
             &base.clock,
             Some(lender),
         ),
+        format: MachineFormat::for_config(&base.config),
         pause: Arc::new(|seconds| std::thread::sleep(std::time::Duration::from_secs_f64(seconds))),
     });
     let idle = Arc::new(Idle::new(

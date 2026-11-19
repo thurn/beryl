@@ -82,6 +82,7 @@ fn express_world(lane: &Arc<FakeExpress>) -> World {
         gate: world.gate.clone(),
         records: Records::new(&world.records),
         express: Some(lane.clone()),
+        format: None,
         pause: Arc::new(move |seconds| pause_clock.advance(seconds)),
     });
     world
@@ -302,4 +303,27 @@ fn build_inputs_are_manifests_in_the_workspace_and_toolchain_files_anywhere() {
     assert!(is_build_input(".cargo/config.toml", "ignite"));
     assert!(!is_build_input("rust/Cargo.lock", "ignite"));
     assert!(!is_build_input("ignite/crates/x/src/lib.rs", "ignite"));
+}
+
+#[test]
+fn a_failed_clippy_names_clippy_on_the_failing_crate_as_the_rerun() {
+    use crate::land::express::rerun_command;
+    let clippy = "cargo clippy --locked --all-targets -- -D warnings";
+    let named = "error: this function has too many lines (130/100)\n  \
+                 --> crates/ignite_daemon/src/land.rs:350:5\n\
+                 error: could not compile `ignite_daemon` (lib test) due to 1 previous error";
+    assert_eq!(
+        rerun_command(clippy, named),
+        "cargo clippy -p ignite_daemon --all-targets -- -D warnings"
+    );
+    let path_only = "error: unused import\n   --> crates/ignite_core/src/lib.rs:3:5";
+    assert_eq!(
+        rerun_command(clippy, path_only),
+        "cargo clippy -p ignite_core --all-targets -- -D warnings"
+    );
+    assert_eq!(
+        rerun_command(clippy, "no diagnostics"),
+        "cargo clippy --all-targets -- -D warnings"
+    );
+    assert_eq!(rerun_command("cargo test", named), "cargo test");
 }

@@ -138,6 +138,20 @@ impl TestGit {
         repo.checked_out.insert(path.to_path_buf(), at.clone());
     }
 
+    /// Commits `changes` on the branch checked out in `path`, as a formatter at landing does.
+    /// A branch here is one commit on its base, so the new commit holds the branch's earlier
+    /// edits as well and replaces that commit as the branch's head.
+    pub fn commit_on(&self, path: &Path, changes: &[(&str, &str)]) -> Commit {
+        let mut repo = self.repo.lock().unwrap();
+        let base = repo.base[path].clone();
+        let mut all = repo.edits[path].clone();
+        all.extend(edits(changes));
+        let head = repo.commit(Some(&base), &all);
+        repo.edits.insert(path.to_path_buf(), all);
+        repo.checked_out.insert(path.to_path_buf(), head.clone());
+        head
+    }
+
     pub fn tip_now(&self) -> Commit {
         self.repo.lock().unwrap().tip()
     }

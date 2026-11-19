@@ -32,6 +32,7 @@ fn release_world(
         gate: world.gate.clone(),
         records: Records::new(&world.records),
         express: None,
+        format: None,
         pause: Arc::new(move |seconds| pause_clock.advance(seconds)),
     });
     world

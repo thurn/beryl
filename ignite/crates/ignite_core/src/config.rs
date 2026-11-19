@@ -73,6 +73,10 @@ pub struct Config {
     /// every landing through the gate.
     #[serde(default)]
     pub express: Option<Express>,
+    /// Formatters `ignite land` runs on the files a landing changes before its checks; none
+    /// formats nothing.
+    #[serde(default)]
+    pub format: crate::formatting::Format,
     /// When a daemon restarts into a new release of Ignite.
     #[serde(default)]
     pub self_update: SelfUpdateConfig,
