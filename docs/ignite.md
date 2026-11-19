@@ -1728,9 +1728,9 @@ Rules:
   reported as `known-failing`, so one broken check fails nobody else's landing.
   The ticket that fixes it must make it pass, and the check leaves that state
   when it next passes at a tip. The output's `known` line names these checks
-  with their tickets. The daemon asks the hub for them (`GET /regressions/open`),
-  so a check the hub grouped onto another check's ticket counts too, though no
-  title names it.
+  with their tickets. The daemon asks the hub for them
+  (`GET /regressions/open`), so a check the hub grouped onto another check's
+  ticket counts too, though no title names it.
 - A check can fail at the tip before tip verification has filed its ticket. So
   when every fault of a gate is a check failure that its rerun confirmed, the
   landing asks whether each of those checks fails at the tip it was rebased onto
