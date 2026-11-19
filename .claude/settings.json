@@ -16,7 +16,6 @@
       "ListPlugins",
       "mcp__Claude_Browser",
       "mcp__claude-in-chrome",
-      "mcp__playwright",
       "mcp__Claude_Code_iOS_Simulator",
       "mcp__visualize",
       "mcp__easel",

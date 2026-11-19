@@ -391,7 +391,7 @@
     "expect": "down"
   },
   {
-    "label": "Beryl's `.claude/settings.json` denies tools that 1,737 sessions over 14 days called at most twice (Artifact, Workflow, the built-in browser pane, Playwright and Chrome, the iOS simulator, charts, plugin suggestions, the app's panes and pull requests), and Claude Code leaves a denied tool out of every request's context",
+    "label": "Beryl's `.claude/settings.json` denies tools that 1,737 sessions over 14 days called at most twice (Artifact, Workflow, the built-in browser pane and Chrome, the iOS simulator, charts, plugin suggestions, the app's panes and pull requests), and Claude Code leaves a denied tool out of every request's context",
     "metric": "bead.dollars",
     "expect": "down"
   }
