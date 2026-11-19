@@ -133,7 +133,11 @@ fn two_failures_of_one_check_give_one_regression_ticket() {
     assert_eq!(outcome, regressions::Outcome::Created);
     // Ignite filed the regression on its own, so its ID starts with `A`; the culprit a session
     // filed keeps its `T`.
-    assert!(first.starts_with('A') && culprit[0].starts_with('T'), "{first} {}", culprit[0]);
+    assert!(
+        first.starts_with('A') && culprit[0].starts_with('T'),
+        "{first} {}",
+        culprit[0]
+    );
 
     clock.advance(600.0);
     let (second, outcome) =
