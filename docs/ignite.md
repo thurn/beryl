@@ -2245,9 +2245,11 @@ Not every ticket is offered:
   included, and the pool is never offered a pending ticket. The one exception is
   a regression, a check that tip verification found failing on `staging`: it
   holds `master` back, so the hub files it already released.
-  `ignite ticket update <id> --release` makes the ticket and every descendant
-  still pending `open`; `ignite ticket create --release` files a ticket already
-  released. A session may still start a pending ticket by name.
+  `ignite ticket update <id> --release`, or the Release button on the dashboard,
+  makes the ticket and every descendant still pending `open`: the hub adds the
+  descendants to any update that releases a pending ticket.
+  `ignite ticket create --release` files a ticket already released. A session
+  may still start a pending ticket by name.
 - An epic is worked only once it is active, which means it has a `--workers`
   number above 0. An epic filed without one gets a share of 3, so releasing it
   is enough; the share is bounded by the pool, so it reserves nothing. File it

@@ -89,7 +89,8 @@ fn apply_batch(
     request: &Request,
     now: Timestamp,
 ) -> Result<Response, Response> {
-    let batch: BatchRequest = body(request)?;
+    let mut batch: BatchRequest = body(request)?;
+    tickets::add_releases(conn, &mut batch).map_err(|e| store_failure(&e))?;
     let writer = request.writer.as_ref().expect("checked in handle");
     match batch::apply(conn, &batch, &writer.actor, writer.machine.as_str(), now) {
         Ok(BatchOutcome::Applied(reply)) => ok(&reply),

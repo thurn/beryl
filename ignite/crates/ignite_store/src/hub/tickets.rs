@@ -18,8 +18,8 @@ use std::collections::BTreeMap;
 
 use ignite_core::ids::Seq;
 use ignite_core::protocol::tickets::{
-    Blocker, Comment, Edge, Graph, GraphTicket, History, Status, Ticket, TicketDetail,
-    TicketFields, TicketQuery, TicketType,
+    BatchRequest, Blocker, Comment, Edge, Graph, GraphTicket, History, Operation, Status, Ticket,
+    TicketDetail, TicketFields, TicketQuery, TicketType,
 };
 use ignite_core::ready::Readiness;
 use ignite_core::shares;
@@ -405,6 +405,54 @@ pub(crate) fn sql_value(column: &str, value: &Value) -> SqlValue {
         Value::String(text) => SqlValue::Text(text.clone()),
         Value::Array(_) | Value::Object(_) => SqlValue::Text(value.to_string()),
     }
+}
+
+/// Adds to `batch` the release of every pending descendant of each pending ticket that one of
+/// its updates releases (sets `open`), so that releasing an epic releases its tickets whichever
+/// client sent the update: `ignite ticket update --release` or the dashboard's Release button.
+/// A ticket created in the same batch (`$<index>`) has no descendants yet and is skipped.
+pub fn add_releases(conn: &Connection, batch: &mut BatchRequest) -> Result<()> {
+    let mut released = Vec::new();
+    for operation in &batch.ops {
+        let Operation::Update {
+            id, set: Some(set), ..
+        } = operation
+        else {
+            continue;
+        };
+        if set.status != Some(Status::Open) || id.starts_with('$') {
+            continue;
+        }
+        let Some(id) = resolve(conn, id)? else {
+            continue;
+        };
+        if load(conn, id.as_str())?.is_some_and(|t| t.status == Status::PendingApproval) {
+            released.push(id);
+        }
+    }
+    let mut added = HashSet::new();
+    for id in released {
+        let mut below: Vec<String> = descendants(conn, id.as_str())?.into_iter().collect();
+        below.sort();
+        for descendant in below {
+            let pending =
+                load(conn, &descendant)?.is_some_and(|t| t.status == Status::PendingApproval);
+            if pending && added.insert(descendant.clone()) {
+                batch.ops.push(Operation::Update {
+                    id: descendant,
+                    set: Some(TicketFields {
+                        status: Some(Status::Open),
+                        ..TicketFields::default()
+                    }),
+                    add_labels: Vec::new(),
+                    remove_labels: Vec::new(),
+                    set_meta: BTreeMap::new(),
+                    unset_meta: Vec::new(),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The IDs of every descendant of `ancestor`, closed or not.

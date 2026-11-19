@@ -517,3 +517,40 @@ fn an_export_names_tickets_and_a_forced_import_rolls_one_back() {
     );
     assert_eq!(title(&hub), "First");
 }
+
+/// The dashboard's Release button sends one update for the ticket it shows. The hub releases
+/// that ticket's pending descendants too, as `ignite ticket update --release` does, and leaves a
+/// closed one alone.
+#[test]
+fn releasing_an_epic_by_one_update_releases_its_pending_tickets() {
+    let fixture = Fixture::new("release");
+    let hub = fixture.start();
+    let receipt = hub.post(
+        "/batch",
+        &json!({"ops": [
+            {"op": "create", "fields": {"title": "Epic", "type": "epic", "status": "pending_approval"}},
+            {"op": "create", "parent": "$0", "fields": {"title": "Child", "status": "pending_approval"}},
+            {"op": "create", "parent": "$1", "fields": {"title": "Grandchild", "status": "pending_approval"}},
+            {"op": "create", "parent": "$0", "fields": {"title": "Done", "status": "closed"}},
+            {"op": "create", "fields": {"title": "Unrelated", "status": "pending_approval"}},
+        ]}),
+    );
+    let id = |index: usize| receipt["results"][index]["id"].as_str().unwrap().to_owned();
+    hub.post(
+        "/batch",
+        &json!({"ops": [{"op": "update", "id": id(0), "set": {"status": "open"}}]}),
+    );
+    let status =
+        |index: usize| hub.get(&format!("/tickets/{}", id(index))).json()["status"].clone();
+    assert_eq!(
+        (0..5).map(status).collect::<Vec<_>>(),
+        vec![
+            json!("open"),
+            json!("open"),
+            json!("open"),
+            json!("closed"),
+            json!("pending_approval")
+        ],
+        "the epic and its pending tickets are released; a closed one and an unrelated one are not"
+    );
+}

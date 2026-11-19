@@ -104,13 +104,6 @@ pub fn create(
     Ok(op)
 }
 
-/// The updates that release each of `ids` for implementation.
-pub fn releases(ids: &[String]) -> Vec<Value> {
-    ids.iter()
-        .map(|id| json!({"op": "update", "id": id, "set": {"status": RELEASED}}))
-        .collect()
-}
-
 /// What `update` was asked to change besides the shared fields.
 pub struct Changes<'a> {
     pub title: Option<&'a str>,
