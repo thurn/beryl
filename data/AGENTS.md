@@ -3,6 +3,10 @@
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
 - `beryl3d/` holds Beryl 3D's data files, described in `rust/beryl3d/AGENTS.md`.
+  `beryl3d/match/web/` holds the web interface's element records of the
+  reference targets of `just b3d match score`, one file per target, written by
+  `just b3d match score --refresh-web` and read by the `b3d-web-match` check;
+  `beryl3d/web-match.json` holds each target's counts, which may only go down.
 - `card-store.tsv` is the card store, built by `just cards` from Scryfall's bulk
   data. It has a record for every card in the pool and every token those cards
   make, sorted so it can be searched by seeking

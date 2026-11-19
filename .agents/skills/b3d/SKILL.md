@@ -168,6 +168,13 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   by screen area, with three example elements each, and writes them to
   `gaps.json`. Start a style-vocabulary change from it, and add each shape you
   teach `Style` to `data/beryl3d/match/supported.json`.
+- `just b3d match score [prefix]` counts how far each reference target (a
+  desktop and a phone window of every screen kind) is from the web interface
+  and holds the counts to `data/beryl3d/web-match.json`. A count that rose, or
+  fell without the entry being lowered, fails; `--update` lowers entries,
+  `--update --raise` raises one (say why in the commit body), and
+  `--refresh-web` rewrites the committed web reference under
+  `data/beryl3d/match/web/`. Run it after a look change, then `--update`.
 - `just b3d match samples [prefix]` draws each conformance sample (one element
   with a CSS effect the web uses, from `data/beryl3d/match/samples.json`) in
   WebKit and in Beryl 3D's renderer and prints, per sample, `pass` or `FAIL`

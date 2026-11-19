@@ -229,9 +229,11 @@ the client they describe, and later sections refer to them by number.
   project's owner asked for this on 2026-11-14: the rest of the project lands
   about eight changes an hour, and none of them may wait for, or be failed by, a
   client that is not yet the app. The cost is that a change to the session can
-  break Beryl 3D without its author being told. A sweep finds that afterwards,
-  and Beryl 3D's own work fixes it (see
-  [Checks and isolation](#checks-and-isolation)).
+  break Beryl 3D without its author being told. The exploration families of
+  Ignite find that afterwards, which for a change to the web interface's look is
+  `b3d-web-drift`, and Beryl 3D's own work fixes it (see
+  [Checks and isolation](#checks-and-isolation) and
+  [Matching the web interface's look](#matching-the-web-interfaces-look)).
 
 - **C18. The highest frame rate the display and device can hold, but smooth
   motion comes first.** The project's owner decided this on 2026-11-15. Every
@@ -2554,21 +2556,21 @@ just b3d check pay-default
 just b3d test b3d:counterspell
 ```
 
-| Command                          | What it prints                                                                                                                                  |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list [prefix]`                  | Every recording whose name starts with the prefix: fixtures, card spec moments and stress boards, each with its length and its number of views. |
-| `info <recording>`               | The recording's moments: each view with its time, each script's steps with their start and end, and each prompt with its buttons.               |
-| `tree <recording>`               | The resolved elements at one moment, as an indented tree.                                                                                       |
-| `png <recording>`                | The frame at one moment, drawn by the real renderer into a file. With `--tree`, the tree of the same frame as well.                             |
-| `film <recording>`               | Frames across a span of time, as one picture laid out as a grid, with one line of text for each frame.                                          |
-| `motion-film <verb> [case]`      | A verb's cases from both seats and layouts, filmed at 15 frames a second (`film --rate 15 --frame-width 760`) beside Arena's.                   |
-| `diff <recording>`               | What changed between two moments: the elements that appeared, left, moved or changed state.                                                     |
-| `check <recording>`              | Every interface check on every tick of the recording, and the faults.                                                                           |
-| `test [prefix]`                  | Every interface test whose name starts with the prefix (see [Test speed](#test-speed)). `--every-tick` checks every tick.                       |
-| `timeline <recording>`           | Each script's timeline, one line per step (see [Timeline parity](#timeline-parity)).                                                            |
-| `gate`                           | The frame gates (see [Performance gates](#performance-gates)).                                                                                  |
-| `app`, `smoke`, `frames`, `live` | The running app (see [Driving the running app](#driving-the-running-app)).                                                                      |
-| `sweep`                          | Everything Beryl 3D checks after a push (see [Checks and isolation](#checks-and-isolation)).                                                    |
+| Command                          | What it prints                                                                                                                                                         |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list [prefix]`                  | Every recording whose name starts with the prefix: fixtures, card spec moments and stress boards, each with its length and its number of views.                        |
+| `info <recording>`               | The recording's moments: each view with its time, each script's steps with their start and end, and each prompt with its buttons.                                      |
+| `tree <recording>`               | The resolved elements at one moment, as an indented tree.                                                                                                              |
+| `png <recording>`                | The frame at one moment, drawn by the real renderer into a file. With `--tree`, the tree of the same frame as well.                                                    |
+| `film <recording>`               | Frames across a span of time, as one picture laid out as a grid, with one line of text for each frame.                                                                 |
+| `motion-film <verb> [case]`      | A verb's cases from both seats and layouts, filmed at 15 frames a second (`film --rate 15 --frame-width 760`) beside Arena's.                                          |
+| `diff <recording>`               | What changed between two moments: the elements that appeared, left, moved or changed state.                                                                            |
+| `check <recording>`              | Every interface check on every tick of the recording, and the faults.                                                                                                  |
+| `test [prefix]`                  | Every interface test whose name starts with the prefix (see [Test speed](#test-speed)). `--every-tick` checks every tick.                                              |
+| `timeline <recording>`           | Each script's timeline, one line per step (see [Timeline parity](#timeline-parity)).                                                                                   |
+| `gate`                           | The frame gates (see [Performance gates](#performance-gates)).                                                                                                         |
+| `app`, `smoke`, `frames`, `live` | The running app (see [Driving the running app](#driving-the-running-app)).                                                                                             |
+| `match score [prefix]`           | Counts of differences from the web interface on each reference target, held to a ratchet (see [Matching the web interface's look](#matching-the-web-interfaces-look)). |
 
 Every command that takes a recording also takes `--seat you|opponent`,
 `--layout desktop|phone`, `--size <width>x<height>`, `--scale <number>`,
@@ -4108,13 +4110,19 @@ What isolation costs, and who pays:
   the fixture recorder, the image cache and the shared shell crate. A change to
   one of them is checked without Beryl 3D, so it can land and leave Beryl 3D not
   compiling, or playing a script wrongly.
-- **The sweep finds it, and Beryl 3D's own work fixes it.** The sweep's task
-  names the commit that broke it. Whoever is working on Beryl 3D takes that task
+- **Ignite finds it, and Beryl 3D's own work fixes it.** A regression on the tip
+  files a ticket that names the commit that broke it, and an exploration family
+  files one for what it finds. Whoever is working on Beryl 3D takes that ticket
   first, and a session whose own check fails on such a break fixes the break in
   its own change.
 - **The two timelines can drift.** A change to how the web interface lays a beat
-  out in time is not held to Beryl 3D's. The sweep's timeline parity run lists
-  the recordings that now differ, and Beryl 3D follows.
+  out in time is not held to Beryl 3D's. The `b3d-timeline` family lists the
+  recordings that now differ, and Beryl 3D follows.
+- **The two looks can drift.** A change to the web interface's CSS or layout
+  never runs Beryl 3D's checks. The `b3d-web-drift` exploration family shoots
+  the live web interface and files a ticket when it no longer matches the
+  committed reference (see
+  [Matching the web interface's look](#matching-the-web-interfaces-look)).
 
 The exceptions. Each is a change to the rest of the project, made once and
 checked by the rest of the project's checks:
@@ -4376,9 +4384,49 @@ reference is the web interface as WebKit draws it, at scale 2.
   within one view of the page; the web's animation tends to start about a frame
   later than Beryl 3D's, because the page takes a frame to react to the views it
   is handed.
-- **Drift.** A web change never runs Beryl 3D's checks (decision C17), so the
-  Beryl 3D sweep scores every target and files a ticket for each one that
-  drifted.
+- **Score.**
+  `just b3d match score [prefix] [--update] [--raise] [--refresh-web]` takes the
+  snapshot of each reference target (one desktop window and one phone window of
+  every screen kind in `screens.json`, at the recording's end, from seat `you`)
+  and counts what the other subcommands find: `unmatched` elements, `boxes` that
+  differ (with text that overlaps on one side only), `styles` that differ,
+  `unsupported` web values and `pixels` that differ.
+  `data/beryl3d/web-match.json` holds the counts of each target, which may only
+  go down. A count above its entry, or a target with no entry, fails. A count
+  below its entry fails too, and the output gives the command that lowers it
+  (`--update`), as `test-faults.json` does. `--raise` is the only way to raise
+  or add an entry, and its commit body says why. The pixel count moves by about
+  0.2% between a web page shot at rest and one shot while the machine is loaded,
+  so it counts as changed only when it moves by 1% of its entry; the other
+  counts are exact. A prefix of a test's name scores those test targets instead
+  (there are over nine thousand, so a run over all of them is not a check). The
+  testing screen has no reference target, because one frame of it holds more
+  records than the renderer's frame limit. `--refresh-web` takes every snapshot
+  again and rewrites the committed web reference.
+- **The committed web reference.** `data/beryl3d/match/web/<target>.json` holds
+  the web interface's element records of each reference target, without
+  pictures, paint order or unread fields, and with boxes rounded to hundredths
+  of a point. It is written one element to a line, so that a change to the web
+  interface shows as a short diff. `just b3d match score --refresh-web` rewrites
+  it.
+- **`b3d-web-match`, a regression family.** One check for each reference target.
+  It plays the recording in Beryl 3D, pairs the elements with the committed
+  reference and fails when the target's `unmatched`, `boxes`, `styles` or
+  `unsupported` count rises above its entry. Pixels are left out, because they
+  need the web's picture. It declares Beryl 3D's inputs and the match tools,
+  `data/beryl3d/web-match.json` and `data/beryl3d/match/web/**`, and no file
+  under `ui/` beyond the recording definitions every Beryl 3D family reads, so a
+  change to the web interface runs none of Beryl 3D's checks (decision C17) and
+  its result depends only on its declared inputs. The whole family takes about a
+  second after the `b3d` build.
+- **`b3d-web-drift`, an exploration family.** One check for each reference
+  target, run only in the idle class. It shoots the live web interface, compares
+  it with the committed reference, and runs the full score with pixels. It fails
+  when the web interface no longer matches the reference or the score rose,
+  naming the target, its worst elements and the command that reproduces it.
+  Ignite files a P2 ticket labeled `found-by:b3d-web-drift`; it never blocks a
+  landing or holds `master`. A change to the web interface that was meant is
+  accepted with `--refresh-web`, whose diff shows what moved.
 
 Styles are not generated from the web interface's CSS. Each Beryl 3D element
 keeps its own `Style`, and the tools hold it equal to the web's computed style.

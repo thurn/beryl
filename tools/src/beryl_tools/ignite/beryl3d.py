@@ -669,8 +669,46 @@ def source_run(checks: list[str]) -> list[Result]:
 # rust/beryl3d/target/debug/record did not exist. So `main` makes the product first when
 # `record` is missing.
 LIST_NEEDS_BUILD: frozenset[str] = frozenset(
-    {"b3d-interface", "b3d-every-tick", "b3d-gate", "b3d-timeline", "b3d-frame-counts"}
+    {
+        "b3d-interface",
+        "b3d-every-tick",
+        "b3d-gate",
+        "b3d-timeline",
+        "b3d-frame-counts",
+        "b3d-web-match",
+    }
 )
+
+# The web-match families are in beryl3d_match.py, which loads the match tools. It is imported
+# when a family runs, so the other families do not declare those tools as inputs.
+
+
+def web_match_list() -> list[Listed]:
+    from . import beryl3d_match
+
+    return beryl3d_match.list_web_match(cards_by_recording())
+
+
+def web_match_run(checks: list[str]) -> list[Result]:
+    from . import beryl3d_match
+
+    return beryl3d_match.run_web_match(checks)
+
+
+def web_drift_run(checks: list[str]) -> list[Result]:
+    from . import beryl3d_match
+
+    return beryl3d_match.run_web_drift(checks)
+
+
+def web_drift_next() -> int:
+    """Prints the `b3d-web-drift` checks to play now, one JSON object each."""
+    from . import beryl3d_match
+
+    for line in beryl3d_match.next_web_drift():
+        print(json.dumps(line), flush=True)
+    return 0
+
 
 LISTS: dict[str, Callable[[], list[Listed]]] = {
     "b3d-format": lambda: [
@@ -685,6 +723,9 @@ LISTS: dict[str, Callable[[], list[Listed]]] = {
     "b3d-gate": gate_list,
     "b3d-timeline": timeline_list,
     "b3d-frame-counts": frame_counts_list,
+    "b3d-web-match": lambda: web_match_list(),
+    # An exploration family's checks come from `next`.
+    "b3d-web-drift": lambda: [],
 }
 
 RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
@@ -696,6 +737,8 @@ RUNS: dict[str, Callable[[list[str]], list[Result]]] = {
     "b3d-gate": gate_run,
     "b3d-timeline": timeline_run,
     "b3d-frame-counts": frame_counts_run,
+    "b3d-web-match": lambda c: web_match_run(c),
+    "b3d-web-drift": lambda c: web_drift_run(c),
 }
 
 
@@ -710,6 +753,12 @@ def main(args: list[str]) -> int:
                     return built
             listed(LISTS[family]())
             return 0
+        case ["b3d-web-drift", "next"]:
+            if not (DEBUG / "record").is_file():
+                built = build(to_stderr=True)
+                if built != 0:
+                    return built
+            return web_drift_next()
         case [family, "run", *checks] if family in RUNS:
             results = RUNS[family](checks)
             report(results)
@@ -717,7 +766,7 @@ def main(args: list[str]) -> int:
         case _:
             families = ", ".join(LISTS)
             print(
-                f"usage: beryl3d.py <family> list | <family> run <check>... | build\n"
+                f"usage: beryl3d.py <family> list | <family> run <check>... | b3d-web-drift next | build\n"
                 f"families: {families}",
                 file=sys.stderr,
             )

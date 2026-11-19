@@ -14,8 +14,11 @@ import pytest
 
 from beryl_tools import paths
 from beryl_tools.beryl3d import gate, timeline
+from beryl_tools.beryl3d.match import reference, score
+from beryl_tools.beryl3d.match.target import Target
 from beryl_tools.ignite import Result
 from beryl_tools.ignite import beryl3d as adapter
+from beryl_tools.ignite import beryl3d_match as web_match
 
 MANIFEST: Path = paths.REPO / "ignite" / "checks" / "beryl3d.toml"
 
@@ -76,6 +79,8 @@ def test_the_families_that_read_recordings_name_every_crate_the_recorder_is_buil
         "b3d-gate",
         "b3d-timeline",
         "b3d-frame-counts",
+        "b3d-web-match",
+        "b3d-web-drift",
     ):
         inputs = manifest()["family"][name]["inputs"]
         assert isinstance(inputs, list)
@@ -278,3 +283,138 @@ def test_format_results_blame_the_package_that_holds_the_file() -> None:
         ),
         Result("b3d-format:beryl_inspect", "pass"),
     ]
+
+
+# The web-match families: Beryl 3D's look held against the web interface's.
+
+
+def test_web_match_reads_no_web_file_beyond_the_recordings_definitions() -> None:
+    """A change to the web interface must run none of Beryl 3D's checks, so `b3d-web-match`
+    declares nothing under ui/ but what every Beryl 3D family reads."""
+    declared = manifest()["family"]["b3d-web-match"]["inputs"]
+    assert isinstance(declared, list)
+    inputs = [str(i) for i in declared]
+    assert [i for i in inputs if i.startswith("ui/")] == [
+        "ui/src/generated/**",
+        "ui/fixtures.json",
+    ]
+    assert "data/beryl3d/**" in inputs
+    assert "tools/src/beryl_tools/beryl3d/match/**" in inputs
+
+
+def test_web_drift_is_an_exploration_family_that_reads_the_web_interface() -> None:
+    family = manifest()["family"]["b3d-web-drift"]
+    assert family["kind"] == "exploration"
+    assert "browser-pages" in str(family["resources"])
+    assert "ui/src/**" in str(family["inputs"])
+    assert str(family["next"]).endswith("beryl3d b3d-web-drift next")
+
+
+def test_web_match_has_a_check_for_each_reference_target() -> None:
+    listed = web_match.list_web_match({"screen/start": ["rust/cards/a/lea/island.rs"]})
+    names = [entry.check for entry in listed]
+    assert len(names) == len(set(names)) == len(reference.targets())
+    assert "b3d-web-match:screen/start/you/1600x900@2" in names
+    assert "b3d-web-match:screen/start/you/393x759" in names
+    start = next(e for e in listed if e.check.endswith("screen/start/you/393x759"))
+    assert start.inputs == [
+        "data/beryl3d/match/web/screen_start_you_393x759.json",
+        "rust/cards/a/lea/island.rs",
+    ]
+    document = reference.load_ratchet()
+    for target in reference.targets():
+        assert reference.path(target).is_file(), target.test_name()
+        assert reference.entry(document, target.test_name()) is not None
+
+
+def test_web_match_fails_only_when_a_count_rises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    chosen: Target = reference.targets()[0]
+    name = reference.check_name(chosen)
+    web = reference.load(chosen)
+    assert web is not None
+    check = f"b3d-web-match:{name}"
+
+    def entries(**counts: int) -> dict[str, object]:
+        held = {n: 0 for n in reference.COUNTS} | counts
+        return {"targets": {chosen.test_name(): held}}
+
+    monkeypatch.setattr(web_match, "b3d_records", lambda _t: [dict(e) for e in web])
+    assert web_match.match_one(name, entries()) == Result(check, "pass")
+
+    monkeypatch.setattr(
+        web_match, "b3d_records", lambda _t: [dict(e) for e in web[:-1]]
+    )
+    failed = web_match.match_one(name, entries())
+    assert failed.outcome == "fail"
+    assert "unmatched 1 > 0" in failed.message
+    assert chosen.test_name() in failed.message
+    assert web_match.match_one(name, entries(unmatched=1)).outcome == "pass"
+    missing = web_match.match_one(name, {"targets": {}})
+    assert missing.outcome == "fail" and "no entry" in missing.message
+    assert web_match.match_one("nowhere/you/1x1", entries()).outcome == "fail"
+
+
+def test_a_count_below_its_entry_fails_the_score_with_the_command_to_lower_it() -> None:
+    document = {
+        "targets": {
+            "t": {
+                "unmatched": 5,
+                "boxes": 5,
+                "styles": 5,
+                "unsupported": 5,
+                "pixels": 1000,
+            }
+        }
+    }
+    held = {"unmatched": 5, "boxes": 5, "styles": 5, "unsupported": 5, "pixels": 1000}
+    # A pixel count within its slack of the entry is not a change; the other counts are exact.
+    near = held | {"pixels": 995}
+    assert score.judge({"t": near}, document) == ([], [], [])
+    over, under, lines = score.judge({"t": held | {"boxes": 6}}, document)
+    assert (over, under) == (["t"], []) and "boxes 6 > 5" in lines[0]
+    over, under, lines = score.judge({"t": held | {"styles": 4}}, document)
+    assert (over, under) == ([], ["t"]) and "styles 4 < 5" in lines[0]
+    over, _, lines = score.judge({"new": held}, document)
+    assert over == ["new"] and "not listed" in lines[0]
+
+
+def test_update_lowers_entries_and_raises_or_adds_only_with_raise() -> None:
+    entry = {"unmatched": 5, "boxes": 5, "styles": 5, "unsupported": 5, "pixels": 1000}
+    document = {"targets": {"lower": entry, "rise": entry, "kept": entry}}
+    measured = {
+        "lower": entry | {"boxes": 2},
+        "rise": entry | {"boxes": 9},
+        "new": entry,
+    }
+    entries, refused = score.updated(measured, document, raise_=False)
+    assert entries["lower"]["boxes"] == 2
+    assert entries["rise"]["boxes"] == 5 and "new" not in entries
+    assert sorted(refused) == ["new", "rise"]
+    assert entries["kept"] == entry
+    entries, refused = score.updated(measured, document, raise_=True)
+    assert entries["rise"]["boxes"] == 9 and "new" in entries and not refused
+
+
+def test_the_committed_reference_is_trimmed_sorted_and_one_element_to_a_line() -> None:
+    target = reference.targets()[0]
+    text = reference.path(target).read_text()
+    parsed = json.loads(text)
+    assert parsed["target"] == target.test_name()
+    assert text.count("\n") == len(parsed["elements"]) + 2
+    assert all("z" not in e for e in parsed["elements"])
+    assert reference.document(target, parsed["elements"]) == text
+
+
+def test_a_drift_target_is_played_again_only_after_its_inputs_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(web_match, "web_digest", lambda: "one")
+    first = web_match.next_web_drift()
+    assert [c["check"] for c in first][0].startswith("b3d-web-drift:")
+    assert first == web_match.next_web_drift()
+    monkeypatch.setattr(web_match, "web_digest", lambda: "two")
+    second = web_match.next_web_drift()
+    assert [c["check"] for c in second] == [c["check"] for c in first]
+    assert all(a["digest"] != b["digest"] for a, b in zip(first, second, strict=True))

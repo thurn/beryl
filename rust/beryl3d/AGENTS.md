@@ -152,6 +152,15 @@ through the client with no window or GPU (the `b3d` skill has the details):
   using it, with three examples each. It writes the snapshot's `gaps.json`, or
   `$BERYL_CACHE/b3d/match/gaps.json` with `--all`. A change that teaches `Style`
   a new shape adds it to `data/beryl3d/match/supported.json` in the same commit.
+- `just b3d match score [prefix]` counts each reference target's differences
+  from the web interface (`unmatched`, `boxes`, `styles`, `unsupported`,
+  `pixels`) and holds them to `data/beryl3d/web-match.json`: a count above its
+  entry fails, and so does one below it, with the `--update` command that lowers
+  it. `--update --raise` raises or adds an entry (say why in the commit body),
+  and `--refresh-web` rewrites the committed web reference,
+  `data/beryl3d/match/web/<target>.json`. The `b3d-web-match` check holds the
+  record counts without a browser; `b3d-web-drift` files a ticket when the live
+  web interface moves. A prefix of a test's name scores those tests instead.
 - `just b3d match samples [prefix]` is the conformance suite for CSS effects:
   each sample of `data/beryl3d/match/samples.json` is one element with the web
   interface's CSS (shadows, gradients, drop shadows, filters, masks, borders,
@@ -268,9 +277,15 @@ project, and selects the main lanes.
   with an optional `text`, written with the values `ui/src`'s CSS uses. Adding a
   sample is adding an entry; `--update` then records it.
 
+- `data/beryl3d/match/web/<target>.json`: the web interface's element records of
+  one reference target, trimmed to what the score reads and written one element
+  to a line, which `just b3d match score --refresh-web` rewrites and the
+  `b3d-web-match` check reads.
+
 - `data/beryl3d/web-match.json`:
-  `{"targets": {...}, "samples": {"<sample>": p995 | "unsupported"}}`, the
-  ratchet of the match tools. A sample's value may only go down, and a supported
+  `{"targets": {"<test name>": {"unmatched", "boxes", "styles", "unsupported", "pixels"}}, "samples": {"<sample>": p995 | "unsupported"}}`,
+  the ratchet of the match tools. A target's counts may only go down
+  (`just b3d match score`). A sample's value may only go down, and a supported
   sample never becomes unsupported: `just b3d match samples --update` lowers and
   adds entries, and raises one only with `--raise`, whose commit says why in its
   body.

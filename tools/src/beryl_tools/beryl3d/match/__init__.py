@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from ..command import Command
-from . import boxes, gaps, motion, pixels, samples, snapshot, styles
+from . import boxes, gaps, motion, pixels, samples, score, snapshot, styles
 
 SNAPSHOT = Command(
     "snapshot",
@@ -130,6 +130,21 @@ SAMPLES = Command(
     samples.sample_arguments,
 )
 
+SCORE = Command(
+    "score",
+    "every test target's counts of differences from the web interface, held to "
+    "data/beryl3d/web-match.json",
+    (
+        ("just b3d match score", "every desktop and phone test target, at its end"),
+        (
+            "just b3d match score opening-play --update",
+            "lower the entries of the targets that improved",
+        ),
+    ),
+    score.run,
+    score.score_arguments,
+)
+
 # Each subcommand, in the order `just b3d match --help` lists them. A module adds one by writing
 # its `Command` and adding it here.
 SUBCOMMANDS: tuple[Command, ...] = (
@@ -140,6 +155,7 @@ SUBCOMMANDS: tuple[Command, ...] = (
     STYLES,
     GAPS,
     SAMPLES,
+    SCORE,
 )
 
 

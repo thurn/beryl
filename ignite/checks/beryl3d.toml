@@ -565,6 +565,190 @@ inputs = [
   "tools/src/beryl_tools/xmage_classes.py",
 ]
 
+# How far Beryl 3D's look is from the web interface's on the reference targets (one desktop and
+# one phone window of every screen kind, `reference.targets()` in the match tools), held to
+# data/beryl3d/web-match.json: one check per target, which fails when the target's unmatched,
+# boxes, styles or unsupported count rises above its entry. The web side is the committed
+# reference, data/beryl3d/match/web/<target>.json, so the check needs no browser and reads no
+# file under ui/ beyond `ui/fixtures.json` and `ui/src/generated/**`, which every Beryl 3D family
+# reads. A change to the web interface therefore runs none of Beryl 3D's checks (decision C17),
+# and the result is a function of the declared inputs. Pixels are left out, because they need
+# the web's picture; `b3d-web-drift` and `just b3d match score` count them. `b3d` is needed for
+# the programs and the recordings pack.
+[family.b3d-web-match]
+kind = "regression"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-match list"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-match run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "ui/src/generated/**",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "data/beryl3d/web-match.json",
+  "data/beryl3d/match/web/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+  "tools/src/beryl_tools/ignite/beryl3d_match.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/match/**",
+  "tools/src/beryl_tools/beryl3d/gate.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/purity.py",
+  "tools/src/beryl_tools/beryl3d/timeline.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+]
+
+# The web interface against the committed reference, and the full score with pixels, on the same
+# targets: each check shoots the live page in WebKit, fails when it no longer matches
+# data/beryl3d/match/web/<target>.json or the score rose above its entry, and names the target,
+# its worst elements and the command that reproduces it. It replaces the sweep that found
+# web-caused breaks. `next` yields every target with a digest of the web interface's sources, so
+# a target runs again only after they or its reference changed. It runs only in the idle class
+# and never blocks a landing (docs/ignite.md, "Exploration checks").
+[family.b3d-web-drift]
+kind = "exploration"
+adapter = "jsonl"
+platforms = ["macos"]
+needs = ["python-env", "b3d", "ui-deps"]
+resources = ["browser-pages"]
+list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-drift list"
+next = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-drift next"
+run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-drift run {checks}"
+inputs = [
+  "crate:beryl_inspect",
+  "crate:beryl_record",
+  "rust/crates/beryl_card/**",
+  "rust/crates/beryl_card_build/**",
+  "rust/crates/beryl_card_records/**",
+  "rust/crates/beryl_card_shared/**",
+  "rust/crates/beryl_card_store/**",
+  "rust/crates/beryl_cards/**",
+  "rust/crates/beryl_cli/**",
+  "rust/crates/beryl_engine/**",
+  "rust/crates/beryl_kernel/**",
+  "rust/crates/beryl_link/**",
+  "rust/crates/beryl_link_iroh/**",
+  "rust/crates/beryl_protocol/**",
+  "rust/crates/beryl_rules/**",
+  "rust/crates/beryl_scenario/**",
+  "rust/crates/beryl_scenario_types/**",
+  "rust/crates/beryl_search/**",
+  "rust/crates/beryl_session/**",
+  "rust/crates/beryl_table/**",
+  "rust/crates/beryl_table_session/**",
+  "rust/cards/*/Cargo.toml",
+  "rust/cards/*/build.rs",
+  "rust/cards/*/lib.rs",
+  "rust/Cargo.toml",
+  "data/beryl3d/**",
+  "data/design-tokens.json",
+  "data/card-store.tsv",
+  "data/catalogs.json",
+  "ui/src/generated/**",
+  "data/set-groups.json",
+  "data/table-commands.json",
+  "data/save-breaks.json",
+  "data/ui-conventions.json",
+  "ui/fixtures.json",
+  "docs/sample-decks/**",
+  "data/beryl3d/web-match.json",
+  "data/beryl3d/match/web/**",
+  "tools/src/beryl_tools/ignite/__init__.py",
+  "tools/src/beryl_tools/ignite/rust.py",
+  "tools/src/beryl_tools/ignite/beryl3d.py",
+  "tools/src/beryl_tools/ignite/beryl3d_match.py",
+  "tools/src/beryl_tools/__init__.py",
+  "tools/src/beryl_tools/beryl3d/__init__.py",
+  "tools/src/beryl_tools/beryl3d/match/**",
+  "tools/src/beryl_tools/beryl3d/gate.py",
+  "tools/src/beryl_tools/beryl3d/paths.py",
+  "tools/src/beryl_tools/beryl3d/purity.py",
+  "tools/src/beryl_tools/beryl3d/timeline.py",
+  "tools/src/beryl_tools/card.py",
+  "tools/src/beryl_tools/card_crates.py",
+  "tools/src/beryl_tools/card_files.py",
+  "tools/src/beryl_tools/card_header.py",
+  "tools/src/beryl_tools/card_names.py",
+  "tools/src/beryl_tools/card_store.py",
+  "tools/src/beryl_tools/card_text.py",
+  "tools/src/beryl_tools/cards.py",
+  "tools/src/beryl_tools/catalogs.py",
+  "tools/src/beryl_tools/nearest.py",
+  "tools/src/beryl_tools/paths.py",
+  "tools/src/beryl_tools/render_diff.py",
+  "tools/src/beryl_tools/rulings.py",
+  "tools/src/beryl_tools/scryfall.py",
+  "tools/src/beryl_tools/set_groups.py",
+  "tools/src/beryl_tools/store_cards.py",
+  "tools/src/beryl_tools/system.py",
+  "tools/src/beryl_tools/vocabulary.py",
+  "tools/src/beryl_tools/xmage_classes.py",
+  "ui/src/**",
+  "ui/index.html",
+  "ui/package.json",
+  "ui/package-lock.json",
+  "ui/vite.config.ts",
+  "ui/tsconfig.json",
+  "ui/public/**",
+  "tools/src/beryl_tools/shots.py",
+  "tools/src/beryl_tools/deps.py",
+]
+
 # Instructions per frame of every gated board, counted under Callgrind in `beryl3d-bench`, an
 # arm64 Linux machine only Apple silicon runs, and held to `worst_frame_instructions` and
 # `total_instructions` in data/beryl3d/gates.json, with the scaling check between `stress-255`
