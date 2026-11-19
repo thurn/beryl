@@ -58,8 +58,8 @@ Rules:
 - When a call's result is uncertain (a timeout, an error after it was sent),
   report `failed` with what you saw. Never start, clear or prompt another
   session to make up for it.
-- A session is gone only when the app says it no longer exists or is archived.
-  A failed lookup, or a list that does not show it, proves nothing: answer
+- A session is gone only when the app says it no longer exists or is archived. A
+  failed lookup, or a list that does not show it, proves nothing: answer
   `unknown`.
 - Notices from worker sessions get no reply but going on with the loop.
 
