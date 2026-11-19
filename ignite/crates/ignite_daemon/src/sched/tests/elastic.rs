@@ -195,3 +195,34 @@ fn a_compiling_build_gives_cores_back_to_requests_of_its_own_class() {
     }
     assert_eq!(granted, late);
 }
+
+/// After a restart the daemon took over a growing agent grant of one core, stepped, and so
+/// grew it to fill cores that a ten-core command it had not yet taken over still held: 20 of
+/// 18 cores were granted. Taking over every command before the next step keeps the total at
+/// the machine's cores.
+#[test]
+fn commands_taken_over_after_a_restart_never_hold_more_than_the_machine() {
+    let dir = std::env::temp_dir().join(format!("ignite-sched-adopt-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let (scheduler, _, _) = scheduler();
+    let adoption = |class, cores, follow: Option<&str>| crate::sched::Adoption {
+        class,
+        cores,
+        resources: Vec::new(),
+        memory_mb: None,
+        follow: follow.map(|name| crate::sched::Follow {
+            cores_file: dir.join(name),
+            asked: 16,
+            shrinks: false,
+        }),
+    };
+    // 24 cores: a growing grant of one, then commands that hold the other 23.
+    scheduler.adopt_all(vec![
+        adoption(Class::Agent, 1, Some("growing")),
+        adoption(Class::Agent, 16, None),
+        adoption(Class::Land, 7, None),
+    ]);
+    assert_eq!(scheduler.status().granted, 24);
+    assert_eq!(fs::read_to_string(dir.join("growing")).ok(), None);
+    fs::remove_dir_all(&dir).unwrap();
+}

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use super::jobserver::read_cores;
 use super::{CORES, Run, SpecFile, SupervisedLauncher};
-use crate::sched::{Follow, Grant, Scheduler};
+use crate::sched::{Adoption, Follow, Grant, Scheduler};
 
 /// Seconds an `idle` command has to exit after it is asked to, before its group is killed.
 pub const STOP_GRACE_S: f64 = 10.0;
@@ -84,37 +84,64 @@ impl SupervisedLauncher {
     /// out again while the command runs, and released when its supervisor has exited. Each run
     /// waits on a thread of its own.
     pub fn adopt_unfinished(&self) {
-        let (mut runs, mut cores_held) = (0, 0);
-        for run in self.unfinished() {
-            let held = self.scheduler.as_ref().and_then(|scheduler| {
-                let spec = run.spec()?;
-                let file = spec.grant?;
-                let cores_file = run.dir().join(CORES);
-                let cores = read_cores(&cores_file).unwrap_or(file.cores);
-                // A grant that followed its cores file keeps growing and shrinking after the
-                // restart; without the file the command's jobserver would stay at this size.
-                let follow = file.follows.then(|| Follow {
-                    cores_file,
-                    asked: file.asked.unwrap_or(cores),
-                    shrinks: file.shrinks,
-                });
-                let grant = scheduler.adopt(file.class, cores, file.resources, None, follow);
-                runs += 1;
-                cores_held += grant.cores;
-                if file.class == Class::Idle {
-                    watch_for_stop(scheduler, grant.id, run.clone(), self.stop_grace_s);
+        let runs = self.unfinished();
+        let Some(scheduler) = &self.scheduler else {
+            for run in runs {
+                thread::spawn(move || run.wait());
+            }
+            return;
+        };
+        // Every grant is recorded before the scheduler takes its next step, so no grant grows
+        // into cores that a run not yet recorded still holds (`Scheduler::adopt_all`).
+        let mut adopted = Vec::new();
+        let mut adoptions = Vec::new();
+        let mut others = Vec::new();
+        for run in runs {
+            match run.spec().and_then(|spec| spec.grant) {
+                Some(file) => {
+                    let cores_file = run.dir().join(CORES);
+                    let cores = read_cores(&cores_file).unwrap_or(file.cores);
+                    // A grant that followed its cores file keeps growing and shrinking after
+                    // the restart; without the file the command's jobserver would stay at this
+                    // size.
+                    let follow = file.follows.then(|| Follow {
+                        cores_file,
+                        asked: file.asked.unwrap_or(cores),
+                        shrinks: file.shrinks,
+                    });
+                    let class = file.class;
+                    adoptions.push(Adoption {
+                        class,
+                        cores,
+                        resources: file.resources,
+                        memory_mb: None,
+                        follow,
+                    });
+                    adopted.push((run, class));
                 }
-                Some(GrantGuard::new(Some(Arc::clone(scheduler)), grant))
-            });
+                None => others.push(run),
+            }
+        }
+        let grants = scheduler.adopt_all(adoptions);
+        let cores_held: u32 = grants.iter().map(|g| g.cores).sum();
+        if !grants.is_empty() {
+            eprintln!(
+                "ignite: took over {} runs a previous daemon started, holding {cores_held} cores",
+                grants.len()
+            );
+        }
+        for ((run, class), grant) in adopted.into_iter().zip(grants) {
+            if class == Class::Idle {
+                watch_for_stop(scheduler, grant.id, run.clone(), self.stop_grace_s);
+            }
+            let held = GrantGuard::new(Some(Arc::clone(scheduler)), grant);
             thread::spawn(move || {
                 run.wait();
                 drop(held);
             });
         }
-        if runs > 0 {
-            eprintln!(
-                "ignite: took over {runs} runs a previous daemon started, holding {cores_held} cores"
-            );
+        for run in others {
+            thread::spawn(move || run.wait());
         }
     }
 }

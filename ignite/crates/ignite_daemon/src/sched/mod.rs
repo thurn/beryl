@@ -98,6 +98,17 @@ pub struct Follow {
     pub shrinks: bool,
 }
 
+/// A grant a previous daemon made, as [`Scheduler::adopt_all`] records it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Adoption {
+    pub class: Class,
+    /// The grant's size: its cores file's number, or its first size without one.
+    pub cores: u32,
+    pub resources: Vec<String>,
+    pub memory_mb: Option<u64>,
+    pub follow: Option<Follow>,
+}
+
 /// Cores and resources held until released with [`Scheduler::release`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Grant {
@@ -378,31 +389,53 @@ impl Scheduler {
         memory_mb: Option<u64>,
         follow: Option<Follow>,
     ) -> Grant {
-        let mut state = self.lock();
-        let grows_to = follow
-            .as_ref()
-            .map(|f| f.asked.clamp(1, state.ledger.limits().max_per_command()));
-        let shrinks = follow.as_ref().is_some_and(|f| f.shrinks);
-        let id = state.ledger.adopt(
+        let mut grants = self.adopt_all(vec![Adoption {
             class,
             cores,
-            resources.clone(),
+            resources,
             memory_mb,
-            grows_to,
-            shrinks,
-        );
-        let cores_file = follow.map(|f| f.cores_file);
-        if let Some(file) = &cores_file {
-            state.files.insert(id, file.clone());
+            follow,
+        }]);
+        grants.pop().expect("one grant for one adoption")
+    }
+
+    /// Records every grant a previous daemon made to a command that still runs, in one step,
+    /// and returns them in the same order.
+    ///
+    /// Adopting them one at a time, with a scheduling step after each, granted more cores than
+    /// the machine has: the step after the first adoptions grew those grants into cores that
+    /// looked free but that commands not yet adopted held, and adopting those commands then
+    /// pushed the total past the cores (20 of 18 after a restart on 2026-11-18, with an agent
+    /// grant adopted at one core grown to nine before a ten-core one was adopted).
+    pub fn adopt_all(&self, adoptions: Vec<Adoption>) -> Vec<Grant> {
+        let mut state = self.lock();
+        let max = state.ledger.limits().max_per_command();
+        let mut grants = Vec::with_capacity(adoptions.len());
+        for adoption in adoptions {
+            let grows_to = adoption.follow.as_ref().map(|f| f.asked.clamp(1, max));
+            let shrinks = adoption.follow.as_ref().is_some_and(|f| f.shrinks);
+            let id = state.ledger.adopt(
+                adoption.class,
+                adoption.cores,
+                adoption.resources.clone(),
+                adoption.memory_mb,
+                grows_to,
+                shrinks,
+            );
+            let cores_file = adoption.follow.map(|f| f.cores_file);
+            if let Some(file) = &cores_file {
+                state.files.insert(id, file.clone());
+            }
+            grants.push(Grant {
+                id,
+                cores: adoption.cores.max(1),
+                resources: adoption.resources,
+                queued_s: 0,
+                cores_file,
+            });
         }
         self.advance(&mut state);
-        Grant {
-            id,
-            cores: cores.max(1),
-            resources,
-            queued_s: 0,
-            cores_file,
-        }
+        grants
     }
 
     /// While draining, no `idle` work starts and what runs is told to stop, so that an update
