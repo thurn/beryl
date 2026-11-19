@@ -127,6 +127,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         ready: Mutex::new(None),
         rounds: AtomicU32::new(0),
         ahead_of: Mutex::default(),
+        candidate_seen: Mutex::default(),
         building: Mutex::default(),
         failed: Mutex::default(),
         selftest: Arc::new(FakeSelftest::default()),
@@ -815,3 +816,6 @@ fn the_deploy_state_gives_why_a_build_failed_or_was_rolled_back() {
 
 #[path = "selfupdate_restart_tests.rs"]
 mod restart;
+
+#[path = "selfupdate_prebuild_tests.rs"]
+mod prebuild;

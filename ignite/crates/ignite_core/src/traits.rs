@@ -227,6 +227,16 @@ pub trait Git: Send + Sync {
     fn known_tip(&self, branch: &str) -> Result<Commit> {
         self.tip(branch)
     }
+    /// The commit the local ref `name` (a full name, `refs/...`) points at; `None` when there is
+    /// no such ref. Cheap enough to call every second. Fakes have no refs of their own.
+    fn local_ref(&self, _name: &str) -> Result<Option<Commit>> {
+        Ok(None)
+    }
+    /// Points the local ref `name` at `commit` in the repository of `tree`, which every worktree
+    /// of the repository shares.
+    fn set_local_ref(&self, _tree: &Path, _name: &str, _commit: &Commit) -> Result<()> {
+        Ok(())
+    }
     /// Whether `ancestor` is `descendant` or one of its ancestors.
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool>;
     /// Whether `history` holds every change under `path` that `version` holds: `version` is in

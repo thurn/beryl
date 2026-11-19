@@ -10,9 +10,12 @@
 //! express lane's lock, so a test waits for an express landing that holds it rather than going
 //! back to the scheduler. `ignite test` does so when every name it is given is in one of
 //! those families (`ignite:...`, `ignite-lint:...`, or the bare family name), or is a bare word
-//! with no `family:` prefix (a test name), and runs every command, whatever names it was given. `ignite check` does so for any such tree, because the landing would take the
-//! express lane too.
+//! with no `family:` prefix (a test name), and runs every command, whatever names it was given.
+//! `ignite check` does so for any such tree, because the landing would take the express lane
+//! too. Before the commands, both run the landing's formatters on the changed files and leave
+//! what they rewrote in the tree, uncommitted, so a misformatted file costs no round trip.
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -23,6 +26,7 @@ use super::OpenTree;
 use super::verbs::{changed_paths, render};
 use crate::checks::Checks;
 use crate::land::express::{ExpressLane, ExpressRun, rerun_command, section_in};
+use crate::land::format::MachineFormat;
 use crate::server::Context;
 
 /// What the verb was asked to run.
@@ -74,7 +78,39 @@ pub(super) fn express_reply(
     if !express.covers(&changed) {
         return None;
     }
-    Some(reply(&lane.run_in(&tree.path, &express, &changed), &what))
+    let formatted = format_first(ctx, tree, &changed);
+    let mut reply = reply(&lane.run_in(&tree.path, &express, &changed), &what);
+    if let Some(line) = formatted {
+        reply.text = format!("{}{}", render(&[line]), reply.text);
+    }
+    Some(reply)
+}
+
+/// Runs the landing's formatters (`[format]`) on `changed` in the agent's tree before the
+/// express commands check formatting, as `ignite land` does, and leaves what they changed
+/// uncommitted. The `format` line it returns names the files they rewrote; `None` when no rule
+/// matched.
+fn format_first(ctx: &Context, tree: &OpenTree, changed: &[String]) -> Option<(String, String)> {
+    if ctx.config.format.rules.is_empty() {
+        return None;
+    }
+    let format = MachineFormat {
+        rules: ctx.config.format.rules.clone(),
+    };
+    let (done, rewritten) = format.format_in_place(&tree.path, changed);
+    if done.ran.is_empty() {
+        return None;
+    }
+    let what = if rewritten.is_empty() {
+        "nothing to change".to_owned()
+    } else {
+        format!("rewrote {} in your tree, uncommitted", rewritten.join(", "))
+    };
+    let mut text = format!("{} formatters ran: {what}", done.ran.len());
+    for (command, _) in &done.failed {
+        let _ = write!(text, "; `{command}` failed");
+    }
+    Some(("format".to_owned(), text))
 }
 
 /// The reply to an express run: the `express` line when every command passed, else exit code

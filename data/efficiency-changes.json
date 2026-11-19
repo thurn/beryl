@@ -524,5 +524,10 @@
     "label": "`ignite land` after a passing `ignite check` of the same change charges its budget for the checks the check chose, now cached, so it runs no second slice of scored checks (on 2026-11-19 such a land of a one-line comment ran 398 more checks in 173 s), and the gate converts its seconds at the rate its own gates achieved in the last hour, so a 60 s budget runs in about 60 s under load",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "An express landing names its rebased commit as the release candidate and the daemon builds that release while the landing runs its express commands, the sender loop starts a round as soon as the release moves or its build ends instead of every 10 s, the restart's quiet window is 5 s instead of 15, and express `ignite test` and `ignite check` run the formatters first instead of failing on `cargo fmt --check` or mdformat (on 2026-11-19 two Ignite-only fixes waited 45 to 47 s from landing to restart, 36 s of it the release build, and lost a round trip each to formatting)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

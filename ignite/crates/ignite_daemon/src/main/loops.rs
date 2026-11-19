@@ -171,7 +171,7 @@ impl Parts {
                     reporter.tick(&ctx, sent.is_ok());
                     sent
                 });
-                thread::sleep(SEND_EVERY);
+                update.nap(SEND_EVERY);
             }
         });
     }

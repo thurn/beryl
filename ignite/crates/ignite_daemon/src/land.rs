@@ -82,6 +82,7 @@ use crate::checks::verbs::render;
 use crate::checks::{GateRun, RunOptions};
 use crate::server::{Context, Verb, error_reply};
 use crate::steps;
+use crate::update::prebuild;
 use env::{GateTree, LandGate, LandTrees, TicketTree};
 use express::{ExpressLane, ExpressRun, Expressed};
 use format::{Formatted, Formatter};
@@ -451,6 +452,7 @@ impl Landing {
                 None => Box::new(reply),
             };
             let express = self.express_for(ctx, &held.path, &changed);
+            prebuild::offer(ctx, &held.path, &rebased.head, express.is_some());
             // An express landing runs its commands in its own ticket tree, which the rebase has
             // put at the rebased commit, so express landings run side by side. They once all ran
             // in one shared tree under one lock, and on 2026-11-18 eight of them queued behind

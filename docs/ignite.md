@@ -553,7 +553,7 @@ How the executable is installed and kept current:
   a fix to the client alone, is taken on without a restart: the daemon reports
   it as its version from then on and compares later releases with it. A restart
   that is due waits for a quiet window: until no newer release has appeared for
-  `self_update.quiet_seconds` (15), no newer release is still building and, when
+  `self_update.quiet_seconds` (5), no newer release is still building and, when
   the release changes the landing code (the daemon's `land` module), no landing
   runs, but at most `self_update.cap_seconds` (30) from the first release it
   waits with, counted from when its build started. Releases that land one after
@@ -569,9 +569,22 @@ How the executable is installed and kept current:
   the rerun claims the tree if one was leased to the session meanwhile. Daemons
   fetch the branch every five minutes, so a fix pushed to it by hand deploys
   too. A landing on the machine moves the release branch from a worktree of the
-  main checkout, which updates the checkout's copy of the branch, so the daemon
-  reads that copy every round of its sender loop (10 seconds) and starts the
-  build at the next round.
+  main checkout, which updates the checkout's copy of the branch. The sender
+  loop runs a round every 10 seconds, but it reads that copy every second
+  between rounds and starts a round as soon as the branch moves, a release build
+  finishes, or a landing names a release candidate (below). Before 2026-11-19
+  each of those waited for the next round, up to 10 s.
+- An express landing builds its release before it lands. After its rebase and
+  formatting, it points the local ref `refs/ignite/release-candidate` at the
+  commit it is about to check. The daemon reads the ref, and when the commit
+  follows its own version, changes Ignite's source and no other build runs, it
+  builds and stores that commit's executable while the landing runs its express
+  commands, without a selftest or a restart. An express landing pushes the
+  commit it checked, so when the release branch reaches it the build is already
+  stored and only the selftest is left. On 2026-11-19 the release build took 36
+  s after each Ignite landing, as long as the landing's express commands. A
+  landing that fails or rebases again leaves a stored build nobody restarts
+  into; a build already running is never interrupted for a candidate.
 - The release build is not run by a loop. When the release branch moves, or the
   hub reports a version this daemon doesn't have, the daemon starts one build on
   a thread of its own in `update/update-tree` with a one-hour hang limit; only
@@ -2081,6 +2094,11 @@ what those checks only report, so `ignite land` runs the formatters itself.
   the result on the ticket's branch as `style: format`, and the gate or the
   express commands run on that commit. Later passes rebase the format commit
   with the rest of the branch and do not run the formatters again.
+- `ignite test` and `ignite check` on the express lane run the same rules on the
+  tree's changed files before the express commands, and leave what they rewrote
+  in the tree, uncommitted. Their `format` line names the files. On 2026-11-19
+  two Ignite fixes each lost one or two round trips to those verbs failing on
+  `cargo fmt --check` or the Markdown check.
 - The reply's `format` line says how many formatters ran and names the commit,
   or says there was nothing to change. A landing that fails after formatting
   still shows the line, because the commit stays on the tree's branch.

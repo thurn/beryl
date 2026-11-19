@@ -52,6 +52,9 @@
 //! failed is reported once and not tried again for the same commit; the next move of the release
 //! branch tries the new commit.
 //!
+//! An express landing's release is built before it lands, from the candidate the landing names,
+//! and the sender loop starts a round as soon as there is release work (see `prebuild`).
+//!
 //! The same thread then runs the new executable's selftest (`ignite internal selftest`, see
 //! [`crate::update::selftest`]) before `bin/current` is pointed at it. A build that fails it is
 //! recorded as rejected, so no daemon restarts into it or updates to it again, and is reported
@@ -134,6 +137,9 @@ pub struct Building {
     handle: JoinHandle<std::result::Result<PathBuf, Failure>>,
     /// Set by the thread once the executable is stored and its selftest runs.
     testing: Arc<AtomicBool>,
+    /// The commit is a landing's candidate, built ahead of its landing and not tested (see
+    /// `prebuild`).
+    prebuild: bool,
 }
 
 /// Why a release was not made ready.
@@ -166,6 +172,8 @@ pub struct SelfUpdate {
     /// The release branch's tip as this checkout last knew it, when [`SelfUpdate::poll_release`]
     /// last looked.
     pub release_seen: Mutex<Option<Commit>>,
+    /// The last commit an express landing named as its release candidate (see `prebuild`).
+    pub candidate_seen: Mutex<Option<Commit>>,
     /// The release tip last reported as not containing this daemon's commit.
     pub ahead_of: Mutex<Option<Commit>>,
     /// The release build that is running, if any. At most one runs, so a second request for the
@@ -290,6 +298,12 @@ impl SelfUpdate {
     /// commit or another, which finishes first) or the last attempt for `target` failed: builds
     /// it when it is not stored, then runs its selftest.
     fn start_build(&self, target: &Commit) {
+        self.spawn_build(target, false);
+    }
+
+    /// Starts the thread of [`Self::start_build`]. A `prebuild` only builds and stores the
+    /// executable: its selftest runs when the release branch reaches it.
+    fn spawn_build(&self, target: &Commit, prebuild: bool) {
         let mut building = self.building();
         if building.is_some() || self.failed().as_ref().map(|(commit, _)| commit) == Some(target) {
             return;
@@ -312,6 +326,9 @@ impl SelfUpdate {
                         .map_err(|e| Failure::Build(e.into()))?;
                 }
                 let executable = store.path(&commit);
+                if prebuild {
+                    return Ok(executable);
+                }
                 tested.store(true, Ordering::SeqCst);
                 selftest
                     .run(&executable)
@@ -320,11 +337,13 @@ impl SelfUpdate {
             });
         match spawned {
             Ok(handle) => {
-                eprintln!("ignite: building release {target}");
+                let what = if prebuild { "candidate" } else { "release" };
+                eprintln!("ignite: building {what} {target}");
                 *building = Some(Building {
                     commit: target.clone(),
                     handle,
                     testing,
+                    prebuild,
                 });
             }
             Err(error) => {
@@ -355,12 +374,20 @@ impl SelfUpdate {
             return;
         }
         drop(slot);
-        let Building { commit, handle, .. } = building;
+        let Building {
+            commit,
+            handle,
+            prebuild,
+            ..
+        } = building;
         let built = handle.join().unwrap_or_else(|_| {
             Err(Failure::Build(Error::Io(
                 "the build thread panicked".to_owned(),
             )))
         });
+        if prebuild {
+            return self.collect_prebuild(&commit, built);
+        }
         match built {
             Ok(_) => match self.updater().activate(own, &commit) {
                 Ok(UpdateCheck::Ready { executable, .. }) => {
@@ -461,6 +488,7 @@ impl SelfUpdate {
             .is_multiple_of(POLL_EVERY_ROUNDS);
         // Asked every round, so that the first round records the tip it starts from.
         let moved = self.release_moved();
+        self.poll_candidate();
         if due || moved {
             return self.after_master_moved();
         }
@@ -739,6 +767,8 @@ impl SelfUpdate {
 
 #[path = "selfupdate_deploy.rs"]
 mod deploy;
+#[path = "selfupdate_prebuild.rs"]
+mod prebuild;
 
 #[cfg(test)]
 #[path = "selfupdate_tests.rs"]

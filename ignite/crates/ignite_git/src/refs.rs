@@ -70,6 +70,29 @@ pub fn cached_tip(repo: &Path, remote: &str, branch: &str) -> Result<Commit> {
     cmd::commit(String::from_utf8_lossy(&out.stdout).trim())
 }
 
+/// The commit the local ref `name` points at, or `None` when there is no such ref.
+pub fn local_ref(repo: &Path, name: &str) -> Result<Option<Commit>> {
+    let mut parse = cmd::git(
+        repo,
+        [
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{name}^{{commit}}"),
+        ],
+    );
+    let out = cmd::output(&mut parse)?;
+    if !out.status.success() {
+        return Ok(None);
+    }
+    cmd::commit(String::from_utf8_lossy(&out.stdout).trim()).map(Some)
+}
+
+/// Points the local ref `name` at `commit`, in the repository `tree` belongs to.
+pub fn set_local_ref(tree: &Path, name: &str, commit: &Commit) -> Result<()> {
+    cmd::run(tree, ["update-ref", name, commit.as_str()]).map(|_| ())
+}
+
 /// The commit a tree has checked out.
 pub fn head(tree: &Path) -> Result<Commit> {
     cmd::commit(&cmd::run(tree, ["rev-parse", "--verify", "HEAD^{commit}"])?)

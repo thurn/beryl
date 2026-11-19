@@ -96,8 +96,11 @@ rules = [
 # At 30 s the build (about 40 s on the express cores) outlasts the cap, so the restart follows
 # the build. A landing it cuts short runs again under the new build, and loses little: its
 # express tree's Cargo target directory is warm and a finished express pass is remembered.
+# `quiet_seconds` was 15 until 2026-11-19, when express landings began to build their release
+# before landing: the release then needs only its selftest, a few seconds, and the quiet window
+# was the rest of the wait.
 [self_update]
-quiet_seconds = 15
+quiet_seconds = 5
 cap_seconds = 30
 
 [hub]

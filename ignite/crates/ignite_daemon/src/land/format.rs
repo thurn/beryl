@@ -112,8 +112,10 @@ impl MachineFormat {
     }
 }
 
-impl Formatter for MachineFormat {
-    fn format(&self, tree: &Path, changed: &[String]) -> Formatted {
+impl MachineFormat {
+    /// Runs every rule that matches one of `changed` in `tree` and leaves what they changed in
+    /// the working tree, uncommitted. `Formatted::commit` stays `None`.
+    pub fn run_rules(&self, tree: &Path, changed: &[String]) -> Formatted {
         let mut done = Formatted::default();
         for rule in &self.rules {
             // A deleted file matches the rule but cannot be given to the formatter.
@@ -131,6 +133,34 @@ impl Formatter for MachineFormat {
                 done.failed.push((rule.command.clone(), why));
             }
         }
+        done
+    }
+
+    /// Runs the rules as [`Self::run_rules`] does, in an agent's tree before `ignite test` or
+    /// `ignite check` runs the express commands, and returns which of `changed` the formatters
+    /// rewrote. A rule for a whole workspace (`cargo fmt`) may also rewrite files outside
+    /// `changed`, which are not listed.
+    ///
+    /// On 2026-11-19 two Ignite fixes each lost a round trip or two to `ignite test` and
+    /// `ignite check` failing on `cargo fmt --check` or the Markdown check, though the landing
+    /// would have formatted the same files itself.
+    pub fn format_in_place(&self, tree: &Path, changed: &[String]) -> (Formatted, Vec<String>) {
+        let read = |file: &String| std::fs::read(tree.join(file)).ok();
+        let before: Vec<_> = changed.iter().map(read).collect();
+        let done = self.run_rules(tree, changed);
+        let rewritten = changed
+            .iter()
+            .zip(before)
+            .filter(|(file, before)| read(file) != *before)
+            .map(|(file, _)| file.clone())
+            .collect();
+        (done, rewritten)
+    }
+}
+
+impl Formatter for MachineFormat {
+    fn format(&self, tree: &Path, changed: &[String]) -> Formatted {
+        let mut done = self.run_rules(tree, changed);
         if done.ran.is_empty() {
             return done;
         }
@@ -282,6 +312,27 @@ mod tests {
         assert_eq!(again.ran.len(), 2);
         assert_eq!(again.commit, None);
         assert_eq!(git(&repo, &["rev-parse", "HEAD"]), commit.as_str());
+        let _ = fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn formatting_in_place_rewrites_the_files_and_commits_nothing() {
+        let repo = repository("in-place");
+        let head = git(&repo, &["rev-parse", "HEAD"]);
+        let format = MachineFormat {
+            rules: vec![rule("**/*.md", "", "sh fmt.sh {files}")],
+        };
+        let changed = ["notes.md".to_owned(), "tool/src/lib.rs".to_owned()];
+
+        let (formatted, rewritten) = format.format_in_place(&repo, &changed);
+
+        assert_eq!(formatted.ran.len(), 1, "{formatted:?}");
+        assert_eq!(formatted.commit, None);
+        assert_eq!(rewritten, ["notes.md"]);
+        assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head);
+        assert_eq!(git(&repo, &["status", "--porcelain"]), "M notes.md");
+        let (_, again) = format.format_in_place(&repo, &changed);
+        assert!(again.is_empty(), "{again:?}");
         let _ = fs::remove_dir_all(&repo);
     }
 

@@ -238,3 +238,40 @@ fn verb_check(world: &World, lane: &Arc<FakeLane>) -> ignite_core::protocol::cli
     };
     verb.run(&world.ctx, &request(world, "check", &[]))
 }
+
+/// The landing's formatters run on the changed files before the express commands, so a
+/// misformatted file is fixed in the tree instead of failing `cargo fmt --check`.
+#[test]
+fn the_formatters_run_in_the_tree_before_the_express_commands() {
+    let mut world = express_world(&["ignite/src/lib.rs", "ignite/src/main.rs"]);
+    let tree = world.dir.clone();
+    std::fs::create_dir_all(tree.join("ignite/src")).unwrap();
+    std::fs::write(tree.join("ignite/src/lib.rs"), "fn  a() {}\n").unwrap();
+    std::fs::write(tree.join("ignite/src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(
+        tree.join("fmt.sh"),
+        "for f in \"$@\"; do tr -s ' ' < \"$f\" > \"$f.tmp\" && mv \"$f.tmp\" \"$f\"; done\n",
+    )
+    .unwrap();
+    world.ctx.config.format.rules = vec![ignite_core::formatting::FormatRule {
+        paths: vec!["ignite/**/*.rs".to_owned()],
+        exclude: Vec::new(),
+        dir: String::new(),
+        command: "sh fmt.sh {files}".to_owned(),
+    }];
+    let lane = Arc::new(FakeLane::default());
+    let reply = test_verb(&world, &lane).run(&world.ctx, &request(&world, "test", &["unit"]));
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(
+        reply.text.starts_with(
+            "format   1 formatters ran: rewrote ignite/src/lib.rs in your tree, uncommitted\n"
+        ),
+        "{}",
+        reply.text
+    );
+    assert_eq!(
+        std::fs::read_to_string(tree.join("ignite/src/lib.rs")).unwrap(),
+        "fn a() {}\n"
+    );
+    assert_eq!(lane.ran_in.lock().unwrap().len(), 1);
+}

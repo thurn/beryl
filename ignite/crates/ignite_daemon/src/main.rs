@@ -227,6 +227,7 @@ fn self_update(
         ready: Mutex::new(None),
         rounds: std::sync::atomic::AtomicU32::new(0),
         ahead_of: Mutex::default(),
+        candidate_seen: Mutex::default(),
         building: Mutex::default(),
         failed: Mutex::default(),
         selftest: Arc::new(crate::update::selftest::SupervisedSelftest {

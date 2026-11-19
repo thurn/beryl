@@ -54,6 +54,14 @@ impl Git for GitCli {
         refs::cached_tip(&self.repo, &self.remote, branch)
     }
 
+    fn local_ref(&self, name: &str) -> Result<Option<Commit>> {
+        refs::local_ref(&self.repo, name)
+    }
+
+    fn set_local_ref(&self, tree: &Path, name: &str, commit: &Commit) -> Result<()> {
+        refs::set_local_ref(tree, name, commit)
+    }
+
     fn is_ancestor(&self, ancestor: &Commit, descendant: &Commit) -> Result<bool> {
         refs::is_ancestor(&self.repo, ancestor, descendant)
     }

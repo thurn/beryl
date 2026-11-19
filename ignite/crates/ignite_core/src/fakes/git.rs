@@ -25,6 +25,8 @@ pub struct FakeGit {
     holding: Mutex<HashSet<(Commit, Commit)>>,
     /// How many times `object_ids` was called.
     object_id_calls: std::sync::atomic::AtomicUsize,
+    /// Local refs by full name, as `set_local_ref` left them.
+    refs: Mutex<HashMap<String, Commit>>,
 }
 
 impl FakeGit {
@@ -77,6 +79,15 @@ impl FakeGit {
 }
 
 impl Git for FakeGit {
+    fn local_ref(&self, name: &str) -> Result<Option<Commit>> {
+        Ok(lock(&self.refs).get(name).cloned())
+    }
+
+    fn set_local_ref(&self, _tree: &Path, name: &str, commit: &Commit) -> Result<()> {
+        lock(&self.refs).insert(name.to_owned(), commit.clone());
+        Ok(())
+    }
+
     fn object_ids(&self, _tree: &Path, paths: &[String]) -> Result<Vec<(String, Oid)>> {
         self.object_id_calls
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);

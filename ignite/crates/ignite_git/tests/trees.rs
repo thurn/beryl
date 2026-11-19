@@ -223,3 +223,25 @@ fn tracked_files_include_new_untracked_files_but_not_ignored_ones() {
         [".gitignore", "tests/test_new.py", "tests/test_old.py"]
     );
 }
+
+/// A local ref written from a worktree is read from the main checkout: the release candidate a
+/// landing names in its ticket tree reaches the daemon this way.
+#[test]
+fn a_local_ref_set_in_a_worktree_is_read_in_the_main_checkout() {
+    let scratch = Scratch::new("local-ref");
+    let repo = scratch.path("repo");
+    fs::create_dir_all(&repo).unwrap();
+    init(&repo);
+    write(&repo, "a.txt", "one\n");
+    let first = commit_all(&repo, "first");
+    let tree = scratch.path("tree");
+    worktree::add(&repo, &tree, "work-1", &first).unwrap();
+    let name = "refs/ignite/release-candidate";
+    assert_eq!(ignite_git::refs::local_ref(&repo, name).unwrap(), None);
+
+    ignite_git::refs::set_local_ref(&tree, name, &first).unwrap();
+    assert_eq!(
+        ignite_git::refs::local_ref(&repo, name).unwrap(),
+        Some(first)
+    );
+}
