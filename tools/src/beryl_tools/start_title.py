@@ -6,7 +6,8 @@ it in a later request. A session that loaded it alongside its first file reads w
 code and never called it, so its title kept the app's generated name. This hook runs after
 every Bash call (`.claude/settings.json`, `PostToolUse`). When the command ran `ignite start`
 and its output has a `title` line, it adds a note to the session's context naming the exact
-title to set before anything else. Any other call passes through with no output.
+title to set and asking for the title call to go out with the session's first reads, so it
+costs no request of its own. Any other call passes through with no output.
 
 It uses only the standard library and imports nothing from `beryl_tools`, so it runs as a
 plain script with the system `python3`, without starting `uv`.
@@ -45,10 +46,11 @@ def reminder(event: dict[str, object]) -> str | None:
         return None
     title = found.group(1).strip()
     return (
-        f"Set this session's title to `{title}` now, before any other tool call. "
+        f"Set this session's title to `{title}` in your next request. "
         "In the Claude desktop app, load `mcp__ccd_session_mgmt__set_session_title` with "
-        "ToolSearch in a message of its own, then call it with session_id `self`. "
-        "In Codex, call `set_thread_title`."
+        "ToolSearch in a message of its own, then call it with session_id `self` in the same "
+        "message as your first reads of the tree. In Codex, call `set_thread_title` alongside "
+        "them."
     )
 
 

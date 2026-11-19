@@ -3393,6 +3393,11 @@ guide    ignite guide regression   (read it before you change anything)
 - Ordinary difficulty is the job: failing tests, confusing code, conflicts.
   Never wait for a person, for another ticket, for another machine or for
   verification.
+- Start `land`, `check`, `test` and `wait` in the background where the agent's
+  tool can, and end the turn: the command's exit wakes the session. Never poll
+  with `sleep` or a loop. Where the tool has no background mode, the verb runs
+  in the foreground and answers within nine minutes with its result or a handle
+  for `ignite wait`.
 - Never end a turn on work that nothing will report. Never leave a ticket held
   when stopping for good: release it with its exact state.
 - Never work in another session's tree, take over its ticket or change another

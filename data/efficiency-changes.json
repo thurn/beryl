@@ -484,5 +484,10 @@
     "label": "A landing whose gate fails only on checks that also fail at the tip it was rebased onto lands with them known to fail and has their regression filed at once, instead of waiting unlanded until someone fixes the tip, as a Beryl 3D change did on 2026-11-19 behind 28 findings an earlier landing had introduced",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Workers start `ignite land`, `check`, `test` and `wait` in the background and end the turn instead of polling with `sleep` loops or running them in the foreground until the 600 s Bash timeout; and the post-start title reminder lets the title call share a request with the first reads. On 2026-11-19, 33 worker sessions spent 151 minutes in 108 sleep-poll calls, and 45 `ignite` calls ran 530 to 601 s in the foreground",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

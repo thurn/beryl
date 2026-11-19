@@ -77,8 +77,9 @@ last.
   a note.
 - A refused landing's verdict says whose failure it is. Do what its `next` line says
   (`ignite guide blocked`); never decide yourself that a failure is unrelated.
-- Never end a turn on work that nothing will report. Never leave a ticket held when
-  stopping for good: release it with its exact state.
+- Start `land`, `check`, `test` and `wait` in the background where your tool can and end
+  the turn: the exit wakes you. Never poll with `sleep` or a loop. Never end a turn on work
+  that nothing will report, or stop for good holding a ticket: release it with its state.
 - Never work in another session's tree, take over its ticket or change another ticket's
   scope.
 - A `changed` line is an instruction about your ticket. Read it before you continue.
@@ -139,6 +140,7 @@ mod tests {
             "verdict says whose failure it is",
             "never decide yourself that a failure is unrelated",
             "nothing will report",
+            "Never poll with `sleep` or a loop",
             "Never work in another session's tree",
             "A `changed` line is an instruction about your ticket",
             "landing note says",

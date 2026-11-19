@@ -31,6 +31,7 @@ def test_ignite_start_names_the_title() -> None:
     assert note is not None
     assert "`⚒️ [TQ44S.9.48] Counter names, untap lock`" in note
     assert "set_session_title" in note
+    assert "same message as your first reads" in note
 
 
 def test_other_commands_and_refusals_are_silent() -> None:
