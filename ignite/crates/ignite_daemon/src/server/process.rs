@@ -182,6 +182,10 @@ pub struct Processes {
     pub verbs: BTreeSet<String>,
     /// How often a verb process is looked at.
     pub watch: Duration,
+    /// The Ignite commit of the executable new verb processes start from, the daemon's own;
+    /// `None` when unknown. A landing whose verb process runs another commit is run again
+    /// under this one (see `server/outdated.rs`).
+    pub version: Option<String>,
 }
 
 impl Processes {
@@ -192,6 +196,16 @@ impl Processes {
             home,
             verbs: PROCESS_VERBS.iter().map(|v| (*v).to_owned()).collect(),
             watch: Duration::from_secs(1),
+            version: None,
+        }
+    }
+
+    /// The processes with `version` as the commit new verb processes start from.
+    #[must_use]
+    pub fn with_version(self, version: &str) -> Processes {
+        Processes {
+            version: Some(version.to_owned()),
+            ..self
         }
     }
 }
@@ -204,11 +218,11 @@ pub(super) struct Shared {
     pub(super) running: Arc<AtomicUsize>,
     pub(super) steps: Arc<Steps>,
     pub(super) db: Option<Arc<Mutex<Connection>>>,
-    host: Option<Arc<Host>>,
-    home: PathBuf,
-    watch: Duration,
+    pub(super) host: Option<Arc<Host>>,
+    pub(super) home: PathBuf,
+    pub(super) watch: Duration,
     /// Gone once the server is dropped, as when a test restarts it.
-    server: Weak<()>,
+    pub(super) server: Weak<()>,
 }
 
 /// The reply to a request sent while the daemon is about to restart: nothing was started, and
@@ -460,8 +474,14 @@ impl Server {
     /// process is alive (it holds its lock), lists it and watches it, and returns true. A
     /// process that ended after writing its reply has its reply handed on, and also returns
     /// true. False when the process died, or none was started: the caller runs the verb again
-    /// or ends it.
-    pub(super) fn adopt_process(&self, handle: &Handle, verb: &str) -> bool {
+    /// or ends it. A landing that runs under an older build than the daemon's is stopped and run
+    /// again under the daemon's instead, unless its push has begun (see `server/outdated.rs`).
+    pub(super) fn adopt_process(
+        &self,
+        handle: &Handle,
+        verb: &str,
+        request: Option<&Request>,
+    ) -> bool {
         let Some(processes) = &self.processes else {
             return false;
         };
@@ -469,6 +489,9 @@ impl Server {
         if crate::verbproc::alive(&processes.home, handle) {
             eprintln!("ignite: `ignite {verb}` ({handle}) still runs in its verb process");
             processes.host.track(&self.ctx, handle);
+            if self.restart_if_outdated(handle, verb, request) {
+                return true;
+            }
             watch(shared, handle, None, self.registry.resumable(verb));
             return true;
         }
@@ -499,14 +522,14 @@ fn req_wait_s(wait: Duration) -> u32 {
 }
 
 impl Shared {
-    fn row(&self, handle: &Handle) -> Option<ignite_store::local::rows::Handle> {
+    pub(super) fn row(&self, handle: &Handle) -> Option<ignite_store::local::rows::Handle> {
         let db = self.db.as_ref()?;
         handle_store::get(&lock(db), handle.as_str()).ok().flatten()
     }
 
     /// Hands the reply in `handle`'s row to whoever waits, if the row has finished. True if it
     /// had, or the handle is unknown.
-    fn deliver_if_finished(&self, handle: &Handle) -> bool {
+    pub(super) fn deliver_if_finished(&self, handle: &Handle) -> bool {
         let Some(row) = self.row(handle) else {
             return true;
         };

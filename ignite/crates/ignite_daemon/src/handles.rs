@@ -22,7 +22,7 @@
 //! A session inside `ignite wait` can be interrupted: [`Handles::interrupt`] ends every wait of
 //! that session at once with the reply it is given, such as a message from a person.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
@@ -95,6 +95,9 @@ struct State {
     next_waiter: u64,
     /// Handles the database listed as running when it was opened, until the server takes them.
     orphans: Vec<Orphan>,
+    /// Handles whose `stopped` reply is not handed to waiters, because the daemon stopped their
+    /// verb process only to run the verb again under a newer build (see `server/outdated.rs`).
+    held: HashSet<Handle>,
 }
 
 /// One handle in memory.
@@ -106,6 +109,9 @@ struct Entry {
     finished_at: Option<Timestamp>,
     /// A wait has returned the reply.
     read: bool,
+    /// Why the operation was started again under the same handle, such as `L-128 was restarted
+    /// under ignite eda21bd`, which a wait that ends first prints.
+    restarted: Option<String>,
 }
 
 impl Entry {
@@ -116,6 +122,7 @@ impl Entry {
             reply: None,
             finished_at: None,
             read: false,
+            restarted: None,
         }
     }
 }
@@ -282,8 +289,61 @@ impl Handles {
         self.prune(&mut state);
     }
 
+    /// Keeps `handle` running for its waiters when its verb process ends `stopped`: the daemon
+    /// asked it to stop only to run the verb again (see `server/outdated.rs`). `note` is what a
+    /// wait that ends first says happened. [`Handles::release_hold`] undoes it.
+    pub fn hold_stopped(&self, handle: &Handle, note: &str) {
+        let mut state = lock(&self.state);
+        state.held.insert(handle.clone());
+        if let Some(entry) = state.replies.get_mut(handle) {
+            entry.restarted = Some(note.to_owned());
+        }
+    }
+
+    /// Ends [`Handles::hold_stopped`]: a later `stopped` reply reaches the waiters again. With
+    /// `keep_note` false the note is dropped too, as when the verb process refused to stop.
+    pub fn release_hold(&self, handle: &Handle, keep_note: bool) {
+        let mut state = lock(&self.state);
+        state.held.remove(handle);
+        if !keep_note && let Some(entry) = state.replies.get_mut(handle) {
+            entry.restarted = None;
+        }
+    }
+
+    /// Makes `handle`'s row `running` again with `request`, as before its first run started, for
+    /// a run again under the same handle after its verb process ended `stopped` while held (see
+    /// [`Handles::hold_stopped`]). The row no longer names a verb process.
+    pub fn reopen(&self, handle: &Handle, request: &Request) {
+        let state = lock(&self.state);
+        if let Some(mut row) = self.stored(handle) {
+            "running".clone_into(&mut row.state);
+            row.exit = None;
+            row.reply = serde_json::to_string(&Running {
+                request: request.clone(),
+            })
+            .ok();
+            row.finished_at = None;
+            row.pid = None;
+            row.executable = None;
+            row.protocol = None;
+            self.save(&row);
+        }
+        drop(state);
+    }
+
+    /// Why the running operation of `handle` was started again, if it was.
+    pub fn restarted(&self, handle: &Handle) -> Option<String> {
+        lock(&self.state)
+            .replies
+            .get(handle)
+            .and_then(|entry| entry.restarted.clone())
+    }
+
     fn finish_as(&self, handle: &Handle, reply: Reply, how: &str) {
         let mut state = lock(&self.state);
+        if how == "stopped" && state.held.contains(handle) {
+            return;
+        }
         if let Some(mut row) = self.stored(handle) {
             how.clone_into(&mut row.state);
             row.exit = Some(i64::from(reply.exit.code()));
@@ -337,6 +397,7 @@ impl Handles {
                         reply,
                         finished_at,
                         read: false,
+                        restarted: None,
                     },
                 );
             }
@@ -599,7 +660,14 @@ impl WaitVerb {
             Waited::Done(reply) | Waited::Interrupted(reply) => reply,
             Waited::Running(verb) => {
                 let doing = self.steps.by_handle(handle).map(|a| a.view());
-                still_running_at(&verb, handle, doing.as_ref())
+                let mut reply = still_running_at(&verb, handle, doing.as_ref());
+                if let Some(note) = self.handles.restarted(handle) {
+                    reply.text = format!("restart  {note}\n{}", reply.text);
+                    if let Some(json) = reply.json.as_mut().and_then(|j| j.as_object_mut()) {
+                        json.insert("restarted".to_owned(), serde_json::json!(note));
+                    }
+                }
+                reply
             }
             Waited::Unknown => Reply::text(Exit::Usage, format!("unknown handle: {name}")),
         }

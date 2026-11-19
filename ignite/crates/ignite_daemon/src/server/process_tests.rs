@@ -246,6 +246,8 @@ impl LandingTrees for NoTrees {
 #[derive(Default)]
 struct Switch {
     server: Mutex<Option<Arc<Server>>>,
+    /// How many answers to `host-poll` and `host-step` have told a verb process to stop.
+    stops: AtomicUsize,
 }
 
 impl Switch {
@@ -259,6 +261,13 @@ impl Switch {
             return Err(Error::Unreachable("the daemon is restarting".to_owned()));
         };
         decode_reply::<C>(server.handle(&encode_request(call, PathBuf::from("/home"))))
+    }
+
+    fn count_stop(&self, answer: Result<StopState>) -> Result<StopState> {
+        if answer.as_ref().is_ok_and(|state| state.stop) {
+            self.stops.fetch_add(1, Ordering::SeqCst);
+        }
+        answer
     }
 }
 
@@ -279,7 +288,7 @@ impl HostClient for Switch {
         self.call(call)
     }
     fn step(&self, call: &StepUpdate) -> Result<StopState> {
-        self.call(call)
+        self.count_stop(self.call(call))
     }
     fn refuse_stop(&self, call: &RefuseStop) -> Result<RefuseStopReply> {
         self.call(call)
@@ -288,7 +297,7 @@ impl HostClient for Switch {
         self.call(call)
     }
     fn poll(&self, call: &Poll) -> Result<StopState> {
-        self.call(call)
+        self.count_stop(self.call(call))
     }
     fn finished(&self, call: &Finished) -> Result<Ack> {
         self.call(call)
@@ -430,6 +439,12 @@ impl Machine {
     /// A daemon starting on the machine, as after a restart: a new server and host over the
     /// same database and runs, with a registry of its own.
     fn daemon(&self) -> Arc<Server> {
+        self.daemon_at(None)
+    }
+
+    /// [`Machine::daemon`], whose new verb processes would start from the Ignite commit
+    /// `version`, as a daemon restarted into that release.
+    fn daemon_at(&self, version: Option<&str>) -> Arc<Server> {
         let steps = Arc::new(Steps::new(Arc::new(FakeClock::new(T0))));
         let host = Host::with_timing(
             HostParts {
@@ -470,6 +485,7 @@ impl Machine {
                 .map(|v| (*v).to_owned())
                 .collect::<BTreeSet<_>>(),
             watch: Duration::from_millis(20),
+            version: version.map(str::to_owned),
         };
         let server = Server::with_processes(
             context(),
@@ -723,3 +739,6 @@ fn a_dead_verb_process_owns_its_landing_tree_only_if_it_is_run_again() {
 
 #[path = "process_tip_tests.rs"]
 mod tip_rounds;
+
+#[path = "outdated_tests.rs"]
+mod outdated;

@@ -52,7 +52,7 @@ mod runs;
 mod tests;
 mod verbs;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
@@ -173,6 +173,10 @@ pub struct Host {
     handles: OnceLock<Arc<Handles>>,
     /// The activity of each verb process the daemon knows is running.
     remotes: Mutex<HashMap<Handle, Remote>>,
+    /// Handles whose verb process has ended and whose verb the daemon now runs itself (see
+    /// [`Host::hand_back`]). The host keeps no activity for them and ends none of their
+    /// commands.
+    handed_back: Mutex<HashSet<Handle>>,
     runs: Mutex<HashMap<RequestId, Arc<Pending<RunReply>>>>,
     built: Mutex<HashMap<RequestId, Arc<Pending<BuildReply>>>>,
     /// The cores granted to each verb process by `host-borrow-cores` and not yet returned.
@@ -219,6 +223,7 @@ impl Host {
             timing,
             handles: OnceLock::new(),
             remotes: Mutex::new(HashMap::new()),
+            handed_back: Mutex::new(HashSet::new()),
             runs: Mutex::new(HashMap::new()),
             built: Mutex::new(HashMap::new()),
             borrowed: Mutex::new(HashMap::new()),
@@ -248,6 +253,33 @@ impl Host {
         for run in self.starter.runs_of(handle) {
             self.starter.end(&run);
         }
+    }
+
+    /// The verb process of `handle` has ended and the daemon runs its verb again itself, under
+    /// the same handle: returns the cores the process borrowed and forgets its activity, its
+    /// stop state and its watch, so that a stop asked of the process does not end the commands
+    /// the new run starts.
+    pub fn hand_back(&self, handle: &Handle) {
+        crate::handles::lock(&self.handed_back).insert(handle.clone());
+        if let Some(remote) = crate::handles::lock(&self.remotes).remove(handle) {
+            remote.activity.finish();
+        }
+        self.return_all_cores(handle);
+        if let Err(error) = ignite_store::local::handle_stops::set(
+            &crate::handles::lock(&self.db),
+            &ignite_store::local::rows::HandleStop {
+                handle: handle.to_string(),
+                asked: false,
+                refused: None,
+                at: self.clock.now().to_string(),
+            },
+        ) {
+            eprintln!("ignite: cannot clear the stop state of {handle}: {error}");
+        }
+    }
+
+    fn is_handed_back(&self, handle: &Handle) -> bool {
+        crate::handles::lock(&self.handed_back).contains(handle)
     }
 
     /// The last `host-hello` of the verb process running `handle`, such as for the executable

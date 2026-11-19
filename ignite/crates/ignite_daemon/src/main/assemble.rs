@@ -497,7 +497,8 @@ pub fn server(
             hostname: base.options.hostname.clone(),
         }),
         home,
-    );
+    )
+    .with_version(&base.options.version);
     let mut server = Server::with_processes(
         ctx.clone(),
         registry,

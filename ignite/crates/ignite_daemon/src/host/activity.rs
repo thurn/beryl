@@ -34,6 +34,9 @@ impl Host {
         ctx: &Context,
         handle: &Handle,
     ) -> Option<Arc<Activity>> {
+        if self.is_handed_back(handle) {
+            return None;
+        }
         let mut remotes = lock(&self.remotes);
         if let Some(remote) = remotes.get(handle)
             && !remote.activity.is_finished()
@@ -185,6 +188,12 @@ impl Host {
     /// Hands the reply in a finished handle's row to whoever waits on it, and ends its activity.
     fn settle(&self, handle: &Handle, row: &rows::Handle) {
         self.return_all_cores(handle);
+        // Held while the reply is handed on, so that once `hand_back` has returned no reply of
+        // the ended process reaches the handle's waiters.
+        let handed_back = lock(&self.handed_back);
+        if handed_back.contains(handle) {
+            return;
+        }
         let reply = row
             .reply
             .as_deref()
@@ -218,6 +227,10 @@ impl Host {
                 let Some(host) = host.upgrade() else {
                     return;
                 };
+                // The daemon runs the verb itself now, and its commands are the new run's.
+                if host.is_handed_back(&handle) {
+                    return;
+                }
                 // Before looking whether the verb finished: a verb process that ends at once
                 // when asked to stop, or dies meanwhile, leaves its commands running otherwise.
                 if activity.stop_requested() {

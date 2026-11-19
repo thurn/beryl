@@ -192,6 +192,7 @@ impl TipMachine {
             home: self.scratch.home.clone(),
             verbs: BTreeSet::from([ROUND_VERB.to_owned()]),
             watch: Duration::from_millis(20),
+            version: None,
         };
         let server = Arc::new(
             Server::with_processes(

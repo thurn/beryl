@@ -40,6 +40,7 @@ use ignite_store::local::{rows, trees};
 use crate::handles::{Handles, WaitVerb, lock};
 
 mod late;
+mod outdated;
 mod process;
 mod resume;
 mod wire;

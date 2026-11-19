@@ -620,7 +620,8 @@ How the executable is installed and kept current:
   the branch by hand and ran `ignite install`.
 - Each build is stored under its commit, so a new executable never replaces a
   file that is running. Supervisors and verb processes finish under the version
-  that started them; `ignite status` names the commit each running verb runs
+  that started them, except a landing that has not begun its push (see "How a
+  restart is survived"); `ignite status` names the commit each running verb runs
   under, such as `L-6 land under 87631b5 …`.
 - The hub updates first. Before the daemon on jarvis restarts into a release, it
   kickstarts the hub's service, which comes back on the new `bin/current` and
@@ -664,6 +665,22 @@ How a restart is survived:
   daemon run the verb itself, as below. A verb process that dies while the
   daemon runs is noticed within a second and treated the same way, after the
   daemon ends the commands it left.
+- A landing whose verb process is alive but runs another build than the
+  restarted daemon is asked to stop, as `ignite stop` would ask it, so that a
+  release that fixes a landing bug reaches the landings already queued. On
+  2026-11-18 six landings went on waiting for the express lane under a broken
+  daemon after the fix had reached every machine, until each session stopped its
+  landing and landed again by hand. A landing whose push has begun refuses to
+  stop and finishes under its build, since a push cut short may or may not have
+  reached the remote. One that stops gives back its cores, lease and tree, and
+  once its process has ended the daemon runs it again itself under the same
+  handle, with the same request, so the same note and session. The stopped reply
+  never reaches the session: its `ignite wait` keeps waiting and gets the new
+  run's reply, and a wait that ends first starts with a line such as
+  `restart  L-128 was restarted under ignite eda21bd: it had not begun its push under ignite 87631b5`.
+  A `check` or `test` started under the old build is not restarted: it only
+  reports on a commit, restarting it would end its running commands, and the
+  landing gate runs its checks again under the new build anyway.
 - For a verb that ran on the previous daemon's threads, or whose verb process
   died, the daemon runs `test`, `check`, `land` and a waiting `start` again
   under the same handle. Finished checks come from the result cache. Each
