@@ -394,10 +394,58 @@ def test_a_sample_lists_what_style_cannot_say_and_draws_what_it_can() -> None:
         "border": [[214, 192, 150, 107], 2.0],
         "radius": 8.0,
         "opacity": 0.5,
+        "box_shadow": [],
+        "drop_shadow": [],
     }
-    shadowed = sample(**{"box-shadow": "0 6px 16px #000", "filter": "blur(1px)"})
-    assert samples.lacking(shadowed) == ["box-shadow", "filter"]
-    assert samples.lacking({**sample(), "text": {"string": "Pass"}}) == ["text"]
+    # Box shadows, drop shadows and text are drawn; any other filter is not.
+    shadowed = sample(
+        **{
+            "box-shadow": "inset 0 0 0 1px rgb(214 192 150 / 30%), 0 6px 16px #000",
+            "filter": "drop-shadow(0 1px 1px rgb(0 0 0 / 70%))",
+        }
+    )
+    assert samples.lacking(shadowed) == []
+    style = samples.native_style(shadowed["style"])  # pyre-ignore[6]
+    assert style["box_shadow"] == [
+        {
+            "x": 0.0,
+            "y": 0.0,
+            "blur": 0.0,
+            "spread": 1.0,
+            "color": [214, 192, 150, 76],
+            "inset": True,
+        },
+        {
+            "x": 0.0,
+            "y": 6.0,
+            "blur": 16.0,
+            "spread": 0.0,
+            "color": [0, 0, 0, 255],
+            "inset": False,
+        },
+    ]
+    assert style["drop_shadow"] == [
+        {
+            "x": 0.0,
+            "y": 1.0,
+            "blur": 1.0,
+            "spread": 0.0,
+            "color": [0, 0, 0, 178],
+            "inset": False,
+        }
+    ]
+    blurred = sample(**{"filter": "drop-shadow(0 1px 1px #000) blur(1px)"})
+    assert samples.lacking(blurred) == ["filter"]
+    words = {
+        **sample(),
+        "text": {"string": "Pass", "color": "#fbf0d8", "font-size": "24px"},
+    }
+    assert samples.lacking(words) == []
+    assert samples.native_text(words) == {
+        "string": "Pass",
+        "color": [251, 240, 216, 255],
+        "size": 24.0,
+    }
 
 
 def test_the_ratchet_lets_a_sample_improve_or_become_supported_but_not_worsen() -> None:
