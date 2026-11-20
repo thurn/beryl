@@ -149,7 +149,10 @@ fn plan_usage_adds_up_over_windows_and_is_absent_for_old_windows() {
     let second = posted(
         r#"{"session": "c", "plan_percent": 0.07, "plan_window": "Weekly", "plan_borrowed": true}"#,
     );
-    assert_eq!(collect(std::slice::from_ref(&old), "TEST").totals.plan, None);
+    assert_eq!(
+        collect(std::slice::from_ref(&old), "TEST").totals.plan,
+        None
+    );
     let plan = collect(&[old, first, second], "TEST").totals.plan.unwrap();
     assert!((plan.percent - 0.12).abs() < 1e-9);
     assert_eq!(plan.window, "Weekly");
