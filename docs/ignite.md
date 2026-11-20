@@ -644,18 +644,18 @@ How the executable is installed and kept current:
   whether the commit checked out there contains the release. The new daemon then
   reads the `ignite.toml` that came with the release. On 2026-11-20 a release
   that changed both `[repository]` and the daemon's code restarted every daemon
-  two seconds before its checkout was fast-forwarded, so each kept the old
-  names until a later release. A checkout with local edits cannot be
-  fast-forwarded, so the daemon restarts at the cap on the `ignite.toml` it has.
-  A push in progress holds the restart even past the cap. It never waits
-  for running commands or verb processes, which survive it. Before it restarts,
-  the daemon answers every new request, except the calls of verb processes, with
-  a reply that says it is restarting, which the client sends again, and waits up
-  to 30 seconds for the verbs running on its own threads, such as a `release`.
-  It does not wait for a `start` that only waits for a free tree: the new daemon
-  runs that `start` again under its handle, and the rerun claims the tree if one
-  was leased to the session meanwhile. Daemons fetch the ref every five minutes,
-  so a fix pushed to it by hand (`git push origin <commit>:refs/ignite/release`)
+  two seconds before its checkout was fast-forwarded, so each kept the old names
+  until a later release. A checkout with local edits cannot be fast-forwarded,
+  so the daemon restarts at the cap on the `ignite.toml` it has. A push in
+  progress holds the restart even past the cap. It never waits for running
+  commands or verb processes, which survive it. Before it restarts, the daemon
+  answers every new request, except the calls of verb processes, with a reply
+  that says it is restarting, which the client sends again, and waits up to 30
+  seconds for the verbs running on its own threads, such as a `release`. It does
+  not wait for a `start` that only waits for a free tree: the new daemon runs
+  that `start` again under its handle, and the rerun claims the tree if one was
+  leased to the session meanwhile. Daemons fetch the ref every five minutes, so
+  a fix pushed to it by hand (`git push origin <commit>:refs/ignite/release`)
   deploys too. A landing on the machine moves the release ref from a worktree of
   the main checkout, which updates the checkout's copy of the ref. The sender
   loop runs a round every 10 seconds, but it reads that copy every second
@@ -729,12 +729,11 @@ How the executable is installed and kept current:
   its scheduler's limits, and the refs the main checkout fast-forwards. Those
   take effect at the daemon's next restart, which the next release that changes
   the daemon's code brings about. That restart waits until the main checkout
-  holds the release (see [Processes](#processes)),
-  so a release that changes `ignite.toml` and the daemon's code together
-  restarts the daemon onto the new file. Nothing reloads the daemon's copy. A verb
-  process and its daemon can therefore disagree for a while: a tip round that
-  reads `green` from the file pushes the ref even while the daemon still starts
-  tickets at the tip.
+  holds the release (see [Processes](#processes)), so a release that changes
+  `ignite.toml` and the daemon's code together restarts the daemon onto the new
+  file. Nothing reloads the daemon's copy. A verb process and its daemon can
+  therefore disagree for a while: a tip round that reads `green` from the file
+  pushes the ref even while the daemon still starts tickets at the tip.
 - A verdict is keyed by the tree ID of every file in the ticket tree, committed
   or not, the merge base of the tree's `HEAD` with the tip as the checkout last
   fetched it, and `verdict_settings`, a digest of the `[gate]` section that

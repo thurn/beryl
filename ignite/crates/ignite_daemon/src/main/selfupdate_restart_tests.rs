@@ -195,7 +195,8 @@ fn a_release_of_landing_code_waits_for_a_landing_up_to_the_cap() {
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
     let reason = this_run(&home).reason.unwrap();
     assert!(
-        reason.ends_with(", after waiting 600 s for landings, newer releases and the main checkout"),
+        reason
+            .ends_with(", after waiting 600 s for landings, newer releases and the main checkout"),
         "{reason}"
     );
 }

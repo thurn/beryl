@@ -96,8 +96,6 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
 use crate::main::restart_window::{Decision, RestartWindow};
-pub use checkout::{CHECKOUT_LACKS_RELEASE, MainCheckout, RepositoryCheckout};
-use checkout::waited_for;
 use crate::server::{DRAIN_WAIT, Drain};
 use crate::update::scope::{Source, affects_landing, daemon_changes, summary};
 use crate::update::selftest::Selftest;
@@ -105,6 +103,8 @@ use crate::update::{
     Builder, ExecutableStore, Plan, Restart, SOURCE, UpdateCheck, Updater, record_adopted_from,
     restart_into,
 };
+use checkout::waited_for;
+pub use checkout::{CHECKOUT_LACKS_RELEASE, MainCheckout, RepositoryCheckout};
 
 /// The sender loop runs every 10 seconds, so this many of its rounds are 5 minutes.
 pub const POLL_EVERY_ROUNDS: u32 = 30;
