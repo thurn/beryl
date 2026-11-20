@@ -15,8 +15,8 @@ use beryl_protocol::ipc::decks::SavedDeck;
 use super::ScreenIn;
 use super::start::{LABEL, PANEL_PADDING, TITLE, check_square, checkbox, panel_look, small};
 use crate::element::{
-    Align, Border, Display, Element, Justify, LobbyPress, Overflow, Position, Press, Track,
-    column, row, text,
+    Align, Border, Display, Element, Justify, LobbyPress, Overflow, Position, Press, Track, column,
+    row, text,
 };
 use crate::frame::Role;
 use crate::manual::commands::{COMMANDS, Scope};
@@ -219,7 +219,8 @@ fn frame(name: &str) -> Element {
 /// the legend.
 fn fieldset(name: &str) -> Element {
     let padding = size::LOBBY_SECTION_PADDING;
-    let mut legend = (text(name).style(DESKTOP_LABEL).color(color::TEXT_DIM)).align_self(Align::Start);
+    let mut legend =
+        (text(name).style(DESKTOP_LABEL).color(color::TEXT_DIM)).align_self(Align::Start);
     let side = size::LOBBY_LEGEND_PADDING;
     legend.style.padding = [0.0, side, 0.0, side];
     // The legend stands over the border rather than under it, and keeps the section's padding,
@@ -315,7 +316,11 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
     let loaded = own.is_some_and(|own| own.loaded);
     // On the desktop, `.lobby-panel h2` and the counts under it in the panel's own type.
     let (heading, counts_style, counts_color) = match fit {
-        Fit::Desktop => (type_style::LOBBY_DECK, type_style::LOBBY_COUNTS, color::TYPE),
+        Fit::Desktop => (
+            type_style::LOBBY_DECK,
+            type_style::LOBBY_COUNTS,
+            color::TYPE,
+        ),
         Fit::Phone => (HEADING, BODY, color::TEXT_DIM),
     };
     let mut words = column().name("deck status").child(
@@ -511,11 +516,17 @@ fn assists(view: &LobbyView, fit: Fit) -> Element {
 /// the column, starting past the checkbox, and the checkbox stands over their start.
 fn switch(label: &str, on: bool, press: Press) -> Element {
     let side = size::LOBBY_SWITCH_BOX;
-    let mut words = text(label).style(DESKTOP_LABEL).color(color::TEXT_DIM).grow(1.0);
+    let mut words = text(label)
+        .style(DESKTOP_LABEL)
+        .color(color::TEXT_DIM)
+        .grow(1.0);
     words.style.padding = [0.0, 0.0, 0.0, side + size::LOBBY_SWITCH_LABEL_GAP];
-    let check = check_square(side, on)
-        .position(Position::Absolute)
-        .inset([Some((LABEL_LINE - side) / 2.0), None, None, Some(0.0)]);
+    let check = check_square(side, on).position(Position::Absolute).inset([
+        Some((LABEL_LINE - side) / 2.0),
+        None,
+        None,
+        Some(0.0),
+    ]);
     Element::new(Role::Toggle)
         .name(label)
         .selected(on)
