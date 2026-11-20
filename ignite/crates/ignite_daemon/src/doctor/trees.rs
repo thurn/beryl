@@ -121,8 +121,8 @@ fn disk_finding(free: Option<u64>, used: Option<u64>, budget: Option<u32>) -> Fi
                 "{free} GB free, under the {floor} GB the daemon keeps free; builds wait for \
                  space."
             ),
-            "free disk space; the disk loop clears free trees' builds first, and leased trees \
-             keep theirs until released",
+            "free disk space; the disk loop clears free trees' builds first, then the \
+             incremental caches and builds of leased trees that run nothing",
         );
     }
     let Some(budget) = budget.map(u64::from) else {

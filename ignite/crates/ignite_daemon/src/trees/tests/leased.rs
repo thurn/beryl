@@ -35,9 +35,12 @@ fn all_leased(f: &Fixture, limit: Option<u64>, sizes: &[usize]) -> Trees {
     );
     trees.setup(&f.tip()).unwrap();
     for n in 0..sizes.len() {
-        let Lease::Ready(_) = trees.lease(f.request(&format!("T.{n}"), true)).unwrap() else {
+        let Lease::Ready(lease) = trees.lease(f.request(&format!("T.{n}"), true)).unwrap() else {
             panic!("expected a free tree");
         };
+        // A compiling lease returns before the copy of another tree's build into it ends, and
+        // the disk loop leaves a tree alone while it is seeded or seeds another.
+        crate::trees::wait_until_seeded(&lease.path).unwrap();
     }
     trees
 }
@@ -152,5 +155,36 @@ fn below_the_floor_idle_leased_trees_are_cleared_once_no_free_tree_is_left() {
 
     assert!(report.reclaimed.contains(&id("tree-02")), "{report:?}");
     assert!(!f.repo.join(".worktrees/tree-02/out").exists());
+    assert_eq!(state(&trees, "tree-02"), "leased");
+}
+
+/// Over the limit with no free tree, idle leased trees lose their incremental caches first, and
+/// a tree is cleared whole only if that is not enough. On jarvis 39 of tree-05's 101 GB in
+/// `rust/target/debug` were incremental caches, which cost only a slower next compile.
+#[test]
+fn incremental_caches_go_before_any_leased_tree_is_cleared() {
+    let f = Fixture::new(2, 1);
+    // The files are written after the leases, which seed one tree as a clone of another, so
+    // the trees share no blocks and hold about 6 MB, 4 MB of it incremental caches.
+    let trees = all_leased(&f, Some(9 * MB as u64 / 2), &[0, 0]);
+    for tree in ["tree-01", "tree-02"] {
+        let profile = f.repo.join(".worktrees").join(tree).join("out/debug");
+        write(&profile, ".fingerprint/app-0a0a/bin-app", "");
+        write(&profile, "deps/app-0a0a", &"x".repeat(MB));
+        write(
+            &profile,
+            "incremental/app-1b1b/s-1/query-cache.bin",
+            &"x".repeat(2 * MB),
+        );
+    }
+
+    let report = trees.hold_disk(0).unwrap();
+
+    assert!(report.incremental.contains(&id("tree-02")), "{report:?}");
+    assert!(report.reclaimed.is_empty(), "{report:?}");
+    assert!(report.after <= report.limit.unwrap(), "{report:?}");
+    let profile = f.repo.join(".worktrees/tree-02/out/debug");
+    assert!(!profile.join("incremental").exists());
+    assert!(profile.join("deps/app-0a0a").exists());
     assert_eq!(state(&trees, "tree-02"), "leased");
 }

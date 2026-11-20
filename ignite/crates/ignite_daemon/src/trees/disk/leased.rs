@@ -9,10 +9,13 @@
 //! So the disk loop also sweeps a leased tree whenever nothing runs in it: no verb was asked
 //! from it, no process has its working directory or executable inside it, and the build manager
 //! agreed to start no build there until the sweep ends ([`Builds::pause`]). It deletes replaced
-//! builds and stale object files there as in a free tree, and when the trees are still over
-//! their limit with no free tree left to clear, the whole build directories of the idle leased
-//! trees holding the most bytes of their own. The tree's next command then builds from scratch,
-//! which is slower than an incremental build but keeps the disk from filling.
+//! builds and stale object files there as in a free tree. When the trees are still over their
+//! limit with no free tree left to clear, it deletes the idle leased trees' incremental caches
+//! (`<target>/<profile>/incremental`, 39 of tree-05's 101 GB in `rust/target/debug`), which
+//! costs only a slower next compile of the crates the session changed. Only if that is not
+//! enough does it clear the whole build directories of the idle leased trees holding the most
+//! bytes of their own. The tree's next command then builds from scratch, which is slower than an
+//! incremental build but keeps the disk from filling.
 //!
 //! [`Builds::pause`]: ignite_core::traits::Builds::pause
 
@@ -25,7 +28,12 @@ use ignite_os::occupants::Occupants as _;
 use ignite_store::local::{rows, trees as store};
 
 use super::super::{Trees, store_error};
-use super::{DiskReport, OWN_BYTES, Space, id_of, remove};
+use super::{DiskReport, OWN_BYTES, Space, id_of, profile_dirs, remove};
+
+/// The folder of rustc's incremental caches in each profile directory of a Cargo target
+/// directory. Cargo rebuilds what is missing from it at the next compile, so it can be deleted
+/// whenever no compile runs.
+const INCREMENTAL: &str = "incremental";
 
 /// A leased tree whose builds the build manager holds back until this is dropped.
 pub(super) struct Paused<'a> {
@@ -60,7 +68,7 @@ impl Trees {
     /// [`Builds::pause`]: ignite_core::traits::Builds::pause
     pub(super) fn pause_idle(&self, id: &TreeId) -> Option<Paused<'_>> {
         let path = self.inner.config.path(id);
-        if super::super::Seeding::involves(&path, id)
+        if super::super::Seeding::involves(&path)
             || !self.inner.steps.in_tree(id, &path).is_empty()
             || !self.inner.builds.pause(id)
         {
@@ -93,6 +101,32 @@ impl Trees {
             }
         }
         Ok(())
+    }
+
+    /// Deletes the incremental caches of every idle leased tree that has any, and returns the
+    /// trees it deleted them from.
+    pub(super) fn drop_incremental(&self) -> Result<Vec<TreeId>> {
+        let mut dropped = Vec::new();
+        for row in self.leased_rows()? {
+            let id = id_of(&row)?;
+            let Some(paused) = self.pause_idle(&id) else {
+                continue;
+            };
+            let mut any = false;
+            for dir in self.inner.config.keep.get().iter() {
+                for profile in profile_dirs(&paused.path.join(dir)) {
+                    let caches = profile.join(INCREMENTAL);
+                    if caches.is_dir() {
+                        remove(&caches);
+                        any = true;
+                    }
+                }
+            }
+            if any {
+                dropped.push(id);
+            }
+        }
+        Ok(dropped)
     }
 
     /// Deletes the whole build directories of idle leased trees, those holding the most bytes of

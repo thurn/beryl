@@ -121,13 +121,21 @@ impl Seeding {
         seeding().iter().any(|m| m.path == path)
     }
 
-    /// Whether the tree `tree` at `path` is being seeded or is the donor of a seed now. The disk
-    /// loop leaves such a tree alone even while no command runs in it: deleting its build
+    /// Whether the tree at `path` is being seeded or is the donor of a seed now. The disk loop
+    /// leaves such a tree alone even while no command runs in it: deleting its build
     /// directories would delete the copy, or what is being copied.
-    pub(in crate::trees) fn involves(path: &Path, tree: &TreeId) -> bool {
-        seeding()
-            .iter()
-            .any(|m| m.path == path || m.donor.as_ref() == Some(tree))
+    ///
+    /// A donor is a sibling of the tree it seeds, and is matched by its path. Matching the
+    /// donor's ID alone took any tree of that name in another tree directory for a donor, which
+    /// made the disk-loop tests fail now and then while another test seeded from its own tree of
+    /// the same name.
+    pub(in crate::trees) fn involves(path: &Path) -> bool {
+        seeding().iter().any(|m| {
+            m.path == path
+                || m.donor
+                    .as_ref()
+                    .is_some_and(|donor| m.path.with_file_name(donor.as_str()) == path)
+        })
     }
 }
 

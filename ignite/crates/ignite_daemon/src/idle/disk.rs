@@ -72,6 +72,7 @@ impl Idle {
         };
         if !report.superseded.is_empty()
             || !report.cleared.is_empty()
+            || !report.incremental.is_empty()
             || !report.reclaimed.is_empty()
             || report.objects > 0
         {
@@ -85,12 +86,15 @@ impl Idle {
             };
             eprintln!(
                 "ignite: trees held under their disk limit: deleted {} stale object files \
-                 ({:.1} GB), {} replaced builds, and the build directories of {} free trees \
-                 ({}) and {} idle leased trees ({}), freeing {:.1} GB more ({:.1} GB to {:.1} GB \
+                 ({:.1} GB), {} replaced builds, the incremental caches of {} idle leased trees \
+                 ({}), and the build directories of {} free trees ({}) and {} idle leased trees \
+                 ({}), freeing {:.1} GB more ({:.1} GB to {:.1} GB \
                  of {})",
                 report.objects,
                 gb(report.object_bytes),
                 report.superseded.len(),
+                report.incremental.len(),
+                names(&report.incremental),
                 report.cleared.len(),
                 names(&report.cleared),
                 report.reclaimed.len(),

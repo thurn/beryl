@@ -1073,10 +1073,13 @@ Rules for trees:
   Free trees are swept, and so are leased trees while nothing runs in them: no
   verb was asked from the tree, no process has its working directory or
   executable inside it, and the build manager holds back any build there until
-  the sweep ends. A tree running a command keeps its build directories. On
-  2026-11-20 the trees held 1,800 GB under a 250 GB limit with nearly every tree
-  leased, and the disk filled because only free trees were swept. The daemon
-  logs what it deleted and how much it freed.
+  the sweep ends. A tree running a command keeps its build directories. With no
+  free tree left to clear, idle leased trees first lose their incremental caches
+  (`<target>/<profile>/incremental`), which costs only a slower next compile,
+  and only then, largest first, their whole build directories. On 2026-11-20 the
+  trees held 1,800 GB under a 250 GB limit with nearly every tree leased, and
+  the disk filled because only free trees were swept. The daemon logs what it
+  deleted and how much it freed.
 - Lowering `ticket_trees` or `landing_trees` removes the trees above the new
   count: the disk loop deletes each one's worktree, build directories and row
   once it is free. A session that held one keeps working in it until it releases

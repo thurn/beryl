@@ -13,8 +13,9 @@
 //!
 //! Free trees are marked `resetting` while their files are deleted, so no lease can take one half
 //! swept, and each row is put back as it was afterwards, so the order of last use survives the
-//! sweep. Leased trees are swept too while nothing runs in them, and cleared whole, largest
-//! first, once no free tree is left to clear (`disk/leased.rs`).
+//! sweep. Leased trees are swept too while nothing runs in them, and once no free tree is left to
+//! clear, lose their incremental caches and then, largest first, their whole build directories
+//! (`disk/leased.rs`).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -63,6 +64,8 @@ pub struct DiskReport {
     pub superseded: Vec<PathBuf>,
     /// Free trees whose build directories were deleted whole.
     pub cleared: Vec<TreeId>,
+    /// Leased trees, idle at the time, whose incremental caches were deleted.
+    pub incremental: Vec<TreeId>,
     /// Leased trees, idle at the time, whose build directories were deleted whole.
     pub reclaimed: Vec<TreeId>,
     /// Object files that newer compiles of the same codegen unit replaced, deleted before the
@@ -100,9 +103,10 @@ impl Trees {
     /// own can go instead. The second pass clears any free tree whose bytes would be freed if
     /// every free tree went, which takes the clones that only free trees share.
     ///
-    /// Leased trees that run nothing are swept of replaced builds as well, and when the free
-    /// trees are all cleared and the trees are still over the limit, the idle leased trees
-    /// holding the most bytes of their own are cleared whole (`disk/leased.rs`).
+    /// Leased trees that run nothing are swept of replaced builds as well. When the free trees
+    /// are all cleared and the trees are still over the limit, the idle leased trees lose their
+    /// incremental caches, and if the trees are over it still, those holding the most bytes of
+    /// their own are cleared whole (`disk/leased.rs`).
     pub fn hold_disk(&self, short: u64) -> Result<DiskReport> {
         let mut report = DiskReport::default();
         let mut objects = objects::Swept::default();
@@ -166,6 +170,13 @@ impl Trees {
             }
         }
         if report.after > limit {
+            report.incremental = self.drop_incremental()?;
+            if !report.incremental.is_empty() {
+                space = self.measure();
+                report.after = space.total();
+            }
+        }
+        if report.after > limit {
             self.reclaim_leased(&mut space, limit, &mut report)?;
         }
         if !report.cleared.is_empty() || !report.reclaimed.is_empty() {
@@ -195,8 +206,8 @@ impl Trees {
     /// measuring the trees first. Deletes the whole build directories of free trees, used
     /// longest ago first, and reads the disk's free space with `free` after each one, stopping
     /// once it reaches `floor` or cannot be read. With no free tree left, it deletes the stale
-    /// object files of the leased trees that run nothing, and then their whole build
-    /// directories, leased longest ago first (`disk/leased.rs`).
+    /// object files and incremental caches of the leased trees that run nothing, and then their
+    /// whole build directories, leased longest ago first (`disk/leased.rs`).
     ///
     /// [`Trees::hold_disk`] measures every tree in full twice before it clears any, which took
     /// over half an hour per measurement on 1.6 TB of build directories under load. The daemon
@@ -240,6 +251,9 @@ impl Trees {
             self.each_idle_leased(|dir| objects += objects::sweep_objects(dir))?;
             report.objects = objects.files;
             report.object_bytes = objects.bytes;
+        }
+        if low() {
+            report.incremental = self.drop_incremental()?;
         }
         for row in self.leased_rows()? {
             if !low() {
