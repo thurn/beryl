@@ -10,8 +10,8 @@ use crate::element::Overflow;
 use crate::frame::ElementId;
 
 impl Layer {
-    /// The innermost element at `point` that scrolls and has content past its box, if the
-    /// screen is `open`.
+    /// The innermost element at `point` that scrolls and has content past its box, leaving out
+    /// what waits for the table (`Element::waits`) unless the layer is `open`.
     #[must_use]
     pub fn scroller_at(&self, point: Vec2, open: bool) -> Option<ElementId> {
         self.hit(point, open, |node, _| {

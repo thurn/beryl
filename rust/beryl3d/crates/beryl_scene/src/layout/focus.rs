@@ -37,8 +37,8 @@ impl Layer {
         }
     }
 
-    /// The innermost element at `point` that takes the focus when pressed, if the screen is
-    /// `open`.
+    /// The innermost element at `point` that takes the focus when pressed, leaving out what
+    /// waits for the table (`Element::waits`) unless the layer is `open`.
     #[must_use]
     pub fn focusable_at(&self, point: Vec2, open: bool) -> Option<ElementId> {
         self.hit(point, open, |node, _| node.element.focus.then_some(node.id))

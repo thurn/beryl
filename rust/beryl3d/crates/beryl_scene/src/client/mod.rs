@@ -159,7 +159,7 @@ pub struct Client {
     /// as the view arrives, because layout runs in `handle`, but it opens only once that view's
     /// script and every script before it have played out (`Show::settled`), as the web
     /// interface's prompt opens when its view has played out. Set by each `frame`, so a press
-    /// reaches only a bar the last frame drew.
+    /// reaches only a bar the last frame drew. The bar waits for it (`Element::waits`).
     open: bool,
     /// What the primary pointer is doing since it went down (`gesture`), and the screen and
     /// sheet the flat layer last showed, a change of which ends it.
@@ -478,6 +478,7 @@ impl Client {
         } else {
             Some(self.show.faces())
         };
+        // While scripts play only what waits for the table (`Element::waits`) is left out.
         (self.layer).write_with(&mut builder, self.show.table().camera(), self.open, faces);
         builder.finish();
         self.placed_let_go();

@@ -38,6 +38,8 @@ pub(super) struct Look<'a> {
     faces: Option<&'a Faces>,
     /// The filter functions of it and the elements over it (`Style::filter`).
     pub(super) filters: Chain,
+    /// Whether what waits for the table to settle is drawn (`Element::waits`).
+    open: bool,
 }
 
 /// Whether `element`, drawn as `look` in `rect`, takes a press. An element scrolled out of its
@@ -51,9 +53,10 @@ fn takes_press(element: &Element, look: &Look<'_>, rect: Rect) -> bool {
 
 impl Layer {
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
-    /// the floats drawn under the screen (`FloatId::under_screen`), the screen if it is `open`,
-    /// then every other float, whether the screen is open or not, then the screen's children
-    /// that filter what is drawn under them (`over_floats`).
+    /// the floats drawn under the screen (`FloatId::under_screen`), the screen, leaving out what
+    /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then every
+    /// other float, then the screen's children that filter what is drawn under them
+    /// (`over_floats`).
     pub fn write(&self, builder: &mut FrameBuilder, camera: &Camera, open: bool) {
         self.write_with(builder, camera, open, None);
     }
@@ -76,6 +79,7 @@ impl Layer {
                 passes: false,
                 faces,
                 filters: Chain::default(),
+                open,
             };
             self.write_node(&float.node, u32::MAX, true, look, builder, camera);
         };
@@ -84,7 +88,7 @@ impl Layer {
             write_float(float, builder);
         }
         let mut screen = None;
-        if open && let Some(node) = &self.screen {
+        if let Some(node) = &self.screen {
             // An anchored screen stands at its corner, and is not drawn while that is unknown.
             let corner = match node.element.anchor {
                 Some(_) => node.corner(),
@@ -99,6 +103,7 @@ impl Layer {
                     passes: false,
                     faces,
                     filters: Chain::default(),
+                    open,
                 };
                 screen = self
                     .write_node(node, u32::MAX, true, look, builder, camera)
@@ -111,7 +116,8 @@ impl Layer {
         let Some((node, index)) = screen else {
             return;
         };
-        for child in node.children.iter().filter(|child| over_floats(child)) {
+        let shown = |child: &&Node| over_floats(child) && (open || !child.element.waits);
+        for child in node.children.iter().filter(shown) {
             let Some(point) = child.corner() else {
                 continue;
             };
@@ -124,6 +130,7 @@ impl Layer {
                 passes: node.element.style.passes,
                 faces,
                 filters: Chain::default().inner(own_filter(&node.element)),
+                open,
             };
             self.write_node(child, index, false, look, builder, camera);
         }
@@ -155,7 +162,7 @@ impl Layer {
         builder: &mut FrameBuilder,
         camera: &Camera,
     ) -> Option<u32> {
-        if node.element.style.display == Display::None {
+        if node.element.style.display == Display::None || (node.element.waits && !look.open) {
             return None;
         }
         builder.visit();

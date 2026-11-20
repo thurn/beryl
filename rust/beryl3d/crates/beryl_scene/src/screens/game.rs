@@ -18,10 +18,9 @@ use crate::table::phone_bands;
 /// flat layer; with no prompt open, it is an empty region named "game".
 #[must_use]
 pub fn game(input: &ScreenIn) -> Element {
-    let prompt = input
-        .prompt
-        .and_then(|prompt| prompts::screen(prompt, input))
-        .or_else(|| prompts::waiting(input));
+    let prompt = waiting(input);
+    // The orbs, the steps and the log stay up while scripts play, as the web interface's
+    // `Chrome` does; only what waits for the table (`Element::waits`) is held back.
     let pieces: Vec<Element> = [
         players::players(input).filter(|_| !opening::shown(input)),
         // The opening's backdrop covers the stops, as the web's overlay does.
@@ -30,12 +29,12 @@ pub fn game(input: &ScreenIn) -> Element {
         log::log(input),
         viewer::viewer(input),
         // The result blurs everything drawn before it, the floats too (`Style::backdrop`).
-        game_over::game_over(input),
+        game_over::game_over(input).map(Element::waits),
     ]
     .into_iter()
     .flatten()
     .collect();
-    let opening = opening::opening(input);
+    let opening = opening::opening(input).map(Element::waits);
     if pieces.is_empty() && opening.is_none() {
         return prompt.unwrap_or_else(|| row().name("game"));
     }
@@ -50,6 +49,16 @@ pub fn game(input: &ScreenIn) -> Element {
         .children(pieces)
 }
 
+/// The open prompt, or what the screen shows while the opponent decides, waiting for the table
+/// to settle (`Element::waits`): the web interface's prompt opens once its view has played out.
+fn waiting(input: &ScreenIn) -> Option<Element> {
+    input
+        .prompt
+        .and_then(|prompt| prompts::screen(prompt, input))
+        .or_else(|| prompts::waiting(input))
+        .map(Element::waits)
+}
+
 /// What the flat layer shows over a game on the phone layout (docs/ui-conventions.md, "The
 /// phone"), as the web interface's `PhoneStageBoard` composes the desktop's pieces for a phone:
 /// both orbs centred in their strips, the menu button at the end of the opponent's strip, the
@@ -61,10 +70,7 @@ pub fn game(input: &ScreenIn) -> Element {
 pub fn game_phone(input: &ScreenIn) -> Element {
     let bands = phone_bands(input.window).unwrap_or_default();
     let opening = opening::shown(input);
-    let prompt = input
-        .prompt
-        .and_then(|prompt| prompts::screen(prompt, input))
-        .or_else(|| prompts::waiting(input));
+    let prompt = waiting(input);
     let middle = input
         .view
         .filter(|_| !opening)
@@ -92,13 +98,13 @@ pub fn game_phone(input: &ScreenIn) -> Element {
     // everything else, which it blurs (`Style::backdrop`).
     let mut screen = holder()
         .name("game")
-        .children(opening::opening(input))
+        .children(opening::opening(input).map(Element::waits))
         .children(middle_under)
         .children(prompt)
         .children(furniture.into_iter().flatten().flatten())
         .children(
             [
-                game_over::game_over(input),
+                game_over::game_over(input).map(Element::waits),
                 phone::log_sheet(input, &bands),
                 viewer::viewer(input),
             ]

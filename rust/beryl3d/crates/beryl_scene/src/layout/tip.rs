@@ -34,7 +34,7 @@ pub(super) struct Resting {
 
 impl Layer {
     /// Takes where the pointer is, or `None` once it has left the window or a finger has
-    /// lifted; the screen's elements count only while it is `open`. A menu row it comes onto is highlighted
+    /// lifted; the screen's elements that wait for the table (`Element::waits`) count only while it is `open`. A menu row it comes onto is highlighted
     /// (`menu`), and the tooltip of the element it comes onto starts to wait; the next frame
     /// starts the wait's clock (`tick`).
     pub fn hover(&mut self, point: Option<Vec2>, open: bool) {

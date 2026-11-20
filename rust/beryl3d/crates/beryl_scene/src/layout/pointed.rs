@@ -19,7 +19,7 @@ impl Layer {
         self.pressed = pressed;
     }
 
-    /// The enabled slider at `point`, if the screen is `open`: its id, its press and its box
+    /// The enabled slider at `point`, leaving out what waits for the table unless the layer is `open`: its id, its press and its box
     /// on the window.
     #[must_use]
     pub fn slider_at(&self, point: Vec2, open: bool) -> Option<(ElementId, Press, Rect)> {

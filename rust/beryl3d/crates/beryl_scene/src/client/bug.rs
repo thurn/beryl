@@ -38,9 +38,9 @@ pub(super) struct Bug {
     from: Option<Vec2>,
     /// Whether the whole window was asked for while the picture was being taken.
     whole: bool,
-    /// Whether the screen was drawn when the report froze the table: the flat layer's screen
-    /// is drawn only once the table has settled (`Client::open`), and a frozen table never
-    /// settles.
+    /// Whether the prompt was drawn when the report froze the table: what waits for the table
+    /// (`Element::waits`) is drawn only once it has settled (`Client::open`), and a frozen
+    /// table never settles.
     screen_open: bool,
 }
 

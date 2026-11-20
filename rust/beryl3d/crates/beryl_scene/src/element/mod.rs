@@ -261,6 +261,11 @@ pub struct Element {
     /// Whether it is the button a prompt or screen expects to be pressed (`widgets::primary`).
     /// Its resolved element has the `PRIMARY` state, so that the tree names it.
     pub primary: bool,
+    /// Whether it and everything in it wait for the table to settle: the flat layer neither
+    /// draws them nor lets them take a press or the pointer until every script given so far has
+    /// played out (the layer's `open`). The open prompt waits so, as the web interface's prompt
+    /// opens when its view has played out, while the rest of the screen stays up.
+    pub waits: bool,
     /// Where it stands if it is placed at a point of the window or on a scene object rather
     /// than in its parent's layout. It is laid out at its content's size (`layout::anchor`).
     pub anchor: Option<Anchor>,
@@ -289,6 +294,7 @@ impl Element {
             focus: false,
             selected: false,
             primary: false,
+            waits: false,
             anchor: None,
             shows: None,
             shortcuts: Shortcuts::default(),
@@ -310,6 +316,7 @@ impl Element {
             && self.focus == other.focus
             && self.selected == other.selected
             && self.primary == other.primary
+            && self.waits == other.waits
             && self.anchor == other.anchor
             && self.shows == other.shows
             && self.shortcuts == other.shortcuts
@@ -331,6 +338,13 @@ impl Element {
     #[must_use]
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    /// Makes it wait for the table to settle (`Element::waits`).
+    #[must_use]
+    pub fn waits(mut self) -> Self {
+        self.waits = true;
         self
     }
 

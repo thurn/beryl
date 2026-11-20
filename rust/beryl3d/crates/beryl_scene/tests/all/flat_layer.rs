@@ -538,18 +538,20 @@ fn a_prompt_opens_only_once_its_view_has_played_out() {
     view.script = Some(script);
     client.handle(Input::Update(update));
 
-    // While the card flies, the bar is neither drawn nor pressed. The life totals, which are
-    // floats, are drawn, and so is the corner of the gear, the bug button and undo, another float.
+    // While the card flies, the bar is neither drawn nor pressed. The rest of the screen stays
+    // up, as the web interface's `Chrome` does: the players' orbs and the log's button show.
     let frame = client.frame(MS);
-    let corner = ["corner", "Settings", "Report bug", "Undo"];
+    let named = |name: &str| {
+        (frame.resolved.iter())
+            .any(|element| element.place == Place::Layer && frame.name(element.name) == name)
+    };
     assert!(
-        !frame
-            .resolved
-            .iter()
-            .any(|element| element.place == Place::Layer
-                && !matches!(element.role, Role::Player | Role::Text)
-                && !corner.contains(&frame.name(element.name))),
+        !named("Cancel") && !named("Pay {1}{U}"),
         "no prompt bar while the draw plays"
+    );
+    assert!(
+        named("your orb") && named("Show log"),
+        "the orbs and the log stay up while the draw plays"
     );
     let open = {
         let mut later = self::client();
@@ -589,8 +591,8 @@ fn centred_at(point: Vec2) -> FloatLook {
     }
 }
 
-/// `layer` written into a new frame, with the prompt bar drawn if `open`, and the layout work
-/// done since the last frame.
+/// `layer` written into a new frame, with what waits for the table (`Element::waits`) drawn if
+/// `open`, and the layout work done since the last frame.
 pub(super) fn write_layer(layer: &mut Layer, open: bool) -> Frame {
     let mut frame = Frame::with_capacity(64, 256, 1024);
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
@@ -690,7 +692,11 @@ fn a_float_leaves_the_prompt_bar_where_it_was() {
 #[test]
 fn a_float_is_drawn_while_no_prompt_is_open() {
     let mut layer = Layer::new();
-    layer.show(Some(row().name("prompt").child(text("Pay {1}{U}"))));
+    layer.show(Some(
+        row()
+            .name("screen")
+            .child(row().name("prompt").child(text("Pay {1}{U}")).waits()),
+    ));
     layer.float(LIFE, Some(text("20")));
     layer.set_float_look(
         LIFE,
@@ -710,13 +716,15 @@ fn a_float_is_drawn_while_no_prompt_is_open() {
             .any(|element| frame.name(element.name) == "prompt"),
         "the closed prompt bar is not drawn"
     );
-    // The float's top element is drawn on a panel, faded by its look.
+    find(&frame, Role::Region, "screen");
+    // The float's top element is drawn on a panel, faded by its look. The screen's top element,
+    // drawn first, has a panel of its own at full alpha.
     let layer_draws = &frame.draws[frame.layer as usize..];
     let panels: Vec<_> = (layer_draws.iter())
         .filter(|draw| draw.material == Material::Panel as u8)
         .collect();
-    assert_eq!(panels.len(), 1);
-    assert_eq!(panels[0].tint[3], 0x70, "half of the panel's alpha");
+    assert_eq!(panels.len(), 2);
+    assert_eq!(panels[1].tint[3], 0x70, "half of the panel's alpha");
 }
 
 #[test]

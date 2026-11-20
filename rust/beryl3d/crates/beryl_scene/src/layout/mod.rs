@@ -280,7 +280,8 @@ impl Layer {
     /// The innermost element at `point` that a press means something on, with its press and
     /// whether it is enabled. Elements are searched the last drawn first: the floats drawn over
     /// the screen, then the screen, then the floats drawn under it (`FloatId::under_screen`).
-    /// The screen is searched only while it is `open`, that is drawn.
+    /// What waits for the table to settle (`Element::waits`) is searched only while the layer
+    /// is `open`, that is while it is drawn.
     #[must_use]
     pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Press, bool)> {
         self.hit(point, open, |node, _| {
@@ -290,8 +291,9 @@ impl Layer {
     }
 
     /// The first value `want` gives for an element at `point`, asking the innermost first:
-    /// the floats drawn over the screen, the last drawn first, then the screen while it is
-    /// `open`, then the floats drawn under it. While the screen shows
+    /// the floats drawn over the screen, the last drawn first, then the screen, without what
+    /// waits for the table to settle (`Element::waits`) unless the layer is `open`, then the
+    /// floats drawn under it. While the screen shows
     /// a child drawn over the floats (`write::over_floats`), only that child is asked. An element is at
     /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
     /// it is in, and inside the box of every element it is in that clips or scrolls. As in CSS,
@@ -310,11 +312,12 @@ impl Layer {
         fn find<T>(
             node: &Node,
             point: glam::Vec2,
-            origin: glam::Vec2,
+            (origin, open): (glam::Vec2, bool),
             reach: bool,
             want: &impl Fn(&Node, glam::Vec2) -> Option<T>,
         ) -> Option<T> {
-            if node.element.style.display == element::Display::None {
+            if node.element.style.display == element::Display::None || (node.element.waits && !open)
+            {
                 return None;
             }
             let here = reach && contains(node.rect, point - origin - node.offset());
@@ -324,33 +327,33 @@ impl Layer {
             (node.children.iter().rev())
                 .find_map(|child| match child.element.anchor {
                     // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-                    Some(_) => find(child, point, child.corner()?, true, want),
-                    None => find(child, point, inside, reach_inside, want),
+                    Some(_) => find(child, point, (child.corner()?, open), true, want),
+                    None => find(child, point, (inside, open), reach_inside, want),
                 })
                 .or_else(|| here.then(|| want(node, origin)).flatten())
         }
         // The screen's children drawn over the floats (`write::over_floats`) filter what is under
         // them, and are modal: while one is shown, nothing else is searched.
-        let modal = (self.screen.as_ref().filter(|_| open))
-            .filter(|node| node.children.iter().any(write::over_floats));
+        let modal_child =
+            |child: &&Node| write::over_floats(child) && (open || !child.element.waits);
+        let modal = (self.screen.as_ref())
+            .filter(|node| node.children.iter().any(|child| modal_child(&child)));
         if let Some(node) = modal {
             return (node.children.iter().rev())
-                .filter(|child| write::over_floats(child))
-                .find_map(|child| find(child, point, child.corner()?, true, &want));
+                .filter(modal_child)
+                .find_map(|child| find(child, point, (child.corner()?, open), true, &want));
         }
         let floats = |under: bool| {
             (self.floats.iter().rev())
                 .filter(move |float| float.id.under_screen() == under)
-                .find_map(|float| find(&float.node, point, float.corner(), true, &want))
+                .find_map(|float| find(&float.node, point, (float.corner(), open), true, &want))
         };
         floats(false)
             .or_else(|| {
-                (self.screen.as_ref())
-                    .filter(|_| open)
-                    .and_then(|node| match node.element.anchor {
-                        Some(_) => find(node, point, node.corner()?, true, &want),
-                        None => find(node, point, glam::Vec2::ZERO, true, &want),
-                    })
+                (self.screen.as_ref()).and_then(|node| match node.element.anchor {
+                    Some(_) => find(node, point, (node.corner()?, open), true, &want),
+                    None => find(node, point, (glam::Vec2::ZERO, open), true, &want),
+                })
             })
             .or_else(|| floats(true))
     }
