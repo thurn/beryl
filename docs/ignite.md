@@ -671,8 +671,9 @@ How the executable is installed and kept current:
   it, before it lands, and never runs against sources it does not match. The
   daemon keeps its own copy for what has no tree (which directories a tree reset
   keeps, what is prebuilt and the exploration families its idle loop chooses
-  from), and reads it again each time it fast-forwards the main checkout. Before 2026-11-19 every manifest edit moved the release and
-  restarted every daemon, which ended the verbs running on them.
+  from), and reads it again each time it fast-forwards the main checkout. Before
+  2026-11-19 every manifest edit moved the release and restarted every daemon,
+  which ended the verbs running on them.
 - Whether the release moves is decided before the push. The gate's outcomes
   count when it ran every check of the release family; checks of other families
   that it left to tip verification do not matter. Otherwise the landing runs the
@@ -1045,8 +1046,8 @@ Rules for trees:
   start there and read its instruction files, and nobody works in it.
 - The hub reads its routing facts (each machine's system, the apps and
   `[pool] default_owner`) from the main checkout's `ignite.toml` at start and
-  again every 30 seconds, so a change to routing takes effect within a minute
-  of landing without restarting the hub.
+  again every 30 seconds, so a change to routing takes effect within a minute of
+  landing without restarting the hub.
 
 ### Releasing work
 
