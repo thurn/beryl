@@ -255,6 +255,15 @@ crate::tables! {
         at: String,
     }
 
+    /// A verdict, by tree, base and gate settings, as the machine that passed the gate sent it.
+    Verdict = "verdicts" {
+        tree: String,
+        base: String,
+        settings: String,
+        verdict: String,
+        passed_at: String,
+    }
+
     /// The check costs a tip round cuts one family's batches by, frozen at the first request.
     TipCostRow = "tip_costs" {
         commit_sha: String,

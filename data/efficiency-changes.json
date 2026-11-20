@@ -639,5 +639,10 @@
     "label": "The daemon ends a verb process that was asked to stop by any path and still runs 60 seconds later, so a hung check no longer holds its tree and a core for hours",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The hub stores and looks up verdicts (one per tree, base and gate settings, kept 30 days), so a change that passed the gate on one machine can later be landed from any machine without running the gate again",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

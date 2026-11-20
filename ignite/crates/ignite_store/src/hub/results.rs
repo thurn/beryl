@@ -121,13 +121,15 @@ pub fn store(conn: &mut Connection, results: &[NewResult], now: Timestamp) -> Re
     Ok(())
 }
 
-/// Deletes entries nobody has looked up for 30 days; returns how many.
+/// Deletes entries nobody has looked up for 30 days, and the verdicts that passed more than 30
+/// days ago ([`super::verdicts::prune`]); returns how many entries it deleted.
 pub fn prune(conn: &Connection, now: Timestamp) -> Result<u64> {
     let cutoff = now.plus_seconds(-KEEP_DAYS * 86_400.0);
     let deleted = conn.execute(
         "DELETE FROM results WHERE last_lookup < ?1",
         params![cutoff.to_string()],
     )?;
+    super::verdicts::prune(conn, now)?;
     Ok(deleted as u64)
 }
 

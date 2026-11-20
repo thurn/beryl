@@ -659,10 +659,15 @@ How the executable is installed and kept current:
   default; it must differ from `staging` and `master`). The hub's
   `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted` and git's
   `Git::replay`, `revert`, `merge_base`, `committed_at` and `tree_id` are
-  declared, with fakes, and the real clients answer that they cannot do them
-  yet. A verdict is keyed by the tree ID, the merge base with the tip and
-  `verdict_settings`, a digest of the `[gate]` section that holds nothing about
-  Ignite's own release.
+  declared, with fakes. The hub stores and looks up verdicts
+  (`POST /verdicts/store`, which needs a registered machine's token, and
+  `POST /verdicts/lookup`, which replies with the verdict or `null`) in its
+  `verdicts` table, and `Hub::verdict` and `Hub::store_verdict` of the real
+  client call them; nothing calls those yet, and the other methods still answer
+  that they cannot do them. A verdict is keyed by the tree ID, the merge base
+  with the tip and `verdict_settings`, a digest of the `[gate]` section that
+  holds nothing about Ignite's own release. The hub deletes verdicts that passed
+  more than 30 days ago where it prunes the result cache.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it, or the express commands have (see

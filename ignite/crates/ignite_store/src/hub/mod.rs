@@ -28,6 +28,7 @@ pub mod tip_misses;
 pub mod tip_rounds;
 pub mod tips;
 pub mod tokens;
+pub mod verdicts;
 
 use std::path::Path;
 
@@ -137,6 +138,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 20,
         sql: include_str!("workers_state_since.sql"),
+        code: None,
+    },
+    Migration {
+        version: 21,
+        sql: include_str!("verdicts.sql"),
         code: None,
     },
 ];

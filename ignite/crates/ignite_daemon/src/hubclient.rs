@@ -29,7 +29,8 @@ use ignite_core::protocol::hub::{
     MAX_BODY_BYTES, MachineFree, MachineRegister, MachineRegistered, MetricsImport, NewResult,
     OpenRegression, OpenRegressions, Pause, Record, RecordBatch, RegressionFiled, RegressionReport,
     Release, ReportFiled, Reservation, ResultKey, SessionTitle, StoreRequest, StoredListing,
-    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled,
+    TicketBrief, TipClaim, TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
+    VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, Lease, LeaseBusy, LeaseOp,
@@ -575,6 +576,15 @@ impl Hub for HubClient {
         };
         let reply: ListingReply = self.post("/listings/lookup", &request)?;
         Ok(reply.listings)
+    }
+
+    fn verdict(&self, key: &VerdictKey) -> Result<Option<Verdict>> {
+        self.post("/verdicts/lookup", key)
+    }
+
+    fn store_verdict(&self, verdict: &Verdict) -> Result<()> {
+        let _: serde_json::Value = self.post("/verdicts/store", verdict)?;
+        Ok(())
     }
 
     fn store_listing(&self, listing: &StoredListing) -> Result<()> {

@@ -445,6 +445,48 @@ fn listings_are_looked_up_and_stored_by_family_and_hash() {
 }
 
 #[test]
+fn verdicts_are_looked_up_and_stored_by_their_routes() {
+    use ignite_core::protocol::hub::{Verdict, VerdictKey};
+    let key = VerdictKey {
+        tree: "tree".to_owned(),
+        base: "3a9e4c1".parse().unwrap(),
+        settings: "settings".to_owned(),
+    };
+    let verdict = Verdict {
+        key: key.clone(),
+        head: "4b0f5d2".parse().unwrap(),
+        machine: "host".to_owned(),
+        passed_at: Timestamp::EPOCH,
+        families: vec!["unit".to_owned()],
+        left_to_tip: 1,
+        always_not_run: Vec::new(),
+    };
+    let reply = serde_json::to_string(&verdict).unwrap();
+    let hub = FakeHttpHub::start(move |_, url, _| {
+        if url.ends_with("/verdicts/lookup") {
+            (200, reply.clone())
+        } else {
+            (200, r#"{"ok": true}"#.to_owned())
+        }
+    });
+    assert_eq!(hub.client().verdict(&key).unwrap(), Some(verdict.clone()));
+    hub.client().store_verdict(&verdict).unwrap();
+    let seen = hub.seen();
+    assert_eq!(seen[0].url, "/test/api/verdicts/lookup");
+    assert_eq!(
+        serde_json::from_str::<VerdictKey>(&seen[0].body).unwrap(),
+        key
+    );
+    assert_eq!(seen[1].url, "/test/api/verdicts/store");
+    assert_eq!(
+        serde_json::from_str::<Verdict>(&seen[1].body).unwrap(),
+        verdict
+    );
+    let none = FakeHttpHub::start(|_, _, _| (200, "null".to_owned()));
+    assert_eq!(none.client().verdict(&key).unwrap(), None);
+}
+
+#[test]
 fn tip_costs_rounds_the_last_round_and_rates_use_their_routes() {
     use ignite_core::tipround::{TipCostsRequest, TipRound};
     let hub = FakeHttpHub::start(|_, url, _| {

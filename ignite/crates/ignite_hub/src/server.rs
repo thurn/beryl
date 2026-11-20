@@ -434,6 +434,7 @@ fn api_route(conn: &mut Connection, request: &Request, private: bool, now: Times
         .or_else(|| routes::feed::handle(conn, request, private, now))
         .or_else(|| routes::checks::handle(conn, request, now))
         .or_else(|| routes::listings::handle(conn, request, now))
+        .or_else(|| routes::verdicts::handle(conn, request, now))
         .or_else(|| routes::tip_rounds::handle(conn, request, now))
         .or_else(|| routes::versions::handle(conn, request, now))
         .or_else(|| routes::check_state::handle(conn, request, now))
