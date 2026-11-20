@@ -52,8 +52,10 @@ impl Deliverer for FakeDeliverer {
 }
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = ignite_core::test_files::temp_dir()
-        .join(format!("ignite-clid-messages-{}-{name}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!(
+        "ignite-clid-messages-{}-{name}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -208,7 +210,10 @@ fn a_turn_that_printed_nothing_delivers_its_messages_again() {
         },
     );
     let events = app.read(&launcher.output(&result.output).unwrap());
-    assert_eq!(requeue_if_silent(&conn, &session(), 1, events.lines).unwrap(), 2);
+    assert_eq!(
+        requeue_if_silent(&conn, &session(), 1, events.lines).unwrap(),
+        2
+    );
     assert_eq!(pending(&conn, &session()).unwrap().texts, ["one", "two"]);
 
     // The next turn printed a line, so the worker saw its prompt and nothing comes back.
@@ -222,7 +227,10 @@ fn a_turn_that_printed_nothing_delivers_its_messages_again() {
     );
     assert_eq!(args.last().map(String::as_str), Some("one\n\ntwo"));
     let events = app.read(&launcher.output(&result.output).unwrap());
-    assert_eq!(requeue_if_silent(&conn, &session(), 2, events.lines).unwrap(), 0);
+    assert_eq!(
+        requeue_if_silent(&conn, &session(), 2, events.lines).unwrap(),
+        0
+    );
     assert!(pending(&conn, &session()).unwrap().texts.is_empty());
 }
 
@@ -238,7 +246,10 @@ fn now_ends_a_running_turn_and_the_next_prompt_holds_the_text() {
     assert_eq!(delivery, Delivery::TurnEnded(run.display().to_string()));
     assert_eq!(*deliverer.ended.borrow(), std::slice::from_ref(&run));
     // Asking again ends nothing more: the turn was already ended for the message.
-    assert_eq!(press(&conn, &deliverer, &session()).unwrap(), Delivery::Queued);
+    assert_eq!(
+        press(&conn, &deliverer, &session()).unwrap(),
+        Delivery::Queued
+    );
     assert_eq!(deliverer.ended.borrow().len(), 1);
 
     // The ended turn printed no result, so `decide` resumes with the interrupted text and the

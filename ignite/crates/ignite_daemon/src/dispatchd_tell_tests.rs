@@ -99,7 +99,11 @@ fn tell_now_ends_a_cli_workers_turn_and_a_plain_tell_waits() {
     let (fake, worker) = cli_holder(&rig);
     let reply = rig.tell(&["--now", "T.1", "Stop and release."]);
     assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
-    assert!(reply.text.contains("running turn ends now"), "{}", reply.text);
+    assert!(
+        reply.text.contains("running turn ends now"),
+        "{}",
+        reply.text
+    );
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
     let sent = fake.sent();
     assert_eq!(sent.len(), 1);
@@ -132,7 +136,10 @@ fn every_tell_from_a_justiciar_is_urgent_for_a_cli_worker() {
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
     let sent = fake.sent();
     assert_eq!(sent.len(), 1);
-    assert_eq!(sent[0].text, "Message about T.1: from local_j1: Release it.");
+    assert_eq!(
+        sent[0].text,
+        "Message about T.1: from local_j1: Release it."
+    );
     assert!(sent[0].urgent);
 }
 

@@ -119,7 +119,9 @@ fn tell_one(ctx: &Context, req: &Request, target: &str, text: &str, now: bool) -
     {
         return Ok(Reply::text(
             Exit::Usage,
-            format!("refused  `--now` works only for CLI workers, and {session} is a desktop session"),
+            format!(
+                "refused  `--now` works only for CLI workers, and {session} is a desktop session"
+            ),
         ));
     }
     let urgent = urgent(&ticket, now, from_justiciar(req, &tickets));
