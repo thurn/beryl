@@ -344,12 +344,16 @@ def peaks(found: Measured, window: tuple[int, int]) -> dict[str, dict[str, objec
             b3d.setdefault(lonely.effect, []).append(lonely.track)
     out: dict[str, dict[str, object]] = {}
     for name in sorted({*web, *b3d}):
-        seen = [
-            (sample.opacity, at, sample)
-            for track in web.get(name) or b3d.get(name, [])
-            for at, sample in enumerate(track)
-            if sample is not None and shown(sample)
-        ]
+        def on_window(side: list[tracks.Track]) -> list[tuple[float, int, tracks.Sample]]:
+            return [
+                (sample.opacity, at, sample)
+                for track in side
+                for at, sample in enumerate(track)
+                if sample is not None and shown(sample)
+            ]
+
+        # The web's element where it shows on the window, else Beryl 3D's.
+        seen = on_window(web.get(name, [])) or on_window(b3d.get(name, []))
         if not seen:
             continue
         _, at, sample = max(seen, key=lambda found: (found[0], -found[1]))
@@ -453,7 +457,7 @@ def effect_pixels(
     found = results.get(span.where(), {}).get("peaks")
     peak = found.get(span.name) if isinstance(found, dict) else None
     if not isinstance(peak, dict):
-        return "neither side draws it in its span"
+        return "neither side draws it on the window in its span"
     at = f"{round(float(str(peak['t_ms'])))}ms"
     box = peak["box"]
     assert isinstance(box, list)
