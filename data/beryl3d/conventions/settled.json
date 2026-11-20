@@ -14,7 +14,7 @@
         "press card \"Stock Up\" #8",
         "step 120ms"
       ],
-      "shows": "card \"Stock Up\" #8 hand.yours 700,491 126x175 interactive moving selected"
+      "shows": "card \"Stock Up\" #8 hand.yours 682,491 126x175 interactive moving selected"
     },
     "The kept opening hand": {
       "recording": "opening-keep",

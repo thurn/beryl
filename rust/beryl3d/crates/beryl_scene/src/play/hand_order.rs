@@ -12,6 +12,7 @@
 
 use beryl_protocol::prompt::{PlaceName, ShapeBody};
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerView, Status, ZoneName};
+use beryl_protocol::script::Act;
 
 use crate::frame::OBJECTS;
 
@@ -30,7 +31,7 @@ pub(super) struct HandOrder {
     /// The hand cards that arrive in the view being arranged.
     arriving: Vec<ObjectId>,
     /// The slots the view's script moves into a hand, in the order of the steps that first do.
-    moved: Vec<ObjectId>,
+    moved: Vec<Moved>,
 }
 
 impl HandOrder {
@@ -48,11 +49,14 @@ impl HandOrder {
     }
 
     /// Lists the hand cards of `view` in their order of arrival, and keeps that order for the
-    /// next view. A card that is in a hand now and was in none in the view before arrives now:
-    /// the cards that arrive in one view come last, in the order its script moves them into a
-    /// hand, and those it does not move in slot order. Only the hand cards change places in
-    /// `view.objects`, among the indexes they held. A manual table's view keeps its own order,
-    /// which the players set.
+    /// next view. A card arrives now when it is in a hand now and either was in none in the
+    /// view before or `view`'s script moves it into a hand from another zone, as a mulligan
+    /// shuffles a hand away and deals a new one that may hold some of the same cards. The web
+    /// interface's `arrived` (`ui/src/stage/table.ts`) likewise takes a card out of the order
+    /// when it leaves a hand and puts it last when it comes back. The cards that arrive in one
+    /// view come last, in the order its script moves them into a hand, and those it does not
+    /// move in slot order. Only the hand cards change places in `view.objects`, among the
+    /// indexes they held. A manual table's view keeps its own order, which the players set.
     pub(super) fn arrange(&mut self, view: &mut PlayerView) {
         if view.table.is_some() {
             self.turns.clear();
@@ -71,18 +75,27 @@ impl HandOrder {
         self.next.clear();
         self.next.resize(end, 0);
         self.arriving.clear();
+        moved_into_hand(view, &mut self.moved);
         for &index in &self.in_hand {
-            let slot = usize::from(view.objects[index].slot.0);
+            let object = &view.objects[index];
+            let slot = usize::from(object.slot.0);
             match self.turns.get(slot).copied() {
-                Some(turn) if turn > 0 => self.next[slot] = turn,
-                _ => self.arriving.push(view.objects[index].slot),
+                Some(turn)
+                    if turn > 0
+                        && !self
+                            .moved
+                            .iter()
+                            .any(|m| m.entered && m.slot == object.slot) =>
+                {
+                    self.next[slot] = turn;
+                }
+                _ => self.arriving.push(object.slot),
             }
         }
         if !self.arriving.is_empty() {
-            moved_into_hand(view, &mut self.moved);
             let moved = &self.moved;
             self.arriving.sort_by_key(|slot| {
-                let step = moved.iter().position(|moved| moved == slot);
+                let step = moved.iter().position(|moved| moved.slot == *slot);
                 (step.unwrap_or(usize::MAX), *slot)
             });
             for &slot in &self.arriving {
@@ -107,19 +120,40 @@ impl HandOrder {
     }
 }
 
+/// A slot that a view's script moves into a hand.
+#[derive(Debug)]
+struct Moved {
+    slot: ObjectId,
+    /// Whether a step of the script brings it into a hand from another zone.
+    entered: bool,
+}
+
 /// Fills `moved` with the slots `view`'s script moves into a hand, in the order of the steps
-/// that first do.
-fn moved_into_hand(view: &PlayerView, moved: &mut Vec<ObjectId>) {
+/// that first do, each marked when some step brings it from another zone.
+fn moved_into_hand(view: &PlayerView, moved: &mut Vec<Moved>) {
     moved.clear();
     let steps = (view.script.iter())
         .flat_map(|script| &script.beats)
         .flatten();
     for step in steps {
-        if let Some(object) = step.act.object()
-            && object.zone == ZoneName::Hand
-            && !moved.contains(&object.slot)
-        {
-            moved.push(object.slot);
+        let Some(object) = step.act.object() else {
+            continue;
+        };
+        if object.zone != ZoneName::Hand {
+            continue;
+        }
+        let entered = match &step.act {
+            Act::Fly { from, .. } | Act::Appear { from, .. } | Act::Vanish { from, .. } => {
+                *from != ZoneName::Hand
+            }
+            _ => false,
+        };
+        match moved.iter_mut().find(|m| m.slot == object.slot) {
+            Some(found) => found.entered |= entered,
+            None => moved.push(Moved {
+                slot: object.slot,
+                entered,
+            }),
         }
     }
 }
