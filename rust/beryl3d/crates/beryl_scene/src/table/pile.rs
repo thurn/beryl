@@ -5,8 +5,9 @@
 //!   drawn as cards, the second so that it shows while the top one leaves. The cards beneath
 //!   them keep their scene objects and resting poses but are not drawn (`Rest::visible` is
 //!   false), so that a card taken from the middle of a pile starts where it lay. In their
-//!   place one record of the card mesh, stood on its edge and scaled to their height, is the
-//!   side of the pile that faces the camera, in the color of card stock.
+//!   place at most fifteen flat records draw their edges as the web interface does: dark rims
+//!   with light lines, spread to the right of the viewer's piles and below the opponent's
+//!   (`write_side`).
 //! - Each pile that holds a card has one resolved element, `Role::Pile`, named as the web
 //!   interface's `pileName` names it ("Your library", "Opponent's exile"), whose corners are
 //!   its top card's. The client shows its count as a float beside it (`hud::piles`).
@@ -19,7 +20,7 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::place::{Placement, Rest, turn};
 use super::scene::Table;
-use super::{CARD_HEIGHT, Camera, LAYER, Layout};
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, Layout};
 use crate::frame::{
     Band, Draw, ElementId, FrameBuilder, NameRef, Place, REVEALED_FACE, Resolved, Role, StateBits,
 };
@@ -33,9 +34,20 @@ pub const PILE_IDS: u32 = REVEALED_FACE + (1 << 16);
 /// The zones a side has a pile for, in the order of their places in `Layout::piles`.
 const ZONES: [ZoneName; 3] = [ZoneName::Library, ZoneName::Graveyard, ZoneName::Exile];
 
-/// The color of the side of a pile: the light card stock the web interface draws the edges of
-/// a pile's cards in (`.pile-card-rim` in `ui/src/screens/styles/card-layer.css`).
-const EDGE_TINT: [u8; 4] = [163, 151, 135, 255];
+/// The colors of the edge of a card beneath a pile's top two, as the web interface's
+/// `.pile-card-rim` (`ui/src/screens/styles/card-layer.css`) paints it: a dark fill, and a light
+/// line of card stock on the side toward the table's middle.
+const RIM_FILL: [u8; 4] = [0x21, 0x1b, 0x18, 255];
+const RIM_LINE: [u8; 4] = [0xa3, 0x97, 0x87, 255];
+/// The color of the opponent's rims' left edges, which face away from the light.
+const RIM_SHADE: [u8; 4] = [0x6b, 0x61, 0x55, 255];
+
+/// How many cards beneath a pile's top card each step a whole 1.25 stage pixels from the card
+/// above, before the deeper ones close up (`pileThickness` in `ui/src/game/pileLook.ts`).
+const SPREAD_CARDS: usize = 12;
+
+/// The deepest card beneath a pile's top card that the web interface draws.
+const DEEPEST: usize = 63;
 
 /// One pile as the table shows it at rest.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -224,8 +236,8 @@ impl Table {
             else {
                 continue;
             };
-            if let Some(draw) = side_record(pile) {
-                builder.draw(Band::Opaque, draw);
+            if self.layout().phone.is_none() {
+                write_side(builder, self.camera(), pile, side);
             }
             // A pile writes no element over its top card while a prompt holds that card up in
             // its tray, or once it has left the pile: a press, and the checks that ask what a
@@ -271,26 +283,178 @@ impl Table {
     }
 }
 
-/// The side of `pile` that faces the camera, under its top two cards: the card mesh stood on
-/// its near edge and scaled to their height. None when the pile has no card under its top two.
-#[must_use]
-fn side_record(pile: &PileShown) -> Option<Draw> {
-    let under = pile.count.checked_sub(2).filter(|under| *under > 0)?;
+/// The web interface's `pileThickness` (`ui/src/game/pileLook.ts`): how far, in pixels of its
+/// 1600 by 900 stage, the card `depth` beneath a pile's top card lies from it. Each of the first
+/// `SPREAD_CARDS` steps 1.25 pixels, and the deeper ones close up.
+fn thickness(depth: f32) -> f32 {
+    #[expect(clippy::cast_precision_loss, reason = "a small constant")]
+    let spread = SPREAD_CARDS as f32;
+    1.25 * depth.min(spread) + 13.0 * depth / (depth + 45.0)
+}
+
+/// The web interface's `spread`: which way, on its stage, a layer `thickness` beneath `side`'s
+/// pile lies from the top card (y down). The viewer's piles spread right, the opponent's down
+/// and a little left.
+fn spread(side: Side, thickness: f32) -> Vec2 {
+    match side {
+        Side::You => Vec2::new(thickness, 0.0),
+        Side::Opponent => Vec2::new(-0.3 * thickness, 0.65 * thickness),
+    }
+}
+
+/// One side of a pile's cards whose edges show beneath its top card, in the table's space.
+struct Edge {
+    /// The way out of the card across the edge.
+    normal: Vec3,
+    /// The way along the edge.
+    along: Vec3,
+    /// Half the card's size across the edge and along it.
+    half_across: f32,
+    half_along: f32,
+    /// How wide the web's line along the edge is.
+    line: f32,
+    tint: [u8; 4],
+    /// Whether each of the first `SPREAD_CARDS` lines is drawn on its own. The opponent's left
+    /// edges step less than their line is wide, so they draw one band.
+    stripes: bool,
+    /// How far below its card's height the edge is drawn, so that where two edges of one card
+    /// meet at a corner, the light line covers the shaded one.
+    below: f32,
+}
+
+/// Writes the side of `pile` beneath its top two cards as the web interface draws it: the edge
+/// of each card beneath, its dark rim with a light line on the side toward the table's middle
+/// (`.pile-card-rim` in `ui/src/screens/styles/card-layer.css`), spread out where the web's
+/// `onPile` (`ui/src/game/pileLook.ts`) lays it. The viewer's pile shows its cards' right edges
+/// to the right of the top card. The opponent's shows their near edges below it, and their
+/// left edges, in a shaded line, to its left.
+///
+/// Each rim lies flat at its card's height, under the point of the screen the web draws it at.
+/// A rim's line shows only as far as the card above it leaves it uncovered, so a few records
+/// draw what the web draws with one element a card:
+///
+/// - two dark records of the card mesh, under the shallowest and the deepest rim, whose union
+///   is every rim's dark fill;
+/// - a light stripe for each of the first `SPREAD_CARDS` cards beneath, as wide as its line
+///   or the step to the card above it, whichever is narrower;
+/// - one band for the rest, whose steps are narrower than a line, so that their lines meet: a
+///   parallelogram swept by the edge from the first of them to the deepest.
+///
+/// The phone layout draws nothing beneath a pile's top card, as the web's `ui/src/stage/phone.ts`
+/// draws none.
+fn write_side(builder: &mut FrameBuilder, camera: &Camera, pile: &PileShown, side: Side) {
+    // The web draws cards down to the 63rd beneath the top (`HIDDEN_DEPTH` in
+    // `ui/src/game/layout.ts`), each but the first as a rim.
+    let deepest = pile.count.saturating_sub(1).min(DEEPEST);
+    if deepest < 2 {
+        return;
+    }
+    let window = camera.window.size;
     #[expect(
         clippy::cast_precision_loss,
         reason = "a pile holds a few hundred cards"
     )]
-    let height = LAYER * under as f32;
-    // A quarter turn about x turns the mesh's face from up (+z) toward the viewer (-y), and its
-    // height (y) upright.
-    let transform = Affine3A::from_scale_rotation_translation(
-        Vec3::new(pile.scale, height / CARD_HEIGHT, 1.0),
-        Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
-        Vec3::new(
-            pile.base.x,
-            pile.base.y - pile.scale * CARD_HEIGHT / 2.0,
-            height / 2.0,
-        ),
-    );
-    Some(Draw::table(transform, EDGE_TINT))
+    let top_height = LAYER * (pile.count as f32 - 0.5);
+    let top = camera.to_screen(pile.base.extend(top_height));
+    // The point of the table `height` up that lies under the web's card `depth` beneath the top.
+    #[expect(clippy::cast_precision_loss, reason = "depth is at most 63")]
+    let centre = |depth: usize, height: f32| {
+        let offset = spread(side, thickness(depth as f32));
+        let point = top + offset * Vec2::new(window.width / 1600.0, window.height / 900.0);
+        camera.on_plane(point, height)
+    };
+    #[expect(clippy::cast_precision_loss, reason = "depth is at most 63")]
+    let height = |depth: usize| top_height - LAYER * depth as f32;
+    let at = |depth: usize| centre(depth, height(depth));
+
+    let low = height(deepest) - LAYER / 2.0;
+    for depth in [2, deepest] {
+        let transform = Affine3A::from_scale_rotation_translation(
+            Vec3::new(pile.scale, pile.scale, 1.0),
+            Quat::IDENTITY,
+            centre(depth, low),
+        );
+        builder.draw(Band::Opaque, Draw::table(transform, RIM_FILL));
+    }
+    for edge in edges(side, pile.scale) {
+        // The middle of `depth`'s edge, drawn `edge.below` under its card.
+        let on_edge =
+            |depth: usize| at(depth) + edge.normal * edge.half_across - Vec3::Z * edge.below;
+        // The card mesh squeezed to a line lying flat, its middle at `middle`, spanning `across`
+        // and the card's length along the edge. The squeezed mesh keeps the card's rounded
+        // corners at the line's ends, as the web's border curves into the card's corners. The
+        // same mesh as the dark records, rather than a quad, keeps one pile's records in one
+        // batch of draw calls.
+        let line = |middle: Vec3, across: Vec3| {
+            let along = edge.along * 2.0 * edge.half_along;
+            let (x, y) = if edge.along == Vec3::Y {
+                (across, along)
+            } else {
+                (along, across)
+            };
+            let transform = Affine3A::from_cols(
+                (x / CARD_WIDTH).into(),
+                (y / CARD_HEIGHT).into(),
+                Vec3::Z.into(),
+                middle.into(),
+            );
+            Draw::table(transform, edge.tint)
+        };
+        let mut band_from = 1;
+        if edge.stripes {
+            band_from = deepest.min(SPREAD_CARDS);
+            for depth in 2..=band_from {
+                let width = (on_edge(depth) - on_edge(depth - 1))
+                    .dot(edge.normal)
+                    .clamp(0.0, edge.line);
+                if width > 0.0 {
+                    let middle = on_edge(depth) - edge.normal * width / 2.0;
+                    builder.draw(Band::Opaque, line(middle, edge.normal * width));
+                }
+            }
+        }
+        if deepest > band_from {
+            // The parallelogram whose sides are the edges of the band's first and last cards.
+            let (near, far) = (on_edge(band_from), on_edge(deepest));
+            builder.draw(Band::Opaque, line((near + far) / 2.0, far - near));
+        }
+    }
+}
+
+/// The sides of `side`'s pile cards, `scale` times their printed size, whose edges show
+/// beneath the top card. The web's lines are 2 pixels wide for the light one and 1 for the
+/// shaded one, on a card drawn `FULL_WIDTH` (182) pixels wide.
+fn edges(side: Side, scale: f32) -> impl Iterator<Item = Edge> {
+    let (width, height) = (CARD_WIDTH * scale, CARD_HEIGHT * scale);
+    let pixel = width / 182.0;
+    let right = Edge {
+        normal: Vec3::X,
+        along: Vec3::Y,
+        half_across: width / 2.0,
+        half_along: height / 2.0,
+        line: 2.0 * pixel,
+        tint: RIM_LINE,
+        stripes: true,
+        below: 0.0,
+    };
+    let near = Edge {
+        normal: Vec3::NEG_Y,
+        along: Vec3::X,
+        half_across: height / 2.0,
+        half_along: width / 2.0,
+        ..right
+    };
+    let left = Edge {
+        normal: Vec3::NEG_X,
+        line: pixel,
+        tint: RIM_SHADE,
+        stripes: false,
+        below: LAYER / 4.0,
+        ..right
+    };
+    let edges = match side {
+        Side::You => [Some(right), None],
+        Side::Opponent => [Some(near), Some(left)],
+    };
+    edges.into_iter().flatten()
 }

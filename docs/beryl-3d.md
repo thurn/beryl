@@ -1268,12 +1268,14 @@ camera, how game objects are placed in it and how verbs move them.
 - **A pile draws few records however tall it is.** Only its top card and the
   card under it are drawn as cards. The cards beneath keep their scene objects
   and resting poses, undrawn, so a card taken from inside the pile starts where
-  it lay. One record of the card mesh, stood on its edge and scaled to their
-  height in the color of card stock, is the side of the pile facing the camera.
-  Each pile with a card has a `Role::Pile` element named as the web interface's
-  `pileName` names it, and its count is a float beside it. The piles stand in
-  the corners of the window where the web interface's `PILES` puts them, at the
-  web's size against a creature, on the point of the table under each.
+  it lay. In their place at most fifteen flat records draw the edges of the
+  cards beneath as the web interface does: dark rims with light lines, spread to
+  the right of the viewer's piles and below the opponent's, each rim under the
+  point of the screen where the web draws it. Each pile with a card has a
+  `Role::Pile` element named as the web interface's `pileName` names it, and its
+  count is a float beside it. The piles stand in the corners of the window where
+  the web interface's `PILES` puts them, at the web's size against a creature,
+  on the point of the table under each.
 
 - **One camera per layout, with a fixed orientation.** The desktop layout and
   the phone layout each have one perspective camera, defined by its pitch, its

@@ -71,7 +71,7 @@ fn library_height(table: &Table, view: &ViewBuilder) -> f32 {
 }
 
 #[test]
-fn a_tall_library_is_its_real_height_and_draws_three_records() {
+fn a_tall_library_is_its_real_height_and_draws_few_records() {
     let empty = table_records(&frame_of(&library(0)));
     let sixty = library(60);
     let height = library_height(&table_of(&sixty), &sixty);
@@ -81,8 +81,10 @@ fn a_tall_library_is_its_real_height_and_draws_three_records() {
     );
     assert_eq!(
         table_records(&frame_of(&sixty)) - empty,
-        3,
-        "the top card, the one under it and the side of the rest"
+        16,
+        "the top card, the one under it, two dark records of the rims beneath, a light line for \
+         each of the 11 cards beneath them that steps further than its line is wide, and one \
+         light band for the 47 deeper cards"
     );
     assert_eq!(table_records(&frame_of(&library(1))) - empty, 1);
 }
