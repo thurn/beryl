@@ -151,10 +151,7 @@ impl Host for TestHost {
     fn title(&self, _session: &SessionId) -> Option<String> {
         None
     }
-    fn check_sightings(
-        &self,
-        _since: Timestamp,
-    ) -> Vec<ignite_store::local::rows::CheckSighting> {
+    fn check_sightings(&self, _since: Timestamp) -> Vec<ignite_store::local::rows::CheckSighting> {
         Vec::new()
     }
     fn green(&self) -> Option<String> {
