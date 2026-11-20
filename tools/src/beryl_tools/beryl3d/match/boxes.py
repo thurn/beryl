@@ -111,6 +111,28 @@ def gathered(elements: Sequence[Element], paired: set[int]) -> list[list[Line]]:
     return out
 
 
+def rows(text: Sequence[Line]) -> int:
+    """How many lines `text` is laid out on: its runs grouped by baseline, where baselines
+    less than a point apart are one line. The web gives each inline element its own run, so
+    "40 main · 8 sideboard", whose numbers sit in their own spans, is four runs on one line,
+    where Beryl 3D has one run. A run without a baseline counts as a line of its own."""
+    baselines: list[float] = []
+    loose = 0
+    for line in text:
+        baseline = line.get("baseline")
+        if isinstance(baseline, (int, float)):
+            baselines.append(float(baseline))
+        else:
+            loose += 1
+    count = 0
+    last: float | None = None
+    for baseline in sorted(baselines):
+        if last is None or baseline - last >= 1.0:
+            count += 1
+        last = baseline
+    return count + loose
+
+
 def words(text: Sequence[Line]) -> str:
     return " ".join(" ".join(str(line.get("string", "")).split()) for line in text)
 
@@ -138,7 +160,7 @@ class Difference:
         text on one side only is not counted: a container such as a full-window scrim gathers
         every unpaired line inside it, and text missing from one side is already listed as an
         unmatched element."""
-        n, m = len(self.web_lines), len(self.b3d_lines)
+        n, m = rows(self.web_lines), rows(self.b3d_lines)
         if n == m or not n or not m:
             return ""
         same = words(self.web_lines) == words(self.b3d_lines)

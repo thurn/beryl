@@ -72,10 +72,10 @@
   },
   "b3d:screen/gallery/you/1600x900@2": {
    "unmatched": 191,
-   "boxes": 3,
+   "boxes": 1,
    "styles": 29,
    "unsupported": 1,
-   "pixels": 877797
+   "pixels": 877873
   },
   "b3d:screen/gallery/you/393x759": {
    "unmatched": 326,
@@ -86,7 +86,7 @@
   },
   "b3d:screen/lobby/you/1600x900@2": {
    "unmatched": 23,
-   "boxes": 2,
+   "boxes": 0,
    "styles": 0,
    "unsupported": 0,
    "pixels": 250447
@@ -127,18 +127,18 @@
    "pixels": 100364
   },
   "b3d:screen/table/you/1600x900@2": {
-   "unmatched": 104,
-   "boxes": 0,
-   "styles": 0,
+   "unmatched": 210,
+   "boxes": 11,
+   "styles": 33,
    "unsupported": 0,
-   "pixels": 1974345
+   "pixels": 511179
   },
   "b3d:screen/table/you/393x759": {
-   "unmatched": 42,
-   "boxes": 0,
-   "styles": 0,
+   "unmatched": 117,
+   "boxes": 25,
+   "styles": 24,
    "unsupported": 0,
-   "pixels": 159697
+   "pixels": 138199
   }
  },
  "samples": {

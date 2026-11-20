@@ -9,7 +9,7 @@
     { "name": "gallery", "screen": "gallery", "recording": "screen/gallery", "built": true, "at": "end", "shows": "region \"gallery\"", "web": { "hash": "/gallery" } },
     { "name": "testing", "screen": "testing", "recording": "screen/testing", "built": true, "at": "end", "shows": "region \"testing\"" },
     { "name": "lobby", "screen": "lobby", "recording": "screen/lobby", "built": true, "at": "end", "shows": "region \"lobby\"", "web": { "hash": "/lobby" } },
-    { "name": "manual table", "screen": "table", "recording": "screen/table", "built": true, "at": "end", "shows": "region \"table\"" }
+    { "name": "manual table", "screen": "table", "recording": "screen/table", "built": true, "at": "end", "shows": "region \"table\"", "web": { "hash": "/table" } }
   ],
   "prompt_shapes": {
     "pick": "shape-pick",

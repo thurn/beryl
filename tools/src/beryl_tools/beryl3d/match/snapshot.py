@@ -569,12 +569,17 @@ def test_targets(prefix: str, at: str) -> list[Target] | None:
     """Every desktop and phone test target whose name starts with `prefix`, at `at`, as
     `just b3d test --list` names them; None after printing why they could not be listed.
     """
+    # Both lists are taken whole and filtered here: `b3d test <prefix> --list` fails when no
+    # test matches, so a prefix naming one desktop window would fail the phone listing.
     names: list[str] = []
     for phone in ([], ["--phone-only"]):
-        printed = compare.b3d(["test", *([prefix] if prefix else []), "--list", *phone])
+        printed = compare.b3d(["test", "--list", *phone])
         if printed is None:
             return None
-        names += printed.split()
+        names += [name for name in printed.split() if name.startswith(prefix)]
+    if not names:
+        print(f"match: no test's name starts with {prefix!r}", file=sys.stderr)
+        return None
     return [
         target(
             argparse.Namespace(

@@ -402,8 +402,21 @@ def test_boxes_lists_moved_and_rewrapped_elements_worst_first_and_text_drawn_ove
             [600, 230, 200, 20],
             text=[line("on the play", [600, 230, 200, 20])],
         ),
+        # The web gives each span its own run; the runs share one line, so this is no wrap.
+        plain(
+            "text",
+            "deck",
+            [460, 292, 140, 18],
+            text=[
+                line("40", [460, 292, 16, 18]),
+                line("main ·", [476, 292.3, 49, 18]),
+                line("8", [525, 292, 8, 18]),
+                line("sideboard", [533, 292.2, 67, 18]),
+            ],
+        ),
     ]
     b3d = copy.deepcopy(web)
+    b3d[5]["text"] = [line("40 main · 8 sideboard", [460, 292, 140, 18])]
     # The heading wraps onto two lines, a button moves 6 points, another a quarter point, and
     # the life total slides down over "on the play".
     b3d[0]["text"] = [

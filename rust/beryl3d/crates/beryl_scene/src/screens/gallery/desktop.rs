@@ -142,6 +142,15 @@ fn panel(index: usize) -> Element {
     // The scry panel's title has no inset: `.panel-scry` drops the panels' side padding.
     let inset = if index == 5 { 0.0 } else { at::TITLE_INSET };
     let number = format!("{:02}", index + 1);
+    // The second panel's title starts 4 points further left: `.panel-02 .panel-title` sets a
+    // left padding of 12 points where the other panels' titles have 16.
+    let pull = if index == 1 {
+        at::SECOND_TITLE_PULL
+    } else {
+        0.0
+    };
+    let mut number_at = at::TITLE_NUMBER;
+    number_at[0].x -= pull;
     // As on the web, the title's own words follow its number, a gold text of its own.
     let mut title = text(TITLES[index])
         .name(&format!("{number} {}", TITLES[index]))
@@ -154,9 +163,9 @@ fn panel(index: usize) -> Element {
                 .style(type_style::GALLERY_TITLE_NUMBER)
                 .color(color::GOLD)
                 .fit(true),
-            at::TITLE_NUMBER,
+            number_at,
         ));
-    title.style.padding = [at::TITLE_PADDING.y, 0.0, 0.0, at::TITLE_PADDING.x];
+    title.style.padding = [at::TITLE_PADDING.y, 0.0, 0.0, at::TITLE_PADDING.x - pull];
     Element::new(Role::Region)
         .name(TITLES[index])
         .background(color::GALLERY_PANEL)

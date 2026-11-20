@@ -448,7 +448,9 @@
         "font": "Serif",
         "weight": 700,
         "size": 38,
-        "line_height": 1.2
+        "line_height": 1.158,
+        "letter_spacing": 0.06,
+        "note": "The start and lobby panels' title: `.start-title` in `ui/src/screens/styles/start-panel.css`, bold 38 points in the serif face with 0.06 em of letter spacing. It sets no line height, so the line is Times New Roman's normal one, which Chrome lays out 44 points tall at this size."
       },
       "SCREEN_BODY": {
         "font": "OpenSans",
@@ -461,7 +463,8 @@
         "weight": 400,
         "italic": true,
         "size": 19,
-        "line_height": 1.2
+        "line_height": 1.158,
+        "note": "The start panel's subtitle: `.start-subtitle`, 19-point serif with no line height of its own, so on Times New Roman's normal line, 22 points tall."
       },
       "START_LABEL": {
         "font": "OpenSans",
