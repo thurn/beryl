@@ -568,7 +568,7 @@ impl<'a> Motion<'a> {
                 if still && before == after {
                     return;
                 }
-                let room = regroup.unwrap_or(room);
+                let room = self.slide_room(slot, own, regroup.unwrap_or(room));
                 let track = self.tracks.get_mut(slot);
                 if retarget(track, &mut self.segments, slot, room.from, &before, &after) {
                     return;

@@ -11,6 +11,7 @@ use super::Motion;
 use crate::frame::Place;
 use crate::pose::Pose;
 use crate::table::Rest;
+use crate::verbs::Interval;
 use beryl_protocol::protocol::ZoneName;
 
 /// How far a card may move within its pile and take no segment, in millimetres: a few cards'
@@ -34,6 +35,24 @@ impl Motion<'_> {
             self.settled.push((slot, before.pose));
         }
         true
+    }
+
+    /// The interval over which the card in `slot` slides to its new resting place in a step
+    /// whose own interval is `own` and which gives the cards it moves `room`. A card that an
+    /// earlier step of the script gave a track, and that only settles within its pile now, slides
+    /// over `own`, so that the beat does not wait for it. A mulligan vanishes the hand into the
+    /// library one card at a time, and each card that joins moves those already there a fraction
+    /// of a millimetre. Sliding them over each vanish's closing room held the beat open for 40%
+    /// of a vanish longer than the web interface's, whose pile draws no such move, so the new
+    /// hand appeared 158 ms late.
+    pub(super) fn slide_room(&self, slot: usize, own: Interval, room: Interval) -> Interval {
+        let before = self.rests.rests.get(slot).and_then(Option::as_ref);
+        let after = self.fresh.rests.get(slot).and_then(Option::as_ref);
+        let tracked = (self.tracks.get(slot)).is_some_and(|track| !track.segments().is_empty());
+        let settles = before
+            .zip(after)
+            .is_some_and(|(b, a)| settles_in_pile(b, a));
+        if tracked && settles { own } else { room }
     }
 
     /// Where the card in `slot` lies, if it only settled within its pile so far.
