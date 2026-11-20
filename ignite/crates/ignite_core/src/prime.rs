@@ -55,8 +55,7 @@ pub fn prime(config: &Config) -> String {
 Claim with `ignite start <ticket>`, edit in the tree it prints, commit there (`land` refuses
 uncommitted files), run `ignite check`, then land to `{staging}` with `ignite land -m <note>`.
 `ignite check` is all a plain change needs before landing; `ignite guide flaky-checks` is for a
-flaky, hung or never-catching check. Every command prints a verdict first and a `next` line
-last.
+flaky, hung or never-catching check. Every command prints a verdict first, a `next` line last.
 
 ## Rules
 - Nobody answers questions. Decide, act, and record the choice and why on the ticket.
@@ -80,10 +79,8 @@ last.
   the turn: the exit wakes you. Never poll with `sleep` or a loop. Never end a turn on work
   that nothing will report, or stop for good holding a ticket: release it with its state.
 - A ticket you file names a deterministic, observable acceptance (what was built, a decision,
-  a file). A timing on a shared machine is recorded, never the gate. File `run X and see Y`
-  only after running X once.
-- Never work in another session's tree, take over its ticket or change another ticket's
-  scope.
+  a file); a timing on a shared machine is never the gate. File `run X, see Y` after running X.
+- Never work in another session's tree, take its ticket or change another ticket's scope.
 - A `changed` line is an instruction about your ticket. Read it before you continue.
 - The dispatcher, the session that started you, only relays messages from the daemon. It
   knows nothing about tickets and answers no messages, so never message it. Record a
@@ -142,8 +139,8 @@ mod tests {
             "nothing will report",
             "Never poll with `sleep` or a loop",
             "names a deterministic, observable acceptance",
-            "A timing on a shared machine is recorded, never the gate",
-            "only after running X once",
+            "a timing on a shared machine is never the gate",
+            "File `run X, see Y` after running X",
             "Never work in another session's tree",
             "A `changed` line is an instruction about your ticket",
             "landing note says",
