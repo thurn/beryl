@@ -8,7 +8,7 @@ use glam::Vec2;
 use super::Client;
 
 use crate::command::{Request, SessionCommand};
-use crate::element::floats;
+use crate::element::{Press, floats};
 use crate::faces::{FaceList, Faces};
 use crate::hud::phone::Occupied;
 use crate::input::Rect;
@@ -266,8 +266,16 @@ impl Client {
     /// bug report takes its picture, and go otherwise.
     pub(super) fn show_gear(&mut self) {
         // The phone's menu button, part of its game screen, opens the settings instead.
-        let (bug, undo) = (!self.bug_open(), self.undoable().is_some());
-        let gear = (self.screen == Screen::Game && self.table_shown() && !self.window.phone())
+        // The game screen's undo takes back an engine decision; the manual table's runs its
+        // `table.undo` command, as the web's `Table` passes it to `GameBoard`.
+        let undo = match self.screen {
+            Screen::Table => crate::manual::commands::command("table.undo")
+                .map(|(index, _)| Press::Command(index, false)),
+            _ => self.undoable().map(|_| Press::Undo),
+        };
+        let bug = !self.bug_open();
+        let on_table = matches!(self.screen, Screen::Game | Screen::Table);
+        let gear = (on_table && self.table_shown() && !self.window.phone())
             .then(|| screens::corner(bug, undo));
         let shown = gear.is_some();
         self.layer.float(floats::GEAR, gear);
