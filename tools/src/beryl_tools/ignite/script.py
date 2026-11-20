@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -325,7 +326,22 @@ def ndk_env() -> dict[str, str]:
     }
 
 
+def clear_swift_module_caches(root: Path) -> None:
+    """Deletes the Swift module caches that `swift-rs` build scripts left under `rust/target`.
+
+    A tree's `target` directory can be a copy of another tree's. Swift's precompiled modules
+    record the absolute path of the cache they were built in, so in the copy the Swift build
+    fails with "was compiled with module cache path ...", and `cargo check` for the iOS
+    Simulator fails on that machine only. The caches are cheap to regenerate and cargo needs
+    them only when the build script runs again, so deleting them is always safe."""
+    for cache in (root / "rust" / "target").glob(
+        "*/debug/build/*/out/swift-rs/*/*/debug/ModuleCache"
+    ):
+        shutil.rmtree(cache, ignore_errors=True)
+
+
 def run_mobile(target: str, root: Path) -> dict[str, Any] | None:
+    clear_swift_module_caches(root)
     # From ui/, where Xcode's and Gradle's build scripts run cargo, so this resolves the
     # toolchain the way the phone builds do.
     done = subprocess.run(
