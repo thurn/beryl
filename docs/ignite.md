@@ -656,16 +656,16 @@ How the executable is installed and kept current:
   A build opens a database newer than its last migration, applying nothing, when
   its last migration is at least that value, so a rollback to `bin/last-good`
   still starts after a release that added a table or column.
-- Settings for landing by verdict exist: `[land] mode` (`"strict"`, the
-  default, or `"verdict"`) with `max_base_age_hours` (default 12) and
+- Settings for landing by verdict exist: `[land] mode` (`"strict"`, the default,
+  or `"verdict"`) with `max_base_age_hours` (default 12) and
   `[revert] broken_build` (default false) change nothing yet, and
   `repository.green` (unset by default; it must differ from `staging` and
   `master`) gives tip rounds a build step (see
-  [Tip verification](#tip-verification)). The hub's
-  `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted` are declared, with
-  fakes. The hub stores and looks up verdicts (`POST /verdicts/store`, which
-  needs a registered machine's token, and `POST /verdicts/lookup`, which replies
-  with the verdict or `null`) in its `verdicts` table, and `Hub::verdict` and
+  [Tip verification](#tip-verification)). The hub's `Hub::verdict`,
+  `Hub::store_verdict` and `Hub::reverted` are declared, with fakes. The hub
+  stores and looks up verdicts (`POST /verdicts/store`, which needs a registered
+  machine's token, and `POST /verdicts/lookup`, which replies with the verdict
+  or `null`) in its `verdicts` table, and `Hub::verdict` and
   `Hub::store_verdict` of the real client call them; `Hub::reverted` still
   answers that it cannot do it. A verdict is keyed by the tree ID of every file
   in the ticket tree, committed or not, the merge base of the tree's `HEAD` with
