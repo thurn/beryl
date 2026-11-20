@@ -13,7 +13,8 @@
 //!   minutes.
 //! - [`Claims::tick`] keeps the clock current: a session whose command is still running, such as
 //!   a long `ignite run` or `ignite wait`, is active however long it runs. The dispatcher's stall
-//!   procedure (see `dispatchd_stall`) decides what to do with a session that went silent.
+//!   procedure (see `dispatchd_stall`) decides what to do with a session that went silent, and
+//!   with one whose command has run far past its time, which this clock does not measure.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;

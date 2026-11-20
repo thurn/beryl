@@ -16,8 +16,9 @@
 //! - reads the hub's feed: a new `tell` on a ticket held here becomes a `message` to its session
 //!   and ends that session's `ignite wait`; a regression whose culprit's worker is still idle
 //!   here becomes a `message` to that worker;
-//! - asks the dispatcher to `check` a worker that has run no command for 30 minutes, messages it
-//!   once if it is idle, and releases its ticket when it is gone or stays idle 15 minutes more;
+//! - asks the dispatcher to `check` a worker that has run no command for 30 minutes, or whose
+//!   command has run far past its time (see `stall`), messages it once if it is idle, and
+//!   releases its ticket when it is gone or stays idle 15 minutes more;
 //! - answers a worker's `Stop` hook through `ignite turn-ended` (see `turn`), which keeps a
 //!   worker from ending its turn holding its ticket.
 //!
@@ -67,6 +68,7 @@ mod verb;
 #[path = "dispatchd_work.rs"]
 mod work;
 
+pub use stall::RunningVerb;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
 pub use verb::DispatchVerb;
@@ -138,6 +140,9 @@ pub trait Host: Send + Sync {
     /// across daemon restarts. [`Host::command`] comes from memory, so it knows nothing of a
     /// session whose last command ran before the daemon started.
     fn quiet_since(&self, session: &SessionId) -> Option<Timestamp>;
+    /// The verbs the session started that are still running, whether or not it still waits on
+    /// them, with their current steps.
+    fn running_verbs(&self, session: &SessionId) -> Vec<RunningVerb>;
     /// Ends the session's `ignite wait` at once with `reply`. Returns whether it was waiting.
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
     /// Gives back the ticket of a session that is gone or idle, keeping its work.
@@ -207,11 +212,14 @@ struct Given {
     cleared: bool,
 }
 
-/// A working session that went silent.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+/// A working session that went silent, or whose command is stuck.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Stall {
     checked_at: Timestamp,
     messaged_at: Option<Timestamp>,
+    /// Set when the stall is a command stuck past its time rather than silence.
+    #[serde(default)]
+    stuck: Option<stall::Stuck>,
 }
 
 #[derive(Debug, Default)]

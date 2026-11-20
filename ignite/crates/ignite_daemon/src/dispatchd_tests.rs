@@ -21,6 +21,7 @@ pub(super) struct FakeHost {
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
     pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
     pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
+    pub(super) verbs: Mutex<BTreeMap<SessionId, Vec<RunningVerb>>>,
     interrupts: Mutex<Vec<(SessionId, String)>>,
     pub(super) releases: Mutex<Vec<(SessionId, TicketId)>>,
     /// Every release fails, as one at the hub does when the hub is unreachable.
@@ -54,6 +55,10 @@ impl Host for FakeHost {
 
     fn quiet_since(&self, session: &SessionId) -> Option<Timestamp> {
         lock(&self.quiet).get(session).copied()
+    }
+
+    fn running_verbs(&self, session: &SessionId) -> Vec<RunningVerb> {
+        lock(&self.verbs).get(session).cloned().unwrap_or_default()
     }
 
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {

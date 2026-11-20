@@ -3272,6 +3272,18 @@ leased for nothing.
   died just before a restart is still looked at 30 minutes after its last
   command. A worker removed from the pool when a new dispatcher replaces its own
   is looked at straight away if it still holds a ticket.
+- A command stuck far past its time also counts as a stall, although it is
+  running and keeps the lease renewed: a command the worker started, other than
+  `wait`, that has run for 45 minutes, or whose current step has lasted 30
+  minutes. The daemon has the dispatcher look at the session as it does for
+  silence, and again every 30 minutes while the same command stays stuck. An
+  idle session gets one message that names the command, its step and how long
+  each has run, and says: if the ticket can still be done, continue it; if it
+  waits on something outside the ticket, file that, make it a dependency and
+  release; if it cannot be completed as written, run `ignite justiciar` with the
+  evidence and release. A worker with a `land`, `release` or `close` running is
+  never looked at for a stuck command, because a landing's long waits belong to
+  the landing queue and tip verification.
 - A session that is still running is left alone. An idle one is sent one message
   asking it to continue or release.
 - The daemon releases the ticket only when the app confirms that the session is
@@ -3321,8 +3333,9 @@ Seeing that a worker is stuck:
   workers is running or last ran, and when that command started or ended.
 - The dashboard's pool view shows it. A command that has run for over 10
   minutes, and a worker with no command for over 10 minutes, are both marked.
-  The stall rule above acts only at 30 minutes of silence, and a session that
-  sits in `ignite wait` is never silent.
+  The stall rule above acts at 30 minutes of silence, or when a command has run
+  for 45 minutes or one of its steps for 30, even while the session sits in
+  `ignite wait` on it.
 - Every running command records its current step: rebasing, listing a family,
   building a product, running a number of checks, or waiting for the lease,
   cores or another build. `ignite wait` prints the step and how long it has

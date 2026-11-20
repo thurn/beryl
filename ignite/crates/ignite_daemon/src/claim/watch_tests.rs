@@ -51,6 +51,8 @@ fn a_command_resets_the_silence_clock() {
     );
 }
 
+/// The lease of a session whose command runs on stays renewed. A command stuck past its time is
+/// the dispatcher's to judge, from the command's own age and step (see `dispatchd_stall`).
 #[test]
 fn a_long_command_keeps_the_silence_clock_moving() {
     let world = started();

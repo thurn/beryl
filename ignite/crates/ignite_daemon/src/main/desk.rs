@@ -21,7 +21,7 @@ use crate::claim::{
     self, ClaimRequest, Claims, Leased, ReleaseRequest, Resumed, Saved, Target, TicketDesk,
     TreeDesk,
 };
-use crate::dispatchd::{Host, SessionCommand, TICKET_ENDING_VERBS, ends_ticket};
+use crate::dispatchd::{Host, RunningVerb, SessionCommand, TICKET_ENDING_VERBS, ends_ticket};
 use crate::handles::Handles;
 use crate::hubclient::HubClient;
 use crate::sched::Scheduler;
@@ -425,6 +425,30 @@ impl Host for DaemonHost {
 
     fn quiet_since(&self, session: &SessionId) -> Option<Timestamp> {
         self.claims.quiet_since(session)
+    }
+
+    fn running_verbs(&self, session: &SessionId) -> Vec<RunningVerb> {
+        let Some(server) = self.server() else {
+            return Vec::new();
+        };
+        let now = self.ctx.clock.now();
+        server
+            .steps()
+            .live()
+            .iter()
+            .filter(|activity| activity.work().session.as_ref() == Some(session))
+            .filter_map(|activity| {
+                let view = activity.view();
+                (view.kind == "verb").then(|| RunningVerb {
+                    verb: view.name,
+                    started: now.plus_seconds(-view.age_s),
+                    step: view
+                        .step
+                        .zip(view.step_age_s)
+                        .map(|(step, age)| (step, now.plus_seconds(-age))),
+                })
+            })
+            .collect()
     }
 
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {
