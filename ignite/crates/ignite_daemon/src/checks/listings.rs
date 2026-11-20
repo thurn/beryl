@@ -230,7 +230,7 @@ impl Checks {
                     .filter_map(|p| ids.get(p).map(|oid| (p.clone(), oid.clone())))
                     .collect();
                 let own = Self::listing_ids(ctx, tree, family, own);
-                (name.to_owned(), self.hash(family, &own, None))
+                (name.to_owned(), self.listing_hash(family, &own))
             })
             .collect()
     }

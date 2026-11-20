@@ -206,7 +206,7 @@ impl Checks {
                     .into_iter()
                     .filter_map(|p| ids.get(&p).cloned().map(|oid| (p, oid)))
                     .collect();
-                let coarse = self.hash(family, &own, None);
+                let coarse = self.listing_hash(family, &own);
                 (package.clone(), list_key(name, package, coarse))
             })
             .collect();

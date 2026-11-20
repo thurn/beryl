@@ -401,3 +401,45 @@ fn a_name_a_cheap_family_matches_skips_families_whose_listing_needs_a_build() {
     assert_eq!(world.launcher.commands("lister").len(), listers + 2);
     assert!(!reply.contains("skipped"), "{reply}");
 }
+
+/// A listing made on Windows held a test that only exists there (`cfg(windows)`), and a Mac that
+/// reused it from the hub asked cargo-nextest for the test and got "no tests to run", so the
+/// check stayed incomplete. A `nextest` listing is therefore made once per operating system,
+/// even when the family's checks pass on any.
+#[test]
+fn a_nextest_listing_is_not_shared_between_operating_systems() {
+    let world = nextest_world();
+    let mut settings = world.checks.settings.clone();
+    settings
+        .manifest
+        .families
+        .get_mut("rs")
+        .unwrap()
+        .family
+        .platforms = ignite_core::manifest::Platforms::Any(ignite_core::manifest::AnyPlatform::Any);
+    let on = |os: Os| {
+        let mut settings = settings.clone();
+        settings.os = os;
+        let cache = ResultCache::new(
+            ignite_store::local::open_in_memory().unwrap(),
+            world.hub.clone(),
+            world.ctx.machine.clone(),
+            world.ctx.clock.clone(),
+        );
+        Arc::new(Checks::new(
+            settings,
+            cache,
+            Box::new(FakeTrees::new(&world.dir, &[])),
+            Box::new(FakeHistory::default()),
+        ))
+    };
+    let mac = on(Os::Macos);
+    assert!(run_on(&mac, &world, &["rs:core::a"]).passed());
+    let before = world.hub.listing_keys().len();
+    let windows = on(Os::Windows);
+    assert!(run_on(&windows, &world, &["rs:core::a"]).passed());
+    assert!(
+        world.hub.listing_keys().len() > before,
+        "Windows listed for itself"
+    );
+}

@@ -174,7 +174,7 @@ impl Checks {
                         .into_iter()
                         .filter_map(|p| ids.get(&p).map(|oid| (p, oid.clone())))
                         .collect();
-                    (package, self.hash(family, &found, None))
+                    (package, self.listing_hash(family, &found))
                 })
                 .collect(),
         )

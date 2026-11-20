@@ -80,7 +80,7 @@ use ignite_core::config::Os;
 use ignite_core::hash::{self, HashParts};
 use ignite_core::ids::{CheckName, Commit, InputHash, Oid, SessionId, TicketId, TreeId};
 use ignite_core::inputs::CrateGraph;
-use ignite_core::manifest::{Family, Manifest, Platforms};
+use ignite_core::manifest::{Adapter, Family, Manifest, Platforms};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::hub::{CachedResult, ListingKey, ResultKey};
 use ignite_core::protocol::{Class, Outcome};
@@ -611,13 +611,41 @@ impl Checks {
     }
 
     fn hash(&self, family: &Family, ids: &[(String, Oid)], digest: Option<&str>) -> InputHash {
+        self.hash_for(
+            family,
+            ids,
+            digest,
+            hash::platform(&family.platforms, self.settings.os),
+        )
+    }
+
+    /// The hash of a family's listing. A `nextest` listing names the tests this machine builds,
+    /// and `cfg(windows)` or `cfg(unix)` decides which those are, so it names the operating
+    /// system even when the family's checks pass on any. Otherwise a listing made on Windows,
+    /// holding a Windows-only test, was reused on a Mac, where the test does not exist, and the
+    /// check stayed incomplete.
+    fn listing_hash(&self, family: &Family, ids: &[(String, Oid)]) -> InputHash {
+        let platform = match family.adapter {
+            Adapter::Nextest => Some(self.settings.os),
+            Adapter::Jsonl => hash::platform(&family.platforms, self.settings.os),
+        };
+        self.hash_for(family, ids, None, platform)
+    }
+
+    fn hash_for(
+        &self,
+        family: &Family,
+        ids: &[(String, Oid)],
+        digest: Option<&str>,
+        platform: Option<Os>,
+    ) -> InputHash {
         let commands = hash::commands(family, &self.settings.manifest);
         hash::input_hash(&HashParts {
             inputs: ids,
             digest,
             commands: &commands,
             toolchain: &self.settings.toolchain,
-            platform: hash::platform(&family.platforms, self.settings.os),
+            platform,
         })
     }
 }
