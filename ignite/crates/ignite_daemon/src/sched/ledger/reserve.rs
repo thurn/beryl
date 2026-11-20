@@ -8,8 +8,9 @@
 //!
 //! - A request with `Reserve::TipBuild` takes up to all of the reserve that no other such grant
 //!   holds and starts at once, whatever the shared cores and the load outside Ignite. It takes
-//!   the rest of what it wants from the shared cores in its class, at once or, with a cores file,
-//!   by growing. Several such requests share the reserve in the order they were first asked for.
+//!   the rest of what it wants from the shared cores ahead of every class, at once or, with a
+//!   cores file, by growing (see `rank` in `ledger/order.rs`). Several such requests share the
+//!   reserve in the order they were first asked for.
 //! - No other request is ever granted the reserve's cores. Idle ones are lent to the express
 //!   lane and the release build ([`Ledger::lend_reserve`]), which do not stop a tip build from
 //!   taking them.
@@ -66,6 +67,7 @@ impl Ledger {
         let free = self.tip_reserve_free();
         if let Some(held) = self.held.get_mut(&id) {
             held.reserved = held.cores.min(free);
+            held.reserve = Some(Reserve::TipBuild);
         }
     }
 
@@ -109,6 +111,7 @@ impl Ledger {
                 usage: GrantUse::default(),
                 reserved: 0,
                 lent: extra,
+                reserve: None,
             },
         );
         Some((id, extra))

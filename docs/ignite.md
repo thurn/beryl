@@ -1415,9 +1415,15 @@ Rules for cores:
   - A request with `Reserve::TipBuild` takes up to all of the reserve that no
     other such grant holds and starts at once, whatever the shared cores and the
     load outside Ignite. It takes the rest of what it wants from the shared
-    cores in its class, at once or, with a cores file, by growing. Several such
-    requests share the reserve in the order they were first asked for. A grant
-    that shrinks gives back only its shared cores.
+    cores, at once or, with a cores file, by growing. Several such requests
+    share the reserve in the order they were first asked for.
+  - For the shared cores, a request with `Reserve::TipBuild` is scheduled ahead
+    of every class, `land` included, though `ignite status` still counts it in
+    `tip`. It takes free cores before any landing or agent request, the
+    shrinking grants of every class give cores back to it, and its own grant
+    gives none back. On 2026-11-20 tip rounds took 35 to 90 minutes, most of it
+    building in `tip` behind up to 15 agent sessions, so each round tested a tip
+    that predated the fixes for what the round before had found.
   - No other request is ever granted the reserve's cores. Cores of the reserve
     that no grant holds are lent to the express lane and the release build when
     they borrow free cores (see [Express landings](#express-landings)); a tip

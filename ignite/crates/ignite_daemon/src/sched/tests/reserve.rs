@@ -131,7 +131,7 @@ fn two_tip_builds_share_the_reserve_in_arrival_order() {
 }
 
 #[test]
-fn a_shrinking_tip_build_keeps_its_reserved_cores() {
+fn a_shrinking_tip_build_gives_no_cores_back_to_landings() {
     let mut ledger = Ledger::new(with_reserve());
     ledger.enqueue(
         GrantRequest {
@@ -141,15 +141,75 @@ fn a_shrinking_tip_build_keeps_its_reserved_cores() {
         T0,
     );
     assert_eq!(ledger.step(T0).granted[0].cores, 12);
-    // Land fills the rest of the shared cores and asks for more: the build gives back its
-    // shared cores one a step, but never the reserve's.
+    // Land fills the rest of the shared cores and asks for more, but a tip build is scheduled
+    // ahead of `land`, so it keeps all it holds. It is still reported in `tip`.
     ledger.enqueue(ask(Class::Land, 16), T0);
     ledger.enqueue(ask(Class::Land, 16), T0);
     for second in 1..40 {
         ledger.step(at(f64::from(second)));
     }
     let tip = ledger.status().classes[2].cores;
-    assert_eq!(tip, 4);
+    assert_eq!(tip, 12);
+}
+
+/// Eight shared cores are free and an agent build and a landing build wait for them; a tip
+/// round's build asked for later still takes them, with the reserve, before either starts.
+#[test]
+fn a_tip_build_is_granted_cores_before_waiting_agent_and_landing_builds() {
+    let mut ledger = Ledger::new(Limits {
+        floor: Floor::default(),
+        ..with_reserve()
+    });
+    ledger.enqueue(ask(Class::Agent, 16), T0);
+    ledger.step(T0);
+    let agent = ledger.enqueue(ask(Class::Agent, 8), at(1.0));
+    let land = ledger.enqueue(ask(Class::Land, 8), at(2.0));
+    let build = ledger.enqueue(tip_build(12), at(3.0));
+    let step = ledger.step(at(3.0));
+    let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    assert_eq!(granted, [(build, 12)]);
+    // The landing goes next, then the agent build.
+    assert!(ledger.release(build));
+    let step = ledger.step(at(4.0));
+    let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    assert_eq!(granted, [(land, 8)]);
+    assert_eq!(
+        ledger.status().classes[1].waiting,
+        1,
+        "agent request {agent} waits"
+    );
+}
+
+/// Shrinking agent builds hold every shared core; a growing tip build starts on the reserve,
+/// and the agent builds give their cores back to it one a step until it has what it asked for.
+#[test]
+fn shrinking_agent_builds_give_their_cores_back_to_a_tip_build() {
+    let mut ledger = Ledger::new(with_reserve());
+    for _ in 0..2 {
+        ledger.enqueue(
+            GrantRequest {
+                shrinks: true,
+                ..ask(Class::Agent, 12)
+            },
+            T0,
+        );
+    }
+    ledger.step(T0);
+    assert_eq!(ledger.status().granted, 24);
+    ledger.enqueue(
+        GrantRequest {
+            grows: true,
+            cores_file: Some(std::path::PathBuf::from("cores")),
+            ..tip_build(12)
+        },
+        at(1.0),
+    );
+    assert_eq!(ledger.step(at(1.0)).granted[0].cores, 4);
+    for second in 2..20 {
+        ledger.step(at(f64::from(second)));
+    }
+    let classes = ledger.status().classes;
+    assert_eq!((classes[1].cores, classes[2].cores), (16, 12));
 }
 
 /// A restarted daemon takes over a tip build's grant: it holds the reserve until it is
@@ -214,18 +274,20 @@ fn the_express_lane_borrows_the_idle_reserve_and_a_tip_build_still_gets_it() {
     }
 }
 
-/// With no tip reserve a `Reserve::TipBuild` request is an ordinary request of its class.
+/// With no tip reserve a `Reserve::TipBuild` request is still served first, from the shared
+/// cores alone.
 #[test]
-fn without_a_reserve_a_tip_build_waits_like_any_request() {
+fn without_a_reserve_a_tip_build_is_served_first_from_the_shared_cores() {
     let mut ledger = Ledger::new(Limits {
         floor: Floor::default(),
         ..limits()
     });
     ledger.enqueue(ask(Class::Land, 16), T0);
     ledger.enqueue(ask(Class::Land, 16), T0);
-    ledger.enqueue(tip_build(4), T0);
+    let build = ledger.enqueue(tip_build(4), T0);
     let step = ledger.step(T0);
-    assert_eq!(step.granted.len(), 2);
+    let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    assert_eq!(granted[0], (build, 4));
     assert_eq!(ledger.status().tip_build_used, 0);
     assert!(ledger.lend_reserve(None, Class::Land, 4).is_none());
 }

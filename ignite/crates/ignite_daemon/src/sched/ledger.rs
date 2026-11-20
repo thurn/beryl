@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
+use ignite_core::traits::Reserve;
 
 use super::measured::{GrantUse, Pressure};
 use super::{Grant, GrantRequest, Limits};
@@ -18,7 +19,7 @@ mod reserve;
 mod status;
 
 pub use order::{AGED_SECONDS, SMALL_CORES};
-use order::{in_order, share};
+use order::{in_order, rank, share};
 
 /// `idle` work starts only while the machine is under this share of its cores busy.
 const IDLE_BUSY_LIMIT: f64 = 0.7;
@@ -65,6 +66,9 @@ struct Held {
     /// Of `cores`, idle cores of the tip reserve lent to an express run or release build
     /// ([`Ledger::lend_reserve`]), which the shared cores do not count either.
     lent: u32,
+    /// The reserve the request was made for. A `Reserve::TipBuild` grant is scheduled ahead of
+    /// every class ([`Held::rank`]) and never gives cores back for another request.
+    reserve: Option<Reserve>,
 }
 
 impl Held {
@@ -205,6 +209,7 @@ impl Ledger {
                 usage: GrantUse::default(),
                 reserved: 0,
                 lent: 0,
+                reserve: None,
             },
         );
         id
@@ -448,7 +453,7 @@ impl Ledger {
     fn reclaimable(&self, class: Class) -> u32 {
         self.held
             .values()
-            .filter(|h| h.class > class)
+            .filter(|h| h.rank() > class)
             .map(gives_back)
             .sum()
     }
@@ -460,7 +465,7 @@ impl Ledger {
         let short: Vec<(u64, u32)> = self
             .held
             .iter()
-            .filter(|(_, h)| h.class == class && !h.stopping)
+            .filter(|(_, h)| h.rank() == class && !h.stopping)
             .filter_map(|(&id, h)| Some((id, h.grows_to?.checked_sub(h.cores)?)))
             .filter(|&(_, missing)| missing > 0)
             .collect();
@@ -486,7 +491,7 @@ impl Ledger {
     fn short_growing(&self, class: Class) -> u32 {
         self.held
             .values()
-            .filter(|h| h.class == class && !h.stopping)
+            .filter(|h| h.rank() == class && !h.stopping)
             .filter_map(|h| Some(h.grows_to?.saturating_sub(h.cores)))
             .sum()
     }
@@ -503,7 +508,7 @@ impl Ledger {
     fn shrink_below(&mut self, class: Class) -> Vec<(u64, u32)> {
         let mut shrunk = Vec::new();
         for (&id, held) in &mut self.held {
-            if held.class > class && !held.stopping && gives_back(held) > 0 {
+            if held.rank() > class && !held.stopping && gives_back(held) > 0 {
                 held.cores -= 1;
                 shrunk.push((id, held.cores));
             }
@@ -519,11 +524,11 @@ impl Ledger {
     /// for a higher class, until each small waiter can start. Counting every waiter instead
     /// shrank every build of the class to one core while eighteen requests waited.
     fn shrink_to_share(&mut self, class: Class, now: Timestamp) -> Vec<(u64, u32)> {
-        let held = self.held.values().filter(|h| h.class == class).count();
+        let held = self.held.values().filter(|h| h.rank() == class).count();
         let waiting = self
             .waiting
             .iter()
-            .filter(|w| w.request.class == class && self.ranks_ahead_of_grants(w, now))
+            .filter(|w| rank(&w.request) == class && self.ranks_ahead_of_grants(w, now))
             .count();
         if waiting == 0 {
             return Vec::new();
@@ -532,7 +537,8 @@ impl Ledger {
         let mut shrunk = Vec::new();
         for (&id, held) in &mut self.held {
             if held.shrinks
-                && held.class == class
+                && held.rank() == class
+                && held.reserve != Some(Reserve::TipBuild)
                 && !held.stopping
                 && held.cores > share
                 && gives_back(held) > 0
@@ -577,6 +583,7 @@ impl Ledger {
                 usage: GrantUse::default(),
                 reserved,
                 lent: 0,
+                reserve: waiter.request.reserve,
             },
         );
         Grant {
@@ -686,7 +693,7 @@ impl Ledger {
         // commands as well kept cores idle: one `batch` command on one core kept seven more
         // reserved for `batch` work that never came, while seven agent requests waited for
         // the six free cores for over half an hour and every landing stood still.
-        if self.waiting.iter().any(|w| w.request.class == class) {
+        if self.waiting.iter().any(|w| rank(&w.request) == class) {
             floor.saturating_sub(self.class_cores(class))
         } else {
             0

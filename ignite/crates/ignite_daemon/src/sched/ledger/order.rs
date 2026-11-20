@@ -24,7 +24,10 @@ use std::cmp::Ordering;
 use ignite_core::protocol::Class;
 use ignite_core::time::Timestamp;
 
-use super::{Ledger, Waiter};
+use ignite_core::traits::Reserve;
+
+use super::super::GrantRequest;
+use super::{Held, Ledger, Waiter};
 
 /// How long a request waits before it goes ahead of every request of its class that has waited
 /// less, and before a shrinking grant of its class gives cores back for it whatever its size.
@@ -44,7 +47,7 @@ impl Ledger {
         let mut waiters: Vec<&Waiter> = self
             .waiting
             .iter()
-            .filter(|w| w.request.class == class)
+            .filter(|w| rank(&w.request) == class)
             .collect();
         // Stable, so equal keys keep the queue's order (see `Ledger::enqueue`).
         waiters.sort_by(|a, b| self.serve_before(a, b, now));
@@ -53,6 +56,10 @@ impl Ledger {
 
     fn serve_before(&self, a: &Waiter, b: &Waiter, now: Timestamp) -> Ordering {
         let aged = |w: &Waiter| aged(w, now);
+        let tip_build = |w: &Waiter| w.request.reserve == Some(Reserve::TipBuild);
+        if tip_build(a) != tip_build(b) {
+            return tip_build(b).cmp(&tip_build(a));
+        }
         match (aged(a), aged(b)) {
             (true, false) => Ordering::Less,
             (false, true) => Ordering::Greater,
@@ -83,6 +90,35 @@ impl Ledger {
             .filter(|w| classes.contains(&w.request.class))
             .map(|w| now.seconds_since(w.since).max(0.0))
             .fold(0.0, f64::max)
+    }
+}
+
+/// The class a request is scheduled in: its own, except that a tip round's build check
+/// (`Reserve::TipBuild`) is scheduled in `land`, the highest, and goes first within it.
+///
+/// On 2026-11-20 tip rounds on one machine took 35 to 90 minutes, most of it building, while up
+/// to 15 agent sessions held the machine's cores. A tip build took its reserve at once but waited
+/// in `tip`, below `agent`, for the rest of what it asked for, so each round tested a tip that
+/// predated the fixes for the failures the round before had reported, and `master` stood still
+/// for 11 hours. A tip build decides when `green` moves, where every new ticket starts, so it now
+/// takes free cores before landings and agents do, makes their shrinking grants give cores back,
+/// and gives none back itself ([`Held::rank`]). It is still reported in `tip`.
+pub(super) fn rank(request: &GrantRequest) -> Class {
+    if request.reserve == Some(Reserve::TipBuild) {
+        Class::Land
+    } else {
+        request.class
+    }
+}
+
+impl Held {
+    /// The class this grant is scheduled in ([`rank`]).
+    pub(super) fn rank(&self) -> Class {
+        if self.reserve == Some(Reserve::TipBuild) {
+            Class::Land
+        } else {
+            self.class
+        }
     }
 }
 

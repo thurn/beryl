@@ -42,7 +42,9 @@
 //! - A machine's `tip_build_cores` are kept for requests with `Reserve::TipBuild`, the build
 //!   checks of a tip round, which start on them at once however full the machine is. Idle ones
 //!   are lent to the express lane and the release build ([`Scheduler::try_borrow`]; see
-//!   `ledger/reserve.rs`).
+//!   `ledger/reserve.rs`). For the rest of what they ask for, such requests are scheduled ahead
+//!   of every class, `land` included, and their grants never shrink for another request (see
+//!   `rank` in `ledger/order.rs`).
 //! - Classes are enforced by grants only. Nothing here changes a process's priority: work run
 //!   at low priority on a loaded machine once got almost no CPU for hours.
 
