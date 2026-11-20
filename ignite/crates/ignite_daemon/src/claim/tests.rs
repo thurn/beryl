@@ -605,6 +605,11 @@ fn the_brief_of_a_reverted_ticket_says_how_to_apply_its_work_again() {
         "{}",
         reply.text
     );
+    assert!(
+        reply.text.contains("guide    ignite guide reverted"),
+        "{}",
+        reply.text
+    );
     // A ticket that was never reverted prints no such line.
     world.desk.add(ticket("Tq.49", "Other", ""));
     let plain = start(&world, &["Tq.49"], "local_other");

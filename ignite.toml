@@ -19,6 +19,11 @@ release_family = "ignite"
 # beryl_kernel change, against 18 in a tree that built the state before).
 trees = ".worktrees"
 checks = "ignite/checks"
+# The newest tip whose build checks (the families declared `builds = true`) passed. `ignite start`
+# and `ignite sync` begin there instead of at the tip, so a tip that does not compile never
+# reaches a new ticket; a tip round moves it (docs/ignite.md, "Tip verification"). The first round
+# whose build checks pass creates the branch by pushing; until then `ignite start` uses the tip.
+green = "green"
 
 # Express landings (docs/ignite.md, "Express landings"). On 2026-11-18 every fix to Ignite's own
 # scheduling waited 10 to 30 minutes for `ignite land` in the queue it was fixing, and three were
@@ -114,6 +119,26 @@ rules = [
 # `quiet_seconds` was 15 until 2026-11-19, when express landings began to build their release
 # before landing: the release then needs only its selftest, a few seconds, and the quiet window
 # was the rest of the wait.
+# How a change that touches none of Ignite's own source lands (docs/ignite.md, "Landing"). On
+# 2026-11-19 the median landing through the gate took 7.8 minutes and the slowest 91 minutes over
+# 7 passes: each time another landing moved the tip, the landing rebased, rebuilt what had landed
+# and gated again, and none of the 23 passes lost that way found a failure. In `verdict` mode the
+# gate's pass on the change's own base is stored, and the landing rebases onto the tip in git's
+# object database and pushes without checking again. A base more than `max_base_age_hours` old is
+# rebased for real first, so a verdict never rests on code half a day older than the tip.
+# `mode = "strict"` restores checking on the exact tip.
+[land]
+mode = "verdict"
+max_base_age_hours = 12
+
+# Landing by verdict can leave a tip that does not compile: two changes that each build alone.
+# Until it is fixed `green` cannot move and later landings pile onto it, and a fix written by an
+# agent takes tens of minutes, so a tip round reverts the one landing that broke a build check.
+# Every other failing check is fixed forward through a regression ticket (docs/ignite.md, "A
+# broken build is reverted").
+[revert]
+broken_build = true
+
 [self_update]
 quiet_seconds = 5
 cap_seconds = 30
@@ -210,6 +235,12 @@ floor = { batch = 8, tip = 2 }
 # the rest. The tree's target directory was warm. A run also borrows the cores the scheduler has
 # free when it starts, up to 12 in all (docs/ignite.md, "Express landings"); these are its floor.
 express_cores = 3
+# Of 18 cores, kept for a tip round's build checks, which decide when `green` moves and so where
+# every new ticket starts. On 2026-11-19, 8,053 of 9,692 commands started on one core, because a
+# higher class never takes cores from a lower class's running grants; a build check on one core
+# would hold `green` back for minutes. Reserve cores no tip build holds are lent to the express
+# lane and the release build (docs/ignite.md, "Cores, memory and shared resources").
+tip_build_cores = 4
 
 # Browser pages: at most half the cores' worth at once across every tree. Headless WebKit runs at
 # a higher priority than any build, so more pages starve the builds beside them.
@@ -228,6 +259,8 @@ landing_trees = 2
 trees_disk_gb = 350
 floor = { batch = 2, tip = 2 }
 express_cores = 2
+# Of 10 cores; see jarvis.
+tip_build_cores = 2
 
 [machine.multivac.resources]
 browser-pages = 4
@@ -255,6 +288,8 @@ families = [
 ]
 floor = { batch = 4, tip = 2 }
 express_cores = 2
+# Of 20 threads; see jarvis. Its families include Beryl's clippy, a build check.
+tip_build_cores = 2
 
 [[rebuild]]
 name = "kernel-body"

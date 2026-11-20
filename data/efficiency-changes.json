@@ -699,5 +699,10 @@
     "label": "A reverted landing reopens its ticket at P0 and the dispatcher offers it to the session that wrote it, which still has the context, and sessions holding dependent tickets are told to release them",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Landing by verdict, the `green` branch, the revert of a landing that breaks the build and the tip-build core reserve are switched on in `ignite.toml`, so a landing checked on its own base no longer rebuilds and gates again each time another landing moves the tip (the slowest gated landing on 2026-11-19 took 91 minutes over 7 passes, none of whose repeats found a failure)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

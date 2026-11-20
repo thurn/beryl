@@ -261,9 +261,16 @@ This section names the parts. Each has its own section below.
   inputs. A check whose inputs already passed is not run again, in any tree or
   on any machine.
 - **Landing** is delivering a ticket's commits to the `staging` branch. The
-  **landing gate** is the set of checks that must pass first.
+  **landing gate** is the set of checks that must pass first, on the commit the
+  change was written on. A pass is stored as the change's **verdict**, and the
+  landing rebases the commits onto the newest commit and pushes them without
+  checking again.
 - The **tip** is the newest commit on `staging`. **Tip verification** runs the
-  checks the gate left out, once per tip, and moves `master` forward.
+  checks the gate left out, once per tip. It runs the build checks first and
+  moves the **`green`** branch, where new tickets start, to a tip that compiles;
+  then it moves `master` forward once the budgeted checks pass. A landing that
+  broke the build is **reverted**; any other failure gets a regression ticket
+  and is fixed forward.
 - A **worker** is a desktop-app agent session that implements tickets. The
   **pool** is a machine's set of workers. The **dispatcher** is one small
   session, per machine and per desktop app in use there, that hands tickets to
@@ -282,7 +289,7 @@ A ticket from claim to landing looks like this:
 ```text
 $ ignite start TQ44S.9.48
 ticket   TQ44S.9.48  Beryl 3D manual table: counter names, untap lock
-tree     /Users/dthurn/beryl/.worktrees/tree-07  at staging 8c1f2ab
+tree     /Users/dthurn/beryl/.worktrees/tree-07  at green 8c1f2ab
 title    ⚒️ [TQ44S.9.48] Counter names, untap lock
 files    rust/beryl3d/crates/beryl_scene/src/table/badges.rs  (+4, below)
 needs    TQ44S.9.31 landed 2f0c1d9: "badges draw from one record pool"
@@ -299,9 +306,15 @@ rerun    ignite test lock_sits_top_left
 ```
 
 ```text
-$ ignite land -m "Named counters draw as rows above the plaque."
-rebased  onto staging 91d07be (4 commits landed since start)
+$ ignite check
 gate     38 checks: 31 from cache, 7 run, all passed in 52 s
+verdict  stored for this tree
+```
+
+```text
+$ ignite land -m "Named counters draw as rows above the plaque."
+verdict  passed for this tree 6 min ago on 8c1f2ab
+rebased  onto staging 91d07be without a checkout: 4 commits landed since 8c1f2ab
 landed   3a9e4c1 on staging; ticket closed; tree-07 released
 title    ✅ [TQ44S.9.48] Counter names, untap lock
 next     nothing; wait for your next ticket
@@ -309,10 +322,10 @@ next     nothing; wait for your next ticket
 
 The verbs an agent uses while working:
 
-- `ignite start <ticket>` claims the ticket, leases a build tree at the tip,
-  starts building it, and prints the ticket with what its dependencies left
-  behind. `ignite start "<summary>"` files a ticket first, for a session that
-  was given a task and no ticket.
+- `ignite start <ticket>` claims the ticket, leases a build tree at `green` (the
+  newest tip known to compile), starts building it, and prints the ticket with
+  what its dependencies left behind. `ignite start "<summary>"` files a ticket
+  first, for a session that was given a task and no ticket.
 
 - `ignite test <names>` runs the checks the agent names, in its tree. A name
   without a known `<family>:` prefix is looked up in each family's kept listing
@@ -358,20 +371,23 @@ The verbs an agent uses while working:
   `ignite test fork` after a one-line comment change took 300 s, its lines
   accounted for 130 s, and its three products had built one after another.
 
-- `ignite check` runs what the landing gate would run on the tree as it is. When
-  the gate passes with nothing incomplete, it stores a verdict for the tree (see
-  [Processes](#processes)) and says so on a `verdict  stored for this tree`
-  line, or `verdict  not stored: <reason>`. Its express path stores none. In
-  verdict mode it first refuses a change that mixes Ignite's own source with
-  files outside the `[express] paths`, as `ignite land` does (see
+- `ignite check` runs what the landing gate would run on the tree as it is, and
+  is what a change needs before landing. When the gate passes with nothing
+  incomplete, it stores a verdict for the tree (see [Processes](#processes)) and
+  says so on a `verdict  stored for this tree` line, or
+  `verdict  not stored: <reason>`. Its express path stores none. In verdict mode
+  it first refuses a change that mixes Ignite's own source with files outside
+  the `[express] paths`, as `ignite land` does (see
   [Landing by verdict](#landing-by-verdict)).
 
 - `ignite sync` rebases the tree's branch onto the tip, or onto `green` when
   `repository.green` is set and the branch exists.
 
-- `ignite land` rebases, runs the gate, lands the commits, records the note for
-  dependent tickets, closes the ticket and releases the tree. The note is the
-  landed commits' subjects, one per line; `-m "<note>"` gives an explicit one.
+- `ignite land` lands the checked commits: it finds the tree's verdict (or runs
+  the gate when there is none), rebases the commits onto the tip without a
+  checkout, pushes them, records the note for dependent tickets, closes the
+  ticket and releases the tree. See [Landing](#landing). The note is the landed
+  commits' subjects, one per line; `-m "<note>"` gives an explicit one.
 
 - `ignite run -- <command>` runs any other heavy command with cores from the
   daemon, and records it. A `cargo` on the tree's `PATH` does the same for plain
@@ -671,46 +687,58 @@ How the executable is installed and kept current:
   A build opens a database newer than its last migration, applying nothing, when
   its last migration is at least that value, so a rollback to `bin/last-good`
   still starts after a release that added a table or column.
-- Settings for landing by verdict exist: `[land] mode` (`"strict"`, the default,
-  or `"verdict"`) with `max_base_age_hours` (default 12) and
-  `[revert] broken_build` (default false; when set, tip rounds revert a landing
-  that broke the build, see
-  [A broken build is reverted](#a-broken-build-is-reverted)), and
-  `repository.green` (unset by default; it must differ from `staging` and
-  `master`) gives tip rounds a build step (see
-  [Tip verification](#tip-verification)). The hub's `Hub::verdict`,
-  `Hub::store_verdict` and `Hub::reverted` are declared, with fakes. The hub
-  stores and looks up verdicts (`POST /verdicts/store`, which needs a registered
-  machine's token, and `POST /verdicts/lookup`, which replies with the verdict
-  or `null`) in its `verdicts` table, and `Hub::verdict` and
-  `Hub::store_verdict` of the real client call them; `Hub::reverted` still
-  answers that it cannot do it. A verdict is keyed by the tree ID of every file
-  in the ticket tree, committed or not, the merge base of the tree's `HEAD` with
-  the tip as the checkout last fetched it, and `verdict_settings`, a digest of
-  the `[gate]` section that holds nothing about Ignite's own release.
-  `ignite check` stores a verdict whenever its gate passes with nothing
-  incomplete, at the hub and in the daemon's local `verdicts` table, and
-  `verdicts::find` looks one up at the hub first and then in that table, so it
-  is still found while the hub cannot be reached. Committing a tree's edits
-  unchanged keeps its verdict, because the tree ID stays the same. The hub and
-  the daemon each delete verdicts that passed more than 30 days ago. With
-  `[land] mode = "verdict"`, `ignite land` lands by verdict (see
-  [Landing by verdict](#landing-by-verdict)). The gate's scope is already the
-  change's own files: the paths that differ between the merge base and the tree,
-  so files landed on the tip since the tree started are not counted.
-- Git can rebase and revert in its object database, with no working tree, and no
-  landing uses it yet. `Git::replay` rebases a branch's commits onto the tip one
-  by one with `git merge-tree --write-tree` against each commit's own parent and
-  `git commit-tree`, keeping each commit's author, author date and message,
-  dropping a commit whose change the tip already has and leaving out merge
-  commits, as `git rebase` does. `Git::revert` makes one commit on the tip,
-  written as `ignite <ignite@localhost>`, that undoes a list of commits, newest
-  first. A conflict in either returns the conflicting files. Neither changes any
-  working tree, index or ref, so a ticket tree keeps the build `ignite check`
-  made. Both need git 2.40 (`merge-tree --merge-base`) and fail naming the
-  version found on an older one. `Git::merge_base`, `committed_at` (the
-  committer date) and `tree_id` (the tree ID of every file on disk, committed or
-  not) go with them.
+- Landing by verdict has four settings: `[land] mode` (`"strict"`, the default,
+  or `"verdict"`, which this repository sets) with `max_base_age_hours` (default
+  12; see [Landing](#landing)), `repository.green` (unset by default; it must
+  differ from `staging` and `master`), which gives tip rounds a build step (see
+  [Tip verification](#tip-verification)), `[revert] broken_build` (default
+  false; see [A broken build is reverted](#a-broken-build-is-reverted)), and
+  each machine's `tip_build_cores` (default 0; see
+  [Cores, memory and shared resources](#cores-memory-and-shared-resources)).
+  Their defaults keep every landing checked on the exact tip.
+- A setting in `ignite.toml` takes effect when the process that uses it next
+  starts and reads the file from the main checkout. `ignite.toml` is not
+  Ignite's source, so a change to it builds no release and restarts nothing.
+  Every verb process reads it again when it starts (`Base::read`, called from
+  `verbproc.rs`), so `[land]` and `[revert]` reach the next `ignite land`,
+  `ignite check` and tip round once the daemon has fast-forwarded the main
+  checkout to the change, which it does every 30 seconds while the checkout has
+  no local edits. The daemon reads it only when it starts, and it alone uses
+  `repository.green` for `ignite start` and `ignite sync`, `tip_build_cores` for
+  its scheduler's limits, and the branches the main checkout fast-forwards.
+  Those take effect at the daemon's next restart, which the next release that
+  changes the daemon's code brings about. Nothing reloads the daemon's copy. A
+  verb process and its daemon can therefore disagree for a while: a tip round
+  that reads `green` from the file pushes the branch even while the daemon still
+  starts tickets at the tip.
+- A verdict is keyed by the tree ID of every file in the ticket tree, committed
+  or not, the merge base of the tree's `HEAD` with the tip as the checkout last
+  fetched it, and `verdict_settings`, a digest of the `[gate]` section that
+  holds nothing about Ignite's own release, which changes hundreds of times a
+  day. The hub stores and looks up verdicts (`POST /verdicts/store`, which needs
+  a registered machine's token, and `POST /verdicts/lookup`, which replies with
+  the verdict or `null`) in its `verdicts` table. `ignite check` stores a
+  verdict whenever its gate passes with nothing incomplete, at the hub and in
+  the daemon's local `verdicts` table, and `verdicts::find` looks one up at the
+  hub first and then in that table, so a landing works while the hub cannot be
+  reached. Committing a tree's edits unchanged keeps its verdict, because the
+  tree ID stays the same. The hub and the daemon each delete verdicts that
+  passed more than 30 days ago. The gate's scope is the change's own files: the
+  paths that differ between the merge base and the tree, so files landed on the
+  tip since the tree started are not counted.
+- Git rebases and reverts in its object database, with no working tree, for
+  landing by verdict and for a tip round's revert. `Git::replay` rebases a
+  branch's commits onto the tip one by one with `git merge-tree --write-tree`
+  against each commit's own parent and `git commit-tree`, keeping each commit's
+  author, author date and message, dropping a commit whose change the tip
+  already has and leaving out merge commits, as `git rebase` does. `Git::revert`
+  makes one commit on the tip, written as `ignite <ignite@localhost>`, that
+  undoes a list of commits, newest first. A conflict in either returns the
+  conflicting files. Neither changes any working tree, index or ref, so a ticket
+  tree keeps the build `ignite check` made. Both need git 2.40
+  (`merge-tree --merge-base`) and fail naming the version found on an older one.
+  `Git::merge_base`, `committed_at` (the committer date) and `tree_id` (the tree
+  ID of every file on disk, committed or not) go with them.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it, or the express commands have (see
@@ -1398,6 +1426,11 @@ Rules for cores:
   it is unset, so daemons of older and newer releases still read each other's
   files.
 
+  This repository keeps 4 of jarvis's 18 cores for tip builds beside its 3
+  express cores, and 2 on multivac (10 cores) and cygnus (20 threads) beside
+  their 2 express cores. The daemon reads the reserve when it starts, so a
+  change to it takes effect at the daemon's next restart.
+
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
   CPU for hours.
@@ -2076,39 +2109,152 @@ hides.
 `ignite land` is the only way commits reach `staging`. It replaces `enact push`,
 the ticket's closing comment and `enact close`.
 
+A change is checked once, on the commit it was written on, and lands by that
+result. `ignite check`, or the landing itself when no check has run, runs the
+gate in the ticket tree and stores a **verdict** when it passes: the record that
+these files passed on this base under these gate settings. `ignite land` then
+rebases the commits onto the tip in git's object database and pushes them
+without building or checking anything again, however many landings reached
+`staging` meanwhile. What the gate could not see, two changes that each pass
+alone and fail together, is found after landing by
+[Tip verification](#tip-verification): a tip that no longer compiles is repaired
+by reverting the landing that broke it, and any other failure by a regression
+ticket that is fixed forward. `master` still moves only to a tip whose budgeted
+checks passed.
+
+This is `[land] mode = "verdict"`, which this repository sets. The default,
+`mode = "strict"`, checks every landing on the exact tip instead (see
+[Strict mode](#strict-mode)) and is the setting that restores the old behaviour.
+A change to Ignite's own source lands checked on the exact commit it pushes in
+either mode (see
+[Changes to Ignite's own source](#changes-to-ignites-own-source)).
+
+### Why a landing checks once
+
+Until landing by verdict was switched on, every landing was checked on the exact
+tip, and that cost grew faster than the number of landings. On 2026-11-19, 135
+landings reached `staging`; the 52 that went through the gate took a median of
+7.8 minutes, 33 at the 90th percentile and 91 at worst, and agent sessions spent
+24.9 hours inside `ignite land`. Three costs grew with the volume:
+
+- **The race.** A landing whose tip moved before its push had to rebase, rebuild
+  what had landed and gate again. Suppose commits that touch a landing's checks
+  arrive at random, `r` per hour, and one pass takes `g` hours. A pass survives
+  with probability `exp(-r × g)`, so a landing needs `exp(r × g)` passes on
+  average. With 7-minute passes that is 1.6 passes at 4 such commits an hour,
+  2.5 at 8, 5.8 at 15, 33 at 30 and 1,097 at 60. The slowest landing of
+  2026-11-19 met about 8 an hour and landed on its seventh pass. Over 2026-11-18
+  and 2026-11-19, 13 landings lost at least one race and ran 23 extra passes;
+  all 13 landed, and no extra pass found a failure.
+- **Compiling.** A ticket tree holds the build of the commit its ticket started
+  on, so a landing on the exact tip compiled everything that had landed since.
+  For the 253 tickets that landed on those two days, a median of 3 commits and
+  21 at the 90th percentile reached `staging` between the claim and the landing.
+  Every landing compiled the same commits again, so the work grew with the
+  number of landings times how far behind each one was, and both grow with the
+  number of agents.
+- **The scheduler.** It shares the free cores among every waiting command; with
+  thirteen waiting, each got one core, and a build of 300 CPU-seconds took five
+  minutes or more however many cores the machine had. 8,053 of that day's 9,692
+  commands started on one core.
+
+A verdict removes the first two: the commits are checked once, in the tree that
+already holds their build, and a moved tip costs a rebase in the object database
+instead of a build. What strict checking guaranteed, that `staging` never holds
+a broken combination, is not needed: `master` is the branch that only holds
+verified commits, and `green` is the branch new work starts from (see
+[Tip verification](#tip-verification)).
+
+### Landing by verdict
+
 The steps, in order:
 
 1. Check that the session holds the ticket and the tree has no uncommitted
-   edits.
-2. Rebase the branch onto the tip. A conflict exits with code 3 and the files.
-   On the first pass, run the formatters of `[format]` on the changed files and
-   commit what they change (see
-   [Formatting at landing](#formatting-at-landing)).
-3. Take a landing tree, unless the ticket tree is already at the tip or leaves
-   less to build (see [Build trees](#build-trees)). Check out the rebased commit
-   there. The rest of the landing reads the check families and products from
-   that commit, not from the main checkout.
-4. Decide which families the change can affect, from the paths that differ
-   between the rebased commit and the tip, before anything is listed or built. A
-   family is left out when no changed path matches its inputs, its
-   `package_inputs`, the inputs of the products it needs, the lock file,
-   manifest and toolchain file of the Cargo workspaces those name, its manifest
-   file, or any input its checks printed in its kept listing. A `nextest` family
-   with no kept listing for the tree's inputs is judged by its declared inputs,
-   with `crate-closure` standing for the packages of its own workspaces, since
-   its checks print no inputs of their own. Any other family with no kept
-   listing is listed. The always set follows the same rule. Then compute input
-   hashes, look up the result cache, build what the remaining checks need, and
-   run the always set and the gate. The output's `scope` line says how many
-   families were left out.
-5. Take the hub's short `staging` lease. If the tip moved since step 2, release
-   it and go back to step 2. The lease is taken only after the gate passes and
-   held only for the push, so landings gate in parallel and never wait for
-   another landing's gate.
-6. Push the commit from the landing tree to `staging` on the git remote, and
-   release the lease.
-7. Record the commits and the files they touch on the ticket with the agent's
-   note, close the ticket and release the ticket tree.
+   edits, settle a record an earlier landing of the ticket left, and run the
+   formatters of `[format]` on the changed files, committing what they change
+   (see [Formatting at landing](#formatting-at-landing)).
+2. The base is the merge base of the tree's `HEAD` with the tip. A base
+   committed more than `max_base_age_hours` (12) ago is replaced: the ticket
+   tree is rebased onto the tip for real, so a verdict never rests on code half
+   a day older than the tip.
+3. Look up the verdict for the tree's files, the base and the `[gate]` section,
+   at the hub and then in the daemon's local table. Without one, run the gate in
+   the ticket tree as it is (see [The gate](#the-gate)), and store the verdict
+   when it passes. A failure that the gate's rerun confirmed is compared with
+   the base rather than the tip. A check that fails at the base too is filed as
+   a regression and left out only when the base is the tip; on an older base it
+   may be fixed at the tip, so nothing is filed and the reply says to run
+   `ignite sync` and land again.
+4. Rebase the commits onto the tip in git's object database (`Git::replay`),
+   take the hub's short `staging` lease, check that the tip has not moved, write
+   the landing record and push the rebased commit. When the tip moves or the
+   remote rejects the push, rebase again in the object database and run nothing,
+   20 times at most. A conflict exits with code 3 and the files.
+5. Tell the hub, record the commits and the files they touch on the ticket with
+   the agent's note, close the ticket, and release the ticket tree parked at its
+   own `HEAD`, which is what its builds match: the pushed commit exists only in
+   the object database.
+
+```text
+$ ignite land -m "Named counters draw as rows above the plaque."
+verdict  passed for this tree 6 min ago on 91d07be
+rebased  onto staging 3a9e4c1 without a checkout: 14 commits landed since 91d07be
+landed   7c1d2e0 on staging; ticket closed; tree-07 released
+title    ✅ [TQ44S.9.48] Counter names, untap lock
+next     nothing; wait for your next ticket
+```
+
+The reply starts with a `verdict` line and a `rebased` line, as above, then the
+usual `landed`, `title` and `next` lines. When no verdict was found, the
+`verdict` line is replaced by the gate's own lines and a line saying whether the
+verdict was stored.
+
+A ticket that a tip round reverted (metadata `reverted` at the hub) skips steps
+2 and 3: its tree is rebased onto the tip for real and the gate runs there, so
+the build checks judge the rebased code, which is the combination that failed
+before (see [A broken build is reverted](#a-broken-build-is-reverted)).
+
+### Changes to Ignite's own source
+
+A change to Ignite's own source (a file under `ignite/` other than the check
+manifests) lands as it did before landing by verdict, in either mode: by the
+express lane, or through the gate on the exact tip. That path compiles and tests
+Ignite on the exact commit that lands and then moves the release branch to it,
+which every daemon builds and restarts into. A rebased commit that nothing
+compiled could move the release branch to a build no daemon can make, and a
+broken Ignite cannot run the tip round that would revert it. For the same reason
+a tip round never reverts a change to Ignite, and `green` is not held back for
+one.
+
+So that every change to Ignite stays an express landing, in verdict mode
+`ignite land` and `ignite check` refuse a change that mixes Ignite's own source
+with files outside the `[express] paths`, with exit code 1, before running
+anything:
+
+```text
+refused  this change mixes Ignite's own source with other files
+         rust/crates/beryl_cli/src/main.rs
+next     land the files under ignite/ and the other files as two tickets
+```
+
+A check manifest with the tool it runs is not a mix.
+
+### The gate
+
+The gate is the same in both modes; only the tree it runs in differs. Before
+anything is listed or built, it decides which families the change can affect,
+from the paths that differ between the change's base and the commit it checks. A
+family is left out when no changed path matches its inputs, its
+`package_inputs`, the inputs of the products it needs, the lock file, manifest
+and toolchain file of the Cargo workspaces those name, its manifest file, or any
+input its checks printed in its kept listing. A `nextest` family with no kept
+listing for the tree's inputs is judged by its declared inputs, with
+`crate-closure` standing for the packages of its own workspaces, since its
+checks print no inputs of their own. Any other family with no kept listing is
+listed. The always set follows the same rule. Then it computes input hashes,
+looks up the result cache, builds what the remaining checks need, and runs the
+always set and the gate. The output's `scope` line says how many families were
+left out.
 
 The gate stops at the first fault it knows of:
 
@@ -2147,7 +2293,40 @@ The gate stops at the first fault it knows of:
   on that tree are refused there with exit code 3, naming the running handle to
   `ignite wait` or `ignite stop`.
 
-A landing that loses the race for the tip makes its next pass cheap:
+### Strict mode
+
+With `[land] mode = "strict"`, the default, and for a change to Ignite's own
+source that the express lane does not take, every landing is checked on the
+exact tip it pushes. The steps, in order:
+
+1. Check that the session holds the ticket and the tree has no uncommitted
+   edits.
+2. Rebase the branch onto the tip. A conflict exits with code 3 and the files.
+   On the first pass, run the formatters of `[format]` on the changed files and
+   commit what they change.
+3. Take a landing tree, unless the ticket tree is already at the tip or leaves
+   less to build (see [Build trees](#build-trees)). Check out the rebased commit
+   there. The rest of the landing reads the check families and products from
+   that commit, not from the main checkout.
+4. Run the gate on the rebased commit, scoped by the paths that differ between
+   it and the tip.
+5. Take the hub's short `staging` lease. If the tip moved since step 2, release
+   it and go back to step 2. The lease is taken only after the gate passes and
+   held only for the push, so landings gate in parallel and never wait for
+   another landing's gate.
+6. Push the commit from the landing tree to `staging` on the git remote, and
+   release the lease.
+7. Record the commits and the files they touch on the ticket with the agent's
+   note, close the ticket and release the ticket tree.
+
+```text
+$ ignite land -m "Named counters draw as rows above the plaque."
+rebased  onto staging 91d07be (4 commits landed since start)
+gate     38 checks: 31 from cache, 7 run, all passed in 52 s
+landed   3a9e4c1 on staging; ticket closed; tree-07 released
+```
+
+A strict landing that loses the race for the tip makes its next pass cheap:
 
 - Every pass gates in the tree the first pass chose. A landing tree stays leased
   to the landing until it ends and is checked out at each new rebased commit, so
@@ -2160,16 +2339,17 @@ A landing that loses the race for the tip makes its next pass cheap:
   families were carried over. A rebase that changes the change's own files gates
   in full.
 
-The machine's daemon carries out these steps for the client. The `staging` lease
+### Rules for every landing
+
+The machine's daemon carries out the steps for the client. The `staging` lease
 lasts 180 seconds and is renewed while it is held, so a daemon that dies holding
 it blocks other landings for three minutes at most. A push that the remote
-rejects because the tip moved goes back to step 2. A remote that cannot be
-reached releases the lease and exits with code 4.
-
-Rules:
+rejects because the tip moved rebases again. A remote that cannot be reached
+releases the lease and exits with code 4.
 
 - A ticket closes when it lands. The session does not wait for tip verification.
-- A failed gate exits with code 2 and leaves the ticket tree as it is, rebased.
+- A failed gate exits with code 2 and leaves the ticket tree as it is: unrebased
+  when the gate ran there by verdict, rebased in strict mode.
 - `ignite land` refuses a tree whose branch is not the ticket's, and a tree with
   files that are neither committed nor ignored, naming them. Scratch output
   belongs in the session's scratch folder.
@@ -2183,8 +2363,8 @@ Rules:
 - Paths in a failed gate's output are relative to the repository, because the
   gate may have run in a landing tree that the next landing reuses. The rerun
   command works in the ticket tree.
-- The landing tree that ran a gate already holds the new tip's build when the
-  landing succeeds.
+- In strict mode the landing tree that ran a gate already holds the new tip's
+  build when the landing succeeds.
 - A check with an open regression ticket is left out of other tickets' gates and
   reported as `known-failing`, so one broken check fails nobody else's landing.
   The ticket that fixes it must make it pass, and the check leaves that state
@@ -2194,74 +2374,21 @@ Rules:
   ticket counts too, though no title names it.
 - A check can fail at the tip before tip verification has filed its ticket. So
   when every fault of a gate is a check failure that its rerun confirmed, the
-  landing asks whether each of those checks fails at the tip it was rebased onto
-  too. It runs them in a free landing tree checked out at that tip, or, when
-  none is free, in its own landing tree, which it then checks out at the rebased
-  commit again. Each check is answered from the result cache where that tip's
-  input hash has a result. A check that fails there too is reported to the hub
-  as a regression at once, which opens or joins a regression ticket as tip
-  verification would, naming the commits since the last verified one without a
-  culprit search. If every failure fails at the tip too, the gate runs again
-  with those checks `known-failing`, for the rest of the landing, and the checks
-  that already passed come from the cache. If any passes at the tip, the landing
-  is refused as before, and the `base` line says which check passed there. A
-  check that fails at the tip counts as known to fail even when its failure in
-  the landing says something different, such as more findings: the adapters
-  report no list of findings to compare.
-
-### Landing by verdict
-
-On 2026-11-19 the median landing through the gate took 7.8 minutes and the
-slowest 91 minutes over 7 passes. Each pass rebased the ticket tree onto the
-tip, gated the rebased commit, and went back to the rebase when another landing
-had moved the tip, which rebuilt and ran every family whose inputs the newly
-landed commits touched. None of the 23 extra passes that lost races caused found
-a failure.
-
-With `[land] mode = "verdict"`, a change that touches none of Ignite's own
-source and that the express lane does not take lands by its verdict instead:
-
-1. The ticket tree is checked as in step 1 above, a record an earlier landing
-   left is settled, and the formatters run on the change.
-2. The base is the merge base of the tree's `HEAD` with the tip. A base
-   committed more than `max_base_age_hours` (default 12) ago is replaced: the
-   ticket tree is rebased onto the tip for real.
-3. The landing looks up the verdict for the tree's files, the base and the
-   `[gate]` section, at the hub and then in the daemon's local table. Without
-   one, the gate runs in the ticket tree as it is, a failure that the gate's
-   rerun confirmed is compared with the base rather than the tip, and a pass
-   stores the verdict. A check that fails at the base too is filed as a
-   regression and left out only when the base is the tip; on an older base it
-   may be fixed at the tip, so nothing is filed and the reply says to run
-   `ignite sync` and land again.
-4. The commits are rebased onto the tip in git's object database
-   (`Git::replay`), the lease is taken, and the rebased commit is pushed. When
-   the tip moves or the remote rejects the push, the landing rebases again in
-   the object database and runs nothing, 20 times at most. A conflict exits with
-   code 3 and the files.
-5. The hub is told, and the ticket tree is released parked at its own `HEAD`,
-   which is what its builds match: the pushed commit exists only in the object
-   database.
-
-The reply starts with a `verdict` line (\`passed for this tree N min ago on
-
-<base>`, or the gate's own lines and whether the verdict was stored) and a
-`rebased` line (`onto staging <tip> without a checkout: N commits landed since
-<base>`), then the usual `landed`, `title` and `next` lines.
-
-A ticket that a tip round reverted (metadata `reverted` at the hub) skips steps
-2 and 3: its tree is rebased onto the tip for real and the gate runs there, so
-the build checks judge the rebased code.
-
-A change to Ignite's own source (a file under `ignite/` other than the check
-manifests) and every change the express lane takes land as before, in either
-mode: that path compiles and tests Ignite on the exact commit that lands and
-moves the release branch to it, and a rebased commit that nothing compiled could
-move it to a release no daemon can build. So that every change to Ignite stays
-an express landing, in verdict mode `ignite land` and `ignite check` refuse a
-change that mixes Ignite's own source with files outside the `[express] paths`,
-with exit code 1, naming those files; a check manifest with the tool it runs is
-not a mix.
+  landing asks whether each of those checks fails where the change began too: at
+  the tip it was rebased onto in strict mode, at its base by verdict. It runs
+  them in a free landing tree checked out at that commit, or, when none is free,
+  in its own landing tree, which it then checks out at the landing's commit
+  again. Each check is answered from the result cache where that commit's input
+  hash has a result. A check that fails there too is reported to the hub as a
+  regression at once (by verdict, only when the base is the tip), which opens or
+  joins a regression ticket as tip verification would, naming the commits since
+  the last verified one without a culprit search. If every failure fails there
+  too, the gate runs again with those checks `known-failing`, for the rest of
+  the landing, and the checks that already passed come from the cache. If any
+  passes at the tip, the landing is refused as before, and the `base` line says
+  which check passed there. A check that fails at the tip counts as known to
+  fail even when its failure in the landing says something different, such as
+  more findings: the adapters report no list of findings to compare.
 
 ### Express landings
 
@@ -2510,6 +2637,17 @@ Tip verification is what slow CI, the browser sweep and the nightly run become:
 the regression checks that the gate left out, run once per tip. Nothing in it
 runs on a timer.
 
+Since a change lands by the verdict it earned on its own base (see
+[Landing](#landing)), tip verification is also where two changes that each
+passed alone and fail together are found. A round first runs the build checks
+and moves `green`, the branch new tickets start from, to a tip that compiles.
+When a build check fails, the round reverts the one landing that broke it (see
+[A broken build is reverted](#a-broken-build-is-reverted)). Every other failure
+is fixed forward: the round reports a regression, the hub files a regression
+ticket, and the fix lands on top (see
+[Regression tickets](#regression-tickets)). `master` moves only once the
+budgeted checks pass, as before.
+
 How a daemon verifies a tip:
 
 - It learns of a new tip from the hub's change feed.
@@ -2732,6 +2870,13 @@ stays that way `green` cannot move, tip rounds build nothing, and later landings
 pile onto code nobody can compile. With `[revert] broken_build = true`, a tip
 round removes such a landing instead of waiting tens of minutes for a fix. Any
 other failing check is fixed forward through a regression ticket, as below.
+
+Nothing but a broken build is reverted. A revert pulls code out from under
+tickets that already build on it, and it is a second way for work to move
+through the system. A failing test stops nobody from working: the tip still
+compiles, `green` still moves, and only `master` waits for the fix. An earlier
+design reverted the landing behind any failing check and was cut down to this
+for those reasons.
 
 A failing build check (a check of a family declared `builds = true`, run only
 when `repository.green` is set) reverts its culprit when all of these hold, and
@@ -4171,6 +4316,9 @@ guide    ignite guide regression   (read it before you change anything)
   tests, exercise the change by hand, and read the whole diff as a reviewer
   before landing. A check that could not run is not a pass.
 - Tests go through public behavior and never depend on the machine's speed.
+- `ignite check` is what a change needs before landing: `ignite land` lands the
+  checked commits by their verdict. A change to Ignite's own source lands alone,
+  and a change that mixes it with other files is split into two tickets.
 - Ordinary difficulty is the job: failing tests, confusing code, conflicts.
   Never wait for a person, for another ticket, for another machine or for
   verification.
@@ -4208,6 +4356,12 @@ Each topic is printed by the command that makes it relevant.
 - `review`, on `ignite start` of a review ticket or one labeled `review:inline`.
   What a review looks for, when to rewrite, what is not a finding, and that the
   reviewer fixes what it finds.
+- `reverted`, on `ignite start` of a ticket whose landing a tip round reverted,
+  and named by `ignite prime` for a session told that a ticket its own depends
+  on was reverted. The reopened ticket starts again, applies its work with the
+  `git revert --no-edit <revert commit>` its brief gives, fixes the build and
+  lands; a dependent ticket is released and handed out again when the reverted
+  one lands.
 - `regression`, on `ignite start` of a regression ticket. Reproduce it first and
   read the ticket that caused it. Fix forward. A fault of the product is fixed
   in the product, and a test that fails while the product is right is probably
@@ -4366,6 +4520,24 @@ These are the choices that were weighed against measurements and set aside.
   the dependency's check-and-land tail, a few minutes per link, at the cost of
   rebasing work onto commits that can still change. Chains are shortened by the
   plan's shape.
+- **Checking every landing on the exact tip, made cheaper.** This is what Ignite
+  did until landing by verdict: carrying results over between passes, holding
+  the `staging` lease only for the push, keeping one landing tree per landing.
+  Each fix handled one case, and the number of passes still grows exponentially
+  with the rate of landings that invalidate each other (see
+  [Why a landing checks once](#why-a-landing-checks-once)).
+- **A merge queue that tests each change on top of the ones ahead of it**, as
+  Bors, GitHub's merge queue and Uber's SubmitQueue do. It keeps `staging`
+  always passing, but makes every landing wait for at least one full run of the
+  gate at the tip, and builds the tip for every landing, sometimes on a
+  combination thrown away when a change ahead fails. `master` is already a
+  branch that always passes, so `staging` does not need to be one.
+- **Reverting the landing behind any failing check.** A revert pulls code out
+  from under tickets that build on it, and a failing test stops nobody from
+  working. Only a broken build is reverted (see
+  [A broken build is reverted](#a-broken-build-is-reverted)).
+- **More cores.** A larger machine shortens every build and leaves the race and
+  the repeated builds growing as before.
 - **Randomized trials of workflow settings.** Set aside by decision. Ignite
   reports comparisons and leaves settings to people.
 - **Replacing Enact in stages.** Two systems would share cores and worktrees

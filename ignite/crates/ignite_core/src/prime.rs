@@ -19,19 +19,20 @@ pub const VERB_HELP: &[(&str, &str)] = &[
     ("sync", "rebase your branch onto the tip"),
     (
         "land -m <note>",
-        "rebase, gate, land, close, release the tree",
+        "land the checked commits, close, release the tree",
     ),
     (
-        "release -m <note>",
-        "give the ticket back unfinished, work kept",
+        "release -m <note>, close -m <reason>",
+        "give the ticket back with its work, or close it with nothing to land",
     ),
-    ("close -m <reason>", "close with nothing to land"),
     (
         "run -- <cmd>",
         "run any other heavy command with daemon cores",
     ),
-    ("wait <handle>", "block until a running operation finishes"),
-    ("stop <handle>", "end a running command of yours"),
+    (
+        "wait <handle>, stop <handle>",
+        "block until an operation finishes, or end yours",
+    ),
     (
         "ticket <verb>",
         "create, show, list, link, comment on tickets",
@@ -41,8 +42,10 @@ pub const VERB_HELP: &[(&str, &str)] = &[
         "justiciar <reason>",
         "an emergency, or a ticket impossible as written",
     ),
-    ("why <check>", "a check's cost, failures and where it runs"),
-    ("status, doctor", "this machine's state and health"),
+    (
+        "why <check>, status, doctor",
+        "a check's record; this machine's state and health",
+    ),
     ("guide <topic>", "the rules for one situation"),
 ];
 
@@ -53,9 +56,12 @@ pub fn prime(config: &Config) -> String {
         "\
 # Ignite workflow
 Claim with `ignite start <ticket>`, edit in the tree it prints, commit there (`land` refuses
-uncommitted files), run `ignite check`, then land to `{staging}` with `ignite land -m <note>`.
-`ignite check` is all a plain change needs before landing; `ignite guide flaky-checks` is for a
-flaky, hung or never-catching check. Every command prints a verdict first, a `next` line last.
+uncommitted files), run `ignite check`, then land the checked commits to `{staging}` with
+`ignite land -m <note>`. `ignite check` is what a change needs before landing: `land` uses its
+stored verdict, not checking again when `{staging}` has moved. A change to Ignite's own source
+lands alone (`land` refuses one with other files; split it into two tickets). See `ignite guide
+reverted` for a ticket that came back reverted or depends on one that was, and `ignite guide
+flaky-checks` for a flaky, hung or never-catching check. Every command prints a verdict first.
 
 ## Rules
 - Nobody answers questions. Decide, act, and record the choice and why on the ticket.
@@ -134,6 +140,10 @@ mod tests {
             "never depend on the machine's speed",
             "Ordinary difficulty is the job",
             "Never wait for a person, for another ticket, for another machine or for verification",
+            "land the checked commits",
+            "what a change needs before landing",
+            "Ignite's own source lands alone",
+            "`ignite guide reverted`",
             "verdict says whose failure it is",
             "never decide yourself that a failure is unrelated",
             "nothing will report",

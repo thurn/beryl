@@ -1,0 +1,28 @@
+REVERTED: a landing a tip round took back off the integration branch
+
+Landings are checked on the tree they were written in, not on the newest
+commit, so two landings that each build alone can leave a tip that does
+not build. A tip round then reverts the one landing that broke the build
+and reopens its ticket. Nothing else is ever reverted: any other failing
+check gets a regression ticket and is fixed forward.
+
+Your own ticket came back reverted (its brief has a reverted line):
+- Run ignite start <ticket>. The tree starts without your work: the
+  revert commit removed it.
+- Apply the work again with the command the reverted line gives:
+  git revert --no-edit <revert commit>.
+- Read the failing check's output on the ticket, fix the build, commit,
+  and run the failing check with ignite test before you land.
+- Land with ignite land. A reverted ticket's landing rebases onto the
+  newest commit and checks there, build checks included, so it is slower
+  than usual. That is expected.
+
+You were told that a ticket yours depends on was reverted:
+- Its code is gone from the tip, and your tree may not build. Commit what
+  you have and run ignite release with a note saying where you stopped.
+  Your ticket is handed out again when the reverted one lands.
+- Do not fix the reverted ticket's build yourself: its own session works
+  on it.
+
+A revert commit (subject starting "revert: ") is never reverted. When the
+tip fails with one, a regression ticket is filed instead.

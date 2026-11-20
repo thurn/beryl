@@ -153,6 +153,9 @@ fn working(ticket: &Ticket) -> &'static str {
 
 /// The guide topic the ticket's labels call for.
 fn guide(ticket: &Ticket) -> Option<&'static str> {
+    if ticket.metadata.contains_key("reverted") {
+        return Some("reverted");
+    }
     GUIDES
         .iter()
         .find(|(label, _)| ticket.labels.iter().any(|l| l == label))

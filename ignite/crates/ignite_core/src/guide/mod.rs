@@ -52,6 +52,11 @@ pub const TOPICS: &[Topic] = &[
         text: include_str!("regression.txt"),
     },
     Topic {
+        name: "reverted",
+        summary: "a ticket whose landing was reverted, or that depends on one",
+        text: include_str!("reverted.txt"),
+    },
+    Topic {
         name: "flaky-checks",
         summary: "a flaky, hung or never-catching check",
         text: include_str!("checks.txt"),
