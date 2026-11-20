@@ -34,6 +34,8 @@ struct TestHub {
 impl TestHub {
     fn start(name: &str) -> TestHub {
         let dir = std::env::temp_dir().join(format!("ignite-checks-{name}-{}", std::process::id()));
+        // Process IDs are reused, so a database left by an earlier run must not survive.
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let conn = Arc::new(Mutex::new(hub::open(&dir.join("hub.sqlite")).unwrap()));
         let server = Server::http("127.0.0.1:0").unwrap();
