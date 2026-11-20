@@ -49,10 +49,12 @@ fn main() -> ExitCode {
 /// and `test-runner.exe` (`ignite_daemon::wrap`), so a call by one of those names gets the
 /// matching verb inserted after the program name.
 fn with_shim_verb(mut raw: Vec<String>) -> Vec<String> {
-    let stem = raw
-        .first()
-        .and_then(|program| std::path::Path::new(program).file_stem())
-        .and_then(|stem| stem.to_str());
+    // Split on both separators by hand: `Path` only knows the host's separator, so a Windows path
+    // would not be recognized when this runs elsewhere (as the unit test does).
+    let stem = raw.first().map(|program| {
+        let name = program.rsplit(['/', '\\']).next().unwrap_or(program);
+        name.strip_suffix(".exe").unwrap_or(name)
+    });
     let verb = match stem {
         Some("rustc-wrap") => "rustc-wrap",
         Some("test-runner") => "runner",
