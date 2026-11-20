@@ -271,8 +271,8 @@ pub(crate) fn candidate_id(conn: &Connection, name: &str) -> Result<String> {
     Ok(canonical(stripped))
 }
 
-/// The ticket `name` spells in any case, with or without its leading letter (`T`, `E`, `M`
-/// or `A`).
+/// The ticket `name` spells in any case, with or without its leading letter (`T`, `E`, `M`,
+/// `A` or `B`).
 /// A root is used under only one letter, so at most one candidate with a letter added exists.
 pub(crate) fn spelled_ticket(conn: &Connection, name: &str) -> Result<Option<String>> {
     let upper = name.to_ascii_uppercase();
@@ -293,7 +293,8 @@ pub(crate) fn spelled_ticket(conn: &Connection, name: &str) -> Result<Option<Str
 }
 
 /// A name in the form IDs are stored in: capitals, with a leading `T` (or the `E` of an epic,
-/// the `M` of a meta-ticket or the `A` of a ticket Ignite filed on its own).
+/// the `M` of a meta-ticket, the `A` of a ticket Ignite filed on its own or the `B` of a bug
+/// report).
 pub(crate) fn canonical(name: &str) -> String {
     let upper = name.to_ascii_uppercase();
     if upper.starts_with(ROOT_PREFIXES) {
@@ -596,7 +597,7 @@ fn search_candidates(
         return Err(StoreError::Rejected("search query is required".to_owned()));
     }
     let query = phrase.to_lowercase();
-    // IDs are stored in capitals with a leading letter (`T`, `E`, `M` or `A`), so a phrase is
+    // IDs are stored in capitals with a leading letter (`T`, `E`, `M`, `A` or `B`), so a phrase is
     // compared with them in capitals, with and without each letter; aliases are stored in
     // lowercase.
     let upper = phrase.to_ascii_uppercase();

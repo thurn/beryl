@@ -88,8 +88,8 @@ pub fn display(value: &mut Value) {
     }
 }
 
-/// One ticket ID spelled with its letter: `T`, or the `E`, `M` or `A` of an epic, a meta-ticket
-/// or a ticket Ignite filed on its own.
+/// One ticket ID spelled with its letter: `T`, or the `E`, `M`, `A` or `B` of an epic, a
+/// meta-ticket, a ticket Ignite filed on its own or a bug report.
 pub fn spelled(id: &str) -> String {
     let mut value = Value::String(id.to_owned());
     prefix(&mut value);
@@ -98,11 +98,11 @@ pub fn spelled(id: &str) -> String {
 
 /// Adds the `T` an ID from before IDs were stored in capitals lacks. An epic's ID may start
 /// with a capital `E` (`EQ44S`), a meta-ticket's with a capital `M` (`MAB12`) and an automatic
-/// ticket's with a capital `A` (`AR2D2`), which no such older ID does, since those were
+/// ticket's with a capital `A` (`AR2D2`) and a bug report's with a capital `B` (`BX9K2`), which no such older ID does, since those were
 /// lowercase.
 fn prefix(value: &mut Value) {
     if let Value::String(id) = value
-        && !id.starts_with(['T', 'E', 'M', 'A'])
+        && !id.starts_with(['T', 'E', 'M', 'A', 'B'])
     {
         id.insert(0, 'T');
     }

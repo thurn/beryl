@@ -94,11 +94,11 @@ fn collect(chars: &[char]) -> String {
 }
 
 /// Whether `name` has the shape of the root ID of a meta-ticket or of a ticket Ignite filed on
-/// its own: `M` or `A` and four capitals or digits (`MAB12`, `AR2D2`), which ordinary words
+/// its own: `M`, `A` or `B` and four capitals or digits (`MAB12`, `AR2D2`, `BX9K2`), which ordinary words
 /// written in capitals rarely are.
 fn lettered_root(name: &str) -> bool {
     name.len() == 5
-        && name.starts_with(['M', 'A'])
+        && name.starts_with(['M', 'A', 'B'])
         && name
             .chars()
             .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
