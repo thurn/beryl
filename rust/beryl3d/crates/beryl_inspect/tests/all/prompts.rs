@@ -65,10 +65,7 @@ fn a_payment_says_what_is_left_to_pay_unless_a_mana_payment_has_paid_nothing() {
     // The element's id (`#<n>`) counts the elements made before it, and its position follows the
     // dock's layout, so both change whenever a screen does and are left out.
     let words = asks(&mut at("pay-default", 2, SETTLE_MS));
-    assert!(
-        words.starts_with("text \"Pay {1}{W}.\" #"),
-        "{words}"
-    );
+    assert!(words.starts_with("text \"Pay {1}{W}.\" #"), "{words}");
     // A waterbend cost keeps its amount beside the title, as mana symbols.
     let mut page = at("shape-pay", 10, SETTLE_MS);
     let words = asks(&mut page);
