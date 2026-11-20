@@ -31,9 +31,13 @@ pub fn dispatch_request_wait_s(wait: u32) -> u32 {
     wait.saturating_add(DISPATCH_MARGIN_S)
 }
 
-/// Environment variables that name the asking session, first match wins: Ignite's own, then
-/// the one the Claude desktop app gives its sessions.
-pub const SESSION_VARIABLES: &[&str] = &["IGNITE_SESSION", "CLAUDE_CODE_HOST_SESSION_ID"];
+/// The explicit override and the IDs that the desktop apps use to address their sessions.
+/// Codex hand-offs report the thread ID, so worker commands must use that same ID.
+pub const SESSION_VARIABLES: &[&str] = &[
+    "IGNITE_SESSION",
+    "CLAUDE_CODE_HOST_SESSION_ID",
+    "CODEX_THREAD_ID",
+];
 
 /// Verbs sent without the asking session, which names its session in its arguments instead.
 /// The daemon records each session's current command, and `turn-ended`, which a session's
@@ -192,6 +196,13 @@ mod tests {
             _ => None,
         };
         assert_eq!(session_from_env(env).unwrap().as_str(), "local_abc");
+        let thread = "0196857d-2f65-709b-b98e-bf84c11aa637";
+        let codex = |name: &str| match name {
+            "CODEX_THREAD_ID" => Some(thread.to_owned()),
+            "CODEX_SESSION_ID" => Some("different-id".to_owned()),
+            _ => None,
+        };
+        assert_eq!(session_from_env(codex).unwrap().as_str(), thread);
         let both = |name: &str| Some(format!("{name}-value"));
         assert_eq!(
             session_from_env(both).unwrap().as_str(),

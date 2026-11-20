@@ -8,6 +8,9 @@ Your job starts when the person sends `/ignite pool <n>`, and then it is only
 the loop below. Never plan, read tickets, summarize or decide; write one short
 line per action.
 
+In Codex, follow [In Codex](#in-codex). The setup and loop immediately below are
+for Claude.
+
 ## `/ignite pool <n>`
 
 The person may send this again later to add more workers. Do the steps in order
@@ -91,21 +94,49 @@ Rules:
 
 ## In Codex
 
-- `/ignite pool <n>` only registers you, with
-  `ignite pool add <your thread ID> --app codex --dispatcher --slots <n>`, and
-  starts the loop. Codex keeps no standing workers: each hand-off is a new chat,
-  and `n` is how many of them may run tickets at once. Sending it again with
-  another `n` changes the count; `0` keeps the count you had.
-- A hand-off names no session. Open a new chat in the project at `{checkout}`,
-  given by its full path, never matched by name, and send it `prompt`. Report
-  `ignite dispatch ack <id> ok <the new chat's thread ID>`: that thread then
-  holds the ticket, and later `check` and `message` instructions name it. Only a
-  ready thread ID identifies a worker. If the result is unclear, find the chat
-  and confirm its project and the reservation code in its prompt; never open a
-  second one.
-- A `check` is answered `running`, `idle` or `gone`, or `unknown` when the
-  lookup failed. A session is gone only when the app says it no longer exists or
-  is archived; a list that does not show it proves nothing.
-- Wait on the background wait with the app's event wait: a long foreground
-  command wakes you about once a minute.
-- On `rotate`, open the new dispatcher chat in this folder and stop.
+A person can work a ticket by opening a local Codex chat in `{checkout}` and
+sending `ignite start <ticket>`. Give each ticket a fresh chat. Ignite leases
+the build tree, and the CLI uses `CODEX_THREAD_ID` to identify the worker. Keep
+the turn active through any command that is still running. If Ignite returns a
+handle, use `ignite wait <handle>` for its result. Land or release the ticket
+before ending the turn. The worker's automatic Stop hook is currently installed
+for Claude only.
+
+To try pool dispatch, use a bounded run in a local Codex desktop chat on the
+same machine as the Ignite daemon. Check that the Codex thread tools are
+available and that the worker launch configuration allows the shell commands
+Ignite needs. The creation tool requires the person's explicit request to open
+worker chats. Sending follow-ups requires their explicit authorization to
+message the destination. Treat these as separate from registering capacity.
+
+1. For `/ignite pool <n>`, register with
+   `ignite pool add --app codex --dispatcher --slots <n>`. The daemon uses this
+   chat's `CODEX_THREAD_ID`; `n` is the maximum number of active worker chats.
+   Sending it again with another count changes capacity. `0` keeps the count.
+2. Use a bounded `ignite dispatch --wait 30` while the turn is active and read
+   its result before ending the turn. Take another instruction only within the
+   person's request. Codex's `wait_threads` observes other chats. A shell wait
+   finishing after the turn ends has no verified Codex wake-up here.
+3. On `handoff`, use `list_projects` and match the local project's full path,
+   `{checkout}`. Use the project ID with `create_thread` and a `local`
+   environment. Pass the instruction's `prompt` as the initial prompt, along
+   with `model` and `effort` as `model` and `thinking` when supplied. The model
+   must be an ID accepted by this host, as configured in `[pool.models.codex]`.
+   Report `ignite dispatch ack <id> ok <threadId>` with the ready thread ID.
+   Acknowledge `failed` with the reason if the tool definitively refused to
+   create the chat. If the result is unclear, look up the existing chat and
+   confirm its project path and reservation code before acknowledging it. A
+   queued `clientThreadId` is not a ready thread ID. Do not open a second chat
+   for the same instruction.
+4. On `check`, read the exact thread with `read_thread`. Run
+   `ignite dispatch ack <id> running` for a confirmed active thread (including
+   one that needs attention) or `idle` for a confirmed idle thread. Use `gone`
+   only for confirmed deletion or archival. Use `unknown` for an unclear result
+   or failed lookup.
+5. On `message`, use `send_message_to_thread` for the named and authorized
+   thread with `prompt` as supplied. Acknowledge `ok` after success or `failed`
+   with the reason if the message was refused. On `idle`, the wait is done and
+   needs no acknowledgement.
+6. On `rotate`, the person can open a fresh dispatcher chat in this folder and
+   send `/ignite pool 0`. The new dispatcher inherits the current slots and
+   worker chats. Stop reading instructions in the old dispatcher.

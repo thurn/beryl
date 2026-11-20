@@ -15,9 +15,9 @@ use ignite_daemon::tip::TipOutcome;
 
 use world::{World, ask, commit, detail, start, ticket};
 
-/// `ignite start`, an edit, `ignite test`, a commit and `ignite land`, sent through the real
-/// `ignite` executable and the daemon's socket. The commit reaches `staging`, the ticket is
-/// closed with its note, and `master` moves once the tip is verified.
+/// A Codex thread uses the real executable to start, test and land a ticket over the daemon's
+/// socket. The commit reaches `staging`, the ticket closes with its note, and `master` moves
+/// once the tip is verified.
 #[test]
 fn a_ticket_lands_and_master_moves_once_the_tip_is_verified() {
     let world = World::new("one");
@@ -30,7 +30,8 @@ fn a_ticket_lands_and_master_moves_once_the_tip_is_verified() {
             .args(args)
             .current_dir(cwd)
             .env("IGNITE_HOME", &home)
-            .env("IGNITE_SESSION", "local_e2e1")
+            .env("CODEX_THREAD_ID", "0196857d-2f65-709b-b98e-bf84c11aa637")
+            .env_remove("IGNITE_SESSION")
             .env_remove("CLAUDE_CODE_HOST_SESSION_ID");
         let output = command.output().unwrap();
         (

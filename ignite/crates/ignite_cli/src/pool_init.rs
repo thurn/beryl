@@ -176,8 +176,9 @@ pub fn run(folder: &Path, checkout: &Path) -> Reply {
         Ok(()) => Reply::text(
             Exit::Success,
             format!(
-                "wrote    {}\nnext     open a session in that folder on Haiku, in a permission \
-                 mode that never prompts, and send `/ignite pool <n>`",
+                "wrote    {}\nnext     in Claude, open that folder on Haiku, in a permission \
+                 mode that never prompts, and send `/ignite pool <n>`\n         \
+                 in Codex, open that folder locally and follow `In Codex` in its AGENTS.md",
                 folder.display()
             ),
         ),

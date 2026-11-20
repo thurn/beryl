@@ -240,6 +240,7 @@ impl Drill {
             .env("IGNITE_HOME", &self.home)
             .env_remove("IGNITE_SESSION")
             .env_remove("CLAUDE_CODE_HOST_SESSION_ID")
+            .env_remove("CODEX_THREAD_ID")
             .env_remove("IGNITE_HUB_LISTEN")
             .env_remove("IGNITE_HUB_PUBLIC_LISTEN")
             .env_remove("IGNITE_RESTART_FROM");
