@@ -315,8 +315,9 @@ pub struct TipVerifier {
     saved: Option<state::Saved>,
     /// How often a running batch's claim is renewed (see `families`).
     renew_every: std::time::Duration,
-    /// The commits of each landing this round reverted (see `revert`).
-    reverted: Vec<Vec<Commit>>,
+    /// The commits of each landing this round reverted, and the commit that undid them (see
+    /// `revert`).
+    reverted: Vec<(Vec<Commit>, Commit)>,
     /// Reverts pushed that the hub has not taken yet.
     unsent_reverts: Vec<ignite_core::protocol::hub::Reverted>,
     /// How the round waits for a lease another holder has.

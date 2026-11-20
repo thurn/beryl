@@ -670,9 +670,10 @@ How the executable is installed and kept current:
   still starts after a release that added a table or column.
 - Settings for landing by verdict exist: `[land] mode` (`"strict"`, the default,
   or `"verdict"`) with `max_base_age_hours` (default 12) and
-  `[revert] broken_build` (default false; see
-  [A broken build is reverted](#a-broken-build-is-reverted)) change nothing yet,
-  and `repository.green` (unset by default; it must differ from `staging` and
+  `[revert] broken_build` (default false; when set, tip rounds revert a landing
+  that broke the build, see
+  [A broken build is reverted](#a-broken-build-is-reverted)), and
+  `repository.green` (unset by default; it must differ from `staging` and
   `master`) gives tip rounds a build step (see
   [Tip verification](#tip-verification)). The hub's `Hub::verdict`,
   `Hub::store_verdict` and `Hub::reverted` are declared, with fakes. The hub
@@ -2679,8 +2680,8 @@ when `repository.green` is set) reverts its culprit when all of these hold, and
 is otherwise reported as a regression:
 
 - the search ended at one landing: the only candidate, or found by bisection;
-- the failure came from a run on this machine in this round, not from a result
-  another machine stored;
+- the check fails again when the round runs it at the tip once more, ignoring
+  cached results, so a fault of one run reopens no ticket;
 - the landing changed none of Ignite's own source, whose releases the landing
   itself judges and moves;
 - the landing is not made only of a round's own revert commits (subjects
@@ -2695,10 +2696,13 @@ The revert commit's subject is `revert: <the landing's first subject>`, cut to
 takes the hub's lease on `staging` as a landing does, waiting while a landing
 holds it, checks that the tip has not moved, and pushes. When the tip moved, it
 builds the revert again on the new tip, three times at most, then reports a
-regression instead. It then tells the hub (`Hub::reverted`), which reopens the
+regression instead. A new tip that changed what the check reads, such as a fix
+or another machine's revert, is left to the next round, which runs the check
+there first. The round then tells the hub (`Hub::reverted`), which reopens the
 landing's ticket; a report the hub does not take is kept in the verifier's
 memory and sent again at the start of the next round. Another build check that
-failed with the same landing is covered by the same revert.
+failed with the same landing is covered by the same revert once it passes at
+that revert commit.
 
 ### Regression tickets
 

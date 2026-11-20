@@ -159,9 +159,22 @@ fn a_build_check_broken_by_one_landing_is_reverted() {
     );
     assert!(world.hub.regressions().is_empty());
     assert_eq!(staging_pushes(&world), vec![commit("cccc000")]);
-    // The check ran at the revert before it was pushed.
-    let runs: Vec<Commit> = world.work.runs().into_iter().map(|run| run.1).collect();
-    assert_eq!(runs, vec![tip, commit("cccc000")]);
+    // The check ran at the tip again, ignoring the cache, then at the revert before it was
+    // pushed.
+    let runs: Vec<(Commit, bool)> = world
+        .work
+        .runs()
+        .into_iter()
+        .map(|run| (run.1, run.3))
+        .collect();
+    assert_eq!(
+        runs,
+        vec![
+            (tip.clone(), false),
+            (tip, true),
+            (commit("cccc000"), false)
+        ]
+    );
     let reverted = world.hub.reverted_landings();
     assert_eq!(reverted.len(), 1);
     assert_eq!(reverted[0].ticket, Some(ticket("tk.40")));
@@ -403,4 +416,85 @@ fn a_revert_the_hub_missed_is_sent_with_the_next_round() {
 
     assert_eq!(world.hub.reverted_landings(), vec![missed]);
     assert!(verifier.unsent_reverts.is_empty());
+}
+
+/// Calls `hook` when the second run at `at` starts, after the round's own run there and the
+/// culprit search: the round's own run sets it up as it starts.
+fn on_second_run(world: &World, at: &Commit, hook: fake::BeforeBatches) {
+    let work = world.work.clone();
+    let commit = at.clone();
+    let arm: fake::BeforeBatches = Arc::new(move || {
+        work.on_run
+            .lock()
+            .unwrap()
+            .insert(commit.clone(), hook.clone());
+    });
+    world.work.on_run.lock().unwrap().insert(at.clone(), arm);
+}
+
+/// A failure that does not happen again when the check runs at the tip once more was a fault
+/// of that run, and reopens no ticket.
+#[test]
+fn a_build_failure_that_does_not_repeat_is_reported() {
+    let failing = vet("a", 'a');
+    let (world, ctx, tip) = broken(&failing, &["src/a/lib.rs"], true);
+    clean_revert(&world);
+    let work = world.work.clone();
+    let (at, check) = (tip.clone(), failing.check.clone());
+    on_second_run(
+        &world,
+        &tip,
+        Arc::new(move || work.set_outcome(&at, &check, Outcome::Pass)),
+    );
+
+    reverting(&world).verify(&ctx, &tip).unwrap();
+
+    reported_not_reverted(&world);
+}
+
+/// A tip that moved during the search with a change to what the check reads may already hold
+/// a fix, or another machine's revert: nothing is reverted, and the next round runs the check
+/// at the new tip first.
+#[test]
+fn a_tip_that_changed_the_checks_inputs_is_left_to_the_next_round() {
+    let failing = vet("a", 'a');
+    let (world, ctx, tip) = broken(&failing, &["src/a/lib.rs"], true);
+    clean_revert(&world);
+    let newer = commit("dddd000");
+    world.git.set_changed(&tip, &newer, &["src/a/lib.rs"]);
+    let git = world.git.clone();
+    let moved = newer.clone();
+    let land: fake::BeforeBatches = Arc::new(move || git.set_tip("staging", moved.clone()));
+    // A fix lands after the search, while the check runs at the tip a second time.
+    on_second_run(&world, &tip, land);
+
+    reverting(&world).verify(&ctx, &tip).unwrap();
+
+    assert!(world.hub.regressions().is_empty());
+    assert!(staging_pushes(&world).is_empty());
+    assert!(world.hub.reverted_landings().is_empty());
+}
+
+/// Two build checks blamed on one landing share its revert, but only when each passes there.
+#[test]
+fn a_second_check_on_a_reverted_landing_must_pass_at_the_revert() {
+    let failing = vet("a", 'a');
+    let (world, ctx, tip) = broken(&failing, &["src/a/lib.rs", "src/b/lib.rs"], true);
+    clean_revert(&world);
+    let other = vet("b", 'b');
+    world
+        .work
+        .set_checks(&tip, vec![failing.clone(), other.clone()]);
+    world.work.set_outcome(&tip, &other.check, Outcome::Fail);
+    world
+        .work
+        .set_outcome(&commit("cccc000"), &other.check, Outcome::Fail);
+
+    reverting(&world).verify(&ctx, &tip).unwrap();
+
+    assert_eq!(staging_pushes(&world), vec![commit("cccc000")]);
+    assert_eq!(world.hub.reverted_landings()[0].checks, vec![failing.check]);
+    let regressions = world.hub.regressions();
+    assert_eq!(regressions.len(), 1);
+    assert_eq!(regressions[0].check, other.check);
 }

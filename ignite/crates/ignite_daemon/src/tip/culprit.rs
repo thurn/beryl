@@ -14,6 +14,7 @@ use ignite_core::protocol::hub::{FoundBy, RegressionReport};
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::Result;
 
+use super::revert::Handled;
 use super::{Culprit, MAX_RUNS, TipCheck, TipVerifier, tail, touches};
 use crate::server::Context;
 
@@ -147,11 +148,15 @@ impl TipVerifier {
             format!("the landings could not be read: {error}")
         });
         // A build check broken by one landing is reverted instead, when `revert` allows it.
-        if let Ok(Some(found)) = &culprit
-            && self.try_revert(ctx, tip, check, found, output)
-        {
-            self.reported.insert(check.key.clone());
-            return Ok(());
+        if let Ok(Some(found)) = &culprit {
+            match self.try_revert(ctx, tip, check, found, output) {
+                Handled::Reverted => {
+                    self.reported.insert(check.key.clone());
+                    return Ok(());
+                }
+                Handled::NextRound => return Ok(()),
+                Handled::Report => {}
+            }
         }
         let search = match &culprit {
             Ok(Some(culprit)) => culprit.search.clone(),
