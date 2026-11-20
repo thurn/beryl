@@ -424,6 +424,7 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
         host.clone(),
         setup,
     ));
+    claims.gate_starts(dispatcher.clone());
     Ok(Desks {
         supervised: machinery.supervised.clone(),
         claims,

@@ -8,10 +8,15 @@
 //! - `pass`: the session may stop. It is not a worker of this machine's pool (a person's own
 //!   session, even one running `/ignite`, ends turns to talk to the person), it holds no ticket,
 //!   it holds a justiciar ticket, or a `land`, `release` or `close` of the session is still
-//!   running. Those verbs end the ticket, and their finish wakes the worker, so a `land` waiting
-//!   in the background holds the work legitimately. A running `test`, `check`, `sync` or `wait`
-//!   gives no such guarantee (a worker once ended many turns with a background `test` running
-//!   and nothing woke it), so it does not exempt the worker.
+//!   running. Those verbs end the ticket, so a `land` waiting in the background holds the work
+//!   legitimately.
+//! - `pass`, too, when any other `ignite` verb the session started is still running, such as a
+//!   background `ignite test` or `ignite run -- <command>`: the worker is waiting on it. The
+//!   daemon guarantees that the worker is woken once it finishes (see `wake`). A command started
+//!   any other way is invisible to the daemon, so the block text tells workers to run long
+//!   commands through `ignite run`. Without this, a worker that ended its turn on a long
+//!   background run was released at its second stop, the release reset its tree and killed the
+//!   run, and the woken worker claimed the ticket again beside the worker it was handed to.
 //! - `block`: the first stop with the ticket held. The text names the ticket and every way out
 //!   (`ignite land`, `ignite release`, and `ignite justiciar` for a ticket that cannot be done
 //!   as written), and the hook keeps the worker going with it.
@@ -27,6 +32,9 @@
 //!   reason. A ticket labelled `needs:person` is left alone: it waits on the person by design.
 //!   The title comes from the desktop app's metadata (see `session_title`); a title that cannot
 //!   be read changes nothing.
+//!
+//! A session released either way may not claim a ticket again until the dispatcher hands it one
+//! (see `wake`), and the reply tells it to stop.
 //!
 //! The client sends this verb without the asking session (see `client::UNRECORDED_VERBS` in the
 //! CLI), and the session comes from `--session` instead. A request with a session would replace
@@ -134,6 +142,10 @@ fn block_text(ticket: &TicketId) -> String {
          or gates on something you cannot control, such as a timing on a loaded machine), run \
          `ignite justiciar \"<what is impossible, and the evidence>\"` and then `ignite \
          release`.\n\
+         To wait on a long command, start it in the background as `ignite run -- <command>` \
+         (or `ignite test`, `ignite check`, `ignite wait <handle>`) and end your turn: Ignite \
+         lets you stop while it runs and wakes you when it finishes. A command started any other \
+         way does not count.\n\
          A figure measured on a loaded machine is reported, never gated on or chased, unless \
          the acceptance names a deterministic measure.\n\
          If you stop again without any of these, Ignite releases {ticket} itself, saves its tree \
@@ -224,6 +236,13 @@ impl Dispatcher {
             let sent = send_for_justiciar(ctx, host, session, &ticket, note);
             return Reply::text(Exit::Success, format!("{released}\n{sent}"));
         }
+        let waiting_on = self.running_verb(session);
+        self.note_turn_end(session, waiting_on.is_some(), ctx.clock.now());
+        if let Some(verb) = waiting_on {
+            return pass(&format!(
+                "`ignite {verb}` is still running; Ignite wakes the session when it finishes"
+            ));
+        }
         if !ended.again {
             return Reply::text(Exit::Success, block_text(&ticket));
         }
@@ -235,7 +254,12 @@ impl Dispatcher {
     fn release_ended(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> String {
         match self.host.release(session, ticket, reason) {
             Ok(()) => {
-                format!("released {ticket} from {session}; its work is saved as ignite/{ticket}")
+                self.note_released(session, ticket);
+                format!(
+                    "released {ticket} from {session}; its work is saved as ignite/{ticket}. \
+                     Stop now: do not claim it or any other ticket and do not restart its \
+                     commands; the dispatcher hands you your next ticket."
+                )
             }
             Err(error) => format!("pass     could not release {ticket} from {session}: {error}"),
         }

@@ -12,6 +12,10 @@
 //! `land`, `release` or `close` running is never looked at for a stuck command: a landing's long
 //! waits belong to the landing queue and tip verification.
 //!
+//! A worker that ended its turn waiting on an `ignite` verb is looked at sooner, once the verb
+//! has finished (see `wake`), and an idle one is told the verb finished rather than that it has
+//! been silent.
+//!
 //! Every answer leaves a record of when the session was checked, so the next check comes 30
 //! minutes later. A `running` answer used to remove the record, and the next step found the same
 //! silence and asked again: one worker writing code without running `ignite` was checked about
@@ -26,6 +30,7 @@ use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::DispatchAction;
 use ignite_core::time::Timestamp;
 
+use super::wake::WAKE;
 use super::{
     CONTINUE, Dispatcher, IDLE_AFTER_MESSAGE_S, Purpose, SILENT_S, Stall, State, ends_ticket,
 };
@@ -133,6 +138,7 @@ impl Dispatcher {
                         checked_at: now,
                         messaged_at: None,
                         stuck,
+                        woken: false,
                     },
                 );
                 (format!("; {session} is running"), None)
@@ -157,12 +163,14 @@ impl Dispatcher {
                     checked_at: now,
                     messaged_at: None,
                     stuck: None,
+                    woken: false,
                 });
                 let stuck = stall.stuck.as_ref().map(|stuck| stuck_message(&stuck.what));
+                let unprompted = if stall.woken { WAKE } else { CONTINUE };
                 match stall.messaged_at {
                     None => {
                         stall.messaged_at = Some(now);
-                        let message = stuck.as_deref().unwrap_or(CONTINUE);
+                        let message = stuck.as_deref().unwrap_or(unprompted);
                         Self::queue(
                             state,
                             Some(session),
@@ -199,7 +207,10 @@ impl Dispatcher {
     pub(super) fn release(&self, due: &DueRelease) -> String {
         let (session, ticket, reason) = (&due.session, &due.ticket, due.reason);
         match self.host.release(session, ticket, reason) {
-            Ok(()) => format!("; released {ticket} from {session}: {reason}"),
+            Ok(()) => {
+                self.note_released(session, ticket);
+                format!("; released {ticket} from {session}: {reason}")
+            }
             Err(error) => format!("; could not release {ticket} from {session}: {error}"),
         }
     }
@@ -207,10 +218,14 @@ impl Dispatcher {
     /// Checks working sessions that have run no command for 30 minutes, or whose command is
     /// stuck past its time.
     pub(super) fn watch_silence(&self, state: &mut State, now: Timestamp) {
+        Self::forget_settled(state);
         let sessions: Vec<SessionId> = state.held.keys().cloned().collect();
         for session in sessions {
             if let Some(stuck) = self.stuck(&session, now) {
                 Self::watch_stuck(state, &session, stuck, now);
+                continue;
+            }
+            if self.watch_waiting(state, &session, now) {
                 continue;
             }
             let since = match self.host.command(&session) {
@@ -250,6 +265,7 @@ impl Dispatcher {
                     checked_at: now,
                     messaged_at: None,
                     stuck: None,
+                    woken: false,
                 });
                 stall.checked_at = now;
                 stall.stuck = None;
@@ -299,6 +315,7 @@ impl Dispatcher {
                 checked_at: now,
                 messaged_at: None,
                 stuck: None,
+                woken: false,
             });
             stall.checked_at = now;
             stall.stuck = Some(stuck);

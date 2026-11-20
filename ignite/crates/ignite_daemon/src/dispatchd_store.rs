@@ -8,7 +8,8 @@
 //!
 //! Saved: the pending and given instructions, the reservations, the hand-offs that wait for
 //! another worker (`orphan`), the workers that refused (`refused`), the stalls (when a silent
-//! worker was checked and messaged), the next instruction ID and the justiciar worker. An
+//! worker was checked and messaged), the sessions whose ticket Ignite released (`released`), so a
+//! restart does not let one claim again, the next instruction ID and the justiciar worker. An
 //! instruction that was given and not acknowledged is queued again first, so that it is given
 //! again at once. Instruction IDs continue where they were, so an acknowledgement of an old ID
 //! cannot be taken for a new instruction. What is not saved is rebuilt from the hub and the
@@ -16,7 +17,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use ignite_core::ids::SessionId;
+use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::time::Timestamp;
 use ignite_store::local::rows::DispatchEntry;
 use serde::Serialize;
@@ -30,6 +31,7 @@ const RESERVED: &str = "reserved";
 const ORPHAN: &str = "orphan";
 const REFUSED: &str = "refused";
 const STALL: &str = "stall";
+const RELEASED: &str = "released";
 const META: &str = "meta";
 
 fn entry(kind: &str, key: &impl ToString, body: &impl Serialize) -> Option<DispatchEntry> {
@@ -60,6 +62,9 @@ fn entries_of(state: &State) -> Vec<DispatchEntry> {
     }
     for (session, stall) in &state.stalls {
         entries.extend(entry(STALL, session, stall));
+    }
+    for (session, ticket) in &state.released {
+        entries.extend(entry(RELEASED, session, ticket));
     }
     entries.extend(entry(META, &"next_id", &state.next_id));
     if let Some(justiciar) = &state.justiciar {
@@ -101,6 +106,13 @@ pub(super) fn restore(entries: &[DispatchEntry]) -> State {
             STALL => {
                 if let (Ok(session), Some(stall)) = (SessionId::new(&row.key), read::<Stall>(row)) {
                     state.stalls.insert(session, stall);
+                }
+            }
+            RELEASED => {
+                if let (Ok(session), Some(ticket)) =
+                    (SessionId::new(&row.key), read::<TicketId>(row))
+                {
+                    state.released.insert(session, ticket);
                 }
             }
             META => match row.key.as_str() {

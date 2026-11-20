@@ -81,9 +81,9 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
   a note.
 - A refused landing's verdict says whose failure it is. Do what its `next` line says
   (`ignite guide blocked`); never decide yourself that a failure is unrelated.
-- Start `land`, `check`, `test` and `wait` in the background where your tool can and end
-  the turn: the exit wakes you. Never poll with `sleep` or a loop. Never end a turn on work
-  that nothing will report, or stop for good holding a ticket: release it with its state.
+- Start `land`, `check`, `test`, `wait` or a long `run -- <cmd>` in the background and end
+  the turn: Ignite wakes you. Never poll with `sleep` or a loop, end a turn on work that
+  nothing will report (a command run outside Ignite), or stop holding a ticket: release it.
 - A ticket you file names a deterministic, observable acceptance (what was built, a decision,
   a file); a timing on a shared machine is never the gate. File `run X, see Y` after running X.
 - Never work in another session's tree, take its ticket or change another ticket's scope.

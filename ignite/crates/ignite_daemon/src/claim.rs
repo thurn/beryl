@@ -183,6 +183,13 @@ pub trait TreeDesk: Send + Sync {
     fn set_ticket(&self, tree: &TreeId, ticket: &TicketId) -> Result<()>;
 }
 
+/// Whether a session may claim at all. The dispatcher refuses a pool worker whose ticket Ignite
+/// released from it, until it hands that worker a ticket (see `dispatchd`'s `wake`).
+pub trait StartGate: Send + Sync {
+    /// The refusal's text when `session` may not start `ticket` (`None` for a summary).
+    fn refuse_start(&self, session: &SessionId, ticket: Option<&TicketId>) -> Option<String>;
+}
+
 /// Whether a session has an `ignite` command running, `ignite wait` included.
 pub trait RunningCommands: Send + Sync {
     fn running(&self, session: &SessionId) -> bool;
@@ -236,6 +243,8 @@ pub struct Claims {
     trees: Arc<dyn TreeDesk>,
     /// The server, once it exists: it is built with verbs that hold these claims.
     commands: OnceLock<Arc<dyn RunningCommands>>,
+    /// The dispatcher, once it exists, which may refuse a start (see [`StartGate`]).
+    gate: OnceLock<Arc<dyn StartGate>>,
     db: Mutex<Connection>,
     state: Mutex<State>,
 }
@@ -283,6 +292,7 @@ impl Claims {
             desk,
             trees,
             commands: OnceLock::new(),
+            gate: OnceLock::new(),
             db: Mutex::new(db),
             state: Mutex::new(state),
         }))
@@ -292,6 +302,11 @@ impl Claims {
     /// counts as running. A second call changes nothing.
     pub fn watch_commands(&self, commands: Arc<dyn RunningCommands>) {
         let _ = self.commands.set(commands);
+    }
+
+    /// Gives `ignite start` the gate that may refuse it. A second call changes nothing.
+    pub fn gate_starts(&self, gate: Arc<dyn StartGate>) {
+        let _ = self.gate.set(gate);
     }
 
     /// When `session`, which holds a ticket tree, last ran a command or was last seen running
@@ -356,6 +371,13 @@ impl Claims {
             Ok(parsed) => parsed,
             Err(reply) => return reply,
         };
+        let ticket = match &target {
+            Target::Ticket { id, .. } => Some(id),
+            Target::Adhoc(_) => None,
+        };
+        if let Some(refusal) = self.gate.get().and_then(|g| g.refuse_start(&session, ticket)) {
+            return Reply::text(Exit::Conflict, refusal);
+        }
         if let Target::Ticket { id, .. } = &target {
             self.claim_restored(ctx, &target, id, &session);
             if let Some(reply) = self.already_held(id, &session, &ctx.config.repository.staging) {

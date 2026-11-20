@@ -66,6 +66,8 @@ mod tell;
 mod turn;
 #[path = "dispatchd_verb.rs"]
 mod verb;
+#[path = "dispatchd_wake.rs"]
+mod wake;
 #[path = "dispatchd_work.rs"]
 mod work;
 
@@ -226,6 +228,10 @@ struct Stall {
     /// Set when the stall is a command stuck past its time rather than silence.
     #[serde(default)]
     stuck: Option<stall::Stuck>,
+    /// Set when the session ended its turn waiting on an `ignite` verb that has since finished
+    /// (see `wake`), so an idle answer gets the wake-up message.
+    #[serde(default)]
+    woken: bool,
 }
 
 #[derive(Debug, Default)]
@@ -246,6 +252,11 @@ struct State {
     /// The worker given a justiciar prompt without a ticket, and when (see `justiciar`).
     justiciar: Option<(SessionId, Timestamp)>,
     stalls: BTreeMap<SessionId, Stall>,
+    /// Sessions whose ticket Ignite released (see `wake`), which may not start another ticket
+    /// until the dispatcher hands them one.
+    released: BTreeMap<SessionId, TicketId>,
+    /// Sessions that ended their turn waiting on a running `ignite` verb, and when (see `wake`).
+    waiting: BTreeMap<SessionId, Timestamp>,
     /// Who held a tree at the last look, to notice who finished.
     held: BTreeMap<SessionId, TicketId>,
     last_ticket: BTreeMap<SessionId, TicketId>,
@@ -348,6 +359,8 @@ impl Dispatcher {
         state.stalls.remove(session);
         state.refused.remove(session);
         state.finished_at.remove(session);
+        state.released.remove(session);
+        state.waiting.remove(session);
         state
             .pending
             .retain(|q| q.body.session.as_ref() != Some(session));
@@ -864,3 +877,6 @@ mod tests;
 #[cfg(test)]
 #[path = "dispatchd_turn_tests.rs"]
 mod turn_tests;
+#[cfg(test)]
+#[path = "dispatchd_wake_tests.rs"]
+mod wake_tests;

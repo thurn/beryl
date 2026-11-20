@@ -89,14 +89,15 @@ fn a_justiciars_session_is_never_blocked_or_released() {
 }
 
 #[test]
-fn a_worker_with_a_running_test_is_blocked_then_released() {
+fn a_worker_with_a_running_test_is_waiting_and_may_stop() {
     let rig = holding(&[]);
     run(&rig, "test rust");
-    assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "block");
+    assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "pass");
     assert_eq!(
         verdict(&ended(&rig, &["--session", "local_w1", "--again"])),
-        "released"
+        "pass"
     );
+    assert!(lock(&rig.host.releases).is_empty());
 }
 
 fn run(rig: &Rig, command: &str) {

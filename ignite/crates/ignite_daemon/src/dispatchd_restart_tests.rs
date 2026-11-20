@@ -112,6 +112,7 @@ fn a_refusal_and_a_silent_workers_stall_survive_a_restart() {
                 checked_at: first.clock.now(),
                 messaged_at: Some(first.clock.now()),
                 stuck: None,
+                woken: false,
             },
         );
     }

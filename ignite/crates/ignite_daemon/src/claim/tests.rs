@@ -615,3 +615,36 @@ fn the_brief_of_a_reverted_ticket_says_how_to_apply_its_work_again() {
     let plain = start(&world, &["Tq.49"], "local_other");
     assert!(!plain.text.contains("reverted"), "{}", plain.text);
 }
+
+/// A gate that refuses `local_released` every ticket but `Tq.50`, as the dispatcher refuses a
+/// worker whose ticket Ignite released until it hands that worker one.
+struct Gate;
+
+impl super::StartGate for Gate {
+    fn refuse_start(
+        &self,
+        session: &ignite_core::ids::SessionId,
+        ticket: Option<&ignite_core::ids::TicketId>,
+    ) -> Option<String> {
+        let handed = ticket.is_some_and(|t| t.as_str() == "Tq.50");
+        (session.as_str() == "local_released" && !handed).then(|| "refused  stop now".to_owned())
+    }
+}
+
+#[test]
+fn the_gate_refuses_a_start_before_leasing_a_tree() {
+    let world = World::new();
+    world.claims.gate_starts(std::sync::Arc::new(Gate));
+    world.desk.add(ticket("Tq.48", "Counter names", ""));
+    world.desk.add(ticket("Tq.50", "Handed on", ""));
+    for args in [&["Tq.48"][..], &["Fix the flaky timer test"][..]] {
+        let reply = start(&world, args, "local_released");
+        assert_eq!(reply.exit, Exit::Conflict, "{}", reply.text);
+        assert_eq!(reply.text, "refused  stop now");
+    }
+    assert!(lock(&world.trees.leases).is_empty());
+    assert!(lock(&world.desk.claims).is_empty());
+    let reply = start(&world, &["Tq.50"], "local_released");
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert_eq!(start(&world, &["Tq.48"], WORKER).exit, Exit::Success);
+}
