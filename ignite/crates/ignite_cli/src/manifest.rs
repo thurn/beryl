@@ -52,7 +52,10 @@ fn lint(dir: &Path) -> Result<Reply, String> {
     );
     let json = serde_json::json!({ "findings": lines });
     let (exit, text) = if lines.is_empty() {
-        (Exit::Success, "every input pattern matches and every family has a machine".to_owned())
+        (
+            Exit::Success,
+            "every input pattern matches and every family has a machine".to_owned(),
+        )
     } else {
         (Exit::Usage, lines.join("\n"))
     };

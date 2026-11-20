@@ -202,7 +202,10 @@ fn two_machines_never_run_the_same_batch() {
     assert!(world.hub.tip_claim(&first).unwrap().granted);
 
     let one = world.verifier().verify(&world.ctx("m-1"), &tip).unwrap();
-    let TipOutcome::Waiting { checks: waiting, .. } = one else {
+    let TipOutcome::Waiting {
+        checks: waiting, ..
+    } = one
+    else {
         panic!("expected m-1 to wait, got {one:?}");
     };
     assert_eq!(waiting.len(), UNMEASURED_BATCH);

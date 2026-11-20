@@ -454,11 +454,7 @@ fn a_family_no_machine_of_its_platform_runs_is_reported_at_once() {
     // ever pass `unit:w` on Windows. Waiting an hour would only hold `master` longer.
     let world = World::new();
     let mut ctx = world.ctx("m-1");
-    ctx.config
-        .machine
-        .get_mut("windows")
-        .unwrap()
-        .families = Some(vec!["other".to_owned()]);
+    ctx.config.machine.get_mut("windows").unwrap().families = Some(vec!["other".to_owned()]);
     let tip = commit("bbbb000");
     world.land(&tip);
     let mut elsewhere = check("w", 'e');
