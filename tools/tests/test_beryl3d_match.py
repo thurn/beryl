@@ -509,7 +509,7 @@ def test_a_sample_lists_what_style_cannot_say_and_draws_what_it_can() -> None:
     assert samples.lacking(plain) == []
     assert samples.native_style(plain["style"]) == {  # pyre-ignore[6]
         "background": [33, 31, 28, 255],
-        "border": [[214, 192, 150, 107], 2.0],
+        "border": {"color": [[214, 192, 150, 107]] * 4, "width": [2.0] * 4},
         "radius": 8.0,
         "opacity": 0.5,
         "box_shadow": [],
@@ -517,6 +517,26 @@ def test_a_sample_lists_what_style_cannot_say_and_draws_what_it_can() -> None:
         "background_image": [],
         "mask": None,
         "filter": [],
+    }
+    # A border's sides: the shorthand, then `border-color`'s one to four values, then a side's.
+    sided = sample(
+        **{
+            "border": "1px solid #161210",
+            "border-right": "2px solid #a39787",
+        }
+    )
+    assert samples.lacking(sided) == []
+    assert samples.native_style(sided["style"])["border"] == {  # pyre-ignore[6]
+        "color": [[22, 18, 16, 255], [163, 151, 135, 255]] + [[22, 18, 16, 255]] * 2,
+        "width": [1.0, 2.0, 1.0, 1.0],
+    }
+    three = sample(
+        **{"border": "1.5px solid #000", "border-color": "#fff2b1 #eba043 #f7bc56"}
+    )
+    assert samples.native_style(three["style"])["border"] == {  # pyre-ignore[6]
+        "color": [[255, 242, 177, 255], [235, 160, 67, 255], [247, 188, 86, 255]]
+        + [[235, 160, 67, 255]],
+        "width": [1.5] * 4,
     }
     # Box shadows, drop shadows and text are drawn, and a filter of only drop shadows or only
     # brightness, grayscale, saturate and blur; a mix of the two kinds is not.

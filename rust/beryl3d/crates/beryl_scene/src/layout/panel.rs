@@ -9,8 +9,11 @@ use super::Node;
 use super::shadows::{ShadowBox, write_box_shadows};
 use super::write::{Look, intersection, scaled};
 use crate::element::paint::{blur_of, filtered};
-use crate::element::{Filter, Gradient, Shadow, Shape, Shown, Stop};
-use crate::frame::{Band, Draw, ElementLook, FrameBuilder, Role, StateBits, gradient_reach};
+use crate::element::{Border, Filter, Gradient, Shadow, Shape, Shown, Stop};
+use crate::frame::{
+    Band, Draw, ElementLook, FrameBuilder, Role, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP,
+    StateBits, gradient_reach,
+};
 use crate::input::Rect;
 use crate::table::Camera;
 use crate::text::faded;
@@ -86,9 +89,9 @@ impl Chain {
 /// The panel an element is drawn on.
 pub(super) struct Panel {
     pub(super) tint: [u8; 4],
-    pub(super) edge: [u8; 4],
+    /// Its border's colors and widths; a side of no width draws nothing.
+    pub(super) border: Border,
     pub(super) radius: f32,
-    pub(super) border: f32,
     /// Whether its style's gradients are drawn: not on a disabled button, which is flat stone.
     gradients: bool,
     /// Whether it is 10% brighter, as a button under the pointer is.
@@ -110,9 +113,8 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
     if active {
         return Some(Panel {
             tint: color::MENU_ACTIVE,
-            edge: color::GOLD_SOFT,
+            border: Border::uniform(color::GOLD_SOFT, size::MENU_BORDER),
             radius: size::MENU_ROW_RADIUS,
-            border: size::MENU_BORDER,
             gradients: false,
             lifted: false,
         });
@@ -129,41 +131,51 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
         (false, _) => ([0; 4], 0.0, 0.0),
     };
     let mut tint = style.background.unwrap_or(tint);
-    let mut edge = style.border.map_or(color::METAL, |(edge, _)| edge);
+    let mut border = style
+        .border
+        .unwrap_or(Border::uniform(color::METAL, border));
+    let recolor = |border: Border, edge: [u8; 4]| Border {
+        color: [edge; 4],
+        ..border
+    };
     let icon = matches!(node.element.shows, Some(Shown::Icon(..)));
     let (mut gradients, mut lifted) = (painted, false);
     if state.has(StateBits::DISABLED) && node.element.role == Role::Button && !icon {
-        (tint, edge, gradients) = (color::DISABLED, color::DISABLED_RIM, false);
+        (tint, gradients) = (color::DISABLED, false);
+        border = recolor(border, color::DISABLED_RIM);
     } else if icon {
         if state.has(StateBits::HELD) {
             tint = color::ICON_BUTTON_PRESSED;
         }
         if state.has(StateBits::HOVERED) || state.has(StateBits::FOCUSED) {
-            edge = color::ICON_BUTTON_RIM_HOVERED;
+            border = recolor(border, color::ICON_BUTTON_RIM_HOVERED);
         }
     } else if state.has(StateBits::HOVERED) && super::write::pressable(node) {
         tint = brighter(tint);
-        edge = brighter(edge);
+        border = border.map_colors(brighter);
         lifted = true;
     }
-    let border = style.border.map_or(border, |(_, width)| width);
     // A panel with a clear face, no gradient and no visible edge draws nothing
     // (`element::holder`).
-    if tint[3] == 0 && !gradients && (edge[3] == 0 || border == 0.0) {
+    if tint[3] == 0 && !gradients && !visible(&border) {
         return None;
     }
     Some(Panel {
         tint,
-        edge,
+        border,
         radius: if style.radius > 0.0 {
             style.radius
         } else {
             radius
         },
-        border,
         gradients,
         lifted,
     })
+}
+
+/// Whether any side of `border` draws: it has a width and a color that is not clear.
+fn visible(border: &Border) -> bool {
+    (border.color.iter().zip(border.width)).any(|(edge, width)| edge[3] > 0 && width > 0.0)
 }
 
 /// The box shadows `node` is drawn with in `state`, as `buttons.css` and `icon-button.css`
@@ -214,8 +226,8 @@ pub(super) fn write_box(
         rect,
         radius: panel.map_or(style.radius, |panel| panel.radius),
         border: panel.map_or_else(
-            || style.border.map_or(0.0, |(_, width)| width),
-            |panel| panel.border,
+            || style.border.map_or([0.0; 4], |border| border.width),
+            |panel| panel.border.width,
         ),
         opacity: look.opacity,
         clip: look.clip.map_or(0, |(_, entry)| entry),
@@ -226,13 +238,13 @@ pub(super) fn write_box(
         let layers = gradients(node, Some(panel));
         let sigma = look.filters.sigma();
         if layers.is_empty() && sigma <= 0.0 {
-            write_panel(panel, panel.tint, panel.border, rect, look, builder, camera);
+            write_panel(panel, panel.tint, true, rect, look, builder, camera);
         } else {
             if panel.tint[3] > 0 && sigma > 0.0 {
                 let flat = Gradient::linear(180.0, &[Stop::new(panel.tint)]);
                 write_gradient(&flat, rect, panel.radius, look, builder, camera);
             } else if panel.tint[3] > 0 {
-                write_panel(panel, panel.tint, 0.0, rect, look, builder, camera);
+                write_panel(panel, panel.tint, false, rect, look, builder, camera);
             }
             for layer in layers.iter().rev() {
                 let layer = if panel.lifted {
@@ -242,39 +254,78 @@ pub(super) fn write_box(
                 };
                 write_gradient(&layer, rect, panel.radius, look, builder, camera);
             }
-            if panel.border > 0.0 && panel.edge[3] > 0 {
-                write_panel(panel, [0; 4], panel.border, rect, look, builder, camera);
+            if visible(&panel.border) {
+                write_panel(panel, [0; 4], true, rect, look, builder, camera);
             }
         }
     }
     write_box_shadows(shadows, &cast, true, builder, camera);
 }
 
-/// Writes the record of `panel` filling `rect` in the color `tint`, with a border `border` wide,
-/// faded, filtered and clipped by `look`.
+/// The bit of each side in a `Draw::panel_sides` record, top, right, bottom and left.
+const SIDE_BITS: [u8; 4] = [SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM, SIDE_LEFT];
+
+/// Writes the records of `panel` filling `rect` in the color `tint`, with its border if
+/// `bordered`, faded, filtered and clipped by `look`.
+///
+/// A border whose sides are all alike is one record. One whose sides differ is one
+/// `Draw::panel_sides` record for each color, in the order the sides first use it: the first
+/// also fills the panel, and each draws only its sides, every record knowing every side's width
+/// so that the corners split where CSS splits them.
 fn write_panel(
     panel: &Panel,
     tint: [u8; 4],
-    border: f32,
+    bordered: bool,
     rect: Rect,
     look: &Look,
     builder: &mut FrameBuilder,
     camera: &Camera,
 ) {
     let paint = |color: [u8; 4]| faded(look.filters.color(color), look.opacity);
-    let mut draw = Draw::panel(
-        camera.layer_transform(rect),
-        paint(tint),
-        paint(panel.edge),
-        Vec2::new(rect.width, rect.height),
-        panel.radius,
-        border,
-    );
     let clip = look.clip.map_or(0, |(_, entry)| entry);
-    if clip > 0 {
-        draw = draw.with_clip(clip);
+    let transform = camera.layer_transform(rect);
+    let size = Vec2::new(rect.width, rect.height);
+    let mut write = |draw: Draw| {
+        builder.draw(
+            Band::Layer,
+            if clip > 0 { draw.with_clip(clip) } else { draw },
+        );
+    };
+    let border = &panel.border;
+    if !bordered || border.is_uniform() {
+        let width = if bordered { border.width[0] } else { 0.0 };
+        let edge = paint(border.color[0]);
+        write(Draw::panel(
+            transform,
+            paint(tint),
+            edge,
+            size,
+            panel.radius,
+            width,
+        ));
+        return;
     }
-    builder.draw(Band::Layer, draw);
+    let mut fill = paint(tint);
+    let mut done = 0_u8;
+    for (side, edge) in border.color.iter().enumerate() {
+        if done & SIDE_BITS[side] != 0 {
+            continue;
+        }
+        let sides = (0..4)
+            .filter(|&other| border.color[other] == *edge)
+            .fold(0, |bits, other| bits | SIDE_BITS[other]);
+        done |= sides;
+        let widths = (border.width, sides);
+        write(Draw::panel_sides(
+            transform,
+            fill,
+            paint(*edge),
+            size,
+            panel.radius,
+            widths,
+        ));
+        fill = [0; 4];
+    }
 }
 
 /// Writes the record of `gradient` filling `rect`, with corners of `radius`, faded, filtered,
@@ -399,8 +450,8 @@ pub(super) fn look_of(
         element: index,
         background: panel.map(|panel| panel.tint),
         border: panel
-            .filter(|panel| panel.border > 0.0)
-            .map(|panel| (panel.edge, panel.border)),
+            .filter(|panel| panel.border.width.iter().any(|width| *width > 0.0))
+            .map(|panel| panel.border),
         radius: panel.map_or(0.0, |panel| panel.radius),
         color: ink,
         text,

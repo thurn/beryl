@@ -91,6 +91,35 @@
    }
   },
   {
+   "name": "border-sides-pill",
+   "about": "a primary button's rim, pale gold on top, gold at the sides and amber below, on its face color (`.button-primary`'s `border-color`)",
+   "box": [
+    250,
+    48
+   ],
+   "page": "#211f1c",
+   "style": {
+    "background-color": "#b45e12",
+    "border": "1.5px solid #eba043",
+    "border-color": "#fff2b1 #eba043 #f7bc56",
+    "border-radius": "24px"
+   }
+  },
+  {
+   "name": "border-sides-square",
+   "about": "the paper edge of a card under the top two of your pile, a dark 1px rim with a 2px light right edge (`.pile-card-rim`)",
+   "box": [
+    96,
+    112
+   ],
+   "page": "#6b5f56",
+   "style": {
+    "background-color": "#211b18",
+    "border": "1px solid #161210",
+    "border-right": "2px solid #a39787"
+   }
+  },
+  {
    "name": "radius-24",
    "about": "a pill without a border, as a button's",
    "box": [

@@ -7,7 +7,7 @@ use beryl_protocol::script::Subject;
 
 use super::FrameBuilder;
 use crate::effects::Effect;
-use crate::element::{Filter, Gradient, Shadow};
+use crate::element::{Border, Filter, Gradient, Shadow};
 use crate::text::TypeStyle;
 
 /// How each flat-layer element of a frame was drawn, and its shadows.
@@ -116,8 +116,8 @@ pub struct ElementLook {
     /// The panel's color, before the element's opacity is applied, or `None` when it is drawn
     /// on no panel.
     pub background: Option<[u8; 4]>,
-    /// The panel's border color and width, or `None` when it has no border.
-    pub border: Option<([u8; 4], f32)>,
+    /// The panel's border, or `None` when it has no border.
+    pub border: Option<Border>,
     /// The panel's corner radius in logical points, 0 with no panel.
     pub radius: f32,
     /// The color of its text and icon, before its opacity is applied.

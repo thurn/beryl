@@ -8,7 +8,7 @@ use beryl_protocol::AgentView;
 use beryl_protocol::protocol::Status;
 
 use super::{Screen, ScreenIn, Sheet};
-use crate::element::{Align, Element, Justify, Position, Press, column, row, text};
+use crate::element::{Align, Border, Element, Justify, Position, Press, column, row, text};
 use crate::frame::Role;
 use crate::text::TypeStyle;
 use crate::tokens::{color, ratio, size, space, type_style};
@@ -345,7 +345,7 @@ fn seed_row(state: &FieldState, ok: bool) -> Element {
         size::START_SEED_PADDING_X,
     ];
     if !ok {
-        seed_field.style.border = Some((color::EMBER, size::BORDER));
+        seed_field.style.border = Some(Border::uniform(color::EMBER, size::BORDER));
         seed_field.style.color = Some(color::EMBER);
     }
     row()

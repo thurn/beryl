@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::ops::Range;
 
-use crate::element::Element;
+use crate::element::{Border, Element};
 use crate::frame::Role;
 use crate::tokens::{color, size, type_style};
 
@@ -72,7 +72,7 @@ pub fn field(name: &str, state: &FieldState) -> Element {
     element.style.padding = [y, x, y, x];
     element.style.min_height = Some(type_style::FIELD.size * type_style::FIELD.line_height);
     element.style.background = Some(color::SURFACE_SUNK);
-    element.style.border = Some((color::METAL, size::FIELD_BORDER));
+    element.style.border = Some(Border::uniform(color::METAL, size::FIELD_BORDER));
     element.style.radius = size::FIELD_RADIUS;
     element.field = Some(Box::new(state.clone()));
     element

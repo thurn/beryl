@@ -2,8 +2,8 @@
   "supported": {
     "background-color": ["color"],
     "background-image": ["linear", "radial", "linear + linear", "linear + radial", "radial + linear", "radial + radial"],
-    "border-width": ["uniform"],
-    "border-color": ["color"],
+    "border-width": ["uniform", "sides differ"],
+    "border-color": ["color", "sides differ"],
     "border-radius": ["uniform"],
     "box-shadow": ["*"],
     "filter": ["brightness", "grayscale", "saturate", "blur", "grayscale + brightness", "brightness + saturate", "blur + brightness + saturate", "drop-shadow", "drop-shadow + drop-shadow", "drop-shadow + drop-shadow + drop-shadow", "drop-shadow + drop-shadow + drop-shadow + drop-shadow"],
@@ -13,6 +13,6 @@
     "font-size": ["*"],
     "font-weight": ["*"],
     "mask-image": ["linear"],
-    "transform": []
+    "transform": ["translate", "scale", "rotate or skew"]
   }
 }

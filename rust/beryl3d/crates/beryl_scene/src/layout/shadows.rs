@@ -22,8 +22,8 @@ pub(super) struct ShadowBox {
     pub rect: Rect,
     /// The border box's corner radius.
     pub radius: f32,
-    /// The border's width, which an inset shadow stays inside.
-    pub border: f32,
+    /// The border's widths, top, right, bottom and left, which an inset shadow stays inside.
+    pub border: [f32; 4],
     /// How opaque the element is, which fades each shadow's color.
     pub opacity: f32,
     /// The clip's entry in the frame's clips, or 0 for none.
@@ -78,16 +78,18 @@ pub(super) fn write_box_shadows(
 }
 
 /// The padding box of `cast` and its corner radius: the border box less the border, with the
-/// border's width taken off the radius, as CSS's inner border radius is.
+/// widest side's width taken off the radius, as CSS's inner border radius is where the sides
+/// are the same width.
 fn padding_box(cast: &ShadowBox) -> (Rect, f32) {
-    let border = cast.border.max(0.0);
+    let [top, right, bottom, left] = cast.border.map(|width| width.max(0.0));
     let rect = Rect {
-        x: cast.rect.x + border,
-        y: cast.rect.y + border,
-        width: (cast.rect.width - 2.0 * border).max(0.0),
-        height: (cast.rect.height - 2.0 * border).max(0.0),
+        x: cast.rect.x + left,
+        y: cast.rect.y + top,
+        width: (cast.rect.width - left - right).max(0.0),
+        height: (cast.rect.height - top - bottom).max(0.0),
     };
-    (rect, (cast.radius - border).max(0.0))
+    let widest = top.max(right).max(bottom).max(left);
+    (rect, (cast.radius - widest).max(0.0))
 }
 
 /// The corner radius of a shadow's shape: a box `size` large with corners of `radius`, grown

@@ -1,15 +1,33 @@
 //! Action buttons, with the looks of the web interface's `buttons.css`
 //! (`ui/src/design/components/buttons.css`): a pill of one height and type under a 1.5-point
-//! rim. The ordinary button is a near-black gradient under a pale rim, as the prompt bar shows
+//! rim, lighter on top and darker below than at its sides. The ordinary button is a near-black gradient under a pale rim, as the prompt bar shows
 //! the session's buttons; the primary one is a deep amber gradient under a gold rim, the action a
 //! prompt expects. Neither has a background color under its gradient, as on the web. A disabled one of either is flat stone with dim type, and one under the pointer is
 //! a little brighter (the flat layer's `write` draws those states). A label too long for its
 //! button shrinks to fit (`Style::fit`), as the web's `TurnButton` shrinks its label.
 
 use super::icons;
-use crate::element::{Align, Element, Justify, Shown, TextAlign};
+use crate::element::{Align, Border, Element, Justify, Shown, TextAlign};
 use crate::frame::Role;
 use crate::tokens::{color, gradient, ratio, shadow, size, type_style};
+
+/// The top and bottom of an ordinary button's rim, lighter and darker than its sides
+/// (`color::SECONDARY_RIM`): `.button-secondary`'s `border-color: #e9e3da #b9b2a9 #a59e96`.
+const SECONDARY_RIM_TOP: [u8; 4] = [0xe9, 0xe3, 0xda, 0xff];
+const SECONDARY_RIM_BOTTOM: [u8; 4] = [0xa5, 0x9e, 0x96, 0xff];
+
+/// The top and bottom of a primary button's rim, around its gold sides (`color::PRIMARY_RIM`):
+/// `.button-primary`'s `border-color: #fff2b1 #eba043 #f7bc56`.
+const PRIMARY_RIM_TOP: [u8; 4] = [0xff, 0xf2, 0xb1, 0xff];
+const PRIMARY_RIM_BOTTOM: [u8; 4] = [0xf7, 0xbc, 0x56, 0xff];
+
+/// A button's rim, `size::BORDER` wide, in `side` on its left and right with `top` and
+/// `bottom` above and below, as CSS's three-value `border-color` gives them.
+const fn rim(top: [u8; 4], side: [u8; 4], bottom: [u8; 4]) -> Border {
+    Border::uniform(side, size::BORDER)
+        .side_color(0, top)
+        .side_color(2, bottom)
+}
 
 /// A button showing `label`, named by it: as tall as every action button and at least 8 ems
 /// wide, with its label centred.
@@ -27,7 +45,11 @@ pub fn button(label: &str) -> Element {
     element.style.background_image = vec![gradient::SECONDARY];
     element
         .background([0; 4])
-        .border((color::SECONDARY_RIM, size::BORDER))
+        .border(rim(
+            SECONDARY_RIM_TOP,
+            color::SECONDARY_RIM,
+            SECONDARY_RIM_BOTTOM,
+        ))
         .color(color::SECONDARY_INK)
 }
 
@@ -36,7 +58,7 @@ pub fn button(label: &str) -> Element {
 #[must_use]
 pub fn primary(label: &str) -> Element {
     let mut element = button(label)
-        .border((color::PRIMARY_RIM, size::BORDER))
+        .border(rim(PRIMARY_RIM_TOP, color::PRIMARY_RIM, PRIMARY_RIM_BOTTOM))
         .color(color::PRIMARY_INK);
     element.primary = true;
     element.style.box_shadow = shadow::PRIMARY.to_vec();
@@ -83,6 +105,6 @@ pub fn pass_on(name: &str, side: f32) -> Element {
         .height(side)
         .background([0; 4])
         .child(face);
-    element.style.border = Some(([0; 4], 0.0));
+    element.style.border = Some(Border::uniform([0; 4], 0.0));
     element
 }

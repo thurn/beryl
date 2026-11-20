@@ -6,7 +6,8 @@
 //! from 0 to 1, lengths in points, shadows as `{inset, x, y, blur, spread, color}` (`box-shadow`
 //! and each `drop-shadow` of `filter`), gradients as `{kind, repeating, shape, stops}`
 //! (`background-image` and `mask-image`), the other filter functions as `{fn, value}`, and
-//! `"none"` for what Beryl 3D's `Style` cannot say yet (transforms).
+//! `"none"` for a transform, but on a card on the table (`card_transform`). A border is one
+//! width and color, or four (top, right, bottom and left) when its sides differ.
 //!
 //! After the elements come the effects the frame draws (`Looks::effects`), one record each of
 //! role `effect`, named by the effect, with what it is on as its `object` (a card's slot, an
@@ -27,9 +28,10 @@ use beryl_scene::agent::checks::{ring_outer, ring_rect};
 use beryl_scene::agent::hit::bounds;
 use beryl_scene::agent::tree::{locator_of, place_word};
 use beryl_scene::effects::Effect;
-use beryl_scene::element::{Extent, Filter, Gradient, Length, Shadow, Shape};
+use beryl_scene::element::{Border, Extent, Filter, Gradient, Length, Shadow, Shape};
 use beryl_scene::frame::{
-    EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Ring, Ringed, Role,
+    EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Resolved, Ring,
+    Ringed, Role,
 };
 use beryl_scene::input::Size;
 use beryl_scene::table::ABILITY_IDS;
@@ -200,7 +202,7 @@ fn paint_order(frame: &Frame) -> Vec<usize> {
 /// that, and its opacity, which includes its ancestors' as the web side's does. No panel is a
 /// transparent background, as the web's computed style says.
 fn style(
-    opacity: f32,
+    (opacity, transform): (f32, Option<Value>),
     look: Option<&ElementLook>,
     shadows: (Value, Value),
     (images, mask, filters): (Value, Value, Vec<Value>),
@@ -213,15 +215,11 @@ fn style(
             .map_or_else(|| color([0; 4]), color),
     );
     style.insert("background-image".into(), images);
-    let border = look.and_then(|look| look.border);
-    style.insert(
-        "border-width".into(),
-        round(border.map_or(0.0, |(_, width)| width)),
-    );
-    style.insert(
-        "border-color".into(),
-        color(border.map_or([0; 4], |(edge, _)| edge)),
-    );
+    let border = look
+        .and_then(|look| look.border)
+        .unwrap_or(Border::uniform([0; 4], 0.0));
+    style.insert("border-width".into(), sides(&border.width.map(round)));
+    style.insert("border-color".into(), sides(&border.color.map(color)));
     style.insert(
         "border-radius".into(),
         round(look.map_or(0.0, |look| look.radius)),
@@ -252,8 +250,40 @@ fn style(
         style.insert("font-weight".into(), look.text.weight.into());
     }
     style.insert("mask-image".into(), mask);
-    style.insert("transform".into(), none());
+    style.insert("transform".into(), transform.unwrap_or_else(none));
     Value::Object(style)
+}
+
+/// Four sides' values, top, right, bottom and left, as one value when they are equal, as the web
+/// side's records write them.
+fn sides(values: &[Value; 4]) -> Value {
+    if values.iter().all(|value| *value == values[0]) {
+        values[0].clone()
+    } else {
+        Value::Array(values.to_vec())
+    }
+}
+
+/// The `transform` of a card on the table, as a 2D `matrix()`'s six numbers: the rotation of the
+/// top edge of its face on screen, with no scale, moved to the face's top left corner. The web
+/// lays its cards out flat and turns them with a CSS transform, where Beryl 3D poses each card in
+/// 3D and projects it, so its scale and skew have no CSS counterpart; `just b3d match styles`
+/// compares a transform by its rotation alone and leaves the position and size to the boxes.
+fn card_transform(element: &Resolved) -> Value {
+    // `card_corners` order: bottom left, bottom right, top right and top left of the face.
+    let [_, _, top_right, top_left] = element.corners;
+    let along = top_right - top_left;
+    let angle = along.y.atan2(along.x);
+    let (sin, cos) = angle.sin_cos();
+    let fine = |value: f32| json!((f64::from(value) * 10_000.0).round() / 10_000.0);
+    json!([
+        fine(cos),
+        fine(sin),
+        fine(-sin),
+        fine(cos),
+        round(top_left.x),
+        round(top_left.y)
+    ])
 }
 
 /// What an effect is on, as the web's dump names it: a card's slot, `a<id>` for an ability, a
@@ -329,7 +359,7 @@ fn effect_records(frame: &Frame, size: Size, elements: usize) -> Vec<Value> {
                 // The style of an element that paints nothing of its own, seen at the effect's
                 // opacity, so that the record keeps the contract.
                 "style": style(
-                    effect.opacity.clamp(0.0, 1.0),
+                    (effect.opacity.clamp(0.0, 1.0), None),
                     None,
                     (Value::from("none"), Value::from("none")),
                     (Value::from("none"), Value::from("none"), Vec::new()),
@@ -389,7 +419,7 @@ fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
         "box": [round(line.x), round(line.y), round(line.width), round(line.height)],
         "z": z,
         "parent": parent,
-        "style": style(f32::from(alpha) / 255.0, None, shadows, images),
+        "style": style((f32::from(alpha) / 255.0, None), None, shadows, images),
         "text": [],
     })
 }
@@ -432,6 +462,8 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
             // A card's element id is its object's slot in the view, which the web interface's
             // stage names its card nodes by (`data-stage`).
             let object = (element.role == Role::Card).then_some(element.id.0 % REVEALED_FACE);
+            let transform = (element.role == Role::Card && element.place != Place::Layer)
+                .then(|| card_transform(element));
             json!({
                 "key": locator_of(frame, at as u32),
                 "role": element.role.word(),
@@ -445,7 +477,7 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
                 "z": z[at],
                 "parent": (element.parent != u32::MAX).then_some(element.parent),
                 "style": style(
-                    element.opacity,
+                    (element.opacity, transform),
                     look,
                     shadows(at as u32, &frame.looks.shadows),
                     paints(at as u32, &frame.looks.paints),

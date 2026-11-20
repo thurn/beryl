@@ -16,7 +16,7 @@ use glam::Vec2;
 pub use keys::{Chord, Shortcuts, describe};
 pub use paint::{Extent, Filter, Gradient, Length, Shape, Stop};
 pub use style::{
-    Align, Direction, Display, DropLayer, DropLayers, Justify, MOST_DROP_SHADOWS, Overflow,
+    Align, Border, Direction, Display, DropLayer, DropLayers, Justify, MOST_DROP_SHADOWS, Overflow,
     Position, Shadow, Style, TextAlign, Track,
 };
 
@@ -392,10 +392,10 @@ impl Element {
         self.text.is_none()
             && self.shows.is_none()
             && self.style.background.is_some_and(|tint| tint[3] == 0)
-            && self
-                .style
-                .border
-                .is_none_or(|(edge, width)| edge[3] == 0 || width == 0.0)
+            && self.style.border.is_none_or(|border| {
+                (border.color.iter().zip(border.width))
+                    .all(|(edge, width)| edge[3] == 0 || width == 0.0)
+            })
     }
 }
 

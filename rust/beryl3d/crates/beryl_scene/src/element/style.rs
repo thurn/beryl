@@ -244,6 +244,61 @@ impl DropLayers {
     }
 }
 
+/// The color and width of each side of an element's border, top, right, bottom and left, as
+/// CSS's `border-color` and `border-width` list them. The border takes room inside the box as
+/// CSS's does. Where two sides of different colors meet, the corner is split along the line from
+/// the border box's corner to the padding box's, as CSS's border joins are drawn.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Border {
+    pub color: [[u8; 4]; 4],
+    pub width: [f32; 4],
+}
+
+impl Border {
+    /// The same color and width on every side.
+    #[must_use]
+    pub const fn uniform(color: [u8; 4], width: f32) -> Self {
+        Self {
+            color: [color; 4],
+            width: [width; 4],
+        }
+    }
+
+    /// The same border with side `side` (0 top, 1 right, 2 bottom, 3 left) in `color`.
+    #[must_use]
+    pub const fn side_color(mut self, side: usize, color: [u8; 4]) -> Self {
+        self.color[side] = color;
+        self
+    }
+
+    /// The same border with side `side` (0 top, 1 right, 2 bottom, 3 left) `width` wide.
+    #[must_use]
+    pub const fn side_width(mut self, side: usize, width: f32) -> Self {
+        self.width[side] = width;
+        self
+    }
+
+    /// Whether every side has the same color and width.
+    #[must_use]
+    pub fn is_uniform(&self) -> bool {
+        self.color.iter().all(|color| *color == self.color[0])
+            && (self.width.iter()).all(|width| width.to_bits() == self.width[0].to_bits())
+    }
+
+    /// The same border with every color changed by `change`.
+    #[must_use]
+    pub fn map_colors(mut self, change: impl Fn([u8; 4]) -> [u8; 4]) -> Self {
+        self.color = self.color.map(change);
+        self
+    }
+}
+
+impl From<([u8; 4], f32)> for Border {
+    fn from((color, width): ([u8; 4], f32)) -> Self {
+        Self::uniform(color, width)
+    }
+}
+
 /// An element's layout and look, with CSS's names.
 #[derive(Clone, Debug, PartialEq)]
 #[expect(
@@ -309,9 +364,8 @@ pub struct Style {
     /// change every color the element and everything under it is drawn in; a blur softens the
     /// edges of its own panel and gradients.
     pub filter: Vec<Filter>,
-    /// The color and width of the element's border, which takes room inside its box as CSS's
-    /// does.
-    pub border: Option<([u8; 4], f32)>,
+    /// The colors and widths of the element's border.
+    pub border: Option<Border>,
     /// The radius of the element's panel's corners, or 0 for the usual radius: a screen's
     /// panel's or a button's, and square on any other element.
     pub radius: f32,
@@ -460,13 +514,19 @@ optional_setters! {
     grid_column: (i16, i16),
     grid_row: (i16, i16),
     background: [u8; 4],
-    border: ([u8; 4], f32),
     color: [u8; 4],
     mask: Gradient,
     scroll_fade: f32,
 }
 
 impl Element {
+    /// The element's border: a `Border`, or a color and a width for every side.
+    #[must_use]
+    pub fn border(mut self, border: impl Into<Border>) -> Self {
+        self.style.border = Some(border.into());
+        self
+    }
+
     /// The same padding on every side.
     #[must_use]
     pub fn padding(mut self, padding: f32) -> Self {

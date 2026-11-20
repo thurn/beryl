@@ -36,6 +36,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from typing import TypeVar
 from pathlib import Path
 
 from ... import paths as repo_paths
@@ -54,11 +55,15 @@ MARGIN = 48
 # A sample passes when 99.5% of its pixels are within this many levels in every channel.
 TOLERANCE = 4
 UNSUPPORTED = "unsupported"
+T = TypeVar("T")
 # The CSS properties Beryl 3D's `Style` can say, as `background`, `border`, `radius`,
 # `opacity` and `box_shadow`. `background-image`, `mask-image` and `filter` are drawn when
 # `gradients`, `mask` and `filters` can read them.
+SIDES: tuple[str, ...] = ("top", "right", "bottom", "left")
 SUPPORTED: frozenset[str] = frozenset(
     {"background-color", "border", "border-radius", "opacity", "box-shadow"}
+    | {"border-color", "border-width"}
+    | {f"border-{side}{part}" for side in SIDES for part in ("", "-color", "-width")}
 )
 # The filter functions `Style::filter` holds, besides the drop shadows of `Style::drop_shadow`.
 FILTERS: frozenset[str] = frozenset({"brightness", "grayscale", "saturate", "blur"})
@@ -263,19 +268,62 @@ def native_text(sample: dict[str, object]) -> dict[str, object] | None:
     }
 
 
+def four(values: list[T]) -> list[T]:
+    """One to four values of a CSS box property, top, right, bottom and left, as four, the way
+    CSS repeats them: one for all, two for top and bottom then the sides, three for top, the
+    sides and bottom."""
+    if not 1 <= len(values) <= 4:
+        raise ValueError(f"not one to four sides: {values!r}")
+    top = values[0]
+    right = values[1] if len(values) > 1 else top
+    bottom = values[2] if len(values) > 2 else top
+    left = values[3] if len(values) > 3 else right
+    return [top, right, bottom, left]
+
+
+def solid(text: str) -> tuple[list[int], float]:
+    """A `border` shorthand of a width, `solid` and a color."""
+    found = BORDER.match(text.strip())
+    if not found:
+        raise ValueError(f"not a solid border: {text!r}")
+    return color(found[2]), float(found[1])
+
+
+def border(style: dict[str, str]) -> dict[str, object] | None:
+    """A sample's border as `Style`'s `Border`, `{"color", "width"}` with four sides each, from
+    its `border` shorthand and the longhands after it, in the order CSS applies them: the
+    shorthand, then `border-color` and `border-width`, then each side's shorthand, color and
+    width. None when it has no border property."""
+    if not any(name == "border" or name.startswith("border-") for name in style):
+        return None
+    colors: list[list[int]] = [[0, 0, 0, 255]] * 4
+    widths: list[float] = [0.0] * 4
+    if "border" in style:
+        shade, width = solid(style["border"])
+        colors, widths = [shade] * 4, [width] * 4
+    if "border-color" in style:
+        colors = four([color(c) for c in STOP_COLOR.findall(style["border-color"])])
+    if "border-width" in style:
+        widths = four([length(w) for w in style["border-width"].split()])
+    for at, side in enumerate(SIDES):
+        if f"border-{side}" in style:
+            colors[at], widths[at] = solid(style[f"border-{side}"])
+        if f"border-{side}-color" in style:
+            colors[at] = color(style[f"border-{side}-color"])
+        if f"border-{side}-width" in style:
+            widths[at] = length(style[f"border-{side}-width"])
+    if not any(w > 0 for w in widths):
+        return None
+    return {"color": colors, "width": widths}
+
+
 def native_style(style: dict[str, str]) -> dict[str, object]:
     """The `Style` fields that stand for `style`, a sample's CSS of only supported properties,
     as `b3d-render sample` reads them."""
-    border = None
-    if "border" in style:
-        found = BORDER.match(style["border"].strip())
-        if not found:
-            raise ValueError(f"not a solid border: {style['border']!r}")
-        border = [color(found[2]), float(found[1])]
     background = style.get("background-color")
     return {
         "background": None if background is None else color(background),
-        "border": border,
+        "border": border(style),
         "radius": length(style["border-radius"]) if "border-radius" in style else 0.0,
         "opacity": float(style.get("opacity", "1")),
         "box_shadow": shadows(style.get("box-shadow", "")),

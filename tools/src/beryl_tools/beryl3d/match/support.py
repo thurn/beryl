@@ -157,23 +157,41 @@ def same_mapping(a: Mapping[str, object], b: Mapping[str, object]) -> bool:
     return True
 
 
+def rotation(value: object) -> float | None:
+    """The rotation in degrees of a transform, `"none"` or a 2D `matrix()`'s six numbers, or None
+    for a 3D one.
+
+    A transform is compared by its rotation alone. The web lays its cards out flat and turns
+    them with CSS, where Beryl 3D poses each card in 3D and projects it (its records write the
+    rotation of a card's top edge on screen with no scale), so a card's scale and skew have no
+    counterpart, and its position and size are compared by the boxes."""
+    if value == "none" or value is None:
+        return 0.0
+    if not isinstance(value, list) or len(value) != 6:
+        return None
+    a, b = float(str(value[0])), float(str(value[1]))
+    return math.degrees(math.atan2(b, a))
+
+
+def angle_between(a: float, b: float) -> float:
+    """The smaller angle in degrees between two directions."""
+    turn = abs(a - b) % 360.0
+    return min(turn, 360.0 - turn)
+
+
 def same(a: object, b: object, kind: str) -> bool:
     """Whether `a` and `b` are the same value within the tolerance of `kind`: "color",
-    "length", "ratio", "angle", "transform", "exact" or "structure" (shadows, gradients and
-    filters, compared field by field)."""
+    "length", "ratio", "angle", "transform" (by `rotation`), "exact" or "structure" (shadows,
+    gradients and filters, compared field by field)."""
     if kind == "color":
         if isinstance(a, list) and a and isinstance(a[0], list):
             return same_list(a, b, "color")
         return same_color(a, b)
     if kind == "transform":
-        if not (isinstance(a, list) and isinstance(b, list)) or len(a) != len(b):
+        turn_a, turn_b = rotation(a), rotation(b)
+        if turn_a is None or turn_b is None:
             return a == b
-        # A 2D matrix's last two entries, and a 3D one's 13th to 15th, are lengths.
-        lengths = {4, 5} if len(a) == 6 else {12, 13, 14}
-        return all(
-            near(float(x), float(y), LENGTH if i in lengths else RATIO)
-            for i, (x, y) in enumerate(zip(a, b))
-        )
+        return near(angle_between(turn_a, turn_b), 0.0, ANGLE)
     if is_number(a) and is_number(b):
         assert isinstance(a, (int, float)) and isinstance(b, (int, float))
         tolerance = {"length": LENGTH, "ratio": RATIO, "angle": ANGLE}.get(kind, 0.0)

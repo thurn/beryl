@@ -24,7 +24,7 @@ pub(super) fn taffy_style(style: &Style) -> taffy::Style {
         width: limit(width),
         height: limit(height),
     };
-    let border = style.border.map_or(0.0, |(_, width)| width);
+    let border = style.border.map_or([0.0; 4], |border| border.width);
     taffy::Style {
         display: match style.display {
             Display::Flex => taffy::Display::Flex,
@@ -51,7 +51,7 @@ pub(super) fn taffy_style(style: &Style) -> taffy::Style {
         },
         padding: sides(style.padding.map(LengthPercentage::length)),
         margin: sides(style.margin.map(LengthPercentageAuto::length)),
-        border: sides([LengthPercentage::length(border); 4]),
+        border: sides(border.map(LengthPercentage::length)),
         flex_grow: style.grow,
         flex_shrink: style.shrink,
         flex_basis: dimension(style.basis),

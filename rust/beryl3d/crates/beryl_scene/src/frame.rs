@@ -15,8 +15,8 @@ use glam::{Mat4, Vec2};
 
 pub use backdrop::Backdrop;
 pub use draw::{
-    Draw, Material, Mesh, RADIAL, Sprite, TextureArray, box_shadow_reach, fixed, gradient_reach,
-    sprites,
+    Draw, Material, Mesh, RADIAL, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, Sprite,
+    TextureArray, box_shadow_reach, fixed, gradient_reach, sprites,
 };
 pub use look::{EffectLook, ElementLook, LookPaint, LookShadow, Looks};
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};

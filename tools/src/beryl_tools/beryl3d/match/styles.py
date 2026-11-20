@@ -110,6 +110,77 @@ def compare_pair(web: Element, b3d: Element) -> tuple[list[Difference], list[str
     return found, unsupported
 
 
+def matrix(value: object) -> list[float] | None:
+    """A 2D transform's six numbers, the identity for "none", or None for a 3D one."""
+    if value == "none" or value is None:
+        return [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    if isinstance(value, list) and len(value) == 6:
+        return [float(str(v)) for v in value]
+    return None
+
+
+def as_drawn(web: Sequence[Element], at: int) -> Element:
+    """Web element `at` with the transform its look is drawn with. A card's face on the web is a
+    child region of the card's box, which a tapped card turns by itself, while the card element
+    keeps only its scale; a card is compared by its own transform composed with that child's, as
+    Beryl 3D's card is the face. Any other element is itself."""
+    element = web[at]
+    if element.get("role") != "card":
+        return element
+    style = element["style"]
+    assert isinstance(style, Mapping)
+    own = matrix(style.get("transform"))
+    face = next(
+        (
+            child
+            for child in web
+            if child.get("parent") == at
+            and child.get("role") == "region"
+            and all(
+                support.near(x, y, 1.0)
+                for x, y in zip(joined.box(child), joined.box(element))
+            )
+        ),
+        None,
+    )
+    if face is None or own is None:
+        return element
+    face_style = face["style"]
+    assert isinstance(face_style, Mapping)
+    inner = matrix(face_style.get("transform"))
+    if inner is None or inner[:4] == [1.0, 0.0, 0.0, 1.0]:
+        return element
+    a, b, c, d, e, f = own
+    a2, b2, c2, d2, _, _ = inner
+    composed = [
+        a * a2 + c * b2,
+        b * a2 + d * b2,
+        a * c2 + c * d2,
+        b * c2 + d * d2,
+        e,
+        f,
+    ]
+    return {**element, "style": {**style, "transform": [round(v, 4) for v in composed]}}
+
+
+def upright(element: Element) -> Element:
+    """A card showing its back (it has no name) with its rotation folded by half a turn into a
+    quarter turn either way of upright, since a back reads the same either way up: the web's
+    desktop layout turns the opponent's hand half a turn and its phone layout does not, while
+    Beryl 3D always poses those cards facing their owner. Any other element is itself.
+    """
+    style = element["style"]
+    assert isinstance(style, Mapping)
+    numbers = matrix(style.get("transform"))
+    if element.get("role") != "card" or element.get("name") or numbers is None:
+        return element
+    turn = support.rotation(numbers)
+    if turn is None or abs(turn) <= 90.0:
+        return element
+    a, b, c, d, e, f = numbers
+    return {**element, "style": {**style, "transform": [-a, -b, -c, -d, e, f]}}
+
+
 def measure(
     web: Sequence[Element],
     b3d: Sequence[Element],
@@ -119,7 +190,8 @@ def measure(
     unsupported: dict[str, int] = {}
     for p in pairs:
         found, missing = compare_pair(
-            web[joined.index(p, "web")], b3d[joined.index(p, "b3d")]
+            upright(as_drawn(web, joined.index(p, "web"))),
+            upright(b3d[joined.index(p, "b3d")]),
         )
         differences += found
         for name in missing:

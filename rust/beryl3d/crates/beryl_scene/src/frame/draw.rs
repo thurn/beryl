@@ -313,6 +313,36 @@ impl Draw {
         draw
     }
 
+    /// A panel as `panel` makes one, whose border's sides differ in width or color: it draws the
+    /// fill in `tint` and, in the color `border`, only the sides of `widths` (top, right, bottom
+    /// and left, in logical points) whose bits `sides` sets (`SIDE_TOP` and the rest). A border
+    /// of several colors is one record for each color, the first carrying the fill and the others
+    /// a clear tint. The widths go in the high bytes of `uv` in quarter points, up to 63.75, with
+    /// the color in the low bytes, and `params.w`, a uniform border's width, holds the side bits
+    /// negated, which a width never is.
+    #[must_use]
+    pub fn panel_sides(
+        transform: Affine3A,
+        tint: [u8; 4],
+        border: [u8; 4],
+        size: Vec2,
+        radius: f32,
+        (widths, sides): ([f32; 4], u8),
+    ) -> Self {
+        let mut draw = Self::panel(transform, tint, border, size, radius, 0.0);
+        for (slot, width) in draw.uv.iter_mut().zip(widths) {
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "clamped to a byte"
+            )]
+            let quarters = (width * 4.0).round().clamp(0.0, 255.0) as u16;
+            *slot |= quarters << 8;
+        }
+        draw.params[3] = -f32::from(sides & 0b1111);
+        draw
+    }
+
     /// One CSS box shadow of a flat-layer element whose border box, or padding box for an inset
     /// shadow, is `size` logical points large with corners of `radius`. `shadow` gives its
     /// offset, spread and blur, which `Shadow::sigma` turns into a standard deviation, and
@@ -492,6 +522,12 @@ pub fn box_shadow_reach(shadow: &Shadow) -> f32 {
         shadow.spread + 3.0 * shadow.sigma()
     }
 }
+
+/// The bits of a `Draw::panel_sides` record's side mask that name the sides it draws.
+pub const SIDE_TOP: u8 = 1;
+pub const SIDE_RIGHT: u8 = 2;
+pub const SIDE_BOTTOM: u8 = 4;
+pub const SIDE_LEFT: u8 = 8;
 
 /// What a `Gradient` record's `layer` is raised by when its gradient is radial.
 pub const RADIAL: u16 = 1 << 15;

@@ -4384,22 +4384,23 @@ reference is the web interface as WebKit draws it, at scale 2.
   and each line of text with its baseline. Beryl 3D's records come from
   `b3d tree --records`, which builds the frame with `Frame::looking` set so that
   it records how each flat-layer element was drawn (its panel, text color and
-  type, shadows, gradients, mask and filter) and each line's words; what `Style`
-  cannot say yet (transforms) is written as `none`. The web side is read by a
-  script that Playwright evaluates in the page, so nothing under `ui/` changes,
-  and its roles come from the ARIA role or from `data/beryl3d/match/roles.json`.
-  The page runs on Playwright's paused clock. For a mid-animation moment the
-  page opens with only the views whose scripts Beryl 3D had played out, is
-  handed the views Beryl 3D was still playing live at the times Beryl 3D was
-  given them, and runs its clock a frame at a time as long as Beryl 3D's ran
-  since the first of those (`match/clock.py`): the page shows every view it
-  opens with at rest, so a page opened with all of them showed a later point of
-  the game than Beryl 3D. A moment at rest runs the clock until the stage is
-  idle. CSS animations finish rather than stopping at the moment. `b3d compare`
-  takes its web picture of a mid-animation moment the same way. The report warns
-  when a bundled font's `name` table differs from the web's WOFF2 file of the
-  same face. Neither side draws card scans unless `--art` is given, and then
-  both read the app's scan cache.
+  type, shadows, gradients, mask and filter) and each line's words. A card on
+  the table writes as its `transform` the rotation of its face's top edge on
+  screen, with no scale; every other element writes `none`. The web side is read
+  by a script that Playwright evaluates in the page, so nothing under `ui/`
+  changes, and its roles come from the ARIA role or from
+  `data/beryl3d/match/roles.json`. The page runs on Playwright's paused clock.
+  For a mid-animation moment the page opens with only the views whose scripts
+  Beryl 3D had played out, is handed the views Beryl 3D was still playing live
+  at the times Beryl 3D was given them, and runs its clock a frame at a time as
+  long as Beryl 3D's ran since the first of those (`match/clock.py`): the page
+  shows every view it opens with at rest, so a page opened with all of them
+  showed a later point of the game than Beryl 3D. A moment at rest runs the
+  clock until the stage is idle. CSS animations finish rather than stopping at
+  the moment. `b3d compare` takes its web picture of a mid-animation moment the
+  same way. The report warns when a bundled font's `name` table differs from the
+  web's WOFF2 file of the same face. Neither side draws card scans unless
+  `--art` is given, and then both read the app's scan cache.
 
 - **Boxes and styles.** Elements are paired by locator, then by role, name (or
   card) and parent, then by role and the nearest box within 24 points; the pairs
@@ -4417,7 +4418,14 @@ reference is the web interface as WebKit draws it, at scale 2.
   `Style` cannot express, by `data/beryl3d/match/supported.json`, is not a
   difference: `just b3d match gaps` groups those values by property and shape
   and ranks the groups by the screen area of the elements that use them, which
-  is the order the style vocabulary is taught in.
+  is the order the style vocabulary is taught in. A 2D transform is compared by
+  its rotation alone, within half a degree. The web lays its cards out flat and
+  turns them with CSS, while Beryl 3D poses each card in 3D and projects it, so
+  a card's scale and skew have no counterpart, and its position and size are
+  left to the boxes. A web card is compared by its own transform composed with
+  that of its face, the child region of the same box that a tapped card turns,
+  and a card showing its back is compared either way up, since the web's desktop
+  layout turns the opponent's hand half a turn and its phone layout does not.
 
 - **Effects.** `just b3d match samples` is a conformance suite: each sample in
   `data/beryl3d/match/samples.json` is one element with a box shadow, gradient,
@@ -4489,6 +4497,18 @@ reference is the web interface as WebKit draws it, at scale 2.
   pass-on glyph carry the web's drop shadows. The web's sparkle (`.sparkle`) and
   stage lines (`.stage-lines`) have drop shadows too, but Beryl 3D draws no
   sparkle and draws its lines as light (`light::lines`), not as icons.
+
+- **Borders.** `Style::border` is a `Border`: a color and a width for each side,
+  top, right, bottom and left, as CSS's `border-color` and `border-width` list
+  them, which the buttons' rims need (lighter on top and darker below than at
+  their sides). A border whose sides are all alike is one panel record. One
+  whose sides differ is one `Draw::panel_sides` record for each color, the first
+  also filling the panel: each carries every side's width (in quarter points in
+  the high bytes of its `uv`) and the sides it draws (negated in `params.w`, a
+  width's place), so that each record cuts the padding box out of its ring and
+  splits the corners where CSS does. A point of the ring belongs to the side it
+  is nearest in units of that side's width, which is the line from the border
+  box's corner to the padding box's.
 
 - **Gradients, masks and filters.** `Style::background_image` holds CSS's
   `background-image` as a list of `Gradient` (linear at an angle, or radial with

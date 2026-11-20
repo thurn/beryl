@@ -16,7 +16,9 @@ use super::ScreenIn;
 use super::start::{
     LABEL, PANEL_GAP, PANEL_PADDING, PANEL_RADIUS, PANEL_WIDTH, TITLE, checkbox, small,
 };
-use crate::element::{Align, Element, Justify, LobbyPress, Overflow, Press, column, row, text};
+use crate::element::{
+    Align, Border, Element, Justify, LobbyPress, Overflow, Press, column, row, text,
+};
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::lobby::{
     ASSISTS, DECK_NAME, DECKLIST, DeckPanel, Lobby, STARTING_HAND_SIZE, STARTING_LIFE,
@@ -476,7 +478,7 @@ fn number(label: &str, name: &str, state: &FieldState, wrong: bool, fit: Fit) ->
     let mut number = fit.least(field(name, state));
     number.style.width = Some(NUMBER_WIDTH);
     if wrong {
-        number.style.border = Some((color::EMBER, size::BORDER));
+        number.style.border = Some(Border::uniform(color::EMBER, size::BORDER));
         number.style.color = Some(color::EMBER);
     }
     row()

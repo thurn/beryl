@@ -128,9 +128,16 @@ fn panels(frame: &Frame) -> Vec<Panel> {
                 index,
                 rect: drawn_rect(frame, draw),
                 tint: draw.tint,
+                // The border color is the low byte of each of `uv`'s channels; a record of a
+                // border whose sides differ (`Draw::panel_sides`, a negative `params[3]`) holds
+                // each side's width in quarter points in the high bytes, the top's first.
                 #[allow(clippy::cast_possible_truncation)]
-                edge: draw.uv.map(|channel| channel as u8),
-                border: draw.params[3],
+                edge: draw.uv.map(|channel| (channel & 0xff) as u8),
+                border: if draw.params[3] < 0.0 {
+                    f32::from(draw.uv[0] >> 8) / 4.0
+                } else {
+                    draw.params[3]
+                },
             }
         })
         .collect()

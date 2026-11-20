@@ -10,7 +10,7 @@
 //! ```text
 //! {"scale": 2, "out": "<directory>", "samples": [{"name", "window": [w, h], "page": [r, g, b, a],
 //!   "box": [w, h], "web": "<png>", "style": {"background": [r, g, b, a] | null,
-//!   "border": [[r, g, b, a], width] | null, "radius": r, "opacity": o,
+//!   "border": {"color": [[r, g, b, a] x 4], "width": [w x 4]} | null, "radius": r, "opacity": o,
 //!   "box_shadow": [shadow], "drop_shadow": [shadow], "background_image": [gradient],
 //!   "mask": gradient | null, "filter": [{"fn", "value"}]},
 //!   "text": {"string", "color": [r, g, b, a], "size"} | null,
@@ -46,8 +46,8 @@ use beryl_assets::Prepared;
 use beryl_assets::glyphs::GlyphWorker;
 use beryl_assets::light;
 use beryl_scene::element::{
-    Align, Element, Extent, Filter, Gradient, Justify, Length, Position, Shadow, Shape, Shown,
-    Stop, holder, row,
+    Align, Border, Element, Extent, Filter, Gradient, Justify, Length, Position, Shadow, Shape,
+    Shown, Stop, holder, row,
 };
 use beryl_scene::frame::{Frame, FrameBuilder};
 use beryl_scene::input::AssetReady;
@@ -76,7 +76,7 @@ struct Sample {
     size: Size,
     web: PathBuf,
     background: Option<[u8; 4]>,
-    border: Option<([u8; 4], f32)>,
+    border: Option<Border>,
     radius: f32,
     opacity: f32,
     box_shadow: Vec<Shadow>,
@@ -189,10 +189,18 @@ fn read_sample(value: &Value) -> Result<Sample, Error> {
     let style = &value["style"];
     let border = match &style["border"] {
         Value::Null => None,
-        given => Some((
-            color(&given[0]).ok_or_else(|| bad("border color"))?,
-            given[1].as_f64().ok_or_else(|| bad("border width"))? as f32,
-        )),
+        given => {
+            let mut border = Border::uniform([0; 4], 0.0);
+            for side in 0..4 {
+                border.color[side] =
+                    color(&given["color"][side]).ok_or_else(|| bad("border color"))?;
+                border.width[side] = given["width"][side]
+                    .as_f64()
+                    .ok_or_else(|| bad("border width"))?
+                    as f32;
+            }
+            Some(border)
+        }
     };
     let background = match &style["background"] {
         Value::Null => None,

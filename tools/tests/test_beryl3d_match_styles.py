@@ -138,18 +138,25 @@ def test_values_are_the_same_within_a_level_a_quarter_point_or_half_a_percent() 
     b = css.parsed("box-shadow", "rgb(1, 0, 0) 0px 2.2px 4px 0px")
     c = css.parsed("box-shadow", "rgb(0, 0, 0) 0px 2px 4px 0px inset")
     assert support.same(a, b, "structure") and not support.same(a, c, "structure")
-    # A matrix's translation is a length, its scale a ratio.
-    assert support.same([1, 0, 0, 1, 10, 0], [1, 0, 0, 1, 10.2, 0], "transform")
-    assert not support.same([1, 0, 0, 1, 10, 0], [1.01, 0, 0, 1, 10, 0], "transform")
+    # A transform is compared by its rotation alone: the boxes compare position and size.
+    assert support.same([1, 0, 0, 1, 10, 0], [0.5, 0, 0, 0.5, 90, 0], "transform")
+    assert support.same("none", [1, 0, 0, 1, 5, 5], "transform")
+    turned = [0.99, 0.13, -0.13, 0.99, 1014, 733]
+    assert support.same(
+        turned, [0.9914, 0.1305, -0.1305, 0.9914, 1020, 730], "transform"
+    )
+    assert not support.same(turned, "none", "transform")
 
 
 def test_only_the_shapes_the_supported_table_lists_can_be_expressed() -> None:
     assert support.can_express("border-radius", 12)
     assert not support.can_express("border-radius", [12, 12, 0, 0])
     assert support.can_express("box-shadow", "none")
-    # Shadows are drawn now; transforms are not.
+    # Shadows are drawn, and 2D transforms compared by their rotation; 3D ones are not.
     assert support.can_express("box-shadow", css.parsed("box-shadow", "0px 1px red"))
-    assert not support.can_express("transform", [1, 0, 0, 1, 5, 5])
+    assert support.can_express("transform", [1, 0, 0, 1, 5, 5])
+    assert not support.can_express("transform", [1.0] * 16)
+    assert support.can_express("border-width", [1, 2, 1, 1])
     assert support.shape("transform", [1, 0, 0, 1, 5, 5]) == "translate"
     assert support.shape("transform", [0.5, 0, 0, 0.5, 0, 0]) == "scale"
     assert support.shape("transform", [0.4, 0.1, -0.1, 0.4, 0, 0]) == "rotate or skew"
@@ -195,14 +202,14 @@ def element(
 def test_the_style_diff_lists_differences_and_counts_what_style_cannot_express() -> (
     None
 ):
-    moved = [1, 0, 0, 1, 5, 5]
+    turned = [0.97, 0.26, -0.26, 0.97, 5, 5]
     web = [
         element(
             "Play",
             [0, 0, 200, 48],
             text=True,
             background_color=[180, 94, 18, 1],
-            transform=moved,
+            transform=turned,
             # The web computes a border color even where no border is drawn.
             border_color=[245, 243, 240, 1],
             font_family="Times New Roman",
@@ -227,21 +234,23 @@ def test_the_style_diff_lists_differences_and_counts_what_style_cannot_express()
     found = styles.measure(web, b3d, pairs)
     assert [d.line() for d in found.differences] == [
         'button "Play" #1  font-family  Times New Roman  Crimson Pro',
+        'button "Play" #1  transform  0.97 0.26 -0.26 0.97 5 5  none',
         'button "Back" #1  background-color  rgba(0,0,0,0)  rgba(9,9,9,1)',
     ]
-    assert found.unsupported == {"transform": 1}
-    assert found.total() == "styles 2, unsupported 1"
+    assert found.unsupported == {}
+    assert found.total() == "styles 3, unsupported 0"
 
 
 def test_gaps_group_values_by_shape_and_rank_them_by_area_on_screen() -> None:
     parser = argparse.ArgumentParser()
     target.arguments(parser)
     t = target.target(parser.parse_args(["opening-play", "--at", "end"]))
-    move = [1, 0, 0, 1, 5, 5]
-    scale = [0.5, 0, 0, 0.5, 0, 0]
+    # A 3D matrix, which `Style` cannot express.
+    move = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, 5, 0, 1]
+    radial = [{"kind": "radial", "repeating": False, "shape": None, "stops": []}]
     web = [
         element("Small", [0, 0, 10, 10], transform=move),
-        element("Large", [0, 0, 100, 100], transform=scale),
+        element("Large", [0, 0, 100, 100], mask_image=radial),
         # Half of it lies left of the window.
         element("Edge", [-50, 0, 100, 10], transform=move),
         # Transparent: no area.
@@ -251,8 +260,8 @@ def test_gaps_group_values_by_shape_and_rank_them_by_area_on_screen() -> None:
     ]
     groups = gaps.grouped(gaps.uses(t, web))
     assert [(g.name, g.shape, len(g.uses), g.area()) for g in groups] == [
-        ("transform", "scale", 1, 10000.0),
-        ("transform", "translate", 3, 600.0),
+        ("mask-image", "radial", 1, 10000.0),
+        ("transform", "3d", 3, 600.0),
         ("border-radius", "corners differ", 1, 400.0),
     ]
     examples = groups[1].examples()
@@ -261,4 +270,32 @@ def test_gaps_group_values_by_shape_and_rank_them_by_area_on_screen() -> None:
         'button "Small" #1',
         'button "Gone" #1',
     ]
-    assert examples[0].value == "1 0 0 1 5 5"
+    assert examples[0].value == "1 0 0 0 0 1 0 0 0 0 1 0 5 5 0 1"
+
+
+def test_a_web_card_is_compared_by_its_own_turn_and_its_tapped_face() -> None:
+    # The web scales the card element and turns its face, a child region of the same box.
+    card = {**element("Beza", [700, 250, 146, 104]), "role": "card"}
+    card["style"] = style(transform=[0.8, 0, 0, 0.8, 700, 250])
+    face = {**element("", [700, 250, 146, 104]), "role": "region", "parent": 0}
+    face["style"] = style(transform=[0, 1, -1, 0, 0, 0])
+    drawn = styles.as_drawn([card, face], 0)["style"]
+    assert isinstance(drawn, dict)
+    assert drawn["transform"] == [0.0, 0.8, -0.8, 0.0, 700, 250]
+    # Beryl 3D's tapped card: a quarter turn with no scale.
+    assert support.same(drawn["transform"], [0, 1, -1, 0, 710, 280], "transform")
+    # A card whose face is not turned is itself.
+    face["style"] = style()
+    assert styles.as_drawn([card, face], 0) is card
+
+
+def test_a_card_back_is_compared_either_way_up() -> None:
+    web = {**element("", [0, 0, 60, 80]), "role": "card", "name": ""}
+    web["style"] = style(transform=[-1, 0.04, -0.04, -1, 700, 40])
+    b3d = {**element("", [0, 0, 60, 80]), "role": "card", "name": ""}
+    b3d["style"] = style(transform=[1, -0.04, 0.04, 1, 700, -100])
+    pairs: list[dict[str, object]] = [{"web": 0, "b3d": 0, "pass": "key"}]
+    assert styles.measure([web], [b3d], pairs).differences == []
+    # A face shown upside down is a difference.
+    web["name"] = b3d["name"] = "Island"
+    assert len(styles.measure([web], [b3d], pairs).differences) == 1

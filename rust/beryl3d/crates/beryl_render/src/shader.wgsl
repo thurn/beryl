@@ -270,9 +270,17 @@ fn shade_streak(sprite: vec4<f32>, mesh_uv: vec2<f32>, tint: vec4<f32>, params: 
 }
 
 // A panel of the flat layer: a rounded rectangle `params.xy` logical points large with corners
-// of radius `params.z`, filled with the tint, and a border `params.w` wide in the color held in
+// of radius `params.z`, filled with the tint, and a border in the color held in the low bytes of
 // the record's `uv` (`border`, from 0 to 255). Both edges are antialiased over one pixel;
 // `mesh_pixel` is how far `mesh_uv` moves across one pixel.
+//
+// The border is `params.w` wide on every side, unless `params.w` is negative
+// (`Draw::panel_sides`): then the high bytes of `uv` hold each side's width in quarter points
+// (top, right, bottom, left), and the record draws only the sides whose bits (1 top, 2 right,
+// 4 bottom, 8 left) `-params.w` has. A point
+// of the border belongs to the side it is nearest in units of that side's width, which splits a
+// corner along the line from the border box's corner to the padding box's, as CSS joins two
+// sides of different colors.
 fn shade_panel(
     mesh_uv: vec2<f32>,
     mesh_pixel: vec2<f32>,
@@ -282,14 +290,41 @@ fn shade_panel(
 ) -> vec4<f32> {
     let size = params.xy;
     let pixel = max(max(mesh_pixel.x * size.x, mesh_pixel.y * size.y), 1e-4);
-    let d = rounded_box((mesh_uv - vec2<f32>(0.5)) * size, size * 0.5, params.z);
+    let p = (mesh_uv - vec2<f32>(0.5)) * size;
+    let d = rounded_box(p, size * 0.5, params.z);
     let outer = clamp(0.5 - d / pixel, 0.0, 1.0);
-    let inner = select(1.0, clamp(0.5 - (d + params.w) / pixel, 0.0, 1.0), params.w > 0.0);
     // The fill reaches under the border, which is drawn over it, as CSS's background reaches
     // to the border box's edge (`background-clip: border-box`): a translucent rim shows the
     // panel's fill through it, not what lies behind the panel.
-    let edge = vec4<f32>(border) / 255.0;
-    let ring = edge.a * (1.0 - inner);
+    let edge = vec4<f32>(border & vec4<u32>(255u)) / 255.0;
+    var ring: f32;
+    if (params.w >= 0.0) {
+        let inner = select(1.0, clamp(0.5 - (d + params.w) / pixel, 0.0, 1.0), params.w > 0.0);
+        ring = edge.a * (1.0 - inner);
+    } else {
+        let widths = vec4<f32>(border >> vec4<u32>(8u)) * 0.25;
+        // The padding box: the border box less each side's width, its corners' radius less the
+        // widest side's, which is CSS's inner radius where the sides are the same width.
+        let low = -size * 0.5 + widths.wx;
+        let high = size * 0.5 - widths.yz;
+        let half = max((high - low) * 0.5, vec2<f32>(0.0));
+        let widest = max(max(widths.x, widths.y), max(widths.z, widths.w));
+        let inner_radius = clamp(params.z - widest, 0.0, min(half.x, half.y));
+        let di = rounded_box(p - (low + high) * 0.5, half, inner_radius);
+        let inner = clamp(0.5 - di / pixel, 0.0, 1.0);
+        // How far the point lies in from each side's edge, in units of the side's width; a side
+        // of no width never owns it.
+        let reach = vec4<f32>(p.y + size.y * 0.5, size.x * 0.5 - p.x, size.y * 0.5 - p.y, p.x + size.x * 0.5);
+        let depth = select(vec4<f32>(1e9), reach / max(widths, vec4<f32>(1e-4)), widths > vec4<f32>(0.0));
+        var side = 0u;
+        var least = depth.x;
+        if (depth.y < least) { side = 1u; least = depth.y; }
+        if (depth.z < least) { side = 2u; least = depth.z; }
+        if (depth.w < least) { side = 3u; }
+        let sides = u32(-params.w);
+        let mine = select(0.0, 1.0, ((sides >> side) & 1u) != 0u);
+        ring = edge.a * (1.0 - inner) * mine;
+    }
     let fill = vec4<f32>(tint.rgb, 1.0) * tint.a;
     return (vec4<f32>(edge.rgb, 1.0) * ring + fill * (1.0 - ring)) * outer;
 }
