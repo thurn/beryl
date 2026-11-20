@@ -13,25 +13,30 @@ the table shaking) pairs next, only by its name and what it is on (its `object`)
 sides draw an effect in different shapes and nest it differently. It takes part in no other
 pass.
 
-Five passes then pair the rest, each over what the passes before it left:
+Six passes then pair the rest, each over what the passes before it left:
 
 1. **Object.** Cards of the same object (a card's slot in the view, which both clients name
    their cards by), whatever their names or places.
-2. **Key.** Elements whose locators (`key`) are equal.
-3. **Identity.** Elements with the same role, name and object under the same parent. Only
+2. **Mark.** Marks' outlines (role `mark`) of the same kind (their name: `eligible`,
+   `selected`, `suggested`, `friendly-target`, `hostile-target`) on the same object. A mark
+   pairs in this pass or not at all, so an outline one side lacks on a card is reported on that
+   card ("only the web has this element") rather than paired with another card's outline or
+   another kind of mark nearby, and a wrong one shows in `match styles`.
+3. **Key.** Elements whose locators (`key`) are equal.
+4. **Identity.** Elements with the same role, name and object under the same parent. Only
    elements with a name or an object take part, because the web keeps many unnamed elements
    that would pair with anything. The two trees nest differently, so "the same parent" means
    that the nearest ancestors already paired on each side are each other's pair, or that
    neither side has one. Of several candidates, the one with the nearest box wins.
-4. **Identity anywhere.** Elements with the same role, name and object whose parents differ,
+5. **Identity anywhere.** Elements with the same role, name and object whose parents differ,
    nearest first: the web draws a hand card's cost in an element over the whole hand, while
    Beryl 3D draws it inside the card.
-5. **Box.** Elements with the same role whose boxes lie within `TOLERANCE` points of each other,
+6. **Box.** Elements with the same role whose boxes lie within `TOLERANCE` points of each other,
    nearest first.
 
 `joined.json` is `{"target", "pairs": [{"web", "b3d", "pass"}], "unmatched": {"web": [...],
 "b3d": [...]}, "wrappers": {"web": n, "b3d": n}}`: `web` and `b3d` are indexes into each side's
-elements, `pass` is "effect", "object", "key", "identity", "anywhere" or "box", each unmatched element is
+elements, `pass` is "effect", "object", "mark", "key", "identity", "anywhere" or "box", each unmatched element is
 `{"index", "role", "name", "box", "reason"}`, with `reason` saying why no pass paired it, and
 `wrappers` counts the elements left out on each side.
 """
@@ -55,6 +60,9 @@ TOLERANCE = 24.0
 # draw nothing of their own: a `region` that only lays out its children, and a `list` that only
 # holds its rows.
 WRAPPERS: frozenset[str] = frozenset({"region", "list"})
+
+# The role of a mark's outline on a card, an ability or a player, on both sides.
+MARK = "mark"
 
 
 def visible(color: object) -> bool:
@@ -168,6 +176,12 @@ def join(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, object]:
     def open_b3d(b: int) -> bool:
         return b not in b3d_to and b not in b3d_out and effect_of(b3d[b]) is None
 
+    # A mark pairs only in the mark pass; the later passes leave it out.
+    mark_pass_done: bool = False
+
+    def open_after_marks(element: Element) -> bool:
+        return not (mark_pass_done and element.get("role") == MARK)
+
     def pair(w: int, b: int, how: str) -> None:
         web_to[w] = b
         b3d_to[b] = w
@@ -186,9 +200,9 @@ def join(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, object]:
         near = sorted(
             (distance(we, be), w, b)
             for w, we in enumerate(web)
-            if open_web(w)
+            if open_web(w) and open_after_marks(we)
             for b, be in enumerate(b3d)
-            if open_b3d(b) and alike(we, be)
+            if open_b3d(b) and open_after_marks(be) and alike(we, be)
         )
         for apart, w, b in near:
             if apart > within:
@@ -197,18 +211,25 @@ def join(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, object]:
                 pair(w, b, how)
 
     nearest_first("object", same_card, math.inf)
+    nearest_first("mark", same_mark, math.inf)
+    mark_pass_done = True
 
     keyed = {e["key"]: i for i, e in enumerate(b3d) if e.get("key")}
     for w, element in enumerate(web):
         b = keyed.get(element.get("key"))
-        if b is not None and open_web(w) and open_b3d(b):
+        if (
+            b is not None
+            and open_web(w)
+            and open_b3d(b)
+            and element.get("role") != MARK
+        ):
             pair(w, b, "key")
 
     # Parents come before their children in both documents, so walking the web's elements in
     # order pairs a parent before the identity pass asks about its children's anchors.
     for w, element in enumerate(web):
         wanted = identity(element)
-        if not open_web(w) or wanted is None:
+        if not open_web(w) or wanted is None or element.get("role") == MARK:
             continue
         up = anchor(web, w, web_to)
         place = None if up is None else web_to[up]
@@ -241,13 +262,18 @@ def join(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, object]:
         unpaired = [o for j, o in enumerate(others) if j not in taken and j not in gone]
         elsewhere = [o for j, o in enumerate(others) if j in taken]
         other = "Beryl 3D" if side == "web" else "web"
+        mine_name = "web" if side == "web" else "Beryl 3D"
         return [
             {
                 "index": i,
                 "role": e.get("role"),
                 "name": e.get("name"),
                 "box": e.get("box"),
-                "reason": reason(e, unpaired, elsewhere, other),
+                "reason": (
+                    lone_mark(e, mine, mine_name, other)
+                    if e.get("role") == MARK
+                    else reason(e, unpaired, elsewhere, other)
+                ),
             }
             for i, e in enumerate(mine)
             if i not in paired and i not in out
@@ -274,6 +300,34 @@ def same_card(a: Element, b: Element) -> bool:
         a.get("role") == b.get("role") == "card"
         and a.get("object") is not None
         and a.get("object") == b.get("object")
+    )
+
+
+def same_mark(a: Element, b: Element) -> bool:
+    """Whether `a` and `b` are both outlines of the same mark on the same object."""
+    return (
+        a.get("role") == b.get("role") == MARK
+        and a.get("name") == b.get("name")
+        and a.get("object") == b.get("object")
+    )
+
+
+def lone_mark(
+    element: Element, elements: Sequence[Element], side: str, other: str
+) -> str:
+    """Why the mark `element`, one of `side`'s `elements`, is unpaired: `other` draws no such
+    mark on its object, which is what an outline missing on one side looks like. It names the
+    card, ability or player the mark rings, its parent."""
+    up = parent(element)
+    ringed = elements[up] if up is not None else {}
+    thing = element.get("object")
+    on = f"{ringed.get('role', 'thing')} {str(ringed.get('name') or '')!r}"
+    if thing is not None:
+        on += f" (object {thing})"
+    return (
+        f"only {'the web' if side == 'web' else side} has this element: the {other} side "
+        f"draws no "
+        f"{element.get('name')} mark on {on}"
     )
 
 

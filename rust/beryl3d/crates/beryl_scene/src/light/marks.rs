@@ -189,6 +189,7 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         builder.ring(
             band,
             ringed(on),
+            mark,
             Draw::glow(transform, tint, sprites::OUTLINE, 0.0),
         );
     }

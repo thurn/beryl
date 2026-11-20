@@ -551,9 +551,23 @@ fn ringed_element(frame: &Frame, on: Ringed) -> Option<u32> {
 
 /// The rectangle on the window, in logical points, that bounds the line `ring`'s outline is
 /// drawn along, through `projection`, in a window of `size`.
-fn ring_rect(ring: &Ring, projection: glam::Mat4, size: Size) -> Rect {
+#[must_use]
+pub fn ring_rect(ring: &Ring, projection: glam::Mat4, size: Size) -> Rect {
+    ring_reach(ring, projection, size, sprites::OUTLINE_LINE)
+}
+
+/// The rectangle on the window, in logical points, outside which `ring`'s outline and its glow
+/// draw nothing (`sprites::OUTLINE_OUTER`), through `projection`, in a window of `size`.
+#[must_use]
+pub fn ring_outer(ring: &Ring, projection: glam::Mat4, size: Size) -> Rect {
+    ring_reach(ring, projection, size, sprites::OUTLINE_OUTER)
+}
+
+/// The rectangle on the window that bounds the rectangle `half` across and up from the middle
+/// of `ring`'s quad, in the quad's own units, projected as the renderer draws it.
+fn ring_reach(ring: &Ring, projection: glam::Mat4, size: Size, half: [f32; 2]) -> Rect {
     let m = ring.model;
-    let [x, y] = sprites::OUTLINE_LINE;
+    let [x, y] = half;
     let corners = [(-x, -y), (x, -y), (x, y), (-x, y)].map(|(qx, qy)| {
         let point = glam::Vec3::new(
             m[0] * qx + m[1] * qy + m[3],

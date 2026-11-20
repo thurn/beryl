@@ -231,9 +231,18 @@ time, largest differences first, and land each improvement as you go:
    the shape to `data/beryl3d/match/supported.json`.
 5. **Fix pixel regions, worst first.** `just b3d match pixels <target> --at <moment>`
    names the element answerable for each region and writes crops of the worst
-   ten. Read the crops: a dark ring round the screen in the difference picture
-   is the table's background, a block on one side only is an element the other
-   side lacks.
+   ten. Rows rank by the pixels an element draws itself, inside its own box and
+   outside its painting children's boxes, so what lies on an element does not
+   rank it. Read the crops: a dark ring round the screen in the difference
+   picture is the table's background, a block on one side only is an element
+   the other side lacks. Marks are compared too: each mark's outline
+   (eligible, selected, suggested, friendly and hostile target) is a `mark`
+   element on both sides, named by its kind and parented to the card it rings.
+   Marks pair only by kind and card object, so an outline one side lacks shows
+   in `joined.json` and `pixels` as "only the web has this element" (or "only
+   Beryl 3D") on that card, and a wrong one in `match styles`. In `pixels` an
+   outline owns only a band round its box, so the card keeps its face's
+   pixels.
 6. **Fix motion.** `just b3d match motion --all` ranks every verb, effect and
    mark by how far its motion is from the web's, worst first, and prints for
    each the element that differs most, the kind of difference (position, size,

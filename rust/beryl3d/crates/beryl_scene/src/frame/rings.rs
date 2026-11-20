@@ -5,6 +5,7 @@ use glam::Vec2;
 
 use super::{ABILITIES, ElementId, Frame, OBJECTS};
 use beryl_protocol::protocol::Side;
+use beryl_protocol::script::Mark;
 
 /// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
 /// and a pointer swept across a hand leaves each card it crossed falling for a moment; past this
@@ -23,12 +24,18 @@ pub enum Ringed {
     Player(Side),
 }
 
-/// A mark's outline as the frame draws it: the thing it rings and the transform of its record
-/// (`Draw::model`), which places the `sprites::OUTLINE` quad in the table's space.
+/// A mark's outline as the frame draws it: the thing it rings, which mark it is, and the
+/// transform of its record (`Draw::model`), which places the `sprites::OUTLINE` quad in the
+/// table's space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ring {
     pub on: Ringed,
+    /// Which mark the outline draws, which `just b3d match` names its record by.
+    pub mark: Mark,
     pub model: [f32; 12],
+    /// The outline's color and opacity (`Draw::tint`), the opacity falling as the mark comes
+    /// and goes.
+    pub tint: [u8; 4],
 }
 
 /// A hand card up out of its place in the fan, and the box it has resting there.

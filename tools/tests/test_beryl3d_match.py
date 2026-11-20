@@ -317,6 +317,55 @@ def test_cards_pair_by_object_first_and_a_renamed_pair_by_name_anywhere() -> Non
     assert pairs == {(0, 1): "object", (1, 0): "object", (3, 2): "anywhere"}
 
 
+def mark(kind: str, at: list[float], thing: int, card: int) -> dict[str, object]:
+    """The outline of mark `kind` on the card of object `thing` at index `card`, as both
+    sides' records write one: a `mark` named by its kind, drawn as a shadow."""
+    drawn = plain("mark", kind, at, object=thing, parent=card)
+    style = drawn["style"]
+    assert isinstance(style, dict)
+    return {**drawn, "style": {**style, "box-shadow": [{"spread": 2.55}]}}
+
+
+def test_marks_pair_by_kind_and_card_and_a_missing_outline_is_named_on_its_card() -> (
+    None
+):
+    web = [
+        plain("card", "Island", [400, 730, 200, 270], object=7),
+        mark("eligible", [400, 730, 200, 270], 7, 0),
+        plain("card", "Plains", [600, 730, 200, 270], object=8),
+        mark("eligible", [600, 730, 200, 270], 8, 2),
+    ]
+    b3d = [
+        plain("card", "Island", [404, 730, 200, 270], object=7, key="card #7"),
+        mark("eligible", [402, 728, 204, 274], 7, 0),
+        # Beryl 3D draws the Plains with a selected outline, close enough to the web's
+        # eligible one to pair by box; it must not.
+        plain("card", "Plains", [600, 730, 200, 270], object=8, key="card #8"),
+        mark("selected", [600, 730, 200, 270], 8, 2),
+    ]
+    found = joined.join(web, b3d)
+    listed = found["pairs"]
+    assert isinstance(listed, list)
+    pairs = {(p["web"], p["b3d"]): p["pass"] for p in listed}
+    assert pairs == {(0, 0): "object", (2, 2): "object", (1, 1): "mark"}
+    unmatched = found["unmatched"]
+    assert isinstance(unmatched, dict)
+    assert [(e["name"], e["reason"]) for e in unmatched["web"]] == [
+        (
+            "eligible",
+            "only the web has this element: the Beryl 3D side draws no eligible mark on "
+            "card 'Plains' (object 8)",
+        )
+    ]
+    assert [(e["name"], e["reason"]) for e in unmatched["b3d"]] == [
+        (
+            "selected",
+            "only Beryl 3D has this element: the web side draws no selected mark on "
+            "card 'Plains' (object 8)",
+        )
+    ]
+
+
 def test_boxes_lists_moved_and_rewrapped_elements_worst_first_and_text_drawn_over_text() -> (
     None
 ):

@@ -201,27 +201,100 @@ pub(crate) fn regions(differ: &[bool], width: u32) -> (Vec<u32>, Vec<usize>) {
     (label, sizes)
 }
 
+/// How far outside its box, in points, a mark's outline paints (`Record::edge`): the web draws
+/// it as a `box-shadow` spread and glow round the card's box, and Beryl 3D's record's box is the
+/// line its outline runs along, with the glow either side.
+pub(crate) const EDGE_OUT: f32 = 8.0;
+/// How far inside its box, in points, a mark's outline paints: the web's inset shadow, and the
+/// inner half of Beryl 3D's line.
+pub(crate) const EDGE_IN: f32 = 3.0;
+
+/// Writes `index` into each cell of `grid`, `width` by `height` points, that `record` paints:
+/// its box, or for an outline (`Record::edge`) only the band from `EDGE_IN` inside its box to
+/// `EDGE_OUT` outside it, so that the card the outline rings keeps its own face.
+fn fill(grid: &mut [u32], record: &Record, index: u32, (width, height): (u32, u32)) {
+    let [x, y, w, h] = record.rect;
+    let (outer, hole) = if record.edge {
+        let grow = |by: f32| [x - by, y - by, w + 2.0 * by, h + 2.0 * by];
+        (
+            grow(EDGE_OUT),
+            Pixels::of_points(grow(-EDGE_IN), 1.0, width, height),
+        )
+    } else {
+        (record.rect, None)
+    };
+    let Some(cells) = Pixels::of_points(outer, 1.0, width, height) else {
+        return;
+    };
+    for y in cells.top..cells.bottom {
+        let row = (y * width) as usize;
+        match hole.filter(|hole| (hole.top..hole.bottom).contains(&y)) {
+            Some(hole) => {
+                grid[row + cells.left as usize..row + hole.left as usize].fill(index);
+                grid[row + hole.right as usize..row + cells.right as usize].fill(index);
+            }
+            None => grid[row + cells.left as usize..row + cells.right as usize].fill(index),
+        }
+    }
+}
+
 /// For each point of a window `width` by `height` points large, the index of the topmost
 /// element of `records` that paints there (`Record::paints`), by paint order (`z`), or
 /// `u32::MAX`. Elements are filled into the grid from the bottom up, so a later one covers an
 /// earlier one.
 pub(crate) fn owners(records: &[Record], width: u32, height: u32) -> Vec<u32> {
-    let mut grid = vec![u32::MAX; (width * height) as usize];
     let mut order: Vec<usize> = (0..records.len())
         .filter(|&at| records[at].paints)
         .collect();
     order.sort_by_key(|&at| records[at].z);
+    fill_in(records, order, width, height)
+}
+
+/// For each point of a window `width` by `height` points large, the index of the last element
+/// of `records` in tree order that paints there, or `u32::MAX`. Both sides list a parent before
+/// its children, so where a painting child lies inside its parent's box, the child holds the
+/// point (`own`).
+pub(crate) fn deepest(records: &[Record], width: u32, height: u32) -> Vec<u32> {
+    let order = (0..records.len())
+        .filter(|&at| records[at].paints)
+        .collect();
+    fill_in(records, order, width, height)
+}
+
+fn fill_in(records: &[Record], order: Vec<usize>, width: u32, height: u32) -> Vec<u32> {
+    let mut grid = vec![u32::MAX; (width * height) as usize];
     for at in order {
-        let Some(cells) = Pixels::of_points(records[at].rect, 1.0, width, height) else {
-            continue;
-        };
         let index = u32::try_from(at).expect("fewer records than u32::MAX");
-        for y in cells.top..cells.bottom {
-            let row = (y * width) as usize;
-            grid[row + cells.left as usize..row + cells.right as usize].fill(index);
-        }
+        fill(&mut grid, &records[at], index, (width, height));
     }
     grid
+}
+
+/// For a window of `width` by `height` points, whether a point lies outside the boxes of the
+/// painting descendants of an element of `records` (`own`, over the `deepest` grid).
+pub(crate) fn owns(
+    records: &[Record],
+    (width, height): (u32, u32),
+) -> impl Fn(u32, u32, usize) -> bool + '_ {
+    let deep = deepest(records, width, height);
+    move |x, y, at| {
+        let found = deep[(y.min(height - 1) * width + x.min(width - 1)) as usize];
+        own(records, (found != u32::MAX).then_some(found as usize), at)
+    }
+}
+
+/// Whether the point whose `deepest` element is `deep` lies outside the boxes of the painting
+/// descendants of element `at` of `records`: `deep` is `at` itself, nothing, or no
+/// descendant of it.
+pub(crate) fn own(records: &[Record], deep: Option<usize>, at: usize) -> bool {
+    let mut up = deep;
+    while let Some(here) = up {
+        if here == at {
+            return deep == Some(at);
+        }
+        up = records[here].parent;
+    }
+    true
 }
 
 /// The differing pixels one element, or one pair of elements the matcher paired, is answerable
@@ -239,6 +312,11 @@ pub(crate) struct Row {
     pub b3d_bare: usize,
     /// Of `b3d_pixels`, those where no web element paints.
     pub web_bare: usize,
+    /// Of `web_pixels` and of `b3d_pixels`, those inside the element's own box and outside the
+    /// boxes of its painting children (`own`): what the element itself draws differently,
+    /// rather than what lies on it.
+    pub web_own: usize,
+    pub b3d_own: usize,
     /// The box around all of them, once there is one.
     pub area: Option<Pixels>,
 }
@@ -247,6 +325,12 @@ impl Row {
     /// How many pixels the row is answerable for: the larger of the two sides' counts.
     pub(crate) fn pixels(&self) -> usize {
         self.web_pixels.max(self.b3d_pixels)
+    }
+
+    /// How many of them the row's elements draw themselves, outside their children's boxes: the
+    /// larger of the two sides' `own` counts, which ranks the rows.
+    pub(crate) fn own(&self) -> usize {
+        self.web_own.max(self.b3d_own)
     }
 
     /// Why one side may be at fault, when the other has nothing there: no such element, or no
@@ -267,14 +351,18 @@ impl Row {
 /// Every differing pixel of a region at least `SPECK` large, attributed to the topmost painting
 /// element at its point on each side and so to that element's row. `web_owner` and `b3d_owner`
 /// give the element at a point, in whole points from the top left, of `counts` elements on each
-/// side; `pairs` maps a web element's index to its Beryl 3D pair's. Returns the rows, worst first, and the pixels no element on
-/// either side paints.
+/// side; `pairs` maps a web element's index to its Beryl 3D pair's. `own` says, for a point and
+/// an element on each side (web first), whether the point lies outside the boxes of that
+/// element's painting children. Returns the rows, worst first by the pixels their elements draw
+/// themselves (`Row::own`), so that an element's row is not ranked by what its children draw
+/// over it, and the pixels no element on either side paints.
 pub(crate) fn attribute(
     (label, sizes): (&[u32], &[usize]),
     (width, scale): (u32, f32),
     web_owner: &dyn Fn(u32, u32) -> Option<usize>,
     b3d_owner: &mut dyn FnMut(u32, u32) -> Option<usize>,
     (pairs, counts): (&[(usize, usize)], [usize; 2]),
+    own: [&dyn Fn(u32, u32, usize) -> bool; 2],
 ) -> (Vec<Row>, usize) {
     fn add(rows: &mut Vec<Row>, web: Option<usize>, b3d: Option<usize>) -> usize {
         rows.push(Row {
@@ -284,6 +372,8 @@ pub(crate) fn attribute(
             b3d_pixels: 0,
             b3d_bare: 0,
             web_bare: 0,
+            web_own: 0,
+            b3d_own: 0,
             area: None,
         });
         rows.len() - 1
@@ -314,6 +404,7 @@ pub(crate) fn attribute(
             let row = *web_row[w].get_or_insert_with(|| add(&mut rows, Some(w), None));
             let row = &mut rows[row];
             row.web_pixels += 1;
+            row.web_own += usize::from(own[0](point.0, point.1, w));
             row.b3d_bare += usize::from(b3d.is_none());
             row.area = Some(row.area.map_or(here, |area| area.union(here)));
         }
@@ -321,18 +412,22 @@ pub(crate) fn attribute(
             let row = *b3d_row[b].get_or_insert_with(|| add(&mut rows, None, Some(b)));
             let row = &mut rows[row];
             row.b3d_pixels += 1;
+            row.b3d_own += usize::from(own[1](point.0, point.1, b));
             row.web_bare += usize::from(web.is_none());
             row.area = Some(row.area.map_or(here, |area| area.union(here)));
         }
     }
     let mut rows: Vec<Row> = rows.into_iter().filter(|row| row.pixels() > 0).collect();
-    rows.sort_by_key(|row| std::cmp::Reverse(row.pixels()));
+    rows.sort_by_key(|row| std::cmp::Reverse((row.own(), row.pixels())));
     (rows, nobody)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// No element has a painting child over any point.
+    const ALL_OWN: [&dyn Fn(u32, u32, usize) -> bool; 2] = [&|_, _, _| true, &|_, _, _| true];
 
     fn record(rect: [f32; 4], z: i64, paints: bool) -> Record {
         Record {
@@ -342,6 +437,7 @@ mod tests {
             paints,
             lines: Vec::new(),
             parent: None,
+            edge: false,
         }
     }
 
@@ -417,6 +513,7 @@ mod tests {
             &web,
             &mut b3d,
             (&[(0, 5)], [1, 6]),
+            ALL_OWN,
         );
         assert_eq!(nobody, 0);
         assert_eq!(rows.len(), 1);
@@ -431,6 +528,7 @@ mod tests {
             &web,
             &mut nothing,
             (&[(0, 5)], [1, 6]),
+            ALL_OWN,
         );
         assert_eq!(rows[0].hint(), Some("no Beryl 3D element paints here"));
     }
@@ -441,8 +539,66 @@ mod tests {
         let sizes = [1, 4];
         let web = |_: u32, _: u32| Some(0);
         let mut b3d = |_: u32, _: u32| None;
-        let (rows, _) = attribute((&label, &sizes), (6, 1.0), &web, &mut b3d, (&[], [1, 1]));
+        let (rows, _) = attribute(
+            (&label, &sizes),
+            (6, 1.0),
+            &web,
+            &mut b3d,
+            (&[], [1, 1]),
+            ALL_OWN,
+        );
         assert_eq!(rows[0].web_pixels, 4);
         assert_eq!(rows[0].hint(), Some("only the web has this element"));
+    }
+
+    #[test]
+    fn an_outline_owns_only_its_band_and_leaves_the_card_its_face() {
+        let card = record([20.0, 20.0, 20.0, 20.0], 0, true);
+        let mark = Record {
+            parent: Some(0),
+            edge: true,
+            ..record([20.0, 20.0, 20.0, 20.0], 1, true)
+        };
+        let records = [card, mark];
+        let grid = owners(&records, 60, 60);
+        // The middle of the card is the card's; its edge and just outside it are the mark's.
+        assert_eq!(grid[30 * 60 + 30], 0);
+        assert_eq!(grid[30 * 60 + 20], 1);
+        assert_eq!(grid[30 * 60 + 15], 1);
+        assert_eq!(grid[30 * 60 + 5], u32::MAX);
+        // So the card's own pixels are its middle, and the mark is no child over them.
+        let deep = deepest(&records, 60, 60);
+        let at = |x: usize, y: usize| {
+            let found = deep[y * 60 + x];
+            (found != u32::MAX).then_some(found as usize)
+        };
+        assert!(own(&records, at(30, 30), 0));
+        assert!(!own(&records, at(20, 30), 0));
+        assert!(own(&records, at(20, 30), 1));
+    }
+
+    #[test]
+    fn rows_rank_by_what_their_elements_draw_themselves() {
+        // Element 0 is answerable for three pixels, all under a child; element 1 for two of its
+        // own.
+        let label = [0, 0, 0, 0, 0];
+        let sizes = [5];
+        let web = |x: u32, _: u32| Some(usize::from(x >= 3));
+        let mut b3d = |_: u32, _: u32| None;
+        let under: &dyn Fn(u32, u32, usize) -> bool = &|_, _, at| at == 1;
+        let (rows, _) = attribute(
+            (&label, &sizes),
+            (5, 1.0),
+            &web,
+            &mut b3d,
+            (&[], [2, 1]),
+            [under, under],
+        );
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.web, row.own()))
+                .collect::<Vec<_>>(),
+            vec![(Some(1), 2), (Some(0), 0)]
+        );
     }
 }

@@ -645,13 +645,21 @@ impl<'a> FrameBuilder<'a> {
         self.frame.work.records += 1;
     }
 
-    /// Adds the record of a mark's outline that rings `on` to `band`, as `draw` does, and
-    /// records it in `Frame::rings` for the checks.
-    pub fn ring(&mut self, band: Band, on: Ringed, outline: Draw) {
+    /// Adds the record of the outline of `mark` that rings `on` to `band`, as `draw` does, and
+    /// records it in `Frame::rings` for the checks and the element records.
+    pub fn ring(
+        &mut self,
+        band: Band,
+        on: Ringed,
+        mark: beryl_protocol::script::Mark,
+        outline: Draw,
+    ) {
         if self.frame.rings.len() < RINGS {
             self.frame.rings.push(Ring {
                 on,
+                mark,
                 model: outline.model,
+                tint: outline.tint,
             });
         }
         self.draw(band, outline);

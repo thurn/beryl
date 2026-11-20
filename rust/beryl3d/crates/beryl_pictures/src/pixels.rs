@@ -14,9 +14,15 @@
 //! 4. gives each differing pixel to the topmost element that paints at its point on each side:
 //!    on the web the topmost by paint order (`z`) and box, in Beryl 3D the element its hit test
 //!    reaches (`agent::hit`), or the topmost by `z` and box where that element paints nothing;
+//!    A mark's outline (role `mark`) paints only a band round its box (`diff::EDGE_OUT`), so the
+//!    card it rings keeps the pixels of its own face;
 //! 5. prints one line for each element, or each pair of elements the matcher paired
-//!    (`joined.json`), worst first, with a hint when one side has no element there, and writes a
-//!    crop of the web, Beryl 3D and their difference, magnified, for the worst `CROPS`.
+//!    (`joined.json`), with a hint when one side has no element there, and writes a crop of the
+//!    web, Beryl 3D and their difference, magnified, for the worst `CROPS`. The rows are ranked
+//!    by the pixels each row's elements draw themselves: those inside the element's own box and
+//!    outside the boxes of its painting children (`diff::own`), so that a missing outline on a
+//!    card ranks by its own band, not by the card under it. The totals are the same pixels
+//!    grouped as before.
 //!
 //! It writes `pixels.json` and the crops (`crops/<n>.png`) into the snapshot directory. With
 //! `--box <x>,<y>,<width>,<height>` in points, `pixels.json` also counts the differing pixels,
@@ -73,6 +79,9 @@ pub(crate) struct Record {
     pub lines: Vec<[f32; 4]>,
     /// The index of its parent element, if it has one.
     pub parent: Option<usize>,
+    /// Whether it is a mark's outline (role `mark`), which paints only a band round its box
+    /// (`diff::EDGE_OUT`) and not the card inside it.
+    pub edge: bool,
 }
 
 /// Leaves painting, in `records`, only to the element at `root` and those inside it, when a
@@ -134,12 +143,19 @@ fn records(path: &Path) -> Result<(Vec<Record>, f32, usize), Error> {
                 .filter_map(|line| rect(&line["box"]))
                 .collect();
             let role = element["role"].as_str().unwrap_or("");
+            let name = element["name"].as_str().unwrap_or("");
+            // A mark's outline is named by its kind; the card it rings, its parent, says which.
+            let ringed = (element["parent"].as_u64())
+                .and_then(|up| elements.get(usize::try_from(up).ok()?))
+                .filter(|_| role == "mark")
+                .map(|up| {
+                    let up_role = up["role"].as_str().unwrap_or("");
+                    format!(" on {up_role} \"{}\"", up["name"].as_str().unwrap_or(""))
+                })
+                .unwrap_or_default();
             let label = match element["key"].as_str() {
                 Some(key) if !key.is_empty() => key.to_owned(),
-                _ => format!(
-                    "{role} \"{}\" [{at}]",
-                    element["name"].as_str().unwrap_or("")
-                ),
+                _ => format!("{role} \"{name}\"{ringed} [{at}]"),
             };
             Record {
                 label,
@@ -154,6 +170,7 @@ fn records(path: &Path) -> Result<(Vec<Record>, f32, usize), Error> {
                 parent: element["parent"]
                     .as_u64()
                     .and_then(|parent| usize::try_from(parent).ok()),
+                edge: role == "mark",
             }
         })
         .collect();
@@ -217,7 +234,8 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
     let mut page = cli::open(options)?;
     cli::seek_and_act(&mut page, options, &options.at)?;
     let frame = page.frame();
-    same_elements(frame.resolved.len(), b3d_records.len() - b3d_effects)?;
+    let marks = frame.rings.len();
+    same_elements(frame.resolved.len(), b3d_records.len() - b3d_effects - marks)?;
     // A snapshot drawn with `--only` holds the whole window's records, but only one element's
     // subtree is drawn on each side, so only those elements can be answerable.
     if let Some(locator) = options.value("--only") {
@@ -251,14 +269,18 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
         (at != u32::MAX).then_some(at as usize)
     };
     let web_owner = |x: u32, y: u32| owner(&web_grid, x, y);
-    // The hit test is the slowest step, so each point is asked once.
+    let web_own = diff::owns(&web_records, points);
+    let b3d_own = diff::owns(&b3d_records, points);
+    // The hit test is the slowest step, so each point is asked once. It finds only the frame's
+    // elements, so a mark's outline, which is not one, is taken from the grid first.
     let mut asked = vec![ASKED; b3d_grid.len()];
     let mut b3d_owner = |x: u32, y: u32| {
         let slot = &mut asked[cell(x, y)];
         if *slot == ASKED {
             let centre = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
-            let found = hit(frame, centre)
-                .map(|at| at as usize)
+            let found = owner(&b3d_grid, x, y)
+                .filter(|&at| b3d_records[at].edge)
+                .or_else(|| hit(frame, centre).map(|at| at as usize))
                 .filter(|&at| b3d_records[at].paints)
                 .or_else(|| owner(&b3d_grid, x, y));
             *slot = found.map_or(u32::MAX, |at| at as u32);
@@ -271,6 +293,7 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
         &web_owner,
         &mut b3d_owner,
         (&pairs, [web_records.len(), b3d_records.len()]),
+        [&web_own, &b3d_own],
     );
 
     let mut out = format!("{}\n", options.command_line());
@@ -303,8 +326,8 @@ struct Found<'a> {
     inside: Option<usize>,
 }
 
-/// Fails unless `b3d.json` lists as many elements, before its effects, as the frame resolves:
-/// otherwise the snapshot is from an older build.
+/// Fails unless `b3d.json` lists as many elements, before its effects and marks' outlines, as
+/// the frame resolves: otherwise the snapshot is from an older build.
 fn same_elements(resolved: usize, elements: usize) -> Result<(), Error> {
     if resolved == elements {
         return Ok(());
@@ -392,6 +415,7 @@ fn report(out: &mut String, dir: &Path, found: &Found<'_>) -> Result<(), Error> 
             "web": row.web,
             "b3d": row.b3d,
             "pixels": row.pixels(),
+            "own": row.own(),
             "web_pixels": row.web_pixels,
             "b3d_pixels": row.b3d_pixels,
             "b3d_bare": row.b3d_bare,
@@ -435,10 +459,11 @@ fn line(out: &mut String, row: &Row, (web, b3d): (&[Record], &[Record]), crop: O
     };
     let _ = write!(
         out,
-        "{:>8} px  {name}  (web {} px, Beryl 3D {} px)",
+        "{:>8} px  {name}  (web {} px, Beryl 3D {} px; {} px its own)",
         row.pixels(),
         row.web_pixels,
-        row.b3d_pixels
+        row.b3d_pixels,
+        row.own()
     );
     if let Some(hint) = row.hint() {
         let _ = write!(out, "  {hint}");

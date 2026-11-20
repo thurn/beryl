@@ -14,17 +14,25 @@
 //! (`tools/src/beryl_tools/beryl3d/match/page.mjs`), the box its quad covers on the window and
 //! its opacity. `shake`, which moves the whole picture of the table, is on `table`, and its box
 //! is the offset of the picture, of no size.
+//!
+//! After the effects come the marks' outlines (`Frame::rings`), one `mark` record each, named
+//! by the mark (`eligible`, `selected`, `suggested`, `friendly-target`, `hostile-target`),
+//! parented to the card, ability or life total it rings, with that as its `object` named as an
+//! effect's is, as the web's `.stage-mark` nodes are (`data/beryl3d/match/roles.json`). The outline is not one of the
+//! frame's elements, so the matcher could not see a missing or wrong one without these.
 
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Subject;
+use beryl_scene::agent::checks::{ring_outer, ring_rect};
 use beryl_scene::agent::hit::bounds;
 use beryl_scene::agent::tree::{locator_of, place_word};
 use beryl_scene::effects::Effect;
 use beryl_scene::element::{Extent, Filter, Gradient, Length, Shadow, Shape};
 use beryl_scene::frame::{
-    EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Role,
+    EffectLook, ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Ring, Ringed, Role,
 };
 use beryl_scene::input::Size;
+use beryl_scene::table::ABILITY_IDS;
 use serde_json::{Map, Value, json};
 
 /// Rounds `value` to hundredths, as the web side rounds its boxes.
@@ -332,9 +340,63 @@ fn effect_records(frame: &Frame, size: Size, elements: usize) -> Vec<Value> {
         .collect()
 }
 
-/// The frame's elements as records, then its effects' for a window of `size`. The frame must
-/// have been built `looking` (`Page::set_looking`), or no flat-layer element has a look or a
-/// line its words, and no effect is recorded.
+/// The record of `ring`, the mark outline at `z` in paint order, after every element and effect: its box
+/// is the line the outline is drawn along, and its look one `box-shadow` in the mark's color
+/// whose blur reaches as far as the outline's glow, with the opacity the mark has as it comes
+/// and goes. Its parent and object are those of the card, ability or life total it rings.
+fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
+    let line = ring_rect(ring, frame.view_projection, size);
+    let outer = ring_outer(ring, frame.view_projection, size);
+    let parent = match ring.on {
+        Ringed::Element(id) => frame
+            .resolved
+            .iter()
+            .position(|element| element.id == id && element.place != Place::Layer),
+        Ringed::Player(player) => {
+            let name = beryl_scene::hud::players::orb_name(player);
+            (frame.resolved.iter()).position(|element| {
+                element.place == Place::Layer && frame.name(element.name) == name
+            })
+        }
+    };
+    // What it rings, as an effect's `subject` names it: a card's slot, `a<id>` for an ability
+    // (whose element id is `ABILITY_IDS` more than its id), or a player's side.
+    let object = match ring.on {
+        Ringed::Element(id) if id.0 >= ABILITY_IDS => {
+            Value::from(format!("a{}", id.0 - ABILITY_IDS))
+        }
+        Ringed::Element(id) => json!(id.0 % REVEALED_FACE),
+        Ringed::Player(Side::You) => Value::from("you"),
+        Ringed::Player(Side::Opponent) => Value::from("opponent"),
+    };
+    let [red, green, blue, alpha] = ring.tint;
+    let glow = Shadow {
+        inset: false,
+        x: 0.0,
+        y: 0.0,
+        blur: ((outer.width - line.width) / 2.0).max(0.0),
+        spread: 0.0,
+        color: [red, green, blue, 255],
+    };
+    let shadows = (Value::Array(vec![shadow(&glow)]), Value::from("none"));
+    let images = (Value::from("none"), Value::from("none"), Vec::new());
+    json!({
+        "key": Value::Null,
+        "role": "mark",
+        "name": ring.mark.name(),
+        "object": object,
+        "place": parent.map_or_else(String::new, |at| place_word(frame.resolved[at].place)),
+        "box": [round(line.x), round(line.y), round(line.width), round(line.height)],
+        "z": z,
+        "parent": parent,
+        "style": style(f32::from(alpha) / 255.0, None, shadows, images),
+        "text": [],
+    })
+}
+
+/// The frame's elements as records, then its effects' and its marks' outlines', for a window
+/// of `size`. The frame must have been built `looking` (`Page::set_looking`), or no flat-layer
+/// element has a look or a line its words, and no effect is recorded.
 #[must_use]
 pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
     let z = paint_order(frame);
@@ -392,5 +454,9 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
             })
         })
         .chain(effect_records(frame, size, frame.resolved.len()))
+        .chain((frame.rings.iter().enumerate()).map(|(at, ring)| {
+            let z = frame.resolved.len() + frame.looks.effects.len() + at;
+            mark_record(frame, ring, size, z)
+        }))
         .collect()
 }

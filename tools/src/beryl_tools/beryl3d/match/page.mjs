@@ -337,8 +337,10 @@ export function records({ roles, only, light = false }) {
      * has one, so that "Your library, 32 cards" can be named "Your library" as Beryl 3D names
      * it. */
     const nameOf = (el) => {
-        const name = fullName(el);
-        const pattern = ruleOf(el)?.name;
+        const rule = ruleOf(el);
+        // A mark's outline is named by its class (`stage-mark-eligible`), as it has no name.
+        const name = rule?.from === "class" ? el.className : fullName(el);
+        const pattern = rule?.name;
         return (pattern && new RegExp(pattern).exec(name)?.[1]) ?? name;
     };
     const fullName = (el) => {
@@ -446,8 +448,10 @@ export function records({ roles, only, light = false }) {
         const rect = el.getBoundingClientRect();
         const shown = visible(el, s, rect);
         const role = roleOf(el);
+        // A mark that has not come up, or that the prompt hides (`[data-pay]`), draws nothing.
         const kept =
             shown &&
+            !(role === "mark" && opacity === 0) &&
             (el.hasAttribute("role") ||
                 el.hasAttribute("aria-label") ||
                 el.dataset.stage !== undefined ||
@@ -468,7 +472,8 @@ export function records({ roles, only, light = false }) {
                 key: null,
                 role,
                 name: role === "effect" ? effectName(el) : nameOf(el),
-                object: role === "effect" ? effectOn(el) : objectOf(el),
+                // A mark's object is what it rings, named as an effect's is.
+                object: role === "effect" || role === "mark" ? effectOn(el) : objectOf(el),
                 box: [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 z: here,
                 parent,
