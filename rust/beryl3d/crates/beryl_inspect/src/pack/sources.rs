@@ -4,9 +4,9 @@
 //! recorder, `beryl_record`, hands it as its `Catalog`. So it depends on the source of the engine
 //! crates `beryl_record` names (`beryl_cli`, `beryl_session` and `beryl_cards`) and of every crate
 //! they reach through a `path` dependency (the engine, the rules and the card sets), and on the
-//! data those read: the fixture definitions, the sample
-//! decks, the verb data and the card store. Beryl 3D's own crates are not among them, so a
-//! change to the client alone keeps the hash, and the pack is read again rather than rebuilt.
+//! data those read: the fixture definitions, the sample decks, the verb data and the card store.
+//! Beryl 3D's own crates are not among them, so a change to the client alone keeps the hash, and
+//! the pack is read again rather than rebuilt.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
