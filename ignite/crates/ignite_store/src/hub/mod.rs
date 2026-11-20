@@ -134,6 +134,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("hierarchical_ids.sql"),
         code: Some(renumber::renumber_all),
     },
+    Migration {
+        version: 20,
+        sql: include_str!("workers_state_since.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

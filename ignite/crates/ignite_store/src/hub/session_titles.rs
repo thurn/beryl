@@ -27,6 +27,22 @@ pub fn record(conn: &Connection, session: &str, title: &str, now: Timestamp) -> 
     Ok(())
 }
 
+/// The latest title `session` reported and when it reported it, if it has.
+pub fn get(conn: &Connection, session: &str) -> Result<Option<(String, String)>> {
+    let found = conn
+        .query_row(
+            "SELECT title, updated_at FROM session_titles WHERE session = ?1",
+            [session],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map(Some)
+        .or_else(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })?;
+    Ok(found)
+}
+
 /// Every saved title, by session.
 pub fn all(conn: &Connection) -> Result<HashMap<String, String>> {
     let mut statement = conn.prepare("SELECT session, title FROM session_titles")?;

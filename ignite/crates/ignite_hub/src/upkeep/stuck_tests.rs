@@ -333,3 +333,118 @@ fn a_tip_waiting_on_checks_files_open_and_releases_tickets_holding_them() {
         Status::PendingApproval
     );
 }
+
+/// Claims a ticket for session `s-1` and returns the ticket's ID.
+fn held_by_s1(conn: &mut rusqlite::Connection, now: ignite_core::time::Timestamp) -> String {
+    let work = apply(conn, vec![create("Work", TicketType::Task, None, &[])], now);
+    conn.execute(
+        "UPDATE tickets SET status = 'in_progress', assignee = 's-1', session = 's-1',
+         claimed_at = ?2 WHERE id = ?1",
+        rusqlite::params![work[0], now.to_string()],
+    )
+    .unwrap();
+    work[0].clone()
+}
+
+fn set_title(conn: &rusqlite::Connection, title: &str, now: ignite_core::time::Timestamp) {
+    hub::session_titles::record(conn, "s-1", title, now).unwrap();
+}
+
+fn set_worker(conn: &rusqlite::Connection, state: &str, since: ignite_core::time::Timestamp) {
+    conn.execute("DELETE FROM workers", []).unwrap();
+    conn.execute(
+        "INSERT INTO workers (machine, session, app, role, state, state_since)
+         VALUES ('m', 's-1', 'claude', 'worker', ?1, ?2)",
+        rusqlite::params![state, since.to_string()],
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_ticket_held_by_a_stopped_session_is_reported_after_thirty_minutes() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    held_by_s1(&mut conn, clock.now());
+    set_title(&conn, "⛔ [T1] stopped", clock.now());
+    clock.advance(20.0 * 60.0);
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+    clock.advance(15.0 * 60.0);
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert_eq!(report.tickets_filed.len(), 1);
+    let filed = ticket(&conn, &report.tickets_filed[0]);
+    assert!(filed.labels.contains(&"justiciar".to_owned()));
+    assert!(
+        filed.body.contains("held 35 min by a session titled ⛔"),
+        "{}",
+        filed.body
+    );
+    clock.advance(600.0);
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_ticket_held_by_an_idle_session_is_reported_after_thirty_minutes() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    held_by_s1(&mut conn, clock.now());
+    set_title(&conn, "⚒️ [T1] working", clock.now());
+    set_worker(&conn, "idle", clock.now());
+    clock.advance(20.0 * 60.0);
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+    clock.advance(15.0 * 60.0);
+    let report = upkeep.pass(&mut conn, clock.now()).unwrap();
+    assert_eq!(report.tickets_filed.len(), 1);
+    let filed = ticket(&conn, &report.tickets_filed[0]);
+    assert!(
+        filed.body.contains("held 35 min by an idle session"),
+        "{}",
+        filed.body
+    );
+}
+
+#[test]
+fn a_ticket_held_by_a_working_session_waits_six_hours() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    held_by_s1(&mut conn, clock.now());
+    set_title(&conn, "⚒️ [T1] working", clock.now());
+    set_worker(&conn, "working", clock.now());
+    clock.advance(5.0 * 3_600.0);
+    assert!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .is_empty()
+    );
+    clock.advance(2.0 * 3_600.0);
+    assert_eq!(
+        upkeep
+            .pass(&mut conn, clock.now())
+            .unwrap()
+            .tickets_filed
+            .len(),
+        1
+    );
+}

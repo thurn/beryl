@@ -93,6 +93,7 @@ crate::tables! {
         command: Option<String>,
         command_since: Option<String>,
         command_running: bool,
+        state_since: Option<String>,
     }
 
     Reservation = "reservations" {

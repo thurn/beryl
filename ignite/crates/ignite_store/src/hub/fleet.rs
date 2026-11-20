@@ -53,6 +53,22 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
     if seen == 0 {
         return Err(StoreError::Invalid(format!("unknown machine {machine}")));
     }
+    // A worker that reports the state it was in keeps the time it entered it.
+    let mut since: std::collections::HashMap<String, (String, String)> =
+        std::collections::HashMap::new();
+    {
+        let mut statement = tx.prepare(
+            "SELECT session, state, state_since FROM workers
+             WHERE machine = ?1 AND state_since IS NOT NULL",
+        )?;
+        let rows = statement.query_map([machine], |row| {
+            Ok((row.get::<_, String>(0)?, row.get(1)?, row.get(2)?))
+        })?;
+        for row in rows {
+            let (session, state, entered) = row?;
+            since.insert(session, (state, entered));
+        }
+    }
     tx.execute("DELETE FROM workers WHERE machine = ?1", [machine])?;
     for worker in &heartbeat.workers {
         let files =
@@ -61,11 +77,15 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
             ignite_core::protocol::hub::WorkerRole::Worker => "worker",
             ignite_core::protocol::hub::WorkerRole::Dispatcher => "dispatcher",
         };
+        let entered = match since.get(worker.session.as_str()) {
+            Some((state, entered)) if *state == worker.state => entered.clone(),
+            _ => now.to_string(),
+        };
         tx.execute(
             "INSERT OR REPLACE INTO workers
                (machine, session, app, role, state, ticket, files, command, command_since,
-                command_running)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                command_running, state_since)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 machine,
                 worker.session.as_str(),
@@ -77,11 +97,29 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
                 worker.command,
                 worker.command_since.map(|since| since.to_string()),
                 worker.command_running,
+                entered,
             ],
         )?;
     }
     tx.commit()?;
     Ok(())
+}
+
+/// When the worker running `session` entered the `idle` state, if it is idle now and the hub
+/// has seen it enter that state.
+pub fn idle_since(conn: &Connection, session: &str) -> Result<Option<String>> {
+    let since = conn
+        .query_row(
+            "SELECT state_since FROM workers WHERE session = ?1 AND state = 'idle'
+             ORDER BY state_since LIMIT 1",
+            [session],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .or_else(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })?;
+    Ok(since)
 }
 
 /// Every machine, ordered by name.
@@ -111,7 +149,7 @@ pub fn machines(conn: &Connection) -> Result<Vec<rows::Machine>> {
 pub fn workers(conn: &Connection, machine: &str) -> Result<Vec<rows::Worker>> {
     let mut statement = conn.prepare(
         "SELECT machine, session, app, role, state, ticket, files, command, command_since,
-                command_running
+                command_running, state_since
          FROM workers WHERE machine = ?1 ORDER BY session",
     )?;
     let workers = statement
@@ -127,6 +165,7 @@ pub fn workers(conn: &Connection, machine: &str) -> Result<Vec<rows::Worker>> {
                 command: row.get(7)?,
                 command_since: row.get(8)?,
                 command_running: row.get(9)?,
+                state_since: row.get(10)?,
             })
         })?
         .collect::<std::result::Result<_, _>>()?;

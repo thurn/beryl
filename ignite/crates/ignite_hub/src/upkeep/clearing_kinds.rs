@@ -166,7 +166,8 @@ pub fn verdict(
             Ok(match status_of(conn, subject)? {
                 Some(Status::Closed) => format!("ticket {subject} is closed."),
                 Some(Status::InProgress) => format!(
-                    "ticket {subject} was claimed again and has been held for less than six hours."
+                    "ticket {subject} was claimed again, or its session is working and it has been \
+                     held for less than six hours."
                 ),
                 _ => format!("ticket {subject} is no longer in progress."),
             })

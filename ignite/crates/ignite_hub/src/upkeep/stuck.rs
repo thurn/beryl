@@ -13,8 +13,9 @@
 //!   does not count as ready. An epic with a ticket still `pending_approval` is
 //!   waiting for a person, not stuck;
 //! - a loop of tickets that wait on one another and are under no epic;
-//! - a ticket held in progress for more than six hours, which is reported for the justiciar to
-//!   look at.
+//! - a ticket held in progress for more than six hours, or for more than 30 minutes by a session
+//!   that has stopped (its title starts with ⛔) or been idle that long, which is reported for
+//!   the justiciar to look at.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -28,7 +29,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::Result;
-use ignite_store::hub::{checks, fleet, tickets};
+use ignite_store::hub::{checks, fleet, session_titles, tickets};
 
 use super::filing::{self, Author, Filed, Filing, UPKEEP};
 use super::regressions::OUTPUT_LINES;
@@ -261,6 +262,12 @@ pub(super) fn working_machines(conn: &Connection, now: Timestamp) -> Result<BTre
 /// How long a ticket may stay in progress before a ticket reports it, in seconds.
 pub const HELD_SECONDS: f64 = 6.0 * 3_600.0;
 
+/// How long a ticket may stay in progress with a stopped or idle session, in seconds.
+pub const STOPPED_SECONDS: f64 = 30.0 * 60.0;
+
+/// The mark a session puts at the start of its title when it stops unfinished.
+const STOPPED_MARK: &str = "⛔";
+
 /// The label on a ticket for the justiciar to look at.
 const JUSTICIAR: &str = ignite_core::dispatch::JUSTICIAR;
 
@@ -284,7 +291,7 @@ pub fn stuck_epics(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> 
         .map(|(epic, lines)| epic_filing(&epic, &lines))
         .collect();
     filings.extend(find_cycles(&graph).iter().map(|cycle| cycle_filing(cycle)));
-    filings.extend(find_held(&graph, now).iter().map(held_filing));
+    filings.extend(find_held(conn, &graph, now)?.iter().map(held_filing));
     let mut filed = Vec::with_capacity(filings.len());
     for filing in &filings {
         filed.push(filing::file(conn, UPKEEP, filing, now)?);
@@ -313,7 +320,7 @@ pub(super) fn stuck_now(conn: &Connection, now: Timestamp) -> Result<StuckNow> {
             .iter()
             .map(|cycle| cycle.join(", "))
             .collect(),
-        held: find_held(&graph, now)
+        held: find_held(conn, &graph, now)?
             .into_iter()
             .map(|held| held.ticket)
             .collect(),
@@ -595,62 +602,129 @@ fn cycle_filing(cycle: &[String]) -> Filing {
     }
 }
 
-/// A ticket in progress for more than [`HELD_SECONDS`].
+/// Why a ticket in progress is reported.
+enum HeldFor {
+    /// It has been in progress for more than [`HELD_SECONDS`].
+    Long,
+    /// Its session's title starts with the stopped mark.
+    Stopped,
+    /// Its session has been idle for more than [`STOPPED_SECONDS`].
+    Idle,
+}
+
+/// A ticket in progress for more than [`HELD_SECONDS`], or for more than [`STOPPED_SECONDS`]
+/// with a session that has stopped or gone idle.
 struct Held {
     ticket: String,
     title: String,
-    hours: u64,
+    minutes: u64,
     session: String,
     machine: String,
+    reason: HeldFor,
 }
 
-fn find_held(graph: &Graph, now: Timestamp) -> Vec<Held> {
-    graph
-        .tickets
-        .iter()
-        .filter(|entry| entry.ticket.status == Status::InProgress)
-        .filter_map(|entry| {
-            let ticket = &entry.ticket;
-            let held = now.seconds_since(ticket.claimed_at?);
-            (held > HELD_SECONDS).then(|| Held {
-                ticket: ticket.id.to_string(),
-                title: ticket.title.clone(),
-                hours: (held / 3_600.0) as u64,
-                session: ticket
-                    .session
-                    .as_ref()
-                    .map(ToString::to_string)
-                    .or_else(|| ticket.assignee.clone())
-                    .unwrap_or_else(|| "unknown".to_owned()),
-                machine: ticket
-                    .machine
-                    .as_ref()
-                    .map_or_else(|| "unknown".to_owned(), ToString::to_string),
-            })
-        })
-        .collect()
+fn find_held(conn: &Connection, graph: &Graph, now: Timestamp) -> Result<Vec<Held>> {
+    let mut found = Vec::new();
+    for entry in &graph.tickets {
+        let ticket = &entry.ticket;
+        let Some(claimed) = ticket
+            .claimed_at
+            .filter(|_| ticket.status == Status::InProgress)
+        else {
+            continue;
+        };
+        let held = now.seconds_since(claimed);
+        let reason = if held > HELD_SECONDS {
+            Some(HeldFor::Long)
+        } else if held > STOPPED_SECONDS {
+            stopped_or_idle(conn, ticket.session.as_ref().map(ToString::to_string), now)?
+        } else {
+            None
+        };
+        let Some(reason) = reason else { continue };
+        found.push(Held {
+            ticket: ticket.id.to_string(),
+            title: ticket.title.clone(),
+            minutes: (held / 60.0) as u64,
+            session: ticket
+                .session
+                .as_ref()
+                .map(ToString::to_string)
+                .or_else(|| ticket.assignee.clone())
+                .unwrap_or_else(|| "unknown".to_owned()),
+            machine: ticket
+                .machine
+                .as_ref()
+                .map_or_else(|| "unknown".to_owned(), ToString::to_string),
+            reason,
+        });
+    }
+    Ok(found)
+}
+
+/// Whether the session holding a ticket has had a title starting with the stopped mark, or been
+/// idle, for more than [`STOPPED_SECONDS`].
+fn stopped_or_idle(
+    conn: &Connection,
+    session: Option<String>,
+    now: Timestamp,
+) -> Result<Option<HeldFor>> {
+    let Some(session) = session else {
+        return Ok(None);
+    };
+    let longer = |since: &str| -> Result<bool> {
+        Ok(now.seconds_since(parse_time(since)?) > STOPPED_SECONDS)
+    };
+    if let Some((title, updated)) = session_titles::get(conn, &session)?
+        && title.starts_with(STOPPED_MARK)
+        && longer(&updated)?
+    {
+        return Ok(Some(HeldFor::Stopped));
+    }
+    if let Some(since) = fleet::idle_since(conn, &session)?
+        && longer(&since)?
+    {
+        return Ok(Some(HeldFor::Idle));
+    }
+    Ok(None)
 }
 
 fn held_filing(held: &Held) -> Filing {
     let Held {
         ticket,
         title,
-        hours,
+        minutes,
         session,
         machine,
+        reason,
     } = held;
+    let hours = minutes / 60;
+    let (heading, how) = match reason {
+        HeldFor::Long => (
+            format!("Ticket {ticket} has been in progress for {hours} hours"),
+            format!("held for {hours} hours by session {session} on machine {machine}"),
+        ),
+        HeldFor::Stopped => (
+            format!("Ticket {ticket} is held by a stopped session"),
+            format!(
+                "held {minutes} min by a session titled {STOPPED_MARK}: {session} on machine \
+                 {machine}"
+            ),
+        ),
+        HeldFor::Idle => (
+            format!("Ticket {ticket} is held by an idle session"),
+            format!("held {minutes} min by an idle session: {session} on machine {machine}"),
+        ),
+    };
     Filing {
         signature: Signature::of_subject(ticket, "held"),
         evidence: "held".to_owned(),
         fields: TicketFields {
-            title: Some(format!(
-                "Ticket {ticket} has been in progress for {hours} hours"
-            )),
+            title: Some(heading),
             body: Some(format!(
-                "{ticket} ({title}) is held for {hours} hours by session {session} on machine \
-                 {machine}. A session that stopped, a worker that lost the ticket or a ticket \
-                 too large for one session leaves it so. Find out which, and release, split or \
-                 finish the ticket."
+                "{ticket} ({title}) is {how}. A session that stopped, a worker that lost the \
+                 ticket or a ticket too large for one session leaves it so. Find out which, and \
+                 release, split or finish the ticket."
             )),
             ticket_type: Some(TicketType::Task),
             priority: Some(1),

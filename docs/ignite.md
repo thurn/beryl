@@ -2655,7 +2655,8 @@ cleared:
 - A graph-repair ticket for an epic: something in the epic can start, is in
   progress or waits for a person's release, or the epic is closed. For a loop of
   tickets under no epic: the tickets no longer wait on one another.
-- A ticket held in progress for six hours: it is no longer held that long.
+- A ticket held in progress for six hours, or for 30 minutes by a stopped or
+  idle session: it is no longer held that long, or its session is working.
 - A machine that has not reported: it has reported since, and no tip has waited
   an hour for verification since.
 - `master` has not moved: no landing has waited two hours for it.
@@ -3435,7 +3436,9 @@ release branch when Ignite blocks its own landing.
 - The hub files justiciar tickets at P0 with `tier:opus`, matched by signature
   so a repeated sighting adds a comment and never a second ticket. They come
   from upkeep, when the oldest landing since the last verified tip has waited
-  two hours or a ticket has been held for six hours, and from `POST /justiciar`,
+  two hours or a ticket has been held for six hours (30 minutes when the
+  holding session's title starts with ⛔, or the daemon has reported it idle that
+  long), and from `POST /justiciar`,
   which daemons send for a crash record or a loop that keeps failing, and which
   `ignite justiciar "<reason>"` sends for a session that meets an emergency.
 - While open regression tickets explain the stall, upkeep files no master-lag
