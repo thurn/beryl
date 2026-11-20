@@ -245,8 +245,10 @@ inputs = ["crate-closure", "ignite/.config/nextest.toml"]
 
 # What one package's tests read beyond their own crates and do not open through
 # `ignite_core::test_files`, which records each read. ignite_cli's tests read ignite.toml and
-# the agent instructions that `pool init` installs (ignite/AGENTS.md and CLAUDE.md, .agents and
-# .claude). ignite_daemon's tests read ignite.toml and the nextest config, ignite_hub's preview
+# ignite/AGENTS.md and CLAUDE.md. They do not read the repository's `.agents/` or `.claude/`:
+# `pool init` writes its own skill into a scratch folder and takes its instructions through
+# `include_str!`, which Cargo's dep-info records. Listing those directories made every skill
+# edit an input of all of ignite_cli's tests. ignite_daemon's tests read ignite.toml and the nextest config, ignite_hub's preview
 # reads both, and the daemon's and ignite_git's tests write a .gitignore into the repositories
 # they make, which the check that holds reads to inputs counts. That is library code or a
 # program, which cannot take the helper of a test-only dependency. ignite_core's and
@@ -256,8 +258,6 @@ ignite_cli = [
   "ignite.toml",
   "ignite/AGENTS.md",
   "ignite/CLAUDE.md",
-  ".agents/**",
-  ".claude/**",
 ]
 ignite_daemon = ["ignite.toml", "ignite/.config/**", ".gitignore"]
 ignite_git = [".gitignore"]
@@ -287,8 +287,6 @@ ignite_cli = [
   "ignite.toml",
   "ignite/AGENTS.md",
   "ignite/CLAUDE.md",
-  ".agents/**",
-  ".claude/**",
 ]
 ignite_daemon = ["ignite.toml", "ignite/.config/**", ".gitignore"]
 

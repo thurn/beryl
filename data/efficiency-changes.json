@@ -659,5 +659,10 @@
     "label": "With `repository.green` set, a tip round runs the build checks (clippy, `tsc`, pyre) before its other checks and moves the `green` branch once they pass, so that new work can start from a commit known to compile within minutes of landing instead of after the whole round (median 5.2 minutes, up to 89, on 2026-11-19)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A change to a skill under `.agents/` or `.claude/` no longer puts Ignite's own tests in scope, because `ignite_cli`'s tests do not read those directories",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
