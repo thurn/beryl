@@ -152,7 +152,13 @@ fn the_file_by_file_copy_keeps_modification_times() {
     let file = dir.join("from/deps/libfoo.rlib");
     write(&file, "compiled");
     let earlier = SystemTime::now() - Duration::from_hours(3);
-    File::open(&file).unwrap().set_modified(earlier).unwrap();
+    // Windows sets a modification time only through a handle opened for writing.
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(earlier)
+        .unwrap();
 
     copy::walk(&dir.join("from"), &dir.join("to"), &|_| {}).unwrap();
 
