@@ -531,10 +531,13 @@ impl Table {
             dissolve: 0.0,
             whiten: 0.0,
             face,
-            // The hand and the stack show a card's full frame, as the web interface does.
-            full: matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
-                .then(|| faces.full_layers_of_object(shown))
-                .flatten(),
+            // On the desktop the hand and the stack show a card's full frame, as the web
+            // interface does; its phone layout draws every card without a scan in the
+            // battlefield frame (`scanOrFrame` in `ui/src/mobile/faces.tsx`).
+            full: (matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
+                && !self.camera.window.phone())
+            .then(|| faces.full_layers_of_object(shown))
+            .flatten(),
             state,
             // A copy beneath a pile's top peeks out too little to be pressed by itself; the
             // pile is pressed through its top card. Under a tray, only its cards (`pressable`).

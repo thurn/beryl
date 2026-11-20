@@ -38,8 +38,11 @@ impl Client {
         };
         let mut full = crate::prompts::faces(&input);
         full.extend(screens::sheet_face(&input));
-        // The hand and the stack show cards' full frames, as the web interface does.
-        let read_whole = view.map(|view| self.show.faces().list().read_whole(view));
+        // On the desktop the hand and the stack show cards' full frames, as the web interface
+        // does; on the phone the battlefield frame.
+        let read_whole = view
+            .filter(|_| !input.window.phone())
+            .map(|view| self.show.faces().list().read_whole(view));
         // Until the sheets are built, the settings sheet takes the screen's place in the flat
         // layer; the bug report is drawn over the screen. Before a game has a view and with no
         // prompt open, the game screen shows nothing, so that no empty panel is drawn over the
