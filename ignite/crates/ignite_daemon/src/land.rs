@@ -195,24 +195,21 @@ impl Landing {
     fn sync(&self, ctx: &Context) -> Reply {
         let run = || -> Result<Reply, Stop> {
             let held = self.held_tree(ctx, false)?;
-            let staging = &ctx.config.repository.staging;
-            let tip = ctx
-                .git
-                .tip(staging)
-                .map_err(|e| Box::new(error_reply(&e)))?;
+            let (tip, onto) =
+                crate::claim::green_or_tip(ctx).map_err(|e| Box::new(error_reply(&e)))?;
             let lines = match Self::rebase(ctx, &held, &tip)? {
                 Rebased {
                     landed_since: 0, ..
                 } => {
                     vec![line(
                         "current",
-                        format!("already at {staging} {}", short(&tip)),
+                        format!("already at {onto} {}", short(&tip)),
                     )]
                 }
                 Rebased { landed_since, .. } => vec![line(
                     "rebased",
                     format!(
-                        "onto {staging} {} ({landed_since} commits landed since)",
+                        "onto {onto} {} ({landed_since} commits landed since)",
                         short(&tip)
                     ),
                 )],

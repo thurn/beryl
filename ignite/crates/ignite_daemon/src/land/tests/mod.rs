@@ -505,6 +505,39 @@ fn sync_rebases_the_branch_onto_the_tip() {
 }
 
 #[test]
+fn sync_rebases_onto_green_when_it_is_set() {
+    let mut world = world();
+    world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);
+    world.git.land_other(&[("c.txt", "one")]);
+    let green = world.git.tip_now();
+    world
+        .git
+        .repo
+        .lock()
+        .unwrap()
+        .other_tips
+        .insert("green".to_owned(), green);
+    world.git.land_other(&[("c.txt", "two")]);
+    world.ctx.config.repository.green = Some("green".to_owned());
+    let req = world.request("sync", "tree-01", "local_a", &[]);
+    let mut ctx = world.ctx.clone();
+    ctx.session.clone_from(&req.session);
+    ctx.tree = Some(TreeId::new("tree-01").unwrap());
+    let sync = SyncVerb {
+        landing: world.landing.clone(),
+    };
+
+    let reply = sync.run(&ctx, &req);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("onto green"), "{}", reply.text);
+    assert!(
+        reply.text.contains("1 commits landed since"),
+        "{}",
+        reply.text
+    );
+}
+
+#[test]
 fn a_refusal_that_is_not_a_moved_tip_fails_the_landing_at_once() {
     let world = world();
     world.hold("tree-01", "t.1", "local_a", &[("a.txt", "mine")]);

@@ -3,7 +3,7 @@ use std::path::Path;
 use ignite_core::ids::Commit;
 use ignite_core::protocol::client::Exit;
 use ignite_core::protocol::hub::DependencyNote;
-use ignite_core::protocol::tickets::LandedWork;
+use ignite_core::protocol::tickets::{Edge, EdgeKind, LandedWork};
 
 use super::fakes::{World, id, session, ticket};
 use super::{BriefVerb, CloseVerb, NEEDS_PERSON, ReleaseVerb, StartVerb, Target, lock};
@@ -432,4 +432,154 @@ fn a_ticket_whose_tree_was_freed_by_a_landing_is_no_longer_held() {
     assert!(world.claims.holder("/trees/tree-01".as_ref()).is_none());
     drop(conn);
     let _ = std::fs::remove_file(&path);
+}
+
+const GREEN: &str = "9d2e7c41";
+
+/// A world whose `repository.green` is set and, when `exists`, at `GREEN`.
+fn green_world(exists: bool) -> World {
+    let mut world = World::new();
+    world.ctx.config.repository.green = Some("green".to_owned());
+    if exists {
+        world.git.set_tip("green", Commit::new(GREEN).unwrap());
+    }
+    world
+}
+
+/// Adds `ticket` depending on `dependencies`, each landed as the given commit.
+fn depend(world: &World, ticket: &str, dependencies: &[(&str, &str)]) {
+    world.desk.add(ticket_with_edges(ticket, dependencies));
+    for (dependency, commit) in dependencies {
+        let mut landed = ticket_of(dependency);
+        landed.landed = Some(LandedWork {
+            commits: vec![Commit::new(*commit).unwrap()],
+            files: Vec::new(),
+            note: "landed".to_owned(),
+        });
+        world.desk.add(landed);
+    }
+    let mut details = lock(&world.desk.details);
+    details.get_mut(&id(ticket)).unwrap().edges = dependencies
+        .iter()
+        .map(|(dependency, _)| Edge {
+            src: id(ticket),
+            dst: id(dependency),
+            kind: EdgeKind::Blocks,
+        })
+        .collect();
+}
+
+fn ticket_of(text: &str) -> ignite_core::protocol::tickets::Ticket {
+    ticket(text, "A dependency", "")
+}
+
+fn ticket_with_edges(
+    text: &str,
+    _dependencies: &[(&str, &str)],
+) -> ignite_core::protocol::tickets::Ticket {
+    ticket(text, "Depends on others", "")
+}
+
+fn tree_line(reply: &ignite_core::protocol::client::Reply) -> &str {
+    reply.text.lines().nth(1).unwrap()
+}
+
+#[test]
+fn a_tree_starts_at_green_when_it_exists() {
+    let world = green_world(true);
+    world.desk.add(ticket("Tq.1", "Plain", ""));
+    let reply = start(&world, &["Tq.1"], WORKER);
+    assert_eq!(
+        tree_line(&reply),
+        "tree     /trees/tree-01  at green 9d2e7c4"
+    );
+}
+
+#[test]
+fn a_tree_starts_at_the_tip_when_green_is_unset_or_missing() {
+    let world = World::new();
+    world.desk.add(ticket("Tq.1", "Plain", ""));
+    let reply = start(&world, &["Tq.1"], WORKER);
+    assert_eq!(
+        tree_line(&reply),
+        "tree     /trees/tree-01  at staging 8c1f2ab"
+    );
+    let world = green_world(false);
+    world.desk.add(ticket("Tq.1", "Plain", ""));
+    let reply = start(&world, &["Tq.1"], WORKER);
+    assert_eq!(
+        tree_line(&reply),
+        "tree     /trees/tree-01  at staging 8c1f2ab"
+    );
+}
+
+#[test]
+fn a_regression_ticket_starts_at_the_tip() {
+    let world = green_world(true);
+    let mut regression = ticket("Tq.1", "Regression: build", "");
+    regression.labels = vec!["regression".to_owned()];
+    world.desk.add(regression);
+    let reply = start(&world, &["Tq.1"], WORKER);
+    assert_eq!(
+        tree_line(&reply),
+        "tree     /trees/tree-01  at staging 8c1f2ab"
+    );
+}
+
+#[test]
+fn a_dependency_that_green_lacks_sets_the_start() {
+    let world = green_world(true);
+    depend(&world, "Tq.9", &[("Tq.1", "aaaa1111")]);
+    let older = Commit::new("aaaa1111").unwrap();
+    world
+        .git
+        .set_not_ancestor(&older, &Commit::new(GREEN).unwrap());
+    let reply = start(&world, &["Tq.9"], WORKER);
+    assert_eq!(
+        tree_line(&reply),
+        "tree     /trees/tree-01  at aaaa111, where Tq.1 landed"
+    );
+    assert!(
+        reply.text.contains(
+            "note     green does not hold aaaa111 yet; this tree starts at that commit, which \
+             no tip round has checked"
+        ),
+        "{}",
+        reply.text
+    );
+}
+
+#[test]
+fn the_newest_of_two_dependencies_sets_the_start() {
+    let world = green_world(true);
+    depend(
+        &world,
+        "Tq.9",
+        &[("Tq.1", "aaaa1111"), ("Tq.2", "bbbb2222")],
+    );
+    let (older, newer) = (
+        Commit::new("aaaa1111").unwrap(),
+        Commit::new("bbbb2222").unwrap(),
+    );
+    let green = Commit::new(GREEN).unwrap();
+    world.git.set_not_ancestor(&older, &green);
+    world.git.set_not_ancestor(&newer, &green);
+    world.git.set_not_ancestor(&newer, &older);
+    let reply = start(&world, &["Tq.9"], WORKER);
+    assert_eq!(
+        tree_line(&reply),
+        "tree     /trees/tree-01  at bbbb222, where Tq.2 landed"
+    );
+}
+
+#[test]
+fn green_that_holds_every_dependency_is_the_start() {
+    let world = green_world(true);
+    depend(&world, "Tq.9", &[("Tq.1", "aaaa1111")]);
+    let reply = start(&world, &["Tq.9"], WORKER);
+    assert_eq!(
+        tree_line(&reply),
+        "tree     /trees/tree-01  at green 9d2e7c4"
+    );
+    assert!(!reply.text.contains("note "), "{}", reply.text);
 }

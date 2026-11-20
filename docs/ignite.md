@@ -363,7 +363,8 @@ The verbs an agent uses while working:
   [Processes](#processes)) and says so on a `verdict  stored for this tree`
   line, or `verdict  not stored: <reason>`. Its express path stores none.
 
-- `ignite sync` rebases the tree's branch onto the tip.
+- `ignite sync` rebases the tree's branch onto the tip, or onto `green` when
+  `repository.green` is set and the branch exists.
 
 - `ignite land` rebases, runs the gate, lands the commits, records the note for
   dependent tickets, closes the ticket and releases the tree. The note is the
@@ -981,9 +982,15 @@ Rules for trees:
 - Ignite never builds in a directory outside this set. When every ticket tree is
   leased, `ignite start` waits and says so, and the dispatcher hands off no
   ticket.
-- `ignite start` leases a free tree and checks out a branch at the tip. For a
-  ticket expected to compile Rust, it starts the usual builds at once, and the
-  agent reads the ticket while the tree builds.
+- `ignite start` leases a free tree and checks out a branch at the tip. With
+  `repository.green` set and the branch present, the start is `green` instead,
+  except in two cases. When a dependency of the ticket landed at a commit that
+  `green` does not hold yet, the tree starts at the newest such commit, at once,
+  and the brief's `note` line says so. A regression ticket starts at the tip of
+  `staging`, because its failure is there. The `tree` line says
+  `at green <commit>`, `at <commit>, where <ticket> landed` or
+  `at staging <commit>`. For a ticket expected to compile Rust, it starts the
+  usual builds at once, and the agent reads the ticket while the tree builds.
 - The choice of tree follows the ticket. A ticket expected to compile Rust gets
   the free tree that holds the build directories beside the files the ticket
   names (`rust/beryl3d/target` for a file under `rust/beryl3d/`), and among

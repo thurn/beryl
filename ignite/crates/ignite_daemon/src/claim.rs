@@ -22,6 +22,7 @@
 //! [`TreeDesk`], so this module is tested against fakes of them.
 
 mod activity;
+mod base;
 mod brief;
 mod finish;
 mod parse;
@@ -52,6 +53,7 @@ use ignite_store::local::{rows, shown, trees as tree_rows};
 
 use crate::server::{Context, Verb};
 
+pub use base::green_or_tip;
 pub use watch::ClaimHook;
 
 use parse::{failure, parse_start};
@@ -201,8 +203,10 @@ struct Held {
     tree: TreeId,
     path: PathBuf,
     branch: String,
-    /// The tip the tree was leased at; unknown after a restart.
+    /// The commit the tree was leased at; unknown after a restart.
     at: Option<Commit>,
+    /// How that commit was chosen; `None` after a restart.
+    base: Option<base::How>,
     /// The brief as last fetched; `None` after a restart or an edit to the ticket.
     brief: Option<TicketBrief>,
     /// When the last command ended, or when a running one was last seen.
@@ -366,10 +370,11 @@ impl Claims {
             },
             Target::Adhoc(_) => None,
         };
-        let tip = match ctx.git.tip(&ctx.config.repository.staging) {
-            Ok(tip) => tip,
+        let base = match base::choose(ctx, self.desk.as_ref(), detail.as_ref()) {
+            Ok(base) => base,
             Err(error) => return failure(&error, "cannot read the tip"),
         };
+        let tip = base.commit.clone();
         let compiles = self.expected_cores(ctx, detail.as_ref(), now) >= COMPILES_FROM_CORES;
         let lease_id = match &target {
             Target::Ticket { id, .. } => id.clone(),
@@ -418,14 +423,15 @@ impl Claims {
                 leased.tree, brief.ticket.id
             );
         }
-        self.remember(&brief, &leased, &session, detail.as_ref(), now);
+        self.remember(&brief, &leased, &base.how, &session, detail.as_ref(), now);
         let tree = brief::TreeView {
             tree: &leased.tree,
             path: &leased.path,
             branch: &leased.branch,
             at: Some(&leased.at),
             resumed: leased.resumed.as_ref(),
-            staging: &ctx.config.repository.staging,
+            how: &base.how,
+            note: base.note.as_deref(),
         };
         Reply {
             exit: Exit::Success,
@@ -504,6 +510,7 @@ impl Claims {
         &self,
         brief: &TicketBrief,
         leased: &Leased,
+        how: &base::How,
         session: &SessionId,
         detail: Option<&TicketDetail>,
         now: Timestamp,
@@ -531,6 +538,7 @@ impl Claims {
                 path: leased.path.clone(),
                 branch: leased.branch.clone(),
                 at: Some(leased.at.clone()),
+                base: Some(how.clone()),
                 brief: Some(brief.clone()),
                 active_at: now,
                 synced: true,
@@ -580,13 +588,18 @@ impl Claims {
                 Err(error) => return failure(&error, &format!("cannot read {}", held.ticket)),
             },
         };
+        let how = held
+            .base
+            .clone()
+            .unwrap_or_else(|| base::How::Branch(staging.to_owned()));
         let tree = brief::TreeView {
             tree: &held.tree,
             path: &held.path,
             branch: &held.branch,
             at: held.at.as_ref(),
             resumed: None,
-            staging,
+            how: &how,
+            note: None,
         };
         Reply {
             exit: Exit::Success,
@@ -609,6 +622,7 @@ fn held_from_row(row: &rows::Tree, now: Timestamp) -> Option<Held> {
         path: PathBuf::from(&row.path),
         branch: row.branch.clone().unwrap_or_default(),
         at: None,
+        base: None,
         brief: None,
         active_at: now,
         synced: false,

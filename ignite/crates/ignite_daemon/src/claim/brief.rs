@@ -67,8 +67,10 @@ pub struct TreeView<'a> {
     /// The tip the tree was leased at, when known.
     pub at: Option<&'a Commit>,
     pub resumed: Option<&'a Resumed>,
-    /// The integration branch's name, from `ignite.toml`.
-    pub staging: &'a str,
+    /// How `at` was chosen.
+    pub how: &'a super::base::How,
+    /// A line to print after the tree's, when the start needs explaining.
+    pub note: Option<&'a str>,
 }
 
 /// Aligns each label to one column.
@@ -220,10 +222,13 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
         format!("{}  {}", ticket.id, first_line(&ticket.title)),
     ));
     let at = match tree.at {
-        Some(at) => format!("  at {} {}", tree.staging, short(at)),
+        Some(at) => format!("  at {}", tree.how.phrase(at)),
         None => String::new(),
     };
     rows.push(("tree", format!("{}{at}", tree.path.display())));
+    if let Some(note) = tree.note {
+        rows.push(("note", note.to_owned()));
+    }
     if let Some(resumed) = tree.resumed {
         rows.push((
             "resumes",

@@ -674,5 +674,10 @@
     "label": "`ignite test <name>` leaves out a family whose listing needs a product build when every name it matches is also matched by a family that is cheap to list, and names it on a `skipped` line; `ignite test fork` after a one-line change to a card file spent 24 to 55 minutes listing two Beryl 3D interface families before running its one Rust test (2026-11-19)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "`ignite start` and `ignite sync` begin at `green` when `repository.green` is set (a dependency's landed commit that `green` lacks, or the `staging` tip for a regression ticket, being the exceptions), so a new tree does not start at a tip that fails to compile before a tip round reverts it",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
