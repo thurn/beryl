@@ -331,10 +331,15 @@ pub fn details(report: &RegressionReport) -> String {
     if let Some(os) = report.platform {
         let _ = writeln!(text, "failed on {}", os.as_str());
     }
-    let _ = write!(
-        text,
-        "rerun: ignite test {}\n\noutput (last {OUTPUT_LINES} lines):\n{tail}",
-        report.check
-    );
+    let _ = write!(text, "rerun: ignite test {}\n\n", report.check);
+    if tail.trim().is_empty() {
+        // An empty "output" heading left readers unable to tell a missing output from a
+        // truncated one.
+        text.push_str(
+            "no output: the failing run reported none, so rerun the check to see what failed.",
+        );
+    } else {
+        let _ = write!(text, "output (last {OUTPUT_LINES} lines):\n{tail}");
+    }
     text
 }

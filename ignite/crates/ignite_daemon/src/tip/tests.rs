@@ -634,6 +634,28 @@ fn a_failure_quotes_the_output_file_this_machine_wrote() {
 }
 
 #[test]
+fn an_empty_output_file_is_replaced_by_its_path() {
+    let world = World::new();
+    let ctx = world.ctx("m-1");
+    let tip = commit("cccc000");
+    world.land(&tip);
+    world.work.set_checks(&tip, vec![check("a", 'a')]);
+    world.work.set_outcome(&tip, &name("unit:a"), Outcome::Fail);
+    let file = scratch_file("");
+    world
+        .work
+        .set_output(&name("unit:a"), file.to_str().unwrap());
+
+    world.verifier().verify(&ctx, &tip).unwrap();
+
+    assert_eq!(
+        world.hub.regressions()[0].output,
+        file.display().to_string()
+    );
+    let _ = std::fs::remove_file(file);
+}
+
+#[test]
 fn an_output_path_in_a_cached_result_is_printed_and_not_opened() {
     let world = World::new();
     let ctx = world.ctx("m-1");

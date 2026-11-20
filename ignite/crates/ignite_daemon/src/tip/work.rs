@@ -275,6 +275,11 @@ pub(super) fn tip_runs(run: &CheckRun, needs: &HashMap<String, Vec<String>>) -> 
             }
             // An incomplete check always has a reason for the hub's ticket; one that never got
             // to run, for a failed build say, was not reported by a command.
+            // A failure whose run saved no output file still has the message the check printed,
+            // which the regression ticket quotes instead of an empty section.
+            if outcome == Outcome::Fail {
+                output = output.take().or(failure.and_then(|f| f.message.clone()));
+            }
             let reason = (outcome == Outcome::Incomplete).then(|| {
                 output = output.take().or(failure.and_then(|f| f.message.clone()));
                 failure

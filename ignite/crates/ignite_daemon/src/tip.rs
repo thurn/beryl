@@ -745,7 +745,8 @@ fn tail(output: &str, own: &HashSet<String>) -> String {
         .contains(output)
         .then(|| fs::read_to_string(output).ok())
         .flatten();
-    let Some(text) = text else {
+    // An empty file says nothing, so the reference is printed in its place.
+    let Some(text) = text.filter(|text| !text.trim().is_empty()) else {
         return output.to_owned();
     };
     let lines: Vec<&str> = text.lines().collect();

@@ -751,3 +751,16 @@ fn backups_are_hourly_and_exports_daily() {
     assert_eq!(backup::snapshots(&dir).unwrap().len(), 3);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// A regression ticket that ended with an "output" heading and nothing under it left workers
+/// unable to tell which count had failed. With no output, the ticket says so in a sentence.
+#[test]
+fn a_regression_without_output_says_so_and_has_no_empty_heading() {
+    let text = super::regressions::details(&regression("abcd", "  \n"));
+
+    assert!(text.contains("no output: the failing run reported none"));
+    assert!(!text.contains("output (last"));
+
+    let with = super::regressions::details(&regression("abcd", "boom"));
+    assert!(with.ends_with("output (last 40 lines):\nboom"));
+}

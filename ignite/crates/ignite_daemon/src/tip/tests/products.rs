@@ -60,3 +60,29 @@ fn unbuilt_checks_name_the_product_their_family_needs() {
         ]
     );
 }
+
+/// A check that failed without saving an output file left `blame` nothing to report, and its
+/// regression ticket ended with an empty "output" section. The failure's message stands in.
+#[test]
+fn a_failure_without_an_output_file_reports_its_message() {
+    let failed = Failure {
+        check: name("rs:a"),
+        outcome: Outcome::Fail,
+        at: None,
+        message: Some("total_instructions 46575016 over 35465750".to_owned()),
+        output: None,
+        reason: None,
+    };
+    let run = CheckRun {
+        outcomes: vec![(name("rs:a"), Outcome::Fail)],
+        failures: vec![failed],
+        ..CheckRun::default()
+    };
+
+    let runs = tip_runs(&run, &HashMap::new());
+
+    assert_eq!(
+        runs[0].output.as_deref(),
+        Some("total_instructions 46575016 over 35465750")
+    );
+}
