@@ -124,6 +124,7 @@ impl Dispatcher {
             Self::expire_given(&mut state, now);
             self.watch_silence(&mut state, now);
             self.watch_shared(&mut state, members, now);
+            Self::drop_claimed_handoffs(&mut state);
             Self::retry_orphans(&mut state, members, now);
             Self::drop_expired_handoffs(&mut state, now);
             self.plan_asking(&mut state, members, now)
@@ -211,6 +212,45 @@ impl Dispatcher {
                     .is_some_and(|reserved| reserved.ticket == ticket)
             {
                 state.reserved.remove(&session);
+            }
+        }
+    }
+
+    /// Removes the hand-offs waiting for a worker (the orphans, and the queued hand-offs not yet
+    /// given to the dispatcher) whose ticket a session of this machine already holds, and the
+    /// reservations they held.
+    ///
+    /// A hand-off whose acknowledgement failed can still reach its worker: on 2026-11-20 the
+    /// desktop app delivered hand-off prompts five to eight minutes after they were sent. That
+    /// worker then claims the ticket, while the reservation waits as an orphan for another idle
+    /// worker. Handing it on gave a second worker a start that was refused because another
+    /// session held the ticket, and that worker stopped unfinished.
+    pub(super) fn drop_claimed_handoffs(state: &mut State) {
+        let claimed: std::collections::BTreeSet<TicketId> = state.held.values().cloned().collect();
+        if claimed.is_empty() {
+            return;
+        }
+        state.orphans.retain(|r| !claimed.contains(&r.ticket));
+        let outdated: Vec<(Option<SessionId>, TicketId)> = state
+            .pending
+            .iter()
+            .filter_map(|queued| match &queued.purpose {
+                Purpose::Handoff(reserved) if claimed.contains(&reserved.ticket) => Some((
+                    slots::handoff_session(state, queued),
+                    reserved.ticket.clone(),
+                )),
+                _ => None,
+            })
+            .collect();
+        state.pending.retain(|queued| {
+            !matches!(&queued.purpose, Purpose::Handoff(reserved) if claimed.contains(&reserved.ticket))
+        });
+        for (session, ticket) in outdated {
+            // The holder's own reservation was already removed when its claim was noticed.
+            if let Some(session) = session
+                && !state.held.contains_key(&session)
+            {
+                Self::drop_placeholder(state, &session, &ticket);
             }
         }
     }

@@ -840,3 +840,29 @@ fn a_replaced_dispatchers_worker_holding_a_ticket_is_still_checked_and_released(
         [(session("local_w1"), ticket_id("T.1"))]
     );
 }
+
+#[test]
+fn an_orphaned_handoff_whose_ticket_was_claimed_meanwhile_goes_to_nobody() {
+    let rig = rig(&["local_w1", "local_w2"]);
+    rig.hold("local_w2", "T.0");
+    rig.reserve("T.1", "local_w1", &[]);
+    let first = rig.step().unwrap();
+    assert_eq!(handoff_to(&first), ("local_w1", "T.1"));
+    // No other worker is idle, so the failed hand-off waits as an orphan.
+    let reply = rig.ack(first.id, "failed", "clear refused: still finishing a turn");
+    assert!(!reply.text.contains("goes to"), "reply: {}", reply.text);
+    // The prompt reached the first worker late anyway, and it claimed the ticket.
+    rig.hold("local_w1", "T.1");
+    rig.finish("local_w2");
+    // The second worker settles after its ticket, and the first rests after its refusal.
+    assert!(
+        rig.step()
+            .is_none_or(|i| i.action != DispatchAction::Handoff)
+    );
+    rig.clock.advance(SETTLE_S);
+    let next = rig.step();
+    assert!(
+        next.is_none_or(|i| i.action != DispatchAction::Handoff),
+        "the claimed ticket is not handed to the second worker"
+    );
+}
