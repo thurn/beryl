@@ -69,7 +69,9 @@ fn probe(dir: &Path) -> Option<Starts> {
     let unique = unique()?;
     std::fs::write(
         &source,
-        format!("const char *unique = \"{unique}\";\nint main(void) {{ return unique[0] == 0; }}\n"),
+        format!(
+            "const char *unique = \"{unique}\";\nint main(void) {{ return unique[0] == 0; }}\n"
+        ),
     )
     .ok()?;
     let built = Command::new("cc")

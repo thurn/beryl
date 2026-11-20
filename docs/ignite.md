@@ -1267,13 +1267,13 @@ Rules for cores:
   the trees' `target/debug/deps`. macOS records them for every folder, so only a
   change in what builds write would lower that. `syspolicyd` and
   `XprotectService` used about one core more scanning each newly built program
-  before it first ran, about 180 ms per program. A program started by a
-  process listed under Developer Tools in System Settings is not scanned.
+  before it first ran, about 180 ms per program. A program started by a process
+  listed under Developer Tools in System Settings is not scanned.
   `ignite doctor`'s `scanning` line times a fresh program's first run from the
   daemon, warns when it is scanned and says what to add to that list. Each
   release is signed ad hoc, so macOS knows it only by its code hash, and a grant
-  lapses at the next release.
-  Spotlight does not index the trees, because they are under a hidden folder.
+  lapses at the next release. Spotlight does not index the trees, because they
+  are under a hidden folder.
 - A command that uses well below its grant lends the idle cores to waiting
   requests. After 30 seconds of measurement a grant counts as using its measured
   use plus one core, rounded up: the larger of its average over the last 30
