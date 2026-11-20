@@ -38,7 +38,14 @@ fn client_on_start() -> Client {
 
 /// The frame the client draws next.
 fn frame(client: &mut Client) -> Frame {
-    client.frame(0).clone()
+    // Each frame is a second after the last, so that sections a change moves on the window have
+    // finished gliding to their new places before a test presses one.
+    thread_local!(static NOW: std::cell::Cell<u64> = const { std::cell::Cell::new(0) });
+    let now = NOW.with(|now| {
+        now.set(now.get() + 1_000_000_000);
+        now.get()
+    });
+    client.frame(now).clone()
 }
 
 /// Whether `frame` has an element named `name` with `role`.
