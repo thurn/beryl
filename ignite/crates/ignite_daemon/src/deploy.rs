@@ -1,12 +1,12 @@
 //! Whether a release of Ignite has reached the machines: the `release` section of
 //! `ignite status` and `ignite wait deploy-<commit>`.
 //!
-//! When `ignite land` moves the release branch, each daemon finds the new tip at its next check
+//! When `ignite land` moves the release ref, each daemon finds the new tip at its next check
 //! of the branch, builds it, runs its selftest and restarts into it, and the daemon on the hub's
 //! machine restarts the hub first (see `main/selfupdate.rs`). None of that is reported to the
 //! session that landed. This module shows it:
 //!
-//! - [`ReleaseSection`] prints, in `ignite status`, the release branch's tip, what this daemon
+//! - [`ReleaseSection`] prints, in `ignite status`, the release ref's tip, what this daemon
 //!   runs and what it is doing about the difference (waiting for its next check of the branch,
 //!   building, self-testing, restarting, failed to build, or rolled back with the reason from
 //!   `bin/rollbacks.log`), the hub's version and each machine's.
@@ -49,21 +49,21 @@ pub fn handle(commit: &Commit) -> String {
     format!("{HANDLE_PREFIX}{commit}")
 }
 
-/// The text of a landing's `release` line when it moved the release branch `branch` to
+/// The text of a landing's `release` line when it moved the release ref `branch` to
 /// `commit`.
 pub fn moved(branch: &str, commit: &Commit) -> String {
     format!("{branch} moved to {}", short(commit))
 }
 
 /// The handle `ignite wait` takes to wait for the release, when a landing's `release` line
-/// `release` says that it moved the release branch, `branch` (none when the repository names
-/// no release branch), to `commit`; `None` when it did not move.
+/// `release` says that it moved the release ref, `branch` (none when the repository names
+/// no release ref), to `commit`; `None` when it did not move.
 pub fn landed_handle(branch: Option<&str>, release: &str, commit: &Commit) -> Option<String> {
     (release == moved(branch?, commit)).then(|| handle(commit))
 }
 
 /// The `next` line of a landing whose `release` line, if it had one, is `release`, and the
-/// deploy handle when that line says the release branch `branch` moved to the landed `commit`.
+/// deploy handle when that line says the release ref `branch` moved to the landed `commit`.
 pub fn landed_next(
     branch: Option<&str>,
     release: Option<&str>,
@@ -86,7 +86,7 @@ pub fn parse_handle(name: &str) -> Option<Commit> {
     Commit::new(name.strip_prefix(HANDLE_PREFIX)?).ok()
 }
 
-/// What a check of the release branch found.
+/// What a check of the release ref found.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Checked {
     /// The daemon runs the tip.
@@ -134,10 +134,10 @@ pub struct LocalRelease {
 /// The daemon's self-update, as this module reads it.
 pub trait DeployState: Send + Sync {
     fn local(&self) -> LocalRelease;
-    /// Fetches the release branch and says what the daemon makes of its tip, without acting
+    /// Fetches the release ref and says what the daemon makes of its tip, without acting
     /// on it.
     fn check(&self) -> Result<(Commit, Checked)>;
-    /// Makes the daemon check the release branch at its next round, within seconds, instead of
+    /// Makes the daemon check the release ref at its next round, within seconds, instead of
     /// at its regular check.
     fn check_soon(&self);
     /// Whether `version` is `target` or a later commit that contains it.
@@ -280,16 +280,16 @@ fn short_text(version: &str) -> &str {
 pub struct ReleaseSection {
     pub state: Arc<dyn DeployState>,
     pub git: Arc<dyn Git>,
-    /// The branch landings go to, which the release branch must not run ahead of.
+    /// The branch landings go to, which the release ref must not run ahead of.
     pub staging: String,
     pub hub: Arc<dyn Hub>,
     pub clock: Arc<dyn Clock>,
 }
 
 impl ReleaseSection {
-    /// A warning when the release branch's tip `tip` holds changes to Ignite's source that the
-    /// staging tip lacks, as a fix pushed straight to the release branch does. A landing moves
-    /// the release branch only over a commit whose changes the landed commit holds, so while
+    /// A warning when the release ref's tip `tip` holds changes to Ignite's source that the
+    /// staging tip lacks, as a fix pushed straight to the release ref does. A landing moves
+    /// the release ref only over a commit whose changes the landed commit holds, so while
     /// the fix stays off staging, no later landing can move the release. `None` when staging
     /// holds the tip or either branch cannot be read.
     fn stranded_line(&self, tip: &Commit) -> Option<String> {
