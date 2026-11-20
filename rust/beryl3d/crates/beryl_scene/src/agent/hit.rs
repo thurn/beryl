@@ -68,22 +68,125 @@ pub fn uncovered(frame: &Frame, index: u32) -> Option<Rect> {
 /// slightly too large.
 #[must_use]
 pub fn free_rect(frame: &Frame, index: u32, min: Size) -> Option<Rect> {
-    let grid = Grid::new(frame, index, everything(frame));
+    let grid = Grid::new(frame, index, everything(frame), Shear::NONE);
     let free = grid.free_cells(frame, index, true);
     grid.search(&free, min, false)
 }
 
 /// Whether element `index` has a rectangle at least `min` large where a press reaches it or one
-/// of its descendants: whether `free_rect` would find one. `overlaps` must have been built from
-/// `frame`. It stops at the first such rectangle, which is what the "reachable" check asks.
+/// of its descendants, upright or leaning as the element's own sides lean. `overlaps` must have
+/// been built from `frame`. It stops at the first such rectangle, which is what the "reachable"
+/// check asks.
+///
+/// Upright, it is whether `free_rect` would find one. A battlefield card leans toward the web's
+/// vanishing point (`Pose::shear`), and a narrow one near a window's edge holds no upright
+/// square of `min` though a press across most of its width reaches it. So when no upright
+/// rectangle is found, the same search runs in the element's own leaning frame, where its sides
+/// are upright: a rectangle there is a parallelogram on screen, `min.width` wide along every
+/// line across it and `min.height` tall.
 #[must_use]
 pub fn has_free_rect(frame: &Frame, overlaps: &Overlaps, index: u32, min: Size) -> bool {
-    let grid = Grid::new(frame, index, overlaps.near(grid_area(frame, index)));
+    let grid = Grid::new(
+        frame,
+        index,
+        overlaps.near(grid_area(frame, index)),
+        Shear::NONE,
+    );
     if grid.clear_square(frame, index, min) {
         return true;
     }
     let free = grid.free_cells(frame, index, true);
+    if grid.search(&free, min, true).is_some() {
+        return true;
+    }
+    let shear = Shear::of(frame.resolved[index as usize].corners);
+    if shear == Shear::NONE {
+        return false;
+    }
+    let area = shear.screen_bounds(shear.bounds(&frame.resolved[index as usize]));
+    let grid = Grid::new(frame, index, overlaps.near(area), shear);
+    let free = grid.free_cells(frame, index, true);
     grid.search(&free, min, true).is_some()
+}
+
+/// A horizontal shear that maps a point on screen at `(x, y)` to `(x - lean * y, y)`: the frame
+/// in which an element whose sides lean by `lean` points across for each point down stands
+/// upright. `Grid` measures in it, and maps each point back to the screen to test a press.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Shear {
+    lean: f32,
+}
+
+/// The least lean, in points across for each point down, that `Shear::of` counts: below it a
+/// card's sides are upright to within a hundredth of a point over its height.
+const LEAST_LEAN: f32 = 1e-4;
+
+impl Shear {
+    const NONE: Self = Self { lean: 0.0 };
+
+    /// The shear that makes the sides of the quadrilateral `corners` upright: of its two pairs
+    /// of opposite sides, the pair that runs nearer to straight down, averaged. A card drawn
+    /// in perspective leans each side a little differently, so the frame stands both nearly
+    /// upright. `NONE` when they are upright already or the quadrilateral has no height.
+    fn of(corners: [Vec2; 4]) -> Self {
+        let across = (corners[1] - corners[0]) + (corners[2] - corners[3]);
+        let down = (corners[3] - corners[0]) + (corners[2] - corners[1]);
+        let side = if across.y.abs() * down.x.abs() > down.y.abs() * across.x.abs() {
+            across
+        } else {
+            down
+        };
+        if side.y.abs() <= f32::EPSILON {
+            return Self::NONE;
+        }
+        let lean = side.x / side.y;
+        if lean.abs() < LEAST_LEAN {
+            Self::NONE
+        } else {
+            Self { lean }
+        }
+    }
+
+    /// The point on screen at `point` in the sheared frame.
+    fn to_screen(self, point: Vec2) -> Vec2 {
+        Vec2::new(point.x + self.lean * point.y, point.y)
+    }
+
+    /// The box, in the sheared frame, of an element's corners.
+    fn bounds(self, element: &Resolved) -> Rect {
+        let mut sheared = *element;
+        for corner in &mut sheared.corners {
+            *corner = Vec2::new(corner.x - self.lean * corner.y, corner.y);
+        }
+        bounds(&sheared)
+    }
+
+    /// The box on screen of `rect` in the sheared frame.
+    fn screen_bounds(self, rect: Rect) -> Rect {
+        let mut element_box = [
+            Vec2::new(rect.x, rect.y),
+            Vec2::new(rect.x + rect.width, rect.y),
+            Vec2::new(rect.x + rect.width, rect.y + rect.height),
+            Vec2::new(rect.x, rect.y + rect.height),
+        ];
+        for corner in &mut element_box {
+            *corner = self.to_screen(*corner);
+        }
+        let min = element_box
+            .into_iter()
+            .reduce(Vec2::min)
+            .unwrap_or_default();
+        let max = element_box
+            .into_iter()
+            .reduce(Vec2::max)
+            .unwrap_or_default();
+        Rect {
+            x: min.x,
+            y: min.y,
+            width: max.x - min.x,
+            height: max.y - min.y,
+        }
+    }
 }
 
 /// The elements of a frame filed by the squares of the screen their boxes touch, so that finding
@@ -190,7 +293,7 @@ pub fn covering(frame: &Frame, overlaps: &Overlaps, index: u32) -> Vec<u32> {
 /// the same cells as `free_rect`, each counted by its centre.
 #[must_use]
 pub fn covered(frame: &Frame, index: u32) -> f32 {
-    let grid = Grid::new(frame, index, everything(frame));
+    let grid = Grid::new(frame, index, everything(frame), Shear::NONE);
     let element = &frame.resolved[index as usize];
     if grid.alone && catches_anywhere(element) {
         // Nothing but the element and its descendants overlaps it, and the element catches a
@@ -394,6 +497,8 @@ struct Grid {
     alone: bool,
     /// The largest width and height of a cell.
     cell: Vec2,
+    /// The frame the grid's cells and boxes are measured in.
+    shear: Shear,
 }
 
 /// The largest side of a cell, in logical points, and the most cuts a grid makes along one
@@ -411,8 +516,17 @@ impl Grid {
     /// topmost to catch a press, none of them catches it, so the press reaches some other
     /// element whether or not that one is counted. Leaving such elements out keeps a card in
     /// a crowded row from being measured against every card drawn under it.
-    fn new(frame: &Frame, index: u32, near: Vec<u32>) -> Self {
-        let area = grid_area(frame, index);
+    ///
+    /// The grid is measured in the frame `shear` maps the screen to. With a shear, its area is
+    /// the element's whole box in that frame: its clip, a rectangle on screen, is a
+    /// parallelogram there, and a press tested outside it reaches nothing anyway.
+    fn new(frame: &Frame, index: u32, near: Vec<u32>, shear: Shear) -> Self {
+        let area = if shear == Shear::NONE {
+            grid_area(frame, index)
+        } else {
+            shear.bounds(&frame.resolved[index as usize])
+        };
+        let box_of = |other: u32| shear.bounds(&frame.resolved[other as usize]);
         let (mut xs, mut ys) = (Vec::new(), Vec::new());
         let mut cell = Vec2::ZERO;
         for (edges, start, length, side) in [
@@ -426,9 +540,7 @@ impl Grid {
         let mut overlapping = Vec::with_capacity(near.len());
         let mut lowest = index;
         for other in near {
-            if other != index
-                && intersection(area, bounds(&frame.resolved[other as usize])).is_none()
-            {
+            if other != index && intersection(area, box_of(other)).is_none() {
                 continue;
             }
             let inside = is_within(frame, other, index);
@@ -448,10 +560,20 @@ impl Grid {
             if other == index {
                 continue;
             }
-            let shared = intersection(area, bounds(&frame.resolved[other as usize]))
-                .expect("only overlapping elements are kept");
+            let shared =
+                intersection(area, box_of(other)).expect("only overlapping elements are kept");
             xs.extend([shared.x, shared.x + shared.width]);
             ys.extend([shared.y, shared.y + shared.height]);
+        }
+        if shear != Shear::NONE {
+            // A card drawn in perspective leans its two sides a little differently, so in the
+            // sheared frame they stand a fraction of a point off the box's edges. Cut there too,
+            // or the cells along both sides would each hold a sliver outside the card and be
+            // lost, a cell from each side of the free area.
+            for corner in frame.resolved[index as usize].corners {
+                xs.push(corner.x - shear.lean * corner.y);
+                ys.push(corner.y);
+            }
         }
         if candidates.binary_search(&index).is_err() {
             // An element with an empty area overlaps nothing, itself included.
@@ -468,6 +590,7 @@ impl Grid {
             candidates,
             alone,
             cell,
+            shear,
         }
     }
 
@@ -558,8 +681,10 @@ impl Grid {
         best.map(|(_, rect)| rect)
     }
 
-    /// Whether a press at `point` reaches element `index` or one of its descendants.
+    /// Whether a press at `point`, in the grid's frame, reaches element `index` or one of its
+    /// descendants.
     fn reaches(&self, frame: &Frame, index: u32, point: Vec2) -> bool {
+        let point = self.shear.to_screen(point);
         let mut best: Option<u32> = None;
         for &candidate in &self.candidates {
             if !catches(&frame.resolved[candidate as usize], point) {

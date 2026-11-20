@@ -733,6 +733,39 @@ fn reachable_finds_the_same_cards_as_the_largest_free_rectangle_in_a_crowded_row
 }
 
 #[test]
+fn a_narrow_leaning_card_is_reachable_but_not_when_another_covers_half_of_it() {
+    // A battlefield card at the least zoom near the window's left edge (stress-255 at
+    // 1600x900@2): 32 points wide and 44 tall, its top 6 points right of its bottom, and its top
+    // edge 0.08 points shorter than its bottom in perspective. No upright 24-point square fits
+    // inside it, but a square in its own leaning frame does, with its sides a fraction of a
+    // point off that frame's box.
+    let leaning = |id: u32, shift: f32, depth: f32| {
+        card("Island", id, LANDS, 59.0 + shift, 337.0, depth).with(|element| {
+            element.corners = [
+                Vec2::new(59.279_78 + shift, 380.851_2),
+                Vec2::new(91.262_96 + shift, 380.851_2),
+                Vec2::new(97.267_3 + shift, 336.859_1),
+                Vec2::new(65.371_85 + shift, 336.859_1),
+            ];
+        })
+    };
+    let side = Size {
+        width: 24.0,
+        height: 24.0,
+    };
+    let alone = frame(vec![leaning(1, 0.0, 40.0)]);
+    assert!(hit::free_rect(&alone, 0, side).is_none());
+    assert!(reachable(&alone, &desktop()).is_empty());
+
+    // A nearer card leaning the same way covers all but 16 points of its width.
+    let covered = frame(vec![leaning(1, 0.0, 40.0), leaning(2, 16.0, 30.0)]);
+    assert_eq!(
+        summary(&reachable(&covered, &desktop())),
+        one(Rule::Reachable, &["card \"Island\" #1"])
+    );
+}
+
+#[test]
 fn the_layout_follows_the_shorter_side_of_the_window() {
     let size = |width, height| Size { width, height };
     for (width, height) in [(393.0, 759.0), (375.0, 647.0), (430.0, 932.0)] {
