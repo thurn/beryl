@@ -529,9 +529,10 @@ fn a_run_stopped_while_the_seed_runs_runs_no_command() {
     let _ = fs::remove_dir_all(root);
 }
 
-/// On 2026-11-20 a landing failed with the end of another tree's express log, which said every test passed: the
-/// seed had moved the tree's target directory, log and all, away under the running command, and
-/// the failure was read back from the log's path. It is now read from the file the command wrote.
+/// On 2026-11-20 a landing failed with the end of another tree's express log, which said every
+/// test passed: a seed had moved the tree's target directory, log and all, away under the
+/// running command, and the failure was read back from the log's path. It is now read from the
+/// file the command wrote.
 #[test]
 fn a_failure_shows_what_the_command_wrote_after_its_log_was_moved_away() {
     let (root, lane, _) = lane("moved-log", &["sh swap.sh"]);
