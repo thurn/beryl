@@ -3,6 +3,12 @@ RELEASE: giving a ticket back, or setting it aside
 Ordinary difficulty is not a reason to release: failing tests, confusing
 code and conflicts are the job.
 
+You cannot reproduce the fault a ticket reports:
+- Never release it: the next worker would only repeat your attempt. If
+  your attempt was inconclusive, run the step you would hand on yourself.
+- If it does not fail at the tip, run ignite close, saying what you ran
+  and where. A fault that returns gets a new ticket naming this one.
+
 Your ticket needs another ticket's work that has not landed:
 - Do not wait, and do not watch the integration branch. Commit what you
   have, add the dependency, say in the note what you need and where you

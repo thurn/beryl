@@ -4,7 +4,8 @@ This is the most urgent work there is: the main branch waits on it.
 
 Before you change anything:
 - See whether the check still fails at the tip. If someone already fixed
-  it, close the ticket with the commit.
+  it, close the ticket with the commit. If it passes and you cannot find
+  the fix, close it anyway, saying what you ran; never release it.
 - Read the ticket that caused it, which this ticket links, to understand
   its intent before you change its work.
 - A pass on another machine does not prove the failure was transient. Look
