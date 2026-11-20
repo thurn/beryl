@@ -142,9 +142,11 @@ pub fn machine_families(
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("{}: {error}", path.display())),
     };
-    let (config, _unknown) = Config::parse_with_unknown(&path.to_string_lossy(), &text)
-        .map_err(|e| e.to_string())?;
-    Ok(config.machine(hostname).map(|machine| machine.families.clone()))
+    let (config, _unknown) =
+        Config::parse_with_unknown(&path.to_string_lossy(), &text).map_err(|e| e.to_string())?;
+    Ok(config
+        .machine(hostname)
+        .map(|machine| machine.families.clone()))
 }
 
 /// Reads the main checkout's manifests again and hands any change to the daemon's components.

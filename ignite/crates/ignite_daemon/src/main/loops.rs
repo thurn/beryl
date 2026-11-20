@@ -744,4 +744,3 @@ mod tests {
         assert_eq!(loop_class("ignite-sender"), None);
     }
 }
-
