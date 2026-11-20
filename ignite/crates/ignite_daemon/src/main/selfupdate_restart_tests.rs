@@ -378,3 +378,60 @@ fn status_says_when_a_pending_restart_goes_ahead() {
     assert_eq!(due, Some(Timestamp::from_millis(15_000)));
     assert_eq!(cap, Some(Timestamp::from_millis(600_000)));
 }
+
+/// A daemon as [`daemon_with_clock`] makes it, with the restart window of this repository's
+/// `ignite.toml`: a 5 s quiet window and a 30 s cap.
+fn daemon_with_30_s_cap(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart, Arc<FakeClock>) {
+    let (mut update, git, restart, clock) = daemon_with_clock(master);
+    update.window = Mutex::new(RestartWindow::new(ignite_core::config::SelfUpdateConfig {
+        quiet_seconds: 5.0,
+        cap_seconds: 30.0,
+    }));
+    (update, git, restart, clock)
+}
+
+/// On 2026-11-19 the daemon restarted into a release with the reason "after waiting 185 s for
+/// landings and newer releases", past the 30 s cap. The release had not been built ahead of its
+/// landing, so its build took those 185 s, and the restart went ahead at the first heartbeat
+/// after it was ready. The reason now names the build's time apart from the hold.
+#[test]
+fn a_release_that_built_past_the_cap_restarts_at_once_and_says_it_was_building() {
+    let (update, git, restart, clock) = daemon_with_30_s_cap(NEW);
+    let home = home_with_this_run(&update);
+    git.set_changed(&commit(OLD), &commit(NEW), &[LANDING_FILE]);
+    update.after_master_moved().unwrap();
+    clock.advance(185.0);
+    settle(&update);
+    update.after_heartbeat(Some(OLD), LANDING);
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+    let reason = this_run(&home).reason.unwrap();
+    assert!(
+        reason.ends_with(", ready 185 s after the release appeared"),
+        "{reason}"
+    );
+}
+
+/// A release built within the cap is held by a landing only for what is left of the cap, which
+/// counts from when the release appeared.
+#[test]
+fn a_landing_holds_a_release_for_what_its_build_left_of_the_cap() {
+    let (update, git, restart, clock) = daemon_with_30_s_cap(NEW);
+    let home = home_with_this_run(&update);
+    git.set_changed(&commit(OLD), &commit(NEW), &[LANDING_FILE]);
+    update.after_master_moved().unwrap();
+    clock.advance(10.0);
+    settle(&update);
+    heartbeats(&update, &clock, 2, LANDING);
+    assert!(restart.started().is_empty(), "{:?}", restart.started());
+    update.after_heartbeat(Some(OLD), LANDING);
+    assert_eq!(clock.now(), Timestamp::from_millis(30_000));
+    assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
+    let reason = this_run(&home).reason.unwrap();
+    assert!(
+        reason.ends_with(
+            ", ready 10 s after the release appeared, after waiting 20 s for landings and \
+             newer releases"
+        ),
+        "{reason}"
+    );
+}

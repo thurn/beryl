@@ -588,7 +588,7 @@ impl SelfUpdate {
             && changes
                 .as_ref()
                 .is_none_or(|changes| changes.iter().any(|path| affects_landing(at, path)));
-        let Some(waited) = self.hold(landing, target.as_ref()) else {
+        let Some((waited, held)) = self.hold(landing, target.as_ref()) else {
             return;
         };
         let mut reason = match (&target, &changes) {
@@ -601,10 +601,7 @@ impl SelfUpdate {
             }
             (None, _) => format!("an executable outside the store, {}", executable.display()),
         };
-        if waited > 0.0 {
-            reason =
-                format!("{reason}, after waiting {waited:.0} s for landings and newer releases");
-        }
+        reason.push_str(&waited_for(waited, held));
         self.restart_hub_first(reported.as_ref(), &executable);
         self.drain_and_restart(&executable, &reason);
         // Only a failed restart returns. Forget the build so the next heartbeat does not
@@ -658,11 +655,12 @@ impl SelfUpdate {
     }
 
     /// Whether a restart into `target` (`None` for an executable outside the store) may go ahead
-    /// now: `Some` with how many seconds it has waited, or `None` while the quiet window has not
-    /// passed, `landing` says a landing runs or a newer release builds, until the window's cap.
-    fn hold(&self, landing: bool, target: Option<&Commit>) -> Option<f64> {
+    /// now: `Some` with the seconds since the first pending release appeared and since one was
+    /// ready (see [`Decision::Go`]), or `None` while the quiet window has not passed, `landing`
+    /// says a landing runs or a newer release builds, until the window's cap.
+    fn hold(&self, landing: bool, target: Option<&Commit>) -> Option<(f64, f64)> {
         let Some(target) = target else {
-            return Some(0.0);
+            return Some((0.0, 0.0));
         };
         // A newer release whose build failed or was rejected is not waited for.
         let newest = self.window().newest().cloned();
@@ -681,7 +679,7 @@ impl SelfUpdate {
             None
         };
         match self.window().decide(target, self.clock.now(), held) {
-            Decision::Go { waited } => Some(waited),
+            Decision::Go { waited, held } => Some((waited, held)),
             Decision::Wait => None,
         }
     }
@@ -763,6 +761,26 @@ impl SelfUpdate {
         }
         Ok(self.stage(hub))
     }
+}
+
+/// The end of a restart's reason in `starts.jsonl` that says how long it took: `waited` seconds
+/// since the first pending release appeared, `held` of them after a release was ready (see
+/// [`Decision::Go`]). On 2026-11-19 restarts read "after waiting 185 s", well past the 30 s cap,
+/// though the window had held them for no time at all: the release had been building. The
+/// build's time is now named apart.
+fn waited_for(waited: f64, held: f64) -> String {
+    let building = waited - held;
+    let ready = if building >= 1.0 {
+        format!(", ready {building:.0} s after the release appeared")
+    } else {
+        String::new()
+    };
+    let waiting = if held > 0.0 {
+        format!(", after waiting {held:.0} s for landings and newer releases")
+    } else {
+        String::new()
+    };
+    format!("{ready}{waiting}")
 }
 
 #[path = "selfupdate_deploy.rs"]

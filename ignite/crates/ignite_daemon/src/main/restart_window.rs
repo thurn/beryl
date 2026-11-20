@@ -22,13 +22,18 @@ struct Pending {
     /// The newest of them, and when it appeared: the quiet window counts from here.
     newest: Commit,
     newest_at: Timestamp,
+    /// When a restart into one of them was first asked for, which happens once a release is
+    /// built and ready: the time before this went to building, not to the hold.
+    ready_at: Option<Timestamp>,
 }
 
 /// What [`RestartWindow::decide`] found.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Decision {
-    /// Restart now, after waiting this many seconds since the first pending release.
-    Go { waited: f64 },
+    /// Restart now. `waited` counts the seconds since the first pending release appeared, which
+    /// takes in its build; `held` counts those since a release was first ready, which the
+    /// window held it.
+    Go { waited: f64, held: f64 },
     /// Wait. The reason is logged once, when the wait begins.
     Wait,
 }
@@ -65,6 +70,7 @@ impl RestartWindow {
                     first: now,
                     newest: commit.clone(),
                     newest_at: now,
+                    ready_at: None,
                 });
             }
         }
@@ -84,17 +90,26 @@ impl RestartWindow {
 
     /// Whether a restart into `target` may go ahead at `now`. `held` names what else holds it
     /// (a landing runs, a newer release builds), if anything. A restart with no recorded
-    /// release, such as one into the hub's version, starts its window now.
+    /// release, such as one into the hub's version, starts its window now. It is asked only
+    /// once a release is ready, so a release that took longer than the cap to build restarts at
+    /// the first call.
     pub fn decide(&mut self, target: &Commit, now: Timestamp, held: Option<&str>) -> Decision {
         if self.pending.is_none() {
             self.saw(target, now);
         }
-        let Some(pending) = &self.pending else {
-            return Decision::Go { waited: 0.0 };
+        let Some(pending) = &mut self.pending else {
+            return Decision::Go {
+                waited: 0.0,
+                held: 0.0,
+            };
         };
         let waited = now.seconds_since(pending.first);
+        let held_for = now.seconds_since(*pending.ready_at.get_or_insert(now));
         if waited >= self.config.cap_seconds {
-            return Decision::Go { waited };
+            return Decision::Go {
+                waited,
+                held: held_for,
+            };
         }
         let quiet_for = now.seconds_since(pending.newest_at);
         let why = match held {
@@ -103,7 +118,12 @@ impl RestartWindow {
                 "no newer release has appeared for {:.0} s yet",
                 self.config.quiet_seconds
             ),
-            None => return Decision::Go { waited },
+            None => {
+                return Decision::Go {
+                    waited,
+                    held: held_for,
+                };
+            }
         };
         if !self.said {
             eprintln!(
