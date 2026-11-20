@@ -421,6 +421,13 @@
         "line_height": 1.35,
         "note": "A turn's heading in the game log: `.game-log-turn`, 12 points at weight 600, in capitals."
       },
+      "TURN_BANNER_TITLE": {
+        "font": "Cinzel",
+        "weight": 700,
+        "size": 54,
+        "line_height": 1,
+        "note": "The turn announcement's title: `.turn-banner-title` in `ui/src/screens/styles/turn-banner.css`, bold 54 points in the display face."
+      },
       "BANNER_TITLE": {
         "font": "CrimsonPro",
         "weight": 700,
@@ -1278,6 +1285,10 @@
       "BANNER": {
         "value": "rgb(12 10 9 / 70%)",
         "note": "The smoky shade behind the step banner: the middle stop of `.step-banner`'s gradient in `ui/src/screens/styles/step-banner.css`."
+      },
+      "TURN_BANNER_TITLE": {
+        "value": "#fbf3e2",
+        "note": "The turn announcement's title: `.turn-banner-title`'s `color`, the same for either player."
       },
       "BANNER_TITLE": {
         "value": "#e2a75a",

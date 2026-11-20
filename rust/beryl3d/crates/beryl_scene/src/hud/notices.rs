@@ -175,11 +175,18 @@ fn opacity(announced: &Announced, now: u64) -> f32 {
 fn element(notice: &Notice, view: &PlayerView) -> Element {
     match notice {
         Notice::Turn { active } => {
-            let (words, tint) = match active {
-                Side::You => ("Your Turn", color::CYAN),
-                Side::Opponent => ("Opponent's Turn", color::EMBER),
+            // The web tints only its rosettes and glow by player; the words are cream for both
+            // (`.turn-banner-title`).
+            let words = match active {
+                Side::You => "Your Turn",
+                Side::Opponent => "Opponent's Turn",
             };
-            banner(text(words).style(type_style::TITLE).color(tint), None)
+            banner(
+                text(words)
+                    .style(type_style::TURN_BANNER_TITLE)
+                    .color(color::TURN_BANNER_TITLE),
+                None,
+            )
         }
         Notice::Scry { top, bottom, .. } => pill(&format!("Scry: {top} top, {bottom} bottom.")),
         Notice::TopOrBottom { top, .. } => pill(if *top { "Top" } else { "Bottom" }),
