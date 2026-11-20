@@ -589,5 +589,10 @@
     "label": "The main, Beryl 3D and Ignite workspaces' tests open repository files through the recording helpers, so a change to `data/card-store.tsv`, a card file or the UI conventions reruns only the tests that opened that file, and the `check-inputs` rule fails a raw `std::fs` read of the checkout",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The landing gate asks the hub for every family's check record at once and only for the areas its change touches, sends new listings to the hub in the background, and converts its budget at the rate its running stage achieved, so `ignite check` of a one-card change stops spending 85 s planning and four budgets running",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

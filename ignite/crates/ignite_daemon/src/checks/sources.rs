@@ -94,6 +94,44 @@ fn lines(text: &str) -> Vec<String> {
 pub trait CheckHistory: Send + Sync {
     /// `GET /checks/stats?family=`.
     fn stats(&self, family: &str) -> Result<CheckStatsReply>;
+
+    /// [`CheckHistory::stats`] with each check's runs and failures in `areas` only, or in every
+    /// area when `areas` is empty. The family's failure rate still counts every area. The gate
+    /// scores a check by the areas its change touches, and the `rust` family's record in every
+    /// area was 10 MB, which took the hub 14 s to send.
+    fn stats_in(&self, family: &str, areas: &[String]) -> Result<CheckStatsReply> {
+        let mut reply = self.stats(family)?;
+        if !areas.is_empty() {
+            for check in &mut reply.checks {
+                check.areas.retain(|a| areas.contains(&a.area));
+            }
+        }
+        Ok(reply)
+    }
+}
+
+/// Each family's record at the hub with the runs and failures in `areas` only (see
+/// [`CheckHistory::stats_in`]), all asked at once. A family the hub gave no record for is
+/// left out. Asked one after another, the 30 families of one gate took 85 s.
+pub(crate) fn stats_of<'a>(
+    history: &dyn CheckHistory,
+    families: impl Iterator<Item = &'a str>,
+    areas: &[String],
+) -> std::collections::BTreeMap<String, CheckStatsReply> {
+    let families: std::collections::BTreeSet<&str> = families.collect();
+    std::thread::scope(|scope| {
+        let asked: Vec<_> = families
+            .into_iter()
+            .map(|family| scope.spawn(move || (family, history.stats_in(family, areas))))
+            .collect();
+        asked
+            .into_iter()
+            .filter_map(|thread| {
+                let (family, reply) = thread.join().ok()?;
+                Some((family.to_owned(), reply.ok()?))
+            })
+            .collect()
+    })
 }
 
 /// The hub's record of checks, read over HTTP.
@@ -104,19 +142,32 @@ pub struct HubHistory {
     pub token: String,
 }
 
+/// `text` percent-encoded for a query parameter.
+fn encoded(text: &str) -> String {
+    text.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
+                char::from(b).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+
 impl CheckHistory for HubHistory {
     fn stats(&self, family: &str) -> Result<CheckStatsReply> {
-        let family: String = family
-            .bytes()
-            .map(|b| {
-                if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
-                    char::from(b).to_string()
-                } else {
-                    format!("%{b:02X}")
-                }
-            })
-            .collect();
-        let url = format!("{}/checks/stats?family={family}", self.base);
+        self.stats_in(family, &[])
+    }
+
+    /// Names each area in an `area` parameter, so the hub sends only those. A hub too old to
+    /// know the parameter sends every area, which only costs time.
+    fn stats_in(&self, family: &str, areas: &[String]) -> Result<CheckStatsReply> {
+        let mut url = format!("{}/checks/stats?family={}", self.base, encoded(family));
+        for area in areas {
+            url.push_str("&area=");
+            url.push_str(&encoded(area));
+        }
         // An agent with a timeout, so that a connection the hub never answers cannot hang the
         // caller (tip verification, the gate) forever.
         let agent = ureq::Agent::new_with_config(

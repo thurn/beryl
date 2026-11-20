@@ -17,7 +17,9 @@
 //!   commands achieved in the gates of the last hour on this daemon ([`GateMemory::rate`]),
 //!   when there is one, so a 60 s budget runs in about 60 s under the load of the moment. The
 //!   same land spent 469 billion instructions in 173 s at a load average of 12 to 17, which is
-//!   2.7 billion a second, against the 7.8 billion of the hub's daily rate.
+//!   2.7 billion a second, against the 7.8 billion of the hub's daily rate. An older rate
+//!   still stands while it is below the daily rate, and the rate counts the seconds the
+//!   running stage took, not the sum of its commands' seconds ([`GateMemory::rate`]).
 //! - The memory lives in the daemon's database (`ignite_store::local::gate_memory`), not in the
 //!   process. `ignite check` and `ignite land` each run in a verb process of their own, so a
 //!   memory kept in the process was gone by the next gate: on 2026-11-19 the land of a one-card
@@ -84,10 +86,17 @@ impl GateMemory<'_> {
     }
 
     /// The rate the gate converts its seconds at: the one observed in the last hour, kept within
-    /// [`RATE_RANGE`] of `daily`, the hub's rate for the day, or `daily` when none was.
+    /// [`RATE_RANGE`] of `daily`, the hub's rate for the day. An older observed rate still
+    /// stands when it is below `daily`, since the machine's load has not been seen to fall:
+    /// on 2026-11-19 a gate 65 minutes after the last observed rate of 2.0 billion a second
+    /// planned at the daily 5.7 at a load average of 22, and ran four times its budget. With
+    /// none observed, `daily` stands.
     pub(crate) fn rate(&self, now: Timestamp, daily: f64) -> f64 {
-        match self.fresh(now) {
-            Some(observed) => observed.clamp(daily * RATE_RANGE.0, daily * RATE_RANGE.1),
+        match self.last() {
+            Some((at, observed)) if now.seconds_since(at) <= RATE_FRESH_S => {
+                observed.clamp(daily * RATE_RANGE.0, daily * RATE_RANGE.1)
+            }
+            Some((_, observed)) => observed.clamp(daily * RATE_RANGE.0, daily),
             None => daily,
         }
     }
@@ -110,10 +119,15 @@ impl GateMemory<'_> {
 
     /// The rate recorded in the last [`RATE_FRESH_S`] seconds before `now`, if one was.
     fn fresh(&self, now: Timestamp) -> Option<f64> {
+        self.last()
+            .filter(|(at, _)| now.seconds_since(*at) <= RATE_FRESH_S)
+            .map(|(_, rate)| rate)
+    }
+
+    /// The last rate recorded and when, if one was.
+    fn last(&self) -> Option<(Timestamp, f64)> {
         match gate_memory::rate(self.0) {
-            Ok(Some((at, rate))) => {
-                (now.seconds_since(Timestamp::from_millis(at)) <= RATE_FRESH_S).then_some(rate)
-            }
+            Ok(Some((at, rate))) => Some((Timestamp::from_millis(at), rate)),
             Ok(None) => None,
             Err(error) => {
                 eprintln!("ignite: the gate's rate cannot be read: {error}");
@@ -172,8 +186,13 @@ mod tests {
         memory.observe(at(120.0), 600.0, 100.0);
         let averaged = f64::midpoint(observed, 6.0);
         assert!((memory.rate(at(180.0), 7.8) - averaged).abs() < 1e-9);
-        // After an hour with no gate the daily rate stands again.
-        assert!((memory.rate(at(120.0 + 3601.0), 7.8) - 7.8).abs() < 1e-9);
+        // After an hour with no gate, the old rate still stands while it is below the daily
+        // rate, since the load has not been seen to fall.
+        assert!((memory.rate(at(120.0 + 3601.0), 7.8) - averaged).abs() < 1e-9);
+        // A rate above the daily rate stands only for an hour.
+        memory.observe(at(8000.0), 6000.0, 600.0);
+        assert!((memory.rate(at(8060.0), 7.8) - 10.0).abs() < 1e-9);
+        assert!((memory.rate(at(8000.0 + 3601.0), 7.8) - 7.8).abs() < 1e-9);
     }
 
     #[test]

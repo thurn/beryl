@@ -463,13 +463,8 @@ pub(super) fn gate_view_of(
     changed: &[String],
 ) -> GateView {
     let areas = plan::areas(changed, &tree.graph);
-    let stats: BTreeMap<String, _> = prepared
-        .iter()
-        .filter_map(|p| {
-            let reply = checks.history.stats(&p.family).ok()?;
-            Some((p.family.clone(), reply))
-        })
-        .collect();
+    let families = prepared.iter().map(|p| p.family.as_str());
+    let stats = super::sources::stats_of(checks.history.as_ref(), families, &areas);
     let manifest = &checks.settings.manifest;
     let family = |name: &str| manifest.families.get(name).map(|d| &d.family);
     let regressions = open_regressions(ctx);

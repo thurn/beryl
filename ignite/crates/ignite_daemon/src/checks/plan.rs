@@ -231,11 +231,9 @@ impl super::Checks {
         checks: &[(CheckName, String)],
     ) -> ignite_core::traits::Result<Scoring> {
         let (view, tree) = self.open(ctx, tree)?;
-        let families: BTreeSet<&str> = checks.iter().map(|(_, f)| f.as_str()).collect();
-        let stats: BTreeMap<&str, CheckStatsReply> = families
-            .into_iter()
-            .filter_map(|family| Some((family, self.history.stats(family).ok()?)))
-            .collect();
+        let areas = areas(changed, &tree.graph);
+        let families = checks.iter().map(|(_, f)| f.as_str());
+        let stats = super::sources::stats_of(self.history.as_ref(), families, &areas);
         let regressions = super::verbs::open_regressions(ctx);
         let scored = checks
             .iter()
@@ -249,7 +247,7 @@ impl super::Checks {
             })
             .collect();
         Ok(Scoring {
-            areas: areas(changed, &tree.graph),
+            areas,
             checks: scored,
         })
     }

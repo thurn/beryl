@@ -200,13 +200,28 @@ impl ResultCache {
 
     /// Stores a family's listing locally and at the hub. A hub that cannot take it now is not
     /// asked again: a missing listing only costs another machine a listing of its own.
+    ///
+    /// The hub gets its copy from a thread of its own, so the gate that made the listing does
+    /// not wait for it: a 4 MB listing took the hub 6 to 10 s to receive, and the gate waited
+    /// that long before it planned anything. A copy the hub never receives, because it could
+    /// not be reached or the daemon stopped first, only means another machine lists the family
+    /// itself. Tests send it before returning, so what the hub holds afterwards is certain.
     pub fn store_listing(&self, key: &ListingKey, listing: &str) {
         let at = self.clock.now().to_string();
         let _ = listings::put(&self.conn(), &key.family, key.hash.as_str(), listing, &at);
-        let _ = self.hub.store_listing(&StoredListing {
+        let hub = Arc::clone(&self.hub);
+        let stored = StoredListing {
             key: key.clone(),
             listing: listing.to_owned(),
-        });
+        };
+        let send = move || {
+            let _ = hub.store_listing(&stored);
+        };
+        if cfg!(test) {
+            send();
+        } else {
+            std::thread::spawn(send);
+        }
     }
 
     /// Records that `family`'s `command` (`list` or `run`) passed in `wall_s` seconds.

@@ -18,6 +18,7 @@ use ignite_core::budget::billions_text;
 use ignite_core::gate::cost_of;
 use ignite_core::ids::{CheckName, TicketId, TreeId};
 use ignite_core::manifest::{Family, Kind};
+use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::CachedResult;
 
 use super::plan;
@@ -274,7 +275,7 @@ impl Checks {
         let running = Stopwatch::start(ctx);
         self.run_families(ctx, tree, families, options, &mut run);
         run.stage(ctx, "running", running);
-        self.remember(ctx, &changed, &gate_plan, &run);
+        self.remember(ctx, &changed, &gate_plan, &run, running.seconds(ctx));
         GateRun {
             run,
             left: gate_plan.past_budget.len() + gate_plan.cold.len() + gate_plan.tip.len(),
@@ -311,17 +312,37 @@ impl Checks {
         }
     }
 
-    /// When the gate passed, remembers what it chose by score, so the change's next gate spends no second
-    /// budget, and the rate its check commands achieved, so the next budget's seconds convert
-    /// at the load of the moment (see `spent`).
+    /// Remembers the rate the gate's check commands achieved over `running_s`, the seconds the
+    /// running stage took, so the next budget's seconds convert at the load of the moment (see
+    /// `spent`). When the gate passed, it also remembers what it chose by score, so the
+    /// change's next gate spends no second budget.
+    ///
+    /// The rate is taken from every gate that ran all it chose, which is one where no check
+    /// failed, since a failure stops the rest. On 2026-11-19 two gates of a one-card change
+    /// on one machine both reported a check incomplete because a file was missing from the
+    /// machine's cache, so neither recorded its rate; the last one went stale, and the second
+    /// gate planned at the hub's daily rate, 5.7 billion a second, and ran 232 s against a 60 s
+    /// budget. The seconds are those that passed while the families ran at once, not the sum
+    /// of their commands' seconds, which was 512 s in that gate, because the budget is
+    /// seconds of waiting.
     fn remember(
         &self,
         ctx: &Context,
         changed: &[String],
         gate_plan: &ignite_core::gate::GatePlan,
         run: &CheckRun,
+        running_s: f64,
     ) {
         use ignite_core::gate::Why;
+        let conn = self.cache.conn();
+        let memory = super::spent::GateMemory(&conn);
+        let ran_all = run.build_failures.is_empty()
+            && run.skipped == 0
+            && !run.outcomes.iter().any(|(_, o)| *o == Outcome::Fail);
+        if ran_all {
+            let billions = gate_plan.scored_cost + gate_plan.forced_cost;
+            memory.observe(ctx.clock.now(), billions, running_s);
+        }
         if !run.passed() {
             return;
         }
@@ -332,11 +353,7 @@ impl Checks {
             .filter(|planned| planned.why == Why::Scored)
             .map(|planned| planned.check.clone())
             .collect();
-        let conn = self.cache.conn();
-        let memory = super::spent::GateMemory(&conn);
         memory.passed(ctx.clock.now(), changed, &chosen);
-        let billions = gate_plan.scored_cost + gate_plan.forced_cost;
-        memory.observe(ctx.clock.now(), billions, run.wall_s);
     }
 
     /// Splits the families the change can affect into those to judge again and the names of

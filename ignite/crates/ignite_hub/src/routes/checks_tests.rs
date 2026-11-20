@@ -225,6 +225,18 @@ fn storing_results_counts_each_run_and_its_cost_once_however_often_it_is_sent() 
     );
     // Two runs over four area counts, one of them a failure per area of check b.
     assert_eq!(reply["family_rate"].as_f64(), Some(0.5));
+
+    // Asked for some areas, the hub sends only those, and the family's rate still counts all.
+    let (_, only) = hub.send("GET", "/checks/stats?family=rust&area=ui", None, false);
+    assert_eq!(
+        only["checks"][0]["areas"],
+        json!([{"area": "ui", "runs": 1, "failures": 0}])
+    );
+    assert_eq!(
+        only["checks"][1]["areas"],
+        json!([{"area": "ui", "runs": 1, "failures": 1}])
+    );
+    assert_eq!(only["family_rate"].as_f64(), Some(0.5));
 }
 
 #[test]
