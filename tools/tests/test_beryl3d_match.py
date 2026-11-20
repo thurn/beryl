@@ -317,6 +317,23 @@ def test_cards_pair_by_object_first_and_a_renamed_pair_by_name_anywhere() -> Non
     assert pairs == {(0, 1): "object", (1, 0): "object", (3, 2): "anywhere"}
 
 
+def test_of_two_web_cards_of_one_object_the_one_on_the_screen_pairs() -> None:
+    web = [
+        plain("region", "", [0, 0, 1600, 900]),
+        # During the opening the desktop board moves the stage's hand card below the window,
+        # while the opening draws its own copy of it in its row.
+        plain("card", "Island", [400, 950, 200, 270], object=38, parent=0),
+        plain("card", "Island", [900, 250, 200, 270], object=38, parent=0),
+    ]
+    # Beryl 3D draws one card, nearer the stage's card than the copy, so only the preference
+    # for what is on the screen pairs it with the copy.
+    b3d = [plain("card", "Island", [400, 600, 200, 270], object=38, key="card #38")]
+    found = joined.join(web, b3d)
+    listed = found["pairs"]
+    assert isinstance(listed, list)
+    assert [(p["web"], p["b3d"], p["pass"]) for p in listed] == [(2, 0, "object")]
+
+
 def mark(kind: str, at: list[float], thing: int, card: int) -> dict[str, object]:
     """The outline of mark `kind` on the card of object `thing` at index `card`, as both
     sides' records write one: a `mark` named by its kind, drawn as a shadow."""

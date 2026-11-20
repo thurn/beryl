@@ -214,6 +214,24 @@ def test_a_web_element_inside_a_partnered_one_is_not_reported_alone() -> None:
     assert [lonely.key for lonely in lonely_web] == ['region "" (frames 0-1)']
 
 
+def test_a_web_element_alone_is_measured_only_while_it_is_on_the_screen() -> None:
+    # During a mulligan the web's stage card waits below the window (track 2) and then shows
+    # in the library pile: a player sees it come, not move, so it adds nothing to the
+    # census's sum. A card that moves on the screen (track 3) adds how far it moves.
+    def web_frame(y: int) -> list[dict[str, object]]:
+        screen = card([0, 0, 100, 100], track=1) | {"role": "region"}
+        waiting = card([10, y, 10, 10], track=2) | {"parent": 0}
+        moving = card([y // 4, 10, 10, 10], track=3) | {"parent": 0}
+        return [screen, waiting, moving]
+
+    web = [web_frame(200), web_frame(200), web_frame(80)]
+    b3d: list[list[dict[str, object]]] = [[], [], []]
+    pairs, lonely_b3d, lonely_web = motion.compared(web, b3d, {}, None)
+    assert pairs == [] and lonely_b3d == []
+    found = {lonely.key: tracks.alone(lonely.track).position for lonely in lonely_web}
+    assert found == {'card "" (frames 2)': 0.0, 'card "" (frames 0-2)': 30.0}
+
+
 def effect(
     box: list[float],
     opacity: float,
