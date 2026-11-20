@@ -6,6 +6,7 @@
 
 pub mod clones;
 pub mod fifo;
+pub mod files;
 pub mod hostcpu;
 pub mod ipc;
 pub mod notify;

@@ -22,7 +22,15 @@ fn refused_next(gated: &GateRun) -> String {
         .base
         .as_deref()
         .is_some_and(|base| base.starts_with("not compared with the tip"));
-    if tip_unknown {
+    let not_started = gated.run.build_failures.iter().any(|(_, output)| {
+        std::fs::read_to_string(output).is_ok_and(|text| text.starts_with(crate::build::NOT_STARTED))
+    });
+    if not_started {
+        "a build could not start because the machine failed, not because of your change: \
+         land again; if it repeats, `ignite release` with a note naming the build and its \
+         record; see `ignite guide blocked`"
+            .to_owned()
+    } else if tip_unknown {
         "run the failing check once with `ignite test <check>`; if it passes, land again, \
          otherwise `ignite release` with a note naming the check, the tip commit and the first \
          lines of its output; see `ignite guide blocked`"

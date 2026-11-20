@@ -81,6 +81,11 @@ pub use crate::wrap::UNITS_ENV;
 /// The placeholder in a product's `build` command for the packages a request names.
 const PACKAGES: &str = "{packages}";
 
+/// The start of the record of a build that could not start because the machine failed (a file
+/// could not be opened, for one), not because the change is wrong. The landing reads it to
+/// say so instead of blaming the change.
+pub const NOT_STARTED: &str = "the build did not start, and the change is not at fault: ";
+
 /// How long a build command may run before it is ended as hung, in seconds (two hours). Builds
 /// vary far more than checks do (a cold build of a large workspace takes tens of minutes), so
 /// the limit is fixed and generous: it only has to end a build that will never finish. Time
@@ -651,7 +656,13 @@ impl Builds for BuildManager {
         let plan = match self.plan(tree, product, packages) {
             Ok(plan) => plan,
             Err(error) => {
-                return self.failure(product, &format!("cannot build {product}: {error}"));
+                // An operating-system failure says nothing about the change.
+                let marker = if matches!(error, Error::Io(_)) {
+                    NOT_STARTED
+                } else {
+                    ""
+                };
+                return self.failure(product, &format!("{marker}cannot build {product}: {error}"));
             }
         };
         match self.differing_features(&plan) {

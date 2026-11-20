@@ -267,6 +267,16 @@ impl selfupdate::HubService for NativeHubService {
 /// may start it again before the old hub process has let go of the port.
 const HUB_BIND_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Raises the soft open-file limit before anything opens a file. A login service inherits
+/// launchd's limit of 256 descriptors, which a burst of builds passes, so builds failed with
+/// "Too many open files". The commands the process starts inherit the raised limit.
+fn raise_open_file_limit() {
+    if let Err(error) = ignite_os::files::raise_open_file_limit(ignite_os::files::WANTED_OPEN_FILES)
+    {
+        eprintln!("ignite: cannot raise the open-file limit: {error}");
+    }
+}
+
 /// The hidden `ignite hub` subcommand, which the hub's login service runs from `bin/current`:
 /// serves the hub at the addresses in `IGNITE_HUB_LISTEN` and `IGNITE_HUB_PUBLIC_LISTEN`, and
 /// runs its upkeep, until the process ends. It does nothing else, so it starts in well under a
@@ -274,6 +284,7 @@ const HUB_BIND_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
 /// this executable's commit as its version in heartbeat replies, which every daemon follows.
 /// Returns the exit code.
 pub fn run_hub(cwd: &Path) -> i32 {
+    raise_open_file_limit();
     let home = Home::from_env();
     let Some(addresses) = loops::HubAddresses::from_env() else {
         eprintln!(
@@ -331,6 +342,7 @@ fn running_version() -> String {
 /// main checkout of the repository at `cwd` or, outside one (the login service starts it in
 /// `/`), for the checkout `ignite install` recorded. Returns the exit code.
 pub fn run_daemon(cwd: &Path) -> i32 {
+    raise_open_file_limit();
     let home = Home::from_env();
     // First, before anything this build could fail at: records the start, and goes back to the
     // last-good build if this one crash-loops.
