@@ -627,7 +627,7 @@ def test_an_effect_pairs_by_its_name_and_what_it_is_on_and_with_nothing_else() -
     assert isinstance(pairs, list)
     assert {(p["web"], p["b3d"], p["pass"]) for p in pairs} == {
         (1, 1, "effect"),
-        (0, 0, "identity"),
+        (0, 0, "object"),
     }
     unmatched = found["unmatched"]
     assert isinstance(unmatched, dict)
