@@ -134,7 +134,12 @@ Stop the harm first, find the root cause second:
   only what proves the fix works (one focused test, or `ignite install` from
   that checkout on this machine to see the symptom go away). Then deploy:
   1. push it to `ignite-release`, which every daemon builds and restarts into
-     within minutes; or
+     within minutes, and in the same step push it to `staging` too (rebased onto
+     staging's tip if needed). A landing moves `ignite-release` only over a
+     commit whose changes the landed commit holds, so a fix that stays off
+     `staging` blocks every later release until someone moves the branch by
+     hand. `ignite status` warns when `ignite-release` holds a commit `staging`
+     lacks; or
   2. run `ignite install` from the fix's checkout on each affected machine; or
   3. only when neither works, push it to `staging` (and `master` only when
      `staging` is itself the problem).

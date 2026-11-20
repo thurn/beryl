@@ -99,6 +99,7 @@ fn fleet(hub: &str, machines: Vec<MachineVersion>) -> FleetVersions {
 
 struct World {
     state: Arc<FakeState>,
+    git: Arc<FakeGit>,
     hub: Arc<FakeHub>,
     clock: Arc<FakeClock>,
 }
@@ -109,6 +110,7 @@ impl World {
         hub.set_fleet_versions(fleet(own, vec![machine("jarvis", own, 5.0)]));
         World {
             state: Arc::new(FakeState::new(own, tip)),
+            git: Arc::new(FakeGit::default()),
             hub,
             clock: Arc::new(FakeClock::new(start())),
         }
@@ -133,6 +135,8 @@ impl World {
     fn section(&self) -> Vec<String> {
         ReleaseSection {
             state: self.state.clone(),
+            git: self.git.clone(),
+            staging: "staging".to_owned(),
             hub: self.hub.clone(),
             clock: self.clock.clone(),
         }
@@ -235,6 +239,29 @@ fn status_says_the_release_is_pending_then_deployed() {
             "jarvis bbbbbbb, the release",
         ]
     );
+}
+
+/// A fix pushed straight to the release branch and not to staging made every later landing's
+/// release move fail, with nothing in `ignite status` to say so.
+#[test]
+fn status_warns_when_the_release_holds_a_commit_staging_lacks() {
+    let world = World::new("aaaaaaa", "bbbbbbb");
+    world.git.set_tip("staging", commit("ccccccc"));
+    assert!(world.section().iter().all(|line| !line.contains("warning")));
+
+    world
+        .git
+        .set_not_ancestor(&commit("bbbbbbb"), &commit("ccccccc"));
+    let section = world.section();
+    assert_eq!(
+        section[2],
+        "warning: release holds bbbbbbb, which staging (at ccccccc) lacks; no landing can move \
+         the release until it is pushed to staging too"
+    );
+
+    // A rebased copy of the fix on staging holds its changes, so there is nothing to warn of.
+    world.git.set_holds(&commit("ccccccc"), &commit("bbbbbbb"));
+    assert!(world.section().iter().all(|line| !line.contains("warning")));
 }
 
 #[test]

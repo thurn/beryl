@@ -623,6 +623,8 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         }),
         Box::new(crate::deploy::ReleaseSection {
             state: parts.update.clone(),
+            git: parts.ctx.git.clone(),
+            staging: base.config.repository.staging.clone(),
             hub: parts.ctx.hub.clone(),
             clock: base.clock.clone(),
         }),

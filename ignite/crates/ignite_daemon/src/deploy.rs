@@ -29,7 +29,7 @@ use ignite_core::ids::Commit;
 use ignite_core::protocol::client::{Exit, Reply};
 use ignite_core::protocol::fleet::FleetVersions;
 use ignite_core::time::Timestamp;
-use ignite_core::traits::{Clock, Hub, Result};
+use ignite_core::traits::{Clock, Git, Hub, Result};
 
 use crate::doctor::StatusSection;
 use crate::loop_health::span;
@@ -279,8 +279,38 @@ fn short_text(version: &str) -> &str {
 /// `ignite status`'s `release` section.
 pub struct ReleaseSection {
     pub state: Arc<dyn DeployState>,
+    pub git: Arc<dyn Git>,
+    /// The branch landings go to, which the release branch must not run ahead of.
+    pub staging: String,
     pub hub: Arc<dyn Hub>,
     pub clock: Arc<dyn Clock>,
+}
+
+impl ReleaseSection {
+    /// A warning when the release branch's tip `tip` holds changes to Ignite's source that the
+    /// staging tip lacks, as a fix pushed straight to the release branch does. A landing moves
+    /// the release branch only over a commit whose changes the landed commit holds, so while
+    /// the fix stays off staging, no later landing can move the release. `None` when staging
+    /// holds the tip or either branch cannot be read.
+    fn stranded_line(&self, tip: &Commit) -> Option<String> {
+        let staging = self.git.known_tip(&self.staging).ok()?;
+        let held = self.git.is_ancestor(tip, &staging).ok()?
+            || self
+                .git
+                .holds_changes(&staging, tip, crate::update::SOURCE)
+                .ok()?;
+        (!held).then(|| {
+            format!(
+                "warning: {} holds {}, which {} (at {}) lacks; no landing can move the release \
+                 until it is pushed to {} too",
+                self.state.local().branch,
+                short(tip),
+                self.staging,
+                short(&staging),
+                self.staging
+            )
+        })
+    }
 }
 
 impl StatusSection for ReleaseSection {
@@ -305,6 +335,7 @@ impl StatusSection for ReleaseSection {
             format!("{} at {}", local.branch, short(&tip)),
             local_line(self.state.as_ref(), &local, &tip, Some(checked), now),
         ];
+        lines.extend(self.stranded_line(&tip));
         match self.hub.fleet_versions() {
             Ok(fleet) => {
                 lines.push(format!(
