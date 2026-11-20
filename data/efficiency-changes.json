@@ -704,5 +704,10 @@
     "label": "Landing by verdict, the `green` branch, the revert of a landing that breaks the build and the tip-build core reserve are switched on in `ignite.toml`, so a landing checked on its own base no longer rebuilds and gates again each time another landing moves the tip (the slowest gated landing on 2026-11-19 took 91 minutes over 7 passes, none of whose repeats found a failure)",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The landing gate lists families without building their products when the change cannot alter their listings: listings of families marked `listing_ignores_comments` hash Rust files without comments, a `nextest` family reuses its newest listing for every package whose own files did not change and builds only the changed packages' tests, and clippy, card-text and three browser families list without waiting for their run products",
+    "metric": "ignite.gate-seconds",
+    "expect": "down"
   }
 ]

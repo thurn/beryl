@@ -41,6 +41,7 @@
 
 pub mod adapters;
 mod batches;
+mod code_ids;
 mod execute;
 mod express;
 mod gate;
@@ -48,6 +49,7 @@ mod keying;
 pub(crate) mod listings;
 pub(crate) mod named;
 mod observed;
+mod package_listings;
 pub(crate) mod plan;
 mod prepare;
 mod products;

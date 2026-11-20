@@ -10,6 +10,7 @@ mod fail_fast;
 mod hardening;
 mod listings;
 mod observed;
+mod package_listings;
 mod plan;
 mod scope;
 mod tree_manifest;

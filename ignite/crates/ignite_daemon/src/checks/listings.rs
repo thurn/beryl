@@ -23,7 +23,7 @@
 //! those files and from what its listing hash already covers, so the listing hash covers them
 //! too and its listing is kept like any other.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, PoisonError};
@@ -66,6 +66,11 @@ pub(crate) struct Kept {
     /// [`observed`]). A `nextest` listing without it, as older daemons kept, is not used.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reads: Option<Reads>,
+    /// For a `nextest` family, the hash of what can change each package's test names, by
+    /// package (see `package_listings`). A listing without it is never reused for another
+    /// tree's inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub packages: Option<BTreeMap<String, InputHash>>,
 }
 
 /// Where a family's checks came from.
@@ -224,6 +229,7 @@ impl Checks {
                     .iter()
                     .filter_map(|p| ids.get(p).map(|oid| (p.clone(), oid.clone())))
                     .collect();
+                let own = Self::listing_ids(ctx, tree, family, own);
                 (name.to_owned(), self.hash(family, &own, None))
             })
             .collect()
@@ -560,7 +566,7 @@ impl Checks {
 
     /// Remembers that `name` has listed checks, if it has, so a later empty listing of it is
     /// taken for a broken `list` command.
-    fn note_listed(&self, name: &str, listed: &[Listed]) {
+    pub(super) fn note_listed(&self, name: &str, listed: &[Listed]) {
         if !listed.is_empty() {
             let mut seen = self
                 .listed_before

@@ -95,6 +95,8 @@ impl From<InputPattern> for String {
 }
 
 /// A `[family.<name>]` table.
+// Each flag is a separate key a manifest sets on its own; no two of them form a state.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Family {
     pub kind: Kind,
@@ -155,6 +157,13 @@ pub struct Family {
     /// landing that made one of them fail.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub builds: bool,
+    /// What the family's `list` prints cannot depend on the comments in a Rust file, as with
+    /// test names or what a compiled program does. Its listing hash and the hash of its
+    /// listing's sources then cover each `.rs` file by its code without comments, so a change
+    /// that edits only comments keeps its kept listing and builds nothing to list. The checks'
+    /// own hashes still cover every file whole.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub listing_ignores_comments: bool,
 }
 
 impl Family {

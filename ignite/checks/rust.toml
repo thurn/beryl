@@ -54,6 +54,9 @@ adapter = "nextest"
 platforms = "any"
 needs = ["rust-tests"]
 list = "cargo nextest list --locked {packages} --message-format json -E !binary(allocations)"
+# Test names do not depend on comments, so a change that edits only comments keeps the
+# listing and builds nothing to list (docs/ignite.md, "Declaring a family").
+listing_ignores_comments = true
 run = "cargo nextest run --locked --cargo-quiet {packages} --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = ["crate-closure", "rust/Cargo.toml", "rust/.config/nextest.toml"]
 
@@ -133,6 +136,9 @@ kind = "regression"
 adapter = "jsonl"
 platforms = "any"
 needs = ["python-env", "clippy"]
+# `list` reads `cargo metadata` alone, not clippy's output. Waiting for the `clippy` product
+# made a one-line card change build clippy (333 s) only to list one check per package.
+list_needs = ["python-env"]
 always = true
 # A build check: a failure means the code does not type-check, so `green` does not move.
 builds = true
@@ -184,6 +190,8 @@ kind = "regression"
 adapter = "jsonl"
 platforms = "any"
 needs = ["python-env", "scenario-dump"]
+# `list` names one check per card file from the file names alone; `run` renders the cards.
+list_needs = ["python-env"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.rust card-text list"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.rust card-text run {checks}"
 inputs = [

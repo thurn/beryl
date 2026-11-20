@@ -41,6 +41,9 @@ platforms = "any"
 needs = ["scenario-dump", "python-env"]
 resources = ["oracle"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle list oracle"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 digest_inputs = [
   "tools/oracles/**",
   "tools/src/beryl_tools/BerylScenarioTest.java",
@@ -80,6 +83,9 @@ platforms = "any"
 needs = ["scenario-dump", "python-env"]
 resources = ["oracle"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle list oracle-generated"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 next = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle next oracle-generated"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.oracle run oracle-generated {checks}"
 inputs = [

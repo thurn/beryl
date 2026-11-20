@@ -27,6 +27,9 @@ platforms = ["macos"]
 needs = ["cli", "ui-deps"]
 resources = ["browser-pages"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list ui-test"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run ui-test {checks}"
 # `ui/verbs.json` and `ui/shapes.json` name the verb and shape checks that `list` prints.
 inputs = [
@@ -60,6 +63,9 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["cli", "ui-deps"]
+# `list` reads Python and script files only (browser.py, `LIST_NEEDS_DEPS` says which lists
+# read a product), so listing builds nothing.
+list_needs = []
 resources = ["browser-pages"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list ui-smoke"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run ui-smoke {checks}"
@@ -91,6 +97,8 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["cli", "ui-deps"]
+# `list` imports Playwright but runs no `beryl_cli`.
+list_needs = ["ui-deps"]
 resources = ["browser-pages"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list shots"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run shots {checks}"
@@ -130,6 +138,8 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["cli", "ui-deps"]
+# `list` reads the verb suite only, so listing builds nothing.
+list_needs = []
 resources = ["browser-pages"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list motion"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run motion {checks}"
@@ -176,6 +186,8 @@ kind = "regression"
 adapter = "jsonl"
 platforms = ["macos"]
 needs = ["cli", "ui-deps"]
+# `list` reads the counts gate file only, so listing builds nothing.
+list_needs = []
 resources = ["browser-pages"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.browser list ui-counts"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.browser run ui-counts {checks}"

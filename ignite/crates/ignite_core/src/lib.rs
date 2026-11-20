@@ -19,6 +19,7 @@ pub mod output;
 pub mod owner;
 pub mod prime;
 pub mod protocol;
+pub mod rust_source;
 pub mod ready;
 pub mod schedule;
 pub mod score;

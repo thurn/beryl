@@ -13,6 +13,7 @@ use ignite_core::manifest::Family;
 use ignite_core::protocol::hub::{CachedResult, ListingKey};
 
 use super::listings::{Kept, Listing, Origin};
+use super::package_listings::Reuse;
 use super::time_lines::Stopwatch;
 
 /// The landing gate's test for a family it leaves unlisted, given its name and declaration.
@@ -124,10 +125,23 @@ impl Checks {
         let reading = Stopwatch::start(ctx);
         let mut kept = self.kept_for(hashes.clone());
         run.slow(ctx, "reading kept listings", reading);
+        // A `nextest` family that misses its kept listing may reuse its newest listing for the
+        // packages whose test names cannot have changed (see `package_listings`).
+        let reusing = Stopwatch::start(ctx);
+        let mut reuse: BTreeMap<String, Reuse> = among
+            .iter()
+            .filter(|(name, _)| !kept.contains_key(*name) && !scopes.contains_key(*name))
+            .filter_map(|&(name, family)| {
+                self.reuse(ctx, tree, name, family)
+                    .map(|r| (name.to_owned(), r))
+            })
+            .collect();
+        run.slow(ctx, "comparing newest listings by package", reusing);
         let mut among = among.to_vec();
         if let Some(cold) = gate {
             among.retain(|&(name, family)| {
-                let unlisted = !kept.contains_key(name) && cold(name, family);
+                let whole = matches!(reuse.get(name), Some(Reuse::Whole(_)));
+                let unlisted = !kept.contains_key(name) && !whole && cold(name, family);
                 if unlisted {
                     run.cold_families.push(name.to_owned());
                 }
@@ -145,6 +159,7 @@ impl Checks {
                 }),
                 kept: kept.remove(name),
                 scope: scopes.get(name).cloned(),
+                reuse: reuse.remove(name),
             })
             .collect();
         if !fail_fast {
@@ -155,10 +170,12 @@ impl Checks {
         let (free, building): (Vec<FamilyWork>, Vec<FamilyWork>) =
             work.into_iter().partition(|w| {
                 let needs = w.family.list_needs.as_ref().unwrap_or(&w.family.needs);
-                w.kept.is_some() || needs.is_empty()
+                w.kept.is_some() || needs.is_empty() || matches!(w.reuse, Some(Reuse::Whole(_)))
             });
         let mut products: Vec<String> = Vec::new();
-        for w in &building {
+        // A family listed for its changed packages alone builds only theirs when it is listed,
+        // so its whole product is not built here.
+        for w in building.iter().filter(|w| w.reuse.is_none()) {
             for product in w.family.list_needs.as_ref().unwrap_or(&w.family.needs) {
                 if !products.contains(product) {
                     products.push(product.clone());
@@ -214,7 +231,7 @@ impl Checks {
         let jobs = products
             .iter()
             .map(Job::Build)
-            .chain(free.into_iter().map(Job::List))
+            .chain(free.into_iter().map(|w| Job::List(Box::new(w))))
             .collect();
         let found = on_threads(jobs, |job, own| match job {
             Job::Build(product) => {
@@ -223,7 +240,7 @@ impl Checks {
                     self.build_products(ctx, tree, std::slice::from_ref(product), &[], &who, own);
                 None
             }
-            Job::List(one) => self.prepare_family(ctx, tree, one, options, own),
+            Job::List(one) => self.prepare_family(ctx, tree, *one, options, own),
         });
         let (built, listed): (Vec<_>, Vec<_>) = found
             .into_iter()
@@ -253,17 +270,42 @@ impl Checks {
             key,
             kept,
             scope,
+            reuse,
         } = work;
-        let listed = self.list_remembering_foreign(
-            ctx,
-            tree,
-            (name, family),
-            options,
-            run,
-            key.clone(),
-            kept,
-            scope.as_deref(),
-        );
+        let listed = match reuse {
+            Some(Reuse::Whole(base)) => {
+                run.listings_kept += 1;
+                self.note_listed(name, &base.checks);
+                Ok(Listing {
+                    checks: base.checks,
+                    origin: Origin::Made { key: key.clone() },
+                    reads: base.reads,
+                })
+            }
+            Some(Reuse::Partial { base, changed }) => self
+                .list(
+                    ctx,
+                    tree,
+                    name,
+                    family,
+                    options,
+                    run,
+                    key.clone(),
+                    None,
+                    Some(&changed),
+                )
+                .map(|fresh| Self::merged(base, &changed, fresh, key.clone())),
+            None => self.list_remembering_foreign(
+                ctx,
+                tree,
+                (name, family),
+                options,
+                run,
+                key.clone(),
+                kept,
+                scope.as_deref(),
+            ),
+        };
         let mut listing = Self::listed_or_noted(name, listed, run)?;
         let keying = Stopwatch::start(ctx);
         let (mut keyed, mut broken, mut sources) =
@@ -287,22 +329,26 @@ impl Checks {
         match (&listing.origin, sources) {
             (Origin::Made { key: Some(key) }, Some(sources)) => {
                 let keeping = Stopwatch::start(ctx);
-                let kept = Kept {
+                let mut kept = Kept {
                     sources,
                     checks: listing.checks,
                     reads: listing.reads,
+                    packages: None,
                 };
+                kept.packages = self.packages_of(ctx, tree, family, &kept);
                 self.keep(key.clone(), kept);
                 run.slow(ctx, format!("keeping the listing of {name}"), keeping);
             }
             // A listing that must not be kept still names the family's checks, which is all
             // `ignite test <word>` asks of a family's newest listing.
             (Origin::Made { .. }, sources) if !listing.checks.is_empty() => {
-                let kept = Kept {
+                let mut kept = Kept {
                     sources: sources.unwrap_or_else(|| Self::sources_hash(&[])),
                     checks: listing.checks,
                     reads: listing.reads,
+                    packages: None,
                 };
+                kept.packages = self.packages_of(ctx, tree, family, &kept);
                 self.keep_names(name, &kept);
             }
             _ => {}
@@ -343,6 +389,21 @@ impl Checks {
         for ((), own) in ran {
             run.absorb(own);
         }
+    }
+
+    /// The package hashes to keep with a listing of `family`: those of a `nextest` family whose
+    /// listing names a package for every test, `None` for any other.
+    fn packages_of(
+        &self,
+        ctx: &Context,
+        tree: &OpenTree,
+        family: &Family,
+        kept: &Kept,
+    ) -> Option<BTreeMap<String, ignite_core::ids::InputHash>> {
+        let named = kept.checks.iter().all(|c| c.package.is_some());
+        (family.adapter == ignite_core::manifest::Adapter::Nextest && named)
+            .then(|| self.package_hashes(ctx, tree, family, kept))
+            .flatten()
     }
 
     /// The listing, or `None` after recording in `run` why there is none.
@@ -402,13 +463,15 @@ struct FamilyWork<'a> {
     key: Option<ListingKey>,
     kept: Option<(ListingKey, Arc<Kept>)>,
     scope: Option<Vec<String>>,
+    /// How much of the family's newest listing serves, when it has no kept listing.
+    reuse: Option<Reuse>,
 }
 
 /// One piece of the landing gate's first round of listing: a product to build, or a family to
 /// list that builds nothing to be listed.
 enum Job<'a, 'p> {
     Build(&'p String),
-    List(FamilyWork<'a>),
+    List(Box<FamilyWork<'a>>),
 }
 
 /// Whether listing has already found a fault that refuses a landing: a failed build or

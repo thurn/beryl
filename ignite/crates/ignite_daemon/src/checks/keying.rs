@@ -109,7 +109,8 @@ impl Checks {
         for (listed, paths, run) in resolved {
             keyed.push(self.keyed(family, listed.clone(), own_ids(&paths), run));
         }
-        let sources = Self::sources_hash(&own_ids(&sources));
+        // A family whose listing ignores comments compares its sources by their code alone.
+        let sources = Self::sources_hash(&Self::listing_ids(ctx, tree, family, own_ids(&sources)));
         (keyed, broken, Some(sources))
     }
 

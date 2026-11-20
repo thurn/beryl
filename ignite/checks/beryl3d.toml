@@ -248,6 +248,9 @@ adapter = "nextest"
 platforms = ["macos"]
 needs = ["b3d"]
 list = "cargo nextest list --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --message-format json"
+# Test names do not depend on comments, so a change that edits only comments keeps the
+# listing and builds nothing to list (docs/ignite.md, "Declaring a family").
+listing_ignores_comments = true
 run = "cargo nextest run --manifest-path rust/beryl3d/Cargo.toml --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
 inputs = [
   "crate-closure",
@@ -291,6 +294,9 @@ needs = ["python-env", "b3d"]
 grows = true
 covered_by = "b3d-every-tick"
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-interface run {checks}"
 inputs = [
   "crate:beryl_inspect",
@@ -373,6 +379,9 @@ platforms = ["macos"]
 needs = ["python-env", "b3d"]
 grows = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-every-tick list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-every-tick run {checks}"
 inputs = [
   "crate:beryl_inspect",
@@ -454,6 +463,9 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-gate list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-gate run {checks}"
 inputs = [
   "crate:beryl_inspect",
@@ -541,6 +553,9 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline run {checks}"
 inputs = [
   "crate:beryl_inspect",
@@ -627,6 +642,9 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d", "ui-deps"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline-drift list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 next = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline-drift next"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-timeline-drift run {checks}"
 inputs = [
@@ -724,6 +742,9 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env", "b3d"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-match list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-match run {checks}"
 inputs = [
   "crate:beryl_inspect",
@@ -814,6 +835,9 @@ platforms = ["macos"]
 needs = ["python-env", "b3d", "ui-deps"]
 resources = ["browser-pages"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-drift list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 next = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-drift next"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-web-drift run {checks}"
 inputs = [
@@ -914,6 +938,9 @@ platforms = ["macos"]
 needs = ["python-env", "b3d"]
 resources = ["bench-vm"]
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-counts list"
+# The listing comes from what a built program does, which comments cannot change, so a change
+# that edits only comments keeps the listing and builds nothing to list.
+listing_ignores_comments = true
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.beryl3d b3d-frame-counts run {checks}"
 inputs = [
   "crate:beryl_inspect",

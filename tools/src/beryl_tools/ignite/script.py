@@ -110,9 +110,30 @@ def letters(name: str) -> str:
     return "".join(c.lower() for c in name if c.isascii() and c.isalnum())
 
 
+# A Rust comment, or a literal that may hold `//` or `/*` without starting one. Block comments
+# that nest are taken to their first `*/`.
+COMMENT_OR_LITERAL: re.Pattern[str] = re.compile(
+    r'\bb?r(#*)"[\s\S]*?"\1'  # a raw string
+    r'|"(?:\\.|[^"\\])*"'  # a string
+    r"|'(?:\\.|[^'\\])'"  # a character
+    r"|//[^\n]*|/\*[\s\S]*?\*/"  # a comment
+)
+
+
+def code_only(text: str) -> str:
+    """Rust source without its comments, doc comments included. A card a comment names is not
+    one the scenarios play, and Ignite keeps this family's listing across a change that edits
+    only comments (`listing_ignores_comments` in ignite/checks/script.toml), so the checks'
+    inputs must not depend on them."""
+    return COMMENT_OR_LITERAL.sub(
+        lambda m: " " if m.group(0).startswith("/") else m.group(0), text
+    )
+
+
 def references(text: str) -> set[str]:
-    """Every spelling in `text` that may name a card, as `letters` writes it."""
-    return {letters("".join(groups)) for groups in CARD_REFERENCE.findall(text)} - {""}
+    """Every spelling in `text`'s code that may name a card, as `letters` writes it."""
+    found = CARD_REFERENCE.findall(code_only(text))
+    return {letters("".join(groups)) for groups in found} - {""}
 
 
 def definition(text: str) -> str:

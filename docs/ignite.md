@@ -1615,6 +1615,32 @@ The fields:
   listing with no checks, with a digest, or with refused checks is never kept,
   so `list` must read nothing beyond the family's inputs, the products it needs
   and what its checks print as their own inputs.
+- `list_needs` names the products `list` reads, when that is fewer than `needs`.
+  A family whose `list` reads no build output says `list_needs = []` or names
+  only its Python environment, so listing it never waits for a build: Beryl's
+  clippy family lists one check per package from `cargo metadata`, and waiting
+  for the `clippy` product made a one-line card change build clippy only to list
+  it.
+- `listing_ignores_comments = true` says that what `list` prints cannot depend
+  on the comments in a Rust file, as with test names or what a built program
+  does. The family's listing hash and its listing's sources hash then cover each
+  `.rs` file by its code with comments and layout removed, so a change that edits
+  only comments keeps the kept listing and builds nothing to list. The checks'
+  own input hashes still cover every file whole, since a comment can change what
+  a check finds. A `list` that reads Rust source text itself must leave comments
+  out of what it prints, as the `script` family's adapter does with the card
+  names it finds.
+- A `nextest` listing also keeps, for each package whose tests it can hold, a
+  hash of what can change that package's test names: the package's own files,
+  its observed reads, every manifest and lock file of its workspace, the
+  family's path inputs and the package's `package_inputs`. A tree that misses
+  the kept listing compares the family's newest listing package by package. When
+  no package changed it serves as it is, and nothing is built or listed. When
+  some did and `list` says `{packages}`, only those packages are built and
+  listed, and their tests replace theirs in the newest listing, which is then
+  kept for the tree's inputs. A package gets no tests from another package's
+  code here, since the repository has no procedural macros and no exported macro
+  writes a test; a workspace where one did could not use this.
 - `digest_inputs` names the files a check's `digest` is computed from, beyond
   `inputs` and the inputs of the products in `needs`. With them declared, the
   family's listing is kept under a hash that covers them, and a landing that
