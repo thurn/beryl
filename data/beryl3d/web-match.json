@@ -1,46 +1,46 @@
 {
  "targets": {
   "b3d:game-over/you/1600x900@2": {
-   "unmatched": 121,
+   "unmatched": 117,
    "boxes": 21,
    "styles": 49,
    "unsupported": 1,
-   "pixels": 215707
+   "pixels": 214082
   },
   "b3d:game-over/you/393x759": {
-   "unmatched": 65,
+   "unmatched": 62,
    "boxes": 18,
    "styles": 14,
    "unsupported": 0,
-   "pixels": 96750
+   "pixels": 97249
   },
   "b3d:opening-keep/you/1600x900@2": {
-   "unmatched": 302,
+   "unmatched": 298,
    "boxes": 26,
    "styles": 41,
    "unsupported": 0,
-   "pixels": 279887
+   "pixels": 281727
   },
   "b3d:opening-keep/you/393x759": {
-   "unmatched": 88,
+   "unmatched": 85,
    "boxes": 22,
    "styles": 14,
    "unsupported": 0,
-   "pixels": 97212
+   "pixels": 97999
   },
   "b3d:pay-default/you/1600x900@2": {
-   "unmatched": 109,
+   "unmatched": 107,
    "boxes": 13,
    "styles": 41,
    "unsupported": 0,
-   "pixels": 240610
+   "pixels": 241155
   },
   "b3d:pay-default/you/393x759": {
-   "unmatched": 61,
+   "unmatched": 59,
    "boxes": 13,
    "styles": 18,
    "unsupported": 0,
-   "pixels": 69082
+   "pixels": 69653
   },
   "b3d:screen/bug-report/you/1600x900@2": {
    "unmatched": 31,
@@ -89,7 +89,7 @@
    "boxes": 3,
    "styles": 5,
    "unsupported": 1,
-   "pixels": 4535378
+   "pixels": 4535301
   },
   "b3d:screen/settings/you/393x759": {
    "unmatched": 57,
@@ -113,18 +113,18 @@
    "pixels": 100715
   },
   "b3d:screen/table/you/1600x900@2": {
-   "unmatched": 86,
+   "unmatched": 80,
    "boxes": 0,
    "styles": 0,
    "unsupported": 0,
-   "pixels": 1914547
+   "pixels": 1917724
   },
   "b3d:screen/table/you/393x759": {
-   "unmatched": 46,
+   "unmatched": 42,
    "boxes": 0,
    "styles": 0,
    "unsupported": 0,
-   "pixels": 158345
+   "pixels": 159386
   }
  },
  "samples": {

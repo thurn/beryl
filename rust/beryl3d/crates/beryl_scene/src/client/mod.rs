@@ -457,7 +457,7 @@ impl Client {
             self.window.size,
             (counted && !self.viewing.opening, targets),
         );
-        (self.piles).write(&mut self.layer, self.show.table(), counted && !covers);
+        (self.piles).write(&mut self.layer, &self.show, counted && !covers);
         (self.notices).write(
             &mut self.layer,
             self.show.notices(),
@@ -495,11 +495,11 @@ impl Client {
             Some(LetGo::Dropped { slot, at }) => self.drop_held(slot, at),
             None => {}
         }
-        // The inspector follows the card just found under the pointer in the next frame, and a
-        // prompt whose view has just played out draws its marks in the next frame.
+        // The inspector and a pile's count follow what was just found under the pointer in the
+        // next frame, and a prompt whose view has just played out draws its marks in it.
         let own_due = self.own_due && self.show.settled();
         let inspecting = self.inspector.due || self.hovered_slot() != self.inspector.judged;
-        self.wake = if transitioning || own_due || inspecting {
+        self.wake = if transitioning || own_due || inspecting || self.piles.due(&self.show) {
             Wake::Now
         } else {
             self.timed_wake(table_now)

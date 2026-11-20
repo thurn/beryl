@@ -1,8 +1,9 @@
 //! The number of cards in each library, graveyard and exile pile, shown as a float of the flat
-//! layer beside the pile's top card (`floats::PILE_COUNT`; docs/beryl-3d.md, "Floats"). The web
-//! interface tells it on hover ("Graveyard · 5"), over the viewer's piles and under the
-//! opponent's (`PileButton` in `ui/src/game/Piles.tsx`); here it stands there always, since a
-//! pile cannot be hovered yet. An empty pile shows none.
+//! layer over the pile's top card (`floats::PILE_COUNT`; docs/beryl-3d.md, "Floats"). As the
+//! web interface's pile tip does (`PileButton` in `ui/src/game/Piles.tsx`, `.tip` in
+//! `ui/src/design/components/tips.css`), it shows only while the pointer is over the pile, at
+//! once, as a tooltip's label naming the zone and the count ("Graveyard · 5"): centred over the
+//! middle of the viewer's pile and under the foot of the opponent's. An empty pile shows none.
 //!
 //! A pile's count changes as the table takes the view a script leads to. Every count the scripts
 //! to come will show is laid out ahead, as each update arrives (`PileCounts::prepare`), so that
@@ -12,15 +13,19 @@
 use beryl_protocol::protocol::{ObjectId, ObjectView, PlayerState, PlayerView, Side, ZoneName};
 use glam::Vec2;
 
-use crate::data::space::layout::desktop::piles::COUNT_GAP;
-use crate::element::{Element, floats, text};
+use crate::data::space::flat::TOOLTIP_GAP;
+use crate::element::{Element, floats};
 use crate::layout::{FloatLook, Layer};
+use crate::play::Show;
 use crate::table::{PileShown, Table, host_slot, pile_name};
+use crate::widgets::tip_label;
 
 /// The floats that show each pile's count, and the count each shows now.
 #[derive(Debug, Default)]
 pub struct PileCounts {
     shown: [Option<usize>; 6],
+    /// The pile under the pointer as of the last `write`, whether or not its count shows.
+    hovered: Option<usize>,
     /// Each pile's index and a count the scripts to come give it, kept between updates so that
     /// `prepare` allocates nothing once it has grown.
     coming: Vec<(usize, usize)>,
@@ -68,12 +73,22 @@ impl PileCounts {
         }
     }
 
-    /// Shows each pile's count beside its top card as `table` shows it at rest, or none unless
+    /// Whether the pointer has come onto or left a pile since the last `write`, so that the
+    /// next frame shows the count that follows it.
+    #[must_use]
+    pub fn due(&self, show: &Show) -> bool {
+        show.pointer().hovered_pile() != self.hovered
+    }
+
+    /// Shows the count of the pile under `show`'s pointer, as found in the last frame, over its
+    /// top card as `show`'s table shows it at rest, and no other pile's, or none unless
     /// `visible`. Lays nothing out and allocates nothing for what `prepare` laid out.
-    pub fn write(&mut self, layer: &mut Layer, table: &Table, visible: bool) {
+    pub fn write(&mut self, layer: &mut Layer, show: &Show, visible: bool) {
+        let (table, hovered) = (show.table(), show.pointer().hovered_pile());
+        self.hovered = hovered;
         for index in 0..6 {
             let (side, zone) = PileShown::of_index(index);
-            let pile = table.pile(side, zone).filter(|_| visible);
+            let pile = (table.pile(side, zone)).filter(|_| visible && hovered == Some(index));
             let want = pile.map(|(count, _)| count);
             let id = float(index);
             if want != self.shown[index] {
@@ -83,25 +98,28 @@ impl PileCounts {
                 }
                 self.shown[index] = want;
             }
-            let Some((_, corners)) = pile else {
+            let Some((_, corners)) = &pile else {
                 continue;
             };
-            let left = corners.iter().map(|c| c.x).fold(f32::INFINITY, f32::min);
-            let right = corners
-                .iter()
-                .map(|c| c.x)
-                .fold(f32::NEG_INFINITY, f32::max);
-            let top = corners.iter().map(|c| c.y).fold(f32::INFINITY, f32::min);
-            let bottom = corners
-                .iter()
-                .map(|c| c.y)
-                .fold(f32::NEG_INFINITY, f32::max);
-            let middle = f32::midpoint(left, right);
-            // Over the viewer's piles, which lie at the bottom of the window, and under the
-            // opponent's, which lie at its top.
             let (point, anchor) = match side {
-                Side::You => (Vec2::new(middle, top - COUNT_GAP), Vec2::new(0.5, 1.0)),
-                Side::Opponent => (Vec2::new(middle, bottom + COUNT_GAP), Vec2::new(0.5, 0.0)),
+                // `.tip-over`: centred on the middle of the pile, where the top card's
+                // diagonals meet.
+                Side::You => {
+                    let middle =
+                        (corners[0].midpoint(corners[2])).midpoint(corners[1].midpoint(corners[3]));
+                    (middle, Vec2::new(0.5, 0.5))
+                }
+                // `.tip-below`: `TOOLTIP_GAP` under the pile's lowest edge, centred on the
+                // middle of its foot, the bottom edge of the leaning card.
+                Side::Opponent => {
+                    let mut by_height = *corners;
+                    by_height.sort_unstable_by(|a, b| a.y.total_cmp(&b.y));
+                    let foot = f32::midpoint(by_height[2].x, by_height[3].x);
+                    (
+                        Vec2::new(foot, by_height[3].y + TOOLTIP_GAP),
+                        Vec2::new(0.5, 0.0),
+                    )
+                }
             };
             layer.set_float_look(
                 id,
@@ -170,12 +188,19 @@ fn exiled(view: &PlayerView, side: Side) -> impl Iterator<Item = &ObjectView> {
     })
 }
 
-/// The count of the pile at `index`: text that shows the number, named for the pile and the
-/// number, as "Your library 60", so that the tree's line for it says both.
+/// The count of the pile at `index`, as its tip says it: the zone and the number, "Library ·
+/// 33" (`pileTip` in `ui/src/game/Piles.tsx`). It is named for the pile and the number, as
+/// "Your library 60", so that the tree's line for it says both.
 fn count_text(index: usize, count: usize) -> Element {
     let (side, zone) = PileShown::of_index(index);
-    // It lets the pointer through to the pile and any card over it.
-    let mut element = text(&count.to_string()).passes(true);
+    let words = match zone {
+        ZoneName::Library => "Library",
+        ZoneName::Graveyard => "Graveyard",
+        _ => "Exile",
+    };
+    // It lets the pointer through to the pile and any card over it, as `.tip` takes no
+    // pointer events.
+    let mut element = tip_label(format!("{words} \u{b7} {count}")).passes(true);
     element.name = format!("{} {count}", pile_name(side, zone));
     element
 }

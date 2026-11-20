@@ -23,4 +23,4 @@ pub use list::list;
 pub use menu::{BACK, MenuGroup, MenuId, MenuRow, context_menu, menu, sheet_menu};
 pub use slider::{STEP, level_at, slider};
 pub use toggle::toggle;
-pub use tooltip::tooltip;
+pub use tooltip::{tip_label, tooltip};

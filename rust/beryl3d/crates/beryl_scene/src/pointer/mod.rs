@@ -31,7 +31,7 @@ use crate::input::{self, PointerKind, PointerPhase};
 use crate::motion::between;
 use crate::play::compile::Compiled;
 use crate::pose::{Curve, Pose, Segment};
-use crate::table::{CARD_HEIGHT, Camera, Look};
+use crate::table::{CARD_HEIGHT, Camera, Look, PILE_IDS};
 use held::{By, Fall, Grip, Lean};
 use refusal::Shake;
 
@@ -51,6 +51,8 @@ pub struct Pointer {
     phase: Option<PointerPhase>,
     /// The slot of the card under the pointer, as of the last frame.
     hovered: Option<usize>,
+    /// The index (`PileShown::index`) of the pile under the pointer, as of the last frame.
+    pile: Option<usize>,
     /// The hand cards out of their place in the fan: rising, raised or falling.
     lifts: Vec<Lift>,
     /// The press on a card, from the button going down until it comes up.
@@ -112,6 +114,7 @@ impl Default for Pointer {
             at: None,
             phase: None,
             hovered: None,
+            pile: None,
             lifts: Vec::with_capacity(LIFTS),
             ..Self::EMPTY
         }
@@ -125,6 +128,7 @@ impl Pointer {
         at: None,
         phase: None,
         hovered: None,
+        pile: None,
         lifts: Vec::new(),
         grip: None,
         lean: Lean::FLAT,
@@ -283,6 +287,12 @@ impl Pointer {
     #[must_use]
     pub fn hovered(&self) -> Option<usize> {
         self.hovered
+    }
+
+    /// The index (`PileShown::index`) of the pile under the pointer, as of the last frame.
+    #[must_use]
+    pub fn hovered_pile(&self) -> Option<usize> {
+        self.pile
     }
 
     /// How far up the hand card in `slot` is at `now`, from 0 in the fan to 1 raised.
@@ -574,6 +584,7 @@ fn hover_under(
             depth,
         });
     }
+    pointer.pile = None;
     let Some(point) = pointer.at.filter(|_| pointer.held().is_none()) else {
         pointer.hover(None, false, now);
         return;
@@ -588,6 +599,13 @@ fn hover_under(
     let element = &mut frame.resolved[index];
     if element.role != Role::Card {
         element.state.0 |= StateBits::HOVERED;
+        if element.role == Role::Pile {
+            pointer.pile = element
+                .id
+                .0
+                .checked_sub(PILE_IDS)
+                .map(|index| index as usize);
+        }
         pointer.hover(None, false, now);
         return;
     }
