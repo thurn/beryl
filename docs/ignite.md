@@ -661,11 +661,12 @@ How the executable is installed and kept current:
   fakes. The hub stores and looks up verdicts (`POST /verdicts/store`, which
   needs a registered machine's token, and `POST /verdicts/lookup`, which replies
   with the verdict or `null`) in its `verdicts` table, and `Hub::verdict` and
-  `Hub::store_verdict` of the real client call them; nothing calls those yet, and
-  `Hub::reverted` still answers that it cannot do it. A verdict is keyed by the
-  tree ID, the merge base with the tip and `verdict_settings`, a digest of the
-  `[gate]` section that holds nothing about Ignite's own release. The hub deletes
-  verdicts that passed more than 30 days ago where it prunes the result cache.
+  `Hub::store_verdict` of the real client call them; nothing calls those yet,
+  and `Hub::reverted` still answers that it cannot do it. A verdict is keyed by
+  the tree ID, the merge base with the tip and `verdict_settings`, a digest of
+  the `[gate]` section that holds nothing about Ignite's own release. The hub
+  deletes verdicts that passed more than 30 days ago where it prunes the result
+  cache.
 - Git can rebase and revert in its object database, with no working tree, and no
   landing uses it yet. `Git::replay` rebases a branch's commits onto the tip one
   by one with `git merge-tree --write-tree` against each commit's own parent and
