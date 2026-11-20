@@ -686,6 +686,26 @@ fn a_tip_waiting_on_another_platform_names_its_machine_on_one_ticket() {
     let again = stuck::tip_waiting(&mut conn, UPKEEP, &waiting("ef01"), clock.now()).unwrap();
     assert_eq!(again[0].ticket, filed[0].ticket);
     assert_ne!(again[0].change, Change::Created);
+
+    // Once cygnus stores a result it is running the tip's checks, so a later tip that waits on
+    // it files nothing.
+    let result = NewResult {
+        key: ResultKey {
+            check: CheckName::new("rust:windows_paths").unwrap(),
+            hash: InputHash::new("a".repeat(64)).unwrap(),
+            platform: Some(Os::Windows),
+        },
+        outcome: Outcome::Pass,
+        machine: MachineId::new("m-3").unwrap(),
+        record: RecordId(1),
+        output: None,
+        cost: ignite_core::protocol::hub::ResultCost::default(),
+        areas: Vec::new(),
+    };
+    clock.advance(60.0);
+    results::store(&mut conn, &[result], clock.now()).unwrap();
+    let busy = stuck::tip_waiting(&mut conn, UPKEEP, &waiting("ab12"), clock.now()).unwrap();
+    assert!(busy.is_empty(), "{busy:?}");
 }
 
 #[test]

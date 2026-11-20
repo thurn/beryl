@@ -184,7 +184,15 @@ pub fn tip_waiting(
         .into_iter()
         .filter(|machine| machine.os == os)
         .collect();
-    let filings: Vec<Filing> = if machines.is_empty() {
+    let working = working_machines(conn, now)?;
+    let filings: Vec<Filing> = if machines.iter().any(|m| working.contains(&m.id)) {
+        // A machine of this system stored a result within the hour, so it is running the
+        // tip's checks and the tip waits only because a round takes long. No worker can fix
+        // that by looking at the machine, and filing here refiled the same ticket for every
+        // new tip as soon as a worker closed the last one. A silent machine is still named by
+        // [`tips_waiting`], and a machine that reports but runs nothing is named here.
+        Vec::new()
+    } else if machines.is_empty() {
         vec![Filing {
             signature: Signature::of_subject(&format!("os:{os}"), "unreachable"),
             evidence: report.commit.to_string(),
@@ -239,6 +247,15 @@ pub fn tip_waiting(
     let names: Vec<&str> = report.checks.iter().map(CheckName::as_str).collect();
     filing::release_holding(conn, &names, now)?;
     Ok(filed)
+}
+
+/// The machines that stored a check result in the last [`TIP_WAIT_SECONDS`]: they are running
+/// checks, whether or not a tip waits on them.
+pub(super) fn working_machines(conn: &Connection, now: Timestamp) -> Result<BTreeSet<String>> {
+    let cutoff = now.plus_seconds(-TIP_WAIT_SECONDS).to_string();
+    let mut query = conn.prepare_cached("SELECT DISTINCT machine FROM results WHERE at >= ?1")?;
+    let rows = query.query_map(params![cutoff], |row| row.get::<_, String>(0))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// How long a ticket may stay in progress before a ticket reports it, in seconds.

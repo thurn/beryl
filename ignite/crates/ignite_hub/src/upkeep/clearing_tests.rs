@@ -387,6 +387,52 @@ fn a_silent_machine_ticket_closes_once_it_reports_and_no_tip_waits() {
 }
 
 #[test]
+fn a_tip_wait_ticket_closes_while_its_machine_runs_checks_though_tips_wait() {
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let mut upkeep = Upkeep::new(None).unwrap();
+    fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
+    tips::seen(&conn, "abcd", clock.now()).unwrap();
+    clock.advance(3_700.0);
+    fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
+    let waiting = ignite_core::protocol::hub::TipWaiting {
+        commit: Commit::new("abcd").unwrap(),
+        machine: MachineId::new("m-3").unwrap(),
+        platform: Os::Macos,
+        checks: vec![CheckName::new("app:smoke").unwrap()],
+        waited_s: 3_700.0,
+    };
+    let filed = stuck::tip_waiting(&mut conn, UPKEEP, &waiting, clock.now()).unwrap();
+    assert_eq!(filed.len(), 1);
+
+    // multivac keeps storing results while the tip still waits, which is a slow round, not a
+    // fault, so the ticket closes.
+    let mut closed = Vec::new();
+    for n in 0..12_u32 {
+        clock.advance(600.0);
+        fleet::register(&conn, &machine("m-2", "multivac"), clock.now()).unwrap();
+        let result = NewResult {
+            key: ResultKey {
+                check: CheckName::new("app:smoke").unwrap(),
+                hash: InputHash::new(format!("{n:064x}")).unwrap(),
+                platform: Some(Os::Macos),
+            },
+            outcome: Outcome::Pass,
+            machine: MachineId::new("m-2").unwrap(),
+            record: RecordId(1),
+            output: None,
+            cost: ResultCost::default(),
+            areas: Vec::new(),
+        };
+        results::store(&mut conn, &[result], clock.now()).unwrap();
+        closed.extend(upkeep.pass(&mut conn, clock.now()).unwrap().tickets_closed);
+    }
+    assert_eq!(closed, vec![filed[0].ticket.clone()]);
+    let reason = ticket(&conn, &filed[0].ticket).close_reason.unwrap();
+    assert!(reason.contains("running the tip's checks"), "{reason}");
+}
+
+#[test]
 fn a_master_lag_ticket_closes_once_master_moves() {
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();

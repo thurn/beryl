@@ -12,7 +12,7 @@
 //! - justiciar reports from a daemon or a session: the fact that would show the fault cleared
 //!   is on the reporting machine, and a session's report needs judgement.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -91,6 +91,8 @@ pub struct World {
     machines: Vec<rows::Machine>,
     /// Some tip has waited [`TIP_WAIT_SECONDS`] or more for verification.
     tip_waiting: bool,
+    /// The machines that stored a check result in the last [`TIP_WAIT_SECONDS`].
+    working: BTreeSet<String>,
     master_lagging: bool,
     /// The newest rounds, newest first.
     rounds: Vec<TipRound>,
@@ -111,6 +113,7 @@ impl World {
             stuck: stuck::stuck_now(conn, now)?,
             machines: fleet::machines(conn)?,
             tip_waiting,
+            working: stuck::working_machines(conn, now)?,
             master_lagging: justiciar::master_lagging(conn, now)?,
             rounds: tip_rounds::recent(conn, QUICK_ROUNDS)?,
         })
@@ -185,8 +188,22 @@ fn status_of(conn: &Connection, id: &str) -> Result<Option<Status>> {
 }
 
 /// A machine (or, for `os:<os>`, any machine of that system) has reported since the last
-/// sighting, and no tip has waited an hour since.
+/// sighting, and either no tip has waited an hour since or the machine is running checks: it
+/// stored a result within the hour, so a tip waits only because a round takes long.
 fn unreachable(world: &World, subject: &str, sighted: Timestamp) -> Verdict {
+    if let Some(machine) = world.machines.iter().find(|machine| {
+        let named = match subject.strip_prefix("os:") {
+            Some(os) => machine.os == os,
+            None => machine.id == subject,
+        };
+        named && world.working.contains(&machine.id)
+    }) {
+        return Verdict::Cleared(format!(
+            "machine {} stored a check result within the hour, so it is running the tip's \
+             checks.",
+            machine.name
+        ));
+    }
     if world.tip_waiting {
         return Verdict::Present;
     }
