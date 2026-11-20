@@ -1,5 +1,5 @@
 //! Every registered agent plays a game whose cards have no per-deck overlay entry
-//! ([`crate::overlay`]): what it knows of them is all derived from their definitions, and
+//! (the overlay): what it knows of them is all derived from their definitions, and
 //! nothing in building or playing an agent requires a tuned card.
 
 use beryl_cards::CARDS;
@@ -7,11 +7,9 @@ use beryl_engine::{
     Decision, Decklist, GameTable, Outcome, Profile, Replay, Scratch, Small, State, Step, apply,
     next, observe,
 };
-
-use crate::values::{CardInfo, info};
-use crate::{
-    AGENTS, AgentDecision, Budget, DEEP_SEARCHER, DEEP_SEER, DEEP_SEER_UNANCHORED, Family,
-    GameAgent, Knowledge, RETIRED, deep_family,
+use beryl_search::{
+    AGENTS, AgentDecision, Budget, CardValues, DEEP_SEARCHER, DEEP_SEER, DEEP_SEER_UNANCHORED,
+    Family, GameAgent, Knowledge, RETIRED, deep_family,
 };
 
 /// Basic Swamps and black vanilla creatures complete from the card store, with no file. Twelve
@@ -61,17 +59,20 @@ fn cheap(
 #[test]
 fn every_agent_plays_cards_with_no_overlay_entry_to_the_end() {
     let t = GameTable::new(&CARDS, [VANILLA, VANILLA]).unwrap();
+    // The tiers value an untuned card differently (`Knowledge::Tuned` by its face alone), so
+    // only the flags show whether the overlay has an entry for it.
+    let tuned = CardValues::with(&t, Knowledge::Tuned);
+    let estimated = CardValues::with(&t, Knowledge::Estimate);
     for &(_, name) in VANILLA {
-        let def = CARDS.get(name).unwrap();
-        // The tiers value an untuned card differently (`Knowledge::Tuned` by its face alone),
-        // so only the flags show whether the overlay has an entry for it.
-        let flags = |knowledge| CardInfo {
-            value: 0,
-            ..info(def, knowledge)
+        let card = t.index_named::<beryl_engine::CardIx>(name).unwrap();
+        let flags = |values: &CardValues| {
+            let mut info = values.get(card);
+            info.value = 0;
+            format!("{info:?}")
         };
         assert_eq!(
-            format!("{:?}", flags(Knowledge::Tuned)),
-            format!("{:?}", flags(Knowledge::Estimate)),
+            flags(&tuned),
+            flags(&estimated),
             "{name} has an overlay entry"
         );
     }

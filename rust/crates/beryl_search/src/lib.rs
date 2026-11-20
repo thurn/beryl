@@ -17,9 +17,6 @@ pub mod pace;
 mod rollout;
 mod values;
 
-#[cfg(test)]
-mod agents_tests;
-
 use beryl_engine::rng::SplitMix64;
 use beryl_engine::{Choice, Decision, GameTable, Observation};
 use beryl_engine::{Large, Layout, Small};
@@ -36,6 +33,7 @@ pub use long::{
     value as outcome_value,
 };
 pub use mcts::{Budget, Mcts, Search, Sight, rollouts_run};
+pub use overlay::tuning_mismatches;
 pub use rollout::{
     COUNTER_MIN, Inline, PolicyWeights, REMOVAL_MIN, RolloutPolicy, Rules, Softmax, rollout,
     rollout_to, soft_rollout, soft_rollout_after, soft_rollout_to,
@@ -353,7 +351,7 @@ fn deep_seer(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn GameAgent + S
 }
 
 /// Deep Seer's family: the anchor alone.
-const DEEP_SEER: Family = Family {
+pub const DEEP_SEER: Family = Family {
     method: Method::Pimc { worlds: 18 },
     sight: Sight::Omniscient,
     leaf: Leaf::Rollout,
@@ -422,7 +420,7 @@ fn deep_seer_unanchored(t: &GameTable, seed: u64, _budget: Budget) -> Box<dyn Ga
 }
 
 /// Deep Seer's family before the anchor.
-const DEEP_SEER_UNANCHORED: Family = Family {
+pub const DEEP_SEER_UNANCHORED: Family = Family {
     options: Options {
         anchor: false,
         ..DEEP_SEER.options
@@ -434,7 +432,12 @@ const DEEP_SEER_UNANCHORED: Family = Family {
 const DEEP_WORK: u64 = 30_000_000;
 
 /// A long-think search of `family` at `work` engine steps a decision, on every core.
-fn deep_family(t: &GameTable, seed: u64, family: Family, work: u64) -> Box<dyn GameAgent + Send> {
+pub fn deep_family(
+    t: &GameTable,
+    seed: u64,
+    family: Family,
+    work: u64,
+) -> Box<dyn GameAgent + Send> {
     let settings = Settings {
         family,
         work,

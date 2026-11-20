@@ -762,6 +762,3 @@ impl<L: Layout> TurnSearch<'_, L> {
         })
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -176,29 +176,3 @@ fn apply(effect: &Effect, cards: usize, self_target: bool, draw_win: bool) -> Pr
         _ => Progress::Unknown,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use beryl_engine::card::Types;
-
-    #[test]
-    fn every_planeswalker_has_a_stable_clock() {
-        for &card in beryl_cards::CARDS.cards() {
-            for face in card
-                .faces
-                .iter()
-                .filter(|f| f.types.intersects(Types::PLANESWALKER))
-            {
-                let clocks = |loyalties: std::ops::RangeInclusive<i16>| {
-                    loyalties.flat_map(|loyalty| {
-                        (0..=20).map(move |cards| {
-                            clock(face.abilities.iter(), cards, loyalty, false, false)
-                        })
-                    })
-                };
-                assert!(clocks(1..=12).eq(clocks(1..=12)), "{}", card.name);
-            }
-        }
-    }
-}

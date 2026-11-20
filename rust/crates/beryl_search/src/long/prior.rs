@@ -55,45 +55,30 @@ pub(super) fn pick(
 
 #[cfg(test)]
 mod tests {
-    use super::super::*;
-    use beryl_cards::CARDS;
-    use beryl_cards::decks::WU_CONTROL;
-    use beryl_engine::Profile;
+    use super::*;
+    use beryl_engine::Seat;
 
+    /// Three unvisited children are visited by their prior, best score first, and over many
+    /// visits the child scored far below the rest gets fewer of them than it does with no
+    /// scores, where every child has the same prior.
     #[test]
     fn prior_spends_fewer_visits_on_a_low_scored_child() {
-        let table = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
-        let mut state = State::<Small>::new(&table, 0, Profile::SMART).unwrap();
-        let Step::Decide(decision) = next(&mut state, &table, &mut Scratch::new(), &mut Replay)
-        else {
-            panic!("the game starts with a decision");
-        };
-        let obs = Observation::new(&state, decision.decider);
-        let visits = |prior| {
-            let mut family = crate::DEEP_SEARCHER;
-            family.options.prior = prior;
-            let mut tree = Tree::new(
-                &table,
-                family,
-                obs,
-                &decision,
-                Bitboard::default(),
-                false,
-                0,
-            );
-            let keys = [1, 2, 3];
-            let scores = [Some(-60), None, Some(0)];
+        let scores = [Some(-60), None, Some(0)];
+        let visits = |prior: bool| {
+            let mut nodes: Vec<Node> = (1..=3).map(|key| Node::new(key, Seat::P0)).collect();
+            let children = [0, 1, 2];
             for visit in 0..60 {
-                let (child, choice) =
-                    tree.select(tree.root, &keys, decision.decider, |_| scores.to_vec());
+                let picked = pick(&nodes, &children, |i| if prior { scores[i] } else { None });
                 if prior && visit < 3 {
-                    assert_eq!(choice, Choice([2, 1, 0][visit]));
+                    assert_eq!(picked, [2, 1, 0][visit]);
                 }
-                let node = &mut tree.nodes[child as usize];
-                node.visits += 1;
-                node.reward += 0.5;
+                for node in &mut nodes {
+                    node.avail += 1;
+                }
+                nodes[picked].visits += 1;
+                nodes[picked].reward += 0.5;
             }
-            tree.nodes[tree.child(tree.root, keys[0]).unwrap() as usize].visits
+            nodes[0].visits
         };
         assert!(visits(true) < visits(false));
     }

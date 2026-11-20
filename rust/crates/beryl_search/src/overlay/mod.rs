@@ -228,5 +228,56 @@ pub(crate) fn apply(def: &CardDef, info: &mut CardInfo) {
     }
 }
 
+/// One line for each way `tunings` disagrees with the card definitions `lookup` finds by name:
+/// a name no card has, or a tuned ability that is missing from the card's front face or does
+/// not have the shape the tuning expects.
+fn mismatches(
+    tunings: &[Tuning],
+    lookup: impl Fn(&str) -> Option<&'static CardDef>,
+) -> Vec<String> {
+    let mut found = Vec::new();
+    for tuning in tunings {
+        let Some(def) = lookup(tuning.name) else {
+            found.push(format!("{}: no such card", tuning.name));
+            continue;
+        };
+        let abilities = def.front().abilities;
+        for (tune, expect) in tuning.tuned() {
+            match abilities.get(usize::from(expect.index)) {
+                None => found.push(format!(
+                    "{}: {tune:?} names ability {}, but the front face has {}",
+                    tuning.name,
+                    expect.index,
+                    abilities.len()
+                )),
+                Some(a) if !expect.shape.matches(a) => found.push(format!(
+                    "{}: {tune:?} expects ability {} to be {:?}, but it is {:?}",
+                    tuning.name,
+                    expect.index,
+                    expect.shape,
+                    a.kind()
+                )),
+                Some(_) => {}
+            }
+        }
+    }
+    found
+}
+
+/// Every way the overlay's tunings disagree with the card definitions `lookup` finds by name,
+/// one line each, empty when every tuning names a card and the abilities it was tuned for.
+pub fn tuning_mismatches(lookup: impl Fn(&str) -> Option<&'static CardDef>) -> Vec<String> {
+    mismatches(TUNINGS, lookup)
+}
+
 #[cfg(test)]
-mod tests;
+mod tests {
+    use super::{Tuning, mismatches};
+
+    /// A tuning for a card that does not exist is reported by its name.
+    #[test]
+    fn a_missing_card_is_reported() {
+        let found = mismatches(&[Tuning::value("No Such Card", 1)], |_| None);
+        assert_eq!(found, ["No Such Card: no such card"]);
+    }
+}

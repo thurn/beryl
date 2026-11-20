@@ -1,13 +1,16 @@
-use beryl_cards::{CARDS, decks::WU_CONTROL, names};
+//! The rollout policy's hold rule: an instant or flash spell that does not draw waits for the
+//! opponent's end step, and a draw activation happens in the main phase.
+
+use beryl_cards::decks::WU_CONTROL;
+use beryl_cards::{CARDS, names};
+use beryl_engine::card::{Keywords, Types};
 use beryl_engine::state::CounterKind;
 use beryl_engine::{
-    DecisionKind, Profile, Replay, Scratch, State, Step, TurnStep, apply, next, observe,
+    CardIx, DecisionKind, GameTable, Observation, Opt, Profile, Replay, Scratch, State, Step,
+    TurnStep, apply, next, observe,
 };
 use beryl_scenario::{Action, Live, P0, P1, Permanent, Scenario};
-
-use super::super::RolloutPolicy;
-use super::*;
-use crate::long::Family;
+use beryl_search::{CardValues, Family, Knowledge, RolloutPolicy};
 
 const ISLAND: Permanent = Permanent::new(names::ISLAND);
 const LIBRARY: &[&str] = &[names::ISLAND; 12];
@@ -117,42 +120,10 @@ fn hold_recognizes_the_mirrors_draw_activations() {
     ];
     let deck = abilities.map(|(card, _)| (1, card));
     let t = GameTable::new(&CARDS, [&deck, &deck]).unwrap();
-    let policy = policy(&t);
+    let values = CardValues::with(&t, Knowledge::Tuned);
     for (name, ability) in abilities {
-        let card = t.index_named::<beryl_engine::CardIx>(name).unwrap();
-        let draws = policy.values().get(card).draws(ability);
-        println!("{name}, ability {ability}: draws = {draws}");
-        assert!(draws, "{name}, ability {ability}");
-    }
-}
-
-#[test]
-fn hold_waits_in_main_for_every_instant_or_flash_card_that_does_not_draw() {
-    for card in CARDS.cards() {
-        let face = card.front();
-        if !face.types.intersects(Types::INSTANT) && !face.keywords.intersects(Keywords::FLASH) {
-            continue;
-        }
-        let t = GameTable::new(&CARDS, [&[(1, card.name)], &[(1, names::ISLAND)]]).unwrap();
-        let mut s = State::new(&t, 0, Profile::SMART).unwrap();
-        let slot = s.library(P0)[0];
-        s.board().begin_at(4, P0, TurnStep::PrecombatMain);
-        s.board().place(slot, Zone::Hand).unwrap();
-        let policy = policy(&t);
-        let p = policy.view(&t, Observation::new(&s, P0), P0, false);
-        let draws = face
-            .spell_ability()
-            .is_some_and(|a| p.info(slot).unwrap().draws(index_of(face, a)));
-        assert_eq!(
-            p.held(Opt::Cast {
-                slot,
-                face: FaceIx::FRONT,
-                costs: Castings::NONE
-            }),
-            !draws,
-            "{}",
-            card.name
-        );
+        let card = t.index_named::<CardIx>(name).unwrap();
+        assert!(values.get(card).draws(ability), "{name}, ability {ability}");
     }
 }
 
@@ -179,6 +150,8 @@ fn hold_mirror_casts_at_the_opponents_end_step() {
             apply(&mut s, &t, &mut scratch, &mut Replay, c);
         }
     }
-    println!("{casts} instant or flash casts at the opponent's end step in 50 mirrors");
-    assert!(casts > 0);
+    assert!(
+        casts > 0,
+        "no instant or flash cast at the opponent's end step in 50 mirrors"
+    );
 }

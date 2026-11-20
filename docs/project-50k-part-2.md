@@ -167,7 +167,7 @@ both decks from it, and `just exhaust --pool keystones` searches from positions
 cut from those games, with the invariants, the references and the both-layout
 comparison (section B) at every decision. The nightly runs both and files a
 ticket for a failure, as the browser sweep does. A failure shrinks to a scenario
-(`beryl_search/tests/shrink.rs`). Each keystone of this plan joins the pool with
+(`beryl_search/tests/all/shrink.rs`). Each keystone of this plan joins the pool with
 its card.
 
 ### B. Guards

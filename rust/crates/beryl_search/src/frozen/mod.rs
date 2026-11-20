@@ -5,7 +5,7 @@
 //! back to ([`rollout`]) and that policy's card values ([`values`]).
 //!
 //! Never tune it. Edit it only to follow a change of the engine's API, and only so that it
-//! still plays the same: `tests/frozen.rs` pins its moves on seeded games.
+//! still plays the same: `tests/all/frozen.rs` pins its moves on seeded games.
 
 mod expert;
 mod rollout;

@@ -9,6 +9,7 @@
 // A global allocator is an `unsafe impl`; it only forwards to the system allocator.
 #![allow(unsafe_code)]
 
+#[path = "all/common/mod.rs"]
 mod common;
 
 use std::alloc::{GlobalAlloc, Layout, System};

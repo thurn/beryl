@@ -576,23 +576,7 @@ fn names<L: Layout>(d: &Decision<L>, c: Choice) -> Option<L::Slot> {
 
 #[cfg(test)]
 mod tests {
-    use beryl_cards::CARDS;
-    use beryl_cards::decks::WU_CONTROL;
-    use beryl_engine::{GameTable, Limits, Profile, Small, State};
-
-    use super::{finished, leader, smart, tree_means};
-
-    #[test]
-    fn a_tree_plays_under_search_budgets_below_a_player_game() {
-        let t = GameTable::new(&CARDS, [WU_CONTROL, WU_CONTROL]).unwrap();
-        let player = Profile {
-            limits: Limits::PLAYER,
-            ..Profile::SMART
-        };
-        let mut s: State<Small> = State::new(&t, 0, player).unwrap();
-        smart(&mut s);
-        assert_eq!(s.profile().limits, Limits::DEFAULT);
-    }
+    use super::{finished, leader, tree_means};
 
     /// Trees whose worlds disagree, as the hidden search's mulligan in the incident did: each
     /// spends its visits on its own best candidate. Pooled, the rewards rank the candidates

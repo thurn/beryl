@@ -308,6 +308,3 @@ fn hinders(modification: Modification) -> bool {
         _ => false,
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -14,12 +14,6 @@ use beryl_engine::{GameTable, Layout, Observation, Opt, Seat, TurnStep, Zone, Zo
 use super::{Candidate, LIBRARY_LOW, PolicyWeights, Rules};
 use crate::values::{CardInfo, CardValues};
 
-#[cfg(test)]
-mod hold_tests;
-
-#[cfg(test)]
-mod waste_tests;
-
 /// One decision's view, for the rules above.
 pub(crate) struct Policy<'a, L: Layout> {
     pub(crate) values: &'a CardValues,
