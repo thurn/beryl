@@ -201,6 +201,18 @@ opus = "gpt-6.2-sol"
 sonnet = "gpt-6.2-sol"
 light = "gpt-6.2-sol"
 
+# CLI mode (docs/ignite.md, "CLI mode"): the daemon runs each worker turn itself as `claude -p`
+# or `codex exec`. A program here gives the app an adapter on every machine, so `ignite pool mode`
+# can switch it without a restart; the machine tables below choose which machines actually use it.
+# The flags let a headless turn run tools with nobody there to answer a permission prompt.
+[pool.cli.claude]
+program = "claude"
+args = ["--dangerously-skip-permissions"]
+
+[pool.cli.codex]
+program = "codex"
+args = ["--dangerously-bypass-approvals-and-sandbox"]
+
 # Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
 # seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
 # instead of one command per 50 checks. `seconds` is the second budget: seconds of running the
@@ -247,6 +259,15 @@ express_cores = 3
 # would hold `green` back for minutes. Reserve cores no tip build holds are lent to the express
 # lane and the release build (docs/ignite.md, "Cores, memory and shared resources").
 tip_build_cores = 4
+
+# Claude workers run as headless CLI turns started by the daemon instead of desktop sessions, so
+# no dispatcher session has to stay alive and nothing but the daemon can leave the pool stuck.
+# `slots` is the number of Claude workers `ignite pool list` showed on this machine when the
+# switch was made (15). Codex stays in `desktop` mode here and on every other machine until its
+# probe turn passes; `ignite pool mode codex cli` switches it by hand.
+[machine.jarvis.pool.claude]
+mode = "cli"
+slots = 15
 
 # Browser pages: at most half the cores' worth at once across every tree. Headless WebKit runs at
 # a higher priority than any build, so more pages starve the builds beside them.
