@@ -3788,15 +3788,18 @@ leased for nothing.
   the release note. This applies only to a worker of the machine's pool that
   holds a ticket. A person's own session, including one running `/ignite`, ends
   turns to talk to the person, and is never blocked. Neither is a justiciar's
-  session, nor a worker with a `land`, `release` or `close` still running, such
-  as a `land` waiting in the background: those verbs end the ticket and their
-  finish wakes the worker. A running `test`, `check`, `sync` or `wait` does not
-  exempt the worker, because nothing wakes it when that command finishes. The
-  hook names the session by the desktop app's `CLAUDE_CODE_HOST_SESSION_ID`, the
-  ID Ignite records for the lease; the hook input's own `session_id` is Claude
-  Code's internal ID, which Ignite never sees. Codex has no such hook, so Codex
-  workers rely on the silence check alone, which also still catches workers that
-  died.
+  session, nor a worker with an `ignite` verb of its session still running (the
+  daemon guarantees a wake-up with a check two minutes after the verb ends), nor
+  a worker with a live process under the session's process, such as a background
+  shell command or monitor script, whose end wakes the worker. The hook passes
+  its parent process with `--parent`, and Ignite looks for live descendants of
+  it (macOS and Windows). With nothing running, the first stop is blocked and
+  the next releases the ticket. A released worker is refused by `ignite start`
+  until the dispatcher hands it a ticket. The hook names the session by the
+  desktop app's `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite records for the
+  lease; the hook input's own `session_id` is Claude Code's internal ID, which
+  Ignite never sees. Codex has no such hook, so Codex workers rely on the
+  silence check alone, which also still catches workers that died.
 - A pool worker whose title starts with ⛔ ("stopped unfinished") when it ends a
   turn holding its ticket is released at the first stop, without the block
   message: a worker once kept a ticket, its tree and a running build for hours

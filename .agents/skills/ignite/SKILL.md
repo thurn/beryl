@@ -22,7 +22,8 @@ Pick the mode from the argument:
 Titles, for every session: `⚒️` while working (`🚒` while working a regression
 ticket), `🔍` while waiting on the person's answer (only when a person is there),
 `✅` done, `⛔` stopped unfinished. Every final turn ends on one of the last
-three.
+three. A turn that ends to wait on a running command (an ignite verb or a
+background process) keeps `⚒️`, and is woken when the command ends.
 
 ## Do it here
 

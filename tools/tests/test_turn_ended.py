@@ -30,6 +30,17 @@ def test_a_first_stop_sends_the_last_message_without_again() -> None:
     ]
 
 
+def test_the_hook_passes_its_parent_process() -> None:
+    assert turn_ended.command({}, DESKTOP, 4242) == [
+        "ignite",
+        "turn-ended",
+        "--session",
+        "local_w1",
+        "--parent",
+        "4242",
+    ]
+
+
 def test_a_second_stop_sends_the_last_message_as_the_note() -> None:
     event = {"stop_hook_active": True, "last_assistant_message": "  Blocked on T.9.  "}
     assert turn_ended.command(event, DESKTOP) == [

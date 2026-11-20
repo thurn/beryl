@@ -6,12 +6,17 @@ turn (`.claude/settings.json`, `Stop`) and relays the turn's end to `ignite turn
 decides:
 
 - `pass`: the session may stop. Only a worker of the machine's pool that holds a ticket, has no
-  `ignite` command running and is no justiciar is ever stopped.
+  `ignite` command running, has no live process under the session's process and is no
+  justiciar is ever stopped.
 - `block`: the first stop with the ticket held. The hook prints Claude Code's block decision
   with Ignite's text, which names the ticket and tells the worker to land or release it.
 - `released`: the hook had already blocked once this turn (`stop_hook_active`), or the worker's
   title starts with ⛔ (stopped unfinished), so Ignite released the ticket itself, using the
   worker's last message as the note, and for a ⛔ title also sent for a justiciar.
+
+The hook passes its own parent process with `--parent`: the session's process (Claude Code, or
+the shell it started the hook with). A turn that ends while a background command, such as a shell
+command or a monitor script, still runs under that process is waiting to be woken, not stopping.
 
 The session is the one Ignite records for the ticket lease: `IGNITE_SESSION`, else the desktop
 app's `CLAUDE_CODE_HOST_SESSION_ID` (`local_...`), the same variables the `ignite` client reads.
@@ -91,12 +96,19 @@ def last_message(event: Mapping[str, object]) -> str:
     return found
 
 
-def command(event: Mapping[str, object], env: Mapping[str, str]) -> list[str] | None:
-    """The `ignite turn-ended` call for this stop, or None when there is no session to name."""
+def command(
+    event: Mapping[str, object], env: Mapping[str, str], parent: int | None = None
+) -> list[str] | None:
+    """The `ignite turn-ended` call for this stop, or None when there is no session to name.
+
+    `parent` is the hook's parent process, which Ignite searches for live descendants.
+    """
     name = session(env)
     if name is None:
         return None
     args = ["ignite", "turn-ended", "--session", name]
+    if parent is not None:
+        args += ["--parent", str(parent)]
     if event.get("stop_hook_active") is True:
         args.append("--again")
     # Sent at the first stop too: a worker titled ⛔ is released at its first stop, and its
@@ -123,7 +135,7 @@ def main() -> int:
         return 0
     if not isinstance(event, dict):
         return 0
-    args = command(event, os.environ)
+    args = command(event, os.environ, os.getppid())
     if args is None:
         return 0
     try:
