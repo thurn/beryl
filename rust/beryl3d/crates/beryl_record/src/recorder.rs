@@ -12,11 +12,21 @@ use beryl_session::{GameUpdate, Seat, SessionId, card_records};
 
 use beryl_inspect::pack::{Recorded, Recorder};
 
-/// `beryl_cli`'s recorders, reading the fixture definitions in the repository at `root` and
-/// playing with the cards of `catalog`.
+/// Every implemented card and what is built from their files, which the recorders play with.
+/// This program links the cards and hands them to `beryl_cli`'s library, which names no card
+/// crate, so an edit to a card file recompiles none of that library.
+static CATALOG: Catalog = Catalog {
+    cards: &beryl_cards::CARDS,
+    scenarios: beryl_cards::scenarios,
+    library_scenarios: || beryl_cards::library::by_card().collect(),
+    derived_scenarios: |def| beryl_cards::derive::for_card(def).scenarios,
+    fuzz_deck_from: beryl_cards::decks::fuzz_deck_from,
+    keystone_family: beryl_cards::decks::keystone_family,
+};
+
+/// `beryl_cli`'s recorders, reading the fixture definitions in the repository at `root`.
 pub struct Cli {
     pub root: PathBuf,
-    pub catalog: &'static Catalog,
 }
 
 /// One recording still to make.
@@ -45,7 +55,7 @@ impl Recorder for Cli {
                 Vec::new()
             }
         };
-        let cards: Vec<&specs::Spec> = specs::cards(self.catalog).iter().collect();
+        let cards: Vec<&specs::Spec> = specs::cards(&CATALOG).iter().collect();
         // Plays every candidate moment of every card, which decides which are kept.
         specs::generate(&cards);
         let mut jobs = Vec::new();
@@ -68,7 +78,7 @@ impl Recorder for Cli {
         let next = AtomicUsize::new(0);
         beryl_inspect::runner::spread(jobs.len(), &next, || {
             while let Some(job) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
-                let one = record(self.catalog, job, &source);
+                let one = record(&CATALOG, job, &source);
                 recorded
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
