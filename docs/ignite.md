@@ -671,9 +671,8 @@ How the executable is installed and kept current:
 - Settings for landing by verdict exist: `[land] mode` (`"strict"`, the default,
   or `"verdict"`) with `max_base_age_hours` (default 12) and
   `[revert] broken_build` (default false; see
-  [A broken build is reverted](#a-broken-build-is-reverted)) change nothing
-  yet, and
-  `repository.green` (unset by default; it must differ from `staging` and
+  [A broken build is reverted](#a-broken-build-is-reverted)) change nothing yet,
+  and `repository.green` (unset by default; it must differ from `staging` and
   `master`) gives tip rounds a build step (see
   [Tip verification](#tip-verification)). The hub's `Hub::verdict`,
   `Hub::store_verdict` and `Hub::reverted` are declared, with fakes. The hub
