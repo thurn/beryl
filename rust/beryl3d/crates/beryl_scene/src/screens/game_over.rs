@@ -25,7 +25,7 @@ use crate::frame::Role;
 use crate::input::FaceSize;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::text::TypeStyle;
-use crate::tokens::{color, size, type_style};
+use crate::tokens::{color, ratio, size, space, type_style};
 use crate::widgets::{button, primary};
 
 /// The width of the card that ended the game, the web's 230 on the desktop.
@@ -113,9 +113,9 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
 
 /// The web's `.table-dimmed` filter: `blur(2.5px) brightness(0.68) saturate(0.85)`.
 const DIMMED: [Filter; 3] = [
-    Filter::Blur(2.5),
-    Filter::Brightness(0.68),
-    Filter::Saturate(0.85),
+    Filter::Blur(size::GAME_OVER_DIM_BLUR),
+    Filter::Brightness(ratio::GAME_OVER_DIM_BRIGHTNESS),
+    Filter::Saturate(ratio::GAME_OVER_DIM_SATURATE),
 ];
 
 /// The result's title, why the game ended and the card that ended it, in a column at the
@@ -198,11 +198,11 @@ fn dock(input: &ScreenIn, buttons: Vec<Element>) -> Element {
 /// How far the dock's bottom edge stands above the window's: the web's `.dock` `bottom`.
 const BUTTONS_BOTTOM: f32 = size::GAME_OVER_BUTTONS_BOTTOM;
 /// How far the dock's right edge stands in from the window's: the web's `.dock` `right`.
-const DOCK_RIGHT: f32 = 39.0;
-/// The gap between the dock's buttons, the web's `--button-gap` (`ui/src/design/tokens.css`).
-const BUTTON_GAP: f32 = 10.0;
+const DOCK_RIGHT: f32 = size::GAME_OVER_BUTTONS_RIGHT;
+/// The gap between the dock's buttons, the web's `--button-gap`.
+const BUTTON_GAP: f32 = space::M;
 /// The dock's least width, the web's `--button-width`.
-const DOCK_WIDTH: f32 = 250.0;
+const DOCK_WIDTH: f32 = size::BUTTON_WIDTH;
 
 /// The phone's dock (`.phone-game-over > .dock`): as wide as the window less its gutters, up to
 /// `game_over.dock_width`, standing the gutter above the safe area's foot, with each button as

@@ -1007,6 +1007,14 @@
       "GAME_OVER_BUTTONS_BOTTOM": {
         "value": 87
       },
+      "GAME_OVER_BUTTONS_RIGHT": {
+        "value": 39,
+        "note": "How far the result's dock stands in from the window's right edge: `.dock`'s `right` in `ui/src/screens/styles/controls.css`."
+      },
+      "GAME_OVER_DIM_BLUR": {
+        "value": 2.5,
+        "note": "The blur of the table under the game's result: `.table-dimmed`'s `blur(2.5px)` in `ui/src/screens/styles/table.css`."
+      },
       "GAME_OVER_CARD_GAP": {
         "value": 22
       },
@@ -1330,6 +1338,14 @@
       "SMALL_SCALE": {
         "value": 0.75,
         "note": "`button-small`: a small button is this share of a button's height and type size."
+      },
+      "GAME_OVER_DIM_BRIGHTNESS": {
+        "value": 0.68,
+        "note": "How bright the table under the game's result stays: `.table-dimmed`'s `brightness(0.68)`."
+      },
+      "GAME_OVER_DIM_SATURATE": {
+        "value": 0.85,
+        "note": "How saturated the table under the game's result stays: `.table-dimmed`'s `saturate(0.85)`."
       },
       "QUARTER": {
         "value": 0.25,
