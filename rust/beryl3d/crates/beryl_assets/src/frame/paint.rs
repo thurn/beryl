@@ -280,7 +280,7 @@ impl Canvas {
 fn rasterize(context: &mut ScaleContext, glyph: &SetGlyph) -> Option<Mask> {
     // A weight is a whole number from 100 to 900, which fits a `u16` exactly.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let face = glyph.font.face(glyph.ink.weight as u16);
+    let face = glyph.font.face(glyph.ink.weight as u16, false);
     let font = FontRef::from_index(ALL[usize::from(face)].data, 0)?;
     let mut scaler = context
         .builder(font)

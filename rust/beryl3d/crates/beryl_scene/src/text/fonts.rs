@@ -35,12 +35,16 @@ pub enum Font {
     Mana,
     /// The web's serif face (`--font-serif`), for titles, buttons and captions: Times New
     /// Roman on macOS, or Crimson Pro where the build found no Times New Roman. Times New Roman
-    /// is not variable, so it has a regular and a bold file, and [`Font::face`] picks one.
+    /// is not variable, so it has a regular, a bold, an italic and a bold italic file, and
+    /// [`Font::face`] picks one.
     Serif,
 }
 
 /// The index in [`ALL`] of the serif face's bold file, which no [`Font`] names.
-const SERIF_BOLD: usize = 5;
+const SERIF_BOLD: u8 = 5;
+
+/// The index in [`ALL`] of the serif face's italic file; its bold italic file follows it.
+const SERIF_ITALIC: u8 = 6;
 
 impl Font {
     /// The font's family name as the web interface's CSS names it, without the `Variable`
@@ -62,15 +66,23 @@ impl Font {
         &ALL[self as usize]
     }
 
-    /// The index in [`ALL`] of the file that draws the font at CSS weight `weight`. Only the
-    /// serif face has more than one file: as CSS matches a weight when only 400 and 700 exist,
-    /// a weight above 500 is drawn bold and any other regular.
+    /// The index in [`ALL`] of the file that draws the font at CSS weight `weight`, italic when
+    /// `italic` is set (CSS `font-style: italic`). Only the serif face has more than one file:
+    /// as CSS matches a weight when only 400 and 700 exist, a weight above 500 is drawn bold
+    /// and any other regular. An italic is drawn from an italic file where the serif face has
+    /// one ([`SERIF_HAS_ITALIC`]); every other font, and Crimson Pro standing in for Times New
+    /// Roman, draws its italics upright.
     #[must_use]
-    pub fn face(self, weight: u16) -> u8 {
-        if self == Self::Serif && weight > 500 {
-            SERIF_BOLD as u8
-        } else {
-            self as u8
+    pub fn face(self, weight: u16, italic: bool) -> u8 {
+        if self != Self::Serif {
+            return self as u8;
+        }
+        let bold = weight > 500;
+        match (italic && SERIF_HAS_ITALIC, bold) {
+            (false, false) => self as u8,
+            (false, true) => SERIF_BOLD,
+            (true, false) => SERIF_ITALIC,
+            (true, true) => SERIF_ITALIC + 1,
         }
     }
 }
@@ -79,8 +91,9 @@ impl Font {
 static CRIMSON_PRO: &[u8] = include_bytes!("../../fonts/CrimsonPro.ttf");
 
 /// Every embedded font file: each [`Font`]'s regular file in the order of [`Font`], then the
-/// serif face's bold. A [`GlyphKey`](crate::input::GlyphKey) names its file by its index here.
-pub static ALL: [FontFile; 6] = [
+/// serif face's bold, italic and bold italic. A [`GlyphKey`](crate::input::GlyphKey) names its
+/// file by its index here.
+pub static ALL: [FontFile; 8] = [
     FontFile {
         font: Font::Cinzel,
         file: "Cinzel.ttf",
@@ -110,6 +123,16 @@ pub static ALL: [FontFile; 6] = [
         font: Font::Serif,
         file: SERIF_BOLD_FILE,
         data: SERIF_BOLD_DATA,
+    },
+    FontFile {
+        font: Font::Serif,
+        file: SERIF_ITALIC_FILE,
+        data: SERIF_ITALIC_DATA,
+    },
+    FontFile {
+        font: Font::Serif,
+        file: SERIF_BOLD_ITALIC_FILE,
+        data: SERIF_BOLD_ITALIC_DATA,
     },
 ];
 

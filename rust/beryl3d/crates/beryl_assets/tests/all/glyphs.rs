@@ -133,12 +133,11 @@ fn latin_glyphs_cover_every_type_style() {
         "each bundled text font has all of ASCII, at every type style's size"
     );
     let title = beryl_scene::tokens::type_style::TITLE;
-    assert!(
-        keys.iter()
-            .any(|key| key.font == title.font.face(title.weight)
-                && key.weight == title.weight
-                && key.size == 52)
-    );
+    assert!(keys.iter().any(
+        |key| key.font == title.font.face(title.weight, title.italic)
+            && key.weight == title.weight
+            && key.size == 52
+    ));
 }
 
 #[test]

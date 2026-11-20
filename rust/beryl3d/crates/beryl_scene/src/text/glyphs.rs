@@ -108,12 +108,12 @@ impl Glyphs {
     }
 }
 
-/// The key of glyph `glyph` of the file that draws `style`'s font at its weight, at `style`'s
+/// The key of glyph `glyph` of the file that draws `style`'s font at its weight and slant, at `style`'s
 /// size in physical pixels.
 #[must_use]
 pub fn key(style: TypeStyle, scale: f32, glyph: u16) -> GlyphKey {
     GlyphKey {
-        font: style.font.face(style.weight),
+        font: style.font.face(style.weight, style.italic),
         weight: style.weight,
         glyph,
         blur: 0,

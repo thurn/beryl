@@ -58,7 +58,7 @@
   },
   "b3d:screen/gallery/you/1600x900@2": {
    "unmatched": 191,
-   "boxes": 7,
+   "boxes": 3,
    "styles": 29,
    "unsupported": 1,
    "pixels": 877797
@@ -110,7 +110,7 @@
    "boxes": 11,
    "styles": 6,
    "unsupported": 0,
-   "pixels": 100403
+   "pixels": 100364
   },
   "b3d:screen/table/you/1600x900@2": {
    "unmatched": 104,

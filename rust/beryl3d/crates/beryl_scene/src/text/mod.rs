@@ -17,8 +17,9 @@ use std::ops::Range;
 
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
 use parley::{
-    FontContext, FontFamily, FontFamilyName, FontWeight, InlineBox, InlineBoxKind, Layout,
-    LayoutContext, LineHeight, PlainEditor, PositionedLayoutItem, StyleProperty, VerticalAlign,
+    FontContext, FontFamily, FontFamilyName, FontStyle, FontWeight, InlineBox, InlineBoxKind,
+    Layout, LayoutContext, LineHeight, PlainEditor, PositionedLayoutItem, StyleProperty,
+    VerticalAlign,
 };
 
 use crate::element::Span;
@@ -28,14 +29,17 @@ pub use glyphs::{Glyphs, blurred as blurred_glyph_key, key as glyph_key};
 pub(crate) use write::faded;
 pub use write::{BlockLook, write_block};
 
-/// How a run of text looks: its font, weight, size in logical points and line height as a
-/// multiple of its size.
+/// How a run of text looks: its font, weight, whether it is italic, size in logical points and
+/// line height as a multiple of its size.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TypeStyle {
     pub font: Font,
     /// The CSS weight, from 100 to 900. The bundled text fonts are variable, so any weight is
     /// drawn from the one file; the serif face picks its regular or bold file ([`Font::face`]).
     pub weight: u16,
+    /// Whether it is italic (CSS `font-style: italic`). Only the serif face has italic files,
+    /// and only where it is Times New Roman ([`Font::face`]); other fonts are drawn upright.
+    pub italic: bool,
     pub size: f32,
     pub line_height: f32,
     /// Extra space after every letter, in logical points (CSS `letter-spacing`).
@@ -48,6 +52,7 @@ impl TypeStyle {
         StyleKey {
             font: self.font,
             weight: self.weight,
+            italic: self.italic,
             size: self.size.to_bits(),
             line_height: self.line_height.to_bits(),
             letter_spacing: self.letter_spacing.to_bits(),
@@ -59,6 +64,7 @@ impl TypeStyle {
 struct StyleKey {
     font: Font,
     weight: u16,
+    italic: bool,
     size: u32,
     line_height: u32,
     letter_spacing: u32,
@@ -328,6 +334,7 @@ impl Text {
         styles.insert(StyleProperty::FontWeight(FontWeight::new(f32::from(
             style.weight,
         ))));
+        styles.insert(StyleProperty::FontStyle(font_style(style)));
         styles.insert(StyleProperty::LineHeight(LineHeight::FontSizeRelative(
             style.line_height,
         )));
@@ -424,6 +431,7 @@ impl Text {
         let glyph_style = TypeStyle {
             font: Font::Mana,
             weight: 400,
+            italic: false,
             size: em * symbols::GLYPH_SIZE,
             line_height: 1.0 / symbols::GLYPH_SIZE,
             letter_spacing: 0.0,
@@ -491,6 +499,7 @@ impl Text {
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(f32::from(
             style.weight,
         ))));
+        builder.push_default(StyleProperty::FontStyle(font_style(style)));
         builder.push_default(StyleProperty::LineHeight(LineHeight::FontSizeRelative(
             style.line_height,
         )));
@@ -504,6 +513,7 @@ impl Text {
                 StyleProperty::FontWeight(FontWeight::new(f32::from(span.weight))),
                 range.clone(),
             );
+            builder.push(StyleProperty::FontStyle(font_style(*span)), range.clone());
             builder.push(
                 StyleProperty::LineHeight(LineHeight::FontSizeRelative(span.line_height)),
                 range.clone(),
@@ -622,6 +632,17 @@ fn block_of(shaped: &Shaped, max_width: Option<f32>) -> Block {
         block.glyphs.push(PlacedGlyph { glyph, run, x, y });
     });
     block
+}
+
+/// The parley font style that shapes `style` with the file [`Font::face`] draws it from: italic
+/// only when that file is an italic one, so a font with no italic file is shaped upright, as
+/// it is drawn, and parley synthesizes no slant.
+fn font_style(style: TypeStyle) -> FontStyle {
+    if style.italic && style.font.face(style.weight, true) != style.font.face(style.weight, false) {
+        FontStyle::Italic
+    } else {
+        FontStyle::Normal
+    }
 }
 
 /// A bundled font's bytes as the shared buffer fontique reads.

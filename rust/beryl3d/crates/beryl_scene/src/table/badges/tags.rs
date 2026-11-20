@@ -26,6 +26,7 @@ use crate::tokens::{badge, color};
 pub(super) const NOTE_STYLE: TypeStyle = TypeStyle {
     font: Font::OpenSans,
     weight: 700,
+    italic: false,
     size: note::POINTS,
     line_height: 1.0,
     letter_spacing: 0.0,
@@ -35,6 +36,7 @@ pub(super) const NOTE_STYLE: TypeStyle = TypeStyle {
 pub(super) const COPY_STYLE: TypeStyle = TypeStyle {
     font: Font::OpenSans,
     weight: 700,
+    italic: false,
     size: copy::POINTS,
     line_height: 1.0,
     letter_spacing: 0.0,

@@ -44,7 +44,7 @@ const DEMAND_PAGES: u16 = 3;
 pub fn prepare_latin(scale: f32) -> Vec<GlyphKey> {
     let mut keys = Vec::new();
     for style in type_style::ALL {
-        let file = &ALL[usize::from(style.font.face(style.weight))];
+        let file = &ALL[usize::from(style.font.face(style.weight, style.italic))];
         let Some(font) = FontRef::from_index(file.data, 0) else {
             continue;
         };

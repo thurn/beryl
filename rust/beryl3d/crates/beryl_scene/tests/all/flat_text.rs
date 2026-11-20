@@ -14,6 +14,7 @@ use crate::flat_layer::{client, deciding, prompt};
 const BODY: TypeStyle = TypeStyle {
     font: Font::OpenSans,
     weight: 400,
+    italic: false,
     size: 20.0,
     line_height: 1.2,
     letter_spacing: 0.0,

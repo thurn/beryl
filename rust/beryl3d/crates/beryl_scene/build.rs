@@ -72,36 +72,69 @@ const MAC_SUPPLEMENTAL_FONTS: &str = "/System/Library/Fonts/Supplemental";
 
 /// Writes the files that draw the web's serif face, `--font-serif` (`"Times New Roman", Times,
 /// serif`), as the constants `src/text/fonts.rs` includes. When the build is for macOS and the
-/// building Mac has Times New Roman's regular and bold files, they are embedded from the
-/// system's font folder, so the client draws the face the web's CSS names. Elsewhere, such as
-/// on Windows, both faces are the bundled Crimson Pro, the nearest serif the repository holds.
+/// building Mac has Times New Roman's regular, bold, italic and bold italic files, they are
+/// embedded from the system's font folder, so the client draws the face the web's CSS names.
+/// Elsewhere, such as on Windows, every face is the bundled Crimson Pro, the nearest serif the
+/// repository holds, which has no italic: its italics are drawn upright.
 fn write_serif(out_dir: &std::path::Path) {
     let folder = std::path::Path::new(MAC_SUPPLEMENTAL_FONTS);
-    let regular = folder.join("Times New Roman.ttf");
-    let bold = folder.join("Times New Roman Bold.ttf");
-    println!("cargo:rerun-if-changed={}", regular.display());
-    println!("cargo:rerun-if-changed={}", bold.display());
+    let faces = [
+        (
+            "REGULAR",
+            "SERIF_REGULAR",
+            folder.join("Times New Roman.ttf"),
+        ),
+        (
+            "BOLD",
+            "SERIF_BOLD_DATA",
+            folder.join("Times New Roman Bold.ttf"),
+        ),
+        (
+            "ITALIC",
+            "SERIF_ITALIC_DATA",
+            folder.join("Times New Roman Italic.ttf"),
+        ),
+        (
+            "BOLD_ITALIC",
+            "SERIF_BOLD_ITALIC_DATA",
+            folder.join("Times New Roman Bold Italic.ttf"),
+        ),
+    ];
+    for (_, _, path) in &faces {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
     let for_mac = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "macos");
-    let text = if for_mac && regular.is_file() && bold.is_file() {
-        format!(
-            "/// The family the serif face is drawn in.\n\
-             pub const SERIF_FAMILY: &str = \"Times New Roman\";\n\
-             const SERIF_REGULAR_FILE: &str = {regular:?};\n\
-             static SERIF_REGULAR: &[u8] = include_bytes!({regular:?});\n\
-             const SERIF_BOLD_FILE: &str = {bold:?};\n\
-             static SERIF_BOLD_DATA: &[u8] = include_bytes!({bold:?});\n",
-            regular = regular.display().to_string(),
-            bold = bold.display().to_string(),
-        )
+    let found = for_mac && faces.iter().all(|(_, _, path)| path.is_file());
+    let mut text = String::from("/// The family the serif face is drawn in.\n");
+    if found {
+        text.push_str(
+            "pub const SERIF_FAMILY: &str = \"Times New Roman\";\n\
+             /// Whether the serif face has italic files of its own.\n\
+             pub const SERIF_HAS_ITALIC: bool = true;\n",
+        );
     } else {
-        "/// The family the serif face is drawn in.\n\
-         pub const SERIF_FAMILY: &str = \"Crimson Pro\";\n\
-         const SERIF_REGULAR_FILE: &str = \"CrimsonPro.ttf\";\n\
-         static SERIF_REGULAR: &[u8] = CRIMSON_PRO;\n\
-         const SERIF_BOLD_FILE: &str = \"CrimsonPro.ttf\";\n\
-         static SERIF_BOLD_DATA: &[u8] = CRIMSON_PRO;\n"
-            .to_string()
-    };
+        text.push_str(
+            "pub const SERIF_FAMILY: &str = \"Crimson Pro\";\n\
+             /// Whether the serif face has italic files of its own.\n\
+             pub const SERIF_HAS_ITALIC: bool = false;\n",
+        );
+    }
+    for (name, data, path) in &faces {
+        if found {
+            let path = path.display().to_string();
+            writeln!(
+                text,
+                "const SERIF_{name}_FILE: &str = {path:?};\nstatic {data}: &[u8] = include_bytes!({path:?});"
+            )
+            .unwrap();
+        } else {
+            writeln!(
+                text,
+                "const SERIF_{name}_FILE: &str = \"CrimsonPro.ttf\";\nstatic {data}: &[u8] = CRIMSON_PRO;"
+            )
+            .unwrap();
+        }
+    }
     fs::write(out_dir.join("serif.rs"), text).unwrap();
 }
 
@@ -387,6 +420,8 @@ fn write_type_styles(tokens: &Tokens) -> String {
         let weight = entry["weight"]
             .as_u64()
             .expect("a type style has a `weight`");
+        // An optional `italic`, for CSS `font-style: italic`.
+        let italic = entry["italic"].as_bool().unwrap_or(false);
         let (size, _) = tokens.number(&entry["size"], &path);
         let (line, _) = tokens.number(&entry["line_height"], &path);
         // An optional `letter_spacing`, in ems of the size, as CSS writes it.
@@ -399,7 +434,7 @@ fn write_type_styles(tokens: &Tokens) -> String {
         writeln!(
             out,
             "/// {doc}\npub const {key}: TypeStyle = TypeStyle {{\n    font: Font::{font},\n    \
-             weight: {weight},\n    size: {size:?},\n    line_height: {line:?},\n    letter_spacing: {spacing:?},\n}};"
+             weight: {weight},\n    italic: {italic},\n    size: {size:?},\n    line_height: {line:?},\n    letter_spacing: {spacing:?},\n}};"
         )
         .unwrap();
     }

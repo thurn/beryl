@@ -396,6 +396,7 @@ fn screen(sample: &Sample, mask: bool) -> Element {
             .style(TypeStyle {
                 font: Font::OpenSans,
                 weight: 400,
+                italic: false,
                 size: text.size,
                 line_height: TEXT_LINE_HEIGHT,
                 letter_spacing: 0.0,

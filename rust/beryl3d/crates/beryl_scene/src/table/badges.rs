@@ -40,6 +40,7 @@ use crate::widgets::icons::{LOCK, LOCK_SIDE};
 pub const STYLE: TypeStyle = TypeStyle {
     font: Font::CrimsonPro,
     weight: 700,
+    italic: false,
     size: data::NUMERAL_POINTS,
     line_height: 1.0,
     letter_spacing: 0.0,
@@ -51,6 +52,7 @@ pub const STYLE: TypeStyle = TypeStyle {
 pub const NAME_STYLE: TypeStyle = TypeStyle {
     font: Font::OpenSans,
     weight: 700,
+    italic: false,
     size: data::NUMERAL_POINTS,
     line_height: 1.0,
     letter_spacing: 0.0,

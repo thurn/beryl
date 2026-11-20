@@ -198,6 +198,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, phone: bool
         .style(TypeStyle {
             font: Font::OpenSans,
             weight: 700,
+            italic: false,
             size: text_size,
             line_height: badge::LINE,
             letter_spacing: 0.0,

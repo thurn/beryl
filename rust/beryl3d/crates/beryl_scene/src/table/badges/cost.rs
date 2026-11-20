@@ -37,6 +37,7 @@ const COST_IDS: u32 = ARROW_IDS + (1 << 17);
 const STYLE: TypeStyle = TypeStyle {
     font: Font::CrimsonPro,
     weight: 700,
+    italic: false,
     size: data::POINTS,
     line_height: 1.0,
     letter_spacing: 0.0,
