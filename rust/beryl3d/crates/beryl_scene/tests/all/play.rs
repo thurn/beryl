@@ -561,3 +561,78 @@ fn the_turn_step_shown_follows_the_scripts_set_steps_not_the_latest_view() {
         ]
     );
 }
+
+/// Two cards appear in the hand in one beat, the second 100 ms after the first, as the opening
+/// hand is dealt. Each fades in where it rests, so when the second makes room, the first goes
+/// to its new place within a frame and keeps fading there, as on the web stage, where a card's
+/// own fade only changes its opacity. It used to glide there over the rest of its fade, and
+/// reached its place long after the web's card did.
+#[test]
+fn a_card_fading_into_the_hand_goes_to_its_new_place_within_a_frame() {
+    use beryl_protocol::script::Room;
+    let (start, cards) = before();
+    let library = &start.view.players.you.library;
+    let second = library[library.len() - 2];
+    let mut view = start.view.clone();
+    let appear = |slot, name| {
+        let card = beryl_scene::testing::object(slot, ZoneName::Hand, Side::You, Some(name));
+        Act::Appear {
+            from: ZoneName::Library,
+            why: Why::Draw,
+            object: card,
+            at: None,
+            item: None,
+        }
+    };
+    for slot in [cards.top, second] {
+        let card = beryl_scene::testing::object(slot, ZoneName::Hand, Side::You, Some("Island"));
+        if let Some(object) = view.objects.iter_mut().find(|o| o.slot == slot) {
+            *object = card;
+        }
+    }
+    view.players
+        .you
+        .library
+        .retain(|&slot| slot != cards.top && slot != second);
+    view.script = Some(
+        ScriptBuilder::default()
+            .beat([appear(cards.top, "Island"), appear(second, "Island")])
+            .build(),
+    );
+    let after = GameUpdate {
+        session: start.session,
+        view,
+    };
+    let mut first = timing(340.0);
+    first.room = Room::For { ms: 170.0 };
+    let mut later = first.clone();
+    later.delay = 100.0;
+    let mut show = show();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(after), vec![first, later]);
+    frame(&mut show, &mut empty_frame(), 0);
+
+    let top = usize::from(cards.top.0);
+    let rest = show
+        .latest_rest(top)
+        .expect("the first card rests in the hand");
+    let before_room = show.pose(top, 90 * MS).expect("the first card is drawn");
+    assert_ne!(
+        before_room.position, rest.position,
+        "until the second card makes room, the first stands where it first rested"
+    );
+    let after_room = show.pose(top, 120 * MS).expect("the first card is drawn");
+    assert!(
+        after_room.position.distance(rest.position) < 0.01,
+        "a frame after the second card makes room, the first stands at its new place: {} \
+         and {}",
+        after_room.position,
+        rest.position
+    );
+    assert!(
+        after_room.opacity > before_room.opacity && after_room.opacity < 1.0,
+        "the first card is still fading in at its new place: {} then {}",
+        before_room.opacity,
+        after_room.opacity
+    );
+}

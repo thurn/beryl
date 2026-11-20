@@ -377,6 +377,10 @@ impl Segment {
             | Shape::Thrown { .. }
             | Shape::Swept { .. }
             | Shape::Lifted(_) => self.travelled(elapsed),
+            Shape::Regrouping(fade) => Pose {
+                opacity: fade.opacity(t - self.start),
+                ..self.travelled(elapsed)
+            },
             Shape::TurnedOver => turned_over(&self.from, &self.to, elapsed),
             Shape::Grown => {
                 let u = self.curve.ease(elapsed);

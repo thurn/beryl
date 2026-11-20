@@ -18,6 +18,7 @@ use crate::verbs::{self, Interval};
 
 mod abilities;
 mod counts;
+mod fade;
 mod hidden;
 mod out;
 mod placement;
@@ -27,6 +28,7 @@ mod settle;
 mod still;
 mod tracks;
 
+use fade::{Regrouped, regroup_fade, retarget};
 use hidden::{hides, hides_in_place};
 use room::{only_height, room_of};
 use tracks::same;
@@ -570,6 +572,18 @@ impl<'a> Motion<'a> {
                 }
                 let room = self.slide_room(slot, own, regroup.unwrap_or(room));
                 let track = self.tracks.get_mut(slot);
+                if regroup.is_some() {
+                    match regroup_fade(track, &mut self.segments, slot, room, &before, &after) {
+                        Regrouped::No => {}
+                        Regrouped::Moved => return,
+                        Regrouped::Split(slide, rest) => {
+                            self.push(slot, slide, Cause::Slide(number));
+                            self.push(slot, rest, Cause::Slide(number));
+                            return;
+                        }
+                    }
+                }
+                let track = self.tracks.get_mut(slot);
                 if retarget(track, &mut self.segments, slot, room.from, &before, &after) {
                     return;
                 }
@@ -747,41 +761,6 @@ impl<'a> Motion<'a> {
             });
         }
     }
-}
-
-/// Sends every segment of the object in `slot` that lands at `was` and has not ended by
-/// `from` to `to` instead, and says whether there was one. When several cards are drawn in
-/// one beat, each later draw makes room in the hand while the cards before it are still in
-/// flight, or have not left yet. A slide from `from` would be cut off by a flight that
-/// begins after it, or would cut short one under way, and the card would end the script
-/// at the place it had before the room was made and jump as the script ends; so the
-/// flight lands at the new place.
-fn retarget(
-    track: Option<&mut Track>,
-    records: &mut [SegmentRecord],
-    slot: usize,
-    from: u64,
-    was: &Pose,
-    to: &Pose,
-) -> bool {
-    let Some(track) = track else {
-        return false;
-    };
-    let mut found = false;
-    for segment in track.segments_mut() {
-        if segment.end() > from && &segment.to == was {
-            segment.to = *to;
-            found = true;
-        }
-    }
-    // The same segments in the records, which the interface checks read.
-    for record in records {
-        let segment = &mut record.segment;
-        if record.slot == slot && segment.end() > from && &segment.to == was {
-            segment.to = *to;
-        }
-    }
-    found
 }
 
 fn copies(rest: Option<&Rest>) -> u16 {

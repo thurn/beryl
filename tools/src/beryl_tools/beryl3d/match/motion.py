@@ -321,9 +321,10 @@ def measure(
         return "b3d export failed"
     views_given = frames[-1].get("views_given_ms")
     assert isinstance(views_given, list)
+    listed = [float(at) for at in views_given]
     given, opened, advances, more = clock.handover(
         messages,
-        [float(at) for at in views_given],
+        listed,
         clock.script_ends(t.recording, t.seat, built),
         times[0],
         times[-1],
@@ -332,6 +333,7 @@ def measure(
     notes += more
     job = snapshot.page_job(t, messages, opened, art, out)
     job |= {
+        "preroll_ms": clock.preroll(listed, given),
         "times_ms": [time - given for time in times],
         "advances": advances,
         "json": str(out / "web.json"),

@@ -221,6 +221,43 @@ pub enum Shape {
     /// viewer's card played from their hand onto the table, which leaves the hand in front of the
     /// cards beside it, as the web interface draws a flying card above every other.
     Lifted(Lift),
+    /// A straight line along which the opacity follows a fade of its own rather than the
+    /// segment's curve: a card fading in where it rests that its hand regrouped round, on its
+    /// short way to its new place and for the rest of its fade there (`play::step::fade`).
+    Regrouping(Fade),
+}
+
+/// A fade that a `Shape::Regrouping` segment's opacity follows. It began `begun` nanoseconds
+/// before the segment does and lasts `duration` nanoseconds, from `from` to `to` along `curve`.
+/// Its times count from the segment's start, so that a script laid out again later moves it
+/// with the segment.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Fade {
+    pub begun: u64,
+    pub duration: u64,
+    pub curve: Curve,
+    pub from: f32,
+    pub to: f32,
+}
+
+impl Fade {
+    /// The opacity `since` nanoseconds after the segment that follows it began.
+    #[must_use]
+    pub fn opacity(&self, since: u64) -> f32 {
+        if self.duration == 0 {
+            return self.to;
+        }
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a fade lasts seconds, far below f64's exact range"
+        )]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "the fraction is between 0 and 1"
+        )]
+        let elapsed = ((self.begun + since) as f64 / self.duration as f64).clamp(0.0, 1.0) as f32;
+        self.from + (self.to - self.from) * self.curve.ease(elapsed)
+    }
 }
 
 /// How a `Shape::Lifted` path, and the other shapes that hold a card nearer the eye

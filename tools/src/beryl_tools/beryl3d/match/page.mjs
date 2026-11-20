@@ -25,7 +25,8 @@ export const MOST = 3000;
  * set, is the selector of a button to press once the page has loaded, for a screen the app
  * opens over another one (snapshot.py's `web_page`); `fixture` is {name, file}, the file that
  * answers the page's request for /fixtures/<name>.json, and `art_dir`, if set, the scan cache
- * card images load from. The page's clock is paused once the
+ * card images load from; `preroll_ms`, if set, how long to run the clock before `use`. The
+ * page's clock is paused once the
  * stage and the fixture transport exist and every font has loaded, so it moves only in
  * `page.clock.runFor`. `errors` collects the page's uncaught errors. */
 export async function withPage(job, use) {
@@ -102,6 +103,12 @@ export async function withPage(job, use) {
         await page.evaluate(() =>
             Promise.all([...document.fonts].map((f) => f.load().catch(() => undefined))),
         );
+        // `preroll_ms` runs the page's own timers, such as the opening's coin, to where Beryl
+        // 3D's stood when the page opens (clock.py's `preroll`), a frame at a time so that the
+        // page renders between them.
+        for (let ran = 0; ran + FRAME <= (job.preroll_ms ?? 0) + 1e-6; ran += FRAME) {
+            await page.clock.runFor(FRAME);
+        }
         await use(page, errors);
         await context.close();
     } catch (e) {

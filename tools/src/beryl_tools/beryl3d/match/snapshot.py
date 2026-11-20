@@ -288,21 +288,28 @@ def dump_web(
     offset: float | None = None
     advances: list[list[float]] = []
     notes: list[str] = []
+    now = float(str(moment["t_ms"]))
+    # A view at rest shows every view as past, so its timers have run since the moment's view
+    # was given (`clock.preroll`).
+    ahead = now - given if isinstance(given, int) else 0.0
     if moment.get("animating") and isinstance(given, int):
-        now = float(str(moment["t_ms"]))
         base = float(given)
+        ahead = 0.0
         if isinstance(views_given, list):
+            listed = [float(g) for g in views_given]
             base, at, advances, notes = clock.handover(
                 messages,
-                [float(g) for g in views_given],
+                listed,
                 clock.script_ends(t.recording, t.seat, serving is None),
                 now,
                 now,
                 base,
             )
+            ahead = clock.preroll(listed, base)
         offset = now - base
     job = page_job(t, messages, at, art, out)
     job |= {
+        "preroll_ms": ahead,
         "offset_ms": offset,
         "advances": advances,
         "png": str(out / "web.png"),

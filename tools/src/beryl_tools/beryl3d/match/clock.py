@@ -16,6 +16,14 @@ the first view still playing was given (`first_live`), and is handed the rest li
 fixture transport's `advance` at the times Beryl 3D was given them (`schedule`). Both clocks
 count from the time the first live view was given, and Beryl 3D plays every script at real time
 (`Target.common`), as the web page does, so the two stay together.
+
+The page's own timers, such as the opening's coin, which spins for 1500 ms from when the
+opening first shows (`FLIP_MS` in ui/src/screens/Opening.tsx), start when the page opens. Beryl
+3D started its timers when it was given the views the page opens with, which can be seconds
+earlier: at 2255 ms of `opening-bottom` the page opened at 2165 ms, so the web's coin still spun
+while Beryl 3D's had stopped at 1500 ms and it showed the opening hand. So before counting, the
+page's clock runs on for as long as Beryl 3D had had the latest of those views (`preroll`).
+Those views are past and shown at rest, so only the page's timers move meanwhile.
 """
 
 from __future__ import annotations
@@ -138,6 +146,15 @@ def first_live(given: Sequence[float], ends: Mapping[int, float], at: float) -> 
     while 0 < past < count and end(past - 1) > given[past]:
         past -= 1
     return past
+
+
+def preroll(given: Sequence[float], base: float) -> float:
+    """How long the page's clock runs before it counts from `base`, on Beryl 3D's clock, for
+    the page to stand where Beryl 3D's timers stood: since the latest of the views given at the
+    times `given` that the page opens with, those given before `base`, was given. Zero when it
+    opens with none."""
+    opened = [g for g in given if g < base]
+    return base - max(opened) if opened else 0.0
 
 
 def handover(

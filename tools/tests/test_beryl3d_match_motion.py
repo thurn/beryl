@@ -316,3 +316,14 @@ def test_the_web_page_opens_with_the_views_beryl_3d_had_played_out() -> None:
     )
     assert (base, opened, advances) == (458.0, 3, [[0.0, 3]])
     assert notes[0].startswith("note: views 4 to 6 were still to play at 1000ms")
+
+
+def test_the_web_page_runs_its_timers_for_as_long_as_beryl_3d_had_its_latest_view() -> (
+    None
+):
+    # At 2255 ms of `opening-bottom` the page opens at 2165 ms with the views Beryl 3D was given
+    # at 0 ms, so its coin, which spins for 1500 ms from when the opening first shows, must have
+    # run for 2165 ms already. A page that opens with no view runs no timers first.
+    assert clock.preroll([0.0, 0.0, 0.0, 2165.0, 2165.0], 2165.0) == 2165.0
+    assert clock.preroll([0.0, 500.0, 2165.0], 2165.0) == 1665.0
+    assert clock.preroll([2165.0], 2165.0) == 0.0
