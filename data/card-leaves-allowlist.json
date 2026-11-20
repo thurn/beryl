@@ -1,0 +1,10 @@
+{
+  "crates": [
+    "beryl_3d",
+    "beryl_app",
+    "beryl_bench",
+    "beryl_cards",
+    "beryl_cli_main",
+    "beryl_record"
+  ]
+}

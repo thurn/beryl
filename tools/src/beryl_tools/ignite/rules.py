@@ -39,6 +39,7 @@ from pathlib import Path
 from .. import (
     board_door,
     card_diverge,
+    card_leaves,
     card_names,
     check_inputs,
     citations,
@@ -407,6 +408,19 @@ CHECKS: tuple[Check, ...] = (
         "source",
         lambda root: board_door.check(root),
         (*RULES_TREE, module("board_door"), module("two_player")),
+    ),
+    Check(
+        "card-leaves",
+        "source",
+        lambda root: card_leaves.check(root),
+        (
+            "rust/crates/*/Cargo.toml",
+            "rust/crates/*/src/**",
+            "rust/beryl3d/crates/*/Cargo.toml",
+            "rust/beryl3d/crates/*/src/**",
+            allowlist("card-leaves"),
+            module("card_leaves"),
+        ),
     ),
     Check(
         "discarded-push",

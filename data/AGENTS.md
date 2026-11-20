@@ -73,6 +73,9 @@ This adds to the root `AGENTS.md`, whose rules all apply here.
   Beryl, and the `divergences` check holds each entry to the pinned rules.
 - `oracle-exporter-gaps.json`: generated scenarios that an oracle's exporter
   can't express, which are reported as unsupported.
+- `card-leaves-allowlist.json`: the crates that may depend on `beryl_cards` or a
+  set crate outside `[dev-dependencies]` (`card_leaves.py`). It may only shrink;
+  the check fails on an entry that no longer needs it.
 - `card-names-allowlist.json`: generic code files that still mention card names,
   and one-card mechanics still in the engine. Its counts may only go down.
   `python -m beryl_tools.card_names --shrink` (from `tools/`) lowers them after

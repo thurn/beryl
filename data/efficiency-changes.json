@@ -679,5 +679,10 @@
     "label": "`ignite start` and `ignite sync` begin at `green` when `repository.green` is set (a dependency's landed commit that `green` lacks, or the `staging` tip for a regression ticket, being the exceptions), so a new tree does not start at a tip that fails to compile before a tip round reverts it",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Tests that name real cards moved out of the kernel, rules, search, session, table and command-line libraries into `tests/` binaries, and the `card-leaves` check keeps card crates out of every non-leaf crate's normal dependencies, so a card edit rebuilds only the leaf crates instead of every crate that depends on `beryl_cards`",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

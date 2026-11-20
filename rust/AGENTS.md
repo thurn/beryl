@@ -60,6 +60,13 @@ heavy command.
   `beryl_card_shared::props`. Each crate's integration tests are one binary,
   `tests/all/main.rs` with one module per file, because every test binary links
   the crate and its dependencies again after an edit.
+- Only leaf crates (the apps, the benchmark, the command line and Beryl 3D,
+  listed in `data/card-leaves-allowlist.json`) depend on `beryl_cards` or a set
+  crate as a normal dependency, and no `src/` file of any other crate names them
+  (the `card-leaves` check). Cargo rebuilds every dependent of a changed crate,
+  so this keeps a card edit from rebuilding the kernel, rules, search and
+  session crates. A test of another crate that needs real cards goes in its
+  `tests/` directory with `beryl_cards` as a dev-dependency.
 - `just oracle <card names>` plays a card's generated, rules-library and
   hand-written scenarios against XMage and Forge. It needs `just oracle-setup`
   once per machine.
