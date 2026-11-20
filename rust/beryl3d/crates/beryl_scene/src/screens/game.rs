@@ -7,7 +7,7 @@
 use glam::Vec2;
 
 use super::{ScreenIn, game_over, opening};
-use crate::element::{Anchor, Element, holder, row};
+use crate::element::{Anchor, Element, Shortcuts, holder, row};
 use crate::hud::{full_control, log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
@@ -20,33 +20,54 @@ use crate::table::phone_bands;
 pub fn game(input: &ScreenIn) -> Element {
     let prompt = waiting(input);
     // The orbs, the steps and the log stay up while scripts play, as the web interface's
-    // `Chrome` does; only what waits for the table (`Element::waits`) is held back.
-    let pieces: Vec<Element> = [
-        players::players(input).filter(|_| !opening::shown(input)),
-        // The opening's backdrop covers the stops, as the web's overlay does.
-        steps::steps(input).filter(|_| !opening::shown(input)),
-        full_control::full_control(input).filter(|_| !opening::shown(input)),
+    // `Chrome` does; only what waits for the table (`Element::waits`) is held back. The
+    // opening does not wait: the web shows it, with the coin flip, while the hands are dealt.
+    // The life orbs and the step stops stand under its backdrop, which dims them, as the web's
+    // overlay is drawn over its `Hud`; full control's sign is hidden under it.
+    let shown = opening::shown(input);
+    let hud = [
+        players::players(input),
+        // The overlay takes the presses that would reach the stops under it.
+        steps::steps(input).map(|steps| if shown { inert(steps) } else { steps }),
+        full_control::full_control(input).filter(|_| !shown),
+    ];
+    let over = [
         log::log(input),
         viewer::viewer(input),
         // The result blurs everything drawn before it, the floats too (`Style::backdrop`).
         game_over::game_over(input).map(Element::waits),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
-    let opening = opening::opening(input).map(Element::waits);
-    if pieces.is_empty() && opening.is_none() {
+    ];
+    let opening = opening::opening(input);
+    if hud.iter().chain(&over).all(Option::is_none) && opening.is_none() {
         return prompt.unwrap_or_else(|| row().name("game"));
     }
     // The flat layer draws in tree order, so the opening, whose scrim dims the whole window,
     // comes before the prompt, whose buttons would otherwise be drawn under it and look
     // disabled. The opening has nothing Tab stops at, so Tab still reaches the prompt's buttons
-    // first. The prompt draws no panel, as the web's action dock draws none.
-    holder()
-        .name("game")
-        .children(opening)
-        .children(prompt)
-        .children(pieces)
+    // first. The prompt draws no panel, as the web's action dock draws none. Outside the
+    // opening the orbs and stops are drawn over the prompt.
+    let (under, after) = if opening.is_some() {
+        (hud, Default::default())
+    } else {
+        (Default::default(), hud)
+    };
+    let mut children = Vec::with_capacity(under.len() + 2 + after.len() + over.len());
+    children.extend(under.into_iter().flatten());
+    children.extend(opening);
+    children.extend(prompt);
+    children.extend(after.into_iter().flatten());
+    children.extend(over.into_iter().flatten());
+    let mut game = holder().name("game");
+    game.children = children;
+    game
+}
+
+/// `element` with no press on it or anything in it, as an element under an overlay takes none.
+fn inert(mut element: Element) -> Element {
+    element.press = None;
+    element.shortcuts = Shortcuts::default();
+    element.children = element.children.into_iter().map(inert).collect();
+    element
 }
 
 /// The open prompt, or what the screen shows while the opponent decides, waiting for the table
@@ -94,11 +115,12 @@ pub fn game_phone(input: &ScreenIn) -> Element {
         ]
     });
     // The flat layer draws in tree order. The opening's scrim comes first, as on the desktop
-    // (`game`), so that it dims no control that still takes presses. The result is drawn over
+    // (`game`), so that it dims no control that still takes presses; like the desktop's, it
+    // shows while the hands are dealt. The result is drawn over
     // everything else, which it blurs (`Style::backdrop`).
     let mut screen = holder()
         .name("game")
-        .children(opening::opening(input).map(Element::waits))
+        .children(opening::opening(input))
         .children(middle_under)
         .children(prompt)
         .children(furniture.into_iter().flatten().flatten())

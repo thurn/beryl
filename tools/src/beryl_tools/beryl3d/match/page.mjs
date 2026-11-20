@@ -349,11 +349,13 @@ export function records({ roles, only, light = false }) {
                 return node.getAttribute("aria-label") ?? content(node);
             })
             .join("");
-    /** `el`'s name, cut to the first group of its roles.json entry's `name` pattern where it
-     * has one, so that "Your library, 32 cards" can be named "Your library" as Beryl 3D names
-     * it. */
+    /** `el`'s name: its roles.json entry's `called` where it has one, for an element with no
+     * accessible name that Beryl 3D names; otherwise its name cut to the first group of the
+     * entry's `name` pattern where it has one, so that "Your library, 32 cards" can be named
+     * "Your library" as Beryl 3D names it. */
     const nameOf = (el) => {
         const rule = ruleOf(el);
+        if (rule?.called !== undefined) return rule.called;
         // A mark's outline is named by its class (`stage-mark-eligible`), as it has no name.
         const name = rule?.from === "class" ? el.className : fullName(el);
         const pattern = rule?.name;

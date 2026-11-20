@@ -219,6 +219,7 @@ impl Client {
         let wake = self.bug_wake(table).or_at(self.layer.tip_due());
         wake.or_at(self.touch.due())
             .or_at(self.inspector.notice_until)
+            .or_at(self.viewing.spin_due())
     }
 
     /// A pointer event while the report is open: nothing reaches the table. While a region is

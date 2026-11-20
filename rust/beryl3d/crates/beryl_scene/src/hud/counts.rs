@@ -212,8 +212,9 @@ impl CountFloats {
     /// and pool in a window of `size`, or shows none of them unless `visible`. A `loss` or `gain`
     /// in `effects` that plays on a player at `now` tints their total and shows by how much it
     /// changed, sinking away for a loss and rising for a gain while it fades, linearly over the
-    /// run. A press on the total of a player marked in `targets` picks them. Lays nothing out and
-    /// allocates nothing for what `prepare` laid out.
+    /// run. A press on the total of a player marked in `targets` picks them. While `dimmed`, the
+    /// opening's backdrop lies under the totals, which are dimmed as it dims what lies under it.
+    /// Lays nothing out and allocates nothing for what `prepare` laid out.
     #[expect(
         clippy::too_many_arguments,
         reason = "each is a separate input of the frame"
@@ -226,13 +227,17 @@ impl CountFloats {
         now: u64,
         layout: &Layout,
         size: Size,
-        (visible, targets): (bool, [bool; 2]),
+        (visible, targets, dimmed): (bool, [bool; 2], bool),
     ) {
         let (passes, phone) = (self.passes, self.phone);
         for (side, name) in [(Side::You, "You"), (Side::Opponent, "Opponent")] {
             let at = index(side);
             let target = targets[at];
-            let counts = counts.player(side).filter(|_| visible);
+            // The phone's opening hides the orbs, and the totals with them
+            // (`screens::game_phone`). The desktop's coin and the words saying who starts stand
+            // over the opponent's total, as the web's coin covers it.
+            let hidden = dimmed && (phone || side == Side::Opponent);
+            let counts = counts.player(side).filter(|_| visible && !hidden);
             let run = effects.iter().find(|run| {
                 matches!(run.effect, Effect::Loss | Effect::Gain)
                     && run.on == Subject::Player { player: side }
@@ -282,12 +287,18 @@ impl CountFloats {
                 Effect::Gain => color::GAIN,
                 _ => color::LOSS,
             });
+            // Under the opening's backdrop the total is dimmed as the orb under it is.
+            let opacity = if dimmed {
+                1.0 - crate::screens::opening::backdrop_cover(life.y, size.height)
+            } else {
+                1.0
+            };
             layer.set_float_look(
                 floats::LIFE[at],
                 FloatLook {
                     point: life,
                     anchor: Vec2::new(0.5, 0.5),
-                    opacity: 1.0,
+                    opacity,
                     tint,
                 },
             );

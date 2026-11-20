@@ -30,6 +30,8 @@ impl Client {
         }
         self.inspector.due = true;
         let view = self.show.latest().map(|update| &update.view);
+        self.viewing
+            .spin(view.filter(|_| self.screen == Screen::Game), self.now);
         // A result put aside comes back with the next game's end.
         if view.is_none_or(|view| !matches!(view.status, Status::Over { .. } | Status::Stopped)) {
             self.viewing.result_aside = false;
@@ -105,7 +107,11 @@ impl Client {
             screen: self.screen,
             window: self.window,
             view: self.show.latest().map(|update| &update.view),
-            prompt: self.prompt.as_ref().map(|(_, prompt)| prompt),
+            // While the opening's coin spins, no decision is offered, as the web's `Opening` offers
+            // none.
+            prompt: (self.prompt.as_ref())
+                .map(|(_, prompt)| prompt)
+                .filter(|_| !self.viewing.spinning(self.now)),
             settings: &self.settings,
             sheet: self.sheet,
             agents: &self.agents,
@@ -127,6 +133,7 @@ impl Client {
             log_open: self.log.open,
             concede: self.concede,
             result_aside: self.viewing.result_aside,
+            spinning: self.viewing.spinning(self.now),
             occupied: &crate::hud::phone::NOTHING,
         }
     }

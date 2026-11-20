@@ -233,6 +233,7 @@ mod milestone_three {
             prompt,
             settings,
             sheet: None,
+            spinning: false,
             agents: &[],
             start: &StartForm {
                 agent: None,

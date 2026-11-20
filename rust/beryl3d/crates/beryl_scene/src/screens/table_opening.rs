@@ -59,10 +59,12 @@ fn pieces(input: &ScreenIn) -> Option<(Element, Element)> {
                 starting: None,
                 title,
                 hand: &[],
+                hand_hidden: false,
                 rows: 0,
                 bottom: &[],
                 slots: 0,
                 actions: buttons.len(),
+                waiting: false,
                 press: None,
             };
             (present(&shown, input), buttons, !phone)
@@ -102,10 +104,12 @@ fn pieces(input: &ScreenIn) -> Option<(Element, Element)> {
                 starting: Some(view.turn.active),
                 title: &title,
                 hand: &in_hand,
+                hand_hidden: false,
                 rows: hand.len(),
                 bottom: chosen,
                 slots: usize::from(to_bottom.unwrap_or(0)).max(chosen.len()),
                 actions: buttons.len(),
+                waiting: false,
                 press: picking.then_some(bottom as fn(ObjectId) -> Press),
             };
             (present(&shown, input), buttons, false)

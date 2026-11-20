@@ -59,15 +59,19 @@ const HAND: [&str; 7] = [
 fn the_opening_hand_stands_in_the_row_and_keep_answers_the_mulligan() {
     let mut page = at("opening-keep", "prompt:1");
     let tree = page.tree();
-    // The opening's backdrop covers the step stops, as the web's overlay does: none takes a
-    // press beside the hand.
-    assert!(!tree.contains("toggle \"Your draw\""), "{tree}");
     assert!(tree.contains("text \"Opening hand\""), "{tree}");
     assert!(tree.contains("text \"On the draw\""), "{tree}");
-    // The life totals are hidden, as the web's overlay covers them: the opponent's stood over
-    // "On the draw".
+    // The life orbs stand under the opening's backdrop, as the web's overlay is drawn over
+    // its orbs, with the viewer's total. The opponent's is hidden under "On the draw", as the
+    // web's coin covers it.
+    assert!(tree.contains("region \"opponent's orb\""), "{tree}");
     assert!(!tree.contains("player \"Opponent 20\""), "{tree}");
-    assert!(!tree.contains("player \"You 20\""), "{tree}");
+    assert!(tree.contains("player \"You 20\""), "{tree}");
+    // The stops under the backdrop take no press, as the web's overlay takes it.
+    let draw = (tree.lines())
+        .find(|line| line.contains("toggle \"Your draw\""))
+        .expect("the viewer's draw stop");
+    assert!(!draw.contains("interactive"), "{draw}");
     for name in HAND {
         let (card_name, slot) = name.rsplit_once(" #").expect("a slot");
         let boxed = page.find(&format!("region \"{name}\"")).rect();
@@ -164,4 +168,30 @@ fn a_card_clicked_in_the_row_while_putting_on_the_bottom_clicks_the_prompt_on_it
         })]
     );
     assert!(rest_faults("opening-bottom").is_empty());
+}
+
+#[test]
+fn the_opening_shows_the_flip_while_the_coin_spins_and_then_the_hand() {
+    // `opening-bottom`'s opponent won the flip. Its views reach the client at once, and the
+    // coin spins for a second and a half from then, while the hand is dealt.
+    let mut page = page("opening-bottom", Side::You, Layout::Desktop, SIZE)
+        .unwrap_or_else(|why| panic!("{why}"));
+    let moment = Moment::from_str("899ms").unwrap_or_else(|why| panic!("{why:?}"));
+    page.seek(&moment).unwrap_or_else(|why| panic!("{why}"));
+    let tree = page.tree();
+    // The opening is drawn while the deal plays, with the flip's title and the dots, and no
+    // card of the hand, no word of who starts and no button yet.
+    assert!(tree.contains("text \"Opponent won the flip\""), "{tree}");
+    assert!(tree.contains("region \"waiting\""), "{tree}");
+    assert!(!tree.contains("On the draw"), "{tree}");
+    assert!(!tree.contains("button \"Keep 7\""), "{tree}");
+    assert!(!tree.contains("card \"Plains\" #33"), "{tree}");
+    assert!(tree.contains("player \"You 20\""), "{tree}");
+    // Once it has stopped, the hand stands in the row and the decision is offered.
+    let mut page = at("opening-bottom", "prompt:1");
+    let tree = page.tree();
+    assert!(tree.contains("text \"Opening hand\""), "{tree}");
+    assert!(tree.contains("button \"Keep 7\""), "{tree}");
+    assert!(tree.contains("card \"Plains\" #33"), "{tree}");
+    assert!(!tree.contains("region \"waiting\""), "{tree}");
 }

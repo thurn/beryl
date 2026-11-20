@@ -4,7 +4,8 @@
 //! title, the viewer's hand in a row of large cards and, while cards are being put on the
 //! bottom of the library, a row of slots under it for them. The open prompt's buttons stand in
 //! the prompt bar, which `screens::game` adds after this so that the backdrop is drawn under
-//! them, and the life totals are hidden, as the web's overlay covers them.
+//! them. The life orbs and the step stops stand under the backdrop, which dims them, as the
+//! web's overlay is drawn over its `Hud`.
 //!
 //! The cards are the hand's scene objects (`Shown::Object`): the table moves each from the hand
 //! into its box and back (`table::shown`), so no card is drawn at the hand while the opening is
@@ -14,12 +15,17 @@
 //! The coin is the `announce` notice's float (`hud::notices`), which the client draws over
 //! every screen.
 //!
+//! When the opponent won the flip, the opening first shows the flip for `FLIP_MS` however soon
+//! they chose, as the web's coin spins (`ScreenIn::spinning`): the title says who won, the hand
+//! is dealt out of sight and no button is offered. Until a button is offered, three gold dots
+//! under the title say that the game is waiting, as the web's `.opening-waiting` does.
+//!
 //! Not built yet: the web's face-down hand while the viewer has declared a mulligan, and its
 //! play or draw buttons in the middle of the window, which stand in the prompt bar here.
 
 use beryl_protocol::PlayerView;
 use beryl_protocol::prompt::{PromptView, Purpose};
-use beryl_protocol::protocol::{Declaration, ObjectId, Side, Status, ZoneName};
+use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
 
@@ -27,7 +33,7 @@ use super::ScreenIn;
 use crate::data::space::flat::opening as metrics;
 use crate::data::space::flat::phone::opening as phone;
 use crate::data::space::flat::phone::{ACTION_GAP, ACTION_HEIGHT, GUTTER};
-use crate::element::{Align, Anchor, Element, Justify, Press, Shown, column, row, text};
+use crate::element::{Align, Anchor, Element, Justify, Overflow, Press, Shown, column, row, text};
 use crate::frame::Role;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::text::TypeStyle;
@@ -48,7 +54,7 @@ const COIN: TypeStyle = type_style::OPENING_COIN;
 /// Whether the game is in its opening, as the web's `GameScreen` decides it
 /// (`ui/src/screens/Game.tsx`): before the first turn, while the game is being decided or
 /// played rather than free, over or stopped.
-fn in_opening(view: &PlayerView) -> bool {
+pub(crate) fn in_opening(view: &PlayerView) -> bool {
     view.turn.number == 0
         && !matches!(
             view.status,
@@ -67,10 +73,11 @@ pub fn shown(input: &ScreenIn) -> bool {
 pub fn opening(input: &ScreenIn) -> Option<Element> {
     let view = input.view.filter(|view| in_opening(view))?;
     let you = &view.players.you;
-    let starting = view.turn.starting;
-    let picking = input
-        .prompt
-        .filter(|prompt| prompt.is(Purpose::PutOnBottom));
+    // While the coin spins, the opening does not show who starts, as the web's `Opening` holds
+    // it back; the client offers no decision meanwhile.
+    let starting = view.turn.starting.filter(|_| !input.spinning);
+    let prompt = input.prompt;
+    let picking = prompt.filter(|prompt| prompt.is(Purpose::PutOnBottom));
     let hand: Vec<ObjectId> = (view.objects.iter())
         .filter(|object| object.zone == ZoneName::Hand && object.owner == Side::You)
         .map(|object| object.slot)
@@ -85,26 +92,33 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
     } else {
         0
     };
-    let title = title(view, picking.is_some());
+    let title = title(view, starting, picking.is_some());
     let actions = if picking.is_some() {
         1
     } else {
-        input.prompt.map_or(0, |prompt| prompt.buttons.len())
+        prompt.map_or(0, |prompt| prompt.buttons.len())
     };
     let shown: Vec<ObjectId> = (hand.iter().copied())
         .filter(|&slot| !picked(slot))
-        .filter(|_| starting.is_some())
         .collect();
+    // The opponent choosing who starts shows on the coin, and the opponent considering their
+    // hand on their side of the table, so neither shows the dots (`Opening`'s
+    // `choosingFirst` and `considering`).
+    let choosing_first =
+        starting.is_none() && view.turn.flip_winner == Some(Side::Opponent) && !input.spinning;
+    let considering = matches!(view.handling, Some(CardHandling::Hand { .. }));
     Some(present(
         &Presentation {
             view,
             starting,
             title: &title,
             hand: &shown,
+            hand_hidden: starting.is_none(),
             rows: hand.len(),
             bottom: &bottom,
             slots: to_bottom.max(bottom.len()),
             actions,
+            waiting: actions == 0 && !choosing_first && !considering,
             press: None,
         },
         input,
@@ -116,15 +130,21 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
 /// how many cards the hand holds in all (which sizes the phone's rows), how many slots the
 /// bottom row has, how many buttons the dock holds, and what a press on a card does, if
 /// anything. The engine's game and the manual table each fill it from their own prompt.
+///
+/// `hand_hidden` lays the hand row out but draws none of its cards, as the web keeps the hand
+/// under the table until it knows who starts, so that the cards are dealt out of sight and then
+/// stand in their places at once. `waiting` shows the dots under the title.
 pub(crate) struct Presentation<'a> {
     pub view: &'a PlayerView,
     pub starting: Option<Side>,
     pub title: &'a str,
     pub hand: &'a [ObjectId],
+    pub hand_hidden: bool,
     pub rows: usize,
     pub bottom: &'a [ObjectId],
     pub slots: usize,
     pub actions: usize,
+    pub waiting: bool,
     pub press: Option<fn(ObjectId) -> Press>,
 }
 
@@ -181,6 +201,18 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
             .wrap(true)
             .justify_content(Justify::Center);
     }
+    if shown.hand_hidden {
+        // The cards' boxes lie outside this empty strip's clip, so the table draws none of
+        // them (`Layer::shown_objects`), and the strip takes no room, as the web's empty
+        // `.opening-hand` takes none.
+        hand_row = row()
+            .name("hand held")
+            .height(0.0)
+            .overflow(Overflow::Clip)
+            .passes(true)
+            .child(hand_row);
+    }
+    let dots = (shown.waiting && !super::phone(input)).then(waiting);
     let slots_row = (slots > 0).then(|| {
         let boxes = (0..slots).map(|at| match shown.bottom.get(at) {
             Some(&slot) => card(slot, sizes.slot),
@@ -203,7 +235,8 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
         .child(coin)
         .child(heading)
         .child(hand_row)
-        .children(slots_row);
+        .children(slots_row)
+        .children(dots);
     // The flat layer's root puts a screen in its bottom right corner, so the group is anchored
     // below the window's top middle instead, as the web pads `.opening` down from the top.
     let top = Vec2::new(input.window.size.width / 2.0, sizes.top);
@@ -221,10 +254,66 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
         .child(screen)
 }
 
-/// The title, as the web's `Opening` words it.
-fn title(view: &PlayerView, picking: bool) -> String {
+/// The three gold dots under the title while the game waits for the session or the opponent,
+/// `.opening-buttons` holding `.working-dots.opening-waiting`: 34-point type whose dots are
+/// 0.26em wide, 0.22em apart, 0.3em in from the row's start. The web pulses them; these stand
+/// still.
+fn waiting() -> Element {
+    let dot = |at: usize| {
+        row()
+            .name(&format!("dot {}", at + 1))
+            .width(metrics::DOT)
+            .height(metrics::DOT)
+            .radius(metrics::DOT / 2.0)
+            .background(color::GOLD)
+            .passes(true)
+    };
+    let mut dots = row()
+        .name("working")
+        .gap(metrics::DOT_GAP)
+        .passes(true)
+        .children((0..3).map(dot));
+    dots.style.margin = [0.0, 0.0, 0.0, metrics::DOT_INSET];
+    let mut buttons = row()
+        .name("waiting")
+        .min_height(metrics::WAITING_HEIGHT)
+        .align_items(Align::Center)
+        .passes(true)
+        .child(dots);
+    buttons.style.margin = [metrics::WAITING_GAP, 0.0, 0.0, 0.0];
+    buttons
+}
+
+/// How much of what lies under the opening's backdrop it hides at `y` points down a window
+/// `height` points tall, from 0 to 1: its gradient's opacity there
+/// (`tokens::gradient::OPENING_BACKDROP`, which runs from the window's top to its bottom). A
+/// float drawn over the backdrop, such as a life total, takes the rest as its opacity, so that
+/// it looks dimmed as the web's overlay dims the orb under it.
+#[must_use]
+pub(crate) fn backdrop_cover(y: f32, height: f32) -> f32 {
+    let resolved = crate::tokens::gradient::OPENING_BACKDROP.resolve(Vec2::new(1.0, height));
+    let at = (y / height.max(1.0)).clamp(0.0, 1.0);
+    let alpha = |stop: usize| f32::from(resolved.colors[stop][3]) / f32::from(u8::MAX);
+    let offsets = resolved.offsets;
+    let Some(next) = offsets.iter().position(|&offset| offset >= at) else {
+        return alpha(offsets.len() - 1);
+    };
+    if next == 0 {
+        return alpha(0);
+    }
+    let (from, to) = (offsets[next - 1], offsets[next]);
+    let share = if to > from {
+        (at - from) / (to - from)
+    } else {
+        1.0
+    };
+    alpha(next - 1) + (alpha(next) - alpha(next - 1)) * share
+}
+
+/// The title, as the web's `Opening` words it, given who starts as the opening shows it.
+fn title(view: &PlayerView, starting: Option<Side>, picking: bool) -> String {
     let you = &view.players.you;
-    match view.turn.starting {
+    match starting {
         None if view.turn.flip_winner == Some(Side::You) => "You won the flip".to_owned(),
         None => "Opponent won the flip".to_owned(),
         Some(_) if picking => "Put on the bottom".to_owned(),

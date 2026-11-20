@@ -160,6 +160,9 @@ pub struct ScreenIn<'a> {
     /// Whether the person put the game's result aside to see the battlefield
     /// (`game_over::game_over`).
     pub result_aside: bool,
+    /// Whether the opening still shows the coin flip it began with, holding back who starts and
+    /// the open decision (`opening::opening`).
+    pub spinning: bool,
     /// Where the table's cards rest, on the phone layout, which its prompt and dock keep clear
     /// of (`hud::phone::Occupied`); nothing on the desktop.
     pub occupied: &'a Occupied,

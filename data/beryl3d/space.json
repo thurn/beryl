@@ -969,7 +969,12 @@
       "card_gap": 8,
       "slot": 120,
       "slot_gap": 12,
-      "slots_gap": 26
+      "slots_gap": 26,
+      "waiting_gap": 40,
+      "waiting_height": 52,
+      "dot": 8.84,
+      "dot_gap": 7.48,
+      "dot_inset": 10.2
     },
     "table": {
       "edge": 24,
@@ -1027,6 +1032,7 @@
   "shown": {
     "depth": 280,
     "opening": {
+      "flip_ms": 1500,
       "kept_ms": 130,
       "cross_ms": 250,
       "shift_ms": 170

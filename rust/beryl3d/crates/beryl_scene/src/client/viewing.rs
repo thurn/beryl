@@ -4,7 +4,7 @@
 //! pile holds a face.
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::protocol::{ObjectId, ZoneName};
+use beryl_protocol::protocol::{Declaration, ObjectId, Side, ZoneName};
 use beryl_protocol::script::{Act, OwnStep};
 
 use super::Client;
@@ -16,7 +16,7 @@ use crate::inspect::revealed::{self, RevealedFace};
 use crate::layout::FloatLook;
 use crate::light::Span;
 use crate::pose::Curve;
-use crate::screens::Screen;
+use crate::screens::{self, Screen};
 use crate::table::{Moves, Relaid, Window};
 use crate::verbs::Interval;
 
@@ -46,6 +46,60 @@ pub(super) struct Viewing {
     pub(super) result_aside: bool,
     was_opening: bool,
     laid_in: Option<Window>,
+    /// Where the opening's coin flip stands.
+    coin: Coin,
+}
+
+/// Where the opening's coin flip stands: no opening has begun; the coin spins until a time in
+/// the clock of `Client::frame`; or the opening has begun and its coin is not spinning.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Coin {
+    #[default]
+    Before,
+    Spinning {
+        until: u64,
+    },
+    Landed,
+}
+
+impl Viewing {
+    /// Notes whether `view`, the game screen's latest view if the game screen is shown, is in
+    /// its opening. As the opening begins after the opponent won the flip and before anyone
+    /// has declared, its coin spins for `FLIP_MS` from `now`, however soon they chose, as the
+    /// web's `Opening` spins it from when it first shows.
+    pub(super) fn spin(&mut self, view: Option<&PlayerView>, now: u64) {
+        let Some(view) = view.filter(|view| screens::opening::in_opening(view)) else {
+            self.coin = Coin::Before;
+            return;
+        };
+        if self.coin != Coin::Before {
+            return;
+        }
+        let you = &view.players.you;
+        let spins = view.turn.flip_winner == Some(Side::Opponent)
+            && you.mulligans == 0
+            && you.mulligan == Declaration::Undeclared;
+        self.coin = if spins {
+            Coin::Spinning {
+                until: now + ns(opening::FLIP_MS),
+            }
+        } else {
+            Coin::Landed
+        };
+    }
+
+    /// Whether the opening's coin still spins at `now`.
+    pub(super) fn spinning(&self, now: u64) -> bool {
+        self.spin_due().is_some_and(|until| now < until)
+    }
+
+    /// When the opening's coin stops spinning, while it spins.
+    pub(super) fn spin_due(&self) -> Option<u64> {
+        match self.coin {
+            Coin::Spinning { until } => Some(until),
+            Coin::Before | Coin::Landed => None,
+        }
+    }
 }
 
 /// How the opening's cards glide between its hand and its slots: the web interface's
@@ -190,10 +244,21 @@ impl Client {
         }
     }
 
+    /// What each frame does for the screen's own clock: once the opening's coin has stopped
+    /// spinning, shows who starts and the decision; and shows or hides the Revealed Cards pill
+    /// (`write_pill`).
+    pub(super) fn viewing_frame(&mut self, visible: bool) {
+        if (self.viewing.spin_due()).is_some_and(|until| self.now >= until) {
+            self.viewing.coin = Coin::Landed;
+            self.show_screen();
+        }
+        self.write_pill(visible);
+    }
+
     /// Shows the Revealed Cards pill over the pile while the pile holds a face, on the game
     /// screen with no sheet open, and closes the pile's viewer once its last face has left.
     /// Lays nothing out and allocates nothing.
-    pub(super) fn write_pill(&mut self, visible: bool) {
+    fn write_pill(&mut self, visible: bool) {
         let holds = (self.show.lit().open().iter()).any(|open| {
             matches!(open.span, Span::Revealed { .. })
                 && open.ends.is_none_or(|ends| ends.to > self.now)

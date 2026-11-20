@@ -432,7 +432,7 @@ impl Client {
         self.show.pointer_mut().advance(table_now);
         self.show.advance_slide(table_now);
         self.inspect(table_now);
-        self.write_pill(self.screen == Screen::Game && self.sheet.is_none());
+        self.viewing_frame(self.screen == Screen::Game && self.sheet.is_none());
         let visible = self.hud_shown();
         // The guided start's opening covers the table's life totals and pile counts, not notices.
         let counted = visible && !self.guided_start();
@@ -447,7 +447,7 @@ impl Client {
         let table = self.show.table();
         self.layer
             .follow(|subject| layout::spot_of(&builder, table, subject));
-        // Each total shows what `prepare` laid out; the opening hides them, as the web's does.
+        // Each total shows what `prepare` laid out, over the opening too, as the web's does.
         self.counts.write(
             &mut self.layer,
             self.show.counts(),
@@ -455,7 +455,7 @@ impl Client {
             table_now,
             self.show.table().layout(),
             self.window.size,
-            (counted && !self.viewing.opening, targets),
+            (counted, targets, self.viewing.opening),
         );
         (self.piles).write(&mut self.layer, &self.show, counted && !covers);
         (self.notices).write(
