@@ -400,8 +400,8 @@ impl Game {
     }
 
     /// The other seat's view of the latest update, with its script: what a review game
-    /// publishes beside the human's, and what the fuzz checks (`fuzz.rs`).
-    pub(crate) fn opponent_view(&mut self) -> PlayerView {
+    /// publishes beside the human's, and what the fuzz test checks.
+    pub fn opponent_view(&mut self) -> PlayerView {
         self.draw_for(self.human.opponent())
     }
 

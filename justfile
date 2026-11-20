@@ -255,7 +255,7 @@ workspace-hack:
 fuzz games="10000":
     cd rust && export BERYL_FUZZ_GAMES="$1" CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS=true && \
     cargo test --release -p beryl_search --test all -- games:: shrink:: families:: --nocapture --include-ignored && \
-    cargo test --release -p beryl_session --lib fuzz:: -- --nocapture --include-ignored
+    cargo test --release -p beryl_session --test session fuzz:: -- --nocapture --include-ignored
 
 # The stage's verbs held to Arena's numbers: captured in stepped stage time and measured as Arena's clips were (--values: durations, delays and staggers only)
 [group('test')]

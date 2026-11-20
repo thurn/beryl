@@ -32,6 +32,3 @@ pub fn sessions(
 pub fn resume_latest(sessions: &Sessions) -> Option<SessionId> {
     sessions.resume_latest()
 }
-
-#[cfg(test)]
-mod tests;

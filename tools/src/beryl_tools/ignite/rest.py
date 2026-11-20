@@ -82,7 +82,7 @@ FUZZ_TARGETS: dict[str, tuple[list[str], int]] = {
     "games": (["-p", "beryl_search", "--test", "games"], 500),
     "families": (["-p", "beryl_search", "--test", "families"], 500),
     "shrink": (["-p", "beryl_search", "--test", "shrink"], 100),
-    "session": (["-p", "beryl_session", "--lib", "fuzz::"], 100),
+    "session": (["-p", "beryl_session", "--test", "session", "fuzz::"], 100),
 }
 # Seeds reserved per batch. A multiple of 4, since the engine fuzzer plays every fourth game in
 # the large layout and a batch must start on the same phase as any other.

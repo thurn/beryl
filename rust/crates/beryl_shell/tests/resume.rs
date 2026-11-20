@@ -6,7 +6,7 @@ use std::time::Duration;
 use beryl_cards::decks::{VINTAGE_WU_CONTROL, WU_CONTROL};
 use beryl_session::{GameUpdate, PlayerView, Seat, StartGame, Status, StopsSetting};
 
-use crate::{Dirs, sessions};
+use beryl_shell::{Dirs, resume_latest, sessions};
 
 fn owned(deck: &[(u8, &str)]) -> Vec<(u8, String)> {
     deck.iter().map(|&(n, name)| (n, name.to_owned())).collect()
@@ -60,7 +60,7 @@ fn a_game_dropped_mid_game_resumes_from_a_second_sessions_on_the_same_dirs() {
         sent.send(update).unwrap();
     });
     assert!(
-        crate::resume_latest(&second).is_some(),
+        resume_latest(&second).is_some(),
         "the unfinished game resumes"
     );
     assert_eq!(to_decision(&views), stopped, "it resumes where it stopped");

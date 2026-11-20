@@ -412,12 +412,14 @@ pub fn breaks() -> Result<Vec<Break>, serde_json::Error> {
 
 #[cfg(test)]
 mod tests {
-    use beryl_cards::CARDS;
     use serde_json::json;
 
     use crate::save::Chosen;
 
     use super::*;
+
+    /// The migrations under test never read a card, so the table has none.
+    static CARDS: CardTable = CardTable::new(&[]);
 
     /// A synthetic version 1 to 2 for the chain's own test: `name` renamed `title`.
     const RENAME: Step = |mut file, _| {

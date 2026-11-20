@@ -2,8 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use beryl_card_store::{Face, STORE};
 use beryl_cards::CARDS;
-
-use super::{
+use beryl_session::card_records::{
     CARD_BACK_ID, CardRecordsRequest, NAMELESS_TOKEN_ID, card_records, card_records_among,
 };
 

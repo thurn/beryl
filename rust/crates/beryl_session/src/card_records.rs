@@ -69,6 +69,3 @@ pub fn fixture_message(messages: &[FixtureMessage], cards: &'static CardTable) -
 pub fn record(name: &str, is_token: bool, cards: &'static CardTable) -> Option<Record> {
     beryl_card_records::record(name, is_token, engine_makers(cards))
 }
-
-#[cfg(test)]
-mod tests;

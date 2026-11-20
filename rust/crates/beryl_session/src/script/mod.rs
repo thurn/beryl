@@ -14,8 +14,6 @@ mod stack;
 mod staging;
 
 pub use beryl_protocol::script::*;
-#[cfg(test)]
-pub(crate) use build::PLANTED;
 pub use build::Screen;
 pub use follow::Follow;
 pub use hear::{Cause, Copied, Heard, Move, Names, Said};

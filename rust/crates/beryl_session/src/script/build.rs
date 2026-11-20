@@ -93,16 +93,11 @@ impl Screen {
                     held,
                     ..
                 } = builder;
-                #[allow(unused_mut)] // A test may plant a fault in it.
-                let mut script = Script {
+                let script = Script {
                     reset: None,
                     beats,
                     timing: Vec::new(),
                 };
-                #[cfg(test)]
-                if let Some(fault) = PLANTED.get() {
-                    fault(&mut script);
-                }
                 // Timed last, once nothing adds, removes or reorders a step.
                 let script = script.timed(&start);
                 #[cfg(debug_assertions)]
@@ -150,14 +145,6 @@ impl Screen {
         );
         script
     }
-}
-
-#[cfg(test)]
-thread_local! {
-    /// A fault planted in every script this thread's screens build, before the checks see
-    /// it: the fuzz's test that a broken builder shrinks to a few choices (`fuzz.rs`).
-    pub(crate) static PLANTED: std::cell::Cell<Option<fn(&mut Script)>> =
-        const { std::cell::Cell::new(None) };
 }
 
 /// The checks every script a debug build makes is held to: it replays from the
