@@ -110,6 +110,9 @@ fn record(job: &Job, source: &std::path::Path) -> Recorded {
 /// `messages` headed by the card records of every card they name, as `beryl_cli`'s fixture
 /// files are.
 fn with_card_records(mut messages: Vec<FixtureMessage>) -> Vec<FixtureMessage> {
-    messages.insert(0, card_records::fixture_message(&messages, &beryl_cards::CARDS));
+    messages.insert(
+        0,
+        card_records::fixture_message(&messages, &beryl_cards::CARDS),
+    );
     messages
 }
