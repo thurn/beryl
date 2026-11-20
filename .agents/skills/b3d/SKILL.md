@@ -154,7 +154,10 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   the largest difference of its box's center, its size and its opacity from the
   web's, each with its frame number and time, worst first, and writes a PNG plot
   of x, y, scale and opacity over time with the web's line solid and Beryl 3D's
-  dashed. Read the plots: an easing or a path that differs shows as two curves
+  dashed. `--all` measures the span of each verb, effect and mark that
+  `data/beryl3d/match/motion-census.json` lists and ranks them by summed
+  deviation, worst first; `--refresh-census` finds the spans again from the
+  recordings' timelines. Read the plots: an easing or a path that differs shows as two curves
   of different shape. Start the span after the view arrives (the `step:` lines
   of `just b3d info` give the times); `--only '<locator>'` picks one element and
   `--layout phone` the phone layout.
@@ -220,8 +223,12 @@ time, largest differences first, and land each improvement as you go:
    ten. Read the crops: a dark ring round the screen in the difference picture
    is the table's background, a block on one side only is an element the other
    side lacks.
-6. **Fix motion.** `just b3d match motion <recording> --from <moment> --to
-   <moment>` compares an animation frame by frame; read its plots.
+6. **Fix motion.** `just b3d match motion --all` ranks every verb, effect and
+   mark by how far its motion is from the web's, worst first, and prints for
+   each the element that differs most, the kind of difference (position, size,
+   opacity or timing) and the `just b3d match motion <recording> --from
+   <moment> --to <moment>` command that shows it. Run that command on the worst
+   item in your area and read its plots.
 7. **Check one element alone.** `--only '<locator>'` on `snapshot` and `pixels`
    draws one element and its web pair on black, so its own error shows apart
    from what lies behind it.

@@ -113,6 +113,29 @@ def partners(web: Sequence[Frame], b3d: Sequence[Frame]) -> dict[object, object]
     return out
 
 
+def inside(frames: Sequence[Frame], outer: set[object]) -> set[object]:
+    """The tracks of the elements that lie inside an element whose track is in `outer` (its
+    `parent` chain, an index into the same frame, reaches one) in some frame. A card's text
+    and frame on the web are elements of their own inside the card, which move with it.
+    """
+    found: set[object] = set()
+    for frame in frames:
+        for element in frame:
+            parent = element.get("parent")
+            seen = 0
+            while (
+                isinstance(parent, int)
+                and 0 <= parent < len(frame)
+                and seen < len(frame)
+            ):
+                if frame[parent].get("track") in outer:
+                    found.add(element.get("track"))
+                    break
+                parent = frame[parent].get("parent")
+                seen += 1
+    return found
+
+
 def moves(track: Track) -> bool:
     """Whether the element's box or opacity changes over the span, or it comes or goes."""
     seen = [s for s in track if s is not None]
@@ -192,3 +215,91 @@ def present(track: Track) -> str:
             runs.append(f"{start}-{at - 1}" if at - 1 > start else str(start))
             start = None
     return ", ".join(runs) or "none"
+
+
+# How `match motion --all` weighs each kind of difference into one number, so that a verb's
+# pairs can be summed and the verbs ranked. Each weight turns its kind into points of the
+# boxes' positions: a point of size counts as a point of position, a hundredth of opacity as
+# a point, and a 60 Hz frame (about 16.7 ms) of timing as a point and two thirds, so that a
+# motion which starts one frame late counts about as much as one that is a point and a half
+# off its path for the whole span.
+WEIGHTS: dict[str, float] = {
+    "position": 1.0,
+    "size": 1.0,
+    "opacity": 100.0,
+    "timing": 0.1,
+}
+
+
+def moving_frames(track: Track) -> tuple[int, int] | None:
+    """The first and last frame in which the element is moving: on screen and away from where
+    it stood in the frame before, or coming or going. None if it never moves."""
+    changed: list[int] = []
+    for at in range(1, len(track)):
+        before, now = track[at - 1], track[at]
+        if (before is None) != (now is None):
+            changed.append(at)
+        elif before is not None and now is not None and moves([before, now]):
+            changed.append(at)
+    return (changed[0], changed[-1]) if changed else None
+
+
+@dataclass(frozen=True)
+class Deviation:
+    """How far apart a pair's tracks lie on average, for ranking: the mean distance between the
+    boxes' centers, the mean larger difference of width or height and the mean difference of
+    opacity over the frames both elements are on screen, and how many ms apart the two sides'
+    motions start plus how many apart they end (0 unless both sides move)."""
+
+    position: float
+    size: float
+    opacity: float
+    timing: float
+
+    def weighed(self) -> dict[str, float]:
+        """Each kind's share of `total`, by `WEIGHTS`."""
+        return {kind: getattr(self, kind) * WEIGHTS[kind] for kind in WEIGHTS}
+
+    def total(self) -> float:
+        return sum(self.weighed().values())
+
+    def most(self) -> str:
+        """The kind that adds the most to `total`."""
+        shares = self.weighed()
+        return max(shares, key=lambda kind: shares[kind])
+
+
+def deviation(web: Track, b3d: Track, times: Sequence[float]) -> Deviation:
+    """`Deviation` of two tracks taken at `times` (ms, one for each frame)."""
+    both = [(w, b) for w, b in zip(web, b3d) if w is not None and b is not None]
+    count = max(1, len(both))
+    timing = 0.0
+    web_moving, b3d_moving = moving_frames(web), moving_frames(b3d)
+    if web_moving is not None and b3d_moving is not None:
+        timing = abs(times[web_moving[0]] - times[b3d_moving[0]]) + abs(
+            times[web_moving[1]] - times[b3d_moving[1]]
+        )
+    return Deviation(
+        position=sum(math.dist(w.center(), b.center()) for w, b in both) / count,
+        size=sum(max(abs(w.width - b.width), abs(w.height - b.height)) for w, b in both)
+        / count,
+        opacity=sum(abs(w.opacity - b.opacity) for w, b in both) / count,
+        timing=timing,
+    )
+
+
+def alone(track: Track) -> Deviation:
+    """The `Deviation` of an element that moves on one side only, against standing still: how far
+    its center, its size and its opacity get from where they first are on screen."""
+    seen = [s for s in track if s is not None]
+    if not seen:
+        return Deviation(0.0, 0.0, 0.0, 0.0)
+    first = seen[0]
+    return Deviation(
+        position=max(math.dist(s.center(), first.center()) for s in seen),
+        size=max(
+            max(abs(s.width - first.width), abs(s.height - first.height)) for s in seen
+        ),
+        opacity=max(abs(s.opacity - first.opacity) for s in seen),
+        timing=0.0,
+    )

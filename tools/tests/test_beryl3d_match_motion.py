@@ -124,3 +124,81 @@ def test_a_plot_draws_both_sides_breaking_a_line_where_its_element_is_off_screen
     assert picture.count(f'stroke="{plot.WEB}"') == 4
     assert picture.count(f'stroke="{plot.B3D}"') == 4
     assert picture.count(f'r="2" fill="{plot.B3D}"') == 4
+
+
+def test_motion_all_ranks_items_by_summed_weighed_deviation_worst_first() -> None:
+    from beryl_tools.beryl3d.match import motion_census
+
+    times = [0.0, 20.0, 40.0, 60.0]
+    web: tracks.Track = [tracks.Sample(i * 10, 0, 10, 10, 1.0) for i in range(4)]
+    # Beryl 3D's card starts a frame late and ends where the web's does: its center is 10, 10
+    # and 0 points off in the last three frames, and its motion starts 20 ms later.
+    late: tracks.Track = [web[0], web[0], web[1], web[3]]
+    d = tracks.deviation(web, late, times)
+    assert (d.position, d.size, d.opacity) == (5.0, 0.0, 0.0)
+    assert d.timing == 20.0
+    assert d.most() == "position" and d.total() == 7.0
+    # A fade that is half as opaque throughout differs most in opacity.
+    faded = [tracks.Sample(s.x, s.y, s.width, s.height, 0.5) for s in web if s]
+    assert tracks.deviation(web, list(faded), times).most() == "opacity"
+    # An element only one side moves counts how far it goes.
+    assert tracks.alone(web).position == 30.0
+
+    def span(name: str, end: str) -> motion_census.Span:
+        return motion_census.Span("verbs", name, "verbs-zones", "you", "0ms", end)
+
+    def row(key: str, d: tracks.Deviation) -> dict[str, object]:
+        return {"key": key, **vars(d)}
+
+    fly, tap, gone = span("fly", "50ms"), span("tap", "60ms"), span("lift", "70ms")
+    # An effect that begins with the fly step shares its frames, and so its result.
+    glow = motion_census.Span("effects", "glow", "verbs-zones", "you", "0ms", "50ms")
+    still = tracks.Deviation(0.0, 0.0, 0.0, 0.0)
+    results: dict[motion_census.Where, dict[str, object]] = {
+        tap.where(): {"rows": [row("card #1", d), row("card #2", d)], "notes": []},
+        fly.where(): {
+            "rows": [
+                row("card #3", tracks.Deviation(1, 0, 0.2, 0)),
+                row("card #4", still),
+            ],
+            "notes": [],
+        },
+        gone.where(): {"failed": "b3d tree failed"},
+    }
+    ranked = motion_census.rank([gone, tap, fly, glow], results)
+    assert [r.span.name for r in ranked] == ["fly", "glow", "tap", "lift"]
+    assert (ranked[0].element, ranked[0].most, ranked[0].total) == (
+        "card #3",
+        "opacity",
+        21.0,
+    )
+    assert ranked[1].total == 21.0 and ranked[2].total == 14.0
+    assert ranked[3].failed == "b3d tree failed"
+    lines = motion_census.ranking_lines(ranked)
+    assert lines[0].startswith("  1. verb fly  21.0  card #3  most: opacity")
+    assert (
+        lines[1]
+        .strip()
+        .startswith("just b3d match motion verbs-zones --from 0ms --to 50ms")
+    )
+    assert lines[2].startswith("  2. effect glow  21.0")
+    assert lines[-1] == "  4. verb lift: not measured: b3d tree failed"
+
+
+def test_a_web_element_inside_a_partnered_one_is_not_reported_alone() -> None:
+    # The web card (track 1) holds its text panel (track 2), which moves with it; Beryl 3D has
+    # the card alone. A second web element, outside the card, moves on its own.
+    def web_frame(x: int) -> list[dict[str, object]]:
+        panel = card([x, 0, 10, 4], track=2) | {"role": "region", "parent": 0}
+        other = card([x, 50, 10, 10], track=3) | {"role": "region"}
+        return [card([x, 0, 10, 10], track=1), panel, other]
+
+    web = [web_frame(0), web_frame(10)]
+    b3d = [
+        [card([0, 0, 10, 10], key="card #1")],
+        [card([10, 0, 10, 10], key="card #1")],
+    ]
+    latest = tracks.name_tracks(b3d)
+    pairs, lonely_b3d, lonely_web = motion.compared(web, b3d, latest, None)
+    assert [p.key for p in pairs] == ["card #1"] and lonely_b3d == []
+    assert [what for what, _ in lonely_web] == ['region "" (frames 0-1)']

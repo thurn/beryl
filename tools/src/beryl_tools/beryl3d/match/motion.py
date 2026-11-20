@@ -19,6 +19,8 @@ equal; this measures what happens in between, which is what makes an animation f
 The span must lie within one view, because the web page opens at a view and plays it alone;
 frames after the next view arrives are left out, and the report says so. As in `snapshot`, the
 web page's loading frames make the start of its animation approximate.
+
+`--all` measures a span of every verb, effect and mark and ranks them (motion_census.py).
 """
 
 from __future__ import annotations
@@ -40,14 +42,12 @@ from .target import UNSAFE, Target, target
 
 def motion_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "recording", help="a recording `just b3d list` names, or a test's name"
+        "recording",
+        nargs="?",
+        help="a recording `just b3d list` names, or a test's name (left out with --all)",
     )
-    parser.add_argument(
-        "--from", dest="start", required=True, help="the span's first moment"
-    )
-    parser.add_argument(
-        "--to", dest="end", required=True, help="the span's last moment"
-    )
+    parser.add_argument("--from", dest="start", help="the span's first moment")
+    parser.add_argument("--to", dest="end", help="the span's last moment")
     parser.add_argument("--seat", choices=("you", "opponent"), default=None)
     parser.add_argument("--layout", choices=("desktop", "phone"), default=None)
     parser.add_argument("--size", default=None, help="<width>x<height> in points")
@@ -61,6 +61,28 @@ def motion_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--art", action="store_true", help="draw the app's card scans on both sides"
     )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="rank every verb, effect and mark of data/beryl3d/match/motion-census.json "
+        "by how far its motion is from the web's, worst first",
+    )
+    parser.add_argument(
+        "--refresh-census",
+        action="store_true",
+        help="with --all, find each item's span again from the timelines and rewrite "
+        "motion-census.json",
+    )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="with --all, measure every span again even if nothing changed",
+    )
+
+
+# An element that moves on one side with no partner on the other: how the report names it, and
+# its track.
+Lonely = tuple[str, tracks.Track]
 
 
 @dataclass(frozen=True)
@@ -230,21 +252,22 @@ def compared(
     b3d_frames: Sequence[Sequence[dict[str, object]]],
     latest: dict[object, str],
     only: object | None,
-) -> tuple[list[Pair], list[str], list[str]]:
+) -> tuple[list[Pair], list[Lonely], list[Lonely]]:
     """The pairs to report, worst first: each pair where either side moves, or the one whose
     Beryl 3D track is `only`, moving or not. Then the moving Beryl 3D elements (by `latest`, each
-    track's locator) and web elements left without a partner."""
+    track's locator) and web elements left without a partner and not inside a partnered one,
+    each with its track."""
     partners = tracks.partners(web_frames, b3d_frames)
     web_tracks = tracks.tracks(web_frames)
     pairs: list[Pair] = []
-    lonely_b3d: list[str] = []
+    lonely_b3d: list[Lonely] = []
     for name, track in tracks.tracks(b3d_frames).items():
         if only is not None and name != only:
             continue
         partner = partners.get(name)
         if partner is None:
             if only is not None or tracks.moves(track):
-                lonely_b3d.append(latest[name])
+                lonely_b3d.append((latest[name], track))
             continue
         web = web_tracks[partner]
         if only is None and not (tracks.moves(track) or tracks.moves(web)):
@@ -258,41 +281,55 @@ def compared(
         for e in frame
     }
     partnered = set(partners.values())
+    # An element inside a partnered one (a card's text panel on the web) moves with it, and
+    # its partner's comparison already says how.
+    carried = tracks.inside(web_frames, partnered)
     lonely_web = [
-        f"{about[name]} (frames {tracks.present(track)})"
+        (f"{about[name]} (frames {tracks.present(track)})", track)
         for name, track in web_tracks.items()
-        if name not in partnered and tracks.moves(track)
+        if name not in partnered and name not in carried and tracks.moves(track)
     ]
     return sorted(pairs, key=ranked), lonely_b3d, lonely_web
 
 
-def run(args: argparse.Namespace) -> int:
-    t: Target = target(
-        argparse.Namespace(**{**vars(args), "at": args.start, "only": None})
-    )
+@dataclass(frozen=True)
+class Measured:
+    """Both clients' tracks over one span, compared: the view the span lies in, when it
+    arrived (ms on Beryl 3D's clock), each frame's time, what the report should warn of, the
+    span's directory, and `compared`'s pairs and lonely elements."""
+
+    view: int
+    given: float
+    times: list[float]
+    notes: list[str]
+    out: Path
+    pairs: list[Pair]
+    lonely_b3d: list[Lonely]
+    lonely_web: list[Lonely]
+
+
+def measure(
+    t: Target,
+    end: str,
+    only_locator: str | None,
+    art: bool,
+    serving: snapshot.Shared | None,
+) -> Measured | str:
+    """Plays the span from `t.at` to `end` in both clients and compares their tracks (steps 1
+    to 3 of this module's list); why not, if it could not. With `serving`, both programs are
+    built already and the web page is served from it."""
+    built = serving is None
     printed = compare.b3d(
-        [
-            "tree",
-            t.recording,
-            *t.common(),
-            "--at",
-            args.start,
-            "--to",
-            args.end,
-            "--records",
-        ]
+        ["tree", t.recording, *t.common(), "--at", t.at, "--to", end, "--records"],
+        built,
     )
     if printed is None:
-        return 1
+        return "b3d tree failed"
     frames = span_frames(printed)
     view = int(str(frames[0]["view"]))
     given = frames[0].get("view_given_ms")
     if not isinstance(given, int):
-        print(
-            f"match motion: no view has arrived by {args.start}; start the span later",
-            file=sys.stderr,
-        )
-        return 1
+        return f"no view has arrived by {t.at}; start the span later"
     notes: list[str] = []
     kept = [f for f in frames if f["view"] == view]
     if len(kept) < len(frames):
@@ -302,28 +339,27 @@ def run(args: argparse.Namespace) -> int:
         )
     frames = kept
     times = [float(str(f["t_ms"])) for f in frames]
-    out = t.directory() / UNSAFE.sub("_", f"motion-to-{args.end}")
+    out = t.directory() / UNSAFE.sub("_", f"motion-to-{end}")
     out.mkdir(parents=True, exist_ok=True)
 
     messages = snapshot.exported(t, build=False)
     if messages is None:
-        return 1
+        return "b3d export failed"
     views_given = frames[-1].get("views_given_ms")
     assert isinstance(views_given, list)
     opened, advances, more = schedule(
         messages, [float(at) for at in views_given], float(given), times[-1]
     )
     notes += more
-    job = snapshot.page_job(t, messages, opened, bool(args.art), out)
+    job = snapshot.page_job(t, messages, opened, art, out)
     job |= {
         "times_ms": [time - given for time in times],
         "advances": advances,
         "json": str(out / "web.json"),
     }
-    lines, failed = snapshot.run_page("motion.mjs", job, out, None)
+    lines, failed = snapshot.run_page("motion.mjs", job, out, serving)
     if failed:
-        print(f"match motion: {failed}", file=sys.stderr)
-        return 1
+        return failed
     notes += [f"warning: web {line}" for line in lines]
     web_frames = [
         f["elements"] for f in json.loads((out / "web.json").read_text())["frames"]
@@ -332,12 +368,44 @@ def run(args: argparse.Namespace) -> int:
 
     latest = tracks.name_tracks(b3d_frames)
     only = None
-    if args.only is not None:
-        only, why = chosen_track(b3d_frames, args.only)
+    if only_locator is not None:
+        only, why = chosen_track(b3d_frames, only_locator)
         if only is None:
-            print(f"match motion: {why}", file=sys.stderr)
-            return 1
+            return why
     pairs, lonely_b3d, lonely_web = compared(web_frames, b3d_frames, latest, only)
+    return Measured(
+        view, float(given), times, notes, out, pairs, lonely_b3d, lonely_web
+    )
+
+
+def command(t: Target, end: str, only: str | None = None) -> str:
+    """The `just b3d match motion` command that measures the span from `t.at` to `end`."""
+    return (
+        f"just b3d match motion {t.recording} --from {t.at} --to {end} "
+        + " ".join(t.common())
+        + (f" --only '{only}'" if only else "")
+    )
+
+
+def run(args: argparse.Namespace) -> int:
+    if args.all:
+        from . import motion_census
+
+        return motion_census.run_all(args)
+    if args.recording is None or args.start is None or args.end is None:
+        print(
+            "match motion: give a recording, --from and --to, or --all", file=sys.stderr
+        )
+        return 2
+    t: Target = target(
+        argparse.Namespace(**{**vars(args), "at": args.start, "only": None})
+    )
+    found = measure(t, args.end, args.only, bool(args.art), None)
+    if isinstance(found, str):
+        print(f"match motion: {found}", file=sys.stderr)
+        return 1
+    m = found
+    pairs, times, out, notes = m.pairs, m.times, m.out, list(m.notes)
 
     plots_dir = out / "plots"
     plots_dir.mkdir(exist_ok=True)
@@ -355,13 +423,14 @@ def run(args: argparse.Namespace) -> int:
     if failed:
         notes.append(f"warning: the plots stayed SVG: {failed}")
 
+    only = args.only
+    lonely_b3d = [key for key, _ in m.lonely_b3d]
+    lonely_web = [what for what, _ in m.lonely_web]
     report = [
-        f"just b3d match motion {t.recording} --from {args.start} --to {args.end} "
-        + " ".join(t.common())
-        + (f" --only '{args.only}'" if args.only else ""),
-        f"target {t.test_name()} ({t.layout}), view {view}, {len(frames)} frames from "
-        f"{times[0]:.1f}ms to {times[-1]:.1f}ms ({times[0] - given:.1f}ms to "
-        f"{times[-1] - given:.1f}ms after the view arrived)",
+        command(t, args.end, only),
+        f"target {t.test_name()} ({t.layout}), view {m.view}, {len(times)} frames from "
+        f"{times[0]:.1f}ms to {times[-1]:.1f}ms ({times[0] - m.given:.1f}ms to "
+        f"{times[-1] - m.given:.1f}ms after the view arrived)",
         *notes,
         f"{len(pairs)} {'pair' if only else 'moving pairs'}, worst position first:",
     ]

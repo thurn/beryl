@@ -4514,6 +4514,19 @@ reference is the web interface as WebKit draws it, at scale 2.
   later than Beryl 3D's, because the page takes a frame to react to the views it
   is handed.
 
+  `just b3d match motion --all` ranks the verbs, effects and marks of
+  `parity.json` by how far their motion is from the web's.
+  `data/beryl3d/match/motion-census.json` holds one span for each: for a verb or
+  an effect, the first step of its recording that plays it (from
+  `b3d timeline`), from the step's start to 100 ms after its end; for a mark,
+  the frames before its recording's first prompt is still. Each pair's mean
+  difference of position, size and opacity over the span and the gap between the
+  two sides' motion start and end are weighed into points (`tracks.WEIGHTS`) and
+  summed per item, and an element that moves on one side only adds how far it
+  moves. Element records hold no rotation, so rotation is not compared. Results
+  are cached beside each span's snapshot by the snapshot's input digest, and two
+  browser pages run at a time.
+
 - **Score.**
   `just b3d match score [prefix] [--update] [--raise] [--refresh-web]` takes the
   snapshot of each reference target (one desktop window and one phone window of

@@ -142,8 +142,10 @@ through the client with no window or GPU (the `b3d` skill has the details):
   element and its web pair, the largest difference of position, size and opacity
   and the frame of each, worst first, with a plot of both tracks in `plots/`
   (PNG). `--only <locator>` picks one element, moving or not; the span must lie
-  within one view. Beryl 3D's frames alone are
-  `just b3d tree <name> --at <moment> --to <moment> --records`.
+  within one view. `--all` ranks every verb, effect and mark of
+  `data/beryl3d/match/motion-census.json` by how far its tracks are from the
+  web's, worst first, with the command that shows each. Beryl 3D's frames alone
+  are `just b3d tree <name> --at <moment> --to <moment> --records`.
 - `just b3d match styles <name> --at <moment>` prints each paired element's
   differing style properties as `<element>  <property>  <web>  <Beryl 3D>`,
   largest element first: colors within one level per channel, lengths within a
@@ -279,6 +281,12 @@ project, and selects the main lanes.
   it, as `screens.json`'s `prompt_shapes` maps each prompt shape.
   `just b3d parity --check` keeps the maps complete, and a `beryl_inspect` test
   checks that each named recording exists.
+
+- `data/beryl3d/match/motion-census.json`: the span that
+  `just b3d match motion --all` measures for each verb, effect and mark of
+  `parity.json`, `{"kind", "name", "recording", "seat", "start", "end"}`, or
+  `why` none shows it. It is kept so that two runs measure the same frames;
+  `--all --refresh-census` rewrites it from the recordings' timelines.
 
 - `data/beryl3d/match/roles.json`: CSS selectors of the web interface's
   elements, each with the Beryl 3D role it stands for, which

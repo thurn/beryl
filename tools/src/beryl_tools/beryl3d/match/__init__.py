@@ -78,6 +78,10 @@ MOTION = Command(
             "--only 'card \"Plains\"'",
             "one card's tracks in the phone layout",
         ),
+        (
+            "just b3d match motion --all",
+            "every verb, effect and mark ranked by its difference, worst first",
+        ),
     ),
     motion.run,
     motion.motion_arguments,
