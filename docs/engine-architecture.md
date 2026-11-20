@@ -1252,9 +1252,9 @@ exercises, and `just fuzz` reports those random play never reaches.
   `Scratch::unchecked`, which skips them.
 - **Fuzzing:** random-agent games in debug builds, checked as above.
 - **Shrinking:** a fuzz game is also a seed and a vector of choice indices that
-  proptest generates (`beryl_search/tests/all/shrink.rs`). A failing game shrinks to
-  the fewest choices that still fail and prints as a scenario, its setup at the
-  first priority, to paste into a card's file.
+  proptest generates (`beryl_search/tests/all/shrink.rs`). A failing game
+  shrinks to the fewest choices that still fail and prints as a scenario, its
+  setup at the first priority, to paste into a card's file.
 - **Exhaustive search:** from each card scenario's end position, every sequence
   of decisions to a fixed depth, each branch on its own copy of the state, with
   the invariants and references at every position and no panic allowed
