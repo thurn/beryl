@@ -1,13 +1,13 @@
 //! The abilities on the stack, which the table draws as cards: each wears its source's picture
 //! with a plate that says the ability.
 
-use beryl_protocol::protocol::{PlayerView, StackItem};
-use beryl_protocol::script::Subject;
+use beryl_protocol::protocol::{PlayerView, StackItem, ZoneName};
+use beryl_protocol::script::{Act, Subject};
 
 use super::{ABILITY_IDS, Motion, SceneObject, Table, ability_track};
 use crate::effects;
 use crate::faces::Faces;
-use crate::frame::{ElementId, FrameBuilder, Role, StateBits};
+use crate::frame::{ElementId, FrameBuilder, Place, Role, StateBits};
 use crate::light;
 use crate::table::look::{Dress, Look};
 
@@ -37,13 +37,13 @@ impl Table {
         });
         for id in shown.chain(finals).chain(moved) {
             builder.visit();
-            let Some((object, view, under_way)) = self.ability_at(id, view, motion, builder) else {
+            let Some((object, item, under_way)) = self.ability_at(id, view, motion, builder) else {
                 continue;
             };
             if object.visible {
                 self.write_ability(
                     id,
-                    (&object, view, under_way),
+                    (&object, item, under_way),
                     faces,
                     (back, dress),
                     builder,
@@ -52,44 +52,69 @@ impl Table {
         }
     }
 
-    /// The ability numbered `id` as this frame draws it, as `object_at` gives a card.
+    /// The ability numbered `id` as this frame draws it, as `object_at` gives a card, with its
+    /// item on the stack.
+    ///
+    /// A triggered ability that goes on the stack and resolves within one script, such as an
+    /// enters trigger that resolves at once, is on neither the stack of the view before the
+    /// script nor that of the view it leads to. Its track still moves it, so it takes its item
+    /// from the script's own `emerge` step and its place on its controller's side of the stack.
     fn ability_at<'v>(
         &self,
         id: u32,
         view: &'v PlayerView,
         motion: Option<Motion<'v>>,
         builder: &mut FrameBuilder,
-    ) -> Option<(SceneObject, &'v PlayerView, bool)> {
+    ) -> Option<(SceneObject, &'v StackItem, bool)> {
         let resting = self.objects.ability(id);
         let track = motion.and_then(|motion| {
             let track = ability_track(motion.ability_tracks, id)?;
             (!track.segments().is_empty()).then_some((motion, track))
         });
         let Some((motion, track)) = track else {
-            return resting.map(|object| (object, view, false));
+            return resting.and_then(|object| Some((object, item_of(view, &object)?, false)));
         };
         builder.segment();
         let pose = track.pose_at(motion.t);
-        let (object, view) = match motion.finals.ability(id) {
-            Some(object) => (object, motion.view),
-            None => (resting?, view),
+        let (object, item) = match (motion.finals.ability(id), resting) {
+            (Some(object), _) => (object, item_of(motion.view, &object)?),
+            (None, Some(object)) => (object, item_of(view, &object)?),
+            (None, None) => {
+                let item = emerging_item(motion.view, id)?;
+                let StackItem::Ability { controller, .. } = item else {
+                    return None;
+                };
+                let object = SceneObject {
+                    pose,
+                    place: Place::Card {
+                        zone: ZoneName::Stack,
+                        side: *controller,
+                        row: None,
+                    },
+                    visible: true,
+                    tapped: false,
+                    copies: 1,
+                    view_index: 0,
+                };
+                (object, item)
+            }
         };
         let object = SceneObject {
             pose,
             visible: pose.opacity > 0.0,
             ..object
         };
-        Some((object, view, track.moving(motion.t)))
+        Some((object, item, track.moving(motion.t)))
     }
 
-    /// Writes the resolved element and the draw record of the ability numbered `id`: `object`
-    /// as `view`'s stack shows it, moving if `under_way`, drawn as a card with the board-size
+    /// Writes the resolved element and the draw record of the ability numbered `id`: `object`,
+    /// the stack's `item`, moving if `under_way`, drawn as a card with the board-size
     /// plate face of the ability (its source's picture wearing a plate that says it), or its
     /// source's face while it has none, or the blank layer 0 when it has no source.
     fn write_ability(
         &self,
         id: u32,
-        (object, view, under_way): (&SceneObject, &PlayerView, bool),
+        (object, item, under_way): (&SceneObject, &StackItem, bool),
         faces: &Faces,
         (back, dress): (u16, &Dress<'_>),
         builder: &mut FrameBuilder,
@@ -101,7 +126,7 @@ impl Table {
             nth,
             text,
             ..
-        } = &view.stack[object.view_index as usize]
+        } = item
         else {
             return;
         };
@@ -142,4 +167,25 @@ impl Table {
             builder,
         );
     }
+}
+
+/// The item of `view`'s stack that `object`, one of its abilities, stands for.
+fn item_of<'v>(view: &'v PlayerView, object: &SceneObject) -> Option<&'v StackItem> {
+    view.stack.get(object.view_index as usize)
+}
+
+/// The item that the `emerge` step of `view`'s script puts on the stack as the ability numbered
+/// `id`.
+fn emerging_item(view: &PlayerView, id: u32) -> Option<&StackItem> {
+    view.script
+        .as_ref()?
+        .beats
+        .iter()
+        .flatten()
+        .find_map(|step| match &step.act {
+            Act::Emerge {
+                id: emerged, item, ..
+            } if *emerged == id => Some(item),
+            _ => None,
+        })
 }

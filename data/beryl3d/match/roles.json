@@ -9,6 +9,11 @@
       "name": "\\bstage-mark-(eligible|selected|suggested|friendly-target|hostile-target)\\b",
       "from": "class"
     },
+    {
+      "selector": ".stack-ability.stage-node",
+      "role": "ability",
+      "name": "^(.*?)(?:Triggered|Activated) Ability"
+    },
     { "selector": "[data-life] .life-orb-total", "role": "player" },
     {
       "selector": ".pile-button",

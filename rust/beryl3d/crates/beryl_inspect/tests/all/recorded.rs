@@ -434,3 +434,33 @@ fn a_moment_is_the_same_however_often_the_clock_stopped_before_it() {
     let stepped = trigger_order_tree(7 * MS + 333, at);
     assert_eq!(straight, stepped);
 }
+
+#[test]
+fn a_trigger_that_resolves_in_its_own_script_rises_onto_the_stack() {
+    // Snapcaster Mage's enters trigger goes on the stack and resolves within one script, so
+    // neither the view before it nor the one after holds the ability. The table used to draw
+    // nothing for it while it rose from its source and stood on the stack, though its track
+    // moved it and its arrows pointed from it.
+    let size = Size {
+        width: 1440.0,
+        height: 900.0,
+    };
+    let mut page = beryl_inspect::pages::page("verbs-piles", Side::You, Layout::Desktop, size)
+        .expect("the recording can be read");
+    page.step(Duration(2_450 * MS));
+    let rising = page.tree();
+    assert!(
+        rising
+            .lines()
+            .any(|line| line.contains("ability \"Snapcaster Mage\"") && line.ends_with("moving")),
+        "{rising}"
+    );
+    page.step(Duration(3_000 * MS - page.now()));
+    let resting = page.tree();
+    assert!(
+        resting
+            .lines()
+            .any(|line| line.contains("ability \"Snapcaster Mage\"") && line.contains(" stack ")),
+        "{resting}"
+    );
+}

@@ -460,8 +460,13 @@ pub fn records(frame: &Frame, size: Size) -> Vec<Value> {
                 })
                 .collect();
             // A card's element id is its object's slot in the view, which the web interface's
-            // stage names its card nodes by (`data-stage`).
-            let object = (element.role == Role::Card).then_some(element.id.0 % REVEALED_FACE);
+            // stage names its card nodes by (`data-stage`). An ability's is `ABILITY_IDS` past
+            // its number, and the stage names its node `a` and the number (`a1`).
+            let object = match element.role {
+                Role::Card => Some(Value::from(element.id.0 % REVEALED_FACE)),
+                Role::Ability => Some(Value::from(format!("a{}", element.id.0 - ABILITY_IDS))),
+                _ => None,
+            };
             let transform = (element.role == Role::Card && element.place != Place::Layer)
                 .then(|| card_transform(element));
             json!({
