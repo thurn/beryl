@@ -5,7 +5,9 @@
 mod draw;
 mod look;
 mod order;
+mod backdrop;
 mod paint;
+mod rings;
 mod undrawn;
 
 use beryl_protocol::protocol::{RowName, Side, ZoneName};
@@ -16,7 +18,9 @@ pub use draw::{
     sprites,
 };
 pub use look::{ElementLook, LookPaint, LookShadow, Looks};
+pub use backdrop::Backdrop;
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
+pub use rings::{LIFTED, Lifted, RINGS, Ring, Ringed};
 pub use undrawn::{Missing, Undrawn};
 
 use crate::element::Shadow;
@@ -370,6 +374,8 @@ pub struct Frame {
     pub clips_full: bool,
     /// The stops of the frame's gradients and the masks of its clips (`paint`).
     pub paints: Paints,
+    /// The blur and color filters drawn over what comes before `Backdrop::at`, if any.
+    pub backdrop: Option<Backdrop>,
     /// How far the whole picture is shaken, in physical pixels.
     pub shake: Vec2,
     /// The sounds that begin in this frame.
@@ -407,54 +413,6 @@ pub struct Frame {
     scratch: order::Scratch,
 }
 
-/// The most hand cards the pointer can have up out of the fan at once. One is raised at a time,
-/// and a pointer swept across a hand leaves each card it crossed falling for a moment; past this
-/// many, the card that started falling first lands at once.
-pub const LIFTED: usize = 32;
-
-/// The most mark outlines a frame records in `Frame::rings`: two on each card, ability and
-/// player. An outline past that many is drawn but not checked.
-pub const RINGS: usize = 2 * (OBJECTS + ABILITIES + 2);
-
-/// What a mark's outline rings: a card's or an ability's element of the table, or a player's
-/// life total.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Ringed {
-    Element(ElementId),
-    Player(Side),
-}
-
-/// A mark's outline as the frame draws it: the thing it rings and the transform of its record
-/// (`Draw::model`), which places the `sprites::OUTLINE` quad in the table's space.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Ring {
-    pub on: Ringed,
-    pub model: [f32; 12],
-}
-
-/// A hand card up out of its place in the fan, and the box it has resting there.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Lifted {
-    /// The index of the card's element in `Frame::resolved`.
-    pub element: u32,
-    /// Its corners on screen resting in the fan, in logical points.
-    pub corners: [Vec2; 4],
-    /// Its depth resting in the fan.
-    pub depth: f32,
-}
-
-impl Frame {
-    /// Exchanges each lifted card's drawn box in `resolved` with its resting box in `lifted`.
-    /// Called twice, it leaves the frame as it was.
-    pub fn swap_lifted(&mut self) {
-        for lifted in &mut self.lifted {
-            let element = &mut self.resolved[lifted.element as usize];
-            std::mem::swap(&mut element.corners, &mut lifted.corners);
-            std::mem::swap(&mut element.depth, &mut lifted.depth);
-        }
-    }
-}
-
 /// One laid-out line of an element's text.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextLine {
@@ -490,6 +448,7 @@ impl Frame {
             clips: [Rect::default(); CLIPS],
             clips_full: false,
             paints: Paints::default(),
+            backdrop: None,
             shake: Vec2::ZERO,
             sounds: Vec::with_capacity(SOUNDS),
             lines: Vec::with_capacity(elements),
@@ -568,6 +527,7 @@ impl<'a> FrameBuilder<'a> {
         frame.clips = [Rect::default(); CLIPS];
         frame.clips_full = false;
         frame.paints = Paints::default();
+        frame.backdrop = None;
         frame.shake = Vec2::ZERO;
         frame.sounds.clear();
         frame.lines.clear();

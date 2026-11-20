@@ -42,6 +42,8 @@ pub(super) struct Viewing {
     /// Whether the screen shows the opening hand (`screens::opening`), as it was laid out last
     /// and as it was before that, and the window it was laid out in last.
     pub(super) opening: bool,
+    /// Whether the ended game's result is put aside (`ScreenIn::result_aside`).
+    pub(super) result_aside: bool,
     was_opening: bool,
     laid_in: Option<Window>,
 }

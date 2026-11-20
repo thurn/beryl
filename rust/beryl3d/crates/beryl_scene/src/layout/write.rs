@@ -50,7 +50,8 @@ fn takes_press(element: &Element, look: &Look<'_>, rect: Rect) -> bool {
 
 impl Layer {
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
-    /// the screen if it is `open`, then every float, whether the screen is open or not.
+    /// the screen if it is `open`, then every float, whether the screen is open or not, then
+    /// the screen's children that filter what is drawn under them (`over_floats`).
     pub fn write(&self, builder: &mut FrameBuilder, camera: &Camera, open: bool) {
         self.write_with(builder, camera, open, None);
     }
@@ -64,6 +65,7 @@ impl Layer {
         open: bool,
         faces: Option<&Faces>,
     ) {
+        let mut screen = None;
         if open && let Some(node) = &self.screen {
             // An anchored screen stands at its corner, and is not drawn while that is unknown.
             let corner = match node.element.anchor {
@@ -80,7 +82,9 @@ impl Layer {
                     faces,
                     filters: Chain::default(),
                 };
-                self.write_node(node, u32::MAX, true, look, builder, camera);
+                screen = self
+                    .write_node(node, u32::MAX, true, look, builder, camera)
+                    .map(|index| (node, index));
             }
         }
         for float in &self.floats {
@@ -94,6 +98,25 @@ impl Layer {
                 filters: Chain::default(),
             };
             self.write_node(&float.node, u32::MAX, true, look, builder, camera);
+        }
+        let Some((node, index)) = screen else {
+            return;
+        };
+        for child in node.children.iter().filter(|child| over_floats(child)) {
+            let Some(point) = child.corner() else {
+                continue;
+            };
+            builder.backdrop(&child.element.style.backdrop_filter, self.window.scale);
+            let look = Look {
+                point,
+                opacity: node.opacity(),
+                tint: None,
+                clip: None,
+                passes: node.element.style.passes,
+                faces,
+                filters: Chain::default().inner(&node.element.style.filter),
+            };
+            self.write_node(child, index, false, look, builder, camera);
         }
     }
 
@@ -122,9 +145,9 @@ impl Layer {
         mut look: Look<'_>,
         builder: &mut FrameBuilder,
         camera: &Camera,
-    ) {
+    ) -> Option<u32> {
         if node.element.style.display == Display::None {
-            return;
+            return None;
         }
         builder.visit();
         look.opacity *= node.opacity();
@@ -213,6 +236,10 @@ impl Layer {
             inside.point -= node.scroll;
         }
         for child in &node.children {
+            // `write_with` writes these after the floats.
+            if top && over_floats(child) {
+                continue;
+            }
             let mut look = inside;
             if child.element.anchor.is_some() {
                 let Some(corner) = child.corner() else {
@@ -226,6 +253,7 @@ impl Layer {
             }
             self.write_node(child, index, false, look, builder, camera);
         }
+        Some(index)
     }
 
     /// Writes what `node` shows in its content box (`Shown`), moved, colored and clipped by
@@ -653,4 +681,11 @@ fn corners(rect: Rect) -> [Vec2; 4] {
         Vec2::new(right, rect.y),
         Vec2::new(rect.x, rect.y),
     ]
+}
+
+/// Whether `node`, a child of a top element, is written over the floats: an anchored element
+/// with a backdrop filter (`Style::backdrop_filter`), which filters the floats with the rest of
+/// what is drawn under it. Only the screen's are written; a float's are not written at all.
+pub(super) fn over_floats(node: &Node) -> bool {
+    node.element.anchor.is_some() && !node.element.style.backdrop_filter.is_empty()
 }

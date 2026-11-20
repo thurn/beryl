@@ -3,6 +3,7 @@
 //! that names `wgpu`.
 
 mod atlas;
+mod backdrop;
 mod count;
 mod draw;
 mod enhanced;

@@ -157,6 +157,9 @@ pub struct ScreenIn<'a> {
     pub log_open: bool,
     /// What the settings sheet's concede button does when pressed.
     pub concede: Concede,
+    /// Whether the person put the game's result aside to see the battlefield
+    /// (`game_over::game_over`).
+    pub result_aside: bool,
     /// Where the table's cards rest, on the phone layout, which its prompt and dock keep clear
     /// of (`hud::phone::Occupied`); nothing on the desktop.
     pub occupied: &'a Occupied,

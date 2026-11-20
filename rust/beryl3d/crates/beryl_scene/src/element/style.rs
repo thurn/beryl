@@ -305,6 +305,13 @@ pub struct Style {
     /// change every color the element and everything under it is drawn in; a blur softens the
     /// edges of its own panel and gradients.
     pub filter: Vec<Filter>,
+    /// The functions of CSS's `backdrop-filter`, in order: a blur and color filters applied to
+    /// the whole window as drawn before the element, the table and every flat-layer element
+    /// under it. The flat layer writes an element with one after its floats, so that they are
+    /// filtered too, and only the first such element of a frame filters anything
+    /// (`FrameBuilder::backdrop`). The web's end screen blurs the table this way, though its CSS
+    /// puts the `filter` on the table (`.table-dimmed`).
+    pub backdrop_filter: Vec<Filter>,
     /// The color and width of the element's border, which takes room inside its box as CSS's
     /// does.
     pub border: Option<([u8; 4], f32)>,
@@ -367,6 +374,7 @@ impl Default for Style {
             mask: None,
             scroll_fade: None,
             filter: Vec::new(),
+            backdrop_filter: Vec::new(),
             border: None,
             radius: 0.0,
             box_shadow: Vec::new(),

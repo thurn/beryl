@@ -255,6 +255,7 @@ mod milestone_three {
             log: &[],
             log_open: false,
             concede: beryl_scene::screens::Concede::Asks,
+            result_aside: false,
             occupied: &beryl_scene::hud::phone::NOTHING,
         }
     }

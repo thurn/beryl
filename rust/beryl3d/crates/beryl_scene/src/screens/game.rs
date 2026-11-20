@@ -23,15 +23,14 @@ pub fn game(input: &ScreenIn) -> Element {
         .and_then(|prompt| prompts::screen(prompt, input))
         .or_else(|| prompts::waiting(input));
     let pieces: Vec<Element> = [
-        game_over::scrim(input),
-        game_over::game_over(input),
-        game_over::buttons(input),
         players::players(input).filter(|_| !opening::shown(input)),
         // The opening's backdrop covers the stops, as the web's overlay does.
         steps::steps(input).filter(|_| !opening::shown(input)),
         full_control::full_control(input).filter(|_| !opening::shown(input)),
         log::log(input),
         viewer::viewer(input),
+        // The result blurs everything drawn before it, the floats too (`Style::backdrop_filter`).
+        game_over::game_over(input),
     ]
     .into_iter()
     .flatten()
@@ -88,19 +87,18 @@ pub fn game_phone(input: &ScreenIn) -> Element {
             input.sheet.is_none().then(|| phone::menu(&bands)),
         ]
     });
-    // The flat layer draws in tree order. The opening's and the game over's scrims come first,
-    // as on the desktop (`game`), so that neither dims a control that still takes presses.
+    // The flat layer draws in tree order. The opening's scrim comes first, as on the desktop
+    // (`game`), so that it dims no control that still takes presses. The result is drawn over
+    // everything else, which it blurs (`Style::backdrop_filter`).
     let mut screen = holder()
         .name("game")
         .children(opening::opening(input))
-        .children(game_over::scrim(input))
         .children(middle_under)
         .children(prompt)
         .children(furniture.into_iter().flatten().flatten())
         .children(
             [
                 game_over::game_over(input),
-                game_over::buttons(input),
                 phone::log_sheet(input, &bands),
                 viewer::viewer(input),
             ]

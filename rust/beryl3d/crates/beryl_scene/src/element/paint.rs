@@ -292,13 +292,11 @@ pub enum Filter {
 }
 
 impl Filter {
-    /// `color` changed by this function, as CSS's filter functions change a color: on its sRGB
-    /// values, not premultiplied, clamped to 0 to 255. A blur changes no color.
+    /// The matrix of this function as Filter Effects 1 gives it, each row the weights of red,
+    /// green and blue on sRGB values, or none for a blur, which changes no color.
     #[must_use]
-    pub fn color(self, color: [u8; 4]) -> [u8; 4] {
-        let [r, g, b, a] = color.map(f32::from);
-        // Filter Effects 1's matrices, each row the weights of red, green and blue.
-        let rows = match self {
+    pub fn matrix(self) -> Option<[[f32; 3]; 3]> {
+        Some(match self {
             Self::Brightness(amount) => {
                 [[amount, 0.0, 0.0], [0.0, amount, 0.0], [0.0, 0.0, amount]]
             }
@@ -339,7 +337,17 @@ impl Filter {
                     0.072 + 0.928 * amount,
                 ],
             ],
-            Self::Blur(_) => return color,
+            Self::Blur(_) => return None,
+        })
+    }
+
+    /// `color` changed by this function, as CSS's filter functions change a color: on its sRGB
+    /// values, not premultiplied, clamped to 0 to 255. A blur changes no color.
+    #[must_use]
+    pub fn color(self, color: [u8; 4]) -> [u8; 4] {
+        let [r, g, b, a] = color.map(f32::from);
+        let Some(rows) = self.matrix() else {
+            return color;
         };
         let channel = |row: [f32; 3]| {
             #[expect(

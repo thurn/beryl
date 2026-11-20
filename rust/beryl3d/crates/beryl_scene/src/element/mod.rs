@@ -93,6 +93,9 @@ pub enum Press {
     Lobby(LobbyPress),
     /// Open the folded game log, or close it (`hud::log`).
     Log,
+    /// Show the ended game's result over the table, or put it aside to see the battlefield
+    /// (`screens::game_over`).
+    Result(bool),
     /// Take back the viewer's latest answer that can be taken back (`Client::undo`).
     Undo,
 }

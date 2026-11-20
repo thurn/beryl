@@ -1,7 +1,7 @@
 //! Showing the flat layer's screen or sheet, and the corner's buttons, a float at the game
 //! screen's top right: the gear that opens the settings sheet, the bug button and undo.
 
-use beryl_protocol::protocol::{Side, ZoneName};
+use beryl_protocol::protocol::{Side, Status, ZoneName};
 use beryl_protocol::{AgentView, DecisionId};
 use glam::Vec2;
 
@@ -30,6 +30,10 @@ impl Client {
         }
         self.inspector.due = true;
         let view = self.show.latest().map(|update| &update.view);
+        // A result put aside comes back with the next game's end.
+        if view.is_none_or(|view| !matches!(view.status, Status::Over { .. } | Status::Stopped)) {
+            self.viewing.result_aside = false;
+        }
         let occupied = self.occupied();
         let input = ScreenIn {
             occupied: &occupied,
@@ -122,8 +126,15 @@ impl Client {
             log: self.log.logged.entries(),
             log_open: self.log.open,
             concede: self.concede,
+            result_aside: self.viewing.result_aside,
             occupied: &crate::hud::phone::NOTHING,
         }
+    }
+
+    /// Shows the ended game's result over the table, or puts it aside (`Press::Result`).
+    pub(super) fn show_result(&mut self, shown: bool) {
+        self.viewing.result_aside = !shown;
+        self.show_screen();
     }
 
     /// Opens the game log or closes it. The phone's settings sheet holds the log's button, so a

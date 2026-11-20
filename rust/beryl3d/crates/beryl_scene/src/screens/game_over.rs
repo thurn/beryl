@@ -1,14 +1,16 @@
 //! Game over, shown on the game screen once the game has ended: a port of the web interface's
 //! `GameOver` (`ui/src/screens/GameOver.tsx`) with the rules of `.game-over` in
-//! `ui/src/screens/styles/opening.css`. A scrim over the table, the result in large gold
-//! capitals at the window's vertical middle, why it ended beneath it, the card that ended it
-//! (when the session saw one) and a button back to the start screen.
+//! `ui/src/screens/styles/opening.css`. The table under it blurred and darkened, as the web's
+//! `.table-dimmed` filter does (`ui/src/screens/styles/table.css`), a scrim over it, the result
+//! in large gold capitals at the window's vertical middle, why it ended beneath it, the card that
+//! ended it (when the session saw one), and a dock of "View Battlefield" over "New Game" where
+//! the web's action dock stands. "View Battlefield" puts the result aside, and a "Back to"
+//! button in the dock brings it back, as the web's `useResult` does.
 //!
-//! The scrim lets the pointer through, so the table stays reachable until the "View Battlefield"
-//! button, which the web uses to uncover it, is built.
+//! Like the web's dialog, the result is modal: its scrim takes every press, and nothing under it
+//! takes one (`FrameBuilder::backdrop`, `Layer::press_at`).
 //!
-//! Not built yet: the web's small icon beside the reason, and its "View Battlefield" button,
-//! which needs the client to remember that the result was put aside.
+//! Not built yet: the web's small icon beside the reason.
 
 use beryl_protocol::protocol::{Culprit, LossReason, OutcomeView, Side, Stall, Status};
 use glam::Vec2;
@@ -17,14 +19,16 @@ use super::{Screen, ScreenIn};
 use crate::data::space::flat::phone::game_over as metrics;
 use crate::data::space::flat::phone::opening::NARROW_BELOW;
 use crate::data::space::flat::phone::{ACTION_GAP, GUTTER};
-use crate::element::{Align, Anchor, Element, Justify, Press, Shown, column, row, text};
+use crate::element::{
+    Align, Anchor, Element, Filter, Justify, Press, Shown, column, holder, text,
+};
 use crate::faces::FaceList;
 use crate::frame::Role;
 use crate::input::FaceSize;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH};
 use crate::text::TypeStyle;
 use crate::tokens::{color, size, type_style};
-use crate::widgets::primary;
+use crate::widgets::{button, primary};
 
 /// The width of the card that ended the game, the web's 230 on the desktop.
 const CULPRIT_WIDTH: f32 = size::GAME_OVER_CULPRIT_WIDTH;
@@ -81,10 +85,44 @@ fn shown<'a>(input: &ScreenIn<'a>) -> Option<Ended<'a>> {
     }
 }
 
-/// The result over the game, once the view says it has ended.
+/// What the game screen shows once the view says the game has ended: while the result is shown,
+/// one element holding the scrim, the result and its dock, which blurs and darkens everything
+/// drawn under it (`Style::backdrop_filter`); while the result is put aside, the dock with the
+/// button that brings it back. The holder has no size, so that it covers nothing, and each piece
+/// in it stands at its own point of the window.
 #[must_use]
 pub fn game_over(input: &ScreenIn) -> Option<Element> {
     let Ended(outcome) = shown(input)?;
+    let title = result_title(outcome);
+    if input.result_aside {
+        let back = button(&format!("Back to {title}")).on_press(Press::Result(true));
+        return Some(dock(input, vec![back]));
+    }
+    let buttons = vec![
+        button("View Battlefield").on_press(Press::Result(false)),
+        primary("New Game").on_press(Press::Open(Screen::Start)),
+    ];
+    let mut screen = holder()
+        .name("game over screen")
+        // The web's dialog takes every press over the table, so the scrim does too.
+        .child(super::backdrop(input).passes(false))
+        .child(result(input, outcome))
+        .child(dock(input, buttons));
+    screen.style.backdrop_filter = DIMMED.to_vec();
+    screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
+    Some(screen)
+}
+
+/// The web's `.table-dimmed` filter: `blur(2.5px) brightness(0.68) saturate(0.85)`.
+const DIMMED: [Filter; 3] = [
+    Filter::Blur(2.5),
+    Filter::Brightness(0.68),
+    Filter::Saturate(0.85),
+];
+
+/// The result's title, why the game ended and the card that ended it, in a column at the
+/// window's middle.
+fn result(input: &ScreenIn, outcome: Option<&OutcomeView>) -> Element {
     let phone = super::phone(input);
     // The phone's result is smaller (`.phone-game-over`).
     let (title_style, reason_style, reason_gap) = if phone {
@@ -133,35 +171,45 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
     // The flat layer's root puts a screen in its bottom right corner, so the group is anchored
     // to the window's middle instead.
     screen.anchor = Some(Anchor::Point(middle(input), Vec2::splat(0.5)));
-    Some(screen)
+    screen
 }
 
-/// The button back to the start screen, at the bottom middle of the window where the web's dock
-/// puts the result's buttons.
-#[must_use]
-pub fn buttons(input: &ScreenIn) -> Option<Element> {
-    shown(input)?;
+/// The result's dock, `buttons` from the top down, where the web's action dock stands (`.dock` in
+/// `ui/src/screens/styles/controls.css`): `right: 39px; bottom: 87px`, its buttons stacked
+/// `--button-gap` apart and as wide as the widest, at least `--button-width`. The web's
+/// `DockButtons` puts its first button at the foot, so `New Game` comes last here.
+fn dock(input: &ScreenIn, buttons: Vec<Element>) -> Element {
     if super::phone(input) {
-        return Some(phone_dock(input));
+        return phone_dock(input, buttons);
     }
+    let window = input.window;
     let at = Vec2::new(
-        input.window.size.width / 2.0,
-        input.window.size.height - BUTTONS_BOTTOM,
+        window.size.width - window.safe_area.right - DOCK_RIGHT,
+        window.size.height - window.safe_area.bottom - BUTTONS_BOTTOM,
     );
-    let mut dock = row()
+    let mut dock = column()
         .name("game over buttons")
-        .child(primary("New Game").on_press(Press::Open(Screen::Start)));
-    dock.anchor = Some(Anchor::Point(at, Vec2::new(0.5, 1.0)));
-    Some(dock)
+        .gap(BUTTON_GAP)
+        .align_items(Align::Stretch)
+        .min_width(DOCK_WIDTH)
+        .children(buttons);
+    dock.anchor = Some(Anchor::Point(at, Vec2::ONE));
+    dock
 }
 
-/// How far the buttons' bottom edge stands above the window's: the root's dock offset.
+/// How far the dock's bottom edge stands above the window's: the web's `.dock` `bottom`.
 const BUTTONS_BOTTOM: f32 = size::GAME_OVER_BUTTONS_BOTTOM;
+/// How far the dock's right edge stands in from the window's: the web's `.dock` `right`.
+const DOCK_RIGHT: f32 = 39.0;
+/// The gap between the dock's buttons, the web's `--button-gap` (`ui/src/design/tokens.css`).
+const BUTTON_GAP: f32 = 10.0;
+/// The dock's least width, the web's `--button-width`.
+const DOCK_WIDTH: f32 = 250.0;
 
 /// The phone's dock (`.phone-game-over > .dock`): as wide as the window less its gutters, up to
-/// `game_over.dock_width`, standing the gutter above the safe area's foot, with its button as
+/// `game_over.dock_width`, standing the gutter above the safe area's foot, with each button as
 /// wide as the dock.
-fn phone_dock(input: &ScreenIn) -> Element {
+fn phone_dock(input: &ScreenIn, buttons: Vec<Element>) -> Element {
     let window = input.window;
     let safe = window.safe_area;
     let width =
@@ -174,9 +222,7 @@ fn phone_dock(input: &ScreenIn) -> Element {
         .name("game over buttons")
         .width(width)
         .gap(ACTION_GAP)
-        .child(super::phone_action(
-            primary("New Game").on_press(Press::Open(Screen::Start)),
-        ));
+        .children(buttons.into_iter().map(super::phone_action));
     dock.anchor = Some(Anchor::Point(at, Vec2::new(0.5, 1.0)));
     dock
 }
@@ -205,14 +251,6 @@ fn culprit_size(input: &ScreenIn) -> (f32, f32) {
     } else {
         (metrics::CARD, metrics::CARD_GAP)
     }
-}
-
-/// The backdrop over the table (`screens::backdrop`), which the pointer goes through so that
-/// the table stays reachable beneath it.
-#[must_use]
-pub fn scrim(input: &ScreenIn) -> Option<Element> {
-    shown(input)?;
-    Some(super::backdrop(input))
 }
 
 /// The card that ended the game, drawn flat and whole, or as the plate of the ability that did

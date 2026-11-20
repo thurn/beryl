@@ -611,6 +611,7 @@ impl Client {
             }
             Press::Menu(crate::manual::menus::MENU, row) => self.press_table_menu(row),
             Press::Log => self.toggle_log(),
+            Press::Result(shown) => self.show_result(shown),
             Press::Undo => self.undo(),
             Press::Menu(..) => {}
             Press::Dismiss(Dismiss::Menu) => {

@@ -155,6 +155,14 @@ fn set_bands(frame: &mut Frame) -> (usize, usize) {
     );
     frame.opaque = super::index(opaque);
     frame.layer = super::index(layer);
+    if let Some(backdrop) = &mut frame.backdrop {
+        // Within the flat layer's band, records keep their push order (`depth_key`), so the
+        // push indexes rise.
+        let layer_end = frame.bands[Band::LayerCards as usize] as usize;
+        let before = frame.scratch.keys[layer..layer_end]
+            .partition_point(|key| key & INDEX_MASK < u64::from(backdrop.pushed));
+        backdrop.at = super::index(layer + before);
+    }
     (opaque, layer)
 }
 

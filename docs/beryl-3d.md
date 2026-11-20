@@ -4464,13 +4464,22 @@ reference is the web interface as WebKit draws it, at scale 2.
   own), on sRGB values as WebKit applies CSS's filter functions; a face, which
   no color holds, takes the brightness in its tint and the grayscale as the card
   material's `desaturate`. A blur is the expensive one: it would need the
-  subtree drawn offscreen and blurred. The web blurs one thing, the whole table
-  under the game's end screen (`.table-dimmed`), which Beryl 3D draws in 3D, so
-  a flat-layer element's blur blurs only the edges of its own panel and
-  gradients (a blurred flat color is drawn as a gradient of one stop), by the
-  closed form the box shadows use; the inside of a gradient changes too little
-  under a blur of a few points to matter, which the blur sample confirms at a
-  `p995` of 3. Drop shadows of text and icons under a filter keep their colors.
+  subtree drawn offscreen and blurred, so a flat-layer element's own blur blurs
+  only the edges of its own panel and gradients (a blurred flat color is drawn
+  as a gradient of one stop), by the closed form the box shadows use; the inside
+  of a gradient changes too little under a blur of a few points to matter, which
+  the blur sample confirms at a `p995` of 3. Drop shadows of text and icons
+  under a filter keep their colors. The web blurs one thing whole, the table and
+  its furniture under the game's end screen (`.table-dimmed`:
+  `blur(2.5px) brightness(0.68) saturate(0.85)`). Beryl 3D draws that as CSS's
+  `backdrop-filter` on the end screen (`Style::backdrop_filter`): the flat layer
+  writes the element after its floats, and the frame records where it stands in
+  the flat layer's band (`Frame::backdrop`). The renderer draws every record
+  before it into an offscreen picture, blurs that across and then down into the
+  frame's target with the color filters as one matrix, on sRGB values as WebKit
+  does, and draws the rest of the flat layer over it (`beryl_render`'s
+  `backdrop`). The pass runs only while the end screen shows. The element is
+  modal, as the web's dialog is: nothing drawn under it takes a press.
 
 - **Pixels.** What is left after boxes and styles agree is compared as pixels,
   with glyph pixels masked, because glyph antialiasing differs between WebKit

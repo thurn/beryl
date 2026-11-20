@@ -101,3 +101,29 @@ fn the_card_that_ended_the_game_is_shown_as_a_face() {
     let mut page = over(win(Side::You, LossReason::Life, None));
     assert!(!page.tree().contains("region \"Jace"));
 }
+
+#[test]
+fn view_battlefield_puts_the_result_aside_and_back_brings_it_back() {
+    let mut page = over(win(Side::Opponent, LossReason::Life, None));
+    page.press("button \"View Battlefield\"");
+    page.still();
+    assert!(page.try_find("region \"game over\"").is_err(), "{}", page.tree());
+    assert!(page.frame().backdrop.is_none(), "the table is no longer blurred");
+    page.press("button \"Back to Defeat\"");
+    page.still();
+    assert!(page.try_find("region \"game over\"").is_ok(), "{}", page.tree());
+    assert!(page.frame().backdrop.is_some());
+}
+
+#[test]
+fn the_result_blurs_and_darkens_what_is_drawn_under_it() {
+    let mut page = over(win(Side::Opponent, LossReason::Life, None));
+    let frame = page.frame();
+    let backdrop = frame.backdrop.expect("the end screen filters the table");
+    // The web's `.table-dimmed`: `blur(2.5px) brightness(0.68) saturate(0.85)`, at scale 1.
+    assert!((backdrop.blur - 2.5).abs() < 1e-6, "{backdrop:?}");
+    assert!((backdrop.color[0][0] - 0.68 * (0.213 + 0.787 * 0.85)).abs() < 1e-4);
+    // The table and the flat layer's furniture lie under the filter, and the result over it.
+    assert!(backdrop.at > frame.layer, "{backdrop:?} with the layer at {}", frame.layer);
+    assert!((backdrop.at as usize) < frame.draws.len());
+}

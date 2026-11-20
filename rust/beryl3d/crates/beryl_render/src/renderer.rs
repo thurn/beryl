@@ -11,6 +11,7 @@ use beryl_scene::input::{AssetReady, FaceSize, Tier};
 use wgpu::util::DeviceExt;
 
 use crate::atlas::Atlas;
+use crate::backdrop::Filter;
 use crate::count::{self, FragmentCounter};
 use crate::draw::Draws;
 use crate::enhanced::{Enhanced, LIT_OFFSET, Lit};
@@ -84,6 +85,8 @@ pub struct Renderer {
     depth: Option<(wgpu::TextureView, u32, u32)>,
     /// The Enhanced tier, on a device that can draw it.
     pub(crate) enhanced: Option<Enhanced>,
+    /// The backdrop filter, for frames that ask for one (`Frame::backdrop`).
+    backdrop: Filter,
     /// Present when the renderer counts the fragments each frame shades.
     counter: Option<FragmentCounter>,
     /// The GPU adapter's name and backend, for logs.
@@ -127,6 +130,7 @@ impl Renderer {
             bind_groups(&device, &layout, uniforms, &sampler, &faces, &atlas)
         });
         let enhanced = Enhanced::new(&device, target_format, &layout, slots.uniforms());
+        let backdrop = Filter::new(&device, target_format);
         Self {
             device,
             queue,
@@ -144,6 +148,7 @@ impl Renderer {
             freed_full: None,
             depth: None,
             enhanced,
+            backdrop,
             counter: None,
             adapter: "unknown".to_owned(),
             gpu: None,
@@ -302,6 +307,7 @@ impl Renderer {
         if let Some(enhanced) = &mut self.enhanced {
             enhanced.low_memory();
         }
+        self.backdrop.low_memory();
         let full = &self.faces[face_array(FaceSize::Full)];
         // A renderer with no match holds only the token array, which there is no need to free.
         if full.size != dimensions(FaceSize::Full) {
@@ -421,25 +427,40 @@ impl Renderer {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        let draw_calls = match &mut self.enhanced {
+        // With a backdrop filter, the records before it are drawn offscreen, then filtered into
+        // `view`, and the rest of the flat layer is drawn over them.
+        let backdrop = frame.backdrop.filter(|backdrop| backdrop.at <= draws.kept);
+        let offscreen = backdrop.map(|_| self.backdrop.drawn(&self.device, width, height));
+        let under = Draws {
+            kept: backdrop.map_or(draws.kept, |backdrop| backdrop.at),
+            ..draws
+        };
+        let into = offscreen.as_ref().unwrap_or(view);
+        let mut draw_calls = match &mut self.enhanced {
             Some(tier) if enhanced => tier.render(
                 &self.device,
                 &mut encoder,
-                &draws,
-                view,
+                &under,
+                into,
                 &self.pipelines,
                 &depth,
                 self.counter.as_ref(),
             ),
             _ => baseline_pass(
                 &mut encoder,
-                &draws,
-                view,
+                &under,
+                into,
                 &depth,
                 &self.pipelines,
                 self.counter.as_ref(),
             ),
         };
+        if let Some(backdrop) = backdrop {
+            draw_calls += self
+                .backdrop
+                .apply(&self.queue, &mut encoder, &backdrop, view);
+            draw_calls += over_pass(&mut encoder, &draws, backdrop.at, view, &depth, &self.pipelines);
+        }
         if let Some(counter) = &self.counter {
             counter.resolve(&mut encoder);
         }
@@ -512,6 +533,47 @@ fn baseline_pass(
     let draw_calls = draws.record(&mut pass, pipelines, |_| true);
     count::end(counter, &mut pass);
     draw_calls
+}
+
+/// Records the flat layer's records from `at` on, those drawn over a backdrop filter, into
+/// `view`, over what it holds, and returns how many draw calls it took.
+fn over_pass(
+    encoder: &mut wgpu::CommandEncoder,
+    draws: &Draws,
+    at: u32,
+    view: &wgpu::TextureView,
+    depth: &wgpu::TextureView,
+    pipelines: &[wgpu::RenderPipeline; 3],
+) -> u32 {
+    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("over the backdrop"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Load,
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: depth,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(1.0),
+                store: wgpu::StoreOp::Discard,
+            }),
+            stencil_ops: None,
+        }),
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    draws.record_part(
+        &mut pass,
+        at..draws.kept,
+        |run| Some(&pipelines[run as usize]),
+        (draws.width, draws.height),
+    )
 }
 
 /// The index in `Renderer::faces` of the array for `size`.

@@ -289,7 +289,8 @@ impl Layer {
     }
 
     /// The first value `want` gives for an element at `point`, asking the innermost first:
-    /// floats, the last drawn first, then the screen while it is `open`. An element is at
+    /// floats, the last drawn first, then the screen while it is `open`. While the screen shows
+    /// a child drawn over the floats (`write::over_floats`), only that child is asked. An element is at
     /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
     /// it is in, and inside the box of every element it is in that clips or scrolls. As in CSS,
     /// a child that overflows a box that does neither is drawn outside it, and takes presses
@@ -325,6 +326,15 @@ impl Layer {
                     None => find(child, point, inside, reach_inside, want),
                 })
                 .or_else(|| here.then(|| want(node, origin)).flatten())
+        }
+        // The screen's children drawn over the floats (`write::over_floats`) filter what is under
+        // them, and are modal: while one is shown, nothing else is searched.
+        let modal = (self.screen.as_ref().filter(|_| open))
+            .filter(|node| node.children.iter().any(write::over_floats));
+        if let Some(node) = modal {
+            return (node.children.iter().rev())
+                .filter(|child| write::over_floats(child))
+                .find_map(|child| find(child, point, child.corner()?, true, &want));
         }
         (self.floats.iter().rev())
             .find_map(|float| find(&float.node, point, float.corner(), true, &want))
