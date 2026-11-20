@@ -9,9 +9,11 @@ pub mod commit;
 pub mod committed;
 pub mod fastforward;
 pub mod holds;
+mod objects;
 pub mod push;
 pub mod rebase;
 pub mod refs;
+pub mod replay;
 pub mod save;
 pub mod tracked;
 pub mod treehash;
@@ -20,7 +22,8 @@ pub mod worktree;
 use std::path::{Path, PathBuf};
 
 use ignite_core::ids::{Commit, Oid};
-use ignite_core::traits::{Git, Push, Rebase, Result};
+use ignite_core::time::Timestamp;
+use ignite_core::traits::{Git, Push, Rebase, Result, RevertOutcome};
 
 /// One repository: the main checkout, and the remote that holds the delivery branches.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,5 +81,31 @@ impl Git for GitCli {
         expected: &Commit,
     ) -> Result<Push> {
         push::replace(tree, &self.remote, commit, branch, expected)
+    }
+
+    fn replay(&self, repo: &Path, head: &Commit, tip: &Commit) -> Result<Rebase> {
+        replay::replay(repo, head, tip)
+    }
+
+    fn revert(
+        &self,
+        repo: &Path,
+        tip: &Commit,
+        commits: &[Commit],
+        message: &str,
+    ) -> Result<RevertOutcome> {
+        replay::revert(repo, tip, commits, message)
+    }
+
+    fn merge_base(&self, repo: &Path, a: &Commit, b: &Commit) -> Result<Commit> {
+        objects::merge_base(repo, a, b)
+    }
+
+    fn committed_at(&self, repo: &Path, commit: &Commit) -> Result<Timestamp> {
+        objects::committed_at(repo, commit)
+    }
+
+    fn tree_id(&self, tree: &Path) -> Result<String> {
+        Ok(treehash::write_working_tree(tree)?.as_str().to_owned())
     }
 }

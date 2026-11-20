@@ -7,6 +7,10 @@ use ignite_core::traits::Result;
 
 use crate::{cmd, treehash};
 
+/// The name and email on commits that Ignite writes itself.
+pub(crate) const IGNITE_NAME: &str = "ignite";
+pub(crate) const IGNITE_EMAIL: &str = "ignite@localhost";
+
 /// What a working tree holds: the ID of the tree a commit of all of it would have, and a commit
 /// with that tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,11 +49,11 @@ pub fn snapshot(tree: &Path) -> Result<Snapshot> {
         ],
     );
     for (name, value) in [
-        ("GIT_AUTHOR_NAME", "ignite"),
-        ("GIT_AUTHOR_EMAIL", "ignite@localhost"),
+        ("GIT_AUTHOR_NAME", IGNITE_NAME),
+        ("GIT_AUTHOR_EMAIL", IGNITE_EMAIL),
         ("GIT_AUTHOR_DATE", "1970-01-01T00:00:00Z"),
-        ("GIT_COMMITTER_NAME", "ignite"),
-        ("GIT_COMMITTER_EMAIL", "ignite@localhost"),
+        ("GIT_COMMITTER_NAME", IGNITE_NAME),
+        ("GIT_COMMITTER_EMAIL", IGNITE_EMAIL),
         ("GIT_COMMITTER_DATE", "1970-01-01T00:00:00Z"),
     ] {
         commit.env(name, value);

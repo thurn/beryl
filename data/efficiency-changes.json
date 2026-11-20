@@ -644,5 +644,10 @@
     "label": "The hub stores and looks up verdicts (one per tree, base and gate settings, kept 30 days), so a change that passed the gate on one machine can later be landed from any machine without running the gate again",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite's git client rebases and reverts commits in git's object database (`git merge-tree --write-tree` and `git commit-tree`), leaving the ticket tree's files untouched, so that a landing by verdict can push the rebased commit without recompiling everything that landed since the ticket started (about 25 CPU-minutes per landing on 2026-11-19)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

@@ -657,17 +657,28 @@ How the executable is installed and kept current:
   (`"strict"`, the default, or `"verdict"`) with `max_base_age_hours` (default
   12), `[revert] broken_build` (default false) and `repository.green` (unset by
   default; it must differ from `staging` and `master`). The hub's
-  `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted` and git's
-  `Git::replay`, `revert`, `merge_base`, `committed_at` and `tree_id` are
-  declared, with fakes. The hub stores and looks up verdicts
-  (`POST /verdicts/store`, which needs a registered machine's token, and
-  `POST /verdicts/lookup`, which replies with the verdict or `null`) in its
-  `verdicts` table, and `Hub::verdict` and `Hub::store_verdict` of the real
-  client call them; nothing calls those yet, and the other methods still answer
-  that they cannot do them. A verdict is keyed by the tree ID, the merge base
-  with the tip and `verdict_settings`, a digest of the `[gate]` section that
-  holds nothing about Ignite's own release. The hub deletes verdicts that passed
-  more than 30 days ago where it prunes the result cache.
+  `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted` are declared, with
+  fakes. The hub stores and looks up verdicts (`POST /verdicts/store`, which
+  needs a registered machine's token, and `POST /verdicts/lookup`, which replies
+  with the verdict or `null`) in its `verdicts` table, and `Hub::verdict` and
+  `Hub::store_verdict` of the real client call them; nothing calls those yet, and
+  `Hub::reverted` still answers that it cannot do it. A verdict is keyed by the
+  tree ID, the merge base with the tip and `verdict_settings`, a digest of the
+  `[gate]` section that holds nothing about Ignite's own release. The hub deletes
+  verdicts that passed more than 30 days ago where it prunes the result cache.
+- Git can rebase and revert in its object database, with no working tree, and no
+  landing uses it yet. `Git::replay` rebases a branch's commits onto the tip one
+  by one with `git merge-tree --write-tree` against each commit's own parent and
+  `git commit-tree`, keeping each commit's author, author date and message,
+  dropping a commit whose change the tip already has and leaving out merge
+  commits, as `git rebase` does. `Git::revert` makes one commit on the tip,
+  written as `ignite <ignite@localhost>`, that undoes a list of commits, newest
+  first. A conflict in either returns the conflicting files. Neither changes any
+  working tree, index or ref, so a ticket tree keeps the build `ignite check`
+  made. Both need git 2.40 (`merge-tree --merge-base`) and fail naming the
+  version found on an older one. `Git::merge_base`, `committed_at` (the
+  committer date) and `tree_id` (the tree ID of every file on disk, committed or
+  not) go with them.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it, or the express commands have (see
