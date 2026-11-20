@@ -12,10 +12,7 @@ use crate::hud::{full_control, log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
 use crate::table::phone_bands;
-
-/// How opaque the step stops stand while the opening hand overlay is up, as the web's
-/// `.table-dimmed[data-opening] .turn-controls` (`ui/src/screens/styles/table.css`).
-const OPENING_HUD_OPACITY: f32 = 0.22;
+use crate::tokens::ratio;
 
 /// What the flat layer shows over a game. While none of its pieces shows anything, it is the
 /// open prompt's element alone, as it has been since the prompt bar was the only thing in the
@@ -35,7 +32,7 @@ pub fn game(input: &ScreenIn) -> Element {
         // The overlay takes the presses that would reach the stops under it.
         steps::steps(input).map(|steps| {
             if shown {
-                inert(steps).opacity(OPENING_HUD_OPACITY)
+                inert(steps).opacity(ratio::OPENING_HUD_OPACITY)
             } else {
                 steps
             }

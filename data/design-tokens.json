@@ -1367,6 +1367,10 @@
         "value": 0.75,
         "note": "`button-small`: a small button is this share of a button's height and type size."
       },
+      "OPENING_HUD_OPACITY": {
+        "value": 0.22,
+        "note": "How opaque the step stops stand while the opening hand overlay is up: `.table-dimmed[data-opening] .turn-controls`."
+      },
       "GAME_OVER_DIM_BRIGHTNESS": {
         "value": 0.68,
         "note": "How bright the table under the game's result stays: `.table-dimmed`'s `brightness(0.68)`."
