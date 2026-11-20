@@ -310,6 +310,15 @@ pub enum InternalCommand {
     /// Run the verb of a running handle in this process, from start to finish (a verb process),
     /// and write its reply into the handle's row.
     Verb { handle: String },
+    /// Take the turn lock of the CLI session `IGNITE_CLI_TURN` names, then become the CLI
+    /// program given after `--`: one turn of a worker in CLI mode, run by its supervisor.
+    CliTurn {
+        /// The Ignite home, which holds the session's turn lock.
+        #[arg(long)]
+        home: std::path::PathBuf,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        command: Vec<String>,
+    },
     /// Make the running daemon restart into its own executable, as it does into a new release,
     /// and wait until the new daemon answers. A drill: refused to a session that holds a tree.
     Restart,
@@ -942,6 +951,19 @@ mod tests {
         assert!(matches!(
             Cli::try_parse_from(line).unwrap().command,
             Command::Stop { handle, force: true } if handle == "T-3"
+        ));
+    }
+
+    #[test]
+    fn parses_the_cli_turn_command_with_the_program_untouched() {
+        let line = [
+            "ignite", "internal", "cli-turn", "--home", "/h", "--", "claude", "-p", "--model", "m",
+        ];
+        assert!(matches!(
+            Cli::try_parse_from(line).unwrap().command,
+            Command::Internal {
+                command: InternalCommand::CliTurn { home, command }
+            } if home == std::path::Path::new("/h") && command == ["claude", "-p", "--model", "m"]
         ));
     }
 

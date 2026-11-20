@@ -374,6 +374,31 @@ fn resume(pid: u32) -> io::Result<()> {
     Ok(())
 }
 
+/// Runs `program` with `args` in place of this process, as far as Windows allows: it has no
+/// `exec`, so the program starts as a child, which joins this process's job as every child does,
+/// with the variables named in `remove` taken out of its environment. This process waits for it,
+/// keeping the files in `keep` open (and any lock on them held) meanwhile, and exits with its
+/// exit code. Returns only if the program could not be started.
+pub fn become_program(
+    program: &str,
+    args: &[String],
+    remove: &[&str],
+    keep: &[&std::fs::File],
+) -> io::Error {
+    let mut command = Command::new(program);
+    command.args(args);
+    for name in remove {
+        command.env_remove(name);
+    }
+    let status = match command.status() {
+        Ok(status) => status,
+        Err(error) => return error,
+    };
+    // The files stay open until this process exits, after the child has.
+    let _ = keep;
+    std::process::exit(status.code().unwrap_or(1))
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::{BufRead, BufReader};

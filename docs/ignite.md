@@ -3625,9 +3625,19 @@ A turn:
   and turn number in its `spec.json`. A daemon that dies between the two finds
   no run for the turn and starts it, and one that finds the run takes it over,
   so a turn is never started twice.
-- The supervisor's command takes `sessions/<slot>/lock` in the Ignite home and
-  then becomes the CLI program. Two turns on one transcript are therefore
-  impossible whatever a daemon decides.
+- The supervisor's command, `ignite internal cli-turn`, takes
+  `sessions/<session>/lock` in the Ignite home, waiting while another turn holds
+  it, and then becomes the CLI program, which keeps the lock until it exits. Two
+  turns on one transcript are therefore impossible whatever a daemon decides. It
+  also records the last turn it ran in `sessions/<session>/turn` and refuses a
+  turn that is not newer, so even two supervisors started for one turn run the
+  program once.
+- At start, a daemon looks for the run whose `spec.json` names each recorded
+  turn. No run means the turn never started, so it starts it. A run whose lock
+  is held is running, one with `result.json` has ended, and one with a free lock
+  and no result was interrupted, as by a reboot: its process group is ended
+  first. A turn's run is marked with `output.keep`, so its log is kept for 14
+  days.
 - The model and effort are arguments of every turn. Claude's first line names
   the model before any request is made. If it is not the one asked for, the
   daemon ends the turn, releases the ticket and stops reporting that tier to the

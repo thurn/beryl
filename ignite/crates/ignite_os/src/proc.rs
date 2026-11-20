@@ -7,9 +7,11 @@ use std::process::{Child, Command};
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
-pub use macos::replace_image;
+pub use macos::{become_program, replace_image};
 #[cfg(windows)]
 pub(crate) mod windows;
+#[cfg(windows)]
+pub use windows::become_program;
 
 /// The exit code of every process that Ignite ends on Windows, where a process ended from
 /// outside still exits with a code: `STATUS_CONTROL_C_EXIT`, the code of a console process

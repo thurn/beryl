@@ -3,10 +3,13 @@
 //! signalled at once with the group's ID.
 
 use std::ffi::{CString, OsStr};
+use std::fs::File;
 use std::io;
+use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -99,6 +102,60 @@ unsafe extern "C" {
 /// one call. As `std::process::Command` does for a child, the new image starts with no signal
 /// blocked and with `SIGPIPE` at its default action.
 pub fn replace_image(executable: &Path, args: &[String]) -> io::Error {
+    replace_image_keeping(executable, args, &[], &[])
+}
+
+/// Runs `program` with `args` in place of this process, as [`replace_image`] does, with the
+/// variables named in `remove` taken out of its environment and the files in `keep` left open
+/// in it, so that a lock held on one of them stays held by the new image. A `program` with no
+/// `/` is looked for in the directories of `PATH`. Returns only if it could not.
+pub fn become_program(program: &str, args: &[String], remove: &[&str], keep: &[&File]) -> io::Error {
+    let executable = match find_program(program) {
+        Ok(executable) => executable,
+        Err(error) => return error,
+    };
+    let fds: Vec<libc::c_int> = keep.iter().map(|file| file.as_raw_fd()).collect();
+    for &fd in &fds {
+        // Rust opens every file close-on-exec, and `posix_spawn` refuses to keep such a
+        // descriptor with `EBADF`, so the flag is cleared first.
+        // SAFETY: `fd` is open, borrowed from a `File` that outlives this call; `F_SETFD` only
+        // changes its descriptor flags.
+        if unsafe { libc::fcntl(fd, libc::F_SETFD, 0) } == -1 {
+            return io::Error::last_os_error();
+        }
+    }
+    replace_image_keeping(&executable, args, remove, &fds)
+}
+
+/// The file `program` names: itself when it holds a `/`, otherwise the first executable file of
+/// that name in a directory of `PATH`.
+fn find_program(program: &str) -> io::Result<PathBuf> {
+    if program.contains('/') {
+        return Ok(PathBuf::from(program));
+    }
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(program))
+        .find(|candidate| {
+            std::fs::metadata(candidate)
+                .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+        })
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("no program named {program} in PATH"),
+            )
+        })
+}
+
+/// [`replace_image`], leaving out the variables in `remove` and keeping the descriptors in
+/// `keep` open besides standard input, output and error.
+fn replace_image_keeping(
+    executable: &Path,
+    args: &[String],
+    remove: &[&str],
+    keep: &[libc::c_int],
+) -> io::Error {
     let invalid = |_| io::Error::new(io::ErrorKind::InvalidInput, "a NUL byte in an argument");
     let c_string = |text: &OsStr| CString::new(text.as_bytes()).map_err(invalid);
     let built = (|| -> io::Result<(CString, Vec<CString>, Vec<CString>)> {
@@ -109,6 +166,9 @@ pub fn replace_image(executable: &Path, args: &[String]) -> io::Error {
         }
         let mut variables = Vec::new();
         for (name, value) in std::env::vars_os() {
+            if remove.iter().any(|removed| name == OsStr::new(removed)) {
+                continue;
+            }
             let mut pair = name.into_encoded_bytes();
             pair.push(b'=');
             pair.extend(value.into_encoded_bytes());
@@ -173,7 +233,7 @@ pub fn replace_image(executable: &Path, args: &[String]) -> io::Error {
             ))
         })
         .and_then(|()| {
-            (0..=2).try_for_each(|fd| {
+            (0..=2).chain(keep.iter().copied()).try_for_each(|fd| {
                 check(posix_spawn_file_actions_addinherit_np(&raw mut actions, fd))
             })
         });

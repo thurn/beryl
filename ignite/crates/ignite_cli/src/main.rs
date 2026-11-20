@@ -139,6 +139,9 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         } => exit_reply(ignite_daemon::monitor::justiciar::run_turn(
             lock, log, command,
         )),
+        Command::Internal {
+            command: InternalCommand::CliTurn { home, command },
+        } => exit_reply(ignite_daemon::clid::start::cli_turn(home, command)),
         _ => {
             let session = client::session_from_env(|name| std::env::var(name).ok())
                 .filter(|_| !client::UNRECORDED_VERBS.contains(&verb));
