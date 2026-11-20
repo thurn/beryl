@@ -26,6 +26,7 @@ pub mod rust_source;
 pub mod schedule;
 pub mod score;
 pub mod shares;
+pub mod tailnet;
 pub mod test_files;
 pub mod time;
 pub mod tipround;

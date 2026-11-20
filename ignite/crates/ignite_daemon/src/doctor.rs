@@ -606,12 +606,21 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
         // A reachable hub may still be the read-only listener.
         Ok(_) => listener::finding(&input.config.hub, input.probe)
             .unwrap_or_else(|| Finding::ok("hub", format!("reachable at {url}."))),
-        Err(error) => Finding::problem(
-            "hub",
-            format!("cannot reach the hub at {url}: {error}."),
-            "check that Tailscale is connected on this machine and that the daemon on the \
-             machine that runs the hub is up, then run `ignite doctor` again",
-        ),
+        Err(error) => {
+            let dns = ignite_core::tailnet::diagnose_url(
+                url,
+                ignite_core::tailnet::FailureKind::ConnectOrTls,
+            );
+            Finding::problem(
+                "hub",
+                match &dns {
+                    Some(dns) => format!("cannot reach the hub at {url}: {error}. {dns}"),
+                    None => format!("cannot reach the hub at {url}: {error}."),
+                },
+                "check that Tailscale is connected on this machine and that the daemon on the \
+                 machine that runs the hub is up, then run `ignite doctor` again",
+            )
+        }
     });
 
     findings.extend(model_findings(input.config));

@@ -287,10 +287,10 @@ impl Hub {
                             }
                             failure
                         }
-                        Err(error) => transport_failure(&error, replay_safe)?,
+                        Err(error) => transport_failure(&error, replay_safe, url)?,
                     }
                 }
-                Err(error) => transport_failure(&error, replay_safe)?,
+                Err(error) => transport_failure(&error, replay_safe, url)?,
             };
             let left = budget.saturating_sub(start.elapsed());
             if delay >= left {
@@ -305,7 +305,7 @@ impl Hub {
 
 /// An unreachable hub is retried when the request was never sent or can be repeated; any other
 /// failure to talk to it ends the command.
-fn transport_failure(error: &ureq::Error, replay_safe: bool) -> Result<Failure> {
+fn transport_failure(error: &ureq::Error, replay_safe: bool, url: &str) -> Result<Failure> {
     let before_send = matches!(
         error,
         ureq::Error::HostNotFound
@@ -317,7 +317,14 @@ fn transport_failure(error: &ureq::Error, replay_safe: bool) -> Result<Failure> 
         | ureq::Error::Io(_)
         | ureq::Error::HostNotFound
         | ureq::Error::ConnectionFailed => {
-            let failure = Failure::new(Exit::Unreachable, format!("hub unavailable: {error}"));
+            let mut message = format!("hub unavailable: {error}");
+            if let Some(hint) = ignite_core::tailnet::diagnose_url(
+                url,
+                ignite_core::tailnet::FailureKind::ConnectOrTls,
+            ) {
+                message = format!("{message}. {hint}");
+            }
+            let failure = Failure::new(Exit::Unreachable, message);
             if replay_safe || before_send {
                 Ok(failure)
             } else {
