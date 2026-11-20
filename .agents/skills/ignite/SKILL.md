@@ -166,20 +166,18 @@ will work.
 
 ## Staffing
 
-The dispatcher and the workers are not started from this project. Each machine
-has one dispatcher session, opened by a person in a folder outside the
-repository, which starts the workers itself, because only the session that
-started a worker can clear and prompt it. Tell the person:
+For pool dispatch, a person opens the dispatcher in a folder outside the
+repository. Tell the person:
 
 1. Run `ignite pool init` once per machine from the main checkout. It writes
    `~/ignite` with the dispatcher's instructions and the main checkout's path,
    so the workers start in the checkout. Run it again after Ignite's
    instructions change.
-2. Open a session in `~/ignite` on Haiku, in a permission mode that never
-   prompts, and send `/ignite pool <n>` there. That session registers itself
-   as the dispatcher, starts `n` workers and runs the dispatch loop. Sending it
-   again adds more workers. In Codex, `n` is the number of slots: how many
-   tickets may run at once, each in a new chat.
+2. In Claude, open `~/ignite` on Haiku in a permission mode that never prompts
+   and send `/ignite pool <n>` to start `n` workers and the dispatch loop. In
+   Codex, open the folder locally and follow `In Codex` in its `AGENTS.md` for
+   bounded dispatch. `n` sets concurrent slots. Ask for the worker chats in
+   the batch explicitly and authorize any follow-up messages to them.
 
 `/ignite pool` sent in this project does none of this; give the person these
 steps instead.

@@ -195,11 +195,11 @@ opus = "claude-opus-5-5"
 sonnet = "claude-sonnet-5-5"
 light = "claude-sonnet-5-5"
 
-# Codex runs every tier on one model.
+# Codex runs every tier on the model ID accepted by the desktop thread tool.
 [pool.models.codex]
-opus = "sol"
-sonnet = "sol"
-light = "sol"
+opus = "gpt-6.2-sol"
+sonnet = "gpt-6.2-sol"
+light = "gpt-6.2-sol"
 
 # Tip verification (docs/ignite.md, "How long a round takes"). A claim holds about this many CPU
 # seconds of recorded check costs, so a family of thousands of cheap checks is a few commands
