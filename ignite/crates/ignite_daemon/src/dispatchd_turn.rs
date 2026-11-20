@@ -52,6 +52,7 @@
 
 use std::sync::Arc;
 
+use ignite_core::cli::decide::{block_text, cut, quoting};
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{JusticiarReport, WorkerRole};
@@ -72,8 +73,7 @@ const STOPPED_MARK: char = '⛔';
 /// The longest part of the worker's last message quoted in the justiciar report.
 pub(super) const REASON_CHARS: usize = 400;
 
-/// The longest part of the worker's last message kept in the release note.
-pub(super) const NOTE_CHARS: usize = 2000;
+pub(super) use ignite_core::cli::decide::release_reason;
 
 /// `ignite turn-ended --session <id> [--again] [--note <last message>] [--parent <pid>]`.
 pub struct TurnEndedVerb {
@@ -146,61 +146,12 @@ impl Verb for TurnEndedVerb {
     }
 }
 
-/// The text that keeps a worker going after its first stop with `ticket` held.
-fn block_text(ticket: &TicketId) -> String {
-    format!(
-        "block    You are ending your turn while you hold {ticket}, and nothing will report on \
-         it. Before you stop, do one of these:\n\
-         1. If the work is done, run `ignite land -m <note>`.\n\
-         2. If it is not, run `ignite release -m <exact state>`, with the dependency when it \
-         waits on another ticket (see `ignite guide release`).\n\
-         3. If the ticket cannot be completed as written (its acceptance contradicts its body, \
-         or gates on something you cannot control, such as a timing on a loaded machine), run \
-         `ignite justiciar \"<what is impossible, and the evidence>\"` and then `ignite \
-         release`.\n\
-         To wait on a long command, start it in the background (heavy work as `ignite run -- \
-         <command>`) and end your turn: while anything you started still runs, Ignite lets you \
-         stop and you are woken when it ends. A turn that ends with nothing running is final: \
-         only a final turn takes a ✅, ⛔ or 🔍 title, and a turn that ends to wait keeps ⚒️ (or \
-         🚒), since a ⛔ title releases the ticket at once (see `ignite guide turn-end`).\n\
-         A figure measured on a loaded machine is reported, never gated on or chased, unless \
-         the acceptance names a deterministic measure.\n\
-         If you stop again with nothing running and none of these done, Ignite releases {ticket} \
-         itself, saves its tree as ignite/{ticket} and uses your last message as the note."
-    )
-}
-
-/// The reason given with a release after the second stop, quoting the worker's last message.
-pub(super) fn release_reason(note: Option<&str>) -> String {
-    quoting(
-        "The worker ended its turn twice holding the ticket without landing or releasing it.",
-        note,
-    )
-}
-
 /// The reason given with a release when the worker ended its turn titled ⛔.
 pub(super) fn stopped_reason(note: Option<&str>) -> String {
     quoting(
         "The worker ended its turn titled ⛔ (stopped unfinished) while holding the ticket.",
         note,
     )
-}
-
-/// `head`, followed by the first [`NOTE_CHARS`] characters of `note` when there is one.
-fn quoting(head: &str, note: Option<&str>) -> String {
-    match note.map(str::trim).filter(|n| !n.is_empty()) {
-        Some(note) => format!("{head} Its last message: {}", cut(note, NOTE_CHARS)),
-        None => head.to_owned(),
-    }
-}
-
-/// The first `chars` characters of `text`, with `…` when anything was cut.
-fn cut(text: &str, chars: usize) -> String {
-    let mut kept: String = text.chars().take(chars).collect();
-    if kept.len() < text.len() {
-        kept.push('…');
-    }
-    kept
 }
 
 /// The reason in the justiciar report sent for a worker that stopped unfinished holding
@@ -272,7 +223,7 @@ impl Dispatcher {
             ));
         }
         if !ended.again {
-            return Reply::text(Exit::Success, block_text(&ticket));
+            return Reply::text(Exit::Success, format!("block    {}", block_text(&ticket)));
         }
         let released = self.release_ended(session, &ticket, &release_reason(ended.note.as_deref()));
         Reply::text(Exit::Success, released)

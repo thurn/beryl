@@ -1,9 +1,10 @@
 //! What `ignite turn-ended` answers a session's `Stop` hook.
 
 use super::tests::{Rig, detail, lock, request, rig, session, ticket_id};
-use super::turn::{NOTE_CHARS, REASON_CHARS, justiciar_reason, release_reason};
+use super::turn::{REASON_CHARS, justiciar_reason, release_reason};
 use super::*;
 use crate::server::Verb;
+use ignite_core::cli::decide::NOTE_CHARS;
 
 /// A rig whose one pool worker, `local_w1`, holds `T.1`, a ticket labelled `labels`.
 fn holding(labels: &[&str]) -> Rig {
