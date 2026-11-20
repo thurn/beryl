@@ -16,7 +16,9 @@ pass.
 Six passes then pair the rest, each over what the passes before it left:
 
 1. **Object.** Cards of the same object (a card's slot in the view, which both clients name
-   their cards by), whatever their names or places.
+   their cards by), whatever their names or places. Where the web draws two cards of one
+   object (during the opening, the stage's card below the window and the opening's copy in
+   its row), the one on the screen pairs first.
 2. **Mark.** Marks' outlines (role `mark`) of the same kind (their name: `eligible`,
    `selected`, `suggested`, `friendly-target`, `hostile-target`) on the same object. A mark
    pairs in this pass or not at all, so an outline one side lacks on a card is reported on that
@@ -210,6 +212,16 @@ def join(web: Sequence[Element], b3d: Sequence[Element]) -> dict[str, object]:
             if open_web(w) and open_b3d(b):
                 pair(w, b, how)
 
+    # During the opening the web draws each card of the viewer's hand twice under one object:
+    # the stage's card, moved below the window, and the opening's copy in its row. Beryl 3D
+    # draws one, so a web card a player can see pairs first, and one off the screen pairs only
+    # with what is left.
+    screen = screen_of(web)
+    nearest_first(
+        "object",
+        lambda we, be: same_card(we, be) and on_screen(we, screen),
+        math.inf,
+    )
     nearest_first("object", same_card, math.inf)
     nearest_first("mark", same_mark, math.inf)
     mark_pass_done = True
@@ -301,6 +313,31 @@ def same_card(a: Element, b: Element) -> bool:
         and a.get("object") is not None
         and a.get("object") == b.get("object")
     )
+
+
+def screen_of(elements: Sequence[Element]) -> tuple[float, float, float, float] | None:
+    """The box of the screen the `elements` are drawn on: the union of the boxes of the
+    elements with no parent, which on the web are the page's top-level nodes. None when there
+    are none."""
+    roots = [box(e) for e in elements if parent(e) is None]
+    if not roots:
+        return None
+    left = min(x for x, _, _, _ in roots)
+    top = min(y for _, y, _, _ in roots)
+    right = max(x + w for x, _, w, _ in roots)
+    bottom = max(y + h for _, y, _, h in roots)
+    return left, top, right - left, bottom - top
+
+
+def on_screen(
+    element: Element, screen: tuple[float, float, float, float] | None
+) -> bool:
+    """Whether some of `element`'s box lies on `screen` (everything does when it is None)."""
+    if screen is None:
+        return True
+    x, y, w, h = box(element)
+    sx, sy, sw, sh = screen
+    return x < sx + sw and x + w > sx and y < sy + sh and y + h > sy
 
 
 def same_mark(a: Element, b: Element) -> bool:

@@ -38,7 +38,7 @@ from pathlib import Path
 from ... import paths as repo_paths
 from ... import shots
 from .. import compare
-from . import clock, plot, snapshot, tracks
+from . import clock, joined, plot, snapshot, tracks
 from .target import UNSAFE, Target, target
 
 
@@ -250,14 +250,17 @@ def compared(
     # its partner's comparison already says how. An effect inside a card is drawn of its own,
     # and is measured as itself.
     carried = tracks.inside(web_frames, partnered) - set(web_effects)
+    screens = [joined.screen_of(frame) for frame in web_frames]
     lonely_web = [
         Lonely(
             f"{about[name]} (frames {tracks.present(track)})",
             track,
             web_effects.get(name, ""),
         )
-        for name, track in web_tracks.items()
-        if name not in partnered and name not in carried and tracks.moves(track)
+        for name, all_frames in web_tracks.items()
+        if name not in partnered and name not in carried
+        for track in [tracks.seen(all_frames, screens)]
+        if tracks.moves(track)
     ]
     return sorted(pairs, key=ranked), lonely_b3d, lonely_web
 

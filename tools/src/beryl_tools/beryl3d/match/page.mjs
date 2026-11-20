@@ -393,10 +393,18 @@ export function records({ roles, only, light = false }) {
         return objectOf(on);
     };
     const objectOf = (el) => {
-        const stage = el.dataset.stage;
+        const stage = el.dataset.stage ?? openingSlot(el);
         if (stage !== undefined && /^-?\d+$/.test(stage)) return Number(stage);
         return stage ?? null;
     };
+    // During the opening (ui/src/screens/Opening.tsx) the web draws each card of the hand
+    // twice: the stage's card, which carries `data-stage` and which the desktop board moves
+    // below the window, and the opening's own copy in its row (`.opening-card`, a `card` in
+    // roles.json), whose `data-slot` is the card's object. Beryl 3D draws one card, in the
+    // opening's row, so the copy is named by that object too, and the matcher pairs Beryl 3D's
+    // card with whichever of the two is on the screen.
+    const openingSlot = (el) =>
+        roleOf(el) === "card" ? el.closest(".opening [data-slot]")?.dataset.slot : undefined;
 
     // Each line of a text node: its words, its box and its baseline. A character's box from a
     // Range is its font's content area, so the baseline lies the font's ascent below its top.

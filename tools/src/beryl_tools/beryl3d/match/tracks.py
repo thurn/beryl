@@ -86,6 +86,30 @@ def tracks(frames: Sequence[Frame]) -> dict[object, Track]:
     return out
 
 
+def seen(
+    track: Track, screens: Sequence[tuple[float, float, float, float] | None]
+) -> Track:
+    """`track` with its samples taken out where the element's box lies off the frame's screen,
+    one for each frame (`joined.screen_of`, None for no screen). During the opening the web keeps the stage's hand cards below
+    the window, then shows them in the library pile when a mulligan sends them there; a player
+    sees a card turn up in the pile, not the move from below the window, so an element alone on
+    one side is measured only while on the screen."""
+    out: Track = []
+    for sample_at, screen in zip(track, screens):
+        if sample_at is None or screen is None:
+            out.append(sample_at)
+            continue
+        x, y, width, height = screen
+        visible = (
+            sample_at.x < x + width
+            and sample_at.x + sample_at.width > x
+            and sample_at.y < y + height
+            and sample_at.y + sample_at.height > y
+        )
+        out.append(sample_at if visible else None)
+    return out
+
+
 def partners(web: Sequence[Frame], b3d: Sequence[Frame]) -> dict[object, object]:
     """Each Beryl 3D track's web track over the span: the one the matcher paired it with in the
     most frames, ties going to the earliest. A web track partners one Beryl 3D track at most.
