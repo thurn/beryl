@@ -70,8 +70,10 @@ fn last_week(conn: &Connection, now: Timestamp) -> rusqlite::Result<Amounts> {
         |row| Ok((row.get::<_, f64>(0)?, row.get::<_, f64>(1)?)),
     )?;
     let dollars = conn.query_row(
+        // `at` bounds the scan through its index: a row about a window that starts within the
+        // week was received within it too.
         "SELECT COALESCE(SUM(json_extract(data, '$.row.dollars')), 0) FROM metrics
-         WHERE json_extract(data, '$.table') = 'window_dollars'
+         WHERE at >= ?1 AND json_extract(data, '$.table') = 'window_dollars'
            AND json_extract(data, '$.row.split') = 'class'
            AND json_extract(data, '$.row.start') >= ?1",
         params![since],

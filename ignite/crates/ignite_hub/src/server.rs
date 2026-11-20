@@ -56,6 +56,9 @@ pub const MAX_CONNECTIONS: usize = 32;
 /// How long a request waits for a free database connection before it gets 503.
 const CONNECTION_WAIT: Duration = Duration::from_secs(5);
 
+/// The shortest time between two attempts to evaluate the improvement rules.
+const EVALUATION_RETRY: Duration = Duration::from_secs(600);
+
 /// The largest body the hub reads from a request that carries no valid token, enough for a
 /// machine's first registration.
 pub const MAX_UNAUTHENTICATED_BODY: u64 = 64 * 1024;
@@ -122,6 +125,7 @@ impl HubServer {
             returned: Condvar::new(),
             active: AtomicUsize::new(0),
             read_only,
+            evaluated: Mutex::new(None),
         });
         let accepting = Arc::clone(&server);
         let thread = thread::spawn(move || {
@@ -194,6 +198,9 @@ struct Shared {
     active: AtomicUsize,
     /// Whether only reads are served; see [`HubServer::start_read_only`].
     read_only: bool,
+    /// When the improvement rules were last tried, held while an evaluation runs; see
+    /// [`evaluate_rules`].
+    evaluated: Mutex<Option<Instant>>,
 }
 
 struct Pool {
@@ -270,7 +277,22 @@ fn answer(shared: &Shared, mut http: tiny_http::Request) {
 /// Evaluates the improvement rules after new records or efficiency rows have been stored and
 /// answered, so the machine that sent them does not wait. A failed evaluation leaves the rows
 /// stored, and the next arrival tries again.
+///
+/// An evaluation reads every efficiency row, which takes minutes once the `metrics` table is
+/// gigabytes. So only one runs at a time, and a new one starts at most every
+/// [`EVALUATION_RETRY`], even after a failure. Before this, each arrival started another
+/// evaluation while earlier ones were still reading, and their reads slowed the dispatch
+/// transaction until other writers failed with `database is locked`.
 fn evaluate_rules(shared: &Shared, now: Timestamp) {
+    let mut evaluated = match shared.evaluated.try_lock() {
+        Ok(guard) => guard,
+        Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => return,
+    };
+    if evaluated.is_some_and(|at| at.elapsed() < EVALUATION_RETRY) {
+        return;
+    }
+    *evaluated = Some(Instant::now());
     let Ok(mut conn) = shared.connection() else {
         return;
     };
