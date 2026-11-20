@@ -19,7 +19,11 @@ changing how its checks run.
 
 ## A failure: a regression ticket
 
-The check really failed on `staging`, so something broke.
+The check really failed on `staging`, so something broke. `staging` is not a
+branch: it is the ref `refs/ignite/staging` on the remote, fetched as
+`origin/ignite/staging`, so its tip is `git rev-parse origin/ignite/staging`
+after `git fetch origin refs/ignite/staging:refs/remotes/origin/ignite/staging`.
+A fix lands with `ignite land`, never by a push to `refs/ignite/staging`.
 
 1. **Reproduce** it with `ignite test <check>` in your tree, at the culprit
    commit the ticket names and at the staging tip. Read the ticket that landed

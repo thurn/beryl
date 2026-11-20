@@ -7,9 +7,9 @@ agents use it.
 
 Ignite exists to shorten one number: the wall-clock time from a ticket being
 claimed to its work **landing**, which means its commits reaching the shared
-`staging` branch. It does that by owning every build, test and check an agent
-runs, on every machine, so that one program per machine can see all of the work
-and avoid doing any of it twice.
+`staging` ref. It does that by owning every build, test and check an agent runs,
+on every machine, so that one program per machine can see all of the work and
+avoid doing any of it twice.
 
 The design rests on five decisions:
 
@@ -260,17 +260,28 @@ This section names the parts. Each has its own section below.
 - The **result cache** remembers each check's outcome under a hash of its
   inputs. A check whose inputs already passed is not run again, in any tree or
   on any machine.
-- **Landing** is delivering a ticket's commits to the `staging` branch. The
+- **Landing** is delivering a ticket's commits to the `staging` ref. The
   **landing gate** is the set of checks that must pass first, on the commit the
   change was written on. A pass is stored as the change's **verdict**, and the
   landing rebases the commits onto the newest commit and pushes them without
   checking again.
 - The **tip** is the newest commit on `staging`. **Tip verification** runs the
   checks the gate left out, once per tip. It runs the build checks first and
-  moves the **`green`** branch, where new tickets start, to a tip that compiles;
+  moves the **`green`** ref, where new tickets start, to a tip that compiles;
   then it moves `master` forward once the budgeted checks pass. A landing that
   broke the build is **reverted**; any other failure gets a regression ticket
   and is fixed forward.
+- **Ignite's refs** are `staging`, `green`, the **release ref** that daemons
+  build Ignite from, and the saved work of released tickets. In this repository
+  they live under `refs/ignite/` on the remote (`refs/ignite/staging`,
+  `refs/ignite/green`, `refs/ignite/release` and `refs/ignite/tickets/<ticket>`,
+  set in `ignite.toml`'s `[repository]`). They are not branches, so GitHub lists
+  `master` as the repository's only branch, but git fetches and pushes them as
+  it does branches. A fetch copies each to a remote-tracking ref named
+  `origin/ignite/staging`, `origin/ignite/green` and so on. The main checkout
+  keeps a local branch `staging` at `refs/ignite/staging`, and `green` at
+  `refs/ignite/green` (`ignite_core::refname::local_branch`). A push by hand
+  names the full ref: `git push origin <commit>:refs/ignite/staging`.
 - A **worker** is a desktop-app agent session that implements tickets. The
   **pool** is a machine's set of workers. The **dispatcher** is one small
   session, per machine and per desktop app in use there, that hands tickets to
@@ -381,7 +392,7 @@ The verbs an agent uses while working:
   [Landing by verdict](#landing-by-verdict)).
 
 - `ignite sync` rebases the tree's branch onto the tip, or onto `green` when
-  `repository.green` is set and the branch exists.
+  `repository.green` is set and the ref exists.
 
 - `ignite land` lands the checked commits: it finds the tree's verdict (or runs
   the gate when there is none), rebases the commits onto the tip without a
@@ -609,36 +620,37 @@ How the executable is installed and kept current:
   until install moves it. When the hub cannot be reached, install serves it
   itself for the length of the registration, then stops before the hub's service
   starts.
-- After that the daemon runs the executable built from the release branch,
-  `repository.release` in `ignite.toml`, or `master` when that is unset. When
-  the branch moves and Ignite's own source changed, each daemon builds the new
-  executable in a tree of its own and points `bin/current` at it, so clients and
-  the hub run it. The daemon restarts into it only when the release changes the
-  code the daemon runs: anything under `ignite/` except the `ignite_cli` crate,
-  test files (`tests.rs`, `*_tests.rs`, files under a `tests` directory),
-  Markdown and the check manifests. A release that changes none of that, such as
-  a fix to the client alone, is taken on without a restart: the daemon reports
-  it as its version from then on and compares later releases with it. A restart
-  that is due waits for a quiet window: until no newer release has appeared for
-  `self_update.quiet_seconds` (5), no newer release is still building and, when
-  the release changes the landing code (the daemon's `land` module), no landing
-  runs, but at most `self_update.cap_seconds` (30) from the first release it
-  waits with, counted from when its build started. Releases that land one after
-  another therefore cause one restart into the newest: a release that lands
-  while another builds is built as soon as that build ends, and replaces it as
-  the one to restart into. A push in progress holds the restart even past the
-  cap. It never waits for running commands or verb processes, which survive it.
-  Before it restarts, the daemon answers every new request, except the calls of
-  verb processes, with a reply that says it is restarting, which the client
-  sends again, and waits up to 30 seconds for the verbs running on its own
-  threads, such as a `release`. It does not wait for a `start` that only waits
-  for a free tree: the new daemon runs that `start` again under its handle, and
-  the rerun claims the tree if one was leased to the session meanwhile. Daemons
-  fetch the branch every five minutes, so a fix pushed to it by hand deploys
-  too. A landing on the machine moves the release branch from a worktree of the
-  main checkout, which updates the checkout's copy of the branch. The sender
+- After that the daemon runs the executable built from the release ref,
+  `repository.release` in `ignite.toml` (`refs/ignite/release` here), or
+  `master` when that is unset. When the ref moves and Ignite's own source
+  changed, each daemon builds the new executable in a tree of its own and points
+  `bin/current` at it, so clients and the hub run it. The daemon restarts into
+  it only when the release changes the code the daemon runs: anything under
+  `ignite/` except the `ignite_cli` crate, test files (`tests.rs`, `*_tests.rs`,
+  files under a `tests` directory), Markdown and the check manifests. A release
+  that changes none of that, such as a fix to the client alone, is taken on
+  without a restart: the daemon reports it as its version from then on and
+  compares later releases with it. A restart that is due waits for a quiet
+  window: until no newer release has appeared for `self_update.quiet_seconds`
+  (5), no newer release is still building and, when the release changes the
+  landing code (the daemon's `land` module), no landing runs, but at most
+  `self_update.cap_seconds` (30) from the first release it waits with, counted
+  from when its build started. Releases that land one after another therefore
+  cause one restart into the newest: a release that lands while another builds
+  is built as soon as that build ends, and replaces it as the one to restart
+  into. A push in progress holds the restart even past the cap. It never waits
+  for running commands or verb processes, which survive it. Before it restarts,
+  the daemon answers every new request, except the calls of verb processes, with
+  a reply that says it is restarting, which the client sends again, and waits up
+  to 30 seconds for the verbs running on its own threads, such as a `release`.
+  It does not wait for a `start` that only waits for a free tree: the new daemon
+  runs that `start` again under its handle, and the rerun claims the tree if one
+  was leased to the session meanwhile. Daemons fetch the ref every five minutes,
+  so a fix pushed to it by hand (`git push origin <commit>:refs/ignite/release`)
+  deploys too. A landing on the machine moves the release ref from a worktree of
+  the main checkout, which updates the checkout's copy of the ref. The sender
   loop runs a round every 10 seconds, but it reads that copy every second
-  between rounds and starts a round as soon as the branch moves, a release build
+  between rounds and starts a round as soon as the ref moves, a release build
   finishes, or a landing names a release candidate (below). Before 2026-11-19
   each of those waited for the next round, up to 10 s.
 - An express landing builds its release before it lands. After its rebase and
@@ -647,15 +659,15 @@ How the executable is installed and kept current:
   follows its own version, changes Ignite's source and no other build runs, it
   builds and stores that commit's executable while the landing runs its express
   commands, without a selftest or a restart. An express landing pushes the
-  commit it checked, so when the release branch reaches it the build is already
+  commit it checked, so when the release ref reaches it the build is already
   stored and only the selftest is left. On 2026-11-19 the release build took 36
   s after each Ignite landing, as long as the landing's express commands. A
   landing that fails or rebases again leaves a stored build nobody restarts
   into; a build already running is never interrupted for a candidate.
-- The release build is not run by a loop. When the release branch moves, or the
-  hub reports a version this daemon doesn't have, the daemon starts one build on
-  a thread of its own in `update/update-tree` with a one-hour hang limit; only
-  one runs at a time. The build runs as the daemon's own child process on the
+- The release build is not run by a loop. When the release ref moves, or the hub
+  reports a version this daemon doesn't have, the daemon starts one build on a
+  thread of its own in `update/update-tree` with a one-hour hang limit; only one
+  runs at a time. The build runs as the daemon's own child process on the
   machine's `express_cores`, borrowing whatever cores are free when it starts up
   to 12 in all, and logs to `update/build.log`. Before 2026-11-19 it was a
   supervised `agent` command, which waited up to 7.5 minutes for the scheduler's
@@ -674,7 +686,7 @@ How the executable is installed and kept current:
   a copy of `daemon.db`. `bin/current` points at the build only after it passes.
   A build that fails is added to `bin/rejected`, so no daemon updates to it, and
   is reported once to the justiciar; the daemon stays on its own build until the
-  release branch moves.
+  release ref moves.
 - A restart on Windows starts the new executable with `IGNITE_RESTART_FROM` set
   to the old daemon's process ID, and the old daemon exits once the new one has
   logged its start in `starts.jsonl`. The new daemon waits up to 30 seconds for
@@ -705,12 +717,12 @@ How the executable is installed and kept current:
   checkout to the change, which it does every 30 seconds while the checkout has
   no local edits. The daemon reads it only when it starts, and it alone uses
   `repository.green` for `ignite start` and `ignite sync`, `tip_build_cores` for
-  its scheduler's limits, and the branches the main checkout fast-forwards.
-  Those take effect at the daemon's next restart, which the next release that
-  changes the daemon's code brings about. Nothing reloads the daemon's copy. A
-  verb process and its daemon can therefore disagree for a while: a tip round
-  that reads `green` from the file pushes the branch even while the daemon still
-  starts tickets at the tip.
+  its scheduler's limits, and the refs the main checkout fast-forwards. Those
+  take effect at the daemon's next restart, which the next release that changes
+  the daemon's code brings about. Nothing reloads the daemon's copy. A verb
+  process and its daemon can therefore disagree for a while: a tip round that
+  reads `green` from the file pushes the ref even while the daemon still starts
+  tickets at the tip.
 - A verdict is keyed by the tree ID of every file in the ticket tree, committed
   or not, the merge base of the tree's `HEAD` with the tip as the checkout last
   fetched it, and `verdict_settings`, a digest of the `[gate]` section that
@@ -739,15 +751,15 @@ How the executable is installed and kept current:
   (`merge-tree --merge-base`) and fail naming the version found on an older one.
   `Git::merge_base`, `committed_at` (the committer date) and `tree_id` (the tree
   ID of every file on disk, committed or not) go with them.
-- A landing that changed Ignite's own source moves the release branch to the
-  landed commit once `repository.release_family` (the `ignite` family) has
-  passed on it, or the express commands have (see
-  [Express landings](#express-landings)). A fix to Ignite therefore reaches
-  every machine minutes after it lands, without waiting for tip verification of
-  everything else, which an Ignite bug can itself be blocking.
+- A landing that changed Ignite's own source moves the release ref to the landed
+  commit once `repository.release_family` (the `ignite` family) has passed on
+  it, or the express commands have (see [Express landings](#express-landings)).
+  A fix to Ignite therefore reaches every machine minutes after it lands,
+  without waiting for tip verification of everything else, which an Ignite bug
+  can itself be blocking.
 - The check manifests (`repository.checks`, `ignite/checks/`) are not Ignite's
   source, although they lie under `ignite/`: no executable compiles them. A
-  landing that changes only them judges no release, so the release branch stays
+  landing that changes only them judges no release, so the release ref stays
   where it is and no daemon builds or restarts. Every command reads the families
   and products it lists, builds and runs from the tree it runs in: the ticket
   tree's working directory for `ignite test` and `ignite check`, the rebased
@@ -768,24 +780,24 @@ How the executable is installed and kept current:
   counts with the gate's checks. A failing run does not refuse the landing; the
   release stays where it is and the `release` line says why. After the push the
   ticket closes and its tree is released first, and the only work left before
-  the reply is the push to the release branch. On 2026-11-18 two landings each
+  the reply is the push to the release ref. On 2026-11-18 two landings each
   spent 80 to 135 seconds after their push building and running the `ignite`
   family, with their ticket trees still leased: one because its gate had left
   unrelated checks to tip verification, the other because its gate had not
   listed the family for lack of a built product.
-- A release survives a rebase. A commit pushed to the release branch by hand is
-  rebased when its ticket lands, so the release branch then holds a commit that
-  the landed one does not contain. The landing moves the release branch over it
-  anyway, with `--force-with-lease` against the commit it read there, when the
-  landed commit holds that commit's changes to Ignite's source: some commit of
-  the landed history has the same `ignite/` tree, or every commit that changed
+- A release survives a rebase. A commit pushed to the release ref by hand is
+  rebased when its ticket lands, so the release ref then holds a commit that the
+  landed one does not contain. The landing moves the release ref over it anyway,
+  with `--force-with-lease` against the commit it read there, when the landed
+  commit holds that commit's changes to Ignite's source: some commit of the
+  landed history has the same `ignite/` tree, or every commit that changed
   `ignite/` has an equivalent patch there (as `git cherry` compares them). A
-  daemon that runs a commit the release branch does not contain uses the same
-  test before it calls itself ahead of the release: it builds the release if the
+  daemon that runs a commit the release ref does not contain uses the same test
+  before it calls itself ahead of the release: it builds the release if the
   release holds its changes, and counts as running the release when the two
   `ignite/` trees match. On 2026-11-18 each of three hand pushes followed by a
   rebased landing left every daemon refusing new releases until someone moved
-  the branch by hand and ran `ignite install`.
+  the ref by hand and ran `ignite install`.
 - Each build is stored under its commit, so a new executable never replaces a
   file that is running. Supervisors and verb processes finish under the version
   that started them, except a landing that has not begun its push when the
@@ -801,23 +813,23 @@ How the executable is installed and kept current:
   followed. Daemons retry refused connections and 502, 503 and 504 answers from
   the hub for 15 seconds, so a hub restart is invisible to them.
 - Each record names the Ignite commit that produced it.
-- `ignite status` has a `release` section: the release branch's tip, the build
-  this daemon runs and what it is doing about the difference (waiting for its
-  next check of the branch, with when that is due; building; self-testing;
-  restarting, with when the quiet window ends and the latest the restart can
-  wait; failed to build; or rolled back, with the reason from
-  `bin/rollbacks.log`), then the hub's version and each machine's, which the hub
-  reports at `GET /machines/versions`.
-- When `ignite land` moves the release branch, its `next` line names
+- `ignite status` has a `release` section: the release ref's tip, the build this
+  daemon runs and what it is doing about the difference (waiting for its next
+  check of the ref, with when that is due; building; self-testing; restarting,
+  with when the quiet window ends and the latest the restart can wait; failed to
+  build; or rolled back, with the reason from `bin/rollbacks.log`), then the
+  hub's version and each machine's, which the hub reports at
+  `GET /machines/versions`.
+- When `ignite land` moves the release ref, its `next` line names
   `ignite wait deploy-<commit>`. That wait asks the daemon to fetch the release
-  branch at its next round instead of at its five-minute check, for a release
-  that moved on another machine. It then waits until this daemon, the hub and
-  every machine the hub heard from in the last ten minutes run the commit or a
-  later one (exit 0), or the commit was rolled back, failed its selftest or
-  failed to build on this machine (exit 2, with the reason). A wait that ends
-  first exits 5, or 4 when the hub cannot be reached. The wait keeps no state,
-  so a client cut off by the daemon restarting into the release sends it again.
-  A rollback on another machine shows only as that machine staying behind.
+  ref at its next round instead of at its five-minute check, for a release that
+  moved on another machine. It then waits until this daemon, the hub and every
+  machine the hub heard from in the last ten minutes run the commit or a later
+  one (exit 0), or the commit was rolled back, failed its selftest or failed to
+  build on this machine (exit 2, with the reason). A wait that ends first exits
+  5, or 4 when the hub cannot be reached. The wait keeps no state, so a client
+  cut off by the daemon restarting into the release sends it again. A rollback
+  on another machine shows only as that machine staying behind.
 
 How a restart is survived:
 
@@ -1017,7 +1029,7 @@ Rules for trees:
   leased, `ignite start` waits and says so, and the dispatcher hands off no
   ticket.
 - `ignite start` leases a free tree and checks out a branch at the tip. With
-  `repository.green` set and the branch present, the start is `green` instead,
+  `repository.green` set and the ref present, the start is `green` instead,
   except in two cases. When a dependency of the ticket landed at a commit that
   `green` does not hold yet, the tree starts at the newest such commit, at once,
   and the brief's `note` line says so. A regression ticket starts at the tip of
@@ -1163,12 +1175,12 @@ work lost at release has to be done again from nothing.
 
 - Release commits whatever the tree holds that is not committed, as one commit
   marked as saved at release, and pushes the ticket's branch to the remote as
-  `ignite/<ticket>`. If that push fails, the release fails and the session keeps
-  the ticket.
-- The next `ignite start` of the ticket, on any machine, checks that branch out
-  and says so in the brief: how many commits it holds, who made them, and
-  whether the last one is unfinished work saved at release.
-- The branch is deleted when the ticket lands or closes.
+  `refs/ignite/tickets/<ticket>` (`repository.saved` followed by the ticket's
+  ID). If that push fails, the release fails and the session keeps the ticket.
+- The next `ignite start` of the ticket, on any machine, checks that ref out and
+  says so in the brief: how many commits it holds, who made them, and whether
+  the last one is unfinished work saved at release.
+- The saved ref is deleted when the ticket lands or closes.
 - `ignite release --needs <what>` also records why the ticket was given back.
   `--needs <machine>` (or `<machine>/<app>`) makes that machine the ticket's
   owner, so only its workers take it, and `--needs macos` records the operating
@@ -1189,7 +1201,7 @@ work lost at release has to be done again from nothing.
 ```text
 $ ignite release --needs person -m "Needs the App Store Connect key. Tried the
   keychain and the CI secrets; neither holds it."
-saved    2 commits and 3 uncommitted files as ignite/TQ44S.7.12
+saved    2 commits and 3 uncommitted files as refs/ignite/tickets/TQ44S.7.12
 released TQ44S.7.12; tree-04 is free; do not use this path again
 title    ⛔ [TQ44S.7.12] Sign the iOS build
 ```
@@ -2144,8 +2156,8 @@ hides.
 
 ## Landing
 
-`ignite land` is the only way commits reach `staging`. It replaces `enact push`,
-the ticket's closing comment and `enact close`.
+`ignite land` is the only way commits reach `staging` (`refs/ignite/staging`).
+It replaces `enact push`, the ticket's closing comment and `enact close`.
 
 A change is checked once, on the commit it was written on, and lands by that
 result. `ignite check`, or the landing itself when no check has run, runs the
@@ -2200,7 +2212,7 @@ A verdict removes the first two: the commits are checked once, in the tree that
 already holds their build, and a moved tip costs a rebase in the object database
 instead of a build. What strict checking guaranteed, that `staging` never holds
 a broken combination, is not needed: `master` is the branch that only holds
-verified commits, and `green` is the branch new work starts from (see
+verified commits, and `green` is the ref new work starts from (see
 [Tip verification](#tip-verification)).
 
 ### Landing by verdict
@@ -2260,12 +2272,11 @@ before (see [A broken build is reverted](#a-broken-build-is-reverted)).
 A change to Ignite's own source (a file under `ignite/` other than the check
 manifests) lands as it did before landing by verdict, in either mode: by the
 express lane, or through the gate on the exact tip. That path compiles and tests
-Ignite on the exact commit that lands and then moves the release branch to it,
+Ignite on the exact commit that lands and then moves the release ref to it,
 which every daemon builds and restarts into. A rebased commit that nothing
-compiled could move the release branch to a build no daemon can make, and a
-broken Ignite cannot run the tip round that would revert it. For the same reason
-a tip round never reverts a change to Ignite, and `green` is not held back for
-one.
+compiled could move the release ref to a build no daemon can make, and a broken
+Ignite cannot run the tip round that would revert it. For the same reason a tip
+round never reverts a change to Ignite, and `green` is not held back for one.
 
 So that every change to Ignite stays an express landing, in verdict mode
 `ignite land` and `ignite check` refuse a change that mixes Ignite's own source
@@ -2355,8 +2366,8 @@ exact tip it pushes. The steps, in order:
    it and go back to step 2. The lease is taken only after the gate passes and
    held only for the push, so landings gate in parallel and never wait for
    another landing's gate.
-6. Push the commit from the landing tree to `staging` on the git remote, and
-   release the lease.
+6. Push the commit from the landing tree to `staging` (`refs/ignite/staging`) on
+   the git remote, and release the lease.
 7. Record the commits and the files they touch on the ticket with the agent's
    note, close the ticket and release the ticket tree.
 
@@ -2436,7 +2447,7 @@ releases the lease and exits with code 4.
 On 2026-11-18 every fix to Ignite's own scheduling waited in the queue it was
 fixing. Four fixes waited 10 to 30 minutes each for `ignite land`, because their
 gates asked the scheduler for cores that it had granted to other work, often
-because of the bug being fixed, and three were pushed to the release branch by
+because of the bug being fixed, and three were pushed to the release ref by
 hand. So a landing that changes only Ignite does not go through the gate:
 
 ```toml
@@ -2460,8 +2471,8 @@ express_cores = 3
 - A landing whose every changed file matches `paths` runs `commands` in order,
   in `dir`, in its own ticket tree, which the rebase has already put at the
   rebased commit, and pushes from there. It lands when every command exits 0,
-  and moves the release branch at once. A failure exits with code 2 and shows
-  the end of the command's output.
+  and moves the release ref at once. A failure exits with code 2 and shows the
+  end of the command's output.
 - The commands run as the daemon's own processes, never through a supervisor or
   the scheduler, with `CARGO_BUILD_JOBS`, `RUST_TEST_THREADS`,
   `NEXTEST_TEST_THREADS` and `IGNITE_CORES` set to the machine's
@@ -2634,8 +2645,8 @@ express_cores = 3
   selects the `ignite` and `ignite-lint` families and the always-set families,
   and builds nothing for the game.
 - A machine whose `express_cores` is 0, or a repository with no `[express]` or
-  no release branch, sends every landing through the gate.
-- The integration branch's lease and the push are the same as for any landing.
+  no release ref, sends every landing through the gate.
+- The integration ref's lease and the push are the same as for any landing.
 
 ### Formatting at landing
 
@@ -2681,8 +2692,8 @@ runs on a timer.
 Since a change lands by the verdict it earned on its own base (see
 [Landing](#landing)), tip verification is also where two changes that each
 passed alone and fail together are found. A round first runs the build checks
-and moves `green`, the branch new tickets start from, to a tip that compiles.
-When a build check fails, the round reverts the one landing that broke it (see
+and moves `green`, the ref new tickets start from, to a tip that compiles. When
+a build check fails, the round reverts the one landing that broke it (see
 [A broken build is reverted](#a-broken-build-is-reverted)). Every other failure
 is fixed forward: the round reports a regression, the hub files a regression
 ticket, and the fix lands on top (see
@@ -4033,30 +4044,30 @@ leased for nothing.
   (its acceptance contradicts its body, or gates on something the worker cannot
   control, such as a timing on a loaded machine). If the worker stops again in
   the same turn without doing either, the daemon releases the ticket itself,
-  saving the tree as `ignite/<ticket>` and using the worker's last message as
-  the release note. This applies only to a worker of the machine's pool that
-  holds a ticket. A person's own session, including one running `/ignite`, ends
-  turns to talk to the person, and is never blocked. Neither is a justiciar's
-  session, nor a worker with an `ignite` verb of its session still running (the
-  daemon guarantees a wake-up with a check two minutes after the verb ends), nor
-  a worker with a live process under the session's process, such as a background
-  shell command or monitor script, whose end wakes the worker. The hook passes
-  its parent process with `--parent`, and Ignite looks for live descendants of
-  it (macOS and Windows). With nothing running, the first stop is blocked and
-  the next releases the ticket. A released worker is refused by `ignite start`
-  until the dispatcher hands it a ticket. The hook names the session by the
-  desktop app's `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite records for the
-  lease; the hook input's own `session_id` is Claude Code's internal ID, which
-  Ignite never sees. Codex has no such hook, so Codex workers rely on the
-  silence check alone, which also still catches workers that died.
+  saving the tree as `refs/ignite/tickets/<ticket>` and using the worker's last
+  message as the release note. This applies only to a worker of the machine's
+  pool that holds a ticket. A person's own session, including one running
+  `/ignite`, ends turns to talk to the person, and is never blocked. Neither is
+  a justiciar's session, nor a worker with an `ignite` verb of its session still
+  running (the daemon guarantees a wake-up with a check two minutes after the
+  verb ends), nor a worker with a live process under the session's process, such
+  as a background shell command or monitor script, whose end wakes the worker.
+  The hook passes its parent process with `--parent`, and Ignite looks for live
+  descendants of it (macOS and Windows). With nothing running, the first stop is
+  blocked and the next releases the ticket. A released worker is refused by
+  `ignite start` until the dispatcher hands it a ticket. The hook names the
+  session by the desktop app's `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite
+  records for the lease; the hook input's own `session_id` is Claude Code's
+  internal ID, which Ignite never sees. Codex has no such hook, so Codex workers
+  rely on the silence check alone, which also still catches workers that died.
 - A pool worker whose title starts with ⛔ ("stopped unfinished") when it ends a
   turn holding its ticket is released at the first stop, without the block
   message: a worker once kept a ticket, its tree and a running build for hours
   under a ⛔ title. `ignite turn-ended` reads the title from the desktop app's
-  session metadata, saves the tree as `ignite/<ticket>`, releases the ticket
-  with the worker's last message as the note (resetting the tree stops the
-  session's running commands, as `ignite release` does), and sends for a
-  justiciar as `ignite justiciar` does, with the reason
+  session metadata, saves the tree as `refs/ignite/tickets/<ticket>`, releases
+  the ticket with the worker's last message as the note (resetting the tree
+  stops the session's running commands, as `ignite release` does), and sends for
+  a justiciar as `ignite justiciar` does, with the reason
   `<ticket>: worker stopped unfinished: <the first 400 characters of its last message>`.
   The hub folds repeated reports for the same ticket into one. A title that
   cannot be read changes nothing. A person's own session, a justiciar's session,
@@ -4192,7 +4203,7 @@ justiciar is the role that ends such an emergency. It is an ordinary worker
 session given a ticket labelled `justiciar`, which brings with it the authority
 in `ignite guide justiciar`: to repair the ticket graph, release or rewrite any
 ticket, repair the machine, and fix Ignite itself, deploying the fix through the
-release branch when Ignite blocks its own landing.
+release ref when Ignite blocks its own landing.
 
 - The hub files justiciar tickets at P0 with `tier:opus`, matched by signature
   so a repeated sighting adds a comment and never a second ticket. They come

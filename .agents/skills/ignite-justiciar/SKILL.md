@@ -22,8 +22,11 @@ For the length of the emergency, these rules from the root `AGENTS.md` and
 `ignite prime` no longer bind you:
 
 - the landing gate: you may skip `ignite check` and `ignite land`, and push a
-  fix straight to `ignite-release`, `staging` or `master` (in that order of
-  preference, see [Fix](#3-fix-it-fast));
+  fix straight to the release ref, `staging` or `master` (in that order of
+  preference, see [Fix](#3-fix-it-fast)). The release ref and `staging` are not
+  branches: they live at `refs/ignite/release` and `refs/ignite/staging` on the
+  remote, are fetched as `origin/ignite/release` and `origin/ignite/staging`,
+  and a push names the full ref, `git push origin <commit>:refs/ignite/staging`;
 - "work only in your own tree" and "never take over another session's ticket":
   you may enter any tree, stop any command (`ignite stop <handle> --force`,
   which also ends a hung verb process and its group, or `kill` for a runaway
@@ -121,30 +124,34 @@ files and ask for a report on your ticket. Do the critical path yourself.
 
 Stop the harm first, find the root cause second:
 
-- **Roll back before you debug.** A bad Ignite release: point `ignite-release`
+- **Roll back before you debug.** A bad Ignite release: point the release ref
   back at the last good commit (the monitor's `bin/last-good`, or the release
-  before the culprit). A bad commit on `staging` or `master`: revert it.
+  before the culprit) with
+  `git push --force origin <commit>:refs/ignite/release`. A bad commit on
+  `staging` or `master`: revert it.
 - **Free what is exhausted.** Disk: build caches, stale trees, old logs, in
   that order, never a person's files. Cores: stop the runaway command.
 - **Restart what is wedged.** The daemon: `launchctl kickstart -k`. The hub: the
   same on its machine. A stuck loop with no code fix needed: restart it.
 - **Hotfix Ignite** when nothing smaller works. Write the smallest fix, in your
   justiciar tree or, when Ignite cannot lease one, in a worktree under your
-  scratchpad made with `git worktree add <path> origin/staging`. Build and run
-  only what proves the fix works (one focused test, or `ignite install` from
-  that checkout on this machine to see the symptom go away). Then deploy:
-  1. push it to `ignite-release`, which every daemon builds and restarts into
+  scratchpad made with `git worktree add <path> origin/ignite/staging`. Build
+  and run only what proves the fix works (one focused test, or `ignite install`
+  from that checkout on this machine to see the symptom go away). Then deploy:
+  1. push it to the release ref, which every daemon builds and restarts into
      within minutes, and in the same step push it to `staging` too (rebased onto
-     staging's tip if needed). A landing moves `ignite-release` only over a
-     commit whose changes the landed commit holds, so a fix that stays off
-     `staging` blocks every later release until someone moves the branch by
-     hand. `ignite status` warns when `ignite-release` holds a commit `staging`
-     lacks; or
+     staging's tip if needed), with
+     `git push --atomic origin <commit>:refs/ignite/release <commit>:refs/ignite/staging`.
+     A landing moves the release ref only over a commit whose changes the
+     landed commit holds, so a fix that stays off `staging` blocks every later
+     release until someone moves the ref by hand. `ignite status` warns when
+     the release ref holds a commit `staging` lacks; or
   2. run `ignite install` from the fix's checkout on each affected machine; or
-  3. only when neither works, push it to `staging` (and `master` only when
-     `staging` is itself the problem).
+  3. only when neither works, push it to `staging`
+     (`git push origin <commit>:refs/ignite/staging`), and to `master` only when
+     `staging` is itself the problem.
 
-  Record each push on the ticket: branch, old commit, new commit, and every
+  Record each push on the ticket: ref, old commit, new commit, and every
   check you skipped.
 
 Report to the operator in one line after each step that changes something.

@@ -4,14 +4,18 @@
 
 [repository]
 remote = "origin"
-staging = "staging"
+# Ignite's own refs live under `refs/ignite/` on the remote, not under `refs/heads/`, so GitHub
+# lists `master` as the repository's only branch. A fetch copies them to `origin/ignite/staging`
+# and so on, and the main checkout keeps a local branch `staging` at `refs/ignite/staging`
+# (`ignite_core::refname`). The integration ref every landing pushes to.
+staging = "refs/ignite/staging"
 master = "master"
-# Daemons build Ignite from this branch, not from `master`. A landing that changes Ignite moves it
+# Daemons build Ignite from this ref, not from `master`. A landing that changes Ignite moves it
 # once the `ignite` family passes there, so an Ignite fix deploys without waiting for tip
 # verification of everything else, which an Ignite bug can itself block. A push by hand deploys
 # too: daemons poll it every five minutes. Older daemons that refused unknown keys must not read
 # this; every daemon has run a build that only warns since 506508f9a.
-release = "ignite-release"
+release = "refs/ignite/release"
 release_family = "ignite"
 # Build trees are fixed directories that keep their rust/target between tickets: rustc ignores
 # incremental caches built at another path, and a new directory per change rebuilt every crate
@@ -22,14 +26,18 @@ checks = "ignite/checks"
 # The newest tip whose build checks (the families declared `builds = true`) passed. `ignite start`
 # and `ignite sync` begin there instead of at the tip, so a tip that does not compile never
 # reaches a new ticket; a tip round moves it (docs/ignite.md, "Tip verification"). The first round
-# whose build checks pass creates the branch by pushing; until then `ignite start` uses the tip.
-green = "green"
+# whose build checks pass creates the ref by pushing; until then `ignite start` uses the tip.
+green = "refs/ignite/green"
+# `ignite release` pushes a released ticket's work to this prefix followed by the ticket's ID, and
+# the next `ignite start` of the ticket checks it out (docs/ignite.md, "Releasing work").
+saved = "refs/ignite/tickets/"
 
 # Express landings (docs/ignite.md, "Express landings"). On 2026-11-18 every fix to Ignite's own
 # scheduling waited 10 to 30 minutes for `ignite land` in the queue it was fixing, and three were
-# pushed to `ignite-release` by hand instead. A landing whose every changed file matches `paths`
-# runs these commands in its own ticket tree, side by side with others, on each machine's `express_cores`, which the scheduler
-# never hands out, instead of the gate; it then pushes and moves `ignite-release` on their pass.
+# pushed to the release ref (`repository.release`) by hand instead. A landing whose every changed
+# file matches `paths` runs these commands in its own ticket tree, side by side with others, on
+# each machine's `express_cores`, which the scheduler never hands out, instead of the gate; it
+# then pushes and moves the release ref on their pass.
 # The commands are those of the `ignite` and `ignite-lint` families (ignite/checks/rest.toml):
 # the whole workspace's tests, because `cargo test -p ignite_daemon` alone once missed a failing
 # test in `ignite_core`. They run under cargo-nextest, which runs every test binary at once and
