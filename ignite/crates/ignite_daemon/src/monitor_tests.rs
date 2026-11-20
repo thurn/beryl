@@ -9,7 +9,7 @@ use super::*;
 const GOOD: &str = "aaaaaaa";
 const BAD: &str = "bbbbbbb";
 
-fn at(seconds: f64) -> Timestamp {
+pub(crate) fn at(seconds: f64) -> Timestamp {
     Timestamp::from_millis(1_800_000_000_000).plus_seconds(seconds)
 }
 
@@ -18,23 +18,32 @@ fn commit(hex: &str) -> Commit {
 }
 
 /// A daemon whose process state and answers a test sets, recording what the monitor does.
-struct FakeMachine {
-    running: bool,
-    answers: bool,
+pub(crate) struct FakeMachine {
+    pub(crate) running: bool,
+    pub(crate) answers: bool,
     /// On the hub's machine, whether its hub answers; `None` elsewhere.
     hub: Option<bool>,
     /// Whether an older build wrote the daemon's login service; a refresh makes it current.
     stale_service: Cell<bool>,
+    /// The app the machine runs in CLI mode; `None` on a machine with none.
+    pub(crate) cli_app: Option<justiciar::JusticiarApp>,
+    /// Whether a headless justiciar turn holds its lock. A started turn holds it.
+    pub(crate) turn_lock: Cell<bool>,
+    /// The headless justiciar turns started.
+    pub(crate) turns: RefCell<Vec<justiciar::JusticiarTurn>>,
     log: RefCell<Vec<String>>,
 }
 
 impl FakeMachine {
-    fn new(running: bool, answers: bool) -> Self {
+    pub(crate) fn new(running: bool, answers: bool) -> Self {
         Self {
             running,
             answers,
             hub: None,
             stale_service: Cell::new(true),
+            cli_app: None,
+            turn_lock: Cell::new(false),
+            turns: RefCell::default(),
             log: RefCell::default(),
         }
     }
@@ -44,7 +53,7 @@ impl FakeMachine {
         self
     }
 
-    fn log(&self) -> Vec<String> {
+    pub(crate) fn log(&self) -> Vec<String> {
         self.log.borrow().clone()
     }
 }
@@ -81,9 +90,23 @@ impl Machine for FakeMachine {
         }
         Ok(stale)
     }
+    fn justiciar_app(&self) -> Option<justiciar::JusticiarApp> {
+        self.cli_app.clone()
+    }
+    fn locked(&self, _lock: &Path) -> bool {
+        self.turn_lock.get()
+    }
+    fn start_justiciar(&self, turn: &justiciar::JusticiarTurn) -> std::io::Result<()> {
+        self.turn_lock.set(true);
+        self.turns.borrow_mut().push(turn.clone());
+        Ok(())
+    }
+    fn daemon_log_tail(&self, lines: usize) -> String {
+        format!("daemon log, last {lines} lines")
+    }
 }
 
-fn home() -> Home {
+pub(crate) fn home() -> Home {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let root = ignite_core::test_files::temp_dir().join(format!(
         "ignite-monitor-{}-{}",

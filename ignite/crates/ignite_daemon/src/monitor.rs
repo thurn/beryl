@@ -21,12 +21,17 @@
 //!   on 2026-11-18 the daemon's commands still ran on the slower cores hours after a release
 //!   changed the service to put them on the faster ones, because nobody had run `ignite install`.
 //!
-//! It holds no agent logic and calls the hub only to see that it answers. The decision ([`decide`]) is a function of what
-//! was observed; the observations and actions are the [`Machine`] trait, so the tests run the
-//! decision against a fake. A run reports a problem it handled and exits successfully.
+//! - while the daemon stays down after that, on a machine that runs an app in CLI mode, starts
+//!   and then resumes a headless justiciar turn, a repair session with no person watching
+//!   ([`justiciar`]).
+//!
+//! The justiciar turn is the monitor's only agent logic, and it calls the hub only to see that
+//! it answers. Each decision ([`decide`], [`decide_hub`], [`justiciar::decide`]) is a function
+//! of what was observed; the observations and actions are the [`Machine`] trait, so the tests
+//! run the decisions against a fake. A run reports a problem it handled and exits successfully.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -38,6 +43,9 @@ use ignite_os::service::Service;
 use serde::{Deserialize, Serialize};
 
 use crate::update::{CrashLoop, Home, detect_crash_loop, roll_back, start_log};
+
+#[path = "monitor_justiciar.rs"]
+pub mod justiciar;
 
 /// This many runs in a row without an answer from the daemon get it kickstarted.
 pub const FAILURES_BEFORE_KICKSTART: u32 = 3;
@@ -178,6 +186,16 @@ pub trait Machine {
     /// Rewrites and reloads the daemon's login service if an older build wrote it, and says
     /// whether it did ([`Service::refresh_daemon`]).
     fn refresh_daemon(&self) -> std::io::Result<bool>;
+    /// The first app this machine runs in CLI mode, with what a turn of it needs, or `None` on a
+    /// machine with none ([`justiciar::first_cli_app`]).
+    fn justiciar_app(&self) -> Option<justiciar::JusticiarApp>;
+    /// Whether a process holds the lock file `lock`.
+    fn locked(&self, lock: &Path) -> bool;
+    /// Starts a headless justiciar turn as a detached process that holds its lock while the CLI
+    /// runs.
+    fn start_justiciar(&self, turn: &justiciar::JusticiarTurn) -> std::io::Result<()>;
+    /// The last `lines` lines of the daemon's log, or an empty text when it cannot be read.
+    fn daemon_log_tail(&self, lines: usize) -> String;
 }
 
 fn state_file(home: &Home) -> PathBuf {
@@ -271,6 +289,12 @@ pub fn run_once(home: &Home, machine: &dyn Machine, now: Timestamp) -> Vec<Strin
             )),
         }
     }
+    done.extend(justiciar::run(
+        home,
+        machine,
+        seen.running && seen.answered,
+        now,
+    ));
     let hub_here = machine.hub_here();
     if decide_hub(&mut state, hub_here, hub_here && machine.probe_hub(), now) {
         done.push(match machine.kickstart_hub() {
@@ -322,6 +346,8 @@ fn evidence(state: &MonitorState, seen: &Observation, home: &Home, now: Timestam
 /// for the probe and the desktop for notifications.
 pub struct NativeMachine {
     pub socket: PathBuf,
+    /// The Ignite home: the main checkout it records, and `daemon.db` for `ignite pool mode`.
+    pub home: PathBuf,
 }
 
 impl Machine for NativeMachine {
@@ -377,6 +403,48 @@ impl Machine for NativeMachine {
     fn refresh_daemon(&self) -> std::io::Result<bool> {
         Native.refresh_daemon()
     }
+
+    fn justiciar_app(&self) -> Option<justiciar::JusticiarApp> {
+        let home = Home {
+            root: self.home.clone(),
+        };
+        let checkout = PathBuf::from(fs::read_to_string(home.checkout_file()).ok()?.trim());
+        let config = crate::main::read_config(&checkout).ok()?;
+        let hostname = crate::doctor::Host::hostname(&crate::doctor::NativeHost);
+        let db = ignite_store::local::open(&self.home.join("daemon.db")).ok();
+        let overrides = |app: &str| {
+            db.as_ref()
+                .and_then(|conn| ignite_store::local::cli_slots::mode_override(conn, app).ok())
+                .flatten()
+        };
+        justiciar::first_cli_app(&config, &hostname, &overrides, &checkout)
+    }
+
+    fn locked(&self, lock: &Path) -> bool {
+        justiciar::lock_held(lock)
+    }
+
+    fn start_justiciar(&self, turn: &justiciar::JusticiarTurn) -> std::io::Result<()> {
+        justiciar::spawn_detached(turn)
+    }
+
+    fn daemon_log_tail(&self, lines: usize) -> String {
+        // The log file the daemon's login service writes on macOS (`ignite_os::service`).
+        let Some(user_home) = ignite_core::config::home_dir(|name| std::env::var_os(name)) else {
+            return String::new();
+        };
+        let log = user_home
+            .join("Library")
+            .join("Logs")
+            .join("ignite.daemon.log");
+        fs::read_to_string(log).map_or_else(
+            |_| String::new(),
+            |text| {
+                let all: Vec<&str> = text.lines().collect();
+                all[all.len().saturating_sub(lines)..].join("\n")
+            },
+        )
+    }
 }
 
 /// Whether the hub listening at `listen` answers an HTTP request within [`PROBE_TIMEOUT`]. Any
@@ -402,6 +470,7 @@ pub fn run() -> Reply {
         let home = Home::from_env();
         let machine = NativeMachine {
             socket: crate::server::default_socket(),
+            home: home.root.clone(),
         };
         run_once(&home, &machine, SystemClock.now())
     });

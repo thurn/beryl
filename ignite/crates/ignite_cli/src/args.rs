@@ -309,6 +309,14 @@ pub enum InternalCommand {
     /// Make the running daemon restart into its own executable, as it does into a new release,
     /// and wait until the new daemon answers. A drill: refused to a session that holds a tree.
     Restart,
+    /// Run one headless justiciar turn for `ignite monitor`: hold `lock` while `command` runs,
+    /// with its output in `log`.
+    JusticiarTurn {
+        lock: std::path::PathBuf,
+        log: std::path::PathBuf,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        command: Vec<String>,
+    },
 }
 
 /// Arguments passed through untouched.
@@ -926,6 +934,29 @@ mod tests {
 
     #[test]
     fn parses_the_verb_process_command() {
+        let turn = Cli::try_parse_from([
+            "ignite",
+            "internal",
+            "justiciar-turn",
+            "/h/j.lock",
+            "/h/j-1.log",
+            "claude",
+            "-p",
+            "--model",
+            "opus",
+        ])
+        .unwrap();
+        let Command::Internal {
+            command: InternalCommand::JusticiarTurn { lock, log, command },
+        } = turn.command
+        else {
+            panic!("not a justiciar turn");
+        };
+        assert_eq!(
+            (lock.to_str(), log.to_str()),
+            (Some("/h/j.lock"), Some("/h/j-1.log"))
+        );
+        assert_eq!(command, ["claude", "-p", "--model", "opus"]);
         let line = ["ignite", "internal", "verb", "L-6"];
         assert!(matches!(
             Cli::try_parse_from(line).unwrap().command,
