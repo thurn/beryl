@@ -8,9 +8,13 @@
 //! build directories of the free trees used longest ago. Files that are clones of another tree's
 //! count their shared blocks once (`disk/space.rs`).
 //!
-//! Only free trees are touched. Each is marked `resetting` while its files are deleted, so no
-//! lease can take it half swept, and its row is put back as it was afterwards, so the order of
-//! last use survives the sweep.
+//! Before measuring, the daemon deletes the object files that earlier compiles of a unit left
+//! behind (`disk/objects.rs`), which held half of a large tree's bytes.
+//!
+//! Free trees are marked `resetting` while their files are deleted, so no lease can take one half
+//! swept, and each row is put back as it was afterwards, so the order of last use survives the
+//! sweep. Leased trees are swept too while nothing runs in them, and cleared whole, largest
+//! first, once no free tree is left to clear (`disk/leased.rs`).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -26,6 +30,8 @@ use serde::Serialize;
 use super::{Trees, store_error};
 use space::Space;
 
+mod leased;
+mod objects;
 mod space;
 #[cfg(test)]
 mod tests;
@@ -57,6 +63,12 @@ pub struct DiskReport {
     pub superseded: Vec<PathBuf>,
     /// Free trees whose build directories were deleted whole.
     pub cleared: Vec<TreeId>,
+    /// Leased trees, idle at the time, whose build directories were deleted whole.
+    pub reclaimed: Vec<TreeId>,
+    /// Object files that newer compiles of the same codegen unit replaced, deleted before the
+    /// trees were measured, and the bytes they held (`disk/objects.rs`).
+    pub objects: u64,
+    pub object_bytes: u64,
 }
 
 impl Trees {
@@ -87,35 +99,34 @@ impl Trees {
     /// other keeps the shared blocks, so a donor is kept while a tree that holds bytes of its
     /// own can go instead. The second pass clears any free tree whose bytes would be freed if
     /// every free tree went, which takes the clones that only free trees share.
+    ///
+    /// Leased trees that run nothing are swept of replaced builds as well, and when the free
+    /// trees are all cleared and the trees are still over the limit, the idle leased trees
+    /// holding the most bytes of their own are cleared whole (`disk/leased.rs`).
     pub fn hold_disk(&self, short: u64) -> Result<DiskReport> {
+        let mut report = DiskReport::default();
+        let mut objects = objects::Swept::default();
+        self.each_idle_tree(|dir| objects += objects::sweep_objects(dir))?;
+        report.objects = objects.files;
+        report.object_bytes = objects.bytes;
         let before = self.measure().total();
         let room = (short > 0).then(|| before.saturating_sub(short));
         let limit = match (self.inner.config.disk_limit, room) {
             (Some(limit), Some(room)) => Some(limit.min(room)),
             (limit, room) => limit.or(room),
         };
-        let mut report = DiskReport {
-            before,
-            after: before,
-            limit,
-            ..DiskReport::default()
-        };
+        report.before = before;
+        report.after = before;
+        report.limit = limit;
         let Some(limit) = limit else {
             return Ok(report);
         };
         if before <= limit {
             return Ok(report);
         }
-        for row in self.free_rows()? {
-            let Some(row) = self.take_for_sweep(&row.id)? else {
-                continue;
-            };
-            let path = self.inner.config.path(&id_of(&row)?);
-            for dir in self.inner.config.keep.get().iter() {
-                report.superseded.extend(sweep_superseded(&path.join(dir)));
-            }
-            self.put_back(&row)?;
-        }
+        let mut superseded = Vec::new();
+        self.each_idle_tree(|dir| superseded.extend(sweep_superseded(dir)))?;
+        report.superseded = superseded;
         let mut space = self.measure();
         report.after = space.total();
         let free: HashSet<TreeId> = self.free_rows()?.iter().map(id_of).collect::<Result<_>>()?;
@@ -154,17 +165,38 @@ impl Trees {
                 report.cleared.push(id);
             }
         }
-        if !report.cleared.is_empty() {
+        if report.after > limit {
+            self.reclaim_leased(&mut space, limit, &mut report)?;
+        }
+        if !report.cleared.is_empty() || !report.reclaimed.is_empty() {
             report.after = self.measure().total();
         }
         self.serve_waiters();
         Ok(report)
     }
 
+    /// Calls `sweep` with the build directories of every free tree, marked `resetting`
+    /// meanwhile, and of every leased tree that runs nothing, its builds paused meanwhile.
+    fn each_idle_tree(&self, mut sweep: impl FnMut(&PathBuf)) -> Result<()> {
+        for row in self.free_rows()? {
+            let Some(row) = self.take_for_sweep(&row.id)? else {
+                continue;
+            };
+            let path = self.inner.config.path(&id_of(&row)?);
+            for dir in self.inner.config.keep.get().iter() {
+                sweep(&path.join(dir));
+            }
+            self.put_back(&row)?;
+        }
+        self.each_idle_leased(sweep)
+    }
+
     /// Frees disk space fast while the disk has less than `floor` bytes free, without
     /// measuring the trees first. Deletes the whole build directories of free trees, used
     /// longest ago first, and reads the disk's free space with `free` after each one, stopping
-    /// once it reaches `floor` or cannot be read.
+    /// once it reaches `floor` or cannot be read. With no free tree left, it deletes the stale
+    /// object files of the leased trees that run nothing, and then their whole build
+    /// directories, leased longest ago first (`disk/leased.rs`).
     ///
     /// [`Trees::hold_disk`] measures every tree in full twice before it clears any, which took
     /// over half an hour per measurement on 1.6 TB of build directories under load. The daemon
@@ -177,7 +209,14 @@ impl Trees {
             limit: Some(floor),
             ..DiskReport::default()
         };
-        let low = || free().is_some_and(|bytes| bytes < floor);
+        // Once the disk is back above the floor, or its free space cannot be read, nothing
+        // more is deleted and the free space is not read again.
+        let done = std::cell::Cell::new(false);
+        let low = || {
+            let low = !done.get() && free().is_some_and(|bytes| bytes < floor);
+            done.set(!low);
+            low
+        };
         for row in self.free_rows()? {
             if !low() {
                 break;
@@ -195,6 +234,21 @@ impl Trees {
             row.built_commit = None;
             self.put_back(&row)?;
             report.cleared.push(id);
+        }
+        if low() {
+            let mut objects = objects::Swept::default();
+            self.each_idle_leased(|dir| objects += objects::sweep_objects(dir))?;
+            report.objects = objects.files;
+            report.object_bytes = objects.bytes;
+        }
+        for row in self.leased_rows()? {
+            if !low() {
+                break;
+            }
+            let id = id_of(&row)?;
+            if self.clear_idle_leased(&id)? {
+                report.reclaimed.push(id);
+            }
         }
         self.serve_waiters();
         Ok(report)

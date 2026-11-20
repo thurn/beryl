@@ -172,6 +172,20 @@ pub trait Builds: Send + Sync {
         let _ = tree;
     }
 
+    /// Stops new builds in `tree` from starting until [`Builds::resume`], so that the disk loop
+    /// can delete build files in a leased tree without a build reading them meanwhile. A request
+    /// made while the tree is paused waits. Returns false, and pauses nothing, while a build is
+    /// running in the tree. An implementation that runs no builds of its own always pauses.
+    fn pause(&self, tree: &TreeId) -> bool {
+        let _ = tree;
+        true
+    }
+
+    /// Lets builds in `tree` start again after [`Builds::pause`].
+    fn resume(&self, tree: &TreeId) {
+        let _ = tree;
+    }
+
     /// The products `tree` holds, for any packages and inputs, whose output directories all lie
     /// in `dirs` (paths relative to the tree's root). A lease seeding its tree prefers the donor
     /// holding the most of them: a product the donor never built is built cold in the copy.

@@ -5,8 +5,9 @@
 //!
 //! Measuring the trees walks every file in their build directories, which takes a while on
 //! hundreds of gigabytes, so the measurement is made at most once every [`DISK_EVERY`], or
-//! every [`LOW_EVERY`] while the disk is below its floor. Only free trees are ever swept (see
-//! `trees/disk.rs`), so a tree that is leased or has a running command is left alone.
+//! every [`LOW_EVERY`] while the disk is below its floor. Free trees are swept first; a leased
+//! tree is swept only while nothing runs in it, and a tree running a command is left alone (see
+//! `trees/disk.rs`).
 //!
 //! This ran in the idle loop until a round of idle work waited 107 minutes for cores while the
 //! disk filled from 130 GB free to 1.6 GB, with no measurement made. It runs in a loop of its
@@ -69,20 +70,31 @@ impl Idle {
             crate::steps::step("holding the trees under their disk limit");
             self.host.hold_disk(0)?
         };
-        if !report.superseded.is_empty() || !report.cleared.is_empty() {
+        if !report.superseded.is_empty()
+            || !report.cleared.is_empty()
+            || !report.reclaimed.is_empty()
+            || report.objects > 0
+        {
             let gb = |bytes: u64| bytes as f64 / 1e9;
-            eprintln!(
-                "ignite: trees held under their disk limit: deleted {} replaced builds and the \
-                 build directories of {} free trees ({}), freeing {:.1} GB ({:.1} GB to {:.1} GB \
-                 of {})",
-                report.superseded.len(),
-                report.cleared.len(),
-                report
-                    .cleared
+            let names = |trees: &[ignite_core::ids::TreeId]| {
+                trees
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
-                    .join(", "),
+                    .join(", ")
+            };
+            eprintln!(
+                "ignite: trees held under their disk limit: deleted {} stale object files \
+                 ({:.1} GB), {} replaced builds, and the build directories of {} free trees \
+                 ({}) and {} idle leased trees ({}), freeing {:.1} GB more ({:.1} GB to {:.1} GB \
+                 of {})",
+                report.objects,
+                gb(report.object_bytes),
+                report.superseded.len(),
+                report.cleared.len(),
+                names(&report.cleared),
+                report.reclaimed.len(),
+                names(&report.reclaimed),
                 gb(report.before.saturating_sub(report.after)),
                 gb(report.before),
                 gb(report.after),

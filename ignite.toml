@@ -189,9 +189,11 @@ os = "macos"
 ticket_trees = 24
 landing_trees = 3
 # On 2026-11-18 the trees grew to 419 GB under a 400 GB limit while the rest of the disk filled,
-# leaving 1.6 GB free. The daemon deletes builds in free trees to stay under this limit, and also
-# sweeps free trees whenever the disk has under 50 GB free, whatever this allows. Those two bound
-# the trees' disk use; a tree whose build was swept rebuilds when it is next leased.
+# leaving 1.6 GB free, and on 2026-11-20 to 1,800 GB with nearly every tree leased. The daemon
+# deletes stale object files and replaced builds in free trees and in leased trees that run
+# nothing, then clears free trees and, with none left, the largest idle leased trees to stay under
+# this limit. It also clears trees whenever the disk has under 50 GB free, whatever this allows.
+# A tree whose build was cleared rebuilds at its next command.
 trees_disk_gb = 250
 floor = { batch = 8, tip = 2 }
 # Of 18 cores: an express landing's commands took 164 s on three with the load above 25, measured

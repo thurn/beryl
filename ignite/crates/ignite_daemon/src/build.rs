@@ -218,6 +218,9 @@ struct State {
     flights: HashMap<(Request, InputHash), Arc<Flight>>,
     /// The (tree, output directory) pairs a running build writes.
     busy: HashSet<(TreeId, String)>,
+    /// Trees where no build may start while the disk loop deletes their build files
+    /// ([`Builds::pause`]).
+    paused: HashSet<TreeId>,
     /// Crate graphs by the state of the Cargo files they were read from.
     graphs: HashMap<InputHash, CrateGraph>,
     /// Feature comparisons already made, by directory, Cargo file state and packages: the
@@ -555,7 +558,8 @@ impl BuildManager {
                 lock(&self.state).joined -= 1;
                 return result.unwrap_or_else(|| self.stopped_waiting(plan));
             }
-            if dirs.iter().all(|dir| !state.busy.contains(dir)) {
+            let paused = state.paused.contains(&plan.request.tree);
+            if !paused && dirs.iter().all(|dir| !state.busy.contains(dir)) {
                 if room_checked {
                     break;
                 }
@@ -572,10 +576,17 @@ impl BuildManager {
                 return self.stopped_waiting(plan);
             }
             state.queued += 1;
-            let waiting = crate::steps::waiting(format!(
-                "another build writing the outputs of {} in {}",
-                plan.request.product, plan.request.tree
-            ));
+            let waiting = crate::steps::waiting(if paused {
+                format!(
+                    "the disk loop deleting old build files in {}",
+                    plan.request.tree
+                )
+            } else {
+                format!(
+                    "another build writing the outputs of {} in {}",
+                    plan.request.product, plan.request.tree
+                )
+            });
             // Woken when a build ends, and every `STOP_RECHECK` to see whether the work that
             // asked for this build was stopped, as `ignite stop` does.
             state = self
@@ -645,6 +656,20 @@ impl BuildManager {
 impl Builds for BuildManager {
     fn forget(&self, tree: &TreeId) {
         BuildManager::forget(self, tree);
+    }
+
+    fn pause(&self, tree: &TreeId) -> bool {
+        let mut state = lock(&self.state);
+        if state.busy.iter().any(|(busy, _)| busy == tree) {
+            return false;
+        }
+        state.paused.insert(tree.clone());
+        true
+    }
+
+    fn resume(&self, tree: &TreeId) {
+        lock(&self.state).paused.remove(tree);
+        self.ended.notify_all();
     }
 
     fn ensure(&self, tree: &TreeId, product: &str, packages: &[String]) -> BuildResult {

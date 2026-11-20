@@ -992,15 +992,22 @@ Rules for trees:
   `rust/beryl3d/target` and `ui/node_modules`, and none of them is named in
   Ignite's code. A tree that has only held documentation or Python tickets uses
   little disk.
+- Every round, before measuring, the daemon deletes the object files that newer
+  compiles of the same codegen unit replaced. rustc names each object
+  `<crate>-<hash>.<codegen unit>.<invocation>.rcgu.o` with a new invocation part
+  at every compile and leaves it in `deps` for the binary's debug info, so a
+  test binary rebuilt in place gained a full set at each compile: they were half
+  of a 113 GB tree. Each codegen unit keeps its newest object.
 - To hold the machine under `trees_disk_gb`, the daemon deletes builds that a
   newer build of the same unit replaced, then the build directories of the free
-  trees used longest ago. A replaced build is a top-level unit (a test binary or
-  program) with a newer unit of the same crate and settings, together with every
-  unit only it depends on, followed through the dependency fingerprints that
-  Cargo records. A unit that a kept build depends on is never deleted, however
-  alike it looks to another. While the disk has less than 50 GB free, it also
-  holds the trees under their current size less what the disk lacks, since the
-  limit was set for the disk as it was then.
+  trees used longest ago, then, with no free tree left, those of the idle leased
+  trees holding the most bytes of their own. A replaced build is a top-level
+  unit (a test binary or program) with a newer unit of the same crate and
+  settings, together with every unit only it depends on, followed through the
+  dependency fingerprints that Cargo records. A unit that a kept build depends
+  on is never deleted, however alike it looks to another. While the disk has
+  less than 50 GB free, it also holds the trees under their current size less
+  what the disk lacks, since the limit was set for the disk as it was then.
 - The trees' size counts each file's blocks once. A seeded tree's files are APFS
   clones of its donor's and share their blocks, so each file counts its private
   bytes (macOS `getattrlist`, `ATTR_CMNEXT_PRIVATESIZE`) in its own tree and its
@@ -1023,9 +1030,13 @@ Rules for trees:
   idle work waiting for cores cannot hold it up. It measures the trees at most
   once every 30 minutes (every 5 while under 50 GB free), and not at all while
   the disk has 150 GB free, since a measurement walks every build directory.
-  Only free trees are swept, so a tree that is leased or has a running command
-  keeps its build directories. The daemon logs what it deleted and how much it
-  freed.
+  Free trees are swept, and so are leased trees while nothing runs in them: no
+  verb was asked from the tree, no process has its working directory or
+  executable inside it, and the build manager holds back any build there until
+  the sweep ends. A tree running a command keeps its build directories. On
+  2026-11-20 the trees held 1,800 GB under a 250 GB limit with nearly every tree
+  leased, and the disk filled because only free trees were swept. The daemon
+  logs what it deleted and how much it freed.
 - Lowering `ticket_trees` or `landing_trees` removes the trees above the new
   count: the disk loop deletes each one's worktree, build directories and row
   once it is free. A session that held one keeps working in it until it releases

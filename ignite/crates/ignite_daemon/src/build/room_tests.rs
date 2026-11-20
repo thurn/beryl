@@ -138,3 +138,24 @@ fn a_stopped_request_stops_waiting_for_disk_space_and_builds_nothing() {
     let next = f.manager.ensure(&tree(), "tests", &[]);
     assert!(matches!(next, BuildResult::Built { .. }), "{next:?}");
 }
+
+/// The disk loop pauses a leased tree's builds while it deletes build files there. A request
+/// made meanwhile waits and builds once the tree is resumed, and a tree with a build running
+/// cannot be paused.
+#[test]
+fn a_paused_tree_starts_no_build_until_it_is_resumed() {
+    let f = fixture("paused", true);
+    assert!(f.manager.pause(&tree()));
+    let request = {
+        let manager = Arc::clone(&f.manager);
+        thread::spawn(move || manager.ensure(&tree(), "tests", &[]))
+    };
+    until_waiting(&f.manager, (0, 1));
+    assert!(f.launcher.builds().is_empty());
+    f.manager.resume(&tree());
+    f.launcher.wait_for(|s| s.active == 1);
+    assert!(!f.manager.pause(&tree()));
+    f.launcher.release_one();
+    assert!(matches!(request.join().unwrap(), BuildResult::Built { .. }));
+    assert!(f.manager.pause(&tree()));
+}

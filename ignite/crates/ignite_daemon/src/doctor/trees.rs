@@ -138,6 +138,15 @@ fn disk_finding(free: Option<u64>, used: Option<u64>, budget: Option<u32>) -> Fi
             ),
             "free disk space, or lower trees_disk_gb for this machine in ignite.toml",
         ),
+        // jarvis's trees used 1,633 GB of a 250 GB budget while the disk loop could clear
+        // nothing, because every tree was leased. The disk still had room then; it filled hours
+        // later.
+        Some(used) if used > budget => Finding::warning(
+            "disk",
+            format!("the trees use {used} GB, over the {budget} GB they may use; {free} GB free."),
+            "the disk loop clears free trees and idle leased trees; if the trees stay over \
+             the budget, look for a tree whose build directories keep growing",
+        ),
         Some(used) => Finding::ok(
             "disk",
             format!(
@@ -269,6 +278,14 @@ mod tests {
         assert!(unmeasured.ok && unmeasured.warning, "{unmeasured:?}");
         assert!(disk_finding(Some(500), None, Some(400)).fix.is_none());
         // jarvis: 4 GB free while the trees used 1,633 GB of a 250 GB budget.
+        // The trees over their budget while the disk still has room.
+        let over = disk_finding(Some(400), Some(600), Some(250));
+        assert!(over.ok && over.warning, "{over:?}");
+        assert!(
+            over.text
+                .starts_with("the trees use 600 GB, over the 250 GB they may use"),
+            "{over:?}"
+        );
         let full = disk_finding(Some(4), Some(1633), Some(250));
         assert!(!full.ok, "{full:?}");
         assert!(full.text.starts_with("4 GB free, under the"), "{full:?}");
