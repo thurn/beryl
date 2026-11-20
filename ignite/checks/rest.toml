@@ -282,11 +282,7 @@ ignite_hub = ["ignite.toml", "ignite/.config/**"]
 [family.ignite-platform]
 kind = "regression"
 adapter = "nextest"
-# Held to macOS for now. Each daemon reads its own `families` from the `ignite.toml` in its main
-# checkout, which follows `master`. cygnus's list there lacks this family, so a tip that waits for
-# a Windows pass can never be verified, and `master` never moves to the commit that adds it.
-# Put "windows" back once cygnus's daemon has restarted on a `master` whose list names it.
-platforms = ["macos"]
+platforms = ["macos", "windows"]
 needs = ["ignite-tests"]
 list = "cargo nextest list --locked --workspace --message-format json -E package(ignite_os)|(package(ignite_daemon)&test(/^(wrap|supervise|update|trees::disk|machine_lock|doctor)(::|_tests::)/))|(binary_id(ignite_cli::bin/ignite)&test(/^shim_tests::/))"
 # Test names do not depend on comments, so a change that edits only comments keeps the
