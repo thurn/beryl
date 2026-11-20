@@ -15,3 +15,8 @@ beryl_card = { path = "../beryl_card" }
 
 [build-dependencies]
 beryl_card_build = { path = "../beryl_card_build" }
+
+[dev-dependencies]
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

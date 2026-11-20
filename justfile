@@ -245,6 +245,11 @@ oracle-smoke *args:
 test-rust *args:
     cd rust && cargo nextest run "$@"
 
+# Write beryl_workspace_hack's manifest, so a build of any one Rust package gives its dependencies the whole workspace's features
+[group('test')]
+workspace-hack:
+    {{ by }} workspace-hack
+
 # Random-game fuzzing at length: N engine games (and N/4 per keystone family), then N session games with every script checked, optimized but with debug assertions on (with the fuzz tests no check runs, which are ignored)
 [group('test')]
 fuzz games="10000":

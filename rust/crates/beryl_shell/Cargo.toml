@@ -11,10 +11,14 @@ beryl_session = { path = "../beryl_session" }
 serde_json = "1.0.154"
 
 [dev-dependencies]
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }
 # Isolated data and report folders for the tests.
 tempfile = "3"
-# The decklist the resume test starts a game with.
-beryl_cards = { path = "../beryl_cards" }
+# The decklist the resume test starts a game with, and its scenarios, as the whole workspace
+# builds it, so that a build of this package's tests alone reuses the whole workspace's build.
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 
 [lints]
 workspace = true

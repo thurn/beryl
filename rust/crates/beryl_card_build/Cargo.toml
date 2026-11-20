@@ -23,3 +23,6 @@ serde_json = "1.0.154"
 [dev-dependencies]
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../beryl_test_files" }
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

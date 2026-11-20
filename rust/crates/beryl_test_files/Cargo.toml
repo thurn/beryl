@@ -12,3 +12,8 @@ workspace = true
 # None: tests take this crate as a dev-dependency, so the kernel, rules and card crates keep no
 # runtime dependency, and Beryl 3D's workspace takes it by path.
 [dependencies]
+
+[dev-dependencies]
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

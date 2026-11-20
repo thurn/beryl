@@ -13,3 +13,8 @@ workspace = true
 # The vocabulary, and nothing else: a card crate's scenarios must not rebuild on a rules edit
 #.
 beryl_card = { path = "../beryl_card" }
+
+[dev-dependencies]
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

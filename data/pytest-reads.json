@@ -387,6 +387,11 @@
     "tools/src/beryl_tools/vocabulary.py": [
       "rust/crates/beryl_card/src"
     ],
+    "tools/src/beryl_tools/workspace_hack.py": [
+      "rust/Cargo.toml",
+      "rust/cards",
+      "rust/crates"
+    ],
     "tools/src/beryl_tools/xmage_java.py": [
       "tools/src/beryl_tools/BerylScenarioTest.java"
     ],

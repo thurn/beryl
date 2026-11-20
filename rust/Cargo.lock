@@ -221,6 +221,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 name = "beryl-mobile"
 version = "0.1.0"
 dependencies = [
+ "beryl_workspace_hack",
  "serde",
  "tauri",
  "tauri-plugin",
@@ -232,11 +233,13 @@ version = "0.1.0"
 dependencies = [
  "beryl-mobile",
  "beryl_art",
+ "beryl_cards",
  "beryl_search",
  "beryl_session",
  "beryl_shell",
  "beryl_table",
  "beryl_table_session",
+ "beryl_workspace_hack",
  "block2",
  "crossbeam-utils",
  "objc2",
@@ -258,6 +261,7 @@ dependencies = [
 name = "beryl_art"
 version = "0.1.0"
 dependencies = [
+ "beryl_workspace_hack",
  "ureq",
 ]
 
@@ -269,6 +273,7 @@ dependencies = [
  "beryl_engine",
  "beryl_search",
  "beryl_session",
+ "beryl_workspace_hack",
  "criterion",
  "gungraun",
  "libc",
@@ -279,6 +284,7 @@ name = "beryl_card"
 version = "0.1.0"
 dependencies = [
  "beryl_card_build",
+ "beryl_workspace_hack",
 ]
 
 [[package]]
@@ -287,6 +293,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_card_store",
  "beryl_test_files",
+ "beryl_workspace_hack",
  "serde_json",
 ]
 
@@ -295,6 +302,7 @@ name = "beryl_card_names"
 version = "0.1.0"
 dependencies = [
  "beryl_card_build",
+ "beryl_workspace_hack",
 ]
 
 [[package]]
@@ -303,6 +311,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_card_store",
  "beryl_protocol",
+ "beryl_workspace_hack",
  "serde_json",
 ]
 
@@ -312,12 +321,14 @@ version = "0.1.0"
 dependencies = [
  "beryl_card",
  "beryl_card_build",
+ "beryl_workspace_hack",
 ]
 
 [[package]]
 name = "beryl_card_store"
 version = "0.1.0"
 dependencies = [
+ "beryl_workspace_hack",
  "serde",
  "serde_json",
 ]
@@ -336,6 +347,7 @@ dependencies = [
  "beryl_scenario",
  "beryl_scenario_types",
  "beryl_test_files",
+ "beryl_workspace_hack",
  "cards_1993",
  "cards_1994",
  "cards_1995",
@@ -394,6 +406,7 @@ dependencies = [
  "beryl_session",
  "beryl_table",
  "beryl_table_session",
+ "beryl_workspace_hack",
  "ctrlc",
  "serde",
  "serde_json",
@@ -407,6 +420,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_kernel",
  "beryl_rules",
+ "beryl_workspace_hack",
 ]
 
 [[package]]
@@ -414,12 +428,14 @@ name = "beryl_kernel"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_workspace_hack",
 ]
 
 [[package]]
 name = "beryl_link"
 version = "0.1.0"
 dependencies = [
+ "beryl_workspace_hack",
  "flate2",
  "parking_lot",
  "serde",
@@ -447,6 +463,7 @@ dependencies = [
  "beryl_card",
  "beryl_kernel",
  "beryl_table",
+ "beryl_workspace_hack",
  "serde",
  "serde_json",
  "ts-rs",
@@ -460,6 +477,7 @@ dependencies = [
  "beryl_card",
  "beryl_kernel",
  "beryl_test_files",
+ "beryl_workspace_hack",
 ]
 
 [[package]]
@@ -469,6 +487,7 @@ dependencies = [
  "beryl_card",
  "beryl_engine",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
  "serde",
  "serde_json",
 ]
@@ -478,6 +497,7 @@ name = "beryl_scenario_types"
 version = "0.1.0"
 dependencies = [
  "beryl_card",
+ "beryl_workspace_hack",
 ]
 
 [[package]]
@@ -488,6 +508,7 @@ dependencies = [
  "beryl_cards",
  "beryl_engine",
  "beryl_scenario",
+ "beryl_workspace_hack",
  "proptest",
  "serde",
 ]
@@ -506,6 +527,7 @@ dependencies = [
  "beryl_search",
  "beryl_table",
  "beryl_test_files",
+ "beryl_workspace_hack",
  "flate2",
  "getrandom 0.4.3",
  "proptest",
@@ -523,6 +545,7 @@ version = "0.1.0"
 dependencies = [
  "beryl_cards",
  "beryl_session",
+ "beryl_workspace_hack",
  "serde_json",
  "tempfile",
 ]
@@ -532,6 +555,8 @@ name = "beryl_table"
 version = "0.1.0"
 dependencies = [
  "beryl_card_store",
+ "beryl_table",
+ "beryl_workspace_hack",
  "serde",
  "serde_json",
  "ts-rs",
@@ -543,11 +568,13 @@ version = "0.1.0"
 dependencies = [
  "beryl_card_records",
  "beryl_card_store",
+ "beryl_cards",
  "beryl_link",
  "beryl_link_iroh",
  "beryl_protocol",
  "beryl_session",
  "beryl_table",
+ "beryl_workspace_hack",
  "serde",
  "serde_json",
  "tempfile",
@@ -557,6 +584,49 @@ dependencies = [
 [[package]]
 name = "beryl_test_files"
 version = "0.1.0"
+dependencies = [
+ "beryl_workspace_hack",
+]
+
+[[package]]
+name = "beryl_workspace_hack"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "bitflags 2.13.2",
+ "block2",
+ "crc32fast",
+ "fastrand",
+ "flate2",
+ "getrandom 0.4.3",
+ "http",
+ "icu_properties",
+ "libc",
+ "memchr",
+ "num-traits",
+ "objc2",
+ "once_cell",
+ "percent-encoding",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "schemars 0.8.22",
+ "semver",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "simd-adler32",
+ "smallvec",
+ "stable_deref_trait",
+ "syn 2.0.119",
+ "syn 3.0.9",
+ "tauri-utils",
+ "time",
+ "url",
+ "uuid",
+]
 
 [[package]]
 name = "bincode-next"
@@ -739,6 +809,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_1993",
 ]
 
 [[package]]
@@ -749,6 +821,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_1994",
 ]
 
 [[package]]
@@ -759,6 +833,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_1995",
 ]
 
 [[package]]
@@ -769,6 +845,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_1996",
 ]
 
 [[package]]
@@ -779,6 +857,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_1997",
 ]
 
 [[package]]
@@ -789,6 +869,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_1998",
 ]
 
 [[package]]
@@ -799,6 +881,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_1999",
 ]
 
 [[package]]
@@ -809,6 +893,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2000",
 ]
 
 [[package]]
@@ -819,6 +905,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2001",
 ]
 
 [[package]]
@@ -829,6 +917,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2002",
 ]
 
 [[package]]
@@ -839,6 +929,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2003",
 ]
 
 [[package]]
@@ -849,6 +941,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2004",
 ]
 
 [[package]]
@@ -859,6 +953,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2005",
 ]
 
 [[package]]
@@ -869,6 +965,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2006",
 ]
 
 [[package]]
@@ -879,6 +977,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2007",
 ]
 
 [[package]]
@@ -889,6 +989,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2008",
 ]
 
 [[package]]
@@ -899,6 +1001,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2009",
 ]
 
 [[package]]
@@ -909,6 +1013,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2010",
 ]
 
 [[package]]
@@ -919,6 +1025,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2011",
 ]
 
 [[package]]
@@ -929,6 +1037,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2012",
 ]
 
 [[package]]
@@ -939,6 +1049,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2013",
 ]
 
 [[package]]
@@ -949,6 +1061,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2014",
 ]
 
 [[package]]
@@ -959,6 +1073,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2015",
 ]
 
 [[package]]
@@ -969,6 +1085,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2016",
 ]
 
 [[package]]
@@ -979,6 +1097,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2017",
 ]
 
 [[package]]
@@ -989,6 +1109,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2018",
 ]
 
 [[package]]
@@ -999,6 +1121,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2019_h1",
 ]
 
 [[package]]
@@ -1009,6 +1133,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2019_h2",
 ]
 
 [[package]]
@@ -1019,6 +1145,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2020_h1",
 ]
 
 [[package]]
@@ -1029,6 +1157,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2020_h2",
 ]
 
 [[package]]
@@ -1039,6 +1169,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2021_h1",
 ]
 
 [[package]]
@@ -1049,6 +1181,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2021_h2",
 ]
 
 [[package]]
@@ -1059,6 +1193,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2022_h1",
 ]
 
 [[package]]
@@ -1069,6 +1205,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2022_h2",
 ]
 
 [[package]]
@@ -1079,6 +1217,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2023_h1",
 ]
 
 [[package]]
@@ -1089,6 +1229,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2023_h2",
 ]
 
 [[package]]
@@ -1099,6 +1241,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2024_h1",
 ]
 
 [[package]]
@@ -1109,6 +1253,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2024_h2",
 ]
 
 [[package]]
@@ -1119,6 +1265,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2025_h1",
 ]
 
 [[package]]
@@ -1129,6 +1277,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2025_h2",
 ]
 
 [[package]]
@@ -1139,6 +1289,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2026_q1",
 ]
 
 [[package]]
@@ -1149,6 +1301,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2026_q2",
 ]
 
 [[package]]
@@ -1159,6 +1313,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2026_q3",
 ]
 
 [[package]]
@@ -1169,6 +1325,8 @@ dependencies = [
  "beryl_card_build",
  "beryl_card_shared",
  "beryl_scenario_types",
+ "beryl_workspace_hack",
+ "cards_2026_q4",
 ]
 
 [[package]]

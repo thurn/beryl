@@ -1,0 +1,91 @@
+# Written by `just workspace-hack` (tools/src/beryl_tools/workspace_hack.py), which says why
+# this crate exists. Do not edit.
+
+[package]
+name = "beryl_workspace_hack"
+version = "0.1.0"
+description = "Every shared dependency with the whole workspace's features, for builds of a subset"
+edition.workspace = true
+license.workspace = true
+publish = false
+build = "build.rs"
+
+[lib]
+path = "lib.rs"
+test = false
+doctest = false
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+base64 = { version = "0.23.1", default-features = false, features = ["alloc", "default", "simd-unsafe", "std"] }
+bitflags = { version = "2.13.2", default-features = false, features = ["serde", "serde_core", "std"] }
+block2 = { version = "0.6.2", default-features = false, features = ["alloc", "default", "std"] }
+crc32fast = { version = "1.5.4", default-features = false, features = ["default", "std"] }
+fastrand = { version = "2.5.0", default-features = false, features = ["alloc", "default", "std"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["any_impl", "any_zlib", "default", "miniz_oxide", "runtime_detection", "rust_backend", "zlib-rs"] }
+getrandom = { version = "0.4.3", default-features = false, features = ["std", "sys_rng"] }
+http = { version = "1.5.0", default-features = false, features = ["default", "std"] }
+icu_properties = { version = "2.4.0", default-features = false, features = ["compiled_data", "default"] }
+libc = { version = "0.2.191", default-features = false, features = ["default", "extra_traits", "std"] }
+memchr = { version = "2.8.3", default-features = false, features = ["alloc", "default", "std"] }
+num-traits = { version = "0.2.19", default-features = false, features = ["default", "std"] }
+objc2 = { version = "0.6.5", default-features = false, features = ["alloc", "default", "disable-encoding-assertions", "exception", "std"] }
+once_cell = { version = "1.21.4", default-features = false, features = ["alloc", "default", "race", "std"] }
+percent-encoding = { version = "2.3.2", default-features = false, features = ["alloc", "default", "std"] }
+proc-macro2 = { version = "1.0.107", default-features = false, features = ["default", "proc-macro", "span-locations"] }
+quote = { version = "1.0.47", default-features = false, features = ["default", "proc-macro"] }
+regex = { version = "1.13.1", default-features = false, features = ["default", "perf", "perf-backtrack", "perf-cache", "perf-dfa", "perf-inline", "perf-literal", "perf-onepass", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
+regex-automata = { version = "0.4.18", default-features = false, features = ["alloc", "dfa-onepass", "hybrid", "meta", "nfa-backtrack", "nfa-pikevm", "nfa-thompson", "perf-inline", "perf-literal", "perf-literal-multisubstring", "perf-literal-substring", "std", "syntax", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment", "unicode-word-boundary"] }
+regex-syntax = { version = "0.8.11", default-features = false, features = ["default", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
+schemars = { version = "0.8.22", default-features = false, features = ["default", "derive", "indexmap", "preserve_order", "schemars_derive", "url", "uuid1"] }
+semver = { version = "1.0.28", default-features = false, features = ["default", "serde", "std"] }
+serde = { version = "1.0.229", default-features = false, features = ["alloc", "default", "derive", "rc", "serde_derive", "std"] }
+serde_core = { version = "1.0.229", default-features = false, features = ["alloc", "default", "rc", "result", "std"] }
+serde_json = { version = "1.0.154", default-features = false, features = ["alloc", "default", "float_roundtrip", "raw_value", "std", "unbounded_depth"] }
+simd-adler32 = { version = "0.3.10", default-features = false, features = ["const-generics", "default", "std"] }
+smallvec = { version = "1.16.4", default-features = false, features = ["const_generics"] }
+stable_deref_trait = { version = "1.2.1", default-features = false, features = ["alloc", "default", "std"] }
+syn_2 = { package = "syn", version = "2.0.119", default-features = false, features = ["clone-impls", "default", "derive", "extra-traits", "full", "parsing", "printing", "proc-macro", "visit"] }
+syn_3 = { package = "syn", version = "3.0.9", default-features = false, features = ["clone-impls", "default", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "visit"] }
+tauri-utils = { version = "2.10.2", default-features = false, features = ["brotli", "build-2", "cargo_metadata", "compression", "html-manipulation-2", "proc-macro2", "quote", "resources", "schema", "schemars", "swift-rs", "walkdir"] }
+time = { version = "0.3.55", default-features = false, features = ["alloc", "default", "formatting", "macros", "parsing", "std"] }
+url = { version = "2.5.8", default-features = false, features = ["default", "serde", "std"] }
+uuid = { version = "1.29.0", default-features = false, features = ["default", "rng", "serde", "std", "v4"] }
+
+[target.'cfg(target_os = "macos")'.build-dependencies]
+base64 = { version = "0.23.1", default-features = false, features = ["alloc", "default", "simd-unsafe", "std"] }
+bitflags = { version = "2.13.2", default-features = false, features = ["serde", "serde_core", "std"] }
+block2 = { version = "0.6.2", default-features = false, features = ["alloc", "default", "std"] }
+crc32fast = { version = "1.5.4", default-features = false, features = ["default", "std"] }
+fastrand = { version = "2.5.0", default-features = false, features = ["alloc", "default", "std"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["any_impl", "any_zlib", "default", "miniz_oxide", "runtime_detection", "rust_backend", "zlib-rs"] }
+getrandom = { version = "0.4.3", default-features = false, features = ["std", "sys_rng"] }
+http = { version = "1.5.0", default-features = false, features = ["default", "std"] }
+icu_properties = { version = "2.4.0", default-features = false, features = ["compiled_data", "default"] }
+libc = { version = "0.2.191", default-features = false, features = ["default", "extra_traits", "std"] }
+memchr = { version = "2.8.3", default-features = false, features = ["alloc", "default", "std"] }
+num-traits = { version = "0.2.19", default-features = false, features = ["default", "std"] }
+objc2 = { version = "0.6.5", default-features = false, features = ["alloc", "default", "disable-encoding-assertions", "exception", "std"] }
+once_cell = { version = "1.21.4", default-features = false, features = ["alloc", "default", "race", "std"] }
+percent-encoding = { version = "2.3.2", default-features = false, features = ["alloc", "default", "std"] }
+proc-macro2 = { version = "1.0.107", default-features = false, features = ["default", "proc-macro", "span-locations"] }
+quote = { version = "1.0.47", default-features = false, features = ["default", "proc-macro"] }
+regex = { version = "1.13.1", default-features = false, features = ["default", "perf", "perf-backtrack", "perf-cache", "perf-dfa", "perf-inline", "perf-literal", "perf-onepass", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
+regex-automata = { version = "0.4.18", default-features = false, features = ["alloc", "dfa-onepass", "hybrid", "meta", "nfa-backtrack", "nfa-pikevm", "nfa-thompson", "perf-inline", "perf-literal", "perf-literal-multisubstring", "perf-literal-substring", "std", "syntax", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment", "unicode-word-boundary"] }
+regex-syntax = { version = "0.8.11", default-features = false, features = ["default", "std", "unicode", "unicode-age", "unicode-bool", "unicode-case", "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"] }
+schemars = { version = "0.8.22", default-features = false, features = ["default", "derive", "indexmap", "preserve_order", "schemars_derive", "url", "uuid1"] }
+semver = { version = "1.0.28", default-features = false, features = ["default", "serde", "std"] }
+serde = { version = "1.0.229", default-features = false, features = ["alloc", "default", "derive", "rc", "serde_derive", "std"] }
+serde_core = { version = "1.0.229", default-features = false, features = ["alloc", "default", "rc", "result", "std"] }
+serde_json = { version = "1.0.154", default-features = false, features = ["alloc", "default", "float_roundtrip", "raw_value", "std", "unbounded_depth"] }
+simd-adler32 = { version = "0.3.10", default-features = false, features = ["const-generics", "default", "std"] }
+smallvec = { version = "1.16.4", default-features = false, features = ["const_generics"] }
+stable_deref_trait = { version = "1.2.1", default-features = false, features = ["alloc", "default", "std"] }
+syn_2 = { package = "syn", version = "2.0.119", default-features = false, features = ["clone-impls", "default", "derive", "extra-traits", "full", "parsing", "printing", "proc-macro", "visit"] }
+syn_3 = { package = "syn", version = "3.0.9", default-features = false, features = ["clone-impls", "default", "derive", "extra-traits", "fold", "full", "parsing", "printing", "proc-macro", "visit"] }
+tauri-utils = { version = "2.10.2", default-features = false, features = ["brotli", "build-2", "cargo_metadata", "compression", "html-manipulation-2", "proc-macro2", "quote", "resources", "schema", "schemars", "swift-rs", "walkdir"] }
+time = { version = "0.3.55", default-features = false, features = ["alloc", "default", "formatting", "macros", "parsing", "std"] }
+url = { version = "2.5.8", default-features = false, features = ["default", "serde", "std"] }
+uuid = { version = "1.29.0", default-features = false, features = ["default", "rng", "serde", "std", "v4"] }

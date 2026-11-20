@@ -16,3 +16,8 @@ ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

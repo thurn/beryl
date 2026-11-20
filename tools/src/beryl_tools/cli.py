@@ -37,6 +37,7 @@ from . import (
     ui_counts,
     video,
     vm_host,
+    workspace_hack,
 )
 from .beryl3d import cli as beryl3d_cli
 from .beryl3d import gates_merge
@@ -88,6 +89,7 @@ MODULES: tuple[ModuleType, ...] = (
     ui_counts,
     video,
     vm_host,
+    workspace_hack,
 )
 
 

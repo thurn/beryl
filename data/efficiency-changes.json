@@ -609,5 +609,10 @@
     "label": "A lease prebuilds the products beside the ticket's files first, so an Ignite ticket's tree has Ignite's test build current before Beryl's, and the express commands compile on every core instead of the 2 reserved on multivac, so an express landing there stops spending 130 to 165 s rebuilding Ignite",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A generated crate, `beryl_workspace_hack`, gives every shared dependency the whole Rust workspace's features in a build of any one package, so Ignite builds only the selected packages' test binaries instead of falling back to the whole workspace's (35 crates, 33-77 s) after a card edit",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

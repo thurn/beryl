@@ -31,3 +31,8 @@ tempfile = "3"
 [target.'cfg(windows)'.dependencies]
 # Provides Win32 power throttling declarations in place of handwritten FFI.
 windows-sys = { version = "0.61.2", features = ["Win32_System_Threading"] }
+
+[dev-dependencies]
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }

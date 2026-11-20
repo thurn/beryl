@@ -20,7 +20,10 @@ def features(edges: str) -> dict[str, set[str]]:
     packages following `edges`."""
     tree = subprocess.run(
         ["cargo", "tree", "--locked", *paths.BUILD_SCOPE, "-e", edges]
-        + ["-f", "{p} [{f}]", "--prefix", "none", "--no-dedupe"],
+        # Deduplicated: a package Cargo resolves with another feature set is another node, so
+        # each set is printed in full once. With `--no-dedupe`, the output repeated
+        # `beryl_workspace_hack`'s Tauri dependencies under every package and took minutes.
+        + ["-f", "{p} [{f}]", "--prefix", "none"],
         cwd=paths.RUST,
         capture_output=True,
         text=True,
@@ -28,7 +31,7 @@ def features(edges: str) -> dict[str, set[str]]:
     ).stdout
     found: dict[str, set[str]] = {}
     for line in tree.splitlines():
-        if m := re.match(r"(\S+ v\S+)(?: \(.*\))? \[(.*)\]$", line.strip()):
+        if m := re.match(r"(\S+ v\S+)(?: \(.*\))? \[(.*)\](?: \(\*\))?$", line.strip()):
             found.setdefault(m[1], set()).update(f for f in m[2].split(",") if f)
     return found
 

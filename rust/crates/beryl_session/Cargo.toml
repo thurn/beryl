@@ -43,6 +43,9 @@ zip = { version = "8.6", default-features = false, features = ["deflate-flate2-z
 [dev-dependencies]
 # Opens repository files and records each read, so Ignite reruns the tests when one changes.
 beryl_test_files = { path = "../beryl_test_files" }
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }
 # The tests play cards' scenarios.
 beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_scenario = { path = "../beryl_scenario" }

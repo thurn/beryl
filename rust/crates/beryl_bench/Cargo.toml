@@ -21,6 +21,12 @@ beryl_session = { path = "../beryl_session" }
 libc = "0.2.191"
 
 [dev-dependencies]
+# With its scenarios, as the whole workspace builds it, so that a build of this package's
+# tests alone reuses the whole workspace's build (see beryl_workspace_hack).
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }
 criterion = "0.8.2"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]

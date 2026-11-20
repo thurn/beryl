@@ -17,8 +17,12 @@ beryl_engine = { path = "../beryl_engine" }
 serde = { version = "1.0.229", features = ["derive"] }
 
 [dev-dependencies]
-# The cards and decklists the tests play.
-beryl_cards = { path = "../beryl_cards" }
+# The cards and decklists the tests play, with their scenarios, as the whole workspace builds
+# it, so that a build of this package's tests alone reuses the whole workspace's build.
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }
 beryl_scenario = { path = "../beryl_scenario" }
 # Shrinks a failing fuzz game to the few choices that break it, where a failure was a whole
 # game of hundreds of decisions; only the tests use it, never the search itself.

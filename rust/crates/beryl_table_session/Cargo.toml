@@ -35,5 +35,11 @@ tempfile = "3"
 url = "2"
 
 [dev-dependencies]
+# With its scenarios, as the whole workspace builds it, so that a build of this package's
+# tests alone reuses the whole workspace's build (see beryl_workspace_hack).
+beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
+# Every shared dependency with the whole workspace's features, so that a build of this
+# package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
+beryl_workspace_hack = { path = "../beryl_workspace_hack" }
 # Verifies that manual and engine sessions share one ID sequence.
 beryl_session = { path = "../beryl_session" }

@@ -50,6 +50,11 @@ heavy command.
 ## Testing rules and cards
 
 - `just test-rust` runs the workspace's tests.
+- Every package lists `beryl_workspace_hack` among its dev-dependencies, so that
+  a build of its tests alone gives each dependency the whole workspace's
+  features and Ignite can build only the packages a change needs. After adding
+  or changing a dependency or its features, run `just workspace-hack`;
+  `tools/tests/test_workspace_hack.py` fails until you do.
 - A test that names a real card lives in the crate's `tests/` directory and uses
   only its public API; a unit test under `src/` uses only
   `beryl_card_shared::props`. Each crate's integration tests are one binary,

@@ -26,6 +26,13 @@ beryl_scenario_types = { path = "../../crates/beryl_scenario_types", optional = 
 [build-dependencies]
 beryl_card_build = { path = "../../crates/beryl_card_build" }
 
+[dev-dependencies]
+# The crate with its scenarios, and every shared dependency with the whole
+# workspace's features, so that a build of this crate alone builds what the
+# whole workspace's does (beryl_workspace_hack).
+cards_2004 = { path = ".", features = ["scenarios"] }
+beryl_workspace_hack = { path = "../../crates/beryl_workspace_hack" }
+
 [features]
 # The cards' scenarios, which tests and tools compile and the app never does.
 scenarios = ["dep:beryl_scenario_types"]
