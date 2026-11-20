@@ -398,6 +398,28 @@ fn a_refused_clear_moves_the_handoff_and_rests_the_first_worker_a_minute() {
 }
 
 #[test]
+fn a_failed_handoff_after_the_ticket_was_claimed_queues_no_second_handoff() {
+    let rig = rig(&["local_w1", "local_w2"]);
+    rig.reserve("T.1", "local_w1", &[]);
+    let first = rig.step().unwrap();
+    assert_eq!(handoff_to(&first), ("local_w1", "T.1"));
+    // The worker received the prompt and claimed the ticket before the failed ack arrived.
+    rig.hold("local_w1", "T.1");
+    let reply = rig.ack(first.id, "failed", "read-back reported late");
+    assert!(
+        reply.text.contains("already claimed"),
+        "reply: {}",
+        reply.text
+    );
+    assert!(!reply.text.contains("goes to"), "reply: {}", reply.text);
+    let next = rig.step();
+    assert!(
+        next.is_none_or(|i| i.action != DispatchAction::Handoff),
+        "no hand-off to another worker"
+    );
+}
+
+#[test]
 fn a_model_that_reads_back_wrong_fails_the_handoff_without_a_substitute() {
     let rig = rig(&["local_w1"]);
     rig.reserve("T.1", "local_w1", &["tier:opus"]);

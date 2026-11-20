@@ -580,17 +580,31 @@ impl Dispatcher {
                     let _ = write!(text, " ({reason})");
                 }
                 let reserved = reserved.clone();
-                let workers = slots::with_slots(&state, &members);
-                match Self::idle_workers(&state, &workers, now)
-                    .into_iter()
-                    .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
-                {
-                    Some(other) => {
-                        let _ = write!(text, "; {} goes to {}", reserved.ticket, other.session);
-                        let other = other.session.clone();
-                        Self::queue_handoff_reserved(&mut state, &other, reserved);
+                // The ack can say `failed` after the prompt arrived and the worker already
+                // claimed the ticket (for example when the dispatcher sent the prompt before
+                // reporting the model read-back). Handing the reservation to another worker
+                // would send the same ticket twice.
+                let claimed = state.held.values().any(|t| *t == reserved.ticket)
+                    || self.host.holders().values().any(|t| *t == reserved.ticket);
+                if claimed {
+                    let _ = write!(
+                        text,
+                        "; {} was already claimed, so its reservation is dropped",
+                        reserved.ticket
+                    );
+                } else {
+                    let workers = slots::with_slots(&state, &members);
+                    match Self::idle_workers(&state, &workers, now)
+                        .into_iter()
+                        .find(|m| suits(m, reserved.tier.as_ref(), &reserved.app))
+                    {
+                        Some(other) => {
+                            let _ = write!(text, "; {} goes to {}", reserved.ticket, other.session);
+                            let other = other.session.clone();
+                            Self::queue_handoff_reserved(&mut state, &other, reserved);
+                        }
+                        None => state.orphans.push(reserved),
                     }
-                    None => state.orphans.push(reserved),
                 }
             }
             (Purpose::Handoff(_), "ok", Some(slot)) if slots::is_slot(&slot) => {
