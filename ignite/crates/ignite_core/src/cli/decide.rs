@@ -257,7 +257,7 @@ pub fn block_text(ticket: &TicketId) -> String {
          A figure measured on a loaded machine is reported, never gated on or chased, unless \
          the acceptance names a deterministic measure.\n\
          If you stop again with nothing running and none of these done, Ignite releases {ticket} \
-         itself, saves its tree as ignite/{ticket} and uses your last message as the note."
+         itself, saves its tree's work on the remote and uses your last message as the note."
     )
 }
 

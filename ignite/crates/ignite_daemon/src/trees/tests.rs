@@ -128,6 +128,7 @@ impl Fixture {
             repo: repo.clone(),
             dir: repo.join(".worktrees"),
             remote: "origin".to_owned(),
+            saved: "ignite/".to_owned(),
             branches: vec!["main".to_owned()],
             ticket_trees,
             landing_trees,

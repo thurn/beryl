@@ -3,18 +3,20 @@
 use std::path::Path;
 
 use ignite_core::ids::Commit;
+use ignite_core::refname;
 use ignite_core::traits::{Error, Result};
 
 use crate::cmd;
 
-/// Fetches `branch` from `remote` and returns its newest commit.
+/// Fetches `branch` from `remote` and returns its newest commit. `branch` is a branch name or a
+/// full ref name such as `refs/ignite/staging` ([`refname`]).
 ///
-/// The fetch updates the remote-tracking ref `refs/remotes/<remote>/<branch>`, so the commit's
-/// objects are present for a later rebase or checkout. A branch the remote does not have is
+/// The fetch updates the remote-tracking ref ([`refname::tracking_ref`]), so the commit's
+/// objects are present for a later rebase or checkout. A ref the remote does not have is
 /// [`Error::NotFound`]; any other failed fetch is [`Error::Unreachable`].
 pub fn remote_tip(repo: &Path, remote: &str, branch: &str) -> Result<Commit> {
-    let tracking = format!("refs/remotes/{remote}/{branch}");
-    let refspec = format!("+refs/heads/{branch}:{tracking}");
+    let tracking = refname::tracking_ref(remote, branch);
+    let refspec = format!("+{}:{tracking}", refname::remote_ref(branch));
     let mut attempt = 0;
     loop {
         let mut fetch = cmd::git(repo, ["fetch", "--quiet", "--no-tags", remote, &refspec]);
@@ -54,11 +56,11 @@ fn is_lock_contention(stderr: &str) -> bool {
         || (stderr.contains("Unable to create") && stderr.contains(".lock"))
 }
 
-/// The newest commit of `branch` as of the last fetch, without contacting the remote: what the
-/// remote-tracking ref `refs/remotes/<remote>/<branch>` holds. A branch never fetched is
+/// The newest commit of `branch` as of the last fetch, without contacting the remote: what its
+/// remote-tracking ref ([`refname::tracking_ref`]) holds. A ref never fetched is
 /// [`Error::NotFound`].
 pub fn cached_tip(repo: &Path, remote: &str, branch: &str) -> Result<Commit> {
-    let tracking = format!("refs/remotes/{remote}/{branch}");
+    let tracking = refname::tracking_ref(remote, branch);
     let mut parse = cmd::git(
         repo,
         ["rev-parse", "--verify", &format!("{tracking}^{{commit}}")],

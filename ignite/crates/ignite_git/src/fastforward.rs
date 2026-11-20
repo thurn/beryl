@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use ignite_core::ids::Commit;
+use ignite_core::refname;
 use ignite_core::traits::{Error, Result};
 
 use crate::{cmd, rebase, refs};
@@ -38,8 +39,9 @@ pub enum FastForward {
     Branches(Vec<(String, Branch)>),
 }
 
-/// Fetches each of `branches` from `remote` and fast-forwards the local branch of that name in
-/// the checkout at `repo`. The branch checked out moves with `git merge --ff-only`, which also
+/// Fetches each of `branches` from `remote` and fast-forwards the local branch kept at it
+/// ([`refname::local_branch`]: `staging` for both `staging` and `refs/ignite/staging`) in the
+/// checkout at `repo`. The branch checked out moves with `git merge --ff-only`, which also
 /// updates its files; any other moves with a compare-and-swap of its ref.
 pub fn main_checkout(repo: &Path, remote: &str, branches: &[String]) -> Result<FastForward> {
     if busy(repo)? {
@@ -58,7 +60,8 @@ pub fn main_checkout(repo: &Path, remote: &str, branches: &[String]) -> Result<F
             }
             Err(error) => return Err(error),
         };
-        let local_ref = format!("refs/heads/{branch}");
+        let local_branch = refname::local_branch(branch);
+        let local_ref = format!("refs/heads/{local_branch}");
         let Ok(local) = cmd::run(repo, ["rev-parse", "--verify", "--quiet", &local_ref]) else {
             done.push((branch.clone(), Branch::Missing));
             continue;
@@ -69,7 +72,7 @@ pub fn main_checkout(repo: &Path, remote: &str, branches: &[String]) -> Result<F
         } else if !is_ancestor(repo, &local, &remote_tip)? {
             Branch::Diverged
         } else {
-            if current.as_deref() == Some(branch.as_str()) {
+            if current.as_deref() == Some(local_branch.as_str()) {
                 cmd::run(repo, ["merge", "--ff-only", "--quiet", remote_tip.as_str()])?;
             } else {
                 cmd::run(

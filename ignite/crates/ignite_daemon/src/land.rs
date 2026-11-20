@@ -319,8 +319,11 @@ impl Landing {
                 lines.push(line(
                     "next",
                     format!(
-                        "git rebase {}/{}, resolve them, git rebase --continue, then try again",
-                        repository.remote, repository.staging
+                        "git rebase {}, resolve them, git rebase --continue, then try again",
+                        ignite_core::refname::tracking_name(
+                            &repository.remote,
+                            &repository.staging
+                        )
                     ),
                 ));
                 Err(stop(Exit::Conflict, &lines))

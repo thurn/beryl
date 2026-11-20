@@ -1,8 +1,10 @@
-//! Pushing a commit to a remote branch, refused unless it fast-forwards.
+//! Pushing a commit to a remote branch, refused unless it fast-forwards. A branch here is a
+//! branch name or a full ref name such as `refs/ignite/staging` ([`refname`]).
 
 use std::path::Path;
 
 use ignite_core::ids::Commit;
+use ignite_core::refname;
 use ignite_core::traits::{Error, Push, Result};
 
 use crate::cmd;
@@ -41,7 +43,7 @@ fn push_with(
     branch: &str,
     expected: Option<&Commit>,
 ) -> Result<Push> {
-    let target = format!("refs/heads/{branch}");
+    let target = refname::remote_ref(branch);
     let refspec = format!("{commit}:{target}");
     let mut command = cmd::git(tree, ["push", "--porcelain"]);
     if let Some(expected) = expected {
@@ -69,7 +71,7 @@ fn push_with(
 /// Deletes `branch` on `remote`. A branch the remote does not have is not an error. A remote
 /// that cannot be reached is [`Error::Unreachable`].
 pub fn delete(tree: &Path, remote: &str, branch: &str) -> Result<()> {
-    let target = format!("refs/heads/{branch}");
+    let target = refname::remote_ref(branch);
     let refspec = format!(":{target}");
     let mut command = cmd::git(tree, ["push", "--porcelain", remote, &refspec]);
     let out = cmd::output(&mut command)?;

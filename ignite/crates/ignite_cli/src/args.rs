@@ -54,7 +54,7 @@ pub enum Command {
         #[arg(short = 'm', long = "message")]
         note: Option<String>,
     },
-    /// Give the ticket back unfinished: save the tree's work as `ignite/<ticket>` and release
+    /// Give the ticket back unfinished: save the tree's work on the remote and release
     /// the tree.
     Release {
         /// The ticket's exact state, for whoever starts it next.

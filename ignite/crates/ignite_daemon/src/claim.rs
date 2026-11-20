@@ -5,8 +5,8 @@
 //!   its tree, the title to set, the files it names and what each dependency left behind.
 //!   `ignite start "<summary>"` files an `adhoc` ticket and claims it in the same request.
 //! - `ignite brief` prints the brief again.
-//! - `ignite release -m "<note>" [--needs <what>]` saves what the tree holds as the branch
-//!   `ignite/<ticket>`, gives the ticket back with the note and frees the tree. If the save's push
+//! - `ignite release -m "<note>" [--needs <what>]` saves what the tree holds on the remote
+//!   (`repository.saved` and the ticket's ID), gives the ticket back with the note and frees the tree. If the save's push
 //!   fails, the release fails and the session keeps the ticket.
 //! - `ignite close -m "<reason>"` closes a ticket that needs no landing and frees the tree.
 //!
@@ -173,8 +173,8 @@ pub trait TreeDesk: Send + Sync {
         files: &[String],
         start: &Request,
     ) -> Result<Lease>;
-    /// Commits whatever the tree holds as one commit marked as saved at release and pushes the
-    /// branch as `ignite/<ticket>`. A failed push is an error and leaves the tree as it was.
+    /// Commits whatever the tree holds as one commit marked as saved at release and pushes it
+    /// as the ticket's saved work (`repository.saved`). A failed push is an error and leaves the tree as it was.
     fn save(&self, tree: &TreeId, ticket: &TicketId) -> Result<Saved>;
     /// Ends the tree's processes, resets it to a clean checkout and frees it. `caller` is the
     /// `ignite` client asking, whose process is spared so that it can print the reply.

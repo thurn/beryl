@@ -322,9 +322,9 @@ pub(super) fn changed_paths(
     ctx: &Context,
     tree: &OpenTree,
 ) -> ignite_core::traits::Result<Vec<String>> {
-    let base = format!(
-        "{}/{}",
-        ctx.config.repository.remote, ctx.config.repository.staging
+    let base = ignite_core::refname::tracking_ref(
+        &ctx.config.repository.remote,
+        &ctx.config.repository.staging,
     );
     checks.trees.changed(&tree.path, &base)
 }

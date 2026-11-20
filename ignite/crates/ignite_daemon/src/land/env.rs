@@ -260,7 +260,7 @@ impl LandTrees for MachineTrees {
 
     fn delete_saved(&self, ticket: &TicketId) -> Result<()> {
         let config = self.trees.config();
-        push::delete(&config.repo, &config.remote, &trees::save_branch(ticket))
+        push::delete(&config.repo, &config.remote, &config.save_branch(ticket))
     }
 }
 

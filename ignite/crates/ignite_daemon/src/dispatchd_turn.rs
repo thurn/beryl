@@ -183,7 +183,7 @@ fn cli_block_text(ticket: &TicketId, running: &[u32]) -> String {
          To wait on a long command, run it as `ignite run -- <command>` and `ignite wait`; end \
          your turn only to wait on an `ignite` verb (see `ignite guide cli-worker`).\n\
          If you stop again with none of these done, Ignite releases {ticket} itself, saves its \
-         tree as ignite/{ticket} and uses your last message as the note."
+         tree's work on the remote and uses your last message as the note."
     );
     text
 }
@@ -288,7 +288,7 @@ impl Dispatcher {
             Ok(()) => {
                 self.note_released(session, ticket);
                 format!(
-                    "released {ticket} from {session}; its work is saved as ignite/{ticket}. \
+                    "released {ticket} from {session}; its work is saved on the remote. \
                      Stop now: do not claim it or any other ticket and do not restart its \
                      commands; the dispatcher hands you your next ticket."
                 )

@@ -60,8 +60,8 @@ pub fn release_claims(conn: &mut Connection, now: Timestamp) -> Result<Vec<Strin
         let tree = tree.map_or(String::new(), |tree| format!(" ({tree})"));
         let text = format!(
             "Released by the hub: machine {name} ({machine}) has not reported since {last_seen}. \
-             Any unsaved work stays in that machine's tree{tree}, and on its `ignite/{id}` \
-             branch if one was pushed. The ticket is back in the queue."
+             Any unsaved work stays in that machine's tree{tree}, and in its saved work on \
+             the remote if any was pushed. The ticket is back in the queue."
         );
         let ops = vec![
             Operation::Update {

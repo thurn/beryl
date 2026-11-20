@@ -218,7 +218,9 @@ pub struct Metrics {
 pub struct Repository {
     /// The git remote that holds both branches, such as `origin`.
     pub remote: String,
-    /// The branch that landings go to.
+    /// The branch that landings go to. This and the other refs of this section are either a
+    /// branch name or a full ref name such as `refs/ignite/staging` (see
+    /// [`crate::refname`]).
     pub staging: String,
     /// The branch that tip verification moves forward.
     pub master: String,
@@ -239,12 +241,25 @@ pub struct Repository {
     /// trees start from. Unset, there is no such branch.
     #[serde(default)]
     pub green: Option<String>,
+    /// What `ignite release` saves a ticket's work as on the remote: this prefix followed by
+    /// the ticket's ID, such as `refs/ignite/tickets/` for `refs/ignite/tickets/TNFZ6`. Unset,
+    /// it is [`DEFAULT_SAVED_PREFIX`], the branch `ignite/<ticket>`.
+    #[serde(default)]
+    pub saved: Option<String>,
 }
+
+/// The prefix of a released ticket's saved work when `repository.saved` is unset.
+pub const DEFAULT_SAVED_PREFIX: &str = "ignite/";
 
 impl Repository {
     /// The branch daemons build Ignite's executable from: `release`, or else `master`.
     pub fn release_branch(&self) -> &str {
         self.release.as_deref().unwrap_or(&self.master)
+    }
+
+    /// The prefix of released tickets' saved work: `saved`, or else [`DEFAULT_SAVED_PREFIX`].
+    pub fn saved_prefix(&self) -> &str {
+        self.saved.as_deref().unwrap_or(DEFAULT_SAVED_PREFIX)
     }
 }
 
@@ -583,14 +598,29 @@ impl Config {
         Ok(())
     }
 
-    /// `repository.green` and `[land]`: the green branch is a branch of its own, and the base
-    /// age is positive.
+    /// `[repository]`'s refs and `[land]`: `staging`, `master` and `green` are three different
+    /// refs, however each is written, `saved` is not empty, and the base age is positive.
     fn validate_landing(&self) -> Result<(), (String, String)> {
         let fail = |key: &str, message: &str| Err((key.to_owned(), message.to_owned()));
+        if self
+            .repository
+            .saved
+            .as_deref()
+            .is_some_and(|saved| saved.trim().is_empty())
+        {
+            return fail("repository.saved", "must not be empty");
+        }
+        if crate::refname::remote_ref(&self.repository.staging)
+            == crate::refname::remote_ref(&self.repository.master)
+        {
+            return fail("repository.master", "must differ from repository.staging");
+        }
+        let same =
+            |a: &str, b: &str| crate::refname::remote_ref(a) == crate::refname::remote_ref(b);
         if let Some(green) = &self.repository.green
             && (green.trim().is_empty()
-                || *green == self.repository.staging
-                || *green == self.repository.master)
+                || same(green, &self.repository.staging)
+                || same(green, &self.repository.master))
         {
             return fail(
                 "repository.green",
@@ -615,9 +645,6 @@ impl Config {
             if value.trim().is_empty() {
                 return fail(key, "must not be empty");
             }
-        }
-        if self.repository.staging == self.repository.master {
-            return fail("repository.master", "must differ from repository.staging");
         }
         self.validate_landing()?;
         if !positive(self.gate.threshold) {

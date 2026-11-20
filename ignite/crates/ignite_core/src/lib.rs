@@ -22,6 +22,7 @@ pub mod plan_usage;
 pub mod prime;
 pub mod protocol;
 pub mod ready;
+pub mod refname;
 pub mod rust_source;
 pub mod schedule;
 pub mod score;

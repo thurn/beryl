@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ignite_core::ids::Commit;
+use ignite_core::refname;
 use ignite_core::traits::{Error, Result};
 
 use crate::cmd;
@@ -29,7 +30,8 @@ pub struct Saved {
     pub uncommitted: Vec<String>,
 }
 
-/// Saves the tree's work to `branch` on `remote`, replacing whatever that branch held.
+/// Saves the tree's work to `branch` on `remote`, replacing whatever that branch held. `branch`
+/// is a branch name or a full ref name ([`refname`]).
 ///
 /// When the tree holds edits that are not committed, they become one commit with `message` on
 /// top of `HEAD`. The push is forced: the branch belongs to one ticket, and a rebase in an
@@ -43,7 +45,7 @@ pub fn save(tree: &Path, remote: &str, branch: &str, message: &str) -> Result<Sa
     } else {
         commit_working_tree(tree, &head, message)?
     };
-    let target = format!("refs/heads/{branch}");
+    let target = refname::remote_ref(branch);
     let refspec = format!("+{commit}:{target}");
     let mut push = cmd::git(tree, ["push", "--porcelain", remote, &refspec]);
     let out = cmd::output(&mut push)?;

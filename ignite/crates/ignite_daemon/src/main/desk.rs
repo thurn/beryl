@@ -164,7 +164,11 @@ impl TreeDeskOver {
 
     /// The ticket's saved branch on the remote, if it has one.
     fn saved_head(&self, ticket: &TicketId) -> Result<Option<Commit>> {
-        match refs::remote_tip(self.repo(), self.remote(), &trees::save_branch(ticket)) {
+        match refs::remote_tip(
+            self.repo(),
+            self.remote(),
+            &self.trees.config().save_branch(ticket),
+        ) {
             Ok(commit) => Ok(Some(commit)),
             Err(Error::NotFound(_)) => Ok(None),
             Err(error) => Err(error),
@@ -290,9 +294,9 @@ impl TreeDesk for TreeDeskOver {
     fn save(&self, tree: &ignite_core::ids::TreeId, ticket: &TicketId) -> Result<Saved> {
         let path = self.path(tree);
         let message = format!("wip: {ticket} saved at release\n\n{}", trees::SAVED_TRAILER);
-        let branch = trees::save_branch(ticket);
+        let branch = self.trees.config().save_branch(ticket);
         let saved = save::save(&path, self.remote(), &branch, &message)?;
-        let base = format!("{}/{}", self.remote(), self.staging);
+        let base = ignite_core::refname::tracking_ref(self.remote(), &self.staging);
         let range = format!("{base}..{}", saved.commit);
         let count = git(&path, &["rev-list", "--count", &range])?;
         Ok(Saved {
@@ -315,7 +319,11 @@ impl TreeDesk for TreeDeskOver {
         if self.saved_head(ticket)?.is_none() {
             return Ok(());
         }
-        push::delete(self.repo(), self.remote(), &trees::save_branch(ticket))
+        push::delete(
+            self.repo(),
+            self.remote(),
+            &self.trees.config().save_branch(ticket),
+        )
     }
 }
 

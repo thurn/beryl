@@ -112,8 +112,39 @@ landing_trees = 1
             let error = Config::parse("ignite.toml", &text).unwrap_err();
             assert_eq!(error.key, "repository.green");
         }
+        // The same ref named two ways is still the same ref.
+        let text = MINIMAL.replace(
+            "checks = \"checks\"",
+            "checks = \"checks\"\ngreen = \"refs/heads/staging\"",
+        );
+        let error = Config::parse("ignite.toml", &text).unwrap_err();
+        assert_eq!(error.key, "repository.green");
         let text = format!("{MINIMAL}\n[land]\nmax_base_age_hours = 0\n");
         let error = Config::parse("ignite.toml", &text).unwrap_err();
         assert_eq!(error.key, "land.max_base_age_hours");
+    }
+
+    #[test]
+    fn refs_may_be_full_names_and_saved_work_has_a_prefix() {
+        let (config, _) = Config::parse_with_unknown("ignite.toml", MINIMAL).unwrap();
+        assert_eq!(config.repository.saved_prefix(), "ignite/");
+        let text = MINIMAL
+            .replace("staging = \"staging\"", "staging = \"refs/ignite/staging\"")
+            .replace(
+                "checks = \"checks\"",
+                "checks = \"checks\"\ngreen = \"refs/ignite/green\"\n\
+                 release = \"refs/ignite/release\"\nsaved = \"refs/ignite/tickets/\"",
+            );
+        let (config, unknown) = Config::parse_with_unknown("ignite.toml", &text).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        assert_eq!(config.repository.staging, "refs/ignite/staging");
+        assert_eq!(config.repository.release_branch(), "refs/ignite/release");
+        assert_eq!(config.repository.saved_prefix(), "refs/ignite/tickets/");
+        let error = Config::parse(
+            "ignite.toml",
+            &MINIMAL.replace("checks = \"checks\"", "checks = \"checks\"\nsaved = \" \""),
+        )
+        .unwrap_err();
+        assert_eq!(error.key, "repository.saved");
     }
 }

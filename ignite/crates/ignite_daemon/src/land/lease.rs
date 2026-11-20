@@ -22,7 +22,9 @@ pub(crate) fn try_acquire(
     holder: &str,
     payload: serde_json::Value,
 ) -> Result<std::result::Result<HeldLease, LeaseBusy>> {
-    let name = ctx.config.repository.staging.clone();
+    // Named by the local branch, `staging` for both `staging` and `refs/ignite/staging`, so the
+    // lease keeps its name, which the dashboard looks for, whichever ref the remote uses.
+    let name = ignite_core::refname::local_branch(&ctx.config.repository.staging);
     let op = LeaseOp::Acquire {
         holder: holder.to_owned(),
         ttl_s: LEASE_TTL_S,

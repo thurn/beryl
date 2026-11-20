@@ -69,11 +69,6 @@ pub const SAVED_TRAILER: &str = "Ignite-Saved: release";
 /// How long a process inside a released tree has to exit after `SIGTERM` before `SIGKILL`.
 const GRACE: Duration = Duration::from_secs(3);
 
-/// The remote branch that holds a released ticket's work.
-pub fn save_branch(ticket: &TicketId) -> String {
-    format!("ignite/{ticket}")
-}
-
 /// The local branch a tree sits on while no ticket holds it.
 fn park_branch(tree: &TreeId) -> String {
     format!("ignite-tree/{tree}")
@@ -87,6 +82,8 @@ pub struct TreeConfig {
     /// The directory that holds every tree.
     pub dir: PathBuf,
     pub remote: String,
+    /// The prefix of the remote ref that holds a released ticket's work (`repository.saved`).
+    pub saved: String,
     /// The main checkout's local branches kept fast-forwarded to the remote.
     pub branches: Vec<String>,
     pub ticket_trees: u32,
@@ -105,6 +102,11 @@ pub struct TreeConfig {
 }
 
 impl TreeConfig {
+    /// The remote ref that holds a released ticket's work: the `saved` prefix and the ticket.
+    pub fn save_branch(&self, ticket: &TicketId) -> String {
+        format!("{}{ticket}", self.saved)
+    }
+
     pub fn new(repo: &Path, config: &Config, hostname: &str, manifest: &Manifest) -> Result<Self> {
         let machine = config
             .machine(hostname)
@@ -114,6 +116,7 @@ impl TreeConfig {
             repo: repo.to_path_buf(),
             dir: repo.join(&config.repository.trees),
             remote: config.repository.remote.clone(),
+            saved: config.repository.saved_prefix().to_owned(),
             // `green`, when set, is fast-forwarded too, so that work started from it locally
             // sees where it is. A branch missing locally is skipped.
             branches: [
@@ -585,7 +588,12 @@ impl Trees {
             .ok_or_else(|| Error::Invalid(format!("tree {tree} is leased to no ticket")))?;
         let path = config.path(tree);
         let message = format!("wip: {ticket} saved at release\n\n{SAVED_TRAILER}");
-        let saved = save::save(&path, &config.remote, &save_branch(&ticket), &message)?;
+        let saved = save::save(
+            &path,
+            &config.remote,
+            &config.save_branch(&ticket),
+            &message,
+        )?;
         let ended = self.reset_leased(tree, &row, park_at, caller)?;
         Ok(Released {
             tree: tree.clone(),

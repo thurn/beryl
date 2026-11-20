@@ -88,8 +88,8 @@ impl Dispatcher {
             return None;
         }
         Some(format!(
-            "refused  Ignite released {released} from this session, and its work is saved as \
-             ignite/{released} for whoever takes it next. Stop now: do not start it or any other \
+            "refused  Ignite released {released} from this session, and its work is saved on the \
+             remote for whoever takes it next. Stop now: do not start it or any other \
              ticket, do not restart its commands, and end your turn. The dispatcher hands you \
              your next ticket."
         ))

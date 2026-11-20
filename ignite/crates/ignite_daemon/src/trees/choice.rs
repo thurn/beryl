@@ -172,6 +172,7 @@ mod tests {
             repo: "repo".into(),
             dir: "repo/trees".into(),
             remote: "origin".to_owned(),
+            saved: "ignite/".to_owned(),
             branches: Vec::new(),
             ticket_trees: 1,
             landing_trees: 0,
