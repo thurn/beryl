@@ -108,9 +108,9 @@ impl TipVerifier {
         }))
     }
 
-    /// Finds the culprit of a check that failed at `tip` and reports the regression, unless a
-    /// newer tip changed the check's inputs (its next round runs the check there first) or this
-    /// failure was reported already.
+    /// Finds the culprit of a check that failed at `tip` and reports the regression, or reverts
+    /// the culprit of a broken build (see `revert`), unless a newer tip changed the check's
+    /// inputs (its next round runs the check there first) or this failure was reported already.
     ///
     /// A check only another platform can run is left to that platform's machines: a search here
     /// would run this platform's version of the check, which passes at every commit, and blame
@@ -146,6 +146,13 @@ impl TipVerifier {
             eprintln!("ignite: no culprit found for {}: {error}", check.check);
             format!("the landings could not be read: {error}")
         });
+        // A build check broken by one landing is reverted instead, when `revert` allows it.
+        if let Ok(Some(found)) = &culprit
+            && self.try_revert(ctx, tip, check, found, output)
+        {
+            self.reported.insert(check.key.clone());
+            return Ok(());
+        }
         let search = match &culprit {
             Ok(Some(culprit)) => culprit.search.clone(),
             Ok(None) => CulpritSearch::NotRun {

@@ -5,11 +5,43 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use ignite_core::protocol::tickets::{LeaseOp, LeaseReply};
+use ignite_core::protocol::tickets::{LeaseBusy, LeaseOp, LeaseReply};
 use ignite_core::traits::{Hub, Result};
 
+use crate::server::Context;
+
 /// How long the hub keeps the integration branch's lease without a renewal.
-pub(super) const LEASE_TTL_S: u64 = 180;
+pub(crate) const LEASE_TTL_S: u64 = 180;
+/// The longest wait between two tries for a lease another holder has.
+pub(crate) const BUSY_WAIT_S: f64 = 10.0;
+
+/// Asks the hub once for the integration branch's lease for `holder`, with `payload` saying
+/// who holds it. Returns the guard, or the hub's answer when another holder has it.
+pub(crate) fn try_acquire(
+    ctx: &Context,
+    holder: &str,
+    payload: serde_json::Value,
+) -> Result<std::result::Result<HeldLease, LeaseBusy>> {
+    let name = ctx.config.repository.staging.clone();
+    let op = LeaseOp::Acquire {
+        holder: holder.to_owned(),
+        ttl_s: LEASE_TTL_S,
+        payload: Some(payload),
+        no_queue: true,
+    };
+    Ok(match ctx.hub.lease(&name, op)? {
+        LeaseReply::Held(_) => Ok(HeldLease::start(ctx.hub.clone(), name, holder.to_owned())),
+        LeaseReply::Busy(busy) => Err(busy),
+    })
+}
+
+/// How long to wait before asking again for a lease `busy` says another holder has: until it
+/// expires, between 1 and [`BUSY_WAIT_S`] seconds.
+pub(crate) fn busy_wait(ctx: &Context, busy: &LeaseBusy) -> f64 {
+    busy.expires_at.map_or(BUSY_WAIT_S, |at| {
+        at.seconds_since(ctx.clock.now()).clamp(1.0, BUSY_WAIT_S)
+    })
+}
 /// How often a held lease is renewed.
 const RENEW_EVERY: Duration = Duration::from_secs(60);
 
@@ -19,7 +51,7 @@ const RENEW_EVERY: Duration = Duration::from_secs(60);
 /// A renewal the hub answers as busy means another landing holds the branch now (this one's
 /// lease expired, for example while the machine slept). The guard remembers that, and
 /// [`HeldLease::still_held`] tells the landing before it pushes without the lease.
-pub(super) struct HeldLease {
+pub(crate) struct HeldLease {
     hub: Arc<dyn Hub>,
     name: String,
     holder: String,
@@ -58,7 +90,7 @@ fn note_renewal(reply: Result<LeaseReply>, name: &str, lost: &AtomicBool) -> boo
 }
 
 impl HeldLease {
-    pub(super) fn start(hub: Arc<dyn Hub>, name: String, holder: String) -> HeldLease {
+    pub(crate) fn start(hub: Arc<dyn Hub>, name: String, holder: String) -> HeldLease {
         let stop = Arc::new((Mutex::new(false), Condvar::new()));
         let lost = Arc::new(AtomicBool::new(false));
         let renewer = {
@@ -98,7 +130,7 @@ impl HeldLease {
 
     /// Whether the lease is still this landing's: asks the hub to renew it now, which also
     /// restarts its time to live for the push that follows.
-    pub(super) fn still_held(&self) -> bool {
+    pub(crate) fn still_held(&self) -> bool {
         renew_once(self.hub.as_ref(), &self.name, &self.holder, &self.lost)
             && !self.lost.load(Ordering::SeqCst)
     }

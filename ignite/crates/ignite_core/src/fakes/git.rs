@@ -38,6 +38,8 @@ pub struct FakeGit {
     dates: Mutex<HashMap<Commit, Timestamp>>,
     /// Each tree's ID for `tree_id`, by the tree's path.
     tree_ids: Mutex<HashMap<PathBuf, String>>,
+    /// Each commit's subject for `subject`; a commit not here has the subject `change <sha>`.
+    subjects: Mutex<HashMap<Commit, String>>,
 }
 
 impl FakeGit {
@@ -93,6 +95,11 @@ impl FakeGit {
     /// second commit, as for a tree based on the tip.
     pub fn script_merge_base(&self, base: Commit) {
         lock(&self.merge_bases).push_back(base);
+    }
+
+    /// Sets the subject `subject` gives for `commit`.
+    pub fn set_subject(&self, commit: &Commit, subject: &str) {
+        lock(&self.subjects).insert(commit.clone(), subject.to_owned());
     }
 
     /// Sets the date `committed_at` gives for `commit`.
@@ -224,6 +231,13 @@ impl Git for FakeGit {
             .unwrap_or_else(|| RevertOutcome::Clean {
                 commit: tip.clone(),
             }))
+    }
+
+    fn subject(&self, _repo: &Path, commit: &Commit) -> Result<String> {
+        Ok(lock(&self.subjects)
+            .get(commit)
+            .cloned()
+            .unwrap_or_else(|| format!("change {commit}")))
     }
 
     fn merge_base(&self, _repo: &Path, _a: &Commit, b: &Commit) -> Result<Commit> {

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Seq};
-use ignite_core::protocol::hub::ResultKey;
+use ignite_core::protocol::hub::{ResultKey, Reverted};
 use ignite_core::time::Timestamp;
 use ignite_store::local::tip_state;
 
@@ -39,6 +39,7 @@ pub(super) struct Memory {
     reported_stuck: Vec<(Commit, CheckName)>,
     rechecked: Vec<ResultKey>,
     resting: Option<(Commit, Timestamp)>,
+    unsent_reverts: Vec<Reverted>,
 }
 
 /// The database the memory is saved in, and the text last saved, so that a round that changed
@@ -102,6 +103,7 @@ impl TipVerifier {
         self.reported_stuck = set(memory.reported_stuck);
         self.rechecked = set(memory.rechecked);
         self.resting = memory.resting;
+        self.unsent_reverts = memory.unsent_reverts;
     }
 
     fn memory(&self) -> Memory {
@@ -117,6 +119,7 @@ impl TipVerifier {
             reported_stuck: listed(self.reported_stuck.iter().cloned()),
             rechecked: listed(self.rechecked.iter().cloned()),
             resting: self.resting.clone(),
+            unsent_reverts: self.unsent_reverts.clone(),
         }
     }
 

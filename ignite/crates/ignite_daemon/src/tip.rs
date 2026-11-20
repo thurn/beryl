@@ -38,6 +38,9 @@
 //!   by running that check between them, at most [`MAX_RUNS`] times. A landing is one
 //!   ticket's commits, as the hub recorded them when the ticket landed, so a report names the
 //!   ticket whose landing caused the failure.
+//! - With `[revert] broken_build` set, a failing build check whose search ends at one landing
+//!   reverts that landing instead of reporting a regression, when the conditions in `revert`
+//!   hold.
 //! - When the tips since the last verified commit have waited [`MACHINE_WAIT_S`] for checks
 //!   only another platform's machines can run, the hub is told once per tip and platform, and
 //!   files a P1 ticket naming those machines. `master` keeps waiting.
@@ -49,6 +52,7 @@ mod families;
 mod green;
 mod meter;
 mod report;
+mod revert;
 mod round;
 mod split;
 mod state;
@@ -311,6 +315,12 @@ pub struct TipVerifier {
     saved: Option<state::Saved>,
     /// How often a running batch's claim is renewed (see `families`).
     renew_every: std::time::Duration,
+    /// The commits of each landing this round reverted (see `revert`).
+    reverted: Vec<Vec<Commit>>,
+    /// Reverts pushed that the hub has not taken yet.
+    unsent_reverts: Vec<ignite_core::protocol::hub::Reverted>,
+    /// How the round waits for a lease another holder has.
+    pause: revert::Pause,
 }
 
 impl TipVerifier {
@@ -334,6 +344,9 @@ impl TipVerifier {
             resting: None,
             saved: None,
             renew_every: families::RENEW_EVERY,
+            reverted: Vec::new(),
+            unsent_reverts: Vec::new(),
+            pause: revert::sleep(),
         }
     }
 
@@ -441,6 +454,8 @@ impl TipVerifier {
         tally: &mut meter::Tally,
     ) -> Result<TipOutcome> {
         self.own_outputs.clear();
+        self.reverted.clear();
+        self.send_reverts(ctx);
         let TipSet {
             checks,
             unlisted,

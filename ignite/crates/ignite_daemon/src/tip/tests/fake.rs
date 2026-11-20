@@ -61,6 +61,9 @@ pub(super) struct FakeWork {
     /// Called when a family's batches start, before the first claim, where the real work
     /// builds and lists the family.
     pub(super) before_batches: Mutex<HashMap<String, BeforeBatches>>,
+    /// Called once, when a run at the commit starts, as when a landing moves the tip while the
+    /// check runs.
+    pub(super) on_run: Mutex<HashMap<Commit, BeforeBatches>>,
 }
 
 /// What [`FakeWork::before_batches`] calls for one family.
@@ -220,6 +223,10 @@ impl TipWork for FakeWork {
 
     fn run(&self, ctx: &Context, at: &Commit, checks: &[CheckName], rerun: bool) -> Vec<TipRun> {
         self.classes.lock().unwrap().push(crate::steps::class());
+        let hook = self.on_run.lock().unwrap().remove(at);
+        if let Some(hook) = hook {
+            hook();
+        }
         let wanted = *self.parallel.lock().unwrap();
         if wanted > 1 {
             let mut active = self.active.lock().unwrap();

@@ -684,5 +684,10 @@
     "label": "Tests that name real cards moved out of the kernel, rules, search, session, table and command-line libraries into `tests/` binaries, and the `card-leaves` check keeps card crates out of every non-leaf crate's normal dependencies, so a card edit rebuilds only the leaf crates instead of every crate that depends on `beryl_cards`",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "With `[revert] broken_build` set, a tip round reverts the one landing that made a build check fail, so agents and tip rounds are not left on a tip that does not compile while a fix is written",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

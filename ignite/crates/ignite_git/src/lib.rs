@@ -97,6 +97,10 @@ impl Git for GitCli {
         replay::revert(repo, tip, commits, message)
     }
 
+    fn subject(&self, repo: &Path, commit: &Commit) -> Result<String> {
+        refs::subject(repo, commit)
+    }
+
     fn merge_base(&self, repo: &Path, a: &Commit, b: &Commit) -> Result<Commit> {
         objects::merge_base(repo, a, b)
     }

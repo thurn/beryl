@@ -58,7 +58,7 @@ mod base;
 pub mod env;
 pub mod express;
 pub mod format;
-mod lease;
+pub(crate) mod lease;
 mod passes;
 pub mod records;
 mod release;
@@ -77,7 +77,7 @@ use ignite_core::ids::{Commit, TicketId};
 use ignite_core::protocol::Class;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::Landed;
-use ignite_core::protocol::tickets::{LandedWork, LeaseOp, LeaseReply};
+use ignite_core::protocol::tickets::LandedWork;
 use ignite_core::traits::{Error, Push, Rebase};
 
 use crate::checks::verbs::render;
@@ -89,14 +89,11 @@ use args::LandArgs;
 use env::{GateTree, LandGate, LandTrees, TicketTree};
 use express::{ExpressLane, ExpressRun, Expressed};
 use format::{Formatted, Formatter};
-use lease::{HeldLease, LEASE_TTL_S};
+use lease::HeldLease;
 use passes::{GateHome, Passed};
 use records::{LandingRecord, RecordState, Records};
 use replies::{failed_gate, stopped};
 use timeline::Timeline;
-
-/// The longest wait between two tries for a busy lease.
-const BUSY_WAIT_S: f64 = 10.0;
 
 /// The passes after which a landing gives up, so a branch that never gets a push through
 /// (the tip keeps moving, or the remote keeps answering that it moved) ends with a message.
@@ -711,31 +708,21 @@ impl Landing {
     }
 
     /// Takes the integration branch's lease, waiting while another landing holds it. A holder
-    /// that died is waited out: its lease expires within [`LEASE_TTL_S`] seconds.
+    /// that died is waited out: its lease expires within [`lease::LEASE_TTL_S`] seconds.
     fn acquire(&self, ctx: &Context, holder: &str, ticket: &TicketId) -> Result<HeldLease, Error> {
-        let name = ctx.config.repository.staging.clone();
+        let name = &ctx.config.repository.staging;
         steps::step(format!("taking the {name} lease"));
         loop {
             if steps::stop_requested() {
                 return Err(Error::Conflict("the landing was stopped".to_owned()));
             }
-            let op = LeaseOp::Acquire {
-                holder: holder.to_owned(),
-                ttl_s: LEASE_TTL_S,
-                payload: Some(json!({ "ticket": ticket, "machine": ctx.machine })),
-                no_queue: true,
-            };
-            match ctx.hub.lease(&name, op)? {
-                LeaseReply::Held(_) => {
-                    return Ok(HeldLease::start(ctx.hub.clone(), name, holder.to_owned()));
-                }
-                LeaseReply::Busy(busy) => {
-                    let wait = busy.expires_at.map_or(BUSY_WAIT_S, |at| {
-                        at.seconds_since(ctx.clock.now()).clamp(1.0, BUSY_WAIT_S)
-                    });
+            let payload = json!({ "ticket": ticket, "machine": ctx.machine });
+            match lease::try_acquire(ctx, holder, payload)? {
+                Ok(held) => return Ok(held),
+                Err(busy) => {
                     let _waiting =
                         steps::waiting(format!("the {name} lease, which another landing holds"));
-                    (self.pause)(wait);
+                    (self.pause)(lease::busy_wait(ctx, &busy));
                 }
             }
         }

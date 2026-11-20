@@ -326,6 +326,12 @@ pub trait Git: Send + Sync {
         Err(git_not_supported("revert commits"))
     }
 
+    /// The first line of `commit`'s message.
+    fn subject(&self, repo: &Path, commit: &Commit) -> Result<String> {
+        let _ = (repo, commit);
+        Err(git_not_supported("read a commit's subject"))
+    }
+
     /// The newest commit that both `a` and `b` hold.
     fn merge_base(&self, repo: &Path, a: &Commit, b: &Commit) -> Result<Commit> {
         let _ = (repo, a, b);

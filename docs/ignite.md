@@ -670,7 +670,9 @@ How the executable is installed and kept current:
   still starts after a release that added a table or column.
 - Settings for landing by verdict exist: `[land] mode` (`"strict"`, the default,
   or `"verdict"`) with `max_base_age_hours` (default 12) and
-  `[revert] broken_build` (default false) change nothing yet, and
+  `[revert] broken_build` (default false; see
+  [A broken build is reverted](#a-broken-build-is-reverted)) change nothing
+  yet, and
   `repository.green` (unset by default; it must differ from `staging` and
   `master`) gives tip rounds a build step (see
   [Tip verification](#tip-verification)). The hub's `Hub::verdict`,
@@ -2663,6 +2665,41 @@ and what each commit changed:
 - The regression ticket says how the search ended: the only candidate with
   nothing run, found in N runs, ended early with the reason, or not run with the
   reason.
+
+### A broken build is reverted
+
+A landing type-checks on the tree it was gated in, not on the exact tip, so two
+landings that each compile alone can leave a tip that does not compile. While it
+stays that way `green` cannot move, tip rounds build nothing, and later landings
+pile onto code nobody can compile. With `[revert] broken_build = true`, a tip
+round removes such a landing instead of waiting tens of minutes for a fix. Any
+other failing check is fixed forward through a regression ticket, as below.
+
+A failing build check (a check of a family declared `builds = true`, run only
+when `repository.green` is set) reverts its culprit when all of these hold, and
+is otherwise reported as a regression:
+
+- the search ended at one landing: the only candidate, or found by bisection;
+- the failure came from a run on this machine in this round, not from a result
+  another machine stored;
+- the landing changed none of Ignite's own source, whose releases the landing
+  itself judges and moves;
+- the landing is not made only of a round's own revert commits (subjects
+  starting `revert: `, with no landing recorded);
+- the round has reverted fewer than 3 landings;
+- one commit on the tip undoes all the landing's commits without a conflict
+  (`Git::revert`), and the check passes at that commit, run there or answered by
+  the result cache.
+
+The revert commit's subject is `revert: <the landing's first subject>`, cut to
+60 characters, and its body names the check and the commits it undoes. The round
+takes the hub's lease on `staging` as a landing does, waiting while a landing
+holds it, checks that the tip has not moved, and pushes. When the tip moved, it
+builds the revert again on the new tip, three times at most, then reports a
+regression instead. It then tells the hub (`Hub::reverted`), which reopens the
+landing's ticket; a report the hub does not take is kept in the verifier's
+memory and sent again at the start of the next round. Another build check that
+failed with the same landing is covered by the same revert.
 
 ### Regression tickets
 

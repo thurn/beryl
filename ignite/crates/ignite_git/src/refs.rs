@@ -127,6 +127,15 @@ pub fn subjects_between(repo: &Path, from: &Commit, to: &Commit) -> Result<Vec<S
         .collect())
 }
 
+/// The first line of `commit`'s message.
+pub fn subject(repo: &Path, commit: &Commit) -> Result<String> {
+    Ok(
+        cmd::run(repo, ["log", "-1", "--format=%s", commit.as_str()])?
+            .trim_end()
+            .to_owned(),
+    )
+}
+
 /// Whether `ancestor` is `descendant` or one of its ancestors (`git merge-base --is-ancestor`).
 ///
 /// Exit status 0 means yes and 1 means no. A commit this repository does
