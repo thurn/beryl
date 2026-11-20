@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import shutil
 import sys
 import time
@@ -77,7 +78,8 @@ def bulk_file(kind: str, refresh: bool = False) -> Path:
         raise LookupError(f"Scryfall has no bulk file of type {kind}")
     url = str(entry["jsonl_download_uri"])
     print(f"scryfall: downloading {url}", file=sys.stderr)
-    partial = path.with_suffix(".partial")
+    # One partial file per process: checks run in parallel and may refill the same file.
+    partial = path.with_suffix(f".{os.getpid()}.partial")
     with urllib.request.urlopen(request(url, "*/*"), timeout=600) as response:
         with partial.open("wb") as out:
             shutil.copyfileobj(response, out, 1 << 20)

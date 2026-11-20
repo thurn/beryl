@@ -1,4 +1,5 @@
 import ast
+import gzip
 import json
 import re
 import shutil
@@ -8,7 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from beryl_tools import citations, conventions, design_tokens, file_length, paths
+from beryl_tools import (
+    citations,
+    conventions,
+    design_tokens,
+    file_length,
+    paths,
+    scryfall,
+)
 from beryl_tools.ignite import rules
 
 REPO: Path = Path(__file__).resolve().parents[2]
@@ -226,11 +234,39 @@ def test_checks_that_need_the_rules_or_rulings_are_incomplete_without_them(
         "citations-docs",
         "rule-ownership",
         "divergences",
-        "rulings",
     ):
         result = outcome(name, root)
         assert result["outcome"] == "incomplete", (name, result)
         assert "not cached" in str(result["message"])
+
+
+def test_rulings_check_refills_a_missing_cache_and_blames_the_machine_if_it_cannot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    cached = scryfall.cache_dir() / "rulings.jsonl.gz"
+    cached.unlink(missing_ok=True)
+    calls: list[str] = []
+
+    def refuse(kind: str, refresh: bool = False) -> Path:
+        calls.append(kind)
+        raise OSError("offline")
+
+    monkeypatch.setattr(scryfall, "bulk_file", refuse)
+    result = outcome("rulings", root)
+    assert result["outcome"] == "incomplete", result
+    assert "machine fault" in str(result["message"]) and "offline" in str(
+        result["message"]
+    )
+
+    def fill(kind: str, refresh: bool = False) -> Path:
+        calls.append(kind)
+        cached.write_bytes(gzip.compress(b""))
+        return cached
+
+    monkeypatch.setattr(scryfall, "bulk_file", fill)
+    assert outcome("rulings", root)["outcome"] != "incomplete"
+    assert calls == ["rulings", "rulings"]
 
 
 def test_divergences_and_rule_ownership_run_on_the_cached_release(

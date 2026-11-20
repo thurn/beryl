@@ -14,8 +14,9 @@ Two commands, both run from the checkout's root:
   "message": ...}`. It exits 1 when a check failed and 2 for a check it does not know.
 
 A check reports `incomplete`, never a pass, when it cannot run: the Comprehensive Rules text
-or the Scryfall rulings it needs are not in the machine's cache, `just` is older than the
-justfile's format needs, or git cannot answer. Nothing here downloads anything.
+is not in the machine's cache, the Scryfall rulings are neither cached nor downloadable,
+`just` is older than the justfile's format needs, or git cannot answer. Only the rulings
+check downloads anything, and only when its cache file is missing.
 
 Each check wraps the function that implements it in a domain module (`file_length.check`,
 `two_player.check`, ...), so the rule lives in one place.
@@ -267,7 +268,15 @@ def divergences(root: Path) -> list[str]:
 def rulings_check(root: Path) -> list[str]:
     bulk = scryfall.cache_dir() / "rulings.jsonl.gz"
     if not bulk.is_file():
-        raise Incomplete(f"{bulk} is not cached")
+        # A missing file is a fault of the machine (its cache was emptied), never of the
+        # change being checked, so the check repairs it instead of refusing the landing.
+        try:
+            bulk = scryfall.bulk_file("rulings")
+        except (OSError, LookupError, ValueError) as error:
+            raise Incomplete(
+                f"machine fault, not the change's: {bulk} is not cached and downloading "
+                f"it failed ({error})"
+            ) from error
     library = root / "rust" / "crates" / "beryl_cards" / "src" / "library"
     try:
         return rulings.audit(

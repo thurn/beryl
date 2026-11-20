@@ -22,7 +22,8 @@ inputs = [
 # check-inputs, which requires the Rust tests to open repository files through the helper that
 # records the read.
 # The citations, rule-ownership and divergences checks need the pinned Comprehensive Rules in
-# the machine's cache, and rulings the Scryfall rulings; without them they report incomplete.
+# the machine's cache; without it they report incomplete. The rulings check downloads the
+# Scryfall rulings when its cache file is missing, and reports incomplete only if that fails.
 [family.source]
 kind = "regression"
 adapter = "jsonl"
