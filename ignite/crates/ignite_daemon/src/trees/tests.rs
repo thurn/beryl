@@ -21,6 +21,7 @@ use super::*;
 
 mod landing;
 mod owners;
+mod free;
 mod retire;
 mod seed;
 mod setup;

@@ -54,6 +54,10 @@ impl IdleHost for RemoteIdleHost {
         self.local.hold_disk(short)
     }
 
+    fn free_disk(&self, floor_gb: u64) -> Result<DiskReport> {
+        self.local.free_disk(floor_gb)
+    }
+
     fn disk_free_gb(&self) -> Option<u64> {
         self.local.disk_free_gb()
     }

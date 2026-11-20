@@ -161,6 +161,45 @@ impl Trees {
         Ok(report)
     }
 
+    /// Frees disk space fast while the disk has less than `floor` bytes free, without
+    /// measuring the trees first. Deletes the whole build directories of free trees, used
+    /// longest ago first, and reads the disk's free space with `free` after each one, stopping
+    /// once it reaches `floor` or cannot be read.
+    ///
+    /// [`Trees::hold_disk`] measures every tree in full twice before it clears any, which took
+    /// over half an hour per measurement on 1.6 TB of build directories under load. The daemon
+    /// restarted for each release every few minutes, so no round ever finished, and the disk
+    /// filled to 4 GB free with every build waiting for space. A full disk needs space now; which
+    /// tree holds the most bytes of its own matters less than freeing any. A tree whose files
+    /// are clones of another's frees little, and the next free tree goes after it.
+    pub fn free_disk(&self, floor: u64, free: impl Fn() -> Option<u64>) -> Result<DiskReport> {
+        let mut report = DiskReport {
+            limit: Some(floor),
+            ..DiskReport::default()
+        };
+        let low = || free().is_some_and(|bytes| bytes < floor);
+        for row in self.free_rows()? {
+            if !low() {
+                break;
+            }
+            let Some(mut row) = self.take_for_sweep(&row.id)? else {
+                continue;
+            };
+            let id = id_of(&row)?;
+            // Forgotten before anything is deleted, as in `hold_disk`.
+            self.inner.builds.forget(&id);
+            let path = self.inner.config.path(&id);
+            for dir in self.inner.config.keep.get().iter() {
+                remove(&path.join(dir));
+            }
+            row.built_commit = None;
+            self.put_back(&row)?;
+            report.cleared.push(id);
+        }
+        self.serve_waiters();
+        Ok(report)
+    }
+
     /// The free trees, used longest ago first; never used counts as longest ago.
     fn free_rows(&self) -> Result<Vec<rows::Tree>> {
         let mut free: Vec<rows::Tree> = store::all(&self.lock().db)

@@ -108,6 +108,9 @@ pub trait IdleHost: Send + Sync {
     /// Deletes build directories until the trees are under their disk limit, and `short` bytes
     /// under their current size when the disk lacks that much of the free space kept.
     fn hold_disk(&self, short: u64) -> Result<DiskReport>;
+    /// Deletes the build directories of free trees, used longest ago first, until the disk has
+    /// `floor_gb` gigabytes free, without measuring the trees ([`Trees::free_disk`]).
+    fn free_disk(&self, floor_gb: u64) -> Result<DiskReport>;
     /// Gigabytes free on the disk that holds the trees, when it can be read.
     fn disk_free_gb(&self) -> Option<u64> {
         None
@@ -178,6 +181,12 @@ impl IdleHost for LiveHost {
 
     fn hold_disk(&self, short: u64) -> Result<DiskReport> {
         self.trees.hold_disk(short)
+    }
+
+    fn free_disk(&self, floor_gb: u64) -> Result<DiskReport> {
+        let gb = 1_000_000_000;
+        self.trees
+            .free_disk(floor_gb * gb, || self.disk_free_gb().map(|free| free * gb))
     }
 
     fn disk_free_gb(&self) -> Option<u64> {

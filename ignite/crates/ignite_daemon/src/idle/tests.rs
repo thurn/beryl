@@ -97,6 +97,10 @@ struct Host {
     held: AtomicUsize,
     /// The bytes short of the free space kept, as the last hold was told.
     short: AtomicU64,
+    /// How many times free trees were cleared to bring the disk back to its floor.
+    freed: AtomicUsize,
+    /// The floor in gigabytes, as the last clearing was told.
+    floor: AtomicU64,
     /// Gigabytes free on the trees' disk; `None` reads as unknown.
     free_gb: Mutex<Option<u64>>,
     leased: Mutex<Vec<Commit>>,
@@ -127,6 +131,12 @@ impl IdleHost for Arc<Host> {
     fn hold_disk(&self, short: u64) -> Result<DiskReport> {
         self.held.fetch_add(1, Ordering::SeqCst);
         self.short.store(short, Ordering::SeqCst);
+        Ok(DiskReport::default())
+    }
+
+    fn free_disk(&self, floor_gb: u64) -> Result<DiskReport> {
+        self.freed.fetch_add(1, Ordering::SeqCst);
+        self.floor.store(floor_gb, Ordering::SeqCst);
         Ok(DiskReport::default())
     }
 
@@ -276,6 +286,8 @@ impl Fixture {
             between: AtomicUsize::new(0),
             held: AtomicUsize::new(0),
             short: AtomicU64::new(0),
+            freed: AtomicUsize::new(0),
+            floor: AtomicU64::new(0),
             free_gb: Mutex::new(None),
             leased: Mutex::new(Vec::new()),
             released: Mutex::new(Vec::new()),

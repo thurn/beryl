@@ -38,23 +38,22 @@ fn the_trees_are_not_measured_while_the_disk_has_room() {
     assert_eq!(f.host.held.load(Ordering::SeqCst), 1);
 }
 
-/// The disk filled to 1.6 GB free while the trees were under their 400 GB limit, because the
-/// limit had been set when 277 GB of the disk was free. Below the floor the hold is told how
-/// much the disk lacks, and measures again sooner.
+/// The disk filled to 4 GB free while the disk loop spent each round measuring 1.6 TB of build
+/// directories, and the daemon restarted for a release before any round finished. Below the
+/// floor the free trees are cleared at once, without a measurement, and sooner again.
 #[test]
-fn a_disk_below_its_floor_is_held_for_what_it_lacks_and_measured_sooner() {
+fn a_disk_below_its_floor_clears_free_trees_without_measuring_them() {
     let f = Fixture::new();
     let idle = f.idle();
     *f.host.free_gb.lock().unwrap() = Some(FLOOR_GB + 10);
     assert!(idle.hold_disk().unwrap().is_some());
-    assert_eq!(f.host.short.load(Ordering::SeqCst), 0);
+    assert_eq!(f.host.held.load(Ordering::SeqCst), 1);
+    assert_eq!(f.host.freed.load(Ordering::SeqCst), 0);
 
     *f.host.free_gb.lock().unwrap() = Some(2);
     f.clock.advance(LOW_EVERY.as_secs_f64() + 1.0);
     assert!(idle.hold_disk().unwrap().is_some());
-    assert_eq!(f.host.held.load(Ordering::SeqCst), 2);
-    assert_eq!(
-        f.host.short.load(Ordering::SeqCst),
-        (FLOOR_GB - 2) * 1_000_000_000
-    );
+    assert_eq!(f.host.held.load(Ordering::SeqCst), 1);
+    assert_eq!(f.host.freed.load(Ordering::SeqCst), 1);
+    assert_eq!(f.host.floor.load(Ordering::SeqCst), FLOOR_GB);
 }

@@ -59,8 +59,16 @@ impl Idle {
             // after the same wait instead of at every round of the loop.
             *last = Some(now);
         }
-        crate::steps::step("holding the trees under their disk limit");
-        let report = self.host.hold_disk(short_gb * 1_000_000_000)?;
+        // Below the floor, free trees are cleared without measuring the trees first: two full
+        // measurements of 1.6 TB took over an hour, the daemon restarted for a release before
+        // any round finished, and the disk stayed full with every build waiting for space.
+        let report = if short_gb > 0 {
+            crate::steps::step("clearing free trees until the disk is back above its floor");
+            self.host.free_disk(FLOOR_GB)?
+        } else {
+            crate::steps::step("holding the trees under their disk limit");
+            self.host.hold_disk(0)?
+        };
         if !report.superseded.is_empty() || !report.cleared.is_empty() {
             let gb = |bytes: u64| bytes as f64 / 1e9;
             eprintln!(

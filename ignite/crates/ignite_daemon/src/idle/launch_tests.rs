@@ -245,6 +245,9 @@ fn a_verb_process_leases_idle_trees_through_the_daemon_leaving_one_free() {
         fn hold_disk(&self, _: u64) -> Result<crate::trees::DiskReport> {
             Ok(crate::trees::DiskReport::default())
         }
+        fn free_disk(&self, _: u64) -> Result<crate::trees::DiskReport> {
+            Ok(crate::trees::DiskReport::default())
+        }
     }
     let f = Fixture::new();
     let handle = Handle::new("I-4").unwrap();

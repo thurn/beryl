@@ -110,6 +110,21 @@ fn disk_finding(free: Option<u64>, used: Option<u64>, budget: Option<u32>) -> Fi
             "run `df -k` in the tree directory and check that the disk is mounted",
         );
     };
+    // jarvis's disk held 4 GB free, every build waited for space, and this finding said "ok"
+    // because the trees' 1,633 GB plus the free space still reached their 250 GB budget. Below
+    // the floor the daemon keeps, the disk is short whatever the budget says.
+    let floor = crate::idle::FLOOR_GB;
+    if free < floor {
+        return Finding::problem(
+            "disk",
+            format!(
+                "{free} GB free, under the {floor} GB the daemon keeps free; builds wait for \
+                 space."
+            ),
+            "free disk space; the disk loop clears free trees' builds first, and leased trees \
+             keep theirs until released",
+        );
+    }
     let Some(budget) = budget.map(u64::from) else {
         return Finding::ok("disk", format!("{free} GB free; no budget is set."));
     };
@@ -253,5 +268,9 @@ mod tests {
         let unmeasured = disk_finding(Some(277), None, Some(400));
         assert!(unmeasured.ok && unmeasured.warning, "{unmeasured:?}");
         assert!(disk_finding(Some(500), None, Some(400)).fix.is_none());
+        // jarvis: 4 GB free while the trees used 1,633 GB of a 250 GB budget.
+        let full = disk_finding(Some(4), Some(1633), Some(250));
+        assert!(!full.ok, "{full:?}");
+        assert!(full.text.starts_with("4 GB free, under the"), "{full:?}");
     }
 }
