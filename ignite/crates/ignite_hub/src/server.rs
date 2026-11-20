@@ -372,7 +372,9 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     };
     let (response, conn) = if let Some(api) = api {
         api.clone_into(&mut request.path);
-        caught(conn, |conn| api_route(conn, &request, now))
+        caught(conn, |conn| {
+            api_route(conn, &request, !shared.read_only, now)
+        })
     } else {
         path.clone_into(&mut request.path);
         caught(conn, |conn| page(conn, &request, shared, editable, now))
@@ -426,10 +428,10 @@ fn caught(
     }
 }
 
-/// Tries each API module in turn.
-fn api_route(conn: &mut Connection, request: &Request, now: Timestamp) -> Response {
+/// Tries each API module in turn. `private` says the request came on the private listener.
+fn api_route(conn: &mut Connection, request: &Request, private: bool, now: Timestamp) -> Response {
     routes::tickets::handle(conn, request, now)
-        .or_else(|| routes::feed::handle(conn, request, now))
+        .or_else(|| routes::feed::handle(conn, request, private, now))
         .or_else(|| routes::checks::handle(conn, request, now))
         .or_else(|| routes::listings::handle(conn, request, now))
         .or_else(|| routes::tip_rounds::handle(conn, request, now))

@@ -332,13 +332,30 @@ fn the_feed_answers_at_once_with_changes_and_empty_when_the_wait_ends() {
 }
 
 #[test]
-fn a_feed_request_without_a_token_never_waits_and_a_big_unauthenticated_body_is_refused() {
+fn a_dashboard_feed_request_waits_without_a_token_and_a_big_unauthenticated_body_is_refused() {
     let fixture = Fixture::new("unauth");
     let hub = fixture.start();
-    // With a token this would hold a thread and a connection for a minute; without one it
-    // answers at once, empty.
-    let idle = hub.get("/feed?since=0&wait=60").json();
-    assert_eq!(idle["changes"], json!([]));
+    let created = hub.post(
+        "/batch",
+        &json!({"ops": [{"op": "create", "fields": {"title": "A"}}]}),
+    );
+    let seq = created["seq"].as_u64().unwrap();
+    let id = created["results"][0]["id"].as_str().unwrap().to_owned();
+    // A dashboard page follows the feed at the root's `api/feed` and carries no token. On the
+    // private listener its long poll waits for the next write; answered at once and empty, the
+    // page would ask again at once, hundreds of times a second.
+    let address = hub.address;
+    let waiting = thread::spawn(move || {
+        let path = format!("/api/feed?since={seq}&wait=60");
+        send(address, "GET", &path, None, &[]).json()
+    });
+    hub.post(
+        "/batch",
+        &json!({"ops": [{"op": "update", "id": id, "set": {"title": "B"}}]}),
+    );
+    let woken = waiting.join().unwrap();
+    assert_eq!(woken["seq"], seq + 1);
+    assert_eq!(woken["changes"][0]["ticket"], id.as_str());
     // The body is refused before it is read, whatever the route.
     let big = json!({"text": "x".repeat(100 * 1024)});
     let refused = hub.send("POST", "/pj/api/batch", Some(&big), &[]);

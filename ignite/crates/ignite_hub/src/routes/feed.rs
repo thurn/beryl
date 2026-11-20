@@ -24,8 +24,8 @@ use super::{Request, Response};
 pub const MAX_WAIT_S: u64 = 120;
 
 /// The most requests that may wait at once. Each holds a thread and a database connection, so a
-/// request beyond this, and any request without a valid token, is answered at once without
-/// waiting.
+/// request beyond this, and a request on the public listener without a valid token, is answered
+/// at once without waiting.
 pub const MAX_WAITERS: usize = 16;
 
 static WAITERS: AtomicUsize = AtomicUsize::new(0);
@@ -79,8 +79,16 @@ fn wait_for_write(seen: u64, timeout: Duration) {
         .unwrap_or_else(PoisonError::into_inner);
 }
 
-/// The response if this module owns the request's path.
-pub fn handle(conn: &mut Connection, request: &Request, _now: Timestamp) -> Option<Response> {
+/// The response if this module owns the request's path. `private` says the request came on the
+/// private listener, which only the tailnet reaches. There a request may wait without a token,
+/// because the dashboard's pages follow the feed and carry none; answered at once, their script
+/// would ask again at once, hundreds of times a second.
+pub fn handle(
+    conn: &mut Connection,
+    request: &Request,
+    private: bool,
+    _now: Timestamp,
+) -> Option<Response> {
     if request.path != "/feed" {
         return None;
     }
@@ -96,7 +104,7 @@ pub fn handle(conn: &mut Connection, request: &Request, _now: Timestamp) -> Opti
         Some(Ok(wait_s)) => wait_s.min(MAX_WAIT_S),
         Some(Err(_)) => return Some(failure(400, "wait must be a number of seconds")),
     };
-    let waiter = if wait_s > 0 && request.writer.is_some() {
+    let waiter = if wait_s > 0 && (private || request.writer.is_some()) {
         Waiter::take()
     } else {
         None

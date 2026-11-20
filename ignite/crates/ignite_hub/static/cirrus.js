@@ -420,6 +420,7 @@
             url.searchParams.set("since", String(since));
             url.searchParams.set("wait", String(FEED_WAIT_S));
             let batch;
+            const asked = performance.now();
             try {
                 const response = await fetch(url, { cache: "no-store", signal: controller.signal });
                 if (!response.ok) throw new Error(String(response.status));
@@ -434,6 +435,19 @@
                 continue;
             }
             if (polling === controller) polling = undefined;
+            // The hub answers at once, empty, when it will not hold the request open: on the
+            // public listener without a token, or when too many requests are already waiting.
+            // Asking again at once would send hundreds of requests a second, so an empty reply
+            // that came back well before the wait ended is followed by the same growing pause
+            // as a failure.
+            const early = performance.now() - asked < FEED_WAIT_S * 500;
+            if (batch.changes.length === 0 && early) {
+                await new Promise((resolve) => { retryTimer = setTimeout(resolve, retryDelay); });
+                retryTimer = undefined;
+                retryDelay = Math.min(RECONNECT_MAX_MS, retryDelay * 2);
+                if (suspended) return;
+                continue;
+            }
             retryDelay = RECONNECT_MIN_MS;
             handleBatch(batch);
         }

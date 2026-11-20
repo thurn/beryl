@@ -34,6 +34,16 @@ floor = { batch = 1, tip = 1 }
 
 /// The status code of one request.
 fn status(address: SocketAddr, method: &str, path: &str, body: &str) -> u16 {
+    reply(address, method, path, body)
+        .split(' ')
+        .nth(1)
+        .unwrap()
+        .parse()
+        .unwrap()
+}
+
+/// The whole reply to one request, status line, headers and body.
+fn reply(address: SocketAddr, method: &str, path: &str, body: &str) -> String {
     let message = format!(
         "{method} {path} HTTP/1.0\r\nHost: hub\r\nConnection: close\r\n\
          Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
@@ -43,7 +53,7 @@ fn status(address: SocketAddr, method: &str, path: &str, body: &str) -> u16 {
     stream.write_all(message.as_bytes()).unwrap();
     let mut reply = String::new();
     stream.read_to_string(&mut reply).unwrap();
-    reply.split(' ').nth(1).unwrap().parse().unwrap()
+    reply
 }
 
 #[test]
@@ -77,6 +87,10 @@ fn the_public_listener_serves_reads_and_refuses_writes_and_export() {
     }
     assert_eq!(status(public.address(), "GET", "/pj/api/export", ""), 404);
     assert_eq!(status(public.address(), "GET", "/pj/api/export/x", ""), 404);
+    // A long poll without a token is answered at once and empty, so strangers cannot hold the
+    // request threads. Had it waited instead, this would still pass, but only after a minute.
+    let feed = reply(public.address(), "GET", "/api/feed?since=0&wait=60", "");
+    assert!(feed.ends_with(r#"{"changes":[],"seq":0}"#), "{feed}");
     // The private listener still serves the export and takes writes.
     assert_eq!(status(private.address(), "GET", "/pj/api/export", ""), 200);
     assert_ne!(
