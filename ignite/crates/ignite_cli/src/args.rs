@@ -262,6 +262,10 @@ pub enum Command {
         /// The worker's last message, the release note when it stops again.
         #[arg(long)]
         note: Option<String>,
+        /// The session's own process, the hook's parent: a turn that ends with a process still
+        /// running under it is waiting, not stopping.
+        #[arg(long)]
+        parent: Option<u32>,
     },
     /// Checks this executable on this machine, for the daemon that is about to restart into it.
     #[command(hide = true)]

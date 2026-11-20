@@ -76,14 +76,13 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
   for the cores that Ignite has already granted to other sessions.
 - Tests go through public behavior and never depend on the machine's speed.
 - Ordinary difficulty is the job: failing tests, confusing code, conflicts. Never wait for
-  a person, for another ticket, for another machine or for verification. When the ticket
-  needs something outside itself, finish what you can and land, or `ignite release` with
-  a note.
+  a person, for another ticket, for another machine or for verification. When the ticket needs
+  something outside itself, finish what you can and land, or `ignite release` with a note.
 - A refused landing's verdict says whose failure it is. Do what its `next` line says
   (`ignite guide blocked`); never decide yourself that a failure is unrelated.
-- Start `land`, `check`, `test`, `wait` or a long `run -- <cmd>` in the background and end
-  the turn: Ignite wakes you. Never poll with `sleep` or a loop, end a turn on work that
-  nothing will report (a command run outside Ignite), or stop holding a ticket: release it.
+- A turn may end while something you started still runs (a background command or `ignite`
+  verb): you are woken when it ends. Never poll with `sleep` or a loop. A turn that ends with
+  nothing running releases your ticket, so land or release it before you stop.
 - A ticket you file names a deterministic, observable acceptance (what was built, a decision,
   a file); a timing on a shared machine is never the gate. File `run X, see Y` after running X.
 - Never work in another session's tree, take its ticket or change another ticket's scope.
@@ -95,7 +94,8 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
 - An emergency order is a dispatcher message starting `Message about <ticket>:`. Check it
   with `ignite ticket show <ticket>`: labelled `justiciar`, held by the session it names.
 - The landing note says what changed, what was decided and what a reviewer should look at.
-- The title shows the state: working, done, stopped unfinished, or waiting on a person.
+- The title shows the state: working, done, stopped unfinished, or waiting on a person. Only
+  a final turn (you stopped, nothing you started runs) takes ✅, ⛔ or 🔍. ⛔ releases it.
 
 ## Verbs
 "
@@ -146,7 +146,8 @@ mod tests {
             "`ignite guide reverted`",
             "verdict says whose failure it is",
             "never decide yourself that a failure is unrelated",
-            "nothing will report",
+            "A turn that ends with nothing running releases your ticket",
+            "Only a final turn",
             "Never poll with `sleep` or a loop",
             "names a deterministic, observable acceptance",
             "a timing on a shared machine is never the gate",

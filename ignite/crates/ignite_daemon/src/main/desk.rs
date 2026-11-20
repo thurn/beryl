@@ -468,6 +468,11 @@ impl Host for DaemonHost {
             .release_session(&self.ctx, session, ticket, reason)
     }
 
+    fn running_under(&self, root: u32, asker: Option<u32>) -> Option<Vec<u32>> {
+        use ignite_os::occupants::Occupants as _;
+        ignite_os::Native.live_descendants(root, asker).ok()
+    }
+
     fn title(&self, session: &SessionId) -> Option<String> {
         let env = |name: &str| std::env::var(name).ok();
         let app_data = crate::session_title::app_data(&env)?;

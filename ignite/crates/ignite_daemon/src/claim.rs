@@ -375,7 +375,11 @@ impl Claims {
             Target::Ticket { id, .. } => Some(id),
             Target::Adhoc(_) => None,
         };
-        if let Some(refusal) = self.gate.get().and_then(|g| g.refuse_start(&session, ticket)) {
+        if let Some(refusal) = self
+            .gate
+            .get()
+            .and_then(|g| g.refuse_start(&session, ticket))
+        {
             return Reply::text(Exit::Conflict, refusal);
         }
         if let Target::Ticket { id, .. } = &target {

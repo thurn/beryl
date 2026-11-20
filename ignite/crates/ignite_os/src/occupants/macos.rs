@@ -44,6 +44,34 @@ impl Occupants for Native {
         bsd_info(pid).map(|info| info.pbi_ppid)
     }
 
+    fn children(&self, pid: u32) -> io::Result<Vec<u32>> {
+        let parent = libc::pid_t::try_from(pid)
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "not a process ID"))?;
+        let mut capacity = 16;
+        loop {
+            let mut pids: Vec<libc::pid_t> = vec![0; capacity];
+            let bytes = libc::c_int::try_from(capacity * size_of::<libc::pid_t>())
+                .map_err(|_| io::Error::other("too many children to list"))?;
+            // SAFETY: `pids` is a writable buffer of `bytes` bytes; the call writes at most that.
+            let count =
+                unsafe { libc::proc_listchildpids(parent, pids.as_mut_ptr().cast(), bytes) };
+            if count < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // The call returns a count of PIDs; a full buffer may have been cut short.
+            let count = count as usize;
+            if count < capacity {
+                pids.truncate(count);
+                return Ok(pids
+                    .into_iter()
+                    .filter_map(|child| u32::try_from(child).ok())
+                    .filter(|&child| child > 0 && !zombie_or_gone(child))
+                    .collect());
+            }
+            capacity *= 2;
+        }
+    }
+
     fn group(&self, pid: u32) -> Option<u32> {
         bsd_info(pid).map(|info| info.pbi_pgid)
     }
@@ -199,5 +227,43 @@ mod tests {
         assert!(!child.wait().unwrap().success());
         assert!(Native.occupants(&dir).unwrap().is_empty());
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A shell that starts `sleep` in the background and prints its PID, so the grandchild is
+    /// known to exist once the line is read.
+    fn shell_with_a_background_sleep() -> (std::process::Child, u32) {
+        use std::io::BufRead;
+        let mut shell = Command::new("/bin/sh")
+            .args(["-c", "/bin/sleep 1000 & echo $!; wait"])
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut line = String::new();
+        std::io::BufReader::new(shell.stdout.take().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        (shell, line.trim().parse().unwrap())
+    }
+
+    #[test]
+    fn lists_what_runs_under_a_process_leaving_out_the_branch_of_the_asker() {
+        let me = std::process::id();
+        let (mut waiting, sleep) = shell_with_a_background_sleep();
+        let (mut hook, asker) = shell_with_a_background_sleep();
+        let found = Native.live_descendants(me, Some(asker)).unwrap();
+        assert!(found.contains(&waiting.id()), "{found:?}");
+        assert!(found.contains(&sleep), "a grandchild counts: {found:?}");
+        assert!(!found.contains(&hook.id()), "{found:?}");
+        assert!(!found.contains(&asker), "{found:?}");
+        // An `exclude` that is not under the root leaves nothing out.
+        let all = Native.live_descendants(me, Some(1)).unwrap();
+        assert!(all.contains(&hook.id()) && all.contains(&asker), "{all:?}");
+        // A process waiting to be reaped no longer counts.
+        Native
+            .end(&[sleep, asker, waiting.id()], Duration::from_secs(3))
+            .unwrap();
+        assert!(!Native.children(me).unwrap().contains(&waiting.id()));
+        waiting.wait().unwrap();
+        hook.wait().unwrap();
     }
 }

@@ -97,3 +97,17 @@ fn justiciar_relaxes_constraints_or_files_a_person_ticket_with_an_interim_path()
     }
     assert!(!flat.contains("one hard ticket are no emergency"));
 }
+
+#[test]
+fn turn_end_says_when_a_turn_end_releases_and_to_stop_after() {
+    let release = reply(Some("turn-end")).text;
+    let flat = release.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        flat.contains("A turn that ends with nothing running is final"),
+        "{release}"
+    );
+    assert!(
+        flat.contains("When Ignite has released your ticket"),
+        "{release}"
+    );
+}

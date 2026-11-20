@@ -30,6 +30,9 @@ pub(super) struct FakeHost {
     pub(super) fail_release: Mutex<bool>,
     /// Each session's title in the desktop app; a session missing here has none that can be read.
     pub(super) titles: Mutex<BTreeMap<SessionId, String>>,
+    /// The live processes under each process, with the asker's branch already left out; a
+    /// process missing here cannot be read.
+    pub(super) processes: Mutex<BTreeMap<u32, Vec<u32>>>,
 }
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -76,6 +79,10 @@ impl Host for FakeHost {
 
     fn title(&self, session: &SessionId) -> Option<String> {
         lock(&self.titles).get(session).cloned()
+    }
+
+    fn running_under(&self, root: u32, _asker: Option<u32>) -> Option<Vec<u32>> {
+        lock(&self.processes).get(&root).cloned()
     }
 
     /// Releasing frees the session's tree, as the real release does.

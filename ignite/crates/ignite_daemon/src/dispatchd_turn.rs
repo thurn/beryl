@@ -10,19 +10,28 @@
 //!   it holds a justiciar ticket, or a `land`, `release` or `close` of the session is still
 //!   running. Those verbs end the ticket, so a `land` waiting in the background holds the work
 //!   legitimately.
-//! - `pass`, too, when any other `ignite` verb the session started is still running, such as a
-//!   background `ignite test` or `ignite run -- <command>`: the worker is waiting on it. The
-//!   daemon guarantees that the worker is woken once it finishes (see `wake`). A command started
-//!   any other way is invisible to the daemon, so the block text tells workers to run long
-//!   commands through `ignite run`. Without this, a worker that ended its turn on a long
-//!   background run was released at its second stop, the release reset its tree and killed the
-//!   run, and the woken worker claimed the ticket again beside the worker it was handed to.
-//! - `block`: the first stop with the ticket held. The text names the ticket and every way out
-//!   (`ignite land`, `ignite release`, and `ignite justiciar` for a ticket that cannot be done
-//!   as written), and the hook keeps the worker going with it.
-//! - `released`: the worker stopped again (`--again`, from the hook's `stop_hook_active`) without
-//!   landing or releasing, so Ignite gives the ticket back as the stall rule would. The tree is
-//!   saved as the ticket's branch and the worker's last message (`--note`) is the release note.
+//! - `pass`, too, when anything the session started is still running, since the worker is
+//!   waiting on it. That is either an `ignite` verb of the session, such as a background
+//!   `ignite test` or `ignite run -- <command>`, whose wake-up the daemon guarantees (see
+//!   `wake`), or a live process under the session's own process (`--parent`, the hook's parent),
+//!   such as a background shell command or a monitor script, which the agent app runs as its
+//!   children and wakes the worker for when they exit. The hook runs under the same process, so
+//!   the branch that holds the hook's own client (the request's PID) is left out. If the app
+//!   never wakes such a worker, the stall rule still notices its silence. Before this, a worker
+//!   that ended its turn on a long background run was released at its second stop, the release
+//!   reset its tree and killed the run, and the woken worker claimed the ticket again beside the
+//!   worker it was handed to.
+//! - `block`: the first stop with the ticket held and nothing running. The text names the
+//!   ticket and every way out (`ignite land`, `ignite release`, and `ignite justiciar` for a
+//!   ticket that cannot be done as written), and the hook keeps the worker going with it. With
+//!   nothing running the worker has really stopped, and Ignite could release at once; the one
+//!   block is kept because it is the last chance to land finished work or to write a release
+//!   note that says where the work stands, which the next worker needs.
+//! - `released`: the worker stopped again (`--again`, from the hook's `stop_hook_active`) with
+//!   nothing running and without landing or releasing, so Ignite gives the ticket back as the
+//!   stall rule would. The tree is saved as the ticket's branch and the worker's last message
+//!   (`--note`) is the release note. Without `--parent`, or when the processes cannot be read,
+//!   only the session's `ignite` verbs count as running.
 //! - `released` at the first stop, too, when the session's title starts with ⛔. Workers title
 //!   themselves ⛔ when they stop unfinished, so a pool worker with that title that still holds
 //!   its ticket is saying it is stuck: one once kept a ticket, its tree and a running build for
@@ -66,7 +75,7 @@ pub(super) const REASON_CHARS: usize = 400;
 /// The longest part of the worker's last message kept in the release note.
 pub(super) const NOTE_CHARS: usize = 2000;
 
-/// `ignite turn-ended --session <id> [--again] [--note <last message>]`.
+/// `ignite turn-ended --session <id> [--again] [--note <last message>] [--parent <pid>]`.
 pub struct TurnEndedVerb {
     dispatcher: Arc<Dispatcher>,
     /// The machine's hostname, which names it in a justiciar report.
@@ -85,12 +94,15 @@ struct Ended {
     session: Option<SessionId>,
     again: bool,
     note: Option<String>,
+    /// The session's own process, under which its background commands run.
+    parent: Option<u32>,
 }
 
 fn parse(args: &[String]) -> Result<Ended> {
     let usage = || {
         Error::Invalid(
-            "usage: ignite turn-ended --session <id> [--again] [--note <text>]".to_owned(),
+            "usage: ignite turn-ended --session <id> [--again] [--note <text>] [--parent <pid>]"
+                .to_owned(),
         )
     };
     let mut ended = Ended::default();
@@ -103,6 +115,10 @@ fn parse(args: &[String]) -> Result<Ended> {
             }
             "--again" => ended.again = true,
             "--note" => ended.note = Some(args.next().ok_or_else(usage)?.clone()),
+            "--parent" => {
+                let value = args.next().ok_or_else(usage)?;
+                ended.parent = Some(value.parse().map_err(|_| usage())?);
+            }
             _ => return Err(usage()),
         }
     }
@@ -124,7 +140,7 @@ impl Verb for TurnEndedVerb {
 
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         match parse(&req.args) {
-            Ok(ended) => self.dispatcher.turn_ended(ctx, &ended, &self.host),
+            Ok(ended) => self.dispatcher.turn_ended(ctx, &ended, req.pid, &self.host),
             Err(error) => Reply::text(Exit::Usage, error.to_string()),
         }
     }
@@ -142,14 +158,15 @@ fn block_text(ticket: &TicketId) -> String {
          or gates on something you cannot control, such as a timing on a loaded machine), run \
          `ignite justiciar \"<what is impossible, and the evidence>\"` and then `ignite \
          release`.\n\
-         To wait on a long command, start it in the background as `ignite run -- <command>` \
-         (or `ignite test`, `ignite check`, `ignite wait <handle>`) and end your turn: Ignite \
-         lets you stop while it runs and wakes you when it finishes. A command started any other \
-         way does not count.\n\
+         To wait on a long command, start it in the background (heavy work as `ignite run -- \
+         <command>`) and end your turn: while anything you started still runs, Ignite lets you \
+         stop and you are woken when it ends. A turn that ends with nothing running is final: \
+         only a final turn takes a ✅, ⛔ or 🔍 title, and a turn that ends to wait keeps ⚒️ (or \
+         🚒), since a ⛔ title releases the ticket at once (see `ignite guide turn-end`).\n\
          A figure measured on a loaded machine is reported, never gated on or chased, unless \
          the acceptance names a deterministic measure.\n\
-         If you stop again without any of these, Ignite releases {ticket} itself, saves its tree \
-         as ignite/{ticket} and uses your last message as the note."
+         If you stop again with nothing running and none of these done, Ignite releases {ticket} \
+         itself, saves its tree as ignite/{ticket} and uses your last message as the note."
     )
 }
 
@@ -197,7 +214,7 @@ pub(super) fn justiciar_reason(ticket: &TicketId, note: Option<&str>) -> String 
 }
 
 impl Dispatcher {
-    fn turn_ended(&self, ctx: &Context, ended: &Ended, host: &str) -> Reply {
+    fn turn_ended(&self, ctx: &Context, ended: &Ended, asker: Option<u32>, host: &str) -> Reply {
         let Some(session) = &ended.session else {
             return Reply::text(Exit::Usage, "no session");
         };
@@ -241,6 +258,17 @@ impl Dispatcher {
         if let Some(verb) = waiting_on {
             return pass(&format!(
                 "`ignite {verb}` is still running; Ignite wakes the session when it finishes"
+            ));
+        }
+        let running = ended
+            .parent
+            .and_then(|parent| self.host.running_under(parent, asker))
+            .unwrap_or_default();
+        if !running.is_empty() {
+            let pids: Vec<String> = running.iter().map(u32::to_string).collect();
+            return pass(&format!(
+                "the session's processes {} are still running; the app wakes it when they end",
+                pids.join(", ")
             ));
         }
         if !ended.again {

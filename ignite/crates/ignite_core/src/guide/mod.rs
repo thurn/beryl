@@ -37,6 +37,11 @@ pub const TOPICS: &[Topic] = &[
         text: include_str!("release.txt"),
     },
     Topic {
+        name: "turn-end",
+        summary: "ending a turn while you hold a ticket",
+        text: include_str!("turn-end.txt"),
+    },
+    Topic {
         name: "blocked",
         summary: "a landing that was refused, or landed past a failing check",
         text: include_str!("blocked.txt"),

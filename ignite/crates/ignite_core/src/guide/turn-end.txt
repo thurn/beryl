@@ -1,0 +1,24 @@
+TURN-END: ending a turn while you hold a ticket
+
+A turn may end while something you started still runs, and you are woken when
+it ends. That is either an ignite verb (test, check, wait, or ignite run --
+<command>, the way to run heavy work) or a background command your tool
+started, such as a shell command or a monitor script. Ignite guarantees the
+wake-up for its own verbs: if nothing else wakes you, the dispatcher messages
+you once the verb has finished. Never poll with sleep or a loop instead.
+
+A turn that ends with nothing running is final. Before ending one, land the
+ticket or release it with a note that says where the work stands. If you do
+neither:
+- The first such stop is blocked once, with the ways out.
+- At the next, Ignite releases the ticket itself, saves the tree as
+  ignite/<ticket> and uses your last message as the note.
+
+Titles: only a final turn takes ✅, ⛔ or 🔍. A turn that ends to wait on a
+running command keeps ⚒️ (or 🚒). A ⛔ title on a pool worker that still holds
+its ticket releases the ticket at the first stop and sends for a justiciar.
+
+When Ignite has released your ticket (at a turn end, or because you were silent
+too long), stop. Do not claim it again and do not restart its commands: the
+ticket is ready for another worker, and ignite start refuses you until the
+dispatcher hands you a ticket. A hand-off clears your session first.

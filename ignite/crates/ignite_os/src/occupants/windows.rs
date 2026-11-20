@@ -10,14 +10,15 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, ERROR_INVALID_PARAMETER, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0,
+    CloseHandle, ERROR_INVALID_PARAMETER, FILETIME, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
 };
 use windows_sys::Win32::System::Threading::{
-    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
-    PROCESS_TERMINATE, QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
+    GetProcessTimes, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+    PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, QueryFullProcessImageNameW, TerminateProcess,
+    WaitForSingleObject,
 };
 
 use super::{Occupant, Occupants};
@@ -53,6 +54,21 @@ impl Occupants for Native {
             .into_iter()
             .find(|entry| entry.th32ProcessID == pid)
             .map(|entry| entry.th32ParentProcessID)
+    }
+
+    fn children(&self, pid: u32) -> io::Result<Vec<u32>> {
+        // A process keeps the ID of the parent that started it after that parent exits, and
+        // Windows may give the ID to a new process. Such an orphan started before the new
+        // holder of the ID, so it is told apart by its start time.
+        let Some(born) = started(pid) else {
+            return Ok(Vec::new());
+        };
+        Ok(processes()?
+            .into_iter()
+            .filter(|entry| entry.th32ParentProcessID == pid && entry.th32ProcessID != 0)
+            .map(|entry| entry.th32ProcessID)
+            .filter(|&child| started(child).is_some_and(|at| at >= born))
+            .collect())
     }
 
     fn group(&self, _pid: u32) -> Option<u32> {
@@ -138,6 +154,27 @@ fn processes() -> io::Result<Vec<PROCESSENTRY32W>> {
         more = unsafe { Process32NextW(snapshot.0, &raw mut entry) } != 0;
     }
     Ok(found)
+}
+
+/// When process `pid` started, in 100-nanosecond intervals since 1601, or `None` if this user
+/// may not read it or it has exited.
+fn started(pid: u32) -> Option<u64> {
+    let process = Process::open(pid, PROCESS_QUERY_LIMITED_INFORMATION).ok()??;
+    let mut times = [FILETIME::default(); 4];
+    let [created, exited, kernel, user] = &mut times;
+    // SAFETY: the handle is open with the right to query it, and each pointer is a writable
+    // `FILETIME`.
+    let ok = unsafe {
+        GetProcessTimes(
+            process.0,
+            &raw mut *created,
+            &raw mut *exited,
+            &raw mut *kernel,
+            &raw mut *user,
+        )
+    };
+    (ok != 0)
+        .then(|| (u64::from(times[0].dwHighDateTime) << 32) | u64::from(times[0].dwLowDateTime))
 }
 
 /// The full path of process `pid`'s executable, or `None` if this user may not read it or the

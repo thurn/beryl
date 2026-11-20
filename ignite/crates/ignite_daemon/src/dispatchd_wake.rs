@@ -10,8 +10,9 @@
 //! ended, the session is checked through the dispatcher as a silent one would be (see `stall`).
 //! A worker that its tool already woke answers `running` and nothing more happens; an idle one
 //! gets [`WAKE`], and is released if it stays idle 15 minutes after that, as after any reminder.
-//! A command run any other way, such as a plain background shell command, is invisible to the
-//! daemon, so a turn ended on one is blocked and then released.
+//! A background shell command is not an `ignite` verb: the turn-end check finds it among the
+//! live processes under the session's own process instead, and leaves its wake-up to the agent
+//! app, with the stall rule behind it.
 //!
 //! Released. When Ignite releases a worker's ticket itself (its second stop, its ⛔ title, or the
 //! stall rule), the session may still be alive: a background task it started can report back and
@@ -69,7 +70,9 @@ impl Dispatcher {
 
     /// Records that Ignite released `ticket` from `session`.
     pub(super) fn note_released(&self, session: &SessionId, ticket: &TicketId) {
-        self.state().released.insert(session.clone(), ticket.clone());
+        self.state()
+            .released
+            .insert(session.clone(), ticket.clone());
         self.save();
     }
 
@@ -106,7 +109,12 @@ impl Dispatcher {
     /// Looks at `session` if it ended its turn waiting on a verb: once nothing it started runs
     /// and [`WAKE_S`] has passed, queues a check whose idle answer gets [`WAKE`]. Returns false
     /// when the session is not waiting, so the silence rule looks at it instead.
-    pub(super) fn watch_waiting(&self, state: &mut State, session: &SessionId, now: Timestamp) -> bool {
+    pub(super) fn watch_waiting(
+        &self,
+        state: &mut State,
+        session: &SessionId,
+        now: Timestamp,
+    ) -> bool {
         if !state.waiting.contains_key(session) {
             return false;
         }

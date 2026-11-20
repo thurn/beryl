@@ -155,6 +155,10 @@ pub trait Host: Send + Sync {
     fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()>;
     /// The title the desktop app shows for the session, or `None` when it cannot be read.
     fn title(&self, session: &SessionId) -> Option<String>;
+    /// The live processes under process `root` (the session's own process, as its `Stop` hook
+    /// reports it), leaving out the branch that holds `asker` (the hook's own client), or
+    /// `None` when they cannot be read.
+    fn running_under(&self, root: u32, asker: Option<u32>) -> Option<Vec<u32>>;
     /// Whether a command that ends the session's ticket is still running: its current command,
     /// or an operation it started that runs under a handle after its caller stopped waiting.
     /// Other commands (`test`, `check`, `wait`, ...) do not count.
