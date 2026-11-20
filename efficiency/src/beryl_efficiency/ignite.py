@@ -13,6 +13,8 @@ the hub, ingest reads the hub's SQLite database read-only, by its schema
   has no counterpart: nothing in Ignite waits on one lock.
 - `metrics`, the efficiency rows other machines' daemons posted, one export line per row.
   They are imported as `just efficiency import` imports a file.
+- `metrics` rows of the source `plan_usage`, the Claude plan's usage samples a dispatcher
+  took, one row per window of the plan (`PlanSamples`), which `plan.py` fits to dollars.
 - `tickets`, `tips`, `handoffs`, `regressions` and `workers`, copied whole into the
   `ignite_*` tables when they change, for the series in `ignite_metrics.py`. The tickets,
   with their labels and aliases, are also written as `beads`, `labels` and `ticket_aliases`
@@ -347,17 +349,19 @@ class Imports(CursorSource):
     def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
         """Imports each machine's rows under its name, as `import` imports a file, with the
         newest-schema header the machine sent first. The hub's own machine posts its rows
-        too; those are skipped, since ingest here read them already."""
+        too; those are skipped, since ingest here read them already. Rows of another
+        source, such as `findings` or `plan_usage`, carry no export header and are skipped
+        before the machine is named, since their source is not a host name."""
         count = 0
         for _, r in rows:
-            host = machine_host(db, str(r["machine"]), str(r["source"]))
-            if host == self.local:
-                continue
             lines = r["lines"]
             assert isinstance(lines, list)
             parsed = [json.loads(str(line)) for line in lines]
             headers = [p for p in parsed if isinstance(p, dict) and "export" in p]
             if not headers:
+                continue
+            host = machine_host(db, str(r["machine"]), str(r["source"]))
+            if host == self.local:
                 continue
             header = max(headers, key=lambda h: int(h.get("schema") or 0))
             body = [
@@ -371,6 +375,85 @@ class Imports(CursorSource):
                 continue
             count += sum(found.added.values())
         return count
+
+
+def resets_text(value: object) -> str | None:
+    """A window's `resetsAt` as a UTC ISO time. The app may report it as text or as seconds
+    (or milliseconds) since the epoch; anything else is kept as it came."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) or (
+        isinstance(value, str) and value.replace(".", "", 1).isdigit()
+    ):
+        number = float(value)
+        if number > 1e11:
+            number /= 1000
+        return iso(datetime.fromtimestamp(number, timezone.utc))
+    text = str(value)
+    try:
+        return iso(utc(text))
+    except (ValueError, TypeError):
+        return text
+
+
+class PlanSamples(CursorSource):
+    """The Claude plan's usage samples in the hub's `metrics` (source `plan_usage`), after the
+    latest arrival read, in milliseconds, as `Imports` reads. A sample whose status is not
+    `ok` holds no window and is left out."""
+
+    name = "ignite-plan-usage"
+    SOURCE = "plan_usage"
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def page(self, after: int) -> tuple[bytes, int, list[Row], int]:
+        since = iso(datetime.fromtimestamp(after / 1000, timezone.utc))
+        hub = open_hub(self.path)
+        try:
+            found = hub.execute(
+                """SELECT x.machine, coalesce(m.name, x.machine) AS name, x.data, x.at
+                FROM metrics AS x LEFT JOIN machines AS m ON m.id = x.machine
+                WHERE x.source = ? AND x.at > ? ORDER BY x.at""",
+                (self.SOURCE, since if after else ""),
+            ).fetchall()
+        finally:
+            hub.close()
+        if not found:
+            return b"", after, [], 0
+        cursor = max(int(utc(r["at"]).timestamp() * 1000) for r in found)
+        rows: list[Row] = []
+        skipped = 0
+        for r in found:
+            try:
+                data = json.loads(str(r["data"]))
+                percent, window = data.get("percent_used"), data.get("window")
+                if data.get("status") != "ok" or percent is None or not window:
+                    continue
+                rows.append(
+                    (
+                        "_sample",
+                        {
+                            "machine": str(r["machine"]),
+                            "name": str(r["name"]),
+                            "at": iso(utc(data["at"])),
+                            "window": str(window),
+                            "percent_used": float(percent),
+                            "resets_at": resets_text(data.get("resets_at")),
+                        },
+                    )
+                )
+            except (ValueError, TypeError, KeyError, AttributeError):
+                skipped += 1
+        data_bytes = "".join(str(r["data"]) for r in found).encode()
+        return data_bytes, cursor, rows, skipped
+
+    def save(self, db: sqlite3.Connection, rows: list[Row]) -> int:
+        written: list[Row] = []
+        for _, r in rows:
+            host = machine_host(db, str(r["machine"]), str(r.pop("name")))
+            written.append(("plan_usage", {"host": host, **r}))
+        return write(db, written)
 
 
 class Hub(SnapshotSource):
@@ -520,9 +603,9 @@ def ticket_sources(cache: Path) -> list[HubTickets]:
     return [HubTickets(path)] if path.exists() else []
 
 
-def sources(cache: Path, local: str) -> list[Hub | Records | Imports]:
+def sources(cache: Path, local: str) -> list[Hub | Records | Imports | PlanSamples]:
     """The hub's other sources, or none on a machine that holds no hub database."""
     path = hub_path(cache)
     if not path.exists():
         return []
-    return [Hub(path), Records(path, local), Imports(path, local)]
+    return [Hub(path), Records(path, local), Imports(path, local), PlanSamples(path)]

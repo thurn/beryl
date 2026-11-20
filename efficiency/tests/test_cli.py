@@ -51,6 +51,7 @@ TABLES = {
     "ignite_tips",
     "ignite_handoffs",
     "ignite_workers",
+    "plan_usage",
 }
 
 

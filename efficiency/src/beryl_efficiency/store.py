@@ -580,6 +580,21 @@ MIGRATIONS: tuple[str, ...] = (
         PRIMARY KEY (machine, session)
     );
     """,
+    """
+    -- Samples of the Claude subscription plan's usage (plan.py), one row per window of the
+    -- plan, as a Claude dispatcher reported the desktop app's `get_usage` and the hub stored
+    -- it under the metrics source `plan_usage`. `window` is the plan's label for the window,
+    -- such as `Weekly · all models`; `at` is when the sample was taken.
+    CREATE TABLE plan_usage (
+        host TEXT NOT NULL,
+        machine TEXT NOT NULL,
+        at TEXT NOT NULL,
+        window TEXT NOT NULL,
+        percent_used REAL NOT NULL,
+        resets_at TEXT,
+        PRIMARY KEY (machine, at, window)
+    );
+    """,
 )
 
 

@@ -89,20 +89,22 @@ store" and "Isolation" before changing anything here.
   and `lane_runs` rows (the gate as script `check`, tip verification as `ci`);
   compile units become `compile_timings`. The efficiency rows other machines'
   daemons posted (`metrics`, one export line per row) are imported as `import`
-  imports a file. Tickets, tips, hand-offs and workers are copied into the
-  `ignite_*` tables, and `HubTickets` also writes the tickets as `beads`,
-  `labels` and `ticket_aliases` rows, which replaced `tk export` (the hub
-  supplies no verdict comments or session events, so those tables stop growing).
-  The `ignite` source comes first in `cli.sources()`, ahead of the transcripts,
-  because windows read the tickets; on a machine with no hub database none of
-  these sources exist and ingest keeps what the store has. A machine is named by
-  the first host seen for its ID (`ignite_machines`), so a rename does not split
-  it, and hub ticket IDs are resolved with `ticket_ids.stored`.
-  `ignite_metrics.py` registers the `ignite.*` series: cycle time, waiting for a
-  worker, repair share, `master` lag, dispatch dollars, escapes per 100
-  landings, cache hits and the gate's instructions, seconds and wait. Enact's
-  lock-wait log has no Ignite counterpart: `lock_waits` rows are history that
-  `timing.py` still reads, and no query shows them.
+  imports a file. `PlanSamples` copies the Claude plan's usage samples (metrics
+  source `plan_usage`) into `plan_usage`, which is never exported. Tickets,
+  tips, hand-offs and workers are copied into the `ignite_*` tables, and
+  `HubTickets` also writes the tickets as `beads`, `labels` and `ticket_aliases`
+  rows, which replaced `tk export` (the hub supplies no verdict comments or
+  session events, so those tables stop growing). The `ignite` source comes first
+  in `cli.sources()`, ahead of the transcripts, because windows read the
+  tickets; on a machine with no hub database none of these sources exist and
+  ingest keeps what the store has. A machine is named by the first host seen for
+  its ID (`ignite_machines`), so a rename does not split it, and hub ticket IDs
+  are resolved with `ticket_ids.stored`. `ignite_metrics.py` registers the
+  `ignite.*` series: cycle time, waiting for a worker, repair share, `master`
+  lag, dispatch dollars, escapes per 100 landings, cache hits and the gate's
+  instructions, seconds and wait. Enact's lock-wait log has no Ignite
+  counterpart: `lock_waits` rows are history that `timing.py` still reads, and
+  no query shows them.
 - `commits.py`: the commits source, `git log` of `staging` and `master` run in
   the main checkout, with `master`'s reflog in `ref_moves` (kept after git
   expires it), which says when each commit reached `master`. `History` gives
@@ -160,7 +162,19 @@ store" and "Isolation" before changing anything here.
 - `spend.py` is the `spend` command: each ticket window of this host as JSON
   lines of time and dollar segments in order, coalesced to at most 120 per list,
   each with a colour group, for the efficiency section of Ignite's ticket pages.
-  Ignite's daemon runs it after each export and posts its lines to the hub.
+  Ignite's daemon runs it after each export and posts its lines to the hub. A
+  Claude window also carries `plan_percent`, its estimated share of the plan's
+  weekly limit, and the same for every window of the plan; the windows of each
+  plan window's latest period are sent again at every run, because its factor
+  changes until the period ends.
+- `plan.py`: each ticket's estimated share of the Claude subscription plan. Per
+  period of a plan window (one label between two resets) it fits percent per
+  dollar, by least squares through the origin, from the rise between samples
+  against the Claude dollars in the same span (only one family's dollars for a
+  window such as `Weekly · Fable`), and reports the fit's standard error. A
+  request is priced by its period's factor, or the previous period's while its
+  own has fewer than two samples (`borrowed`). The summary prints the per-ticket
+  median and p95 percent and the pool's percent per hour on its busiest day.
 - `cli.py`: the command and its queries.
 - The page: `serve.py` is `just efficiency serve`, a standard-library server on
   127.0.0.1 that answers `GET` only. An address is a query

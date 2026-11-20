@@ -44,8 +44,9 @@ TIME_COLUMNS: dict[str, str] = {
     "verdicts": "time",
     "ignite_records": "at",
 }
-# Tables that hold per-host bookkeeping rather than data: not exported.
-SKIPPED = {"ingests"}
+# Tables that hold per-host bookkeeping rather than data, and `plan_usage`, which the hub's
+# machine reads from the hub itself: not exported.
+SKIPPED = {"ingests", "plan_usage"}
 # Tables whose rows are totals that grow, so a later row replaces an earlier one.
 REPLACED = {"checks", "lane_runs"}
 

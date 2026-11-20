@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING
 
-from . import scope
+from . import plan as plan_usage, scope
 from .facts import (
     NO_BEAD,
     NO_EPIC,
@@ -274,6 +274,7 @@ class Summary:
     dollars_by_source: list[Part]
     lines: list[Line]
     unpriced: list[str]
+    plan: plan_usage.Figure | None = None
 
 
 # The metric that measures each of the summary's per-ticket figures, whose efficiency changes
@@ -366,6 +367,14 @@ def summary(
         epics + tail,
         sorted(whole.unpriced),
     )
+    if facts.db is not None:
+        result.plan = plan_usage.figure(
+            facts.db,
+            plan_usage.load(facts.db),
+            [b.id for b in closed],
+            scope.range.since,
+            scope.range.until,
+        )
     figures = {
         "agent_minutes": result.agent_minutes,
         "core_minutes": result.core_minutes,
@@ -399,6 +408,7 @@ def summary(
             "dollars_by_source",
             "lines",
             "lower_bound",
+            "plan",
         ),
     )
 
@@ -479,6 +489,7 @@ def summary_lines(s: Summary) -> list[str]:
         *split_lines(
             f"dollars   {t.dollars:.2f}{mark(t.lower_bound)}: ", s.dollars_by_source, 2
         ),
+        *plan_usage.text(s.plan),
         "",
         *lines_table([*s.lines, t], "epic"),
         *footnote(s.unpriced),
@@ -499,6 +510,7 @@ class Epic:
     dollars_by_source: list[Part]
     lines: list[Line]
     unpriced: list[str]
+    plan: plan_usage.Figure | None = None
 
 
 def epic(facts: Facts, scope: Scope, epic_id: str) -> Result:

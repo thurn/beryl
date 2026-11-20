@@ -23,6 +23,11 @@ the hub knows the groups and nothing about this project's command kinds.
 
 A segment carries the command that took most of its seconds in `x`. The hub shows it only on
 its private listener, since commands hold paths.
+
+A Claude window also carries its estimated share of the Claude plan (`plan.py`) when the store
+holds plan usage samples: `plan_percent` of the window `plan_window` (the weekly limit),
+`plan_borrowed` when part of it was priced by an earlier period's factor, and `plan`, the
+same for every window of the plan as `[label, percent, borrowed]`.
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import kinds, timing
+from . import kinds, plan as plan_usage, timing
 
 # The most segments one window has in each list.
 MAX_SEGMENTS = 120
@@ -343,10 +348,41 @@ def encoded(
     return found
 
 
+def plan_fields(
+    db: sqlite3.Connection,
+    plan: plan_usage.Plan,
+    key: tuple[str, str, str],
+    start: str,
+    end: str,
+) -> dict[str, object]:
+    """A window's estimated share of the plan, or nothing when it has none."""
+    if key[1] != "claude":
+        return {}
+    requests = plan_usage.requests_of(
+        db,
+        "AND host = ? AND transcript = ? AND time >= ? AND time <= ?",
+        (key[0], key[2], start, end),
+    )
+    found = plan.estimates(requests)
+    primary = next((e for e in found if e.window == plan.primary()), None)
+    if primary is None:
+        return {}
+    return {
+        "plan_percent": round(primary.percent, 4),
+        "plan_window": primary.window,
+        "plan_borrowed": primary.borrowed,
+        "plan": [[e.window, round(e.percent, 4), e.borrowed] for e in found],
+    }
+
+
 def windows(
-    db: sqlite3.Connection, host: str, since: str | None
+    db: sqlite3.Connection,
+    host: str,
+    since: str | None,
+    plan: plan_usage.Plan | None = None,
 ) -> list[dict[str, object]]:
-    """Every ticket window of `host` that ended at or after `since` (all when None)."""
+    """Every ticket window of `host` that ended at or after `since` (all when None), with its
+    share of the plan when `plan` is given."""
     table, _ = kinds.load()
     heavy = frozenset(k.kind for k in table if k.heavy)
     rows = db.execute(
@@ -390,13 +426,14 @@ def windows(
                 "dollars": [
                     encoded(s, commands, kind_of, True, heavy) for s in dollars
                 ],
+                **(plan_fields(db, plan, key, str(start), str(end)) if plan else {}),
             }
         )
     return found
 
 
 # Raised whenever a change here changes the segments of windows already sent.
-FORMAT = 2
+FORMAT = 3
 
 
 def derivation() -> str:

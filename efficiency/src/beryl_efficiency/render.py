@@ -96,6 +96,9 @@ FIELDS: dict[str, str] = {
     "lower_bound": "true when a model with no price makes the dollars a lower bound; the "
     "text marks such a number with +",
     "unpriced": "models with no price, with their tokens",
+    "plan": "estimated share of the Claude plan's weekly limit: each closed ticket's "
+    "percent (median, p95), the percent per dollar fitted from plan usage samples with its "
+    "standard error, and the pool's percent per hour on its busiest day",
     "percent": "share of the total, in percent",
     "tokens": "tokens of every class",
     "requests": "model requests",
