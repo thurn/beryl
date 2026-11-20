@@ -318,7 +318,8 @@ pub enum FaceSize {
 /// blurred for a drop shadow.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GlyphKey {
-    /// The font's index in `text::fonts::ALL`.
+    /// The index in `text::fonts::ALL` of the font file the glyph is drawn from
+    /// (`Font::face`).
     pub font: u8,
     /// The CSS weight the variable font is drawn at.
     pub weight: u16,

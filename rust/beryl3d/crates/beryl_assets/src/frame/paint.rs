@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use beryl_scene::text::fonts::Font;
+use beryl_scene::text::fonts::{ALL, Font};
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Format;
@@ -278,7 +278,10 @@ impl Canvas {
 
 /// The glyph's coverage, unhinted, with the variable font's weight axis set.
 fn rasterize(context: &mut ScaleContext, glyph: &SetGlyph) -> Option<Mask> {
-    let font = FontRef::from_index(glyph.font.file().data, 0)?;
+    // A weight is a whole number from 100 to 900, which fits a `u16` exactly.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let face = glyph.font.face(glyph.ink.weight as u16);
+    let font = FontRef::from_index(ALL[usize::from(face)].data, 0)?;
     let mut scaler = context
         .builder(font)
         .size(glyph.size)

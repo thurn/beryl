@@ -5,7 +5,8 @@
 //! constants. It also writes the design tokens of `data/design-tokens.json` as the constants of
 //! `src/tokens.rs`'s modules, one file each under `OUT_DIR/tokens` (`write_tokens`). And it
 //! writes the manual table's commands and the deck a solo table starts with to
-//! `OUT_DIR/table_commands.rs` (`write_table_commands`).
+//! `OUT_DIR/table_commands.rs` (`write_table_commands`). And it writes which files draw the
+//! web's serif face to `OUT_DIR/serif.rs` (`write_serif`).
 
 #[path = "build/gradients.rs"]
 mod gradients;
@@ -54,6 +55,7 @@ fn main() {
     write_sounds(&manifest, &out_dir);
     write_credits(&manifest, &out_dir);
     write_table_commands(&manifest, &out_dir);
+    write_serif(&out_dir);
     let tokens = manifest.join("../../../../data/design-tokens.json");
     println!("cargo:rerun-if-changed={}", tokens.display());
     let tokens_json: serde_json::Value =
@@ -63,6 +65,44 @@ fn main() {
     for (module, text) in write_tokens(&tokens_json) {
         fs::write(tokens_dir.join(format!("{module}.rs")), text).unwrap();
     }
+}
+
+/// The folder of the fonts every Mac ships beside the system's own, which holds Times New Roman.
+const MAC_SUPPLEMENTAL_FONTS: &str = "/System/Library/Fonts/Supplemental";
+
+/// Writes the files that draw the web's serif face, `--font-serif` (`"Times New Roman", Times,
+/// serif`), as the constants `src/text/fonts.rs` includes. When the build is for macOS and the
+/// building Mac has Times New Roman's regular and bold files, they are embedded from the
+/// system's font folder, so the client draws the face the web's CSS names. Elsewhere, such as
+/// on Windows, both faces are the bundled Crimson Pro, the nearest serif the repository holds.
+fn write_serif(out_dir: &std::path::Path) {
+    let folder = std::path::Path::new(MAC_SUPPLEMENTAL_FONTS);
+    let regular = folder.join("Times New Roman.ttf");
+    let bold = folder.join("Times New Roman Bold.ttf");
+    println!("cargo:rerun-if-changed={}", regular.display());
+    println!("cargo:rerun-if-changed={}", bold.display());
+    let for_mac = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "macos");
+    let text = if for_mac && regular.is_file() && bold.is_file() {
+        format!(
+            "/// The family the serif face is drawn in.\n\
+             pub const SERIF_FAMILY: &str = \"Times New Roman\";\n\
+             const SERIF_REGULAR_FILE: &str = {regular:?};\n\
+             static SERIF_REGULAR: &[u8] = include_bytes!({regular:?});\n\
+             const SERIF_BOLD_FILE: &str = {bold:?};\n\
+             static SERIF_BOLD_DATA: &[u8] = include_bytes!({bold:?});\n",
+            regular = regular.display().to_string(),
+            bold = bold.display().to_string(),
+        )
+    } else {
+        "/// The family the serif face is drawn in.\n\
+         pub const SERIF_FAMILY: &str = \"Crimson Pro\";\n\
+         const SERIF_REGULAR_FILE: &str = \"CrimsonPro.ttf\";\n\
+         static SERIF_REGULAR: &[u8] = CRIMSON_PRO;\n\
+         const SERIF_BOLD_FILE: &str = \"CrimsonPro.ttf\";\n\
+         static SERIF_BOLD_DATA: &[u8] = CRIMSON_PRO;\n"
+            .to_string()
+    };
+    fs::write(out_dir.join("serif.rs"), text).unwrap();
 }
 
 /// Writes the names of the keys of `sounds` in `ui/src/audio/manifest.json`, in the order the

@@ -23,7 +23,7 @@ fn colors_are_the_css_values() {
 fn flat_values_follow_the_tokens_they_name() {
     // `--button-font: 24px`.
     exactly(type_style::BUTTON.size, 24.0);
-    assert_eq!(type_style::BUTTON.font, Font::CrimsonPro);
+    assert_eq!(type_style::BUTTON.font, Font::Serif);
     assert_eq!(type_style::BUTTON.weight, 700);
     // `--button-gap: 10px` and `--button-height: 48px`.
     exactly(space::M, 10.0);

@@ -1,35 +1,50 @@
-//! The fonts bundled in the client core (docs/beryl-3d.md, "Determinism": no system fonts).
-//! Text is laid out with these files alone, so a line breaks in the same place on every machine.
-//! The three text families are variable fonts, from which parley selects any weight; each file's
-//! licence lies beside it in `fonts/`.
+//! The fonts embedded in the client core (docs/beryl-3d.md, "Determinism": no system fonts at
+//! run time). Text is laid out with these files alone, so a line breaks in the same place on
+//! every run.
+//!
+//! Cinzel, Crimson Pro and Open Sans are variable fonts committed in `fonts/`, from which
+//! parley selects any weight; each file's licence lies beside it. The web interface's serif
+//! face, `--font-serif`, is Times New Roman, which no licence lets the repository hold. The
+//! build script embeds the copy every Mac has in `/System/Library/Fonts/Supplemental/` when it
+//! builds for macOS, and Crimson Pro in its place where that copy is missing, such as on
+//! Windows ([`Font::Serif`]).
 
-/// One bundled font file.
+include!(concat!(env!("OUT_DIR"), "/serif.rs"));
+
+/// One embedded font file.
 #[derive(Clone, Copy, Debug)]
 pub struct FontFile {
     pub font: Font,
-    /// The file's name in `fonts/`.
+    /// The file's name: in `fonts/`, or in the system's font folder for the serif faces.
     pub file: &'static str,
     pub data: &'static [u8],
 }
 
-/// A bundled font, by its index in [`ALL`]. A [`GlyphKey`](crate::input::GlyphKey) names its
-/// font by this index.
+/// An embedded font, by the index of its regular face in [`ALL`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Font {
     /// Cinzel, the display face.
     Cinzel,
-    /// Crimson Pro, for card names, rules text and prompts.
+    /// Crimson Pro, the web's card face (`--font-card`): card names, rules text, life totals
+    /// and the numbers on a card's badges.
     CrimsonPro,
     /// Open Sans, for interface text.
     OpenSans,
     /// The mana symbol font.
     Mana,
+    /// The web's serif face (`--font-serif`), for titles, buttons and captions: Times New
+    /// Roman on macOS, or Crimson Pro where the build found no Times New Roman. Times New Roman
+    /// is not variable, so it has a regular and a bold file, and [`Font::face`] picks one.
+    Serif,
 }
+
+/// The index in [`ALL`] of the serif face's bold file, which no [`Font`] names.
+const SERIF_BOLD: usize = 5;
 
 impl Font {
     /// The font's family name as the web interface's CSS names it, without the `Variable`
-    /// that its variable fonts' names end in.
+    /// that its variable fonts' names end in. For [`Font::Serif`], the family it is drawn in.
     #[must_use]
     pub fn family(self) -> &'static str {
         match self {
@@ -37,18 +52,35 @@ impl Font {
             Self::CrimsonPro => "Crimson Pro",
             Self::OpenSans => "Open Sans",
             Self::Mana => "Mana",
+            Self::Serif => SERIF_FAMILY,
         }
     }
 
-    /// The font's file.
+    /// The font's regular file.
     #[must_use]
     pub fn file(self) -> &'static FontFile {
         &ALL[self as usize]
     }
+
+    /// The index in [`ALL`] of the file that draws the font at CSS weight `weight`. Only the
+    /// serif face has more than one file: as CSS matches a weight when only 400 and 700 exist,
+    /// a weight above 500 is drawn bold and any other regular.
+    #[must_use]
+    pub fn face(self, weight: u16) -> u8 {
+        if self == Self::Serif && weight > 500 {
+            SERIF_BOLD as u8
+        } else {
+            self as u8
+        }
+    }
 }
 
-/// Every bundled font file, in the order of [`Font`], for the glyph rasterizer.
-pub static ALL: [FontFile; 4] = [
+/// Crimson Pro's bytes, which the serif faces share where the build found no Times New Roman.
+static CRIMSON_PRO: &[u8] = include_bytes!("../../fonts/CrimsonPro.ttf");
+
+/// Every embedded font file: each [`Font`]'s regular file in the order of [`Font`], then the
+/// serif face's bold. A [`GlyphKey`](crate::input::GlyphKey) names its file by its index here.
+pub static ALL: [FontFile; 6] = [
     FontFile {
         font: Font::Cinzel,
         file: "Cinzel.ttf",
@@ -57,7 +89,7 @@ pub static ALL: [FontFile; 4] = [
     FontFile {
         font: Font::CrimsonPro,
         file: "CrimsonPro.ttf",
-        data: include_bytes!("../../fonts/CrimsonPro.ttf"),
+        data: CRIMSON_PRO,
     },
     FontFile {
         font: Font::OpenSans,
@@ -69,4 +101,33 @@ pub static ALL: [FontFile; 4] = [
         file: "mana.ttf",
         data: include_bytes!("../../fonts/mana.ttf"),
     },
+    FontFile {
+        font: Font::Serif,
+        file: SERIF_REGULAR_FILE,
+        data: SERIF_REGULAR,
+    },
+    FontFile {
+        font: Font::Serif,
+        file: SERIF_BOLD_FILE,
+        data: SERIF_BOLD_DATA,
+    },
 ];
+
+/// Registers each file of [`ALL`] once through `register`, which returns the family name the
+/// file's font has, and returns the family name of every file of [`ALL`] in its order. A file
+/// whose bytes an earlier one already holds (the serif faces, when they fall back to Crimson
+/// Pro) is not registered again, and takes the earlier file's family.
+pub fn register_all(mut register: impl FnMut(&'static FontFile) -> String) -> Vec<String> {
+    let mut families: Vec<String> = Vec::with_capacity(ALL.len());
+    for (index, file) in ALL.iter().enumerate() {
+        let earlier = ALL[..index]
+            .iter()
+            .position(|other| std::ptr::eq(other.data.as_ptr(), file.data.as_ptr()));
+        let family = match earlier {
+            Some(earlier) => families[earlier].clone(),
+            None => register(file),
+        };
+        families.push(family);
+    }
+    families
+}

@@ -34,7 +34,7 @@ pub use write::{BlockLook, write_block};
 pub struct TypeStyle {
     pub font: Font,
     /// The CSS weight, from 100 to 900. The bundled text fonts are variable, so any weight is
-    /// drawn from the one file.
+    /// drawn from the one file; the serif face picks its regular or bold file ([`Font::face`]).
     pub weight: u16,
     pub size: f32,
     pub line_height: f32,
@@ -227,18 +227,16 @@ impl Text {
             shared: false,
             system_fonts: false,
         });
-        let families = (fonts::ALL.iter())
-            .map(|file| {
-                let registered = collection.register_fonts(Blob::new(file_data(file.data)), None);
-                let (family, _) = registered
-                    .first()
-                    .unwrap_or_else(|| panic!("{} holds a font", file.file));
-                collection
-                    .family_name(*family)
-                    .expect("a registered family has a name")
-                    .to_owned()
-            })
-            .collect();
+        let families = fonts::register_all(|file| {
+            let registered = collection.register_fonts(Blob::new(file_data(file.data)), None);
+            let (family, _) = registered
+                .first()
+                .unwrap_or_else(|| panic!("{} holds a font", file.file));
+            collection
+                .family_name(*family)
+                .expect("a registered family has a name")
+                .to_owned()
+        });
         Self {
             fonts: FontContext {
                 collection,

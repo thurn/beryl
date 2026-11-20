@@ -322,7 +322,7 @@
         "note": "How much of a kind of mana a pool holds, after its symbol: `.mana-pool-entry b`."
       },
       "TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 600,
         "size": 26,
         "line_height": 1.15,
@@ -336,7 +336,7 @@
         "note": "Running interface text."
       },
       "BUTTON": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": {
           "token": "button-font"
@@ -352,7 +352,7 @@
         "note": "A menu row's label: `.table-menu`'s 14 points at line height 1.4 in `ui/src/table/menu.css`."
       },
       "MENU_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 20,
         "line_height": 1.2,
@@ -380,7 +380,7 @@
         "note": "A text field's words: `.bug-text` in `ui/src/screens/styles/bug-report.css`, 15 points at line height 1.45."
       },
       "OVERLAY_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 64.5,
         "line_height": 1.08,
@@ -394,7 +394,7 @@
         "note": "An overlay's instruction under its title: `.overlay-instruction`, 22.8 points at line height 1.2."
       },
       "PILL": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 14,
         "line_height": 1,
@@ -430,21 +430,21 @@
         "note": "The turn announcement's title: `.turn-banner-title` in `ui/src/screens/styles/turn-banner.css`, bold 54 points in the display face with 0.08 em of letter spacing."
       },
       "BANNER_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 26,
         "line_height": 1,
         "note": "The step banner's title: `.step-banner-title`, bold 26 points, in capitals."
       },
       "BANNER_DETAIL": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 20.2,
         "line_height": 1,
         "note": "The step banner's detail: `.step-banner-detail`, 20.2 points (upright: the flat layer has no italic face)."
       },
       "START_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 38,
         "line_height": 1.2
@@ -456,7 +456,7 @@
         "line_height": 1.35
       },
       "START_SUBTITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 19,
         "line_height": 1.2
@@ -468,13 +468,13 @@
         "line_height": 1.3
       },
       "START_AGENT_NAME": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 600,
         "size": 18,
         "line_height": 1.25
       },
       "START_CHEATING_NOTE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 14,
         "line_height": 1.25
@@ -498,7 +498,7 @@
         "line_height": 1
       },
       "GAME_OVER_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 72,
         "line_height": 1.1
@@ -510,20 +510,20 @@
         "line_height": 1.3
       },
       "LOBBY_HEADING": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 600,
         "size": 20,
         "line_height": 1.25
       },
       "LOBBY_DECK": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 20,
         "line_height": 1.15,
         "note": "The desktop lobby's deck heading: `.lobby-panel h2`, bold 20-point serif on a 23-point line."
       },
       "LOBBY_COUNTS": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 16,
         "line_height": 1.125,
@@ -544,19 +544,19 @@
         "note": "A desktop game setting field's words: 16-point sans on a 22-point line."
       },
       "OPENING_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 56,
         "line_height": 1.05
       },
       "OPENING_COIN": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 600,
         "size": 22,
         "line_height": 1.2
       },
       "TURN_CAPTION": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 17.8,
         "line_height": 1.236,
@@ -577,77 +577,77 @@
         "note": "The word under the permanent that holds a player to sorcery speed: `.timing-refusal`, 16 points at weight 600."
       },
       "GALLERY_WORDMARK": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 37,
         "line_height": 1.189,
         "note": "The gallery's \"PROJECT BERYL\" wordmark: `.wordmark h1` in `ui/src/screens/styles/gallery.css`, 37 points on a 44-point line."
       },
       "GALLERY_SUBTITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 26,
         "line_height": 1.3077,
         "note": "The gallery's subtitle under its wordmark: `.gallery-subtitle`, 26 points on a 34-point line."
       },
       "GALLERY_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 26,
         "line_height": 1.3077,
         "note": "A gallery panel's numbered title: `.panel-title`, bold 26 points on a 34-point line."
       },
       "GALLERY_CAPTION": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 17,
         "line_height": 1.1765,
         "note": "A caption the gallery centres under a sample: `.caption` in a 240-point `.caption-at` box, 17 points on a 20-point line."
       },
       "GALLERY_SWATCH": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 17,
         "line_height": 1.2941,
         "note": "A color swatch's name: `.swatch figcaption`, 17 points on a 22-point line."
       },
       "GALLERY_HEX": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 14,
         "line_height": 1.2857,
         "note": "A color swatch's hex value: `.swatch small`, 14 points on an 18-point line."
       },
       "GALLERY_SPECIMEN_CAPTION": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 15.7,
         "line_height": 1.4013,
         "note": "The captions under the gallery's two type specimens: `.specimen .caption`, 15.7 points on a 22-point line."
       },
       "GALLERY_MATERIAL_CAPTION": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 16,
         "line_height": 1.375,
         "note": "The caption under the gallery's tabletop swatch: `.material-specimens .caption`, 16 points on a 22-point line."
       },
       "GALLERY_METAL_CAPTION": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 15.5,
         "line_height": 1.4194,
         "note": "The caption under the gallery's metallic rules, a little smaller than the tabletop's: 15.5 points on a 22-point line."
       },
       "GALLERY_ROW_CAPTION": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 17.5,
         "line_height": 1.2571,
         "note": "The captions beside the gallery's three buttons: `.button-rows .caption`, 17.5 points on a 22-point line."
       },
       "GALLERY_SERIF": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 56,
         "line_height": 1,
@@ -668,49 +668,49 @@
         "note": "A life total on the gallery's smaller orbs (`--orb: 0.74px`): `.life-orb-total` at 48 orb units."
       },
       "GALLERY_BADGE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 20.5,
         "line_height": 1.05,
         "note": "The player badge's name in the gallery: `.panel-03 .player-badge`, bold 20.5 points."
       },
       "GALLERY_LAND_COUNT": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 22,
         "line_height": 1.4,
         "note": "The count on the gallery's stack of lands, \"×3\": `.land-stack-count`, bold 22 points."
       },
       "GALLERY_PRIMARY": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 29.5,
         "line_height": 1,
         "note": "The gallery's primary button sample: `.button-rows .button-primary`, 29.5 points."
       },
       "GALLERY_SECONDARY": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 24.5,
         "line_height": 1,
         "note": "The gallery's secondary button sample: `.button-rows .button-secondary`, 24.5 points."
       },
       "GALLERY_DISABLED": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 28.5,
         "line_height": 1,
         "note": "The gallery's disabled button sample: `.button-rows .button:disabled`, 28.5 points."
       },
       "GALLERY_PILL": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 20,
         "line_height": 1,
         "note": "The priority pill in the gallery: `.panel-02 .priority-pill`, 20 points."
       },
       "GALLERY_SCRY_TITLE": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 22.6,
         "line_height": 1,
@@ -724,7 +724,7 @@
         "note": "The instruction and button labels of the gallery's scry overlay, at 0.35 of their size in the overlay."
       },
       "GALLERY_SCRY_LABEL": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 400,
         "size": 11.55,
         "line_height": 1,
@@ -745,14 +745,14 @@
         "note": "The minus and plus on a gallery prompt's stepper buttons: bold 22 points."
       },
       "GALLERY_SCRY_BUTTON": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 8.4,
         "line_height": 1,
         "note": "The labels of the buttons on the gallery's scry overlay: the buttons' 24 points at the 0.35 the overlay is drawn at."
       },
       "GALLERY_TITLE_NUMBER": {
-        "font": "CrimsonPro",
+        "font": "Serif",
         "weight": 700,
         "size": 26,
         "line_height": 1.1077,

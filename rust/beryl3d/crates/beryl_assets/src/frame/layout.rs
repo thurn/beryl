@@ -13,7 +13,7 @@
 use std::ops::Range;
 
 use beryl_scene::input::FaceSize;
-use beryl_scene::text::fonts::{ALL, Font};
+use beryl_scene::text::fonts::{ALL, Font, register_all};
 use parley::fontique::{Blob, Collection, CollectionOptions, SourceCache};
 use parley::{
     FontContext, FontFamily, FontFamilyName, FontWeight, Layout, LayoutContext, LineHeight,
@@ -323,21 +323,18 @@ impl Typesetter {
             shared: false,
             system_fonts: false,
         });
-        let families = ALL
-            .iter()
-            .map(|file| {
-                let data: std::sync::Arc<dyn AsRef<[u8]> + Send + Sync> =
-                    std::sync::Arc::new(file.data);
-                let registered = collection.register_fonts(Blob::new(data), None);
-                let (family, _) = registered
-                    .first()
-                    .unwrap_or_else(|| panic!("{} holds a font", file.file));
-                collection
-                    .family_name(*family)
-                    .expect("a registered family has a name")
-                    .to_owned()
-            })
-            .collect();
+        let families = register_all(|file| {
+            let data: std::sync::Arc<dyn AsRef<[u8]> + Send + Sync> =
+                std::sync::Arc::new(file.data);
+            let registered = collection.register_fonts(Blob::new(data), None);
+            let (family, _) = registered
+                .first()
+                .unwrap_or_else(|| panic!("{} holds a font", file.file));
+            collection
+                .family_name(*family)
+                .expect("a registered family has a name")
+                .to_owned()
+        });
         Self {
             fonts: FontContext {
                 collection,

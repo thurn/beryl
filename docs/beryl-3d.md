@@ -734,17 +734,24 @@ enforces the ones that can be seen in source.
   code and the gate holds the dependencies.
 - **No threads, locks or files.** Work that needs them lives in `beryl_assets`,
   and its results arrive as inputs.
-- **No system fonts.** Text is laid out with the fonts bundled in the app
-  (Cinzel, Crimson Pro, Open Sans and the mana symbol font), with system font
-  fallback switched off, so a line breaks in the same place on every machine.
-  The web interface takes these fonts from npm packages, as WOFF2 files that the
-  Rust text crates cannot read. Beryl 3D commits the same families as TrueType
-  files, with their licences, in `rust/beryl3d/crates/beryl_scene/fonts`, and
-  embeds them in the client core at build time. Where a family has a variable
-  font file, that file is committed instead of separate weights: `parley`
-  selects a weight from it (Open Sans at weight 700 keeps the glyphs of weight
-  400, with the variation coordinates of 700 and wider advances), and the
-  rasterizer draws each glyph run with the run's variation coordinates.
+- **No system fonts at run time.** Text is laid out with the fonts embedded in
+  the app (Cinzel, Crimson Pro, Open Sans, the mana symbol font and the serif
+  face below), with system font fallback switched off, so a line breaks in the
+  same place on every run. The web interface takes these fonts from npm
+  packages, as WOFF2 files that the Rust text crates cannot read. Beryl 3D
+  commits the same families as TrueType files, with their licences, in
+  `rust/beryl3d/crates/beryl_scene/fonts`, and embeds them in the client core at
+  build time. Where a family has a variable font file, that file is committed
+  instead of separate weights: `parley` selects a weight from it (Open Sans at
+  weight 700 keeps the glyphs of weight 400, with the variation coordinates of
+  700 and wider advances), and the rasterizer draws each glyph run with the
+  run's variation coordinates. The web's serif face, `--font-serif`, is Times
+  New Roman, whose licence keeps it out of the repository. When `beryl_scene`'s
+  build script builds for macOS, it embeds the regular and bold files every Mac
+  ships in `/System/Library/Fonts/Supplemental/`, so the font is still read at
+  build time, never at run time. Where they are missing, such as on Windows, the
+  serif face is Crimson Pro. Times New Roman is not variable, so a serif weight
+  above 500 is drawn from the bold file, as CSS matches it.
 - **Seeded effects.** A particle effect's randomness comes from a fixed
   generator seeded by the object's id and the step's index.
 - **Data is compiled in.** The client core's data files (spatial values and the

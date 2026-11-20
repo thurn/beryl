@@ -134,9 +134,10 @@ fn latin_glyphs_cover_every_type_style() {
     );
     let title = beryl_scene::tokens::type_style::TITLE;
     assert!(
-        keys.iter().any(|key| key.font == title.font as u8
-            && key.weight == title.weight
-            && key.size == 52)
+        keys.iter()
+            .any(|key| key.font == title.font.face(title.weight)
+                && key.weight == title.weight
+                && key.size == 52)
     );
 }
 
