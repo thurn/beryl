@@ -1,13 +1,14 @@
 //! Ticket owners at the hub (see `ignite_core::owner`): the routing facts from `ignite.toml`,
-//! which the hub records at start as a value in the `meta` table, and the move of the old
-//! routing labels into the ticket's fields.
+//! which the hub records at start as a value in the `meta` table, the owner of a ticket a
+//! program files, and the move of the old routing labels into the ticket's fields.
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 use serde_json::Value;
 
 use ignite_core::config::Os;
-use ignite_core::owner::Routing;
+use ignite_core::owner::{Owner, Routing};
+use ignite_core::protocol::tickets::{BatchRequest, Operation};
 
 use crate::{Result, StoreError};
 
@@ -46,6 +47,24 @@ pub fn record_routing(conn: &Connection, routing: &Routing) -> Result<()> {
 /// The routing facts last recorded, or none for a hub that never recorded them.
 pub fn routing(conn: &Connection) -> Result<Routing> {
     Ok(get(conn, ROUTING)?.unwrap_or_default())
+}
+
+/// Makes `machine`, the name of the machine writing, the owner of each ticket that `batch`
+/// creates without naming an owner, for a batch a program filed (`ignite ticket create
+/// --automatic`): an automatic filing stays on the machine that filed it, whatever app runs
+/// there. A machine the hub has no name for, given as `None`, changes nothing, which leaves
+/// the tickets to the default owner.
+pub fn add_filing_machine(batch: &mut BatchRequest, machine: Option<&str>) {
+    let Some(machine) = machine else {
+        return;
+    };
+    for operation in &mut batch.ops {
+        if let Operation::Create { fields, .. } = operation
+            && fields.owner.is_none()
+        {
+            fields.owner = Some(Some(Owner::new(machine, None)));
+        }
+    }
 }
 
 /// Moves the routing labels into the ticket's own fields: `needs:macos` and `needs:windows`
@@ -103,7 +122,8 @@ fn os_named(word: &str) -> Option<Os> {
 mod tests {
     use super::*;
     use crate::hub::open_in_memory;
-    use ignite_core::owner::{Owner, RoutedMachine};
+    use ignite_core::owner::RoutedMachine;
+    use ignite_core::protocol::tickets::TicketFields;
 
     fn routing() -> Routing {
         Routing {
@@ -155,5 +175,42 @@ mod tests {
         assert_eq!(super::routing(&conn).unwrap(), Routing::default());
         record_routing(&conn, &routing()).unwrap();
         assert_eq!(super::routing(&conn).unwrap(), routing());
+    }
+
+    #[test]
+    fn an_automatic_filing_is_owned_by_the_machine_that_filed_it() {
+        let create = |owner: Option<&str>| Operation::Create {
+            fields: TicketFields {
+                title: Some("Count rose".to_owned()),
+                owner: owner.map(|text| Some(text.parse().unwrap())),
+                ..TicketFields::default()
+            },
+            parent: None,
+            deps: Vec::new(),
+            request_key: None,
+        };
+        let owners_of = |machine: Option<&str>| {
+            let mut batch = BatchRequest {
+                preconditions: Vec::new(),
+                ops: vec![create(None), create(Some("jarvis/codex"))],
+            };
+            add_filing_machine(&mut batch, machine);
+            batch
+                .ops
+                .iter()
+                .map(|op| match op {
+                    Operation::Create { fields, .. } => fields
+                        .owner
+                        .clone()
+                        .flatten()
+                        .map_or_else(|| "-".to_owned(), |owner| owner.to_string()),
+                    _ => unreachable!(),
+                })
+                .collect::<Vec<_>>()
+        };
+        // Named owners are kept; the rest go to the filing machine, with any app.
+        assert_eq!(owners_of(Some("Cygnus")), ["cygnus", "jarvis/codex"]);
+        // A machine the hub cannot name leaves them to the default owner.
+        assert_eq!(owners_of(None), ["-", "jarvis/codex"]);
     }
 }

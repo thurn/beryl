@@ -81,6 +81,15 @@ fn dependency(spec: &str) -> Result<Value> {
 }
 
 /// The status of a ticket filed but not yet released for implementation.
+/// `body` marked as filed by a program when `automatic` (`ignite ticket create --automatic`), so
+/// that the hub makes the writer's machine the owner of the tickets it creates.
+pub fn filed(mut body: Value, automatic: bool) -> Value {
+    if automatic {
+        body["automatic"] = Value::Bool(true);
+    }
+    body
+}
+
 pub const PENDING: &str = "pending_approval";
 
 /// The status a released ticket takes.

@@ -497,6 +497,12 @@ pub enum TicketCommand {
         /// pool is never offered it until a person or an agent reviewing it releases it.
         #[arg(long)]
         pending: bool,
+        /// Filed by a program, such as a check or a script, not by a person or a session's own
+        /// judgement: the ticket is owned by the machine that runs this command, unless
+        /// `--owner` names another. A ticket filed without it, and with no owner in its line,
+        /// goes to `[pool] default_owner`.
+        #[arg(long)]
+        automatic: bool,
     },
     /// Show one or more tickets.
     Show {

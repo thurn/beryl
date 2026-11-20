@@ -700,3 +700,33 @@ fn writers_report_session_titles_that_the_hub_keeps() {
     assert_eq!(titles["tester"], "Planner");
     assert_eq!(titles["local_abc"], "Worker");
 }
+
+#[test]
+fn an_automatic_filing_is_owned_by_its_machine_and_a_manual_one_by_nobody() {
+    let fixture = Fixture::new("automatic");
+    hub::open(&fixture.dir.join("hub.sqlite"))
+        .unwrap()
+        .execute(
+            "INSERT INTO machines (id, name, os, cores, memory_mb, families, version, last_seen)
+             VALUES ('m-1', 'cygnus', 'windows', 8, 1, '[]', 'v', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+    let hub = fixture.start();
+    let owner = |filed: &Value| {
+        let id = filed["results"][0]["id"].as_str().unwrap().to_owned();
+        hub.get(&format!("/tickets/{id}")).json()["owner"].clone()
+    };
+    let automatic = hub.post(
+        "/batch",
+        &json!({"automatic": true,
+                "ops": [{"op": "create", "fields": {"title": "Count rose"}}]}),
+    );
+    assert_eq!(owner(&automatic), "cygnus");
+    // A session's own filing names no owner, so it goes to the default owner.
+    let manual = hub.post(
+        "/batch",
+        &json!({"ops": [{"op": "create", "fields": {"title": "Port it"}}]}),
+    );
+    assert_eq!(owner(&manual), Value::Null);
+}

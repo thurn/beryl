@@ -365,6 +365,8 @@ class IgniteTickets:
                 labels,
                 "--body-file",
                 str(body_file),
+                # Filed by a check, so it stays on the machine that measured it.
+                "--automatic",
             )
 
 

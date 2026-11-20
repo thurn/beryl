@@ -19,7 +19,7 @@ use ignite_core::protocol::tickets::{BatchRequest, LeaseOp, LeaseReply, TicketQu
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{feed, leases, session_titles, tickets};
+use ignite_store::hub::{feed, fleet, leases, owners, session_titles, tickets};
 
 use super::{Request, Response};
 
@@ -92,6 +92,11 @@ fn apply_batch(
     let mut batch: BatchRequest = body(request)?;
     let writer = request.writer.as_ref().expect("checked in handle");
     let raw = serde_json::from_slice::<Value>(&request.body).unwrap_or(Value::Null);
+    if raw.get(AUTOMATIC).and_then(Value::as_bool) == Some(true) {
+        let machine =
+            fleet::name_of(conn, writer.machine.as_str()).map_err(|e| store_failure(&e))?;
+        owners::add_filing_machine(&mut batch, machine.as_deref());
+    }
     tickets::add_holds(conn, &mut batch).map_err(|e| store_failure(&e))?;
     tickets::add_releases(conn, &mut batch).map_err(|e| store_failure(&e))?;
     // The CLI sends the writing session's title beside the operations, so the dashboard can
@@ -105,6 +110,12 @@ fn apply_batch(
         Err(error) => Err(store_failure(&error)),
     }
 }
+
+/// The key of `POST /batch`'s body that is `true` when a program filed the batch's tickets, such
+/// as a check (`ignite ticket create --automatic`). Each ticket it creates without an owner is
+/// then owned by the writer's machine, as a ticket the hub files from a machine's report is; a
+/// ticket a person or a session files follows its line's owner or the default owner.
+pub const AUTOMATIC: &str = "automatic";
 
 /// The key of `POST /batch`'s body holding the title of the session writing, if it has one.
 pub const ACTOR_TITLE: &str = "actor_title";

@@ -3114,9 +3114,14 @@ that machine take it, such as `jarvis/claude` or `cygnus/codex`.
   neither goes to the default owner, `[pool] default_owner` in `ignite.toml`
   (`jarvis/claude` here). Only a hub with no default owner configured offers
   such a ticket to any worker.
-- Which machine or app filed a ticket never decides where it goes. A ticket
-  reaches another machine only when it, or an ancestor, names that machine as
-  its owner, with `--owner` or `ignite release --needs <machine>`.
+- A ticket a person or a session files goes where its line's owner, or the
+  default owner, says, whichever machine filed it. It reaches another machine
+  only when it, or an ancestor, names that machine as its owner, with `--owner`
+  or `ignite release --needs <machine>`.
+- A ticket a program files stays on the machine that filed it. A script or check
+  files with `ignite ticket create --automatic`, which makes the machine running
+  the command the owner (any app there) unless `--owner` names another, as the
+  count trend does.
 - Dispatch offers a ticket only to its owner's workers. An idle worker on
   another machine or of another app is never offered it, so the other five
   destinations get only work that is routed to them.
