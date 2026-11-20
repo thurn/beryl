@@ -638,7 +638,16 @@ How the executable is installed and kept current:
   from when its build started. Releases that land one after another therefore
   cause one restart into the newest: a release that lands while another builds
   is built as soon as that build ends, and replaces it as the one to restart
-  into. A push in progress holds the restart even past the cap. It never waits
+  into. The restart also waits, up to the same cap, until the main checkout
+  holds the release: the daemon fast-forwards the checkout's integration
+  branches itself, without waiting for the 30-second fast-forward loop, and asks
+  whether the commit checked out there contains the release. The new daemon then
+  reads the `ignite.toml` that came with the release. On 2026-11-20 a release
+  that changed both `[repository]` and the daemon's code restarted every daemon
+  two seconds before its checkout was fast-forwarded, so each kept the old
+  names until a later release. A checkout with local edits cannot be
+  fast-forwarded, so the daemon restarts at the cap on the `ignite.toml` it has.
+  A push in progress holds the restart even past the cap. It never waits
   for running commands or verb processes, which survive it. Before it restarts,
   the daemon answers every new request, except the calls of verb processes, with
   a reply that says it is restarting, which the client sends again, and waits up
@@ -719,7 +728,10 @@ How the executable is installed and kept current:
   `repository.green` for `ignite start` and `ignite sync`, `tip_build_cores` for
   its scheduler's limits, and the refs the main checkout fast-forwards. Those
   take effect at the daemon's next restart, which the next release that changes
-  the daemon's code brings about. Nothing reloads the daemon's copy. A verb
+  the daemon's code brings about. That restart waits until the main checkout
+  holds the release (see [Processes](#processes)),
+  so a release that changes `ignite.toml` and the daemon's code together
+  restarts the daemon onto the new file. Nothing reloads the daemon's copy. A verb
   process and its daemon can therefore disagree for a while: a tip round that
   reads `green` from the file pushes the ref even while the daemon still starts
   tickets at the tip.

@@ -195,7 +195,7 @@ fn a_release_of_landing_code_waits_for_a_landing_up_to_the_cap() {
     assert_eq!(restart.started(), [update.store.path(&commit(NEW))]);
     let reason = this_run(&home).reason.unwrap();
     assert!(
-        reason.ends_with(", after waiting 600 s for landings and newer releases"),
+        reason.ends_with(", after waiting 600 s for landings, newer releases and the main checkout"),
         "{reason}"
     );
 }
@@ -429,8 +429,8 @@ fn a_landing_holds_a_release_for_what_its_build_left_of_the_cap() {
     let reason = this_run(&home).reason.unwrap();
     assert!(
         reason.ends_with(
-            ", ready 10 s after the release appeared, after waiting 20 s for landings and \
-             newer releases"
+            ", ready 10 s after the release appeared, after waiting 20 s for landings, \
+             newer releases and the main checkout"
         ),
         "{reason}"
     );

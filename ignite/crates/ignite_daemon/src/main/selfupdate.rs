@@ -44,6 +44,10 @@
 //! replaced by the newer one. Each restart records its reason in `starts.jsonl`: the release and
 //! the daemon files it changed.
 //!
+//! A restart into a release also waits, up to the same cap, until the main checkout holds the
+//! release: the daemon fast-forwards the checkout itself first, so that the new daemon reads the
+//! `ignite.toml` that came with the release (see `selfupdate_checkout.rs`).
+//!
 //! The release is built by a thread of its own (see [`crate::update::ReleaseBuilder`]), on the
 //! machine's express cores rather than the scheduler's (see [`crate::update::direct`]), so the
 //! sender loop goes on sending heartbeats and the outbox while Cargo runs. Whichever loop asks
@@ -92,6 +96,8 @@ use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, Error, Git, Hub, Result};
 
 use crate::main::restart_window::{Decision, RestartWindow};
+pub use checkout::{CHECKOUT_LACKS_RELEASE, MainCheckout, RepositoryCheckout};
+use checkout::waited_for;
 use crate::server::{DRAIN_WAIT, Drain};
 use crate::update::scope::{Source, affects_landing, daemon_changes, summary};
 use crate::update::selftest::Selftest;
@@ -204,6 +210,9 @@ pub struct SelfUpdate {
     /// The releases that appeared since the daemon started or last took one on, and when the
     /// restart into them may go ahead.
     pub window: Mutex<RestartWindow>,
+    /// The main checkout, which a restart waits for until it holds the release, so that the new
+    /// daemon reads the release's `ignite.toml` (see `selfupdate_checkout.rs`).
+    pub checkout: Arc<dyn MainCheckout>,
 }
 
 impl SelfUpdate {
@@ -675,6 +684,8 @@ impl SelfUpdate {
             Some("a landing runs")
         } else if newer_builds {
             Some("a newer release builds")
+        } else if !self.checkout_holds(target) {
+            Some(CHECKOUT_LACKS_RELEASE)
         } else {
             None
         };
@@ -763,26 +774,8 @@ impl SelfUpdate {
     }
 }
 
-/// The end of a restart's reason in `starts.jsonl` that says how long it took: `waited` seconds
-/// since the first pending release appeared, `held` of them after a release was ready (see
-/// [`Decision::Go`]). On 2026-11-19 restarts read "after waiting 185 s", well past the 30 s cap,
-/// though the window had held them for no time at all: the release had been building. The
-/// build's time is now named apart.
-fn waited_for(waited: f64, held: f64) -> String {
-    let building = waited - held;
-    let ready = if building >= 1.0 {
-        format!(", ready {building:.0} s after the release appeared")
-    } else {
-        String::new()
-    };
-    let waiting = if held > 0.0 {
-        format!(", after waiting {held:.0} s for landings and newer releases")
-    } else {
-        String::new()
-    };
-    format!("{ready}{waiting}")
-}
-
+#[path = "selfupdate_checkout.rs"]
+mod checkout;
 #[path = "selfupdate_deploy.rs"]
 mod deploy;
 #[path = "selfupdate_prebuild.rs"]

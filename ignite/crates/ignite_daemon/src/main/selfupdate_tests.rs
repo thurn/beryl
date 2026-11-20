@@ -142,6 +142,7 @@ fn daemon(master: &str) -> (SelfUpdate, Arc<FakeGit>, FakeRestart) {
         adopted: Mutex::default(),
         release_seen: Mutex::default(),
         window: Mutex::new(RestartWindow::new(WINDOW)),
+        checkout: Arc::new(checkout::UpToDate),
     };
     (update, git, restart)
 }
@@ -819,3 +820,6 @@ mod restart;
 
 #[path = "selfupdate_prebuild_tests.rs"]
 mod prebuild;
+
+#[path = "selfupdate_checkout_tests.rs"]
+mod checkout;

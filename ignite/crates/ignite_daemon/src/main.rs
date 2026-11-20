@@ -131,6 +131,7 @@ impl Daemon {
                 &base,
                 &machinery.launcher,
                 &machinery.scheduler,
+                &machinery.trees,
             )),
             health: health.clone(),
             reporter: Arc::new(crate::justiciar::Reporter::new(
@@ -197,6 +198,7 @@ fn self_update(
     base: &assemble::Base,
     launcher: &Arc<dyn ignite_core::traits::Launcher>,
     scheduler: &Arc<crate::sched::Scheduler>,
+    trees: &crate::trees::Trees,
 ) -> selfupdate::SelfUpdate {
     let options = &base.options;
     let update = options.home.root.join("update");
@@ -248,6 +250,10 @@ fn self_update(
         adopted: Mutex::default(),
         release_seen: Mutex::default(),
         window: Mutex::new(restart_window::RestartWindow::new(base.config.self_update)),
+        checkout: Arc::new(selfupdate::RepositoryCheckout {
+            trees: trees.clone(),
+            repo: options.repo.clone(),
+        }),
     }
 }
 
