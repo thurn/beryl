@@ -43,7 +43,7 @@ fn a_game_dropped_mid_game_resumes_from_a_second_sessions_on_the_same_dirs() {
 
     let (sent, views) = channel();
     let first = sessions(&beryl_cards::CARDS, &dirs, move |update| {
-        sent.send(update).unwrap()
+        sent.send(update).unwrap();
     });
     first.start_game(&start, None).unwrap();
     let stopped = to_decision(&views);
@@ -57,7 +57,7 @@ fn a_game_dropped_mid_game_resumes_from_a_second_sessions_on_the_same_dirs() {
 
     let (sent, views) = channel();
     let second = sessions(&beryl_cards::CARDS, &dirs, move |update| {
-        sent.send(update).unwrap()
+        sent.send(update).unwrap();
     });
     assert!(
         crate::resume_latest(&second).is_some(),

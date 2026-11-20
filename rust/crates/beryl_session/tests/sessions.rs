@@ -133,7 +133,7 @@ fn a_scripted_human_plays_a_whole_game_and_its_replay_reproduces_it() {
     let dir = std::env::temp_dir().join(format!("beryl-session-{}", std::process::id()));
     let (sent, views) = channel();
     let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap()
+        sent.send(u).unwrap();
     });
     let session = sessions
         .start_game(
@@ -292,7 +292,7 @@ fn a_concession_ends_the_game_in_defeat_and_its_replay_reproduces_it() {
     let dir = std::env::temp_dir().join(format!("beryl-concede-{}", std::process::id()));
     let (sent, views) = channel();
     let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap()
+        sent.send(u).unwrap();
     });
     let session = sessions
         .start_game(&start(4, StopsSetting::SMART), None)
@@ -443,7 +443,7 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
     let dir = replay_dir("resume");
     let (sent, views) = channel();
     let first = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap()
+        sent.send(u).unwrap();
     });
     first
         .start_game(&start(3, StopsSetting::EXACT), None)
@@ -461,7 +461,7 @@ fn a_game_resumed_from_its_save_plays_on_as_if_it_never_stopped() {
 
     let (sent, views) = channel();
     let second = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap()
+        sent.send(u).unwrap();
     });
     let session = second.resume_latest().expect("the unfinished game resumes");
     assert_eq!(
@@ -546,7 +546,7 @@ fn only_an_unfinished_game_that_still_replays_is_resumed() {
     let dir = replay_dir("no-resume");
     let (sent, views) = channel();
     let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap()
+        sent.send(u).unwrap();
     });
     assert_eq!(sessions.resume_latest(), None, "no replay directory");
     assert_eq!(
@@ -567,7 +567,7 @@ fn only_an_unfinished_game_that_still_replays_is_resumed() {
     let over = only_replay(&dir);
     let (sent, views) = channel();
     let sessions = Sessions::new(&beryl_cards::CARDS, Some(dir.clone()), move |u| {
-        sent.send(u).unwrap()
+        sent.send(u).unwrap();
     });
     assert_eq!(sessions.resume_latest(), None, "the newest game is over");
     assert_eq!(sessions.current(), None);

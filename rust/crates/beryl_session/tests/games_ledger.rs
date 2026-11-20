@@ -46,7 +46,7 @@ fn completed_games_are_appended_and_counted_in_reports() {
     let reports = directory.path().join("bugs");
     let (send, views) = channel();
     let sessions = Sessions::new(&beryl_cards::CARDS, None, move |update| {
-        send.send(update).unwrap()
+        send.send(update).unwrap();
     })
     .with_ledger(ledger.clone());
     let mut start = StartGame {
