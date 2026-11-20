@@ -2933,10 +2933,13 @@ holds it, checks that the tip has not moved, and pushes. When the tip moved, it
 builds the revert again on the new tip, three times at most, then reports a
 regression instead. A new tip that changed what the check reads, such as a fix
 or another machine's revert, is left to the next round, which runs the check
-there first. The round then tells the hub (`Hub::reverted`, `POST /reverted`).
-In one batch the hub reopens the landing's ticket, sets its priority to 0 and
-its metadata `reverted` (the revert commit, the landed commits and the failing
-checks), and comments with the check, its output and the line
+there first. A check is left to the next round this way only once until `master`
+moves: on a busy day every round's tip is overtaken before it ends, so a check
+that fails again is reported as a regression whatever the newer tip changed. The
+round then tells the hub (`Hub::reverted`, `POST /reverted`). In one batch the
+hub reopens the landing's ticket, sets its priority to 0 and its metadata
+`reverted` (the revert commit, the landed commits and the failing checks), and
+comments with the check, its output and the line
 `apply your work again with: git revert --no-edit <revert commit>`. For commits
 no landing recorded it files a new P0 ticket with the same text. A second report
 of the same revert commit changes nothing, and a landing of the ticket clears
