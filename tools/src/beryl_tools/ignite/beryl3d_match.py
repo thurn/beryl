@@ -220,23 +220,35 @@ def pixel_lines(t: Target, directory: Path) -> list[str]:
     return out
 
 
+def drawn(live: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """`live`, the web interface's elements now, with each card's turned face folded into the
+    card's transform. The score does that to the web side only, since the other side is
+    normally Beryl 3D, whose card is the face; here both sides are the web, so without this a
+    tapped card of an unchanged page differs from its own reference."""
+    from ..beryl3d.match import styles
+
+    return [styles.as_drawn(live, i) for i in range(len(live))]
+
+
 def drift_one(t: Target, directory: Path, document: Mapping[str, Any]) -> Result:
     check = f"{WEB_DRIFT}:{reference.check_name(t)}"
-    live = json.loads((directory / "web.json").read_text())["elements"]
+    live = drawn(
+        reference.trim(json.loads((directory / "web.json").read_text())["elements"])
+    )
     web = reference.load(t)
     problems: list[str] = []
     worst: list[str] = []
     if web is None:
         problems.append(f"{relative(reference.path(t))} is missing")
     else:
-        drift = reference.count(web, reference.trim(live))
+        drift = reference.count(web, live)
         moved = {n: drift[n] for n in ("unmatched", "boxes", "styles") if drift[n]}
         if moved:
             shown = ", ".join(f"{n} {v}" for n, v in moved.items())
             problems.append(
                 f"the web interface differs from its committed reference: {shown}"
             )
-            worst += worst_lines(web, reference.trim(live))
+            worst += worst_lines(web, live)
     counts = score.measure(t, directory)
     held = reference.entry(document, reference.entry_name(t))
     if counts is None:
