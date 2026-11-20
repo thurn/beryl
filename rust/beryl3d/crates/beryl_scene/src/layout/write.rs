@@ -106,7 +106,7 @@ impl Layer {
             let Some(point) = child.corner() else {
                 continue;
             };
-            builder.backdrop(&child.element.style.backdrop_filter, self.window.scale);
+            builder.backdrop(&child.element.style.filter, self.window.scale);
             let look = Look {
                 point,
                 opacity: node.opacity(),
@@ -114,7 +114,7 @@ impl Layer {
                 clip: None,
                 passes: node.element.style.passes,
                 faces,
-                filters: Chain::default().inner(&node.element.style.filter),
+                filters: Chain::default().inner(own_filter(&node.element)),
             };
             self.write_node(child, index, false, look, builder, camera);
         }
@@ -152,7 +152,7 @@ impl Layer {
         builder.visit();
         look.opacity *= node.opacity();
         look.passes |= node.element.style.passes;
-        look.filters = look.filters.inner(&node.element.style.filter);
+        look.filters = look.filters.inner(own_filter(&node.element));
         let element = &node.element;
         let mut state = self.state(node);
         if look.passes {
@@ -684,8 +684,19 @@ fn corners(rect: Rect) -> [Vec2; 4] {
 }
 
 /// Whether `node`, a child of a top element, is written over the floats: an anchored element
-/// with a backdrop filter (`Style::backdrop_filter`), which filters the floats with the rest of
-/// what is drawn under it. Only the screen's are written; a float's are not written at all.
+/// with a backdrop filter (`Style::backdrop`), which filters the floats with the rest of what is
+/// drawn under it. Only the screen's are written; a float's are not written at all.
 pub(super) fn over_floats(node: &Node) -> bool {
-    node.element.anchor.is_some() && !node.element.style.backdrop_filter.is_empty()
+    let style = &node.element.style;
+    node.element.anchor.is_some() && style.backdrop && !style.filter.is_empty()
+}
+
+/// The filter functions `element` is drawn through itself: none when they filter what is drawn
+/// under it instead (`Style::backdrop`).
+pub(super) fn own_filter(element: &Element) -> &[crate::element::Filter] {
+    if element.style.backdrop {
+        &[]
+    } else {
+        &element.style.filter
+    }
 }

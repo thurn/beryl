@@ -410,7 +410,7 @@ pub(super) fn look_of(
     let filter: &[Filter] = if panel.is_some_and(|panel| panel.lifted) {
         &lifted
     } else {
-        &style.filter
+        super::write::own_filter(&node.element)
     };
     builder.look_paints(index, gradients(node, panel), mask, filter);
 }

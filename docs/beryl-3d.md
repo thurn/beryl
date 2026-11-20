@@ -4472,14 +4472,14 @@ reference is the web interface as WebKit draws it, at scale 2.
   under a filter keep their colors. The web blurs one thing whole, the table and
   its furniture under the game's end screen (`.table-dimmed`:
   `blur(2.5px) brightness(0.68) saturate(0.85)`). Beryl 3D draws that as CSS's
-  `backdrop-filter` on the end screen (`Style::backdrop_filter`): the flat layer
-  writes the element after its floats, and the frame records where it stands in
-  the flat layer's band (`Frame::backdrop`). The renderer draws every record
-  before it into an offscreen picture, blurs that across and then down into the
-  frame's target with the color filters as one matrix, on sRGB values as WebKit
-  does, and draws the rest of the flat layer over it (`beryl_render`'s
-  `backdrop`). The pass runs only while the end screen shows. The element is
-  modal, as the web's dialog is: nothing drawn under it takes a press.
+  `backdrop-filter` on the end screen (`Style::backdrop`): the flat layer writes
+  the element after its floats, and the frame records where it stands in the
+  flat layer's band (`Frame::backdrop`). The renderer draws every record before
+  it into an offscreen picture, blurs that across and then down into the frame's
+  target with the color filters as one matrix, on sRGB values as WebKit does,
+  and draws the rest of the flat layer over it (`beryl_render`'s `backdrop`).
+  The pass runs only while the end screen shows. The element is modal, as the
+  web's dialog is: nothing drawn under it takes a press.
 
 - **Pixels.** What is left after boxes and styles agree is compared as pixels,
   with glyph pixels masked, because glyph antialiasing differs between WebKit

@@ -1,4 +1,4 @@
-//! A frame's backdrop filter (`Style::backdrop_filter`): a blur and color filters that the
+//! A frame's backdrop filter (`Style::backdrop`): a blur and color filters that the
 //! renderer applies to the whole window as drawn so far, before it draws the rest of the flat
 //! layer over it. The web interface's end screen blurs and darkens the table under the result
 //! this way (`.table-dimmed` in `ui/src/screens/styles/table.css`).

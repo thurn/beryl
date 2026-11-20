@@ -246,6 +246,10 @@ impl DropLayers {
 
 /// An element's layout and look, with CSS's names.
 #[derive(Clone, Debug, PartialEq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a CSS property of its own, set and read apart from the others"
+)]
 pub struct Style {
     pub display: Display,
     pub direction: Direction,
@@ -305,13 +309,6 @@ pub struct Style {
     /// change every color the element and everything under it is drawn in; a blur softens the
     /// edges of its own panel and gradients.
     pub filter: Vec<Filter>,
-    /// The functions of CSS's `backdrop-filter`, in order: a blur and color filters applied to
-    /// the whole window as drawn before the element, the table and every flat-layer element
-    /// under it. The flat layer writes an element with one after its floats, so that they are
-    /// filtered too, and only the first such element of a frame filters anything
-    /// (`FrameBuilder::backdrop`). The web's end screen blurs the table this way, though its CSS
-    /// puts the `filter` on the table (`.table-dimmed`).
-    pub backdrop_filter: Vec<Filter>,
     /// The color and width of the element's border, which takes room inside its box as CSS's
     /// does.
     pub border: Option<([u8; 4], f32)>,
@@ -338,6 +335,15 @@ pub struct Style {
     /// CSS's `pointer-events: none` lets it: a press never lands on it, and what it covers
     /// stays hovered. Its resolved elements have the `PASSES` state.
     pub passes: bool,
+    /// Whether its `filter` is CSS's `backdrop-filter` instead: a blur and color filters applied
+    /// to the whole window as drawn before the element, the table and every flat-layer element
+    /// under it, and not to the element itself. The flat layer writes an anchored child of the
+    /// screen with one after its floats, so that they are filtered too, and only the first such
+    /// element of a frame filters anything (`FrameBuilder::backdrop`). The web's end screen
+    /// blurs the table this way, though its CSS puts the `filter` on the table
+    /// (`.table-dimmed`). A flag rather than a list of its own keeps `Style` from growing,
+    /// which added reallocations to every board's `Client::handle`.
+    pub backdrop: bool,
 }
 
 impl Default for Style {
@@ -374,7 +380,6 @@ impl Default for Style {
             mask: None,
             scroll_fade: None,
             filter: Vec::new(),
-            backdrop_filter: Vec::new(),
             border: None,
             radius: 0.0,
             box_shadow: Vec::new(),
@@ -384,6 +389,7 @@ impl Default for Style {
             color: None,
             fit: false,
             passes: false,
+            backdrop: false,
         }
     }
 }

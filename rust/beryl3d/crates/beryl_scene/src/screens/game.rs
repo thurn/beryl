@@ -29,7 +29,7 @@ pub fn game(input: &ScreenIn) -> Element {
         full_control::full_control(input).filter(|_| !opening::shown(input)),
         log::log(input),
         viewer::viewer(input),
-        // The result blurs everything drawn before it, the floats too (`Style::backdrop_filter`).
+        // The result blurs everything drawn before it, the floats too (`Style::backdrop`).
         game_over::game_over(input),
     ]
     .into_iter()
@@ -89,7 +89,7 @@ pub fn game_phone(input: &ScreenIn) -> Element {
     });
     // The flat layer draws in tree order. The opening's scrim comes first, as on the desktop
     // (`game`), so that it dims no control that still takes presses. The result is drawn over
-    // everything else, which it blurs (`Style::backdrop_filter`).
+    // everything else, which it blurs (`Style::backdrop`).
     let mut screen = holder()
         .name("game")
         .children(opening::opening(input))

@@ -85,7 +85,7 @@ fn shown<'a>(input: &ScreenIn<'a>) -> Option<Ended<'a>> {
 
 /// What the game screen shows once the view says the game has ended: while the result is shown,
 /// one element holding the scrim, the result and its dock, which blurs and darkens everything
-/// drawn under it (`Style::backdrop_filter`); while the result is put aside, the dock with the
+/// drawn under it (`Style::backdrop`); while the result is put aside, the dock with the
 /// button that brings it back. The holder has no size, so that it covers nothing, and each piece
 /// in it stands at its own point of the window.
 #[must_use]
@@ -106,7 +106,8 @@ pub fn game_over(input: &ScreenIn) -> Option<Element> {
         .child(super::backdrop(input).passes(false))
         .child(result(input, outcome))
         .child(dock(input, buttons));
-    screen.style.backdrop_filter = DIMMED.to_vec();
+    screen.style.filter = DIMMED.to_vec();
+    screen.style.backdrop = true;
     screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
     Some(screen)
 }
