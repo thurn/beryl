@@ -71,11 +71,11 @@
    "pixels": 126978
   },
   "b3d:screen/lobby/you/1600x900@2": {
-   "unmatched": 40,
-   "boxes": 16,
-   "styles": 12,
+   "unmatched": 23,
+   "boxes": 3,
+   "styles": 9,
    "unsupported": 0,
-   "pixels": 901697
+   "pixels": 261252
   },
   "b3d:screen/lobby/you/393x759": {
    "unmatched": 36,

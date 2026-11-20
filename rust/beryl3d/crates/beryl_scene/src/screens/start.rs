@@ -11,7 +11,7 @@ use super::{Screen, ScreenIn, Sheet};
 use crate::element::{Align, Border, Element, Justify, Position, Press, column, row, text};
 use crate::frame::Role;
 use crate::text::TypeStyle;
-use crate::tokens::{color, ratio, size, space, type_style};
+use crate::tokens::{color, ratio, shadow, size, space, type_style};
 use crate::widgets::{self, FieldState, button, field, icon_button, list, primary, tooltip};
 
 /// The name of the seed's text field.
@@ -182,10 +182,8 @@ pub fn start(input: &ScreenIn) -> Element {
         .name("start panel")
         .width(PANEL_WIDTH)
         .align_items(Align::Center)
-        .gap(PANEL_GAP)
-        .background(color::PANEL)
-        .border((color::METAL, size::BORDER))
-        .radius(PANEL_RADIUS)
+        .gap(PANEL_GAP);
+    let panel = panel_look(panel)
         .children(heading)
         .child(agents)
         .child(seed_row)
@@ -513,10 +511,37 @@ fn fair_box(on: bool) -> Element {
 /// A checkbox labelled `label`, ticked if `on`, which means `press` when pressed: the start
 /// screen's "Fair deal" box and the lobby's assists.
 pub fn checkbox(label: &str, on: bool, press: Press) -> Element {
-    let check = row()
+    let check = check_square(CHECKBOX, on);
+    Element::new(Role::Toggle)
+        .name(label)
+        .selected(on)
+        .gap(space::M)
+        .align_items(Align::Center)
+        .on_press(press)
+        .child(check)
+        .child(text(label).style(LABEL).color(color::TEXT_DIM))
+}
+
+/// `panel` in the look of the web's `.start-panel`, which the start and lobby screens share: a
+/// dark face, a bronze border with a lighter top edge, rounded corners, a dark ring inside the
+/// border and a shadow under it.
+pub(super) fn panel_look(panel: Element) -> Element {
+    panel
+        .background(color::START_PANEL)
+        .border(
+            Border::uniform(color::START_PANEL_BORDER, size::BORDER)
+                .side_color(0, color::START_PANEL_BORDER_TOP),
+        )
+        .radius(PANEL_RADIUS)
+        .box_shadow(shadow::START_PANEL.to_vec())
+}
+
+/// The square of a checkbox `side` points wide, with a gold border, ticked if `on`.
+pub(super) fn check_square(side: f32, on: bool) -> Element {
+    row()
         .name("checkbox")
-        .width(CHECKBOX)
-        .height(CHECKBOX)
+        .width(side)
+        .height(side)
         .radius(size::START_CHECKBOX_RADIUS)
         .border((color::GOLD, size::BORDER))
         .align_items(Align::Center)
@@ -526,19 +551,11 @@ pub fn checkbox(label: &str, on: bool, press: Press) -> Element {
         .children(on.then(|| {
             row()
                 .name("tick")
-                .width(CHECKBOX / 2.0)
-                .height(CHECKBOX / 2.0)
+                .width(side / 2.0)
+                .height(side / 2.0)
                 .radius(size::START_TICK_RADIUS)
                 .background(color::GOLD)
-        }));
-    Element::new(Role::Toggle)
-        .name(label)
-        .selected(on)
-        .gap(space::M)
-        .align_items(Align::Center)
-        .on_press(press)
-        .child(check)
-        .child(text(label).style(LABEL).color(color::TEXT_DIM))
+        }))
 }
 
 /// `button` at the web's small size (`button-small`): shorter, with smaller type.

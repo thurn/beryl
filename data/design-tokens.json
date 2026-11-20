@@ -515,6 +515,34 @@
         "size": 20,
         "line_height": 1.25
       },
+      "LOBBY_DECK": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 20,
+        "line_height": 1.15,
+        "note": "The desktop lobby's deck heading: `.lobby-panel h2`, bold 20-point serif on a 23-point line."
+      },
+      "LOBBY_COUNTS": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 16,
+        "line_height": 1.125,
+        "note": "The desktop lobby's deck counts under its heading: 16-point serif on an 18-point line."
+      },
+      "LOBBY_LABEL": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 15,
+        "line_height": 1.3333,
+        "note": "The desktop lobby's legends and labels: `.lobby-section legend, .lobby-panel label`, semibold 15-point sans on a 20-point line."
+      },
+      "LOBBY_SETTING": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 16,
+        "line_height": 1.375,
+        "note": "A desktop game setting field's words: 16-point sans on a 22-point line."
+      },
       "OPENING_TITLE": {
         "font": "CrimsonPro",
         "weight": 700,
@@ -1049,6 +1077,70 @@
       "LOBBY_GAP": {
         "value": 12
       },
+      "LOBBY_PANEL_WIDTH": {
+        "value": 780,
+        "note": "The desktop lobby panel's width: `.start-panel.lobby-panel`'s `width` in `ui/src/table/lobby/lobby.css`."
+      },
+      "LOBBY_PANEL_GAP": {
+        "value": 14,
+        "note": "The space between the desktop lobby panel's sections: `.start-panel.lobby-panel`'s `gap`."
+      },
+      "LOBBY_SECTION_PADDING": {
+        "value": 12,
+        "note": "A desktop lobby section's padding: `.lobby-section`'s `padding`."
+      },
+      "LOBBY_SECTION_BORDER": {
+        "value": 1,
+        "note": "The width of a desktop lobby section's border: `.lobby-section`'s `border`."
+      },
+      "LOBBY_SECTION_RADIUS": {
+        "value": 8,
+        "note": "The radius of a desktop lobby section's corners: `.lobby-section`'s `border-radius`."
+      },
+      "LOBBY_SECTION_GAP": {
+        "value": 8,
+        "note": "The space between a desktop lobby section's rows, and between the deck's buttons and the game settings: `section.lobby-section`'s and `.lobby-actions`' `gap`."
+      },
+      "LOBBY_LEGEND_PADDING": {
+        "value": 2,
+        "note": "The space on either side of a section's legend: the browser's own `padding-inline` for `legend`."
+      },
+      "LOBBY_SWITCH_GAP": {
+        "value": 10,
+        "note": "The space between the assists' switches, across and down: `.lobby-assists`' `gap`."
+      },
+      "LOBBY_SWITCH_BOX": {
+        "value": 12,
+        "note": "The side of an assist's checkbox, as the browser draws `.lobby-assists input`."
+      },
+      "LOBBY_SWITCH_LABEL_GAP": {
+        "value": 8,
+        "note": "The space between an assist's checkbox and its label: `.lobby-assists label`'s `gap`."
+      },
+      "LOBBY_LABEL_GAP": {
+        "value": 4,
+        "note": "The space between a game setting's label and its field: the `gap` of `.lobby-panel label:has(input)`."
+      },
+      "LOBBY_SETTING_WIDTH": {
+        "value": 91.5,
+        "note": "The width of a desktop game setting's number field: `.lobby-panel input[type=\"number\"]`'s `10ch`, at 16 points."
+      },
+      "LOBBY_SETTING_HEIGHT": {
+        "value": 38,
+        "note": "The height of a desktop game setting's field: a 22-point line, `padding: 7px 10px` and a 1-point border."
+      },
+      "LOBBY_SETTING_PADDING_Y": {
+        "value": 7,
+        "note": "A desktop game setting field's padding above and below its text."
+      },
+      "LOBBY_SETTING_PADDING_X": {
+        "value": 10,
+        "note": "A desktop game setting field's padding on either side of its text."
+      },
+      "LOBBY_FIRST_WIDTH": {
+        "value": 51,
+        "note": "The width of the desktop lobby's 'First' box, as the web lays out its `select`."
+      },
       "SETTINGS_WIDTH": {
         "value": 360
       },
@@ -1190,6 +1282,18 @@
       "SWEEP": {
         "value": "rgb(255 205 96 / 14%)",
         "note": "The wash inside the rectangle a sweep over the manual table draws: `.selection-rectangle`'s `background` in `ui/src/table/selection.css`."
+      },
+      "START_PANEL": {
+        "value": "rgb(41 35 31)",
+        "note": "The start and lobby panels' face: `.start-panel`'s `background: #29231f` in `ui/src/screens/styles/start-panel.css`."
+      },
+      "START_PANEL_BORDER": {
+        "value": "rgb(138 115 90)",
+        "note": "The start and lobby panels' border: `.start-panel`'s `border: 1.5px solid #8a735a`."
+      },
+      "START_PANEL_BORDER_TOP": {
+        "value": "rgb(233 200 138)",
+        "note": "The start and lobby panels' lighter top edge: `.start-panel`'s `border-top-color: #e9c88a`."
       },
       "SWEEP_RIM": {
         "value": "rgb(255 205 96 / 90%)",
@@ -1440,6 +1544,10 @@
       "SHEET": {
         "value": "0 8px 24px rgb(0 0 0 / 55%)",
         "note": "The phone's bottom sheet that holds a menu: `.phone-sheet` in `ui/src/mobile/phone.css`."
+      },
+      "START_PANEL": {
+        "value": "inset 0 0 0 1px rgb(14 11 10 / 55%), 0 6px 18px rgb(0 0 0 / 40%)",
+        "note": "The start and lobby panels: `.start-panel`'s `box-shadow`, a dark ring inside the border and a shadow under the panel."
       },
       "BANNER_TITLE": {
         "value": "0 1px 1px rgb(0 0 0 / 85%), 0 2px 5px rgb(0 0 0 / 50%)",

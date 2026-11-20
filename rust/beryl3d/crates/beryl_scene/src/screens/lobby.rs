@@ -13,12 +13,12 @@ use beryl_protocol::ipc::LobbyView;
 use beryl_protocol::ipc::decks::SavedDeck;
 
 use super::ScreenIn;
-use super::start::{
-    LABEL, PANEL_GAP, PANEL_PADDING, PANEL_RADIUS, PANEL_WIDTH, TITLE, checkbox, small,
-};
+use super::start::{LABEL, PANEL_PADDING, TITLE, check_square, checkbox, panel_look, small};
 use crate::element::{
-    Align, Border, Element, Justify, LobbyPress, Overflow, Press, column, row, text,
+    Align, Border, Display, Element, Justify, LobbyPress, Overflow, Position, Press, Track,
+    column, row, text,
 };
+use crate::frame::Role;
 use crate::manual::commands::{COMMANDS, Scope};
 use crate::manual::lobby::{
     ASSISTS, DECK_NAME, DECKLIST, DeckPanel, Lobby, STARTING_HAND_SIZE, STARTING_LIFE,
@@ -43,6 +43,13 @@ const DECKLIST_HEIGHT: f32 = size::LOBBY_DECKLIST_HEIGHT;
 /// The space the panel keeps from the window's top and bottom edges.
 const MARGIN: f32 = size::SCREEN_MARGIN;
 
+/// The desktop's legends and labels (`.lobby-section legend, .lobby-panel label`): semibold
+/// 15-point sans on a 20-point line.
+const DESKTOP_LABEL: TypeStyle = type_style::LOBBY_LABEL;
+
+/// The height of one line of `DESKTOP_LABEL`.
+const LABEL_LINE: f32 = DESKTOP_LABEL.size * DESKTOP_LABEL.line_height;
+
 /// What the flat layer shows on the lobby screen. Until the session sends the lobby, only the
 /// heading.
 #[must_use]
@@ -50,16 +57,16 @@ pub fn lobby(input: &ScreenIn) -> Element {
     if super::phone(input) {
         return lobby_phone(input);
     }
+    // `.start-panel.lobby-panel`: wider than the start screen's panel, with its sections
+    // stretched across it.
     let panel = column()
         .name("lobby panel")
-        .width(PANEL_WIDTH)
+        .width(size::LOBBY_PANEL_WIDTH)
         .max_height((input.window.size.height - 2.0 * MARGIN).max(0.0))
         .overflow(Overflow::Scroll)
-        .align_items(Align::Center)
-        .gap(PANEL_GAP)
-        .background(color::PANEL)
-        .border((color::METAL, size::BORDER))
-        .radius(PANEL_RADIUS);
+        .align_items(Align::Stretch)
+        .gap(size::LOBBY_PANEL_GAP);
+    let panel = panel_look(panel);
     let mut panel = sections(panel, input, Fit::Desktop);
     panel.style.padding = PANEL_PADDING;
     // The layer draws a screen's top element as a panel unless its style says otherwise; this
@@ -112,6 +119,15 @@ impl Fit {
         }
     }
 
+    /// A section of the panel named `name`: on the desktop a framed fieldset with `name` as its
+    /// legend, and on a phone a column under `name` in capitals.
+    fn section(self, name: &str) -> Element {
+        match self {
+            Self::Desktop => fieldset(name),
+            Self::Phone => section(name),
+        }
+    }
+
     /// The least height of a control a finger presses: none on the desktop.
     fn least(self, element: Element) -> Element {
         match self {
@@ -135,7 +151,7 @@ fn sections(holder: Element, input: &ScreenIn, fit: Fit) -> Element {
     let mut holder = holder.child(heading);
     if let Some(view) = &lobby.view {
         holder = holder
-            .children(summary(view))
+            .children(summary(view, fit))
             .child(deck(lobby, view, fit))
             .children(lobby.picker.map(|panel| picker(lobby, panel, input, fit)))
             .children(sideboard(lobby, view, fit))
@@ -143,9 +159,13 @@ fn sections(holder: Element, input: &ScreenIn, fit: Fit) -> Element {
             .child(if lobby.hosting() {
                 settings(view, input, fit)
             } else {
-                settings_summary(view)
+                settings_summary(view, fit)
             })
-            .child(fit.action(start(lobby, view)));
+            .child(match fit {
+                // `.lobby-start` stands in the middle of the panel.
+                Fit::Desktop => start(lobby, view).align_self(Align::Center),
+                Fit::Phone => fit.action(start(lobby, view)),
+            });
     }
     if let Some(error) = lobby.error {
         holder = holder.child(text(error).style(BODY).color(color::EMBER));
@@ -180,6 +200,37 @@ fn shortcuts(mut screen: Element, lobby: &Lobby) -> Element {
     screen
 }
 
+/// A desktop section's frame (`.lobby-section`): a column stretched across the panel with a
+/// metal border and rounded corners.
+fn frame(name: &str) -> Element {
+    column()
+        .name(name)
+        .align_self(Align::Stretch)
+        .gap(size::LOBBY_SECTION_GAP)
+        .border((color::METAL, size::LOBBY_SECTION_BORDER))
+        .radius(size::LOBBY_SECTION_RADIUS)
+}
+
+/// A desktop section with a legend (`fieldset.lobby-section`). The web draws a fieldset's top
+/// border through the middle of its legend, with a gap in the line under the legend's words;
+/// `Style` has no way to say that, so here the border runs along the legend's top, and the
+/// section's box is the fieldset's. The legend's words stand at the section's padding with the
+/// browser's 2 points on either side, and the section's rows start the section's padding under
+/// the legend.
+fn fieldset(name: &str) -> Element {
+    let padding = size::LOBBY_SECTION_PADDING;
+    let mut legend = (text(name).style(DESKTOP_LABEL).color(color::TEXT_DIM)).align_self(Align::Start);
+    let side = size::LOBBY_LEGEND_PADDING;
+    legend.style.padding = [0.0, side, 0.0, side];
+    // The legend stands over the border rather than under it, and keeps the section's padding,
+    // less the gap between rows, from the rows under it.
+    let border = size::LOBBY_SECTION_BORDER;
+    legend.style.margin = [-border, 0.0, padding - size::LOBBY_SECTION_GAP, 0.0];
+    let mut section = frame(name).align_items(Align::Start).child(legend);
+    section.style.padding = [0.0, padding, padding, padding];
+    section
+}
+
 /// A section of the panel with a heading, as the web's `.lobby-section` fieldsets have.
 fn section(name: &str) -> Element {
     column()
@@ -195,11 +246,11 @@ fn section(name: &str) -> Element {
 
 /// The match (`LobbySummary.tsx`), once a second seat exists: the invite code, each seat's name
 /// and deck, whether the guest is ready, the score, and who won the last game.
-fn summary(view: &LobbyView) -> Option<Element> {
+fn summary(view: &LobbyView, fit: Fit) -> Option<Element> {
     if view.seats.len() < 2 {
         return None;
     }
-    let mut match_section = section("Match");
+    let mut match_section = fit.section("Match");
     if let Some(code) = &view.invite {
         match_section = match_section.child(
             text(&format!("Invite code {code}"))
@@ -262,22 +313,27 @@ fn summary(view: &LobbyView) -> Option<Element> {
 fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
     let own = lobby.own();
     let loaded = own.is_some_and(|own| own.loaded);
+    // On the desktop, `.lobby-panel h2` and the counts under it in the panel's own type.
+    let (heading, counts_style, counts_color) = match fit {
+        Fit::Desktop => (type_style::LOBBY_DECK, type_style::LOBBY_COUNTS, color::TYPE),
+        Fit::Phone => (HEADING, BODY, color::TEXT_DIM),
+    };
     let mut words = column().name("deck status").child(
         text(match &lobby.deck_name {
             _ if !loaded => "No deck loaded",
             Some(name) => name,
             None => "Deck loaded",
         })
-        .style(HEADING)
+        .style(heading)
         .color(color::TYPE),
     );
     if let Some(own) = own.filter(|own| own.loaded) {
         let counts = format!("{} main · {} sideboard", own.main_count, own.side_count);
-        words = words.child(text(&counts).style(BODY).color(color::TEXT_DIM));
+        words = words.child(text(&counts).style(counts_style).color(counts_color));
     }
     let actions =
         (fit.group("deck actions"))
-            .gap(space::M)
+            .gap(size::LOBBY_SECTION_GAP)
             .child(fit.action(button("Change").on_press(Press::Lobby(LobbyPress::Change))))
             .child(
                 fit.action(
@@ -290,7 +346,15 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
             .children(loaded.then(|| {
                 fit.action(button("Unload deck").on_press(Press::Lobby(LobbyPress::Unload)))
             }));
-    let mut deck = section("Deck").child(words).child(actions);
+    // On the desktop the deck's section has no legend (`section.lobby-section`), and its rows
+    // keep to their own widths.
+    let holder = match fit {
+        Fit::Desktop => frame("Deck")
+            .align_items(Align::Start)
+            .padding(size::LOBBY_SECTION_PADDING),
+        Fit::Phone => section("Deck"),
+    };
+    let mut deck = holder.child(words).child(actions);
     if !view.unknown.is_empty() {
         deck = deck.child(text("Unknown cards").style(LABEL).color(color::EMBER));
         for name in &view.unknown {
@@ -305,7 +369,7 @@ fn deck(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Element {
 /// save the deck under, the decklist, and 'Import'. Then why the last deck could not be read,
 /// if it could not, and 'Close'.
 fn picker(lobby: &Lobby, panel: DeckPanel, input: &ScreenIn, fit: Fit) -> Element {
-    let mut picker = section("Choose a deck");
+    let mut picker = fit.section("Choose a deck");
     picker = match panel {
         DeckPanel::Saved => picker
             .children(
@@ -372,7 +436,7 @@ fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
     if !lobby.sideboard || !lobby.own().is_some_and(|own| own.loaded) {
         return None;
     }
-    let mut swap = section("Sideboard swap");
+    let mut swap = fit.section("Sideboard swap");
     for (from_side, heading, zone) in [
         (false, "Main deck", &view.main),
         (true, "Sideboard", &view.side),
@@ -415,17 +479,79 @@ fn sideboard(lobby: &Lobby, view: &LobbyView, fit: Fit) -> Option<Element> {
     )
 }
 
-/// The five assists' switches (`AssistSwitches.tsx`).
+/// The five assists' switches (`AssistSwitches.tsx`): on the desktop in two columns of equal
+/// width (`.lobby-assists`), and on a phone one above the other.
 fn assists(view: &LobbyView, fit: Fit) -> Element {
-    let mut boxes = row().name("assist switches").gap(space::L).wrap(true);
-    if fit == Fit::Phone {
-        boxes = fit.group("assist switches");
-    }
+    let mut boxes = match fit {
+        Fit::Desktop => row()
+            .name("assist switches")
+            .display(Display::Grid)
+            .grid_template_columns(vec![Track::Fraction(1.0); 2])
+            .gap(size::LOBBY_SWITCH_GAP)
+            .align_self(Align::Stretch),
+        Fit::Phone => fit.group("assist switches"),
+    };
     for (at, (assist, label)) in (0u8..).zip(ASSISTS) {
         let on = view.assists.contains(&assist);
-        boxes = boxes.child(fit.least(checkbox(label, on, Press::Lobby(LobbyPress::Assist(at)))));
+        let press = Press::Lobby(LobbyPress::Assist(at));
+        boxes = boxes.child(match fit {
+            Fit::Desktop => switch(label, on, press),
+            Fit::Phone => fit.least(checkbox(label, on, press)),
+        });
     }
-    section("Assists").child(boxes)
+    let mut assists = fit.section("Assists").child(boxes);
+    if fit == Fit::Desktop {
+        assists.style.align_items = Some(Align::Stretch);
+    }
+    assists
+}
+
+/// One of the desktop's assists (`.lobby-assists label`): a 12-point checkbox and its label,
+/// across its whole column. On the web the label holds the checkbox, so the label's words fill
+/// the column, starting past the checkbox, and the checkbox stands over their start.
+fn switch(label: &str, on: bool, press: Press) -> Element {
+    let side = size::LOBBY_SWITCH_BOX;
+    let mut words = text(label).style(DESKTOP_LABEL).color(color::TEXT_DIM).grow(1.0);
+    words.style.padding = [0.0, 0.0, 0.0, side + size::LOBBY_SWITCH_LABEL_GAP];
+    let check = check_square(side, on)
+        .position(Position::Absolute)
+        .inset([Some((LABEL_LINE - side) / 2.0), None, None, Some(0.0)]);
+    Element::new(Role::Toggle)
+        .name(label)
+        .selected(on)
+        .on_press(press)
+        .child(words)
+        .child(check)
+}
+
+/// A desktop game setting's label `label` over `control`, as the web's label holds its field
+/// (`.lobby-panel label:has(input, select)`): the label's words are at least as wide as the
+/// control, and stand the control's height and the gap above it taller than their line, with
+/// the control in the bottom of that room.
+fn labelled(label: &str, control: Element) -> Element {
+    let height = control.style.height.unwrap_or_default();
+    let mut words = text(label).style(DESKTOP_LABEL).color(color::TEXT_DIM);
+    words.style.min_width = control.style.width;
+    words.style.padding = [0.0, 0.0, size::LOBBY_LABEL_GAP + height, 0.0];
+    let control = control
+        .position(Position::Absolute)
+        .inset([None, None, Some(0.0), Some(0.0)]);
+    column().name(label).child(words).child(control)
+}
+
+/// A desktop game setting's field, as `.lobby-panel input` draws it: 16-point words in a box
+/// padded 7 points above and below and 10 at the sides.
+fn setting_field(name: &str, state: &FieldState, width: f32) -> Element {
+    let mut setting = field(name, state);
+    // An empty field shows the setting in force, which the web's field holds as its value, so
+    // it is drawn in the value's color rather than faint.
+    setting.style.color = Some(color::TYPE);
+    setting.style.text = type_style::LOBBY_SETTING;
+    let (y, x) = (size::LOBBY_SETTING_PADDING_Y, size::LOBBY_SETTING_PADDING_X);
+    setting.style.padding = [y, x, y, x];
+    setting.style.width = Some(width);
+    setting.style.height = Some(size::LOBBY_SETTING_HEIGHT);
+    setting
 }
 
 /// The host's game settings (`GameSettings.tsx`): a field for the starting life and one for the
@@ -440,6 +566,33 @@ fn settings(view: &LobbyView, input: &ScreenIn, fit: Fit) -> Element {
     life.placeholder = current.starting_life.to_string();
     hand.placeholder = current.starting_hand_size.to_string();
     let changed = matches!(asked_settings(current, &life.text, &hand.text), Ok(Some(_)));
+    let save = button("Save settings")
+        .enabled(changed)
+        .on_press(Press::Lobby(LobbyPress::SaveSettings));
+    if fit == Fit::Desktop {
+        // `.lobby-actions`: the two fields, who plays first and 'Save settings' in one row,
+        // along its bottom.
+        let controls = row()
+            .name("game fields")
+            .wrap(true)
+            .gap(size::LOBBY_SECTION_GAP)
+            .align_items(Align::End)
+            .child(desktop_number(
+                "Starting life",
+                STARTING_LIFE,
+                &life,
+                unreadable::<i32>(&life.text),
+            ))
+            .child(desktop_number(
+                "Starting hand size",
+                STARTING_HAND_SIZE,
+                &hand,
+                unreadable::<u16>(&hand.text),
+            ))
+            .child(first_box(view))
+            .child(save);
+        return fit.section("Game").child(controls);
+    }
     let fields = (fit.group("game fields"))
         .gap(space::L)
         .align_items(match fit {
@@ -460,14 +613,38 @@ fn settings(view: &LobbyView, input: &ScreenIn, fit: Fit) -> Element {
             unreadable::<u16>(&hand.text),
             fit,
         ));
-    section("Game").child(fields).child(first(view)).child(
-        fit.action(
-            button("Save settings")
-                .align_self(Align::Start)
-                .enabled(changed)
-                .on_press(Press::Lobby(LobbyPress::SaveSettings)),
-        ),
-    )
+    section("Game")
+        .child(fields)
+        .child(first(view))
+        .child(fit.action(save.align_self(Align::Start)))
+}
+
+/// A desktop game setting's label over its number field `name`, holding `state`, drawn in ember
+/// if `wrong`.
+fn desktop_number(label: &str, name: &str, state: &FieldState, wrong: bool) -> Element {
+    let mut number = setting_field(name, state, size::LOBBY_SETTING_WIDTH);
+    if wrong {
+        number.style.border = Some(Border::uniform(color::EMBER, size::FIELD_BORDER));
+        number.style.color = Some(color::EMBER);
+    }
+    labelled(label, number)
+}
+
+/// Who plays first on the desktop: 'First' over a box showing it, in the look of the web's
+/// `select`. It is shown, not chosen, as `settings` says.
+fn first_box(view: &LobbyView) -> Element {
+    let mut shown = Element::new(Role::Region).name(&first_name(view));
+    shown.text = Some(first_name(view));
+    shown.style.text = type_style::LOBBY_SETTING;
+    shown.style.color = Some(color::TYPE);
+    let (y, x) = (size::LOBBY_SETTING_PADDING_Y, size::LOBBY_SETTING_PADDING_X);
+    shown.style.padding = [y, x, y, x];
+    shown.style.width = Some(size::LOBBY_FIRST_WIDTH);
+    shown.style.height = Some(size::LOBBY_SETTING_HEIGHT);
+    shown.style.background = Some(color::SURFACE_SUNK);
+    shown.style.border = Some(Border::uniform(color::METAL, size::FIELD_BORDER));
+    shown.style.radius = size::FIELD_RADIUS;
+    labelled("First", shown)
 }
 
 /// A game setting's label and number field `name`, holding `state`, drawn in ember if `wrong`,
@@ -488,9 +665,9 @@ fn number(label: &str, name: &str, state: &FieldState, wrong: bool, fit: Fit) ->
 }
 
 /// The game settings as a guest sees them (`GameSettingsSummary`).
-fn settings_summary(view: &LobbyView) -> Element {
+fn settings_summary(view: &LobbyView, fit: Fit) -> Element {
     let settings = view.settings;
-    section("Game")
+    fit.section("Game")
         .child(
             text(&format!("Starting life: {}", settings.starting_life))
                 .style(BODY)
@@ -509,17 +686,22 @@ fn settings_summary(view: &LobbyView) -> Element {
 
 /// Who plays first: the named seat, or by default a roll, or after a game the loser's choice.
 fn first(view: &LobbyView) -> Element {
-    let first = match view.settings.first {
+    text(&format!("First: {}", first_name(view)))
+        .style(BODY)
+        .color(color::TYPE)
+}
+
+/// The name of who plays first: the named seat, or by default a roll, or after a game the
+/// loser's choice.
+fn first_name(view: &LobbyView) -> String {
+    match view.settings.first {
         Some(first) => (view.seats.iter())
             .find(|seat| seat.seat == first)
             .and_then(|seat| seat.name.clone())
             .unwrap_or_else(|| "Guest".to_owned()),
         None if view.last_winner.is_some() => "Loser chooses".to_owned(),
         None => "Roll".to_owned(),
-    };
-    text(&format!("First: {first}"))
-        .style(BODY)
-        .color(color::TYPE)
+    }
 }
 
 /// The host's 'Start', enabled when the table can start, or the guest's 'Ready', enabled once
