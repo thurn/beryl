@@ -156,6 +156,13 @@ pub(crate) fn row_area(
     side: Side,
     row: RowName,
 ) -> (RowArea, f32) {
+    // The desktop layout fitted to a window has each side's rows where the web interface draws
+    // them, already clear of the stack's column and the life orbs (`ROOM` and `ROWS` in
+    // `ui/src/game/tableRows.ts`).
+    if let Some(rows) = &layout.fitted {
+        let area = rows[super::place::side_index(side)][super::place::row_index(row)].area;
+        return (area, area.y);
+    }
     let (area, y) = left_of_stack((layout, camera), side, row);
     (clear_of_life((layout, camera), side, row, (area, y)), y)
 }

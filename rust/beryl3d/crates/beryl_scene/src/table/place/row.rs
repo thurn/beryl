@@ -7,6 +7,7 @@ use crate::agent::hit;
 use crate::frame::Place;
 use crate::table::rows::{Beneath, Laid, NameIds, RowRules, SameName, lay_row, least_strip};
 use crate::table::{Camera, Layout, RowArea, row_area};
+use glam::{Quat, Vec3};
 
 /// The limits of a row for one layout and camera, independent of its cards and scroll offset.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -69,11 +70,37 @@ pub(super) fn battlefield_row(
     } else {
         (cards, None)
     };
+    // The rightmost any row of the layout reaches, past which no card scrolled off this row's
+    // right end rests.
+    let rights = match &layout.fitted {
+        Some(rows) => rows[side_index(side)].map(|row| row.area.right),
+        None => [layout.creatures, layout.lands, layout.others].map(|row| row.right),
+    };
+    let limit = rights.into_iter().fold(area.right, f32::max);
+    // A row fitted to the web interface's is laid out in millimetres of a card at its printed
+    // size, in an area as much wider than its own as its cards are smaller, and then scaled
+    // about its left end (`web_fit`).
+    let fitted = layout
+        .fitted
+        .map(|rows| rows[side_index(side)][row_index(row)]);
+    let (scale, gap, tapped_gap) = fitted.map_or((1.0, layout.gap, layout.gap), |fitted| {
+        (fitted.scale, fitted.gap, fitted.tapped_gap)
+    });
+    let local = |x: f32| area.left + (x - area.left) / scale;
+    let unscaled = RowArea {
+        y: area.y,
+        left: area.left,
+        right: local(area.right),
+        centre: area.centre.map(local),
+    };
     let rules = RowRules {
         layout,
-        strip,
-        room: area.right - area.left,
+        strip: strip / scale,
+        room: unscaled.right - unscaled.left,
         scroll: offset,
+        gap,
+        tapped_gap,
+        limit: local(limit),
     };
     let place = |zone| Place::Card {
         zone,
@@ -82,10 +109,27 @@ pub(super) fn battlefield_row(
     };
     let mut set = |Laid {
                        object,
-                       pose,
+                       mut pose,
                        visible,
                        copies,
                    }| {
+        if let Some(fitted) = fitted {
+            let at = pose.position;
+            pose.position = Vec3::new(
+                area.left + (at.x - area.left) * scale,
+                y + (at.y - y) * scale,
+                at.z * scale,
+            );
+            pose.scale *= scale;
+            // Each card leans back toward the camera in the row's plane, as far as makes it as
+            // tall on screen as the web's upright card. A tapped card keeps its centre on the
+            // row's line, where the web lines a row's cards up by their tops: one raised up the
+            // table would lie farther from the camera than the untapped card beside it, and the
+            // hit test, which takes the nearer card for the one in front, would let that card
+            // cover it.
+            pose.position.z += fitted.height(pose.position.y);
+            pose.rotation = Quat::from_rotation_x(fitted.tilt) * pose.rotation;
+        }
         placement.set(
             object.slot,
             Rest {
@@ -100,7 +144,7 @@ pub(super) fn battlefield_row(
     placement.rows.battlefield[side_index(side)][row_index(row)] = lay_row(
         (cards, &beneath),
         (names, ids, stack_slots),
-        area,
+        unscaled,
         y,
         &rules,
         &mut set,

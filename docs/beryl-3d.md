@@ -1367,6 +1367,35 @@ flight start exactly where the card was.
   lands run from the table's edge inward and the other permanents from the
   middle outward, so a permanent that leaves one of those rows moves only the
   cards to its right.
+- **Rows follow the web's stage (desktop).** `Layout::for_window` fits each
+  side's three battlefield rows to the window (`table::web_fit`) from the web
+  interface's stage positions, copied into `layout.desktop.web` in `space.json`:
+  `ROWS` and `ROOM` (`ui/src/game/tableRows.ts`) and the frame widths and gaps
+  of `ui/src/game/battlefield.ts`, with the stage fitted to the window as
+  `ui/src/game/Stage.tsx` fits it. Each row gets the line of the table under the
+  centres of the web's untapped cards, its ends, and the scale at which a card
+  is as wide on screen as the web's. It is laid out in millimetres of a card at
+  its printed size, then scaled about its left end. A card lying flat under the
+  camera's pitch is shorter on screen than the web's upright one, so a row's
+  cards lean back toward the camera until an untapped card is as tall as the
+  web's (at 1600 by 900, 11 to 15 degrees on the viewer's rows and 20 to 23 on
+  the opponent's). Every card of a row lies in one plane, which rises at that
+  angle from the near edge of an untapped card, and every card's centre lies on
+  the row's line, so a card placed later lies nearer the camera than one placed
+  before it, as the hit test needs. The web lines a row's cards up by their tops
+  instead, so a tapped card stands about 18 points lower than the web's. The
+  lands' row leaves the web's wider `TAPPED_GAP` before its first tapped land.
+  Two parts of the web's placement are not copied yet: an attacker's `ADVANCE`
+  toward the other side, which needs its own animation, and the piles (`PILES`
+  in `ui/src/game/pileLook.ts`), whose size and place also move the cards lifted
+  beside a library, the pile counts and every flight that starts at a pile.
+  Decided on 2026-11-19 instead of refitting the camera: no camera fit could
+  move rows that stood 25 to 80 points off while the hand already matched.
+  Untapped card centres now land within about 3 points of the web's on the
+  reference targets. The boxes still differ in width by up to 11 points, since
+  the web leans a card by shearing it, which a card in perspective does not do.
+  The phone layout keeps its own rows (`table::phone`), and has not been fitted
+  to the web's.
 - **Some cards lie under a permanent, in its row**, as the web interface tucks
   them: the other cards of a merged permanent and the cards a permanent holds in
   exile peek out to its left, and the Auras and Equipment attached to it,
@@ -4325,9 +4354,12 @@ change there and a small change in each client.
   are not shared: the web interface keeps its settings in the browser's storage,
   and Beryl 3D in a file of its own in the same data folder.
 
-What they do not share is placement. The web interface draws the table on a 1600
-by 900 surface and imitates perspective by shrinking and tilting each card.
-Beryl 3D's table is a real scene. Each is fitted to Arena separately.
+The web interface draws the table on a 1600 by 900 surface and imitates
+perspective by shrinking and leaning each card. Beryl 3D's table is a real
+scene, seen through a camera fitted to Arena (`layout.desktop.camera`, solved by
+`just b3d camera-fit`). On the desktop, Beryl 3D takes its battlefield rows from
+the web interface's stage positions rather than from its own: see "Rows follow
+the web's stage" under "Objects and placement".
 
 ### Matching the web interface's look
 

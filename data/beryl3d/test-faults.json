@@ -5,6 +5,9 @@
     },
     "b3d:order-long/you/1600x900@2": {
       "text-overlap": 2
+    },
+    "b3d:stress-verbs/you/2560x1080": {
+      "reachable": 1
     }
   }
 }

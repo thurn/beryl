@@ -116,6 +116,35 @@ pub(super) struct RowRules<'a> {
     pub strip: f32,
     pub room: f32,
     pub scroll: usize,
+    /// How far apart cards stand while the row has room to spare.
+    pub gap: f32,
+    /// How far the first tapped card stands from the untapped card before it while the row has
+    /// room to spare: wider than `gap` in the desktop's lands' row, as the web interface's
+    /// `TAPPED_GAP` is, so that how much mana is open reads at a glance.
+    pub tapped_gap: f32,
+    /// The furthest right a card scrolled off the row's right end may rest (`beyond_right`).
+    pub limit: f32,
+}
+
+impl RowRules<'_> {
+    /// The gap between a card or group whose top card is `before` and the next, whose top card
+    /// is `after`.
+    pub(super) fn gap_between(&self, before: &ObjectView, after: &ObjectView) -> f32 {
+        if !before.tapped && after.tapped {
+            self.tapped_gap
+        } else {
+            self.gap
+        }
+    }
+
+    /// Where a row whose cards take `full` with room to spare starts: centred on the area's
+    /// centre as near as its limits let it be, or at its left limit.
+    pub(super) fn start(area: RowArea, full: f32) -> f32 {
+        match area.centre {
+            Some(centre) => (centre - full / 2.0).min(area.right - full).max(area.left),
+            None => area.left,
+        }
+    }
 }
 
 /// The cards that lie under a row's permanents (`place::under`), each with the permanent it
@@ -276,19 +305,20 @@ pub(super) fn lay_row<'a>(
         .iter()
         .map(|g| group_width(g, beneath, rules))
         .collect();
-    let full: f32 = widths.iter().sum::<f32>() + rules.layout.gap * gaps(groups.len());
+    let between: Vec<f32> = groups
+        .iter()
+        .zip(groups.iter().skip(1))
+        .map(|(before, after)| rules.gap_between(before[0], after[0]))
+        .collect();
+    let full: f32 = widths.iter().sum::<f32>() + between.iter().sum::<f32>();
     // An empty row lays out nothing however little room it has. Without this, a row with no
     // room would reach the window below, which has to show at least one of no groups.
     if full <= room || groups.len() == 0 {
-        let mut left = if area.centred {
-            area.left + (room - full) / 2.0
-        } else {
-            area.left
-        };
+        let mut left = RowRules::start(area, full);
         let mut height = 0;
-        for (group, width) in groups.iter().zip(&widths) {
+        for (index, (group, width)) in groups.iter().zip(&widths).enumerate() {
             place_group((group, beneath), left, y, &mut height, true, rules, laid);
-            left += width + rules.layout.gap;
+            left += width + between.get(index).copied().unwrap_or(0.0);
         }
         return RowWindow::new(groups.len(), 0, groups.len(), (0, 0));
     }

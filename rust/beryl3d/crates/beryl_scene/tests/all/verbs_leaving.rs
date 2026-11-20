@@ -344,14 +344,22 @@ fn every_case_of_emerge_travels_from_the_source_to_the_stack() {
                 < 5.0,
             "{case}: it starts in the middle of its source: {begins:?} {source:?}"
         );
-        assert!(begins.scale < 0.7, "{case}: small at first");
+        assert!(begins.scale < 0.7 * source.scale, "{case}: small at first");
         let landed = at(&moments, to);
         let rests = landed.ability.expect("on the stack");
         let table = show.table();
         let id = *table.abilities().last().expect("an ability on the stack");
         let placed = table.ability_rest(id).expect("placed on the stack");
+        // The stack stands much nearer the eye than the battlefield, so the two sizes compare
+        // on the window, not as scales.
+        let tall = |pose: &Pose| {
+            let (corners, _) = table.camera().card_box(pose);
+            let ys = corners.map(|corner| corner.y);
+            ys.iter().copied().fold(f32::MIN, f32::max)
+                - ys.iter().copied().fold(f32::MAX, f32::min)
+        };
         assert!(
-            (rests.scale - placed.scale).abs() < 1e-6 && rests.scale > begins.scale,
+            (rests.scale - placed.scale).abs() < 1e-6 && tall(&rests) > tall(&begins),
             "{case}: it grows to its size on the stack"
         );
         assert!(

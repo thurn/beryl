@@ -25,6 +25,7 @@ mod shown;
 mod stack;
 mod tray;
 mod tray_layout;
+mod web_fit;
 
 use glam::Vec2;
 
@@ -44,6 +45,7 @@ pub(crate) use stack::{OnStack, on_stack, row_area};
 pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
 };
+pub use web_fit::{FittedRow, FittedRows};
 
 use crate::data::space;
 use crate::input::{Insets, Size};
@@ -92,12 +94,12 @@ pub struct RowArea {
     pub y: f32,
     pub left: f32,
     pub right: f32,
-    /// Whether a row with room to spare is centred in the band, rather than laid from its left
-    /// limit. The web interface centres only the creatures' row; the lands run from the table's
-    /// edge inward and the other permanents from the middle outward (`sideRows` in
-    /// `ui/src/game/battlefield.ts`), so a permanent that leaves one of those rows moves only
-    /// the cards to its right.
-    pub centred: bool,
+    /// Where across the table a row with room to spare is centred, as near as its limits let
+    /// it be; none for a row laid from its left limit. The web interface centres only the
+    /// creatures' row, on the stage's middle; the lands run from the table's edge inward and the
+    /// other permanents from the middle outward (`sideRows` in `ui/src/game/battlefield.ts`), so
+    /// a permanent that leaves one of those rows moves only the cards to its right.
+    pub centre: Option<f32>,
 }
 
 /// Where a hand stands, relative to the camera (`hand` and `opponent_hand` in `space.json`).
@@ -216,17 +218,25 @@ pub struct Layout {
     /// On the phone layout, the bands of the window from the opponent's strip to the viewer's
     /// hand, which the flat layer's furniture stands in; none on the desktop.
     pub bands: Option<phone::PhoneBands>,
+    /// On the desktop layout fitted to a window (`for_window`), each side's battlefield rows
+    /// fitted to where the web interface draws them (`web_fit`), which replace `creatures`,
+    /// `lands` and `others`; none otherwise.
+    pub fitted: Option<web_fit::FittedRows>,
 }
 
 impl Layout {
-    /// The layout a window of this shape takes: this one on a desktop window, and the phone
-    /// layout fitted to `window` when its shorter side is under 500 points (`Window::phone`).
+    /// The layout a window of this shape takes: this one on a desktop window, with its
+    /// battlefield rows fitted to where the web interface draws them in that window
+    /// (`web_fit`), and the phone layout fitted to `window` when its shorter side is under 500
+    /// points (`Window::phone`).
     #[must_use]
     pub fn for_window(&self, window: Window) -> Layout {
         if window.phone() {
-            phone::layout(window)
-        } else {
-            *self
+            return phone::layout(window);
+        }
+        Layout {
+            fitted: Some(web_fit::rows(window, &self.fit(window))),
+            ..*self
         }
     }
 
@@ -263,7 +273,11 @@ macro_rules! row_area {
             y: desktop::$name::Y,
             left: desktop::$name::LEFT,
             right: desktop::$name::RIGHT,
-            centred: $centred,
+            centre: if $centred {
+                Some((desktop::$name::LEFT + desktop::$name::RIGHT) / 2.0)
+            } else {
+                None
+            },
         }
     };
 }
@@ -351,4 +365,5 @@ pub const DESKTOP: Layout = Layout {
     ],
     phone: None,
     bands: None,
+    fitted: None,
 };

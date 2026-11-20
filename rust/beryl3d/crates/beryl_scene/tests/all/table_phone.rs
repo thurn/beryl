@@ -650,10 +650,12 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
 }
 
 #[test]
-fn a_desktop_window_keeps_the_desktop_layout() {
+fn a_desktop_window_keeps_the_desktop_layout_with_its_rows_fitted() {
     let table = Table::new(DESKTOP, Window::default());
-    assert_eq!(*table.layout(), DESKTOP);
-    assert_eq!(DESKTOP.for_window(Window::default()), DESKTOP);
+    let fitted = DESKTOP.for_window(Window::default());
+    assert_eq!(*table.layout(), fitted);
+    assert!(fitted.phone.is_none() && fitted.fitted.is_some());
+    assert_eq!(fitted.camera, DESKTOP.camera);
     assert!(DESKTOP.for_window(phone(393.0, 759.0)).phone.is_some());
 }
 

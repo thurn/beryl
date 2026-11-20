@@ -4,7 +4,7 @@
       "recording": "tokens",
       "at": "2870ms",
       "still": false,
-      "shows": "card \"Map Token\" #512 battlefield.yours.others 964,572"
+      "shows": "card \"Map Token\" battlefield.yours.others"
     },
     "Cards put on the bottom after a mulligan": {
       "recording": "opening-bottom",
@@ -26,7 +26,7 @@
       "recording": "tokens",
       "at": "2400ms",
       "still": false,
-      "shows": "card \"Snapcaster Mage\" #16 graveyard.yours 609,433 103x124 moving faded"
+      "shows": "card \"Snapcaster Mage\" graveyard.yours moving faded"
     },
     "Choosing how to cast": {
       "recording": "shape-mode",
@@ -60,7 +60,7 @@
     "Attacking a planeswalker": {
       "recording": "attack-past-walker",
       "at": "650ms",
-      "shows": "card \"The Wandering Emperor\" #264 battlefield.theirs.others 829,150 94x108 interactive eligible"
+      "shows": "card \"The Wandering Emperor\" battlefield.theirs.others interactive eligible"
     },
     "Two items on the stack": {
       "recording": "arrow-stacked",
@@ -119,7 +119,7 @@
       "recording": "tokens",
       "at": "1300ms",
       "still": false,
-      "shows": "card \"Plains\" #3 battlefield.yours.lands 119,570 164x136 interactive tapped moving"
+      "shows": "card \"Plains\" battlefield.yours.lands interactive tapped moving"
     },
     "The local player's scry": {
       "recording": "verbs-scry",

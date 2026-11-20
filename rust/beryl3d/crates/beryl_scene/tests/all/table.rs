@@ -223,8 +223,9 @@ fn crowded() -> PlayerView {
 #[test]
 fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovered() {
     let view = crowded();
-    let camera = Camera::fit(DESKTOP.camera, window(1440.0, 900.0));
-    let placement = place(&view, &[], &DESKTOP, &camera, &Scroll::default());
+    let layout = DESKTOP.for_window(window(1440.0, 900.0));
+    let camera = layout.fit(window(1440.0, 900.0));
+    let placement = place(&view, &[], &layout, &camera, &Scroll::default());
     let [low, high] = DESKTOP.camera.required;
     let mut drawn = 0;
     for object in &view.objects {
@@ -238,12 +239,11 @@ fn a_crowded_battlefield_keeps_its_cards_in_the_table_with_their_strips_uncovere
             CARD_HEIGHT
         } else {
             CARD_WIDTH
-        } / 2.0;
+        } / 2.0
+            * rest.pose.scale;
         assert!(p.x - half >= low.x && p.x + half <= high.x, "{p}");
-        assert!(
-            p.y - CARD_HEIGHT / 2.0 >= low.y && p.y + CARD_HEIGHT / 2.0 <= high.y,
-            "{p}"
-        );
+        let long = CARD_HEIGHT / 2.0 * rest.pose.scale;
+        assert!(p.y - long >= low.y && p.y + long <= high.y, "{p}");
     }
     assert!(drawn < 255, "some cards are scrolled out of view");
 

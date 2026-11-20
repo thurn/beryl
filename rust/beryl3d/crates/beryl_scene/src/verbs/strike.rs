@@ -171,13 +171,15 @@ fn blow(step: &StepIn<'_>, from: Pose, struck: Subject) -> Option<Blow> {
     })
 }
 
-/// Half the width and depth a card at `pose` covers on the table, turned as it lies.
+/// Half the width and depth a card at `pose` covers on the table, turned as it lies. A card
+/// that leans back from the table (`table::web_fit`) reaches as much further up the screen as
+/// its far edge rises, which counts as depth.
 fn extent(pose: Pose) -> Vec2 {
     let across = pose.rotation * Vec3::new(CARD_WIDTH / 2.0, 0.0, 0.0);
     let along = pose.rotation * Vec3::new(0.0, CARD_HEIGHT / 2.0, 0.0);
     Vec2::new(
         across.x.abs() + along.x.abs(),
-        across.y.abs() + along.y.abs(),
+        across.y.abs() + along.y.abs() + across.z.abs() + along.z.abs(),
     ) * pose.scale
 }
 

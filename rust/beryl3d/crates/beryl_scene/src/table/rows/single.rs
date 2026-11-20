@@ -15,15 +15,19 @@ pub(super) fn lay_single_cards<'a>(
 ) -> RowWindow {
     let room = area.right - area.left;
     let count = cards.len();
-    let gap = rules.layout.gap;
-    let full = cards.iter().map(|card| card_width(card)).sum::<f32>() + gap * gaps(count);
-    if full <= room || count == 0 {
-        let mut left = if area.centred {
-            area.left + (room - full) / 2.0
+    let between = |index: usize| {
+        if index == 0 {
+            0.0
         } else {
-            area.left
-        };
+            rules.gap_between(cards[index - 1], cards[index])
+        }
+    };
+    let full = cards.iter().map(|card| card_width(card)).sum::<f32>()
+        + (0..count).map(between).sum::<f32>();
+    if full <= room || count == 0 {
+        let mut left = RowRules::start(area, full);
         for (index, &card) in cards.iter().enumerate() {
+            left += between(index);
             let width = card_width(card);
             laid(permanent(
                 card,
@@ -33,7 +37,7 @@ pub(super) fn lay_single_cards<'a>(
                 true,
                 1,
             ));
-            left += width + gap;
+            left += width;
         }
         return RowWindow::new(count, 0, count, (0, 0));
     }
@@ -78,12 +82,7 @@ pub(super) fn lay_single_cards<'a>(
 /// screen, that hid most flights into the row. A row that ends at the battlefield's right edge
 /// has no room past its end, and its hidden cards rest against that end.
 pub(super) fn beyond_right(area: RowArea, rules: &RowRules, width: f32) -> f32 {
-    let layout = rules.layout;
-    let limit = [layout.creatures, layout.lands, layout.others]
-        .iter()
-        .map(|row| row.right)
-        .fold(area.right, f32::max);
-    (area.right + layout.gap).min(limit - width)
+    (area.right + rules.gap).min(rules.limit.max(area.right) - width)
 }
 
 pub(super) fn window_size(groups: usize, room: f32, widest: f32, strip: f32) -> usize {

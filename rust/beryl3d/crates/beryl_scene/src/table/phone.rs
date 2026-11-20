@@ -512,7 +512,7 @@ pub fn layout(window: Window) -> Layout {
         y,
         left,
         right,
-        centred,
+        centre: centred.then_some(f32::midpoint(left, right)),
     };
     Layout {
         camera: camera_data,
@@ -542,6 +542,7 @@ pub fn layout(window: Window) -> Layout {
         players: [anchor(bands.your_strip), anchor(bands.opponent_strip)],
         phone: Some(stack),
         bands: Some(bands),
+        fitted: None,
     }
 }
 
