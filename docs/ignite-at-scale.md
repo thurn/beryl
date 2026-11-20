@@ -1,0 +1,758 @@
+# Ignite at high volume: land first, verify the tip once
+
+Ignite is the program that builds, checks and delivers every change to Project
+Beryl. Coding agents are its only users. An agent claims a **ticket** (one
+task), edits in a **ticket tree** (a git worktree at a fixed path that keeps its
+build between tickets), and delivers with `ignite land`, which pushes the
+ticket's commits to the shared `staging` branch. That delivery is a **landing**.
+The newest commit on `staging` is the **tip**. A second branch, `master`, only
+ever points at a commit of `staging` whose checks have passed.
+
+Today a landing must pass its checks on the exact tip. When another landing
+moves the tip first, the landing rebases and checks again. On 2026-11-19 that
+rule, on a machine short of cores, made one landing take 91 minutes and seven
+attempts. The median landing that ran the checks took 7.8 minutes, although the
+checks it chooses are budgeted at 60 seconds.
+
+This document proposes to change what a landing waits for, following the way
+Google and Meta run continuous integration on one large repository. It has six
+parts:
+
+- **Check once.** A change is checked on the commit it was written on. The
+  result is stored and stays valid while the tip moves.
+- **Land with git alone.** A landing rebases and pushes. It takes seconds, and
+  it never waits for another landing or starts again because of one.
+- **Verify the tip in batches.** The tip is compiled and checked once for each
+  batch of landings, in one tree that has cores kept for it.
+- **Revert automatically.** A landing that breaks the tip is reverted, and its
+  ticket opens again with the failure.
+- **Start from a commit that builds.** New work begins at the newest commit
+  known to compile, not at whatever the tip is.
+- **Run few heavy commands at once.** A build gets several cores or waits its
+  turn. It is not started on one core beside a dozen others.
+
+Checking once and landing with git alone remove the race for the tip. Automatic
+reverts are what make that safe. Verifying in batches and starting from a commit
+that builds remove most compiling, and the scheduling change makes what is left
+finish sooner.
+
+## Related information
+
+- [`docs/ignite.md`](ignite.md) is Ignite's design as built. This proposal
+  replaces its sections "Landing" and "Express landings", and changes "Tip
+  verification", "Build trees" and "Cores, memory and shared resources".
+- `ignite.toml` in the repository root holds Ignite's settings, and
+  `ignite/checks/` declares the checks. Every setting this proposal adds goes in
+  `ignite.toml` and is shown where it is introduced.
+- [Software Engineering at Google, chapter 23, "Continuous Integration"](https://abseil.io/resources/swe-book/html/ch23.html)
+  describes checking a change before submission on a subset of tests, running
+  the rest after submission, finding the change that broke a test and rolling it
+  back, and building from the last commit known to pass.
+- "Taming Google-Scale Continuous Testing", by Memon and others at ICSE-SEIP in
+  2017, describes running tests after submission on batches of changes instead
+  of on every change.
+- ["Predictive Test Selection"](https://arxiv.org/abs/1810.05286), by Machalica
+  and others at Meta, describes choosing which tests to run for a change from
+  each test's record of failing on similar changes.
+- "Keeping Master Green at Scale", by Ananthanarayanan and others at Uber,
+  published at EuroSys in 2019, describes the main alternative: a queue that
+  tests each change on top of the changes ahead of it.
+  [Alternatives considered](#alternatives-considered) says why this proposal
+  does not take that route.
+
+## How a change is delivered today
+
+This section describes the current path of a change, because the proposal is a
+set of changes to it. It also introduces the terms the rest of the document
+uses.
+
+- **The daemon** is Ignite's one long-running process on each machine. It runs
+  every heavy command, hands out cores, and records what each command cost. The
+  **hub** is the daemon on the main machine, jarvis (a Mac with 18 cores), which
+  also holds the shared database of tickets and results.
+- **A check** is one named verification, such as one Rust test. A **family** is
+  the group of checks that one command runs, such as all Rust tests. A family's
+  declaration names its **inputs**, the files its checks read, and the **build
+  products** it needs, such as the compiled test binaries.
+- **The result cache** stores each check's outcome under its **input hash**, a
+  hash of everything the check reads. A check whose inputs already passed is not
+  run again, in any tree or on any machine.
+- **The gate** is the set of checks a landing must pass before it is pushed. It
+  has three parts. The **always set** is formatting, the project's lint rules
+  for source files, and the type checks (clippy, `tsc` and pyre). Next are the
+  checks whose own files the change edits. Last are the checks chosen by
+  **score**, which is each check's record of failing after similar changes
+  divided by its cost, up to a budget of 60 seconds of running checks.
+- `ignite land` rebases the ticket tree onto the tip, runs the gate on the
+  rebased commit, takes a short **lease** on `staging` from the hub (a lock held
+  only for the push), and pushes. If the tip moved while the gate ran, it starts
+  again from the rebase. The gate usually runs in a **landing tree**, one of
+  three spare trees on jarvis that stay near the tip.
+- **Tip verification** runs the checks the gate left out. It works in
+  **rounds**: each round takes the newest tip, runs the best-scored checks
+  within a budget of 300 seconds, moves `master` to that tip if they pass, and
+  then runs the rest.
+- When a check fails in a round, Ignite searches for the landing that broke it
+  and files a **regression ticket**, a top-priority ticket to repair it. Until
+  the repair lands, `master` does not move past the failure, and other landings
+  are told that the check is known to fail.
+- A change that touches only Ignite's own files takes the **express lane**: a
+  fixed list of four commands that run in place of the gate, on cores the
+  scheduler never gives to other work. Such a landing also moves the **release
+  branch**, the branch every daemon builds itself from.
+- **Exploration checks** search at random for bugs, such as generated game
+  scenarios. They never block a landing or `master`, and this proposal does not
+  change them.
+
+## What one day showed
+
+Every figure in this section is from the daemon's records on jarvis for
+2026-11-19, from midnight to about 20:30 Pacific time, unless it says otherwise.
+
+Volume and landing time:
+
+- 135 landings reached `staging`, at most 15 in one hour, carrying 236 commits.
+- 83 of them took the express lane and 52 went through the gate.
+
+| Landing             | Count | Median  | 90th percentile | Longest |
+| ------------------- | ----- | ------- | --------------- | ------- |
+| Through the gate    | 52    | 7.8 min | 33 min          | 91 min  |
+| By the express lane | 83    | 2.1 min | 5.6 min         | 9.6 min |
+
+Time that sessions and `master` waited:
+
+- Agent sessions spent 63 hours inside three commands: `ignite test` (18.7
+  hours), `ignite check` (19.5 hours) and `ignite land` (24.9 hours). That is
+  three sessions blocked for the whole day.
+- A round of tip verification took a median of 5.2 minutes, 20 minutes at the
+  90th percentile and 89 minutes at worst.
+- One failing test held `master` back for over an hour in the afternoon.
+
+Where the CPU went:
+
+| Work            | Commands | CPU-hours | Share |
+| --------------- | -------- | --------- | ----- |
+| Compiling       | 1,479    | 57.0      | 75%   |
+| Running checks  | 2,695    | 15.8      | 21%   |
+| Listing checks  | 4,810    | 2.4       | 3%    |
+| Everything else | 708      | 0.9       | 1%    |
+
+- That is 25 CPU-minutes of compiling and 11 build commands for each landing.
+- 8,053 of the 9,692 commands (83%) started with one core. A build that took
+  over 30 seconds used 0.93 of a core at the median. Such builds took 115
+  seconds at the median and 426 at the 90th percentile.
+- Commands waited 49 hours for cores. Commands that list a family's checks
+  waited 23 hours to do 2.4 hours of work.
+
+### One landing, 91 minutes
+
+The slowest landing changed some Python tools, a data file and one agent skill
+file. Its record shows each problem this proposal addresses.
+
+- **It ran Ignite's own test suite.** The declaration of that family names the
+  skill files as an input of one package's tests, so a one-file skill edit put
+  1,513 tests in the gate.
+- **Every other Ignite change then invalidated it.** After a lost race, the gate
+  runs again each family whose inputs the newly landed commits touch. Every
+  Ignite change touches that family's inputs, so each attempt rebuilt the test
+  binaries and ran the suite again, which took 6 to 11 minutes. Ignite changes
+  were landing every 6 to 9 minutes.
+- **Every one of its 178 commands ran on one core**, builds included, although a
+  landing is the scheduler's highest class of work.
+- **A test already failing on `staging` cost 24 minutes.** The first attempt hit
+  a test that an earlier landing had broken. Showing that the test failed at the
+  tip too took a second build, after 19 minutes in which the landing ran no
+  command.
+
+It landed on its seventh attempt. Ignite gives up after ten.
+
+### Checking again after a lost race found nothing
+
+The rule that makes a landing check again exists to catch two changes that each
+pass alone and fail together. The daemon's records since 2026-11-18 hold 13
+landings that lost at least one race and say how each attempt ended. Together
+they ran 23 extra attempts. All 13 landed, and no later attempt found a failure.
+
+That sample is small. It shows what the rule cost over two days and that it
+caught nothing in them. It does not show how often two changes fail together,
+which [Records](#records) below sets out to measure.
+
+### Why the cost grows faster than the volume
+
+Three costs rise faster than the number of landings. Each follows from the
+current design, not from a slow machine.
+
+**The race.** Suppose commits that invalidate a landing's gate arrive at random,
+`r` per hour, and one attempt takes `g` hours. An attempt survives with
+probability `exp(-r × g)`, so a landing needs `exp(r × g)` attempts on average:
+
+```text
+attempt length 7 minutes (the landing above took 6 to 11)
+
+ 4 invalidating commits an hour     1.6 attempts
+ 8 invalidating commits an hour     2.5 attempts   what that landing met
+15 invalidating commits an hour     5.8 attempts
+30 invalidating commits an hour      33 attempts
+60 invalidating commits an hour   1,097 attempts
+```
+
+A landing that no other landing invalidates is unaffected, which is why most
+landings are fine today. At four times the rate that the 91-minute landing met,
+the average such landing needs more attempts than Ignite's limit of ten.
+
+**Compiling.** A ticket tree holds the build of the commit its ticket started
+on. `ignite land` rebases onto the tip and builds there, so the landing compiles
+everything that landed since. For the 253 tickets that landed on 2026-11-18 and
+2026-11-19, a median of 3 commits and 21 at the 90th percentile reached
+`staging` between the ticket's claim and its landing. Every landing compiles the
+same commits again, so the work is the number of landings multiplied by the
+commits each one is behind, and both grow with the number of agents.
+
+**The scheduler.** It divides the free cores among every waiting command. With
+thirteen commands waiting, each gets one core, and a build that needs 300
+CPU-seconds takes five minutes or more, however many cores the machine has.
+
+## What Google and Meta do, and what Ignite already has
+
+The proposal is easier to judge against the practice it borrows from. This table
+names each part of that practice, what Ignite does today and what changes.
+
+| Practice                                                       | Ignite today                                     | This proposal                                     |
+| -------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| Cache a check's result under a hash of its inputs              | Yes: the result cache                            | Unchanged                                         |
+| Before submission, run the tests most likely to fail           | Yes: scores and the gate's budget                | Unchanged                                         |
+| After submission, run the rest on batches of changes           | Yes: tip verification                            | Adds a build step that runs first                 |
+| Keep a branch that only holds verified commits                 | Yes: `master`                                    | Adds `green`, which moves sooner                  |
+| Submit without checking again when the main branch has moved   | No: every landing checks on the exact tip        | Yes: [The change's verdict](#the-changes-verdict) |
+| Roll back the change that broke the main branch, automatically | No: a regression ticket is filed, `master` waits | Yes: [Automatic revert](#automatic-revert)        |
+| Start new work from the last commit known to pass              | No: new work starts at the tip                   | Yes: [The green branch](#the-green-branch)        |
+| Compile each commit once                                       | No: each landing compiles what others landed     | Mostly: [Builds](#builds)                         |
+
+Ignite already has the half of this model that costs the most to build: the
+cache, the scoring, tip verification and the search for the landing that broke a
+check. It pays for that half and for strict checking before every landing as
+well. The proposal drops the strict checking and adds the missing parts that
+make dropping it safe.
+
+## What stays the same
+
+These properties of Ignite are fixed, and each one ruled out some other design.
+
+- `master` only ever points at a commit whose budgeted checks passed.
+- Cargo stays the build tool, with incremental builds in trees at fixed paths.
+  There is no shared cache of compiled output.
+- Checks, families, input hashes, the result cache, scores, both budgets and
+  exploration checks work as they do now.
+- Agents keep the same commands with the same exit codes, and remain sessions in
+  the desktop apps.
+- Machines on different releases of Ignite, and on macOS and Windows, keep
+  working side by side.
+- A fix to Ignite never waits behind the work it is meant to fix.
+
+## A ticket from start to landing
+
+This is what an agent sees under the proposal. Two things in it are new and are
+specified in the sections that follow. A **verdict** is the stored result of a
+change's checks. `green` is a branch that points at the newest commit known to
+compile.
+
+```text
+$ ignite start <ticket>
+tree     .worktrees/tree-07  at green 91d07be
+
+$ ignite check
+verdict  passed: 41 checks, 24 from cache, 17 run in 38 s; stored for this tree
+
+$ ignite land -m "Named counters draw as rows above the plaque."
+verdict  passed for this tree 6 min ago on 91d07be
+rebased  onto staging 3a9e4c1 without a checkout: 14 commits landed since
+         91d07be
+landed   7c1d2e0 on staging in 4 s; ticket closed; tree-07 released
+```
+
+Fourteen commits landed while the agent worked. None of them delayed the
+landing, and the ticket tree compiled none of them.
+
+## The change's verdict
+
+A verdict is the record that one exact state of a change passed its checks. It
+replaces the requirement that the gate pass on the tip.
+
+A verdict is identified by three things:
+
+- The git tree ID of the ticket tree's commit, which names the content of every
+  file in it.
+- The **base**, the commit of `staging` that the ticket's branch started from.
+- A digest of the settings that decide which checks run, so that a change to
+  those settings does not leave old verdicts standing.
+
+The checks behind a verdict are the gate's, chosen the same way: the formatters
+run first and commit what they change, then the always set, then the checks the
+change edits, then the checks chosen by score within the budget. Whatever the
+budget leaves out goes to tip verification, as today.
+
+Two things differ from today:
+
+- **The checks run in the ticket tree as it is, with no rebase.** The families
+  the change can affect are found from the paths that differ between the base
+  and the tree. The tree has already built this state for the agent's own tests,
+  so the checks usually build nothing.
+- **The verdict is stored at the hub.** `ignite check` and `ignite land` on any
+  machine look it up, so `ignite check` followed by `ignite land` runs the
+  checks once.
+
+A stored verdict:
+
+```json
+{"tree": "9f3c41d", "base": "91d07be", "settings": "c41e07a",
+ "machine": "jarvis", "passed_at": "2026-11-19T18:44:29Z",
+ "families": ["pytest", "markdown", "source"],
+ "left_to_tip": 447, "always_not_run": []}
+```
+
+- `families` names the families whose checks were judged.
+- `left_to_tip` counts the affected checks that the budget left for tip
+  verification.
+- `always_not_run` names always-set families that this machine cannot run, such
+  as a browser type check on the Windows machine. The verdict is still complete
+  for landing, and the tip's build step runs those families (see
+  [Verifying the tip](#verifying-the-tip)).
+
+### A check that was already failing
+
+A check can fail for a change because it was already failing at the base. Today
+the landing proves that by building the tip in a second tree. Under the proposal
+the answer usually costs nothing.
+
+- Git can produce a check's input hash for any commit without a checkout. The
+  daemon computes the failing check's input hash at the base and looks it up in
+  the result cache.
+- A pass at the base means the change broke the check. The verdict fails.
+- A failure at the base means the check was already broken. It is left out of
+  the verdict as known to fail, and the hub is told, as today.
+- No result at the base is the uncommon case. The check runs once at the base in
+  a landing tree, as today, and the result is cached for every later change.
+
+## Landing
+
+In the common case `ignite land` runs no build and no check. Its steps:
+
+1. Check that the session holds the ticket and the tree has no uncommitted
+   edits.
+2. Find the verdict for the tree's commit. If there is none, run its checks now,
+   as `ignite check` would.
+3. Rebase the branch onto the tip without a working tree, as `git replay` does.
+   The ticket tree's files are not touched.
+4. Take the lease on `staging`, push, and release the lease. If the tip moved
+   since step 3, repeat step 3, which takes about a second.
+5. Record the landing on the ticket, close the ticket and release the tree.
+
+**A clean rebase is all a verdict needs to stand.** A landing checks again in
+only three cases:
+
+- **The rebase conflicts.** The landing ends with the conflicting files, as
+  today.
+- **The base is over 12 hours old.** The landing rebases the ticket tree for
+  real, computes a new verdict there, and goes on from step 3. `ignite sync`
+  does the same ahead of time. None of the 253 landings of 2026-11-18 and
+  2026-11-19 had a base that old: the longest time from claim to landing was 4.4
+  hours.
+- **The ticket was reverted before.** See [Automatic revert](#automatic-revert).
+
+An earlier draft of this rule also checked again whenever a landed commit
+touched a file the change touches. Measurement ruled it out: 73 of those 253
+landings (29%) shared a file, other than documentation, with a commit that
+reached `staging` between their claim and their landing. The files were ordinary
+source files, not a few shared lists that could be exempted. A rule that sends
+three landings in ten back through a build at the tip brings the race back.
+
+```toml
+[land]
+mode = "verdict"          # "strict" checks on the exact tip, as before
+max_base_age_hours = 12
+```
+
+What this removes from Ignite:
+
+- The loop that runs the gate again when the tip moves, and its limit of ten
+  attempts.
+- The rules that decide which families to carry over from one attempt to the
+  next.
+- The use of a landing tree for an ordinary landing.
+- The express lane's separate rules for when its commands run again (see
+  [Changes to Ignite itself](#changes-to-ignite-itself)).
+
+At 60 landings an hour, a push attempt of two seconds loses the race about once
+in thirty, and the next attempt takes another second.
+
+## Verifying the tip
+
+Tip verification already works on batches: a round verifies the newest tip, and
+landings that arrive during a round are covered by the next one. The proposal
+adds a first step to each round and gives it priority, because the tip is now
+the only place where the combined code is compiled and type-checked.
+
+A round has three parts, in order:
+
+- **The build step.** Build every product at the tip, list every family's
+  checks, and run the always set there. When it passes, move `green` to the tip.
+- **The budgeted checks.** Run the best-scored checks within the budget of 300
+  seconds. When they pass, move `master` to the tip. This part exists today.
+- **The remaining checks.** Run everything else. This part exists today.
+
+Rules for the build step:
+
+- It runs in one landing tree that is kept for it, the **tip tree**, so each
+  round compiles only what its batch of landings changed.
+- It runs in a scheduler class above every other. `tip_build_cores` cores are
+  kept for it and never given to other work, as the express lane's cores are
+  today. It borrows free cores beyond those, up to two thirds of the machine.
+- The builds and listings it makes are what verdicts and `ignite start` reuse
+  (see [Builds](#builds)).
+
+```toml
+[machine.jarvis]
+tip_build_cores = 4
+```
+
+`ignite status` reports each pointer:
+
+```text
+staging  3a9e4c1
+green    3a9e4c1  built and type-checked 70 s after it landed
+master   91d07be  14 commits behind; the round ends in about 3 min
+```
+
+## Automatic revert
+
+When a check fails at the tip and the result cache holds a pass for it at the
+commit the last round verified, some landing in the batch broke it. Today the
+hub files a regression ticket and `master` waits for the repair. Under the
+proposal Ignite removes the landing instead.
+
+A product that fails to build at the tip is handled the same way. The product
+stands for the failing check, and the product's inputs are its inputs.
+
+How the culprit is found:
+
+- The candidates are the landings in the batch that changed any input of the
+  failing check. A single candidate is the culprit, with nothing run.
+- With several, Ignite first tries the candidate that changed the file the
+  failure names. It runs the check at the tip with that landing reverted, in a
+  landing tree.
+- If the check still fails, Ignite searches by bisection, as today, for at most
+  ten runs.
+
+A landing is reverted automatically only when all of these hold:
+
+- A second run confirmed the failure, so the check is not flaky.
+- The search ended at one landing, not at a range of landings.
+- `git revert` of the landing's commits applies cleanly at the tip.
+- The check passes at the tip with the revert applied. When the revert restores
+  the check's inputs to a state that already passed, the result cache answers
+  this and nothing runs.
+- The round has reverted fewer than three landings. The limit stops a check that
+  the machine broke, not a commit, from reverting a whole batch.
+
+When any of them fails, Ignite files a regression ticket exactly as it does
+today.
+
+What a revert does:
+
+- Ignite pushes one revert commit to `staging`. Its message names the check that
+  failed and the commit it reverts.
+- The reverted ticket opens again. Its commits are saved on the branch
+  `ignite/<ticket>`, as they are today when a session gives a ticket back.
+- If the session that landed it has not started another ticket, the reopened
+  ticket goes to that session, which still has the context. If that session has
+  moved on or is gone, the ticket goes first in the order tickets are handed
+  out.
+- Open tickets that depend on the reverted one depend on it again. A session
+  already working on one of them is sent a message.
+
+```text
+revert: feat: ward counts mana spent
+
+This reverts commit 5e1b0aa.
+
+After it landed, the check
+rust:beryl_bench::family::tests::family_corpora_never_change failed at the tip
+and passed with this commit reverted. Its ticket is open again and holds the
+check's output.
+```
+
+Rules for what follows a revert:
+
+- **A revert commit is a landing with no ticket.** The next round verifies it
+  like any other. It is never reverted itself: if the tip fails with it, Ignite
+  files a regression ticket.
+- **A ticket that started from a commit holding the culprit** lands by the
+  ordinary rule. Its rebase passes over the revert commit, and conflicts if its
+  work depended on the reverted lines.
+- **A reverted ticket lands under a stricter rule the next time.** Before the
+  push, the checks that got it reverted run on the rebased commit, in a landing
+  tree at the tip. If the tip moves meanwhile, the landing still pushes: the
+  stricter rule runs once.
+
+## The green branch
+
+`green` is a branch that points at the newest tip whose build step passed. It
+only moves forward.
+
+- `ignite start` leases a tree at `green`, not at the tip, and `ignite sync`
+  rebases onto `green`.
+- A tip that does not compile therefore never reaches an agent. It delays
+  `green` until its culprit is reverted, and nothing else.
+- A ticket that depends on a landing `green` does not hold yet waits for
+  `green`, which is one build step. After `max_green_wait_minutes` it starts at
+  the tip instead, and the output says the tree may not build.
+- `master` keeps its meaning: the newest tip whose budgeted checks passed.
+
+```text
+staging   A - B - C - D - E     E landed 20 s ago
+green             C             the build step passed at C
+master        B                 the budgeted checks passed at B
+```
+
+If `D` does not compile, a round reverts it with a new commit `F` after `E`, and
+`green` moves from `C` to `F` once `F` builds. Tickets started meanwhile began
+at `C`.
+
+```toml
+[start]
+max_green_wait_minutes = 10
+```
+
+## Builds
+
+Compiling is three quarters of Ignite's CPU, so this is where most of the saving
+is. The proposal does not add a shared compiler cache. It removes the builds
+that repeat another tree's work.
+
+- **A ticket tree builds only its own ticket.** Landing no longer rebases it, so
+  it never compiles what other tickets landed. The exceptions are the cases
+  under [Landing](#landing) and a deliberate `ignite sync`.
+- **The tip tree builds each landed commit once**, incrementally from the batch
+  before, on several cores.
+- **A new ticket starts from the tip tree's build.** `ignite start` already
+  copies a build from another tree by cloning its files, which uses no disk
+  until they change. The tree it copies from becomes the tip tree at `green`.
+- **Listings come from the tip tree.** A family's list of checks is kept under a
+  hash of what the listing reads. A verdict lists a family itself only when the
+  change touches what the listing reads.
+
+Each landed commit should then cost its author's own incremental builds and one
+build at the tip. The measure to watch is CPU-minutes of compiling per landing,
+which is 25 today.
+
+## Scheduling
+
+The scheduler keeps its measurements of what each command uses. Three rules
+change.
+
+- **A build waits for enough cores.** A build is granted at least
+  `build_min_cores`, or it waits in line. A command that lists checks never
+  waits, and neither does a command whose last five runs each used under two
+  CPU-seconds, which is the existing rule for quick commands.
+- **The line is ordered by class, then by arrival.** The classes, highest first:
+  the tip's build step, verdicts and landings, agents' own commands, the rest of
+  tip verification, long experiments, and work done only when the machine is
+  idle.
+- **Ignite's own processes count as Ignite's.** The daemon, the hub and every
+  command process are measured as part of Ignite, not as load from outside it
+  that reduces the cores handed out.
+
+One further rule applies to every command: a command that was told to stop and
+is still running 60 seconds later is ended. On 2026-11-19 one check that had
+been stopping for over five hours used most of a core the whole time.
+
+Why fewer commands at once finish sooner, for twelve builds of 300 CPU-seconds
+each on twelve cores:
+
+```text
+one core each, all at once       every build ends at 300 s       mean 300 s
+two at a time, six cores each    builds end at 50, 50, 100, ...   mean 175 s
+```
+
+A real build does not speed up in proportion to its cores, so the gain is
+smaller than this. `build_min_cores` is set for each machine from measurement.
+
+```toml
+[machine.jarvis]
+build_min_cores = 6
+```
+
+## Changes to Ignite itself
+
+The express lane exists because fixes to Ignite once waited in the queue they
+were fixing. It keeps the parts that solve that problem.
+
+- **Kept:** a change to Ignite alone is checked by the express commands, on
+  cores kept for them, and its landing moves the release branch.
+- **Replaced:** a pass of those commands is a verdict like any other, stored
+  under the tree ID. The express lane's own rules for reusing a pass after a
+  lost race are deleted, because every landing now behaves that way.
+- **Added:** an Ignite change can be reverted automatically like any other. The
+  revert commit is itself a change to Ignite, so it moves the release branch and
+  daemons restart into it.
+
+## Records
+
+Each new behaviour leaves a record, so that a problem shows as a number before
+it shows as a slow day.
+
+- Every landing records its seconds, split into the verdict, the rebase and the
+  push. It also records whether a commit that landed since its base touched one
+  of its files.
+- Every revert records the check, the landing, how the culprit was found, the
+  seconds from the landing to the revert, and whether the reverted landing
+  shared a file with a commit that landed since its base.
+- The hub's dashboard shows for each day: landings, the median and 90th
+  percentile landing time, reverts per 100 landings, the minutes `staging` did
+  not compile, and how far `green` and `master` trailed the tip.
+- `ignite land --explain` prints, without landing, whether a verdict exists and
+  which of the three cases under [Landing](#landing) applies.
+
+The record of shared files answers the question the 13-landing sample could not:
+how often two changes fail together, and whether sharing a file predicts it. If
+most reverts turn out to be of landings that shared a file, checking those
+landings at the tip becomes worth its cost, and the records say so.
+
+The comparison that decides between `strict` and `verdict` is session time. Each
+revert costs its ticket a second landing under the stricter rule. Strict
+checking cost 63 session-hours on the day measured.
+
+The values the design aims for are estimates from the measurements above:
+
+| Measure                                          | 2026-11-19        | Aim            |
+| ------------------------------------------------ | ----------------- | -------------- |
+| `ignite land` once a verdict exists, 90th pct.   | 33 min (gated)    | under 15 s     |
+| Push attempts per landing at 60 landings an hour | does not converge | under 1.1      |
+| From a landing until `green` holds it, median    | not measured      | 3 min          |
+| CPU-minutes of compiling per landing             | 25                | under 10       |
+| Builds started on one core                       | most              | none           |
+| Reverts per 100 landings                         | none              | to be measured |
+
+## Migration and compatibility
+
+The change is switched on for the whole repository by one setting and switched
+back without moving any data.
+
+- **The switch.** `[land] mode` is read from `ignite.toml` at the tip of
+  `staging`, so every daemon changes behaviour when the commit that sets it
+  lands. `"strict"` is today's behaviour.
+- **Tickets in progress.** A ticket tree leased before the switch needs nothing.
+  Its base is the commit it started on, and its first `ignite check` or
+  `ignite land` after the switch stores a verdict.
+- **The hub.** Verdicts are a new table in the hub's database, added by a
+  migration, with one route to store a verdict and one to look it up. The hub
+  runs the same release as every daemon, so it gains them first. A daemon that
+  cannot reach the hub keeps a verdict in its own database and lands from that.
+- **Machines on an older release.** The lease on `staging` and the push are
+  unchanged, so an older daemon lands the old way beside newer ones. Only one
+  machine runs a round for a given tip, as today. A round on an older daemon
+  files regression tickets, and a round on a newer one reverts.
+- **`green`.** It is created at `master`'s commit. Until the first build step
+  passes, `ignite start` uses it as it is.
+- **Reverts alone can be switched off.** `[revert] automatic = false` keeps
+  regression tickets as the only response to a broken tip.
+- **The design document.** When this is built, the sections of
+  [`docs/ignite.md`](ignite.md) named under
+  [Related information](#related-information) are rewritten to match, and this
+  document is deleted.
+
+```toml
+[revert]
+automatic = true
+max_per_round = 3
+```
+
+## Alternatives considered
+
+These are the other ways to make landing scale, and why the proposal prefers
+verifying after landing.
+
+- **Keep checking on the exact tip and make it cheaper.** This is what Ignite
+  has done since it was switched on: carrying results over between attempts,
+  holding the lease only for the push, keeping one tree per landing. Each fix
+  handled one case, and the number of attempts still grows exponentially with
+  the rate of landings that invalidate each other.
+- **A merge queue that tests each change on top of the ones ahead of it**, as
+  Bors, GitHub's merge queue and Uber's SubmitQueue do. It keeps `staging`
+  always passing. It also makes every landing wait for at least one full run of
+  the gate at the tip, and it builds the tip for every landing, sometimes on a
+  combination that is thrown away when a change ahead fails. Beryl already has a
+  branch that always passes, `master`, so `staging` does not need to be one.
+- **A shared cache of compiled output**, such as sccache or a Bazel remote
+  cache. `docs/ignite.md` rejected this because it gives up Cargo's incremental
+  builds, which are worth about 25 times on a small edit to a core crate. That
+  still holds. This proposal removes the repeated builds instead of caching
+  them.
+- **More cores.** A larger machine shortens every build and leaves the race and
+  the repeated builds growing as before.
+
+## Manual QA
+
+Run these on a scratch clone of the repository with its own hub and daemon, the
+rehearsal setup that `docs/ignite.md` describes, so that nothing reaches the
+real `staging`.
+
+**Run this flow first.** It exercises the verdict, the landing, the build step,
+the revert and `green` together:
+
+- Start two tickets from `green`. In the first, rename a function in one file.
+  In the second, add a call to the old name in another file. Run `ignite check`
+  in both, and expect each to store a verdict. Land the first, then the second.
+- Expect both landings to finish in seconds with no build.
+- Expect the next round's build step to fail to compile, find the second landing
+  as the culprit, and push a revert commit within a few minutes.
+- Expect `green` never to point at the commit that did not compile, the second
+  ticket to be open again with the compiler's output, and its commits to be on
+  `ignite/<ticket>`.
+
+Landing:
+
+- Land a change while a script pushes an unrelated commit to `staging` every ten
+  seconds. Expect one or two push attempts and a landing in under ten seconds.
+- Land a change after another landing edited one of its files without a textual
+  conflict. Expect it to land by the ordinary rule, and its record to say that
+  it shared a file.
+- Set `max_base_age_hours = 0` and land. Expect the landing to rebase the ticket
+  tree, compute a new verdict and say that the base was too old.
+- Run `ignite land --explain` before each landing above, and compare its answer
+  with what the landing then does.
+- Make a change fail a check that already fails at its base. Expect the verdict
+  to leave the check out as known to fail, with no build at the base when the
+  result cache holds the base's result.
+
+Reverts:
+
+- Break a check with a landing whose revert conflicts with a later landing.
+  Expect a regression ticket and no revert.
+- Make a check fail once and pass on its second run. Expect no revert and the
+  check marked flaky.
+- Land four changes in one batch that each break a different check. Expect three
+  reverts and one regression ticket.
+- Land a reverted ticket again without fixing it. Expect the stricter rule to
+  run the failing check at the tip before the push and to refuse the landing.
+- Revert a ticket that another open ticket depends on. Expect the dependency to
+  return, and a message in the session working on the dependent ticket.
+
+Starting and building:
+
+- While the tip does not compile, run `ignite start`. Expect a tree at `green`,
+  behind the tip, that builds.
+- Start a ticket that depends on a landing `green` does not hold yet. Expect the
+  start to wait for one build step and to say what it waits for.
+- Work a ticket while twenty commits land, then land it. Expect the ticket
+  tree's build records to show no compile of any crate the ticket did not touch.
+
+Scheduling:
+
+- Start fifteen builds at once on a machine with `build_min_cores = 6`. Expect
+  at most two to run at a time, each on six cores or more, and `ignite status`
+  to show the rest waiting in order of arrival.
+- While they wait, land a change. Expect the tip's build step to start at once
+  on the cores kept for it.
+- Tell a running check to stop and prevent its process from exiting. Expect it
+  to be ended after 60 seconds and its cores returned.
