@@ -66,6 +66,7 @@ fn pieces(input: &ScreenIn) -> Option<(Element, Element)> {
                 actions: buttons.len(),
                 waiting: false,
                 press: None,
+                choice: &[],
             };
             (present(&shown, input), buttons, !phone)
         }
@@ -111,6 +112,7 @@ fn pieces(input: &ScreenIn) -> Option<(Element, Element)> {
                 actions: buttons.len(),
                 waiting: false,
                 press: picking.then_some(bottom as fn(ObjectId) -> Press),
+                choice: &[],
             };
             (present(&shown, input), buttons, false)
         }

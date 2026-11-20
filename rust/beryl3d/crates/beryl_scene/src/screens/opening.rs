@@ -20,11 +20,14 @@
 //! is dealt out of sight and no button is offered. Until a button is offered, three gold dots
 //! under the title say that the game is waiting, as the web's `.opening-waiting` does.
 //!
-//! Not built yet: the web's face-down hand while the viewer has declared a mulligan, and its
-//! play or draw buttons in the middle of the window, which stand in the prompt bar here.
+//! Play or draw, asked before anyone has started, shows its buttons side by side under the title
+//! (`choice`, the web's `.opening-choice`), and the game screen leaves the prompt bar out then
+//! (`choosing_start`). The other opening buttons stand in the prompt bar.
+//!
+//! Not built yet: the web's face-down hand while the viewer has declared a mulligan.
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::prompt::{PromptView, Purpose};
+use beryl_protocol::prompt::{PromptButton, PromptView, Purpose};
 use beryl_protocol::protocol::{CardHandling, Declaration, ObjectId, Side, Status, ZoneName};
 use beryl_protocol::script::{Mark, Subject};
 use glam::Vec2;
@@ -37,7 +40,8 @@ use crate::element::{Align, Anchor, Element, Justify, Overflow, Press, Shown, co
 use crate::frame::Role;
 use crate::table::{CARD_HEIGHT, CARD_WIDTH, Window};
 use crate::text::TypeStyle;
-use crate::tokens::{color, type_style};
+use crate::tokens::{color, size, type_style};
+use crate::widgets::{button, primary};
 
 /// The starting hand size ([CR 103.5]): "Each player draws a number of cards equal to their
 /// starting hand size, which is normally seven."
@@ -60,6 +64,22 @@ pub(crate) fn in_opening(view: &PlayerView) -> bool {
             view.status,
             Status::Free | Status::Over { .. } | Status::Stopped
         )
+}
+
+/// Whether the opening shows the open prompt's buttons itself, side by side under the title,
+/// instead of the prompt bar: play or draw, asked before anyone has started, on the desktop
+/// layout (`choosingStart` in `ui/src/screens/Opening.tsx`). While it does, the game screen
+/// leaves the prompt out.
+#[must_use]
+pub(crate) fn choosing_start(input: &ScreenIn) -> bool {
+    !super::phone(input)
+        && !input.spinning
+        && input
+            .view
+            .is_some_and(|view| in_opening(view) && view.turn.starting.is_none())
+        && input
+            .prompt
+            .is_some_and(|prompt| !prompt.buttons.is_empty())
 }
 
 /// Whether the game screen shows the opening.
@@ -120,6 +140,11 @@ pub fn opening(input: &ScreenIn) -> Option<Element> {
             actions,
             waiting: actions == 0 && !choosing_first && !considering,
             press: None,
+            choice: if choosing_start(input) {
+                prompt.map_or(&[], |prompt| &prompt.buttons)
+            } else {
+                &[]
+            },
         },
         input,
     ))
@@ -146,6 +171,9 @@ pub(crate) struct Presentation<'a> {
     pub actions: usize,
     pub waiting: bool,
     pub press: Option<fn(ObjectId) -> Press>,
+    /// The buttons shown side by side under the title (`.opening-choice`): the first is
+    /// primary and stands rightmost, as in Arena.
+    pub choice: &'a [PromptButton],
 }
 
 /// The opening `shown` describes, over the dimmed table: the coin, the title, the hand and the
@@ -227,7 +255,7 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
     });
     // The pointer goes through to the table's cards, unless the cards here take presses of
     // their own, which they would inherit the passing from.
-    let passes = shown.press.is_none();
+    let passes = shown.press.is_none() && shown.choice.is_empty();
     let mut screen = column()
         .name("opening")
         .passes(passes)
@@ -236,7 +264,8 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
         .child(heading)
         .child(hand_row)
         .children(slots_row)
-        .children(dots);
+        .children(dots)
+        .children(choice(shown.choice));
     // The flat layer's root puts a screen in its bottom right corner, so the group is anchored
     // below the window's top middle instead, as the web pads `.opening` down from the top.
     let top = Vec2::new(input.window.size.width / 2.0, sizes.top);
@@ -252,6 +281,29 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
                 .background_image(vec![crate::tokens::gradient::OPENING_BACKDROP]),
         )
         .child(screen)
+}
+
+/// The play or draw buttons, `.opening-choice`: a row reversed so that the first button stands
+/// on the right, 40 points apart (so the children are laid out last to first), each at least
+/// `--button-width` wide, 40 points under what precedes them.
+fn choice(buttons: &[PromptButton]) -> Option<Element> {
+    if buttons.is_empty() {
+        return None;
+    }
+    let mut choice = row()
+        .name("choice")
+        .gap(metrics::CHOICE_GAP)
+        .justify_content(Justify::Center);
+    choice.style.margin = [metrics::CHOICE_TOP, 0.0, 0.0, 0.0];
+    Some(
+        choice.children(buttons.iter().enumerate().rev().map(|(at, view)| {
+            let widget = if at == 0 { primary } else { button };
+            widget(&view.label)
+                .min_width(size::BUTTON_WIDTH)
+                .enabled(view.enabled)
+                .on_press(Press::Button(view.id))
+        })),
+    )
 }
 
 /// The three gold dots under the title while the game waits for the session or the opponent,

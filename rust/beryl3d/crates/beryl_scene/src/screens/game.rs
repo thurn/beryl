@@ -18,7 +18,8 @@ use crate::table::phone_bands;
 /// flat layer; with no prompt open, it is an empty region named "game".
 #[must_use]
 pub fn game(input: &ScreenIn) -> Element {
-    let prompt = waiting(input);
+    // Play or draw stands in the opening, not in the prompt bar.
+    let prompt = waiting(input).filter(|_| !opening::choosing_start(input));
     // The orbs, the steps and the log stay up while scripts play, as the web interface's
     // `Chrome` does; only what waits for the table (`Element::waits`) is held back. The
     // opening does not wait: the web shows it, with the coin flip, while the hands are dealt.
