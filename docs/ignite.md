@@ -348,6 +348,10 @@ The verbs an agent uses while working:
   accounted for 130 s, and its three products had built one after another.
 
 - `ignite check` runs what the landing gate would run on the tree as it is.
+  When the gate passes with nothing incomplete, it stores a verdict for the tree
+  (see [Processes](#processes)) and says so on a
+  `verdict  stored for this tree` line, or `verdict  not stored: <reason>`. Its
+  express path stores none.
 
 - `ignite sync` rebases the tree's branch onto the tip.
 
@@ -661,12 +665,20 @@ How the executable is installed and kept current:
   fakes. The hub stores and looks up verdicts (`POST /verdicts/store`, which
   needs a registered machine's token, and `POST /verdicts/lookup`, which replies
   with the verdict or `null`) in its `verdicts` table, and `Hub::verdict` and
-  `Hub::store_verdict` of the real client call them; nothing calls those yet,
-  and `Hub::reverted` still answers that it cannot do it. A verdict is keyed by
-  the tree ID, the merge base with the tip and `verdict_settings`, a digest of
-  the `[gate]` section that holds nothing about Ignite's own release. The hub
-  deletes verdicts that passed more than 30 days ago where it prunes the result
-  cache.
+  `Hub::store_verdict` of the real client call them; `Hub::reverted` still
+  answers that it cannot do it. A verdict is keyed by the tree ID of every file
+  in the ticket tree, committed or not, the merge base of the tree's `HEAD` with
+  the tip as the checkout last fetched it, and `verdict_settings`, a digest of
+  the `[gate]` section that holds nothing about Ignite's own release.
+  `ignite check` stores a verdict whenever its gate passes with nothing
+  incomplete, at the hub and in the daemon's local `verdicts` table, and
+  `verdicts::find` looks one up at the hub first and then in that table, so it
+  is still found while the hub cannot be reached. Committing a tree's edits
+  unchanged keeps its verdict, because the tree ID stays the same. The hub and
+  the daemon each delete verdicts that passed more than 30 days ago. Nothing
+  lands by verdict yet. The gate's scope is already the change's own files: the
+  paths that differ between the merge base and the tree, so files landed on the
+  tip since the tree started are not counted.
 - Git can rebase and revert in its object database, with no working tree, and no
   landing uses it yet. `Git::replay` rebases a branch's commits onto the tip one
   by one with `git merge-tree --write-tree` against each commit's own parent and

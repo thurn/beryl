@@ -59,6 +59,7 @@ mod split;
 mod time_lines;
 mod units;
 mod unstarted;
+mod verdict;
 
 pub use units::ListingTime;
 pub(crate) mod verbs;

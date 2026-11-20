@@ -191,4 +191,14 @@ crate::tables! {
         /// Billions of instructions per second of running checks.
         rate: f64,
     }
+
+    /// A verdict this daemon stored, by tree, base and gate settings.
+    Verdict = "verdicts" {
+        tree: String,
+        base: String,
+        settings: String,
+        /// The verdict as JSON.
+        verdict: String,
+        passed_at: String,
+    }
 }

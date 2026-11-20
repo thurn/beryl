@@ -199,6 +199,7 @@ fn check_runs_the_gate_and_answers_the_rest_from_the_cache() {
             "listed   1 s listing 1 family afresh, 2 kept; slowest: rust 1 s",
             "tip      1,204 checks left to tip verification: 1,204 checks (1,204 billion) below \
              the threshold",
+            "verdict  stored for this tree",
         ],
         "{}",
         reply.text

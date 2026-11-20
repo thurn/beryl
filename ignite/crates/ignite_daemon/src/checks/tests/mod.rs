@@ -13,6 +13,7 @@ mod observed;
 mod plan;
 mod scope;
 mod tree_manifest;
+mod verdict_store;
 mod verdicts;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};

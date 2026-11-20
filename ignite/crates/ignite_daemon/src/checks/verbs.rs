@@ -272,6 +272,7 @@ impl Verb for CheckVerb {
             gated.opened(ctx, opening);
             let mut lines = built_lines(&gated.run);
             lines.extend(gate_lines(&gated));
+            lines.extend(super::verdict::store_lines(ctx, &checks, &tree, &gated));
             return reply(&gated.run, render(&lines));
         }
         let regression: Vec<(&str, &Family)> = checks

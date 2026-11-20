@@ -18,6 +18,7 @@ pub mod rows;
 pub mod shown;
 pub mod tip_state;
 pub mod trees;
+pub mod verdicts;
 
 use std::path::Path;
 
@@ -112,6 +113,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 17,
         sql: include_str!("schema_17.sql"),
+        code: None,
+    },
+    Migration {
+        version: 18,
+        sql: include_str!("schema_18.sql"),
         code: None,
     },
 ];
