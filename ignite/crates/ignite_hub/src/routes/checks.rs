@@ -434,7 +434,8 @@ fn import_metrics(
     {
         let mut insert = tx
             .prepare_cached(
-                "INSERT OR IGNORE INTO metrics (machine, source, data, at) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT OR IGNORE INTO metrics (machine, source, data, at, kind)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
             )
             .map_err(|e| store_failure(&e.into()))?;
         for row in &request.rows {
@@ -443,7 +444,8 @@ fn import_metrics(
                     request.machine.as_str(),
                     request.source,
                     row.to_string(),
-                    now.to_string()
+                    now.to_string(),
+                    ignite_store::hub::metrics::kind_of(row)
                 ])
                 .map_err(|e| store_failure(&e.into()))?;
         }

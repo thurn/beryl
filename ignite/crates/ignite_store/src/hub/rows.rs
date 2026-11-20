@@ -308,7 +308,8 @@ crate::tables! {
     /// Each class's rate of check commands for one day, in billions of instructions per second.
     ClassRate = "class_rates" { day: String, class: String, rate: Option<f64> }
 
-    Metric = "metrics" { machine: String, source: String, data: String, at: String }
+    /// `kind` is the export table the row came from, NULL for a header or a findings report.
+    Metric = "metrics" { machine: String, source: String, data: String, at: String, kind: Option<String> }
 
     /// One ticket window's time and dollar segments, as a machine posted them.
     TicketSpend = "ticket_spend" { machine: String, window: String, ticket: String, start: String, end: String, data: String, at: String }

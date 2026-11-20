@@ -83,16 +83,18 @@ impl Rule for Efficiency {
     }
 }
 
+/// The rows posted from `source` `?1` that arrived between `?2` and `?3`, oldest first, read
+/// through the `(source, at)` index.
+pub(crate) const REPORTED: &str =
+    "SELECT machine, data FROM metrics WHERE source = ?1 AND at >= ?2 AND at <= ?3 ORDER BY at";
+
 /// Each dashboard rule's findings, one per machine that reported it lately.
 fn reported(
     conn: &Connection,
     now: Timestamp,
 ) -> rusqlite::Result<BTreeMap<String, Vec<Reported>>> {
     let since = now.plus_seconds(-FRESH_DAYS * 86_400.0).to_string();
-    let mut statement = conn.prepare(
-        "SELECT machine, data FROM metrics WHERE source = ?1 AND at >= ?2 AND at <= ?3
-         ORDER BY at",
-    )?;
+    let mut statement = conn.prepare(REPORTED)?;
     let rows = statement.query_map(params![SOURCE, since, now.to_string()], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;

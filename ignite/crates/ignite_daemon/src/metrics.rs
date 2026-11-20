@@ -39,6 +39,10 @@ use ignite_core::traits::{CommandSpec, Error, Result};
 
 use crate::server::Context;
 
+#[path = "metrics_filter.rs"]
+mod filter;
+use filter::{hub_host, hub_keeps};
+
 /// The most bytes of export lines one `POST /metrics/import` carries. The hub reads bodies up
 /// to 100 MB, and the client gives a request 30 seconds; a few megabytes stay far inside both.
 const CHUNK_BYTES: usize = 4 * 1024 * 1024;
@@ -255,6 +259,7 @@ fn post_export(ctx: &Context, path: &Path, started: Timestamp, chunk_bytes: usiz
         .filter(|host| !host.is_empty())
         .ok_or_else(|| Error::Invalid(format!("{} names no host", path.display())))?
         .to_owned();
+    let on_hub_machine = hub_host(&ctx.config.hub.url).is_some_and(|hub| hub == source);
     let mut part = Part {
         ctx,
         header,
@@ -265,8 +270,12 @@ fn post_export(ctx: &Context, path: &Path, started: Timestamp, chunk_bytes: usiz
     let (mut count, mut rows, mut bytes) = (0u32, Vec::new(), 0usize);
     for line in lines {
         let line = line.map_err(reading)?;
+        let row: serde_json::Value = serde_json::from_str(&line).map_err(invalid)?;
+        if !hub_keeps(ignite_store::hub::metrics::kind_of(&row), on_hub_machine) {
+            continue;
+        }
         bytes += line.len();
-        rows.push(serde_json::from_str(&line).map_err(invalid)?);
+        rows.push(row);
         count = count.saturating_add(1);
         if bytes >= chunk_bytes {
             part.post(std::mem::take(&mut rows))?;

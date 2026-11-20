@@ -13,6 +13,7 @@ pub mod findings;
 pub mod fleet;
 pub mod leases;
 pub mod listings;
+pub mod metrics;
 pub mod owners;
 pub mod rates;
 pub mod records;
@@ -143,6 +144,16 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 21,
         sql: include_str!("verdicts.sql"),
+        code: None,
+    },
+    Migration {
+        version: 22,
+        sql: include_str!("metrics_kinds.sql"),
+        code: Some(metrics::prune_and_fill_kinds),
+    },
+    Migration {
+        version: 23,
+        sql: include_str!("metrics_indexes.sql"),
         code: None,
     },
 ];

@@ -427,7 +427,8 @@ fn backlog_ratios_take_the_largest_unit() {
     let dollars = json!({"table": "window_dollars",
                          "row": {"split": "class", "start": ago(2.0), "dollars": 1000.0}});
     conn.execute(
-        "INSERT INTO metrics (machine, source, data, at) VALUES ('m-1', 'm-1', ?1, ?2)",
+        "INSERT INTO metrics (machine, source, data, at, kind)
+         VALUES ('m-1', 'm-1', ?1, ?2, 'window_dollars')",
         params![dollars.to_string(), ago(1.0)],
     )
     .unwrap();
@@ -449,4 +450,34 @@ fn backlog_ratios_take_the_largest_unit() {
     assert!((ratios.last_week.dollars - 1000.0).abs() < 1e-9);
     assert!((ratios.last_week.core_hours - 100.0).abs() < 1e-6);
     assert!((ratios.fraction - 0.11).abs() < 1e-9);
+}
+
+/// The query plan of `sql`, one step per line.
+fn plan(conn: &rusqlite::Connection, sql: &str, args: &[&dyn rusqlite::ToSql]) -> String {
+    let mut statement = conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+    let steps = statement
+        .query_map(args, |row| row.get::<_, String>(3))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap();
+    steps.join("\n")
+}
+
+/// The hub's two readers of `metrics` look rows up by an index, never by scanning the table,
+/// which held 1.5 million rows when a scan on every evaluation locked the hub.
+#[test]
+fn the_metrics_readers_use_an_index() {
+    let conn = hub::open_in_memory().unwrap();
+    let (since, until) = (ago(14.0), ago(0.0));
+    let findings = plan(
+        &conn,
+        efficiency::REPORTED,
+        &[&efficiency::SOURCE, &since, &until],
+    );
+    assert!(findings.contains("INDEX metrics_source_at ("), "{findings}");
+    let dollars = plan(&conn, backlog::WINDOW_DOLLARS, &[&since]);
+    assert!(dollars.contains("INDEX metrics_kind_at ("), "{dollars}");
+    for found in [findings, dollars] {
+        assert!(!found.contains("SCAN metrics"), "{found}");
+    }
 }

@@ -59,6 +59,15 @@ fn backlog(conn: &Connection) -> rusqlite::Result<Amounts> {
     Ok(amounts)
 }
 
+/// The dollars of the class-split model windows that started at or after `?1`. A window is
+/// posted after it starts, so its row arrived (`at`) no earlier than its `start`: the
+/// `(kind, at)` index narrows the rows to that span before any JSON is read.
+pub(crate) const WINDOW_DOLLARS: &str =
+    "SELECT COALESCE(SUM(json_extract(data, '$.row.dollars')), 0) FROM metrics
+     WHERE kind = 'window_dollars' AND at >= ?1
+       AND json_extract(data, '$.row.split') = 'class'
+       AND json_extract(data, '$.row.start') >= ?1";
+
 /// The fleet's use over the week before `now`.
 fn last_week(conn: &Connection, now: Timestamp) -> rusqlite::Result<Amounts> {
     let since = now.plus_seconds(-WEEK_SECONDS).to_string();
@@ -69,16 +78,7 @@ fn last_week(conn: &Connection, now: Timestamp) -> rusqlite::Result<Amounts> {
         params![since],
         |row| Ok((row.get::<_, f64>(0)?, row.get::<_, f64>(1)?)),
     )?;
-    let dollars = conn.query_row(
-        // `at` bounds the scan through its index: a row about a window that starts within the
-        // week was received within it too.
-        "SELECT COALESCE(SUM(json_extract(data, '$.row.dollars')), 0) FROM metrics
-         WHERE at >= ?1 AND json_extract(data, '$.table') = 'window_dollars'
-           AND json_extract(data, '$.row.split') = 'class'
-           AND json_extract(data, '$.row.start') >= ?1",
-        params![since],
-        |row| row.get::<_, f64>(0),
-    )?;
+    let dollars = conn.query_row(WINDOW_DOLLARS, params![since], |row| row.get::<_, f64>(0))?;
     Ok(Amounts {
         dollars,
         agent_hours: agent_s / 3600.0,

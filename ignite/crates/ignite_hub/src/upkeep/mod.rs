@@ -13,6 +13,8 @@
 //! - files the copy of each meta-ticket whose schedule says one is due ([`schedules`]);
 //! - closes each ticket it filed by itself whose fault has stayed clear for an hour, unless a
 //!   person touched it or a worker holds it ([`clearing`]);
+//! - deletes efficiency rows older than any reader needs, a few small batches at a time
+//!   (`ignite_store::hub::metrics::delete_expired`);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
 //! The routes call the rest as reports arrive: a landing a tip round reverted ([`reverted::file`]),
@@ -88,6 +90,8 @@ pub struct UpkeepReport {
     /// Tickets closed because the fault they report cleared ([`clearing`]).
     pub tickets_closed: Vec<String>,
     pub checks_switched_off: Vec<String>,
+    /// Efficiency rows deleted for being older than any reader needs.
+    pub metrics_deleted: usize,
     pub snapshot: Option<PathBuf>,
     pub export: Option<PathBuf>,
 }
@@ -151,6 +155,10 @@ impl Upkeep {
         keep(schedules::file_due(conn, now).map(|copies| report.tickets_filed.extend(copies)));
         // After every step that files, so a fault seen again on this pass keeps its ticket open.
         keep(clearing::close_cleared(conn, now).map(|closed| report.tickets_closed = closed));
+        keep(
+            ignite_store::hub::metrics::delete_expired(conn, now)
+                .map(|deleted| report.metrics_deleted = deleted),
+        );
         if let Some(dir) = self.backups.clone() {
             keep(self.backups_due(conn, &dir, now, &mut report));
         }
