@@ -6,6 +6,13 @@ project's owner ("the design interview"), on a reading of the current client, a
 survey of the Rust graphics and text crates as published that week, and
 measurements taken that day on the development machine.*
 
+*[Beryl 3D architecture](beryl-3d-architecture.md), decided 2026-11-20, replaces
+what this document says about how the client core is organized inside: its
+crates, the table's placement functions, the flat layer's screens and floats,
+how limits on frame cost are held and which recordings the interface tests run.
+Where the two disagree, that document is right. This one is still the reference
+for the frame, hosts, rendering, card faces, threads, sound and measurements.*
+
 Beryl is an app that plays Magic: The Gathering against an AI. Its rules engine,
 its AI and the code that runs a game are Rust. Its interface is a web page,
 written in TypeScript and React, shown in a WebView by Tauri on the Mac, iOS and

@@ -2,13 +2,15 @@
 
 This adds to the root `AGENTS.md`, whose rules all apply here.
 
-Beryl 3D is the native 3D client of Beryl (the design is in `docs/beryl-3d.md`).
-This directory is a Cargo workspace of its own, with its own `Cargo.toml`,
-`Cargo.lock` and `target`, so that no check of the main workspace in `rust/`
-builds it and a change here selects no lane of the main checks (decision C17).
-Its crates depend on the main crates (`beryl_protocol`, `beryl_session`) by
-path. Its `[workspace.lints]` table must equal the main one's, which the
-`lints-match` check enforces.
+Beryl 3D is the native 3D client of Beryl. Its design is in `docs/beryl-3d.md`,
+and `docs/beryl-3d-architecture.md` says how the client core is to be organized:
+read that one before changing how the code is structured. This directory is a
+Cargo workspace of its own, with its own `Cargo.toml`, `Cargo.lock` and
+`target`, so that no check of the main workspace in `rust/` builds it and a
+change here selects no lane of the main checks (decision C17). Its crates depend
+on the main crates (`beryl_protocol`, `beryl_session`) by path. Its
+`[workspace.lints]` table must equal the main one's, which the `lints-match`
+check enforces.
 
 A program here that spreads work over threads sizes them with
 `beryl_inspect::runner::threads`, which follows the cores Ignite granted it
