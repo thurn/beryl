@@ -3434,6 +3434,14 @@ Stopping a command:
   one, and the stop waits another 60 seconds for the daemon to see it finish.
 - A landing whose push has begun refuses, because a cut-short push may or may
   not have reached the remote.
+- A verb process that was asked to stop by any other path, such as
+  `ignite close` or `ignite release` of its tree, and is still running 60
+  seconds later is ended by a loop of the daemon (`ignite-overdue-stops`, every
+  10 seconds). It reads the stops the daemon keeps in its local database, writes
+  the handle as `stopped`, and ends the verb process with its process group, as
+  `ignite stop` does. A handle that refused the stop, such as a landing whose
+  push has begun, is left alone. This also ends a verb process an older release
+  started.
 - `ignite stop <handle> --force` is for an emergency. Only the operator (a
   request from a terminal, which names no session) or a session holding an
   `in_progress` ticket labelled `justiciar` may give it. It stops a command of

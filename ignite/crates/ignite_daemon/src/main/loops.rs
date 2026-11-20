@@ -44,6 +44,8 @@ const IDLE_EVERY: Duration = Duration::from_secs(30);
 /// How often the disk loop looks at free space and at trees `ignite.toml` no longer declares.
 /// A round measures the trees only as often as `Idle::hold_disk` allows.
 const DISK_EVERY: Duration = Duration::from_secs(60);
+/// How often the loop that ends verb processes that ignored their stop looks for them.
+const OVERDUE_EVERY: Duration = Duration::from_secs(10);
 /// How often fleet metrics look for new session transcripts.
 const METRICS_EVERY: Duration = Duration::from_secs(600);
 /// The pause after a failed round of tip verification.
@@ -63,6 +65,7 @@ const CLAIMS_STALL_AFTER: Duration = Duration::from_mins(10);
 const IDLE_STALLS_AFTER: Duration = Duration::from_mins(10);
 /// A measurement walked about 290 GB of build directories for over ten minutes on jarvis.
 const DISK_STALLS_AFTER: Duration = Duration::from_hours(1);
+const OVERDUE_STALLS_AFTER: Duration = Duration::from_mins(10);
 const METRICS_STALL_AFTER: Duration = Duration::from_hours(1);
 const MAIN_STALLS_AFTER: Duration = Duration::from_mins(10);
 /// A round of the ticket mirror is one long poll of the feed or one page of a copy.
@@ -125,6 +128,25 @@ impl Parts {
         self.spawn_disk();
         self.spawn_metrics();
         self.spawn_mirror();
+        self.spawn_overdue_stops(server.clone());
+    }
+
+    /// Ends a verb process that was asked to stop, by any path, and still runs a minute later
+    /// (see [`crate::stop_overdue`]).
+    fn spawn_overdue_stops(&self, server: Arc<Server>) {
+        self.start_loop(
+            "ignite-overdue-stops",
+            OVERDUE_STALLS_AFTER,
+            move |ticker| {
+                loop {
+                    thread::sleep(OVERDUE_EVERY);
+                    ticker.round(|| {
+                        server.end_overdue_stops();
+                        Ok(())
+                    });
+                }
+            },
+        );
     }
 
     /// Sends the outbox, the heartbeat and any landing the hub has not heard of. After each

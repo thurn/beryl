@@ -23,6 +23,24 @@ pub fn get(conn: &Connection, handle: &str) -> Result<Option<rows::HandleStop>> 
         .optional()?)
 }
 
+/// The handles whose stop was asked, oldest request first, with when each was asked.
+pub fn asked(conn: &Connection) -> Result<Vec<rows::HandleStop>> {
+    let mut statement = conn.prepare(
+        "SELECT handle, asked, refused, at FROM handle_stops WHERE asked = 1 ORDER BY at, handle",
+    )?;
+    let stops = statement
+        .query_map([], |row| {
+            Ok(rows::HandleStop {
+                handle: row.get(0)?,
+                asked: row.get(1)?,
+                refused: row.get(2)?,
+                at: row.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(stops)
+}
+
 /// Records the handle's stop state, replacing what was recorded.
 pub fn set(conn: &Connection, stop: &rows::HandleStop) -> Result<()> {
     conn.execute(

@@ -634,5 +634,10 @@
     "label": "The settings, protocol types, trait methods and fakes for landing by verdict and a green branch exist with defaults that change nothing, so the tickets that make `ignite land` take seconds (one gate per tree and base, rebased in git's object database) can be built at the same time against the fakes",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The daemon ends a verb process that was asked to stop by any path and still runs 60 seconds later, so a hung check no longer holds its tree and a core for hours",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
