@@ -5,7 +5,7 @@
 //! On 2026-11-18 every fix to Ignite's own scheduling waited 10 to 30 minutes in the queue it
 //! was fixing: the gate's checks and builds asked the scheduler for cores, the scheduler had
 //! granted every core to other work, and the bug being fixed was often why. Three of those fixes
-//! were pushed to the release branch by hand instead. So a landing whose every changed file
+//! were pushed to the release ref by hand instead. So a landing whose every changed file
 //! matches `[express] paths` skips the gate. It checks the rebased commit out in one fixed
 //! worktree, `[express] tree`, whose ignored files (Ignite's Cargo target directory) survive
 //! from one landing to the next, and runs `[express] commands` there in order. They run as the
@@ -40,7 +40,7 @@
 //! commits landed since that pass touch none of them and no build input.
 //!
 //! The landing then takes the integration branch's lease and pushes as any landing does, and
-//! moves the release branch on the commands' pass (see [`super::release`]). A machine whose
+//! moves the release ref on the commands' pass (see [`super::release`]). A machine whose
 //! `express_cores` is zero has no express lane, and its landings all go through the gate.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
@@ -265,7 +265,7 @@ fn ago_text(seconds: f64) -> String {
 
 impl Landing {
     /// The express lane, when this landing may take it: the machine has one, the repository
-    /// configures the express commands and a release branch to move, and every file the
+    /// configures the express commands and a release ref to move, and every file the
     /// landing changes matches `[express] paths`.
     ///
     /// The section judged is that of the `ignite.toml` in `tree`, the ticket tree the rebase
