@@ -320,6 +320,13 @@ impl CountFloats {
     }
 }
 
+/// How far, in points, a gain's number on the desktop layout starts above where the web's
+/// `.life-change-gain` puts it. At the web's position the number's box reaches 3 points into the
+/// "Your draw" step toggle at the orb's top left, which "text overlaps nothing" rejects now that
+/// the steps stay up while scripts play, and the number is a transient float, so 2 points do not
+/// show.
+const GAIN_CLEARANCE: f32 = 2.0;
+
 /// How far a line of the title type reaches above and below its middle, in logical points: the
 /// phone's life total, from which the amount it changed by starts, and the space the desktop's
 /// notices leave above a total.
@@ -354,7 +361,10 @@ fn change_look(
     } else if phone {
         (HALF_LIFE + drift, Vec2::new(0.5, 0.0))
     } else if run.effect == Effect::Gain {
-        (-half + size::LIFE_CHANGE_TOP - drift, Vec2::new(1.0, 0.0))
+        (
+            -half + size::LIFE_CHANGE_TOP - GAIN_CLEARANCE - drift,
+            Vec2::new(1.0, 0.0),
+        )
     } else {
         (
             half - size::LIFE_CHANGE_BOTTOM - height + drift,
