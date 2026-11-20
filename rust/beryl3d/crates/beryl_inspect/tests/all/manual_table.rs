@@ -16,7 +16,7 @@ use glam::Vec2;
 
 /// A sweep from the empty table above your Serra Angel to below your Pacifism, which touches
 /// those two permanents and no land.
-const SWEEP: &str = "drag 560,410 to 900,600";
+const SWEEP: &str = "drag 560,410 to 1000,600";
 
 /// `screen/table` at rest, at its end.
 fn table() -> Page {
@@ -84,7 +84,7 @@ fn extent(page: &mut Page, name: &str) -> (f32, f32) {
 #[test]
 fn a_sweep_from_the_empty_table_draws_a_rectangle_and_selects_what_it_touches() {
     let mut page = table();
-    page.run("hold 560,410 over 900,600");
+    page.run("hold 560,410 over 1000,600");
     assert!(
         page.try_find("region \"selection-rectangle\"").is_ok(),
         "no rectangle mid-sweep:\n{}",
