@@ -407,7 +407,11 @@ not json
         let entries = codex(include_str!("codex_fixtures/model_refused_0_171.jsonl"));
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].kind, TranscriptKind::Result);
-        assert!(entries[0].text.starts_with("failed: The 'gpt-nonexistent-9'"));
+        assert!(
+            entries[0]
+                .text
+                .starts_with("failed: The 'gpt-nonexistent-9'")
+        );
     }
 
     #[test]

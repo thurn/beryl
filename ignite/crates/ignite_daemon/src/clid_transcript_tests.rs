@@ -50,8 +50,17 @@ fn a_recorded_codex_turn_is_digested() {
             (4, TranscriptKind::Result, "completed"),
         ]
     );
-    assert_eq!(lines[2].call, Some(1), "the output names its command's line");
-    assert!(lines.iter().filter(|l| l.index != 2).all(|l| l.call.is_none()));
+    assert_eq!(
+        lines[2].call,
+        Some(1),
+        "the output names its command's line"
+    );
+    assert!(
+        lines
+            .iter()
+            .filter(|l| l.index != 2)
+            .all(|l| l.call.is_none())
+    );
 }
 
 #[test]
@@ -153,7 +162,9 @@ fn queueing_lines_wakes_the_sender_and_a_tool_result_reaches_the_hub_with_its_ca
     let session = SessionId::new("cli-codex-0a1b2c3d").unwrap();
     rig.daemon.send_digest("codex", &session, None, 1, CODEX);
     // The sender's pause between rounds ends at once: lines are waiting.
-    assert!(crate::outbox::wait_for_transcripts(std::time::Duration::ZERO));
+    assert!(crate::outbox::wait_for_transcripts(
+        std::time::Duration::ZERO
+    ));
     flush(&rig, &hub);
     let held = hub.transcript_lines();
     let result = held

@@ -320,7 +320,10 @@ fn a_waiting_reader_gets_the_next_line_as_soon_as_it_is_appended() {
     // With nothing after `after` and no wait, the answer is empty at once.
     let (status, empty) = send(address, "GET", &format!("{route}?after=0"), &[], "");
     assert_eq!(status, 200);
-    assert_eq!(serde_json::from_str::<Value>(&empty).unwrap()["lines"], json!([]));
+    assert_eq!(
+        serde_json::from_str::<Value>(&empty).unwrap()["lines"],
+        json!([])
+    );
     assert_eq!(
         send(address, "GET", &format!("{route}?after=0&wait=x"), &[], "").0,
         400

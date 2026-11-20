@@ -74,8 +74,7 @@ type Raw = (
     Option<u32>,
 );
 
-const COLUMNS: &str =
-    "seq, machine, session, ticket, turn, line_index, kind, text, at, call_index";
+const COLUMNS: &str = "seq, machine, session, ticket, turn, line_index, kind, text, at, call_index";
 
 fn decode(raw: Raw) -> Option<StoredTranscriptLine> {
     let (seq, machine, session, ticket, turn, index, kind, text, at, call) = raw;
@@ -204,8 +203,14 @@ mod tests {
         append(&conn, &machine, &[line(1, 0, "Bash: ls"), result], now).unwrap();
         let stored = after(&conn, "cli-claude-0a1b2c3d", 0).unwrap();
         assert_eq!(
-            stored.iter().map(|s| (s.line.kind, s.line.call)).collect::<Vec<_>>(),
-            [(TranscriptKind::Tool, None), (TranscriptKind::ToolResult, Some(0))]
+            stored
+                .iter()
+                .map(|s| (s.line.kind, s.line.call))
+                .collect::<Vec<_>>(),
+            [
+                (TranscriptKind::Tool, None),
+                (TranscriptKind::ToolResult, Some(0))
+            ]
         );
     }
 
