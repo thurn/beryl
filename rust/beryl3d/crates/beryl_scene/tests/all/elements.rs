@@ -342,8 +342,9 @@ fn a_fading_node_is_partway_through_its_transition() {
 fn a_screen_built_again_before_its_first_frame_glides_nothing() {
     // The start screen is built before the host's agents arrive and again with them, both
     // before any frame draws it. The rows push the title above them to a new place, but no
-    // frame ever drew the title at its old one, so it must not glide there as the screen
-    // fades in.
+    // frame ever drew the title at its old one, so it must not glide there. A screen shown
+    // before the first frame stands whole from that frame, as the web's first page does, so
+    // nothing moves at all.
     let mut layer = layer();
     let screen = |rows: usize| {
         let rows = (0..rows).map(|at| region(&format!("row {at}")).width(100.0).height(50.0));
@@ -356,13 +357,16 @@ fn a_screen_built_again_before_its_first_frame_glides_nothing() {
     layer.show(Some(screen(0)));
     layer.show(Some(screen(2)));
     layer.tick(0);
-    assert!(layer.tick(10 * MS).moving, "the screen is fading in");
-    let (_, fading) = find(&write(&mut layer), Role::Text, "Title");
-    assert!(!layer.tick(1_000 * MS).moving, "the fade in has ended");
+    assert!(
+        !layer.tick(10 * MS).moving,
+        "the first screen is not fading in"
+    );
+    let (_, first) = find(&write(&mut layer), Role::Text, "Title");
+    layer.tick(1_000 * MS);
     let (_, rest) = find(&write(&mut layer), Role::Text, "Title");
     assert!(
-        close(fading[1], rest[1]),
-        "the title stands at {fading:?} while the screen fades in, not where it rests, {rest:?}"
+        close(first[1], rest[1]),
+        "the title stands at {first:?} on the first frames, not where it rests, {rest:?}"
     );
 }
 

@@ -274,11 +274,12 @@ fn a_touch_held_on_a_permanent_opens_its_menu() {
     let angel = middle(&frame, Role::Card, "Serra Angel");
     client.handle(touch(PointerPhase::Down, angel));
     // The hold is timed from the first frame after the touch, which wakes the client again
-    // when it is due.
+    // no later than when it is due. It may wake sooner for another timer: before the first
+    // screen stood whole from its first frame, its fade in kept the client awake.
     client.frame(10 * MS);
     let due = 10 * MS + LONG_PRESS;
     assert!(
-        matches!(client.wake(), Wake::Now) || client.wake() == Wake::At(due),
+        matches!(client.wake(), Wake::Now) || matches!(client.wake(), Wake::At(at) if at <= due),
         "the client sleeps past the hold: {:?}",
         client.wake()
     );
