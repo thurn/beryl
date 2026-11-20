@@ -9,7 +9,9 @@ use beryl_scene::frame::{Frame, Role, StateBits};
 use beryl_scene::input::{Input, PointerPhase};
 use beryl_scene::testing::ViewBuilder;
 
-use super::flat_layer::{centre, client, deciding, find, pointer, prompt};
+use beryl_protocol::prompt::ButtonId;
+
+use super::flat_layer::{centre, client, deciding, edges, find, pointer, prompt, prompt_button};
 
 /// Whether `frame` has an element of `role` named `name`.
 fn has(frame: &Frame, role: Role, name: &str) -> bool {
@@ -187,4 +189,45 @@ fn the_log_is_a_button_until_it_is_opened() {
     let frame = client.frame(100_000_000);
     assert!(has(frame, Role::Button, "Hide log"));
     assert!(has(frame, Role::Text, "You gained 2 life"));
+}
+
+/// A deciding view whose prompt has a turn button and, if `pass_on`, the round button that passes
+/// on, with full control on in the stops the game holds.
+fn full_control_on(pass_on: bool) -> Input {
+    let mut view = prompt("");
+    view.buttons = vec![prompt_button(ButtonId::Decline, "Next", true)];
+    if pass_on {
+        view.buttons.push(prompt_button(ButtonId::PassOn, "To End Turn", false));
+    }
+    let Input::Update(mut update) = deciding(view) else {
+        unreachable!("deciding is an update")
+    };
+    update.view.stops.full_control = true;
+    Input::Update(update)
+}
+
+#[test]
+fn full_controls_sign_stands_left_of_the_turn_button_and_moves_over_for_pass_on() {
+    let mut client = client();
+    let frame = client.frame(0);
+    assert!(!has(frame, Role::Icon, "Full control"), "no sign before a game");
+    client.handle(deciding(prompt("Pay {1}{U}")));
+    let frame = client.frame(1_000_000);
+    assert!(!has(frame, Role::Icon, "Full control"), "no sign while full control is off");
+
+    // As the web's `.full-control` stands it: 12 points left of the turn button, centred on it.
+    client.handle(full_control_on(false));
+    let frame = client.frame(2_000_000);
+    let next = edges(frame, find(frame, Role::Button, "Next"));
+    let sign = edges(frame, find(frame, Role::Icon, "Full control"));
+    assert!((next.0 - sign.2 - 12.0).abs() < 0.01, "{sign:?} by {next:?}");
+    assert!((sign.1 - next.1 - 10.0).abs() < 0.01, "{sign:?} by {next:?}");
+
+    // With the round pass-on button left of the turn button, the sign stands 12 points left of
+    // that instead.
+    client.handle(full_control_on(true));
+    let frame = client.frame(3_000_000);
+    let pass_on = edges(frame, find(frame, Role::Button, "To End Turn"));
+    let sign = edges(frame, find(frame, Role::Icon, "Full control"));
+    assert!((pass_on.0 - sign.2 - 12.0).abs() < 0.01, "{sign:?} by {pass_on:?}");
 }

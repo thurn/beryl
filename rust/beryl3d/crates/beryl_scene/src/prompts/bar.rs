@@ -10,17 +10,20 @@ use glam::Vec2;
 
 use super::Piles;
 use crate::data::space::hud::phone as data;
-use crate::element::{Align, Anchor, Element, Press, TextAlign, column, holder, row, text};
+use crate::element::{Align, Anchor, Element, Position, Press, TextAlign, column, holder, row, text};
 use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
 use crate::screens::ScreenIn;
 use crate::table::{PhoneBands, phone_bands};
 use crate::text::TypeStyle;
-use crate::tokens::{color, shadow, space, type_style};
-use crate::widgets::{button, icon_button, icons, primary};
+use crate::tokens::{color, shadow, size, space, type_style};
+use crate::widgets::{self, button, icon_button, icons, primary};
 
-/// The prompt bar for `prompt`: its title, then its buttons in the order the session sent them,
-/// the one the prompt puts forward drawn as the primary button. The ways to use a card stand
-/// over the table instead (`super::ways`).
+/// The prompt bar for `prompt`: on the desktop, the action dock (`desktop_dock`), with what the prompt
+/// asks at its top, its other buttons stacked under that in the order the session sent them,
+/// the first at the foot, and the button it puts forward at the dock's foot as the turn button,
+/// with the one that passes on beside it and its caption under it, as the web's `PromptDock`
+/// (`ui/src/stage/PromptBar.tsx`) lays them out. The ways to use a card stand over the table
+/// instead (`super::ways`).
 /// A prompt with no title, such as a priority stop's, shows only its buttons, as the web
 /// interface's prompt bar does (`ui/src/stage/PromptBar.tsx`): an empty text would still take
 /// a gap beside them.
@@ -46,8 +49,8 @@ pub(super) struct Controls {
 
 /// The prompt bar for `prompt`, as `prompt_bar` draws it, with `after` written in brackets
 /// after what it asks, as the web's `Asks` writes how much of a cost is still to pay, and
-/// `controls` just before the primary button, as the web's dock stands a number's steps
-/// (`Stepper` in `ui/src/stage/PromptBar.tsx`), or after the buttons where none is primary.
+/// `controls` over the turn button, as the web's dock stands a number's steps (`Stepper` in
+/// `ui/src/stage/PromptBar.tsx`).
 pub(super) fn bar(
     prompt: &PromptView,
     input: &ScreenIn,
@@ -69,33 +72,108 @@ pub(super) fn bar(
     if input.window.phone() {
         return phone_bar(prompt, input, &asks, controls);
     }
-    let title = (!asks.is_empty()).then(|| text(&asks).style(type_style::TITLE).grow(1.0));
+    let title = (!asks.is_empty()).then(|| {
+        text(&asks)
+            .style(type_style::TITLE)
+            .text_align(TextAlign::Center)
+    });
     let ways = || super::ways(prompt).map(|way| way.id);
-    let buttons =
-        (prompt.buttons.iter()).filter(|button_view| !ways().any(|id| id == button_view.id));
-    let primary_at = buttons.clone().position(|button_view| button_view.primary);
-    let mut controls = controls.map(|controls| controls.element);
-    let mut bar = row()
+    let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
+        .filter(|button_view| !ways().any(|id| id == button_view.id))
+        .collect();
+    let forward = buttons.iter().copied().find(|button_view| button_view.primary);
+    let pass_on = (buttons.iter().copied()).find(|button_view| button_view.id == ButtonId::PassOn);
+    let same = |a: Option<&PromptButton>, b: &PromptButton| a.is_some_and(|a| a.id == b.id);
+    // The first of the other buttons stands at the foot and the rest stack over it, as the
+    // web's `.dock-buttons` lays them out in a reversed column.
+    let others: Vec<Element> = (buttons.iter().copied())
+        .filter(|button_view| !same(forward, button_view) && !same(pass_on, button_view))
+        .rev()
+        .map(|button_view| {
+            dock_sized(
+                button(&button_view.label)
+                    .enabled(button_view.enabled)
+                    .on_press(Press::Button(button_view.id)),
+            )
+        })
+        .collect();
+    desktop_dock()
+        .children(title)
+        .children(others)
+        .children(controls.map(|controls| controls.element))
+        .children(forward.map(|forward| {
+            turn_action(
+                dock_sized(
+                    primary(&forward.label)
+                        .enabled(forward.enabled)
+                        .on_press(Press::Button(forward.id)),
+                ),
+                pass_on,
+                &forward.caption,
+            )
+        }))
+}
+
+/// The most room the dock's words and buttons take across: `.dock`'s `max-width`.
+const DOCK_MAX_WIDTH: f32 = 460.0;
+
+/// How far under the turn button its caption's top stands: `.turn-action > :not(.button)`'s
+/// `top: calc(100% + 8.5px)`.
+const CAPTION_GAP: f32 = 8.5;
+
+/// The desktop's action dock, as the web's `.dock` in `ui/src/screens/styles/controls.css`
+/// lays it out in the window's bottom right corner (`layout::DOCK_RIGHT` and `DOCK_BOTTOM`): a
+/// column of buttons of one width, at least a turn button's (`--button-width`), with what the
+/// prompt asks over them and the turn button at the foot. It draws no panel of its own, as the
+/// web's dock draws none.
+fn desktop_dock() -> Element {
+    column()
         .name("prompt")
         .gap(space::M)
-        .padding(space::L)
-        .children(title);
-    for (at, button_view) in buttons.enumerate() {
-        if Some(at) == primary_at {
-            bar.children.extend(controls.take());
-        }
-        let widget = if button_view.primary { primary } else { button };
-        let pressed = widget(&button_view.label)
+        .align_items(Align::Stretch)
+        .min_width(size::BUTTON_WIDTH)
+        .max_width(DOCK_MAX_WIDTH)
+        .background([0; 4])
+        .border(([0; 4], 0.0))
+}
+
+/// `element`, a button of the dock, as wide as the dock (`.dock .button`: `min-width: 0;
+/// width: 100%`).
+fn dock_sized(mut element: Element) -> Element {
+    element.style.min_width = Some(0.0);
+    element.align_self(Align::Stretch)
+}
+
+/// The turn button `pressed` at the dock's foot, as the web's `.turn-action` stands it: the
+/// round button that passes on, `pass_on`, to its left, and what it says under its label,
+/// `caption`, centred under it. Neither takes room in the dock's column, so the turn button
+/// stands at the same place whatever is beside or under it.
+fn turn_action(pressed: Element, pass_on: Option<&PromptButton>, caption: &str) -> Element {
+    let gap = space::M;
+    let height = size::BUTTON_HEIGHT;
+    let pass_on = pass_on.map(|button_view| {
+        // `.dock .turn-action .pass-on-button`: a circle as tall as the turn button, its right
+        // edge the dock's gap left of the turn button's left edge.
+        widgets::pass_on(&button_view.label, height)
             .enabled(button_view.enabled)
-            .on_press(Press::Button(button_view.id));
-        bar.children.push(if button_view.primary {
-            captioned(pressed, &button_view.caption)
-        } else {
-            pressed
-        });
-    }
-    bar.children.extend(controls);
-    bar
+            .on_press(Press::Button(button_view.id))
+            .position(Position::Absolute)
+            .inset([Some(0.0), None, None, Some(-(height + gap))])
+    });
+    let caption = (!caption.is_empty()).then(|| {
+        text(caption)
+            .style(type_style::TURN_CAPTION)
+            .color(color::TURN_CAPTION)
+            .text_align(TextAlign::Center)
+            .position(Position::Absolute)
+            .inset([Some(height + CAPTION_GAP), None, None, None])
+    });
+    column()
+        .name("turn action")
+        .align_items(Align::Center)
+        .child(pressed)
+        .children(pass_on)
+        .children(caption)
 }
 
 /// The primary button `pressed` with what it says under its label, `caption`, beneath it, as
@@ -478,13 +556,7 @@ pub fn waiting(input: &ScreenIn) -> Option<Element> {
     }
     let label = button(OPPONENTS_TURN).enabled(false);
     if !input.window.phone() {
-        return Some(
-            row()
-                .name("prompt")
-                .gap(space::M)
-                .padding(space::L)
-                .child(label),
-        );
+        return Some(desktop_dock().child(turn_action(dock_sized(label), None, "")));
     }
     // It stands where the dock would, raised over a hand whose back row stands in the strip. Where
     // that would cover a permanent of the viewer's back row and the label is too wide for the

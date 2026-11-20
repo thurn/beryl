@@ -371,14 +371,12 @@ fn tab_moves_the_focus_to_the_next_button_and_return_presses_it() {
     let mut client = client();
     client.handle(deciding(prompt("Pay {1}{U}")));
     client.frame(0);
-    client.handle(key(KeyCode::Tab, Modifiers::default()));
+    // The dock stacks Cancel over the turn button, Auto Pay, and Tab follows the dock's order
+    // from the top, as it follows the web's.
     client.handle(key(KeyCode::Tab, Modifiers::default()));
     let frame = client.frame(MS);
     let cancel = &frame.resolved[find_index(frame, "Cancel")];
-    assert!(
-        cancel.state.has(StateBits::FOCUSED),
-        "Tab went to Auto Pay, then Cancel"
-    );
+    assert!(cancel.state.has(StateBits::FOCUSED), "Tab went to Cancel");
     assert!(
         !frame.resolved[find_index(frame, "Auto Pay")]
             .state

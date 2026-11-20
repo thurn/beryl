@@ -3,6 +3,7 @@
 
 pub mod banner;
 pub mod counts;
+pub mod full_control;
 pub mod log;
 pub mod notices;
 pub mod phone;

@@ -58,7 +58,7 @@ pub(super) fn decision() -> DecisionId {
     }
 }
 
-fn prompt_button(id: ButtonId, label: &str, primary: bool) -> PromptButton {
+pub(super) fn prompt_button(id: ButtonId, label: &str, primary: bool) -> PromptButton {
     PromptButton {
         id,
         label: label.to_owned(),
@@ -191,7 +191,8 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     let auto = find(frame, Role::Button, "Auto Pay");
     let cancel = find(frame, Role::Button, "Cancel");
 
-    // The bar's bottom right corner is where the web interface's action dock stands.
+    // The bar's bottom right corner is where the web interface's action dock stands, and the
+    // button the prompt puts forward stands in that corner as the turn button.
     let (bar_left, bar_top, bar_right, bar_bottom) = edges(frame, bar);
     assert!(
         (bar_right - (WIDTH - 39.0)).abs() < 0.01,
@@ -201,34 +202,39 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
         (bar_bottom - (HEIGHT - 87.0)).abs() < 0.01,
         "bar ends at {bar_bottom}"
     );
+    let (_, _, auto_right, auto_bottom) = edges(frame, auto);
+    assert!((auto_right - bar_right).abs() < 0.01 && (auto_bottom - bar_bottom).abs() < 0.01);
     for element in [title, auto, cancel] {
-        assert_eq!(frame.resolved[element].parent, bar as u32);
         assert_eq!(frame.resolved[element].place, Place::Layer);
         let (left, top, right, bottom) = edges(frame, element);
         assert!(left >= bar_left && right <= bar_right && top >= bar_top && bottom <= bar_bottom);
     }
-    // The title, then the buttons in the order the session sent them, left to right.
-    assert!(edges(frame, title).2 <= edges(frame, auto).0);
-    assert!(edges(frame, auto).2 <= edges(frame, cancel).0);
-    let (_, top, _, bottom) = edges(frame, cancel);
-    assert!(
-        (bottom - top - 48.0).abs() < 0.01,
-        "a button is 48 points tall"
-    );
+    // The title at the top, the other buttons under it and the turn button at the foot, each
+    // button as wide as the dock, which is a turn button's width (`--button-width`).
+    assert!(edges(frame, title).3 <= edges(frame, cancel).1);
+    assert!(edges(frame, cancel).3 <= edges(frame, auto).1);
+    for button in [auto, cancel] {
+        let (left, top, right, bottom) = edges(frame, button);
+        assert!((right - left - 250.0).abs() < 0.01, "a dock button is 250 points wide");
+        assert!(
+            (bottom - top - 48.0).abs() < 0.01,
+            "a button is 48 points tall"
+        );
+    }
     assert!(frame.resolved[auto].interactive && frame.resolved[cancel].interactive);
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
-    // A panel for the bar, one for each button and one under the count of each of the six
-    // piles, the corner's settings gear and bug button, the button of the game log, folded
-    // because the opponent's lands reach into its column, and the disc of each of the title's
-    // two mana symbols, all in the flat layer's band. The orbs and the life totals on them draw
-    // no panel.
+    // A panel for each button and one under the count of each of the six piles, the corner's
+    // settings gear and bug button, the button of the game log, folded because the opponent's
+    // lands reach into its column, and the disc of each of the title's two mana symbols, all in
+    // the flat layer's band. The dock draws no panel, as the web's draws none, and neither do
+    // the orbs or the life totals on them.
     let layer = &frame.draws[frame.layer as usize..];
     let panels = layer
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 14);
+    assert_eq!(panels, 13);
 }
 
 #[test]
@@ -244,19 +250,45 @@ fn a_prompt_with_no_title_shows_only_its_buttons() {
             .any(|element| element.role == Role::Text && element.parent == bar as u32),
         "no text for an empty title"
     );
-    // The bar holds its padding, the two buttons and one gap between them, and nothing else.
+    // The dock holds the two buttons, one over the other with a gap between them, and nothing
+    // else.
     let auto = edges(frame, find(frame, Role::Button, "Auto Pay"));
     let cancel = edges(frame, find(frame, Role::Button, "Cancel"));
-    let (bar_left, _, bar_right, _) = edges(frame, bar);
-    let padding = space::L;
+    let (bar_left, bar_top, bar_right, _) = edges(frame, bar);
+    assert!((cancel.1 - bar_top).abs() < 0.01, "{cancel:?} in {bar_top}");
     assert!(
-        (auto.0 - bar_left - padding).abs() < 0.01,
-        "{auto:?} in {bar_left}"
+        (auto.1 - cancel.3 - space::M).abs() < 0.01,
+        "{auto:?} under {cancel:?}"
     );
-    assert!(
-        (bar_right - cancel.2 - padding).abs() < 0.01,
-        "{cancel:?} in {bar_right}"
-    );
+    assert!((auto.0 - bar_left).abs() < 0.01 && (bar_right - auto.2).abs() < 0.01);
+}
+
+#[test]
+fn the_turn_button_has_the_pass_on_button_beside_it_and_its_caption_under_it() {
+    let mut client = client();
+    let mut view = prompt("");
+    view.buttons = vec![
+        PromptButton {
+            caption: "To Main 2".to_owned(),
+            ..prompt_button(ButtonId::Decline, "Next", true)
+        },
+        prompt_button(ButtonId::PassOn, "To End Turn", false),
+    ];
+    client.handle(deciding(view));
+    let frame = client.frame(500 * MS);
+    let bar = edges(frame, find(frame, Role::Region, "prompt"));
+    let next = edges(frame, find(frame, Role::Button, "Next"));
+    let pass_on = edges(frame, find(frame, Role::Button, "To End Turn"));
+    let caption = edges(frame, find(frame, Role::Text, "To Main 2"));
+    // As the web's `.turn-action` stands them: neither the round button nor the caption takes
+    // room in the dock, so the turn button keeps the dock's corner and width.
+    assert!((next.2 - next.0 - 250.0).abs() < 0.01, "{next:?}");
+    assert!((next.3 - bar.3).abs() < 0.01 && (next.2 - bar.2).abs() < 0.01);
+    assert!((pass_on.2 - (next.0 - space::M)).abs() < 0.01, "{pass_on:?} by {next:?}");
+    assert!((pass_on.1 - next.1).abs() < 0.01 && (pass_on.3 - pass_on.1 - 48.0).abs() < 0.01);
+    assert!((caption.1 - (next.3 + 8.5)).abs() < 0.01, "{caption:?} under {next:?}");
+    let middle = |(left, _, right, _): (f32, f32, f32, f32)| f32::midpoint(left, right);
+    assert!((middle(caption) - middle(next)).abs() < 0.5, "{caption:?} under {next:?}");
 }
 
 #[test]

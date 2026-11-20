@@ -8,11 +8,10 @@ use glam::Vec2;
 
 use super::{ScreenIn, game_over, opening};
 use crate::element::{Anchor, Element, holder, row};
-use crate::hud::{log, phone, players, steps};
+use crate::hud::{full_control, log, phone, players, steps};
 use crate::inspect::viewer;
 use crate::prompts;
 use crate::table::phone_bands;
-use crate::tokens::{color, size};
 
 /// What the flat layer shows over a game. While none of its pieces shows anything, it is the
 /// open prompt's element alone, as it has been since the prompt bar was the only thing in the
@@ -30,6 +29,7 @@ pub fn game(input: &ScreenIn) -> Element {
         players::players(input).filter(|_| !opening::shown(input)),
         // The opening's backdrop covers the stops, as the web's overlay does.
         steps::steps(input).filter(|_| !opening::shown(input)),
+        full_control::full_control(input).filter(|_| !opening::shown(input)),
         log::log(input),
         viewer::viewer(input),
     ]
@@ -40,15 +40,14 @@ pub fn game(input: &ScreenIn) -> Element {
     if pieces.is_empty() && opening.is_none() {
         return prompt.unwrap_or_else(|| row().name("game"));
     }
-    // The pieces are in a region that draws nothing, so the prompt keeps the panel it has as
-    // the screen's top element. The flat layer draws in tree order, so the opening, whose scrim
-    // dims the whole window, comes before the prompt, whose buttons would otherwise be drawn
-    // under it and look disabled. The opening has nothing Tab stops at, so Tab still reaches
-    // the prompt's buttons first.
+    // The flat layer draws in tree order, so the opening, whose scrim dims the whole window,
+    // comes before the prompt, whose buttons would otherwise be drawn under it and look
+    // disabled. The opening has nothing Tab stops at, so Tab still reaches the prompt's buttons
+    // first. The prompt draws no panel, as the web's action dock draws none.
     holder()
         .name("game")
         .children(opening)
-        .children(prompt.map(on_panel))
+        .children(prompt)
         .children(pieces)
 }
 
@@ -110,27 +109,4 @@ pub fn game_phone(input: &ScreenIn) -> Element {
         );
     screen.anchor = Some(Anchor::Point(Vec2::ZERO, Vec2::ZERO));
     screen
-}
-
-/// `element` drawn on the panel of a screen's top element, where its style gives none. The
-/// panel's border takes room inside the box, which a top element's does not, so the padding
-/// gives that room back and the box keeps its size.
-fn on_panel(element: Element) -> Element {
-    let style = &element.style;
-    let (background, border, radius) = (style.background, style.border, style.radius);
-    let padding = if border.is_none() {
-        style.padding.map(|side| (side - size::BORDER).max(0.0))
-    } else {
-        style.padding
-    };
-    let mut element = element
-        .background(background.unwrap_or(color::PANEL))
-        .border(border.unwrap_or((color::METAL, size::BORDER)))
-        .radius(if radius > 0.0 {
-            radius
-        } else {
-            size::PANEL_RADIUS
-        });
-    element.style.padding = padding;
-    element
 }

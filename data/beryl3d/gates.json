@@ -257,7 +257,7 @@
   },
   "tests": {
     "median_frames": 124,
-    "most_frames": 5984
+    "most_frames": 5988
   },
   "scaling": {
     "stress-1024": {

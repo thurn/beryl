@@ -14,7 +14,7 @@ mod slider;
 mod toggle;
 mod tooltip;
 
-pub use button::{button, primary};
+pub use button::{button, pass_on, primary};
 pub use check::check_mark;
 pub use field::{FieldState, Fields, field};
 pub use icon_button::icon_button;

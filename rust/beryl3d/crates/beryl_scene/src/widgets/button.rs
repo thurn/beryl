@@ -6,7 +6,8 @@
 //! a little brighter (the flat layer's `write` draws those states). A label too long for its
 //! button shrinks to fit (`Style::fit`), as the web's `TurnButton` shrinks its label.
 
-use crate::element::{Element, TextAlign};
+use super::icons;
+use crate::element::{Align, Element, Justify, Shown, TextAlign};
 use crate::frame::Role;
 use crate::tokens::{color, gradient, shadow, size, type_style};
 
@@ -40,5 +41,56 @@ pub fn primary(label: &str) -> Element {
     element.primary = true;
     element.style.box_shadow = shadow::PRIMARY.to_vec();
     element.style.background_image = vec![gradient::PRIMARY];
+    element
+}
+
+/// The round button that passes on to a later stop, named `name`, as the web's `PassOn`
+/// (`ui/src/stage/PromptBar.tsx`) draws it: a frameless button `side` points across that holds a
+/// face in the primary button's amber (`.pass-on-face.button-primary` in
+/// `ui/src/screens/styles/controls.css`), with the fast-forward glyph in the primary button's
+/// light ink under its shadow. The face is not a `.button`, so it stays amber when disabled.
+/// How far right of centre the pass-on glyph stands: `.pass-on-face > svg`'s
+/// `transform: translateX(1.5px)`.
+const GLYPH_NUDGE: f32 = 1.5;
+
+/// The pass-on glyph's height over its width: its artwork's view box is 24 by 16, so the web's
+/// 22-point-wide `svg` is 14.7 points tall.
+const GLYPH_ASPECT: f32 = 16.0 / 24.0;
+
+#[must_use]
+pub fn pass_on(name: &str, side: f32) -> Element {
+    // `.pass-on-face > svg`: the glyph casts the shadow, and is nudged right because its ink
+    // leans left of its box. The face centres it, so a left margin of twice the nudge moves it
+    // right by the nudge.
+    let glyph_size = icons::atlas_size(icons::PASS_ON);
+    let mut glyph = Element::new(Role::Icon)
+        .name("")
+        .width(f32::from(glyph_size))
+        .height(f32::from(glyph_size) * GLYPH_ASPECT)
+        .margin([0.0, 0.0, 0.0, 2.0 * GLYPH_NUDGE])
+        .color(color::PRIMARY_INK)
+        .drop_shadow(shadow::PASS_ON.to_vec())
+        .passes(true);
+    glyph.shows = Some(Shown::Icon(icons::PASS_ON, glyph_size));
+    let mut face = Element::new(Role::Region)
+        .name("")
+        .width(side)
+        .height(side)
+        .radius(side / 2.0)
+        .background([0; 4])
+        .border((color::PRIMARY_RIM, size::BORDER))
+        .align_items(Align::Center)
+        .justify_content(Justify::Center)
+        .passes(true)
+        .child(glyph);
+    face.style.box_shadow = shadow::PRIMARY.to_vec();
+    face.style.background_image = vec![gradient::PRIMARY];
+    let mut element = Element::new(Role::Button)
+        .name(name)
+        .width(side)
+        .height(side)
+        .background([0; 4])
+        .child(face);
+    element.style.border = Some(([0; 4], 0.0));
     element
 }
