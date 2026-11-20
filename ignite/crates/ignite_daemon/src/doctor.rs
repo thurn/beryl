@@ -27,6 +27,7 @@ pub mod listener;
 mod loops;
 mod mirror;
 mod running;
+mod scanning;
 mod trees;
 
 pub use loops::LoopsSection;
@@ -817,6 +818,7 @@ impl Verb for DoctorVerb {
             findings.push(mirror::finding(path, ctx.hub.as_ref(), ctx.clock.now()));
         }
         findings.extend(self.emergency.as_ref().and_then(|e| e.finding()));
+        findings.extend(scanning::finding());
         report(&findings)
     }
 }

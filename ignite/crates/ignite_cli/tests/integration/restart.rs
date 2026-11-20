@@ -21,7 +21,8 @@ use ignite_hub::server::{HubServer, RunningHub};
 const HUNG: Duration = Duration::from_mins(5);
 
 /// The family's adapter. `run` logs `<class> <check> <checksum of src>` for each check to
-/// `@MARKS@/runs.log`, waits until `@GATE@` exists, then passes them.
+/// `@MARKS@/runs.log`, waits until `@GATE@` exists (at most ten minutes, so a failed test leaves no shell
+/// behind), then passes them.
 const ADAPTER: &str = r#"#!/bin/sh
 case "$1" in
 list)
@@ -31,7 +32,7 @@ run)
   shift
   sum=$(cat src/* | cksum | cut -d ' ' -f 1)
   for check in "$@"; do echo "$IGNITE_CLASS $check $sum" >> '@MARKS@/runs.log'; done
-  while [ ! -e '@GATE@' ]; do sleep 0.02; done
+  i=0; while [ ! -e '@GATE@' ] && [ $i -lt 6000 ]; do sleep 0.1; i=$((i+1)); done
   for check in "$@"; do
     echo "{\"check\": \"$check\", \"outcome\": \"pass\", \"message\": \"ok\"}" >> "$IGNITE_RESULTS"
   done ;;

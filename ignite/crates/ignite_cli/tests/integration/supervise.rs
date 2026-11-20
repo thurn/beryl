@@ -186,8 +186,8 @@ fn a_command_outlives_the_daemon_side_and_its_result_is_picked_up_afterwards() {
     let spec = shell(
         &root,
         &format!(
-            r"while [ ! -e '{}' ]; do sleep 0.01; done; echo finished",
-            go.display()
+            "{}; echo finished",
+            super::wait_for_file(&go.display().to_string())
         ),
     );
     let first = launcher(&root);

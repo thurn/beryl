@@ -551,3 +551,29 @@ fn the_http_probe_sends_a_tokenless_post_and_reads_the_refusal() {
         )
     );
 }
+
+#[test]
+fn doctor_warns_when_a_new_program_waits_for_a_security_scan() {
+    use std::time::Duration;
+    let scanned = scanning::judge(scanning::Starts {
+        first: Duration::from_millis(180),
+        second: Duration::from_millis(5),
+    });
+    assert!(scanned.warning, "{}", scanned.line());
+    assert!(scanned.line().contains("180 ms"), "{}", scanned.line());
+    assert!(scanned.fix.unwrap().contains("Developer Tools"));
+    let exempt = scanning::judge(scanning::Starts {
+        first: Duration::from_millis(9),
+        second: Duration::from_millis(5),
+    });
+    assert!(exempt.ok && !exempt.warning, "{}", exempt.line());
+}
+
+/// The probe itself, on the machine running the test: it builds and runs a program and reports a
+/// finding either way.
+#[cfg(target_os = "macos")]
+#[test]
+fn the_scanning_probe_reports_a_finding_on_macos() {
+    let finding = scanning::finding().expect("cc builds the probe");
+    assert_eq!(finding.label, "scanning");
+}

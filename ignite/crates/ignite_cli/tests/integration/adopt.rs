@@ -35,8 +35,8 @@ fn waiting(cwd: &Path, go: &Path) -> CommandSpec {
             "/bin/sh".to_owned(),
             "-c".to_owned(),
             format!(
-                "while [ ! -e '{}' ]; do sleep 0.01; done; echo finished; exit 3",
-                go.display()
+                "{}; echo finished; exit 3",
+                super::wait_for_file(&go.display().to_string())
             ),
         ],
         cwd: cwd.to_path_buf(),
