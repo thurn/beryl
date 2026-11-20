@@ -58,6 +58,9 @@ pub struct Card {
 pub struct HomeCard {
     pub card: Card,
     pub labels: Vec<String>,
+    /// The name of the machine whose worker holds the ticket, when its assignee is a worker
+    /// that a machine has registered.
+    pub machine: Option<String>,
 }
 
 /// How many descendants of a ticket are closed, in progress and in all.
@@ -192,7 +195,10 @@ pub fn progress(conn: &Connection, ids: &[String]) -> Result<Vec<Progress>, Read
 /// The open tickets the home page can show, most recently updated first, with their progress.
 pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Vec<Progress>), ReadError> {
     let mut statement = conn.prepare(&format!(
-        "SELECT {CARD_FIELDS}, labels FROM tickets
+        "SELECT {CARD_FIELDS}, labels,
+                (SELECT m.name FROM workers w JOIN machines m ON m.id = w.machine
+                 WHERE w.session = tickets.assignee LIMIT 1)
+         FROM tickets
          WHERE status != 'closed'
            AND (parent IS NULL OR status IN ('in_progress', 'deferred') OR labels != '[]')"
     ))?;
@@ -200,6 +206,7 @@ pub fn home_data(conn: &Connection) -> Result<(Vec<HomeCard>, Vec<Progress>), Re
         Ok(HomeCard {
             card: card(row)?,
             labels: labels_of(&row.get::<_, String>(9)?),
+            machine: row.get(10)?,
         })
     })?;
     let mut cards: Vec<HomeCard> = rows.collect::<Result<_, _>>()?;

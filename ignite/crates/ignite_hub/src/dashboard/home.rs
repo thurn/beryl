@@ -49,6 +49,15 @@ fn automatic_group(labels: &[String]) -> Option<usize> {
     })
 }
 
+/// A machine's hostname as a card shows it: without its domain, and capitalized (`Multivac`).
+fn machine_label(hostname: &str) -> String {
+    let host = hostname.split('.').next().unwrap_or(hostname);
+    let mut chars = host.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first.to_uppercase().chain(chars).collect()
+    })
+}
+
 /// Builds the home page for the project at `root`, at feed position `seq`.
 #[allow(clippy::too_many_lines)]
 pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> PageOptions {
@@ -97,10 +106,12 @@ pub fn page(root: &str, cards: &[HomeCard], counts: &[Progress], seq: &str) -> P
             } else {
                 String::new()
             };
-            let assignee = card
-                .assignee
-                .as_deref()
-                .map_or(String::new(), |name| worker_unlinked(Some(name), &card.id));
+            let assignee = card.assignee.as_deref().map_or(String::new(), |name| {
+                ticket.machine.as_deref().map_or_else(
+                    || worker_unlinked(Some(name), &card.id),
+                    |machine| c::tip(&esc(&machine_label(machine)), name),
+                )
+            });
             let foot = format!(
                 "{state}{kind}{}{assignee}<span class=\"c-card-time\">{}</span>",
                 children_progress(progress.get(card.id.as_str()).copied()),

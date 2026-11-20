@@ -17,7 +17,19 @@ fn ticket(id: &str, labels: &[&str]) -> HomeCard {
             owner: None,
         },
         labels: labels.iter().map(|label| (*label).to_owned()).collect(),
+        machine: None,
     }
+}
+
+#[test]
+fn a_card_names_the_machine_working_it_not_the_session() {
+    let mut cards = [ticket("Tw1", &[])];
+    cards[0].card.status = Status::InProgress;
+    cards[0].card.assignee = Some("local_0123456789abcdef".to_owned());
+    cards[0].machine = Some("multivac.local".to_owned());
+    let body = page("/", &cards, &[], "0").body;
+    assert!(body.contains("Multivac"), "{body}");
+    assert!(!body.contains("session 012345"), "{body}");
 }
 
 fn group_of(labels: &[&str]) -> Option<&'static str> {
