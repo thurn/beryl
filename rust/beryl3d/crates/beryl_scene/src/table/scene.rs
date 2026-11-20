@@ -530,6 +530,10 @@ impl Table {
             dissolve: 0.0,
             whiten: 0.0,
             face,
+            // The hand and the stack show a card's full frame, as the web interface does.
+            full: matches!(shown.zone, ZoneName::Hand | ZoneName::Stack)
+                .then(|| faces.full_layers_of_object(shown))
+                .flatten(),
             state,
             // A copy beneath a pile's top peeks out too little to be pressed by itself; the
             // pile is pressed through its top card. Under a tray, only its cards (`pressable`).
@@ -629,6 +633,11 @@ impl Table {
         );
         let opacity = (look.pose.opacity.clamp(0.0, 1.0) * 255.0).round() as u8;
         let [red, green, blue] = look.tint;
+        // The full-size face, once it has landed, or the board-size one enlarged.
+        let (size, layer, back) = match (look.face, look.full) {
+            (Some(_), Some([full, full_back])) => (FaceSize::Full, full, full_back),
+            (face, _) => (FaceSize::Board, face.unwrap_or(0), back),
+        };
         // A card that is fading, breaking up or washed with light is drawn with the blended
         // records, after the opaque ones, among the marks of cards at its height. The opaque
         // pass neither blends nor shows what is behind a record, so a fading or broken card
@@ -652,8 +661,8 @@ impl Table {
             Draw::card(
                 transform,
                 [red, green, blue, opacity],
-                FaceSize::Board,
-                look.face.unwrap_or(0),
+                size,
+                layer,
                 back,
                 look.dissolve,
                 look.whiten,
@@ -763,12 +772,17 @@ impl Table {
             .then(|| faces.plate_layer(name, *triggered, *nth))
             .flatten();
         let face = source.and_then(|_| plate.or_else(|| faces.board_layer(name)));
+        let full = source.and_then(|_| match plate {
+            Some(_) => faces.plate_full_layers(name, *triggered, *nth),
+            None => faces.full_layers_named(name),
+        });
         let mut look = Look {
             pose: object.pose,
             tint: [255, 255, 255],
             dissolve: 0.0,
             whiten: 0.0,
             face,
+            full,
             state: if under_way { StateBits::MOVING } else { 0 },
             interactive: false,
         };

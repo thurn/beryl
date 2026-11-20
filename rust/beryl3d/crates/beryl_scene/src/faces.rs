@@ -7,11 +7,17 @@
 use std::collections::BTreeMap;
 
 use beryl_protocol::card_records::{CardEntry, CardRecords};
+use beryl_protocol::protocol::{ObjectView, PlayerView, StackItem, ZoneName};
 
 use crate::input::{AssetReady, FaceId, FaceSize};
 
 /// The card back's [`FaceId`]: always the first face.
 pub const CARD_BACK: FaceId = FaceId(0);
+
+/// The most faces the stack and the hands ask for at full size (`FaceList::read_whole`). The
+/// full-size array holds 16 layers, and the rest stay free for the cards being read otherwise:
+/// the card under the pointer, the inspector and a prompt's cards.
+pub const READ_WHOLE: usize = 10;
 
 /// One distinct picture of the match.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -150,6 +156,62 @@ impl FaceList {
     pub fn plate(&self, name: &str, triggered: bool, nth: u8) -> Option<FaceId> {
         let source = self.find(name)?;
         self.plates.get(&(source, triggered, nth)).copied()
+    }
+
+    /// The faces of the cards `view` shows where the web interface draws a card's full frame
+    /// rather than its battlefield frame (`variant` in `ui/src/components/Card.tsx`): the
+    /// spells and abilities on the stack, top first, then the face-up cards in the hands, after
+    /// the card back when there are any. Each face is listed once, and at most [`READ_WHOLE`]
+    /// besides the card back are. The client asks for them at full
+    /// size (`Faces::want_full`), so that these cards show their cost, type line and rules text.
+    #[must_use]
+    pub fn read_whole(&self, view: &PlayerView) -> Vec<FaceId> {
+        let mut faces = Vec::new();
+        let mut add = |face: Option<FaceId>| {
+            if let Some(face) = face
+                && faces.len() < READ_WHOLE
+                && !faces.contains(&face)
+            {
+                faces.push(face);
+            }
+        };
+        for item in view.stack.iter().rev() {
+            match item {
+                StackItem::Spell { slot, .. } => {
+                    let object = view.objects.iter().find(|object| object.slot == *slot);
+                    add(object.and_then(|object| self.find_object(object)));
+                }
+                StackItem::Ability {
+                    name,
+                    triggered,
+                    nth,
+                    text,
+                    ..
+                } => add(if text.is_none() {
+                    self.plate(name, *triggered, *nth)
+                } else {
+                    self.find(name)
+                }),
+            }
+        }
+        for object in view.objects.iter().filter(|o| o.zone == ZoneName::Hand) {
+            add(self.find_object(object));
+        }
+        // A card drawn from the full-size array takes its back from there too.
+        if !faces.is_empty() {
+            faces.insert(0, CARD_BACK);
+        }
+        faces
+    }
+
+    /// The face that shows `object`, from its token printing first, which tells apart tokens
+    /// that share a name, and then from its name. `None` for a card whose name the viewer
+    /// does not know.
+    #[must_use]
+    pub fn find_object(&self, object: &ObjectView) -> Option<FaceId> {
+        (object.token_printing.as_deref())
+            .and_then(|printing| self.find(printing))
+            .or_else(|| self.find(object.name.as_deref()?))
     }
 
     /// The faces, in [`FaceId`] order.
@@ -545,5 +607,36 @@ impl Faces {
     #[must_use]
     pub fn full_layer_of(&self, face: FaceId) -> Option<u16> {
         self.full.get(usize::from(face.0)).copied().flatten()
+    }
+
+    /// The full-size layers of `face` and of the card back, once both have them: a card drawn
+    /// from the full-size array takes its back from that array too.
+    #[must_use]
+    pub fn full_layers(&self, face: Option<FaceId>) -> Option<[u16; 2]> {
+        Some([
+            self.full_layer_of(face?)?,
+            self.full_layer_of(CARD_BACK)?,
+        ])
+    }
+
+    /// The full-size layers of the face that shows `object` (`FaceList::find_object`) and of
+    /// the card back, once both have them.
+    #[must_use]
+    pub fn full_layers_of_object(&self, object: &ObjectView) -> Option<[u16; 2]> {
+        self.full_layers(self.list.find_object(object))
+    }
+
+    /// The full-size layers of the plate face of an ability on the stack (`FaceList::plate`) and
+    /// of the card back, once both have them.
+    #[must_use]
+    pub fn plate_full_layers(&self, name: &str, triggered: bool, nth: u8) -> Option<[u16; 2]> {
+        self.full_layers(self.list.plate(name, triggered, nth))
+    }
+
+    /// The full-size layers of the face that shows the card or face named `name` and of the
+    /// card back, once both have them.
+    #[must_use]
+    pub fn full_layers_named(&self, name: &str) -> Option<[u16; 2]> {
+        self.full_layers(self.list.find(name))
     }
 }

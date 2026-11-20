@@ -100,6 +100,7 @@ pub(crate) fn look_with_face(
                     && let Some(earlier_face) = earlier_face.take()
                 {
                     look.face = earlier_face();
+                    look.full = None;
                 }
             }
             _ => {}

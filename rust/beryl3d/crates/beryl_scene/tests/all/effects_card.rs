@@ -39,6 +39,7 @@ fn look_at(effect: Effect, share: f32) -> Look {
         dissolve: 0.0,
         whiten: 0.0,
         face: LATER,
+        full: None,
         state: 0,
         interactive: false,
     };

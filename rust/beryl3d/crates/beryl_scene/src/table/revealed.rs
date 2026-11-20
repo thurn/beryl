@@ -83,6 +83,7 @@ impl Table {
                 dissolve: 0.0,
                 whiten: 0.0,
                 face: face_of(faces, shown),
+                full: None,
                 state: 0,
                 interactive: false,
             };

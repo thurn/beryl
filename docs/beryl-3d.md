@@ -2434,7 +2434,13 @@ board size and the full frame (`card-full`) at full size, with the name, the
 mana cost as Mana font symbols, a stand-in painting, and on the full frame the
 type line and the rules text shrunk to fit its box, and the printed power and
 toughness or loyalty. A token's body is pewter. `tiny-skia` draws the shapes,
-parley sets the text and `swash` rasterizes it.
+parley sets the text and `swash` rasterizes it. The web interface draws the full
+frame wherever a card is not on the battlefield, so the client asks for the
+faces of the cards in the hands and on the stack at full size whenever it
+rebuilds its screen (`FaceList::read_whole`, at most 10 of them and the card
+back), and draws those cards from their full-size layers once they land. The
+headless host behind `png`, `film` and `match` prepares and waits for those
+faces before each picture.
 
 **An ability on the stack** shows a face of its own, listed after the cards and
 tokens: its source's picture (scan or drawn frame) with the web interface's

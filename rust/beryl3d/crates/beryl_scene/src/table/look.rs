@@ -19,6 +19,11 @@ pub struct Look {
     pub whiten: f32,
     /// The board-size layer of its face, if it has one.
     pub face: Option<u16>,
+    /// The full-size layers of the same face and of the card back, drawn in place of the
+    /// board-size ones where the web interface draws a card's full frame (in a hand, on the
+    /// stack), once both have landed (`Faces::full_layers`). A face's board-size picture is the
+    /// battlefield frame, without the cost, type line or rules text.
+    pub full: Option<[u16; 2]>,
     /// `StateBits`.
     pub state: u16,
     pub interactive: bool,

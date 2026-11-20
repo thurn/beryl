@@ -7,6 +7,9 @@
 //! match and uploads them all, as the app does behind its loading screen (docs/beryl-3d.md,
 //! "Preparation"), so a card shows its scan when the scan cache has it and Beryl's drawn card
 //! frame when not. It never downloads a scan, so a picture depends only on what the cache holds.
+//! Before each picture it also prepares and uploads the faces the client asks for at full size,
+//! such as those of the cards in the hand and on the stack, and waits for them, so a picture
+//! shows what the app shows once its uploads have caught up.
 //!
 //! Text is drawn from glyphs that `beryl_assets`' glyph worker rasterizes on its own thread:
 //! the printable ASCII characters of every type style before the first picture, and before each
@@ -15,24 +18,31 @@
 
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::time::Duration;
 
 use beryl_art::{ArtCache, Origins};
 use beryl_assets::glyphs::{GlyphWorker, prepare_latin};
 use beryl_assets::light;
-use beryl_assets::{Config, Format, Prepared, Preparer, default_workers};
+use beryl_assets::{Config, FULL_LAYERS, Format, Full, Prepared, Preparer, default_workers};
 use beryl_render::{Limits, Renderer, Target};
 
 use crate::assets::Scans;
 use beryl_scene::driver::{DriverError, Moment, Page};
 use beryl_scene::faces::FaceList;
 use beryl_scene::frame::Frame;
+use beryl_scene::input::{AssetReady, FaceSize};
 
 /// An address where nothing listens, so that a scan the cache lacks fails to download at once.
 const NOWHERE: Origins<'static> = Origins {
     cards: "http://127.0.0.1:9",
     backs: "http://127.0.0.1:9",
 };
+
+/// How long the host waits for a face from the asset workers before it gives up on it. It only
+/// catches a face that never comes, such as one whose encoder failed: a face takes well under a
+/// second.
+const FACE_WAIT: Duration = Duration::from_mins(2);
 
 /// A recording played for one seat in one window, and the renderer that draws it.
 pub struct Headless {
@@ -42,6 +52,10 @@ pub struct Headless {
     glyphs: GlyphWorker,
     /// The glyph pages the worker has finished.
     pages: Receiver<Prepared>,
+    /// The asset workers, kept to prepare the faces the client asks for at full size.
+    preparer: Preparer,
+    /// The faces the workers have finished.
+    faces: Receiver<Prepared>,
 }
 
 impl Headless {
@@ -58,7 +72,7 @@ impl Headless {
         let scale = page.scale();
         let mut renderer = Renderer::headless(Limits::Default)?;
         renderer.upload_page(&light::prepared());
-        load_faces(&mut renderer, page.faces(), scans);
+        let (preparer, faces) = load_faces(&mut renderer, page.faces(), scans);
         let pixels = |points: f32| (points * scale).round().max(1.0) as u32;
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
         let (out, pages) = mpsc::channel();
@@ -71,6 +85,8 @@ impl Headless {
             target,
             glyphs,
             pages,
+            preparer,
+            faces,
         };
         head.text();
         Ok(head)
@@ -81,6 +97,7 @@ impl Headless {
     /// too) and gives the client their glyphs and icons. Laying out text never waits for its glyphs, so this changes what is drawn but
     /// not where.
     fn text(&mut self) {
+        self.full_faces();
         self.page.frame();
         self.glyphs.request(self.page.wanted_glyphs());
         self.glyphs.flush();
@@ -88,6 +105,45 @@ impl Headless {
             if self.renderer.upload_page(&prepared) {
                 self.page.give_glyphs(prepared.ready);
             }
+        }
+    }
+
+    /// Has the asset workers prepare the faces the present moment asks for at full size (at
+    /// most as many as the full-size array holds, so that none of them evicts another), waits
+    /// for them, uploads them and tells the client where each landed. A face that already has a
+    /// full-size layer is given to the client again at once, as a client made anew after a seek
+    /// asks for it again.
+    fn full_faces(&mut self) {
+        self.page.frame();
+        let wanted = self.page.wanted_faces();
+        let mut waiting = 0;
+        for face in wanted.into_iter().take(FULL_LAYERS) {
+            match self.preparer.full(face) {
+                Some(Full::Kept { layer }) => self.page.give_face(AssetReady::Face {
+                    face,
+                    size: FaceSize::Full,
+                    layer,
+                }),
+                Some(Full::Queued { .. }) => waiting += 1,
+                None => {}
+            }
+        }
+        while waiting > 0 {
+            let prepared = match self.faces.recv_timeout(FACE_WAIT) {
+                Ok(prepared) => prepared,
+                Err(RecvTimeoutError::Timeout | RecvTimeoutError::Disconnected) => return,
+            };
+            let full = matches!(
+                prepared.ready,
+                AssetReady::Face {
+                    size: FaceSize::Full,
+                    ..
+                }
+            );
+            if self.renderer.upload_layer(&prepared) && full {
+                self.page.give_face(prepared.ready);
+            }
+            waiting -= usize::from(full);
         }
     }
 
@@ -156,7 +212,12 @@ impl Headless {
 /// Makes `renderer`'s face arrays for the faces of `list` and uploads every face, as the asset
 /// workers read it from the compressed cache, compress it from its scan or draw its frame.
 /// This thread only waits and uploads: the workers do every file read, decode and compression.
-fn load_faces(renderer: &mut Renderer, list: &FaceList, scans: &Scans) {
+/// Returns the workers and the channel they send faces on, for the faces wanted at full size.
+fn load_faces(
+    renderer: &mut Renderer,
+    list: &FaceList,
+    scans: &Scans,
+) -> (Preparer, Receiver<Prepared>) {
     let format = Format::choose(&renderer.formats());
     let names: Vec<&str> = list
         .faces()
@@ -172,10 +233,13 @@ fn load_faces(renderer: &mut Renderer, list: &FaceList, scans: &Scans) {
         start: crate::threads::asset_thread,
     });
     let results = preparer.prepare_match(list, &[format]);
-    // Dropping the preparer waits for its workers to finish every face queued, after which the
-    // channel holds them all and then ends.
-    drop(preparer);
-    for prepared in results {
+    // Each face is sent once at board size, unless its encoder failed, which the wait gives up
+    // on.
+    for _ in 0..list.faces().len() {
+        let Ok(prepared) = results.recv_timeout(FACE_WAIT) else {
+            break;
+        };
         renderer.upload_layer(&prepared);
     }
+    (preparer, results)
 }

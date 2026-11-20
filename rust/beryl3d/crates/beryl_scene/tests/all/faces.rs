@@ -5,7 +5,7 @@ use beryl_card_records::{CardRecords, TokenMakers, card_records_among};
 use beryl_scene::agent::checks::blank_cards;
 use beryl_scene::agent::{Context, Layout, Rule};
 use beryl_scene::faces::{CARD_BACK, FaceList};
-use beryl_scene::frame::{Frame, Material, Role};
+use beryl_scene::frame::{Frame, Material, Role, TextureArray};
 use beryl_scene::input::{AssetReady, FaceId, FaceSize, Input, Insets, Lifecycle, Size, Tier};
 use beryl_scene::testing::{ScriptBuilder, ViewBuilder};
 use beryl_scene::{Client, Config};
@@ -225,4 +225,56 @@ fn an_ability_on_the_stack_has_a_plate_face_of_its_own_beside_its_source_s() {
     assert!(list.plate("Snapcaster Mage", false, 0).is_none());
     assert!(list.plate("Teferi, Time Raveler", false, 1).is_some());
     assert!(list.plate("Teferi, Time Raveler", false, 2).is_none());
+}
+
+/// Whether each card draw record of `frame` samples the full-size array, and its layer.
+fn card_draws(frame: &Frame) -> Vec<(bool, u16)> {
+    (frame.draws.iter())
+        .filter(|d| d.material == Material::Card as u8)
+        .map(|d| (d.flags & 0b11 == TextureArray::FullFaces as u8, d.layer))
+        .collect()
+}
+
+#[test]
+fn hand_and_stack_cards_draw_their_full_frame_and_permanents_their_battlefield_frame() {
+    // The web interface draws the full frame, with the cost, type line and rules text, in the
+    // hand and on the stack, and the battlefield frame on the battlefield (`Card.tsx`). A face's
+    // board-size picture is the battlefield frame, so the hand and the stack ask for full size.
+    let mut client = client(|list| list.all_ready().collect());
+    client.frame(0);
+    let wanted: Vec<FaceId> = client.wanted_faces().collect();
+    let find = |client: &Client, name| client.faces().find(name).unwrap();
+    assert_eq!(wanted.first(), Some(&CARD_BACK), "{wanted:?}");
+    for name in ["Lightning Bolt", "Counterspell", "Memory Lapse", "Plains"] {
+        assert!(wanted.contains(&find(&client, name)), "{name}: {wanted:?}");
+    }
+    for name in ["Serra Angel", "Pacifism", "Brainstorm"] {
+        assert!(!wanted.contains(&find(&client, name)), "{name}: {wanted:?}");
+    }
+    assert_eq!(
+        wanted[1],
+        find(&client, "Lightning Bolt"),
+        "the stack is asked for before the hand"
+    );
+    let full: Vec<(FaceId, u16)> = wanted.iter().copied().zip(100..).collect();
+    for &(face, layer) in &full {
+        client.handle(Input::Assets(AssetReady::Face {
+            face,
+            size: FaceSize::Full,
+            layer,
+        }));
+    }
+    let draws = card_draws(client.frame(1));
+    let full_layer = |name| full.iter().find(|(f, _)| *f == find(&client, name)).unwrap().1;
+    for name in ["Lightning Bolt", "Counterspell"] {
+        assert!(
+            draws.contains(&(true, full_layer(name))),
+            "{name} is drawn from its full-size layer: {draws:?}"
+        );
+    }
+    let angel = find(&client, "Serra Angel");
+    assert!(
+        draws.contains(&(false, angel.0)),
+        "Serra Angel is drawn from its board-size layer: {draws:?}"
+    );
 }

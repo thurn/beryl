@@ -449,11 +449,19 @@ fn draw_art(
     }
     let h = hash(name);
     let hue = hue(key) + (h % 40) as f32 - 20.0;
+    // JavaScript's `>>` shifts a signed 32-bit integer and its `%` keeps the dividend's sign,
+    // so in `Card.tsx` a hash at or above 2^31 lifts the sun and the ridge above their least
+    // heights. Rust's `i32` shifts and remainders do the same.
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "the hash is read as JavaScript's `>>` reads it, as a signed 32-bit integer"
+    )]
+    let signed = h as i32;
     let sun = (
         (20 + h % 60) as f32 / 100.0,
-        (18 + (h >> 8) % 25) as f32 / 100.0,
+        (18 + (signed >> 8) % 25) as f32 / 100.0,
     );
-    let ridge = (52 + (h >> 16) % 18) as f32 / 100.0;
+    let ridge = (52 + (signed >> 16) % 18) as f32 / 100.0;
     let sky = vertical(
         art,
         stops(&[
@@ -463,8 +471,9 @@ fn draw_art(
         ]),
     );
     canvas.fill_box(art, 0.0, sky);
-    // The ridge's edge runs at 172 degrees: down and a little to the left.
-    let (dx, dy) = (-8.0_f32.to_radians().sin(), 8.0_f32.to_radians().cos());
+    // The gradient runs toward 172 degrees, which CSS measures clockwise from straight up:
+    // down and a little to the right, so the ridge's edge rises toward the right.
+    let (dx, dy) = (8.0_f32.to_radians().sin(), 8.0_f32.to_radians().cos());
     let middle = (art.x + art.width / 2.0, art.y + art.height / 2.0);
     let half = f32::midpoint(art.width * dx.abs(), art.height * dy.abs());
     let ground = linear(
@@ -491,9 +500,12 @@ fn draw_art(
     canvas.fill_box(art, 0.0, hollow);
     let light = radial(
         Point::from_xy(art.x + sun.0 * art.width, art.y + sun.1 * art.height),
-        // `circle ... 28%`: the farthest corner's distance, as CSS sizes a circle.
+        // `circle ... 28%`: 28% of the distance from the middle to the farthest corner, as CSS
+        // sizes a circle given no size.
         {
-            let far = (art.width.max(art.width * sun.0).hypot(art.height)) * 0.28;
+            let across = art.width * sun.0.max(1.0 - sun.0);
+            let down = art.height * sun.1.max(1.0 - sun.1);
+            let far = across.hypot(down) * 0.28;
             (far, far)
         },
         stops(&[
