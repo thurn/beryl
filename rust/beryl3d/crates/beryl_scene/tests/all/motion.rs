@@ -47,6 +47,7 @@ fn a_segment_starts_at_its_start_pose_and_rests_at_its_end_pose() {
         scale: 2.0,
         opacity: 0.5,
         turn: 1.0,
+        skew: 0.0,
     };
     let segments = [segment(100 * MS, 200 * MS, at(0.0), to)];
     assert_eq!(pose_at(&segments, 0), at(0.0), "before it begins");

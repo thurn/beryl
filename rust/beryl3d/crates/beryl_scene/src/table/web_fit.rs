@@ -18,8 +18,10 @@
 
 use glam::{Vec2, Vec3};
 
-use super::{CARD_HEIGHT, CARD_WIDTH, Camera, RowArea, Window};
+use super::pile::lift;
+use super::{CARD_HEIGHT, CARD_WIDTH, Camera, LAYER, RowArea, Window};
 use crate::data::space::layout::desktop::web as data;
+use crate::pose::Pose;
 
 /// The web interface's `CARD_ASPECT`, a card's width over its height.
 const ASPECT: f32 = CARD_WIDTH / CARD_HEIGHT;
@@ -361,6 +363,10 @@ pub struct FittedPiles {
     /// as a fitted row's do (`FittedRow::tilt`), so that a top card is as tall on screen as the
     /// web's upright one.
     pub tilt: [f32; 2],
+    /// How far each pile's cards are sheared, by side (the viewer's first) then library,
+    /// graveyard and exile: the tangent of the web's `lean` of the pile's top card, as
+    /// `Pose::skew` takes it.
+    pub skew: [[f32; 3]; 2],
 }
 
 /// Every pile of the desktop layout fitted to `window` through `camera`. The web draws a pile's
@@ -374,6 +380,7 @@ pub(super) fn piles(window: Window, camera: &Camera) -> FittedPiles {
         tops: [[Vec2::ZERO; 3]; 2],
         scale: [1.0; 2],
         tilt: [0.0; 2],
+        skew: [[0.0; 3]; 2],
     };
     for side in 0..2 {
         // The anchor's height on the stage, the card's unscaled width, the anchors' x, and how
@@ -410,6 +417,41 @@ pub(super) fn piles(window: Window, camera: &Camera) -> FittedPiles {
         );
         fitted.scale[side] = stand.scale;
         fitted.tilt[side] = stand.tilt;
+        // The camera already leans a card toward the vanishing point the further it lies from
+        // the middle of the screen, so a card is sheared only by what the web's lean has over
+        // that.
+        for (zone, x) in xs.into_iter().enumerate() {
+            let middle = x + width / 2.0;
+            let top = fitted.tops[side][zone];
+            let z = LAYER * 0.5 + lift(stand.scale, stand.tilt);
+            let pose = Pose {
+                position: camera.on_plane(top, z).truncate().extend(z),
+                rotation: glam::Quat::from_rotation_x(stand.tilt),
+                scale: stand.scale,
+                ..Pose::default()
+            };
+            let [bottom_left, bottom_right, top_right, top_left] =
+                camera.card_corners(pose.transform());
+            let (head, foot) = (
+                top_left.midpoint(top_right),
+                bottom_left.midpoint(bottom_right),
+            );
+            let natural = (foot.x - head.x) / (foot.y - head.y);
+            let skew = stage.lean(middle, y) - natural;
+            fitted.skew[side][zone] = skew;
+            // The camera's perspective moves the middle of a tilted card's outline a little off
+            // the screen point its middle stands under, and the web's boxes are measured by
+            // their outline, so the pile moves by what the outline is off.
+            let sheared = Pose { skew, ..pose };
+            let corners = camera.card_corners(sheared.transform());
+            let low = corners
+                .iter()
+                .fold(Vec2::MAX, |low, corner| low.min(*corner));
+            let high = corners
+                .iter()
+                .fold(Vec2::MIN, |high, corner| high.max(*corner));
+            fitted.tops[side][zone] += top - low.midpoint(high);
+        }
     }
     fitted
 }

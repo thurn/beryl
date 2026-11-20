@@ -107,8 +107,10 @@ fn a_library_falls_by_one_layer_when_a_card_is_drawn() {
     table.apply(&view);
     let new_top = *view.players.you.library.last().expect("a card");
     let after = height(&table, new_top);
+    // The cards of a taller pile are drawn a hair smaller, so that they are as large on screen as
+    // a shorter pile's, which moves where their near edge stands by far less than a layer.
     assert!(
-        (before - after - LAYER).abs() < 1e-4,
+        (before - after - LAYER).abs() < 1e-2,
         "{before} became {after}"
     );
 }

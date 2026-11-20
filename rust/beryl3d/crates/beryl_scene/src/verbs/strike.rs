@@ -244,5 +244,6 @@ fn between(a: Pose, b: Pose, share: f32) -> Pose {
         scale: a.scale + (b.scale - a.scale) * share,
         opacity: a.opacity + (b.opacity - a.opacity) * share,
         turn: a.turn + (b.turn - a.turn) * share,
+        skew: a.skew + (b.skew - a.skew) * share,
     }
 }

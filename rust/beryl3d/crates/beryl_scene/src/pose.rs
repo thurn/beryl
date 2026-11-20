@@ -5,7 +5,7 @@
 
 use std::f32::consts::PI;
 
-use glam::{Affine3A, Quat, Vec3};
+use glam::{Affine3A, Mat3, Quat, Vec3};
 
 use crate::verbs::{Interval, StepTime};
 
@@ -21,6 +21,10 @@ pub struct Pose {
     pub opacity: f32,
     /// How far the face has turned over, from 0 (face up) to 1 (face down).
     pub turn: f32,
+    /// How far the card is sheared across its own plane, as the web's `skewX` leans a card on
+    /// the table toward its vanishing point: the card's bottom edge lies `skew` times the card's
+    /// height to the right of its top edge, measured in the card's frame after `rotation`.
+    pub skew: f32,
 }
 
 impl Default for Pose {
@@ -31,6 +35,7 @@ impl Default for Pose {
             scale: 1.0,
             opacity: 1.0,
             turn: 0.0,
+            skew: 0.0,
         }
     }
 }
@@ -41,11 +46,30 @@ impl Pose {
     /// rotated, then moved to `position`.
     #[must_use]
     pub fn transform(&self) -> Affine3A {
-        Affine3A::from_scale_rotation_translation(
-            Vec3::splat(self.scale),
-            self.rotation_for(self.turn),
-            self.position,
-        )
+        self.placed(self.turn)
+    }
+
+    /// The transform of a quad `size` large, laid in the card's plane with its middle at
+    /// `position` and turned and sheared as the card is, for what is drawn on or round a card
+    /// (a mark's outline, an effect's burst) and has to follow its edges.
+    #[must_use]
+    pub fn frame(&self, size: Vec3, position: Vec3) -> Affine3A {
+        if self.skew == 0.0 {
+            return Affine3A::from_scale_rotation_translation(size, self.rotation, position);
+        }
+        Affine3A::from_rotation_translation(self.rotation, position)
+            * self.shear()
+            * Affine3A::from_scale(size)
+    }
+
+    /// The shear of a skewed card in its own frame: a point's x moves left by `skew` times its
+    /// y, so that the card's foot lies right of its top.
+    fn shear(&self) -> Affine3A {
+        Affine3A::from_mat3(Mat3::from_cols(
+            Vec3::X,
+            Vec3::new(-self.skew, 1.0, 0.0),
+            Vec3::Z,
+        ))
     }
 
     /// How the side of the card that faces up is turned: as `transform` turns the card while
@@ -54,11 +78,28 @@ impl Pose {
     /// it shows at rest, as the web interface's children of a card turn with it.
     #[must_use]
     pub fn upward(&self) -> Affine3A {
-        Affine3A::from_scale_rotation_translation(
-            Vec3::splat(self.scale),
-            self.rotation_for(self.turn - self.turn.round()),
-            self.position,
-        )
+        self.placed(self.turn - self.turn.round())
+    }
+
+    /// The transform of a card turned over by `turn`. A skewed card is sheared after it turns
+    /// and before `rotation` lays it down, so that the shear leans the same way on screen
+    /// whichever side shows.
+    fn placed(&self, turn: f32) -> Affine3A {
+        if self.skew == 0.0 {
+            return Affine3A::from_scale_rotation_translation(
+                Vec3::splat(self.scale),
+                self.rotation_for(turn),
+                self.position,
+            );
+        }
+        let flipped = Quat::from_rotation_x(PI * turn);
+        Affine3A::from_rotation_translation(self.rotation, self.position)
+            * self.shear()
+            * Affine3A::from_scale_rotation_translation(
+                Vec3::splat(self.scale),
+                flipped,
+                Vec3::ZERO,
+            )
     }
 
     fn rotation_for(&self, turn: f32) -> Quat {

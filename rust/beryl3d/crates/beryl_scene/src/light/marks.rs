@@ -298,13 +298,7 @@ impl Outline {
         let scale = pose.scale.max(f32::EPSILON);
         let size = 2.0 * (half / scale + Vec2::splat(self.grow * frame));
         let radius = self.radius * frame;
-        let placed = |quad: Vec2| {
-            Affine3A::from_scale_rotation_translation(
-                (quad * scale).extend(1.0),
-                pose.rotation,
-                position,
-            )
-        };
+        let placed = |quad: Vec2| pose.frame((quad * scale).extend(1.0), position);
         let mut farthest = 0.0_f32;
         for inset in [false, true] {
             for layer in self

@@ -20,7 +20,10 @@ mod under;
 pub(crate) use under::{host_slot, names_host};
 
 use super::hands::{HandFits, hand};
-use super::pile::{PileShown, lay_pile, lay_unseen_exile, pile_base, pile_scale, pile_tilt};
+use super::pile::{
+    PileShown, lay_pile, lay_unseen_exile, pile_base, pile_card_scale, pile_scale, pile_skew,
+    pile_tilt,
+};
 use super::rows::{NameIds, RowWindow, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells, stack_pose};
 use super::{Camera, Layout, lifted, phone};
@@ -691,7 +694,6 @@ fn lay(
     let (layout, camera, scroll, fits, ids) = rules;
     match group {
         Group::Pile { side, zone } => {
-            let scale = pile_scale(layout, side);
             if zone == ZoneName::Exile && layout.phone.is_some() {
                 lay_unseen_exile(
                     placement,
@@ -699,13 +701,21 @@ fn lay(
                     side,
                     (
                         pile_base(layout, camera, (side, ZoneName::Graveyard), 0),
-                        scale,
+                        pile_scale(layout, side),
                     ),
                 );
             } else {
                 let at = pile_base(layout, camera, (side, zone), objects.len());
+                let scale = pile_card_scale(layout, camera, (side, zone), objects.len());
                 let tilt = pile_tilt(layout, side);
-                lay_pile(placement, objects, (side, zone), (at, scale, tilt));
+                let skew = pile_skew(layout, (side, zone));
+                lay_pile(
+                    placement,
+                    objects,
+                    (side, zone),
+                    (at, scale, tilt, skew),
+                    layout.fitted_piles.map(|_| camera),
+                );
             }
         }
         Group::Hand(side) => {

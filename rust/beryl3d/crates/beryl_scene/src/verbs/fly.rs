@@ -392,6 +392,7 @@ fn lerp(from: Pose, to: Pose, u: f32) -> Pose {
         scale: from.scale + (to.scale - from.scale) * u,
         opacity: from.opacity + (to.opacity - from.opacity) * u,
         turn: from.turn + (to.turn - from.turn) * u,
+        skew: from.skew + (to.skew - from.skew) * u,
     }
 }
 

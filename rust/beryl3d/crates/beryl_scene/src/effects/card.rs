@@ -142,9 +142,8 @@ pub fn write(
 ) {
     for (effect, p) in under_way(runs, on, now) {
         if let Some(strength) = strength(effect, p) {
-            let face = Affine3A::from_scale_rotation_translation(
+            let face = look.pose.frame(
                 Vec3::new(CARD_WIDTH, CARD_HEIGHT, 1.0) * look.pose.scale,
-                look.pose.rotation,
                 look.pose.position,
             );
             builder.effect(EffectLook {
