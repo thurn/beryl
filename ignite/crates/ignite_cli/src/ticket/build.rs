@@ -95,6 +95,17 @@ pub fn filed(mut body: Value, automatic: bool, independent: bool) -> Value {
     body
 }
 
+/// The status `--release` or `--pending` asks a new ticket to be filed with, if either.
+pub fn filing_status(release: bool, pending: bool) -> Option<&'static str> {
+    if release {
+        Some(RELEASED)
+    } else if pending {
+        Some(PENDING)
+    } else {
+        None
+    }
+}
+
 pub const PENDING: &str = "pending_approval";
 
 /// The status a released ticket takes.

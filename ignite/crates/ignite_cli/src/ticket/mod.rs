@@ -88,13 +88,7 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             pending,
             automatic,
         } => {
-            let status = if *release {
-                Some(build::RELEASED)
-            } else if *pending {
-                Some(build::PENDING)
-            } else {
-                None
-            };
+            let status = build::filing_status(*release, *pending);
             let mut op = build::create(title, fields, labels, deps, status)?;
             if let Some(filer) = &hub.actor_title {
                 op["fields"]["metadata"] = json!({ CREATED_BY_TITLE: filer });
