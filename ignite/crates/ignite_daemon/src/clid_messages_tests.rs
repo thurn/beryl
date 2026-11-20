@@ -85,6 +85,7 @@ fn database() -> Connection {
             interrupted_in_row: 0,
             block_sent: 0,
             backed_off: 0,
+            fallback_prompt: None,
         },
     )
     .unwrap();

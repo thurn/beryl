@@ -420,3 +420,43 @@ fn a_machine_whose_claude_runs_in_cli_mode_queues_no_usage() {
         "{step:?}"
     );
 }
+
+/// A regression reserved for a CLI slot, whose culprit's CLI session ended when it landed, asks
+/// the CLI pool to resume the culprit's transcript with the regression's hand-off prompt.
+#[test]
+fn a_regression_for_a_cli_slot_names_its_culprit_to_the_cli_pool() {
+    let rig = rig(&[]);
+    let fake = cli(&rig, 2);
+    let body = "caused-by T.1 (commit 5e1b0aa)\nfirst bad 5e1b0aa, last good 77c2d14";
+    rig.hub.insert_ticket(detail(
+        "R",
+        "open",
+        None,
+        &["regression", "tier:opus"],
+        body,
+    ));
+    rig.hub.queue_reservation(Reservation {
+        ticket: ticket_id("R"),
+        machine: rig.ctx.machine.clone(),
+        session: session("cli-claude-slot-1"),
+        expires_at: rig.clock.now().plus_seconds(600.0),
+        code: "7f3a".to_owned(),
+    });
+    tick(&rig);
+
+    assert_eq!(fake.begun().len(), 1);
+    let resume = fake.resumes()[0].clone().expect("the culprit is named");
+    assert_eq!(resume.culprit.as_str(), "T.1");
+    assert!(
+        resume
+            .prompt
+            .starts_with("R is a regression caused by your last ticket")
+            && resume.prompt.contains("ignite start R --reservation 7f3a"),
+        "{}",
+        resume.prompt
+    );
+    // An ordinary ticket names no culprit.
+    reserve(&rig, "T.2", "cli-claude-slot-2", &["tier:opus"]);
+    tick(&rig);
+    assert_eq!(fake.resumes().get(1), Some(&None));
+}

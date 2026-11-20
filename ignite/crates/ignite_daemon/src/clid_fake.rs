@@ -8,7 +8,7 @@ use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::{Error, Result};
 
-use super::{CliPool, SessionCheck, lock};
+use super::{CliPool, Resume, SessionCheck, lock};
 
 /// A message [`FakeCliPool`] was given.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -33,6 +33,8 @@ pub struct JusticiarStart {
 #[derive(Debug, Default)]
 pub struct FakeCliPool {
     begun: Mutex<Vec<(Reservation, String, Option<String>)>>,
+    /// The `resume` of each `begin`, in the same order as `begun`.
+    resumes: Mutex<Vec<Option<Resume>>>,
     justiciars: Mutex<Vec<JusticiarStart>>,
     /// `begin` fails with this error while it is set.
     refuse: Mutex<Option<String>>,
@@ -48,6 +50,11 @@ impl FakeCliPool {
     /// Every `begin` so far: the reservation, model and effort.
     pub fn begun(&self) -> Vec<(Reservation, String, Option<String>)> {
         lock(&self.begun).clone()
+    }
+
+    /// The `resume` argument of every `begin` so far, in order.
+    pub fn resumes(&self) -> Vec<Option<Resume>> {
+        lock(&self.resumes).clone()
     }
 
     /// Every justiciar session started so far, in order.
@@ -100,6 +107,7 @@ impl CliPool for FakeCliPool {
         reservation: &Reservation,
         model: &str,
         effort: Option<&str>,
+        resume: Option<&Resume>,
     ) -> Result<SessionId> {
         let app = reservation
             .session
@@ -111,6 +119,7 @@ impl CliPool for FakeCliPool {
         if let Some(error) = lock(&self.refuse).clone() {
             return Err(Error::Io(error));
         }
+        lock(&self.resumes).push(resume.cloned());
         let mut begun = lock(&self.begun);
         begun.push((
             reservation.clone(),
@@ -187,7 +196,9 @@ mod tests {
             expires_at: "2026-11-20T12:00:00.000Z".parse().unwrap(),
             code: "c0de".to_owned(),
         };
-        let session = pool.begin(&reservation, "opus", Some("high")).unwrap();
+        let session = pool
+            .begin(&reservation, "opus", Some("high"), None)
+            .unwrap();
         assert_eq!(session.as_str(), "cli-claude-00000001");
         assert_eq!(pool.check(&session), SessionCheck::Idle);
         pool.set_check(&session, SessionCheck::Running);
@@ -201,6 +212,7 @@ mod tests {
                     ..reservation
                 },
                 "opus",
+                None,
                 None
             )
             .is_err()

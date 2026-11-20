@@ -31,7 +31,7 @@ use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots;
 
 use super::{Dispatcher, Reserved, State, justiciar};
-use crate::clid::CliPool;
+use crate::clid::{CliPool, Resume};
 use crate::pool::{CLAUDE_MODELS, Member};
 use crate::server::Context;
 
@@ -65,8 +65,13 @@ pub(super) struct Layout {
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Call {
     /// Start a session for `reserved` in the slot whose placeholder is `slot`, or, when `slot`
-    /// is a CLI session (the next ticket of a `lane:` chain), in that session's slot.
-    Begin { slot: SessionId, reserved: Reserved },
+    /// is a CLI session (the next ticket of a `lane:` chain), in that session's slot. With
+    /// `resume`, the session may resume the transcript of the worker whose ticket caused it.
+    Begin {
+        slot: SessionId,
+        reserved: Reserved,
+        resume: Option<Resume>,
+    },
     /// Queue `text` for the session's next turn. An urgent message (`ignite tell --now`, or an
     /// order from a justiciar) also ends the running turn.
     Message {
@@ -252,7 +257,11 @@ impl Dispatcher {
         };
         for call in calls {
             match call {
-                Call::Begin { slot, reserved } => self.begin(ctx, cli, &slot, reserved),
+                Call::Begin {
+                    slot,
+                    reserved,
+                    resume,
+                } => self.begin(ctx, cli, &slot, reserved, resume.as_ref()),
                 Call::Message {
                     session,
                     text,
@@ -279,7 +288,14 @@ impl Dispatcher {
     /// worker and takes the reservation, so stall checks, messages and tells reach it. A start
     /// that fails frees the slot, which is left alone for a minute, as a desktop worker that
     /// refused a hand-off is, and the reservation lapses at the hub.
-    fn begin(&self, ctx: &Context, cli: &CliMode, slot: &SessionId, reserved: Reserved) {
+    fn begin(
+        &self,
+        ctx: &Context,
+        cli: &CliMode,
+        slot: &SessionId,
+        reserved: Reserved,
+        resume: Option<&Resume>,
+    ) {
         let now = ctx.clock.now();
         // A hold starts no turn, so a reservation made just before it began lapses instead.
         if let Some(hold) = cli.pool.held(&reserved.app) {
@@ -311,7 +327,7 @@ impl Dispatcher {
         let model = reserved.model.clone().unwrap_or_default();
         let started = cli
             .pool
-            .begin(&reservation, &model, Some(reserved.effort.as_str()));
+            .begin(&reservation, &model, Some(reserved.effort.as_str()), resume);
         let session = match started {
             Ok(session) => session,
             Err(error) => {

@@ -257,6 +257,9 @@ crate::tables! {
         block_sent: i64,
         /// 1 when the last end was an API error answered with a back-off.
         backed_off: i64,
+        /// While the slot's first turn resumes another session's transcript, the prompt that
+        /// starts the ticket again on a new transcript if that turn does not end cleanly.
+        fallback_prompt: Option<String>,
     }
 
     /// One turn of a CLI session.
@@ -325,5 +328,15 @@ crate::tables! {
         /// 1 when a landing was refused because the check's result at the tip was unknown.
         tip_unknown: i64,
         at: String,
+    }
+
+    /// A ticket that landed from a CLI slot, with the transcript its last turn named, which a
+    /// regression it caused resumes for 24 hours.
+    CliLanded = "cli_landed" {
+        ticket: String,
+        app: String,
+        transcript: Option<String>,
+        model: Option<String>,
+        landed_at: Option<String>,
     }
 }

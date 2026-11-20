@@ -778,12 +778,7 @@ impl Dispatcher {
         reserved: Reserved,
         title: &str,
     ) {
-        let prompt = format!(
-            "{} is a regression caused by your last ticket: {title}. Run `ignite start {}` and \
-             fix it.",
-            reserved.ticket,
-            start_arguments(&reserved)
-        );
+        let prompt = feed::regression_prompt(&reserved, title);
         Self::push_handoff(state, session, reserved, prompt, false);
     }
 
@@ -800,6 +795,7 @@ impl Dispatcher {
             state.cli_calls.push(cli::Call::Begin {
                 slot: session.clone(),
                 reserved,
+                resume: None,
             });
             return;
         }

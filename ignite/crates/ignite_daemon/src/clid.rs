@@ -18,6 +18,8 @@
 //!   classified, `decide` chooses what follows, and the action is carried out (see `end`).
 //! - A slot waiting on an `ignite` verb, or backing off, starts its next turn when the verb has
 //!   ended or the pause is over. No turn starts for an app on a CLI hold.
+//! - A ticket that lands keeps its transcript in `cli_landed` for 24 hours, so that a regression
+//!   it caused can resume the conversation in which the change was made (see `claim`).
 //!
 //! Nothing about a session lives in this struct's memory except the 10-minute hiding of a
 //! refused model: every slot is a `cli_slots` row and every turn a `cli_turns` row, so a
@@ -77,6 +79,18 @@ pub const LOOP: &str = "ignite-cli";
 pub const STEP_S: f64 = 1.0;
 /// Seconds a model the CLI refused to start is left out of what the app's slots offer.
 pub const HIDE_MODEL_S: f64 = 600.0;
+/// Seconds a ticket that landed from a CLI slot keeps its transcript for a regression it caused.
+pub const LANDED_KEEP_S: f64 = 24.0 * 3600.0;
+
+/// A hand-off that should resume the conversation of the worker whose ticket `culprit` caused
+/// it: a regression, or a ticket whose landing was reverted (then `culprit` is the ticket
+/// itself). The first turn resumes that worker's transcript with `prompt` when `culprit` landed
+/// from a slot of the same app in the last 24 hours, and starts fresh otherwise.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Resume {
+    pub culprit: TicketId,
+    pub prompt: String,
+}
 
 /// Whether a CLI session is working, as the dispatcher's `check` asks it of a desktop session.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,13 +119,15 @@ pub trait CliPool: Send + Sync {
     /// Takes a reservation the hub made for one of `app`'s CLI slots (its placeholder session
     /// is `cli-<app>-slot-<k>`), or for a CLI session whose ticket ended (the next ticket of a
     /// `lane:` chain): creates the slot's row with a new Ignite session, or the same one, and
-    /// starts its first turn with the hand-off prompt. Returns the session, which the
-    /// dispatcher adds to the pool as a single-use worker.
+    /// starts its first turn with the hand-off prompt. With `resume`, a new session's first
+    /// turn may resume the culprit's transcript instead (see [`Resume`]). Returns the session,
+    /// which the dispatcher adds to the pool as a single-use worker.
     fn begin(
         &self,
         reservation: &Reservation,
         model: &str,
         effort: Option<&str>,
+        resume: Option<&Resume>,
     ) -> Result<SessionId>;
     /// Queues `text` for the session's next turn. An urgent message (`tell --now`, or an order
     /// from a justiciar) ends the running turn and resumes with it.
@@ -592,12 +608,14 @@ impl CliPool for CliDaemon {
     /// free, or else the lowest free slot of the app: the dispatcher counts busy sessions and
     /// does not know which slot each one holds. A CLI session (the next ticket of a `lane:`
     /// chain) keeps its session ID and resumes the transcript its last turn named, once its
-    /// slot is free. The dispatcher adds the returned session to the pool.
+    /// slot is free. A new session given `resume` resumes the culprit's transcript when it has
+    /// one (see `claim`). The dispatcher adds the returned session to the pool.
     fn begin(
         &self,
         reservation: &Reservation,
         model: &str,
         effort: Option<&str>,
+        resume: Option<&Resume>,
     ) -> Result<SessionId> {
         let named = &reservation.session;
         let (app, preferred, earlier) = if let Some((app, index)) = placeholder(named) {
@@ -613,11 +631,16 @@ impl CliPool for CliDaemon {
             None => Self::new_session(&app)?,
         };
         let prompt = handoff_prompt(&reservation.ticket, &reservation.code);
+        let resume = resume.filter(|_| earlier.is_none());
         let row = self.claim_slot(&app, preferred, &session, model, effort, prompt, earlier)?;
         let row = CliSlot {
             ticket: Some(reservation.ticket.to_string()),
             reservation: Some(reservation.code.clone()),
             ..row
+        };
+        let row = match resume {
+            Some(resume) => self.resume_culprit(row, resume)?,
+            None => row,
         };
         self.put(&row)?;
         self.start_next(&row)?;

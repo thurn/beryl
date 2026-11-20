@@ -11,7 +11,8 @@
 //! What each action does to the slot:
 //!
 //! - `Free`: the slot is free and its session leaves the pool. The ticket and transcript stay
-//!   on the row, so the next ticket of the same `lane:` chain can resume the transcript.
+//!   on the row, so the next ticket of the same `lane:` chain can resume the transcript, and
+//!   go into `cli_landed`, so a regression the ticket caused can resume it (see `claim`).
 //! - `Release`: the ticket is given back through [`crate::dispatchd::Host::release`] with the
 //!   note, then as `Free`.
 //! - `Resume`: the next turn starts now with the prompt.
@@ -21,6 +22,11 @@
 //!   with its ticket held.
 //! - `Park`: the slot is parked with its ticket held, and the report goes to
 //!   [`super::Effects::report`].
+//!
+//! One end skips `decide`: the first turn of a slot that resumed a culprit's transcript, if it
+//! ends as anything but `Clean`. The resume failed (the transcript is gone, or the CLI refused
+//! it), so the slot starts the ticket again at once on a new transcript with its fallback
+//! prompt, and no hold, park or release follows from that end.
 
 use ignite_core::cli::{Action, Facts, PreviousAnswer, SlotState, TurnEnd, TurnEvents};
 use ignite_core::time::Timestamp;
@@ -43,6 +49,18 @@ impl CliDaemon {
     ) -> Result<()> {
         let app = self.app(&row.app)?.app.clone();
         let end = forced.unwrap_or_else(|| app.classify(events, exit));
+        if let Some(fallback) = &row.fallback_prompt
+            && end != TurnEnd::Clean
+        {
+            self.effects.ended(&slot_of(row), &end, events);
+            let now = self.now().to_string();
+            let next = self.close(row, turn, &end, exit, SlotState::BackingOff, |r| {
+                r.transcript = None;
+                r.next_prompt = Some(fallback.clone());
+                r.resume_at = Some(now);
+            })?;
+            return self.start_next(&next);
+        }
         let facts = self.facts(row, turn, &end, events)?;
         let action = (self.rules.decide)(&slot_of(row), &end, &facts);
         self.effects.ended(&slot_of(row), &end, events);
@@ -140,6 +158,7 @@ impl CliDaemon {
         };
         match action {
             Action::Free => {
+                self.record_landed(row)?;
                 self.close(row, turn, end, exit, SlotState::Free, |_| {})?;
             }
             Action::Release { note } => {
@@ -215,6 +234,8 @@ impl CliDaemon {
         next.wait_handle = None;
         next.resume_at = None;
         next.park_reason = None;
+        // Only a slot's first turn after a resume falls back to a new transcript.
+        next.fallback_prompt = None;
         if state == SlotState::Free {
             next.session = None;
             next.reservation = None;

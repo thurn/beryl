@@ -1,13 +1,28 @@
-//! Giving a slot to a new session: which slot it takes, and what a CLI session that worked a
-//! ticket here before brings to its next one (its slot number, turn count and transcript).
+//! Giving a slot to a new session: which slot it takes, what a CLI session that worked a
+//! ticket here before brings to its next one (its slot number, turn count and transcript), and
+//! what a ticket that landed leaves for a regression it causes.
+//!
+//! A regression goes first to the worker whose ticket caused it, because that worker still
+//! holds the change's context. A CLI session ends when its ticket lands, so the context is kept
+//! another way: when a slot is freed because its ticket is no longer held, the ticket, app,
+//! model and transcript go into `cli_landed` ([`CliDaemon::record_landed`]). For 24 hours, a
+//! new session of the same app whose hand-off names that ticket as its culprit resumes the
+//! transcript, under its own Ignite session ID, with the regression's hand-off prompt and the
+//! regression's model and effort ([`CliDaemon::resume_culprit`]). A record is used once.
+//!
+//! The transcript's files belong to the CLI, which may prune them, so a resume can fail. The
+//! slot then keeps the plain hand-off prompt in `fallback_prompt`: if the resumed first turn
+//! ends as anything but a clean turn, the ticket starts again at once on a new transcript (see
+//! `end`), so a failed resume costs the regression one turn start and nothing more.
 
 use ignite_core::cli::SlotState;
 use ignite_core::ids::SessionId;
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots as store;
-use ignite_store::local::rows::CliSlot;
+use ignite_store::local::rows::{CliLanded, CliSlot};
 
-use super::{CliDaemon, hex, random_bytes};
+use super::{CliDaemon, LANDED_KEEP_S, Resume, hex, random_bytes};
 
 /// A CLI session that worked a ticket here before, as its turns recorded it.
 pub(super) struct Earlier {
@@ -37,6 +52,51 @@ impl CliDaemon {
             turn: last.turn,
             transcript: turns.iter().rev().find_map(|t| t.transcript.clone()),
         }))
+    }
+
+    /// Records that the ticket of `row`, a slot about to be freed because its ticket is no
+    /// longer held, landed with the transcript its turns named. Records older than
+    /// [`LANDED_KEEP_S`] are deleted. A slot with no ticket or no transcript leaves nothing.
+    pub(super) fn record_landed(&self, row: &CliSlot) -> Result<()> {
+        let (Some(ticket), Some(transcript)) = (&row.ticket, &row.transcript) else {
+            return Ok(());
+        };
+        let now = self.now();
+        let landed = CliLanded {
+            ticket: ticket.clone(),
+            app: row.app.clone(),
+            transcript: Some(transcript.clone()),
+            model: row.model.clone(),
+            landed_at: Some(now.to_string()),
+        };
+        let expired_before = now.plus_seconds(-LANDED_KEEP_S).to_string();
+        self.database(|conn| store::record_landed(conn, &landed, &expired_before))
+    }
+
+    /// `row`, a new session's slot, changed to resume the transcript of `resume.culprit` with
+    /// `resume.prompt` when that ticket landed from a slot of the same app within
+    /// [`LANDED_KEEP_S`]; otherwise `row` as it is. A resumed slot keeps its plain hand-off
+    /// prompt as the fallback for a first turn that does not end cleanly.
+    pub(super) fn resume_culprit(&self, row: CliSlot, resume: &Resume) -> Result<CliSlot> {
+        let landed = self.database(|conn| store::take_landed(conn, resume.culprit.as_str()))?;
+        let Some(landed) = landed else {
+            return Ok(row);
+        };
+        let oldest = self.now().plus_seconds(-LANDED_KEEP_S);
+        let recent = landed
+            .landed_at
+            .as_deref()
+            .and_then(|t| Timestamp::parse(t).ok())
+            .is_some_and(|at| at >= oldest);
+        match landed.transcript {
+            Some(transcript) if recent && landed.app == row.app => Ok(CliSlot {
+                transcript: Some(transcript),
+                fallback_prompt: row.next_prompt.clone(),
+                next_prompt: Some(resume.prompt.clone()),
+                ..row
+            }),
+            _ => Ok(row),
+        }
     }
 
     /// A new Ignite session for a CLI worker of `app`, `cli-<app>-<8 hex>`.
@@ -89,6 +149,7 @@ impl CliDaemon {
             interrupted_in_row: 0,
             block_sent: 0,
             backed_off: 0,
+            fallback_prompt: None,
         })
     }
 }

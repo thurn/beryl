@@ -1,5 +1,6 @@
-//! CLI mode's rows (see `schema_20.sql`): worker slots, their turns, the messages waiting for a
-//! turn, each app's CLI hold, and the mode override `ignite pool mode` stores.
+//! CLI mode's rows (see `schema_20.sql` and `schema_22.sql`): worker slots, their turns, the
+//! messages waiting for a turn, each app's CLI hold, the tickets that landed from a slot, and the
+//! mode override `ignite pool mode` stores.
 //!
 //! [`record_turn_start`] is the first phase of starting a turn: it records the turn and marks
 //! the messages its prompt carries as delivered in one transaction, before the supervisor
@@ -8,7 +9,7 @@
 use rusqlite::{Connection, OptionalExtension, Row, TransactionBehavior, params};
 
 use crate::Result;
-use crate::local::rows::{CliHold, CliMessage, CliSlot, CliTurn};
+use crate::local::rows::{CliHold, CliLanded, CliMessage, CliSlot, CliTurn};
 
 /// The `pool_settings` key of an app's mode override.
 fn mode_key(app: &str) -> String {
@@ -39,6 +40,7 @@ fn read_slot(row: &Row<'_>) -> rusqlite::Result<CliSlot> {
         interrupted_in_row: row.get("interrupted_in_row")?,
         block_sent: row.get("block_sent")?,
         backed_off: row.get("backed_off")?,
+        fallback_prompt: row.get("fallback_prompt")?,
     })
 }
 
@@ -93,7 +95,7 @@ pub fn put(conn: &Connection, slot: &CliSlot) -> Result<()> {
     conn.execute(
         &format!(
             "INSERT OR REPLACE INTO cli_slots ({}) VALUES \
-             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+             (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             columns(CliSlot::COLUMNS)
         ),
         params![
@@ -115,9 +117,63 @@ pub fn put(conn: &Connection, slot: &CliSlot) -> Result<()> {
             slot.interrupted_in_row,
             slot.block_sent,
             slot.backed_off,
+            slot.fallback_prompt,
         ],
     )?;
     Ok(())
+}
+
+fn read_landed(row: &Row<'_>) -> rusqlite::Result<CliLanded> {
+    Ok(CliLanded {
+        ticket: row.get("ticket")?,
+        app: row.get("app")?,
+        transcript: row.get("transcript")?,
+        model: row.get("model")?,
+        landed_at: row.get("landed_at")?,
+    })
+}
+
+/// Records that `landed.ticket` landed from a CLI slot, replacing an earlier record of the same
+/// ticket, and deletes every record that landed before `expired_before`. Times are stored as
+/// `Timestamp` writes them (UTC, fixed width), so they compare as text.
+pub fn record_landed(conn: &Connection, landed: &CliLanded, expired_before: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM cli_landed WHERE landed_at IS NULL OR landed_at < ?1",
+        [expired_before],
+    )?;
+    conn.execute(
+        &format!(
+            "INSERT OR REPLACE INTO cli_landed ({}) VALUES (?1, ?2, ?3, ?4, ?5)",
+            columns(CliLanded::COLUMNS)
+        ),
+        params![
+            landed.ticket,
+            landed.app,
+            landed.transcript,
+            landed.model,
+            landed.landed_at
+        ],
+    )?;
+    Ok(())
+}
+
+/// Removes and returns the record of `ticket` landing from a CLI slot, if there is one. A
+/// record is used at most once, so two regressions never resume the same transcript at once.
+pub fn take_landed(conn: &mut Connection, ticket: &str) -> Result<Option<CliLanded>> {
+    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let landed = transaction
+        .query_row(
+            &format!(
+                "SELECT {} FROM cli_landed WHERE ticket = ?1",
+                columns(CliLanded::COLUMNS)
+            ),
+            [ticket],
+            read_landed,
+        )
+        .optional()?;
+    transaction.execute("DELETE FROM cli_landed WHERE ticket = ?1", [ticket])?;
+    transaction.commit()?;
+    Ok(landed)
 }
 
 /// Every slot, ordered by app and number.
@@ -253,7 +309,7 @@ pub fn holds(conn: &Connection) -> Result<Vec<CliHold>> {
 /// The values `cli_turns.state` takes.
 const TURN_STATES: [&str; 3] = ["starting", "running", "ended"];
 
-/// Reads every row of the four CLI tables through the row structs and `ignite_core::cli`'s
+/// Reads every row of the five CLI tables through the row structs and `ignite_core::cli`'s
 /// types, and returns the first row that does not decode, naming its table and row. The release
 /// selftest runs it on a copy of the daemon's database, so that a build that could not read the
 /// rows an older build wrote is rejected before every running worker is stranded by a restart.
@@ -279,6 +335,10 @@ pub fn verify_decodable(conn: &Connection) -> std::result::Result<(), String> {
             None => Err(format!("unknown hold reason {:?}", hold.reason)),
         };
         Ok((format!("app {}", hold.app), outcome))
+    })?;
+    verify_table(conn, "cli_landed", CliLanded::COLUMNS, |row| {
+        let landed = read_landed(row)?;
+        Ok((format!("ticket {}", landed.ticket), Ok(())))
     })
 }
 
@@ -459,6 +519,7 @@ mod tests {
             interrupted_in_row: 0,
             block_sent: 0,
             backed_off: 0,
+            fallback_prompt: None,
         }
     }
 
@@ -520,6 +581,28 @@ mod tests {
         assert_eq!(turns(&conn, session).unwrap(), [turn(session, 1)]);
         assert_eq!(list(&conn).unwrap().len(), 1);
         assert!(by_session(&conn, "cli-claude-ffffffff").unwrap().is_none());
+    }
+
+    fn landed(ticket: &str, at: &str) -> CliLanded {
+        CliLanded {
+            ticket: ticket.to_owned(),
+            app: "claude".to_owned(),
+            transcript: Some(format!("t-{ticket}")),
+            model: Some("opus".to_owned()),
+            landed_at: Some(at.to_owned()),
+        }
+    }
+
+    #[test]
+    fn a_landed_ticket_is_taken_once_and_old_records_are_pruned() {
+        let mut conn = open_in_memory().unwrap();
+        let old = landed("T.1", "2026-11-19T11:00:00.000Z");
+        record_landed(&conn, &old, "2026-11-19T00:00:00.000Z").unwrap();
+        let new = landed("T.2", "2026-11-20T12:00:00.000Z");
+        record_landed(&conn, &new, "2026-11-19T12:00:00.000Z").unwrap();
+        assert_eq!(take_landed(&mut conn, "T.1").unwrap(), None);
+        assert_eq!(take_landed(&mut conn, "T.2").unwrap(), Some(new));
+        assert_eq!(take_landed(&mut conn, "T.2").unwrap(), None);
     }
 
     #[test]
@@ -594,7 +677,13 @@ mod tests {
     #[test]
     fn every_column_of_the_cli_tables_is_nullable_or_defaulted() {
         let conn = open_in_memory().unwrap();
-        for table in ["cli_slots", "cli_turns", "cli_messages", "cli_holds"] {
+        for table in [
+            "cli_slots",
+            "cli_turns",
+            "cli_messages",
+            "cli_holds",
+            "cli_landed",
+        ] {
             let mut statement = conn
                 .prepare(&format!(
                     "SELECT name, \"notnull\", dflt_value FROM pragma_table_info('{table}')"

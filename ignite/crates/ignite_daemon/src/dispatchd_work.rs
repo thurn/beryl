@@ -16,6 +16,7 @@ use super::{
     DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, cli, feed, label, shared, slots, suits,
     tier_for,
 };
+use crate::clid::Resume;
 use crate::pool::Member;
 use crate::server::Context;
 
@@ -541,6 +542,21 @@ impl Dispatcher {
             }
             return;
         }
+        // A CLI worker's session ended with its ticket, so no idle worker holds the culprit's
+        // conversation; the slot resumes its transcript instead, when it was kept.
+        if !taken
+            && cli::is_cli_slot(named)
+            && let Some(culprit) = feed::cause(&detail)
+        {
+            let prompt = feed::culprit_prompt(&detail, &reserved);
+            state.reserved.insert(named.clone(), reserved.clone());
+            state.cli_calls.push(cli::Call::Begin {
+                slot: named.clone(),
+                reserved,
+                resume: Some(Resume { culprit, prompt }),
+            });
+            return;
+        }
         if !taken {
             Self::queue_handoff_reserved(state, named, reserved);
             return;
@@ -565,15 +581,7 @@ impl Dispatcher {
         members: &[Member],
         now: Timestamp,
     ) -> Option<SessionId> {
-        // A reverted ticket goes back to the worker that landed it, which still has the
-        // conversation in which it wrote the change.
-        let cause = if detail.ticket.metadata.contains_key("reverted") {
-            detail.ticket.id.clone()
-        } else if detail.ticket.labels.iter().any(|l| l == "regression") {
-            feed::caused_by(&detail.ticket.body)?
-        } else {
-            return None;
-        };
+        let cause = feed::cause(detail)?;
         let workers = slots::with_slots(state, members);
         Self::idle_workers(state, &workers, now)
             .into_iter()
@@ -590,26 +598,7 @@ impl Dispatcher {
         reserved: Reserved,
         detail: &TicketDetail,
     ) {
-        let checks = detail
-            .ticket
-            .metadata
-            .get("reverted")
-            .and_then(|m| m.get("checks"))
-            .and_then(serde_json::Value::as_array)
-            .map(|checks| {
-                checks
-                    .iter()
-                    .filter_map(serde_json::Value::as_str)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            })
-            .unwrap_or_default();
-        let prompt = format!(
-            "your landing of {} was reverted: the tip did not build with it ({checks}). Run \
-             `ignite start {}`",
-            reserved.ticket,
-            super::start_arguments(&reserved)
-        );
+        let prompt = feed::reverted_prompt(detail, &reserved);
         Self::push_handoff(state, session, reserved, prompt, false);
     }
 

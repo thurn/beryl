@@ -1,11 +1,11 @@
 //! What the dispatcher does with a change in the hub's feed: delivering an `ignite tell`, and
-//! finding the culprit of a regression ticket.
+//! finding the culprit of a regression ticket and the prompt that hands the regression to it.
 
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{DispatchAction, Exit, Reply};
 use ignite_core::protocol::tickets::{Status, TicketDetail};
 
-use super::{Dispatcher, Purpose, State, cli, tell};
+use super::{Dispatcher, Purpose, Reserved, State, cli, start_arguments, tell};
 
 /// Sends a new `tell` on `detail`'s ticket to `holder`, the session working it here, as a
 /// `message` instruction. If the session is inside `ignite wait`, the wait ends with a reply that
@@ -85,6 +85,64 @@ pub(super) fn deliver_tell(
     dispatcher
         .host
         .interrupt(holder, Reply::text(Exit::Success, notice));
+}
+
+/// The ticket whose worker should take `detail` because it holds the change's context: for a
+/// ticket whose landing was reverted, the ticket itself; for a regression, the ticket on its
+/// `caused-by` line. `None` for any other ticket.
+pub(super) fn cause(detail: &TicketDetail) -> Option<TicketId> {
+    if detail.ticket.metadata.contains_key("reverted") {
+        Some(detail.ticket.id.clone())
+    } else if detail.ticket.labels.iter().any(|l| l == "regression") {
+        caused_by(&detail.ticket.body)
+    } else {
+        None
+    }
+}
+
+/// The hand-off prompt of `reserved`, a regression, for the worker whose last ticket caused it.
+pub(super) fn regression_prompt(reserved: &Reserved, title: &str) -> String {
+    format!(
+        "{} is a regression caused by your last ticket: {title}. Run `ignite start {}` and fix \
+         it.",
+        reserved.ticket,
+        start_arguments(reserved)
+    )
+}
+
+/// The hand-off prompt of `reserved`, a ticket whose landing a tip round reverted, for the
+/// worker that landed it. It names the checks that did not build.
+pub(super) fn reverted_prompt(detail: &TicketDetail, reserved: &Reserved) -> String {
+    let checks = detail
+        .ticket
+        .metadata
+        .get("reverted")
+        .and_then(|m| m.get("checks"))
+        .and_then(serde_json::Value::as_array)
+        .map(|checks| {
+            checks
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default();
+    format!(
+        "your landing of {} was reverted: the tip did not build with it ({checks}). Run `ignite \
+         start {}`",
+        reserved.ticket,
+        start_arguments(reserved)
+    )
+}
+
+/// The prompt that hands `detail` to the worker whose ticket caused it: the reverted ticket's
+/// or the regression's.
+pub(super) fn culprit_prompt(detail: &TicketDetail, reserved: &Reserved) -> String {
+    if detail.ticket.metadata.contains_key("reverted") {
+        reverted_prompt(detail, reserved)
+    } else {
+        regression_prompt(reserved, &detail.ticket.title)
+    }
 }
 
 /// The ticket named on a regression's `caused-by <ticket>` line.
