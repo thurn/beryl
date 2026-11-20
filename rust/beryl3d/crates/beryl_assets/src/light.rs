@@ -56,7 +56,7 @@ pub fn prepared() -> Prepared {
 type Shape = fn(f32, f32) -> f32;
 
 /// Each shape with its cell.
-const SHAPES: [(Sprite, Shape); 15] = [
+const SHAPES: [(Sprite, Shape); 16] = [
     (sprites::DISC, disc),
     (sprites::BURST, burst),
     (sprites::RING, ring),
@@ -72,6 +72,7 @@ const SHAPES: [(Sprite, Shape); 15] = [
     (sprites::PLAQUE, plaque),
     (sprites::COIN, coin),
     (sprites::HALO, halo),
+    (sprites::WEDGE_HOT, wedge_hot),
 ];
 
 /// Fills `sprite`'s cell of `pixels` with `shape`, leaving its border empty.
@@ -253,14 +254,89 @@ fn head(x: f32, y: f32) -> f32 {
     )))
 }
 
-/// A wedge: a slice of a disc, 60 degrees wide, opening upward from its point near the bottom
-/// of the cell.
+/// The chevron an attacker wears past its card's edge, as the web stage's light painter draws
+/// it (`u_kind == 1` in `ui/src/stage/glow.ts`): a triangle with its base along the card's edge
+/// and its point `chevron` card widths past it, with a rim of light along its two outer edges,
+/// a fill that is brightest toward the point and fades toward the card, and a halo round it,
+/// all dimmer toward its two ends. The quad it fills is `sprites::wedge_size` large, so the
+/// triangle is drawn in card widths inside room of `sprites::WEDGE_ROOM` on every side, at the
+/// desktop table's scale of about 95 points to a card's width. This record holds the light
+/// the web gives the tone's glow color, soft-clipped as its `lit` clips it; `wedge_hot` holds
+/// the light it gives the core color.
 fn wedge(x: f32, y: f32) -> f32 {
-    let y = y + 0.9;
-    let (sin, cos) = std::f32::consts::FRAC_PI_6.sin_cos();
-    // Distance outside each straight side, and outside the arc.
-    let sides = (-x * cos - y * sin).max(x * cos - y * sin);
-    fill(sides.max(length(x, y) - 1.8))
+    let parts = Chevron::at(x, y);
+    let light = (parts.fill * 1.7 + parts.glow + parts.line) * parts.arm;
+    1.0 - (-1.5 * light).exp()
+}
+
+/// The white-hot part of the chevron that `wedge` draws: its rim, hottest at the point, and
+/// the fill near the point, in the web's tone's core color.
+fn wedge_hot(x: f32, y: f32) -> f32 {
+    let parts = Chevron::at(x, y);
+    let light =
+        (parts.line * (0.65 + 0.9 * parts.apex) + parts.fill * parts.apex * 0.55) * parts.arm;
+    1.0 - (-1.5 * light).exp()
+}
+
+/// The parts of the web's chevron at one point of the cell, each from 0 to about 1.
+struct Chevron {
+    fill: f32,
+    glow: f32,
+    line: f32,
+    apex: f32,
+    arm: f32,
+}
+
+impl Chevron {
+    /// The parts at `(x, y)`, each from -1 to 1 across the cell's drawn area with y toward the
+    /// point.
+    fn at(x: f32, y: f32) -> Self {
+        use beryl_scene::data::space::own::wedge::CHEVRON;
+        /// One point of the web's desktop table, in card widths.
+        const POINT: f32 = 1.0 / 95.0;
+        let room = sprites::WEDGE_ROOM;
+        // In card widths, from the middle of the base: the base is a card wide, and the point
+        // is `CHEVRON` past it.
+        let px = x * 0.5 * (1.0 + 2.0 * room);
+        let py = f32::midpoint(y, 1.0) * (CHEVRON + 2.0 * room) - room;
+        let (half, high) = (0.5, CHEVRON);
+        let edge_y = high * (1.0 - px.abs() / half);
+        let distance = segment((px, py), (-half, 0.0), (0.0, high)).min(segment(
+            (px, py),
+            (half, 0.0),
+            (0.0, high),
+        ));
+        let inside = py >= 0.0 && py <= edge_y && px.abs() <= half;
+        let fill = if inside {
+            (py / edge_y.max(POINT)).clamp(0.0, 1.0).powf(1.25) * 0.95
+        } else {
+            0.0
+        };
+        // The web's rim is `max(2.2, 0.03 * half + 0.8 * pixel)` points wide, its halo fades
+        // over `0.09 * half + 4` points, with `half` the half width in points.
+        let half_points = half / POINT;
+        let width = 2.2f32.max(0.03 * half_points + 0.8) * POINT;
+        let line = (-distance * distance / (2.0 * width * width)).exp();
+        let glow = (-distance / ((0.09 * half_points + 4.0) * POINT)).exp() * 0.55;
+        let apex = (-length(px, py - high) / (high * 0.85)).exp();
+        let arm = 0.6 + 0.4 * (1.0 - smooth(half * 0.25, half, px.abs()));
+        // Fade out before the edge of the cell, so the halo never ends in a hard line.
+        let edge = falloff(((x.abs().max(y.abs()) - 0.85) / 0.15).max(0.0));
+        Self {
+            fill: fill * edge,
+            glow: glow * edge,
+            line: line * edge,
+            apex,
+            arm,
+        }
+    }
+}
+
+/// The distance from `p` to the segment from `a` to `b`.
+fn segment(p: (f32, f32), a: (f32, f32), b: (f32, f32)) -> f32 {
+    let (pa, ba) = ((p.0 - a.0, p.1 - a.1), (b.0 - a.0, b.1 - a.1));
+    let t = ((pa.0 * ba.0 + pa.1 * ba.1) / (ba.0 * ba.0 + ba.1 * ba.1)).clamp(0.0, 1.0);
+    length(pa.0 - ba.0 * t, pa.1 - ba.1 * t)
 }
 
 /// A thin crescent: a disc with an offset disc cut out of it, opening right.

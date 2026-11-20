@@ -4,7 +4,7 @@ use beryl_assets::light::{BORDER, light_page};
 use beryl_assets::packer::PAGE_SIZE;
 use beryl_scene::frame::{Sprite, sprites};
 
-const ALL: [Sprite; 15] = [
+const ALL: [Sprite; 16] = [
     sprites::DISC,
     sprites::BURST,
     sprites::RING,
@@ -20,6 +20,7 @@ const ALL: [Sprite; 15] = [
     sprites::PLAQUE,
     sprites::COIN,
     sprites::HALO,
+    sprites::WEDGE_HOT,
 ];
 
 /// The opacity of texel `(x, y)` of `sprite`'s cell.

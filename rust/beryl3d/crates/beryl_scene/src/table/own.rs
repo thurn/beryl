@@ -23,7 +23,7 @@ use std::cell::Cell;
 use std::f32::consts::PI;
 
 use beryl_protocol::protocol::{Combat, ObjectView, Side};
-use glam::{Affine3A, Quat, Vec2};
+use glam::{Affine3A, Quat, Vec2, Vec3};
 
 use super::{CARD_HEIGHT, CARD_WIDTH, Look};
 use crate::data::space::own;
@@ -163,6 +163,31 @@ impl<'b, 'f> Marks<'b, 'f> {
             )
     }
 
+    /// The quad `size` large with its middle `out` past the middle of `edge`, turned by `turn`
+    /// about the card's normal. A card in a battlefield row leans back toward the camera, so
+    /// past its near edge its plane runs under the table, which would hide the quad: there the
+    /// quad is folded up about the edge until it lies level, as the web's mark lies flat on
+    /// the stage past the card.
+    fn past(&self, edge: &Edge, out: f32, size: Vec2, turn: f32) -> Affine3A {
+        let axis = edge.axis.extend(0.0);
+        let outward = self.card.transform_vector3(axis).normalize_or_zero();
+        let normal = self.card.transform_vector3(Vec3::Z).normalize_or_zero();
+        // Folding by `angle` toward the normal turns the outward way into
+        // `outward * cos + normal * sin`, which is level where `tan = -outward.z / normal.z`.
+        let fold = if outward.z < 0.0 && normal.z > f32::EPSILON {
+            Quat::from_axis_angle(axis.cross(Vec3::Z), (-outward.z / normal.z).atan())
+        } else {
+            Quat::IDENTITY
+        };
+        self.card
+            * Affine3A::from_rotation_translation(fold, (edge.axis * edge.reach).extend(own::LIFT))
+            * Affine3A::from_scale_rotation_translation(
+                size.extend(1.0),
+                Quat::from_rotation_z(turn),
+                (edge.axis * out).extend(0.0),
+            )
+    }
+
     fn icon(&mut self, sprite: Sprite, at: Vec2, size: Vec2, tint: [u8; 4]) {
         let draw = Draw::icon(
             self.place(at, size, 0.0),
@@ -173,28 +198,36 @@ impl<'b, 'f> Marks<'b, 'f> {
     }
 
     /// The wedge of an attacker or the crescent of a blocker on `edge`, `age` milliseconds
-    /// after its record first said it fights.
+    /// after its record first said it fights. The wedge is two records over one quad, as the
+    /// web's `fighterLight` lights it in two colors: its body, rim and halo in the ember glow,
+    /// and its white-hot rim in the ember core.
     fn fight(&mut self, fighting: Fighting, edge: &Edge, age: f32) {
         let fade = (age / own::FADE_MS).clamp(0.0, 1.0);
         let turn = edge.axis.y.atan2(edge.axis.x) - PI / 2.0;
-        let (sprite, at, size, tint) = if fighting == Fighting::Attacks {
+        if fighting == Fighting::Attacks {
             let pop = (-age / own::wedge::POP_MS).exp();
             let length = own::wedge::CHEVRON * CARD_WIDTH * (1.0 + own::wedge::POP.y * pop);
-            let size = Vec2::new(edge.across * (1.0 + own::wedge::POP.x * pop), length);
-            let at = edge.axis * (edge.reach + length / 2.0);
-            (sprites::WEDGE, at, size, color::WEDGE)
-        } else {
-            let t = (age / own::crescent::OPEN_MS).clamp(0.0, 1.0);
-            let open = own::crescent::OPENS_FROM
-                + (1.0 - own::crescent::OPENS_FROM) * (1.0 - (1.0 - t).powi(3));
-            let size = own::crescent::SIZE * edge.across * open;
-            let at = edge.axis * (edge.reach + own::crescent::GAP * edge.across);
-            (sprites::CRESCENT, at, size, color::CRESCENT)
-        };
+            let size = sprites::wedge_size(edge.across * (1.0 + own::wedge::POP.x * pop), length);
+            let transform = self.past(edge, length / 2.0, size, turn);
+            for (sprite, tint) in [
+                (sprites::WEDGE, color::WEDGE),
+                (sprites::WEDGE_HOT, color::WEDGE_HOT),
+            ] {
+                let tint = with_opacity(tint, fade * self.opacity);
+                self.builder
+                    .draw(self.band, Draw::glow(transform, tint, sprite, 0.0));
+            }
+            return;
+        }
+        let t = (age / own::crescent::OPEN_MS).clamp(0.0, 1.0);
+        let open = own::crescent::OPENS_FROM
+            + (1.0 - own::crescent::OPENS_FROM) * (1.0 - (1.0 - t).powi(3));
+        let size = own::crescent::SIZE * edge.across * open;
+        let out = own::crescent::GAP * edge.across;
         let draw = Draw::glow(
-            self.place(at, size, turn),
-            with_opacity(tint, fade * self.opacity),
-            sprite,
+            self.past(edge, out, size, turn),
+            with_opacity(color::CRESCENT, fade * self.opacity),
+            sprites::CRESCENT,
             0.0,
         );
         self.builder.draw(self.band, draw);

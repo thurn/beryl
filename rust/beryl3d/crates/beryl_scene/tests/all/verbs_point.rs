@@ -9,8 +9,9 @@ use beryl_scene::agent::checks::{KeptArrow, keep_arrows, lines_hold};
 use beryl_scene::agent::steps::{no_jumps, rest_equals_placement, step_times};
 use beryl_scene::agent::{Context, Layout, TreeOptions};
 use beryl_scene::data::space::light;
-use beryl_scene::frame::{Frame, Role};
+use beryl_scene::frame::{Frame, Material, Role};
 use beryl_scene::input::{Insets, Size};
+use beryl_scene::light::arrows::RIBBON;
 use beryl_scene::play::Show;
 use beryl_scene::testing::{ScriptBuilder, timing};
 use glam::Vec2;
@@ -204,10 +205,30 @@ fn each_case_of_point_plays_to_its_placement() {
         assert_eq!(rest_equals_placement(&record), Vec::new(), "{case}");
         assert_eq!(no_jumps(&record), Vec::new(), "{case}");
         assert_eq!(step_times(&record), Vec::new(), "{case}");
-        let shown = arrows(&played.last_frame()).len();
+        let last = played.last_frame();
+        let shown = arrows(&last).len();
         let expected = usize::from(!case.ends_with("end"));
         assert_eq!(shown, expected, "{case}: arrows shown at its end");
+        // The element alone does not show that the arrow is seen: its ribbon must give light.
+        // A glow `progress` 1 of the way through gives none, and arrows were once drawn so.
+        if expected == 1 {
+            assert!(
+                lit_glows(&last) >= RIBBON,
+                "{case}: the arrow's ribbon gives light"
+            );
+        }
     }
+}
+
+/// How many glow records of `frame` give any light: some opacity, not faded out by their
+/// progress (`Draw::glow`).
+fn lit_glows(frame: &Frame) -> usize {
+    frame
+        .draws
+        .iter()
+        .filter(|draw| draw.material == Material::Glow as u8)
+        .filter(|draw| draw.tint[3] > 0 && draw.params[0] < 1.0)
+        .count()
 }
 
 #[test]

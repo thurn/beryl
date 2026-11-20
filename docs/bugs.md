@@ -6,6 +6,27 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Beryl 3D drew no arrows, and attackers wore a dull salmon smear instead of a
+  chevron.** The scene listed every target arrow, source line and line of combat
+  (`just b3d tree` showed them), but `png` drew none. `light::arrows` wrote each
+  ribbon and head as `Draw::glow(..., 1.0)`, and the glow material fades a glow
+  out as its `progress` runs to 1, so every arrow was fully faded from the
+  commit that added it (f558ef039). Separately, the `WEDGE` sprite was a 60°
+  slice of a disc, which squashed into the chevron's thin quad came out as a
+  flat trapezoid with no rim or halo, and the opponent's attackers sank out of
+  sight: a battlefield row's plane rises from the near edge of an untapped card,
+  the opponent's attacker moves toward the viewer, and both the card's foot and
+  its mark (which lies past that edge, in the card's plane) went under the
+  cloth. Fixed: arrows write `progress` 0; `WEDGE` and a new `WEDGE_HOT` draw
+  the web's chevron from `glow.ts` in its glow and core colors; an attacker
+  keeps its row height as it advances, and a fight mark past a card's near edge
+  folds up to lie level. Prevention: the scene tests checked that an arrow
+  element existed, never that its records gave light, and the text tools cannot
+  see a record's `progress`. Guard: `each_case_of_point_plays_to_its_placement`
+  now requires an arrow's glow records to have opacity and `progress` below 1. A
+  renderer check that compares drawn pixels with the tree's elements would catch
+  the rest of this class.
+
 - **Every hub write failed with `database is locked` for minutes.** Claims,
   heartbeats and results were refused, so `ignite start` answered "Claim
   refused: no live reservation" and the pool froze. `POST /next` reserves a

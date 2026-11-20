@@ -308,11 +308,14 @@ pub(super) fn battlefield_row(
             // table would lie farther from the camera than the untapped card beside it, and the
             // hit test, which takes the nearer card for the one in front, would let that card
             // cover it.
-            // An attacker stands out of its row toward the other side, where the web's does.
+            // An attacker stands out of its row toward the other side, where the web's does. It
+            // keeps the height of its place in the row: the row's plane rises from the near edge
+            // of an untapped card, so the opponent's attacker, moved toward the viewer, would
+            // otherwise sink with its near edge and its wedge under the table.
+            pose.position.z += fitted.height(pose.position.y);
             if matches!(object.combat, Some(Combat::Attacking { .. })) {
                 pose.position.y += fitted.advance[usize::from(object.tapped)];
             }
-            pose.position.z += fitted.height(pose.position.y);
             pose.rotation = Quat::from_rotation_x(fitted.tilt) * pose.rotation;
             // A drawn card is sheared until its box on screen is the web's skewed card's. A card
             // scrolled out of view rests undrawn at the row's end, under the cards that join

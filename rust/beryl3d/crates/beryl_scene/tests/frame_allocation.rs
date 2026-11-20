@@ -317,9 +317,10 @@ fn a_frame_of_255_attackers_allocates_nothing() {
     };
     // A row shows as many as fit; the rest wait undrawn at its end.
     assert!(count(Material::Card) > 10, "many attackers are drawn");
+    // A wedge is two glow records: its body in the tone's glow, its rim in the tone's core.
     assert_eq!(
         count(Material::Glow),
-        count(Material::Card),
+        2 * count(Material::Card),
         "each attacker drawn wears a wedge"
     );
     assert_eq!(after - before, 0, "allocations in a frame of 255 attackers");

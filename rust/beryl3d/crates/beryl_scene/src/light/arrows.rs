@@ -311,7 +311,7 @@ fn write_ribbon(
             camera.screen_transform((pair[0] + pair[1]) / 2.0, Vec2::new(long, 2.0 * half), way);
         builder.draw(
             Band::Glows,
-            Draw::glow(transform, tint, sprites::RIBBON, 1.0),
+            Draw::glow(transform, tint, sprites::RIBBON, 0.0),
         );
     }
 }
@@ -338,7 +338,7 @@ fn write_head(
         Vec2::new(long, 2.0 * long * light::head::SPREAD),
         way,
     );
-    builder.draw(Band::Glows, Draw::glow(transform, tint, sprites::HEAD, 1.0));
+    builder.draw(Band::Glows, Draw::glow(transform, tint, sprites::HEAD, 0.0));
 }
 
 /// A ribbon's half-width where it has come `arc` of the `whole` points it is long, as the web

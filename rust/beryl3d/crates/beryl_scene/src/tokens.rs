@@ -128,6 +128,8 @@ pub mod color {
     /// The wedge an attacker wears: the glow of `ember` in `TONES`, the tone `fighterLight`
     /// (`ui/src/stage/light.ts`) gives it.
     pub const WEDGE: [u8; 4] = [255, 38, 10, 255];
+    /// The white-hot rim of an attacker's wedge: the core of `ember` in `TONES`.
+    pub const WEDGE_HOT: [u8; 4] = [255, 204, 128, 255];
     /// The crescent a blocker wears: the glow of `gold` in `TONES`, the tone `fighterLight`
     /// gives it.
     pub const CRESCENT: [u8; 4] = [255, 168, 26, 255];

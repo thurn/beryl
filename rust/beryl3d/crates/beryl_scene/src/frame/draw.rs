@@ -89,8 +89,7 @@ pub struct Sprite {
 }
 
 /// The shapes on the atlas's first page, which light and effects draw with: a 1024 by 1024 page
-/// cut into 256 by 256 cells, row by row from the top left. The last cell of the bottom row is
-/// spare.
+/// cut into 256 by 256 cells, row by row from the top left.
 pub mod sprites {
     use glam::Vec2;
 
@@ -124,6 +123,27 @@ pub mod sprites {
     pub const PLAQUE: Sprite = cell(0, 768);
     pub const COIN: Sprite = cell(256, 768);
     pub const HALO: Sprite = cell(512, 768);
+    /// The white-hot core of `WEDGE`: its rim, hottest at the point, which the web's
+    /// `fighterLight` lights in the `core` color of the wedge's tone.
+    pub const WEDGE_HOT: Sprite = cell(768, 768);
+
+    /// How much room `WEDGE` and `WEDGE_HOT` leave round the chevron for its halo, on each side,
+    /// as a share of the edge it lies against (across) and in card widths (along). The web
+    /// draws the chevron's box 26 pixels larger on each side (`glow.ts`, `room`), about 0.27 of
+    /// the width of a card on the desktop table.
+    pub const WEDGE_ROOM: f32 = 0.27;
+
+    /// The size to scale a quad drawn with `WEDGE` or `WEDGE_HOT` to, so that the chevron is
+    /// `across` wide at its base and `length` from its base to its point, with room round it
+    /// for its halo; both in the units of `CARD_WIDTH`. The quad's middle lies `length / 2`
+    /// past the base, toward the point.
+    #[must_use]
+    pub fn wedge_size(across: f32, length: f32) -> Vec2 {
+        Vec2::new(
+            across * (1.0 + 2.0 * WEDGE_ROOM),
+            length + 2.0 * WEDGE_ROOM * CARD_WIDTH,
+        )
+    }
 
     /// Half the width and height of the rectangle outside which `OUTLINE`'s cell is empty, in
     /// the units of a unit quad drawn with the whole cell (-0.5 to 0.5 across). The outline is
