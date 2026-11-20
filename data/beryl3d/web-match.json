@@ -43,74 +43,74 @@
    "pixels": 69492
   },
   "b3d:screen/bug-report/you/1600x900@2": {
-   "unmatched": 59,
+   "unmatched": 31,
    "boxes": 1,
-   "styles": 3,
-   "unsupported": 1,
-   "pixels": 5644062
+   "styles": 8,
+   "unsupported": 2,
+   "pixels": 1179527
   },
   "b3d:screen/bug-report/you/393x759": {
-   "unmatched": 15,
-   "boxes": 0,
-   "styles": 0,
+   "unmatched": 30,
+   "boxes": 2,
+   "styles": 4,
    "unsupported": 0,
-   "pixels": 292660
+   "pixels": 290432
   },
   "b3d:screen/gallery/you/1600x900@2": {
-   "unmatched": 189,
-   "boxes": 1,
-   "styles": 3,
-   "unsupported": 1,
-   "pixels": 5450857
+   "unmatched": 324,
+   "boxes": 77,
+   "styles": 245,
+   "unsupported": 18,
+   "pixels": 3245180
   },
   "b3d:screen/gallery/you/393x759": {
-   "unmatched": 143,
-   "boxes": 0,
-   "styles": 0,
-   "unsupported": 0,
-   "pixels": 217331
+   "unmatched": 326,
+   "boxes": 76,
+   "styles": 257,
+   "unsupported": 18,
+   "pixels": 126978
   },
   "b3d:screen/lobby/you/1600x900@2": {
-   "unmatched": 92,
-   "boxes": 0,
-   "styles": 0,
-   "unsupported": 0,
-   "pixels": 1568673
+   "unmatched": 40,
+   "boxes": 16,
+   "styles": 12,
+   "unsupported": 5,
+   "pixels": 898802
   },
   "b3d:screen/lobby/you/393x759": {
-   "unmatched": 43,
-   "boxes": 0,
-   "styles": 0,
-   "unsupported": 0,
-   "pixels": 72355
+   "unmatched": 36,
+   "boxes": 17,
+   "styles": 26,
+   "unsupported": 5,
+   "pixels": 201144
   },
   "b3d:screen/settings/you/1600x900@2": {
-   "unmatched": 87,
-   "boxes": 1,
-   "styles": 3,
+   "unmatched": 59,
+   "boxes": 3,
+   "styles": 5,
    "unsupported": 1,
-   "pixels": 5493803
+   "pixels": 4535375
   },
   "b3d:screen/settings/you/393x759": {
-   "unmatched": 41,
-   "boxes": 0,
-   "styles": 0,
+   "unmatched": 57,
+   "boxes": 2,
+   "styles": 2,
    "unsupported": 0,
-   "pixels": 258355
+   "pixels": 183224
   },
   "b3d:screen/start/you/1600x900@2": {
-   "unmatched": 87,
-   "boxes": 0,
-   "styles": 0,
+   "unmatched": 34,
+   "boxes": 11,
+   "styles": 5,
    "unsupported": 0,
-   "pixels": 1594926
+   "pixels": 695266
   },
   "b3d:screen/start/you/393x759": {
-   "unmatched": 35,
-   "boxes": 0,
-   "styles": 0,
-   "unsupported": 0,
-   "pixels": 110089
+   "unmatched": 26,
+   "boxes": 11,
+   "styles": 10,
+   "unsupported": 2,
+   "pixels": 100723
   },
   "b3d:screen/table/you/1600x900@2": {
    "unmatched": 86,

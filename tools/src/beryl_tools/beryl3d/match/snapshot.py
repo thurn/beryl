@@ -7,7 +7,8 @@ target's snapshot directory (target.py), which the other `match` subcommands rea
    moving.
 2. `b3d-render png` draws the moment at the target's scale as `b3d.png`.
 3. The recording is exported as the web interface's fixture (`b3d export --only`), and
-   dump.mjs opens the page `?fixture=<name>&at=<n>#/game` in WebKit on Playwright's paused
+   dump.mjs opens the page `?fixture=<name>&at=<n>#/game` (or, for a screen of
+   data/beryl3d/screens.json, the page its `web` names) in WebKit on Playwright's paused
    clock. For a moment in the middle of an animation, the page opens with the views Beryl 3D
    had played out, is handed the rest live at the times Beryl 3D was given them, and its clock
    runs as long as Beryl 3D's did since the first of those (clock.py); a moment at rest runs it
@@ -56,6 +57,7 @@ R = TypeVar("R")
 
 HERE: Path = Path(__file__).resolve().parent
 ROLES: Path = repo_paths.REPO / "data" / "beryl3d" / "match" / "roles.json"
+SCREENS: Path = repo_paths.REPO / "data" / "beryl3d" / "screens.json"
 # The files a snapshot directory holds once this command has run.
 FILES = ("web.png", "web.json", "b3d.png", "b3d.json", "report.txt")
 # What a change to either client's look or to these tools is made in.
@@ -177,6 +179,19 @@ def render_png(t: Target, art: bool, out: Path, build: bool = True) -> str | Non
     return None
 
 
+def web_page(recording: str) -> dict[str, str]:
+    """How the web interface opens the screen the recording `recording` shows: the `web` of its
+    screens.json entry, `{"hash", "query"?, "click"?}`, or the game page for a recording that
+    is no screen's. The web app picks its screen from the route's hash (`route` in
+    ui/src/App.tsx), and some screens, such as settings, open over another screen only when a
+    button is pressed."""
+    for screen in json.loads(SCREENS.read_text())["screens"]:
+        if screen["recording"] == recording and "web" in screen:
+            web: dict[str, str] = screen["web"]
+            return web
+    return {"hash": "/game"}
+
+
 def page_job(
     t: Target, messages: list[dict[str, object]], at: int, art: bool, out: Path
 ) -> dict[str, object]:
@@ -191,9 +206,16 @@ def page_job(
     # serves only the public files that existed when it started.
     fixture = out / f"{name}.json"
     fixture.write_text(json.dumps({"messages": messages}))
-    phone = "phone&" if t.layout == "phone" else ""
+    web = web_page(t.recording)
+    query = [
+        *(["phone"] if t.layout == "phone" else []),
+        *([web["query"]] if "query" in web else []),
+        f"fixture={name}",
+        f"at={at}",
+    ]
     return {
-        "route": f"/?{phone}fixture={name}&at={at}#/game",
+        "route": f"/?{'&'.join(query)}#{web['hash']}",
+        "click": web.get("click"),
         "fixture": {"name": name, "file": str(fixture)},
         "width": width,
         "height": height,

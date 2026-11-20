@@ -4,7 +4,7 @@
 // names the same node in every frame (page.mjs's `records`).
 //
 // Usage, from ui/ (where Playwright is installed): node <this file> <job.json>
-// The job is page.mjs's {base, route, fixture, width, height, scale, art_dir} and {times_ms,
+// The job is page.mjs's {base, route, click, fixture, width, height, scale, art_dir} and {times_ms,
 // advances, roles, json}. The page opens with the views that arrived before the span's first
 // batch, at rest. `advances` is [[offset_ms, count], ...]: at each offset the script calls the
 // fixture transport's `advance` (ui/src/ipc.ts) `count` times, which hands the page the next

@@ -21,9 +21,11 @@ export const FRAME = 1000 / 60;
 export const MOST = 3000;
 
 /** Opens the job's fixture page and runs `use(page, errors)` on it, then closes it; whether it
- * failed. The job is {base, route, fixture, width, height, scale, art_dir}: `fixture` is
- * {name, file}, the file that answers the page's request for /fixtures/<name>.json, and
- * `art_dir`, if set, the scan cache card images load from. The page's clock is paused once the
+ * failed. The job is {base, route, click, fixture, width, height, scale, art_dir}: `click`, if
+ * set, is the selector of a button to press once the page has loaded, for a screen the app
+ * opens over another one (snapshot.py's `web_page`); `fixture` is {name, file}, the file that
+ * answers the page's request for /fixtures/<name>.json, and `art_dir`, if set, the scan cache
+ * card images load from. The page's clock is paused once the
  * stage and the fixture transport exist and every font has loaded, so it moves only in
  * `page.clock.runFor`. `errors` collects the page's uncaught errors. */
 export async function withPage(job, use) {
@@ -82,6 +84,20 @@ export async function withPage(job, use) {
         for (let i = 0; i < MOST; i++) {
             if (await page.evaluate(() => window.berylStage && window.berylFixture)) break;
             await page.clock.runFor(FRAME);
+        }
+        // The button is pressed from inside the page: Playwright's own click waits for animation
+        // frames, which the paused clock never gives.
+        if (job.click) {
+            let pressed = false;
+            for (let i = 0; i < MOST && !pressed; i++) {
+                pressed = await page.evaluate((selector) => {
+                    const button = document.querySelector(selector);
+                    button?.click();
+                    return button !== null;
+                }, job.click);
+                if (!pressed) await page.clock.runFor(FRAME);
+            }
+            if (!pressed) throw new Error(`no element matches ${job.click}`);
         }
         await page.evaluate(() =>
             Promise.all([...document.fonts].map((f) => f.load().catch(() => undefined))),

@@ -322,7 +322,11 @@ project, and selects the main lanes.
 
 - `data/beryl3d/screens.json`: Beryl 3D's screens, each with the recording, the
   moment (`at`) and the tree line (`shows`) that show it once it is `built`, and
-  `prompt_shapes`, a fixture for each shape of `ui/shapes.json`.
+  `prompt_shapes`, a fixture for each shape of `ui/shapes.json`. A screen's
+  `web`, `{"hash", "query"?, "click"?}`, says how `just b3d match` opens the web
+  interface's own page of it: the route's hash, any words added to its query,
+  and a button to press once the page has loaded. A screen without one is
+  compared with the game page, `#/game`.
 
 - `data/beryl3d/conventions/<kind>.json`, one per section kind of
   `data/ui-conventions.json` (`exception`, `settled`, `no-equivalent`,

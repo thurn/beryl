@@ -3,7 +3,7 @@
 // writes the page's screenshot and its elements as the records `web.json` holds.
 //
 // Usage, from ui/ (where Playwright is installed): node <this file> <job.json>
-// The job is {base, route, fixture, width, height, scale, offset_ms, png, json, roles, target,
+// The job is {base, route, click, fixture, width, height, scale, offset_ms, png, json, roles, target,
 // art_dir, only}: `fixture` is {name, file}, the file that answers the page's request for
 // /fixtures/<name>.json; `offset_ms` is how long after the fixture's last view arrived to stop
 // the clock, or null for the view at rest; `advances` is [[offset_ms, count], ...], the
