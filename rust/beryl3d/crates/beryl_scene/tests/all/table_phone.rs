@@ -633,9 +633,11 @@ fn a_resize_in_mid_flight_into_and_between_phone_layouts_keeps_the_pose() {
         );
         assert_eq!(show.table().layout().phone.is_some(), to.phone());
         frame(&mut show, &mut scratch, 400 * MS);
+        // The view the show ends on lists the drawn card last in the hand, as it rests.
+        let shown = &show.shown().expect("the draw is shown").view;
         let rest = show
             .table()
-            .placement(&drawn.view, &[])
+            .placement(shown, &[])
             .get(cards.top)
             .expect("the drawn card rests in the hand")
             .pose;

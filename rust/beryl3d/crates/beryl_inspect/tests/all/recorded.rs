@@ -156,7 +156,10 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
         for (index, update) in views.into_iter().enumerate() {
             show.push(Box::new(update.clone()), timings(&update));
             show.frame(now, &mut FrameBuilder::new(&mut frame, Tier::Baseline));
-            let placement = show.table().placement(&update.view, &[]);
+            // The show lists each hand in its order of arrival, where the session's view lists
+            // it by slot, so the view placed is the one the show ends on.
+            let latest = show.latest().expect("the view was given");
+            let placement = show.table().placement(&latest.view, &[]);
             // Far past the script's end, each moving object is where its track ends, once every
             // step is compiled, as the frames up to then would compile them.
             let ended = u64::MAX / 4;

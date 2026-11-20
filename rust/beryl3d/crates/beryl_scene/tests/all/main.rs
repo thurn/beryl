@@ -26,6 +26,7 @@ mod flat_text;
 mod game_over;
 mod game_phone;
 mod gesture;
+mod hand_order;
 mod hud;
 mod inspect;
 mod keep_only;

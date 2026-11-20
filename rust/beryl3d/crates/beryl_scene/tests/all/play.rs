@@ -191,11 +191,9 @@ fn a_resize_in_mid_flight_keeps_the_pose_and_arrives_at_the_new_place() {
     let mut scratch = empty_frame();
     frame(&mut show, &mut scratch, 0);
     let card = usize::from(cards.top.0);
-    let old_place = show
-        .table()
-        .placement(&drawn.view, &[])
-        .get(cards.top)
-        .map(|r| r.pose);
+    // The show lists the drawn card last in the hand, where the session's view lists it by
+    // slot, first, so where it rests is read from the show.
+    let old_place = show.latest_rest(card);
 
     frame(&mut show, &mut scratch, 150 * MS);
     let was = show.pose(card, 150 * MS).expect("the card is drawn");
@@ -209,18 +207,15 @@ fn a_resize_in_mid_flight_keeps_the_pose_and_arrives_at_the_new_place() {
             && (was.turn - now.turn).abs() < 1e-5,
         "the card does not jump: {was:?} became {now:?}"
     );
-    let new_place = show
-        .table()
-        .placement(&drawn.view, &[])
-        .get(cards.top)
-        .map(|r| r.pose);
+    let new_place = show.latest_rest(card);
     assert_ne!(old_place, new_place, "the hand moved with the window");
     let later = show.pose(card, 300 * MS);
     assert_ne!(later, Some(was), "the card goes on moving");
 
     frame(&mut show, &mut scratch, 400 * MS);
-    assert_eq!(show.shown(), Some(&drawn));
-    at_rest(&show, &drawn, 400 * MS);
+    let shown = show.shown().expect("the draw is shown").clone();
+    assert_eq!(shown.view.script, drawn.view.script, "the draw is shown");
+    at_rest(&show, &shown, 400 * MS);
 }
 
 #[test]
@@ -261,7 +256,6 @@ fn the_hand_regroups_in_the_time_its_room_gives_whatever_the_draw_takes() {
     show.push(Box::new(start.clone()), Vec::new());
     show.push(Box::new(after.clone()), timings);
     frame(&mut show, &mut empty_frame(), 0);
-    let placement = show.table().placement(&after.view, &[]);
     let held: Vec<_> = start
         .view
         .objects
@@ -270,7 +264,9 @@ fn the_hand_regroups_in_the_time_its_room_gives_whatever_the_draw_takes() {
         .map(|o| o.slot)
         .collect();
     assert_eq!(held.len(), 3, "three cards were in the hand");
-    let rests = |slot: beryl_protocol::protocol::ObjectId| placement.get(slot).map(|r| r.pose);
+    // The show lists the drawn card last in the hand, where the session's view lists it by
+    // slot, first, so where each card rests is read from the show.
+    let rests = |slot: beryl_protocol::protocol::ObjectId| show.latest_rest(usize::from(slot.0));
     let moved = held
         .iter()
         .filter(|&&slot| show.pose(usize::from(slot.0), 0) != rests(slot))

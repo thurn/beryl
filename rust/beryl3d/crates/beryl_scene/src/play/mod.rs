@@ -27,6 +27,7 @@ mod counts;
 mod history;
 mod hold;
 pub(crate) use compile::nanoseconds;
+mod hand_order;
 mod index;
 mod notices;
 mod part;
@@ -57,6 +58,7 @@ use beryl_protocol::script::{
 use glam::Vec2;
 
 use self::compile::{Compiled, bit, compile};
+use self::hand_order::HandOrder;
 use self::playing::{Playing, Waiting, timings_of};
 use self::record::{Plant, ScriptRecord};
 use crate::data::space::catch_up;
@@ -137,6 +139,8 @@ pub struct Show {
     prepared: Option<u64>,
     /// Whether every script is compiled whole as it arrives (`compile_whole`).
     whole: bool,
+    /// Each hand's order of arrival, which every view given is rearranged into.
+    hands: HandOrder,
 }
 
 impl Show {
@@ -174,6 +178,7 @@ impl Show {
                 .map(|entry| entry.timing),
             prepared: None,
             whole: false,
+            hands: HandOrder::new(),
         }
     }
 
@@ -426,7 +431,8 @@ impl Show {
         self.push_timed(update, None);
     }
 
-    fn push_timed(&mut self, update: Box<GameUpdate>, timings: Option<Vec<StepTiming>>) {
+    fn push_timed(&mut self, mut update: Box<GameUpdate>, timings: Option<Vec<StepTiming>>) {
+        self.hands.arrange(&mut update.view);
         self.prepared = None;
         let number = self.given;
         self.given += 1;
