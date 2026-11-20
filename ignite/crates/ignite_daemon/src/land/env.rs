@@ -9,6 +9,7 @@ use std::sync::Arc;
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Handle, SessionId, TicketId, TreeId};
 use ignite_core::protocol::Outcome;
+use ignite_core::protocol::hub::{Verdict, VerdictKey};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_git::{push, refs, save};
@@ -42,6 +43,8 @@ pub trait LandTrees: Send + Sync {
     fn ticket_tree(&self, tree: &TreeId) -> Result<Option<TicketTree>>;
     /// The branch checked out in `path`; `None` for a detached `HEAD`.
     fn branch(&self, path: &Path) -> Result<Option<String>>;
+    /// The commit checked out in `path`.
+    fn head(&self, path: &Path) -> Result<Commit>;
     /// The files in `path` that are neither committed nor ignored.
     fn uncommitted(&self, path: &Path) -> Result<Vec<String>>;
     /// The commits after `from` up to `to`, oldest first.
@@ -117,6 +120,33 @@ pub trait LandGate: Send + Sync {
         family: &str,
         options: &RunOptions,
     ) -> CheckRun;
+    /// The verdict stored under `key`: the hub's, or with the default body only the hub's; the
+    /// machine's gate also looks in its local database (see [`crate::verdicts::find`]).
+    fn verdict(&self, ctx: &Context, key: &VerdictKey) -> Option<Verdict> {
+        let found = ctx.hub.verdict(key).ok().flatten();
+        found.filter(|verdict| verdict.key == *key)
+    }
+    /// Stores the verdict that `gated`, a gate that passed in `tree` at `head`, earned under
+    /// `key`: at the hub, and for the machine's gate in its local database as well.
+    fn remember(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        key: VerdictKey,
+        head: Commit,
+        gated: &GateRun,
+    ) -> Result<()> {
+        let _ = tree;
+        ctx.hub.store_verdict(&Verdict {
+            key,
+            head,
+            machine: ctx.machine.as_str().to_owned(),
+            passed_at: ctx.clock.now(),
+            families: gated.scoped.clone(),
+            left_to_tip: u32::try_from(gated.left).unwrap_or(u32::MAX),
+            always_not_run: Vec::new(),
+        })
+    }
     /// When the landing's handle began. A daemon restart that cuts a landing off runs it again
     /// under the same handle, so this is earlier than the run's own start when one did.
     fn began(&self, handle: &Handle) -> Option<Timestamp> {
@@ -163,6 +193,10 @@ impl LandTrees for MachineTrees {
 
     fn branch(&self, path: &Path) -> Result<Option<String>> {
         refs::branch(path)
+    }
+
+    fn head(&self, path: &Path) -> Result<Commit> {
+        refs::head(path)
     }
 
     fn uncommitted(&self, path: &Path) -> Result<Vec<String>> {
@@ -246,6 +280,22 @@ impl LandGate for ChecksGate {
 
     fn began(&self, handle: &Handle) -> Option<Timestamp> {
         self.checks.handle_began(handle)
+    }
+
+    fn verdict(&self, ctx: &Context, key: &VerdictKey) -> Option<Verdict> {
+        crate::checks::find_verdict(ctx, &self.checks, key)
+    }
+
+    fn remember(
+        &self,
+        ctx: &Context,
+        tree: &GateTree,
+        key: VerdictKey,
+        head: Commit,
+        gated: &GateRun,
+    ) -> Result<()> {
+        let (runner, open) = self.checks.open(ctx, &tree.tree)?;
+        crate::checks::store_verdict(ctx, &runner, &open, gated, key, head)
     }
 
     fn run_checks(

@@ -93,6 +93,7 @@ pub use gate::{Carried, Excused, GateBudget, GateRun};
 pub use plan::Scoring;
 pub use sources::{CheckHistory, HubHistory, TreeSource};
 pub use verbs::{CheckVerb, TestVerb, WhyVerb};
+pub(crate) use verdict::{find_keyed as find_verdict, store_keyed as store_verdict};
 
 /// How many times one check or one family listing is tried while it comes back incomplete.
 const TRIES: u32 = 3;

@@ -20,10 +20,10 @@ type Hook = Box<dyn FnOnce() + Send>;
 
 /// An express lane that records the commits it ran on and fails when told to.
 #[derive(Default)]
-struct FakeExpress {
-    ran: Mutex<Vec<Commit>>,
+pub(super) struct FakeExpress {
+    pub(super) ran: Mutex<Vec<Commit>>,
     /// The trees `run_in` ran in.
-    trees: Mutex<Vec<PathBuf>>,
+    pub(super) trees: Mutex<Vec<PathBuf>>,
     /// The express commands each `run_in` was given.
     commands: Mutex<Vec<Vec<String>>>,
     fails: bool,
@@ -65,7 +65,7 @@ impl ExpressLane for FakeExpress {
 
 /// A world with a release branch, the express commands configured for `ignite/**`, and the
 /// express lane `lane` on the machine.
-fn express_world(lane: &Arc<FakeExpress>) -> World {
+pub(super) fn express_world(lane: &Arc<FakeExpress>) -> World {
     let mut world = world_with_checks(vec![
         ("unit:a", vec!["a.txt"]),
         ("rel:smoke", vec!["ignite/lib.rs"]),

@@ -27,12 +27,16 @@ fn always_world() -> World {
 }
 
 fn check(world: &World) -> ignite_core::protocol::client::Reply {
+    check_with(world, &world.ctx)
+}
+
+fn check_with(world: &World, ctx: &Context) -> ignite_core::protocol::client::Reply {
     let verb = CheckVerb {
         checks: world.checks.clone(),
         express: None,
     };
     verb.run(
-        &world.ctx,
+        ctx,
         &Request {
             verb: "check".to_owned(),
             args: Vec::new(),
@@ -182,4 +186,43 @@ fn a_verdict_the_tree_cannot_be_keyed_for_is_reported_and_the_check_still_passes
         reply.text
     );
     assert!(world.hub.stored_verdicts().is_empty());
+}
+
+/// In verdict mode a change to Ignite's own source may not carry files outside the `[express]
+/// paths`, and `ignite check` says so before running anything. Strict mode refuses nothing.
+#[test]
+fn in_verdict_mode_check_refuses_a_change_mixing_ignites_source_with_other_files() {
+    let world = world(
+        ALWAYS,
+        &["ignite/crates/x.rs", "rust/main.rs"],
+        FakeHistory::default(),
+    );
+    world.git.set_tree_id(&world.dir, "tree-1");
+    let mut ctx = world.ctx.clone();
+    ctx.config.express = Some(ignite_core::config::Express {
+        paths: vec!["ignite/**".to_owned()],
+        tree: std::path::PathBuf::from("trees/express"),
+        dir: "ignite".to_owned(),
+        commands: vec!["cargo test".to_owned()],
+        families: Vec::new(),
+        inert: Vec::new(),
+    });
+    let strict = check_with(&world, &ctx);
+    assert!(!strict.text.contains("refused"), "{}", strict.text);
+
+    ctx.config.land.mode = ignite_core::config::LandMode::Verdict;
+    let reply = check_with(&world, &ctx);
+
+    assert_eq!(reply.exit, Exit::Usage, "{}", reply.text);
+    assert!(
+        reply.text.starts_with("refused  this change mixes"),
+        "{}",
+        reply.text
+    );
+    assert!(
+        reply.text.contains("\n         rust/main.rs\n"),
+        "{}",
+        reply.text
+    );
+    assert!(!reply.text.contains("ignite/crates/x.rs"), "{}", reply.text);
 }

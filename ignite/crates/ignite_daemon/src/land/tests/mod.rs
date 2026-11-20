@@ -8,6 +8,7 @@ mod more;
 mod races;
 mod release;
 mod repo;
+mod verdict;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

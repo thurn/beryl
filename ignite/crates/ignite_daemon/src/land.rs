@@ -46,7 +46,8 @@
 //!    not run all of it, so only a push is left here (see [`release`]). This never fails the
 //!    landing.
 //!
-//! `ignite sync` does step 1's checks and step 2 alone.
+//! `ignite sync` does step 1's checks and step 2 alone. With `[land] mode = "verdict"`, a change
+//! that touches none of Ignite's own source lands by [`by_verdict`] instead.
 //!
 //! Each step is recorded as it starts (see [`crate::steps`]), so `ignite wait`, `ignite status`
 //! and the client of `ignite land` can say what the landing is doing. `ignite stop` ends a
@@ -55,6 +56,7 @@
 
 mod args;
 mod base;
+pub(crate) mod by_verdict;
 pub mod env;
 pub mod express;
 pub mod format;
@@ -185,7 +187,7 @@ impl Landing {
 
     fn land(&self, ctx: &Context, req: &Request, args: &LandArgs) -> Reply {
         self.deliver_pending(ctx);
-        self.land_checked(ctx, req, args)
+        self.land_in_mode(ctx, req, args)
             .unwrap_or_else(|stop| *stop)
     }
 
@@ -483,6 +485,7 @@ impl Landing {
                     options: &options,
                     carried: carried.as_ref(),
                     earlier: last_passed.as_ref(),
+                    onto_tip: true,
                 };
                 (self.gate_pass(ctx, &pass, &mut excused), None)
             };
@@ -672,7 +675,19 @@ impl Landing {
         ctx: &Context,
         req: &Request,
         held: &TicketTree,
+        rec: &LandingRecord,
+    ) -> Settled {
+        self.settle_parked(ctx, req, held, rec, &rec.commit)
+    }
+
+    /// [`Landing::settle`], with the ticket tree released parked at `park_at`.
+    fn settle_parked(
+        &self,
+        ctx: &Context,
+        req: &Request,
+        held: &TicketTree,
         record: &LandingRecord,
+        park_at: &Commit,
     ) -> Settled {
         let ticket = &record.landed.ticket;
         let closed = match self.records.deliver(ctx.hub.as_ref(), record) {
@@ -681,10 +696,7 @@ impl Landing {
             Err(error) => format!("the hub refused the record ({error}); it is kept"),
         };
         let mut problems = Vec::new();
-        let released = match self
-            .trees
-            .release_ticket(&held.tree, &record.commit, req.pid)
-        {
+        let released = match self.trees.release_ticket(&held.tree, park_at, req.pid) {
             Ok(()) => format!("{} released", held.tree),
             Err(error) => {
                 problems.push(line(

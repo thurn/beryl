@@ -244,6 +244,10 @@ impl LandTrees for RemoteLandTrees {
         self.local.branch(path)
     }
 
+    fn head(&self, path: &Path) -> Result<Commit> {
+        self.local.head(path)
+    }
+
     fn uncommitted(&self, path: &Path) -> Result<Vec<String>> {
         self.local.uncommitted(path)
     }

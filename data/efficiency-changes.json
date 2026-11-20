@@ -689,5 +689,10 @@
     "label": "With `[revert] broken_build` set, a tip round reverts the one landing that made a build check fail, so agents and tip rounds are not left on a tip that does not compile while a fix is written",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "With `[land] mode = \"verdict\"`, a change that touches none of Ignite's own source lands by the verdict its gate earned on its own base: the commits are rebased onto the tip in git's object database and pushed without building or checking again when the tip moves (the slowest gated landing on 2026-11-19 took 91 minutes over 7 passes)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

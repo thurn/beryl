@@ -1,7 +1,8 @@
 //! What `ignite check` stores when its gate passes: a verdict for the tree as it is (see
 //! [`crate::verdicts`]).
 
-use ignite_core::protocol::hub::Verdict;
+use ignite_core::ids::Commit;
+use ignite_core::protocol::hub::{Verdict, VerdictKey};
 
 use super::gate::GateRun;
 use super::verbs::changed_paths;
@@ -36,6 +37,19 @@ fn store(
 ) -> ignite_core::traits::Result<()> {
     let head = checks.trees.head(&tree.path)?;
     let key = verdicts::key_for(ctx, &tree.path, &head)?;
+    store_keyed(ctx, checks, tree, gated, key, head)
+}
+
+/// Stores the verdict that `gated`, a gate that passed in `tree` at `head`, earned under `key`,
+/// at the hub and in the local database. A landing calls it with the key it looked up.
+pub(crate) fn store_keyed(
+    ctx: &Context,
+    checks: &Checks,
+    tree: &OpenTree,
+    gated: &GateRun,
+    key: VerdictKey,
+    head: Commit,
+) -> ignite_core::traits::Result<()> {
     let verdict = Verdict {
         key,
         head,
@@ -70,4 +84,10 @@ fn always_not_run(ctx: &Context, checks: &Checks, tree: &OpenTree, gated: &GateR
         })
         .cloned()
         .collect()
+}
+
+/// The verdict stored under `key`, at the hub or in the local database (see
+/// [`verdicts::find`]).
+pub(crate) fn find_keyed(ctx: &Context, checks: &Checks, key: &VerdictKey) -> Option<Verdict> {
+    verdicts::find(ctx, &checks.cache.conn(), key)
 }

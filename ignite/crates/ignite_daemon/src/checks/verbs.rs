@@ -134,6 +134,10 @@ impl Verb for CheckVerb {
             Ok(opened) => opened,
             Err(reply) => return reply,
         };
+        let changed = || changed_paths(&checks, ctx, &tree);
+        if let Some(refused) = crate::land::by_verdict::refuse_mixed(ctx, &tree.path, changed) {
+            return refused;
+        }
         if !flags.contains(&"--plan") {
             let lane = self.express.as_ref();
             if let Some(reply) = express_reply(lane, &checks, ctx, &tree, Asked::Gate) {

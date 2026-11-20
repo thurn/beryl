@@ -361,7 +361,10 @@ The verbs an agent uses while working:
 - `ignite check` runs what the landing gate would run on the tree as it is. When
   the gate passes with nothing incomplete, it stores a verdict for the tree (see
   [Processes](#processes)) and says so on a `verdict  stored for this tree`
-  line, or `verdict  not stored: <reason>`. Its express path stores none.
+  line, or `verdict  not stored: <reason>`. Its express path stores none. In
+  verdict mode it first refuses a change that mixes Ignite's own source with
+  files outside the `[express] paths`, as `ignite land` does (see
+  [Landing by verdict](#landing-by-verdict)).
 
 - `ignite sync` rebases the tree's branch onto the tip, or onto `green` when
   `repository.green` is set and the branch exists.
@@ -690,10 +693,11 @@ How the executable is installed and kept current:
   `verdicts::find` looks one up at the hub first and then in that table, so it
   is still found while the hub cannot be reached. Committing a tree's edits
   unchanged keeps its verdict, because the tree ID stays the same. The hub and
-  the daemon each delete verdicts that passed more than 30 days ago. Nothing
-  lands by verdict yet. The gate's scope is already the change's own files: the
-  paths that differ between the merge base and the tree, so files landed on the
-  tip since the tree started are not counted.
+  the daemon each delete verdicts that passed more than 30 days ago. With
+  `[land] mode = "verdict"`, `ignite land` lands by verdict (see
+  [Landing by verdict](#landing-by-verdict)). The gate's scope is already the
+  change's own files: the paths that differ between the merge base and the tree,
+  so files landed on the tip since the tree started are not counted.
 - Git can rebase and revert in its object database, with no working tree, and no
   landing uses it yet. `Git::replay` rebases a branch's commits onto the tip one
   by one with `git merge-tree --write-tree` against each commit's own parent and
@@ -2204,6 +2208,60 @@ Rules:
   check that fails at the tip counts as known to fail even when its failure in
   the landing says something different, such as more findings: the adapters
   report no list of findings to compare.
+
+### Landing by verdict
+
+On 2026-11-19 the median landing through the gate took 7.8 minutes and the
+slowest 91 minutes over 7 passes. Each pass rebased the ticket tree onto the
+tip, gated the rebased commit, and went back to the rebase when another landing
+had moved the tip, which rebuilt and ran every family whose inputs the newly
+landed commits touched. None of the 23 extra passes that lost races caused found
+a failure.
+
+With `[land] mode = "verdict"`, a change that touches none of Ignite's own
+source and that the express lane does not take lands by its verdict instead:
+
+1. The ticket tree is checked as in step 1 above, a record an earlier landing
+   left is settled, and the formatters run on the change.
+2. The base is the merge base of the tree's `HEAD` with the tip. A base
+   committed more than `max_base_age_hours` (default 12) ago is replaced: the
+   ticket tree is rebased onto the tip for real.
+3. The landing looks up the verdict for the tree's files, the base and the
+   `[gate]` section, at the hub and then in the daemon's local table. Without
+   one, the gate runs in the ticket tree as it is, a failure that the gate's
+   rerun confirmed is compared with the base rather than the tip, and a pass
+   stores the verdict. A check that fails at the base too is filed as a
+   regression and left out only when the base is the tip; on an older base it
+   may be fixed at the tip, so nothing is filed and the reply says to run
+   `ignite sync` and land again.
+4. The commits are rebased onto the tip in git's object database
+   (`Git::replay`), the lease is taken, and the rebased commit is pushed. When
+   the tip moves or the remote rejects the push, the landing rebases again in
+   the object database and runs nothing, 20 times at most. A conflict exits with
+   code 3 and the files.
+5. The hub is told, and the ticket tree is released parked at its own `HEAD`,
+   which is what its builds match: the pushed commit exists only in the object
+   database.
+
+The reply starts with a `verdict` line (\`passed for this tree N min ago on
+
+<base>`, or the gate's own lines and whether the verdict was stored) and a
+`rebased` line (`onto staging <tip> without a checkout: N commits landed since
+<base>`), then the usual `landed`, `title` and `next` lines.
+
+A ticket that a tip round reverted (metadata `reverted` at the hub) skips steps
+2 and 3: its tree is rebased onto the tip for real and the gate runs there, so
+the build checks judge the rebased code.
+
+A change to Ignite's own source (a file under `ignite/` other than the check
+manifests) and every change the express lane takes land as before, in either
+mode: that path compiles and tests Ignite on the exact commit that lands and
+moves the release branch to it, and a rebased commit that nothing compiled could
+move it to a release no daemon can build. So that every change to Ignite stays
+an express landing, in verdict mode `ignite land` and `ignite check` refuse a
+change that mixes Ignite's own source with files outside the `[express] paths`,
+with exit code 1, naming those files; a check manifest with the tool it runs is
+not a mix.
 
 ### Express landings
 

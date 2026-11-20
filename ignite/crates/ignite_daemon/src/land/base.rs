@@ -44,6 +44,11 @@ pub(super) struct Pass<'a> {
     pub carried: Option<&'a Carried>,
     /// The last gate of this landing that passed, whose verdicts `carried` carries over.
     pub earlier: Option<&'a Passed>,
+    /// `rebased.onto` is the tip, so a check failing there too is filed as a regression and
+    /// left out. A landing by verdict gates on its base, which may be older than the tip and
+    /// even than `master`: a check failing there may be fixed at the tip, so it is not filed,
+    /// and the landing is refused with the advice to rebase.
+    pub onto_tip: bool,
 }
 
 impl Landing {
@@ -83,9 +88,28 @@ impl Landing {
                 }
             };
             let mut passing = Vec::new();
+            if !pass.onto_tip {
+                let at_base: Vec<String> = verdicts
+                    .iter()
+                    .filter(|v| v.outcome == Outcome::Fail && failed.contains(&v.check))
+                    .map(|v| v.check.to_string())
+                    .collect();
+                if at_base.len() == failed.len() {
+                    gated.base = Some(format!(
+                        "not compared with the tip: {} fails at the base {} as well, which may \
+                         be older than the tip; `ignite sync` rebases onto the tip, then land again",
+                        at_base.join(", "),
+                        short(&pass.rebased.onto)
+                    ));
+                    return gated;
+                }
+            }
             for check in &failed {
                 let verdict = verdicts.iter().find(|v| v.check == *check);
                 match verdict.filter(|v| v.outcome == Outcome::Fail) {
+                    Some(_) if !pass.onto_tip => {
+                        passing.push(format!("{check} (it fails at the base too)"));
+                    }
                     Some(verdict) => match file(ctx, pass.rebased, verdict) {
                         Some(ticket) => {
                             excused.insert(check.clone(), ticket);

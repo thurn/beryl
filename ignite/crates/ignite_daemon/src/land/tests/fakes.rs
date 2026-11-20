@@ -16,7 +16,7 @@ use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     CachedResult, Claim, FlakyReport, Landed, MachineFree, MetricsImport, NewResult, Record,
     RegressionFiled, RegressionReport, Reservation, ResultKey, TicketBrief, TipClaim,
-    TipClaimReply, TipVerified,
+    TipClaimReply, TipVerified, Verdict, VerdictKey,
 };
 use ignite_core::protocol::tickets::{
     FeedBatch, Lease, LeaseBusy, LeaseOp, LeaseReply, TicketDetail,
@@ -402,6 +402,12 @@ impl Hub for LeaseHub {
     fn regression(&self, report: &RegressionReport) -> Result<RegressionFiled> {
         self.hub.regression(report)
     }
+    fn verdict(&self, key: &VerdictKey) -> Result<Option<Verdict>> {
+        self.hub.verdict(key)
+    }
+    fn store_verdict(&self, verdict: &Verdict) -> Result<()> {
+        self.hub.store_verdict(verdict)
+    }
 }
 
 /// Ticket trees in a map, and free landing trees in a list.
@@ -436,6 +442,9 @@ impl LandTrees for TestTrees {
             .values()
             .find(|t| t.path == path)
             .and_then(|t| t.branch.clone()))
+    }
+    fn head(&self, path: &Path) -> Result<Commit> {
+        Ok(self.git.repo.lock().unwrap().checked_out[path].clone())
     }
     fn uncommitted(&self, path: &Path) -> Result<Vec<String>> {
         let uncommitted = self.uncommitted.lock().unwrap();
