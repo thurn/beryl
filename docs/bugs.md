@@ -6,6 +6,24 @@ bugs do not belong here. Each entry gives a short description of the bug, how a
 similar bug could be prevented, and the fixing commit when it was not found and
 fixed in the same session. Newest first.
 
+- **Every hub write failed with `database is locked` for minutes.** Claims,
+  heartbeats and results were refused, so `ignite start` answered "Claim
+  refused: no live reservation" and the pool froze. `POST /next` reserves a
+  ticket inside an `IMMEDIATE` transaction, which holds the database's write
+  lock, and in it `rules::backlog::ratios` summed last week's dollars with
+  `json_extract` over the `metrics` table, which had grown to gigabytes. While
+  rule evaluations read the same table, that scan took minutes. Hotfix 2ca7543c5
+  ran one evaluation at a time; now `rules::backlog::refresh` takes last week's
+  use during the hourly rule evaluation and keeps it in `meta`, so the dispatch
+  transaction reads one row instead (d8cb347ea). Guards:
+  `a_hand_off_reads_no_metrics_rows` renames `metrics` away and requires
+  `POST /next` to still reserve a ticket, and
+  `rule_evaluations_run_one_at_a_time_and_not_again_within_the_retry` covers the
+  evaluation gate. Prevention in general: a write transaction reads only rows
+  found through an index, and a read of a table that grows without bound is done
+  outside it.
+  [Fix](https://github.com/thurn/beryl/commit/d8cb347ea9d0676a817113b938a2872e74f24c18).
+
 - **Redealing a face-down copy could corrupt its copied values.** The hidden
   card was dealt into the field that holds the copied definition. Search now
   deals it into the memo that keeps the original card. The regression
