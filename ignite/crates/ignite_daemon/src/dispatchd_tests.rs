@@ -8,6 +8,7 @@ use ignite_core::protocol::hub::Reservation;
 use ignite_core::protocol::tickets::Operation;
 use ignite_core::traits::Clock;
 
+use super::tell_tests::claimed;
 use super::*;
 use crate::pool::PoolVerb;
 use crate::server::Verb;
@@ -23,7 +24,7 @@ pub(super) struct FakeHost {
     pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
     pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
     pub(super) verbs: Mutex<BTreeMap<SessionId, Vec<RunningVerb>>>,
-    interrupts: Mutex<Vec<(SessionId, String)>>,
+    pub(super) interrupts: Mutex<Vec<(SessionId, String)>>,
     pub(super) releases: Mutex<Vec<(SessionId, TicketId)>>,
     /// Every release fails, as one at the hub does when the hub is unreachable.
     pub(super) fail_release: Mutex<bool>,
@@ -531,7 +532,7 @@ fn an_idle_worker_is_reminded_once_then_released_and_a_gone_one_at_once() {
 fn tell_on_a_held_ticket_messages_its_session_once_and_ends_its_wait() {
     let rig = rig(&["local_w1"]);
     rig.hub
-        .insert_ticket(detail("T.1", "in_progress", Some("local_w1"), &[], ""));
+        .insert_ticket(claimed("T.1", "local_w1", &[], "1970-01-01T00:00:00.000Z"));
     rig.hold("local_w1", "T.1");
     assert!(rig.step().is_none());
     rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();

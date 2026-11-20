@@ -863,6 +863,9 @@ mod slots_tests;
 #[path = "dispatchd_stall_tests.rs"]
 mod stall_tests;
 #[cfg(test)]
+#[path = "dispatchd_tell_tests.rs"]
+mod tell_tests;
+#[cfg(test)]
 #[path = "dispatchd_tests.rs"]
 mod tests;
 #[cfg(test)]

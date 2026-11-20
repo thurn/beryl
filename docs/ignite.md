@@ -3603,7 +3603,11 @@ ignite tell --all "The oracle engines are down until noon. Skip oracle checks."
 
 - `ignite tell <ticket>` records the text as a comment on the ticket and marks
   it for delivery. The daemon of the machine where the ticket is being worked
-  has its dispatcher send the text to that session as a message.
+  has its dispatcher send the text to that session as a message. Only a session
+  that holds the ticket and claimed it before the comment was written gets the
+  message. A comment from before the claim is already in the session's brief,
+  and a ticket that has just been released sends nothing, so an old order never
+  reaches the next session to take the ticket.
 - A session that is inside `ignite wait` gets its wait ended at once, so it does
   not sit out the rest of the wait. The reply says only "<ticket> has a message
   for you from the dispatcher. End your turn to receive it." It does not carry
