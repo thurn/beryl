@@ -1,7 +1,7 @@
 //! The desktop's battlefield rows, fitted to where the web interface draws them
 //! (`table::web_fit`): each card's box on the window against the web's box of the same card.
 
-use beryl_protocol::protocol::{CardType, ObjectId, Side, ZoneName};
+use beryl_protocol::protocol::{CardType, Combat, ObjectId, Side, ZoneName};
 use beryl_scene::input::{Insets, Size};
 use beryl_scene::table::{DESKTOP, Scroll, Window, place};
 use beryl_scene::testing::ViewBuilder;
@@ -73,6 +73,79 @@ fn desktop_cards_land_on_the_web_interfaces_boxes() {
             slot.0,
             high.y - low.y,
             web[3]
+        );
+    }
+}
+
+/// While a creature blocks, it stands straight across the table from its attacker, as the web
+/// interface's `row` (`ui/src/game/battlefield.ts`) stands it, whichever side blocks. Before,
+/// a blocker kept its place in its row, so its strike went sideways where the web's goes
+/// straight across.
+#[test]
+fn a_blocker_stands_across_from_its_attacker() {
+    let window = Window {
+        size: Size {
+            width: 1600.0,
+            height: 900.0,
+        },
+        scale: 2.0,
+        safe_area: Insets::default(),
+    };
+    let layout = DESKTOP.for_window(window);
+    let camera = layout.fit(window);
+    for defender in [Side::Opponent, Side::You] {
+        let attacker_side = if defender == Side::You {
+            Side::Opponent
+        } else {
+            Side::You
+        };
+        let mut builder = ViewBuilder::new();
+        let mut creature = |side: Side, name: &str| {
+            let card = builder.card(ZoneName::Battlefield, side, name);
+            card.types = vec![CardType::Creature];
+            card.slot
+        };
+        let attackers = [
+            creature(attacker_side, "Grizzly Bears"),
+            creature(attacker_side, "Hill Giant"),
+            creature(attacker_side, "Serra Angel"),
+        ];
+        let bystander = creature(defender, "Wall of Omens");
+        let blocker = creature(defender, "Baneslayer Angel");
+        let mut view = builder.build();
+        for object in &mut view.objects {
+            if attackers.contains(&object.slot) {
+                object.tapped = true;
+                object.combat = Some(Combat::Attacking {
+                    planeswalker: None,
+                    target_departed: None,
+                    blocked: object.slot == attackers[0],
+                });
+            } else if object.slot == blocker {
+                object.combat = Some(Combat::Blocking {
+                    attacker: Some(attackers[0]),
+                });
+            }
+        }
+        let placement = place(&view, &[], &layout, &camera, &Scroll::default());
+        let screen = |slot: ObjectId| {
+            let pose = placement.get(slot).expect("the card is placed").pose;
+            let (corners, _) = camera.card_box(&pose);
+            let low = corners.iter().copied().fold(Vec2::MAX, Vec2::min);
+            let high = corners.iter().copied().fold(Vec2::MIN, Vec2::max);
+            (low, high)
+        };
+        let middle = |slot: ObjectId| {
+            let (low, high) = screen(slot);
+            f32::midpoint(low.x, high.x)
+        };
+        let across = (middle(blocker) - middle(attackers[0])).abs();
+        assert!(across < 1.0, "{defender:?} blocks {across} points aside");
+        let (blocker_low, blocker_high) = screen(blocker);
+        let (other_low, other_high) = screen(bystander);
+        assert!(
+            other_high.x <= blocker_low.x || other_low.x >= blocker_high.x,
+            "{defender:?}'s other creature makes room for the blocker"
         );
     }
 }

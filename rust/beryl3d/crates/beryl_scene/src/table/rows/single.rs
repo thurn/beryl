@@ -2,7 +2,7 @@
 
 use beryl_protocol::protocol::ObjectView;
 
-use super::{Laid, RowArea, RowRules, RowWindow, card_width, gaps, permanent};
+use super::{Laid, RowArea, RowRules, RowWindow, card_width, faced, gaps, permanent};
 
 /// Lays a row with no piles or tucked cards. Each card's width and height in the draw order
 /// can be read directly, so the row needs no list of group widths or group slices.
@@ -25,6 +25,25 @@ pub(super) fn lay_single_cards<'a>(
     let full = cards.iter().map(|card| card_width(card)).sum::<f32>()
         + (0..count).map(between).sum::<f32>();
     if full <= room || count == 0 {
+        let widths: Vec<f32> = if rules.faces.is_empty() {
+            Vec::new()
+        } else {
+            cards.iter().map(|card| card_width(card)).collect()
+        };
+        if let Some((order, lefts)) = faced(cards, &widths, (area, full), rules) {
+            for (height, (&index, &left)) in order.iter().zip(&lefts).enumerate() {
+                let card = cards[index];
+                laid(permanent(
+                    card,
+                    left + card_width(card) / 2.0,
+                    y,
+                    u32::try_from(height).expect("rows hold at most u16::MAX cards"),
+                    true,
+                    1,
+                ));
+            }
+            return RowWindow::new(count, 0, count, (0, 0));
+        }
         let mut left = RowRules::start(area, full);
         for (index, &card) in cards.iter().enumerate() {
             left += between(index);

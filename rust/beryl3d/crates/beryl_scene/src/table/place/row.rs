@@ -5,7 +5,7 @@ use beryl_protocol::protocol::{CardType, Combat, ObjectId, ObjectView, RowName, 
 use std::borrow::Cow;
 
 use super::{
-    Group, PileRules, Placement, ROWS, Rest, Rules, Zones, host_slot, members, row_index,
+    Group, PileRules, Placement, ROWS, Rest, Rules, Zones, host_slot, lay, members, row_index,
     side_index,
 };
 use crate::agent::hit;
@@ -13,7 +13,7 @@ use crate::frame::Place;
 use crate::table::rows::{
     Beneath, Laid, NameIds, RowRules, SameName, lay_row, least_strip, row_length,
 };
-use crate::table::{CARD_HEIGHT, Camera, FittedRow, Layout, RowArea, row_area};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, row_area};
 use glam::{Quat, Vec3};
 
 /// The limits of a row for one layout and camera, independent of its cards and scroll offset.
@@ -119,6 +119,13 @@ impl Placement {
         Self {
             zooms,
             ..Self::default()
+        }
+    }
+
+    /// Forgets where `slot` rests.
+    pub(crate) fn clear(&mut self, slot: ObjectId) {
+        if let Some(rest) = self.rests.get_mut(usize::from(slot.0)) {
+            *rest = None;
         }
     }
 }
@@ -227,6 +234,7 @@ fn row_rules(
         gap,
         tapped_gap,
         limit: local(limit),
+        faces: &[],
     };
     (fitted, scale, rules)
 }
@@ -238,7 +246,7 @@ pub(super) fn battlefield_row(
     placement: &mut Placement,
     cards: &[&ObjectView],
     (side, row): (Side, RowName),
-    (layout, fit): (&Layout, RowFit),
+    (layout, fit, camera): (&Layout, RowFit, &Camera),
     offset: usize,
     (ids, stack_slots): (Option<&NameIds<'_>>, Option<&[ObjectId]>),
 ) {
@@ -266,6 +274,13 @@ pub(super) fn battlefield_row(
             y - shrink
         }
     });
+    let height = fitted.map_or(0.0, |fitted| fitted.height(line));
+    let on_line = (row, Vec3::new(0.0, line, height));
+    let faces = faces(&cards, placement, (camera, area, on_line), local);
+    let rules = RowRules {
+        faces: &faces,
+        ..rules
+    };
     let place = |zone| Place::Card {
         zone,
         side,
@@ -318,6 +333,105 @@ pub(super) fn battlefield_row(
         &mut set,
     );
     placement.rows.battlefield[side_index(side)][row_index(row)] = window;
+}
+
+/// Where each blocker of `cards` wants its middle to stand so that it faces its attacker
+/// straight across the table, as the web interface's `row` (`ui/src/game/battlefield.ts`)
+/// stands it, in the row's millimetres before it is scaled (`local` turns a table x into
+/// them): under its attacker's middle on the screen, and an attacker's blockers side by side
+/// about that, 1.04 card widths apart, in the creatures' row only. `line` is the camera, the
+/// row's area, the row and a point on its line at the height its cards rest at. A blocker
+/// whose attacker has no resting place yet faces nothing; `place_zones` lays such a row out
+/// again once every row has been placed.
+fn faces(
+    cards: &[&ObjectView],
+    placement: &Placement,
+    (camera, area, (row, line)): (&Camera, RowArea, (RowName, Vec3)),
+    local: impl Fn(f32) -> f32,
+) -> Vec<(ObjectId, f32)> {
+    let attacker = |object: &ObjectView| match object.combat {
+        Some(Combat::Blocking { attacker }) => attacker,
+        _ => None,
+    };
+    if row != RowName::Creatures || !cards.iter().any(|card| attacker(card).is_some()) {
+        return Vec::new();
+    }
+    // The row's line is level with the camera's sideways axis, so a point's x on the screen
+    // moves with its x on the table in proportion along it.
+    let at = |x: f32| camera.to_screen(Vec3::new(x, line.y, line.z)).x;
+    let (left, right) = (at(area.left), at(area.right));
+    let across = right - left;
+    let mut faces = Vec::new();
+    for card in cards {
+        let Some(blocked) = attacker(card) else {
+            continue;
+        };
+        let Some(rest) = placement.get(blocked) else {
+            continue;
+        };
+        if across.abs() < f32::EPSILON || faces.iter().any(|(slot, _)| *slot == card.slot) {
+            continue;
+        }
+        let screen = camera.to_screen(rest.pose.position).x;
+        let x = local(area.left + (screen - left) / across * (area.right - area.left));
+        let together: Vec<ObjectId> = cards
+            .iter()
+            .filter(|other| attacker(other) == Some(blocked))
+            .map(|other| other.slot)
+            .collect();
+        let middle = (together.len() - 1) as f32 / 2.0;
+        for (index, slot) in together.into_iter().enumerate() {
+            faces.push((slot, x + (index as f32 - middle) * CARD_WIDTH * 1.04));
+        }
+    }
+    faces
+}
+
+/// The battlefield rows of `zones` that hold a creature blocking an attacker. Each is laid out
+/// again once every other row has its resting places, so that its blockers face where their
+/// attackers rest (`faces`) whichever side's rows were laid out first.
+pub(crate) fn blocking_rows<'z>(zones: &'z Zones<'_>) -> impl Iterator<Item = Group> + 'z {
+    [Side::You, Side::Opponent]
+        .into_iter()
+        .map(|side| Group::Row {
+            side,
+            row: RowName::Creatures,
+        })
+        .filter(|&group| blockers(zones).any(|(blocker, _)| zones.group_of(blocker) == Some(group)))
+}
+
+/// Lays out again each row of `zones` that holds a blocker (`blocking_rows`), once every row
+/// has been placed, and returns how many objects it laid out.
+pub(super) fn lay_blockers_again(
+    (zones, piles, rules): (&Zones<'_>, &PileRules, Rules<'_>),
+    placement: &mut Placement,
+) -> usize {
+    let mut laid = 0;
+    for group in blocking_rows(zones) {
+        let objects = members(zones, group);
+        laid += objects.len();
+        lay(group, &objects, (zones, piles, rules, None), placement);
+    }
+    laid
+}
+
+/// The attackers that creatures of `zones` block.
+pub(crate) fn blocked<'z>(zones: &'z Zones<'_>) -> impl Iterator<Item = ObjectId> + 'z {
+    blockers(zones).map(|(_, attacker)| attacker)
+}
+
+/// Each permanent of `zones` that blocks an attacker, with that attacker. It reads the
+/// battlefield's list of slots, so that it takes no list of its own to say there is none.
+fn blockers<'z>(zones: &'z Zones<'_>) -> impl Iterator<Item = (&'z ObjectView, ObjectId)> + 'z {
+    zones.battlefield.iter().filter_map(|&slot| {
+        let object = zones.get(slot)?;
+        match object.combat {
+            Some(Combat::Blocking {
+                attacker: Some(attacker),
+            }) => Some((object, attacker)),
+            _ => None,
+        }
+    })
 }
 
 /// A lands row's cards in the order they stand: untapped first, then lands before the mana
@@ -373,4 +487,19 @@ fn lands_in_order<'a>(
         }
     }
     (order, SameName::from_previous(previous))
+}
+
+/// Which row a permanent stands in: where a player pinned it, else the creatures' row for a
+/// creature, the lands' part of the back row for a mana source, and the others' part for the
+/// rest. A mana source is a land, or an artifact with a mana ability (a mana rock, a Treasure),
+/// as the web interface's `battlefieldRow` has it.
+pub(super) fn row_of(object: &ObjectView) -> RowName {
+    let is = |kind| object.types.contains(&kind);
+    object.pinned.unwrap_or(if is(CardType::Creature) {
+        RowName::Creatures
+    } else if is(CardType::Land) || (is(CardType::Artifact) && object.mana_ability) {
+        RowName::Lands
+    } else {
+        RowName::Others
+    })
 }

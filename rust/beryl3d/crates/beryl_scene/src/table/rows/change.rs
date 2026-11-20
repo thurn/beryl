@@ -1,6 +1,6 @@
 //! Which object changes affect the layout of its battlefield row.
 
-use beryl_protocol::protocol::{Combat, ObjectView, ZoneName};
+use beryl_protocol::protocol::{Combat, ObjectId, ObjectView, ZoneName};
 
 use super::{plain, same_pile_face};
 
@@ -28,7 +28,7 @@ impl RowChange {
             || was.types != now.types
             || was.tapped != now.tapped
             || was.name != now.name
-            || attacking(was) != attacking(now)
+            || stance(was) != stance(now)
         {
             Self::Layout
         } else if was.facing != now.facing || was.phased_out != now.phased_out {
@@ -43,8 +43,14 @@ impl RowChange {
     }
 }
 
-/// Whether `object` is attacking, which moves it out of its row toward the other side on the
-/// desktop (`FittedRow::advance`).
-fn attacking(object: &ObjectView) -> bool {
-    matches!(object.combat, Some(Combat::Attacking { .. }))
+/// How `object` fights, which decides where it stands in its row: an attacker moves out of its
+/// row toward the other side on the desktop (`FittedRow::advance`), and a blocker stands across
+/// from the attacker it blocks (`rows::face`).
+/// It gives whether it attacks, and the attacker it blocks.
+fn stance(object: &ObjectView) -> (bool, Option<ObjectId>) {
+    match object.combat {
+        Some(Combat::Attacking { .. }) => (true, None),
+        Some(Combat::Blocking { attacker }) => (false, attacker),
+        None => (false, None),
+    }
 }

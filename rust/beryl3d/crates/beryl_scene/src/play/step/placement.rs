@@ -1,12 +1,13 @@
 //! The groups each script step places again.
 
-use beryl_protocol::protocol::{CardType, ObjectView, PlayerView, ZoneName};
+use beryl_protocol::protocol::{CardType, ObjectId, ObjectView, PlayerView, RowName, ZoneName};
 use beryl_protocol::script::{Act, Fact, Subject};
 
 use super::Motion;
 use crate::play::index;
 use crate::table::{
-    Group, NameIds, PileRules, Placement, Rest, RowChange, Table, Zones, Zooms, reposed,
+    Group, HandFits, NameIds, PileRules, Placement, Rest, RowChange, Table, Zones, Zooms, blocked,
+    blocking_rows, reposed,
 };
 
 impl<'a> Motion<'a> {
@@ -119,15 +120,9 @@ impl<'a> Motion<'a> {
         }
         let fit = (table, &zones, &self.piles, &self.names);
         zoom(&mut self.fresh.zooms, fit, &mut dirty);
-        // By index, which `dirty` and `next` share with `Group::ALL`: zipping the groups with
-        // their lists cost about 300 instructions a step.
-        for (index, next) in self.next.iter_mut().enumerate() {
-            if dirty[index] {
-                let zones = (&zones, &self.names, &self.piles);
-                let output = (&mut self.fresh, &mut self.hands);
-                table.place_group(zones, Group::ALL[index], output, next);
-            }
-        }
+        let output = (&mut self.fresh, &mut self.hands, &mut self.next[..]);
+        let input = (&zones, &self.names, &self.piles, &self.rests);
+        place_dirty(table, input, output, &mut dirty);
         Some(dirty)
     }
 
@@ -241,5 +236,62 @@ fn dirty_in_object_order(dirty: &mut [bool]) {
         .filter(|group| group.in_object_order())
     {
         dirty[group.index()] = true;
+    }
+}
+
+/// Places each group of `zones` that `dirty` marks, and then again each row that holds a
+/// blocker, once any creatures' row has been laid out again, since a blocker faces where its
+/// attacker rests (`place::blocking_rows`), marking those rows in `dirty` too. Their resting
+/// places go to `fresh` and their slots to `next`. A blocker reads where its attacker rests
+/// from `fresh`, which holds only the groups placed in this step, so an attacker whose row is
+/// not placed again lends it the place it keeps in `rests` while the rows are laid out.
+fn place_dirty(
+    table: &Table,
+    (zones, names, piles, rests): (&Zones<'_>, &NameIds<'_>, &PileRules, &Placement),
+    (fresh, hands, next): (&mut Placement, &mut HandFits, &mut [Vec<ObjectId>]),
+    dirty: &mut [bool],
+) {
+    let mut lent = Vec::new();
+    for attacker in blocked(zones) {
+        if fresh.get(attacker).is_none()
+            && let Some(rest) = rests.get(attacker)
+        {
+            fresh.set(attacker, *rest);
+            lent.push(attacker);
+        }
+    }
+    // By index, which `dirty` and `next` share with `Group::ALL`: zipping the groups with their
+    // lists cost about 300 instructions a step.
+    for (index, next) in next.iter_mut().enumerate() {
+        if dirty[index] {
+            let output = (&mut *fresh, &mut *hands);
+            table.place_group((zones, names, piles), Group::ALL[index], output, next);
+        }
+    }
+    let creatures = |index: usize| {
+        matches!(
+            Group::ALL[index],
+            Group::Row {
+                row: RowName::Creatures,
+                ..
+            }
+        )
+    };
+    let relay = (0..dirty.len()).any(|index| dirty[index] && creatures(index));
+    for group in blocking_rows(zones).filter(|_| relay) {
+        let index = group.index();
+        dirty[index] = true;
+        let output = (&mut *fresh, &mut *hands);
+        table.place_group((zones, names, piles), group, output, &mut next[index]);
+    }
+    // A lent place is given back unless its row was placed after all, which replaced it.
+    for attacker in lent {
+        let placed = zones
+            .get(attacker)
+            .and_then(|object| zones.group_of(object))
+            .is_some_and(|group| dirty[group.index()]);
+        if !placed {
+            fresh.clear(attacker);
+        }
     }
 }

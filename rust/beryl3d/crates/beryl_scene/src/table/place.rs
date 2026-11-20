@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 use beryl_protocol::protocol::{
-    CardType, ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, StackItem, ZoneName,
+    ObjectId, ObjectView, PlayerState, PlayerView, RowName, Side, StackItem, ZoneName,
 };
 use beryl_protocol::script::{Piles, Table as Played};
 
@@ -14,8 +14,8 @@ mod policy;
 pub(crate) use indexed::arrival;
 pub(crate) use policy::PileRules;
 mod row;
-use row::battlefield_row;
-pub(crate) use row::{RowFits, Zooms, rezoom, zooms};
+pub(crate) use row::{RowFits, Zooms, blocked, blocking_rows, rezoom, zooms};
+use row::{battlefield_row, row_of};
 mod under;
 pub(crate) use under::{host_slot, names_host};
 
@@ -174,6 +174,7 @@ pub(crate) fn place_zones(zones: &Zones, rules: Rules<'_>) -> Placement {
             &mut placement,
         );
     }
+    row::lay_blockers_again((zones, &piles, rules), &mut placement);
     placement
 }
 
@@ -231,6 +232,7 @@ pub(crate) fn place_reusing(
             );
         }
     }
+    laid += row::lay_blockers_again((zones, &piles, rules), &mut placement);
     (placement, laid)
 }
 
@@ -747,7 +749,7 @@ fn lay(
                 placement,
                 objects,
                 (side, row),
-                (layout, fits.get(side, row)),
+                (layout, fits.get(side, row), camera),
                 offset,
                 (ids, piles.for_group(group)),
             );
@@ -787,19 +789,4 @@ fn side_of(object: &ObjectView) -> Side {
 /// The turn of a card that shows its face (0) or its back (1).
 pub(super) fn turn(object: &ObjectView) -> f32 {
     if face_up(object) { 0.0 } else { 1.0 }
-}
-
-/// Which row a permanent stands in: where a player pinned it, else the creatures' row for a
-/// creature, the lands' part of the back row for a mana source, and the others' part for the
-/// rest. A mana source is a land, or an artifact with a mana ability (a mana rock, a Treasure),
-/// as the web interface's `battlefieldRow` has it.
-fn row_of(object: &ObjectView) -> RowName {
-    let is = |kind| object.types.contains(&kind);
-    object.pinned.unwrap_or(if is(CardType::Creature) {
-        RowName::Creatures
-    } else if is(CardType::Land) || (is(CardType::Artifact) && object.mana_ability) {
-        RowName::Lands
-    } else {
-        RowName::Others
-    })
 }

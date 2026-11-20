@@ -15,9 +15,11 @@ use crate::data::space::card::PHASED_OUT_OPACITY;
 use crate::pose::Pose;
 
 mod change;
+mod face;
 mod names;
 mod single;
 pub(crate) use change::RowChange;
+use face::faced;
 pub(crate) use names::NameIds;
 pub(super) use names::SameName;
 use single::{beyond_right, lay_single_cards, spacing, window_size};
@@ -124,6 +126,9 @@ pub(super) struct RowRules<'a> {
     pub tapped_gap: f32,
     /// The furthest right a card scrolled off the row's right end may rest (`beyond_right`).
     pub limit: f32,
+    /// Where each blocker of the row that faces its attacker wants its middle to stand, in the
+    /// row's millimetres (`face`); empty outside combat.
+    pub faces: &'a [(ObjectId, f32)],
 }
 
 impl RowRules<'_> {
@@ -339,6 +344,9 @@ pub(super) fn lay_row<'a>(
     // An empty row lays out nothing however little room it has. Without this, a row with no
     // room would reach the window below, which has to show at least one of no groups.
     if full <= room || groups.len() == 0 {
+        if let Some(window) = lay_faced((&groups, beneath), &widths, (area, full, y), rules, laid) {
+            return window;
+        }
         let mut left = RowRules::start(area, full);
         let mut height = 0;
         for (index, (group, width)) in groups.iter().zip(&widths).enumerate() {
@@ -408,6 +416,31 @@ pub(super) fn lay_row<'a>(
         }
     }
     RowWindow::new(groups.len(), first, shown, (before, after))
+}
+
+/// Lays out a row with room to spare whose blockers face their attackers (`face`), or returns
+/// None and lays out nothing when none of its groups faces one.
+fn lay_faced<'a>(
+    (groups, beneath): (&Groups<'a, '_>, &Beneath<'a>),
+    widths: &[f32],
+    (area, full, y): (RowArea, f32, f32),
+    rules: &RowRules,
+    laid: &mut impl FnMut(Laid<'a>),
+) -> Option<RowWindow> {
+    if rules.faces.is_empty() {
+        return None;
+    }
+    let tops: Vec<&ObjectView> = groups.iter().map(|group| group[0]).collect();
+    let (order, lefts) = faced(&tops, widths, (area, full), rules)?;
+    let mut height = 0;
+    for (&index, &left) in order.iter().zip(&lefts) {
+        let group = groups
+            .iter()
+            .nth(index)
+            .expect("an index of the row's groups");
+        place_group((group, beneath), left, y, &mut height, true, rules, laid);
+    }
+    Some(RowWindow::new(groups.len(), 0, groups.len(), (0, 0)))
 }
 
 /// The least strip, in millimetres, that leaves an overlapped card of a row at height `y` in
