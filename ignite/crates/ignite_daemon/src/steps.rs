@@ -102,12 +102,21 @@ enum Stop {
     Refused(String),
 }
 
+/// One thing work waits for, with its own number and start.
+struct Wait {
+    id: u64,
+    what: String,
+    at: Timestamp,
+    /// A wait in the scheduler's queue for cores (see [`waiting_for_cores`]).
+    cores: bool,
+}
+
 struct State {
     work: Work,
     handle: Option<Handle>,
     step: Option<(String, Timestamp)>,
-    /// What the work waits for, innermost last, each with its own number and start.
-    waits: Vec<(u64, String, Timestamp)>,
+    /// What the work waits for, innermost last.
+    waits: Vec<Wait>,
     next_wait: u64,
     stop: Stop,
     /// How many [`critical`] guards are held.
@@ -156,6 +165,9 @@ pub struct View {
     pub step_age_s: Option<f64>,
     pub waiting_for: Option<String>,
     pub waiting_s: Option<f64>,
+    /// What the work waits for is cores in the scheduler's queue, which work of a higher class
+    /// holds: the work is not stuck, only behind others (see [`waiting_for_cores`]).
+    pub waiting_for_cores: bool,
     /// A stop has been asked for and the work has not ended yet.
     pub stopping: bool,
     /// The work started under an earlier daemon, which did not tell this one its step yet.
@@ -360,7 +372,7 @@ impl Activity {
         lock(&self.state)
             .waits
             .iter()
-            .map(|(_, what, _)| what.clone())
+            .map(|wait| wait.what.clone())
             .collect()
     }
 
@@ -413,18 +425,24 @@ impl Activity {
         std::mem::replace(&mut state.step, step)
     }
 
-    fn push_wait(&self, what: &str) -> u64 {
+    fn push_wait(&self, what: &str, cores: bool) -> u64 {
         let mut state = lock(&self.state);
         let id = state.next_wait;
         state.next_wait += 1;
-        state.waits.push((id, what.to_owned(), self.clock.now()));
+        let at = self.clock.now();
+        state.waits.push(Wait {
+            id,
+            what: what.to_owned(),
+            at,
+            cores,
+        });
         let line = format!("waiting for {what}");
         state.observers.retain(|o| o.send(line.clone()).is_ok());
         id
     }
 
     fn pop_wait(&self, id: u64) {
-        lock(&self.state).waits.retain(|(n, _, _)| *n != id);
+        lock(&self.state).waits.retain(|wait| wait.id != id);
     }
 
     /// Puts in place everything a verb running in a process of its own says it is doing (the
@@ -454,13 +472,19 @@ impl Activity {
         }
         let mut old = std::mem::take(&mut state.waits);
         for what in waiting {
-            let wait = if let Some(at) = old.iter().position(|(_, text, _)| text == what) {
+            let wait = if let Some(at) = old.iter().position(|wait| wait.what == *what) {
                 old.remove(at)
             } else {
                 let id = state.next_wait;
                 state.next_wait += 1;
                 heard.push(format!("waiting for {what}"));
-                (id, what.clone(), now)
+                // The host protocol carries only the text of a wait.
+                Wait {
+                    id,
+                    what: what.clone(),
+                    at: now,
+                    cores: false,
+                }
             };
             state.waits.push(wait);
         }
@@ -499,8 +523,9 @@ impl Activity {
             age_s: now.seconds_since(self.started),
             step: state.step.as_ref().map(|(text, _)| text.clone()),
             step_age_s: state.step.as_ref().map(|(_, at)| now.seconds_since(*at)),
-            waiting_for: wait.map(|(_, what, _)| what.clone()),
-            waiting_s: wait.map(|(_, _, at)| now.seconds_since(*at)),
+            waiting_for: wait.map(|wait| wait.what.clone()),
+            waiting_s: wait.map(|wait| now.seconds_since(wait.at)),
+            waiting_for_cores: wait.is_some_and(|wait| wait.cores),
             stopping: state.stop == Stop::Asked && !state.finished,
             adopted: self.adopted,
         }
@@ -695,7 +720,20 @@ pub fn during(text: impl AsRef<str>) -> During {
 pub fn waiting(what: impl AsRef<str>) -> Waiting {
     Waiting {
         held: current().map(|activity| {
-            let id = activity.push_wait(what.as_ref());
+            let id = activity.push_wait(what.as_ref(), false);
+            (activity, id)
+        }),
+    }
+}
+
+/// [`waiting`] for a request waiting in the scheduler's queue for `what`, such as `8 cores for
+/// idle work`. The view marks it ([`View::waiting_for_cores`]), so a loop whose round waits only
+/// because work of a higher class holds the cores is not reported as stuck.
+#[must_use = "the wait ends when the guard is dropped"]
+pub fn waiting_for_cores(what: impl AsRef<str>) -> Waiting {
+    Waiting {
+        held: current().map(|activity| {
+            let id = activity.push_wait(what.as_ref(), true);
             (activity, id)
         }),
     }

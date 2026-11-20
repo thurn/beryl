@@ -7,7 +7,13 @@
 //!   then marked reported. A crash is a bug in Ignite's code, which any machine's justiciar can
 //!   fix, so the report is not tied to this machine.
 //! - Each loop that [`LoopHealth`] calls unhealthy is reported once while it stays unhealthy,
-//!   tied to this machine, whose state is what has to be looked at.
+//!   tied to this machine, whose state is what has to be looked at. A loop whose round is
+//!   waiting in the scheduler's queue for cores is not reported: work of a higher class holds
+//!   them, which `ignite status --admission` shows. On 2026-11-20 cygnus filed a P0 justiciar
+//!   ticket because its idle loop waited 10 minutes for 12 cores while a tip round and an
+//!   agent's build used all 18, which is how idle work is meant to behave. A scheduler that
+//!   grants nothing at all would also stall landings and tip rounds, and the hub files a ticket
+//!   when `master` stops moving.
 //! - A request `ignite justiciar` made while the hub was down is sent once it answers again.
 //! - When the hub has not answered for [`HUB_DOWN_S`], the dispatcher hands a justiciar prompt
 //!   to an idle worker of this machine directly (see `dispatchd_justiciar.rs`).
@@ -213,7 +219,9 @@ impl Reporter {
                 self.state().reported_loops.remove(&loop_report.name);
                 continue;
             };
-            if self.state().reported_loops.contains(&loop_report.name) {
+            if loop_report.waiting_for_cores()
+                || self.state().reported_loops.contains(&loop_report.name)
+            {
                 continue;
             }
             let mut report = report(

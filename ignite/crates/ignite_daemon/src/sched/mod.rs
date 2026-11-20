@@ -376,7 +376,7 @@ impl Scheduler {
                 return None;
             }
             if waiting.is_none() {
-                waiting = Some(crate::steps::waiting(waiting_for(
+                waiting = Some(crate::steps::waiting_for_cores(waiting_for(
                     request,
                     &state.ledger.status(),
                 )));

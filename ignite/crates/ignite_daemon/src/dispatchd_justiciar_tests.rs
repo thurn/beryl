@@ -91,6 +91,49 @@ fn a_stuck_loop_is_reported_once_for_this_machine() {
     assert!(reports[0].on_machine);
 }
 
+/// On 2026-11-20 cygnus filed a P0 justiciar ticket because its idle loop had waited ten
+/// minutes in the scheduler's queue for 12 cores while a tip round and an agent's build held all
+/// 18. That is how idle work is meant to behave, so a round waiting for cores is not reported;
+/// the same round is reported once it is stuck on anything else.
+#[test]
+fn a_loop_waiting_for_cores_is_not_reported_until_it_waits_on_something_else() {
+    use std::sync::{Arc, Barrier};
+
+    let rig = rig(&[]);
+    let home = home("loop-cores");
+    let (reporter, health) = reporter(&rig, &home);
+    let idle = health.register("ignite-idle", Duration::from_secs(600));
+    let barriers: Vec<Arc<Barrier>> = (0..4).map(|_| Arc::new(Barrier::new(2))).collect();
+    let round = {
+        let barriers = barriers.clone();
+        std::thread::spawn(move || {
+            idle.round(|| {
+                crate::steps::step("building cli in tree-01");
+                let cores = crate::steps::waiting_for_cores("12 cores for idle work");
+                barriers[0].wait();
+                barriers[1].wait();
+                drop(cores);
+                let _lease = crate::steps::waiting("the tree-01 lease");
+                barriers[2].wait();
+                barriers[3].wait();
+                Ok::<_, String>(())
+            })
+        })
+    };
+    barriers[0].wait();
+    rig.clock.advance(601.0);
+    reporter.tick(&rig.ctx, true);
+    assert!(rig.hub.justiciar_reports().is_empty());
+    barriers[1].wait();
+    barriers[2].wait();
+    reporter.tick(&rig.ctx, true);
+    barriers[3].wait();
+    round.join().unwrap();
+    let reports = rig.hub.justiciar_reports();
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    assert_eq!(reports[0].subject, "loop:ignite-idle");
+}
+
 #[test]
 fn a_hub_down_for_fifteen_minutes_gets_a_local_justiciar() {
     let rig = rig(&["local_w1", "local_w2"]);

@@ -108,6 +108,17 @@ impl LoopReport {
                 .as_ref()
                 .is_some_and(|doing| doing.waiting_for.is_some() || doing.step.is_some())
     }
+
+    /// Whether a round in progress is waiting in the scheduler's queue for cores. Work of a
+    /// higher class holds them, so the loop is behind other work, not stuck. The idle loop is
+    /// the usual case: its work runs only on cores nothing else wants.
+    pub fn waiting_for_cores(&self) -> bool {
+        self.in_round
+            && self
+                .doing
+                .as_ref()
+                .is_some_and(|doing| doing.waiting_for_cores)
+    }
 }
 
 /// A duration in the largest unit that keeps it short.

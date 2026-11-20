@@ -240,6 +240,10 @@ fn a_wait_that_ends_first_names_the_step_and_how_long_it_has_lasted() {
     while activity.view().waiting_for.is_none() {
         std::thread::yield_now();
     }
+    assert!(
+        activity.view().waiting_for_cores,
+        "a wait in the scheduler's queue is marked as a wait for cores"
+    );
     clock.advance(240.0);
     let waited = server.handle(&request("wait", &[handle.as_str()], "local_a", 0));
     assert_eq!(waited.exit, Exit::Running);
