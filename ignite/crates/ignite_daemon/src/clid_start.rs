@@ -296,9 +296,8 @@ pub fn cli_turn(home: &Path, command: &[String]) -> i32 {
             let Some((program, args)) = command.split_first() else {
                 return 1;
             };
-            let error = ignite_os::proc::become_program(program, args, APP_SESSION_VARIABLES, &[
-                &lock,
-            ]);
+            let error =
+                ignite_os::proc::become_program(program, args, APP_SESSION_VARIABLES, &[&lock]);
             eprintln!("ignite internal cli-turn: cannot run {program}: {error}");
             1
         }

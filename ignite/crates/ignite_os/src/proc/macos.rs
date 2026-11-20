@@ -109,7 +109,12 @@ pub fn replace_image(executable: &Path, args: &[String]) -> io::Error {
 /// variables named in `remove` taken out of its environment and the files in `keep` left open
 /// in it, so that a lock held on one of them stays held by the new image. A `program` with no
 /// `/` is looked for in the directories of `PATH`. Returns only if it could not.
-pub fn become_program(program: &str, args: &[String], remove: &[&str], keep: &[&File]) -> io::Error {
+pub fn become_program(
+    program: &str,
+    args: &[String],
+    remove: &[&str],
+    keep: &[&File],
+) -> io::Error {
     let executable = match find_program(program) {
         Ok(executable) => executable,
         Err(error) => return error,

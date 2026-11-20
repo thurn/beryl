@@ -32,7 +32,10 @@ const ROLES: &str = "clid::start::clid_start_tests::";
 #[test]
 #[ignore = "run by the other tests in this module as a supervisor"]
 fn supervisor_role() {
-    let Some(spec) = std::env::args().next_back().filter(|arg| arg.ends_with("spec.json")) else {
+    let Some(spec) = std::env::args()
+        .next_back()
+        .filter(|arg| arg.ends_with("spec.json"))
+    else {
         return;
     };
     // libtest has printed `test <name> ... ` without a newline, and the launcher looks for the
@@ -99,10 +102,8 @@ impl Fixture {
                 "--nocapture".to_owned(),
             ]
         };
-        let supervised = SupervisedLauncher::with_command(
-            role("supervisor_role"),
-            self.home.join("runs"),
-        );
+        let supervised =
+            SupervisedLauncher::with_command(role("supervisor_role"), self.home.join("runs"));
         let mut cli_turn = role("cli_turn_role");
         cli_turn.push(self.home.display().to_string());
         TurnLauncher::with_command(
@@ -152,32 +153,36 @@ impl Fixture {
     }
 
     fn run_dirs(&self) -> usize {
-        fs::read_dir(self.home.join("runs"))
-            .map_or(0, |entries| entries.filter_map(std::result::Result::ok).count())
+        fs::read_dir(self.home.join("runs")).map_or(0, |entries| {
+            entries.filter_map(std::result::Result::ok).count()
+        })
     }
 
     fn database(&self) -> Connection {
         let conn = ignite_store::local::open_in_memory().unwrap();
-        cli_slots::put(&conn, &CliSlot {
-            app: "fake".to_owned(),
-            slot: 1,
-            session: Some(self.session.to_string()),
-            ticket: Some("T.1".to_owned()),
-            state: "running".to_owned(),
-            turn: 0,
-            transcript: None,
-            model: Some("m-1".to_owned()),
-            effort: None,
-            since: None,
-            reservation: None,
-            next_prompt: Some("go".to_owned()),
-            wait_handle: None,
-            resume_at: None,
-            park_reason: None,
-            interrupted_in_row: 0,
-            block_sent: 0,
-            backed_off: 0,
-        })
+        cli_slots::put(
+            &conn,
+            &CliSlot {
+                app: "fake".to_owned(),
+                slot: 1,
+                session: Some(self.session.to_string()),
+                ticket: Some("T.1".to_owned()),
+                state: "running".to_owned(),
+                turn: 0,
+                transcript: None,
+                model: Some("m-1".to_owned()),
+                effort: None,
+                since: None,
+                reservation: None,
+                next_prompt: Some("go".to_owned()),
+                wait_handle: None,
+                resume_at: None,
+                park_reason: None,
+                interrupted_in_row: 0,
+                block_sent: 0,
+                backed_off: 0,
+            },
+        )
         .unwrap();
         conn
     }
@@ -271,9 +276,7 @@ fn a_crash_after_starting_a_turn_takes_its_run_over() {
     wait_started(&fifo);
 
     let restarted = f.launcher();
-    let (found, again) = restarted
-        .ensure(&f.session, 1, &f.command(&gate))
-        .unwrap();
+    let (found, again) = restarted.ensure(&f.session, 1, &f.command(&gate)).unwrap();
     assert_eq!(found, Recovery::Running);
     assert!(again.is_none());
     assert!(
@@ -289,9 +292,10 @@ fn a_crash_after_starting_a_turn_takes_its_run_over() {
             .unwrap()
             .contains("{\"type\":\"result\"}")
     );
-    assert_eq!(recover(&f.home, &f.session, 1), Recovery::Ended {
-        exit: Some(0)
-    });
+    assert_eq!(
+        recover(&f.home, &f.session, 1),
+        Recovery::Ended { exit: Some(0) }
+    );
     assert!(!turn_running(&f.home, &f.session));
     assert_eq!((f.runs(), f.run_dirs()), (1, 1));
 }
@@ -325,13 +329,19 @@ fn a_second_start_of_a_turn_does_not_run_the_program_twice() {
     assert!(output.contains("waits for it"), "{output}");
     assert!(output.contains("turn 1 ran already"), "{output}");
     assert_eq!(f.runs(), 1);
-    assert_eq!(recover(&f.home, &f.session, 1), Recovery::Ended {
-        exit: Some(0)
-    });
+    assert_eq!(
+        recover(&f.home, &f.session, 1),
+        Recovery::Ended { exit: Some(0) }
+    );
 
     // The next turn runs.
     let next = launcher
-        .start(&mut conn, &f.turn(2), &[], &f.command(Path::new("/dev/null")))
+        .start(
+            &mut conn,
+            &f.turn(2),
+            &[],
+            &f.command(Path::new("/dev/null")),
+        )
         .unwrap();
     assert_eq!(next.wait().exit, Some(0));
     assert_eq!(f.runs(), 2);
