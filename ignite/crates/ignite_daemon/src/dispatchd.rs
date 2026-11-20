@@ -151,6 +151,8 @@ pub trait Host: Send + Sync {
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
     /// Gives back the ticket of a session that is gone or idle, keeping its work.
     fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()>;
+    /// The title the desktop app shows for the session, or `None` when it cannot be read.
+    fn title(&self, session: &SessionId) -> Option<String>;
     /// Whether a command that ends the session's ticket is still running: its current command,
     /// or an operation it started that runs under a handle after its caller stopped waiting.
     /// Other commands (`test`, `check`, `wait`, ...) do not count.

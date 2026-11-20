@@ -285,6 +285,14 @@ mod tests {
     }
 
     #[test]
+    fn reads_titles_that_start_with_a_status_emoji() {
+        for status in ["⛔ [T.1] Stuck", "⚒️ [T.1] Working", "🔍 [T.1] Asking"] {
+            let dir = app_data("emoji", Some(&format!(r#"{{"title":"{status}"}}"#)));
+            assert_eq!(title(&dir, SESSION, &no_env).as_deref(), Some(status));
+        }
+    }
+
+    #[test]
     fn finds_no_title_without_a_readable_titled_file() {
         assert_eq!(title(&app_data("missing", None), SESSION, &no_env), None);
         let untitled = app_data("untitled", Some(r#"{"title":""}"#));

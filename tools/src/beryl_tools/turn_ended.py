@@ -9,8 +9,9 @@ decides:
   `ignite` command running and is no justiciar is ever stopped.
 - `block`: the first stop with the ticket held. The hook prints Claude Code's block decision
   with Ignite's text, which names the ticket and tells the worker to land or release it.
-- `released`: the hook had already blocked once this turn (`stop_hook_active`), so Ignite
-  released the ticket itself, using the worker's last message as the note.
+- `released`: the hook had already blocked once this turn (`stop_hook_active`), or the worker's
+  title starts with ⛔ (stopped unfinished), so Ignite released the ticket itself, using the
+  worker's last message as the note, and for a ⛔ title also sent for a justiciar.
 
 The session is the one Ignite records for the ticket lease: `IGNITE_SESSION`, else the desktop
 app's `CLAUDE_CODE_HOST_SESSION_ID` (`local_...`), the same variables the `ignite` client reads.
@@ -98,9 +99,11 @@ def command(event: Mapping[str, object], env: Mapping[str, str]) -> list[str] | 
     args = ["ignite", "turn-ended", "--session", name]
     if event.get("stop_hook_active") is True:
         args.append("--again")
-        note = last_message(event)[:NOTE_CHARS]
-        if note:
-            args += ["--note", note]
+    # Sent at the first stop too: a worker titled ⛔ is released at its first stop, and its
+    # last message is the release note and the justiciar report's reason.
+    note = last_message(event)[:NOTE_CHARS]
+    if note:
+        args += ["--note", note]
     return args
 
 

@@ -468,6 +468,12 @@ impl Host for DaemonHost {
             .release_session(&self.ctx, session, ticket, reason)
     }
 
+    fn title(&self, session: &SessionId) -> Option<String> {
+        let env = |name: &str| std::env::var(name).ok();
+        let app_data = crate::session_title::app_data(&env)?;
+        crate::session_title::title(&app_data, session.as_str(), &env)
+    }
+
     fn ending_ticket(&self, session: &SessionId) -> bool {
         self.command(session)
             .is_some_and(|command| command.running && ends_ticket(&command.command))

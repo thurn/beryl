@@ -14,13 +14,19 @@ def test_the_session_is_the_one_ignite_records() -> None:
     assert turn_ended.session({}) is None
 
 
-def test_a_first_stop_asks_without_a_note() -> None:
-    event = {"session_id": "cli-uuid", "stop_hook_active": False}
+def test_a_first_stop_sends_the_last_message_without_again() -> None:
+    event = {
+        "session_id": "cli-uuid",
+        "stop_hook_active": False,
+        "last_assistant_message": "Left the tree as it is.",
+    }
     assert turn_ended.command(event, DESKTOP) == [
         "ignite",
         "turn-ended",
         "--session",
         "local_w1",
+        "--note",
+        "Left the tree as it is.",
     ]
 
 

@@ -469,7 +469,10 @@ pub fn server(
         parts.emergencies.clone(),
     )));
     registry.register(Box::new(TellVerb));
-    registry.register(Box::new(TurnEndedVerb::new(parts.dispatcher.clone())));
+    registry.register(Box::new(TurnEndedVerb::new(
+        parts.dispatcher.clone(),
+        parts.reporter.host.clone(),
+    )));
     registry.register(Box::new(crate::justiciar::JusticiarVerb {
         home: parts.home.root.clone(),
         host: parts.reporter.host.clone(),

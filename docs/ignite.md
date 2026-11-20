@@ -3765,6 +3765,19 @@ leased for nothing.
   Code's internal ID, which Ignite never sees. Codex has no such hook, so Codex
   workers rely on the silence check alone, which also still catches workers that
   died.
+- A pool worker whose title starts with ⛔ ("stopped unfinished") when it ends a
+  turn holding its ticket is released at the first stop, without the block
+  message: a worker once kept a ticket, its tree and a running build for hours
+  under a ⛔ title. `ignite turn-ended` reads the title from the desktop app's
+  session metadata, saves the tree as `ignite/<ticket>`, releases the ticket
+  with the worker's last message as the note (resetting the tree stops the
+  session's running commands, as `ignite release` does), and sends for a
+  justiciar as `ignite justiciar` does, with the reason
+  `<ticket>: worker stopped unfinished: <the first 400 characters of its last message>`.
+  The hub folds repeated reports for the same ticket into one. A title that
+  cannot be read changes nothing. A person's own session, a justiciar's session,
+  a worker with a `land`, `release` or `close` running and a ticket labelled
+  `needs:person` are left alone.
 - The hub releases the claims of a machine that has not reported for 2 hours,
   with a comment on each ticket.
 - The hub also releases a ticket that is in progress although no Ignite session

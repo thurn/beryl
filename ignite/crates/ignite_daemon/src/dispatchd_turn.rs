@@ -18,6 +18,15 @@
 //! - `released`: the worker stopped again (`--again`, from the hook's `stop_hook_active`) without
 //!   landing or releasing, so Ignite gives the ticket back as the stall rule would. The tree is
 //!   saved as the ticket's branch and the worker's last message (`--note`) is the release note.
+//! - `released` at the first stop, too, when the session's title starts with ⛔. Workers title
+//!   themselves ⛔ when they stop unfinished, so a pool worker with that title that still holds
+//!   its ticket is saying it is stuck: one once kept a ticket, its tree and a running build for
+//!   hours under a ⛔ title. The ticket is released as for a second stop (releasing resets the
+//!   tree, which stops the session's running commands, as `ignite release` does), and a
+//!   justiciar is sent for, as `ignite justiciar` does, with the worker's last message as the
+//!   reason. A ticket labelled `needs:person` is left alone: it waits on the person by design.
+//!   The title comes from the desktop app's metadata (see `session_title`); a title that cannot
+//!   be read changes nothing.
 //!
 //! The client sends this verb without the asking session (see `client::UNRECORDED_VERBS` in the
 //! CLI), and the session comes from `--session` instead. A request with a session would replace
@@ -28,7 +37,7 @@ use std::sync::Arc;
 
 use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{Exit, Reply, Request};
-use ignite_core::protocol::hub::WorkerRole;
+use ignite_core::protocol::hub::{JusticiarReport, WorkerRole};
 use ignite_core::traits::{Error, Result};
 
 use super::Dispatcher;
@@ -37,17 +46,28 @@ use crate::server::{Context, Verb};
 /// The label that marks a justiciar's ticket, whose session is never blocked or released.
 const JUSTICIAR_LABEL: &str = "justiciar";
 
+/// The label of a ticket that waits on the person, which a ⛔ title does not release.
+const NEEDS_PERSON_LABEL: &str = "needs:person";
+
+/// How a worker's title starts when it stops unfinished.
+const STOPPED_MARK: char = '⛔';
+
+/// The longest part of the worker's last message quoted in the justiciar report.
+pub(super) const REASON_CHARS: usize = 400;
+
 /// The longest part of the worker's last message kept in the release note.
 pub(super) const NOTE_CHARS: usize = 2000;
 
 /// `ignite turn-ended --session <id> [--again] [--note <last message>]`.
 pub struct TurnEndedVerb {
     dispatcher: Arc<Dispatcher>,
+    /// The machine's hostname, which names it in a justiciar report.
+    host: String,
 }
 
 impl TurnEndedVerb {
-    pub fn new(dispatcher: Arc<Dispatcher>) -> TurnEndedVerb {
-        TurnEndedVerb { dispatcher }
+    pub fn new(dispatcher: Arc<Dispatcher>, host: String) -> TurnEndedVerb {
+        TurnEndedVerb { dispatcher, host }
     }
 }
 
@@ -96,7 +116,7 @@ impl Verb for TurnEndedVerb {
 
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         match parse(&req.args) {
-            Ok(ended) => self.dispatcher.turn_ended(ctx, &ended),
+            Ok(ended) => self.dispatcher.turn_ended(ctx, &ended, &self.host),
             Err(error) => Reply::text(Exit::Usage, error.to_string()),
         }
     }
@@ -123,22 +143,49 @@ fn block_text(ticket: &TicketId) -> String {
 
 /// The reason given with a release after the second stop, quoting the worker's last message.
 pub(super) fn release_reason(note: Option<&str>) -> String {
-    let head = "The worker ended its turn twice holding the ticket without landing or releasing \
-                it.";
+    quoting(
+        "The worker ended its turn twice holding the ticket without landing or releasing it.",
+        note,
+    )
+}
+
+/// The reason given with a release when the worker ended its turn titled ⛔.
+pub(super) fn stopped_reason(note: Option<&str>) -> String {
+    quoting(
+        "The worker ended its turn titled ⛔ (stopped unfinished) while holding the ticket.",
+        note,
+    )
+}
+
+/// `head`, followed by the first [`NOTE_CHARS`] characters of `note` when there is one.
+fn quoting(head: &str, note: Option<&str>) -> String {
     match note.map(str::trim).filter(|n| !n.is_empty()) {
-        Some(note) => {
-            let mut kept: String = note.chars().take(NOTE_CHARS).collect();
-            if kept.len() < note.len() {
-                kept.push('…');
-            }
-            format!("{head} Its last message: {kept}")
-        }
+        Some(note) => format!("{head} Its last message: {}", cut(note, NOTE_CHARS)),
         None => head.to_owned(),
     }
 }
 
+/// The first `chars` characters of `text`, with `…` when anything was cut.
+fn cut(text: &str, chars: usize) -> String {
+    let mut kept: String = text.chars().take(chars).collect();
+    if kept.len() < text.len() {
+        kept.push('…');
+    }
+    kept
+}
+
+/// The reason in the justiciar report sent for a worker that stopped unfinished holding
+/// `ticket`: "<ticket>: worker stopped unfinished: <its last message, cut>".
+pub(super) fn justiciar_reason(ticket: &TicketId, note: Option<&str>) -> String {
+    let head = format!("{ticket}: worker stopped unfinished");
+    match note.map(str::trim).filter(|n| !n.is_empty()) {
+        Some(note) => format!("{head}: {}", cut(note, REASON_CHARS)),
+        None => head,
+    }
+}
+
 impl Dispatcher {
-    fn turn_ended(&self, ctx: &Context, ended: &Ended) -> Reply {
+    fn turn_ended(&self, ctx: &Context, ended: &Ended, host: &str) -> Reply {
         let Some(session) = &ended.session else {
             return Reply::text(Exit::Usage, "no session");
         };
@@ -159,26 +206,64 @@ impl Dispatcher {
             return pass("a land, release or close of the session is still running");
         }
         // A lookup that fails proves nothing, so the session is let go rather than blocked.
-        match ctx.hub.ticket(&ticket) {
+        let needs_person = match ctx.hub.ticket(&ticket) {
             Ok(detail) if detail.ticket.labels.iter().any(|l| l == JUSTICIAR_LABEL) => {
                 return pass("a justiciar's session");
             }
-            Ok(_) => {}
+            Ok(detail) => detail.ticket.labels.iter().any(|l| l == NEEDS_PERSON_LABEL),
             Err(error) => return pass(&format!("could not read {ticket}: {error}")),
+        };
+        let stopped = !needs_person
+            && self
+                .host
+                .title(session)
+                .is_some_and(|title| title.starts_with(STOPPED_MARK));
+        if stopped {
+            let note = ended.note.as_deref();
+            let released = self.release_ended(session, &ticket, &stopped_reason(note));
+            let sent = send_for_justiciar(ctx, host, session, &ticket, note);
+            return Reply::text(Exit::Success, format!("{released}\n{sent}"));
         }
         if !ended.again {
             return Reply::text(Exit::Success, block_text(&ticket));
         }
-        let reason = release_reason(ended.note.as_deref());
-        match self.host.release(session, &ticket, &reason) {
-            Ok(()) => Reply::text(
-                Exit::Success,
-                format!("released {ticket} from {session}; its work is saved as ignite/{ticket}"),
-            ),
-            Err(error) => Reply::text(
-                Exit::Success,
-                format!("pass     could not release {ticket} from {session}: {error}"),
-            ),
+        let released = self.release_ended(session, &ticket, &release_reason(ended.note.as_deref()));
+        Reply::text(Exit::Success, released)
+    }
+
+    /// Releases `ticket` from `session` and says what happened, as the reply's first line.
+    fn release_ended(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> String {
+        match self.host.release(session, ticket, reason) {
+            Ok(()) => {
+                format!("released {ticket} from {session}; its work is saved as ignite/{ticket}")
+            }
+            Err(error) => format!("pass     could not release {ticket} from {session}: {error}"),
         }
+    }
+}
+
+/// Sends for a justiciar for `ticket`, which `session` stopped working, as `ignite justiciar`
+/// does. The hub folds reports with the same subject into one ticket, so a worker that ends
+/// several turns titled ⛔ files one. Returns the reply's line saying what happened.
+fn send_for_justiciar(
+    ctx: &Context,
+    host: &str,
+    session: &SessionId,
+    ticket: &TicketId,
+    note: Option<&str>,
+) -> String {
+    let reason = justiciar_reason(ticket, note);
+    let report = JusticiarReport {
+        subject: format!("stopped:{ticket}"),
+        title: format!("Justiciar asked for: {ticket}: worker stopped unfinished"),
+        details: format!("Asked for {session}, which ended its turn titled ⛔:\n\n{reason}"),
+        evidence: ctx.clock.now().to_string(),
+        machine: ctx.machine.clone(),
+        host: host.to_owned(),
+        on_machine: false,
+    };
+    match ctx.hub.justiciar(&report) {
+        Ok(filed) => format!("filed    {} (justiciar) for {ticket}", filed.ticket),
+        Err(error) => format!("failed   no justiciar sent for {ticket}: {error}"),
     }
 }

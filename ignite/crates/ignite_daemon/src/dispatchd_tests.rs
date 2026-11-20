@@ -28,6 +28,8 @@ pub(super) struct FakeHost {
     pub(super) releases: Mutex<Vec<(SessionId, TicketId)>>,
     /// Every release fails, as one at the hub does when the hub is unreachable.
     pub(super) fail_release: Mutex<bool>,
+    /// Each session's title in the desktop app; a session missing here has none that can be read.
+    pub(super) titles: Mutex<BTreeMap<SessionId, String>>,
 }
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -70,6 +72,10 @@ impl Host for FakeHost {
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {
         lock(&self.interrupts).push((session.clone(), reply.text));
         true
+    }
+
+    fn title(&self, session: &SessionId) -> Option<String> {
+        lock(&self.titles).get(session).cloned()
     }
 
     /// Releasing frees the session's tree, as the real release does.
