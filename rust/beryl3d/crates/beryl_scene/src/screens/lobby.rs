@@ -211,12 +211,11 @@ fn frame(name: &str) -> Element {
         .radius(size::LOBBY_SECTION_RADIUS)
 }
 
-/// A desktop section with a legend (`fieldset.lobby-section`). The web draws a fieldset's top
-/// border through the middle of its legend, with a gap in the line under the legend's words;
-/// `Style` has no way to say that, so here the border runs along the legend's top, and the
-/// section's box is the fieldset's. The legend's words stand at the section's padding with the
-/// browser's 2 points on either side, and the section's rows start the section's padding under
-/// the legend.
+/// A desktop section with a legend (`fieldset.lobby-section`). As the web draws a fieldset,
+/// its border's top line runs through the middle of the legend, open across the legend's box
+/// (`Style::legend`), while the section's box is the fieldset's. The legend's words stand at
+/// the section's padding with the browser's 2 points on either side, and the section's rows
+/// start the section's padding under the legend.
 fn fieldset(name: &str) -> Element {
     let padding = size::LOBBY_SECTION_PADDING;
     let mut legend =
@@ -229,6 +228,7 @@ fn fieldset(name: &str) -> Element {
     legend.style.margin = [-border, 0.0, padding - size::LOBBY_SECTION_GAP, 0.0];
     let mut section = frame(name).align_items(Align::Start).child(legend);
     section.style.padding = [0.0, padding, padding, padding];
+    section.style.legend = true;
     section
 }
 

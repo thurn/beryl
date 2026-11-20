@@ -7,7 +7,7 @@ use glam::Vec2;
 
 use super::Node;
 use super::shadows::{ShadowBox, write_box_shadows};
-use super::write::{Look, intersection, scaled};
+use super::write::{Look, clip_inside, intersection, scaled};
 use crate::element::paint::{blur_of, filtered};
 use crate::element::{Border, Filter, Gradient, Shadow, Shape, Shown, Stop};
 use crate::frame::{
@@ -96,6 +96,50 @@ pub(super) struct Panel {
     gradients: bool,
     /// Whether it is 10% brighter, as a button under the pointer is.
     lifted: bool,
+    /// For an element whose first child is its legend (`Style::legend`), where that legend
+    /// stands in its box.
+    legend: Option<Legend>,
+}
+
+/// Where a fieldset's legend stands, in points from its box's top left corner: how far down
+/// its panel starts and the left and right ends of the opening in its border's top line.
+#[derive(Clone, Copy, Debug)]
+struct Legend {
+    drop: f32,
+    left: f32,
+    right: f32,
+}
+
+impl Legend {
+    /// The legend of `node`, which has `border` on its panel, if its style says its first child
+    /// is one. Browsers put the middle of the border's top line at the legend's vertical middle
+    /// (`RenderFieldset::paintBoxDecorations` in `WebKit`), and leave the line open across the
+    /// legend's border box, which takes its `padding-inline` of 2 points on either side.
+    fn of(node: &Node, border: &Border) -> Option<Self> {
+        if !node.element.style.legend {
+            return None;
+        }
+        let legend = node.children.first()?.rect;
+        let middle = legend.y - node.rect.y + legend.height / 2.0;
+        Some(Self {
+            drop: (middle - border.width[0] / 2.0).max(0.0),
+            left: legend.x - node.rect.x,
+            right: legend.x - node.rect.x + legend.width,
+        })
+    }
+}
+
+impl Panel {
+    /// The box the panel fills when the element's border box is `rect`: the same box, or for a
+    /// fieldset the part of it from the legend's middle down.
+    fn drawn(&self, rect: Rect) -> Rect {
+        let drop = self.legend.map_or(0.0, |legend| legend.drop);
+        Rect {
+            y: rect.y + drop,
+            height: (rect.height - drop).max(0.0),
+            ..rect
+        }
+    }
 }
 
 /// The panel `node` is drawn on, if any: the usual one under every button and the top element
@@ -117,6 +161,7 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
             radius: size::MENU_ROW_RADIUS,
             gradients: false,
             lifted: false,
+            legend: None,
         });
     }
     let style = &node.element.style;
@@ -170,6 +215,7 @@ pub(super) fn panel(node: &Node, top: bool, state: StateBits, active: bool) -> O
         },
         gradients,
         lifted,
+        legend: Legend::of(node, &border),
     })
 }
 
@@ -222,6 +268,7 @@ pub(super) fn write_box(
 ) {
     let style = &node.element.style;
     let shadows = box_shadows(node, state);
+    let rect = panel.map_or(rect, |panel| panel.drawn(rect));
     let cast = ShadowBox {
         rect,
         radius: panel.map_or(style.radius, |panel| panel.radius),
@@ -271,7 +318,9 @@ const SIDE_BITS: [u8; 4] = [SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM, SIDE_LEFT];
 /// A border whose sides are all alike is one record. One whose sides differ is one
 /// `Draw::panel_sides` record for each color, in the order the sides first use it: the first
 /// also fills the panel, and each draws only its sides, every record knowing every side's width
-/// so that the corners split where CSS splits them.
+/// so that the corners split where CSS splits them. A fieldset's border (`Panel::legend`) is
+/// drawn as one whose sides differ, with its top side in two more records, each clipped to the
+/// part of the box on one side of the legend.
 fn write_panel(
     panel: &Panel,
     tint: [u8; 4],
@@ -285,24 +334,36 @@ fn write_panel(
     let clip = look.clip.map_or(0, |(_, entry)| entry);
     let transform = camera.layer_transform(rect);
     let size = Vec2::new(rect.width, rect.height);
-    let mut write = |draw: Draw| {
+    let border = &panel.border;
+    let legend = panel.legend.filter(|_| bordered);
+    // The top side's two clips, left of the legend and right of it, each cut to the clip the
+    // element is under.
+    let opening = legend.map(|legend| {
+        let scale = camera.window.scale;
+        let left = Rect {
+            width: legend.left.max(0.0),
+            ..rect
+        };
+        let right = Rect {
+            x: rect.x + legend.right,
+            width: (rect.width - legend.right).max(0.0),
+            ..rect
+        };
+        [left, right].map(|part| clip_inside(part, look, scale, builder).1)
+    });
+    let mut write = |draw: Draw, clip: u8| {
         builder.draw(
             Band::Layer,
             if clip > 0 { draw.with_clip(clip) } else { draw },
         );
     };
-    let border = &panel.border;
-    if !bordered || border.is_uniform() {
+    if !bordered || (border.is_uniform() && legend.is_none()) {
         let width = if bordered { border.width[0] } else { 0.0 };
         let edge = paint(border.color[0]);
-        write(Draw::panel(
-            transform,
-            paint(tint),
-            edge,
-            size,
-            panel.radius,
-            width,
-        ));
+        write(
+            Draw::panel(transform, paint(tint), edge, size, panel.radius, width),
+            clip,
+        );
         return;
     }
     let mut fill = paint(tint);
@@ -315,16 +376,33 @@ fn write_panel(
             .filter(|&other| border.color[other] == *edge)
             .fold(0, |bits, other| bits | SIDE_BITS[other]);
         done |= sides;
-        let widths = (border.width, sides);
-        write(Draw::panel_sides(
-            transform,
-            fill,
-            paint(*edge),
-            size,
-            panel.radius,
-            widths,
-        ));
-        fill = [0; 4];
+        let whole = if opening.is_some() {
+            sides & !SIDE_TOP
+        } else {
+            sides
+        };
+        if whole != 0 || fill[3] > 0 {
+            write(
+                Draw::panel_sides(
+                    transform,
+                    fill,
+                    paint(*edge),
+                    size,
+                    panel.radius,
+                    (border.width, whole),
+                ),
+                clip,
+            );
+            fill = [0; 4];
+        }
+        if let (Some(parts), true) = (opening, sides & SIDE_TOP != 0) {
+            for part in parts {
+                let top = (border.width, SIDE_TOP);
+                let draw =
+                    Draw::panel_sides(transform, [0; 4], paint(*edge), size, panel.radius, top);
+                write(draw, part);
+            }
+        }
     }
 }
 

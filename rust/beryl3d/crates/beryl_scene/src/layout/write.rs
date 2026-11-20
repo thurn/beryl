@@ -511,7 +511,12 @@ impl Layer {
 /// The clip the children of an element that clips or scrolls are drawn under: its box `rect`
 /// cut to the clip `look` is under, and its entry in the frame's clips (0 when they were all
 /// taken). A clip made under a masked one keeps its mask.
-fn clip_inside(rect: Rect, look: &Look, scale: f32, builder: &mut FrameBuilder) -> (Rect, u8) {
+pub(super) fn clip_inside(
+    rect: Rect,
+    look: &Look,
+    scale: f32,
+    builder: &mut FrameBuilder,
+) -> (Rect, u8) {
     let cut = look
         .clip
         .map_or(Some(rect), |(clip, _)| intersection(clip, rect));

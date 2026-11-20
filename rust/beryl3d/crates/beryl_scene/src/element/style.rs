@@ -369,6 +369,11 @@ pub struct Style {
     /// The radius of the element's panel's corners, or 0 for the usual radius: a screen's
     /// panel's or a button's, and square on any other element.
     pub radius: f32,
+    /// Whether its first child is its legend, as a `<fieldset>`'s `<legend>` is: its panel and
+    /// border start at the legend's vertical middle rather than at its box's top, and the top
+    /// line of its border is left open across the legend's box, as browsers draw a fieldset.
+    /// The element's box, and so its layout, is unchanged.
+    pub legend: bool,
     /// Its box shadows, CSS's `box-shadow`, the first drawn on top. An outer shadow is drawn
     /// under the element's panel and only outside its border box; an inset one over the panel's
     /// fill, inside its padding box. An element with shadows and no panel still casts them.
@@ -436,6 +441,7 @@ impl Default for Style {
             filter: Vec::new(),
             border: None,
             radius: 0.0,
+            legend: false,
             box_shadow: Vec::new(),
             drop_shadow: Vec::new(),
             text: type_style::BODY,
@@ -477,6 +483,7 @@ setters! {
     overflow: Overflow,
     opacity: f32,
     radius: f32,
+    legend: bool,
     box_shadow: Vec<Shadow>,
     drop_shadow: Vec<Shadow>,
     background_image: Vec<Gradient>,
