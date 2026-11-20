@@ -135,6 +135,10 @@ pub struct Layer {
     /// Whether the tree being matched and laid out is the screen's, whose changes transition
     /// (`motion`); floats' do not.
     animating: bool,
+    /// The times of the first and the latest frames that ticked the layer (`Layer::tick`), in
+    /// nanoseconds since the client started. A change found while the clock still reads the
+    /// first frame's time does not transition (`Layer::started`).
+    ticks: Option<(u64, u64)>,
     /// The menu row whose submenu is open (`menu`).
     submenu: Option<ElementId>,
     /// The menu row the pointer is on, which it highlighted when it came onto it (`tip`).
@@ -181,6 +185,7 @@ impl Layer {
             pressed: None,
             editing: None,
             animating: false,
+            ticks: None,
             submenu: None,
             pointed: None,
             shaken: None,
@@ -212,7 +217,7 @@ impl Layer {
 
     /// Shows `screen`, or nothing, matching it against the screen shown before.
     pub fn show(&mut self, screen: Option<Element>) {
-        self.animating = true;
+        self.animating = self.started();
         let old = self.screen.take();
         self.screen = match (old, screen) {
             (old, Some(element)) => Some(self.reconcile(old, element)),

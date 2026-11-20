@@ -4,6 +4,11 @@
 //! dock comes in (`dock-in 0.22s ease-out` in `ui/src/screens/styles/controls.css`). A node
 //! that enters the screen fades in over the same; a node that leaves is gone at once.
 //!
+//! What the screen shows at the first frame's time stands at its layout and opacity at once
+//! (`Layer::started`), as the web interface's page shows its first screen whole when it loads:
+//! a screen opened at the start, or the opening with the step stops dimmed under it, is at full
+//! strength from the first frame, not fading in over it.
+//!
 //! A change is found in `Client::handle`, which has no clock, so a transition begins at the
 //! next frame's time (`Layer::tick`), and every frame works out its values from the start and
 //! end alone, allocating nothing. Floats move by their looks instead, and never transition.
@@ -82,6 +87,13 @@ impl Node {
 }
 
 impl Layer {
+    /// Whether the clock has moved past the first frame's time, so that a change of the screen
+    /// transitions. A screen shown before the first frame, or during it (the client builds its
+    /// screen again after ticking the layer, as a view's opening appears), is drawn as laid out.
+    pub(super) fn started(&self) -> bool {
+        self.ticks.is_some_and(|(first, latest)| latest != first)
+    }
+
     /// Shakes every element that takes `press` across the screen by `across` logical points
     /// from the next frame on, or stops shaking with `None`, as the web's `shakeRefusal` moves
     /// a refused button. It lays nothing out and allocates nothing, so the client calls it on
@@ -118,6 +130,7 @@ impl Layer {
             }
             moving
         }
+        self.ticks = Some((self.ticks.map_or(now, |(first, _)| first), now));
         self.tick_tip(now);
         let mut began = false;
         let moving = (self.screen.as_mut()).is_some_and(|node| visit(node, now, &mut began));
