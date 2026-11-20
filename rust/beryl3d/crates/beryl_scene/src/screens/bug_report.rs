@@ -24,7 +24,7 @@ use crate::element::{
 use crate::frame::Role;
 use crate::input::{Insets, Rect};
 use crate::text::TypeStyle;
-use crate::tokens::{color, ratio, size, type_style};
+use crate::tokens::{color, ratio, shadow, size, type_style};
 use crate::widgets::{self, check_mark, field, icon_button, primary};
 
 /// The name of the field the player describes the bug in.
@@ -66,6 +66,9 @@ const TOOL: f32 = size::BUG_TOOL;
 
 /// How far the hint stands below the window's top (`.bug-hint`).
 const HINT_TOP: f32 = size::BUG_HINT_TOP;
+
+/// The height of the desktop hint's line of text.
+const HINT_LINE: f32 = size::BUG_HINT_LINE;
 
 /// The checkbox's side, as the start screen's fair-deal box.
 const CHECKBOX: f32 = size::CHECKBOX;
@@ -218,14 +221,18 @@ fn select(drag: Option<Rect>, window: Rect, phone: Option<Insets>) -> Vec<Elemen
                 ..HINT
             }
         } else {
-            HINT
+            // `.bug-hint` sets no line height, and WebKit's normal line for Open Sans at 15
+            // points is a 20-point line box.
+            TypeStyle {
+                line_height: HINT_LINE / HINT.size,
+                ..HINT
+            }
         };
         let hint = text("Drag to select")
             .style(style)
             .color(color::TEXT)
             .background(TOOLS)
-            .border((color::METAL, 1.0))
-            .radius(size::BUG_PILL_RADIUS);
+            .border((color::METAL, 1.0));
         let mut hint = hint;
         hint.style.padding = [
             size::BUG_HINT_PADDING_Y,
@@ -233,6 +240,9 @@ fn select(drag: Option<Rect>, window: Rect, phone: Option<Insets>) -> Vec<Elemen
             size::BUG_HINT_PADDING_Y,
             size::BUG_HINT_PADDING_X,
         ];
+        // `border-radius: 999px` draws a pill: half the hint's height, its line, padding and
+        // border, which is the radius the web's computed style reports.
+        hint.style.radius = style.size * style.line_height / 2.0 + size::BUG_HINT_PADDING_Y + 1.0;
         let line = row()
             .name("hint")
             .position(Position::Absolute)
@@ -419,20 +429,24 @@ fn tools(choosing: bool, phone: Option<Insets>) -> Element {
         ]
     });
     let tool = |icon, name: &str, press| {
-        icon_button(icon, name)
+        let mut tool = icon_button(icon, name)
             .width(side)
             .height(side)
             .background([0; 4])
             .border(([0; 4], 0.0))
             .radius(side / 2.0)
-            .on_press(press)
+            .on_press(press);
+        // `.bug-tool` has no rim: `background: none` and no box shadow.
+        tool.style.box_shadow = Vec::new();
+        tool
     };
     let mut pill = row()
         .name("bug tools")
         .gap(2.0)
         .background(TOOLS)
         .border((color::METAL, 1.0))
-        .radius(size::BUG_PILL_RADIUS)
+        // `border-radius: 999px` on a pill one tool tall: half its height.
+        .radius(side / 2.0 + size::BUG_TOOLS_PADDING + 1.0)
         .position(Position::Absolute)
         .inset([Some(inset[0]), Some(inset[1]), None, None])
         .children(choosing.then(|| {
@@ -444,6 +458,7 @@ fn tools(choosing: bool, phone: Option<Insets>) -> Element {
         }))
         .child(tool(widgets::icons::CLOSE, "Close", Press::Sheet(None)));
     pill.style.padding = [size::BUG_TOOLS_PADDING; 4];
+    pill.style.box_shadow = shadow::BUG_TOOLS.to_vec();
     pill
 }
 

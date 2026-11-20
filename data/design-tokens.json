@@ -971,6 +971,10 @@
       "BUG_HINT_TOP": {
         "value": 22
       },
+      "BUG_HINT_LINE": {
+        "value": 20,
+        "note": "The height of the desktop bug report hint's line: `.bug-hint` sets no line height, and WebKit's normal line for Open Sans at 15 points is 20 points."
+      },
       "BUG_HINT_SIZE": {
         "value": 15
       },
@@ -1392,6 +1396,10 @@
       "ICON_BUTTON_HOVERED": {
         "value": "inset 0 0 0 1px rgb(214 192 150 / 45%), 0 2px 6px rgb(0 0 0 / 30%)",
         "note": "An icon button under the pointer or with the focus: `.icon-button:hover`, its rim brighter."
+      },
+      "BUG_TOOLS": {
+        "value": "0 4px 12px rgb(0 0 0 / 45%)",
+        "note": "The bug report's tools pill: `.bug-tools` in `ui/src/screens/styles/bug-report.css`, a drop shadow that lifts it off any frozen frame."
       },
       "TIP": {
         "value": "0 3px 8px rgb(0 0 0 / 50%)",

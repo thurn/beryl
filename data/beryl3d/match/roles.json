@@ -22,6 +22,7 @@
       "role": "region",
       "called": "scrim"
     },
+    { "selector": ".bug-shade", "role": "region", "called": "shade" },
     { "selector": "[data-life] .life-orb-total", "role": "player" },
     {
       "selector": ".pile-button",

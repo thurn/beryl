@@ -44,17 +44,17 @@
   },
   "b3d:screen/bug-report/you/1600x900@2": {
    "unmatched": 31,
-   "boxes": 1,
-   "styles": 8,
-   "unsupported": 1,
-   "pixels": 1392430
+   "boxes": 0,
+   "styles": 2,
+   "unsupported": 0,
+   "pixels": 1379056
   },
   "b3d:screen/bug-report/you/393x759": {
    "unmatched": 30,
    "boxes": 2,
-   "styles": 4,
+   "styles": 1,
    "unsupported": 0,
-   "pixels": 290432
+   "pixels": 290660
   },
   "b3d:screen/gallery/you/1600x900@2": {
    "unmatched": 324,
@@ -75,7 +75,7 @@
    "boxes": 16,
    "styles": 12,
    "unsupported": 0,
-   "pixels": 1115186
+   "pixels": 901697
   },
   "b3d:screen/lobby/you/393x759": {
    "unmatched": 36,
@@ -100,10 +100,10 @@
   },
   "b3d:screen/start/you/1600x900@2": {
    "unmatched": 34,
-   "boxes": 11,
+   "boxes": 10,
    "styles": 5,
    "unsupported": 0,
-   "pixels": 873273
+   "pixels": 859462
   },
   "b3d:screen/start/you/393x759": {
    "unmatched": 26,

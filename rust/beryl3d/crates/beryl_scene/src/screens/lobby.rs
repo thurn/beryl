@@ -68,12 +68,10 @@ pub fn lobby(input: &ScreenIn) -> Element {
         .name("lobby")
         .background([0; 4])
         .border(([0; 4], 0.0))
-        .grow(1.0)
-        .align_self(Align::Stretch)
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel);
-    shortcuts(screen, input.lobby)
+    shortcuts(super::whole_window(input, screen), input.lobby)
 }
 
 /// The lobby on a phone: the panel's sections in one column over the safe area, which scrolls

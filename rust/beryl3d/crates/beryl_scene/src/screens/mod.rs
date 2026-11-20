@@ -248,6 +248,20 @@ fn backdrop(input: &ScreenIn) -> Element {
     backdrop
 }
 
+/// `screen` laid over the whole window, as the web's desktop screens fill the page: the flat
+/// layer's root puts a screen in its bottom right corner inside the game screen's dock offsets,
+/// which would centre what the screen holds left of and above the window's middle.
+fn whole_window(input: &ScreenIn, screen: crate::element::Element) -> crate::element::Element {
+    let mut screen = screen
+        .width(input.window.size.width)
+        .height(input.window.size.height);
+    screen.anchor = Some(crate::element::Anchor::Point(
+        glam::Vec2::ZERO,
+        glam::Vec2::ZERO,
+    ));
+    screen
+}
+
 /// Whether the window takes the phone layout, by the selector the interface checks use
 /// (`Layout::for_size`). Each screen's public function asks this and calls its portrait
 /// alternate.

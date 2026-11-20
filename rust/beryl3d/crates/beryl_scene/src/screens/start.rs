@@ -203,12 +203,11 @@ pub fn start(input: &ScreenIn) -> Element {
         .name("start")
         .background([0; 4])
         .border(([0; 4], 0.0))
-        .grow(1.0)
-        .align_self(Align::Stretch)
         .align_items(Align::Center)
         .justify_content(Justify::Center)
         .child(panel)
         .child(corner());
+    let screen = super::whole_window(input, screen);
     super::table_entries::with_host_key(with_keys(screen, input, going_on))
 }
 
