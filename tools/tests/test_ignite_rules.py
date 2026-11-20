@@ -244,7 +244,7 @@ def test_rulings_check_refills_a_missing_cache_and_blames_the_machine_if_it_cann
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = repository(tmp_path)
-    cached = scryfall.cache_dir() / "rulings.jsonl.gz"
+    cached: Path = scryfall.cache_dir() / "rulings.jsonl.gz"
     cached.unlink(missing_ok=True)
     calls: list[str] = []
 
