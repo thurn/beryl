@@ -10,6 +10,9 @@
 //! - copies `daemon.db` to a temporary folder and applies the new executable's migrations to
 //!   the copy, so a migration that fails on this machine's data, or a database that is newer
 //!   than the build, shows up here;
+//! - reads every row of the CLI tables (`cli_slots`, `cli_turns`, `cli_messages`, `cli_holds`)
+//!   in the migrated copy through the build's own row types, so a build that cannot decode what
+//!   an older build wrote is rejected before a restart strands every running worker;
 //! - prints the host protocol versions the build serves.
 //!
 //! It exits 0 when everything works, and otherwise 1 with the reason on standard error. The
@@ -135,9 +138,10 @@ fn migrate_a_copy(live: &Path) -> std::result::Result<(), String> {
             .execute("VACUUM INTO ?1", [copy.to_string_lossy().as_ref()])
             .map_err(|e| format!("cannot copy {}: {e}", live.display()))?;
     }
-    ignite_store::local::open(&copy)
-        .map(drop)
-        .map_err(|e| format!("the migrations fail on a copy of {}: {e}", live.display()))
+    let conn = ignite_store::local::open(&copy)
+        .map_err(|e| format!("the migrations fail on a copy of {}: {e}", live.display()))?;
+    ignite_store::local::cli_slots::verify_decodable(&conn)
+        .map_err(|e| format!("the CLI tables of a copy of {}: {e}", live.display()))
 }
 
 /// A folder in the temporary directory that is removed when dropped.

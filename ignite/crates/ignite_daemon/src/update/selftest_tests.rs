@@ -110,6 +110,26 @@ fn a_database_newer_than_the_build_fails_and_is_not_changed() {
 }
 
 #[test]
+fn a_cli_slot_with_an_undecodable_state_fails_and_is_not_changed() {
+    let (repo, machine) = repository();
+    let home = home_with_database();
+    let live = home.root.join("daemon.db");
+    {
+        let conn = rusqlite::Connection::open(&live).unwrap();
+        conn.execute(
+            "INSERT INTO cli_slots (app, slot, state) VALUES ('claude', 3, 'dreaming')",
+            [],
+        )
+        .unwrap();
+    }
+    let error = check(&repo, &home, &machine).unwrap_err();
+    assert!(
+        error.contains("cli_slots") && error.contains("slot 3") && error.contains("dreaming"),
+        "{error}"
+    );
+}
+
+#[test]
 fn the_migrations_run_on_a_copy_and_leave_the_live_database_alone() {
     let home = Home { root: tempdir() };
     let live = home.root.join("daemon.db");

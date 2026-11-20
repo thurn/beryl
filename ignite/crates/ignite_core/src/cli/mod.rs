@@ -167,7 +167,7 @@ pub struct TurnEvents {
 }
 
 /// Why a turn's failure is not the session's own, which puts the app on a CLI hold.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HoldReason {
     NotLoggedIn,
@@ -176,7 +176,9 @@ pub enum HoldReason {
     ProgramMissing,
     /// The program exited before printing its first line.
     NoFirstLine,
-    /// An API error such as a 5xx answer, an overloaded service or a network failure.
+    /// An API error such as a 5xx answer, an overloaded service or a network failure. A stored
+    /// hold that names no reason reads as this one, the mildest: it ends when a probe succeeds.
+    #[default]
     ApiError,
 }
 
@@ -190,6 +192,19 @@ impl HoldReason {
             HoldReason::NoFirstLine => "no_first_line",
             HoldReason::ApiError => "api_error",
         }
+    }
+
+    /// The reason stored as `name`; `None` for a name this build does not know.
+    pub fn parse(name: &str) -> Option<HoldReason> {
+        [
+            HoldReason::NotLoggedIn,
+            HoldReason::ModelRefused,
+            HoldReason::ProgramMissing,
+            HoldReason::NoFirstLine,
+            HoldReason::ApiError,
+        ]
+        .into_iter()
+        .find(|reason| reason.as_str() == name)
     }
 }
 
@@ -207,9 +222,17 @@ pub enum TurnEnd {
     /// The plan's limit was reached in `window`, when the stream named one.
     PlanLimit { window: Option<String> },
     /// The failure is not the session's: the slot is parked and the app goes on a CLI hold.
-    Hold { reason: HoldReason, message: String },
+    Hold {
+        #[serde(default)]
+        reason: HoldReason,
+        #[serde(default)]
+        message: String,
+    },
     /// An exit or event the adapter cannot place.
-    Unknown { why: String },
+    Unknown {
+        #[serde(default)]
+        why: String,
+    },
 }
 
 /// What the daemon does after a turn's end, as [`decide`] chooses it.
@@ -319,5 +342,49 @@ mod tests {
             );
         }
         assert_eq!(SlotState::parse("dreaming"), None);
+    }
+
+    /// `cli_turns.end_kind` keeps a `TurnEnd` as JSON, and an older build's rows must stay
+    /// readable when a later build adds a field. So every field of every variant takes a
+    /// default when it is missing, and a variant with no other field reads from its tag alone.
+    #[test]
+    fn every_field_of_a_stored_turn_end_has_a_default() {
+        for kind in ["clean", "interrupted", "plan_limit", "hold", "unknown"] {
+            let json = format!(r#"{{"kind":"{kind}"}}"#);
+            serde_json::from_str::<TurnEnd>(&json)
+                .unwrap_or_else(|e| panic!("{json} does not read as a TurnEnd: {e}"));
+        }
+        // A tag alone must name each variant, so that a variant added without a default for
+        // one of its fields fails above rather than in a daemon's database.
+        let named = [
+            TurnEnd::Clean,
+            TurnEnd::Interrupted,
+            TurnEnd::PlanLimit { window: None },
+            TurnEnd::Hold {
+                reason: HoldReason::default(),
+                message: String::new(),
+            },
+            TurnEnd::Unknown { why: String::new() },
+        ];
+        for end in named {
+            let json = serde_json::to_value(&end).unwrap();
+            let kind = json["kind"].as_str().unwrap().to_owned();
+            let tag_only = serde_json::json!({ "kind": kind });
+            serde_json::from_value::<TurnEnd>(tag_only).unwrap();
+        }
+    }
+
+    #[test]
+    fn hold_reasons_round_trip_through_their_stored_names() {
+        for reason in [
+            HoldReason::NotLoggedIn,
+            HoldReason::ModelRefused,
+            HoldReason::ProgramMissing,
+            HoldReason::NoFirstLine,
+            HoldReason::ApiError,
+        ] {
+            assert_eq!(HoldReason::parse(reason.as_str()), Some(reason));
+        }
+        assert_eq!(HoldReason::parse("sulking"), None);
     }
 }

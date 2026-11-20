@@ -250,6 +250,83 @@ pub fn holds(conn: &Connection) -> Result<Vec<CliHold>> {
     Ok(holds)
 }
 
+/// The values `cli_turns.state` takes.
+const TURN_STATES: [&str; 3] = ["starting", "running", "ended"];
+
+/// Reads every row of the four CLI tables through the row structs and `ignite_core::cli`'s
+/// types, and returns the first row that does not decode, naming its table and row. The release
+/// selftest runs it on a copy of the daemon's database, so that a build that could not read the
+/// rows an older build wrote is rejected before every running worker is stranded by a restart.
+pub fn verify_decodable(conn: &Connection) -> std::result::Result<(), String> {
+    verify_table(conn, "cli_slots", CliSlot::COLUMNS, |row| {
+        let slot = read_slot(row)?;
+        let key = format!("app {}, slot {}", slot.app, slot.slot);
+        Ok((key, check_slot(&slot)))
+    })?;
+    verify_table(conn, "cli_turns", CliTurn::COLUMNS, |row| {
+        let turn = read_turn(row)?;
+        let key = format!("session {}, turn {}", turn.session, turn.turn);
+        Ok((key, check_turn(&turn)))
+    })?;
+    verify_table(conn, "cli_messages", CliMessage::COLUMNS, |row| {
+        let message = read_message(row)?;
+        Ok((format!("id {}", message.id), Ok(())))
+    })?;
+    verify_table(conn, "cli_holds", CliHold::COLUMNS, |row| {
+        let hold = read_hold(row)?;
+        let outcome = match ignite_core::cli::HoldReason::parse(&hold.reason) {
+            Some(_) => Ok(()),
+            None => Err(format!("unknown hold reason {:?}", hold.reason)),
+        };
+        Ok((format!("app {}", hold.app), outcome))
+    })
+}
+
+fn check_slot(slot: &CliSlot) -> std::result::Result<(), String> {
+    if ignite_core::cli::SlotState::parse(&slot.state).is_none() {
+        return Err(format!("unknown slot state {:?}", slot.state));
+    }
+    Ok(())
+}
+
+fn check_turn(turn: &CliTurn) -> std::result::Result<(), String> {
+    if !TURN_STATES.contains(&turn.state.as_str()) {
+        return Err(format!("unknown turn state {:?}", turn.state));
+    }
+    if let Some(end) = &turn.end_kind {
+        serde_json::from_str::<ignite_core::cli::TurnEnd>(end)
+            .map_err(|e| format!("end_kind {end:?} is not a turn end: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Reads each row of `table` on its own, by `rowid`, so one bad row is named and cannot hide
+/// behind another. `read` returns the row's key for the message and whether its values mean
+/// something to this build.
+fn verify_table(
+    conn: &Connection,
+    table: &str,
+    columns: &[&str],
+    read: impl Fn(&Row<'_>) -> rusqlite::Result<(String, std::result::Result<(), String>)>,
+) -> std::result::Result<(), String> {
+    let fail = |row: &str, why: String| format!("{table} row {row} does not decode: {why}");
+    let rowids: Vec<i64> = conn
+        .prepare(&format!("SELECT rowid FROM {table} ORDER BY rowid"))
+        .and_then(|mut s| s.query_map([], |r| r.get(0))?.collect())
+        .map_err(|e| format!("{table} cannot be read: {e}"))?;
+    let select = format!(
+        "SELECT {} FROM {table} WHERE rowid = ?1",
+        columns.join(", ")
+    );
+    for rowid in rowids {
+        let (key, outcome) = conn
+            .query_row(&select, [rowid], &read)
+            .map_err(|e| fail(&format!("rowid {rowid}"), e.to_string()))?;
+        outcome.map_err(|why| fail(&key, why))?;
+    }
+    Ok(())
+}
+
 /// The mode `ignite pool mode` forced on `app` (`cli` or `desktop`), or `None` when
 /// `ignite.toml` decides.
 pub fn mode_override(conn: &Connection, app: &str) -> Result<Option<String>> {
@@ -397,5 +474,82 @@ mod tests {
             ("free", 0, None)
         );
         assert_eq!(holds(&conn).unwrap()[0].reported, 0);
+    }
+
+    /// A column that is neither nullable nor defaulted cannot be added by a later build without
+    /// making the rows an older build wrote unreadable, so none of these tables may have one.
+    #[test]
+    fn every_column_of_the_cli_tables_is_nullable_or_defaulted() {
+        let conn = open_in_memory().unwrap();
+        for table in ["cli_slots", "cli_turns", "cli_messages", "cli_holds"] {
+            let mut statement = conn
+                .prepare(&format!(
+                    "SELECT name, \"notnull\", dflt_value FROM pragma_table_info('{table}')"
+                ))
+                .unwrap();
+            let columns: Vec<(String, i64, Option<String>)> = statement
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+                .unwrap()
+                .collect::<rusqlite::Result<_>>()
+                .unwrap();
+            assert!(!columns.is_empty(), "{table} has no columns");
+            for (name, not_null, default) in columns {
+                assert!(
+                    not_null == 0 || default.is_some(),
+                    "{table}.{name} is NOT NULL with no DEFAULT"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn verification_passes_on_good_rows_and_names_the_bad_one() {
+        let mut conn = open_in_memory().unwrap();
+        verify_decodable(&conn).unwrap();
+        put(&conn, &slot("cli-claude-0a1b2c3d")).unwrap();
+        record_turn_start(&mut conn, &turn("cli-claude-0a1b2c3d", 1), &[]).unwrap();
+        queue_message(&conn, &message("cli-claude-0a1b2c3d", "hi")).unwrap();
+        conn.execute_batch(
+            "INSERT INTO cli_holds (app, reason) VALUES ('codex', 'not_logged_in');
+             UPDATE cli_turns SET end_kind = '{\"kind\":\"hold\"}';",
+        )
+        .unwrap();
+        verify_decodable(&conn).unwrap();
+
+        conn.execute("UPDATE cli_slots SET state = 'dreaming'", [])
+            .unwrap();
+        let error = verify_decodable(&conn).unwrap_err();
+        assert!(
+            error.contains("cli_slots") && error.contains("claude") && error.contains("dreaming"),
+            "{error}"
+        );
+        conn.execute("UPDATE cli_slots SET state = 'free'", [])
+            .unwrap();
+
+        conn.execute("UPDATE cli_turns SET end_kind = 'not json'", [])
+            .unwrap();
+        let error = verify_decodable(&conn).unwrap_err();
+        assert!(
+            error.contains("cli_turns") && error.contains("turn 1"),
+            "{error}"
+        );
+        conn.execute("UPDATE cli_turns SET end_kind = NULL", [])
+            .unwrap();
+
+        conn.execute("UPDATE cli_holds SET reason = 'sulking'", [])
+            .unwrap();
+        let error = verify_decodable(&conn).unwrap_err();
+        assert!(
+            error.contains("cli_holds") && error.contains("codex"),
+            "{error}"
+        );
+        conn.execute("UPDATE cli_holds SET reason = 'api_error'", [])
+            .unwrap();
+
+        // A value of the wrong type is named by its rowid.
+        conn.execute("UPDATE cli_messages SET urgent = 'yes'", [])
+            .unwrap();
+        let error = verify_decodable(&conn).unwrap_err();
+        assert!(error.contains("cli_messages row rowid 1"), "{error}");
     }
 }
