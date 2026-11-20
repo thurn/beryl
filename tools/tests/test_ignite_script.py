@@ -245,8 +245,8 @@ def test_a_fixture_check_reads_every_card_file(repo: Path) -> None:
 
 def test_a_card_named_only_in_a_comment_is_not_a_reference() -> None:
     text = (
-        "/// Copies \"Mana Crypt\" like Card::Ponder would.\n"
+        '/// Copies "Mana Crypt" like Card::Ponder would.\n'
         "const A: &str = Card::Opt; // Card::Brainstorm\n"
-        "/* Card::Divination */ const B: &str = \"Lightning // Bolt\";\n"
+        '/* Card::Divination */ const B: &str = "Lightning // Bolt";\n'
     )
     assert adapter.references(text) == {"opt", "lightningbolt"}

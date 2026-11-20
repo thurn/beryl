@@ -74,7 +74,10 @@ impl Checks {
             return None;
         }
         // A package that is gone needs no listing: its tests leave with it.
-        let changed = changed.into_iter().filter(|p| now.contains_key(p)).collect();
+        let changed = changed
+            .into_iter()
+            .filter(|p| now.contains_key(p))
+            .collect();
         Some(Reuse::Partial { base, changed })
     }
 
@@ -221,7 +224,12 @@ impl Checks {
             paths.push(join(&package.dir, "Cargo.toml"));
         }
         for workspace in workspaces {
-            for name in ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rust-toolchain"] {
+            for name in [
+                "Cargo.toml",
+                "Cargo.lock",
+                "rust-toolchain.toml",
+                "rust-toolchain",
+            ] {
                 paths.push(join(workspace, name));
             }
         }

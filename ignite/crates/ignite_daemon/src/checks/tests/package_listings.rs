@@ -71,12 +71,20 @@ fn write_workspace(world: &World, cards: &str, version: char) {
         let file = world.dir.join(path);
         fs::create_dir_all(file.parent().unwrap()).unwrap();
         fs::write(file, text).unwrap();
-        let c = if path == "game/cards/src/lib.rs" { version } else { 'a' };
+        let c = if path == "game/cards/src/lib.rs" {
+            version
+        } else {
+            'a'
+        };
         world
             .git
             .set_object(path, Oid::new(c.to_string().repeat(40)).unwrap());
     }
-    for (dir, c) in [("game", version), ("game/cards", version), ("game/core", 'a')] {
+    for (dir, c) in [
+        ("game", version),
+        ("game/cards", version),
+        ("game/core", 'a'),
+    ] {
         world
             .git
             .set_object(dir, Oid::new(c.to_string().repeat(40)).unwrap());
@@ -107,7 +115,11 @@ fn workspace_world() -> (World, Arc<Checks>) {
     trees.graph = CrateGraph {
         packages: vec![package("core", &[]), package("cards", &["core"])],
     };
-    let checks = daemon(&world, ignite_store::local::open_in_memory().unwrap(), trees);
+    let checks = daemon(
+        &world,
+        ignite_store::local::open_in_memory().unwrap(),
+        trees,
+    );
     (world, checks)
 }
 
@@ -154,7 +166,10 @@ fn a_change_to_comments_alone_lists_nothing_and_builds_nothing() {
     write_workspace(&world, CARDS_CODE, 'd');
     gate_listing(&world, &checks);
     let lists = list_commands(&world);
-    assert!(lists[listed..].iter().any(|args| args[0] == "lister"), "{lists:?}");
+    assert!(
+        lists[listed..].iter().any(|args| args[0] == "lister"),
+        "{lists:?}"
+    );
 }
 
 #[test]
@@ -180,7 +195,11 @@ fn a_change_to_one_package_lists_and_builds_that_package_alone() {
     assert_eq!(&cargo[0][3..5], ["-p", "cards"]);
     let requests = world.builds.requests();
     let new: Vec<&Vec<String>> = requests[built..].iter().map(|r| &r.2).collect();
-    assert_eq!(new, [&vec!["cards".to_owned()]], "only the cards package was built");
+    assert_eq!(
+        new,
+        [&vec!["cards".to_owned()]],
+        "only the cards package was built"
+    );
 
     // The merged listing is kept: the same tree lists nothing again.
     let listed = list_commands(&world).len();

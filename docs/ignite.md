@@ -1624,12 +1624,12 @@ The fields:
 - `listing_ignores_comments = true` says that what `list` prints cannot depend
   on the comments in a Rust file, as with test names or what a built program
   does. The family's listing hash and its listing's sources hash then cover each
-  `.rs` file by its code with comments and layout removed, so a change that edits
-  only comments keeps the kept listing and builds nothing to list. The checks'
-  own input hashes still cover every file whole, since a comment can change what
-  a check finds. A `list` that reads Rust source text itself must leave comments
-  out of what it prints, as the `script` family's adapter does with the card
-  names it finds.
+  `.rs` file by its code with comments and layout removed, so a change that
+  edits only comments keeps the kept listing and builds nothing to list. The
+  checks' own input hashes still cover every file whole, since a comment can
+  change what a check finds. A `list` that reads Rust source text itself must
+  leave comments out of what it prints, as the `script` family's adapter does
+  with the card names it finds.
 - A `nextest` listing also keeps, for each package whose tests it can hold, a
   hash of what can change that package's test names: the package's own files,
   its observed reads, every manifest and lock file of its workspace, the
