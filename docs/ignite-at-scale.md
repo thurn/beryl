@@ -37,6 +37,10 @@ a landing that breaks the build is what makes that safe. Verifying in batches
 and starting from a commit that builds remove most compiling, and the cores kept
 for the tip make its one build finish soon.
 
+All of this applies to changes to the game and its tools. A change to Ignite
+itself keeps today's landing, for the reasons under
+[Changes to Ignite itself](#changes-to-ignite-itself).
+
 ## Related information
 
 - [`docs/ignite.md`](ignite.md) is Ignite's design as built. This proposal
@@ -286,6 +290,10 @@ A verdict is identified by three things:
 - A digest of the settings that decide which checks run, so that a change to
   those settings does not leave old verdicts standing.
 
+Nothing in those three names the build of Ignite that computed the verdict.
+Ignite is released hundreds of times a day, and a verdict outlives those
+releases.
+
 The checks behind a verdict are the gate's, chosen the same way: the formatters
 run first and commit what they change, then the always set, then the checks the
 change edits, then the checks chosen by score within the budget. Whatever the
@@ -335,7 +343,9 @@ the answer usually costs nothing.
 
 ## Landing
 
-In the common case `ignite land` runs no build and no check. Its steps:
+In the common case `ignite land` runs no build and no check. This is how every
+change lands except one that touches Ignite's own source (see
+[Changes to Ignite itself](#changes-to-ignite-itself)). Its steps:
 
 1. Check that the session holds the ticket and the tree has no uncommitted
    edits.
@@ -397,8 +407,8 @@ A round has three parts, in order:
 
 - **The build step.** Run the **build checks** at the tip: the checks that fail
   when the code does not compile or type-check (clippy, `tsc` and pyre). The
-  repository marks their families with `builds = true`. When they pass, move
-  `green` to the tip.
+  repository marks their families with `builds = true`. Ignite's own lint is not
+  one of them. When they pass, move `green` to the tip.
 - **The budgeted checks.** Run the best-scored checks within the budget of 300
   seconds. When they pass, move `master` to the tip. This part exists today.
 - **The remaining checks.** Run everything else. This part exists today.
@@ -451,6 +461,7 @@ A landing is reverted only when all of these hold:
 
 - A build check failed at the tip, and a second run confirmed it.
 - The search for the culprit, which is unchanged, ended at one landing.
+- That landing changed none of Ignite's own source.
 - The revert of the landing's commits applies cleanly at the tip.
 - The build check passes at the tip with the revert applied. When the revert
   restores the check's inputs to a state that already passed, the result cache
@@ -514,6 +525,8 @@ only moves forward.
 - A tip that does not compile therefore never reaches a new ticket. It delays
   `green` until its culprit is reverted, and nothing else.
 - `master` keeps its meaning: the newest tip whose budgeted checks passed.
+- A regression ticket is the exception: it starts at the tip. Its failure is at
+  the tip, and when that failure is a broken build `green` is behind it.
 
 ```text
 staging   A - B - C - D - E     E landed 20 s ago
@@ -574,6 +587,10 @@ does not repeat it.
 - **Cores are kept for the tip's build step.** `tip_build_cores` are taken out
   of what the scheduler hands out, as the express lane's cores are. A command of
   the build step starts on them at once, whatever else is waiting or running.
+- **The kept cores are lent to Ignite's own updates.** The express lane and the
+  release build borrow idle cores when they start. Cores kept for the tip that
+  no build step holds are lent to them too, so the reserve never slows an update
+  to Ignite.
 - **Ignite's own processes count as Ignite's.** The scheduler hands out the
   machine's cores less the load from outside Ignite. On 2026-11-19 that outside
   load included the hub's own process and a check's process left over from an
@@ -586,17 +603,53 @@ does not repeat it.
 
 ## Changes to Ignite itself
 
-The express lane exists because fixes to Ignite once waited in the queue they
-were fixing. It keeps the parts that solve that problem.
+Ignite is updated hundreds of times a day: jarvis restarted into 49 releases on
+2026-11-19. Those updates are how a stuck queue or a bug in Ignite gets fixed,
+so they have to deploy quickly even when the rest of the system is broken. That
+requirement shapes four rules.
 
-- **Kept:** a change to Ignite alone is checked by the express commands, on
-  cores kept for them, and its landing moves the release branch.
-- **Replaced:** a pass of those commands is a verdict like any other, stored
-  under the tree ID. The express lane's own rules for reusing a pass after a
-  lost race are deleted, because every landing now behaves that way.
-- **Added:** an Ignite change that breaks the build is reverted like any other.
-  The revert commit is itself a change to Ignite, so it moves the release branch
-  and daemons restart into it.
+**A change to Ignite's own source lands the way it does today, whatever the
+mode.** That covers the express lane and any other landing that would move the
+release branch.
+
+- Today such a landing compiles and tests Ignite on the rebased commit. After a
+  lost race it runs the commands again when a landed commit touched one of its
+  files or a Cargo build input. It builds the release executable while the
+  commands run, and it moves the release branch on that pass.
+- Landing by verdict would push a commit that nothing compiled and move the
+  release branch to it. Changes to Ignite collide more than any others: 43 of
+  168 Ignite-only landings on 2026-11-18 and 2026-11-19 shared a file with a
+  concurrent landing.
+- A release that does not build stops every update. No daemon retries it until
+  the release branch moves again, and the next fix lands on top of the same
+  broken code.
+- The executable built ahead of time would be for a commit that never lands, so
+  every deploy would wait for a build after its landing.
+- The existing path is fast enough to keep: 83 landings on 2026-11-19 at a
+  median of 2.1 minutes, and 2 of the 83 needed a second pass. Its checks take
+  about a minute, so the race this proposal removes elsewhere hardly bites it.
+
+**A tip round never reverts a change to Ignite.** Ignite's own lint is not a
+build check, so it does not hold `green` back either. A revert would have to
+move the release branch from a tip round, on the judgement of code that may be
+the broken part. A broken Ignite build at the tip gets a regression ticket, as
+today, and daemons stay on the release they run.
+
+**A verdict is not tied to a release.** Its key names the tree, the base and the
+gate's settings. Keyed by the build of Ignite, a verdict would die every few
+minutes and be computed again before nearly every landing.
+
+**New data is readable by the build before it.** A daemon that restarts into a
+release takes over the commands and verb processes the older build started, and
+a rollback opens a database a newer build wrote. So every field this proposal
+adds to something stored or sent between processes is optional, and every
+database change only adds.
+
+What frequent releases gain from the rest of the proposal:
+
+- Other landings take seconds, so a restart rarely has one to wait for.
+- A change to the game no longer runs again because Ignite moved the tip. That
+  was the whole cost of the 91-minute landing.
 
 ## Records
 
