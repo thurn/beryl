@@ -462,8 +462,8 @@ pub struct TicketFieldArgs {
     #[arg(long)]
     pub cores: Option<f64>,
     /// Who works it: `<machine>/<app>` (such as `cygnus/codex`), `<machine>` for any app on that
-    /// machine, or `none` to follow its epic's owner. Without it, a new ticket under no owned
-    /// epic is owned by the machine and app of the session filing it.
+    /// machine, or `none` to follow its epic's owner. A ticket with no owner in its line goes to
+    /// `[pool] default_owner` in `ignite.toml`, whichever machine filed it.
     #[arg(long)]
     pub owner: Option<String>,
     /// Make it a meta-ticket, a template the hub copies into a new child ticket on this

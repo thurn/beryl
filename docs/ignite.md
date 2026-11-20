@@ -671,8 +671,7 @@ How the executable is installed and kept current:
   it, before it lands, and never runs against sources it does not match. The
   daemon keeps its own copy for what has no tree (which directories a tree reset
   keeps, what is prebuilt and the exploration families its idle loop chooses
-  from), and reads it again each time its tip loop fast-forwards the main
-  checkout. Before 2026-11-19 every manifest edit moved the release and
+  from), and reads it again each time it fast-forwards the main checkout. Before 2026-11-19 every manifest edit moved the release and
   restarted every daemon, which ended the verbs running on them.
 - Whether the release moves is decided before the push. The gate's outcomes
   count when it ran every check of the release family; checks of other families
@@ -1041,9 +1040,13 @@ Rules for trees:
   refuses any other session with exit code 3, so a session that was replaced
   cannot go on working in a tree that now belongs to someone else.
 - The daemon keeps the main checkout's local `staging` and `master`
-  fast-forwarded to the remote, and only while that checkout has no local
-  changes. Sessions start there and read its instruction files, and nobody works
-  in it.
+  fast-forwarded to the remote every 30 seconds, on a loop of its own
+  (`ignite-main`), and only while that checkout has no local changes. Sessions
+  start there and read its instruction files, and nobody works in it.
+- The hub reads its routing facts (each machine's system, the apps and
+  `[pool] default_owner`) from the main checkout's `ignite.toml` at start and
+  again every 30 seconds, so a change to routing takes effect within a minute
+  of landing without restarting the hub.
 
 ### Releasing work
 

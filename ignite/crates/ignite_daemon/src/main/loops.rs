@@ -48,6 +48,10 @@ const DISK_EVERY: Duration = Duration::from_secs(60);
 const METRICS_EVERY: Duration = Duration::from_secs(600);
 /// The pause after a failed round of tip verification.
 const TIP_RETRY: Duration = Duration::from_secs(10);
+/// How often the main checkout is fast-forwarded and its check manifests read again.
+const MAIN_EVERY: Duration = Duration::from_secs(30);
+/// How often the hub reads `ignite.toml` again for its routing facts (see [`serve_hub_at`]).
+const ROUTING_EVERY: Duration = Duration::from_secs(30);
 
 /// How long each loop may go without finishing a round before `ignite doctor` calls it stuck.
 /// Each is far longer than the loop's own period, so that a slow hub or a long job is not
@@ -60,6 +64,7 @@ const IDLE_STALLS_AFTER: Duration = Duration::from_mins(10);
 /// A measurement walked about 290 GB of build directories for over ten minutes on jarvis.
 const DISK_STALLS_AFTER: Duration = Duration::from_hours(1);
 const METRICS_STALL_AFTER: Duration = Duration::from_hours(1);
+const MAIN_STALLS_AFTER: Duration = Duration::from_mins(10);
 /// A round of the ticket mirror is one long poll of the feed or one page of a copy.
 const MIRROR_STALLS_AFTER: Duration = Duration::from_mins(30);
 /// The pause after a round of the ticket mirror that failed or found nothing, so a hub that
@@ -73,7 +78,7 @@ pub struct Parts {
     pub ctx: Context,
     pub client: Arc<HubClient>,
     pub trees: Trees,
-    /// Reads the main checkout's manifests again after the tip loop fast-forwards it.
+    /// Reads the main checkout's manifests again after the main loop fast-forwards it.
     pub manifests: Arc<Reload>,
     pub checks: Arc<Checks>,
     pub landing: Arc<Landing>,
@@ -114,6 +119,7 @@ impl Parts {
         };
         self.spawn_sender(db, server.clone());
         self.spawn_tip(server.clone());
+        self.spawn_main();
         self.spawn_claims();
         self.spawn_idle(server.clone());
         self.spawn_disk();
@@ -218,14 +224,12 @@ impl Parts {
     }
 
     /// Verifies each new tip of the integration branch, each round in a verb process of its own
-    /// that outlives a restart of the daemon (see [`TipLoop`]), then keeps the main checkout's
-    /// branches fast-forwarded and reads its check manifests again (see `crate::manifests`). A
-    /// round that moved `master` has the new release built.
+    /// that outlives a restart of the daemon (see [`TipLoop`]). A round that moved `master` has
+    /// the new release built.
     fn spawn_tip(&self, server: Arc<Server>) {
         let mut tips = TipLoop::new(server, Arc::new(self.round_verb()));
-        let (ctx, trees, wait_s) = (self.ctx.clone(), self.trees.clone(), self.feed_wait_s);
+        let (ctx, wait_s) = (self.ctx.clone(), self.feed_wait_s);
         let update = self.update.clone();
-        let manifests = self.manifests.clone();
         self.start_loop("ignite-tip", TIP_STALLS_AFTER, move |ticker| {
             loop {
                 let round = ticker.round(|| match tips.turn(&ctx, wait_s) {
@@ -244,14 +248,32 @@ impl Parts {
                 if round.is_none() {
                     thread::sleep(TIP_RETRY);
                 }
-                if let Err(error) = trees.fast_forward_main() {
-                    eprintln!("ignite: main checkout not fast-forwarded: {error}");
-                }
-                match manifests.run() {
-                    Ok(true) => eprintln!("ignite: read the changed check manifests"),
-                    Ok(false) => {}
-                    Err(error) => eprintln!("ignite: check manifests not read again: {error}"),
-                }
+            }
+        });
+    }
+
+    /// Keeps the main checkout's branches fast-forwarded and reads its check manifests again
+    /// (see `crate::manifests`). This ran after each tip round until 2026-11-20, when a round
+    /// that took over an hour left the checkout's `ignite.toml`, which the hub reads, an hour
+    /// behind `staging`.
+    fn spawn_main(&self) {
+        let (trees, manifests) = (self.trees.clone(), self.manifests.clone());
+        self.start_loop("ignite-main", MAIN_STALLS_AFTER, move |ticker| {
+            loop {
+                ticker.round(|| {
+                    trees
+                        .fast_forward_main()
+                        .map_err(|error| format!("main checkout not fast-forwarded: {error}"))?;
+                    match manifests.run() {
+                        Ok(true) => eprintln!("ignite: read the changed check manifests"),
+                        Ok(false) => {}
+                        Err(error) => {
+                            return Err(format!("check manifests not read again: {error}"));
+                        }
+                    }
+                    Ok(())
+                });
+                thread::sleep(MAIN_EVERY);
             }
         });
     }
@@ -546,7 +568,33 @@ pub fn serve_hub_at(
     }
     let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups"))).map_err(store)?;
     crash::spawn_loop("ignite-hub-upkeep", move || upkeep.run(conn, &SystemClock));
+    let routing_conn = ignite_store::hub::open(&database).map_err(store)?;
+    let repo = repo.to_path_buf();
+    crash::spawn_loop("ignite-hub-routing", move || {
+        loop {
+            thread::sleep(ROUTING_EVERY);
+            if let Err(error) = reload_routing(&repo, &routing_conn) {
+                eprintln!("ignite hub: routing not read again: {error}");
+            }
+        }
+    });
     Ok(())
+}
+
+/// Records the routing facts of the repository's `ignite.toml` (`ignite_core::owner::Routing`)
+/// when they differ from the ones recorded, and says whether it did. The hub records them at
+/// start, but `ignite.toml` lies outside Ignite's source, so a change to it, such as a new
+/// default owner, builds no release and restarts nothing: without this, dispatch would keep
+/// routing by the old file until some later restart.
+fn reload_routing(repo: &Path, conn: &Connection) -> Result<bool> {
+    let store = |e: ignite_store::StoreError| Error::Io(e.to_string());
+    let routing = ignite_core::owner::Routing::from_config(&super::read_config(repo)?);
+    if ignite_store::hub::owners::routing(conn).map_err(store)? == routing {
+        return Ok(false);
+    }
+    ignite_store::hub::owners::record_routing(conn, &routing).map_err(store)?;
+    eprintln!("ignite hub: recorded the changed routing of ignite.toml");
+    Ok(true)
 }
 
 /// The file `[hub] wordmark` names, read from the repository. A file that cannot be read is
@@ -617,6 +665,34 @@ mod tests {
             Err::<(), _>(std::io::Error::from(std::io::ErrorKind::AddrInUse))
         });
         assert!(never.is_err());
+    }
+
+    #[test]
+    fn a_changed_ignite_toml_reaches_the_hubs_routing() {
+        let dir = std::env::temp_dir().join(format!("ignite-routing-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let conn = ignite_store::hub::open_in_memory().unwrap();
+        let config = |owner: &str| {
+            format!(
+                "[repository]\nremote = \"origin\"\nstaging = \"s\"\nmaster = \"m\"\n\
+                 trees = \"t\"\nchecks = \"c\"\n[hub]\nurl = \"http://127.0.0.1:0\"\n\
+                 project = \"p\"\n[gate]\nthreshold = 0.004\ncap = 400\n[pool]\n\
+                 default_owner = \"{owner}\"\n[machine.jarvis]\nos = \"macos\"\n\
+                 ticket_trees = 1\nlanding_trees = 1\n"
+            )
+        };
+        let toml = dir.join("ignite.toml");
+        std::fs::write(&toml, config("jarvis/claude")).unwrap();
+        assert!(reload_routing(&dir, &conn).unwrap());
+        assert!(!reload_routing(&dir, &conn).unwrap());
+        std::fs::write(&toml, config("jarvis/codex")).unwrap();
+        assert!(reload_routing(&dir, &conn).unwrap());
+        let routing = ignite_store::hub::owners::routing(&conn).unwrap();
+        assert_eq!(
+            routing.default_owner,
+            Some(ignite_core::owner::Owner::new("jarvis", Some("codex")))
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
