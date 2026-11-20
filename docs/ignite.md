@@ -3628,8 +3628,8 @@ args = ["--dangerously-skip-permissions"]
   second, `ignite-cli-health` runs the probe turns of the apps in CLI mode and
   sends each CLI hold's report, and `ignite-cli-dispatch` runs the dispatcher's
   step every 10 seconds while any app is in CLI mode. A probe runs a whole turn,
-  so it never holds up the turns of other slots. `ignite doctor` lists all
-  three loops.
+  so it never holds up the turns of other slots. `ignite doctor` lists all three
+  loops.
 - The dispatch loop is what offers idle slots to the hub. A machine whose apps
   all run in CLI mode has no dispatcher session to ask for steps, and the only
   other steps come from `ignite` verbs. Before 2026-11-20 there was no such
