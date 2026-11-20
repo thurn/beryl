@@ -500,8 +500,17 @@ impl Trees {
         let path = config.path(tree);
         // A tree given back while its last lease's copy ran may be leased again before the copy ends.
         let _ = seed::wait_until_seeded(&path);
-        if let Err(error) = worktree::reset(&path, &request.branch, &request.at, &config.keep.get())
+        // Saved work that is only an ancestor of the tip has no commits of its own (for example
+        // a branch left by an attempt that changed nothing). Checking it out would leave the
+        // tree on an old commit while the ticket's brief names the tip, so start at the tip.
+        let at = if request.at != request.tip
+            && refs::is_ancestor(&config.repo, &request.at, &request.tip).unwrap_or(false)
         {
+            request.tip.clone()
+        } else {
+            request.at.clone()
+        };
+        if let Err(error) = worktree::reset(&path, &request.branch, &at, &config.keep.get()) {
             let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
             return Err(error);
         }
@@ -512,7 +521,7 @@ impl Trees {
             tree: tree.clone(),
             path,
             branch: request.branch.clone(),
-            at: request.at.clone(),
+            at,
         })
     }
 

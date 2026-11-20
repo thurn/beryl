@@ -286,6 +286,22 @@ fn a_release_saves_the_work_keeps_the_build_directories_and_removes_untracked_fi
 }
 
 #[test]
+fn a_saved_branch_with_no_commits_past_the_tip_starts_the_tree_at_the_tip() {
+    let f = Fixture::new(1, 3);
+    let mut request = f.request("T.9", false);
+    // An earlier attempt saved the branch at an older commit and added nothing to it.
+    request.at = f.commits[0].clone();
+    let Lease::Ready(lease) = f.trees.lease(request).unwrap() else {
+        panic!("expected a free tree");
+    };
+    assert_eq!(lease.at, f.tip());
+    assert_eq!(
+        git(&lease.path, &["rev-parse", "HEAD"]).trim(),
+        f.tip().as_str()
+    );
+}
+
+#[test]
 fn a_failed_push_leaves_the_tree_untouched_and_leased() {
     let f = Fixture::new(1, 1);
     let lease = f.lease("T.1", false);
