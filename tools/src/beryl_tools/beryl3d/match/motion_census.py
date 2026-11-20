@@ -87,20 +87,17 @@ class Span:
         return (self.recording, self.seat, self.start, self.end)
 
     def target(self) -> Target:
-        """The span's first moment, with Beryl 3D at real time as `match motion` plays it."""
-        return replace(
-            target(
-                argparse.Namespace(
-                    recording=self.recording,
-                    at=self.start,
-                    seat=self.seat,
-                    layout=None,
-                    size=None,
-                    scale=None,
-                    only=None,
-                )
-            ),
-            real_time=True,
+        """The span's first moment, played at real time as every match target is."""
+        return target(
+            argparse.Namespace(
+                recording=self.recording,
+                at=self.start,
+                seat=self.seat,
+                layout=None,
+                size=None,
+                scale=None,
+                only=None,
+            )
         )
 
 
@@ -158,19 +155,16 @@ def step_span(
 def view_arrival(recording: str, seat: str, view: int) -> float | None:
     """When the client was given the `view`th view (counted from 1) of the recording, on its
     clock: what `tree --records` says of the frame where that view is first still."""
-    t = replace(
-        target(
-            argparse.Namespace(
-                recording=recording,
-                at=f"view:{view}",
-                seat=seat,
-                layout=None,
-                size=None,
-                scale=None,
-                only=None,
-            )
-        ),
-        real_time=True,
+    t = target(
+        argparse.Namespace(
+            recording=recording,
+            at=f"view:{view}",
+            seat=seat,
+            layout=None,
+            size=None,
+            scale=None,
+            only=None,
+        )
     )
     printed = compare.b3d(
         ["tree", recording, *t.common(), "--at", f"view:{view}", "--records"], False
@@ -187,19 +181,16 @@ def mark_span(recording: str, seat: str) -> tuple[str, str] | str:
     """A mark's span: from a frame after the view of the recording's first prompt arrives (or
     `MARK_MS` before the prompt is still, if later) to `AFTER_MS` after it is still; why not if
     the recording has no prompt."""
-    t = replace(
-        target(
-            argparse.Namespace(
-                recording=recording,
-                at="prompt:1",
-                seat=seat,
-                layout=None,
-                size=None,
-                scale=None,
-                only=None,
-            )
-        ),
-        real_time=True,
+    t = target(
+        argparse.Namespace(
+            recording=recording,
+            at="prompt:1",
+            seat=seat,
+            layout=None,
+            size=None,
+            scale=None,
+            only=None,
+        )
     )
     printed = compare.b3d(
         ["tree", recording, *t.common(), "--at", "prompt:1", "--records"], False

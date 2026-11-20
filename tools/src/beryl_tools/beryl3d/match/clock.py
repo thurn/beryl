@@ -14,7 +14,8 @@ for the spell before it.
 The page is therefore opened with only the views whose scripts Beryl 3D had played out before
 the first view still playing was given (`first_live`), and is handed the rest live with the
 fixture transport's `advance` at the times Beryl 3D was given them (`schedule`). Both clocks
-count from the time the first live view was given.
+count from the time the first live view was given, and Beryl 3D plays every script at real time
+(`Target.common`), as the web page does, so the two stay together.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from collections.abc import Mapping, Sequence
 from .. import compare
 
 # Each recording and seat's script ends, read once per process (`script_ends`).
-_ENDS: dict[tuple[str, str, bool], dict[int, float] | None] = {}
+_ENDS: dict[tuple[str, str], dict[int, float] | None] = {}
 _ENDS_LOCK = threading.Lock()
 
 
@@ -103,17 +104,16 @@ def ends_of(info: Mapping[str, object]) -> dict[int, float]:
     return out
 
 
-def script_ends(
-    recording: str, seat: str, build: bool, real_time: bool = False
-) -> dict[int, float] | None:
-    """`ends_of` the recording from `seat`, with every script played at real time if
-    `real_time` (`--no-catch-up`), or None if `b3d info` failed. Read once."""
-    key = (recording, seat, real_time)
+def script_ends(recording: str, seat: str, build: bool) -> dict[int, float] | None:
+    """`ends_of` the recording from `seat`, with every script played at real time
+    (`--no-catch-up`) as every match target plays it, or None if `b3d info` failed. Read once.
+    """
+    key = (recording, seat)
     with _ENDS_LOCK:
         if key in _ENDS:
             return _ENDS[key]
     line = ["info", recording, "--seat", seat, "--json"]
-    printed = compare.b3d(line + (["--no-catch-up"] if real_time else []), build)
+    printed = compare.b3d([*line, "--no-catch-up"], build)
     lines = [] if printed is None else printed.strip().splitlines()
     ends = ends_of(json.loads(lines[-1])) if lines else None
     with _ENDS_LOCK:

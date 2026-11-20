@@ -32,7 +32,7 @@ import json
 import subprocess
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from ... import paths as repo_paths
@@ -324,7 +324,7 @@ def measure(
     given, opened, advances, more = clock.handover(
         messages,
         [float(at) for at in views_given],
-        clock.script_ends(t.recording, t.seat, built, t.real_time),
+        clock.script_ends(t.recording, t.seat, built),
         times[0],
         times[-1],
         float(latest),
@@ -359,8 +359,7 @@ def measure(
 
 def command(t: Target, end: str, only: str | None = None) -> str:
     """The `just b3d match motion` command that measures the span from `t.at` to `end`."""
-    # `match motion` always plays Beryl 3D at real time, so its command line has no option for it.
-    options = [option for option in t.common() if option != "--no-catch-up"]
+    options = t.options()
     return (
         f"just b3d match motion {t.recording} --from {t.at} --to {end} "
         + " ".join(options)
@@ -378,9 +377,8 @@ def run(args: argparse.Namespace) -> int:
             "match motion: give a recording, --from and --to, or --all", file=sys.stderr
         )
         return 2
-    t: Target = replace(
-        target(argparse.Namespace(**{**vars(args), "at": args.start, "only": None})),
-        real_time=True,
+    t: Target = target(
+        argparse.Namespace(**{**vars(args), "at": args.start, "only": None})
     )
     found = measure(t, args.end, args.only, bool(args.art), None)
     if isinstance(found, str):

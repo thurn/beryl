@@ -295,7 +295,7 @@ def dump_web(
             base, at, advances, notes = clock.handover(
                 messages,
                 [float(g) for g in views_given],
-                clock.script_ends(t.recording, t.seat, serving is None, t.real_time),
+                clock.script_ends(t.recording, t.seat, serving is None),
                 now,
                 now,
                 base,
@@ -342,7 +342,7 @@ def report(
             f"animating, {int(str(moment['t_ms'])) - given}ms after the view arrived"
         )
     command = f"just b3d match snapshot {t.recording} --at {t.at} " + " ".join(
-        t.common()
+        t.options()
     )
     if t.only is not None:
         command += f" --only '{t.only}'"

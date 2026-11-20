@@ -193,7 +193,11 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
 ## Matching the web
 
 To bring Beryl 3D closer to the web interface's look, work one screen area at a
-time, largest differences first, and land each improvement as you go:
+time, largest differences first, and land each improvement as you go. Every
+`just b3d match` command plays Beryl 3D's scripts at real time
+(`--no-catch-up`), as the web page plays them, so a moment mid-script shows the
+same point of the game in both clients; a plain `just b3d tree` plays with
+catch-up, so its timing at a busy moment can differ from the match's.
 
 1. **Pick the worst area.** `just b3d match census` measures a fixed list of
    moments across many recordings (`data/beryl3d/match/census.json`) and ranks

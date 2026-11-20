@@ -53,10 +53,6 @@ class Target:
     # A Beryl 3D locator whose element `--only` draws alone on both sides, or None for the
     # whole window.
     only: str | None = None
-    # Whether Beryl 3D plays every script at real time however many updates wait
-    # (`--no-catch-up`), as the web interface does. `match motion` compares at real time, since
-    # Beryl 3D's catching up would put it ahead of the web after a large batch of views.
-    real_time: bool = False
 
     def width_height(self) -> tuple[int, int]:
         width, height = self.size.split("x")
@@ -67,13 +63,22 @@ class Target:
         scale = "" if self.scale == "1" else f"@{self.scale}"
         return f"b3d:{self.recording}/{self.seat}/{self.size}{scale}"
 
-    def common(self) -> list[str]:
-        """The `b3d` and `b3d-render` options that open this recording, seat and window."""
+    def options(self) -> list[str]:
+        """The seat and window options, as a `just b3d match` command line takes them."""
         return [
             *["--seat", self.seat, "--size", self.size, "--layout", self.layout],
             *["--scale", self.scale],
-            *(["--no-catch-up"] if self.real_time else []),
         ]
+
+    def common(self) -> list[str]:
+        """The `b3d` and `b3d-render` options that open this recording, seat and window.
+
+        Beryl 3D always plays every script at real time (`--no-catch-up`), as the web interface
+        does. With catch-up on, Beryl 3D plays scripts two or four times as fast while updates
+        wait, so mid-run it drifted hundreds of milliseconds ahead of the web page: at 82780ms of
+        `late-game` it had finished the opponent's draw and lit their main phase while the web
+        still had the card in flight and lit their untap step."""
+        return [*self.options(), "--no-catch-up"]
 
     def slug(self) -> str:
         """The snapshot directory's name: everything that tells two targets apart."""
@@ -81,8 +86,6 @@ class Target:
         if self.only is not None:
             # A locator holds quotes and spaces, and may be long, so it is named by a digest.
             name += "-only-" + hashlib.sha256(self.only.encode()).hexdigest()[:12]
-        if self.real_time:
-            name += "-real-time"
         return UNSAFE.sub("_", name)
 
     def directory(self) -> Path:
