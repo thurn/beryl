@@ -37,8 +37,15 @@ fn shade_card_lit(
     return vec4<f32>(rgb * shadow, color.a);
 }
 
-// The table, lit as a card is, without the sheen.
-fn shade_table_lit(tint: vec4<f32>, normal: vec3<f32>, view: vec3<f32>, shadow: f32) -> vec4<f32> {
-    let color = shade_table(tint);
+// The table, lit as a card is, without the sheen. `params` and `fragment` are `shade_table`'s.
+fn shade_table_lit(
+    tint: vec4<f32>,
+    params: vec4<f32>,
+    fragment: vec2<f32>,
+    normal: vec3<f32>,
+    view: vec3<f32>,
+    shadow: f32,
+) -> vec4<f32> {
+    let color = shade_table(tint, params, fragment);
     return vec4<f32>(color.rgb * diffuse(normalize(normal)) * shadow, color.a);
 }

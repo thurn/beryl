@@ -90,7 +90,7 @@ fn fs_lit(in: LitOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f
     let view = normalize(lit.eye.xyz - in.world);
     var color = vec4<f32>(0.0);
     switch in.material {
-        case TABLE: { color = shade_table_lit(in.tint, normal, view, shadow); }
+        case TABLE: { color = shade_table_lit(in.tint, in.params, in.clip.xy, normal, view, shadow); }
         case CARD: { color = shade_card_lit(face, in.mesh_uv, in.tint, in.params, normal, view, shadow); }
         case CONTACT_SHADOW: { color = shade_contact_shadow(in.mesh_uv, in.tint, in.params); }
         case GLOW: { color = shade_glow(face, in.tint, in.params); }

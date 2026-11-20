@@ -12,7 +12,7 @@ use beryl_scene::table::{CARD_HEIGHT, CARD_WIDTH, Camera, DESKTOP, Window};
 use glam::camera::rh::{proj::directx, view::look_at_mat4};
 use glam::{Affine3A, Mat4, Quat, Vec2, Vec3};
 
-const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
+pub(super) const BOTH: [Limits; 2] = [Limits::Default, Limits::Downlevel];
 /// How far a sampled channel may be from the expected value, out of 255.
 const TOLERANCE: u8 = 2;
 
@@ -406,8 +406,8 @@ pub(super) struct TwentyCards {
     pub(super) shadow_points: Vec<Vec3>,
     /// The centre of each card.
     pub(super) cards: Vec<Vec3>,
-    /// A point on the cloth far from every card, and the cloth's color.
-    pub(super) cloth: (Vec3, [u8; 3]),
+    /// A point on the cloth far from every card.
+    pub(super) cloth: Vec3,
 }
 
 pub(super) fn twenty_cards() -> TwentyCards {
@@ -448,8 +448,7 @@ pub(super) fn twenty_cards() -> TwentyCards {
         Quat::IDENTITY,
         Vec3::new(0.0, 0.0, -0.5),
     );
-    let cloth_rgb = [38, 66, 58];
-    opaque.push((Band::Opaque, Draw::table(cloth, [38, 66, 58, 255])));
+    opaque.push((Band::Opaque, Draw::tabletop(cloth, [255; 4])));
     TwentyCards {
         camera,
         width: window.size.width as u32,
@@ -457,7 +456,7 @@ pub(super) fn twenty_cards() -> TwentyCards {
         records: opaque.into_iter().chain(shadows).chain(edges).collect(),
         shadow_points,
         cards,
-        cloth: (Vec3::new(0.0, 180.0, -0.5), cloth_rgb),
+        cloth: Vec3::new(0.0, 180.0, -0.5),
     }
 }
 
@@ -470,7 +469,7 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
         height,
         records,
         shadow_points,
-        cloth: (cloth_point, cloth_rgb),
+        cloth: cloth_point,
         ..
     } = twenty_cards();
     for limits in BOTH {
@@ -499,13 +498,31 @@ fn twenty_cards_with_three_raised_draw_in_perspective() {
             let p = camera.to_screen(point);
             picture.at(p.x as u32, p.y as u32)
         };
-        // The cloth far from every card is its own color.
-        assert!(close(pixel(cloth_point), cloth_rgb), "{limits:?}");
+        // The cloth far from every card is the tabletop's warm brown (`tabletop.rs` checks its
+        // gradient), and darker where a shadow falls on it than in the same place unshadowed.
+        let cloth = pixel(cloth_point);
+        assert!(
+            cloth[0] > 90 && cloth[0] > cloth[2] + 15,
+            "{limits:?}: {cloth:?}"
+        );
+        let unshadowed: Vec<(Band, Draw)> = records
+            .iter()
+            .copied()
+            .filter(|&(band, _)| band != Band::ContactShadows)
+            .collect();
+        let (bare, _) = draw(
+            &mut renderer,
+            camera.view_projection,
+            (width, height),
+            &unshadowed,
+        );
         for point in &shadow_points {
             let shaded = pixel(*point);
+            let p = camera.to_screen(*point);
+            let open = bare.at(p.x as u32, p.y as u32);
             assert!(
-                shaded.iter().zip(cloth_rgb).all(|(&s, c)| s + 8 < c),
-                "{limits:?}: the shadow at {point} is {shaded:?}"
+                shaded.iter().zip(open).all(|(&s, c)| s + 8 < c),
+                "{limits:?}: the shadow at {point} is {shaded:?}, the cloth {open:?}"
             );
         }
     }

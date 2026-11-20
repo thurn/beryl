@@ -146,9 +146,48 @@ fn rounded_box(p: vec2<f32>, half: vec2<f32>, radius: f32) -> f32 {
     return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - radius;
 }
 
-// The table: its tint.
-fn shade_table(tint: vec4<f32>) -> vec4<f32> {
-    return vec4<f32>(tint.rgb * tint.a, tint.a);
+// How much of the tabletop's color the web's grain (`--grain` in `data/design-tokens.json`, black
+// fractal noise at 9% opacity) leaves on average. Measured over the web's tabletop, every pixel
+// is the gradient's color times 0.952, give or take a level or two of noise; the noise itself is
+// left out, since no pattern drawn here would fall on the same pixels as the web's.
+const GRAIN: f32 = 0.952;
+
+// `color` carried on toward `next` across the stretch of the tabletop's gradient from `low` to
+// `high`: unchanged before `low`, `next` past `high`. Applied to each pair of stops in turn, from
+// the middle out, it gives the gradient's color at `t`.
+fn tabletop_stop(color: vec3<f32>, t: f32, low: f32, high: f32, next: vec3<f32>) -> vec3<f32> {
+    return mix(color, next / 255.0, clamp((t - low) / (high - low), 0.0, 1.0));
+}
+
+// The web's `--tabletop` (`data/design-tokens.json`) at `t`, how far a pixel is from the middle
+// of the screen as a share of half the screen's width and height (CSS's `radial-gradient(ellipse
+// 50% 50% at 50% 50%, ...)`): its stops' colors and offsets, from the warm brown of the middle to
+// the near black of the corners at t = 1.41. The render test `the_cloth_paints_the_tabletop`
+// holds these stops to the token's.
+fn tabletop_at(t: f32) -> vec3<f32> {
+    var color = vec3<f32>(133.0, 113.0, 105.0) / 255.0;
+    color = tabletop_stop(color, t, 0.0, 0.42, vec3<f32>(131.0, 112.0, 105.0));
+    color = tabletop_stop(color, t, 0.42, 0.52, vec3<f32>(126.0, 108.0, 101.0));
+    color = tabletop_stop(color, t, 0.52, 0.61, vec3<f32>(117.0, 100.0, 93.0));
+    color = tabletop_stop(color, t, 0.61, 0.71, vec3<f32>(112.0, 96.0, 90.0));
+    color = tabletop_stop(color, t, 0.71, 0.81, vec3<f32>(104.0, 89.0, 83.0));
+    color = tabletop_stop(color, t, 0.81, 0.90, vec3<f32>(89.0, 76.0, 70.0));
+    color = tabletop_stop(color, t, 0.90, 1.0, vec3<f32>(74.0, 63.0, 59.0));
+    color = tabletop_stop(color, t, 1.0, 1.23, vec3<f32>(59.0, 51.0, 49.0));
+    color = tabletop_stop(color, t, 1.23, 1.33, vec3<f32>(42.0, 38.0, 36.0));
+    color = tabletop_stop(color, t, 1.33, 1.41, vec3<f32>(27.0, 24.0, 24.0));
+    return color;
+}
+
+// The table: its tint, or where `params.x` is 1 (`Draw::tabletop`), the web's tabletop times the
+// tint. The tabletop lies on the screen rather than on the table: its gradient spans the target,
+// centred on it, and moves with the table when the table shakes, as the web's cloth moves with
+// its stage. `fragment` is the pixel's position in physical pixels.
+fn shade_table(tint: vec4<f32>, params: vec4<f32>, fragment: vec2<f32>) -> vec4<f32> {
+    let from_middle = (fragment - u.shake) / u.target_size * 2.0 - vec2<f32>(1.0);
+    let painted = tabletop_at(length(from_middle)) * GRAIN;
+    let color = tint.rgb * select(vec3<f32>(1.0), painted, params.x > 0.5);
+    return vec4<f32>(color * tint.a, tint.a);
 }
 
 // A card's broken edge as it dissolves: the cells of a 24 by 34 grid over the card, each with
@@ -434,7 +473,7 @@ fn fs(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f3
     let mesh_pixel = fwidth(in.mesh_uv);
     var color = vec4<f32>(0.0);
     switch in.material {
-        case TABLE: { color = shade_table(in.tint); }
+        case TABLE: { color = shade_table(in.tint, in.params, in.clip.xy); }
         case CARD: { color = shade_card(picture, in.mesh_uv, in.tint, in.params); }
         case CONTACT_SHADOW: { color = shade_contact_shadow(in.mesh_uv, in.tint, in.params); }
         case GLOW: { color = shade_glow(picture, in.tint, in.params); }

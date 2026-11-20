@@ -59,7 +59,7 @@ fn twenty_cards_draw_in_enhanced_as_in_baseline_away_from_edges() {
         height,
         records,
         cards,
-        cloth: (cloth_point, _),
+        cloth: cloth_point,
         ..
     } = twenty_cards();
     // The Enhanced tier's draw lists hold no contact shadows.

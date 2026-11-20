@@ -11,4 +11,5 @@ mod light;
 mod render;
 mod shader_cost;
 mod shadow;
+mod tabletop;
 mod text;

@@ -42,6 +42,13 @@ fn each_constructor_fills_only_its_materials_fields() {
             [0.0; 4],
         ),
         (
+            Draw::tabletop(transform(), TINT),
+            Material::Table,
+            [0; 4],
+            0,
+            [1.0, 0.0, 0.0, 0.0],
+        ),
+        (
             Draw::card(transform(), TINT, FaceSize::Board, 7, 9, 0.25, 0.5),
             Material::Card,
             [9, 0, 0, 0],

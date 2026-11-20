@@ -155,7 +155,8 @@ const MESH_BITS: u8 = 0b1100;
 const CLIP_SHIFT: u8 = 4;
 
 impl Draw {
-    /// The table. It reads no `uv`, `layer` or `params`.
+    /// A solid shape of the table material, drawn in its tint. It reads no `uv` or `layer`, and
+    /// `params` is zero.
     #[must_use]
     pub fn table(transform: Affine3A, tint: [u8; 4]) -> Self {
         Self::new(
@@ -165,6 +166,18 @@ impl Draw {
             TextureArray::SmallFaces,
             Mesh::Card,
         )
+    }
+
+    /// The table's cloth, painted with the web interface's `--tabletop`: a radial gradient
+    /// spanning the window, from warm brown in the middle to near black in the corners, darkened
+    /// by its grain. The gradient lies on the screen, not on the cloth, as the web's lies on its
+    /// page, so the cloth's place and size do not move it. The gradient is multiplied by `tint`,
+    /// so white draws it as the web does. `params.x` is 1.
+    #[must_use]
+    pub fn tabletop(transform: Affine3A, tint: [u8; 4]) -> Self {
+        let mut draw = Self::table(transform, tint);
+        draw.params = [1.0, 0.0, 0.0, 0.0];
+        draw
     }
 
     /// A card showing `face` on its front and `back` on its back, both layers of the array for

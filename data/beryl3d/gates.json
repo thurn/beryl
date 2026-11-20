@@ -204,55 +204,55 @@
   "materials": {
     "box_shadow": {
       "samples": 1,
-      "expressions": 193
+      "expressions": 196
     },
     "gradient": {
       "samples": 1,
-      "expressions": 174
+      "expressions": 177
     },
     "card": {
       "samples": 1,
-      "expressions": 128
+      "expressions": 131
     },
     "contact_shadow": {
       "samples": 1,
-      "expressions": 116
+      "expressions": 119
     },
     "glow": {
       "samples": 1,
-      "expressions": 102
+      "expressions": 105
     },
     "glyph": {
       "samples": 1,
-      "expressions": 96
+      "expressions": 99
     },
     "icon": {
       "samples": 1,
-      "expressions": 96
+      "expressions": 99
     },
     "panel": {
       "samples": 1,
-      "expressions": 152
+      "expressions": 155
     },
     "table": {
       "samples": 1,
-      "expressions": 94
+      "expressions": 123
     },
     "streak": {
       "samples": 1,
-      "expressions": 119
+      "expressions": 122
     },
     "card_lit": {
       "samples": 5,
-      "expressions": 292
+      "expressions": 295
     },
     "table_lit": {
       "samples": 5,
-      "expressions": 231
+      "expressions": 364
     },
     "particle": {
       "samples": 5,
-      "expressions": 206
+      "expressions": 209
     }
   },
   "tests": {

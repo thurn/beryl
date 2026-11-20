@@ -520,7 +520,7 @@ zero. The numbers in the first column are the values of `material`:
 
 | Material         | `uv`                                                   | `layer`    | `params`                                                            |
 | ---------------- | ------------------------------------------------------ | ---------- | ------------------------------------------------------------------- |
-| 0 table          | unused                                                 | unused     | unused                                                              |
+| 0 table          | unused                                                 | unused     | `[1 to paint the tabletop, 0, 0, 0]`                                |
 | 1 card           | `uv[0]` is the back's layer                            | the face   | `[dissolve, whiten, desaturate, 0]`, each from 0 to 1               |
 | 2 contact shadow | unused                                                 | unused     | `[blur in millimetres, 0, 0, 0]`                                    |
 | 3 glow           | the sprite's rectangle in texels                       | atlas page | `[progress from 0 to 1, 0, 0, 0]`                                   |
@@ -533,6 +533,11 @@ zero. The numbers in the first column are the values of `material`:
 | 10 gradient      | linear: the angle; radial: centre and radii, `fixed`   | the entry  | `[box width, box height, box radius, deviation]`, in logical points |
 
 - **A rectangle in texels** is `[x, y, width, height]` within one atlas page.
+- **The tabletop** (`Draw::tabletop`) is the table's cloth painted as the web
+  interface's `--tabletop`: a radial gradient centred on the window and spanning
+  it, times the grain's average darkening, times the tint. It lies on the
+  screen, not on the cloth, and moves only when the table shakes. A table record
+  with `params` zero is its tint alone, a solid color.
 - **A box shadow's** box is the element's border box, or its padding box for an
   inset shadow, and its deviation is the Gaussian's standard deviation. `fixed`
   is a length in sixteenths of a point plus 32,768. The shape radius is the
