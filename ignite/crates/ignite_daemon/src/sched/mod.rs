@@ -10,8 +10,9 @@
 //!
 //! - Five classes in strict order (`land`, `agent`, `tip`, `batch`, `idle`). A lower class starts
 //!   nothing while a higher one has a request waiting for cores.
-//! - One command takes at most two thirds of the cores. Waiting requests of one class share
-//!   what is free evenly.
+//! - One command takes at most two thirds of the cores. Within a class, a request that has
+//!   waited [`AGED_SECONDS`] goes first, then the smallest; each gets what it asked for before
+//!   the next gets anything (see `ledger/order.rs`).
 //! - `tip` and `batch` have floors (`floor` in a machine's table of `ignite.toml`) that higher
 //!   classes cannot take while the class has work running or waiting.
 //! - Each named resource is held by at most its capacity of grants at once. A resource the
@@ -63,7 +64,7 @@ use ignite_core::traits::Clock;
 use ignite_os::hostcpu::HostCpu;
 use serde::Serialize;
 
-pub use ledger::{Ledger, RECLAIM_SECONDS, Step};
+pub use ledger::{AGED_SECONDS, Ledger, RECLAIM_SECONDS, SMALL_CORES, Step};
 pub use measured::{LEND_WINDOW_SECONDS, RECENT_SECONDS};
 
 /// How often [`Scheduler::sample_every`] reads the machine. Each reading is also a step, and a
@@ -545,6 +546,12 @@ impl Scheduler {
 
     pub fn status(&self) -> Status {
         self.lock().ledger.status()
+    }
+
+    /// How long the request of `classes` that has waited longest has waited, in seconds; zero
+    /// when none waits. The dispatcher starts no ordinary ticket while ticket work waits long.
+    pub fn longest_wait(&self, classes: &[Class]) -> f64 {
+        self.lock().ledger.longest_wait(classes, self.clock.now())
     }
 
     /// What `request` would wait for now, such as `8 cores for land work (2 land commands

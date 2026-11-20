@@ -1196,8 +1196,18 @@ Rules for cores:
 - A command starts with as many threads as it was granted
   (`NEXTEST_TEST_THREADS`, `RUST_TEST_THREADS`, `IGNITE_CORES`). Where there is
   no jobserver (on Windows), `CARGO_BUILD_JOBS` is the grant too.
-- One command takes at most two thirds of the machine's cores. Waiting commands
-  of one class share what is free evenly.
+- One command takes at most two thirds of the machine's cores.
+- Within a class, a request that has waited two minutes goes first, in arrival
+  order. The others go smallest first, then in arrival order. Each request gets
+  all the cores it asked for before the next one gets any. On 2026-11-20, 16 to
+  18 agent requests waited for jarvis's 15 cores. The scheduler then shared the
+  free cores evenly, so each command ran on about one core. A one-card change's
+  `ignite check` ran 80 minutes without finishing: its one-core listing steps
+  waited behind ten-core builds.
+- A build that only compiles gives a core back on each step to a waiting
+  request of its own class, but only to a small one (at most two cores) or one
+  that has waited two minutes. Before this rule, every waiting request counted,
+  and with eighteen waiting every build shrank to one core.
 - The daemon reads the machine's total CPU use from the operating system about
   once a second, and with it the CPU each command has used: its process group,
   every process those started (even one that left the group), and the children
@@ -3240,6 +3250,13 @@ tickets run beside expensive ones.
   (`MachineFree.explain`), and the hub answers `{"nothing": "<reason>"}` instead
   of `null`. More workers would help only when the line is about workers or
   trees, never when it is about tickets or cores.
+- While a `land` or `agent` request has waited two minutes or more for cores,
+  the daemon asks the hub only for tickets that hold `master` back, as a paused
+  pool does. The machine then has more work than cores, and a new ticket's
+  commands would only make every command wait longer. Expected cores come from
+  history and cannot see this: on 2026-11-20 jarvis kept starting workers while
+  18 commands waited. The `pool` line says
+  `commands have waited 150 s for cores, so only tickets that hold master back start`.
 
 ```text
 $ ignite status

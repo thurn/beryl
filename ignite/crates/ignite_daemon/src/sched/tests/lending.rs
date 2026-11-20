@@ -25,8 +25,8 @@ fn run_at(ledger: &mut Ledger, id: u64, cores: f64, from: f64, to: f64, mut cpu_
 #[test]
 fn a_grant_that_leaves_its_cores_idle_lends_them_to_a_waiting_request() {
     let mut ledger = Ledger::new(limits());
-    let wrapper = ledger.enqueue(ask(Class::Agent, 16), T0);
-    let other = ledger.enqueue(ask(Class::Agent, 16), T0);
+    let wrapper = ledger.enqueue(ask(Class::Agent, 12), T0);
+    let other = ledger.enqueue(ask(Class::Agent, 12), T0);
     ledger.step(T0);
     assert_eq!(ledger.status().granted, 24);
 
@@ -94,8 +94,8 @@ fn a_lender_whose_use_rises_takes_its_cores_back_from_idle_work() {
 #[test]
 fn outside_load_is_what_is_busy_beyond_what_ignites_commands_use() {
     let mut ledger = Ledger::new(limits());
-    let id = ledger.enqueue(ask(Class::Agent, 16), T0);
-    ledger.enqueue(ask(Class::Agent, 16), T0);
+    let id = ledger.enqueue(ask(Class::Agent, 12), T0);
+    ledger.enqueue(ask(Class::Agent, 12), T0);
     ledger.step(T0);
     // Before any use is read, a grant counts all its cores: 18 busy is all Ignite's.
     ledger.observe(Some(0.75), None);

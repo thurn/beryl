@@ -13,6 +13,10 @@ use super::measured::{GrantUse, Pressure};
 use super::{Grant, GrantRequest, Limits, Status};
 
 mod observe;
+mod order;
+
+use order::{in_order, share};
+pub use order::{AGED_SECONDS, SMALL_CORES};
 
 /// `idle` work starts only while the machine is under this share of its cores busy.
 const IDLE_BUSY_LIMIT: f64 = 0.7;
@@ -202,13 +206,15 @@ impl Ledger {
 
     /// Grants what can be granted now and names the `idle` grants to stop.
     ///
-    /// Classes are served in order. Within a class, the requests that can run share the free
-    /// cores evenly, each capped at what it asked for and at two thirds of the machine, and then
-    /// the class's short growing grants share what is left. A class with a request left waiting
+    /// Classes are served in order. Within a class, the requests that can run are served in the
+    /// order of [`Ledger::served_order`], each given what it asked for, capped at two thirds of
+    /// the machine, before the next gets anything ([`in_order`]); then the class's short growing
+    /// grants share what is left evenly. A class with a request left waiting
     /// for cores, or a short growing grant of `land`, stops every lower class from starting
     /// anything, except that `tip` and `batch` may still take their floors, and makes each
-    /// shrinking grant of a lower class give back one core. A request left waiting also makes
-    /// each shrinking grant of its own class that holds more than its share give back one core.
+    /// shrinking grant of a lower class give back one core. A request left waiting that is
+    /// small or has waited long ([`Ledger::ranks_ahead_of_grants`]) also makes each shrinking
+    /// grant of its own class that holds more than its share give back one core.
     pub fn step(&mut self, now: Timestamp) -> Step {
         let mut step = Step::default();
         let mut reserve: BTreeMap<Class, u32> = Class::ALL
@@ -264,10 +270,15 @@ impl Ledger {
             if pressed {
                 usable = 0;
             }
-            let (picked, mut left) = self.pick(class, usable);
+            let (picked, mut left) = self.pick(class, usable, now);
             let grants = self.fill(&picked, usable);
             let reclaimable = self.reclaimable(class);
             for (id, cores) in picked.into_iter().zip(grants) {
+                // The requests ahead of it in the order took every usable core.
+                if cores == 0 {
+                    left.push(id);
+                    continue;
+                }
                 if reclaimable > 0 && self.waits_to_reclaim(id, cores, now) {
                     left.push(id);
                     continue;
@@ -308,7 +319,7 @@ impl Ledger {
             step.resized.extend(self.shrink_below(class));
         }
         if let Some(class) = highest_waiting {
-            step.resized.extend(self.shrink_to_share(class));
+            step.resized.extend(self.shrink_to_share(class, now));
         }
         // When grants that lent cores use them again, the machine is over: `idle` work gives
         // them back first.
@@ -380,10 +391,11 @@ impl Ledger {
         }
     }
 
-    /// The waiters of `class` that can start now, by ID in queue order, at most `usable` of
-    /// them (each needs at least one core), and the IDs of those that could start but found no
-    /// core. A request whose resources are all held, or whose memory is not free, is neither.
-    fn pick(&self, class: Class, usable: u32) -> (Vec<u64>, Vec<u64>) {
+    /// The waiters of `class` that can start now, by ID in the order they are served
+    /// ([`Ledger::served_order`]), at most `usable` of them (each needs at least one core), and
+    /// the IDs of those that could start but found no core. A request whose resources are all
+    /// held, or whose memory is not free, is neither.
+    fn pick(&self, class: Class, usable: u32, now: Timestamp) -> (Vec<u64>, Vec<u64>) {
         let mut resources: BTreeMap<&str, u32> = BTreeMap::new();
         let mut memory = self.free_memory_mb.map(|free| {
             let unseen: u64 = self
@@ -395,7 +407,7 @@ impl Ledger {
             free.saturating_sub(unseen)
         });
         let (mut picked, mut left) = (Vec::new(), Vec::new());
-        for waiter in self.waiting.iter().filter(|w| w.request.class == class) {
+        for waiter in self.served_order(class, now) {
             let fits = waiter.request.resources.iter().all(|name| {
                 let taken = self.resource_held(name) + resources.get(name.as_str()).unwrap_or(&0);
                 taken < self.limits.capacity(name)
@@ -425,11 +437,11 @@ impl Ledger {
         (picked, left)
     }
 
-    /// Shares `usable` cores among the picked waiters evenly ([`share`]). `usable` is at least
-    /// the number picked, so each gets at least one.
+    /// Gives `usable` cores to the picked waiters in their order ([`in_order`]). A waiter gets
+    /// none when those ahead of it took every core.
     fn fill(&self, picked: &[u64], usable: u32) -> Vec<u32> {
         let wants: Vec<u32> = picked.iter().map(|&id| self.want(id)).collect();
-        share(&wants, usable)
+        in_order(&wants, usable)
     }
 
     /// Whether waiter `id`, which would be granted `cores`, waits instead for lower classes to
@@ -515,17 +527,22 @@ impl Ledger {
     }
 
     /// Takes one core from each shrinking grant of `class` that holds more than its share: the
-    /// machine's cores divided among the class's grants and waiters, at least one. A build that
-    /// started alone on twelve cores kept them while fifteen requests of its own class arrived,
-    /// and those waited 150 to 165 seconds for it to finish; now the build gives a core back on
-    /// each step, as it does for a higher class, until each waiter can start.
-    fn shrink_to_share(&mut self, class: Class) -> Vec<(u64, u32)> {
+    /// machine's cores divided among the class's grants and the waiters it gives cores back for
+    /// ([`Ledger::ranks_ahead_of_grants`]), at least one. A build that started alone on twelve
+    /// cores kept them while fifteen requests of its own class arrived, and those waited 150 to
+    /// 165 seconds for it to finish; now the build gives a core back on each step, as it does
+    /// for a higher class, until each small waiter can start. Counting every waiter instead
+    /// shrank every build of the class to one core while eighteen requests waited.
+    fn shrink_to_share(&mut self, class: Class, now: Timestamp) -> Vec<(u64, u32)> {
         let held = self.held.values().filter(|h| h.class == class).count();
         let waiting = self
             .waiting
             .iter()
-            .filter(|w| w.request.class == class)
+            .filter(|w| w.request.class == class && self.ranks_ahead_of_grants(w, now))
             .count();
+        if waiting == 0 {
+            return Vec::new();
+        }
         let share = (self.limits.cores / u32::try_from(held + waiting).unwrap_or(u32::MAX)).max(1);
         let mut shrunk = Vec::new();
         for (&id, held) in &mut self.held {
@@ -539,8 +556,7 @@ impl Ledger {
 
     /// The cores waiter `id` would take with nothing else waiting.
     fn want(&self, id: u64) -> u32 {
-        let waiter = &self.waiting[index_of(&self.waiting, id)];
-        waiter.request.cores.clamp(1, self.limits.max_per_command())
+        self.want_of(&self.waiting[index_of(&self.waiting, id)])
     }
 
     fn hold(&mut self, waiter: Waiter, cores: u32, now: Timestamp) -> Grant {
@@ -711,34 +727,6 @@ impl Ledger {
             .filter(|h| h.resources.iter().any(|r| r == name))
             .count() as u32
     }
-}
-
-/// Shares `cores` among claims that want `wants` each, evenly. A claim that wants less than an
-/// even share gets what it wants, and the rest is shared among the others; cores that do not
-/// divide evenly go to the earliest claims. A claim may get none when there are more claims
-/// than cores.
-fn share(wants: &[u32], cores: u32) -> Vec<u32> {
-    let mut grants = vec![0; wants.len()];
-    let mut open: Vec<usize> = (0..wants.len()).collect();
-    let mut left = cores;
-    while !open.is_empty() {
-        let even = left / open.len() as u32;
-        let (settled, rest): (Vec<usize>, Vec<usize>) =
-            open.iter().partition(|&&i| wants[i] <= even);
-        if settled.is_empty() {
-            let extra = (left % open.len() as u32) as usize;
-            for (n, &i) in open.iter().enumerate() {
-                grants[i] = even + u32::from(n < extra);
-            }
-            break;
-        }
-        for i in settled {
-            grants[i] = wants[i];
-            left -= wants[i];
-        }
-        open = rest;
-    }
-    grants
 }
 
 fn index_of(waiting: &[Waiter], id: u64) -> usize {

@@ -1,7 +1,7 @@
 //! How the dispatcher deals with the hub: no request is made with the state locked, a hand-off
 //! whose reservation lapsed is dropped, `dispatch` ends before its caller's wait does, and the
 //! feed cursor follows a hub whose journal restarted, and a paused pool asks the hub only for
-//! the tickets that hold `master` back.
+//! the tickets that hold `master` back, as does a pool whose commands wait long for cores.
 
 use std::sync::TryLockError;
 
@@ -9,6 +9,7 @@ use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::Clock;
 
 use super::tests::{detail, handoff_to, lock, request, rig, session};
+use super::work::BACKLOG_SECONDS;
 use super::*;
 use crate::server::Verb;
 use crate::testhub::SpyHub;
@@ -220,4 +221,35 @@ fn a_paused_pool_asks_only_for_tickets_holding_master_back() {
     assert_eq!(rig.hub.asked().len(), before);
     assert!(rig.pool(&["list"], None).text.contains("every machine"));
     assert!(status.lines()[0].starts_with("paused on every machine"));
+}
+
+/// On 2026-11-20 jarvis kept starting workers while 16 to 18 commands waited for its cores, and
+/// every command took many times its unloaded time. While ticket work has waited two minutes or
+/// more for cores, the dispatcher asks only for the tickets that hold `master` back, as a paused
+/// pool does, and `ignite status` says why its workers are idle.
+#[test]
+fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
+    let rig = rig(&["local_w1", "local_w2"]);
+    *lock(&rig.host.waited) = BACKLOG_SECONDS + 30.0;
+    assert!(rig.step().is_none());
+    let asked = rig.hub.asked();
+    assert!(
+        asked
+            .iter()
+            .all(|free| free.master_only && !free.justiciar_only),
+        "{asked:?}"
+    );
+    let (idle, why) = rig.dispatcher.idle_reason().unwrap();
+    assert_eq!(idle, 2);
+    assert!(why.starts_with("commands have waited 150 s for cores"), "{why}");
+
+    // A regression still starts.
+    rig.reserve("R", "local_w1", &["regression"]);
+    assert_eq!(handoff_to(&rig.step().unwrap()), ("local_w1", "R"));
+
+    // Once the wait is short again, ordinary tickets start.
+    *lock(&rig.host.waited) = BACKLOG_SECONDS - 1.0;
+    rig.reserve("T.1", "local_w2", &[]);
+    assert_eq!(handoff_to(&rig.step().unwrap()), ("local_w2", "T.1"));
+    assert!(!rig.hub.asked().last().unwrap().master_only);
 }

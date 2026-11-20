@@ -27,7 +27,19 @@ struct Asking {
     workers: usize,
     /// The pool is paused, so the hub may offer only a ticket that holds `master` back.
     master_only: bool,
+    /// Seconds the oldest request of ticket work has waited for cores, when that is at least
+    /// [`BACKLOG_SECONDS`]: the hub is then asked only for tickets that hold `master` back.
+    backlog: Option<f64>,
 }
+
+/// How long ticket work may wait for cores before the dispatcher stops starting ordinary
+/// tickets. On 2026-11-20 jarvis kept starting workers while 16 to 18 commands already waited
+/// for its 15 cores. Each new worker's commands joined the queue, so every command waited
+/// longer, and a one-card change's `ignite check` ran 80 minutes without finishing. Admission by
+/// the tickets' expected cores did not stop it: those figures are history and say nothing about
+/// the queue now. Two minutes is the longest wait for cores a short change should see; past it
+/// the machine has more work than cores, and a new ticket only makes every ticket slower.
+pub const BACKLOG_SECONDS: f64 = 120.0;
 
 /// Clears the flag that says a step is asking the hub, however the step ends.
 struct AskingGuard<'a>(&'a Dispatcher);
@@ -196,12 +208,14 @@ impl Dispatcher {
                 (!idle.is_empty()).then(|| (idle.len(), "no ticket tree is free".to_owned()));
             return None;
         }
+        let waited = self.host.ticket_work_wait();
         state.asking_hub = true;
         Some(Asking {
             idle,
             trees,
             workers: slots::capacity(members),
             master_only,
+            backlog: (waited >= BACKLOG_SECONDS).then_some(waited),
         })
     }
 
@@ -221,7 +235,11 @@ impl Dispatcher {
             mut trees,
             workers,
             master_only,
+            backlog,
         } = asking;
+        // While ticket work waits long for cores, only a ticket that holds `master` back starts:
+        // the pool asks as a paused pool does.
+        let master_only = master_only || backlog.is_some();
         let mut offers = Vec::new();
         let mut why = "no ticket tree is free".to_owned();
         while !idle.is_empty() && trees > 0 {
@@ -267,6 +285,14 @@ impl Dispatcher {
             trees -= 1;
             let detail = ctx.hub.ticket(&reservation.ticket).ok();
             offers.push((reservation, worker.app, detail));
+        }
+        if let Some(waited) = backlog
+            && !idle.is_empty()
+        {
+            why = format!(
+                "commands have waited {waited:.0} s for cores, so only tickets that hold master \
+                 back start ({why})"
+            );
         }
         let left = (!idle.is_empty()).then_some((idle.len(), why));
         (offers, left)

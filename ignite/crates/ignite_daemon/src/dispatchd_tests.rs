@@ -18,6 +18,7 @@ pub(super) struct FakeHost {
     pub(super) trees: Mutex<u32>,
     cores: Mutex<f64>,
     admit: Mutex<f64>,
+    pub(super) waited: Mutex<f64>,
     holders: Mutex<BTreeMap<SessionId, TicketId>>,
     pub(super) commands: Mutex<BTreeMap<SessionId, SessionCommand>>,
     pub(super) quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
@@ -43,6 +44,10 @@ impl Host for FakeHost {
 
     fn admit_cores(&self) -> f64 {
         *lock(&self.admit)
+    }
+
+    fn ticket_work_wait(&self) -> f64 {
+        *lock(&self.waited)
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {

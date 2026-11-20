@@ -133,6 +133,9 @@ pub trait Host: Send + Sync {
     /// The cores the machine admits tickets against: all the cores its scheduler hands out. The
     /// hub subtracts the expected cores of the tickets in progress here.
     fn admit_cores(&self) -> f64;
+    /// How long the scheduler's oldest request of ticket work (the `land` and `agent` classes)
+    /// has waited for cores, in seconds; zero when none waits.
+    fn ticket_work_wait(&self) -> f64;
     /// The ticket each session holds a build tree for.
     fn holders(&self) -> BTreeMap<SessionId, TicketId>;
     fn command(&self, session: &SessionId) -> Option<SessionCommand>;

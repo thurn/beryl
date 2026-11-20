@@ -174,11 +174,10 @@ fn a_compiling_build_gives_cores_back_to_requests_of_its_own_class() {
     assert_eq!(ledger.step(T0).granted.len(), 2);
     assert_eq!(agent_cores(&ledger), 24);
 
-    // Two more agent requests: four grants and waiters share 24 cores, six each, so the build
-    // gives back one core per step down to six, and the other command, which does not shrink,
-    // keeps its eight.
+    // Two small agent requests, such as listing steps: the build gives back one core per step
+    // until each can start, and the other command, which does not shrink, keeps its eight.
     let late: Vec<u64> = (0..2)
-        .map(|_| ledger.enqueue(ask(Class::Agent, 8), at(1.0)))
+        .map(|_| ledger.enqueue(ask(Class::Agent, 1), at(1.0)))
         .collect();
     let mut granted = Vec::new();
     let mut now = 1.0;
@@ -194,6 +193,27 @@ fn a_compiling_build_gives_cores_back_to_requests_of_its_own_class() {
         assert!(now < 30.0, "the late requests never started");
     }
     assert_eq!(granted, late);
+}
+
+/// Counting every waiting request of the class in the build's share shrank every build to one
+/// core while eighteen requests waited. A large request of the same class waits for the build,
+/// which keeps its cores, until it has waited `AGED_SECONDS`; then the build gives cores back.
+#[test]
+fn a_compiling_build_keeps_its_cores_from_a_large_request_until_it_has_waited_long() {
+    use crate::sched::AGED_SECONDS;
+    let mut ledger = Ledger::new(limits());
+    let build = ledger.enqueue(compile(Class::Agent, 16), T0);
+    ledger.enqueue(ask(Class::Agent, 8), T0);
+    ledger.step(T0);
+    ledger.enqueue(ask(Class::Agent, 8), at(1.0));
+    let mut now = 1.0;
+    while now < AGED_SECONDS {
+        let step = ledger.step(at(now));
+        assert!(step.resized.is_empty() && step.granted.is_empty(), "at {now} s");
+        now += 1.0;
+    }
+    let step = ledger.step(at(AGED_SECONDS + 1.0));
+    assert_eq!(step.resized, [(build, 15)]);
 }
 
 /// After a restart the daemon took over a growing agent grant of one core, stepped, and so
@@ -237,9 +257,10 @@ fn a_grant_that_grew_gives_its_growth_back_while_land_waits() {
         under_jobserver(Class::Agent, 16, "/runs/a/cores".into()),
         T0,
     );
-    let other = ledger.enqueue(ask(Class::Agent, 16), T0);
+    let other = ledger.enqueue(ask(Class::Agent, 12), T0);
     let step = ledger.step(T0);
-    assert_eq!(step.granted[0].cores, 12, "two agents share 24 cores");
+    let first = |id| step.granted.iter().find(|g| g.id == id).unwrap().cores;
+    assert_eq!(first(compare), 12, "the other agent took 12 of the 24 cores first");
     ledger.release(other);
     let step = ledger.step(at(1.0));
     assert_eq!(step.resized, [(compare, 16)], "grew into the free cores");

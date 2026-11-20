@@ -71,27 +71,61 @@ fn the_express_cores_are_never_handed_out() {
     assert_eq!(small.machine_cores(), 4);
 }
 
+/// Sharing the cores evenly among every waiting request ran each of eighteen commands on about
+/// one core, so all of them finished late. Requests are served in turn instead: the first gets
+/// what it asked for before the next gets anything.
 #[test]
-fn ten_commands_starting_at_once_share_the_cores() {
+fn ten_commands_starting_at_once_are_served_in_turn() {
     let mut ledger = Ledger::new(limits());
     let ids: Vec<u64> = (0..10)
         .map(|_| ledger.enqueue(ask(Class::Agent, 16), T0))
         .collect();
     let step = ledger.step(T0);
-    let cores: Vec<u32> = step.granted.iter().map(|g| g.cores).collect();
-    // 24 cores among 10: four get 3 and six get 2, earliest arrivals first.
-    assert_eq!(cores, [3, 3, 3, 3, 2, 2, 2, 2, 2, 2]);
-    assert_eq!(step.granted.iter().map(|g| g.id).collect::<Vec<_>>(), ids);
+    let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    // 24 cores: the earliest gets its 16 (two thirds of the machine), the next the other 8.
+    assert_eq!(granted, [(ids[0], 16), (ids[1], 8)]);
+    assert_eq!(ledger.status().classes[1].waiting, 8);
 }
 
+/// A one-card change's listing steps, which want one core each, waited behind ten-core builds.
+/// The smallest request of a class goes first.
 #[test]
-fn a_small_request_leaves_its_share_to_the_others() {
+fn the_smallest_request_starts_first() {
     let mut ledger = Ledger::new(limits());
-    ledger.enqueue(ask(Class::Agent, 2), T0);
-    ledger.enqueue(ask(Class::Agent, 16), T0);
-    ledger.enqueue(ask(Class::Agent, 16), T0);
-    let cores: Vec<u32> = ledger.step(T0).granted.iter().map(|g| g.cores).collect();
-    assert_eq!(cores, [2, 11, 11]);
+    let big = ledger.enqueue(ask(Class::Agent, 16), T0);
+    let other = ledger.enqueue(ask(Class::Agent, 16), T0);
+    let small = ledger.enqueue(ask(Class::Agent, 2), at(1.0));
+    let granted: Vec<(u64, u32)> = ledger
+        .step(at(1.0))
+        .granted
+        .iter()
+        .map(|g| (g.id, g.cores))
+        .collect();
+    assert_eq!(granted, [(small, 2), (big, 16), (other, 6)]);
+}
+
+/// A stream of small requests must not hold a large one back for ever: once it has waited
+/// `AGED_SECONDS` it goes ahead of every request that has waited less, whatever its size.
+#[test]
+fn a_request_that_waited_long_goes_ahead_of_smaller_ones() {
+    use crate::sched::AGED_SECONDS;
+    let mut ledger = Ledger::new(limits());
+    let holder = ledger.enqueue(ask(Class::Agent, 16), T0);
+    // One core is left free.
+    ledger.enqueue(ask(Class::Agent, 7), T0);
+    ledger.step(T0);
+    let big = ledger.enqueue(ask(Class::Agent, 16), at(1.0));
+    // Before it has waited long, a later small request goes ahead of it.
+    let early = ledger.enqueue(ask(Class::Agent, 1), at(2.0));
+    let step = ledger.step(at(3.0));
+    assert_eq!(step.granted[0].id, early);
+    assert!(ledger.release(early));
+
+    let late = ledger.enqueue(ask(Class::Agent, 1), at(AGED_SECONDS));
+    assert!(ledger.release(holder));
+    let step = ledger.step(at(AGED_SECONDS + 1.0));
+    let granted: Vec<(u64, u32)> = step.granted.iter().map(|g| (g.id, g.cores)).collect();
+    assert_eq!(granted, [(big, 16), (late, 1)]);
 }
 
 #[test]
@@ -213,7 +247,8 @@ fn tip_takes_its_floor_even_while_a_higher_class_waits() {
         .find(|g| g.id == tip)
         .expect("tip starts");
     assert_eq!(tip_grant.cores, 2);
-    assert_eq!(step.granted.len(), 5);
+    // The agents take the other 22 in turn: 16 and 6, and two wait.
+    assert_eq!(step.granted.len(), 3);
 }
 
 #[test]
