@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Handle, SessionId, TicketId, TreeId};
-use ignite_core::time::Timestamp;
 use ignite_core::protocol::Outcome;
+use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
 use ignite_git::{push, refs, save};
 

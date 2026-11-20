@@ -649,14 +649,21 @@ fn a_verb_process_found_dead_at_start_is_run_again_in_a_new_one() {
     machine.commands.finish_all();
     assert_eq!(waited(&server, &handle).text, "test: Some(0)");
     assert_eq!(
-        (machine.ran_in_process("test"), machine.ran_in_daemon("test")),
+        (
+            machine.ran_in_process("test"),
+            machine.ran_in_daemon("test")
+        ),
         (1, 0)
     );
     assert_eq!(machine.threads.started.load(Ordering::SeqCst), 1);
     let row = handle_store::get(&lock(&machine.db), handle.as_str())
         .unwrap()
         .unwrap();
-    assert_ne!(row.pid, Some(999_999), "the row no longer names the dead process");
+    assert_ne!(
+        row.pid,
+        Some(999_999),
+        "the row no longer names the dead process"
+    );
 }
 
 /// A verb process that dies while the daemon runs is noticed, and its verb is run again in the

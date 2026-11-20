@@ -80,7 +80,11 @@ impl Timeline {
             ));
         }
         if !self.ended.is_empty() {
-            let passes = if self.ended.len() == 1 { "pass" } else { "passes" };
+            let passes = if self.ended.len() == 1 {
+                "pass"
+            } else {
+                "passes"
+            };
             parts.push(format!(
                 "{earlier:.0} s in the {} {passes} before it",
                 self.ended.len()

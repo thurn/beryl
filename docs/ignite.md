@@ -771,8 +771,8 @@ How a restart is survived:
   landing run again on a thread of the daemon was cut off by each of the four
   restarts that followed in 13 minutes, since a restart waits only for landings
   whose code its release changes, and each run started its gate over. A verb
-  process that dies while the daemon runs is run again on a thread of the
-  daemon instead, so a process that dies at once cannot start another forever. A
+  process that dies while the daemon runs is run again on a thread of the daemon
+  instead, so a process that dies at once cannot start another forever. A
   landing that agreed to stop and is still running 60 seconds later has its verb
   process ended, as `ignite stop` ends one. The stopped reply never reaches the
   session: its `ignite wait` keeps waiting and gets the new run's reply, and a
@@ -1709,14 +1709,15 @@ runs, so a gate that fails or is cut off by a daemon restart still fixes what
 the next gate of the change spends. On 2026-11-20 the two checks and the first
 landing of a one-card change all failed on a file missing from the machine's
 cache, so no gate of it was remembered, and each gate spent a fresh budget: its
-two landings ran about 3,800 checks. A change is known by its own files: the paths that differ
-from `staging`. A later gate of the change charges its budget for those checks
-when it answers them from the cache, with their families' start-ups, as if it
-had run them. So a gate of an unchanged change chooses the same checks and runs
-none of them again. A rebase over landed commits reruns only those whose inputs
-the commits changed. The `budget` line names what an earlier gate spent. Those
-charges can take the spending past the budget, and a check whose result is
-cached is still chosen then, since answering it costs nothing.
+two landings ran about 3,800 checks. A change is known by its own files: the
+paths that differ from `staging`. A later gate of the change charges its budget
+for those checks when it answers them from the cache, with their families'
+start-ups, as if it had run them. So a gate of an unchanged change chooses the
+same checks and runs none of them again. A rebase over landed commits reruns
+only those whose inputs the commits changed. The `budget` line names what an
+earlier gate spent. Those charges can take the spending past the budget, and a
+check whose result is cached is still chosen then, since answering it costs
+nothing.
 
 Building is outside both budgets. The gate runs checks on what its tree has
 already compiled, as Enact's worktrees did: a product the tree has built before

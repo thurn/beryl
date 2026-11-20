@@ -92,8 +92,8 @@ use format::{Formatted, Formatter};
 use lease::{HeldLease, LEASE_TTL_S};
 use passes::{GateHome, Passed};
 use records::{LandingRecord, RecordState, Records};
-use timeline::Timeline;
 use replies::{failed_gate, stopped};
+use timeline::Timeline;
 
 /// The longest wait between two tries for a busy lease.
 const BUSY_WAIT_S: f64 = 10.0;
@@ -506,7 +506,11 @@ impl Landing {
             }
             if !gated.run.passed() {
                 let failed = failed_gate(&staging, &rebased, &gated, &gate_tree.path);
-                return Err(format_onto(timeline.onto(ctx.clock.now(), failed, gated.seconds)));
+                return Err(format_onto(timeline.onto(
+                    ctx.clock.now(),
+                    failed,
+                    gated.seconds,
+                )));
             }
             // Whether the commit may move the release branch is settled now, running the
             // release family if the gate did not, so nothing but a push is left after the
