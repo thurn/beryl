@@ -19,6 +19,22 @@ pub const CARD_BACK: FaceId = FaceId(0);
 /// the card under the pointer, the inspector and a prompt's cards.
 pub const READ_WHOLE: usize = 10;
 
+/// The faces `FaceList::read_whole` lists, in a fixed array so that listing them allocates
+/// nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReadWhole {
+    faces: [FaceId; READ_WHOLE + 1],
+    len: usize,
+}
+
+impl ReadWhole {
+    /// The faces, the card back first.
+    #[must_use]
+    pub fn faces(&self) -> &[FaceId] {
+        &self.faces[..self.len]
+    }
+}
+
 /// One distinct picture of the match.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListedFace {
@@ -162,17 +178,22 @@ impl FaceList {
     /// rather than its battlefield frame (`variant` in `ui/src/components/Card.tsx`): the
     /// spells and abilities on the stack, top first, then the face-up cards in the hands, after
     /// the card back when there are any. Each face is listed once, and at most [`READ_WHOLE`]
-    /// besides the card back are. The client asks for them at full
-    /// size (`Faces::want_full`), so that these cards show their cost, type line and rules text.
+    /// besides the card back are. The client asks for them at full size (`Faces::want_full`),
+    /// so that these cards show their cost, type line and rules text. Allocates nothing: the
+    /// client lists them whenever it rebuilds its screen.
     #[must_use]
-    pub fn read_whole(&self, view: &PlayerView) -> Vec<FaceId> {
-        let mut faces = Vec::new();
+    pub fn read_whole(&self, view: &PlayerView) -> ReadWhole {
+        let mut faces = ReadWhole {
+            faces: [CARD_BACK; READ_WHOLE + 1],
+            len: 1,
+        };
         let mut add = |face: Option<FaceId>| {
             if let Some(face) = face
-                && faces.len() < READ_WHOLE
-                && !faces.contains(&face)
+                && faces.len <= READ_WHOLE
+                && !faces.faces().contains(&face)
             {
-                faces.push(face);
+                faces.faces[faces.len] = face;
+                faces.len += 1;
             }
         };
         for item in view.stack.iter().rev() {
@@ -197,9 +218,10 @@ impl FaceList {
         for object in view.objects.iter().filter(|o| o.zone == ZoneName::Hand) {
             add(self.find_object(object));
         }
-        // A card drawn from the full-size array takes its back from there too.
-        if !faces.is_empty() {
-            faces.insert(0, CARD_BACK);
+        // A card drawn from the full-size array takes its back from there too, so the card
+        // back leads the list when there are any others.
+        if faces.len == 1 {
+            faces.len = 0;
         }
         faces
     }
@@ -494,7 +516,9 @@ impl Faces {
             list,
             board: vec![None; count],
             full: vec![None; count],
-            wanted: Vec::new(),
+            // Room for what the hands and the stack ask for at once (`FaceList::read_whole`)
+            // and a few more, so that asking for them while a match plays allocates nothing.
+            wanted: Vec::with_capacity(2 * (READ_WHOLE + 1)),
             asked: vec![false; count],
             number: 0,
         }

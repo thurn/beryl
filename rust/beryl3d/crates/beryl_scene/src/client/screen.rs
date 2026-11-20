@@ -39,9 +39,7 @@ impl Client {
         let mut full = crate::prompts::faces(&input);
         full.extend(screens::sheet_face(&input));
         // The hand and the stack show cards' full frames, as the web interface does.
-        if let Some(view) = view {
-            full.extend(self.show.faces().list().read_whole(view));
-        }
+        let read_whole = view.map(|view| self.show.faces().list().read_whole(view));
         // Until the sheets are built, the settings sheet takes the screen's place in the flat
         // layer; the bug report is drawn over the screen. Before a game has a view and with no
         // prompt open, the game screen shows nothing, so that no empty panel is drawn over the
@@ -68,7 +66,10 @@ impl Client {
         self.layer.show(shown);
         self.layer.scroll_to_end(crate::hud::log::LIST);
         self.place_shown();
-        for face in full {
+        let read_whole = read_whole
+            .iter()
+            .flat_map(|faces| faces.faces().iter().copied());
+        for face in full.into_iter().chain(read_whole) {
             self.show.faces_mut().want_full(face);
         }
         self.show_gear();
