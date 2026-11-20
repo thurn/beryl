@@ -322,4 +322,18 @@ crate::tables! {
 
     /// One change in the feed's journal, which keeps only the most recent positions.
     FeedChange = "feed" { id: i64, seq: i64, kind: String, ticket: Option<String>, name: Option<String> }
+
+    /// One line of a CLI worker's transcript digest.
+    TranscriptLine = "transcript_lines" {
+        seq: i64,
+        machine: String,
+        session: String,
+        ticket: Option<String>,
+        turn: i64,
+        line_index: i64,
+        kind: String,
+        text: String,
+        at: Option<String>,
+        stored_at: String,
+    }
 }

@@ -241,3 +241,53 @@
 .c-edit-composer textarea {
   min-height: 4.5em;
 }
+
+/* The page of a CLI worker (dashboard/session.rs): its transcript digest and the box that tells
+   the worker something. */
+
+.c-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.c-transcript-line {
+  display: flex;
+  gap: var(--space-3);
+  align-items: baseline;
+  font: var(--text-sm) / 1.45 var(--font-sans);
+}
+
+.c-transcript-kind {
+  flex: none;
+  width: 5.5em;
+  color: var(--ink-3);
+  font-size: var(--text-xs);
+}
+
+.c-transcript-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.c-transcript-line[data-kind="tool"] .c-transcript-text {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.c-transcript-line[data-kind="result"] .c-transcript-text,
+.c-transcript-line[data-kind="prompt"] .c-transcript-text {
+  font-weight: 600;
+}
+
+.c-tell-now {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  font-size: var(--text-sm);
+}

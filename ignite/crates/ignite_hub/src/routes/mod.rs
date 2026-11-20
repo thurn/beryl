@@ -9,6 +9,7 @@ pub mod feed;
 pub mod listings;
 pub mod tickets;
 pub mod tip_rounds;
+pub mod transcripts;
 pub mod verdicts;
 pub mod versions;
 

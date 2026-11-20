@@ -478,6 +478,7 @@ fn api_route(conn: &mut Connection, request: &Request, private: bool, now: Times
         .or_else(|| routes::check_state::handle(conn, request, now))
         .or_else(|| routes::dispatch::handle(conn, request, now))
         .or_else(|| routes::commands::handle(conn, request, now))
+        .or_else(|| routes::transcripts::handle(conn, request, private, now))
         .unwrap_or_else(|| failure(404, "Unknown route"))
 }
 
@@ -497,6 +498,7 @@ fn page(
             project: &shared.project,
             wordmark: shared.wordmark.as_deref(),
             editable,
+            private: !shared.read_only,
         },
         now,
     )

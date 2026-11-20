@@ -79,6 +79,7 @@ fn get(conn: &Connection, target: &str, editable: bool) -> String {
         project: "proj",
         wordmark: None,
         editable,
+        private: false,
     };
     let response = serve_with(conn, &request, &site, Timestamp::parse(NOW).unwrap()).unwrap();
     assert_eq!(response.status, 200, "{target}");

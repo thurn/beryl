@@ -20,6 +20,7 @@ pub mod owners;
 pub mod pool;
 pub mod references;
 pub mod serve;
+pub mod session;
 pub mod spend;
 pub mod spend_view;
 pub mod status;

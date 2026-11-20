@@ -360,7 +360,7 @@ pub fn page(
         ),
         (
             "Assignee".into(),
-            worker(card.assignee.as_deref(), &card.id),
+            assignee_view(card.assignee.as_deref(), &card.id, root, editable),
         ),
     ];
     let owner_view = owners::property_view(owner, |id| {
@@ -613,4 +613,16 @@ pub(crate) fn options(
     let data = ticket_data(conn, project, row)?;
     let owner = owners::view(conn, id)?;
     Ok(Some(page(root, project, &data, &owner, seq, editable)))
+}
+
+/// The assignee of a ticket. A CLI worker's links to its session page, which only the private
+/// listener serves (`editable` pages come from it).
+fn assignee_view(assignee: Option<&str>, ticket: &str, root: &str, editable: bool) -> String {
+    let view = worker(assignee, ticket);
+    match assignee {
+        Some(session) if editable && session.starts_with("cli-") => {
+            c::link(&super::session::session_url(root, session), &view, None, "")
+        }
+        _ => view,
+    }
 }

@@ -1,0 +1,278 @@
+//! A CLI worker's transcript digest: the hub stores what a machine's daemon appends, the session
+//! page shows it with a box that tells the worker something, and the public read-only listener
+//! serves neither the route nor the page, because a transcript can hold secrets.
+#![allow(clippy::format_collect)]
+
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpStream};
+
+use serde_json::{Value, json};
+
+use ignite_core::config::Config;
+use ignite_core::ids::MachineId;
+use ignite_core::protocol::cli::{TranscriptKind, TranscriptLine};
+use ignite_core::time::Timestamp;
+use ignite_hub::dashboard::serve::{Site, serve_with};
+use ignite_hub::routes::Request;
+use ignite_hub::server::HubServer;
+use ignite_store::hub::{self, tokens, transcripts};
+
+const CONFIG: &str = r#"
+[repository]
+remote = "origin"
+staging = "staging"
+master = "master"
+trees = "trees"
+checks = "checks"
+
+[hub]
+url = "http://127.0.0.1:0"
+project = "pj"
+
+[gate]
+threshold = 0.004
+cap = 400
+
+[machine.m-1]
+os = "macos"
+ticket_trees = 1
+landing_trees = 1
+trees_disk_gb = 10
+floor = { batch = 1, tip = 1 }
+"#;
+
+const SESSION: &str = "cli-claude-0a1b2c3d";
+const NOW: &str = "2026-11-20T12:00:00.000Z";
+
+fn lines() -> Vec<TranscriptLine> {
+    let line = |turn, index, kind, text: &str| TranscriptLine {
+        session: SESSION.parse().unwrap(),
+        ticket: Some("TT1".parse().unwrap()),
+        turn,
+        index,
+        kind,
+        text: text.to_owned(),
+        at: None,
+    };
+    vec![
+        line(1, 0, TranscriptKind::Prompt, "Run `ignite start TT1`"),
+        line(1, 1, TranscriptKind::Tool, "Bash: ignite status <now>"),
+        line(1, 2, TranscriptKind::Assistant, "Reading the files"),
+        line(1, 3, TranscriptKind::Result, "ended cleanly"),
+    ]
+}
+
+/// A database with one CLI worker holding a ticket and a few digest lines.
+fn seeded() -> rusqlite::Connection {
+    let conn = hub::open_in_memory().unwrap();
+    conn.execute_batch(
+        "INSERT INTO machines (id, name, os, cores, memory_mb, version, last_seen)
+         VALUES ('m-1', 'jarvis', 'macos', 8, 16000, 'abc', '2026-11-20T11:59:00.000Z');
+         INSERT INTO tickets (id, title, status, labels, body, created_at, updated_at, created_by, version)
+         VALUES ('TT1', 'Held ticket', 'in_progress', '[\"tier:sonnet\"]', '',
+                 '2026-11-20T10:00:00.000Z', '2026-11-20T10:00:00.000Z', 'Derek', 5);
+         INSERT INTO workers (machine, session, app, role, state, ticket)
+         VALUES ('m-1', 'cli-claude-0a1b2c3d', 'claude', 'worker', 'working', 'TT1');",
+    )
+    .unwrap();
+    let now = Timestamp::parse(NOW).unwrap();
+    transcripts::append(&conn, &MachineId::new("m-1").unwrap(), &lines(), now).unwrap();
+    conn
+}
+
+fn page(conn: &rusqlite::Connection, path: &str, private: bool, editable: bool) -> (u16, String) {
+    let request = Request {
+        method: "GET".to_owned(),
+        path: path.to_owned(),
+        query: Vec::new(),
+        writer: None,
+        body: Vec::new(),
+        headers: Vec::new(),
+    };
+    let site = Site {
+        project: "pj",
+        wordmark: None,
+        editable,
+        private,
+    };
+    let reply = serve_with(conn, &request, &site, Timestamp::parse(NOW).unwrap()).unwrap();
+    (reply.status, String::from_utf8(reply.body).unwrap())
+}
+
+#[test]
+fn the_session_page_shows_the_lines_and_the_tell_box() {
+    let conn = seeded();
+    let (status, html) = page(&conn, &format!("/pool/session/{SESSION}"), true, true);
+    assert_eq!(status, 200, "{html}");
+    for expected in [
+        "Run `ignite start TT1`",
+        "Bash: ignite status &lt;now&gt;",
+        "Reading the files",
+        "ended cleanly",
+        "sonnet",
+        "working",
+        "turn",
+        "data-tell",
+        "name=\"now\"",
+        "data-ticket=\"TT1\"",
+        "data-after=\"4\"",
+    ] {
+        assert!(
+            html.to_lowercase().contains(&expected.to_lowercase()),
+            "{expected}: {html}"
+        );
+    }
+    // Without edit controls the page shows the lines but no box.
+    let (status, html) = page(&conn, &format!("/pool/session/{SESSION}"), true, false);
+    assert_eq!(status, 200);
+    assert!(html.contains("Reading the files") && !html.contains("data-tell"));
+    // A session the hub has never heard of is 404.
+    assert_eq!(
+        page(&conn, "/pool/session/cli-claude-ffffffff", true, true).0,
+        404
+    );
+}
+
+#[test]
+fn the_pool_page_links_a_cli_worker_on_the_private_listener_only() {
+    let conn = seeded();
+    let link = format!("/pool/session/{SESSION}");
+    assert!(page(&conn, "/pool", true, true).1.contains(&link));
+    assert!(!page(&conn, "/pool", false, false).1.contains(&link));
+}
+
+#[test]
+fn the_session_page_is_a_404_when_the_listener_is_not_private() {
+    let conn = seeded();
+    let (status, html) = page(&conn, &format!("/pool/session/{SESSION}"), false, false);
+    assert_eq!(status, 404);
+    assert!(!html.contains("Reading the files"));
+}
+
+/// One request's status code and body.
+fn send(
+    address: SocketAddr,
+    method: &str,
+    path: &str,
+    headers: &[&str],
+    body: &str,
+) -> (u16, String) {
+    let extra: String = headers
+        .iter()
+        .map(|header| format!("{header}\r\n"))
+        .collect();
+    let message = format!(
+        "{method} {path} HTTP/1.0\r\nHost: hub\r\nConnection: close\r\n{extra}\
+         Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    let mut stream = TcpStream::connect(address).unwrap();
+    stream.write_all(message.as_bytes()).unwrap();
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).unwrap();
+    let status = reply.split(' ').nth(1).unwrap().parse().unwrap();
+    let body = reply.split_once("\r\n\r\n").map_or("", |(_, body)| body);
+    (status, body.to_owned())
+}
+
+#[test]
+fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-transcripts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let database = dir.join("hub.sqlite");
+    let token = {
+        let conn = hub::open(&database).unwrap();
+        tokens::issue(&conn, &"m-1".parse().unwrap()).unwrap()
+    };
+    let server = HubServer {
+        config: Config::parse("ignite.toml", CONFIG).unwrap(),
+        listen: "127.0.0.1:0".to_owned(),
+        database,
+        wordmark: None,
+    };
+    let public = server.start_read_only().unwrap();
+    let private = server.start().unwrap();
+    let auth = [
+        format!("Authorization: Bearer {token}"),
+        "X-Actor: s1".to_owned(),
+    ];
+    let auth: Vec<&str> = auth.iter().map(String::as_str).collect();
+    let body = json!({"machine": "m-1", "lines": lines()}).to_string();
+
+    let append = |headers: &[&str], body: &str| {
+        send(
+            private.address(),
+            "POST",
+            "/pj/api/transcripts/append",
+            headers,
+            body,
+        )
+    };
+    // Appending needs a token, and the token's machine.
+    assert_eq!(append(&[], &body).0, 401);
+    let other = json!({"machine": "m-2", "lines": lines()}).to_string();
+    assert_eq!(append(&auth, &other).0, 403);
+    // The same lines twice are stored once.
+    let (status, first) = append(&auth, &body);
+    assert_eq!(status, 200, "{first}");
+    assert_eq!(serde_json::from_str::<Value>(&first).unwrap()["stored"], 4);
+    let (_, second) = append(&auth, &body);
+    assert_eq!(serde_json::from_str::<Value>(&second).unwrap()["stored"], 0);
+
+    let route = format!("/pj/api/transcripts/{SESSION}");
+    let (status, read) = send(private.address(), "GET", &route, &[], "");
+    assert_eq!(status, 200);
+    let read: Value = serde_json::from_str(&read).unwrap();
+    assert_eq!(read["lines"].as_array().unwrap().len(), 4);
+    let seq = read["lines"][1]["seq"].as_i64().unwrap();
+    let (_, later) = send(
+        private.address(),
+        "GET",
+        &format!("{route}?after={seq}"),
+        &[],
+        "",
+    );
+    let later: Value = serde_json::from_str(&later).unwrap();
+    assert_eq!(later["lines"].as_array().unwrap().len(), 2);
+
+    // The public listener answers 404 for the route and the page, and refuses the append.
+    assert_eq!(send(public.address(), "GET", &route, &[], "").0, 404);
+    assert_eq!(
+        send(
+            public.address(),
+            "GET",
+            &format!("/pool/session/{SESSION}"),
+            &[],
+            ""
+        )
+        .0,
+        404
+    );
+    assert_eq!(
+        send(
+            public.address(),
+            "POST",
+            "/pj/api/transcripts/append",
+            &auth,
+            &body
+        )
+        .0,
+        405
+    );
+    // The private listener serves the page for a session that has lines.
+    let (status, html) = send(
+        private.address(),
+        "GET",
+        &format!("/pool/session/{SESSION}"),
+        &[],
+        "",
+    );
+    assert_eq!(status, 200);
+    assert!(html.contains("Reading the files"));
+
+    public.stop();
+    private.stop();
+    let _ = std::fs::remove_dir_all(dir);
+}

@@ -15,6 +15,8 @@
 //!   person touched it or a worker holds it ([`clearing`]);
 //! - deletes efficiency rows older than any reader needs, a few small batches at a time
 //!   (`ignite_store::hub::metrics::delete_expired`);
+//! - deletes transcript digest lines a week after they arrived
+//!   (`ignite_store::hub::transcripts::delete_expired`);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
 //! The routes call the rest as reports arrive: a landing a tip round reverted ([`reverted::file`]),
@@ -159,6 +161,7 @@ impl Upkeep {
             ignite_store::hub::metrics::delete_expired(conn, now)
                 .map(|deleted| report.metrics_deleted = deleted),
         );
+        keep(ignite_store::hub::transcripts::delete_expired(conn, now).map(|_| ()));
         if let Some(dir) = self.backups.clone() {
             keep(self.backups_due(conn, &dir, now, &mut report));
         }

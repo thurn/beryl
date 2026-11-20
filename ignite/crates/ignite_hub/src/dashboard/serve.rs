@@ -18,7 +18,7 @@ use super::common::{SITE_ICONS, brand};
 use super::components::{self as c, PageOptions, esc};
 use super::data::ReadError;
 use super::references::{dashboard_root, percent_encode, ticket_url};
-use super::{assets, explore, home, landings, machines, pool, status, ticket, tips};
+use super::{assets, explore, home, landings, machines, pool, session, status, ticket, tips};
 use crate::routes::{Request, Response};
 
 /// What a path under the project names.
@@ -28,6 +28,8 @@ enum Route {
     Home,
     /// One of the fleet pages (`machines`, `pool`, `epics`, `landings`, `tips`, `finds`).
     Fleet(&'static str),
+    /// `/pool/session/<id>`: a CLI worker's transcript, served on the private listener only.
+    Session(String),
     /// `/<name>`, with an optional trailing slash: a ticket's page, or a redirect to it from
     /// another name for it.
     Ticket(String),
@@ -49,6 +51,10 @@ fn route(path: &str) -> Option<Route> {
     }
     if let Some(page) = fleet_page(path) {
         return Some(Route::Fleet(page));
+    }
+    if let Some(id) = path.strip_prefix("/pool/session/") {
+        let id = id.strip_suffix('/').unwrap_or(id);
+        return (!id.is_empty() && !id.contains('/')).then(|| Route::Session(id.to_owned()));
     }
     // `/tickets/<name>` is the address the dashboard gave a ticket until its pages moved to the
     // root, and `/beads/<id>.html` the address of the first dashboard.
@@ -246,6 +252,7 @@ pub fn serve(
         project,
         wordmark: None,
         editable: false,
+        private: false,
     };
     serve_with(conn, request, &site, now)
 }
@@ -260,6 +267,9 @@ pub struct Site<'a> {
     /// Whether ticket pages carry the controls that edit the ticket: only on the private
     /// listener, for a request from a Tailscale user (see `crate::auth`).
     pub editable: bool,
+    /// Whether this is the private listener. A transcript can hold secrets, so the worker
+    /// session page is served only there; the public copy answers 404 for it.
+    pub private: bool,
 }
 
 /// Like [`serve`], for the listener `site`.
@@ -284,6 +294,7 @@ fn serve_pages(
         project,
         wordmark,
         editable,
+        private,
     } = *site;
     let head = request.method.eq_ignore_ascii_case("HEAD");
     if !head && !request.method.eq_ignore_ascii_case("GET") {
@@ -324,7 +335,7 @@ fn serve_pages(
         Route::Fleet(page) => {
             let built = match page {
                 "machines" => machines::options(conn, &root, &seq, now),
-                "pool" => pool::options(conn, &root, &seq, now),
+                "pool" => pool::options(conn, &root, &seq, private, now),
                 "epics" => pool::epics(conn, &root, &seq, now),
                 "landings" => landings::options(conn, &root, &seq, now),
                 "tips" => tips::options(conn, &root, &seq, now),
@@ -336,6 +347,19 @@ fn serve_pages(
                     fragment(&seq, regions(&options), head)
                 }
                 Ok(options) => page_reply(&options, if_none_match, head),
+            }
+        }
+        Route::Session(id) => {
+            if !private {
+                return Some(not_found(&root, wordmark, head));
+            }
+            match session::options(conn, &root, project, &id, editable).map(|o| o.map(brand)) {
+                Err(error) => failed(&error),
+                Ok(None) => not_found(&root, wordmark, head),
+                Ok(Some(options)) if fragment_kind == Some("all") => {
+                    fragment(&seq, regions(&options), head)
+                }
+                Ok(Some(options)) => page_reply(&options, if_none_match, head),
             }
         }
         Route::Ticket(name) => {

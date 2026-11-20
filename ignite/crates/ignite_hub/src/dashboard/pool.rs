@@ -59,7 +59,23 @@ fn shortened(session: &str) -> String {
     session.chars().take(SHOWN).collect::<String>() + "…"
 }
 
-fn worker_row(root: &str, now: Timestamp, worker: &Worker) -> String {
+/// A worker's session ID, shortened. A CLI worker's links to its transcript page on the
+/// private listener, which is the only one that serves it.
+fn session_label(root: &str, private: bool, session: &str) -> String {
+    let shown = c::tip(&c::mono(&shortened(session)), session);
+    if private && session.starts_with("cli-") {
+        c::link(
+            &super::session::session_url(root, session),
+            &shown,
+            None,
+            "",
+        )
+    } else {
+        shown
+    }
+}
+
+fn worker_row(root: &str, now: Timestamp, private: bool, worker: &Worker) -> String {
     let since = worker
         .command_since
         .as_deref()
@@ -101,7 +117,7 @@ fn worker_row(root: &str, now: Timestamp, worker: &Worker) -> String {
     c::row(
         &(c::dot(tone, &worker.state, None)
             + " "
-            + &c::tip(&c::mono(&shortened(&worker.session)), &worker.session)
+            + &session_label(root, private, &worker.session)
             + &c::muted(" · ")
             + &ticket
             + "<div>"
@@ -117,6 +133,7 @@ pub(crate) fn options(
     conn: &Connection,
     root: &str,
     seq: &str,
+    private: bool,
     now: Timestamp,
 ) -> Result<PageOptions, ReadError> {
     let mut machines = conn.prepare("SELECT id, name FROM machines ORDER BY name, id")?;
@@ -171,7 +188,11 @@ pub(crate) fn options(
         let list = if members.is_empty() {
             c::empty("No workers.")
         } else {
-            c::rows(members.iter().map(|worker| worker_row(root, now, worker)))
+            c::rows(
+                members
+                    .iter()
+                    .map(|worker| worker_row(root, now, private, worker)),
+            )
         };
         body += &c::section(
             name,

@@ -21,10 +21,11 @@ const STYLES: [&str; 6] = [
 ];
 /// The scripts, served as one file: cirrus itself and its data cards, ticket editing, then the
 /// theme choice.
-const SCRIPTS: [&str; 4] = [
+const SCRIPTS: [&str; 5] = [
     include_str!("../../static/cirrus.js"),
     include_str!("../../static/datacard.js"),
     include_str!("../../static/edit.js"),
+    include_str!("../../static/session.js"),
     include_str!("../../static/theme.js"),
 ];
 const WORKER: &str = include_str!("../../static/sw.js");
