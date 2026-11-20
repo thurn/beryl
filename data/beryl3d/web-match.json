@@ -10,9 +10,9 @@
   "b3d:combat-attackers/you/1600x900@2#118000ms": {
    "unmatched": 342,
    "boxes": 27,
-   "styles": 19,
+   "styles": 17,
    "unsupported": 0,
-   "pixels": 653782
+   "pixels": 649781
   },
   "b3d:game-over/you/1600x900@2": {
    "unmatched": 94,
@@ -73,14 +73,14 @@
   "b3d:screen/gallery/you/1600x900@2": {
    "unmatched": 191,
    "boxes": 1,
-   "styles": 29,
+   "styles": 24,
    "unsupported": 1,
    "pixels": 877873
   },
   "b3d:screen/gallery/you/393x759": {
    "unmatched": 326,
    "boxes": 76,
-   "styles": 241,
+   "styles": 244,
    "unsupported": 0,
    "pixels": 126680
   },
@@ -96,7 +96,7 @@
    "boxes": 17,
    "styles": 18,
    "unsupported": 0,
-   "pixels": 201790
+   "pixels": 201322
   },
   "b3d:screen/settings/you/1600x900@2": {
    "unmatched": 59,
@@ -117,7 +117,7 @@
    "boxes": 10,
    "styles": 0,
    "unsupported": 0,
-   "pixels": 858891
+   "pixels": 855613
   },
   "b3d:screen/start/you/393x759": {
    "unmatched": 26,

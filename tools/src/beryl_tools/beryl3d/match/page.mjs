@@ -301,9 +301,17 @@ export function records({ roles, only, light = false }) {
      * stage turns a tapping card through `rotate` (stage.css `--turn`) on top of the face's own
      * `transform: rotate(90deg)` of a tapped card, so `transform` alone misses how far it is.
      */
+    const none = (v) => !v || v === "none";
     const transformOf = (s) => {
-        const none = (v) => !v || v === "none";
-        if ([s.translate, s.rotate, s.scale, s.transform].every(none)) return "none";
+        const m = matrixOf(s);
+        if (!m) return "none";
+        const numbers = m.is2D ? [m.a, m.b, m.c, m.d, m.e, m.f] : [...m.toFloat64Array()];
+        // `+ 0` turns a -0 into 0.
+        return numbers.map((n) => round(n, 4) + 0);
+    };
+    /** The composed matrix that `transformOf` describes, or undefined for none. */
+    const matrixOf = (s) => {
+        if ([s.translate, s.rotate, s.scale, s.transform].every(none)) return undefined;
         let m = new DOMMatrix();
         if (!none(s.translate)) {
             const [x = 0, y = 0, z = 0] = s.translate.split(/\s+/).map(parseFloat);
@@ -327,14 +335,21 @@ export function records({ roles, only, light = false }) {
             m = m.scale(x, y, z);
         }
         if (!none(s.transform)) m = m.multiply(new DOMMatrix(s.transform));
-        const numbers = m.is2D ? [m.a, m.b, m.c, m.d, m.e, m.f] : [...m.toFloat64Array()];
-        // `+ 0` turns a -0 into 0.
-        return numbers.map((n) => round(n, 4) + 0);
+        return m;
     };
-    // `opacity` is the element's with its ancestors', the opacity it is seen at, as Beryl 3D
-    // resolves it.
-    // `size` is the element's laid-out width and height, before any transform.
-    const styleOf = (s, opacity, size) => ({
+    /**
+     * The size text is drawn at under `matrix`, the transforms of an element and its ancestors
+     * composed (`walk`): the length its x-y part gives the element's vertical unit, since a font
+     * size is the height of the em square. So a rotation keeps the size, `scale(0.35)` takes
+     * 0.35 of it, and the step banner's `scaleX(0.92)`, which narrows its letters, keeps it.
+     * `getComputedStyle(...).fontSize` is the size before any transform, while Beryl 3D records
+     * the size it draws. The ratio of the box to `offsetHeight` would give the same under a
+     * plain scale, but not under a rotation, and `offsetHeight` is rounded to a whole pixel.
+     */
+    const drawnSize = (s, matrix) => round(px(s.fontSize) * Math.hypot(matrix.m21, matrix.m22));
+    // `size` is the element's laid-out width and height, before any transform, and `matrix` the
+    // element's and its ancestors' transforms composed (`drawnSize`).
+    const styleOf = (s, opacity, size, matrix) => ({
         "background-color": color(s.backgroundColor),
         // WebKit's text of the four layered properties, which css.py parses into structures.
         "background-image": s.backgroundImage,
@@ -361,7 +376,7 @@ export function records({ roles, only, light = false }) {
         opacity: round(opacity, 3),
         color: color(s.color),
         "font-family": family(s.fontFamily),
-        "font-size": px(s.fontSize),
+        "font-size": drawnSize(s, matrix),
         "font-weight": Number(s.fontWeight),
         "mask-image": s.maskImage || s.webkitMaskImage || "none",
         transform: transformOf(s),
@@ -475,7 +490,7 @@ export function records({ roles, only, light = false }) {
         canvas.font = `${s.fontStyle} ${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
         return canvas.measureText("Hg").fontBoundingBoxAscent;
     };
-    const linesOf = (node, s) => {
+    const linesOf = (node, s, matrix) => {
         const lines = [];
         const range = document.createRange();
         const up = ascent(s);
@@ -506,7 +521,7 @@ export function records({ roles, only, light = false }) {
             .map((line) => ({
                 string: line.string.replace(/\s+/g, " ").trim(),
                 family: family(s.fontFamily),
-                size: px(s.fontSize),
+                size: drawnSize(s, matrix),
                 weight: Number(s.fontWeight),
                 color: color(s.color),
                 baseline: round(line.top + up),
@@ -529,10 +544,12 @@ export function records({ roles, only, light = false }) {
 
     const elements = [];
     const indexOf = new Map();
-    const walk = (el, parent, seen) => {
+    const walk = (el, parent, seen, outer) => {
         const s = getComputedStyle(el);
         if (s.display === "none") return;
         const opacity = seen * Number(s.opacity);
+        const own = matrixOf(s);
+        const matrix = own ? outer.multiply(own) : outer;
         const rect = el.getBoundingClientRect();
         const shown = visible(el, s, rect);
         const role = roleOf(el);
@@ -553,7 +570,7 @@ export function records({ roles, only, light = false }) {
             const text = [];
             for (const node of light ? [] : el.childNodes) {
                 if (node.nodeType === Node.TEXT_NODE && node.data.trim()) {
-                    text.push(...linesOf(node, s));
+                    text.push(...linesOf(node, s, matrix));
                 }
             }
             elements.push({
@@ -565,14 +582,14 @@ export function records({ roles, only, light = false }) {
                 box: [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 z: here,
                 parent,
-                style: styleOf(s, opacity, laidOut(el, rect)),
+                style: styleOf(s, opacity, laidOut(el, rect), matrix),
                 text,
                 ...(light ? { track: trackOf(el) } : {}),
             });
         }
-        for (const child of el.children) walk(child, here, opacity);
+        for (const child of el.children) walk(child, here, opacity, matrix);
     };
-    for (const child of document.body.children) walk(child, null, 1);
+    for (const child of document.body.children) walk(child, null, 1, new DOMMatrix());
     // `shake` moves the whole table (effects.css `[data-shaking]`), not a node of its own: it is
     // recorded as an effect on `table` whose box is how far the table is moved from where it
     // rests, of no size, as Beryl 3D records the offset of its picture. Where it rests is read
@@ -595,7 +612,7 @@ export function records({ roles, only, light = false }) {
             box: [round(x - restX), round(y - restY), 0, 0],
             z: elements.length,
             parent: null,
-            style: styleOf(getComputedStyle(shaking), 1, [0, 0]),
+            style: styleOf(getComputedStyle(shaking), 1, [0, 0], new DOMMatrix()),
             text: [],
             ...(light ? { track: "shake" } : {}),
         });
