@@ -263,6 +263,43 @@ export function records({ roles, only, light = false }) {
             : parseFloat(first) || 0;
         return round(Math.min(value, shorter / 2));
     };
+    /**
+     * The element's whole transform, as the numbers of a `matrix(...)` (6) or `matrix3d(...)`
+     * (16), or "none". CSS draws an element through its `translate`, `rotate` and `scale`
+     * properties, in that order, and then its `transform`, so all four are composed here. The
+     * stage turns a tapping card through `rotate` (stage.css `--turn`) on top of the face's own
+     * `transform: rotate(90deg)` of a tapped card, so `transform` alone misses how far it is.
+     */
+    const transformOf = (s) => {
+        const none = (v) => !v || v === "none";
+        if ([s.translate, s.rotate, s.scale, s.transform].every(none)) return "none";
+        let m = new DOMMatrix();
+        if (!none(s.translate)) {
+            const [x = 0, y = 0, z = 0] = s.translate.split(/\s+/).map(parseFloat);
+            m = m.translate(x, y, z);
+        }
+        if (!none(s.rotate)) {
+            // "45deg", "x 45deg" or "1 0 0 45deg": an angle about z, a named axis or a vector.
+            const parts = s.rotate.trim().split(/\s+/);
+            const angle = parseFloat(parts.pop() ?? "0");
+            const named = { x: [1, 0, 0], y: [0, 1, 0], z: [0, 0, 1] };
+            const axis =
+                parts.length === 0
+                    ? [0, 0, 1]
+                    : parts.length === 1
+                      ? (named[parts[0]] ?? [0, 0, 1])
+                      : parts.map(parseFloat);
+            m = m.rotateAxisAngle(axis[0], axis[1], axis[2], angle);
+        }
+        if (!none(s.scale)) {
+            const [x = 1, y = x, z = 1] = s.scale.split(/\s+/).map(parseFloat);
+            m = m.scale(x, y, z);
+        }
+        if (!none(s.transform)) m = m.multiply(new DOMMatrix(s.transform));
+        const numbers = m.is2D ? [m.a, m.b, m.c, m.d, m.e, m.f] : [...m.toFloat64Array()];
+        // `+ 0` turns a -0 into 0.
+        return numbers.map((n) => round(n, 4) + 0);
+    };
     // `opacity` is the element's with its ancestors', the opacity it is seen at, as Beryl 3D
     // resolves it.
     // `size` is the element's laid-out width and height, before any transform.
@@ -296,13 +333,7 @@ export function records({ roles, only, light = false }) {
         "font-size": px(s.fontSize),
         "font-weight": Number(s.fontWeight),
         "mask-image": s.maskImage || s.webkitMaskImage || "none",
-        transform:
-            s.transform === "none"
-                ? "none"
-                : // The numbers inside `matrix(...)` or `matrix3d(...)`, without the name's "3".
-                  (s.transform.replace(/^[a-z0-9]+\(/i, "").match(/-?[\d.e+-]+/g) ?? []).map(
-                      (n) => round(Number(n), 4),
-                  ),
+        transform: transformOf(s),
     });
 
     const laidOut = (el, rect) =>

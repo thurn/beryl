@@ -299,3 +299,20 @@ def test_a_card_back_is_compared_either_way_up() -> None:
     # A face shown upside down is a difference.
     web["name"] = b3d["name"] = "Island"
     assert len(styles.measure([web], [b3d], pairs).differences) == 1
+
+
+def test_a_card_turning_partway_is_found_by_the_middle_of_its_face() -> None:
+    # Partway through tapping, the face's box is the larger box of a turned card, but its
+    # middle is still the card's.
+    card = {**element("Island", [80, 590, 140, 92]), "role": "card"}
+    card["style"] = style(transform=[0.9, 0, 0, 0.9, 80, 590])
+    face = {**element("", [71, 557, 158, 158]), "role": "region", "parent": 0}
+    face["style"] = style(transform=[0.7071, 0.7071, -0.7071, 0.7071, 0, 0])
+    drawn = styles.as_drawn([card, face], 0)["style"]
+    assert isinstance(drawn, dict)
+    assert support.same(
+        drawn["transform"], [0.71, 0.71, -0.71, 0.71, 0, 0], "transform"
+    )
+    # A region whose middle is elsewhere is not the card's face.
+    face["box"] = [300, 557, 158, 158]
+    assert styles.as_drawn([card, face], 0) is card

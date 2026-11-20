@@ -254,9 +254,7 @@ def tally(
         add(on_b3d[b3d_index[id(d.b3d)]], "boxes")
     for p in pairs:
         b = joined.index(p, "b3d")
-        differing, unsupported = styles.compare_pair(
-            web[joined.index(p, "web")], b3d[b]
-        )
+        differing, unsupported = styles.compare_paired(web, b3d, p)
         add(on_b3d[b], "styles", len(differing))
         add(on_b3d[b], "unsupported", len(unsupported))
     for side, areas in (("web", on_web), ("b3d", on_b3d)):

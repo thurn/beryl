@@ -119,11 +119,19 @@ def matrix(value: object) -> list[float] | None:
     return None
 
 
+def middle(box: Sequence[float]) -> tuple[float, float]:
+    """The middle of a box `[x, y, width, height]`."""
+    x, y, width, height = box
+    return (x + width / 2, y + height / 2)
+
+
 def as_drawn(web: Sequence[Element], at: int) -> Element:
     """Web element `at` with the transform its look is drawn with. A card's face on the web is a
-    child region of the card's box, which a tapped card turns by itself, while the card element
-    keeps only its scale; a card is compared by its own transform composed with that child's, as
-    Beryl 3D's card is the face. Any other element is itself."""
+    child region with the card's middle, which a tapped or tapping card turns by itself about
+    that middle, while the card element keeps only its scale; a card is compared by its own
+    transform composed with that child's, as Beryl 3D's card is the face. The face is found by
+    its middle, not its box, since a face turned partway has a larger box than the card's.
+    Any other element is itself."""
     element = web[at]
     if element.get("role") != "card":
         return element
@@ -138,7 +146,7 @@ def as_drawn(web: Sequence[Element], at: int) -> Element:
             and child.get("role") == "region"
             and all(
                 support.near(x, y, 1.0)
-                for x, y in zip(joined.box(child), joined.box(element))
+                for x, y in zip(middle(joined.box(child)), middle(joined.box(element)))
             )
         ),
         None,
@@ -181,6 +189,20 @@ def upright(element: Element) -> Element:
     return {**element, "style": {**style, "transform": [-a, -b, -c, -d, e, f]}}
 
 
+def compare_paired(
+    web: Sequence[Element],
+    b3d: Sequence[Element],
+    pair: Mapping[str, object],
+) -> tuple[list[Difference], list[str]]:
+    """`compare_pair` of `pair`'s two elements, each as it is drawn: a web card with its turned
+    face's transform (`as_drawn`), and a card back either way up (`upright`). Every count of
+    style differences goes through here, so that `match styles` and the census agree."""
+    return compare_pair(
+        upright(as_drawn(web, joined.index(pair, "web"))),
+        upright(b3d[joined.index(pair, "b3d")]),
+    )
+
+
 def measure(
     web: Sequence[Element],
     b3d: Sequence[Element],
@@ -189,10 +211,7 @@ def measure(
     differences: list[Difference] = []
     unsupported: dict[str, int] = {}
     for p in pairs:
-        found, missing = compare_pair(
-            upright(as_drawn(web, joined.index(p, "web"))),
-            upright(b3d[joined.index(p, "b3d")]),
-        )
+        found, missing = compare_paired(web, b3d, p)
         differences += found
         for name in missing:
             unsupported[name] = unsupported.get(name, 0) + 1
