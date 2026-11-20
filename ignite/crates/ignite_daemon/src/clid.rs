@@ -140,9 +140,7 @@ impl CliPool for FakeCliPool {
             .strip_prefix("cli-")
             .and_then(|rest| rest.split_once("-slot-"))
             .map(|(app, _)| app.to_owned())
-            .ok_or_else(|| {
-                Error::Invalid(format!("{} is not a CLI slot", reservation.session))
-            })?;
+            .ok_or_else(|| Error::Invalid(format!("{} is not a CLI slot", reservation.session)))?;
         let mut begun = lock(&self.begun);
         begun.push((
             reservation.clone(),
@@ -213,7 +211,8 @@ mod tests {
             )
             .is_err()
         );
-        pool.message(&session, "Message about T.1: stop", true).unwrap();
+        pool.message(&session, "Message about T.1: stop", true)
+            .unwrap();
         assert!(pool.sent()[0].urgent);
         assert!(pool.slots("claude").is_empty());
         assert!(pool.held("claude").is_none());

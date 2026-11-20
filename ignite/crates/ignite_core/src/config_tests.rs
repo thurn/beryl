@@ -218,7 +218,10 @@ fn the_cli_pool_tables_parse_and_default_to_desktop_mode() {
             slots: 0
         }
     );
-    assert_eq!(config.machine_pool("nowhere", "claude").mode, PoolMode::Desktop);
+    assert_eq!(
+        config.machine_pool("nowhere", "claude").mode,
+        PoolMode::Desktop
+    );
     assert_eq!(config.cli_program("claude"), None);
 
     let cli = "\n[machine.jarvis.pool.claude]\nmode = \"cli\"\nslots = 8\n\
@@ -244,11 +247,17 @@ fn the_cli_pool_tables_parse_and_default_to_desktop_mode() {
         },
         "a table without a mode is desktop mode"
     );
-    assert_eq!(config.machine_pool("cygnus", "claude").mode, PoolMode::Desktop);
+    assert_eq!(
+        config.machine_pool("cygnus", "claude").mode,
+        PoolMode::Desktop
+    );
     let claude = config.cli_program("claude").unwrap();
     assert_eq!(
         (claude.program.as_str(), claude.args.as_slice()),
-        ("claude", ["--dangerously-skip-permissions".to_owned()].as_slice())
+        (
+            "claude",
+            ["--dangerously-skip-permissions".to_owned()].as_slice()
+        )
     );
     assert!(config.cli_program("codex").unwrap().args.is_empty());
 

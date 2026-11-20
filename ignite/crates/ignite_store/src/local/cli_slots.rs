@@ -270,10 +270,7 @@ pub fn set_mode_override(conn: &Connection, app: &str, mode: Option<&str>) -> Re
             "INSERT OR REPLACE INTO pool_settings (key, value) VALUES (?1, ?2)",
             params![mode_key(app), mode],
         )?,
-        None => conn.execute(
-            "DELETE FROM pool_settings WHERE key = ?1",
-            [mode_key(app)],
-        )?,
+        None => conn.execute("DELETE FROM pool_settings WHERE key = ?1", [mode_key(app)])?,
     };
     Ok(())
 }
@@ -371,7 +368,10 @@ mod tests {
         let conn = open_in_memory().unwrap();
         assert_eq!(mode_override(&conn, "claude").unwrap(), None);
         set_mode_override(&conn, "claude", Some("cli")).unwrap();
-        assert_eq!(mode_override(&conn, "claude").unwrap().as_deref(), Some("cli"));
+        assert_eq!(
+            mode_override(&conn, "claude").unwrap().as_deref(),
+            Some("cli")
+        );
         assert_eq!(mode_override(&conn, "codex").unwrap(), None);
         set_mode_override(&conn, "claude", None).unwrap();
         assert_eq!(mode_override(&conn, "claude").unwrap(), None);
@@ -389,7 +389,11 @@ mod tests {
         .unwrap();
         let slots = list(&conn).unwrap();
         assert_eq!(
-            (slots[0].state.as_str(), slots[0].turn, slots[0].session.clone()),
+            (
+                slots[0].state.as_str(),
+                slots[0].turn,
+                slots[0].session.clone()
+            ),
             ("free", 0, None)
         );
         assert_eq!(holds(&conn).unwrap()[0].reported, 0);

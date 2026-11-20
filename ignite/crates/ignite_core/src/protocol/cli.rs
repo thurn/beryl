@@ -166,7 +166,10 @@ mod tests {
 
     #[test]
     fn pool_mode_words_parse() {
-        assert_eq!(PoolModeSetting::parse("cli").unwrap().mode(), Some(PoolMode::Cli));
+        assert_eq!(
+            PoolModeSetting::parse("cli").unwrap().mode(),
+            Some(PoolMode::Cli)
+        );
         assert_eq!(PoolModeSetting::parse("config").unwrap().mode(), None);
         assert_eq!(PoolModeSetting::parse("tui"), None);
     }

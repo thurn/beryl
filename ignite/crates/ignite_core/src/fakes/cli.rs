@@ -227,10 +227,12 @@ impl Launcher for ScriptedLauncher {
             runs.push(spec.clone());
             runs.len()
         };
-        let turn = lock(&self.queue).pop_front().unwrap_or_else(|| ScriptedTurn {
-            exit: Some(0),
-            ..ScriptedTurn::default()
-        });
+        let turn = lock(&self.queue)
+            .pop_front()
+            .unwrap_or_else(|| ScriptedTurn {
+                exit: Some(0),
+                ..ScriptedTurn::default()
+            });
         let output = PathBuf::from(format!("scripted/{n}/output.log"));
         let result = RunResult {
             exit: turn.exit,
