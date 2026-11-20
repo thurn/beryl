@@ -57,7 +57,7 @@ pub use starts::{
 pub const MONITOR_VERB: &str = "monitor";
 
 /// The directory of Ignite's own source in the repository; a change under it means a new build,
-/// and a landing that touches it may move the release branch.
+/// and a landing that touches it may move the release ref.
 pub const SOURCE: &str = "ignite";
 
 /// The arguments the login service starts the executable with.
@@ -655,12 +655,12 @@ pub enum UpdateCheck {
     UpToDate,
     /// `master` moved but nothing under `ignite/` changed, so the executable stays.
     NotNeeded { tip: Commit },
-    /// The release branch's tip lacks changes to Ignite's source that the running commit has:
+    /// The release ref's tip lacks changes to Ignite's source that the running commit has:
     /// the daemon was installed by hand from a newer or diverged commit. Going to the tip would
     /// be a downgrade, so the executable stays until the branch moves past it. A tip that holds
     /// the running commit's changes as other commits, as a rebased copy does, is not ahead.
     Ahead { tip: Commit },
-    /// The release branch's tip was rolled back or failed its selftest on this machine, so the
+    /// The release ref's tip was rolled back or failed its selftest on this machine, so the
     /// executable stays until the branch moves again.
     Rejected { tip: Commit },
     /// The executable of `to` is built and stored, and is what a restart starts.
@@ -703,8 +703,8 @@ impl Updater<'_> {
             return Ok(Plan::Done(UpdateCheck::Rejected { tip }));
         }
         // A tip that does not contain the running commit may still hold its changes: a commit
-        // pushed to the release branch by hand and then landed is rebased, and the landing moves
-        // the release branch to the rebased copy. Staying on the hand-pushed commit then would
+        // pushed to the release ref by hand and then landed is rebased, and the landing moves
+        // the release ref to the rebased copy. Staying on the hand-pushed commit then would
         // refuse every later release. Only a tip that lacks the running commit's changes to
         // Ignite's source would be a downgrade.
         if !self.git.is_ancestor(current, &tip)?
