@@ -17,7 +17,8 @@
 //! - A check whose regression ticket is still open keeps it, and a second failure changes
 //!   nothing.
 //! - When the fix has landed and closed the ticket but the check still fails, the ticket is
-//!   reopened with the new output, unless the rules above add the check to an open ticket.
+//!   reopened with the new output and no assignee, so that dispatch offers it to a worker
+//!   again, unless the rules above add the check to an open ticket.
 //! - A regression a landing found, not tip verification, also records why tip verification
 //!   missed it (`super::missed`).
 //! - An upkeep pass marks a regression fixed once its ticket is closed and the check has passed
@@ -108,6 +109,19 @@ pub fn file(
             };
             let ops = vec![
                 Operation::Reopen { id: ticket.clone() },
+                // The session that closed the ticket is still its assignee, and dispatch
+                // offers no ticket that has one, so without this nobody works it again.
+                Operation::Update {
+                    id: ticket.clone(),
+                    set: Some(TicketFields {
+                        assignee: Some(None),
+                        ..TicketFields::default()
+                    }),
+                    add_labels: Vec::new(),
+                    remove_labels: Vec::new(),
+                    set_meta: BTreeMap::new(),
+                    unset_meta: Vec::new(),
+                },
                 Operation::Comment {
                     id: ticket,
                     text: format!("{again}\n\n{}", details(report)),

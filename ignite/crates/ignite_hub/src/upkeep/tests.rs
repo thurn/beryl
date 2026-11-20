@@ -322,7 +322,14 @@ fn a_fix_that_did_not_work_reopens_the_ticket_with_the_new_output() {
     )
     .unwrap();
     clock.advance(3_600.0);
+    // A worker held the ticket when it closed it, and a closed ticket keeps its assignee.
+    conn.execute(
+        "UPDATE tickets SET status = 'in_progress', assignee = 'local_w' WHERE id = ?1",
+        [&id],
+    )
+    .unwrap();
     close(&mut conn, &id, clock.now());
+    assert_eq!(ticket(&conn, &id).assignee.as_deref(), Some("local_w"));
 
     clock.advance(600.0);
     let (again, outcome) = regressions::file(
@@ -337,6 +344,8 @@ fn a_fix_that_did_not_work_reopens_the_ticket_with_the_new_output() {
         (id.as_str(), regressions::Outcome::Reopened)
     );
     assert_eq!(ticket(&conn, &id).status, Status::Open);
+    // Dispatch offers only tickets nobody holds, so the reopened one has no assignee.
+    assert_eq!(ticket(&conn, &id).assignee, None);
     let comments = tickets::comments(&conn, &id).unwrap();
     assert_eq!(comments.len(), 1);
     assert!(comments[0].text.contains("still fails"));
