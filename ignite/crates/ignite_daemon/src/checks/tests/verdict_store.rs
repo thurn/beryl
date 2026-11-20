@@ -89,7 +89,9 @@ fn a_passing_check_stores_a_verdict_found_by_the_trees_files_base_and_gate() {
     assert!(found(&world, &machines).is_some(), "only [gate] counts");
 
     // A moved integration branch, which the tree's `HEAD` has merged, gives another base.
-    world.git.set_tip("staging", Commit::new("ba5e456").unwrap());
+    world
+        .git
+        .set_tip("staging", Commit::new("ba5e456").unwrap());
     assert_eq!(found(&world, &world.ctx), None);
 }
 
@@ -124,7 +126,11 @@ fn a_dirty_trees_verdict_is_found_after_its_edits_are_committed_unchanged() {
     let committed = Commit::new("def5678").unwrap();
     let key = verdicts::key_for(&world.ctx, &world.dir, &committed).unwrap();
     let verdict = verdicts::find(&world.ctx, &world.checks.cache.conn(), &key).unwrap();
-    assert_eq!(verdict.head, head(), "the verdict keeps the HEAD it passed at");
+    assert_eq!(
+        verdict.head,
+        head(),
+        "the verdict keeps the HEAD it passed at"
+    );
 }
 
 #[test]

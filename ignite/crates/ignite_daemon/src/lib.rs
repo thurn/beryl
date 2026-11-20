@@ -46,6 +46,6 @@ mod testhub;
 pub mod tip;
 pub mod trees;
 pub mod update;
-pub mod verdicts;
 pub mod verbproc;
+pub mod verdicts;
 pub mod wrap;

@@ -347,11 +347,10 @@ The verbs an agent uses while working:
   `ignite test fork` after a one-line comment change took 300 s, its lines
   accounted for 130 s, and its three products had built one after another.
 
-- `ignite check` runs what the landing gate would run on the tree as it is.
-  When the gate passes with nothing incomplete, it stores a verdict for the tree
-  (see [Processes](#processes)) and says so on a
-  `verdict  stored for this tree` line, or `verdict  not stored: <reason>`. Its
-  express path stores none.
+- `ignite check` runs what the landing gate would run on the tree as it is. When
+  the gate passes with nothing incomplete, it stores a verdict for the tree (see
+  [Processes](#processes)) and says so on a `verdict  stored for this tree`
+  line, or `verdict  not stored: <reason>`. Its express path stores none.
 
 - `ignite sync` rebases the tree's branch onto the tip.
 
