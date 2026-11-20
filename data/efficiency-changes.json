@@ -621,7 +621,7 @@
     "expect": "down"
   },
   {
-    "label": "`beryl_cli`'s library takes the cards as a `Catalog` from its binary, now the package `beryl_cli_main`, and Beryl 3D's recorder, so a card file edit relinks those binaries and recompiles none of the library's 20,000 lines, here or in Beryl 3D's build",
+    "label": "The `beryl_cli` library takes the cards as a `Catalog` from its binary, now the package `beryl_cli_main`, and Beryl 3D's recorder, so a card file edit relinks those binaries and recompiles none of the library's 20,000 lines, here or in Beryl 3D's build",
     "metric": "bead.agent-minutes",
     "expect": "down"
   },
@@ -651,7 +651,7 @@
     "expect": "down"
   },
   {
-    "label": "`ignite check` stores a verdict when its gate passes (keyed by the tree's files, its merge base with the tip and the `[gate]` section, at the hub and in the daemon's local table), so a later landing of the same tree can look the pass up instead of running the gate again",
+    "label": "An `ignite check` that passes stores a verdict when its gate passes (keyed by the tree's files, its merge base with the tip and the `[gate]` section, at the hub and in the daemon's local table), so a later landing of the same tree can look the pass up instead of running the gate again",
     "metric": "bead.agent-minutes",
     "expect": "down"
   },
@@ -666,17 +666,17 @@
     "expect": "down"
   },
   {
-    "label": "The scheduler keeps a machine's `tip_build_cores` for the build checks of a tip round (`Reserve::TipBuild`), which start at once on them however full the machine is, so `green` and the tickets waiting on it are not held behind a dozen one-core commands; idle reserved cores are lent to the express lane and the release build",
+    "label": "The scheduler keeps a machine's `tip_build_cores` for the build checks of a tip round (`Reserve::TipBuild`), which start at once on them however full the machine is, so `green` and the tickets waiting on it are not held behind a dozen one-core commands, and idle reserved cores are lent to the express lane and the release build",
     "metric": "ignite.master-lag-minutes",
     "expect": "down"
   },
   {
-    "label": "`ignite test <name>` leaves out a family whose listing needs a product build when every name it matches is also matched by a family that is cheap to list, and names it on a `skipped` line; `ignite test fork` after a one-line change to a card file spent 24 to 55 minutes listing two Beryl 3D interface families before running its one Rust test (2026-11-19)",
+    "label": "The command `ignite test <name>` leaves out a family whose listing needs a product build when every name it matches is also matched by a family that is cheap to list, and names it on a `skipped` line, and `ignite test fork` after a one-line change to a card file spent 24 to 55 minutes listing two Beryl 3D interface families before running its one Rust test (2026-11-19)",
     "metric": "bead.agent-minutes",
     "expect": "down"
   },
   {
-    "label": "`ignite start` and `ignite sync` begin at `green` when `repository.green` is set (a dependency's landed commit that `green` lacks, or the `staging` tip for a regression ticket, being the exceptions), so a new tree does not start at a tip that fails to compile before a tip round reverts it",
+    "label": "Both `ignite start` and `ignite sync` begin at `green` when `repository.green` is set (a dependency's landed commit that `green` lacks, or the `staging` tip for a regression ticket, being the exceptions), so a new tree does not start at a tip that fails to compile before a tip round reverts it",
     "metric": "bead.agent-minutes",
     "expect": "down"
   },
