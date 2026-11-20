@@ -117,6 +117,19 @@ def web_at(messages: list[dict[str, object]], view: int) -> int:
     return len(events)
 
 
+def screen_of(messages: list[dict[str, object]]) -> str:
+    """The hash route that shows `messages`: `table` for a manual table's recording, whose
+    views carry a `table` and which the game screen ignores (`usePlayback` in
+    ui/src/stage/playback.ts), otherwise `game`."""
+    for message in messages:
+        payload = message.get("payload")
+        if message.get("event") == "game-update" and isinstance(payload, dict):
+            view = payload.get("view")
+            if isinstance(view, dict) and view.get("table") is not None:
+                return "table"
+    return "game"
+
+
 def shoot(
     messages: list[dict[str, object]],
     view: int,
@@ -135,7 +148,10 @@ def shoot(
     phone = "phone&" if layout == "phone" else ""
     shot = {
         "name": "web",
-        "route": f"/?{phone}fixture={name}&at={web_at(messages, view)}#/game",
+        "route": f"/?{phone}fixture={name}&at={web_at(messages, view)}#/{screen_of(messages)}",
+        # What a game is drawn on, either screen's table: the "No game in progress" and "Starting
+        # game" screens are `.table.start-screen`, so a blank half fails the shot.
+        "expect": ".table:not(.start-screen), .phone-board",
         "width": width,
         "height": height,
         "scale": float(scale),
@@ -166,6 +182,14 @@ def shoot(
     # The shot's own checks may find faults in the web page; they are printed, not fatal, since
     # the picture is still the web interface's.
     faults = [line for line in done.stdout.splitlines() if line.startswith("ui-shots:")]
+    if any("not on screen:" in line for line in faults):
+        sys.stderr.write(done.stdout + done.stderr)
+        print(
+            "compare: the web page shows no game for this recording, so there is nothing to "
+            "compare Beryl 3D's frame with; no picture was written",
+            file=sys.stderr,
+        )
+        return None
     for line in faults:
         print(f"web page: {line}")
     return picture
