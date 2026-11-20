@@ -614,5 +614,10 @@
     "label": "A generated crate, `beryl_workspace_hack`, gives every shared dependency the whole Rust workspace's features in a build of any one package, so Ignite builds only the selected packages' test binaries instead of falling back to the whole workspace's (35 crates, 33-77 s) after a card edit",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "A seed clones each of a donor tree's Cargo profile directories in one `clonefile` call (7 s for 72,000 files under load, against 134-680 s file by file), passes over a donor that is building for the next one, and starts again after a daemon restart, so a leased tree whose build the disk loop deleted no longer compiles about 320 crates from nothing on its first `ignite test`",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

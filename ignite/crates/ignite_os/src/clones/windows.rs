@@ -63,6 +63,12 @@ impl Clones for Native {
             .entry(volume.clone())
             .or_insert_with(|| counts_block_references(&volume))
     }
+
+    /// Windows has no call that clones a directory hierarchy, so the caller copies it file by
+    /// file.
+    fn clone_tree(&self, _from: &Path, _to: &Path) -> io::Result<()> {
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
 }
 
 /// The root of the volume that holds `path`, such as `D:\`.

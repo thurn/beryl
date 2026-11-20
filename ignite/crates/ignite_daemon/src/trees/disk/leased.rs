@@ -54,12 +54,16 @@ impl Trees {
 
     /// Pauses builds in the leased tree `id` if nothing runs in it ([`Builds::pause`]), and
     /// returns the guard that resumes them. `None` when a verb runs from the tree, a build runs
-    /// in it, a process works inside it or its processes cannot be listed.
+    /// in it, a process works inside it, its processes cannot be listed, or a seed copies into
+    /// it or from it (the daemon's own copy is not a process inside the tree).
     ///
     /// [`Builds::pause`]: ignite_core::traits::Builds::pause
     pub(super) fn pause_idle(&self, id: &TreeId) -> Option<Paused<'_>> {
         let path = self.inner.config.path(id);
-        if !self.inner.steps.in_tree(id, &path).is_empty() || !self.inner.builds.pause(id) {
+        if super::super::Seeding::involves(&path, id)
+            || !self.inner.steps.in_tree(id, &path).is_empty()
+            || !self.inner.builds.pause(id)
+        {
             return None;
         }
         let paused = Paused {

@@ -536,3 +536,58 @@ fn a_read_only_file_is_copied_with_its_modification_time() {
     // Remove the read-only files' directory last; deleting needs only the directory's rights.
     fs::remove_dir_all(&dir).unwrap();
 }
+
+/// Under load most leased trees are building, and a seed whose best donor held Cargo's lock
+/// ended without a copy. It goes on to the next donor.
+#[test]
+fn a_seed_whose_best_donor_is_building_copies_the_next() {
+    if !copies_are_clones_here() {
+        return;
+    }
+    let (f, donor) = donor_at_the_tip();
+    let lock = File::open(donor.join("out/debug/.cargo-lock")).unwrap();
+    lock.try_lock().unwrap();
+    let landing = f.repo.join(".worktrees/landing-1");
+    fake_target(&landing);
+    write(&landing, "out/debug/deps/marker", "landing-1");
+    f.trees.record_build(&id("landing-1"), &f.tip()).unwrap();
+    // tree-02 holds a product the others lack, so it ranks first.
+    f.builds.hold(&id("tree-02"), "bin");
+
+    let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
+
+    assert_eq!(lease.tree.as_str(), "tree-01");
+    assert_eq!(
+        fs::read_to_string(lease.path.join("out/debug/deps/marker")).unwrap(),
+        "landing-1"
+    );
+}
+
+/// A release restarted the daemon seconds after a lease started its seed, the seed died with
+/// the old daemon, and the ticket's first test compiled every crate from nothing. The seed
+/// directory beside the tree outlives the daemon, and the next daemon starts that seed again.
+#[test]
+fn a_seed_a_restart_cut_short_is_started_again() {
+    if !copies_are_clones_here() {
+        return;
+    }
+    let (f, _donor) = donor_at_the_tip();
+    // A lease that started no seed stands for one whose seed died with its daemon.
+    let lease = f.lease("T.2", false);
+    assert_eq!(lease.tree.as_str(), "tree-01");
+    let marker = f.repo.join(".worktrees/.tree-01.seeding");
+    fs::create_dir_all(marker.join("new/out")).unwrap();
+    let other = f.repo.join(".worktrees/.landing-1.seeding");
+    fs::create_dir_all(&other).unwrap();
+
+    assert_eq!(f.trees.resume_seeds().unwrap(), [id("tree-01")]);
+    super::super::wait_until_seeded(&lease.path).unwrap();
+
+    assert!(lease.path.join("out/debug/deps/libfoo-1.rlib").exists());
+    assert!(!marker.exists());
+    assert!(
+        !other.exists(),
+        "a tree not leased to a ticket is not seeded"
+    );
+}

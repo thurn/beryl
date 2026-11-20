@@ -11,8 +11,10 @@
 //! thread that then prebuilds the tree ([`Trees::start_builds`]): a copy of large target
 //! directories under load took up to 141 s, and the session could do nothing while `ignite
 //! start` waited for it. Every build in the tree waits for the copy ([`wait_until_seeded`]),
-//! and a file the session edits during the copy keeps its own modification time. On macOS the copy is a clone (APFS
-//! `clonefile`): it takes a few seconds and almost no disk until either tree writes. Measured
+//! and a file the session edits during the copy keeps its own modification time. On macOS each
+//! profile directory is cloned in one APFS `clonefile` call (`seed_copy.rs`): it takes seconds
+//! and almost no disk until either tree writes. A seed that a daemon restart cut short is started
+//! again by the next daemon (`seed_swap.rs`, [`Trees::resume_seeds`]). Measured
 //! on 2026-11-18 with the two trees 14 commits apart (none of them touching a crate), three
 //! products whose cold builds took 947, 1,070 and 1,390 CPU-s then built in 5.4, 6.3 and
 //! 0.2 CPU-s.
@@ -62,7 +64,10 @@ use ignite_store::local::{rows, trees as store};
 
 use super::disk::{id_of, profile_dirs};
 use super::{Kind, LeaseRequest, Trees, store_error};
-use swap::{move_dir, staging, tree_locks, tree_profiles};
+#[cfg(test)]
+pub(super) use copy::clone_dir;
+use copy::clone_target;
+use swap::{clear, delete, move_dir, set_aside, staging, swap_in, tree_locks, tree_profiles};
 
 /// The lock files Cargo holds in a profile directory while it builds there: Cargo 1.98 holds the
 /// build and artifact locks exclusively for the whole build, and older versions `.cargo-lock`.
@@ -113,6 +118,15 @@ impl Seeding {
 
     fn contains(path: &Path) -> bool {
         seeding().iter().any(|m| m.path == path)
+    }
+
+    /// Whether the tree `tree` at `path` is being seeded or is the donor of a seed now. The disk
+    /// loop leaves such a tree alone even while no command runs in it: deleting its build
+    /// directories would delete the copy, or what is being copied.
+    pub(in crate::trees) fn involves(path: &Path, tree: &TreeId) -> bool {
+        seeding()
+            .iter()
+            .any(|m| m.path == path || m.donor.as_ref() == Some(tree))
     }
 }
 
@@ -198,7 +212,8 @@ struct Candidate<'a> {
     held: BTreeSet<String>,
 }
 
-/// A donor taken for the copy, and whether it was free and must be put back.
+/// A tree that could be copied, and whether it is free, so must be taken for the copy and put
+/// back after it.
 struct Donor {
     row: rows::Tree,
     free: bool,
@@ -218,17 +233,49 @@ impl Trees {
         let seeding = Native
             .copies_are_clones(&path)
             .then(|| Seeding::start(path, tree.clone()));
+        if let Some(seeding) = &seeding
+            && let Err(error) = fs::create_dir_all(staging(&seeding.0))
+        {
+            // Without it the seed still runs, but a restart during it is not resumed.
+            eprintln!("ignite: {tree}'s seed is not marked on disk: {error}");
+        }
+        self.spawn_builds(
+            seeding,
+            tree,
+            request.at.clone(),
+            request.tip.clone(),
+            request.files.clone(),
+        );
+    }
+
+    /// Starts the seed that `seeding` marks, if any, and then the prebuild products, on a thread
+    /// of its own.
+    fn spawn_builds(
+        &self,
+        seeding: Option<Seeding>,
+        tree: &TreeId,
+        at: Commit,
+        tip: Commit,
+        files: Vec<String>,
+    ) {
         if seeding.is_none() && self.inner.config.prebuild.get().is_empty() {
             return;
         }
         let trees = self.clone();
-        let (tree, at, tip) = (tree.clone(), request.at.clone(), request.tip.clone());
-        let files = request.files.clone();
+        let tree = tree.clone();
         std::thread::spawn(move || {
             if let Some(seeding) = seeding {
                 let started = trees.inner.clock.now();
                 let seeded = trees.seed(&seeding, &tree, &tip);
+                // Set aside before the mark is dropped, so a build that starts once it is gone
+                // finds no seed directory, and deleted after, so no build waits for that.
+                let left = set_aside(&staging(&seeding.0));
                 drop(seeding);
+                match left {
+                    Ok(Some(left)) => delete(left),
+                    Ok(None) => {}
+                    Err(error) => eprintln!("ignite: {tree}'s seed directory stays: {error}"),
+                }
                 let took = trees.inner.clock.now().seconds_since(started);
                 match seeded {
                     Ok(Some(seeded)) => eprintln!(
@@ -261,40 +308,52 @@ impl Trees {
     /// less than `tree`'s own ([`Trees::take_donor`]). Returns what was copied, or `None` when
     /// nothing was.
     /// `seeding` marks `tree` for as long as the copy runs.
+    ///
+    /// A donor in which a build holds Cargo's lock when its turn comes is passed over for the
+    /// next. The seed used to end there instead, and under load, when most leased trees were
+    /// building, a lease of a tree whose build the disk loop had deleted got no copy at all.
     fn seed(&self, seeding: &Seeding, tree: &TreeId, tip: &Commit) -> Result<Option<Seeded>> {
-        let Some(donor) = self.take_donor(tree, tip)? else {
-            return Ok(None);
-        };
-        seeding.set_donor(&id_of(&donor.row)?);
-        let result = self.copy_from(&donor.row, tree);
-        if donor.free {
-            self.put_back(&donor.row)?;
+        for ranked in self.donors(tree, tip)? {
+            let row = if ranked.free {
+                match self.take_for_sweep(&ranked.row.id)? {
+                    Some(row) => row,
+                    None => continue,
+                }
+            } else {
+                ranked.row.clone()
+            };
+            let donor = id_of(&row)?;
+            seeding.set_donor(&donor);
+            let result = self.copy_from(&row, tree);
+            if ranked.free {
+                self.put_back(&row)?;
+            }
+            let dirs = result?;
+            if dirs.is_empty() {
+                continue;
+            }
+            self.record_build(tree, &ranked.base)?;
+            return Ok(Some(Seeded {
+                donor,
+                built: ranked.base,
+                behind: ranked.behind,
+                changed: ranked.changed,
+                missing: ranked.missing,
+                dirs,
+            }));
         }
-        let dirs = result?;
-        if dirs.is_empty() {
-            return Ok(None);
-        }
-        self.record_build(tree, &donor.base)?;
-        Ok(Some(Seeded {
-            donor: id_of(&donor.row)?,
-            built: donor.base,
-            behind: donor.behind,
-            changed: donor.changed,
-            missing: donor.missing,
-            dirs,
-        }))
+        Ok(None)
     }
 
-    /// The tree to copy from: of the free trees and the leased ticket trees holding a Cargo
-    /// target directory, the one whose copy leaves the least to compile at `tip` ([`Cost`]), and
-    /// less than `tree`'s own build would. A free donor is marked `resetting` until
-    /// [`Trees::put_back`].
+    /// The trees to copy from, best first: of the free trees and the leased ticket trees holding
+    /// a Cargo target directory, those whose copy leaves less to compile at `tip` ([`Cost`])
+    /// than `tree`'s own build would, the one that leaves the least first.
     ///
     /// Ranking by commit distance alone chose donors whose copies rebuilt most of the workspace:
     /// a leased tree records the commit it was leased at, so its ticket's edits were invisible,
     /// and a tree that never built a product (one ticket's tree builds only what its checks
     /// need) passed it on to be built cold.
-    fn take_donor(&self, tree: &TreeId, tip: &Commit) -> Result<Option<Donor>> {
+    fn donors(&self, tree: &TreeId, tip: &Commit) -> Result<Vec<Donor>> {
         let rows = store::all(&self.lock().db).map_err(|e| store_error(&e))?;
         let configured = self.inner.config.configured();
         let own = rows
@@ -339,29 +398,21 @@ impl Trees {
             .collect();
         // Cheapest first, and a free tree before a leased one at the same cost.
         ranked.sort_by(|a, b| (a.0, a.1.leased, &a.1.row.id).cmp(&(b.0, b.1.leased, &b.1.row.id)));
-        for (_, candidate) in ranked {
-            let missing = wanted
-                .iter()
-                .filter(|p| !candidate.held.contains(**p))
-                .map(|p| (*p).clone())
-                .collect();
-            let row = if candidate.leased {
-                Some(candidate.row.clone())
-            } else {
-                self.take_for_sweep(&candidate.row.id)?
-            };
-            if let Some(row) = row {
-                return Ok(Some(Donor {
-                    row,
-                    free: !candidate.leased,
-                    base: candidate.base.clone(),
-                    behind: candidate.behind,
-                    changed: candidate.changed,
-                    missing,
-                }));
-            }
-        }
-        Ok(None)
+        Ok(ranked
+            .into_iter()
+            .map(|(_, candidate)| Donor {
+                row: candidate.row.clone(),
+                free: !candidate.leased,
+                base: candidate.base.clone(),
+                behind: candidate.behind,
+                changed: candidate.changed,
+                missing: wanted
+                    .iter()
+                    .filter(|p| !candidate.held.contains(**p))
+                    .map(|p| (*p).clone())
+                    .collect(),
+            })
+            .collect())
     }
 
     /// `row`'s tree measured against `tip`, or `None` when it holds no build or git cannot
@@ -428,6 +479,8 @@ impl Trees {
     ///
     /// A failure before the swap leaves the tree as it was; one during it deletes the tree's
     /// target directories, so it builds from nothing rather than from a copy with wrong times.
+    /// The copy and the replaced directories stay in the seed directory, which the caller sets
+    /// aside and deletes when the seed ends.
     fn copy_from(&self, donor: &rows::Tree, tree: &TreeId) -> Result<Vec<String>> {
         let donor_id = id_of(donor)?;
         let from = self.inner.config.path(&donor_id);
@@ -444,24 +497,16 @@ impl Trees {
         let times = file_times(&from, &to)?;
         let staging = staging(&to);
         let (new, old) = (staging.join("new"), staging.join("old"));
-        remove(&staging)?;
-        let cloned = (|| -> io::Result<()> {
-            for dir in &dirs {
-                clone_dir(&from.join(dir), &new.join(dir))?;
-                rewrite_target(&new.join(dir), &pairs)?;
-            }
-            Ok(())
-        })();
-        if let Err(error) = cloned {
-            let _ = remove(&staging);
-            return Err(error.into());
+        clear(&staging)?;
+        for dir in &dirs {
+            clone_target(&from.join(dir), &new.join(dir))?;
+            rewrite_target(&new.join(dir), &pairs)?;
         }
         let own = self.cargo_dirs(&to);
         let profiles = tree_profiles(&from, &to, &own, &dirs);
         let tree_locked = match tree_locks(&profiles) {
             Ok(Some(locks)) => locks,
             locked => {
-                let _ = remove(&staging);
                 return Err(locked.err().unwrap_or_else(|| {
                     io::Error::other(format!(
                         "a build in {tree} held Cargo's lock when the copy was ready, so the \
@@ -479,7 +524,7 @@ impl Trees {
                 move_dir(&to.join(dir), &old.join(dir))?;
             }
             for dir in &dirs {
-                move_dir(&new.join(dir), &to.join(dir))?;
+                swap_in(&new.join(dir), &to.join(dir), &old.join(dir))?;
             }
             // While Cargo's locks in the donor are still held, so no build there changes what
             // it holds meanwhile.
@@ -499,10 +544,8 @@ impl Trees {
             for dir in own.iter().chain(&dirs) {
                 let _ = remove(&to.join(dir));
             }
-            let _ = remove(&staging);
             return Err(error.into());
         }
-        remove(&staging)?;
         Ok(dirs)
     }
 }
@@ -539,38 +582,6 @@ fn remove(path: &Path) -> io::Result<()> {
         Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
     }
-}
-
-/// Copies the directory `from` to `to`, which must not exist, keeping each file's modification
-/// time. On APFS and on a block-cloning `ReFS` volume each file is a clone.
-pub(super) fn clone_dir(from: &Path, to: &Path) -> io::Result<()> {
-    fs::create_dir_all(to)?;
-    for entry in fs::read_dir(from)? {
-        let entry = entry?;
-        let (source, target) = (entry.path(), to.join(entry.file_name()));
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            clone_dir(&source, &target)?;
-        } else if kind.is_symlink() {
-            copy_link(&source, &target)?;
-        } else {
-            fs::copy(&source, &target)?;
-            set_modified(&target, entry.metadata()?.modified()?)?;
-        }
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn copy_link(from: &Path, to: &Path) -> io::Result<()> {
-    std::os::unix::fs::symlink(fs::read_link(from)?, to)
-}
-
-/// Windows makes a symbolic link only with Developer Mode or an administrator's rights, and
-/// Cargo writes none there, so a link is copied as the file it points at.
-#[cfg(not(unix))]
-fn copy_link(from: &Path, to: &Path) -> io::Result<()> {
-    fs::copy(from, to).map(drop)
 }
 
 /// Sets a file's modification time. Cargo leaves some outputs read-only, and `fs::copy` keeps
@@ -735,6 +746,10 @@ fn file_times(from: &Path, to: &Path) -> Result<Vec<(String, SystemTime, SystemT
     Ok(times)
 }
 
+#[path = "seed_copy.rs"]
+mod copy;
+#[path = "seed_resume.rs"]
+mod resume;
 #[path = "seed_swap.rs"]
 mod swap;
 #[cfg(test)]

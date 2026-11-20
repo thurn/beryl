@@ -213,6 +213,10 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         builds.clone(),
     );
     let unfinished = trees.mark_unfinished()?;
+    // Before the socket is served, so a build asked for after a restart waits for the copy.
+    if let Err(error) = trees.resume_seeds() {
+        eprintln!("ignite: seeds a restart cut short were not started again: {error}");
+    }
     let staging = &base.config.repository.staging;
     match setup {
         TreeSetup::Now => {

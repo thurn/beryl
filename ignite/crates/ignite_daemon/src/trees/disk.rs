@@ -44,7 +44,7 @@ const OWN_BYTES: u64 = 1_000_000_000;
 
 /// The folder of per-unit fingerprints in each profile directory of a Cargo target directory,
 /// which is how such a directory is recognised among a product's outputs.
-const FINGERPRINTS: &str = ".fingerprint";
+pub(super) const FINGERPRINTS: &str = ".fingerprint";
 /// The folders of a profile directory that hold a unit's files, named `<crate>-<hash>` with
 /// optional prefixes and extensions, beside its fingerprint folder.
 const UNIT_FOLDERS: [&str; 2] = ["deps", "build"];
