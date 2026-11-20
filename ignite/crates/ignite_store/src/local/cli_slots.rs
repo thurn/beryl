@@ -352,6 +352,36 @@ pub fn set_mode_override(conn: &Connection, app: &str, mode: Option<&str>) -> Re
     Ok(())
 }
 
+/// Replaces every column of a recorded turn except its key, the session and number.
+pub fn update_turn(conn: &Connection, turn: &CliTurn) -> Result<()> {
+    conn.execute(
+        "UPDATE cli_turns SET app = ?3, slot = ?4, ticket = ?5, prompt = ?6, state = ?7, \
+         run = ?8, started_at = ?9, ended_at = ?10, exit = ?11, end_kind = ?12, \
+         transcript = ?13, model = ?14, cli_version = ?15, cost_usd = ?16, \
+         lines_applied = ?17 WHERE session = ?1 AND turn = ?2",
+        params![
+            turn.session,
+            turn.turn,
+            turn.app,
+            turn.slot,
+            turn.ticket,
+            turn.prompt,
+            turn.state,
+            turn.run,
+            turn.started_at,
+            turn.ended_at,
+            turn.exit,
+            turn.end_kind,
+            turn.transcript,
+            turn.model,
+            turn.cli_version,
+            turn.cost_usd,
+            turn.lines_applied,
+        ],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -352,6 +352,7 @@ dependencies = [
 name = "ignite_daemon"
 version = "0.1.0"
 dependencies = [
+ "getrandom",
  "ignite_core",
  "ignite_git",
  "ignite_hub",

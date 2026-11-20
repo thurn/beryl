@@ -9,6 +9,8 @@ version.workspace = true
 autobins = false
 
 [dependencies]
+# Random session IDs and transcript UUIDs for CLI workers.
+getrandom.workspace = true
 ignite_core.workspace = true
 ignite_git.workspace = true
 ignite_hub.workspace = true
