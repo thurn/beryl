@@ -1079,6 +1079,22 @@
       "VIEWER_FADE": {
         "value": 56,
         "note": "How far the cards fade out at an end of a pile viewer's list with more beyond it: `--fade` of `.zone-viewer-cards` in `ui/src/screens/styles/zone-viewer.css`."
+      },
+      "DOCK_MAX_WIDTH": {
+        "value": 460,
+        "note": "The most room the desktop's action dock takes across: `.dock`'s `max-width` in `ui/src/screens/styles/controls.css`."
+      },
+      "TURN_CAPTION_GAP": {
+        "value": 8.5,
+        "note": "How far under the turn button its caption's top stands: `.turn-action > :not(.button)`'s `top: calc(100% + 8.5px)`."
+      },
+      "PASS_ON_GLYPH_NUDGE": {
+        "value": 1.5,
+        "note": "How far right of centre the pass-on button's glyph stands, because its ink leans left of its box: `.pass-on-face > svg`'s `translateX(1.5px)`."
+      },
+      "FULL_CONTROL_RIGHT": {
+        "value": 301,
+        "note": "How far full control's stop sign stands from the window's right edge: `.full-control`'s `right: 301px`."
       }
     },
     "color": {
@@ -1334,6 +1350,10 @@
       "WAY_DISABLED_BRIGHTNESS": {
         "value": 0.55,
         "note": "How far a way that cannot be chosen is darkened: `brightness(0.55)` of `.stage-way:disabled .stage-way-face`."
+      },
+      "PASS_ON_GLYPH_ASPECT": {
+        "value": 0.6667,
+        "note": "The pass-on glyph's height over its width: its artwork's view box is 24 by 16, so the web's 22-point-wide `svg` is 14.7 points tall."
       }
     },
     "shadow": {

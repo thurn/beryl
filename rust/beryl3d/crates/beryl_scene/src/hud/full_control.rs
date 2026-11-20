@@ -9,22 +9,10 @@ use glam::Vec2;
 
 use crate::element::{Anchor, Element, Shown};
 use crate::frame::Role;
+use crate::layout::DOCK_BOTTOM;
 use crate::screens::ScreenIn;
 use crate::tokens::{color, shadow, size, space};
 use crate::widgets::icons;
-
-/// How far the sign's right edge stands from the window's right edge: `.full-control`'s
-/// `right: 301px`, which is the dock's right inset (39), a turn button's width (250) and 12
-/// points between them.
-const RIGHT: f32 = 301.0;
-
-/// How far under the turn button's top the sign's top stands: `.full-control`'s `top: 775px`
-/// against the turn button's top at 765 in a 900-point stage, which centres the 28-point sign
-/// on the 48-point button.
-const BELOW_BUTTON_TOP: f32 = 10.0;
-
-/// The dock's bottom inset, the web's `.dock` `bottom: 87px` (`layout::DOCK_BOTTOM`).
-const DOCK_BOTTOM: f32 = 87.0;
 
 /// The stop sign, while full control is on during a game on the desktop. Whether it is on is
 /// read from the stops the game holds (`PlayerView::stops`), as the web's game screen reads
@@ -40,9 +28,9 @@ pub fn full_control(input: &ScreenIn) -> Option<Element> {
         (prompt.buttons.iter()).any(|button_view| button_view.id == ButtonId::PassOn)
     });
     let right = if pass_on {
-        RIGHT + size::BUTTON_HEIGHT + space::M
+        size::FULL_CONTROL_RIGHT + size::BUTTON_HEIGHT + space::M
     } else {
-        RIGHT
+        size::FULL_CONTROL_RIGHT
     };
     let window = input.window;
     let side = f32::from(icons::FULL_CONTROL_SIDE);
@@ -56,11 +44,11 @@ pub fn full_control(input: &ScreenIn) -> Option<Element> {
         .drop_shadow(shadow::FULL_CONTROL.to_vec())
         .passes(true);
     mark.shows = Some(Shown::Icon(icons::FULL_CONTROL, icons::FULL_CONTROL_SIDE));
-    let top = window.size.height
-        - window.safe_area.bottom
-        - DOCK_BOTTOM
-        - size::BUTTON_HEIGHT
-        + BELOW_BUTTON_TOP;
+    // `.full-control`'s `top: 775px` against the turn button's top at 765 in a 900-point stage:
+    // the sign is centred on the turn button.
+    let button_top =
+        window.size.height - window.safe_area.bottom - DOCK_BOTTOM - size::BUTTON_HEIGHT;
+    let top = button_top + (size::BUTTON_HEIGHT - side) / 2.0;
     let corner = Vec2::new(window.size.width - window.safe_area.right - right, top);
     mark.anchor = Some(Anchor::Point(corner, Vec2::new(1.0, 0.0)));
     Some(mark)

@@ -215,7 +215,10 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(edges(frame, cancel).3 <= edges(frame, auto).1);
     for button in [auto, cancel] {
         let (left, top, right, bottom) = edges(frame, button);
-        assert!((right - left - 250.0).abs() < 0.01, "a dock button is 250 points wide");
+        assert!(
+            (right - left - 250.0).abs() < 0.01,
+            "a dock button is 250 points wide"
+        );
         assert!(
             (bottom - top - 48.0).abs() < 0.01,
             "a button is 48 points tall"
@@ -284,11 +287,20 @@ fn the_turn_button_has_the_pass_on_button_beside_it_and_its_caption_under_it() {
     // room in the dock, so the turn button keeps the dock's corner and width.
     assert!((next.2 - next.0 - 250.0).abs() < 0.01, "{next:?}");
     assert!((next.3 - bar.3).abs() < 0.01 && (next.2 - bar.2).abs() < 0.01);
-    assert!((pass_on.2 - (next.0 - space::M)).abs() < 0.01, "{pass_on:?} by {next:?}");
+    assert!(
+        (pass_on.2 - (next.0 - space::M)).abs() < 0.01,
+        "{pass_on:?} by {next:?}"
+    );
     assert!((pass_on.1 - next.1).abs() < 0.01 && (pass_on.3 - pass_on.1 - 48.0).abs() < 0.01);
-    assert!((caption.1 - (next.3 + 8.5)).abs() < 0.01, "{caption:?} under {next:?}");
+    assert!(
+        (caption.1 - (next.3 + 8.5)).abs() < 0.01,
+        "{caption:?} under {next:?}"
+    );
     let middle = |(left, _, right, _): (f32, f32, f32, f32)| f32::midpoint(left, right);
-    assert!((middle(caption) - middle(next)).abs() < 0.5, "{caption:?} under {next:?}");
+    assert!(
+        (middle(caption) - middle(next)).abs() < 0.5,
+        "{caption:?} under {next:?}"
+    );
 }
 
 #[test]

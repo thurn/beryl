@@ -9,7 +9,7 @@
 use super::icons;
 use crate::element::{Align, Element, Justify, Shown, TextAlign};
 use crate::frame::Role;
-use crate::tokens::{color, gradient, shadow, size, type_style};
+use crate::tokens::{color, gradient, ratio, shadow, size, type_style};
 
 /// A button showing `label`, named by it: as tall as every action button and at least 8 ems
 /// wide, with its label centred.
@@ -49,14 +49,6 @@ pub fn primary(label: &str) -> Element {
 /// face in the primary button's amber (`.pass-on-face.button-primary` in
 /// `ui/src/screens/styles/controls.css`), with the fast-forward glyph in the primary button's
 /// light ink under its shadow. The face is not a `.button`, so it stays amber when disabled.
-/// How far right of centre the pass-on glyph stands: `.pass-on-face > svg`'s
-/// `transform: translateX(1.5px)`.
-const GLYPH_NUDGE: f32 = 1.5;
-
-/// The pass-on glyph's height over its width: its artwork's view box is 24 by 16, so the web's
-/// 22-point-wide `svg` is 14.7 points tall.
-const GLYPH_ASPECT: f32 = 16.0 / 24.0;
-
 #[must_use]
 pub fn pass_on(name: &str, side: f32) -> Element {
     // `.pass-on-face > svg`: the glyph casts the shadow, and is nudged right because its ink
@@ -66,8 +58,8 @@ pub fn pass_on(name: &str, side: f32) -> Element {
     let mut glyph = Element::new(Role::Icon)
         .name("")
         .width(f32::from(glyph_size))
-        .height(f32::from(glyph_size) * GLYPH_ASPECT)
-        .margin([0.0, 0.0, 0.0, 2.0 * GLYPH_NUDGE])
+        .height(f32::from(glyph_size) * ratio::PASS_ON_GLYPH_ASPECT)
+        .margin([0.0, 0.0, 0.0, 2.0 * size::PASS_ON_GLYPH_NUDGE])
         .color(color::PRIMARY_INK)
         .drop_shadow(shadow::PASS_ON.to_vec())
         .passes(true);

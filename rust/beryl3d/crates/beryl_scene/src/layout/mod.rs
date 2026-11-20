@@ -48,8 +48,8 @@ use crate::widgets::icons::Icons;
 /// Where the desktop layout anchors a screen: its bottom right corner this far in from the
 /// safe area's, where the web interface's action dock stands (`.dock` in
 /// `ui/src/screens/styles/controls.css`: `right: 39px; bottom: 87px`).
-const DOCK_RIGHT: f32 = 39.0;
-const DOCK_BOTTOM: f32 = 87.0;
+pub(crate) const DOCK_RIGHT: f32 = 39.0;
+pub(crate) const DOCK_BOTTOM: f32 = 87.0;
 
 /// A flat-layer element's id is this plus a count of the elements that have entered the tree,
 /// so that it never equals a card's, which is its object's slot in the view, or an ability's

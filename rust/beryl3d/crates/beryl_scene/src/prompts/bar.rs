@@ -10,7 +10,9 @@ use glam::Vec2;
 
 use super::Piles;
 use crate::data::space::hud::phone as data;
-use crate::element::{Align, Anchor, Element, Position, Press, TextAlign, column, holder, row, text};
+use crate::element::{
+    Align, Anchor, Element, Position, Press, TextAlign, column, holder, row, text,
+};
 use crate::hud::phone::{Occupied, asked_top, clear_at_right, phase_span};
 use crate::screens::ScreenIn;
 use crate::table::{PhoneBands, phone_bands};
@@ -81,7 +83,10 @@ pub(super) fn bar(
     let buttons: Vec<&PromptButton> = (prompt.buttons.iter())
         .filter(|button_view| !ways().any(|id| id == button_view.id))
         .collect();
-    let forward = buttons.iter().copied().find(|button_view| button_view.primary);
+    let forward = buttons
+        .iter()
+        .copied()
+        .find(|button_view| button_view.primary);
     let pass_on = (buttons.iter().copied()).find(|button_view| button_view.id == ButtonId::PassOn);
     let same = |a: Option<&PromptButton>, b: &PromptButton| a.is_some_and(|a| a.id == b.id);
     // The first of the other buttons stands at the foot and the rest stack over it, as the
@@ -114,13 +119,6 @@ pub(super) fn bar(
         }))
 }
 
-/// The most room the dock's words and buttons take across: `.dock`'s `max-width`.
-const DOCK_MAX_WIDTH: f32 = 460.0;
-
-/// How far under the turn button its caption's top stands: `.turn-action > :not(.button)`'s
-/// `top: calc(100% + 8.5px)`.
-const CAPTION_GAP: f32 = 8.5;
-
 /// The desktop's action dock, as the web's `.dock` in `ui/src/screens/styles/controls.css`
 /// lays it out in the window's bottom right corner (`layout::DOCK_RIGHT` and `DOCK_BOTTOM`): a
 /// column of buttons of one width, at least a turn button's (`--button-width`), with what the
@@ -132,7 +130,7 @@ fn desktop_dock() -> Element {
         .gap(space::M)
         .align_items(Align::Stretch)
         .min_width(size::BUTTON_WIDTH)
-        .max_width(DOCK_MAX_WIDTH)
+        .max_width(size::DOCK_MAX_WIDTH)
         .background([0; 4])
         .border(([0; 4], 0.0))
 }
@@ -166,7 +164,7 @@ fn turn_action(pressed: Element, pass_on: Option<&PromptButton>, caption: &str) 
             .color(color::TURN_CAPTION)
             .text_align(TextAlign::Center)
             .position(Position::Absolute)
-            .inset([Some(height + CAPTION_GAP), None, None, None])
+            .inset([Some(height + size::TURN_CAPTION_GAP), None, None, None])
     });
     column()
         .name("turn action")
