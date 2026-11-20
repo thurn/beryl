@@ -479,9 +479,9 @@ fn the_tree_s_ignite_toml_is_read_for_its_express_section_with_the_daemons_as_fa
 /// now waits while the tree's seed directory is on disk, and runs once it is set aside.
 #[test]
 fn a_run_waits_until_the_trees_seed_has_ended() {
-    let root = std::env::temp_dir().join(format!("ignite-express-seed-{}", std::process::id()));
+    let (root, mut lane, _) = lane("seed", &[]);
     let seed = root.join(".repo.seeding");
-    let (root, lane, _) = lane("seed", &[&format!("test ! -e {}", seed.display())]);
+    lane.commands = vec![format!("test ! -e {}", seed.display())];
     fs::create_dir_all(&seed).unwrap();
     let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
     let landing = steps.begin(
