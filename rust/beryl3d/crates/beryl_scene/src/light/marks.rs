@@ -167,11 +167,11 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             let size = light::TAP_SIZE * pose.scale;
             // `look` lifts the paying card off the table as the mark comes up; the symbol
             // rises with it, or the card's face would hide it from the depth test.
-            let transform = Affine3A::from_scale_rotation_translation(
+            let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
                 Vec3::new(size, size, 1.0),
                 pose.rotation,
                 position + Vec3::Z * light::PAYING_LIFT * shown,
-            );
+            ));
             builder.draw(band, Draw::glow(transform, tint, sprites::TAP, 0.0));
             continue;
         }
@@ -207,8 +207,11 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         #[expect(clippy::cast_precision_loss, reason = "a handful of marks")]
         let grow = light::OUTLINE_GROW * pose.scale * (1 + inside) as f32;
         let size = sprites::outline_size(half + Vec2::splat(grow));
-        let transform =
-            Affine3A::from_scale_rotation_translation(size.extend(1.0), pose.rotation, position);
+        let transform = pose.sheared(Affine3A::from_scale_rotation_translation(
+            size.extend(1.0),
+            pose.rotation,
+            position,
+        ));
         let outline = Draw::glow(transform, tint, sprites::OUTLINE, 0.0);
         builder.ring(Ring {
             on: ringed(on),

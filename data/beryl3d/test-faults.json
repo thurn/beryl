@@ -5,6 +5,12 @@
     },
     "b3d:order-long/you/1600x900@2": {
       "text-overlap": 2
+    },
+    "b3d:stress-1024/you/1600x900@2": {
+      "reachable": 1
+    },
+    "b3d:stress-255/you/1600x900@2": {
+      "reachable": 1
     }
   }
 }

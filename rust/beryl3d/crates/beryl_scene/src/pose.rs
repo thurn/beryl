@@ -25,6 +25,12 @@ pub struct Pose {
     /// the table toward its vanishing point: the card's bottom edge lies `skew` times the card's
     /// height to the right of its top edge, measured in the card's frame after `rotation`.
     pub skew: f32,
+    /// How far the object's far side moves across the table (along `x`) for each millimetre
+    /// along it (along `y`) from its centre, after it is rotated and skewed: a shear in the
+    /// table's plane rather than the card's, so that a tapped card leans as an untapped one
+    /// does. It is nought except on a battlefield row fitted to the web interface, whose cards
+    /// lean toward the web's vanishing point as the web's skewed cards do (`web_fit::lean`).
+    pub shear: f32,
 }
 
 impl Default for Pose {
@@ -36,6 +42,7 @@ impl Default for Pose {
             opacity: 1.0,
             turn: 0.0,
             skew: 0.0,
+            shear: 0.0,
         }
     }
 }
@@ -43,10 +50,10 @@ impl Default for Pose {
 impl Pose {
     /// The transform from a card mesh's space into the table's: scaled, turned over by `turn`
     /// top over bottom (about the card's short axis, as a card tossed across a table turns),
-    /// rotated, then moved to `position`.
+    /// rotated, skewed, then moved to `position`, and sheared in the table's plane by `shear`.
     #[must_use]
     pub fn transform(&self) -> Affine3A {
-        self.placed(self.turn)
+        self.sheared(self.placed(self.turn))
     }
 
     /// The transform of a quad `size` large, laid in the card's plane with its middle at
@@ -55,11 +62,33 @@ impl Pose {
     #[must_use]
     pub fn frame(&self, size: Vec3, position: Vec3) -> Affine3A {
         if self.skew == 0.0 {
-            return Affine3A::from_scale_rotation_translation(size, self.rotation, position);
+            return self.sheared(Affine3A::from_scale_rotation_translation(
+                size,
+                self.rotation,
+                position,
+            ));
         }
-        Affine3A::from_rotation_translation(self.rotation, position)
-            * self.shear()
-            * Affine3A::from_scale(size)
+        self.sheared(
+            Affine3A::from_rotation_translation(self.rotation, position)
+                * self.shear()
+                * Affine3A::from_scale(size),
+        )
+    }
+
+    /// `transform`, which lays something on the object, sheared in the table's plane by
+    /// `shear` about the object's centre, so that it lies on the object as drawn.
+    #[must_use]
+    pub fn sheared(&self, transform: Affine3A) -> Affine3A {
+        if self.shear == 0.0 {
+            return transform;
+        }
+        // x' = x + shear * y, about the object's centre.
+        let shear = Mat3::from_cols(Vec3::X, Vec3::new(self.shear, 1.0, 0.0), Vec3::Z);
+        let from = Vec3::from(transform.translation) - self.position;
+        Affine3A::from_mat3_translation(
+            shear * Mat3::from(transform.matrix3),
+            self.position + shear * from,
+        )
     }
 
     /// The shear of a skewed card in its own frame: a point's x moves left by `skew` times its
@@ -78,7 +107,7 @@ impl Pose {
     /// it shows at rest, as the web interface's children of a card turn with it.
     #[must_use]
     pub fn upward(&self) -> Affine3A {
-        self.placed(self.turn - self.turn.round())
+        self.sheared(self.placed(self.turn - self.turn.round()))
     }
 
     /// The transform of a card turned over by `turn`. A skewed card is sheared after it turns

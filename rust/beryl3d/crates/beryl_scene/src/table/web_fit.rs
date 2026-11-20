@@ -17,6 +17,9 @@
 //! every row with it, as the web's `battlefieldZoom` does (`place::zooms`).
 //! A card lying flat under the camera's pitch is shorter on screen against its width than the
 //! web's upright one, so each row's cards lean back toward the camera until they are as tall.
+//! It is also a trapezoid, its far edge foreshortened, where the web's is a parallelogram, so
+//! each card is sheared in the table's plane until its box on screen is as wide as the web's
+//! (`lean`).
 
 use glam::{Vec2, Vec3};
 
@@ -58,6 +61,9 @@ pub struct FittedRow {
     /// attacker moves as far again as makes its centre the web's. Cards that do not attack keep
     /// to the line, for the hit test's sake (`place::row`): an attacker stands out of its row.
     pub advance: [f32; 2],
+    /// How wide the web draws an untapped card of the row on the window, before its lean, in
+    /// logical points: its frame's width shrunk by the row's depth (`depthScale`).
+    pub width: f32,
 }
 
 impl FittedRow {
@@ -226,7 +232,7 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> Fitt
     let scale = stand.scale;
     // A gap of the web's, against its card's frame, is the same share of a card here.
     let gap = |pixels: f32| CARD_WIDTH * pixels / spec.frame;
-    let mut row = FittedRow {
+    let row = FittedRow {
         area: RowArea {
             y: stand.y,
             left: across(centre_of(spec.start), lift) - CARD_WIDTH * scale / 2.0,
@@ -238,18 +244,22 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> Fitt
         tapped_gap: gap(spec.tapped_gap),
         tilt: stand.tilt,
         advance: [0.0; 2],
+        width: width * stage.scale,
     };
     // A tapped card's centre lies half the difference of its height and width higher on the
     // web's stage than an untapped one's, both tops on the row's top.
-    let tapped = forward - (height - width) / 2.0;
-    row.advance = [forward, tapped].map(|pixels| {
+    let rise = -(height - width) / 2.0;
+    let moved = |pixels: f32| {
         let goal = line + pixels * stage.scale;
         let moved = Stand::solve(row.area.y, |y| {
             camera.to_screen(Vec3::new(0.0, y, row.height(y))).y - goal
         });
         moved - row.area.y
-    });
-    row
+    };
+    FittedRow {
+        advance: [moved(forward), moved(forward + rise)],
+        ..row
+    }
 }
 
 /// How the cards of a row stand: the line of the table their centres lie over, how far each
@@ -344,6 +354,113 @@ impl Stand {
         b
     }
 }
+
+/// `pose`, a card of the row `row` zoomed out by `zoom` (`place::zooms`) as `place::row` lays
+/// it, sheared across the table and moved along `x` so that its box on screen is the web's. The
+/// web draws a permanent as an upright
+/// rectangle skewed toward its vanishing point about its top (`onTable` and `footprint` in
+/// `ui/src/game/placement.ts`), a parallelogram whose box is as wide as the card plus the
+/// lean's tangent times its height, centred on the card. A card lying flat under this camera
+/// is a trapezoid whose far edge is foreshortened, whose box is narrower, the more so the
+/// farther from the screen's middle it lies. A shear in the table's plane (`Pose::shear`)
+/// moves its far edge sideways, widening its box by about as much as it moves, and a move
+/// along `x` centres that box where the web's is. A `tapped` card is sheared the same way, as
+/// the web skews its lying box. Near the screen's middle, where the web's card barely leans, a
+/// trapezoid's near edge alone can be wider than the web's box, and no shear narrows it: such a
+/// card is only moved, to centre its box on the web's.
+#[must_use]
+pub fn lean((row, zoom): (&FittedRow, f32), camera: &Camera, pose: Pose, tapped: bool) -> Pose {
+    let stage = Stage::of(camera.window);
+    // A card at rest is face up or face down, which outlines the same shape. It is measured face
+    // up, so that a card placed face up and turned over later gets the shear it would have been
+    // placed with face down, to the last bit.
+    let span = |shear: f32, moved: f32| {
+        let pose = Pose {
+            shear,
+            position: pose.position + Vec3::X * moved,
+            turn: 0.0,
+            ..pose
+        };
+        let corners = camera.card_corners(pose.transform());
+        corners
+            .iter()
+            .fold((f32::MAX, f32::MIN, f32::MAX), |(l, r, t), c| {
+                (l.min(c.x), r.max(c.x), t.min(c.y))
+            })
+    };
+    let (_, _, top) = span(0.0, 0.0);
+    // The web's card across the screen and down it: a tapped card lies turned a quarter.
+    let width = row.width * zoom;
+    let (wide, tall) = if tapped {
+        (width / ASPECT, width)
+    } else {
+        (width, width / ASPECT)
+    };
+    let centre = camera.to_screen(pose.position).x;
+    // The web's lean is taken at the middle of its card's top edge, which lies the lean's
+    // tangent times half the card's height from the card's centre.
+    let on_stage = |point: f32, offset: f32| point / stage.scale - offset;
+    let (middle, top) = (
+        on_stage(centre, stage.offset.x),
+        on_stage(top, stage.offset.y),
+    );
+    let half_tall = tall / stage.scale / 2.0;
+    let rough = stage.lean(middle, top);
+    let tangent = stage.lean(middle - rough * half_tall, top);
+    // The row places a card's centre where an untapped card's leaned centre lies, half the
+    // tangent times its height from its top's middle; a tapped card is less tall, so the web's
+    // centre lies nearer its top's middle.
+    let centre = if tapped {
+        centre + tangent * (tall - width / ASPECT) / 2.0
+    } else {
+        centre
+    };
+    let half = f32::midpoint(wide, tangent.abs() * tall);
+    let goal = (centre - half, centre + half);
+    let miss = |shear: f32, moved: f32| {
+        let (left, right, _) = span(shear, moved);
+        (left - goal.0, right - goal.1)
+    };
+    // The shear and the move by Newton's method: the box's ends are nearly linear in both.
+    let (mut shear, mut moved) = (0.0, 0.0);
+    for _ in 0..4 {
+        let now = miss(shear, moved);
+        let by_shear = miss(shear + SHEAR_STEP, moved);
+        let by_move = miss(shear, moved + 1.0);
+        let (a, c) = (
+            (by_shear.0 - now.0) / SHEAR_STEP,
+            (by_shear.1 - now.1) / SHEAR_STEP,
+        );
+        let (b, d) = (by_move.0 - now.0, by_move.1 - now.1);
+        let determinant = a * d - b * c;
+        if determinant.abs() < f32::EPSILON {
+            break;
+        }
+        shear -= (d * now.0 - b * now.1) / determinant;
+        moved -= (a * now.1 - c * now.0) / determinant;
+    }
+    let (left, right) = miss(shear, moved);
+    if left.abs().max(right.abs()) > CLOSE {
+        // No shear gives the web's box: centre the unsheared one on it.
+        shear = 0.0;
+        moved = 0.0;
+        for _ in 0..2 {
+            let (left, right) = miss(0.0, moved);
+            moved -= f32::midpoint(left, right);
+        }
+    }
+    Pose {
+        shear,
+        position: pose.position + Vec3::X * moved,
+        ..pose
+    }
+}
+
+/// How near, in logical points, `lean` must bring a box's ends to the web's to keep its shear.
+const CLOSE: f32 = 0.25;
+
+/// The step in `Pose::shear` by which `lean` measures how the box's ends follow the shear.
+const SHEAR_STEP: f32 = 0.01;
 
 /// Every row of the desktop layout fitted to `window` through `camera`.
 pub(super) fn rows(window: Window, camera: &Camera) -> FittedRows {

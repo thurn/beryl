@@ -1410,10 +1410,17 @@ flight start exactly where the card was.
   stands. Decided on 2026-11-19 instead of refitting the camera: no camera fit
   could move rows that stood 25 to 80 points off while the hand already matched.
   Untapped card centres now land within about 3 points of the web's on the
-  reference targets. The boxes still differ in width by up to 11 points, since
-  the web leans a card by shearing it, which a card in perspective does not do.
-  The phone layout keeps its own rows (`table::phone`), and has not been fitted
-  to the web's.
+  reference targets. The web leans a card by skewing it into a parallelogram,
+  where a card lying in perspective is a trapezoid with a narrower box, so each
+  fitted row's card also carries a shear in the table's plane (`Pose::shear`,
+  solved per card by `web_fit::lean`) that makes its box on screen as wide as
+  the web's and centres it there. Decided on 2026-11-20 instead of comparing the
+  two cards' corners in the matcher: a trapezoid's corners miss a
+  parallelogram's by as much as their boxes differ, so only a shear closes the
+  difference. Near the screen's middle, where the web's card barely leans, the
+  trapezoid's near edge alone is up to 3 points wider than the web's card, and
+  no shear narrows it. The phone layout keeps its own rows (`table::phone`), and
+  has not been fitted to the web's.
 - **Some cards lie under a permanent, in its row**, as the web interface tucks
   them: the other cards of a merged permanent and the cards a permanent holds in
   exile peek out to its left, and the Auras and Equipment attached to it,

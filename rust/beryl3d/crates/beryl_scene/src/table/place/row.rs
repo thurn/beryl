@@ -13,7 +13,9 @@ use crate::frame::Place;
 use crate::table::rows::{
     Beneath, Laid, NameIds, RowRules, SameName, lay_row, least_strip, row_length,
 };
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, row_area};
+use crate::table::{
+    CARD_HEIGHT, CARD_WIDTH, Camera, FittedRow, Layout, RowArea, row_area, web_fit,
+};
 use glam::{Quat, Vec3};
 
 /// The limits of a row for one layout and camera, independent of its cards and scroll offset.
@@ -312,6 +314,13 @@ pub(super) fn battlefield_row(
             }
             pose.position.z += fitted.height(pose.position.y);
             pose.rotation = Quat::from_rotation_x(fitted.tilt) * pose.rotation;
+            // A drawn card is sheared until its box on screen is the web's skewed card's. A card
+            // scrolled out of view rests undrawn at the row's end, under the cards that join
+            // it, so it keeps its pose: sheared, its pose would change with every card that
+            // joins and give it a track for nothing.
+            if visible {
+                pose = web_fit::lean((&fitted, zoom), camera, pose, object.tapped);
+            }
         }
         placement.set(
             object.slot,

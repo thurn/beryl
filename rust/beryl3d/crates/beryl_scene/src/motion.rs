@@ -408,6 +408,7 @@ pub(crate) fn between(from: &Pose, to: &Pose, u: f32) -> Pose {
         opacity: from.opacity + (to.opacity - from.opacity) * u,
         turn: from.turn + (to.turn - from.turn) * u,
         skew: from.skew + (to.skew - from.skew) * u,
+        shear: from.shear + (to.shear - from.shear) * u,
     }
 }
 
@@ -528,6 +529,7 @@ impl Segment {
             opacity: back(pose.opacity, to.opacity),
             turn,
             skew: back(pose.skew, to.skew),
+            shear: back(pose.shear, to.shear),
         };
     }
 }
