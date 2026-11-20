@@ -88,11 +88,11 @@ fn placeholders(state: &State, members: &[Member]) -> Vec<Member> {
 }
 
 /// The placeholder of every CLI slot that no CLI session fills, reserved or not, for each app in
-/// CLI mode. The slot for tickets that hold `master` back is offered only while fewer than all
-/// of the app's slots are busy.
+/// CLI mode whose slots are offered (see `cli`). The slot for tickets that hold `master` back is
+/// offered only while fewer than all of the app's slots are busy.
 fn cli_placeholders(state: &State, members: &[Member]) -> Vec<Member> {
     let mut slots = Vec::new();
-    for layout in &state.cli_layout {
+    for layout in state.cli_layout.iter().filter(|layout| layout.offered) {
         let sessions = members
             .iter()
             .filter(|m| {
@@ -153,7 +153,12 @@ pub(super) fn capacity(state: &State, members: &[Member]) -> usize {
         .filter(|m| !cli::in_cli_mode(state, &m.app))
         .map(|m| m.slots)
         .sum::<u32>()
-        + state.cli_layout.iter().map(|l| l.slots).sum::<u32>();
+        + state
+            .cli_layout
+            .iter()
+            .filter(|l| l.offered)
+            .map(|l| l.slots)
+            .sum::<u32>();
     standing + usize::try_from(slots).unwrap_or(usize::MAX)
 }
 

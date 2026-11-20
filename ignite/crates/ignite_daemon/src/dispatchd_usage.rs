@@ -9,7 +9,9 @@
 //! - A `usage` is queued ahead of a waiting hand-off when the last one was queued more than
 //!   [`USAGE_BEFORE_HANDOFF_S`] ago, and on its own every [`USAGE_EVERY_S`], so the series has
 //!   no long gaps while no hand-off happens. Only a Claude dispatcher is asked: Codex has no
-//!   such tool.
+//!   such tool. A machine whose Claude app runs in CLI mode queues none: every turn there
+//!   reports the plan's usage in its own events, and `clid_health.rs` stores those samples in
+//!   the same table, named as `get_usage` names its windows.
 //! - The report is `get_usage`'s result or its `plan` object. Each of `plan.windows` (`label`,
 //!   `percentUsed`, `resetsAt`) becomes one row of the local `plan_usage` table. A `plan.status`
 //!   other than `ok` becomes one row with no window and the plan's note, and a report that is not
@@ -27,10 +29,12 @@ use std::fmt::Write as _;
 
 use serde_json::{Value, json};
 
+use ignite_core::ids::MachineId;
 use ignite_core::plan_usage::{self as hold_rule, Hold};
 use ignite_core::protocol::client::{DispatchAction, Exit, Reply};
 use ignite_core::protocol::hub::{MetricsImport, WorkerRole};
 use ignite_core::time::Timestamp;
+use ignite_core::traits::Hub;
 use ignite_store::local::plan_usage;
 use ignite_store::local::rows::PlanUsage;
 
@@ -158,7 +162,7 @@ fn ago(now: Timestamp, at: &str) -> String {
 impl Dispatcher {
     /// Queues a `usage` when one is due (see the module's header).
     pub(super) fn plan_usage(&self, state: &mut State, members: &[Member], now: Timestamp) {
-        if !self.setup.plan_usage {
+        if !self.setup.plan_usage || super::cli::in_cli_mode(state, "claude") {
             return;
         }
         let claude_dispatcher = members
@@ -219,7 +223,12 @@ impl Dispatcher {
             let _ = write!(reply.text, "; not stored: {error}");
             return reply;
         }
-        if let Err(error) = self.post_usage(ctx) {
+        if let Err(error) = post_usage(
+            &self.pool,
+            ctx.hub.as_ref(),
+            &ctx.machine,
+            ctx.config.pool.usage_hold_percent,
+        ) {
             let _ = write!(
                 reply.text,
                 "; not yet at the hub ({error}), sent with the next sample"
@@ -227,31 +236,34 @@ impl Dispatcher {
         }
         reply
     }
+}
 
-    /// Posts every sample row the hub has not acknowledged, and marks them posted.
-    fn post_usage(&self, ctx: &Context) -> ignite_core::traits::Result<()> {
-        let store_error =
-            |e: ignite_store::StoreError| ignite_core::traits::Error::Io(e.to_string());
-        let waiting = self
-            .pool
-            .with_database(|conn| plan_usage::unposted(conn))
-            .map_err(store_error)?;
-        if waiting.is_empty() {
-            return Ok(());
-        }
-        ctx.hub.metrics(&MetricsImport {
-            machine: ctx.machine.clone(),
-            source: SOURCE.to_owned(),
-            rows: waiting
-                .iter()
-                .map(|row| metrics_row(row, ctx.config.pool.usage_hold_percent))
-                .collect(),
-        })?;
-        let ids: Vec<i64> = waiting.iter().map(|row| row.id).collect();
-        self.pool
-            .with_database(|conn| plan_usage::mark_posted(conn, &ids))
-            .map_err(store_error)
+/// Posts every sample row the hub has not acknowledged, and marks them posted. `threshold` is
+/// `[pool] usage_hold_percent`, which says whether each row holds.
+pub fn post_usage(
+    pool: &Pool,
+    hub: &dyn Hub,
+    machine: &MachineId,
+    threshold: u32,
+) -> ignite_core::traits::Result<()> {
+    let store_error = |e: ignite_store::StoreError| ignite_core::traits::Error::Io(e.to_string());
+    let waiting = pool
+        .with_database(|conn| plan_usage::unposted(conn))
+        .map_err(store_error)?;
+    if waiting.is_empty() {
+        return Ok(());
     }
+    hub.metrics(&MetricsImport {
+        machine: machine.clone(),
+        source: SOURCE.to_owned(),
+        rows: waiting
+            .iter()
+            .map(|row| metrics_row(row, threshold))
+            .collect(),
+    })?;
+    let ids: Vec<i64> = waiting.iter().map(|row| row.id).collect();
+    pool.with_database(|conn| plan_usage::mark_posted(conn, &ids))
+        .map_err(store_error)
 }
 
 /// The windows of the plan whose newest sample holds Claude hand-offs at `now`, given the
@@ -298,7 +310,7 @@ pub fn usage_report(pool: &Pool, now: Timestamp, threshold: u32) -> Reply {
         return Reply::text(
             Exit::Success,
             "no plan usage sample yet: a Claude dispatcher takes one before hand-offs and every \
-             15 minutes",
+             15 minutes, and each Claude turn in CLI mode reports one",
         );
     }
     let holds = usage_holds(pool, threshold, now);

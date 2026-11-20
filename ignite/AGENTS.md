@@ -36,7 +36,8 @@ owns which file. These are the contract's rules.
 - Test against the fakes in `ignite_core::fakes`, never against another ticket's
   unfinished code. Every trait in `ignite_core::traits` has one. CLI mode's
   fakes are `FakeCliApp` and `ScriptedLauncher` in `ignite_core::fakes`, and
-  `FakeCliPool` in `ignite_daemon::clid`.
+  `FakeCliPool` in `ignite_daemon::clid`, whose `set_hold` and `set_probed`
+  stand in for a CLI hold and the probe turn that `clid_health.rs` runs.
 - A verb nobody has built is listed in `NOT_BUILT` in
   `crates/ignite_cli/src/client.rs`; the ticket that builds it deletes its row
   and registers a `Verb` (`ignite_daemon::server`) with the daemon.

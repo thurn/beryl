@@ -83,7 +83,7 @@ pub use cli::APPS;
 pub use stall::RunningVerb;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
-pub use usage::{hold_line, usage_holds, usage_report};
+pub use usage::{hold_line, post_usage, usage_holds, usage_report};
 pub use verb::DispatchVerb;
 
 /// Seconds an instruction may go unacknowledged before it is given again.

@@ -8,7 +8,9 @@
 //!   touches a ticket in progress: workers of the old mode finish, and only new hand-offs follow
 //!   the new mode.
 //! - An app in CLI mode offers the hub `slots` idle workers, and one more that takes only tickets
-//!   that hold `master` back (see `slots`). "Dispatcher down" never stops its hand-offs.
+//!   that hold `master` back (see `slots`). "Dispatcher down" never stops its hand-offs. Its
+//!   slots are offered only once a probe turn has passed since the daemon started, and never
+//!   while the app is on a CLI hold ([`CliPool::offers`]); a hold also starts no session.
 //! - A hand-off to a CLI slot, and a message or a `check` for a CLI session, never enters the
 //!   instruction queue. Each is recorded as a [`Call`] while the state is locked, and carried out
 //!   through [`CliPool`] once it is unlocked, since starting a turn writes to the database and
@@ -53,6 +55,10 @@ pub(super) struct Layout {
     pub(super) slots: u32,
     /// The tiers the app runs, matched against a ticket's `tier:` label.
     pub(super) models: Vec<String>,
+    /// Whether the slots are offered to the hub: a probe turn has passed since the daemon
+    /// started and the app is on no CLI hold. A held app stays in CLI mode, so its desktop
+    /// workers are offered nothing either.
+    pub(super) offered: bool,
 }
 
 /// Something to ask the [`CliPool`] once the state is unlocked.
@@ -203,6 +209,7 @@ impl Dispatcher {
                 app: (*app).to_owned(),
                 slots: cli.config.machine_pool(&cli.hostname, app).slots,
                 models: tiers(&cli.config, app),
+                offered: cli.pool.offers(app),
             })
             .collect()
     }
@@ -274,6 +281,25 @@ impl Dispatcher {
     /// refused a hand-off is, and the reservation lapses at the hub.
     fn begin(&self, ctx: &Context, cli: &CliMode, slot: &SessionId, reserved: Reserved) {
         let now = ctx.clock.now();
+        // A hold starts no turn, so a reservation made just before it began lapses instead.
+        if let Some(hold) = cli.pool.held(&reserved.app) {
+            eprintln!(
+                "ignite: {} not started in {slot}: {} is on a CLI hold ({})",
+                reserved.ticket,
+                reserved.app,
+                hold.reason.as_str()
+            );
+            let mut state = self.state();
+            if state
+                .reserved
+                .get(slot)
+                .is_some_and(|r| r.ticket == reserved.ticket)
+            {
+                state.reserved.remove(slot);
+            }
+            state.refused.insert(slot.clone(), now);
+            return;
+        }
         let reservation = Reservation {
             ticket: reserved.ticket.clone(),
             machine: ctx.machine.clone(),

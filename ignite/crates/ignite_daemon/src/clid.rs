@@ -122,6 +122,12 @@ pub trait CliPool: Send + Sync {
     fn slots(&self, app: &str) -> Vec<Slot>;
     /// `app`'s CLI hold, if it is on one.
     fn held(&self, app: &str) -> Option<Hold>;
+    /// Whether `app`'s slots may be offered to the hub: a probe turn has passed since the
+    /// daemon started and the app is on no CLI hold (see `health`). The default asks only
+    /// whether the app is held.
+    fn offers(&self, app: &str) -> bool {
+        self.held(app).is_none()
+    }
     /// Starts a session of `app` that holds no ticket, whose first turn runs `prompt` on `model`
     /// at `effort`: the justiciar the daemon starts when the hub cannot be reached. Returns the
     /// new session. The default refuses, for a pool that cannot start one.
@@ -182,6 +188,12 @@ pub trait Effects: Send + Sync {
     /// Reports a parked slot, or a release that needs a person's attention.
     fn report(&self, slot: &Slot, report: &str) {
         let _ = (slot, report);
+    }
+    /// Whether a probe turn has passed for `app` since the daemon started, so that its slots
+    /// may be offered (see `health`).
+    fn probed(&self, app: &str) -> bool {
+        let _ = app;
+        true
     }
 }
 
@@ -707,6 +719,10 @@ impl CliPool for CliDaemon {
             cli_version: row.cli_version,
             message: row.message.unwrap_or_default(),
         })
+    }
+
+    fn offers(&self, app: &str) -> bool {
+        self.held(app).is_none() && self.effects.probed(app)
     }
 
     fn hidden_models(&self, app: &str) -> Vec<String> {

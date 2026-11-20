@@ -356,3 +356,67 @@ fn the_hub_down_justiciar_runs_as_a_cli_session() {
         "one justiciar at a time"
     );
 }
+
+/// Whether any request to the hub offered one of the CLI app's slots.
+fn offered_cli_slots(rig: &Rig, from: usize) -> bool {
+    asks(rig)[from..]
+        .iter()
+        .any(|(workers, _)| workers.iter().any(|w| w.starts_with("cli-claude-slot-")))
+}
+
+#[test]
+fn an_unprobed_or_held_app_offers_no_slots() {
+    let rig = rig(&[]);
+    let fake = cli(&rig, 2);
+    fake.set_probed("claude", false);
+    tick(&rig);
+    assert!(
+        !offered_cli_slots(&rig, 0),
+        "no slot before a probe passes: {:?}",
+        asks(&rig)
+    );
+
+    fake.set_probed("claude", true);
+    fake.set_hold(
+        "claude",
+        Some(ignite_core::cli::Hold {
+            app: "claude".to_owned(),
+            reason: ignite_core::cli::HoldReason::NotLoggedIn,
+            since: rig.clock.now(),
+            cli_version: Some("2.1.323".to_owned()),
+            message: "Invalid API key".to_owned(),
+        }),
+    );
+    let before = asks(&rig).len();
+    tick(&rig);
+    assert!(!offered_cli_slots(&rig, before), "{:?}", asks(&rig));
+    assert!(fake.begun().is_empty());
+
+    fake.set_hold("claude", None);
+    let before = asks(&rig).len();
+    tick(&rig);
+    assert!(offered_cli_slots(&rig, before), "{:?}", asks(&rig));
+}
+
+#[test]
+fn a_machine_whose_claude_runs_in_cli_mode_queues_no_usage() {
+    let rig = super::tests::rig_sampling(
+        &[],
+        ignite_store::local::open_in_memory().unwrap(),
+        Timestamp::from_millis(super::tests::START),
+        true,
+    );
+    let reply = rig.pool(
+        &["add", "local_dispatcher", "--app", "claude", "--dispatcher"],
+        Some("local_dispatcher"),
+    );
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    cli(&rig, 1);
+    tick(&rig);
+    let step = rig.step();
+    assert!(
+        step.as_ref()
+            .is_none_or(|given| given.action != DispatchAction::Usage),
+        "{step:?}"
+    );
+}

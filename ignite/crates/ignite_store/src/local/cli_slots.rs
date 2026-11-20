@@ -327,6 +327,47 @@ fn verify_table(
     Ok(())
 }
 
+/// Puts `hold.app` on `hold` unless it is already on one, which keeps its first reason and
+/// time. Returns whether the hold is new.
+pub fn start_hold(conn: &Connection, hold: &CliHold) -> Result<bool> {
+    let inserted = conn.execute(
+        &format!(
+            "INSERT OR IGNORE INTO cli_holds ({}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            columns(CliHold::COLUMNS)
+        ),
+        params![
+            hold.app,
+            hold.reason,
+            hold.since,
+            hold.cli_version,
+            hold.message,
+            hold.probed_at,
+            hold.reported
+        ],
+    )?;
+    Ok(inserted > 0)
+}
+
+/// Ends `app`'s hold. Returns whether it was on one.
+pub fn end_hold(conn: &Connection, app: &str) -> Result<bool> {
+    Ok(conn.execute("DELETE FROM cli_holds WHERE app = ?1", [app])? > 0)
+}
+
+/// Records when the last probe turn of `app`'s hold ran.
+pub fn hold_probed(conn: &Connection, app: &str, at: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE cli_holds SET probed_at = ?2 WHERE app = ?1",
+        params![app, at],
+    )?;
+    Ok(())
+}
+
+/// Marks `app`'s hold as reported to the justiciar.
+pub fn hold_reported(conn: &Connection, app: &str) -> Result<()> {
+    conn.execute("UPDATE cli_holds SET reported = 1 WHERE app = ?1", [app])?;
+    Ok(())
+}
+
 /// The mode `ignite pool mode` forced on `app` (`cli` or `desktop`), or `None` when
 /// `ignite.toml` decides.
 pub fn mode_override(conn: &Connection, app: &str) -> Result<Option<String>> {
@@ -493,6 +534,37 @@ mod tests {
         assert_eq!(mode_override(&conn, "codex").unwrap(), None);
         set_mode_override(&conn, "claude", None).unwrap();
         assert_eq!(mode_override(&conn, "claude").unwrap(), None);
+    }
+
+    #[test]
+    fn a_hold_starts_once_and_ends() {
+        let conn = open_in_memory().unwrap();
+        let hold = CliHold {
+            app: "claude".to_owned(),
+            reason: "not_logged_in".to_owned(),
+            since: Some("2026-11-20T12:00:00.000Z".to_owned()),
+            cli_version: Some("2.1.323".to_owned()),
+            message: Some("Invalid API key".to_owned()),
+            probed_at: None,
+            reported: 0,
+        };
+        assert!(start_hold(&conn, &hold).unwrap());
+        let later = CliHold {
+            reason: "api_error".to_owned(),
+            ..hold.clone()
+        };
+        assert!(!start_hold(&conn, &later).unwrap());
+        hold_probed(&conn, "claude", "2026-11-20T12:05:00.000Z").unwrap();
+        hold_reported(&conn, "claude").unwrap();
+        let stored = holds(&conn).unwrap();
+        assert_eq!(stored[0].reason, "not_logged_in");
+        assert_eq!(
+            (stored[0].probed_at.as_deref(), stored[0].reported),
+            (Some("2026-11-20T12:05:00.000Z"), 1)
+        );
+        assert!(end_hold(&conn, "claude").unwrap());
+        assert!(!end_hold(&conn, "claude").unwrap());
+        assert!(holds(&conn).unwrap().is_empty());
     }
 
     /// A row written with only the key columns, as an older build that knew fewer columns

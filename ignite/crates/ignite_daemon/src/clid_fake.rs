@@ -1,6 +1,6 @@
 //! [`FakeCliPool`], a [`CliPool`] held in memory for the dispatcher's tests.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
 use ignite_core::cli::{Hold, Slot};
@@ -40,6 +40,8 @@ pub struct FakeCliPool {
     checks: Mutex<BTreeMap<SessionId, SessionCheck>>,
     slots: Mutex<BTreeMap<String, Vec<Slot>>>,
     holds: Mutex<BTreeMap<String, Hold>>,
+    /// Apps no probe has passed for yet, whose slots are not offered.
+    unprobed: Mutex<BTreeSet<String>>,
 }
 
 impl FakeCliPool {
@@ -69,6 +71,17 @@ impl FakeCliPool {
 
     pub fn set_slots(&self, app: &str, slots: Vec<Slot>) {
         lock(&self.slots).insert(app.to_owned(), slots);
+    }
+
+    /// Records whether a probe turn has passed for `app`; until one has, its slots are not
+    /// offered. Every app counts as probed until this says otherwise.
+    pub fn set_probed(&self, app: &str, probed: bool) {
+        let mut unprobed = lock(&self.unprobed);
+        if probed {
+            unprobed.remove(app);
+        } else {
+            unprobed.insert(app.to_owned());
+        }
     }
 
     /// Puts `hold.app` on `hold`, or with `None` ends `app`'s hold.
@@ -132,6 +145,10 @@ impl CliPool for FakeCliPool {
 
     fn held(&self, app: &str) -> Option<Hold> {
         lock(&self.holds).get(app).cloned()
+    }
+
+    fn offers(&self, app: &str) -> bool {
+        !lock(&self.unprobed).contains(app) && self.held(app).is_none()
     }
 
     fn begin_justiciar(

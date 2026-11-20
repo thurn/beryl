@@ -10,7 +10,7 @@ use std::time::Duration;
 use rusqlite::Connection;
 use serde::Serialize;
 
-use ignite_core::protocol::hub::{FlakyReport, NewResult, Record};
+use ignite_core::protocol::hub::{FlakyReport, MetricsImport, NewResult, Record};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Hub, Result};
 use ignite_store::local::{outbox as store, rows};
@@ -20,6 +20,7 @@ use crate::hubclient::too_large;
 const RECORD: &str = "record";
 const RESULT: &str = "result";
 const FLAKY: &str = "flaky";
+const METRICS: &str = "metrics";
 
 /// How many entries one flush reads at a time.
 const BATCH: u32 = 200;
@@ -34,6 +35,11 @@ pub fn push_result(conn: &Connection, result: &NewResult, at: Timestamp) -> Resu
 
 pub fn push_flaky(conn: &Connection, report: &FlakyReport, at: Timestamp) -> Result<()> {
     push(conn, FLAKY, report, at)
+}
+
+/// Queues rows for the hub's `POST /metrics/import`, such as a CLI turn's cost.
+pub fn push_metrics(conn: &Connection, import: &MetricsImport, at: Timestamp) -> Result<()> {
+    push(conn, METRICS, import, at)
 }
 
 fn push(conn: &Connection, kind: &str, body: &impl Serialize, at: Timestamp) -> Result<()> {
@@ -132,6 +138,9 @@ fn send(hub: &dyn Hub, kind: &str, run: &[&rows::OutboxEntry]) -> Result<()> {
         FLAKY => parse::<FlakyReport>(run)?
             .iter()
             .try_for_each(|report| hub.flaky(report)),
+        METRICS => parse::<MetricsImport>(run)?
+            .iter()
+            .try_for_each(|import| hub.metrics(import)),
         other => Err(Error::Invalid(format!("unknown outbox kind {other:?}"))),
     }
 }
