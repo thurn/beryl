@@ -151,6 +151,15 @@ impl Host for TestHost {
     fn title(&self, _session: &SessionId) -> Option<String> {
         None
     }
+    fn check_sightings(
+        &self,
+        _since: Timestamp,
+    ) -> Vec<ignite_store::local::rows::CheckSighting> {
+        Vec::new()
+    }
+    fn green(&self) -> Option<String> {
+        None
+    }
     fn running_under(&self, root: u32, _asker: Option<u32>) -> Option<Vec<u32>> {
         assert_eq!(root, PID);
         lock(&self.children).clone()
