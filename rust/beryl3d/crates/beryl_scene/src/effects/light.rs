@@ -44,7 +44,7 @@
 //!   effects.css). The life total's text is tinted too (`hud::counts`).
 //!
 //! While the frame is built for the match tools, each light is also recorded as an `EffectLook`
-//! with the opacity it is drawn at.
+//! with the box and opacity of the web's `.stage-effect` node for it (`node`), not its quad.
 
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
@@ -52,7 +52,7 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 use super::{Effect, EffectRun};
 use crate::data::space::effects::{beam, flash, glow, impact, pulse, trail};
 use crate::data::space::light::LIFT;
-use crate::frame::{Band, Draw, EffectLook, FrameBuilder, Material, Sprite, sprites};
+use crate::frame::{Band, Draw, EffectLook, FrameBuilder, Sprite, sprites};
 use crate::light::{marks, streaks};
 use crate::play::{Reach, Scene};
 use crate::pose::Pose;
@@ -136,8 +136,11 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
                 progress,
             ),
             Effect::Beam => beam(&pose, half, progress),
+            // Not drawn while the card has hardly moved, but its node is still recorded, as the
+            // web keeps its trail node for the whole run.
             Effect::Trail => {
                 let Some(draw) = trail(run.on, reach, half, progress, scene) else {
+                    record(builder, run, &pose, half, progress);
                     continue;
                 };
                 draw
@@ -152,24 +155,46 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
             }
             _ => continue,
         };
-        builder.effect(EffectLook {
-            effect: run.effect,
-            on: run.on,
-            model: draw.model,
-            opacity: seen(&draw),
-        });
+        record(builder, run, &pose, half, progress);
         builder.draw(Band::Glows, draw);
     }
 }
 
-/// The opacity a light's record is drawn at: its tint's, faded by its progress for the glow
-/// material (`shade_glow` in `beryl_render`'s shader multiplies by `1 - params[0]`).
-fn seen(draw: &Draw) -> f32 {
-    let tint = f32::from(draw.tint[3]) / 255.0;
-    if draw.material == Material::Glow as u8 {
-        tint * (1.0 - draw.params[0])
-    } else {
-        tint
+/// Records `run`, `progress` of the way through on what lies at `pose` with half size `half`,
+/// for the match tools, as the web's node for it (`node`).
+fn record(builder: &mut FrameBuilder<'_>, run: &EffectRun, pose: &Pose, half: Vec2, progress: f32) {
+    let (scale, opacity) = node(run.effect, run.on, progress);
+    let size = (half * 2.0 * scale).extend(1.0);
+    let model = Affine3A::from_scale_rotation_translation(size, pose.rotation, above(pose));
+    builder.effect(EffectLook {
+        effect: run.effect,
+        on: run.on,
+        model: Draw::glow(model, [0; 4], sprites::HALO, progress).model,
+        opacity,
+    });
+}
+
+/// How much larger than what it is on, and how opaque, the web's `.stage-effect` node of
+/// `effect` is, `progress` of the way through: the `transform: scale(...)` and `opacity` of its
+/// rule in `ui/src/stage/effects.css`. The web draws these lights on a canvas (`flaresOf` in
+/// `ui/src/stage/flare.ts`) or as box shadows past the node's edge, and its node is only a
+/// record the size of the card, or of the face of a player's life orb. The match tools measure
+/// an effect's motion from that node, so Beryl 3D records the same box and opacity rather than
+/// its light's quad, whose empty margins made every light look far larger than the web's; the
+/// light itself is compared in pixels.
+fn node(effect: Effect, on: Subject, progress: f32) -> (f32, f32) {
+    let rest = 1.0 - progress;
+    let player = matches!(on, Subject::Player { .. });
+    match effect {
+        // `[data-life] > .stage-effect` and `[data-life] > .stage-effect-impact`.
+        Effect::Loss | Effect::Gain => (1.0 + 0.45 * progress, rest),
+        Effect::Impact if player => (1.0 + 0.9 * progress, rest),
+        Effect::Glow => (1.0 + 0.1 * progress, rest),
+        Effect::Impact => (1.0 + 0.12 * progress, 0.55 * rest),
+        Effect::Flash => (1.0 + 0.08 * progress, rest * rest),
+        Effect::Pulse => (1.0, rest),
+        // `beam` and `trail` have no rule of their own: the node stands whole over the card.
+        _ => (1.0, 1.0),
     }
 }
 

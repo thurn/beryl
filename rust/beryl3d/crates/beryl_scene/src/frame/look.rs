@@ -27,11 +27,12 @@ pub struct Looks {
 /// One effect as a frame draws it, which `tree --records` reports as an element of role
 /// `effect`, so that `just b3d match` can measure it against the web interface's `.stage-effect`
 /// node of the same name on the same thing (docs/beryl-3d.md, "Effects"). `model` places a quad
-/// from -0.5 to 0.5 in the table's space, as `Draw::model` does: the light's own record for an
-/// effect that is light, and the card's face for one that changes how the card is drawn.
-/// `opacity` is how strongly it shows, from 0 to 1, as the opacity of the web's node would say:
-/// a light's opacity as its material fades it, how far a card is washed white or darkened, and
-/// 1 while a life total is tinted.
+/// from -0.5 to 0.5 in the table's space, as `Draw::model` does. For an effect that is light,
+/// whose web node is only a record the size of what it is on (the light is drawn on a canvas or
+/// past the node's edge), both are that node's box and opacity as its CSS rule scales and fades
+/// it (`node` in `effects::light`). For one that changes how the card is drawn, `model` is the
+/// card's face and `opacity` how far the card is washed white or darkened; it is 1 while a life
+/// total is tinted.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EffectLook {
     pub effect: Effect,

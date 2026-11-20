@@ -4612,9 +4612,11 @@ reference is the web interface as WebKit draws it, at scale 2.
   role `effect` (`roles.json`), named by its effect and with what it is on as
   its object; the table shaking is a record on `table` whose box is the table's
   offset from rest. Beryl 3D's records list each effect it draws
-  (`Looks::effects`) after its elements: a light's quad and the opacity its
-  material draws it at, the face of a card washed white or darkened and how far,
-  a life total tinted for `loss` or `gain`, and the picture's offset for
+  (`Looks::effects`) after its elements: for a light, the box and opacity of the
+  web's node for it (the card's face scaled and faded as `effects.css` does,
+  since the web draws the light itself on a canvas or past the node's edge, and
+  compares it in pixels), the face of a card washed white or darkened and how
+  far, a life total tinted for `loss` or `gain`, and the picture's offset for
   `shake`. The matcher pairs effects first, by name and object only.
 
   `just b3d match motion --all` ranks the verbs, effects and marks of
