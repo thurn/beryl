@@ -348,7 +348,14 @@ impl Claims {
         .ok_or_else(|| Error::NotFound(format!("{session} holds no tree for {ticket}")))?;
         let note = |saved: &Saved| format!("{reason} Its work is saved as {}.", saved.branch);
         match self.give_back(ctx, &held, note, None, None) {
-            Ok(_) => Ok(()),
+            // The ticket is released either way. A tree whose reset failed keeps the ticket's
+            // branch until the retry, and the next lease of the ticket frees it (see `trees`).
+            Ok(given) => {
+                if let Some(error) = given.reset {
+                    eprintln!("ignite: released {ticket}, but {} not reset: {error}", held.tree);
+                }
+                Ok(())
+            }
             // A tree that a waiting `ignite start "<summary>"` was given keeps the ad hoc
             // placeholder name until the session runs `start` again and claims it. When the
             // daemon restarts in between, nothing claims it: the hub has never heard of the

@@ -93,6 +93,14 @@ pub fn list(repo: &Path) -> Result<Vec<Worktree>> {
     Ok(trees)
 }
 
+/// Detaches the worktree at `tree` from its branch, leaving its HEAD at `at` and its files and
+/// index as they are, so that another worktree may check the branch out. Only `HEAD` is
+/// rewritten, so a lock that a killed command left on the index does not stop it.
+pub fn detach(tree: &Path, at: &Commit) -> Result<()> {
+    cmd::run(tree, ["update-ref", "--no-deref", "HEAD", at.as_str()])?;
+    Ok(())
+}
+
 /// Removes the worktree at `path`, discarding its edits and untracked files.
 pub fn remove(repo: &Path, path: &Path) -> Result<()> {
     let mut command = cmd::git(repo, ["worktree", "remove", "--force"]);

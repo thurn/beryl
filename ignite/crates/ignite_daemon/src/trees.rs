@@ -26,6 +26,7 @@
 //! directories, and serves the first waiter. A verb that refuses to stop (a landing whose push
 //! began) or does not end in time leaves the tree leased, and the release says why.
 
+mod branch;
 mod choice;
 mod disk;
 pub mod head;
@@ -510,7 +511,7 @@ impl Trees {
         } else {
             request.at.clone()
         };
-        if let Err(error) = worktree::reset(&path, &request.branch, &at, &config.keep.get()) {
+        if let Err(error) = self.check_out_branch(&path, &request.branch, &at) {
             let _ = store::release(&self.lock().db, tree.as_str(), None, &self.now());
             return Err(error);
         }

@@ -909,3 +909,29 @@ fn a_verb_in_another_daemons_tree_of_the_same_name_is_left_running() {
         .unwrap();
     assert!(!elsewhere.stop_requested());
 }
+
+#[test]
+fn a_lease_frees_the_ticket_branch_from_a_tree_a_failed_release_left_on_it() {
+    let f = Fixture::new(2, 1);
+    let first = f.lease("T.1", false);
+    // The release's reset failed, here on a lock a killed command left, so the first tree is
+    // still on the ticket's branch when the hub gives the ticket to another session.
+    let git_dir = git(&first.path, &["rev-parse", "--absolute-git-dir"]);
+    fs::write(Path::new(git_dir.trim()).join("index.lock"), "").unwrap();
+    let mut request = f.request("T.1", false);
+    request.session = Some(SessionId::new("local_next").unwrap());
+    let Lease::Ready(second) = f.trees.lease(request).unwrap() else {
+        panic!("expected a free tree");
+    };
+
+    assert_ne!(second.tree, first.tree);
+    assert_eq!(
+        git(&second.path, &["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "work/T.1"
+    );
+    assert_eq!(
+        git(&first.path, &["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "HEAD",
+        "the first tree is detached"
+    );
+}
