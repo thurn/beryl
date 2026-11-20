@@ -320,7 +320,8 @@ def peaks(found: Measured, window: tuple[int, int]) -> dict[str, dict[str, objec
     draws none of it, as `{"t_ms", "box"}`. Only frames where its box is inside the window
     (`window`, width and height in points) count, since a picture shows nothing outside it.
     """
-    width, height = window
+    width: int = window[0]
+    height: int = window[1]
 
     def shown(sample: tracks.Sample) -> bool:
         return (
