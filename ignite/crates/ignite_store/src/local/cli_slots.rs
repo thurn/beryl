@@ -209,6 +209,42 @@ pub fn by_session(conn: &Connection, session: &str) -> Result<Option<CliSlot>> {
 /// number. Fails, changing nothing, when the session already has a row for that turn.
 pub fn record_turn_start(conn: &mut Connection, turn: &CliTurn, deliver: &[i64]) -> Result<()> {
     let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    record_in(&transaction, turn, deliver)?;
+    transaction.commit()?;
+    Ok(())
+}
+
+/// Gives the slot `slot` names (by app and number) to its session unless another session holds
+/// it, and with `first`, records the slot's first turn as [`record_turn_start`] does, all in one
+/// transaction. Returns whether the slot was free. Two hand-offs that chose the same free slot
+/// cannot both take it, and the `ignite-cli` loop never sees the slot before its turn is
+/// recorded, so it cannot record the same turn first.
+pub fn claim(
+    conn: &mut Connection,
+    slot: &CliSlot,
+    first: Option<(&CliTurn, &[i64])>,
+) -> Result<bool> {
+    let transaction = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let holder: Option<String> = transaction
+        .query_row(
+            "SELECT session FROM cli_slots WHERE app = ?1 AND slot = ?2",
+            params![slot.app, slot.slot],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    if holder.is_some_and(|holder| slot.session.as_deref() != Some(holder.as_str())) {
+        return Ok(false);
+    }
+    put(&transaction, slot)?;
+    if let Some((turn, deliver)) = first {
+        record_in(&transaction, turn, deliver)?;
+    }
+    transaction.commit()?;
+    Ok(true)
+}
+
+fn record_in(transaction: &Connection, turn: &CliTurn, deliver: &[i64]) -> Result<()> {
     transaction.execute(
         &format!(
             "INSERT INTO cli_turns ({}) VALUES \
@@ -240,16 +276,12 @@ pub fn record_turn_start(conn: &mut Connection, turn: &CliTurn, deliver: &[i64])
          WHERE session = ?1",
         params![turn.session, turn.turn, turn.started_at],
     )?;
-    {
-        let mut update = transaction.prepare(
-            "UPDATE cli_messages SET delivered_turn = ?2 \
-             WHERE id = ?1 AND delivered_turn IS NULL",
-        )?;
-        for id in deliver {
-            update.execute(params![id, turn.turn])?;
-        }
+    let mut update = transaction.prepare(
+        "UPDATE cli_messages SET delivered_turn = ?2 WHERE id = ?1 AND delivered_turn IS NULL",
+    )?;
+    for id in deliver {
+        update.execute(params![id, turn.turn])?;
     }
-    transaction.commit()?;
     Ok(())
 }
 

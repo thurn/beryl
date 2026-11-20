@@ -84,11 +84,11 @@ impl CliDaemon {
             .ticket
             .as_ref()
             .is_some_and(|ticket| self.host.holders().get(&session) == Some(ticket));
-        let messages = self
-            .database(|conn| store::undelivered(conn, session.as_str()))?
-            .into_iter()
-            .map(|m| m.text)
-            .collect();
+        let waiting = self.database(|conn| store::undelivered(conn, session.as_str()))?;
+        // `ignite tell --now` ends the running turn on purpose, so that end says nothing about
+        // whether the worker is stuck.
+        let cut_for_message = waiting.iter().any(|m| m.urgent != 0);
+        let messages = waiting.into_iter().map(|m| m.text).collect();
         let interrupted_in_row = if *end == TurnEnd::Interrupted {
             // An `ignite` command run during the turn shows the worker was making progress,
             // so the count starts again with this end.
@@ -100,7 +100,7 @@ impl CliDaemon {
                 (Some(quiet), Some(started)) => quiet > started,
                 _ => false,
             };
-            if ran_since {
+            if ran_since || cut_for_message {
                 1
             } else {
                 u32::try_from(row.interrupted_in_row).unwrap_or(0) + 1
@@ -237,16 +237,18 @@ impl CliDaemon {
         // Only a slot's first turn after a resume falls back to a new transcript.
         next.fallback_prompt = None;
         if state == SlotState::Free {
-            next.session = None;
-            next.reservation = None;
-            next.interrupted_in_row = 0;
-            next.block_sent = 0;
-            next.backed_off = 0;
+            freed(&mut next);
         }
         change(&mut next);
+        // A turn that printed no line never showed its prompt to the worker, so the messages
+        // it carried wait for the next turn again. A slot made free has no next turn.
+        let requeue = turn.lines_applied == 0 && state != SlotState::Free;
         self.database(|conn| {
             let transaction = conn.transaction()?;
             store::update_turn(&transaction, &turn)?;
+            if requeue {
+                store::requeue_messages(&transaction, &turn.session, turn.turn)?;
+            }
             // The slot's row is keyed by app and number, so it is written only while it still
             // holds this session.
             let current = store::by_session(&transaction, &turn.session)?;
@@ -263,4 +265,47 @@ impl CliDaemon {
         }
         Ok(next)
     }
+
+
+    /// Frees a parked slot whose session no longer holds its ticket: someone released it, its
+    /// lease expired, or its reservation lapsed before `ignite start` claimed it. Nothing else
+    /// looks at a parked slot until its app's CLI hold ends, and a slot parked for an end
+    /// `decide` could not place has no such end, so without this the slot would stay taken
+    /// for good. A slot with no ticket (a justiciar) is left for a person.
+    pub(super) fn free_if_released(&self, row: &CliSlot) -> Result<()> {
+        let slot = slot_of(row);
+        let (Some(session), Some(ticket)) = (&slot.session, &slot.ticket) else {
+            return Ok(());
+        };
+        if self.host.holders().get(session) == Some(ticket) {
+            return Ok(());
+        }
+        let mut next = row.clone();
+        SlotState::Free.as_str().clone_into(&mut next.state);
+        next.since = Some(self.now().to_string());
+        next.park_reason = None;
+        next.next_prompt = None;
+        next.fallback_prompt = None;
+        freed(&mut next);
+        self.database(|conn| {
+            let transaction = conn.transaction()?;
+            let current = store::by_session(&transaction, session.as_str())?;
+            if current.is_some_and(|c| c.state == SlotState::Parked.as_str()) {
+                store::put(&transaction, &next)?;
+            }
+            transaction.commit()?;
+            Ok(())
+        })?;
+        self.pool.remove(session)
+    }
+}
+
+/// Clears what a slot made free keeps of its session. The ticket and transcript stay, for the
+/// next ticket of a `lane:` chain.
+fn freed(row: &mut CliSlot) {
+    row.session = None;
+    row.reservation = None;
+    row.interrupted_in_row = 0;
+    row.block_sent = 0;
+    row.backed_off = 0;
 }

@@ -21,6 +21,8 @@ use crate::dispatchd::{RunningVerb, SessionCommand};
 
 #[path = "clid_actions_tests.rs"]
 mod actions;
+#[path = "clid_paths_tests.rs"]
+mod paths;
 #[path = "clid_resume_tests.rs"]
 mod resume;
 #[path = "clid_transcript_tests.rs"]
@@ -117,6 +119,8 @@ struct TestHost {
     quiet: Mutex<BTreeMap<SessionId, Timestamp>>,
     children: Mutex<Option<Vec<u32>>>,
     releases: Mutex<Vec<(SessionId, TicketId, String)>>,
+    /// The replies `ignite wait`s were ended with.
+    interrupts: Mutex<Vec<String>>,
 }
 
 impl Host for TestHost {
@@ -144,7 +148,8 @@ impl Host for TestHost {
     fn running_verbs(&self, session: &SessionId) -> Vec<RunningVerb> {
         lock(&self.verbs).get(session).cloned().unwrap_or_default()
     }
-    fn interrupt(&self, _session: &SessionId, _reply: Reply) -> bool {
+    fn interrupt(&self, _session: &SessionId, reply: Reply) -> bool {
+        lock(&self.interrupts).push(reply.text);
         false
     }
     fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()> {
@@ -493,7 +498,8 @@ fn a_turn_recorded_and_never_started_is_started_once() {
     *lock(&rig.turns.fail_starts) = 1;
     // The supervisor fails to start after the turn was recorded, as when the daemon dies
     // between the two phases.
-    assert!(rig.try_begin().is_err());
+    // The session exists once its turn is recorded, so the hand-off succeeds.
+    assert!(rig.try_begin().is_ok());
     let slot = rig.slot();
     assert_eq!((slot.state, slot.turn), (SlotState::Starting, 1));
     assert!(rig.turns.starts().is_empty());

@@ -100,10 +100,9 @@ fn cli_e2e_a_crash_between_recording_a_turn_and_starting_it_runs_it_once() {
         inner: rig.turns(),
         failed: AtomicBool::new(false),
     }));
-    assert!(
-        rig.try_begin().is_err(),
-        "the start failed after the record"
-    );
+    // The session exists once its turn is recorded, so the hand-off succeeds and the
+    // dispatcher adds the session to the pool; the turn starts later.
+    rig.try_begin().unwrap();
     assert_eq!(rig.invocations(), 0);
     let session = rig.slot().session.unwrap();
     assert_eq!(rig.slot().state, SlotState::Starting);

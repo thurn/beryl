@@ -287,6 +287,9 @@ pub struct CliDaemon {
     /// How many lines of each turn's digest (by session and turn) are in the outbox, as far as
     /// this daemon knows. A restart forgets it, and the hub drops the repeats.
     sent: Mutex<BTreeMap<(SessionId, u32), usize>>,
+    /// Held while a hand-off chooses a slot and claims it, so the dispatcher's threads take
+    /// slots one at a time (see `claim::open_slot`).
+    opening: Mutex<()>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -376,6 +379,7 @@ impl CliDaemon {
             hidden: Mutex::new(BTreeMap::new()),
             machine: None,
             sent: Mutex::new(BTreeMap::new()),
+            opening: Mutex::new(()),
         }
     }
 
@@ -420,10 +424,6 @@ impl CliDaemon {
     fn turn_row(&self, session: &SessionId, turn: u32) -> Result<Option<CliTurn>> {
         let turns = self.database(|conn| store::turns(conn, session.as_str()))?;
         Ok(turns.into_iter().find(|t| t.turn == i64::from(turn)))
-    }
-
-    fn put(&self, row: &CliSlot) -> Result<()> {
-        self.database(|conn| store::put(conn, row))
     }
 
     fn now(&self) -> Timestamp {
@@ -482,7 +482,8 @@ impl CliDaemon {
                     .is_none_or(|at| at <= self.now());
                 if due { self.start_next(row) } else { Ok(()) }
             }
-            SlotState::Parked | SlotState::Free => Ok(()),
+            SlotState::Parked => self.free_if_released(row),
+            SlotState::Free => Ok(()),
         }
     }
 
@@ -510,6 +511,20 @@ impl CliDaemon {
         if self.held(&row.app).is_some() {
             return Ok(());
         }
+        let Some((turn, deliver)) = self.next_turn(row)? else {
+            return Ok(());
+        };
+        self.database(|conn| store::record_turn_start(conn, &turn, &deliver))?;
+        let mut row = row.clone();
+        row.turn = turn.turn;
+        SlotState::Starting.as_str().clone_into(&mut row.state);
+        self.launch(&row)
+    }
+
+    /// The slot's next turn, not yet recorded, and the IDs of the messages it delivers: its
+    /// prompt is the one the slot waits to start with followed by every undelivered message.
+    /// `None` when there is nothing to say.
+    fn next_turn(&self, row: &CliSlot) -> Result<Option<(CliTurn, Vec<i64>)>> {
         let session = row.session.clone().unwrap_or_default();
         let waiting = self.database(|conn| store::undelivered(conn, &session))?;
         let mut prompt = row.next_prompt.clone().unwrap_or_default();
@@ -527,10 +542,10 @@ impl CliDaemon {
             prompt.push_str(&text);
         }
         if prompt.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
         let turn = CliTurn {
-            session: session.clone(),
+            session,
             turn: row.turn + 1,
             app: row.app.clone(),
             slot: row.slot,
@@ -548,12 +563,8 @@ impl CliDaemon {
             cost_usd: None,
             lines_applied: 0,
         };
-        let deliver: Vec<i64> = waiting.iter().map(|m: &CliMessage| m.id).collect();
-        self.database(|conn| store::record_turn_start(conn, &turn, &deliver))?;
-        let mut row = row.clone();
-        row.turn = turn.turn;
-        SlotState::Starting.as_str().clone_into(&mut row.state);
-        self.launch(&row)
+        let deliver = waiting.iter().map(|m: &CliMessage| m.id).collect();
+        Ok(Some((turn, deliver)))
     }
 
     /// Starts the slot's recorded turn, whose row says it is starting.
@@ -654,6 +665,7 @@ impl CliPool for CliDaemon {
             return Err(Error::Invalid(format!("{named} is not a CLI slot")));
         };
         self.app(&app)?;
+        let _opening = lock(&self.opening);
         let session = match &earlier {
             Some(_) => named.clone(),
             None => Self::new_session(&app)?,
@@ -670,8 +682,7 @@ impl CliPool for CliDaemon {
             Some(resume) => self.resume_culprit(row, resume)?,
             None => row,
         };
-        self.put(&row)?;
-        self.start_next(&row)?;
+        self.open_slot(row)?;
         Ok(session)
     }
 
@@ -684,6 +695,7 @@ impl CliPool for CliDaemon {
         effort: &str,
     ) -> Result<SessionId> {
         self.app(app)?;
+        let _opening = lock(&self.opening);
         let session = Self::new_session(app)?;
         let row = self.claim_slot(
             app,
@@ -694,33 +706,15 @@ impl CliPool for CliDaemon {
             prompt.to_owned(),
             None,
         )?;
-        self.put(&row)?;
-        self.start_next(&row)?;
+        self.open_slot(row)?;
         Ok(session)
     }
 
-    /// Queues the message. An urgent one ends the running turn, unless a `land` of the
-    /// session is under way, so the loop finds the turn interrupted and resumes it with the
-    /// message.
+    /// Queues the message (see `messages`). An urgent one ends the running turn, unless a
+    /// `land` of the session is under way, so the loop finds the turn interrupted and resumes
+    /// it with the message; any other ends the session's `ignite wait`.
     fn message(&self, session: &SessionId, text: &str, urgent: bool) -> Result<()> {
-        let row = self
-            .row(session)?
-            .ok_or_else(|| Error::NotFound(format!("{session} has no CLI slot")))?;
-        let message = CliMessage {
-            id: 0,
-            session: session.to_string(),
-            ticket: row.ticket.clone(),
-            text: text.to_owned(),
-            urgent: i64::from(urgent),
-            queued_at: Some(self.now().to_string()),
-            delivered_turn: None,
-        };
-        self.database(|conn| store::queue_message(conn, &message))?;
-        let slot = slot_of(&row);
-        if urgent && slot.state == SlotState::Running && !self.host.ending_ticket(session) {
-            self.turns.end(session, slot.turn)?;
-        }
-        Ok(())
+        self.queue_message(session, text, urgent)
     }
 
     fn check(&self, session: &SessionId) -> SessionCheck {

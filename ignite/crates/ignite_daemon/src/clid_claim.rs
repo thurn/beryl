@@ -22,7 +22,11 @@ use ignite_core::traits::{Error, Result};
 use ignite_store::local::cli_slots as store;
 use ignite_store::local::rows::{CliLanded, CliSlot};
 
-use super::{CliDaemon, LANDED_KEEP_S, Resume, hex, random_bytes};
+use super::{CliDaemon, CliPool, LANDED_KEEP_S, Resume, hex, random_bytes};
+
+/// How many slots [`CliDaemon::open_slot`] tries before it gives up: each failed try means
+/// another hand-off took the slot first.
+const OPEN_ATTEMPTS: u32 = 4;
 
 /// A CLI session that worked a ticket here before, as its turns recorded it.
 pub(super) struct Earlier {
@@ -99,6 +103,66 @@ impl CliDaemon {
         }
     }
 
+    /// Slot `preferred` of `app` if it is free, or else the lowest free one, or else one
+    /// numbered past every slot there is.
+    fn free_index(&self, app: &str, preferred: u32) -> Result<i64> {
+        let rows: Vec<CliSlot> = self.rows()?.into_iter().filter(|r| r.app == app).collect();
+        let busy = |index: i64| rows.iter().any(|r| r.slot == index && r.session.is_some());
+        let preferred = i64::from(preferred);
+        if preferred > 0 && !busy(preferred) {
+            return Ok(preferred);
+        }
+        // Among one more number than there are rows, one is always free.
+        let last = i64::try_from(rows.len()).unwrap_or(i64::MAX - 1) + 1;
+        Ok((1..=last).find(|index| !busy(*index)).unwrap_or(last))
+    }
+
+    /// Writes `row`, a slot given to a new session by [`CliDaemon::claim_slot`], and records
+    /// its first turn in the same transaction, then starts that turn. Unless the app is on a
+    /// CLI hold: then the slot waits, backing off, for the hold to end.
+    ///
+    /// The slot is written only if it is still free. The dispatcher hands tickets over from
+    /// more than one thread, and the slot's row is keyed by app and number, so a write over
+    /// another session's slot would take it from that session and strand its turn. The
+    /// caller holds `opening`, so within one daemon no other hand-off can take the slot
+    /// meanwhile; should anything else have, this one takes the lowest free slot instead.
+    ///
+    /// Once the turn is recorded, the session exists whether or not its supervisor starts: a
+    /// supervisor that fails to start is started by the `ignite-cli` loop, which finds the
+    /// turn recorded and not started. So that failure is logged, not returned, and the
+    /// dispatcher adds the session to the pool as it does for any other start.
+    pub(super) fn open_slot(&self, mut row: CliSlot) -> Result<()> {
+        for _ in 0..OPEN_ATTEMPTS {
+            let first = match self.held(&row.app) {
+                Some(_) => None,
+                None => self.next_turn(&row)?,
+            };
+            let claimed = self.database(|conn| {
+                store::claim(conn, &row, first.as_ref().map(|(t, d)| (t, d.as_slice())))
+            })?;
+            if !claimed {
+                row.slot = self.free_index(&row.app, 0)?;
+                continue;
+            }
+            if let Some((turn, _)) = first {
+                row.turn = turn.turn;
+                SlotState::Starting.as_str().clone_into(&mut row.state);
+                if let Err(error) = self.launch(&row) {
+                    eprintln!(
+                        "ignite: turn {} of {} recorded; its supervisor starts later: {error}",
+                        turn.turn, turn.session
+                    );
+                }
+            }
+            return Ok(());
+        }
+        Err(Error::Conflict(format!(
+            "no free slot of {} could be taken for {}",
+            row.app,
+            row.session.unwrap_or_default()
+        )))
+    }
+
     /// A new Ignite session for a CLI worker of `app`, `cli-<app>-<8 hex>`.
     pub(super) fn new_session(app: &str) -> Result<SessionId> {
         SessionId::new(format!("cli-{app}-{}", hex(&random_bytes::<4>()?)))
@@ -119,16 +183,7 @@ impl CliDaemon {
         prompt: String,
         earlier: Option<Earlier>,
     ) -> Result<CliSlot> {
-        let rows: Vec<CliSlot> = self.rows()?.into_iter().filter(|r| r.app == app).collect();
-        let busy = |index: i64| rows.iter().any(|r| r.slot == index && r.session.is_some());
-        let preferred = i64::from(preferred);
-        let index = if preferred > 0 && !busy(preferred) {
-            preferred
-        } else {
-            // Among one more number than there are rows, one is always free.
-            let last = i64::try_from(rows.len()).unwrap_or(i64::MAX - 1) + 1;
-            (1..=last).find(|index| !busy(*index)).unwrap_or(last)
-        };
+        let index = self.free_index(app, preferred)?;
         let now = self.now().to_string();
         Ok(CliSlot {
             app: app.to_owned(),
