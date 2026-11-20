@@ -42,6 +42,15 @@
 //!   The title comes from the desktop app's metadata (see `session_title`); a title that cannot
 //!   be read changes nothing.
 //!
+//! A CLI session (its ID starts with `cli-`, see `SessionId::is_cli`) keeps these rules with two
+//! changes, because the daemon runs it as one headless process per turn and ends that process
+//! with the turn. A live process under the session that is not an `ignite` verb no longer lets
+//! the turn end: nothing would wake it, and the supervisor kills it. The first such stop is
+//! blocked with a line saying so that names `ignite run -- <command>` and `ignite wait`; a
+//! second releases the ticket. And titles do not apply: a CLI session has none, so a ⛔ title
+//! never releases it, and its block text says nothing about titles (see `ignite guide
+//! cli-worker`).
+//!
 //! A session released either way may not claim a ticket again until the dispatcher hands it one
 //! (see `wake`), and the reply tells it to stop.
 //!
@@ -50,6 +59,7 @@
 //! the session's current command with this one and end it, and a background `land` would then
 //! look finished to both this verb and the stall rule.
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use ignite_core::cli::decide::{block_text, cut, quoting};
@@ -146,6 +156,38 @@ impl Verb for TurnEndedVerb {
     }
 }
 
+/// The text that keeps a CLI worker going after its first stop with `ticket` held. With
+/// `running` (the live processes under the session that are not `ignite` verbs) it starts with
+/// the line saying why those do not let the turn end.
+fn cli_block_text(ticket: &TicketId, running: &[u32]) -> String {
+    let mut text = String::new();
+    if !running.is_empty() {
+        let pids: Vec<String> = running.iter().map(u32::to_string).collect();
+        let _ = writeln!(
+            text,
+            "The processes {} that you started are still running, and the supervisor ends \
+             them with your turn, so nothing will wake you. Run heavy work as `ignite run -- \
+             <command>` and wait for it in the foreground with `ignite wait`.",
+            pids.join(", ")
+        );
+    }
+    let _ = write!(
+        text,
+        "You are ending your turn while you hold {ticket}, and nobody will answer you. Before \
+         you stop, do one of these:\n\
+         1. If the work is done, run `ignite land -m <note>`.\n\
+         2. If it is not, run `ignite release -m <exact state>`, with the dependency when it \
+         waits on another ticket (see `ignite guide release`).\n\
+         3. If the ticket cannot be completed as written, run `ignite justiciar \"<what is \
+         impossible, and the evidence>\"` and then `ignite release`.\n\
+         To wait on a long command, run it as `ignite run -- <command>` and `ignite wait`; end \
+         your turn only to wait on an `ignite` verb (see `ignite guide cli-worker`).\n\
+         If you stop again with none of these done, Ignite releases {ticket} itself, saves its \
+         tree as ignite/{ticket} and uses your last message as the note."
+    );
+    text
+}
+
 /// The reason given with a release when the worker ended its turn titled ⛔.
 pub(super) fn stopped_reason(note: Option<&str>) -> String {
     quoting(
@@ -193,7 +235,9 @@ impl Dispatcher {
             Ok(detail) => detail.ticket.labels.iter().any(|l| l == NEEDS_PERSON_LABEL),
             Err(error) => return pass(&format!("could not read {ticket}: {error}")),
         };
+        let cli = session.is_cli();
         let stopped = !needs_person
+            && !cli
             && self
                 .host
                 .title(session)
@@ -215,7 +259,16 @@ impl Dispatcher {
             .parent
             .and_then(|parent| self.host.running_under(parent, asker))
             .unwrap_or_default();
-        if !running.is_empty() {
+        if cli {
+            // The supervisor ends the process tree with the turn, so a process that is not an
+            // `ignite` verb is not something the worker is waiting on.
+            if !ended.again {
+                return Reply::text(
+                    Exit::Success,
+                    format!("block    {}", cli_block_text(&ticket, &running)),
+                );
+            }
+        } else if !running.is_empty() {
             let pids: Vec<String> = running.iter().map(u32::to_string).collect();
             return pass(&format!(
                 "the session's processes {} are still running; the app wakes it when they end",

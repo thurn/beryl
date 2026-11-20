@@ -471,6 +471,7 @@ impl Claims {
             resumed: leased.resumed.as_ref(),
             how: &base.how,
             note: base.note.as_deref(),
+            cli: session.is_cli(),
         };
         Reply {
             exit: Exit::Success,
@@ -639,6 +640,7 @@ impl Claims {
             resumed: None,
             how: &how,
             note: None,
+            cli: held.session.is_cli(),
         };
         Reply {
             exit: Exit::Success,

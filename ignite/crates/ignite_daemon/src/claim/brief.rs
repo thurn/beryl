@@ -71,6 +71,9 @@ pub struct TreeView<'a> {
     pub how: &'a super::base::How,
     /// A line to print after the tree's, when the start needs explaining.
     pub note: Option<&'a str>,
+    /// Whether the session is a CLI worker, which has no title to set and is told to read the
+    /// `cli-worker` guide.
+    pub cli: bool,
 }
 
 /// Aligns each label to one column.
@@ -238,10 +241,12 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
             format!("{}: {}", tree.branch, resumed_line(resumed)),
         ));
     }
-    rows.push((
-        "title",
-        format!("{} {}", working(ticket), title_of(Some(brief), &ticket.id)),
-    ));
+    if !tree.cli {
+        rows.push((
+            "title",
+            format!("{} {}", working(ticket), title_of(Some(brief), &ticket.id)),
+        ));
+    }
     let files = tree_files(ticket, tree.path);
     for (i, file) in files.iter().take(MAX_FILES).enumerate() {
         rows.push((if i == 0 { "files" } else { "" }, file.clone()));
@@ -275,7 +280,12 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
     }
     rows.push((
         "next",
-        "set the title first, then cd to the tree, read the files and edit".to_owned(),
+        if tree.cli {
+            "run `ignite guide cli-worker`, then cd to the tree, read the files and edit"
+        } else {
+            "set the title first, then cd to the tree, read the files and edit"
+        }
+        .to_owned(),
     ));
     lines(&rows)
 }

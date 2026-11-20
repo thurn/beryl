@@ -1,0 +1,31 @@
+CLI-WORKER: working as a headless CLI worker
+
+Your session ID starts with cli-. The daemon runs you as one process per turn
+(claude -p or codex exec) and ends that process when your turn ends. Nobody
+watches the turn live and nobody can answer you.
+
+Rules, and why:
+- Start no background shell commands, and no monitor scripts. Your process, and
+  everything it started, ends with the turn, so a background command is killed
+  before it finishes. Ignite blocks a turn end that leaves one running.
+- Wait in the foreground. Run heavy work as ignite run -- <command> or ignite
+  test <names>, then ignite wait <handle>. These run under the daemon, which
+  outlives your turn, and ignite wait blocks until the operation finishes.
+- A turn may also end while an ignite verb of yours still runs. The daemon
+  resumes you when the verb ends, with its result.
+- Never ask a person. Decide, act, and record the choice and why on the ticket.
+  There is no interactive takeover. A person steers you with ignite tell, and
+  the text arrives as the prompt of your next turn.
+- End your turn only after ignite land or ignite release (ignite close for a
+  ticket with nothing to land), or to wait on an ignite verb. Any other turn end
+  is blocked once, with the ways out. A second one releases your ticket with
+  your last message as the note and saves the tree as ignite/<ticket>.
+- You have no session title. Skip every title rule: the dashboard shows your
+  state from the daemon's records, and a title never releases your ticket.
+
+If your turn was interrupted (the process crashed, the machine rebooted), the
+daemon resumes you and says your last tool call may not have finished. Check the
+tree and your last command before you repeat it.
+
+When Ignite has released your ticket, stop. Do not claim it again and do not
+restart its commands (see ignite guide turn-end).

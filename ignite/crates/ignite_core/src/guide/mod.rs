@@ -42,6 +42,11 @@ pub const TOPICS: &[Topic] = &[
         text: include_str!("turn-end.txt"),
     },
     Topic {
+        name: "cli-worker",
+        summary: "working as a headless CLI worker, one process per turn",
+        text: include_str!("cli-worker.txt"),
+    },
+    Topic {
         name: "blocked",
         summary: "a landing that was refused, or landed past a failing check",
         text: include_str!("blocked.txt"),

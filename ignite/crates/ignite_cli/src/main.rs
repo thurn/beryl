@@ -195,8 +195,10 @@ fn config_above(
 
 fn prime(cwd: &std::path::Path) -> Reply {
     use ignite_core::protocol::client::Exit;
+    // A CLI worker's session is named by the daemon in `IGNITE_SESSION`.
+    let cli = std::env::var("IGNITE_SESSION").is_ok_and(|session| session.starts_with("cli-"));
     match config_above(cwd) {
-        Ok((_, config)) => Reply::text(Exit::Success, ignite_core::prime::prime(&config)),
+        Ok((_, config)) => Reply::text(Exit::Success, ignite_core::prime::prime_for(&config, cli)),
         Err(failure) => failure.into_reply(),
     }
 }

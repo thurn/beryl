@@ -242,3 +242,76 @@ fn the_justiciar_reason_quotes_the_start_of_the_last_message() {
         "T.1: worker stopped unfinished"
     );
 }
+
+const CLI: &str = "cli-claude-0a1b2c3d";
+
+/// A rig whose one pool worker is the CLI session `CLI`, holding `T.1`.
+fn cli_holding() -> Rig {
+    let rig = rig(&[CLI]);
+    rig.hold(CLI, "T.1");
+    rig.hub
+        .insert_ticket(detail("T.1", "in_progress", Some(CLI), &[], ""));
+    rig
+}
+
+#[test]
+fn a_cli_worker_with_a_background_process_is_blocked_once_with_the_new_line() {
+    let rig = cli_holding();
+    lock(&rig.host.processes).insert(4100, vec![4210]);
+    let args = ["--session", CLI, "--parent", "4100"];
+    let reply = ended(&rig, &args);
+    assert_eq!(verdict(&reply), "block", "{}", reply.text);
+    for phrase in [
+        "The processes 4210 that you started are still running",
+        "ends them with your turn",
+        "`ignite run -- <command>`",
+        "`ignite wait`",
+        "ignite guide cli-worker",
+        "ignite land -m",
+    ] {
+        let flat = reply.text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains(phrase), "missing {phrase}: {}", reply.text);
+    }
+    assert!(!reply.text.contains("title"), "{}", reply.text);
+    assert!(lock(&rig.host.releases).is_empty());
+
+    // The second stop releases the ticket, as for any worker, instead of passing.
+    let again = ended(&rig, &["--session", CLI, "--parent", "4100", "--again"]);
+    assert_eq!(verdict(&again), "released", "{}", again.text);
+    assert_eq!(
+        lock(&rig.host.releases).clone(),
+        [(session(CLI), ticket_id("T.1"))]
+    );
+}
+
+#[test]
+fn a_cli_worker_with_nothing_running_gets_the_block_without_the_process_line() {
+    let rig = cli_holding();
+    let reply = ended(&rig, &["--session", CLI]);
+    assert_eq!(verdict(&reply), "block", "{}", reply.text);
+    assert!(!reply.text.contains("still running"), "{}", reply.text);
+    assert!(!reply.text.contains("title"), "{}", reply.text);
+}
+
+#[test]
+fn a_cli_worker_waiting_on_an_ignite_verb_may_stop() {
+    let rig = cli_holding();
+    lock(&rig.host.commands).insert(
+        session(CLI),
+        SessionCommand {
+            command: "test rust".to_owned(),
+            since: ignite_core::traits::Clock::now(rig.clock.as_ref()),
+            running: true,
+        },
+    );
+    assert_eq!(verdict(&ended(&rig, &["--session", CLI])), "pass");
+}
+
+#[test]
+fn a_stopped_title_does_not_release_a_cli_worker() {
+    let rig = cli_holding();
+    titled(&rig, CLI, "⛔ [T.1] Measure the wait");
+    assert_eq!(verdict(&ended(&rig, &["--session", CLI])), "block");
+    assert!(lock(&rig.host.releases).is_empty());
+    assert!(rig.hub.justiciar_reports().is_empty());
+}

@@ -111,3 +111,19 @@ fn turn_end_says_when_a_turn_end_releases_and_to_stop_after() {
         "{release}"
     );
 }
+
+#[test]
+fn cli_worker_says_what_a_cli_worker_never_does_and_why() {
+    let text = reply(Some("cli-worker")).text;
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    for phrase in [
+        "Start no background shell commands",
+        "Wait in the foreground",
+        "ignite wait",
+        "Never ask a person",
+        "End your turn only after ignite land or ignite release",
+        "no session title",
+    ] {
+        assert!(flat.contains(phrase), "missing {phrase}: {text}");
+    }
+}

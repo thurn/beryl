@@ -168,6 +168,14 @@ string_id!(
     non_empty_token
 );
 
+impl SessionId {
+    /// Whether this is a CLI worker's session (`cli-<app>-<8 hex>`), which the daemon runs as a
+    /// headless process, one per turn, rather than a desktop-app session.
+    pub fn is_cli(&self) -> bool {
+        self.as_str().starts_with("cli-")
+    }
+}
+
 string_id!(
     /// A build tree, such as `tree-07`.
     TreeId,

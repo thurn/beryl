@@ -49,9 +49,42 @@ pub const VERB_HELP: &[(&str, &str)] = &[
     ("guide <topic>", "the rules for one situation"),
 ];
 
-/// The workflow every worker reads.
+/// The rule about ending a turn, for a desktop-app session.
+const DESKTOP_TURN_RULE: &str = "\
+- A turn may end while something you started still runs (a background command or `ignite`
+  verb): you are woken when it ends. Never poll with `sleep` or a loop. A turn that ends with
+  nothing running releases your ticket, so land or release it before you stop.
+";
+
+/// The rule about the session title, for a desktop-app session.
+const DESKTOP_TITLE_RULE: &str = "\
+- The title shows the state: working, done, stopped unfinished, or waiting on a person. Only
+  a final turn (you stopped, nothing you started runs) takes ✅, ⛔ or 🔍. ⛔ releases it.
+";
+
+/// The rules of a CLI worker, in place of the turn and title rules (see `ignite guide
+/// cli-worker`): its process ends with its turn and nobody can answer it.
+const CLI_TURN_RULE: &str = "\
+- You are a CLI worker: your process ends with your turn and nobody can answer it. Start no
+  background shell commands. Wait in the foreground with `ignite wait`. Never ask a person.
+  End your turn only after `ignite land` or `ignite release`, or to wait on an `ignite` verb.
+  Read `ignite guide cli-worker` now.
+";
+
+/// The workflow every desktop-app worker reads.
 pub fn prime(config: &Config) -> String {
+    prime_for(config, false)
+}
+
+/// The workflow a worker reads. A CLI worker (`cli`) gets the rules of `ignite guide
+/// cli-worker` and no title rule, since it has no title.
+pub fn prime_for(config: &Config, cli: bool) -> String {
     let staging = &config.repository.staging;
+    let (turn_rule, title_rule) = if cli {
+        (CLI_TURN_RULE, "")
+    } else {
+        (DESKTOP_TURN_RULE, DESKTOP_TITLE_RULE)
+    };
     let mut text = format!(
         "\
 # Ignite workflow
@@ -80,10 +113,7 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
   something outside itself, finish what you can and land, or `ignite release` with a note.
 - A refused landing's verdict says whose failure it is. Do what its `next` line says
   (`ignite guide blocked`); never decide yourself that a failure is unrelated.
-- A turn may end while something you started still runs (a background command or `ignite`
-  verb): you are woken when it ends. Never poll with `sleep` or a loop. A turn that ends with
-  nothing running releases your ticket, so land or release it before you stop.
-- A ticket you file names a deterministic, observable acceptance (what was built, a decision,
+{turn_rule}- A ticket you file names a deterministic, observable acceptance (what was built, a decision,
   a file); a timing on a shared machine is never the gate. File `run X, see Y` after running X.
 - Never work in another session's tree, take its ticket or change another ticket's scope.
 - A `changed` line is an instruction about your ticket. Read it before you continue.
@@ -94,9 +124,7 @@ flaky-checks` for a flaky, hung or never-catching check. Every command prints a 
 - An emergency order is a dispatcher message starting `Message about <ticket>:`. Check it
   with `ignite ticket show <ticket>`: labelled `justiciar`, held by the session it names.
 - The landing note says what changed, what was decided and what a reviewer should look at.
-- The title shows the state: working, done, stopped unfinished, or waiting on a person. Only
-  a final turn (you stopped, nothing you started runs) takes ✅, ⛔ or 🔍. ⛔ releases it.
-
+{title_rule}
 ## Verbs
 "
     );
@@ -161,6 +189,31 @@ mod tests {
             let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
             assert!(flat.contains(phrase), "missing: {phrase}");
         }
+    }
+
+    #[test]
+    fn prime_for_a_cli_session_names_the_guide_and_prints_no_title_line() {
+        let text = prime_for(&config(), true);
+        let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(flat.contains("`ignite guide cli-worker`"), "{text}");
+        assert!(
+            flat.contains("Start no background shell commands"),
+            "{text}"
+        );
+        assert!(flat.contains("Wait in the foreground with `ignite wait`"));
+        assert!(flat.contains("Never ask a person"));
+        assert!(flat.contains("only after `ignite land` or `ignite release`"));
+        assert!(!flat.contains("The title shows the state"), "{text}");
+        assert!(!flat.contains("⛔"), "{text}");
+        assert!(text.lines().count() < MAX_PRIME_LINES);
+    }
+
+    #[test]
+    fn prime_for_a_desktop_session_keeps_the_title_rule() {
+        let text = prime_for(&config(), false);
+        assert!(text.contains("The title shows the state"));
+        assert!(!text.contains("cli-worker"));
+        assert_eq!(text, prime(&config()));
     }
 
     #[test]

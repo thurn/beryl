@@ -3697,6 +3697,17 @@ Messages, usage and repair:
   Transcripts can hold secrets, so the hub serves them on the Tailscale listener
   only.
 
+A CLI worker's `ignite turn-ended` follows the desktop rules with two changes. A
+live process under the session that is not an `ignite` verb does not let the
+turn end, because the supervisor ends it with the turn: the first such stop is
+blocked with a line that names `ignite run -- <command>` and `ignite wait`, and
+the second releases the ticket. Titles do not apply. `ignite start` and
+`ignite prime` leave out the title lines for a session whose ID starts with
+`cli-`, and name the `cli-worker` guide, which says: start no background shell
+commands, wait in the foreground with `ignite wait`, never ask a person, and end
+the turn only after `ignite land` or `ignite release`, or to wait on an `ignite`
+verb.
+
 Clearing a worker, the settle time after a ticket, the model read-back, the
 `dispatch allowed` hooks, rotation and session titles exist only for the desktop
 dispatcher.
