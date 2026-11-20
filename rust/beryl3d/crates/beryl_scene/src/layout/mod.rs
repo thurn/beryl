@@ -404,7 +404,7 @@ impl Layer {
                     compute(&mut self.taffy, &mut self.text, node.taffy, CONTENT);
                 }
                 compute_anchored(&mut self.taffy, &mut self.text, &node);
-                self.place(&mut node, glam::Vec2::ZERO, false);
+                self.place(&mut node, glam::Vec2::ZERO, false, false);
                 let tree = node.corner().unwrap_or(glam::Vec2::ZERO);
                 menu::place_menus(&mut node, tree, None, self.window.size);
                 self.screen = Some(node);
@@ -422,7 +422,7 @@ impl Layer {
                     compute(&mut self.taffy, &mut self.text, root, CONTENT);
                 }
                 compute_anchored(&mut self.taffy, &mut self.text, &float.node);
-                self.place(&mut float.node, glam::Vec2::ZERO, false);
+                self.place(&mut float.node, glam::Vec2::ZERO, false, false);
             }
             self.floats = floats;
         }
@@ -468,8 +468,9 @@ impl Layer {
     /// Reads `node`'s computed box, with its parent's top left corner at `origin`, and breaks
     /// its text at its content box's width where that width has changed. `unseen` says that no
     /// frame has drawn the node's parent yet, because it or an ancestor is fading in and no
-    /// frame has begun that fade.
-    fn place(&mut self, node: &mut Node, origin: glam::Vec2, unseen: bool) {
+    /// frame has begun that fade. `at_once` says that the node and everything under it move to
+    /// their new places without sliding, because a sibling in the same flow changed size.
+    fn place(&mut self, node: &mut Node, origin: glam::Vec2, unseen: bool, at_once: bool) {
         let layout = self
             .taffy
             .layout(node.taffy)
@@ -493,6 +494,7 @@ impl Layer {
             && was != corner
             && !resized
             && !unseen
+            && !at_once
         {
             node.transition(was - corner, node.opacity());
         }
@@ -528,14 +530,31 @@ impl Layer {
                 );
             }
         }
+        // A child that entered or changed size takes its new box at once, since sizes do not
+        // transition, so siblings that slide toward their new places would start inside it: in
+        // a row of mana counters, the blue counter growing from "{U}" to "{U}2" ran 5 points
+        // into the black counter as that slid right. Every child of the flow moves at once
+        // instead, as the web's flex rows do. An anchored child stands apart from the flow.
+        let reflowed = node.children.iter().any(|child| {
+            child.element.anchor.is_none() && {
+                let size = self
+                    .taffy
+                    .layout(child.taffy)
+                    .expect("the node is in the tree")
+                    .size;
+                child.location.is_none()
+                    || child.rect.width.to_bits() != size.width.to_bits()
+                    || child.rect.height.to_bits() != size.height.to_bits()
+            }
+        });
         for child in &mut node.children {
             // An anchored child's tree is laid out from (0, 0), and stands at its corner.
-            let origin = if child.element.anchor.is_some() {
-                glam::Vec2::ZERO
+            let (origin, child_at_once) = if child.element.anchor.is_some() {
+                (glam::Vec2::ZERO, at_once)
             } else {
-                corner
+                (corner, at_once || reflowed)
             };
-            self.place(child, origin, unseen);
+            self.place(child, origin, unseen, child_at_once);
         }
     }
 
