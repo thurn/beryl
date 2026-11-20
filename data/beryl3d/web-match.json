@@ -15,11 +15,11 @@
    "pixels": 263114
   },
   "b3d:opening-keep/you/1600x900@2": {
-   "unmatched": 385,
+   "unmatched": 374,
    "boxes": 24,
    "styles": 2,
    "unsupported": 20,
-   "pixels": 1058964
+   "pixels": 917296
   },
   "b3d:opening-keep/you/393x759": {
    "unmatched": 99,
@@ -33,7 +33,7 @@
    "boxes": 11,
    "styles": 9,
    "unsupported": 12,
-   "pixels": 832584
+   "pixels": 806830
   },
   "b3d:pay-default/you/393x759": {
    "unmatched": 72,
