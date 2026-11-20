@@ -300,6 +300,7 @@ impl CountFloats {
                     anchor: Vec2::new(0.5, 0.5),
                     opacity,
                     tint,
+                    scale: 1.0,
                 },
             );
             layer.set_float_look(
@@ -368,6 +369,7 @@ fn change_look(
         anchor,
         opacity: 1.0 - through,
         tint,
+        scale: 1.0,
     }
 }
 

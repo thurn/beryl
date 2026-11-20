@@ -16,6 +16,7 @@ const BODY: TypeStyle = TypeStyle {
     weight: 400,
     size: 20.0,
     line_height: 1.2,
+    letter_spacing: 0.0,
 };
 
 /// Draws frames from `now` and gives every glyph the client wants a cell in atlas page `page`,

@@ -8,6 +8,7 @@
 
 pub mod badges;
 mod camera;
+pub(crate) use camera::zoom_rect;
 pub mod far_shade;
 mod hands;
 pub(crate) use hands::HandFits;

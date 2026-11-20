@@ -22,6 +22,8 @@ pub struct FloatLook {
     pub opacity: f32,
     /// The color of the float's text in place of the design tokens' type color, if any.
     pub tint: Option<[u8; 4]>,
+    /// How much larger than laid out the float is drawn, about its centre.
+    pub scale: f32,
 }
 
 impl Default for FloatLook {
@@ -32,6 +34,7 @@ impl Default for FloatLook {
             anchor: Vec2::ZERO,
             opacity: 1.0,
             tint: None,
+            scale: 1.0,
         }
     }
 }

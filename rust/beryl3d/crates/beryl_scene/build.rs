@@ -349,13 +349,17 @@ fn write_type_styles(tokens: &Tokens) -> String {
             .expect("a type style has a `weight`");
         let (size, _) = tokens.number(&entry["size"], &path);
         let (line, _) = tokens.number(&entry["line_height"], &path);
+        // An optional `letter_spacing`, in ems of the size, as CSS writes it.
+        let spacing = entry["letter_spacing"]
+            .as_f64()
+            .map_or(0.0, |em| (em * f64::from(size) * 100.0).round() / 100.0);
         let doc = entry["note"]
             .as_str()
             .map_or(format!("`{path}`."), str::to_string);
         writeln!(
             out,
             "/// {doc}\npub const {key}: TypeStyle = TypeStyle {{\n    font: Font::{font},\n    \
-             weight: {weight},\n    size: {size:?},\n    line_height: {line:?},\n}};"
+             weight: {weight},\n    size: {size:?},\n    line_height: {line:?},\n    letter_spacing: {spacing:?},\n}};"
         )
         .unwrap();
     }

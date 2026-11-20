@@ -23,7 +23,7 @@ use crate::input::Size;
 use crate::layout::{FloatLook, Layer};
 use crate::notice::{Announced, NoticeRun, Place};
 use crate::table::Layout;
-use crate::tokens::{color, space, type_style};
+use crate::tokens::{color, ratio, space, type_style};
 
 /// Every float a notice is shown in, with the place that shows there.
 const FLOATS: [(FloatId, Place); 4] = [
@@ -128,10 +128,11 @@ impl NoticeFloats {
             layer.set_float_look(
                 id,
                 FloatLook {
-                    point,
+                    point: point + Vec2::new(0.0, slide(announced, now)),
                     anchor,
                     opacity: opacity(announced, now),
                     tint: None,
+                    scale: scale(announced, now),
                 },
             );
         }
@@ -169,6 +170,31 @@ fn opacity(announced: &Announced, now: u64) -> f32 {
     (through / announced.fade.fade_in)
         .min((1.0 - through) / announced.fade.fade_out)
         .clamp(0.0, 1.0)
+}
+
+/// How much larger than laid out `announced` is drawn at `now`: `Fade::scale_from` as it starts
+/// to fade in, growing linearly to 1 as it finishes fading in.
+fn scale(announced: &Announced, now: u64) -> f32 {
+    let from = announced.fade.scale_from;
+    let grown = (progress(announced, now) / announced.fade.fade_in).min(1.0);
+    from + (1.0 - from) * grown
+}
+
+/// How far down, in points, `announced` has moved at `now`: none until `ratio::TURN_BANNER_SLIDE_AT` of its run, then
+/// linearly to `Fade::slide`.
+fn slide(announced: &Announced, now: u64) -> f32 {
+    let start = ratio::TURN_BANNER_SLIDE_AT;
+    announced.fade.slide * ((progress(announced, now) - start) / (1.0 - start)).clamp(0.0, 1.0)
+}
+
+/// How far through its run `announced` is at `now`, from 0 to 1.
+#[expect(clippy::cast_precision_loss, reason = "a notice lasts seconds at most")]
+fn progress(announced: &Announced, now: u64) -> f32 {
+    let over = announced.over;
+    if over.duration() == 0 {
+        return 1.0;
+    }
+    (now.saturating_sub(over.from)) as f32 / over.duration() as f32
 }
 
 /// What `notice` shows, where `view` is the table it is shown over.

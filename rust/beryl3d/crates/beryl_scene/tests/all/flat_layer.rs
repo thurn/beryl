@@ -487,6 +487,7 @@ fn a_variable_font_is_drawn_at_any_weight() {
         weight: 400,
         size: 20.0,
         line_height: 1.2,
+        letter_spacing: 0.0,
     };
     let bold = beryl_scene::text::TypeStyle {
         weight: 700,

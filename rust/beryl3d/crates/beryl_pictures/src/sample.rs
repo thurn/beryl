@@ -398,6 +398,7 @@ fn screen(sample: &Sample, mask: bool) -> Element {
                 weight: 400,
                 size: text.size,
                 line_height: TEXT_LINE_HEIGHT,
+                letter_spacing: 0.0,
             })
             .color(if mask { [255; 4] } else { text.color });
         if !mask {

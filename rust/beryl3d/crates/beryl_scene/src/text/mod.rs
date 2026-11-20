@@ -38,6 +38,8 @@ pub struct TypeStyle {
     pub weight: u16,
     pub size: f32,
     pub line_height: f32,
+    /// Extra space after every letter, in logical points (CSS `letter-spacing`).
+    pub letter_spacing: f32,
 }
 
 impl TypeStyle {
@@ -48,6 +50,7 @@ impl TypeStyle {
             weight: self.weight,
             size: self.size.to_bits(),
             line_height: self.line_height.to_bits(),
+            letter_spacing: self.letter_spacing.to_bits(),
         }
     }
 }
@@ -58,6 +61,7 @@ struct StyleKey {
     weight: u16,
     size: u32,
     line_height: u32,
+    letter_spacing: u32,
 }
 
 /// A styled span as a key that orders and compares exactly.
@@ -329,6 +333,7 @@ impl Text {
         styles.insert(StyleProperty::LineHeight(LineHeight::FontSizeRelative(
             style.line_height,
         )));
+        styles.insert(StyleProperty::LetterSpacing(style.letter_spacing));
         editor
     }
 
@@ -423,6 +428,7 @@ impl Text {
             weight: 400,
             size: em * symbols::GLYPH_SIZE,
             line_height: 1.0 / symbols::GLYPH_SIZE,
+            letter_spacing: 0.0,
         };
         // A symbol the Mana font has no glyph for shows its own letters in the font around it,
         // as `ManaSymbol` does.
@@ -490,6 +496,7 @@ impl Text {
         builder.push_default(StyleProperty::LineHeight(LineHeight::FontSizeRelative(
             style.line_height,
         )));
+        builder.push_default(StyleProperty::LetterSpacing(style.letter_spacing));
         for (index, (range, span)) in ranges.iter().enumerate() {
             let brush = u16::try_from(index + 1).expect("a text has fewer than 65,536 spans");
             builder.push(StyleProperty::Brush(brush), range.clone());
@@ -501,6 +508,10 @@ impl Text {
             );
             builder.push(
                 StyleProperty::LineHeight(LineHeight::FontSizeRelative(span.line_height)),
+                range.clone(),
+            );
+            builder.push(
+                StyleProperty::LetterSpacing(span.letter_spacing),
                 range.clone(),
             );
         }

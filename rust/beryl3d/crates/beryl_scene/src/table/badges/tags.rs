@@ -28,6 +28,7 @@ pub(super) const NOTE_STYLE: TypeStyle = TypeStyle {
     weight: 700,
     size: note::POINTS,
     line_height: 1.0,
+    letter_spacing: 0.0,
 };
 
 /// The style of a copy's label (`.token-label`'s `font`), at `copy::POINTS`.
@@ -36,6 +37,7 @@ pub(super) const COPY_STYLE: TypeStyle = TypeStyle {
     weight: 700,
     size: copy::POINTS,
     line_height: 1.0,
+    letter_spacing: 0.0,
 };
 
 /// A line of text, shaped and cut to the room it has on a card.

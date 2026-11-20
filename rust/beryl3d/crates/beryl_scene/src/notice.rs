@@ -11,6 +11,7 @@ use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Notice;
 
 use crate::data::space::notices;
+use crate::tokens::{ratio, size};
 use crate::verbs::Interval;
 
 /// A notice shown over `over`, on the script's clock. `passes` says whether the table goes on
@@ -62,6 +63,12 @@ impl Place {
 pub struct Fade {
     pub fade_in: f32,
     pub fade_out: f32,
+    /// How large it is drawn as it starts to fade in, as a multiple of its size, growing
+    /// linearly to its size as it finishes fading in.
+    pub scale_from: f32,
+    /// How far down it has moved, in points, when its run ends; it starts to move at `ratio::TURN_BANNER_SLIDE_AT` of its
+    /// run, and moves linearly.
+    pub slide: f32,
 }
 
 impl Fade {
@@ -75,7 +82,24 @@ impl Fade {
             }
             _ => (notices::banner::IN, notices::banner::OUT),
         };
-        Self { fade_in, fade_out }
+        // The turn banner (`.turn-banner.stage-notice` in `ui/src/stage/stage.css`) starts at
+        // 0.93 of its size, and sinks 30 points toward the player whose turn it is at its end:
+        // up the table for the opponent's, down for ours.
+        let (scale_from, slide) = match notice {
+            Notice::Turn { active: Side::You } => {
+                (ratio::TURN_BANNER_START_SCALE, size::TURN_BANNER_SLIDE)
+            }
+            Notice::Turn {
+                active: Side::Opponent,
+            } => (ratio::TURN_BANNER_START_SCALE, -size::TURN_BANNER_SLIDE),
+            _ => (1.0, 0.0),
+        };
+        Self {
+            fade_in,
+            fade_out,
+            scale_from,
+            slide,
+        }
     }
 }
 

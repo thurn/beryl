@@ -481,6 +481,7 @@ fn a_moved_float_allocates_nothing() {
             anchor: Vec2::new(0.5, 0.5),
             opacity: 0.5,
             tint: Some([255, 0, 0, 255]),
+            scale: 1.0,
         },
     );
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);

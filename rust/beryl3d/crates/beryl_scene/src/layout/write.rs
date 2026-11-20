@@ -18,7 +18,7 @@ use crate::element::{Display, Element, Overflow, Shown, TextAlign};
 use crate::faces::{CARD_BACK, Faces};
 use crate::frame::{Band, Draw, FrameBuilder, Missing, NameRef, Place, Resolved, Role, StateBits};
 use crate::input::{FaceId, FaceSize, Rect};
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Camera, zoom_rect};
 use crate::text::{self, BlockLook, faded};
 use crate::tokens::color;
 
@@ -40,6 +40,9 @@ pub(super) struct Look<'a> {
     pub(super) filters: Chain,
     /// Whether what waits for the table to settle is drawn (`Element::waits`).
     open: bool,
+    /// The point the float is scaled about and the scale (`FloatLook::scale`), as the camera
+    /// draws it: the boxes recorded for the frame are scaled the same way.
+    zoom: (Vec2, f32),
 }
 
 /// Whether `element`, drawn as `look` in `rect`, takes a press. An element scrolled out of its
@@ -71,6 +74,13 @@ impl Layer {
         faces: Option<&Faces>,
     ) {
         let write_float = |float: &Float, builder: &mut FrameBuilder| {
+            let rect = float.node.rect;
+            let corner = float.corner();
+            let zoom = (
+                corner + Vec2::new(rect.width, rect.height) / 2.0,
+                float.look.scale,
+            );
+            let camera = camera.zoomed(zoom.0, zoom.1);
             let look = Look {
                 point: float.corner(),
                 opacity: float.look.opacity,
@@ -80,8 +90,9 @@ impl Layer {
                 faces,
                 filters: Chain::default(),
                 open,
+                zoom,
             };
-            self.write_node(&float.node, u32::MAX, true, look, builder, camera);
+            self.write_node(&float.node, u32::MAX, true, look, builder, &camera);
         };
         // Two passes over the floats rather than a partition, which would allocate every frame.
         for float in (self.floats.iter()).filter(|float| float.id.under_screen()) {
@@ -104,6 +115,7 @@ impl Layer {
                     faces,
                     filters: Chain::default(),
                     open,
+                    zoom: (Vec2::ZERO, 1.0),
                 };
                 screen = self
                     .write_node(node, u32::MAX, true, look, builder, camera)
@@ -131,6 +143,7 @@ impl Layer {
                 faces,
                 filters: Chain::default().inner(own_filter(&node.element)),
                 open,
+                zoom: (Vec2::ZERO, 1.0),
             };
             self.write_node(child, index, false, look, builder, camera);
         }
@@ -198,7 +211,7 @@ impl Layer {
                 role: element.role,
                 name: NameRef::default(),
                 place: Place::Layer,
-                corners: corners(rect),
+                corners: corners(zoom_rect(rect, look.zoom)),
                 depth: 0.0,
                 opacity: look.opacity,
                 clip: look.clip.map(|(rect, _)| rect),
@@ -465,11 +478,14 @@ impl Layer {
         for line in &block.lines {
             builder.line(
                 index,
-                Rect {
-                    x: origin.x + line.rect.x,
-                    y: origin.y + line.rect.y,
-                    ..line.rect
-                },
+                zoom_rect(
+                    Rect {
+                        x: origin.x + line.rect.x,
+                        y: origin.y + line.rect.y,
+                        ..line.rect
+                    },
+                    look.zoom,
+                ),
                 block.base.style.size,
                 origin.y + line.baseline,
                 line.words(&words),

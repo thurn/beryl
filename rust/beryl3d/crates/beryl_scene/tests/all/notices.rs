@@ -150,8 +150,11 @@ fn the_turn_banner_stands_centred_for_its_step_and_then_goes() {
         let frame = client.frame(now);
         let (min, max) = text_box(frame, "Your Turn").expect("the banner");
         let middle = (min + max) / 2.0;
+        // In the last fifth of its run the banner sinks 30 points toward the player whose turn it
+        // is, so only its horizontal centre holds there.
+        let sunk = if now == to - 1 { 30.0 } else { 0.0 };
         assert!(
-            (middle - Vec2::new(WIDTH / 2.0, HEIGHT / 2.0))
+            (middle - Vec2::new(WIDTH / 2.0, HEIGHT / 2.0 + sunk))
                 .abs()
                 .max_element()
                 <= 1.0,

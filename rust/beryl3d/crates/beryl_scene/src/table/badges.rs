@@ -42,6 +42,7 @@ pub const STYLE: TypeStyle = TypeStyle {
     weight: 700,
     size: data::NUMERAL_POINTS,
     line_height: 1.0,
+    letter_spacing: 0.0,
 };
 
 /// The style a named counter's name is shaped in: the interface font's bold, which the web's
@@ -52,6 +53,7 @@ pub const NAME_STYLE: TypeStyle = TypeStyle {
     weight: 700,
     size: data::NUMERAL_POINTS,
     line_height: 1.0,
+    letter_spacing: 0.0,
 };
 
 /// The highest number a badge shows; a higher one shows as this.

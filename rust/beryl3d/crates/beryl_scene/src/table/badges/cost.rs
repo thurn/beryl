@@ -39,6 +39,7 @@ const STYLE: TypeStyle = TypeStyle {
     weight: 700,
     size: data::POINTS,
     line_height: 1.0,
+    letter_spacing: 0.0,
 };
 
 /// The records a cost may write: those a card may write besides itself, its soft edge, its

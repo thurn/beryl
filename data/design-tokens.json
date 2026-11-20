@@ -426,7 +426,8 @@
         "weight": 700,
         "size": 54,
         "line_height": 1,
-        "note": "The turn announcement's title: `.turn-banner-title` in `ui/src/screens/styles/turn-banner.css`, bold 54 points in the display face."
+        "letter_spacing": 0.08,
+        "note": "The turn announcement's title: `.turn-banner-title` in `ui/src/screens/styles/turn-banner.css`, bold 54 points in the display face with 0.08 em of letter spacing."
       },
       "BANNER_TITLE": {
         "font": "CrimsonPro",
@@ -549,6 +550,10 @@
       }
     },
     "size": {
+      "TURN_BANNER_SLIDE": {
+        "value": 30,
+        "note": "How far the turn banner slides toward the player whose turn it is by the end of its run: `.turn-banner.stage-notice`'s `translate` of 30px."
+      },
       "BUTTON_HEIGHT": {
         "token": "button-height",
         "note": "Every action button on the game screen."
@@ -1350,6 +1355,14 @@
       }
     },
     "ratio": {
+      "TURN_BANNER_START_SCALE": {
+        "value": 0.93,
+        "note": "How large the turn banner is as it starts to fade in: `.turn-banner.stage-notice`'s `scale: calc(0.93 + 0.07 * ...)` in `ui/src/stage/stage.css`."
+      },
+      "TURN_BANNER_SLIDE_AT": {
+        "value": 0.8,
+        "note": "How far through its run the turn banner starts to slide away: `max(0, (var(--through) - 0.8) / 0.2)` in `.turn-banner.stage-notice`."
+      },
       "SMALL_SCALE": {
         "value": 0.75,
         "note": "`button-small`: a small button is this share of a button's height and type size."

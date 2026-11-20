@@ -200,6 +200,7 @@ fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, phone: bool
             weight: 700,
             size: text_size,
             line_height: badge::LINE,
+            letter_spacing: 0.0,
         })
         .text_align(TextAlign::Center)
         .position(Position::Absolute)
