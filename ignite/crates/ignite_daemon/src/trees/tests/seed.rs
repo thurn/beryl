@@ -197,6 +197,50 @@ fn a_donor_whose_cargo_lock_is_held_is_passed_over() {
     assert!(!lease.path.join("out/debug/deps/libfoo-1.rlib").exists());
 }
 
+/// The session's own commands build in its tree without waiting for the seed. A seed that
+/// deleted the tree's target directories under such a build made it fail on missing files, so a
+/// build holding Cargo's lock in the leased tree when the copy is ready keeps the tree's own
+/// build, and the copy made beside the tree is deleted.
+#[test]
+fn a_build_running_in_the_leased_tree_keeps_its_own_build() {
+    if !copies_are_clones_here() {
+        return;
+    }
+    let (f, _donor) = donor_at_the_tip();
+    let own = f.repo.join(".worktrees/tree-01");
+    write(&own, "out/debug/.fingerprint/mine-1/lib-mine", "0");
+    write(&own, "out/debug/.cargo-lock", "");
+    let lock = File::open(own.join("out/debug/.cargo-lock")).unwrap();
+    lock.try_lock().unwrap();
+
+    let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
+
+    assert_eq!(lease.path, own);
+    assert!(own.join("out/debug/.fingerprint/mine-1").exists());
+    assert!(!own.join("out/debug/deps/libfoo-1.rlib").exists());
+    assert!(!f.repo.join(".worktrees/.tree-01.seeding").exists());
+}
+
+/// Once the copy replaces the tree's target directories, the copy made beside the tree is gone
+/// and the tree's own build with it.
+#[test]
+fn a_seed_swaps_in_the_copy_and_leaves_nothing_beside_the_tree() {
+    if !copies_are_clones_here() {
+        return;
+    }
+    let (f, _donor) = donor_at_the_tip();
+    let own = f.repo.join(".worktrees/tree-01");
+    write(&own, "out/debug/.fingerprint/mine-1/lib-mine", "0");
+
+    let lease = f.lease("T.2", true);
+    super::super::wait_until_seeded(&lease.path).unwrap();
+
+    assert!(own.join("out/debug/deps/libfoo-1.rlib").exists());
+    assert!(!own.join("out/debug/.fingerprint/mine-1").exists());
+    assert!(!f.repo.join(".worktrees/.tree-01.seeding").exists());
+}
+
 /// Builds that note, when a tree's builds are forgotten, whether its `out` directory was still
 /// there: a tree's builds must be forgotten before its build directories are deleted, or a
 /// restart partway through the deletion leaves the record of builds whose files are gone.

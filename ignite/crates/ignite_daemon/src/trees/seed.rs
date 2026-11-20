@@ -62,6 +62,7 @@ use ignite_store::local::{rows, trees as store};
 
 use super::disk::{id_of, profile_dirs};
 use super::{Kind, LeaseRequest, Trees, store_error};
+use swap::{move_dir, staging, tree_locks, tree_profiles};
 
 /// The lock files Cargo holds in a profile directory while it builds there: Cargo 1.98 holds the
 /// build and artifact locks exclusively for the whole build, and older versions `.cargo-lock`.
@@ -412,9 +413,21 @@ impl Trees {
     }
 
     /// Replaces `tree`'s Cargo target directories with copies of the donor's and makes the
-    /// tree's files look to Cargo as the donor's do. Returns the directories copied. On a
-    /// failure partway, `tree`'s target directories are deleted, so that it builds from nothing
-    /// rather than from a copy whose files' times were never set.
+    /// tree's files look to Cargo as the donor's do. Returns the directories copied.
+    ///
+    /// The session works in the tree while the copy runs, and its own commands (a `cargo build`
+    /// or a script that runs one) do not wait for the seed as the daemon's builds do. When the
+    /// seed deleted the tree's target directories in place, such a build failed with "No such
+    /// file or directory" on its own outputs, and a deletion that raced the build's writes
+    /// failed with "Directory not empty" and left the tree with no target directory at all. So
+    /// the copy is made beside the tree first ([`staging`]), and the tree's directories are only
+    /// swapped for it by renames while the seed holds Cargo's lock files in every profile
+    /// directory of the tree exclusively ([`tree_locks`]). A build that holds one of them when
+    /// the copy is ready ends the seed with an error and the tree keeps its own build; a build
+    /// that starts during the swap waits on the lock and then builds in the copy.
+    ///
+    /// A failure before the swap leaves the tree as it was; one during it deletes the tree's
+    /// target directories, so it builds from nothing rather than from a copy with wrong times.
     fn copy_from(&self, donor: &rows::Tree, tree: &TreeId) -> Result<Vec<String>> {
         let donor_id = id_of(donor)?;
         let from = self.inner.config.path(&donor_id);
@@ -429,18 +442,44 @@ impl Trees {
             path_pair(&tracked::git_dir(&from)?, &tracked::git_dir(&to)?),
         ];
         let times = file_times(&from, &to)?;
+        let staging = staging(&to);
+        let (new, old) = (staging.join("new"), staging.join("old"));
+        remove(&staging)?;
+        let cloned = (|| -> io::Result<()> {
+            for dir in &dirs {
+                clone_dir(&from.join(dir), &new.join(dir))?;
+                rewrite_target(&new.join(dir), &pairs)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = cloned {
+            let _ = remove(&staging);
+            return Err(error.into());
+        }
         let own = self.cargo_dirs(&to);
-        // Forgotten before the tree's own target directories are deleted, and whether or not the
-        // copy succeeds: a copy that fails partway leaves none, and a daemon restart during the
-        // copy would otherwise leave the record of builds whose files are gone.
+        let profiles = tree_profiles(&from, &to, &own, &dirs);
+        let tree_locked = match tree_locks(&profiles) {
+            Ok(Some(locks)) => locks,
+            locked => {
+                let _ = remove(&staging);
+                return Err(locked.err().unwrap_or_else(|| {
+                    io::Error::other(format!(
+                        "a build in {tree} held Cargo's lock when the copy was ready, so the \
+                         tree keeps its own build"
+                    ))
+                }))?;
+            }
+        };
+        // Forgotten before the tree's own target directories are moved, and whether or not the
+        // swap succeeds: a swap that fails partway leaves none, and a daemon restart during it
+        // would otherwise leave the record of builds whose files are gone.
         self.inner.builds.forget(tree);
-        let copied = (|| -> io::Result<()> {
+        let swapped = (|| -> io::Result<()> {
             for dir in own.iter().chain(&dirs) {
-                remove(&to.join(dir))?;
+                move_dir(&to.join(dir), &old.join(dir))?;
             }
             for dir in &dirs {
-                clone_dir(&from.join(dir), &to.join(dir))?;
-                rewrite_target(&to.join(dir), &pairs)?;
+                move_dir(&new.join(dir), &to.join(dir))?;
             }
             // While Cargo's locks in the donor are still held, so no build there changes what
             // it holds meanwhile.
@@ -455,12 +494,15 @@ impl Trees {
             }
             Ok(())
         })();
-        if let Err(error) = copied {
+        drop(tree_locked);
+        if let Err(error) = swapped {
             for dir in own.iter().chain(&dirs) {
                 let _ = remove(&to.join(dir));
             }
+            let _ = remove(&staging);
             return Err(error.into());
         }
+        remove(&staging)?;
         Ok(dirs)
     }
 }
@@ -693,6 +735,8 @@ fn file_times(from: &Path, to: &Path) -> Result<Vec<(String, SystemTime, SystemT
     Ok(times)
 }
 
+#[path = "seed_swap.rs"]
+mod swap;
 #[cfg(test)]
 #[path = "seed_tests.rs"]
 mod tests;
