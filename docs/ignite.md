@@ -3436,11 +3436,11 @@ release branch when Ignite blocks its own landing.
 - The hub files justiciar tickets at P0 with `tier:opus`, matched by signature
   so a repeated sighting adds a comment and never a second ticket. They come
   from upkeep, when the oldest landing since the last verified tip has waited
-  two hours or a ticket has been held for six hours (30 minutes when the
-  holding session's title starts with ⛔, or the daemon has reported it idle that
-  long), and from `POST /justiciar`,
-  which daemons send for a crash record or a loop that keeps failing, and which
-  `ignite justiciar "<reason>"` sends for a session that meets an emergency.
+  two hours or a ticket has been held for six hours (30 minutes when the holding
+  session's title starts with ⛔, or the daemon has reported it idle that long),
+  and from `POST /justiciar`, which daemons send for a crash record or a loop
+  that keeps failing, and which `ignite justiciar "<reason>"` sends for a
+  session that meets an emergency.
 - While open regression tickets explain the stall, upkeep files no master-lag
   ticket. It comments on each of those tickets instead, once per stuck landing,
   as `ignite tell` would, so the session working it gets the comment as a
