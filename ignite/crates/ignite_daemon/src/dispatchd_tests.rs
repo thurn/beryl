@@ -117,6 +117,16 @@ pub(super) fn rig(workers: &[&str]) -> Rig {
 /// A dispatcher over `db` with its clock at `now`; a second one over the same database file is a
 /// restarted daemon.
 pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp) -> Rig {
+    rig_sampling(workers, db, now, false)
+}
+
+/// [`rig_on`], with samples of the plan's usage asked for when `plan_usage` is set.
+pub(super) fn rig_sampling(
+    workers: &[&str],
+    db: rusqlite::Connection,
+    now: Timestamp,
+    plan_usage: bool,
+) -> Rig {
     let text = r#"
         [repository]
         remote = "origin"
@@ -156,6 +166,7 @@ pub(super) fn rig_on(workers: &[&str], db: rusqlite::Connection, now: Timestamp)
     let setup = Setup {
         os: Os::Macos,
         families: Vec::new(),
+        plan_usage,
     };
     let dispatcher = Arc::new(Dispatcher::new(pool, host.clone(), setup));
     let rig = Rig {

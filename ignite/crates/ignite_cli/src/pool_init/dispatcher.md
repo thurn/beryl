@@ -66,6 +66,9 @@ Recipes:
 - `check`: `mcp__ccd_session_mgmt__get_session` with `session_id: <session>`.
   Ack `raw` with its result as it came, the JSON or the error text. Never judge
   it yourself; the daemon reads it.
+- `usage`: `ToolSearch` with `query: "select:mcp__ccd_session_mgmt__get_usage"`,
+  then `mcp__ccd_session_mgmt__get_usage` with no arguments. Ack `raw` with its
+  result as it came, the JSON or the error text.
 - `idle`: go back to 1. Send no ack.
 
 Rules:

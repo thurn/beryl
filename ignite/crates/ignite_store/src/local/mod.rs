@@ -12,6 +12,7 @@ pub mod handles;
 pub mod listings;
 pub mod outbox;
 pub mod passes;
+pub mod plan_usage;
 pub mod pool;
 pub mod results;
 pub mod rows;
@@ -118,6 +119,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 18,
         sql: include_str!("schema_18.sql"),
+        code: None,
+    },
+    Migration {
+        version: 19,
+        sql: include_str!("schema_19.sql"),
         code: None,
     },
 ];

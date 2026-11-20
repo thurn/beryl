@@ -137,6 +137,9 @@ pub enum DispatchAction {
     Check,
     /// A Codex dispatcher whose context has grown opens a new chat as the dispatcher and stops.
     Rotate,
+    /// A Claude dispatcher calls the app's `get_usage` tool and acknowledges with what it
+    /// returned, so the daemon can record how much of the Claude plan is used.
+    Usage,
 }
 
 #[cfg(test)]

@@ -150,6 +150,12 @@ impl Pool {
         ignite_store::local::dispatch_queue::all(&self.conn()).map_err(|e| store_error(&e))
     }
 
+    /// Runs `f` on the local database, for the samples of the plan's usage (see
+    /// `dispatchd_usage`).
+    pub(crate) fn with_database<T>(&self, f: impl FnOnce(&mut Connection) -> T) -> T {
+        f(&mut self.conn())
+    }
+
     /// Replaces the dispatcher's saved queue with `entries`.
     pub fn save_queue(&self, entries: &[rows::DispatchEntry]) -> Result<()> {
         ignite_store::local::dispatch_queue::replace_all(&mut self.conn(), entries)
@@ -214,10 +220,14 @@ impl Verb for PoolVerb {
             Some((&"remove", [session])) => self.remove(session),
             Some((&"pause", rest)) => self.pause(ctx, rest.contains(&"--all"), true),
             Some((&"resume", rest)) => self.pause(ctx, rest.contains(&"--all"), false),
+            Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
+                self.dispatcher.pool(),
+                ctx.clock.now(),
+            )),
             Some(_) => Err(Error::Invalid(
                 "usage: ignite pool list | add <session>... --app <app> [--dispatcher [--slots <n>]] \
                  | remove <session> \
-                 | pause [--all] | resume [--all]"
+                 | pause [--all] | resume [--all] | usage"
                     .to_owned(),
             )),
         };

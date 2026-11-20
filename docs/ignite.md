@@ -3342,6 +3342,8 @@ Each machine has one standing pool that serves every active epic.
   included, until `ignite pool resume --all`. While any pool is paused,
   `ignite status` and the dashboard's first line name the tickets that hold
   `master` back. Nothing but a person's `resume` ends a pause.
+- `ignite pool usage` prints how much of the Claude plan is used, from the
+  dispatcher's latest samples (see `usage` under "The dispatcher").
 - The pool outlives epics. Nothing is rebuilt when a plan starts or ends.
 - Claude Code workers are cleared and prompted again for each ticket. Codex has
   no clear operation, so a Codex worker is a new chat per ticket.
@@ -3491,8 +3493,35 @@ justiciar hand-off is always `high`.
    went elsewhere, claims nothing.
 
 The other instructions are `message`, which sends text to a live session,
-`check`, which asks whether a session is running, idle or gone, and `idle`,
-which means the wait ended with nothing to do.
+`check`, which asks whether a session is running, idle or gone, `usage`, which
+asks how much of the Claude plan is used, and `idle`, which means the wait ended
+with nothing to do.
+
+Nothing else in Ignite knows how much of the Claude subscription plan is used:
+without samples, the pool kept handing out tickets until workers failed at the
+limit, and nobody could say what a ticket cost as a share of the plan. The
+desktop app tells any session through its `get_usage` tool, which the daemon
+cannot call, so it asks a Claude dispatcher with `usage`:
+
+- The daemon queues a `usage` ahead of a waiting hand-off when the last one was
+  more than 5 minutes ago, and on its own every 15 minutes, so the series has no
+  long gaps while nothing is handed off. A Codex dispatcher is never asked.
+- The instruction's text names the tool: the dispatcher loads
+  `mcp__ccd_session_mgmt__get_usage` with `ToolSearch`, calls it, and reports
+  the result as it came with `raw`.
+- The daemon stores one row per window of `plan.windows` (its `label`, such as
+  `Weekly · all models`, `percentUsed` and `resetsAt`) in the local database's
+  `plan_usage` table, with the time and the machine. A `plan.status` other than
+  `ok` (`not_applicable`, `unavailable`) is stored as one row with no window and
+  the plan's note, and a report that is not `get_usage`'s JSON as `unreadable`.
+- Each row goes to the hub's `POST /metrics/import` under the source
+  `plan_usage`. A row the hub did not acknowledge is sent with the next sample.
+- `ignite pool usage` prints the newest sample of each window, its age and when
+  the window resets.
+- `ignite pool init` no longer denies `get_usage` in the dispatcher folder's
+  settings, and removes the rule an earlier run added. Claude Code reads the
+  settings when a session starts, so a dispatcher started before then reports
+  the tool's refusal, which is stored as `unreadable`.
 
 The two judgments where a dispatcher's mistake costs most are whether a session
 is gone and whether a hand-off's model stuck: a wrong `gone` releases a live

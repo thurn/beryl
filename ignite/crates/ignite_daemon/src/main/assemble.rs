@@ -418,6 +418,7 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
     let setup = Setup {
         os: base.os,
         families: base.families().unwrap_or_default(),
+        plan_usage: true,
     };
     let dispatcher = Arc::new(Dispatcher::new(
         Pool::new(base.open()?),

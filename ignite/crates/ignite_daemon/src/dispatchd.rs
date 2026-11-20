@@ -21,7 +21,9 @@
 //!   command has run far past its time (see `stall`), messages it once if it is idle, and
 //!   releases its ticket when it is gone or stays idle 15 minutes more;
 //! - answers a worker's `Stop` hook through `ignite turn-ended` (see `turn`), which keeps a
-//!   worker from ending its turn holding its ticket.
+//!   worker from ending its turn holding its ticket;
+//! - asks a Claude dispatcher for the plan's `usage` before hand-offs and every 15 minutes, and
+//!   records what it reports (see `usage`).
 //!
 //! What other parts of the daemon own (trees, admission, handles, releasing) reaches this module
 //! through [`Host`]. The instruction queue is saved in the local database whenever it changes
@@ -64,6 +66,8 @@ mod store;
 mod tell;
 #[path = "dispatchd_turn.rs"]
 mod turn;
+#[path = "dispatchd_usage.rs"]
+mod usage;
 #[path = "dispatchd_verb.rs"]
 mod verb;
 #[path = "dispatchd_wake.rs"]
@@ -74,6 +78,7 @@ mod work;
 pub use stall::RunningVerb;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
+pub use usage::usage_report;
 pub use verb::DispatchVerb;
 
 /// Seconds an instruction may go unacknowledged before it is given again.
@@ -174,6 +179,8 @@ pub struct Setup {
     pub os: Os,
     /// The check families the machine runs; empty means every family.
     pub families: Vec<String>,
+    /// Ask a Claude dispatcher for samples of the plan's usage (see `usage`).
+    pub plan_usage: bool,
 }
 
 /// A ticket reserved for a worker here and not yet claimed.
@@ -204,6 +211,7 @@ enum Purpose {
     Handoff(Reserved),
     Message,
     Check,
+    Usage,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -281,6 +289,8 @@ struct State {
     clears_reported: Option<Timestamp>,
     /// How many workers were left idle after the last request for tickets, and why.
     idle_reason: Option<(usize, String)>,
+    /// When a `usage` instruction was last queued, or the last sample taken (see `usage`).
+    usage_asked: Option<Timestamp>,
 }
 
 /// The dispatcher's state and the pool, shared by the `dispatch`, `pool` and `tell` verbs.
@@ -437,6 +447,7 @@ impl Dispatcher {
         let mut state = self.state();
         let now = ctx.clock.now();
         Self::drop_expired_handoffs(&mut state, now);
+        self.plan_usage(&mut state, &members, now);
         let asking_app = asking.and_then(|session| {
             members
                 .iter()
@@ -476,6 +487,7 @@ impl Dispatcher {
                 Purpose::Handoff(reserved) if !reserved.app.is_empty() => {
                     Some(reserved.app.clone())
                 }
+                Purpose::Usage => Some("claude".to_owned()),
                 _ => app_of(&queued.body.session),
             };
             asking_app.is_none() || app.is_none_or(|a| Some(a) == asking_app)
@@ -884,3 +896,6 @@ mod turn_tests;
 #[cfg(test)]
 #[path = "dispatchd_wake_tests.rs"]
 mod wake_tests;
+#[cfg(test)]
+#[path = "dispatchd_usage_tests.rs"]
+mod usage_tests;

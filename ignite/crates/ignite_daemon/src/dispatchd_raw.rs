@@ -105,7 +105,7 @@ fn base_model(model: &str) -> &str {
     }
 }
 
-fn short(raw: &str) -> String {
+pub(super) fn short(raw: &str) -> String {
     let raw = raw.trim();
     match raw.char_indices().nth(80) {
         Some((at, _)) => format!("{}...", &raw[..at]),
@@ -144,6 +144,10 @@ impl Dispatcher {
                 format!("no instruction {id} is waiting for an acknowledgement"),
             );
         };
+        if body.action == DispatchAction::Usage {
+            drop(state);
+            return self.ack_usage(ctx, id, raw);
+        }
         if body.action == DispatchAction::Check
             && let Some(session) = &body.session
         {
@@ -157,8 +161,8 @@ impl Dispatcher {
             return Reply::text(
                 Exit::Usage,
                 format!(
-                    "instruction {id} takes no raw result: only a check and a hand-off to a \
-                     named session do"
+                    "instruction {id} takes no raw result: only a check, a usage and a hand-off \
+                     to a named session do"
                 ),
             );
         }

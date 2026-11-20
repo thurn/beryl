@@ -40,7 +40,12 @@ const AUTO_COMPACT_WINDOW: u64 = 120_000;
 ///
 /// The dispatcher's loop needs `Bash` (for `ignite dispatch`), `Skill` (for `/ignite pool`),
 /// `ToolSearch`, `Read`, `start_session` and the `ccd_session_mgmt` tools that read, list, clear,
-/// retitle, set the model and effort of, and message a session. None of those are listed here.
+/// retitle, set the model and effort of, and message a session, and `get_usage`. None of those
+/// are listed here.
+/// Rules that an earlier `ignite pool init` added to `permissions.deny` and that the loop now
+/// needs, so writing the settings again removes them: the `usage` instruction calls `get_usage`.
+const NO_LONGER_DENIED: &[&str] = &["mcp__ccd_session_mgmt__get_usage"];
+
 const DENIED_TOOLS: &[&str] = &[
     // Built-in tools for editing, research, subagents and artifacts.
     "Agent",
@@ -112,7 +117,7 @@ const DENIED_TOOLS: &[&str] = &[
     "mcp__ccd_session__read_widget_context",
     "mcp__ccd_session__list_start_targets",
     // The session management tools other than those that read, list, clear, retitle, set the
-    // model and effort of, and message a session.
+    // model and effort of, and message a session, and `get_usage`, which reads the plan's usage.
     "mcp__ccd_session_mgmt__archive_session",
     "mcp__ccd_session_mgmt__unarchive_session",
     "mcp__ccd_session_mgmt__delete_session",
@@ -121,7 +126,6 @@ const DENIED_TOOLS: &[&str] = &[
     "mcp__ccd_session_mgmt__export_transcript",
     "mcp__ccd_session_mgmt__search_session_transcripts",
     "mcp__ccd_session_mgmt__list_events",
-    "mcp__ccd_session_mgmt__get_usage",
     "mcp__ccd_session_mgmt__set_remote_control",
     "mcp__ccd_session_mgmt__set_session_fast_mode",
     "mcp__ccd_session_mgmt__set_session_output_style",
@@ -200,8 +204,9 @@ fn write(folder: &Path, checkout: &Path) -> std::io::Result<()> {
 }
 
 /// The settings file's text with `autoCompactWindow` and the `CLAUDE_CODE_AUTO_COMPACT_WINDOW`
-/// environment variable set, every rule in [`DENIED_TOOLS`] added to `permissions.deny` and the
-/// hook of [`with_hook`] in place, keeping every other setting, variable, deny rule and hook.
+/// environment variable set, every rule in [`DENIED_TOOLS`] added to `permissions.deny`, every
+/// rule in [`NO_LONGER_DENIED`] removed from it and the hook of [`with_hook`] in place, keeping
+/// every other setting, variable, deny rule and hook.
 /// Text that is not a JSON object is replaced.
 fn with_dispatcher_settings(existing: &str) -> String {
     let mut settings = match serde_json::from_str::<serde_json::Value>(existing) {
@@ -238,6 +243,7 @@ fn with_dispatcher_settings(existing: &str) -> String {
             *deny = serde_json::Value::Array(Vec::new());
         }
         if let serde_json::Value::Array(deny) = deny {
+            deny.retain(|rule| !rule.as_str().is_some_and(|r| NO_LONGER_DENIED.contains(&r)));
             for rule in DENIED_TOOLS {
                 if !deny.iter().any(|existing| existing.as_str() == Some(rule)) {
                     deny.push(serde_json::Value::from(*rule));
@@ -393,6 +399,16 @@ mod tests {
         );
     }
 
+    #[test]
+    fn removes_a_rule_the_loop_now_needs() {
+        let existing = r#"{"permissions": {"deny": ["Read", "mcp__ccd_session_mgmt__get_usage"]}}"#;
+        let settings: serde_json::Value =
+            serde_json::from_str(&with_dispatcher_settings(existing)).unwrap();
+        let deny = settings["permissions"]["deny"].as_array().unwrap();
+        assert!(deny.iter().all(|rule| rule != "mcp__ccd_session_mgmt__get_usage"));
+        assert_eq!(deny.len(), 1 + DENIED_TOOLS.len());
+    }
+
     /// A rule that denied a tool the loop calls would stop every hand-off on the machine.
     #[test]
     fn never_denies_a_tool_the_loop_calls() {
@@ -409,6 +425,7 @@ mod tests {
             "mcp__ccd_session_mgmt__set_session_title",
             "mcp__ccd_session_mgmt__send_message",
             "mcp__ccd_session_mgmt__list_sessions",
+            "mcp__ccd_session_mgmt__get_usage",
         ] {
             for rule in DENIED_TOOLS {
                 let server_prefix = rule.starts_with("mcp__")

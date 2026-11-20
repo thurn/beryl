@@ -126,6 +126,27 @@ crate::tables! {
 
     PoolSetting = "pool_settings" { key: String, value: String }
 
+    /// One window of one sample of the Claude plan's usage, as the app's `get_usage` reported
+    /// it through the dispatcher.
+    PlanUsage = "plan_usage" {
+        id: i64,
+        /// When the sample was taken.
+        at: String,
+        machine: String,
+        /// `get_usage`'s `plan.status`: `ok`, `not_applicable`, `unavailable`, or `unreadable`
+        /// when the dispatcher's report was not `get_usage`'s JSON.
+        status: String,
+        /// The window's label, such as `Weekly · all models`; `None` for a sample with no
+        /// windows.
+        label: Option<String>,
+        percent_used: Option<f64>,
+        resets_at: Option<String>,
+        /// Why a sample has no windows, when the status is not `ok`.
+        note: Option<String>,
+        /// 1 once the row reached the hub.
+        posted: i64,
+    }
+
     /// What the build manager knows about one build product in one tree.
     Build = "builds" {
         tree: String,
