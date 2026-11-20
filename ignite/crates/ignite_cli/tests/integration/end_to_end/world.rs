@@ -2,12 +2,10 @@
 //! hub on a random port, and daemons assembled in the test's process, each with its own clone
 //! of the remote and its own home folder.
 //!
-//! The repository holds a two-crate Cargo workspace and a manifest of two `jsonl` families,
-//! whose shell adapter fails a check when its crate's source contains the word `BROKEN`:
-//!
-//! - `core` checks `alpha`. It is marked `always`, so every landing that touches `alpha` runs it.
-//! - `extra` checks `beta`. The gate threshold is set so high that the gate never chooses it,
-//!   so only tip verification runs it.
+//! The repository holds a two-crate Cargo workspace and a manifest of one `jsonl` family,
+//! `core`, whose shell adapter fails a check when its crate's source contains the word
+//! `BROKEN`. `core` checks `alpha`. It is marked `always`, so every landing that touches `alpha`
+//! runs it.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -30,14 +28,12 @@ case "$1" in
 list)
   case "$2" in
   core) echo '{"check": "core:alpha_adds"}' ;;
-  extra) echo '{"check": "extra:beta_adds"}' ;;
   esac ;;
 run)
   shift
   for check in "$@"; do
     case "$check" in
     core:alpha_adds) source=crates/alpha/src/lib.rs ;;
-    extra:beta_adds) source=crates/beta/src/lib.rs ;;
     esac
     if grep -q BROKEN "$source"; then outcome=fail; else outcome=pass; fi
     echo "{\"check\": \"$check\", \"outcome\": \"$outcome\", \"message\": \"$source\"}" >> "$IGNITE_RESULTS"
@@ -53,14 +49,6 @@ always = true
 list = "sh checks/adapter.sh list core"
 run = "sh checks/adapter.sh run {checks}"
 inputs = ["crate:alpha"]
-
-[family.extra]
-kind = "regression"
-adapter = "jsonl"
-platforms = "any"
-list = "sh checks/adapter.sh list extra"
-run = "sh checks/adapter.sh run {checks}"
-inputs = ["crate:beta"]
 "#;
 
 /// `ignite.toml` for a hub at `url`, with two machines.
