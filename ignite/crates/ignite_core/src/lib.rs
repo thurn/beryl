@@ -28,3 +28,5 @@ pub mod time;
 pub mod tipround;
 pub mod traits;
 pub mod verdict;
+
+pub use protocol::hub::verdict_settings;

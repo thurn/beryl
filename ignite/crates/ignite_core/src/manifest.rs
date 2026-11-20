@@ -150,6 +150,11 @@ pub struct Family {
     /// so a change to the second does not spend its run on every landing.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub always_when: Vec<String>,
+    /// The family's checks fail when the code does not compile or type-check. A tip round runs
+    /// these build checks first, moves the green branch once they pass, and may revert the
+    /// landing that made one of them fail.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub builds: bool,
 }
 
 impl Family {
@@ -745,5 +750,20 @@ outputs = ["ui/node_modules"]
         let mut always = plain.clone();
         always.always = true;
         assert!(always.always_for(&changed(&["rust/game/a.rs"])));
+    }
+
+    #[test]
+    fn builds_marks_a_family_whose_checks_fail_when_the_code_does_not_compile() {
+        let plain = Manifest::from_files(&files(&[("checks/rust.toml", RUST)])).unwrap();
+        assert!(!plain.families["rust"].family.builds);
+        let builds = RUST.replacen(
+            "needs = [\"rust-tests\"]\n",
+            "needs = [\"rust-tests\"]\nbuilds = true\n",
+            1,
+        );
+        let (manifest, unknown) =
+            Manifest::from_files_with_unknown(&files(&[("checks/rust.toml", &builds)])).unwrap();
+        assert!(unknown.is_empty(), "{unknown:?}");
+        assert!(manifest.families["rust"].family.builds);
     }
 }

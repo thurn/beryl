@@ -320,6 +320,11 @@ pub struct LookupReply {
 mod cost;
 pub use cost::ResultCost;
 
+// Verdicts and reverted landings live in a file of their own, with their tests.
+#[path = "hub_verdicts.rs"]
+mod verdicts;
+pub use verdicts::{RevertFiled, Reverted, Verdict, VerdictKey, verdict_settings};
+
 /// One result to store.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NewResult {

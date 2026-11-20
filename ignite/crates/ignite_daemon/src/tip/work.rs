@@ -196,6 +196,7 @@ fn options(rerun: bool) -> RunOptions {
         rerun,
         ticket: None,
         session: None,
+        reserve: None,
     }
 }
 

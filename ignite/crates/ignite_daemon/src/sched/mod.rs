@@ -97,6 +97,9 @@ pub struct GrantRequest {
     /// moment it is granted. Named to the command by `IGNITE_CORES_FILE`. A grant with one grows
     /// as cores free up, to what it asked for: the command's jobserver follows the file.
     pub cores_file: Option<PathBuf>,
+    /// Cores set aside for this kind of command (see [`ignite_core::traits::Reserve`]). The
+    /// scheduler does not read it yet.
+    pub reserve: Option<ignite_core::traits::Reserve>,
 }
 
 /// How an adopted grant keeps following its command after a daemon restart: the cores file its

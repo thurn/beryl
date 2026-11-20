@@ -85,6 +85,7 @@ fn grant_request(spec: &CommandSpec) -> GrantRequest {
         shrinks: false,
         grows: false,
         cores_file: None,
+        reserve: spec.reserve,
     }
 }
 
@@ -325,6 +326,7 @@ fn run_call(handle: &Handle, counter: u64, asked: Timestamp) -> Run {
             tree: None,
             ticket: None,
             hang_limit_s: None,
+            reserve: None,
         },
     }
 }

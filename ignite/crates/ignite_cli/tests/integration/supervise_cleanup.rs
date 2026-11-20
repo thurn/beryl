@@ -74,6 +74,7 @@ fn a_process_a_command_leaves_in_the_background_ends_with_the_command() {
         tree: None,
         ticket: None,
         hang_limit_s: None,
+        reserve: None,
     };
     let result = launcher(&root).run(&spec);
     assert_eq!(result.exit, Some(0));
@@ -159,6 +160,7 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
         asked: None,
         follows: false,
         shrinks: false,
+        reserve: None,
     };
     fs::write(
         run_dir.join("spec.json"),
@@ -214,6 +216,7 @@ fn an_adopted_grant_keeps_growing_through_its_cores_file() {
         asked: Some(4),
         follows: true,
         shrinks: true,
+        reserve: None,
     };
     fs::write(
         run_dir.join("spec.json"),

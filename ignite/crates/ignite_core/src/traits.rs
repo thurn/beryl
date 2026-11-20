@@ -8,6 +8,8 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use crate::ids::{Commit, Oid, RecordId, Seq, SessionId, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
@@ -18,6 +20,7 @@ use crate::protocol::hub::{
     ResultKey, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified,
     TipWaiting, TipWaitingFiled,
 };
+use crate::protocol::hub::{RevertFiled, Reverted, Verdict, VerdictKey};
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, FeedBatch, ImportReply, ImportRequest, LeaseOp, LeaseReply, Ticket,
     TicketDetail, TicketQuery, WholeTicket,
@@ -87,6 +90,19 @@ pub struct CommandSpec {
     /// Seconds the command may run before its supervisor ends it with everything it started.
     /// Time spent waiting for cores does not count. `None` lets it run until it exits.
     pub hang_limit_s: Option<u64>,
+    /// Cores set aside for this kind of command, outside the cores the scheduler shares among
+    /// every other request; `None` for an ordinary request.
+    pub reserve: Option<Reserve>,
+}
+
+/// Cores a machine sets aside for one kind of command, which the scheduler never grants to any
+/// other request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reserve {
+    /// The build checks of a tip round, which decide whether the green branch moves:
+    /// `tip_build_cores` on the machine.
+    TipBuild,
 }
 
 /// How a supervised command ended.
@@ -225,6 +241,15 @@ pub enum Rebase {
     Conflict { files: Vec<String> },
 }
 
+/// How [`Git::revert`] ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RevertOutcome {
+    /// One new commit on top of the tip undoes the commits; no ref was moved.
+    Clean { commit: Commit },
+    /// Undoing the commits on top of the tip conflicted in these files.
+    Conflict { files: Vec<String> },
+}
+
 /// How a push ended.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Push {
@@ -277,6 +302,53 @@ pub trait Git: Send + Sync {
         branch: &str,
         expected: &Commit,
     ) -> Result<Push>;
+
+    /// Rebases the commits of `head` that `tip` does not hold onto `tip`, in the object
+    /// database of the repository at `repo`: no working tree, index or ref changes. A commit
+    /// that becomes empty is dropped. Each commit is merged with `git merge-tree --write-tree`
+    /// against its own parent and written with `git commit-tree`, keeping its author, author
+    /// date and message.
+    fn replay(&self, repo: &Path, head: &Commit, tip: &Commit) -> Result<Rebase> {
+        let _ = (repo, head, tip);
+        Err(git_not_supported("replay commits"))
+    }
+
+    /// One commit on top of `tip` that undoes `commits` (oldest first), in the object database:
+    /// the same three-way merge as [`Git::replay`] with the sides swapped, newest commit first.
+    fn revert(
+        &self,
+        repo: &Path,
+        tip: &Commit,
+        commits: &[Commit],
+        message: &str,
+    ) -> Result<RevertOutcome> {
+        let _ = (repo, tip, commits, message);
+        Err(git_not_supported("revert commits"))
+    }
+
+    /// The newest commit that both `a` and `b` hold.
+    fn merge_base(&self, repo: &Path, a: &Commit, b: &Commit) -> Result<Commit> {
+        let _ = (repo, a, b);
+        Err(git_not_supported("find a merge base"))
+    }
+
+    /// When `commit` was committed (its committer date).
+    fn committed_at(&self, repo: &Path, commit: &Commit) -> Result<Timestamp> {
+        let _ = (repo, commit);
+        Err(git_not_supported("read a commit's date"))
+    }
+
+    /// The tree ID a commit of every file on disk in `tree` would have, uncommitted and
+    /// untracked files included, without writing a commit or changing the index.
+    fn tree_id(&self, tree: &Path) -> Result<String> {
+        let _ = tree;
+        Err(git_not_supported("compute a tree ID"))
+    }
+}
+
+/// The error of a [`Git`] method that an implementation does not provide yet.
+fn git_not_supported(what: &str) -> Error {
+    Error::Invalid(format!("this git client cannot {what} yet"))
 }
 
 pub trait Hub: Send + Sync {
@@ -445,6 +517,28 @@ pub trait Hub: Send + Sync {
     /// The Ignite commit the hub and each registered machine runs (`GET /machines/versions`).
     fn fleet_versions(&self) -> Result<crate::protocol::fleet::FleetVersions> {
         Err(not_supported("give the fleet's versions"))
+    }
+
+    /// The verdict stored for `key`, or `None` when no gate has passed for it
+    /// (`POST /verdicts/lookup`).
+    fn verdict(&self, key: &VerdictKey) -> Result<Option<Verdict>> {
+        let _ = key;
+        Err(not_supported("look up verdicts"))
+    }
+
+    /// Stores a gate that passed with nothing incomplete, for every machine to land by
+    /// (`POST /verdicts/store`).
+    fn store_verdict(&self, verdict: &Verdict) -> Result<()> {
+        let _ = verdict;
+        Err(not_supported("store a verdict"))
+    }
+
+    /// Reports a landing a tip round reverted because a build check failed with it; the hub
+    /// reopens its ticket at P0, or files a new P0 ticket when no landing recorded the commits
+    /// (`POST /reverted`).
+    fn reverted(&self, reverted: &Reverted) -> Result<RevertFiled> {
+        let _ = reverted;
+        Err(not_supported("report a reverted landing"))
     }
 }
 

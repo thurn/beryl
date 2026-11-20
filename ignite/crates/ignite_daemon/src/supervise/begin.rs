@@ -92,6 +92,7 @@ impl SupervisedLauncher {
             asked: Some(spec.cores),
             follows,
             shrinks,
+            reserve: spec.reserve,
         };
         let env = grant.env();
         let queued_s = grant.queued_s as f64;
@@ -209,6 +210,7 @@ impl SupervisedLauncher {
             shrinks,
             grows: spec.grows,
             cores_file,
+            reserve: spec.reserve,
         };
         match since {
             Some(since) => scheduler.acquire_since(&request, since, cancelled),
@@ -252,6 +254,7 @@ mod tests {
             tree: None,
             ticket: None,
             hang_limit_s: None,
+            reserve: None,
         }
     }
 

@@ -217,6 +217,7 @@ impl RunStarter for SupervisedStarter {
             shrinks: false,
             grows: spec.grows,
             cores_file: None,
+            reserve: spec.reserve,
         };
         match &self.scheduler {
             Some(scheduler) => scheduler.describe(&request),
@@ -233,6 +234,7 @@ impl RunStarter for SupervisedStarter {
             shrinks: false,
             grows: false,
             cores_file: None,
+            reserve: None,
         })?;
         Some((grant.id, grant.cores))
     }

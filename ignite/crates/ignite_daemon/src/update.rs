@@ -407,6 +407,7 @@ impl ReleaseBuilder {
             tree: None,
             ticket: None,
             hang_limit_s: Some(RELEASE_BUILD_HANG_LIMIT_S),
+            reserve: None,
         }
     }
 

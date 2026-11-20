@@ -35,6 +35,11 @@ pub struct GrantFile {
     /// The command gives cores back while a higher class waits.
     #[serde(default)]
     pub shrinks: bool,
+    /// Cores set aside for this kind of command, which a restarted daemon will grant from the
+    /// same reserve. Left out when unset, so that a `spec.json` written by an older daemon
+    /// still parses and one written by this daemon parses in an older one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reserve: Option<ignite_core::traits::Reserve>,
 }
 
 /// A grant that is released when this value is dropped, so that a panic between asking for
@@ -151,5 +156,44 @@ impl Run {
     /// The spec this run was started with, if its file can still be read.
     pub(super) fn spec(&self) -> Option<SpecFile> {
         serde_json::from_slice(&fs::read(self.dir().join(super::SPEC)).ok()?).ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GrantFile, SpecFile};
+    use ignite_core::protocol::Class;
+    use ignite_core::traits::Reserve;
+
+    /// A `spec.json` as a daemon wrote it before grants had a reserve. A restarted daemon takes
+    /// over commands an older release started, so it must still read their files.
+    const OLDER_SPEC: &str = r#"{
+        "args": ["cargo", "build"],
+        "cwd": "/trees/tree-01",
+        "env": [["IGNITE_CORES", "4"]],
+        "queued_s": 1.5,
+        "jobserver": null,
+        "build_jobs": null,
+        "hang_limit_s": 1800,
+        "grant": {"class": "tip", "cores": 4, "resources": [], "asked": 8, "follows": true,
+                  "shrinks": false}
+    }"#;
+
+    #[test]
+    fn a_spec_written_without_a_reserve_parses_and_one_without_writes_none() {
+        let spec: SpecFile = serde_json::from_str(OLDER_SPEC).unwrap();
+        let grant = spec.grant.clone().unwrap();
+        assert_eq!(grant.class, Class::Tip);
+        assert_eq!(grant.reserve, None);
+        let written = serde_json::to_value(&spec).unwrap();
+        assert!(written["grant"].get("reserve").is_none(), "{written}");
+
+        let reserved = GrantFile {
+            reserve: Some(Reserve::TipBuild),
+            ..grant
+        };
+        let text = serde_json::to_string(&reserved).unwrap();
+        assert!(text.contains(r#""reserve":"tip-build""#), "{text}");
+        assert_eq!(serde_json::from_str::<GrantFile>(&text).unwrap(), reserved);
     }
 }

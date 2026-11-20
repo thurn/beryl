@@ -4,7 +4,7 @@
 //! ([`CacheGate`]), as the real gate does.
 
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,33 +28,12 @@ use crate::checks::{Carried, CheckRun, Excused, Failure, GateRun, RunOptions};
 use crate::land::env::{CheckVerdict, GateTree, LandGate, LandTrees, TicketTree};
 use crate::server::Context;
 
+pub use super::repo::{Repo, edits};
+
 pub fn hex(text: &str) -> String {
     let mut hasher = DefaultHasher::new();
     text.hash(&mut hasher);
     format!("{:016x}", hasher.finish()).repeat(3)[..40].to_owned()
-}
-
-/// A repository in maps: each commit's files, the integration branch's history, and what each
-/// tree has checked out. A ticket tree's branch is its base commit plus its own edits.
-#[derive(Default)]
-pub struct Repo {
-    pub next: u64,
-    pub files: HashMap<Commit, BTreeMap<String, Oid>>,
-    pub parent: HashMap<Commit, Commit>,
-    pub history: Vec<Commit>,
-    pub checked_out: HashMap<PathBuf, Commit>,
-    pub base: HashMap<PathBuf, Commit>,
-    pub edits: HashMap<PathBuf, BTreeMap<String, Oid>>,
-    pub conflicts: HashMap<PathBuf, Vec<String>>,
-    pub pushes: Vec<(PathBuf, Commit)>,
-    /// Commits pushed to a branch other than the integration branch, by branch.
-    pub branch_pushes: Vec<(String, Commit)>,
-    /// Commits pushed over another branch's commit by `Git::replace`: branch, commit, and the
-    /// commit it replaced.
-    pub replaces: Vec<(String, Commit, Commit)>,
-    /// The tips of branches other than the integration branch; one not here is at the
-    /// integration branch's tip.
-    pub other_tips: HashMap<String, Commit>,
 }
 
 #[derive(Default)]
@@ -79,35 +58,13 @@ pub struct TestGit {
     pub on_branch_push: Mutex<Option<Hook>>,
 }
 
-impl Repo {
-    pub fn tip(&self) -> Commit {
-        self.history.last().cloned().expect("a root commit")
-    }
-
-    pub fn commit(&mut self, parent: Option<&Commit>, edits: &BTreeMap<String, Oid>) -> Commit {
-        self.next += 1;
-        let commit = Commit::new(format!("{:040x}", self.next)).unwrap();
-        let mut files = parent.map(|p| self.files[p].clone()).unwrap_or_default();
-        files.extend(edits.clone());
-        self.files.insert(commit.clone(), files);
-        if let Some(parent) = parent {
-            self.parent.insert(commit.clone(), parent.clone());
-        }
-        commit
-    }
-}
-
-pub fn edits(pairs: &[(&str, &str)]) -> BTreeMap<String, Oid> {
-    pairs
-        .iter()
-        .map(|(path, text)| ((*path).to_owned(), Oid::new(hex(text)).unwrap()))
-        .collect()
-}
-
 impl TestGit {
-    pub fn new(files: &[(&str, &str)]) -> Self {
+    /// A repository whose root commit holds `files`. Its commits record the time on `clock`,
+    /// for `Git::committed_at`, or the epoch without one.
+    pub fn with_clock(files: &[(&str, &str)], clock: Option<Arc<FakeClock>>) -> Self {
         let git = TestGit::default();
         let mut repo = git.repo.lock().unwrap();
+        repo.clock = clock;
         let root = repo.commit(None, &edits(files));
         repo.history.push(root);
         drop(repo);
@@ -293,6 +250,24 @@ impl Git for TestGit {
         Ok(Push::Pushed {
             commit: commit.clone(),
         })
+    }
+
+    fn replay(&self, _repo: &Path, head: &Commit, tip: &Commit) -> Result<Rebase> {
+        Ok(self.repo.lock().unwrap().replay(head, tip))
+    }
+
+    fn merge_base(&self, _repo: &Path, a: &Commit, b: &Commit) -> Result<Commit> {
+        Ok(self.repo.lock().unwrap().merge_base(a, b))
+    }
+
+    fn committed_at(&self, _repo: &Path, commit: &Commit) -> Result<Timestamp> {
+        let repo = self.repo.lock().unwrap();
+        let at = repo.committed.get(commit).copied();
+        at.ok_or_else(|| Error::NotFound(commit.to_string()))
+    }
+
+    fn tree_id(&self, tree: &Path) -> Result<String> {
+        Ok(self.repo.lock().unwrap().tree_id(tree))
     }
 }
 

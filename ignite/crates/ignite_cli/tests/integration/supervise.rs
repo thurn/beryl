@@ -47,6 +47,7 @@ fn shell(cwd: &Path, script: &str) -> CommandSpec {
         tree: None,
         ticket: None,
         hang_limit_s: None,
+        reserve: None,
     }
 }
 
@@ -321,6 +322,7 @@ mod grants {
             shrinks: false,
             grows: false,
             cores_file: None,
+            reserve: None,
         }
     }
 
@@ -624,6 +626,7 @@ mod stop_grace {
             shrinks: false,
             grows: false,
             cores_file: None,
+            reserve: None,
         };
         // An agent takes the two cores the idle command left, so a landing has no cores free
         // and the scheduler stops the idle command for it.

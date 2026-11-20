@@ -65,7 +65,7 @@ use crate::protocol::client::{Exit, Reply, Request};
 use crate::protocol::hub::CompileUnit;
 use crate::protocol::{Class, Usage};
 use crate::time::Timestamp;
-use crate::traits::{BuildFor, BuildResult, CommandSpec, Error, Result};
+use crate::traits::{BuildFor, BuildResult, CommandSpec, Error, Reserve, Result};
 
 /// The newest version of the host protocol this build speaks.
 pub const PROTOCOL_VERSION: u32 = 2;
@@ -254,6 +254,10 @@ pub struct Command {
     pub tree: Option<TreeId>,
     pub ticket: Option<TicketId>,
     pub hang_limit_s: Option<u64>,
+    /// Cores set aside for this kind of command. Left out when unset, so a verb process and a
+    /// daemon of releases before or after it still understand each other.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reserve: Option<Reserve>,
 }
 
 impl From<&CommandSpec> for Command {
@@ -269,6 +273,7 @@ impl From<&CommandSpec> for Command {
             tree: spec.tree.clone(),
             ticket: spec.ticket.clone(),
             hang_limit_s: spec.hang_limit_s,
+            reserve: spec.reserve,
         }
     }
 }
@@ -286,6 +291,7 @@ impl From<Command> for CommandSpec {
             tree: command.tree,
             ticket: command.ticket,
             hang_limit_s: command.hang_limit_s,
+            reserve: command.reserve,
         }
     }
 }

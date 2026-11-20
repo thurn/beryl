@@ -457,6 +457,7 @@ mod tests {
                 tree: None,
                 ticket: None,
                 hang_limit_s: None,
+                reserve: None,
             },
         }
     }

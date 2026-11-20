@@ -7,6 +7,7 @@ mod format;
 mod more;
 mod races;
 mod release;
+mod repo;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -94,11 +95,10 @@ fn world_with(
         landed_down: AtomicBool::new(false),
         steal_after_acquire: AtomicBool::new(false),
     });
-    let git = Arc::new(TestGit::new(&[
-        ("a.txt", "a"),
-        ("b.txt", "b"),
-        ("c.txt", "c"),
-    ]));
+    let git = Arc::new(TestGit::with_clock(
+        &[("a.txt", "a"), ("b.txt", "b"), ("c.txt", "c")],
+        Some(clock.clone()),
+    ));
     let trees = Arc::new(TestTrees {
         git: git.clone(),
         tickets: Mutex::new(HashMap::new()),

@@ -653,6 +653,16 @@ How the executable is installed and kept current:
   A build opens a database newer than its last migration, applying nothing, when
   its last migration is at least that value, so a rollback to `bin/last-good`
   still starts after a release that added a table or column.
+- Settings for landing by verdict exist and change nothing yet:
+  `[land] mode` (`"strict"`, the default, or `"verdict"`) with
+  `max_base_age_hours` (default 12), `[revert] broken_build` (default false) and
+  `repository.green` (unset by default; it must differ from `staging` and
+  `master`). The hub's `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted`
+  and git's `Git::replay`, `revert`, `merge_base`, `committed_at` and `tree_id`
+  are declared, with fakes, and the real clients answer that they cannot do
+  them yet. A verdict is keyed by the tree ID, the merge base with the tip and
+  `verdict_settings`, a digest of the `[gate]` section that holds nothing about
+  Ignite's own release.
 - A landing that changed Ignite's own source moves the release branch to the
   landed commit once `repository.release_family` (the `ignite` family) has
   passed on it, or the express commands have (see
@@ -1274,6 +1284,12 @@ Rules for cores:
 - A machine's `express_cores` are never granted: they are kept for the express
   lane's commands, which run outside the scheduler (see
   [Express landings](#express-landings)).
+- A machine's `tip_build_cores` (default 0) will be kept for the build checks of
+  a tip round, whose commands carry `Reserve::TipBuild` in their `CommandSpec`.
+  The setting, the `reserve` field of a command, its grant request and its
+  `spec.json` grant exist, but the scheduler does not read them yet. The field
+  is left out of `spec.json` and of the host protocol when it is unset, so
+  daemons of older and newer releases still read each other's files.
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
   CPU for hours.
@@ -1460,6 +1476,10 @@ The fields:
 - `always_when` narrows `always` to changes that touch one of its path patterns.
   For any other change the family's checks are scored. See
   [The always set](#the-always-set).
+- `builds = true` marks a family whose checks fail when the code does not
+  compile or type-check, such as clippy or `tsc`. No code reads it yet: tip
+  rounds will run these build checks first, move `repository.green` once they
+  pass, and revert the landing that made one fail. No manifest sets it yet.
 - `covered_by` names a family whose checks find every fault this family's checks
   find. Tip verification then runs the covering family only. See
   [How long a round takes](#how-long-a-round-takes).

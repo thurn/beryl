@@ -141,6 +141,10 @@ pub struct RunOptions {
     pub rerun: bool,
     pub ticket: Option<TicketId>,
     pub session: Option<SessionId>,
+    /// Cores set aside for these checks' commands, passed on to each command's
+    /// [`ignite_core::traits::CommandSpec`] by the code that will reserve them; `None` for
+    /// ordinary checks.
+    pub reserve: Option<ignite_core::traits::Reserve>,
 }
 
 /// A check that did not pass, with what its run said.

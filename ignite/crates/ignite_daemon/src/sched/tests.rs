@@ -36,6 +36,7 @@ fn ask(class: Class, cores: u32) -> GrantRequest {
         shrinks: false,
         grows: false,
         cores_file: None,
+        reserve: None,
     }
 }
 

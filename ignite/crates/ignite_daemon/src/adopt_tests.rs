@@ -19,6 +19,7 @@ fn spec(args: &[&str]) -> CommandSpec {
         tree: None,
         ticket: None,
         hang_limit_s: None,
+        reserve: None,
     }
 }
 

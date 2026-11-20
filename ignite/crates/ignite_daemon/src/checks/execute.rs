@@ -669,6 +669,7 @@ impl Checks {
             tree: Some(tree.id.clone()),
             ticket: options.ticket.clone(),
             hang_limit_s: Some(hang_limit_s(slowest)),
+            reserve: options.reserve,
         });
         // The units the command's test processes and compiles recorded, if it was set up to.
         let (units, span) = units::env_units_file(&spec_env)

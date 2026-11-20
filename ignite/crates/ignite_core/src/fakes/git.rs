@@ -1,11 +1,12 @@
 //! [`FakeGit`], the in-memory repository of [`super`]'s fakes.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::ids::{Commit, Oid};
-use crate::traits::{Error, Git, Push, Rebase, Result};
+use crate::time::Timestamp;
+use crate::traits::{Error, Git, Push, Rebase, Result, RevertOutcome};
 
 use super::lock;
 
@@ -27,6 +28,16 @@ pub struct FakeGit {
     object_id_calls: std::sync::atomic::AtomicUsize,
     /// Local refs by full name, as `set_local_ref` left them.
     refs: Mutex<HashMap<String, Commit>>,
+    /// The next results of `replay`, first queued first.
+    replays: Mutex<VecDeque<Rebase>>,
+    /// The next results of `revert`, first queued first.
+    reverts: Mutex<VecDeque<RevertOutcome>>,
+    /// The next results of `merge_base`, first queued first.
+    merge_bases: Mutex<VecDeque<Commit>>,
+    /// Each commit's date for `committed_at`; a commit not here was made at the epoch.
+    dates: Mutex<HashMap<Commit, Timestamp>>,
+    /// Each tree's ID for `tree_id`, by the tree's path.
+    tree_ids: Mutex<HashMap<PathBuf, String>>,
 }
 
 impl FakeGit {
@@ -64,6 +75,35 @@ impl FakeGit {
     /// The next rebase's result; by default a rebase is clean onto the tip given.
     pub fn script_rebase(&self, result: Rebase) {
         *lock(&self.rebase) = Some(result);
+    }
+
+    /// Queues the result of a later `replay`; with none queued, a replay is clean onto the tip
+    /// given, as a rebase is.
+    pub fn script_replay(&self, result: Rebase) {
+        lock(&self.replays).push_back(result);
+    }
+
+    /// Queues the result of a later `revert`; with none queued, a revert is clean and its
+    /// commit is the tip given.
+    pub fn script_revert(&self, result: RevertOutcome) {
+        lock(&self.reverts).push_back(result);
+    }
+
+    /// Queues the answer of a later `merge_base`; with none queued, the merge base is the
+    /// second commit, as for a tree based on the tip.
+    pub fn script_merge_base(&self, base: Commit) {
+        lock(&self.merge_bases).push_back(base);
+    }
+
+    /// Sets the date `committed_at` gives for `commit`.
+    pub fn set_committed_at(&self, commit: &Commit, at: Timestamp) {
+        lock(&self.dates).insert(commit.clone(), at);
+    }
+
+    /// Sets the ID `tree_id` gives for the tree at `tree`; a tree not set has an ID made from
+    /// its path.
+    pub fn set_tree_id(&self, tree: &Path, id: &str) {
+        lock(&self.tree_ids).insert(tree.to_path_buf(), id.to_owned());
     }
 
     /// How many times `object_ids` has been called, each of which reads the whole tree.
@@ -160,5 +200,49 @@ impl Git for FakeGit {
         Ok(Push::Pushed {
             commit: commit.clone(),
         })
+    }
+
+    fn replay(&self, _repo: &Path, _head: &Commit, tip: &Commit) -> Result<Rebase> {
+        Ok(lock(&self.replays)
+            .pop_front()
+            .unwrap_or_else(|| Rebase::Clean {
+                onto: tip.clone(),
+                head: tip.clone(),
+                landed_since: 0,
+            }))
+    }
+
+    fn revert(
+        &self,
+        _repo: &Path,
+        tip: &Commit,
+        _commits: &[Commit],
+        _message: &str,
+    ) -> Result<RevertOutcome> {
+        Ok(lock(&self.reverts)
+            .pop_front()
+            .unwrap_or_else(|| RevertOutcome::Clean {
+                commit: tip.clone(),
+            }))
+    }
+
+    fn merge_base(&self, _repo: &Path, _a: &Commit, b: &Commit) -> Result<Commit> {
+        Ok(lock(&self.merge_bases)
+            .pop_front()
+            .unwrap_or_else(|| b.clone()))
+    }
+
+    fn committed_at(&self, _repo: &Path, commit: &Commit) -> Result<Timestamp> {
+        Ok(lock(&self.dates)
+            .get(commit)
+            .copied()
+            .unwrap_or(Timestamp::EPOCH))
+    }
+
+    fn tree_id(&self, tree: &Path) -> Result<String> {
+        Ok(lock(&self.tree_ids)
+            .get(tree)
+            .cloned()
+            .unwrap_or_else(|| format!("tree of {}", tree.display())))
     }
 }

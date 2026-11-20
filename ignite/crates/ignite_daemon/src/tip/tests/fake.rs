@@ -140,6 +140,7 @@ impl FakeWork {
             tree: None,
             ticket: None,
             hang_limit_s: None,
+            reserve: None,
         });
     }
 

@@ -629,5 +629,10 @@
     "label": "Ignite's scheduler counts the hub and verb processes outside the daemon's process tree as Ignite's own CPU, not as load outside Ignite, so it hands out the cores they use instead of holding them back from waiting agent commands",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The settings, protocol types, trait methods and fakes for landing by verdict and a green branch exist with defaults that change nothing, so the tickets that make `ignite land` take seconds (one gate per tree and base, rebased in git's object database) can be built at the same time against the fakes",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

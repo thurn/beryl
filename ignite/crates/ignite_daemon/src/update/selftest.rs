@@ -61,6 +61,7 @@ impl Selftest for SupervisedSelftest {
             tree: None,
             ticket: None,
             hang_limit_s: Some(HANG_LIMIT_S),
+            reserve: None,
         });
         let text = std::fs::read_to_string(&result.output).unwrap_or_default();
         if result.hung {

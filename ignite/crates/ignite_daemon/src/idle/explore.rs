@@ -234,6 +234,7 @@ impl Idle {
             tree: Some(tree.clone()),
             ticket: None,
             hang_limit_s: None,
+            reserve: None,
         }
     }
 

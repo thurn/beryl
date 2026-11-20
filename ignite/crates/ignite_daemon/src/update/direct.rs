@@ -218,6 +218,7 @@ mod tests {
             tree: None,
             ticket: None,
             hang_limit_s: Some(60),
+            reserve: None,
         });
         assert_eq!(result.exit, Some(3));
         assert!(!result.hung);

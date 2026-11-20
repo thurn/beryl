@@ -55,6 +55,7 @@ fn pages(class: Class) -> GrantRequest {
         shrinks: false,
         grows: false,
         cores_file: None,
+        reserve: None,
     }
 }
 

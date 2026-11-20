@@ -138,6 +138,7 @@ fn command() -> Command {
         tree: Some(tree()),
         ticket: Some(ticket()),
         hang_limit_s: Some(1800),
+        reserve: None,
     }
 }
 

@@ -397,6 +397,7 @@ impl BuildManager {
             tree: Some(plan.request.tree.clone()),
             ticket: crate::steps::ticket(),
             hang_limit_s: Some(BUILD_HANG_LIMIT_S),
+            reserve: None,
         }
     }
 

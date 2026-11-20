@@ -111,6 +111,7 @@ impl Checks {
             rerun: false,
             ticket: who.ticket.clone(),
             session: who.session.clone(),
+            reserve: None,
         };
         self.record(
             ctx,

@@ -90,6 +90,7 @@ fn the_landing_gate_uses_the_trees_manifests() {
         rerun: false,
         ticket: None,
         session: None,
+        reserve: None,
     };
 
     let gated = world.checks.gate(&world.ctx, &tree(), &landing);

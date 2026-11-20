@@ -15,8 +15,8 @@ use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
     OpenRegression, Pause, Record, RegressionFiled, RegressionReport, ReportFiled, Reservation,
-    ResultKey, SessionTitle, StoredListing, TicketBrief, TipClaim, TipClaimReply, TipVerified,
-    TipWaiting, TipWaitingFiled,
+    ResultKey, RevertFiled, Reverted, SessionTitle, StoredListing, TicketBrief, TipClaim,
+    TipClaimReply, TipVerified, TipWaiting, TipWaitingFiled, Verdict,
 };
 use crate::protocol::tickets::{
     BatchReply, BatchRequest, Comment, FeedBatch, FeedChange, ImportReply, ImportRequest, Lease,
@@ -32,6 +32,7 @@ mod fleet;
 mod git;
 mod host;
 mod tips;
+mod verdicts;
 mod whole;
 pub use builds::FakeBuilds;
 pub use git::FakeGit;
@@ -167,6 +168,7 @@ pub struct FakeHub {
     listings: Mutex<HashMap<ListingKey, String>>,
     tips: tips::FakeTips,
     fleet: fleet::FakeFleet,
+    verdicts: verdicts::FakeVerdicts,
 }
 
 impl FakeHub {
@@ -361,6 +363,18 @@ impl Hub for FakeHub {
 
     fn fleet_versions(&self) -> Result<crate::protocol::fleet::FleetVersions> {
         self.fake_fleet_versions()
+    }
+
+    fn verdict(&self, key: &crate::protocol::hub::VerdictKey) -> Result<Option<Verdict>> {
+        self.fake_verdict(key)
+    }
+
+    fn store_verdict(&self, verdict: &Verdict) -> Result<()> {
+        self.fake_store_verdict(verdict)
+    }
+
+    fn reverted(&self, reverted: &Reverted) -> Result<RevertFiled> {
+        self.fake_reverted(reverted)
     }
 
     fn store_listing(&self, listing: &StoredListing) -> Result<()> {
@@ -697,134 +711,4 @@ impl Hub for FakeHub {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::Os;
-    use crate::ids::TreeId;
-    use crate::ids::{CheckName, InputHash, MachineId, RecordId};
-    use crate::protocol::Outcome;
-    use crate::traits::{BuildResult, Builds, Git};
-    use std::path::Path;
-
-    fn key() -> ResultKey {
-        ResultKey {
-            check: CheckName::new("rust:a::b").unwrap(),
-            hash: InputHash::new("a".repeat(64)).unwrap(),
-            platform: Some(Os::Macos),
-        }
-    }
-
-    #[test]
-    fn the_hub_caches_what_it_stores_and_fails_when_down() {
-        let hub = FakeHub::default();
-        assert_eq!(hub.lookup(&[key()]).unwrap(), vec![None]);
-        let machine = MachineId::new("m-1").unwrap();
-        let new = NewResult {
-            key: key(),
-            outcome: Outcome::Pass,
-            machine,
-            record: RecordId(1),
-            output: None,
-            cost: crate::protocol::hub::ResultCost::default(),
-            areas: Vec::new(),
-        };
-        hub.store(&[new]).unwrap();
-        assert_eq!(
-            hub.lookup(&[key()]).unwrap()[0].as_ref().unwrap().outcome,
-            Outcome::Pass
-        );
-        hub.set_unreachable(true);
-        assert!(matches!(hub.lookup(&[key()]), Err(Error::Unreachable(_))));
-    }
-
-    #[test]
-    fn leases_exclude_other_holders() {
-        let hub = FakeHub::default();
-        let acquire = |holder: &str| LeaseOp::Acquire {
-            holder: holder.to_owned(),
-            ttl_s: 60,
-            payload: None,
-            no_queue: true,
-        };
-        assert!(matches!(
-            hub.lease("land", acquire("a")).unwrap(),
-            LeaseReply::Held(_)
-        ));
-        assert!(matches!(
-            hub.lease("land", acquire("b")).unwrap(),
-            LeaseReply::Busy(_)
-        ));
-        let release = LeaseOp::Release {
-            holder: "a".to_owned(),
-            if_revision: None,
-        };
-        assert!(matches!(
-            hub.lease("land", release).unwrap(),
-            LeaseReply::Held(_)
-        ));
-        assert!(matches!(
-            hub.lease("land", acquire("b")).unwrap(),
-            LeaseReply::Held(_)
-        ));
-    }
-
-    #[test]
-    fn the_feed_returns_changes_after_since() {
-        let hub = FakeHub::default();
-        hub.push_change("ticket", None);
-        let second = hub.push_change("ticket", None);
-        let batch = hub.feed(Seq(1), 0).unwrap();
-        assert_eq!(batch.seq, second);
-        assert_eq!(batch.changes.len(), 1);
-    }
-
-    #[test]
-    fn builds_are_built_once_then_current() {
-        let builds = FakeBuilds::default();
-        let tree = TreeId::new("tree-01").unwrap();
-        assert!(matches!(
-            builds.ensure(&tree, "tests", &[]),
-            BuildResult::Built { .. }
-        ));
-        assert_eq!(builds.ensure(&tree, "tests", &[]), BuildResult::Current);
-    }
-
-    #[test]
-    fn the_launcher_answers_scripted_prefixes() {
-        let launcher = FakeLauncher::default();
-        let failing = RunResult {
-            exit: Some(2),
-            output: PathBuf::from("out"),
-            usage: Usage::default(),
-            hung: false,
-        };
-        launcher.script(&["cargo", "test"], failing);
-        let spec = |args: &[&str]| CommandSpec {
-            args: args.iter().map(|s| (*s).to_owned()).collect(),
-            cwd: PathBuf::new(),
-            env: Vec::new(),
-            class: crate::protocol::Class::Agent,
-            cores: 1,
-            resources: Vec::new(),
-            grows: false,
-            tree: None,
-            ticket: None,
-            hang_limit_s: None,
-        };
-        assert_eq!(
-            launcher.run(&spec(&["cargo", "test", "-p", "x"])).exit,
-            Some(2)
-        );
-        assert_eq!(launcher.run(&spec(&["cargo", "build"])).exit, Some(0));
-        assert_eq!(launcher.runs().len(), 2);
-    }
-
-    #[test]
-    fn git_pushes_move_the_tip() {
-        let git = FakeGit::default();
-        let commit = Commit::new("3a9e4c1").unwrap();
-        git.push(Path::new("t"), &commit, "staging").unwrap();
-        assert_eq!(git.tip("staging").unwrap(), commit);
-        assert!(git.tip("master").is_err());
-    }
-}
+mod tests;
