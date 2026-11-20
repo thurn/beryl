@@ -34,6 +34,7 @@ fn machine(workers: Vec<IdleWorker>) -> MachineFree {
         name: None,
         justiciar_only: false,
         master_only: false,
+        explain: false,
     }
 }
 

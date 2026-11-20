@@ -154,6 +154,50 @@ pub struct MachineFree {
     /// stuck behind it.
     #[serde(default)]
     pub master_only: bool,
+    /// Answer `{"nothing": "<reason>"}` instead of `null` when no ticket fits, so the daemon can
+    /// show in `ignite status` why its idle workers are idle ([`NextReply`]). A daemon that
+    /// predates it sends none and gets `null`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub explain: bool,
+}
+
+/// The hub's answer to `POST /next`: a reservation, or nothing with the reason when the request
+/// set `explain` and the hub knows it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NextReply {
+    Reserved(Reservation),
+    Nothing(Option<String>),
+}
+
+/// `POST /next`'s body on the wire: a reservation, `{"nothing": "<reason>"}`, or `null`.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum NextWire {
+    Reserved(Reservation),
+    Nothing { nothing: String },
+}
+
+impl Serialize for NextReply {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Reserved(r) => r.serialize(serializer),
+            Self::Nothing(None) => serializer.serialize_none(),
+            Self::Nothing(Some(reason)) => NextWire::Nothing {
+                nothing: reason.clone(),
+            }
+            .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for NextReply {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match Option::<NextWire>::deserialize(deserializer)? {
+            Some(NextWire::Reserved(r)) => Self::Reserved(r),
+            Some(NextWire::Nothing { nothing }) => Self::Nothing(Some(nothing)),
+            None => Self::Nothing(None),
+        })
+    }
 }
 
 /// A ticket reserved for one machine and session until `expires_at`.

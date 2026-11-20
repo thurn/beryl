@@ -237,6 +237,8 @@ struct State {
     /// When the Claude dispatcher's hook first reported a clear. From then on hand-offs wait
     /// for one (see `allowed`).
     clears_reported: Option<Timestamp>,
+    /// How many workers were left idle after the last request for tickets, and why.
+    idle_reason: Option<(usize, String)>,
 }
 
 /// The dispatcher's state and the pool, shared by the `dispatch`, `pool` and `tell` verbs.

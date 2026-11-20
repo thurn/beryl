@@ -255,6 +255,10 @@ pub fn chain_next<'a>(lane: &str, ready: &'a [ReadyTicket]) -> Option<&'a ReadyT
         .min_by(|a, b| queue_order(a, b))
 }
 
+#[path = "dispatch_why.rs"]
+mod why;
+pub use why::why_nothing;
+
 #[cfg(test)]
 #[path = "dispatch_tests.rs"]
 mod tests;

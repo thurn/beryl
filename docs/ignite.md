@@ -3169,18 +3169,32 @@ tickets run beside expensive ones.
 - A ticket that names files in several areas takes the largest figure. A ticket
   that names no files takes the machine's median.
 - A planner can state the figure directly with `--cores`.
-- The daemon keeps a total for the tickets in progress on its machine, counting
-  each at the larger of its expectation and what it has used so far.
-- A ticket is admitted when that total plus its own figure is within
-  `admit_cores`, a setting per machine. On jarvis, with 18 cores, it starts at
-  13\.
+- The hub keeps a total for the tickets in progress on a machine or reserved
+  for it, counting each at its expectation. It cannot see what a ticket has used
+  so far.
+- A ticket is admitted when that total plus its own figure is within the
+  machine's `admit_cores`: every core its scheduler hands out, which is its
+  cores less its `express_cores`. On jarvis, with 18 cores and 3 express cores,
+  that is 15. It is not a setting, because the scheduler already makes every
+  heavy command wait for cores; admission only keeps the expected load of the
+  tickets in progress within what the machine has.
+- While workers stay idle, the `pool` line of `ignite status` says why: the
+  first reason, in dispatch's order, that no ready ticket went to them. The
+  daemon asks the hub for the reason with each request for tickets
+  (`MachineFree.explain`), and the hub answers `{"nothing": "<reason>"}` instead
+  of `null`. More workers would help only when the line is about workers or
+  trees, never when it is about tickets or cores.
 
 ```text
-$ ignite status --admission
-admit_cores 13.0   in progress 11.6 (9 tickets)
-next  TW8GV.21.80  beryl_kernel  expects 2.1 cores   waits
-next  TEN2C.4      tools/        expects 0.1 cores   admitted
+$ ignite status
+pool       3 idle workers: 2 ready tickets wait for cores: the smallest expects 2.5, and 1.0 of the machine's admitted cores are free
 ```
+
+The other reasons are that no ready ticket is offered (file tickets or release
+an epic), that the ready tickets are for another machine's or model's workers,
+that their epics are at their `--max-workers` cap, that they need check families
+the machine cannot run, that no ticket tree is free, and that the last idle
+worker is kept for justiciar tickets.
 
 A documentation or tools ticket is therefore admitted on a busy machine, limited
 only by idle workers and trees, while a third kernel ticket waits. The same
@@ -4092,7 +4106,7 @@ These show that cores, trees and workers go where the rules say.
   five and two in progress. Close all but one of the second epic's tickets and
   expect six and one.
 - **A light ticket on a busy machine.** Fill the machine with core-crate tickets
-  until `ignite status --admission` shows the next one waiting. File a ticket
+  until `ignite status` shows idle workers waiting for cores. File a ticket
   that names only a Python file. Expect it handed off at once, in the tree with
   the oldest build, with no Rust build started.
 - **A plan.** Give `/ignite` a plan document. Expect an epic filed in one batch,

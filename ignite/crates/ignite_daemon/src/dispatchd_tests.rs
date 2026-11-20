@@ -339,6 +339,10 @@ fn nothing_is_handed_off_without_a_free_tree_or_admission() {
         rig.hub.asked().is_empty(),
         "no tree free: the hub is not asked"
     );
+    assert_eq!(
+        rig.dispatcher.idle_reason(),
+        Some((1, "no ticket tree is free".to_owned()))
+    );
 
     // The hub decides admission from the cores the daemon reports, and answers nothing. The
     // daemon reports the scheduler's free cores at the moment and the cores it admits against.
@@ -351,6 +355,11 @@ fn nothing_is_handed_off_without_a_free_tree_or_admission() {
     assert_eq!(asked[0].admit_cores, Some(15.0));
     assert_eq!(asked[0].idle_workers[0].models, ["opus", "sonnet", "light"]);
     assert_eq!(rig.state_of("local_w1"), "idle");
+    // `ignite status` shows why the worker is idle; the fake hub gives no reason.
+    assert_eq!(
+        rig.dispatcher.idle_reason(),
+        Some((1, "the hub gave no reason".to_owned()))
+    );
 }
 
 #[test]

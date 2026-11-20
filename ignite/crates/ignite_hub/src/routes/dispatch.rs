@@ -38,7 +38,8 @@ use ignite_core::owner::Owner;
 use ignite_core::protocol::emergency::{EmergencyChange, EmergencyReply};
 use ignite_core::protocol::hub::{
     AdhocClaim, Claim, Close, DependencyNote, Heartbeat, HeartbeatReply, Landed, LandedReply,
-    MachineFree, MachineRegister, MachineRegistered, Pause, Release, SessionTitle, TicketBrief,
+    MachineFree, MachineRegister, MachineRegistered, NextReply, Pause, Release, SessionTitle,
+    TicketBrief,
 };
 use ignite_core::protocol::tickets::{
     BatchRequest, Operation, OperationResult, Status, Ticket, TicketFields,
@@ -324,9 +325,13 @@ fn next(conn: &mut Connection, free: &MachineFree, now: Timestamp) -> Answer {
             .map_err(|e| store_failure(&e))?;
         free.name = Some(name);
     }
-    let reservation = queue::next(&tx, &free, now).map_err(|e| store_failure(&e))?;
+    let reply = match queue::next(&tx, &free, now).map_err(|e| store_failure(&e))? {
+        Ok(reservation) => NextReply::Reserved(reservation),
+        // Only a daemon that asked for the reason gets it; an older one reads `null`.
+        Err(reason) => NextReply::Nothing(free.explain.then_some(reason)),
+    };
     tx.commit().map_err(sql_failure)?;
-    Ok(Response::json(200, &json!(reservation)))
+    Ok(Response::json(200, &json!(reply)))
 }
 
 /// Claims `claim.ticket` for its session and tree: a reserved ticket with its reservation's code

@@ -269,6 +269,14 @@ pub trait Hub: Send + Sync {
     fn lookup(&self, keys: &[ResultKey]) -> Result<Vec<Option<CachedResult>>>;
     fn store(&self, results: &[NewResult]) -> Result<()>;
     fn next(&self, free: &MachineFree) -> Result<Option<Reservation>>;
+    /// `POST /next` with `explain` set: a reservation, or nothing with the hub's reason, for
+    /// `ignite status`. A hub that gives no reason answers as [`Hub::next`] does.
+    fn next_explained(&self, free: &MachineFree) -> Result<crate::protocol::hub::NextReply> {
+        use crate::protocol::hub::NextReply;
+        Ok(self
+            .next(free)?
+            .map_or(NextReply::Nothing(None), NextReply::Reserved))
+    }
     fn claim(&self, claim: &Claim) -> Result<TicketBrief>;
     fn landed(&self, landed: &Landed) -> Result<()>;
     fn lease(&self, name: &str, op: LeaseOp) -> Result<LeaseReply>;

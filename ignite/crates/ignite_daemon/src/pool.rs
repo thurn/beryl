@@ -501,7 +501,16 @@ impl crate::doctor::StatusSection for PauseSection {
             "paused on this machine: only tickets that hold master back are handed off, one at \
              a time"
         } else {
-            return Vec::new();
+            // Whether more workers would help: only when the reason is about workers, never
+            // when it is about tickets or cores.
+            return self
+                .dispatcher
+                .idle_reason()
+                .map(|(idle, why)| {
+                    let workers = if idle == 1 { "worker" } else { "workers" };
+                    vec![format!("{idle} idle {workers}: {why}")]
+                })
+                .unwrap_or_default();
         }
         .to_owned()];
         let query = ignite_core::protocol::tickets::TicketQuery {

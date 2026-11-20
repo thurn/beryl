@@ -61,23 +61,31 @@ const NEEDS_PERSON: &str = "needs:person";
 mod held;
 use held::Paused;
 
-/// The ticket to reserve for `free`'s machine, already reserved and logged, or `None`. Call it
-/// inside an `IMMEDIATE` transaction after lapsing old reservations, so that two machines asking
-/// at once are answered one after the other and never get one ticket.
-pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Option<Reservation>> {
+/// The ticket to reserve for `free`'s machine, already reserved and logged, or why there is none
+/// ([`dispatch::why_nothing`]). Call it inside an `IMMEDIATE` transaction after lapsing old
+/// reservations, so that two machines asking at once are answered one after the other and never
+/// get one ticket.
+pub fn next(
+    conn: &Connection,
+    free: &MachineFree,
+    now: Timestamp,
+) -> Result<std::result::Result<Reservation, String>> {
     let machine = free.machine.as_str();
     let paused = held::paused(conn, free)?;
-    if paused == Paused::Everything
-        || paused == Paused::MasterOnly && held::holds_one(conn, machine)?
-    {
-        return Ok(None);
+    if paused == Paused::Everything {
+        return Ok(Err("hand-offs are paused on every machine".to_owned()));
+    }
+    if paused == Paused::MasterOnly && held::holds_one(conn, machine)? {
+        return Ok(Err(
+            "the pool is paused and already works a ticket that holds master back".to_owned(),
+        ));
     }
     // A worker of this machine that already holds a reservation is asking again because the
     // reply to its earlier request was lost; it gets the same reservation, not another ticket
     // and not nothing for ten minutes.
     for worker in &free.idle_workers {
         if let Some(held) = fleet::reservation_for_worker(conn, machine, worker.session.as_str())? {
-            return Ok(Some(held));
+            return Ok(Ok(held));
         }
     }
     let snapshot = Snapshot::load(conn, now)?;
@@ -107,7 +115,7 @@ pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Opt
     let last_files = last_files(conn, machine)?;
     let Some(handoff) = dispatch::next_for(&free, &ready, &epic_order, improvements, &last_files)
     else {
-        return Ok(None);
+        return Ok(Err(dispatch::why_nothing(&free, &ready, &epic_order)));
     };
     let kind = ready
         .iter()
@@ -121,7 +129,7 @@ pub fn next(conn: &Connection, free: &MachineFree, now: Timestamp) -> Result<Opt
         kind,
         now,
     )
-    .map(Some)
+    .map(Ok)
 }
 
 /// The next ready ticket of the `lane:` chain `lane`, reserved for the session that finished

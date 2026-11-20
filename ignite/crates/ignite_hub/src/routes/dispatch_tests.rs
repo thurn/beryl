@@ -151,6 +151,7 @@ pub(super) fn free(machine: &str, sessions: &[&str]) -> Value {
         name: None,
         justiciar_only: false,
         master_only: false,
+        explain: false,
     })
 }
 
@@ -619,6 +620,14 @@ fn a_ticket_needing_a_person_is_not_offered() {
     assert_eq!(first["ticket"], ids[1].as_str());
     let (_, second) = post(&mut conn, "/next", &free("m-1", &["local_b"]), at(1.0));
     assert_eq!(second, Value::Null);
+    // A daemon that asks why gets the reason instead of `null`, for `ignite status`.
+    let mut explained = free("m-1", &["local_b"]);
+    explained["explain"] = json!(true);
+    let (_, why) = post(&mut conn, "/next", &explained, at(2.0));
+    assert_eq!(
+        why,
+        json!({"nothing": "no ready ticket is offered: file tickets, or release an epic"})
+    );
 }
 
 #[test]

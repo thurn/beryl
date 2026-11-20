@@ -436,6 +436,14 @@ impl Hub for HubClient {
         self.post("/next", free)
     }
 
+    fn next_explained(&self, free: &MachineFree) -> Result<ignite_core::protocol::hub::NextReply> {
+        let free = MachineFree {
+            explain: true,
+            ..free.clone()
+        };
+        self.post("/next", &free)
+    }
+
     fn claim(&self, claim: &Claim) -> Result<TicketBrief> {
         self.post("/claims", claim)
     }

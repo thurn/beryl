@@ -5,6 +5,7 @@ use std::time::Duration;
 use super::*;
 use ignite_core::ids::{MachineId, RecordId, SessionId, TicketId, TreeId};
 use ignite_core::protocol::Class;
+use ignite_core::protocol::hub::NextReply;
 use ignite_core::time::Timestamp;
 
 /// One request the stand-in hub received.
@@ -396,8 +397,20 @@ fn next_reads_nothing_as_no_reservation() {
         name: None,
         justiciar_only: false,
         master_only: false,
+        explain: false,
     };
     assert_eq!(hub.client().next(&free).unwrap(), None);
+    // An older hub answers `null` to a request for the reason, too.
+    assert_eq!(
+        hub.client().next_explained(&free).unwrap(),
+        NextReply::Nothing(None)
+    );
+    let why =
+        FakeHttpHub::start(|_, _, _| (200, r#"{"nothing": "no ticket tree is free"}"#.to_owned()));
+    assert_eq!(
+        why.client().next_explained(&free).unwrap(),
+        NextReply::Nothing(Some("no ticket tree is free".to_owned()))
+    );
 }
 
 #[test]

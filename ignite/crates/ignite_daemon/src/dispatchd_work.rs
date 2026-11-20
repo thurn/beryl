@@ -8,7 +8,7 @@
 
 use ignite_core::config::Config;
 use ignite_core::ids::{SessionId, TicketId};
-use ignite_core::protocol::hub::{IdleWorker, MachineFree, Reservation};
+use ignite_core::protocol::hub::{IdleWorker, MachineFree, NextReply, Reservation};
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
@@ -95,8 +95,9 @@ impl Dispatcher {
             return;
         };
         let _asking = AskingGuard(self);
-        let offers = self.ask_for_work(ctx, asking);
+        let (offers, idle_reason) = self.ask_for_work(ctx, asking);
         let mut state = self.state();
+        state.idle_reason = idle_reason;
         for (reservation, app, detail) in offers {
             Self::queue_handoff(&ctx.config, &mut state, &reservation, &app, detail);
         }
@@ -176,11 +177,11 @@ impl Dispatcher {
         // nobody watches. The hub offers such tickets to one worker at a time, and nothing at
         // all while every machine is paused (`ignite pool pause --all`).
         let master_only = self.pool.paused().unwrap_or(true);
-        if state.down
-            || state.draining
-            || state.asking_hub
-            || master_only && self.pool.paused_everywhere()
-        {
+        if state.asking_hub {
+            return None;
+        }
+        if state.down || state.draining || master_only && self.pool.paused_everywhere() {
+            state.idle_reason = None;
             return None;
         }
         let workers = slots::with_slots(state, members);
@@ -191,6 +192,8 @@ impl Dispatcher {
         let reserved = u32::try_from(state.reserved.len()).unwrap_or(u32::MAX);
         let trees = self.host.free_ticket_trees().saturating_sub(reserved);
         if idle.is_empty() || trees == 0 {
+            state.idle_reason =
+                (!idle.is_empty()).then(|| (idle.len(), "no ticket tree is free".to_owned()));
             return None;
         }
         state.asking_hub = true;
@@ -202,9 +205,17 @@ impl Dispatcher {
         })
     }
 
+    /// How many workers were left idle after the last request for tickets, and why: the hub's
+    /// reason when it offered nothing, for `ignite status`. `None` when no worker was idle or the
+    /// pool asked for nothing (down, updating or paused everywhere).
+    pub fn idle_reason(&self) -> Option<(usize, String)> {
+        self.state().idle_reason.clone()
+    }
+
     /// Asks the hub for tickets while workers are idle and ticket trees are free, and reads
-    /// each reserved ticket. Runs with the state unlocked.
-    fn ask_for_work(&self, ctx: &Context, asking: Asking) -> Vec<Offer> {
+    /// each reserved ticket. Runs with the state unlocked. Also returns how many workers are
+    /// left idle and why, or `None` when every one got a ticket.
+    fn ask_for_work(&self, ctx: &Context, asking: Asking) -> (Vec<Offer>, Option<(usize, String)>) {
         let Asking {
             mut idle,
             mut trees,
@@ -212,6 +223,7 @@ impl Dispatcher {
             master_only,
         } = asking;
         let mut offers = Vec::new();
+        let mut why = "no ticket tree is free".to_owned();
         while !idle.is_empty() && trees > 0 {
             let free = MachineFree {
                 machine: ctx.machine.clone(),
@@ -233,11 +245,22 @@ impl Dispatcher {
                 // A paused pool asks for justiciar and regression tickets alike.
                 justiciar_only: !master_only && idle.len() == 1 && workers > 1,
                 master_only,
+                // `next_explained` asks for the reason itself.
+                explain: false,
             };
-            let Ok(Some(reservation)) = ctx.hub.next(&free) else {
-                break;
+            let reservation = match ctx.hub.next_explained(&free) {
+                Ok(NextReply::Reserved(reservation)) => reservation,
+                Ok(NextReply::Nothing(reason)) => {
+                    why = reason.unwrap_or_else(|| "the hub gave no reason".to_owned());
+                    break;
+                }
+                Err(error) => {
+                    why = format!("the hub did not answer: {error}");
+                    break;
+                }
             };
             let Some(index) = idle.iter().position(|m| m.session == reservation.session) else {
+                "the hub reserved a ticket for a worker that is not idle".clone_into(&mut why);
                 break;
             };
             let worker = idle.remove(index);
@@ -245,7 +268,8 @@ impl Dispatcher {
             let detail = ctx.hub.ticket(&reservation.ticket).ok();
             offers.push((reservation, worker.app, detail));
         }
-        offers
+        let left = (!idle.is_empty()).then_some((idle.len(), why));
+        (offers, left)
     }
 
     /// Turns a reservation into a hand-off for its worker. `detail` is the ticket as the hub
