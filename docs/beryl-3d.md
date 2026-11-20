@@ -1366,7 +1366,14 @@ flight start exactly where the card was.
   interface does. Sources and targets on the stack stand alone. The lands row
   starts piling once its controller has seven lands across the battlefield. A
   row lays its groups out at full size while they fit, then overlaps them down
-  to the least uncovered strip and scrolls if needed.
+  to the least uncovered strip and scrolls if needed. On the desktop, a row too
+  long for its room first zooms the battlefield out, as the web's
+  `battlefieldZoom` does (`place::zooms`): the creatures' rows of both sides
+  share the zoom of the most crowded row, down to the web's `ZOOM_LEAST`, and a
+  back row shrinks further alone, down to `least_back_zoom` in `space.json`,
+  which keeps each card large enough to press. A zoomed-out row keeps its edge
+  toward the lane between the creatures' rows, or a back row its edge toward its
+  player.
 - **Rows stand as the web interface's do.** The creatures' row is centred; the
   lands run from the table's edge inward and the other permanents from the
   middle outward, so a permanent that leaves one of those rows moves only the

@@ -5,7 +5,9 @@ use beryl_protocol::script::{Act, Fact, Subject};
 
 use super::Motion;
 use crate::play::index;
-use crate::table::{Group, Placement, Rest, RowChange, Table, Zones, reposed};
+use crate::table::{
+    Group, NameIds, PileRules, Placement, Rest, RowChange, Table, Zones, Zooms, reposed,
+};
 
 impl<'a> Motion<'a> {
     /// Applies `act` to the table and places again every group whose resting places it may
@@ -44,13 +46,9 @@ impl<'a> Motion<'a> {
         let zones = index::step_zones(self.index.as_mut(), &self.played, act, &self.touched)
             .handled(self.look.handled())
             .arrived(&self.arrival);
+        // The first step places again each group kept in the order its objects arrived.
         if self.first {
-            for group in Group::ALL
-                .into_iter()
-                .filter(|group| group.in_object_order())
-            {
-                dirty[group.index()] = true;
-            }
+            dirty_in_object_order(&mut dirty);
         }
         for object in self.touched.iter().filter_map(|&slot| zones.get(slot)) {
             self.names.note(object);
@@ -119,6 +117,8 @@ impl<'a> Motion<'a> {
         if !self.touched.is_empty() || dirty[Group::Stack.index()] {
             self.piles.update(&zones, &mut dirty, lands_may_change);
         }
+        let fit = (table, &zones, &self.piles, &self.names);
+        zoom(&mut self.fresh.zooms, fit, &mut dirty);
         // By index, which `dirty` and `next` share with `Group::ALL`: zipping the groups with
         // their lists cost about 300 instructions a step.
         for (index, next) in self.next.iter_mut().enumerate() {
@@ -208,4 +208,38 @@ impl<'a> Motion<'a> {
 fn land_side(object: &ObjectView) -> Option<beryl_protocol::protocol::Side> {
     (object.zone == ZoneName::Battlefield && object.types.contains(&CardType::Land))
         .then_some(object.controller)
+}
+
+/// Finds again how far each battlefield row is zoomed out (`place::rezoom`) when a row is placed
+/// again, measuring only the rows placed again, since a row that grew or shrank may zoom every
+/// row, and then marks every row in `dirty` if any row's zoom moved. `zooms` holds them as the
+/// steps before left the table.
+fn zoom(
+    zooms: &mut Zooms,
+    (table, zones, piles, names): (&Table, &Zones, &PileRules, &NameIds),
+    dirty: &mut [bool],
+) {
+    let row = |index: usize| matches!(Group::ALL[index], Group::Row { .. });
+    if (0..dirty.len()).any(|index| dirty[index] && row(index)) {
+        let changed = |side, row| dirty[Group::Row { side, row }.index()];
+        let now = table.rezoom(zooms, (zones, piles, names), changed);
+        let moved = now != *zooms;
+        // The fits of the rows measured again are kept even when no zoom moved.
+        *zooms = now;
+        if moved {
+            for (index, dirty) in dirty.iter_mut().enumerate() {
+                *dirty |= row(index);
+            }
+        }
+    }
+}
+
+/// Marks in `dirty` every group kept in the order its objects arrived (`Group::in_object_order`).
+fn dirty_in_object_order(dirty: &mut [bool]) {
+    for group in Group::ALL
+        .into_iter()
+        .filter(|group| group.in_object_order())
+    {
+        dirty[group.index()] = true;
+    }
 }

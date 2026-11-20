@@ -1,11 +1,12 @@
 //! The table's placement rules and work counters.
 
-use beryl_protocol::protocol::{ObjectId, PlayerView};
+use beryl_protocol::protocol::{ObjectId, PlayerView, RowName, Side};
 
 use super::Table;
 use crate::table::HandFits;
 use crate::table::place::{
-    Group, PileRules, Placement, Rules, Zones, place_group, place_reusing, place_zones,
+    Group, PileRules, Placement, Rules, Zones, Zooms, place_group, place_reusing, place_zones,
+    rezoom, zooms,
 };
 use crate::table::rows::NameIds;
 
@@ -45,6 +46,34 @@ impl Table {
         let (placement, laid) = place_reusing(zones, known, self.placement_rules(None));
         self.placed.add(laid);
         placement
+    }
+
+    /// How far each battlefield row of `zones` is zoomed out for this window (`place::zooms`).
+    /// `ids` numbers the names of `zones`' objects, if the caller keeps them.
+    pub(crate) fn zooms(
+        &self,
+        zones: &Zones,
+        piles: &PileRules,
+        ids: Option<&NameIds<'_>>,
+    ) -> Zooms {
+        zooms(zones, piles, self.placement_rules(ids))
+    }
+
+    /// How far each battlefield row of `zones` is zoomed out for this window, measuring again
+    /// only the rows `changed` names and taking the others' fits from `known` (`place::rezoom`).
+    pub(crate) fn rezoom(
+        &self,
+        known: &Zooms,
+        (zones, piles, ids): (&Zones, &PileRules, &NameIds<'_>),
+        changed: impl Fn(Side, RowName) -> bool,
+    ) -> Zooms {
+        rezoom(
+            known,
+            zones,
+            piles,
+            self.placement_rules(Some(ids)),
+            changed,
+        )
     }
 
     /// Places the objects of `group` in `zones` into `placement` for this window, and leaves the

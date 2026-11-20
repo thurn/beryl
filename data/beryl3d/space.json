@@ -387,6 +387,7 @@
           ]
         ]
       },
+      "least_back_zoom": 0.4,
       "strip": 24,
       "creatures": {
         "y": -62,
@@ -512,6 +513,8 @@
         "tapped_gap": 44,
         "permanent_gap": 0.1,
         "advance": 16,
+        "zoom_least": 0.3,
+        "back_row_pull": 0.8,
         "you": {
           "back": 570,
           "lands": 111,

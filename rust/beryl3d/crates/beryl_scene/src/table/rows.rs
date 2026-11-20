@@ -262,6 +262,51 @@ impl<'a> Groups<'a, '_> {
     }
 }
 
+/// `cards` gathered into the groups `lay_row` lays out side by side: identical permanents into
+/// piles where the row piles them (`stack_slots`), and each other card alone.
+fn grouped<'a, 'b>(
+    (cards, beneath): (&'b [&'a ObjectView], &Beneath<'a>),
+    (names, ids, stack_slots): (Option<SameName>, Option<&NameIds<'_>>, Option<&[ObjectId]>),
+) -> Groups<'a, 'b> {
+    stack_slots
+        .filter(|_| cards.len() > 1)
+        .map_or(Groups::Single(cards), |stack_slots| {
+            // On a short row, rule out singletons before allocating the name index.
+            if names.is_none()
+                && cards.len() <= 8
+                && !cards
+                    .iter()
+                    .enumerate()
+                    .any(|(index, &card)| cards[..index].iter().any(|other| twins(card, other)))
+            {
+                return Groups::Single(cards);
+            }
+            piles(
+                cards,
+                &names.unwrap_or_else(|| SameName::of(cards, ids)),
+                beneath,
+                stack_slots,
+            )
+        })
+}
+
+/// How long `cards` lie side by side when `lay_row` has room for all of them, in millimetres:
+/// each group's width and the gaps between them.
+pub(super) fn row_length<'a>(
+    (cards, beneath): (&[&'a ObjectView], &Beneath<'a>),
+    (names, ids, stack_slots): (Option<SameName>, Option<&NameIds<'_>>, Option<&[ObjectId]>),
+    rules: &RowRules,
+) -> f32 {
+    let groups = grouped((cards, beneath), (names, ids, stack_slots));
+    let widths: f32 = groups.iter().map(|g| group_width(g, beneath, rules)).sum();
+    let between: f32 = groups
+        .iter()
+        .zip(groups.iter().skip(1))
+        .map(|(before, after)| rules.gap_between(before[0], after[0]))
+        .sum();
+    widths + between
+}
+
 /// Lays out `cards`, in order from left to right, in `area` at height `y` on the table. `names`
 /// links each card to the one before it with its name, if the caller has them already, and
 /// `ids` numbers the cards' names, if the caller keeps numbers. Each card goes to `laid` as it is
@@ -275,27 +320,7 @@ pub(super) fn lay_row<'a>(
     laid: &mut impl FnMut(Laid<'a>),
 ) -> RowWindow {
     let room = area.right - area.left;
-    let groups =
-        stack_slots
-            .filter(|_| cards.len() > 1)
-            .map_or(Groups::Single(cards), |stack_slots| {
-                // On a short row, rule out singletons before allocating the name index.
-                if names.is_none()
-                    && cards.len() <= 8
-                    && !cards
-                        .iter()
-                        .enumerate()
-                        .any(|(index, &card)| cards[..index].iter().any(|other| twins(card, other)))
-                {
-                    return Groups::Single(cards);
-                }
-                piles(
-                    cards,
-                    &names.unwrap_or_else(|| SameName::of(cards, ids)),
-                    beneath,
-                    stack_slots,
-                )
-            });
+    let groups = grouped((cards, beneath), (names, ids, stack_slots));
     if let Groups::Single(cards) = groups
         && beneath.cards.is_empty()
     {

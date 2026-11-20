@@ -13,7 +13,7 @@ use super::badges;
 use super::look::{Dress, Look};
 use super::own::{self, Fights};
 use super::pile::PileShown;
-use super::place::{Placement, Rest, RowFits, Rows, Scroll};
+use super::place::{Placement, Rest, RowFits, Rows, Scroll, Zooms};
 use super::shadows::Floors;
 use super::shown::Shown;
 use super::tray::TrayMotion;
@@ -323,6 +323,8 @@ impl Table {
                     })
                 })
                 .collect(),
+            // Only placing a group reads the zooms (`Motion::place` keeps its own).
+            zooms: Zooms::default(),
         };
         self.unhold(&mut placement);
         placement

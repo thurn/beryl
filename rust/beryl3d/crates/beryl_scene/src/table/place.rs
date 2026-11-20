@@ -14,8 +14,8 @@ mod policy;
 pub(crate) use indexed::arrival;
 pub(crate) use policy::PileRules;
 mod row;
-pub(crate) use row::RowFits;
 use row::battlefield_row;
+pub(crate) use row::{RowFits, Zooms, rezoom, zooms};
 mod under;
 pub(crate) use under::{host_slot, names_host};
 
@@ -59,6 +59,8 @@ pub struct Placement {
     /// Which groups of each battlefield row, and which cards of the viewer's hand and the
     /// stack, are in view.
     pub rows: Rows,
+    /// How far each battlefield row is zoomed out.
+    pub(crate) zooms: Zooms,
 }
 
 /// A line of cards that scrolls when it holds more than fit with their least strip: a
@@ -159,8 +161,11 @@ pub fn place(
 
 /// Every object's resting place in `zones`, seen through `camera`.
 pub(crate) fn place_zones(zones: &Zones, rules: Rules<'_>) -> Placement {
-    let mut placement = Placement::default();
     let piles = zones.pile_rules();
+    let mut placement = Placement {
+        zooms: zooms(zones, &piles, rules),
+        ..Placement::default()
+    };
     for (group, objects) in Group::ALL.into_iter().zip(all_members(zones)) {
         lay(
             group,
@@ -186,15 +191,19 @@ pub(crate) fn place_reusing(
         abilities: Vec::new(),
         piles: known.piles,
         rows: known.rows,
+        zooms: Zooms::default(),
     };
     let mut laid = 0;
     let (piles, known_piles) = (zones.pile_rules(), known_zones.pile_rules());
+    placement.zooms = zooms(zones, &piles, rules);
+    let zoomed = placement.zooms != zooms(known_zones, &known_piles, rules);
     let groups = Group::ALL.into_iter().zip(all_members(zones));
     for ((group, objects), was) in groups.zip(all_members(known_zones)) {
         let same = objects.len() == was.len()
             && objects.iter().zip(&was).all(|(a, b)| a == b)
             && (group != Group::Stack || zones.stack == known_zones.stack)
-            && piles.same_for_row(&known_piles, group, &objects);
+            && piles.same_for_row(&known_piles, group, &objects)
+            && !(zoomed && matches!(group, Group::Row { .. }));
         // A group the cards being handled are lifted from is placed again when the cards
         // handled changed, though its objects did not.
         let lifted_from = |handled: Option<&lifted::Handled>| {

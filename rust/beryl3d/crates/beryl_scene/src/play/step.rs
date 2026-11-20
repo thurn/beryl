@@ -171,6 +171,7 @@ impl<'a> Motion<'a> {
         let tracks = Vec::with_capacity(end);
         let steps = timings.len();
         let index = (steps >= index::LEAST_STEPS).then(|| Index::new(before, played));
+        let piles = PileRules::of_view(before);
         Self {
             names: NameIds::of(&before.objects),
             played: played.clone(),
@@ -182,12 +183,12 @@ impl<'a> Motion<'a> {
             whole: false,
             unplaced: 0,
             first: true,
-            fresh: Placement::default(),
+            fresh: Placement::zoomed(table.zooms(&Zones::of_table(played), &piles, None)),
             hands: HandFits::default(),
             next: [const { Vec::new() }; Group::ALL.len()],
             touched: Vec::new(),
             reposed: Vec::new(),
-            piles: PileRules::of_view(before),
+            piles,
             marks: Vec::new(),
             affected: Vec::new(),
             removed: Vec::new(),

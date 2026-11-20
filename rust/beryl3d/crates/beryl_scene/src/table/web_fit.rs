@@ -13,6 +13,8 @@
 //! the row's ends, and the scale at which a card is as wide on screen as the web's, so that each
 //! card's centre projects onto the centre of the web's card. A row is laid out in millimetres of
 //! a card at its printed size and then scaled by that scale about its left end (`place::row`).
+//! That scale is a row's at full size: a crowded row shrinks its cards further, and may shrink
+//! every row with it, as the web's `battlefieldZoom` does (`place::zooms`).
 //! A card lying flat under the camera's pitch is shorter on screen against its width than the
 //! web's upright one, so each row's cards lean back toward the camera until they are as tall.
 
@@ -34,7 +36,8 @@ pub struct FittedRow {
     /// untapped cards lie on, signed for its side, and its `left` and `right` are where the
     /// edges of its first and last cards may reach along that line.
     pub area: RowArea,
-    /// How large its cards are against a card's printed size.
+    /// How large its cards are against a card's printed size while the row has room for them
+    /// at full size (`place::zooms`).
     pub scale: f32,
     /// How far apart its cards stand, before `scale`.
     pub gap: f32,
