@@ -414,6 +414,14 @@ pub fn text(words: &str) -> Element {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FloatId(pub u16);
 
+impl FloatId {
+    /// Whether the float is drawn under the screen instead of over it (`floats::UNDER_SCREEN`).
+    #[must_use]
+    pub fn under_screen(self) -> bool {
+        floats::UNDER_SCREEN.contains(&self)
+    }
+}
+
 /// The ids of the flat layer's floats. Where a float comes in pairs or more, the arrays are
 /// indexed by side first, the viewer's at 0 and the opponent's at 1.
 pub mod floats {
@@ -463,6 +471,11 @@ pub mod floats {
     /// The step banner between the opponent's orb and their permanents, such as "Combat" over
     /// "Blockers declared" (`hud::banner`).
     pub const STEP_BANNER: FloatId = FloatId(32);
+    /// The floats drawn under the screen, before it, rather than over it. The web interface
+    /// stacks the step banner over the permanents but under the life orbs and the prompts, so
+    /// the trigger cards of an order prompt cover the banner instead of the banner covering
+    /// their title lines.
+    pub const UNDER_SCREEN: [FloatId; 1] = [STEP_BANNER];
     /// The count of cards scrolled off the left end and the right end of the viewer's hand.
     pub const HAND_COUNT: [FloatId; 2] = [FloatId(34), FloatId(35)];
     /// The count of items scrolled off the stack's bottom, at its left, and its top, at its

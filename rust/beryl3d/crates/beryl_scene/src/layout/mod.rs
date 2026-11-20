@@ -278,8 +278,9 @@ impl Layer {
     }
 
     /// The innermost element at `point` that a press means something on, with its press and
-    /// whether it is enabled. Floats are drawn over the screen, so they are searched first, the
-    /// last drawn first. The screen is searched only while it is `open`, that is drawn.
+    /// whether it is enabled. Elements are searched the last drawn first: the floats drawn over
+    /// the screen, then the screen, then the floats drawn under it (`FloatId::under_screen`).
+    /// The screen is searched only while it is `open`, that is drawn.
     #[must_use]
     pub fn press_at(&self, point: glam::Vec2, open: bool) -> Option<(ElementId, Press, bool)> {
         self.hit(point, open, |node, _| {
@@ -289,7 +290,8 @@ impl Layer {
     }
 
     /// The first value `want` gives for an element at `point`, asking the innermost first:
-    /// floats, the last drawn first, then the screen while it is `open`. While the screen shows
+    /// the floats drawn over the screen, the last drawn first, then the screen while it is
+    /// `open`, then the floats drawn under it. While the screen shows
     /// a child drawn over the floats (`write::over_floats`), only that child is asked. An element is at
     /// `point` where it is drawn: moved by its own transition and by the scroll of the elements
     /// it is in, and inside the box of every element it is in that clips or scrolls. As in CSS,
@@ -336,8 +338,12 @@ impl Layer {
                 .filter(|child| write::over_floats(child))
                 .find_map(|child| find(child, point, child.corner()?, true, &want));
         }
-        (self.floats.iter().rev())
-            .find_map(|float| find(&float.node, point, float.corner(), true, &want))
+        let floats = |under: bool| {
+            (self.floats.iter().rev())
+                .filter(move |float| float.id.under_screen() == under)
+                .find_map(|float| find(&float.node, point, float.corner(), true, &want))
+        };
+        floats(false)
             .or_else(|| {
                 (self.screen.as_ref())
                     .filter(|_| open)
@@ -346,6 +352,7 @@ impl Layer {
                         None => find(node, point, glam::Vec2::ZERO, true, &want),
                     })
             })
+            .or_else(|| floats(true))
     }
 
     /// Takes `node` and everything under it out of taffy's tree.

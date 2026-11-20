@@ -9,6 +9,7 @@ use beryl_protocol::protocol::Side;
 use glam::{Affine3A, Vec2, Vec3};
 
 use super::edit::Marks;
+use super::float::Float;
 use super::panel::{Chain, look_of, mask_of, panel, write_box, write_mask};
 use super::shadows::write_icon_shadows;
 use super::{Layer, Node, text_top};
@@ -50,8 +51,9 @@ fn takes_press(element: &Element, look: &Look<'_>, rect: Rect) -> bool {
 
 impl Layer {
     /// Writes the flat layer into `builder`, on the plane `camera` puts in front of the table:
-    /// the screen if it is `open`, then every float, whether the screen is open or not, then
-    /// the screen's children that filter what is drawn under them (`over_floats`).
+    /// the floats drawn under the screen (`FloatId::under_screen`), the screen if it is `open`,
+    /// then every other float, whether the screen is open or not, then the screen's children
+    /// that filter what is drawn under them (`over_floats`).
     pub fn write(&self, builder: &mut FrameBuilder, camera: &Camera, open: bool) {
         self.write_with(builder, camera, open, None);
     }
@@ -65,6 +67,22 @@ impl Layer {
         open: bool,
         faces: Option<&Faces>,
     ) {
+        let write_float = |float: &Float, builder: &mut FrameBuilder| {
+            let look = Look {
+                point: float.corner(),
+                opacity: float.look.opacity,
+                tint: float.look.tint,
+                clip: None,
+                passes: false,
+                faces,
+                filters: Chain::default(),
+            };
+            self.write_node(&float.node, u32::MAX, true, look, builder, camera);
+        };
+        // Two passes over the floats rather than a partition, which would allocate every frame.
+        for float in (self.floats.iter()).filter(|float| float.id.under_screen()) {
+            write_float(float, builder);
+        }
         let mut screen = None;
         if open && let Some(node) = &self.screen {
             // An anchored screen stands at its corner, and is not drawn while that is unknown.
@@ -87,17 +105,8 @@ impl Layer {
                     .map(|index| (node, index));
             }
         }
-        for float in &self.floats {
-            let look = Look {
-                point: float.corner(),
-                opacity: float.look.opacity,
-                tint: float.look.tint,
-                clip: None,
-                passes: false,
-                faces,
-                filters: Chain::default(),
-            };
-            self.write_node(&float.node, u32::MAX, true, look, builder, camera);
+        for float in (self.floats.iter()).filter(|float| !float.id.under_screen()) {
+            write_float(float, builder);
         }
         let Some((node, index)) = screen else {
             return;
