@@ -8,7 +8,7 @@
 use beryl_protocol::protocol::ZoneName;
 use glam::{Affine3A, Vec2, Vec3};
 
-use super::pile::pile_base;
+use super::pile::PileShown;
 use super::scene::{SceneObject, Table};
 use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::data::space::shadow;
@@ -91,7 +91,7 @@ impl Table {
             ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile => {}
             _ => return false,
         }
-        let pile = pile_base(self.layout(), self.camera(), side, zone);
+        let pile = self.objects.piles[PileShown::index(side, zone)].base;
         pose.position.truncate().distance_squared(pile) < 0.01
     }
 

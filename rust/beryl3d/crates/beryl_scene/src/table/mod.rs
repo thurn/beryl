@@ -45,7 +45,7 @@ pub(crate) use stack::{OnStack, on_stack, row_area};
 pub use tray_layout::{
     Across, Held, Second, TrayKind, TrayPoses, TraySpace, landing, tray, tray_area, tray_boxes,
 };
-pub use web_fit::{FittedRow, FittedRows};
+pub use web_fit::{FittedPiles, FittedRow, FittedRows};
 
 use crate::data::space;
 use crate::input::{Insets, Size};
@@ -222,6 +222,10 @@ pub struct Layout {
     /// fitted to where the web interface draws them (`web_fit`), which replace `creatures`,
     /// `lands` and `others`; none otherwise.
     pub fitted: Option<web_fit::FittedRows>,
+    /// On the desktop layout fitted to a window, the piles fitted to where the web interface
+    /// draws them (`web_fit::piles`), which replace `piles` and set `pile_scale`; none
+    /// otherwise.
+    pub fitted_piles: Option<web_fit::FittedPiles>,
 }
 
 impl Layout {
@@ -234,8 +238,12 @@ impl Layout {
         if window.phone() {
             return phone::layout(window);
         }
+        let camera = self.fit(window);
+        let piles = web_fit::piles(window, &camera);
         Layout {
-            fitted: Some(web_fit::rows(window, &self.fit(window))),
+            fitted: Some(web_fit::rows(window, &camera)),
+            fitted_piles: Some(piles),
+            pile_scale: piles.scale,
             ..*self
         }
     }
@@ -366,4 +374,5 @@ pub const DESKTOP: Layout = Layout {
     phone: None,
     bands: None,
     fitted: None,
+    fitted_piles: None,
 };

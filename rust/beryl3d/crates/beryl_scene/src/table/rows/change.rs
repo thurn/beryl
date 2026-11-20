@@ -1,6 +1,6 @@
 //! Which object changes affect the layout of its battlefield row.
 
-use beryl_protocol::protocol::{ObjectView, ZoneName};
+use beryl_protocol::protocol::{Combat, ObjectView, ZoneName};
 
 use super::{plain, same_pile_face};
 
@@ -28,6 +28,7 @@ impl RowChange {
             || was.types != now.types
             || was.tapped != now.tapped
             || was.name != now.name
+            || attacking(was) != attacking(now)
         {
             Self::Layout
         } else if was.facing != now.facing || was.phased_out != now.phased_out {
@@ -40,4 +41,10 @@ impl RowChange {
             }
         }
     }
+}
+
+/// Whether `object` is attacking, which moves it out of its row toward the other side on the
+/// desktop (`FittedRow::advance`).
+fn attacking(object: &ObjectView) -> bool {
+    matches!(object.combat, Some(Combat::Attacking { .. }))
 }

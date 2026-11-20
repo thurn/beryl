@@ -5,7 +5,7 @@
    "boxes": 21,
    "styles": 49,
    "unsupported": 1,
-   "pixels": 214082
+   "pixels": 180469
   },
   "b3d:game-over/you/393x759": {
    "unmatched": 62,
@@ -19,7 +19,7 @@
    "boxes": 26,
    "styles": 41,
    "unsupported": 0,
-   "pixels": 281727
+   "pixels": 256827
   },
   "b3d:opening-keep/you/393x759": {
    "unmatched": 85,
@@ -33,7 +33,7 @@
    "boxes": 13,
    "styles": 41,
    "unsupported": 0,
-   "pixels": 241155
+   "pixels": 217322
   },
   "b3d:pay-default/you/393x759": {
    "unmatched": 59,
@@ -117,7 +117,7 @@
    "boxes": 0,
    "styles": 0,
    "unsupported": 0,
-   "pixels": 1917724
+   "pixels": 1973830
   },
   "b3d:screen/table/you/393x759": {
    "unmatched": 42,

@@ -23,6 +23,7 @@ mod out;
 mod placement;
 mod places;
 mod room;
+mod settle;
 mod still;
 mod tracks;
 
@@ -108,6 +109,9 @@ pub(crate) struct Motion<'a> {
     affected: Vec<usize>,
     /// Old members that have no resting place after the step.
     removed: Vec<ObjectId>,
+    /// The cards that moved a little within their pile and took no segment for it, each with
+    /// where it lay before (`settle`).
+    settled: Vec<(usize, Pose)>,
     pub tracks: Vec<Track>,
     /// One track for each ability that moves, sorted by number.
     pub ability_tracks: Vec<(u32, Track)>,
@@ -187,6 +191,7 @@ impl<'a> Motion<'a> {
             marks: Vec::new(),
             affected: Vec::new(),
             removed: Vec::new(),
+            settled: Vec::new(),
             tracks,
             ability_tracks: Vec::new(),
             moved: Vec::new(),
@@ -558,28 +563,27 @@ impl<'a> Motion<'a> {
             return;
         }
         let (segment, cause) = match (before, after) {
-            (Some(before), Some(after)) => {
+            (Some(&before), Some(&after)) => {
                 if still && before == after {
                     return;
                 }
                 let room = regroup.unwrap_or(room);
                 let track = self.tracks.get_mut(slot);
-                if retarget(track, &mut self.segments, slot, room.from, before, after) {
+                if retarget(track, &mut self.segments, slot, room.from, &before, &after) {
                     return;
                 }
-                let from = self
-                    .tracks
-                    .get(slot)
-                    .filter(|track| !track.segments().is_empty())
-                    .map_or(*before, |track| track.pose_at(room.from));
+                if self.settles(slot) {
+                    return;
+                }
+                let from = self.placed(slot, room.from).unwrap_or(before);
                 // A change in draw height alone does not count towards the beat's duration.
-                if only_height(from, *after) {
+                if only_height(from, after) {
                     (
-                        verbs::instant(from, *after, room.from),
+                        verbs::instant(from, after, room.from),
                         Cause::Change(number),
                     )
                 } else {
-                    (verbs::slide(from, *after, room), Cause::Slide(number))
+                    (verbs::slide(from, after, room), Cause::Slide(number))
                 }
             }
             (Some(_), None) => {
@@ -682,16 +686,16 @@ impl<'a> Motion<'a> {
     }
 
     /// Where the object in `slot` is at `t` as the steps so far have it: on its track, or where
-    /// it rested before the script if nothing has moved it; `None` if it has no scene object.
+    /// it rested before the script if nothing has moved it (where it lay in its pile, for a card
+    /// that only settled there: `settle`); `None` if it has no scene object.
     fn placed(&self, slot: usize, t: u64) -> Option<Pose> {
         match self.tracks.get(slot).filter(|t| !t.segments().is_empty()) {
             Some(track) => Some(track.pose_at(t)),
-            None => self
-                .rests
-                .rests
-                .get(slot)
-                .and_then(Option::as_ref)
-                .map(|rest| rest.pose),
+            None => self.settled_pose(slot).or_else(|| {
+                (self.rests.rests.get(slot))
+                    .and_then(Option::as_ref)
+                    .map(|rest| rest.pose)
+            }),
         }
     }
 

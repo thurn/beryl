@@ -7,15 +7,16 @@ use std::time::Instant;
 use beryl_inspect::pages::{Recorded, check_recording, recording};
 use beryl_inspect::{recordings, stress};
 use beryl_protocol::Seat;
-use beryl_protocol::protocol::Side;
+use beryl_protocol::protocol::{Side, ZoneName};
 use beryl_protocol::script::Verb;
 use beryl_scene::agent::tree::line;
 use beryl_scene::agent::{Layout, locate};
 use beryl_scene::driver::{Duration, Moment, Page, TICK};
-use beryl_scene::frame::{Frame, FrameBuilder, Wake};
+use beryl_scene::frame::{Frame, FrameBuilder, Place, Wake};
 use beryl_scene::input::{Input, Insets, Size, Tier};
 use beryl_scene::play::Show;
-use beryl_scene::table::{DESKTOP, Table, Window};
+use beryl_scene::pose::Pose;
+use beryl_scene::table::{DESKTOP, Rest, Table, Window};
 use beryl_scene::{Client, Config};
 
 const SEATS: [Side; 2] = [Side::You, Side::Opponent];
@@ -136,6 +137,22 @@ fn unplaced((name, seat): &(String, Seat)) -> Option<String> {
     (show.unplaced() > 0).then(|| format!("{name} from {seat:?}: {}", show.unplaced()))
 }
 
+/// Whether a card drawn at `pose` lies in the pile `rest` places it in, within the distance a
+/// card may settle there without a segment (`settle` in `beryl_scene`'s `play::step`).
+fn settled_in_pile(rest: &Rest, pose: Option<Pose>) -> bool {
+    let in_pile = matches!(
+        rest.place,
+        Place::Card {
+            zone: ZoneName::Library | ZoneName::Graveyard | ZoneName::Exile,
+            ..
+        }
+    );
+    in_pile
+        && pose.is_some_and(|pose| {
+            pose.rotation == rest.pose.rotation && pose.position.distance(rest.pose.position) <= 2.0
+        })
+}
+
 #[test]
 fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
     for seat in SEATS {
@@ -167,12 +184,19 @@ fn after_each_verbs_zones_script_every_object_rests_at_its_placement() {
             // An object that leaves for a hidden zone ends at that zone's pile and then has no
             // placement; the check after the script covers it.
             for object in &update.view.objects {
-                let Some(rest) = placement.get(object.slot).map(|rest| rest.pose) else {
+                let Some(rest) = placement.get(object.slot) else {
                     continue;
                 };
+                let pose = show.pose(usize::from(object.slot.0), ended);
+                // A card that a step only moved a fraction of a millimetre within its pile, as a
+                // pile on the desktop stands so that its top card stays where the web draws it,
+                // takes no segment and takes its place as the script ends.
+                if settled_in_pile(rest, pose) {
+                    continue;
+                }
                 assert_eq!(
-                    show.pose(usize::from(object.slot.0), ended),
-                    Some(rest),
+                    pose,
+                    Some(rest.pose),
                     "{seat:?} view {}: card #{} ends its script at its placement",
                     index + 1,
                     object.slot.0

@@ -511,6 +511,7 @@
         "land_gap": 12,
         "tapped_gap": 44,
         "permanent_gap": 0.1,
+        "advance": 16,
         "you": {
           "back": 570,
           "lands": 111,
@@ -528,6 +529,22 @@
           "others_x": 998,
           "others_end": 1500,
           "others_width": 110
+        },
+        "piles": {
+          "clearance": 4,
+          "most_thickness": 28,
+          "you": {
+            "width": 80,
+            "x": [36, 151, 266],
+            "y": 772,
+            "base": 13
+          },
+          "opponent": {
+            "width": 82,
+            "x": [1432, 1336, 1240],
+            "y": 8,
+            "spread_down": 0.65
+          }
         }
       }
     },

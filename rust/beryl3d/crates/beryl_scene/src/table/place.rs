@@ -20,7 +20,7 @@ mod under;
 pub(crate) use under::{host_slot, names_host};
 
 use super::hands::{HandFits, hand};
-use super::pile::{PileShown, lay_pile, lay_unseen_exile, pile_base, pile_scale};
+use super::pile::{PileShown, lay_pile, lay_unseen_exile, pile_base, pile_scale, pile_tilt};
 use super::rows::{NameIds, RowWindow, face_up};
 use super::stack::{OnStack, on_stack, place_stack, spells, stack_pose};
 use super::{Camera, Layout, lifted, phone};
@@ -697,11 +697,15 @@ fn lay(
                     placement,
                     objects,
                     side,
-                    (pile_base(layout, camera, side, ZoneName::Graveyard), scale),
+                    (
+                        pile_base(layout, camera, (side, ZoneName::Graveyard), 0),
+                        scale,
+                    ),
                 );
             } else {
-                let at = pile_base(layout, camera, side, zone);
-                lay_pile(placement, objects, (side, zone), (at, scale));
+                let at = pile_base(layout, camera, (side, zone), objects.len());
+                let tilt = pile_tilt(layout, side);
+                lay_pile(placement, objects, (side, zone), (at, scale, tilt));
             }
         }
         Group::Hand(side) => {

@@ -543,6 +543,7 @@ pub fn layout(window: Window) -> Layout {
         phone: Some(stack),
         bands: Some(bands),
         fitted: None,
+        fitted_piles: None,
     }
 }
 

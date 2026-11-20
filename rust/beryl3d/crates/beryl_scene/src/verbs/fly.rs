@@ -26,9 +26,11 @@
 //!   does a card no one can read that an effect puts in a hand from a library, farther.
 //! - An opponent's discard drops along the line from hand to graveyard. Other flights also
 //!   follow a straight line across the table.
-//! - Any straight or bowed flight that would carry its card's centre past the top or right edge
-//!   of the window is bowed down or left on the screen until it does not (`kept_in_window`):
-//!   the opponent's hand and their piles all lie along the top of the window.
+//! - Any straight or bowed flight that would carry its card's centre past the top, bottom or
+//!   right edge of the window is bowed down, up or left on the screen until it does not
+//!   (`kept_in_window`): the opponent's hand and their piles all lie along the top of the
+//!   window, and the viewer's piles reach its bottom edge, so a spell cast from the viewer's
+//!   graveyard, which bows toward the viewer's edge, would dip below it.
 //!
 //! Flights that rise use `verbs.fly.arc` for their height at the middle of the step: every
 //! flight but a card's played or cast from the viewer's hand, a drawn card's or an opponent's
@@ -620,8 +622,8 @@ const LOOKS: u16 = 24;
 /// near either end a bow moves the card hardly at all, and the ends are where the card rests.
 const PUSHED_FROM: f32 = 0.2;
 
-/// `segment`, bowed down or left on the screen as far as it takes for its card's centre to stay
-/// inside the top and right edges of the window's safe area, by half the side of the square the
+/// `segment`, bowed down, up or left on the screen as far as it takes for its card's centre to
+/// stay inside the top, bottom and right edges of the window's safe area, by half the side of the square the
 /// "on screen" check asks to see of a card, so that at least half the card and all that square
 /// are seen, at every moment of its flight but those near its ends. The opponent's hand is held
 /// mostly above the window, and their graveyard, exile and library lie along the top right, so a
@@ -679,20 +681,22 @@ fn kept_in_window(segment: Segment, camera: &Camera) -> Segment {
     // The window's projection is not linear in depth, so a push is measured again after it is
     // made, and made again for what is still short.
     for _ in 0..3 {
-        let (mut down, mut left) = (0.0_f32, 0.0_f32);
+        let (mut down, mut upward, mut left) = (0.0_f32, 0.0_f32, 0.0_f32);
         for &(straight, arch) in &moments[..count] {
             let position = straight + bow.offset * arch;
             let centre = camera.to_screen(position);
             let points = camera.to_screen(position + Vec3::X).x - centre.x;
             let short_down = insets.top + margin - centre.y;
+            let short_up = centre.y - (size.height - insets.bottom - margin);
             let short_left = centre.x - (size.width - insets.right - margin);
             down = down.max(short_down / points / arch);
+            upward = upward.max(short_up / points / arch);
             left = left.max(short_left / points / arch);
         }
-        if down <= 0.0 && left <= 0.0 {
+        if down <= 0.0 && upward <= 0.0 && left <= 0.0 {
             break;
         }
-        bow.offset -= up * down.max(0.0) + right * left.max(0.0);
+        bow.offset += up * (upward.max(0.0) - down.max(0.0)) - right * left.max(0.0);
         pushed = true;
     }
     if pushed { with(bow) } else { segment }

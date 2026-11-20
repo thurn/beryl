@@ -61,11 +61,11 @@
     },
     "verbs-zones": {
       "worst_frame_elements": 558,
-      "total_elements": 507814,
+      "total_elements": 512782,
       "worst_frame_segments": 23,
-      "total_segments": 17317,
+      "total_segments": 17387,
       "worst_frame_records": 130,
-      "total_records": 99924,
+      "total_records": 100671,
       "worst_frame_layout_nodes": 54,
       "total_layout_nodes": 203,
       "worst_frame_text_runs": 29,
@@ -73,7 +73,7 @@
       "worst_frame_draw_calls": 6,
       "worst_frame_upload_bytes": 10400,
       "worst_frame_blended_area": 0.6856,
-      "handle_allocations": 18359,
+      "handle_allocations": 18371,
       "frame_allocations": 0,
       "worst_frame_instructions": 4816173,
       "total_instructions": 222865299,
@@ -94,7 +94,7 @@
       "worst_frame_text_runs": 24,
       "total_text_runs": 27,
       "worst_frame_draw_calls": 5,
-      "worst_frame_upload_bytes": 5360,
+      "worst_frame_upload_bytes": 5600,
       "worst_frame_blended_area": 0.6636,
       "handle_allocations": 2177,
       "frame_allocations": 0,
@@ -106,12 +106,12 @@
       "total_steps": 5
     },
     "stress-verbs": {
-      "worst_frame_elements": 162,
+      "worst_frame_elements": 161,
       "total_elements": 18180,
       "worst_frame_segments": 101,
       "total_segments": 7142,
-      "worst_frame_records": 421,
-      "total_records": 31377,
+      "worst_frame_records": 432,
+      "total_records": 31364,
       "worst_frame_layout_nodes": 46,
       "total_layout_nodes": 52,
       "worst_frame_text_runs": 20,
@@ -119,9 +119,9 @@
       "worst_frame_placed": 1924,
       "total_placed": 2024,
       "worst_frame_draw_calls": 15,
-      "worst_frame_upload_bytes": 34256,
-      "worst_frame_blended_area": 1.7329,
-      "handle_allocations": 2366,
+      "worst_frame_upload_bytes": 35136,
+      "worst_frame_blended_area": 1.7358,
+      "handle_allocations": 2369,
       "frame_allocations": 0,
       "worst_frame_instructions": 3000710,
       "total_instructions": 54872457,
@@ -257,7 +257,7 @@
   },
   "tests": {
     "median_frames": 124,
-    "most_frames": 5988
+    "most_frames": 5989
   },
   "scaling": {
     "stress-1024": {

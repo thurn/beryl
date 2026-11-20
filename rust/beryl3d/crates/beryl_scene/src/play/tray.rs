@@ -106,9 +106,10 @@ impl Show {
     }
 
     /// Hands each card the tray let go over to the script that just started, if the script
-    /// carries it somewhere else, more than half a card's width away: each of its first segments that starts from where it rested before the tray
-    /// held it up starts from where the tray let it go instead, and one that holds it there
-    /// holds it there, so that it waits where it was held up until its own step carries it on.
+    /// carries it somewhere else, more than half a card's width away: each of its first segments
+    /// that starts from where it rested before the tray held it up (`hand_over`) starts from
+    /// where the tray let it go instead, and one that holds it there holds it there, so that it
+    /// waits where it was held up until its own step carries it on.
     /// Writes the script's record again if any card was handed over.
     pub(super) fn hand_over_tray(&mut self) {
         let Some(playing) = &mut self.playing else {
@@ -133,27 +134,16 @@ impl Show {
             }
             handed.push(slot);
             for segment in track.segments_mut() {
-                if segment.from != resting {
+                if !hand_over(segment, &resting, from) {
                     break;
                 }
-                segment.from = from;
-                if segment.to != resting {
-                    break;
-                }
-                segment.to = from;
             }
             for record in
                 (playing.compiled.segments.iter_mut()).filter(|record| record.slot == slot)
             {
-                let segment = &mut record.segment;
-                if segment.from != resting {
+                if !hand_over(&mut record.segment, &resting, from) {
                     break;
                 }
-                segment.from = from;
-                if segment.to != resting {
-                    break;
-                }
-                segment.to = from;
             }
         }
         // Only the first script to start after the tray let its cards go takes them over.
@@ -165,6 +155,33 @@ impl Show {
             self.playing = Some(playing);
         }
     }
+}
+
+/// How far from where a card rested before the tray held it up a segment may start, in
+/// millimetres, and still start from there for `hand_over`. A pile on the desktop stands so that
+/// its top card stays where the web interface draws it (`table::FittedPiles`), so each card that
+/// leaves it moves the cards left in it a fraction of a millimetre, and a step that takes a card
+/// from the pile slides each card still in it that far before its own step carries it off.
+const HANDED_NEAR: f32 = 2.0;
+
+/// Starts `segment` from `from`, where the tray let its card go, if it starts from `resting`,
+/// where the card rested before the tray held it up (within `HANDED_NEAR`), and holds it there
+/// too if it also ends there. Says whether the next segment may start from `resting` as well.
+fn hand_over(segment: &mut crate::pose::Segment, resting: &Pose, from: Pose) -> bool {
+    let near = |pose: &Pose| {
+        pose.position.distance(resting.position) <= HANDED_NEAR
+            && pose.rotation == resting.rotation
+            && (pose.turn - resting.turn).abs() < 1e-3
+    };
+    if !near(&segment.from) {
+        return false;
+    }
+    segment.from = from;
+    if !near(&segment.to) {
+        return false;
+    }
+    segment.to = from;
+    true
 }
 
 /// Where a let-go of the tray's cards that waited for the script answering a closed prompt was

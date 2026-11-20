@@ -1271,11 +1271,13 @@ camera, how game objects are placed in it and how verbs move them.
   it lay. In their place at most fifteen flat records draw the edges of the
   cards beneath as the web interface does: dark rims with light lines, spread to
   the right of the viewer's piles and below the opponent's, each rim under the
-  point of the screen where the web draws it. Each pile with a card has a
-  `Role::Pile` element named as the web interface's `pileName` names it, and its
-  count is a float beside it. The piles stand in the corners of the window where
-  the web interface's `PILES` puts them, at the web's size against a creature,
-  on the point of the table under each.
+  point of the screen where the web draws it, leaning with the pile's cards.
+  Each pile with a card has a `Role::Pile` element named as the web interface's
+  `pileName` names it, and its count is a float beside it. The piles stand in
+  the corners of the window where the web interface's `PILES` puts them. On the
+  desktop each pile's top card lies where the web draws it at any window shape
+  (see "Rows follow the web's stage"); on the phone each pile's bottom card lies
+  on the point of the table under its place.
 
 - **One camera per layout, with a fixed orientation.** The desktop layout and
   the phone layout each have one perspective camera, defined by its pitch, its
@@ -1387,12 +1389,19 @@ flight start exactly where the card was.
   before it, as the hit test needs. The web lines a row's cards up by their tops
   instead, so a tapped card stands about 18 points lower than the web's. The
   lands' row leaves the web's wider `TAPPED_GAP` before its first tapped land.
-  Two parts of the web's placement are not copied yet: an attacker's `ADVANCE`
-  toward the other side, which needs its own animation, and the piles (`PILES`
-  in `ui/src/game/pileLook.ts`), whose size and place also move the cards lifted
-  beside a library, the pile counts and every flight that starts at a pile.
-  Decided on 2026-11-19 instead of refitting the camera: no camera fit could
-  move rows that stood 25 to 80 points off while the hand already matched.
+  An attacking card stands out of its row toward the other side where the web's
+  attacker stands, `ADVANCE` (16 stage pixels) from the row and, when tapped,
+  with its top on the row's top as the web lines it up; it moves there as its
+  tap plays, and a card that starts or stops attacking lays its row out again.
+  The piles are fitted the same way (`web_fit::piles`, from `PILES` and
+  `pileLook` in `ui/src/game/pileLook.ts`): each pile's top card is as wide as
+  the web's and leans back until it is as tall, and the pile stands wherever
+  puts its top card's middle under the web's, however many cards it holds. Near
+  the bottom of the window a card grows taller as it leans back only for a few
+  degrees, until it faces the camera, so a fit never leans a card past that. The
+  cards lifted beside a library and the pile counts follow the pile where it
+  stands. Decided on 2026-11-19 instead of refitting the camera: no camera fit
+  could move rows that stood 25 to 80 points off while the hand already matched.
   Untapped card centres now land within about 3 points of the web's on the
   reference targets. The boxes still differ in width by up to 11 points, since
   the web leans a card by shearing it, which a card in perspective does not do.

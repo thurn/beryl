@@ -1,6 +1,6 @@
 //! Battlefield row placement and the geometry shared by all placements in a window.
 
-use beryl_protocol::protocol::{CardType, ObjectId, ObjectView, RowName, Side};
+use beryl_protocol::protocol::{CardType, Combat, ObjectId, ObjectView, RowName, Side};
 
 use super::{Placement, ROWS, Rest, host_slot, row_index, side_index};
 use crate::agent::hit;
@@ -127,6 +127,10 @@ pub(super) fn battlefield_row(
             // table would lie farther from the camera than the untapped card beside it, and the
             // hit test, which takes the nearer card for the one in front, would let that card
             // cover it.
+            // An attacker stands out of its row toward the other side, where the web's does.
+            if matches!(object.combat, Some(Combat::Attacking { .. })) {
+                pose.position.y += fitted.advance[usize::from(object.tapped)];
+            }
             pose.position.z += fitted.height(pose.position.y);
             pose.rotation = Quat::from_rotation_x(fitted.tilt) * pose.rotation;
         }

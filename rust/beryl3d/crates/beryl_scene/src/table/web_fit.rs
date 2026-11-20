@@ -46,6 +46,13 @@ pub struct FittedRow {
     /// (`FittedRow::height`), so that a card placed later lies over one placed before it,
     /// wherever they overlap.
     pub tilt: f32,
+    /// How far along the table an attacking card's centre moves from the row's line, signed,
+    /// untapped then tapped. The web moves an attacker `ADVANCE` stage pixels toward the other
+    /// side (`permanentRow` in `ui/src/game/battlefield.ts`), and lines a tapped card up with
+    /// the row by its top, where Beryl 3D keeps it centred on the row's line, so a tapped
+    /// attacker moves as far again as makes its centre the web's. Cards that do not attack keep
+    /// to the line, for the hit test's sake (`place::row`): an attacker stands out of its row.
+    pub advance: [f32; 2],
 }
 
 impl FittedRow {
@@ -171,7 +178,13 @@ fn side_rows(stage: &Stage, camera: &Camera, opponent: bool) -> [FittedRow; 3] {
     } else {
         specs!(you)
     };
-    specs.map(|spec| fit_row(stage, camera, &spec))
+    // Toward the other side: up the stage on the viewer's side, down it on the opponent's.
+    let forward = if opponent {
+        data::ADVANCE
+    } else {
+        -data::ADVANCE
+    };
+    specs.map(|spec| fit_row(stage, camera, &spec, forward))
 }
 
 /// `spec` fitted through `camera`. Along a line of the screen, a card's place across the table
@@ -179,7 +192,7 @@ fn side_rows(stage: &Stage, camera: &Camera, opponent: bool) -> [FittedRow; 3] {
 /// in the x of the card it is the centre of: the web's lean moves a card's centre sideways by an
 /// amount linear in its x. So the row's ends, its scale and its gaps follow from where two of its
 /// points land. Its line and its cards' tilt are found by `Stand::fit`.
-fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec) -> FittedRow {
+fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec, forward: f32) -> FittedRow {
     let width = spec.frame * depth_scale(spec.top);
     let height = width / ASPECT;
     let line = stage.on_window(Vec2::new(0.0, spec.top + height / 2.0)).y;
@@ -208,7 +221,7 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec) -> FittedRow {
     let scale = stand.scale;
     // A gap of the web's, against its card's frame, is the same share of a card here.
     let gap = |pixels: f32| CARD_WIDTH * pixels / spec.frame;
-    FittedRow {
+    let mut row = FittedRow {
         area: RowArea {
             y: stand.y,
             left: across(centre_of(spec.start), lift) - CARD_WIDTH * scale / 2.0,
@@ -219,7 +232,19 @@ fn fit_row(stage: &Stage, camera: &Camera, spec: &RowSpec) -> FittedRow {
         gap: gap(spec.gap),
         tapped_gap: gap(spec.tapped_gap),
         tilt: stand.tilt,
-    }
+        advance: [0.0; 2],
+    };
+    // A tapped card's centre lies half the difference of its height and width higher on the
+    // web's stage than an untapped one's, both tops on the row's top.
+    let tapped = forward - (height - width) / 2.0;
+    row.advance = [forward, tapped].map(|pixels| {
+        let goal = line + pixels * stage.scale;
+        let moved = Stand::solve(row.area.y, |y| {
+            camera.to_screen(Vec3::new(0.0, y, row.height(y))).y - goal
+        });
+        moved - row.area.y
+    });
+    row
 }
 
 /// How the cards of a row stand: the line of the table their centres lie over, how far each
@@ -259,15 +284,32 @@ impl Stand {
 
     /// The stand whose untapped card is `height` points tall on screen with its middle on the
     /// screen's line `line`, as the web's upright card is: the tilt found by bisection, the line
-    /// of the table by the secant method, each in turn until both settle.
+    /// of the table by the secant method, each in turn until both settle. A card grows taller on
+    /// screen as it leans back only until it faces the camera, and shorter past that, so the
+    /// bisection looks no further than that tilt. Near the bottom of the window, where the camera
+    /// looks down more steeply, it faces the camera after a small lean, and a card that cannot
+    /// grow as tall as `height` stands at that tilt, as tall as it can be.
     fn fit(self, camera: &Camera, line: f32, height: f32) -> Stand {
         let mut stand = self;
         for _ in 0..4 {
+            let tall = |tilt: f32| {
+                let (top, bottom) = Stand { tilt, ..stand }.untapped(camera, stand.y);
+                bottom - top
+            };
+            // The tallest tilt, by ternary search.
             let (mut low, mut high) = (0.0, MOST_TILT);
+            for _ in 0..32 {
+                let (a, b) = (low + (high - low) / 3.0, high - (high - low) / 3.0);
+                if tall(a) < tall(b) {
+                    low = a;
+                } else {
+                    high = b;
+                }
+            }
+            let (mut low, mut high) = (0.0, f32::midpoint(low, high));
             for _ in 0..24 {
                 let tilt = f32::midpoint(low, high);
-                let (top, bottom) = Stand { tilt, ..stand }.untapped(camera, stand.y);
-                if bottom - top < height {
+                if tall(tilt) < height {
                     low = tilt;
                 } else {
                     high = tilt;
@@ -302,4 +344,94 @@ impl Stand {
 pub(super) fn rows(window: Window, camera: &Camera) -> FittedRows {
     let stage = Stage::of(window);
     [false, true].map(|opponent| side_rows(&stage, camera, opponent))
+}
+
+/// The library, graveyard and exile piles of the desktop layout fitted to a window, so that
+/// each pile's top card lands where the web interface draws it (`pileLook` in
+/// `ui/src/game/pileLook.ts`). The web keeps a pile's top card at its anchor however many cards
+/// the pile holds, so a pile here stands wherever puts its top card's centre under `tops`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FittedPiles {
+    /// The middle of each pile's top card on the window, in logical points: by side, the
+    /// viewer's first, then library, graveyard and exile.
+    pub tops: [[Vec2; 3]; 2],
+    /// How large each side's pile cards are against a card's printed size, the viewer's first.
+    pub scale: [f32; 2],
+    /// How far each side's pile cards lean back from lying flat toward the camera, in radians,
+    /// as a fitted row's do (`FittedRow::tilt`), so that a top card is as tall on screen as the
+    /// web's upright one.
+    pub tilt: [f32; 2],
+}
+
+/// Every pile of the desktop layout fitted to `window` through `camera`. The web draws a pile's
+/// top card as it draws a permanent: upright, shrunk by how far up the stage its anchor lies and
+/// leaned toward the vanishing point by a skew about its top left corner (`PileButton` in
+/// `ui/src/game/Piles.tsx`).
+pub(super) fn piles(window: Window, camera: &Camera) -> FittedPiles {
+    use data::piles;
+    let stage = Stage::of(window);
+    let mut fitted = FittedPiles {
+        tops: [[Vec2::ZERO; 3]; 2],
+        scale: [1.0; 2],
+        tilt: [0.0; 2],
+    };
+    for side in 0..2 {
+        // The anchor's height on the stage, the card's unscaled width, the anchors' x, and how
+        // far the top card lies below its anchor (`PILE_BASE`). The opponent's top cards lie
+        // so that the deepest layer of the thickest pile, which spreads downward, ends
+        // `clearance` above their back row.
+        let (y, frame, xs, base) = if side == 0 {
+            let xs = piles::you::X.to_array();
+            (piles::you::Y, piles::you::WIDTH, xs, piles::you::BASE)
+        } else {
+            let xs = piles::opponent::X.to_array().map(|x| stage.right_held(x));
+            let height = piles::opponent::WIDTH * depth_scale(piles::opponent::Y) / ASPECT;
+            let base = data::opponent::BACK
+                - piles::CLEARANCE
+                - piles::opponent::SPREAD_DOWN * piles::MOST_THICKNESS
+                - piles::opponent::Y
+                - height;
+            (piles::opponent::Y, piles::opponent::WIDTH, xs, base)
+        };
+        let width = frame * depth_scale(y);
+        let height = width / ASPECT;
+        for (zone, x) in xs.into_iter().enumerate() {
+            let middle = x + width / 2.0;
+            let centre = Vec2::new(
+                middle + stage.lean(middle, y) * height / 2.0,
+                y + base + height / 2.0,
+            );
+            fitted.tops[side][zone] = stage.on_window(centre);
+        }
+        let stand = fit_card(
+            camera,
+            fitted.tops[side][0].y,
+            (width * stage.scale, height * stage.scale),
+        );
+        fitted.scale[side] = stand.scale;
+        fitted.tilt[side] = stand.tilt;
+    }
+    fitted
+}
+
+/// The stand of a card whose middle lies on the screen's line `line` and which is `size`
+/// points wide and tall on screen there, as the web's upright card is. Under a camera that is
+/// neither turned nor rolled, how wide and tall a card is on screen does not depend on where
+/// across the table it lies. The scale and the stand depend on each other only a little: a few
+/// rounds settle both.
+fn fit_card(camera: &Camera, line: f32, (width, height): (f32, f32)) -> Stand {
+    let mut stand = Stand {
+        y: camera.on_plane(Vec2::new(0.0, line), 0.0).y,
+        tilt: 0.0,
+        scale: 1.0,
+    };
+    for _ in 0..4 {
+        stand = stand.fit(camera, line, height);
+        let up = stand.lift(CARD_HEIGHT);
+        let half = CARD_WIDTH / 2.0 * stand.scale;
+        let left = camera.to_screen(Vec3::new(-half, stand.y, up)).x;
+        let right = camera.to_screen(Vec3::new(half, stand.y, up)).x;
+        stand.scale *= width / (right - left);
+    }
+    stand.fit(camera, line, height)
 }

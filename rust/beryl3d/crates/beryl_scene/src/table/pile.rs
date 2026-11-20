@@ -13,7 +13,11 @@
 //!   its top card's. The client shows its count as a float beside it (`hud::piles`).
 //! - Where a pile lies is a point of the screen, copied from the web interface's `PILES`
 //!   (`ui/src/game/pileLook.ts`), which keeps each side's piles in their corner of the window
-//!   at any window shape. The pile stands on the point of the table under it.
+//!   at any window shape. On the desktop fitted to a window (`web_fit::piles`), that point is
+//!   where the web draws the middle of the pile's top card, which stays there however many
+//!   cards the pile holds: the pile stands wherever puts its top card under it, and its cards
+//!   are as wide as the web's and lean back toward the camera until they are as tall. Otherwise
+//!   (the phone layout) the pile's bottom card stands on the point of the table under it.
 
 use beryl_protocol::protocol::{ObjectId, ObjectView, Side, ZoneName};
 use glam::{Affine3A, Quat, Vec2, Vec3};
@@ -49,6 +53,11 @@ const SPREAD_CARDS: usize = 12;
 /// The deepest card beneath a pile's top card that the web interface draws.
 const DEEPEST: usize = 63;
 
+/// How far from the point its pile stands on a top card may lie and still lie on the pile, in
+/// millimetres: more than the pile moves as cards join or leave it within one script, and far
+/// less than the cards lifted beside a library lie from it.
+const ON_PILE: f32 = 4.0;
+
 /// One pile as the table shows it at rest.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PileShown {
@@ -60,6 +69,8 @@ pub struct PileShown {
     pub top: Option<ObjectId>,
     /// How large its cards are against a card's printed size.
     pub scale: f32,
+    /// How far its cards lean back from lying flat toward the camera, in radians.
+    pub tilt: f32,
 }
 
 impl PileShown {
@@ -71,6 +82,24 @@ impl PileShown {
         match side {
             Side::You => zone,
             Side::Opponent => 3 + zone,
+        }
+    }
+
+    /// Where the pile's element and count stand, given `top`, where its top card rests: over
+    /// that card while it lies on the pile, and over the place it would lie in while it lies
+    /// beside the pile, as the cards the opponent looks at from the top of a library do
+    /// (`table::lifted`), so that the library's element and count stay over the pile.
+    #[must_use]
+    pub fn shown_top(&self, top: Pose) -> Pose {
+        let layer = self.count.max(1) - 1;
+        let on_pile = layer_pose((self.base, self.scale, self.tilt), layer);
+        if top.position.truncate().distance(self.base) <= ON_PILE {
+            top
+        } else {
+            Pose {
+                turn: top.turn,
+                ..on_pile
+            }
         }
     }
 
@@ -96,10 +125,59 @@ pub fn pile_name(side: Side, zone: ZoneName) -> &'static str {
     }
 }
 
-/// The point of the table `side`'s pile of `zone` stands on, seen through `camera`.
-pub(super) fn pile_base(layout: &Layout, camera: &Camera, side: Side, zone: ZoneName) -> Vec2 {
+/// The point of the table `side`'s pile of `zone` stands on when it holds `count` cards, seen
+/// through `camera`: on the desktop fitted to a window, the point under its top card's middle,
+/// which `Layout::fitted_piles` places on the window at the height that card lies at.
+pub(super) fn pile_base(
+    layout: &Layout,
+    camera: &Camera,
+    (side, zone): (Side, ZoneName),
+    count: usize,
+) -> Vec2 {
     let index = PileShown::index(side, zone);
-    camera.on_table(layout.piles[index / 3][index % 3])
+    let Some(fitted) = layout.fitted_piles else {
+        return camera.on_table(layout.piles[index / 3][index % 3]);
+    };
+    let (scale, tilt) = (pile_scale(layout, side), pile_tilt(layout, side));
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a pile holds a few hundred cards"
+    )]
+    let top = LAYER * (count.max(1) as f32 - 0.5) + lift(scale, tilt);
+    camera
+        .on_plane(fitted.tops[index / 3][index % 3], top)
+        .truncate()
+}
+
+/// How far `side`'s pile cards lean back from lying flat toward the camera, in radians: none
+/// unless the layout is fitted to a window.
+pub(super) fn pile_tilt(layout: &Layout, side: Side) -> f32 {
+    layout.fitted_piles.map_or(0.0, |fitted| {
+        fitted.tilt[usize::from(side == Side::Opponent)]
+    })
+}
+
+/// How far a pile card `scale` times its printed size and leaning back by `tilt` stands above
+/// where it would lie flat, so that its near edge stays where a flat card's lies.
+fn lift(scale: f32, tilt: f32) -> f32 {
+    CARD_HEIGHT / 2.0 * scale * tilt.sin()
+}
+
+/// The pose, face up, of the card `layer` cards above the bottom of a pile that stands on the
+/// point `base` of the table, its cards `scale` times their printed size and leaning back by
+/// `tilt` radians.
+fn layer_pose((base, scale, tilt): (Vec2, f32, f32), layer: usize) -> Pose {
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a pile holds a few hundred cards"
+    )]
+    let height = LAYER * (layer as f32 + 0.5);
+    Pose {
+        position: base.extend(height + lift(scale, tilt)),
+        rotation: Quat::from_rotation_x(tilt),
+        scale,
+        ..Pose::default()
+    }
 }
 
 /// How large `side`'s pile cards are against a card's printed size.
@@ -111,26 +189,21 @@ pub(super) fn pile_scale(layout: &Layout, side: Side) -> f32 {
 }
 
 /// Places a library, graveyard or exile pile, `objects` bottom first, on the point `at` of
-/// the table, its cards `scale` times their printed size: each card one `LAYER` above the last,
-/// and only the top two drawn. A card lies face up where its face is known to the viewer, as a
-/// known top card shows face up on its library (UI Conventions, "Known cards in a library").
+/// the table, its cards `scale` times their printed size and leaning back toward the camera by
+/// `tilt` radians: each card one `LAYER` above the last, and only the top two drawn. A card lies
+/// face up where its face is known to the viewer, as a known top card shows face up on its
+/// library (UI Conventions, "Known cards in a library").
 pub(super) fn lay_pile(
     placement: &mut Placement,
     objects: &[&ObjectView],
     (side, zone): (Side, ZoneName),
-    (at, scale): (Vec2, f32),
+    (at, scale, tilt): (Vec2, f32, f32),
 ) {
     let count = objects.len();
     for (height, object) in objects.iter().enumerate() {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a pile holds a few hundred cards"
-        )]
         let pose = Pose {
-            position: at.extend(LAYER * (height as f32 + 0.5)),
-            scale,
             turn: turn(object),
-            ..Pose::default()
+            ..layer_pose((at, scale, tilt), height)
         };
         let place = Place::Card {
             zone,
@@ -152,6 +225,7 @@ pub(super) fn lay_pile(
         base: at,
         top: objects.last().map(|object| object.slot),
         scale,
+        tilt,
     };
 }
 
@@ -195,6 +269,7 @@ pub(super) fn lay_unseen_exile(
         base: at,
         top: None,
         scale,
+        tilt: 0.0,
     };
 }
 
@@ -218,7 +293,7 @@ impl Table {
         if self.in_box(top) || self.in_tray(top) || !self.lies_in(top, side, zone) {
             return None;
         }
-        let top = self.rest(top)?;
+        let top = pile.shown_top(self.rest(top)?);
         Some((pile.count, self.camera().card_corners(top.transform())))
     }
 
@@ -232,7 +307,7 @@ impl Table {
             let Some((slot, top)) = (pile.top)
                 .map(|top| usize::from(top.0))
                 .filter(|&top| !self.in_box(top))
-                .and_then(|top| Some((top, self.rest(top)?)))
+                .and_then(|top| Some((top, pile.shown_top(self.rest(top)?))))
             else {
                 continue;
             };
@@ -354,7 +429,9 @@ fn write_side(builder: &mut FrameBuilder, camera: &Camera, pile: &PileShown, sid
         clippy::cast_precision_loss,
         reason = "a pile holds a few hundred cards"
     )]
-    let top_height = LAYER * (pile.count as f32 - 0.5);
+    let top_height = LAYER * (pile.count as f32 - 0.5) + lift(pile.scale, pile.tilt);
+    // The rims lean back with the pile's cards (`PileShown::tilt`).
+    let lean = Quat::from_rotation_x(pile.tilt);
     let top = camera.to_screen(pile.base.extend(top_height));
     // The point of the table `height` up that lies under the web's card `depth` beneath the top.
     #[expect(clippy::cast_precision_loss, reason = "depth is at most 63")]
@@ -371,22 +448,22 @@ fn write_side(builder: &mut FrameBuilder, camera: &Camera, pile: &PileShown, sid
     for depth in [2, deepest] {
         let transform = Affine3A::from_scale_rotation_translation(
             Vec3::new(pile.scale, pile.scale, 1.0),
-            Quat::IDENTITY,
+            lean,
             centre(depth, low),
         );
         builder.draw(Band::Opaque, Draw::table(transform, RIM_FILL));
     }
     for edge in edges(side, pile.scale) {
         // The middle of `depth`'s edge, drawn `edge.below` under its card.
-        let on_edge =
-            |depth: usize| at(depth) + edge.normal * edge.half_across - Vec3::Z * edge.below;
+        let normal = lean * edge.normal;
+        let on_edge = |depth: usize| at(depth) + normal * edge.half_across - Vec3::Z * edge.below;
         // The card mesh squeezed to a line lying flat, its middle at `middle`, spanning `across`
         // and the card's length along the edge. The squeezed mesh keeps the card's rounded
         // corners at the line's ends, as the web's border curves into the card's corners. The
         // same mesh as the dark records, rather than a quad, keeps one pile's records in one
         // batch of draw calls.
         let line = |middle: Vec3, across: Vec3| {
-            let along = edge.along * 2.0 * edge.half_along;
+            let along = lean * edge.along * 2.0 * edge.half_along;
             let (x, y) = if edge.along == Vec3::Y {
                 (across, along)
             } else {
@@ -395,7 +472,7 @@ fn write_side(builder: &mut FrameBuilder, camera: &Camera, pile: &PileShown, sid
             let transform = Affine3A::from_cols(
                 (x / CARD_WIDTH).into(),
                 (y / CARD_HEIGHT).into(),
-                Vec3::Z.into(),
+                (lean * Vec3::Z).into(),
                 middle.into(),
             );
             Draw::table(transform, edge.tint)
@@ -405,11 +482,11 @@ fn write_side(builder: &mut FrameBuilder, camera: &Camera, pile: &PileShown, sid
             band_from = deepest.min(SPREAD_CARDS);
             for depth in 2..=band_from {
                 let width = (on_edge(depth) - on_edge(depth - 1))
-                    .dot(edge.normal)
+                    .dot(normal)
                     .clamp(0.0, edge.line);
                 if width > 0.0 {
-                    let middle = on_edge(depth) - edge.normal * width / 2.0;
-                    builder.draw(Band::Opaque, line(middle, edge.normal * width));
+                    let middle = on_edge(depth) - normal * width / 2.0;
+                    builder.draw(Band::Opaque, line(middle, normal * width));
                 }
             }
         }

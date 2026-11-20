@@ -130,7 +130,7 @@
       "recording": "abhorrent-oculus/manifests-dread-on-each-opponents-upkeep-only",
       "at": "870ms",
       "still": false,
-      "shows": "card \"Counterspell\" #10 graveyard.yours 151,795 79x91 moving faded"
+      "shows": "card \"Counterspell\" graveyard.yours moving faded"
     },
     "A batch exile": {
       "recording": "gurmag-angler/paid-with-delve-and-cavern-of-souls-mana",

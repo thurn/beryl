@@ -63,11 +63,14 @@ fn table_of(view: &ViewBuilder) -> Table {
     table
 }
 
-/// The height of the top of the top card of the viewer's library.
+/// The height of the viewer's library: from under its bottom card to the top of its top card.
+/// Its cards lean back toward the camera as far as makes them as tall on screen as the web
+/// interface's, which stands each a little off the table, by the same height for every card.
 fn library_height(table: &Table, view: &ViewBuilder) -> f32 {
-    let top = *view.build().players.you.library.last().expect("a card");
-    let pose = table.rest(usize::from(top.0)).expect("placed");
-    pose.position.z + LAYER / 2.0
+    let library = view.build().players.you.library;
+    let height = |slot: ObjectId| table.rest(usize::from(slot.0)).expect("placed").position.z;
+    let (bottom, top) = (library[0], *library.last().expect("a card"));
+    height(top) - height(bottom) + LAYER
 }
 
 #[test]
@@ -98,15 +101,12 @@ fn a_library_falls_by_one_layer_when_a_card_is_drawn() {
     let top = view.players.you.library.pop().expect("a card");
     view.objects[usize::from(top.0)] = object(top, ZoneName::Hand, Side::You, Some("Island"));
     let mut table = table_of(&full);
-    let before = library_height(&table, &full);
+    let height =
+        |table: &Table, slot: ObjectId| table.rest(usize::from(slot.0)).expect("placed").position.z;
+    let before = height(&table, top);
     table.apply(&view);
     let new_top = *view.players.you.library.last().expect("a card");
-    let after = table
-        .rest(usize::from(new_top.0))
-        .expect("placed")
-        .position
-        .z
-        + LAYER / 2.0;
+    let after = height(&table, new_top);
     assert!(
         (before - after - LAYER).abs() < 1e-4,
         "{before} became {after}"
@@ -172,7 +172,11 @@ fn a_card_taken_from_inside_a_pile_starts_where_it_lay() {
     );
     let mut before = before;
     before.script(ScriptBuilder::reset().build());
-    let lay = table_of(&before)
+    // The show's table is 1440 by 900, and a pile's cards are as large as the web's in the
+    // window: lay the library out in the same window.
+    let mut table = Table::new(DESKTOP, window(1440.0, 900.0));
+    table.apply(&before.build());
+    let lay = table
         .rest(usize::from(slot.0))
         .expect("placed in the library");
     let mut show = show();
@@ -199,8 +203,6 @@ fn a_card_taken_from_inside_a_pile_starts_where_it_lay() {
         .map(|record| record.segment)
         .collect();
     let start: Pose = pose_at(&segments, 0);
-    // The show's table is 1440 by 900; the pile stands on the same point under its anchor,
-    // so compare the heights, which no window changes.
     assert!(
         (start.position.z - lay.position.z).abs() < 1e-4,
         "it starts at the height it lay at: {start:?} against {lay:?}"

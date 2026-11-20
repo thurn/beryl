@@ -192,7 +192,9 @@ pub(crate) fn lay(
                 Side::You => beside,
                 Side::Opponent => -beside,
             } * scale;
-            let at = super::pile::pile_base(layout, camera, side, ZoneName::Library) + beside;
+            // Beside where the library stands now, which follows how many cards it holds.
+            let library = super::PileShown::index(side, ZoneName::Library);
+            let at = placement.piles[library].base + beside;
             Pose {
                 position: at.extend(lift::library::RISE + LAYER * order),
                 scale,
