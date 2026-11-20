@@ -155,7 +155,8 @@ pub fn tips_waiting(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>>
 const LISTED_CHECKS: usize = 20;
 
 /// Files one ticket for each machine running the platform a tip has waited an hour for, or one
-/// saying no such machine is registered. A machine shares its ticket with [`tips_waiting`], so
+/// saying no such machine is registered, or, when the report names families no machine of the
+/// platform runs, one naming those families. A machine shares its ticket with [`tips_waiting`], so
 /// a machine that is silent and needed has one ticket. Each of these tickets is filed released,
 /// since the tip holds `master` back, and so is any ticket still waiting for a person that holds
 /// back one of the checks the tip waits on ([`filing::release_holding`]).
@@ -186,7 +187,32 @@ pub fn tip_waiting(
         .filter(|machine| machine.os == os)
         .collect();
     let working = working_machines(conn, now)?;
-    let filings: Vec<Filing> = if machines.iter().any(|m| working.contains(&m.id)) {
+    let filings: Vec<Filing> = if !report.unrunnable.is_empty() {
+        // No machine of this system is declared to run these families, so the tip can never
+        // verify, however many machines are working. Only a change to `ignite.toml` fixes it.
+        let families = report.unrunnable.join(", ");
+        vec![Filing {
+            signature: Signature::of_subject(&format!("os:{os}:{families}"), "unrunnable"),
+            evidence: report.commit.to_string(),
+            fields: TicketFields {
+                title: Some(format!("No {os} machine runs the families {families}")),
+                body: Some(format!(
+                    "Tip {} waits for checks of the families {families}, which must pass on \
+                     {os}, but no `[machine.*]` with `os = \"{os}\"` in `ignite.toml` lists \
+                     them in its `families`. `master` cannot move until a {os} machine runs \
+                     them: add each family to such a machine's `families`, or drop {os} from \
+                     the family's `platforms`. Machine {} is waiting.\n\nchecks:\n- {listed}",
+                    report.commit, report.machine
+                )),
+                ticket_type: Some(TicketType::Bug),
+                priority: Some(1),
+                labels: Some(labels),
+                ..TicketFields::default()
+            },
+            deps: Vec::new(),
+            released: true,
+        }]
+    } else if machines.iter().any(|m| working.contains(&m.id)) {
         // A machine of this system stored a result within the hour, so it is running the
         // tip's checks and the tip waits only because a round takes long. No worker can fix
         // that by looking at the machine, and filing here refiled the same ticket for every

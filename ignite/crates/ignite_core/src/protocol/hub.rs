@@ -515,7 +515,8 @@ pub struct TipVerified {
 }
 
 /// `POST /tips/waiting`: a tip has waited an hour for checks that only a machine running
-/// `platform` can run. The hub files one P1 ticket naming each such machine.
+/// `platform` can run, or waits on families no such machine runs at all. The hub files one P1
+/// ticket naming each such machine, or one naming the families.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TipWaiting {
     pub commit: Commit,
@@ -526,6 +527,10 @@ pub struct TipWaiting {
     pub checks: Vec<CheckName>,
     /// How long the tips since the last verified commit have waited on `platform`.
     pub waited_s: f64,
+    /// The families of those checks that no `platform` machine declared in `ignite.toml` lists
+    /// in its `families`, so the tip can never verify. Sent at once rather than after an hour.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unrunnable: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

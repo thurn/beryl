@@ -526,6 +526,42 @@ impl Config {
         })
     }
 
+    /// Whether some declared machine can run `family`'s checks: one whose `families` list, when
+    /// it has one, names the family, and which runs `os` when `os` is given. A machine whose
+    /// operating system is not declared counts only when `os` is `None`.
+    pub fn runs_family(&self, os: Option<Os>, family: &str) -> bool {
+        self.machine.values().any(|machine| {
+            os.is_none_or(|os| machine.os == Some(os))
+                && machine
+                    .families
+                    .as_ref()
+                    .is_none_or(|list| list.iter().any(|f| f == family))
+        })
+    }
+
+    /// Each family in `manifest` that no declared machine can run on a platform it must pass
+    /// on, with that platform (`None` for a family that may pass anywhere and that no machine
+    /// runs at all). Tip verification waits for a pass on each platform a family names, so a
+    /// family in this list keeps `master` from moving forever.
+    pub fn unrunnable_families(
+        &self,
+        manifest: &crate::manifest::Manifest,
+    ) -> Vec<(String, Option<Os>)> {
+        let mut missing = Vec::new();
+        for (name, declared) in &manifest.families {
+            let platforms = match &declared.family.platforms {
+                crate::manifest::Platforms::Any(_) => vec![None],
+                crate::manifest::Platforms::Each(list) => list.iter().copied().map(Some).collect(),
+            };
+            for os in platforms {
+                if !self.runs_family(os, name) {
+                    missing.push((name.clone(), os));
+                }
+            }
+        }
+        missing
+    }
+
     /// The `[pool]` table: no empty model ID, and a default owner on a declared machine.
     fn validate_pool(&self) -> Result<(), (String, String)> {
         let fail = |key: &str, message: &str| Err((key.to_owned(), message.to_owned()));

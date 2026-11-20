@@ -29,6 +29,12 @@ seconds = 60
 [machine.local]
 ticket_trees = 1
 landing_trees = 1
+# A Windows machine that runs every family, so checks keyed for Windows wait on a machine that
+# can run them.
+[machine.windows]
+os = "windows"
+ticket_trees = 1
+landing_trees = 1
 "#;
 
 fn commit(text: &str) -> Commit {
@@ -196,7 +202,7 @@ fn two_machines_never_run_the_same_batch() {
     assert!(world.hub.tip_claim(&first).unwrap().granted);
 
     let one = world.verifier().verify(&world.ctx("m-1"), &tip).unwrap();
-    let TipOutcome::Waiting { checks: waiting } = one else {
+    let TipOutcome::Waiting { checks: waiting, .. } = one else {
         panic!("expected m-1 to wait, got {one:?}");
     };
     assert_eq!(waiting.len(), UNMEASURED_BATCH);
@@ -435,7 +441,8 @@ fn a_check_only_another_platform_runs_holds_master_until_it_passes_there() {
     assert_eq!(
         verifier.verify(&ctx, &tip).unwrap(),
         TipOutcome::Waiting {
-            checks: vec![name("unit:a")]
+            checks: vec![name("unit:a")],
+            unrunnable: Vec::new(),
         }
     );
     assert_eq!(world.master(), commit("aaaa000"));

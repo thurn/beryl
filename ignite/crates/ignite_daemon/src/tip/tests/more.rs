@@ -158,7 +158,8 @@ fn a_check_that_stays_incomplete_is_reported_once_and_left_alone_for_an_hour() {
     assert_eq!(
         first,
         TipOutcome::Waiting {
-            checks: vec![name("unit:a")]
+            checks: vec![name("unit:a")],
+            unrunnable: Vec::new(),
         }
     );
     let reports = world.hub.incomplete_reports();
@@ -271,7 +272,8 @@ fn a_family_that_cannot_be_listed_makes_the_tip_wait_and_is_reported_once() {
     assert_eq!(
         outcome,
         TipOutcome::Waiting {
-            checks: vec![name("shots:listing")]
+            checks: vec![name("shots:listing")],
+            unrunnable: Vec::new(),
         }
     );
     // The other family was still run.
@@ -324,7 +326,8 @@ fn a_refused_push_to_master_is_reported_once_and_the_tip_waits() {
     assert_eq!(
         outcome,
         TipOutcome::Waiting {
-            checks: vec![name("tip:move-master")]
+            checks: vec![name("tip:move-master")],
+            unrunnable: Vec::new(),
         }
     );
     let reports = world.hub.incomplete_reports();
@@ -443,4 +446,45 @@ fn checks_with_one_invalid_manifest_entry_are_reported_together() {
         reports[0].output,
         "invalid: crate-closure: the check belongs to no package"
     );
+}
+
+#[test]
+fn a_family_no_machine_of_its_platform_runs_is_reported_at_once() {
+    // The only Windows machine lists its families and leaves out `unit`, so no machine can
+    // ever pass `unit:w` on Windows. Waiting an hour would only hold `master` longer.
+    let world = World::new();
+    let mut ctx = world.ctx("m-1");
+    ctx.config
+        .machine
+        .get_mut("windows")
+        .unwrap()
+        .families = Some(vec!["other".to_owned()]);
+    let tip = commit("bbbb000");
+    world.land(&tip);
+    let mut elsewhere = check("w", 'e');
+    elsewhere.runnable = false;
+    elsewhere.key.platform = Some(Os::Windows);
+    world
+        .work
+        .set_checks(&tip, vec![check("a", 'a'), elsewhere]);
+    let mut verifier = world.verifier();
+
+    let outcome = verifier.verify(&ctx, &tip).unwrap();
+    let TipOutcome::Waiting { unrunnable, .. } = &outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(unrunnable.len(), 1, "{unrunnable:?}");
+    assert!(
+        unrunnable[0].contains("unit") && unrunnable[0].contains("windows"),
+        "{unrunnable:?}"
+    );
+    let reports = world.hub.tips_waiting();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].unrunnable, vec!["unit".to_owned()]);
+    assert_eq!(reports[0].checks, vec![name("unit:w")]);
+
+    // The next round at the same tip says so again but tells the hub only once.
+    verifier.verify(&ctx, &tip).unwrap();
+    assert_eq!(world.hub.tips_waiting().len(), 1);
+    assert_eq!(world.master(), commit("aaaa000"));
 }

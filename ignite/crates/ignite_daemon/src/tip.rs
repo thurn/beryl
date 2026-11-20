@@ -43,13 +43,16 @@
 //!   hold.
 //! - When the tips since the last verified commit have waited [`MACHINE_WAIT_S`] for checks
 //!   only another platform's machines can run, the hub is told once per tip and platform, and
-//!   files a P1 ticket naming those machines. `master` keeps waiting.
+//!   files a P1 ticket naming those machines. `master` keeps waiting. When no machine of that
+//!   platform declared in `ignite.toml` runs a waited check's family at all, the hub is told at
+//!   once, and the round's outcome names the family.
 
 mod cache;
 mod covered;
 mod culprit;
 mod families;
 mod green;
+mod machines;
 mod meter;
 mod report;
 mod revert;
@@ -68,7 +71,7 @@ use std::sync::Arc;
 use ignite_core::config::Os;
 use ignite_core::ids::{CheckName, Commit, Seq, TicketId};
 use ignite_core::protocol::Outcome;
-use ignite_core::protocol::hub::{IncompleteReason, ResultKey, TipState, TipVerified, TipWaiting};
+use ignite_core::protocol::hub::{IncompleteReason, ResultKey, TipState, TipVerified};
 use ignite_core::time::Timestamp;
 use ignite_core::tipround::CulpritSearch;
 use ignite_core::traits::{Push, Result};
@@ -247,7 +250,14 @@ pub enum TipOutcome {
     Verified,
     /// These checks have no result yet: another machine holds their batch, only another
     /// platform can run them, or their run was incomplete. `master` waits.
-    Waiting { checks: Vec<CheckName> },
+    Waiting {
+        checks: Vec<CheckName>,
+        /// One line for each platform and family the tip waits on that no machine declared in
+        /// `ignite.toml` can run there, so it would wait forever. Empty when every waited check
+        /// has a machine.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        unrunnable: Vec<String>,
+    },
     /// These checks failed at the tip. `master` stays where it is.
     Failed { checks: Vec<CheckName> },
     /// A newer tip arrived during the round; the next round verifies it.
@@ -411,13 +421,16 @@ impl TipVerifier {
         self.resting = None;
         match &outcome {
             TipOutcome::Verified | TipOutcome::Failed { .. } => self.settled = Some(tip.clone()),
-            TipOutcome::Waiting { checks } => {
+            TipOutcome::Waiting { checks, unrunnable } => {
                 eprintln!(
                     "ignite: tip {tip} waits for {} checks, first {}; trying again in {} minutes",
                     checks.len(),
                     checks.first().map_or("none", CheckName::as_str),
                     WAITING_RETRY_S / 60.0
                 );
+                for line in unrunnable {
+                    eprintln!("ignite: tip {tip} can never verify: {line}");
+                }
                 self.resting = Some((tip.clone(), now.plus_seconds(WAITING_RETRY_S)));
             }
             TipOutcome::Superseded { .. } => {}
@@ -556,7 +569,8 @@ impl TipVerifier {
 
         let mut failed: Vec<&TipCheck> = Vec::new();
         let mut waiting: Vec<CheckName> = Vec::new();
-        let mut elsewhere: BTreeMap<Os, Vec<CheckName>> = BTreeMap::new();
+        // The checks only another platform's machines can run, with their families.
+        let mut elsewhere: BTreeMap<Os, Vec<(CheckName, String)>> = BTreeMap::new();
         for check in checks.iter().filter(|c| !split.is_after(c)) {
             match verdicts.get(&check.key).map(|v| v.outcome) {
                 Some(Outcome::Pass | Outcome::Flaky) => {}
@@ -564,7 +578,10 @@ impl TipVerifier {
                 Some(Outcome::Incomplete) | None => {
                     waiting.push(check.check.clone());
                     if let (false, Some(os)) = (check.runnable, check.key.platform) {
-                        elsewhere.entry(os).or_default().push(check.check.clone());
+                        elsewhere
+                            .entry(os)
+                            .or_default()
+                            .push((check.check.clone(), check.family.clone()));
                     }
                 }
             }
@@ -572,7 +589,10 @@ impl TipVerifier {
         for missing in &unlisted {
             waiting.push(missing.name.clone());
             for os in &missing.platforms {
-                elsewhere.entry(*os).or_default().push(missing.name.clone());
+                elsewhere
+                    .entry(*os)
+                    .or_default()
+                    .push((missing.name.clone(), missing.family.clone()));
             }
         }
         if !failed.is_empty() {
@@ -600,10 +620,13 @@ impl TipVerifier {
         if !waiting.is_empty() {
             let flagged = self.flag_missing_machines(ctx, tip, elsewhere);
             self.save(ctx);
-            flagged?;
+            let unrunnable = flagged?;
             waiting.sort();
             waiting.dedup();
-            return Ok(TipOutcome::Waiting { checks: waiting });
+            return Ok(TipOutcome::Waiting {
+                checks: waiting,
+                unrunnable,
+            });
         }
         let outcome = self.move_master(ctx, tip)?;
         if outcome == TipOutcome::Verified {
@@ -645,7 +668,10 @@ impl TipVerifier {
             ctx.config.repository.master
         );
         self.report_stuck(ctx, tip, &name, None, &output);
-        TipOutcome::Waiting { checks: vec![name] }
+        TipOutcome::Waiting {
+            checks: vec![name],
+            unrunnable: Vec::new(),
+        }
     }
 
     /// Records `tip` as verified with the hub and clears the waiting state.
@@ -659,38 +685,6 @@ impl TipVerifier {
         self.flagged.clear();
         self.deferred.clear();
         Ok(TipOutcome::Verified)
-    }
-
-    /// Starts the wait for each platform `tip` waits on that no earlier tip was waiting on,
-    /// forgets platforms it no longer waits on, and reports each platform waited on for
-    /// [`MACHINE_WAIT_S`], once per tip.
-    fn flag_missing_machines(
-        &mut self,
-        ctx: &Context,
-        tip: &Commit,
-        elsewhere: BTreeMap<Os, Vec<CheckName>>,
-    ) -> Result<()> {
-        let now = ctx.clock.now();
-        self.waiting_since
-            .retain(|os, _| elsewhere.contains_key(os));
-        for (platform, mut checks) in elsewhere {
-            let since = *self.waiting_since.entry(platform).or_insert(now);
-            let waited_s = now.seconds_since(since);
-            if waited_s < MACHINE_WAIT_S || self.flagged.contains(&(tip.clone(), platform)) {
-                continue;
-            }
-            checks.sort();
-            checks.dedup();
-            ctx.hub.tip_waiting(&TipWaiting {
-                commit: tip.clone(),
-                machine: ctx.machine.clone(),
-                platform,
-                checks,
-                waited_s,
-            })?;
-            self.flagged.insert((tip.clone(), platform));
-        }
-        Ok(())
     }
 }
 

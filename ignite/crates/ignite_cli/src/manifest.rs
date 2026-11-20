@@ -1,6 +1,7 @@
 //! `ignite manifest lint`: checks that every input pattern in the check manifests matches a
-//! tracked file and that every `crate:` names a workspace package. It runs locally, without the
-//! daemon or the hub.
+//! tracked file, that every `crate:` names a workspace package, and that some machine in
+//! `ignite.toml` runs each family on each platform it must pass on. It runs locally, without
+//! the daemon or the hub.
 
 use std::path::Path;
 use std::process::Command;
@@ -33,10 +34,25 @@ fn lint(dir: &Path) -> Result<Reply, String> {
     let tracked = ignite_git::tracked::files(&root).map_err(|e| e.to_string())?;
     let graph = crate_graph(&root, &tracked)?;
     let findings = inputs::lint(&manifest, &graph, &tracked);
-    let lines: Vec<String> = findings.iter().map(ToString::to_string).collect();
+    let mut lines: Vec<String> = findings.iter().map(ToString::to_string).collect();
+    // Tip verification waits for a pass on every platform a family names, so a family that no
+    // declared machine runs on one of them keeps `master` from ever moving.
+    lines.extend(
+        config
+            .unrunnable_families(&manifest)
+            .into_iter()
+            .map(|(family, os)| match os {
+                Some(os) => format!(
+                    "family {family} must pass on {os}, but no {os} machine in {CONFIG_FILE} \
+                     lists it in `families`",
+                    os = os.as_str()
+                ),
+                None => format!("family {family}: no machine in {CONFIG_FILE} runs it"),
+            }),
+    );
     let json = serde_json::json!({ "findings": lines });
     let (exit, text) = if lines.is_empty() {
-        (Exit::Success, "every input pattern matches".to_owned())
+        (Exit::Success, "every input pattern matches and every family has a machine".to_owned())
     } else {
         (Exit::Usage, lines.join("\n"))
     };

@@ -322,6 +322,7 @@ fn a_tip_waiting_on_checks_files_open_and_releases_tickets_holding_them() {
             platform: Os::Windows,
             checks: vec![held],
             waited_s: 3_600.0,
+            unrunnable: Vec::new(),
         },
         clock.now(),
     )
@@ -447,4 +448,39 @@ fn a_ticket_held_by_a_working_session_waits_six_hours() {
             .len(),
         1
     );
+}
+
+#[test]
+fn a_tip_waiting_on_a_family_no_machine_runs_files_a_ticket_naming_it() {
+    use super::filing::UPKEEP;
+    use super::stuck;
+    use ignite_core::config::Os;
+    use ignite_core::ids::{CheckName, Commit, MachineId};
+    use ignite_core::protocol::hub::TipWaiting;
+    let clock = start();
+    let mut conn = hub::open_in_memory().unwrap();
+    let filed = stuck::tip_waiting(
+        &mut conn,
+        UPKEEP,
+        &TipWaiting {
+            commit: Commit::new("abcd").unwrap(),
+            machine: MachineId::new("m-1").unwrap(),
+            platform: Os::Windows,
+            checks: vec![CheckName::new("ignite-platform:wrap").unwrap()],
+            waited_s: 0.0,
+            unrunnable: vec!["ignite-platform".to_owned()],
+        },
+        clock.now(),
+    )
+    .unwrap();
+    assert_eq!(filed.len(), 1);
+    let filed = ticket(&conn, &filed[0].ticket);
+    assert_eq!(filed.status, Status::Open);
+    assert_eq!(filed.priority, 1);
+    assert!(
+        filed.title.contains("windows") && filed.title.contains("ignite-platform"),
+        "{}",
+        filed.title
+    );
+    assert!(filed.body.contains("families"), "{}", filed.body);
 }

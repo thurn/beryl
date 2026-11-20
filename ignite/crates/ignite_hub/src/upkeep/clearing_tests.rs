@@ -401,6 +401,7 @@ fn a_tip_wait_ticket_closes_while_its_machine_runs_checks_though_tips_wait() {
         platform: Os::Macos,
         checks: vec![CheckName::new("app:smoke").unwrap()],
         waited_s: 3_700.0,
+        unrunnable: Vec::new(),
     };
     let filed = stuck::tip_waiting(&mut conn, UPKEEP, &waiting, clock.now()).unwrap();
     assert_eq!(filed.len(), 1);

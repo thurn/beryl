@@ -119,7 +119,8 @@ fn an_incomplete_build_check_keeps_green_where_it_is() {
     assert_eq!(
         outcome,
         TipOutcome::Waiting {
-            checks: vec![name("vet:a")]
+            checks: vec![name("vet:a")],
+            unrunnable: Vec::new(),
         }
     );
     assert!(branches_pushed(&world).is_empty());

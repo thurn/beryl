@@ -679,6 +679,7 @@ fn a_tip_waiting_on_another_platform_names_its_machine_on_one_ticket() {
         platform: Os::Windows,
         checks: vec![CheckName::new("rust:windows_paths").unwrap()],
         waited_s: 3_600.0,
+        unrunnable: Vec::new(),
     };
 
     // With no Windows machine registered, the ticket says so.

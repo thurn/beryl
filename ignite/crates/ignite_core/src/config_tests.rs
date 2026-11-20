@@ -279,3 +279,88 @@ fn the_cli_pool_tables_parse_and_default_to_desktop_mode() {
     let bad_mode = "\n[machine.jarvis.pool.claude]\nmode = \"tui\"\n";
     assert!(Config::parse("ignite.toml", &format!("{DOCUMENT_EXAMPLES}{bad_mode}")).is_err());
 }
+
+/// One family that must pass on macOS and Windows, beside one that may pass anywhere.
+const PLATFORM_FAMILIES: &str = r#"
+[family.platform]
+kind = "regression"
+adapter = "nextest"
+platforms = ["macos", "windows"]
+list = "cargo nextest list"
+run = "cargo nextest run"
+inputs = ["crate-closure"]
+
+[family.rust]
+kind = "regression"
+adapter = "nextest"
+platforms = "any"
+list = "cargo nextest list"
+run = "cargo nextest run"
+inputs = ["crate-closure"]
+"#;
+
+fn platform_manifest() -> crate::manifest::Manifest {
+    crate::manifest::Manifest::from_files(&[(
+        PathBuf::from("checks/rest.toml"),
+        PLATFORM_FAMILIES.to_owned(),
+    )])
+    .unwrap()
+}
+
+#[test]
+fn a_family_no_machine_of_its_platform_runs_is_unrunnable() {
+    // The only Windows machine lists its families and leaves out `platform`, which must pass
+    // on Windows, so tip verification would wait for it forever.
+    let text = DOCUMENT_EXAMPLES.replace("jarvis]\n", "jarvis]\nos = \"macos\"\n");
+    let config = Config::parse("ignite.toml", &text).unwrap();
+    assert_eq!(
+        config.unrunnable_families(&platform_manifest()),
+        vec![("platform".to_owned(), Some(Os::Windows))]
+    );
+
+    let listed = text.replace("\"python\"]", "\"python\", \"platform\"]");
+    let config = Config::parse("ignite.toml", &listed).unwrap();
+    assert!(config.unrunnable_families(&platform_manifest()).is_empty());
+}
+
+#[test]
+fn a_machine_without_a_declared_os_runs_only_families_that_pass_anywhere() {
+    let config = Config::parse("ignite.toml", DOCUMENT_EXAMPLES).unwrap();
+    assert!(config.runs_family(None, "rust"));
+    assert!(!config.runs_family(Some(Os::Macos), "rust"));
+    assert_eq!(
+        config.unrunnable_families(&platform_manifest()),
+        vec![
+            ("platform".to_owned(), Some(Os::Macos)),
+            ("platform".to_owned(), Some(Os::Windows)),
+        ]
+    );
+}
+
+#[test]
+fn every_family_of_the_repository_has_a_machine_on_each_of_its_platforms() {
+    let text = crate::test_files::read_to_string("ignite.toml").unwrap();
+    let config = Config::parse("ignite.toml", &text).unwrap();
+    let dir = &config.repository.checks;
+    let mut paths: Vec<PathBuf> = crate::test_files::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "toml"))
+        .collect();
+    paths.sort();
+    let files: Vec<(PathBuf, String)> = paths
+        .into_iter()
+        .map(|path| {
+            let name = path.file_name().unwrap().to_owned();
+            let text = crate::test_files::read_to_string(dir.join(&name)).unwrap();
+            (path, text)
+        })
+        .collect();
+    let manifest = crate::manifest::Manifest::from_files(&files).unwrap();
+    let missing = config.unrunnable_families(&manifest);
+    assert!(
+        missing.is_empty(),
+        "no machine in ignite.toml can run these families on these platforms; add each family \
+         to the `families` of a `[machine.*]` with that `os`: {missing:?}"
+    );
+}
