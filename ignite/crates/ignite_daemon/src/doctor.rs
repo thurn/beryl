@@ -559,20 +559,28 @@ pub struct DoctorInput<'a> {
     pub version: Option<Commit>,
 }
 
-/// The first word of each command that a family or product runs, when the machine can run it.
+/// The first word of each command that a family the machine can run, or a product such a family
+/// needs, runs. A product that only other families need is never built here, so its tools are
+/// not asked for: a machine that runs no browser family needs no `npm`.
 fn needed_tools(manifest: &Manifest, runnable: &BTreeSet<String>) -> BTreeSet<String> {
     const SHELL_WORDS: &[&str] = &["cd", "export", "set", "echo", "test", "["];
-    let mut commands: Vec<&str> = manifest
-        .products
-        .values()
-        .map(|p| p.build.as_str())
-        .collect();
+    let mut commands: Vec<&str> = Vec::new();
+    let mut products: BTreeSet<&str> = BTreeSet::new();
     for (name, declared) in &manifest.families {
         if runnable.contains(name) {
-            commands.extend(declared.family.run.as_deref());
-            commands.extend(declared.family.list.as_deref());
+            let family = &declared.family;
+            commands.extend(family.run.as_deref());
+            commands.extend(family.list.as_deref());
+            products.extend(family.needs.iter().map(String::as_str));
+            products.extend(family.list_needs.iter().flatten().map(String::as_str));
         }
     }
+    commands.extend(
+        products
+            .into_iter()
+            .filter_map(|name| manifest.products.get(name))
+            .map(|p| p.build.as_str()),
+    );
     commands
         .into_iter()
         .filter_map(|c| c.split_whitespace().next())

@@ -332,6 +332,43 @@ fn low_disk_and_missing_tools_are_reported() {
 }
 
 #[test]
+fn a_product_only_an_unrunnable_family_needs_asks_for_no_tool() {
+    let manifest = Manifest::from_files(&[(
+        PathBuf::from("checks/all.toml"),
+        r#"
+        [product.tests]
+        build = "make tests"
+        inputs = ["src"]
+        outputs = ["target"]
+        [product.deps]
+        build = "npm ci"
+        inputs = ["package.json"]
+        outputs = ["node_modules"]
+        [family.units]
+        kind = "regression"
+        adapter = "nextest"
+        platforms = "any"
+        run = "cargo nextest run"
+        needs = ["tests"]
+        inputs = ["src"]
+        [family.browser]
+        kind = "regression"
+        adapter = "nextest"
+        platforms = ["macos"]
+        run = "cargo nextest run"
+        needs = ["deps"]
+        inputs = ["src"]
+        "#
+        .to_owned(),
+    )])
+    .unwrap();
+    let runnable = BTreeSet::from(["units".to_owned()]);
+    let tools = needed_tools(&manifest, &runnable);
+    assert!(tools.contains("make"), "{tools:?}");
+    assert!(!tools.contains("npm"), "{tools:?}");
+}
+
+#[test]
 fn status_shows_the_sections_its_flags_ask_for() {
     let status = Arc::new(|| sched::Status {
         cores: 10,
