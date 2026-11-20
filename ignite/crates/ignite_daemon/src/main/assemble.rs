@@ -272,6 +272,7 @@ pub fn checking_with(
             manifest: base.manifest.clone(),
             os: base.os,
             families: base.families(),
+            hostname: base.options.hostname.clone(),
             toolchain: toolchain(&base.options.repo),
             outputs: base.home("outputs"),
             cores: per_command,

@@ -119,8 +119,11 @@ fn hang_limit_s(slowest_pass_s: Option<f64>) -> u64 {
 pub struct CheckSettings {
     pub manifest: Manifest,
     pub os: Os,
-    /// The families this machine runs; `None` means every family.
+    /// The families this machine runs; `None` means every family. A tree whose own
+    /// `ignite.toml` declares this machine replaces it (see [`Checks::open`]).
     pub families: Option<Vec<String>>,
+    /// This machine's name in `ignite.toml`, whose `[machine.<name>]` table lists its families.
+    pub hostname: String,
     /// The toolchain version every input hash includes.
     pub toolchain: String,
     /// Where result files of `jsonl` families are written.
@@ -504,6 +507,14 @@ impl Checks {
     /// runs are the tree's, whatever manifests this runner was made with; those stand only for
     /// a tree with no manifest directory. Manifests the tree has but that cannot be parsed are
     /// an error.
+    ///
+    /// Which of those families this machine runs also comes from the tree: from the
+    /// `[machine.<hostname>]` table of the tree's `ignite.toml`, when it has one. The runner's
+    /// own list was read from the main checkout when the daemon started, and the main checkout
+    /// follows `master`. A change that adds a family to this machine's list, made because tip
+    /// verification found no machine to run that family, could then never take effect: `master`
+    /// waits for the family, and the daemon waits for `master`. A tree whose `ignite.toml` does
+    /// not parse keeps the runner's own list.
     pub(crate) fn open(&self, ctx: &Context, tree: &TreeId) -> Result<(Checks, OpenTree)> {
         let path = self
             .trees
@@ -516,6 +527,16 @@ impl Checks {
         let mut settings = self.settings.clone();
         if let Some(own) = own {
             settings.manifest = own;
+        }
+        // An `ignite.toml` the tree has but that does not parse leaves the runner's own list,
+        // as it leaves the daemon's express commands (see `crate::land::express`).
+        match crate::manifests::machine_families(&path, &settings.hostname) {
+            Ok(Some(families)) => settings.families = families,
+            Ok(None) => {}
+            Err(error) => eprintln!(
+                "ignite: the ignite.toml of tree {tree} does not parse, so this machine runs \
+                 the families its daemon read at start: {error}"
+            ),
         }
         let view = Checks {
             settings,

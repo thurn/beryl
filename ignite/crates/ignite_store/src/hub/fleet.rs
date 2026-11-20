@@ -53,6 +53,14 @@ pub fn heartbeat(conn: &mut Connection, heartbeat: &Heartbeat, now: Timestamp) -
     if seen == 0 {
         return Err(StoreError::Invalid(format!("unknown machine {machine}")));
     }
+    if let Some(families) = &heartbeat.families {
+        let families =
+            serde_json::to_string(families).map_err(|e| StoreError::Invalid(e.to_string()))?;
+        tx.execute(
+            "UPDATE machines SET families = ?2 WHERE id = ?1",
+            params![machine, families],
+        )?;
+    }
     // A worker that reports the state it was in keeps the time it entered it.
     let mut since: std::collections::HashMap<String, (String, String)> =
         std::collections::HashMap::new();
@@ -430,6 +438,7 @@ mod tests {
                 worker("local_a", "working", Some("Tq44s.1")),
                 worker("local_b", "idle", None),
             ],
+            families: None,
         };
         heartbeat(&mut conn, &beat, clock.now()).unwrap();
         assert_eq!(workers(&conn, "m-7f3a").unwrap().len(), 2);
@@ -445,6 +454,27 @@ mod tests {
         );
     }
 
+    /// A machine whose `ignite.toml` gained a family reports it on its next heartbeat; a
+    /// heartbeat with no list, from an older daemon, leaves the list the hub holds.
+    #[test]
+    fn a_heartbeat_with_families_replaces_the_registered_list() {
+        let mut conn = hub::open_in_memory().unwrap();
+        let clock = clock();
+        register(&conn, &register_message(), clock.now()).unwrap();
+        let mut beat = Heartbeat {
+            machine: "m-7f3a".parse().unwrap(),
+            version: "d97ed0e".into(),
+            workers: vec![],
+            families: Some(vec!["unit".to_owned(), "platform".to_owned()]),
+        };
+        heartbeat(&mut conn, &beat, clock.now()).unwrap();
+        let reported = r#"["unit","platform"]"#;
+        assert_eq!(machines(&conn).unwrap()[0].families, reported);
+        beat.families = None;
+        heartbeat(&mut conn, &beat, clock.now()).unwrap();
+        assert_eq!(machines(&conn).unwrap()[0].families, reported);
+    }
+
     #[test]
     fn a_heartbeat_from_an_unregistered_machine_is_refused() {
         let mut conn = hub::open_in_memory().unwrap();
@@ -452,6 +482,7 @@ mod tests {
             machine: "m-unknown".parse().unwrap(),
             version: "x".into(),
             workers: vec![],
+            families: None,
         };
         assert!(heartbeat(&mut conn, &beat, clock().now()).is_err());
     }
@@ -528,6 +559,7 @@ mod tests {
             machine: "m-7f3a".parse().unwrap(),
             version: "d97ed0e".into(),
             workers: vec![running, worker("local_2", "idle", None)],
+            families: None,
         };
         heartbeat(&mut conn, &beat, clock.now()).unwrap();
         let stored = workers(&conn, "m-7f3a").unwrap();

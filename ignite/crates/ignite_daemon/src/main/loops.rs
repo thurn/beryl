@@ -172,6 +172,7 @@ impl Parts {
         let reporter = self.reporter.clone();
         let emergencies = self.emergencies.clone();
         let titles = self.titles.clone();
+        let hostname = self.hostname.clone();
         self.start_loop("ignite-sender", SENDER_STALLS_AFTER, move |ticker| {
             // The hub's version from the last heartbeat it answered.
             let hub_version: RefCell<Option<String>> = RefCell::new(None);
@@ -184,6 +185,7 @@ impl Parts {
                     machine: ctx.machine.clone(),
                     version,
                     workers: dispatcher.view().unwrap_or_default(),
+                    families: current_families(&ctx.repo, &hostname),
                 })?;
                 *hub_version.borrow_mut() = Some(reply.hub_version);
                 dispatcher
@@ -653,6 +655,18 @@ fn retry_bind<T>(window: Duration, start: impl Fn() -> std::io::Result<T>) -> Re
     }
 }
 
+/// The families the main checkout's `ignite.toml` lists for this machine now, empty for every
+/// family, for the heartbeat to report: the hub otherwise holds the list the machine registered
+/// with, however its `ignite.toml` changed since. `None`, which leaves the hub's list, when the
+/// file cannot be read or parsed (such as halfway through a merge) or no longer declares the
+/// machine.
+fn current_families(repo: &std::path::Path, hostname: &str) -> Option<Vec<String>> {
+    crate::manifests::machine_families(repo, hostname)
+        .ok()
+        .flatten()
+        .map(Option::unwrap_or_default)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -730,3 +744,4 @@ mod tests {
         assert_eq!(loop_class("ignite-sender"), None);
     }
 }
+

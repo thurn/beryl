@@ -114,6 +114,7 @@ mod tests {
                 machine,
                 version: "bbbbbbb".to_owned(),
                 workers: Vec::new(),
+                families: None,
             },
             Timestamp::EPOCH.plus_seconds(at),
         )

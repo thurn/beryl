@@ -93,6 +93,11 @@ pub struct Heartbeat {
     pub machine: MachineId,
     pub version: String,
     pub workers: Vec<WorkerState>,
+    /// The check families the machine's `ignite.toml` lists for it now, empty for every
+    /// family, which replace the list it registered with. `None` from a daemon that predates
+    /// the field, which leaves the list the hub holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub families: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

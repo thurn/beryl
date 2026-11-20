@@ -10,7 +10,8 @@
 //! the tree's code does not have, or a product built with other arguments than the family that
 //! reads it lists with). The check runner opens every tree with the tree's manifests (see
 //! `crate::checks::Checks::open`), and the build manager reads a product from the tree it builds
-//! in (see `crate::build`).
+//! in (see `crate::build`). Which families this machine runs comes from the tree too, from its
+//! `ignite.toml` ([`machine_families`]).
 //!
 //! The daemon keeps its own copy for what has no tree: which directories a tree reset keeps,
 //! what is prebuilt, the exploration families its idle loop chooses from, and a tree that holds
@@ -121,6 +122,29 @@ pub fn in_tree(root: &Path, checks: &Path) -> Result<Option<Manifest>, String> {
         return Ok(None);
     }
     read_directory(&dir).map(Some)
+}
+
+/// The families that the `ignite.toml` at `root` lists for the machine `hostname`: `None` when
+/// there is no such file or it declares no `[machine.<hostname>]`, and `Some(None)` when it
+/// declares the machine with no `families` list, which means every family. A file that cannot
+/// be read or parsed is an error.
+///
+/// The check runner reads this from each tree it opens, so a tree that adds a family to this
+/// machine runs it there, and the heartbeat reads it from the main checkout, so the hub shows
+/// the list the machine runs now rather than the one it registered with.
+pub fn machine_families(
+    root: &Path,
+    hostname: &str,
+) -> Result<Option<Option<Vec<String>>>, String> {
+    let path = root.join("ignite.toml");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("{}: {error}", path.display())),
+    };
+    let (config, _unknown) = Config::parse_with_unknown(&path.to_string_lossy(), &text)
+        .map_err(|e| e.to_string())?;
+    Ok(config.machine(hostname).map(|machine| machine.families.clone()))
 }
 
 /// Reads the main checkout's manifests again and hands any change to the daemon's components.
