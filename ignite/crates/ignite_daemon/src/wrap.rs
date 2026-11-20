@@ -152,10 +152,16 @@ fn shell_quote(text: &str) -> String {
 }
 
 /// Quotes a path for a batch file. A Windows path cannot hold `"`, but a `%` would start a
-/// variable, so it is doubled.
+/// variable, so it is doubled. A verbatim `\\?\` prefix, which `canonicalize` adds, is dropped
+/// for a drive path because `cmd.exe` cannot run a program through it ("The system cannot
+/// find the path specified", exit code 3).
 #[cfg(windows)]
 fn batch_quote(text: &str) -> String {
-    format!("\"{}\"", text.replace('%', "%%"))
+    let plain = match text.strip_prefix(r"\\?\") {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => rest,
+        _ => text,
+    };
+    format!("\"{}\"", plain.replace('%', "%%"))
 }
 
 /// The hidden `ignite rustc-wrap <rustc> <args...>` subcommand.

@@ -136,3 +136,22 @@ fn cargo_env_points_cargo_at_the_scripts() {
         &Path::new("/s").join(RUNNER_SCRIPT).display().to_string()
     );
 }
+
+/// `canonicalize` gives a verbatim `\\?\` path on Windows, and `cmd.exe` cannot run a program
+/// through one, so the shim script must name the plain drive path.
+#[cfg(windows)]
+#[test]
+fn a_batch_script_names_a_plain_drive_path() {
+    assert_eq!(
+        batch_quote(r"\\?\D:\a b\ignite.exe"),
+        r#""D:\a b\ignite.exe""#
+    );
+    assert_eq!(
+        batch_quote(r"\\?\UNC\host\share\ignite.exe"),
+        r#""\\?\UNC\host\share\ignite.exe""#
+    );
+    assert_eq!(
+        batch_quote(r"C:\100%\ignite.exe"),
+        r#""C:\100%%\ignite.exe""#
+    );
+}
