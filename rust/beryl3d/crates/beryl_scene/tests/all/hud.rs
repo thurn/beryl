@@ -176,24 +176,15 @@ fn lands(lands: usize) -> Input {
 }
 
 #[test]
-fn the_log_folds_to_a_button_when_a_permanent_enters_its_column() {
+fn the_log_is_a_button_until_it_is_opened() {
     let mut client = client();
     client.handle(lands(0));
     let frame = client.frame(0);
-    assert!(has(frame, Role::Text, "You gained 2 life"));
-    assert!(!has(frame, Role::Button, "Show log"));
-
-    // A long row of lands runs from the table's left edge into the log's column.
-    client.handle(lands(14));
-    let frame = client.frame(10_000_000_000);
-    assert!(
-        !has(frame, Role::List, "Game log"),
-        "the folded log is open"
-    );
+    assert!(!has(frame, Role::List, "Game log"), "the log starts open");
     let at = centre(frame, find(frame, Role::Button, "Show log"));
     client.handle(pointer(PointerPhase::Down, at));
     client.handle(pointer(PointerPhase::Up, at));
-    let frame = client.frame(10_100_000_000);
+    let frame = client.frame(100_000_000);
     assert!(has(frame, Role::Button, "Hide log"));
     assert!(has(frame, Role::Text, "You gained 2 life"));
 }

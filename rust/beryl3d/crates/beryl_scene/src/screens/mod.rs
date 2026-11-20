@@ -153,8 +153,6 @@ pub struct ScreenIn<'a> {
     pub lobby: &'a Lobby,
     /// What has happened in the game so far, oldest first (`hud::log`).
     pub log: &'a [LogEntry],
-    /// Whether a permanent reaches into the game log's column, which folds the log to a button.
-    pub log_folded: bool,
     /// Whether the folded game log is open.
     pub log_open: bool,
     /// What the settings sheet's concede button does when pressed.

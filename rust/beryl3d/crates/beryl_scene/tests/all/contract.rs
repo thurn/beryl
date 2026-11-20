@@ -253,7 +253,6 @@ mod milestone_three {
             carried: None,
             lobby: &LOBBY,
             log: &[],
-            log_folded: false,
             log_open: false,
             concede: beryl_scene::screens::Concede::Asks,
             occupied: &beryl_scene::hud::phone::NOTHING,

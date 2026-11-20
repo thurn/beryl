@@ -5,8 +5,9 @@
 //!
 //! - The lines are made as each view arrives (`Logged::take`), from the difference between that
 //!   view and the ones before: its events, and the names of the cards seen so far.
-//! - While a permanent's rectangle reaches into the log's column, the log is folded to an icon
-//!   button at the window's top left, which opens and closes it in its column (`Press::Log`).
+//! - The log is always folded to an icon button at the window's top left, which opens and closes
+//!   it in its column (`Press::Log`), as the stage's `<GameLog folded>` does
+//!   (`ui/src/stage/Chrome.tsx`).
 
 mod lines;
 
@@ -86,12 +87,10 @@ impl Logged {
     }
 }
 
-/// The game log as the client keeps it: its entries, whether a permanent reaches into its
-/// column, which folds it to a button, and whether the folded log is open.
+/// The game log as the client keeps it: its entries and whether the folded log is open.
 #[derive(Clone, Debug, Default)]
 pub struct Log {
     pub logged: Logged,
-    pub folded: bool,
     pub open: bool,
 }
 
@@ -99,72 +98,35 @@ fn depth(undo_depth: u32) -> usize {
     usize::try_from(undo_depth).unwrap_or(usize::MAX)
 }
 
-/// The log's column on the window, in logical points: its left and right edges, its top, and
-/// the bottom of its tallest list.
-#[must_use]
-pub fn column_box() -> (f32, f32, f32, f32) {
-    (
-        LOG_LEFT,
-        LOG_LEFT + size::LOG_WIDTH,
-        LOG_TOP,
-        LOG_TOP + size::LOG_HEIGHT,
-    )
-}
-
-/// Whether a card whose corners on the window are `corners` reaches into the log's column, which
-/// folds the log.
-#[must_use]
-pub fn reaches_column(corners: &[Vec2; 4]) -> bool {
-    let (left, right, top, bottom) = column_box();
-    let (mut low, mut high) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
-    for corner in corners {
-        low = low.min(*corner);
-        high = high.max(*corner);
-    }
-    low.x < right && high.x > left && low.y < bottom && high.y > top
-}
-
-/// What the game screen shows for the log: nothing before a game has a view or while the log is
-/// empty and not folded; its list in its column; or, folded, its button, with the list below it
-/// while it is open.
+/// What the game screen shows for the log: nothing before a game has a view; otherwise its
+/// button, with the list below it while it is open.
 #[must_use]
 pub fn log(input: &ScreenIn) -> Option<Element> {
     input.view?;
     let entries = input.log;
-    let folded = input.log_folded;
-    if !folded && entries.is_empty() {
-        return None;
-    }
-    let shown = !folded || input.log_open;
-    let height = if folded {
-        size::LOG_FOLDED_HEIGHT
+    let name = if input.log_open {
+        "Hide log"
     } else {
-        size::LOG_HEIGHT
+        "Show log"
     };
-    let button = folded.then(|| {
-        let name = if input.log_open {
-            "Hide log"
-        } else {
-            "Show log"
-        };
-        let mut button = icon_button(icons::LOG, name)
-            .selected(input.log_open)
-            .on_press(Press::Log);
-        button.anchor = Some(Anchor::Point(
-            Vec2::new(LOG_LEFT, LOG_BUTTON_TOP),
-            Vec2::ZERO,
-        ));
-        button
-    });
-    let list = (shown && !entries.is_empty()).then(|| {
+    let mut button = icon_button(icons::LOG, name)
+        .selected(input.log_open)
+        .on_press(Press::Log);
+    button.anchor = Some(Anchor::Point(
+        Vec2::new(LOG_LEFT, LOG_BUTTON_TOP),
+        Vec2::ZERO,
+    ));
+    let list = (input.log_open && !entries.is_empty()).then(|| {
         // On the desktop the oldest lines fade out under the list's top edge, as
         // `.game-log-list`'s mask fades them; the phone's sheet has no mask.
-        let mut panel = (panel(entries).width(size::LOG_WIDTH).max_height(height))
-            .mask(crate::tokens::gradient::LOG_MASK);
+        let mut panel = (panel(entries)
+            .width(size::LOG_WIDTH)
+            .max_height(size::LOG_FOLDED_HEIGHT))
+        .mask(crate::tokens::gradient::LOG_MASK);
         panel.anchor = Some(Anchor::Point(Vec2::new(LOG_LEFT, LOG_TOP), Vec2::ZERO));
         panel
     });
-    Some(holder().name("log").children(button).children(list))
+    Some(holder().name("log").child(button).children(list))
 }
 
 /// The log's list of `entries`, oldest first, on its panel, with no size or place of its own:
