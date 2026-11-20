@@ -17,10 +17,10 @@ fixed list of moments instead and gives every difference it finds to one screen 
   visible mark shows (a target picked, a card selected, Auto Pay's suggested ring), so the
   file's `added` table holds moments chosen by hand for those, often a recording's end, and
   `--choose` leaves them as they are.
-- **The areas.** `AREAS` is the table of screen areas, each with the Beryl 3D source it lives
-  in. A Beryl 3D element belongs to the first area that it, or failing that its nearest
-  ancestor, matches (`b3d_areas`). A web element belongs to the area of its nearest paired
-  ancestor, itself included (`web_areas`).
+- **The areas.** `AREAS` is the table of screen areas (arrows, hand, battlefield and so on),
+  each with the Beryl 3D source it lives in. A Beryl 3D element belongs to the first area
+  that it, or failing that its nearest ancestor, matches (`b3d_areas`). A web element
+  belongs to the area of its nearest paired ancestor, itself included (`web_areas`).
 - **The counts.** Each moment is taken as `snapshot` takes it, in the desktop window at scale 2
   from the seat `you`, and measured as `boxes`, `styles` and `pixels` measure it. Each
   differing pixel (`b3d-render pixels`) goes to the area of the topmost Beryl 3D element that
@@ -108,6 +108,10 @@ def region_names(*names: str) -> re.Pattern[str]:
 # A card's printed parts come before the zones, so that a mana cost drawn on a card in hand is
 # part of the card face and the card itself part of the hand.
 AREAS: tuple[Area, ...] = (
+    # Target arrows, source lines, lines of combat and the pointer arrow: each is one element
+    # of role `arrow`, whose light is its own records. (An attacker's wedge and a blocker's
+    # crescent are drawn with their card, so their pixels count in the card's area.)
+    Area("arrows", f"{SCENE}/light", roles=frozenset({"arrow"})),
     Area(
         "card face",
         f"{SCENE}/faces.rs",
@@ -374,8 +378,8 @@ def choose(prefix: str) -> int:
         f"to {PER_RECORDING} of each recording's check times, spread across it, from the "
         f"seat {SEAT} in the window {WINDOW}. `just b3d match census --choose` rewrites it. "
         "`added` holds moments chosen by hand, where a small mark (a target picked, a card "
-        "selected, Auto Pay's suggested ring) shows that no check time catches; `--choose` "
-        "keeps them."
+        "selected, Auto Pay's suggested ring) or a light (an arrow at a target, an attack, a "
+        "block) shows that no check time catches; `--choose` keeps them."
     )
     text = (
         f'{{\n "about": {json.dumps(about)},\n "recordings": {table(held)},\n'

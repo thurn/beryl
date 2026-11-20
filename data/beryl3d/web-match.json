@@ -1,5 +1,19 @@
 {
  "targets": {
+  "b3d:combat-attackers/you/1600x900@2#102500ms": {
+   "unmatched": 350,
+   "boxes": 28,
+   "styles": 15,
+   "unsupported": 0,
+   "pixels": 964317
+  },
+  "b3d:combat-attackers/you/1600x900@2#118000ms": {
+   "unmatched": 342,
+   "boxes": 27,
+   "styles": 19,
+   "unsupported": 0,
+   "pixels": 653782
+  },
   "b3d:game-over/you/1600x900@2": {
    "unmatched": 94,
    "boxes": 2,

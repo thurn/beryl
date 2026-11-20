@@ -114,9 +114,10 @@ through the client with no window or GPU (the `b3d` skill has the details):
   `BERYL3D_SCANS` to an empty directory to see every face drawn.
 - `just b3d compare <name> --at <moment>` writes one PNG with the web
   interface's screenshot of the same moment on the left and `png`'s frame on the
-  right. It exports the recording (`just b3d export <directory> --only <name>`),
-  shoots the page as `just ui-shots` does, and keeps the screenshot, which
-  `--web <png>` reuses.
+  right. Beryl 3D plays at real time (`--no-catch-up`), as the web page does, so
+  both sides show the same moment. It exports the recording
+  (`just b3d export <directory> --only <name>`), shoots the page as
+  `just ui-shots` does, and keeps the screenshot, which `--web <png>` reuses.
 - `just b3d match snapshot <name> --at <moment>` writes both clients' pictures
   and element records (box, paint order, CSS style, lines of text) of the same
   moment, mid-animation too, to `$BERYL_CACHE/b3d/match/<tree>/<target>/`, with
@@ -171,9 +172,9 @@ through the client with no window or GPU (the `b3d` skill has the details):
 - `just b3d match census` measures the moments listed in
   `data/beryl3d/match/census.json` (up to eight of each recording's check times)
   as `boxes`, `styles` and `pixels` do, gives each difference to a screen area
-  (hand, battlefield, stack, prompt, game log, piles, life orbs, steps, card
-  face, cloth, screens) by its Beryl 3D element, and ranks the areas, each with
-  its source directory and its three worst moments. `--areas`,
+  (arrows, hand, battlefield, stack, prompt, game log, piles, life orbs, steps,
+  card face, cloth, screens) by its Beryl 3D element, and ranks the areas, each
+  with its source directory and its three worst moments. `--areas`,
   `--recordings <prefix>` and `--json` narrow and format the report, written to
   `$BERYL_CACHE/b3d/match/census/<digest>/`; `--choose` chooses the moments
   again.

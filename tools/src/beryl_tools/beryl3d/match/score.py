@@ -2,8 +2,9 @@
 target, held to a ratchet so that one agent's fix is not undone by another's (docs/beryl-3d.md,
 "Matching the web interface's look").
 
-For each reference target (reference.py: one desktop and one phone window of every screen kind),
-or each test target whose name starts with the `prefix` given, at its end, it takes the snapshot (snapshot.py) and counts
+For each reference target (reference.py: one desktop and one phone window of every screen kind,
+and a few mid-game moments), one reference target named in full (`<test>#<moment>`), or each
+test target whose name starts with the `prefix` given, at its end, it takes the snapshot (snapshot.py) and counts
 what `boxes`, `styles`, `gaps` and `pixels` find:
 
     unmatched    elements the matcher left unpaired, on either side
@@ -179,7 +180,11 @@ def run(args: argparse.Namespace) -> int:
     prefix = args.prefix
     if prefix and not prefix.startswith("b3d:"):
         prefix = f"b3d:{prefix}"
-    if prefix:
+    # A reference target at a moment of its own is named in full, `<test>#<moment>`.
+    exact = [t for t in reference.targets() if reference.entry_name(t) == prefix]
+    if exact:
+        targets = exact
+    elif prefix:
         targets = snapshot.test_targets(prefix, reference.AT)
         if targets is None:
             return 1
@@ -202,9 +207,9 @@ def run(args: argparse.Namespace) -> int:
     )
     for t, counts in results:
         if counts is None:
-            failed.append(t.test_name())
+            failed.append(reference.entry_name(t))
         else:
-            measured[t.test_name()] = counts
+            measured[reference.entry_name(t)] = counts
     if failed:
         print(
             f"match score: no snapshot or pixels for {', '.join(failed)}",

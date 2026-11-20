@@ -179,6 +179,21 @@ impl Frame {
                     .is_some_and(|&owner| owner != u32::MAX && keep(owner))
             })
             .collect();
+        self.keep_kept(&kept);
+    }
+
+    /// Keeps only the records of a finished frame that `keep` accepts, by their index in
+    /// `draws`, so that the frame draws without the others. The frame's load is left as it
+    /// was. The light test draws each arrow and fight mark's frame without its records this
+    /// way, to see that they changed the picture.
+    pub fn keep_records(&mut self, keep: impl Fn(usize) -> bool) {
+        let kept: Vec<bool> = (0..self.draws.len()).map(keep).collect();
+        self.keep_kept(&kept);
+    }
+
+    /// Keeps the records of `draws` whose entry of `kept` is true, with their sort keys and
+    /// owners, and sets the bands again.
+    fn keep_kept(&mut self, kept: &[bool]) {
         let mut at = 0;
         self.draws.retain(|_| (kept[at], at += 1).0);
         at = 0;

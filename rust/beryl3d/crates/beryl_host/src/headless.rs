@@ -196,6 +196,17 @@ impl Headless {
         self.renderer.read(&self.target)
     }
 
+    /// Draws the present frame with only the records `keep` accepts, by their index in the
+    /// frame's `draws`, and returns its pixels as `pixels` does.
+    pub fn pixels_keeping_records(&mut self, keep: impl Fn(&Frame, usize) -> bool) -> Vec<u8> {
+        self.text();
+        let mut frame = self.page.frame().clone();
+        let wanted: Vec<bool> = (0..frame.draws.len()).map(|at| keep(&frame, at)).collect();
+        frame.keep_records(|at| wanted[at]);
+        self.renderer.render(&frame, &mut self.target);
+        self.renderer.read(&self.target)
+    }
+
     /// Draws the present frame into a PNG file at `path`.
     ///
     /// # Errors

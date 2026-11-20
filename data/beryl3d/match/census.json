@@ -1,5 +1,5 @@
 {
- "about": "The moments `just b3d match census` measures, in milliseconds, by recording: up to 8 of each recording's check times, spread across it, from the seat you in the window 1600x900@2. `just b3d match census --choose` rewrites it. `added` holds moments chosen by hand, where a small mark (a target picked, a card selected, Auto Pay's suggested ring) shows that no check time catches; `--choose` keeps them.",
+ "about": "The moments `just b3d match census` measures, in milliseconds, by recording: up to 8 of each recording's check times, spread across it, from the seat you in the window 1600x900@2. `just b3d match census --choose` rewrites it. `added` holds moments chosen by hand, where a small mark (a target picked, a card selected, Auto Pay's suggested ring) or a light (an arrow at a target, an attack, a block) shows that no check time catches; `--choose` keeps them.",
  "recordings": {
   "screen/start": [0],
   "opening-keep": [635, 1765, 3222, 4519, 5867, 6842, 8330, 9778],
@@ -26,6 +26,8 @@
   "target-own": [800],
   "arrow-spell": [2189],
   "choice-pay": [2183],
-  "attack-token": [2380]
+  "attack-token": [2380],
+  "combat-attackers": [102500, 118000],
+  "combat-blockers": [3900]
  }
 }

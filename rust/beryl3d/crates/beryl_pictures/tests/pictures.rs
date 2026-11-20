@@ -340,3 +340,6 @@ fn a_picture_at_scale_2_draws_what_its_clips_hold() {
         total - background
     );
 }
+
+#[path = "pictures/light.rs"]
+mod light;

@@ -13,7 +13,8 @@ docs/beryl-3d.md), so a session judges a look by reading the two side by side. T
 4. runs `b3d-render compare` with that screenshot as `--web`, which draws the moment and writes
    both pictures into one file under `$BERYL_CACHE/b3d/out`.
 
-The web page shows the view once it is at rest, so for a moment in the middle of an animation
+Beryl 3D plays at real time (`--no-catch-up`), as the web page does, so both sides show the same
+moment of the recording. The web page shows the view once it is at rest, so for a moment in the middle of an animation
 (`--at 1500ms`) the two sides differ by the animation's progress.
 """
 
@@ -199,7 +200,11 @@ def run(args: argparse.Namespace) -> int:
     from . import cli
 
     name, seat, size = target(args)
-    common = ["--seat", seat, "--size", size, "--layout", args.layout]
+    # Beryl 3D plays every script at real time (`--no-catch-up`), as the web page does and as
+    # every `just b3d match` command plays it. With catch-up its side showed a later moment:
+    # at 102500 ms of `combat-attackers` the web had Counterspell on the stack and Beryl 3D
+    # had blockers declared.
+    common = ["--seat", seat, "--size", size, "--layout", args.layout, "--no-catch-up"]
     if args.web:
         return draw(cli, name, common, args, args.web)
     tree = b3d(["tree", name, *common, "--at", args.at])

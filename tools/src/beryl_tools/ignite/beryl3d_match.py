@@ -54,7 +54,7 @@ def relative(file: Path) -> str:
 
 def reproduce(t: Target) -> str:
     """The command that scores `t` again from the live web interface."""
-    return f"just b3d match score {t.test_name()} --fresh"
+    return f"just b3d match score {reference.entry_name(t)} --fresh"
 
 
 def clip(text: str) -> str:
@@ -102,12 +102,12 @@ def match_one(name: str, document: Mapping[str, Any]) -> Result:
             f"{relative(reference.path(t))} is missing; `just b3d match score "
             "--refresh-web` writes it",
         )
-    held = reference.entry(document, t.test_name())
+    held = reference.entry(document, reference.entry_name(t))
     if held is None:
         return Result(
             check,
             "fail",
-            f"{t.test_name()} has no entry in {reference.RATCHET.name}; "
+            f"{reference.entry_name(t)} has no entry in {reference.RATCHET.name}; "
             "`just b3d match score --update --raise` adds it",
         )
     found = Counts(reference.count(web, b3d_records(t)))
@@ -118,10 +118,10 @@ def match_one(name: str, document: Mapping[str, Any]) -> Result:
         check,
         "fail",
         clip(
-            f"{t.test_name()} is further from the web interface than "
+            f"{reference.entry_name(t)} is further from the web interface than "
             f"{reference.RATCHET.name} allows: {', '.join(rose)}. "
             f"`just b3d match boxes {t.test_name()} --at {t.at}` (or `styles`) lists the "
-            f"differences; `just b3d match score {t.test_name()}` measures them."
+            f"differences; `just b3d match score {reference.entry_name(t)}` measures them."
         ),
     )
 
@@ -164,7 +164,7 @@ def next_web_drift() -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     for t in reference.targets():
         file = reference.path(t)
-        held = reference.entry(document, t.test_name())
+        held = reference.entry(document, reference.entry_name(t))
         digest = hashlib.sha256()
         for part in (
             web,
@@ -238,11 +238,13 @@ def drift_one(t: Target, directory: Path, document: Mapping[str, Any]) -> Result
             )
             worst += worst_lines(web, reference.trim(live))
     counts = score.measure(t, directory)
-    held = reference.entry(document, t.test_name())
+    held = reference.entry(document, reference.entry_name(t))
     if counts is None:
         problems.append("the pixel count could not be taken")
     elif held is None:
-        problems.append(f"{t.test_name()} has no entry in {reference.RATCHET.name}")
+        problems.append(
+            f"{reference.entry_name(t)} has no entry in {reference.RATCHET.name}"
+        )
     else:
         rose = Counts(counts).rose(held)
         if rose:
@@ -250,7 +252,7 @@ def drift_one(t: Target, directory: Path, document: Mapping[str, Any]) -> Result
             worst += pixel_lines(t, directory)
     if not problems:
         return Result(check, "pass")
-    lines = [f"{t.test_name()}: {'; '.join(problems)}."]
+    lines = [f"{reference.entry_name(t)}: {'; '.join(problems)}."]
     if worst:
         lines.append(
             "Worst elements (where a line says `web` it means the committed reference, "
@@ -290,7 +292,7 @@ def run_web_drift(checks: Sequence[str]) -> list[Result]:
                 or Result(
                     f"{WEB_DRIFT}:{reference.check_name(t)}",
                     "fail",
-                    f"{t.test_name()}: the snapshot could not be taken. Reproduce: "
+                    f"{reference.entry_name(t)}: the snapshot could not be taken. Reproduce: "
                     f"`{reproduce(t)}`",
                 )
             )

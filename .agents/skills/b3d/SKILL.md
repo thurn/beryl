@@ -109,6 +109,12 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   not hold, but these commands deliver every glyph through a stub atlas, so a
   host that loses glyphs (an atlas page the renderer refused) shows only in a
   picture, or as `missing_glyphs` failing `just b3d app --for`.
+- The interface checks read the element tree, so they pass while an element
+  draws nothing. For light, the `beryl_pictures` test
+  `every_arrow_line_and_fight_mark_the_tree_lists_is_drawn` (in the `b3d-test`
+  check family) draws every arrow, line of combat and attack or block mark with
+  the real renderer, at the check time each first shows in each recording, and
+  fails when the frame drawn without its records is the same.
 - The interface checks judge interactive elements, and the "marks on their
   things" check holds each mark's outline round its card, ability or life total,
   and "text overlaps nothing" keeps text off other text and controls. Of the
@@ -120,8 +126,10 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
   the same moment and compared the two.
   `just b3d compare <recording> --at <moment>` writes both into one PNG: the web
   page shot from the recording's exported fixture on the left, Beryl 3D's frame
-  on the right, at the same window size and `--scale`. The web side shows the
-  moment's view at rest. Write what you compared, and the picture's path, on the
+  on the right, at the same window size and `--scale`. Beryl 3D plays at real
+  time (`--no-catch-up`), as the web page does, so both sides show the same
+  moment; give the same flag to `png` or `tree` to see that frame alone. The web
+  side shows the moment's view at rest. Write what you compared, and the picture's path, on the
   ticket.
 - `just b3d match snapshot <recording> --at <moment>` writes both clients'
   pictures and element records of the same moment, mid-animation too, at scale 2
@@ -201,8 +209,8 @@ catch-up, so its timing at a busy moment can differ from the match's.
 
 1. **Pick the worst area.** `just b3d match census` measures a fixed list of
    moments across many recordings (`data/beryl3d/match/census.json`) and ranks
-   screen areas (hand, battlefield, stack, prompt, game log, piles, life orbs,
-   steps, card face, cloth, screens) by differing pixels, with their box and
+   screen areas (arrows, hand, battlefield, stack, prompt, game log, piles,
+   life orbs, steps, card face, cloth, screens) by differing pixels, with their box and
    style differences, the web values `Style` cannot express, the unpaired
    elements and the Beryl 3D source each area lives in. Each area lists its
    three worst moments with the `just b3d match pixels` command that shows

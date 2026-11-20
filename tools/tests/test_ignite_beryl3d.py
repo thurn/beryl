@@ -464,10 +464,14 @@ def test_web_match_has_a_check_for_each_reference_target() -> None:
         "data/beryl3d/match/web/screen_start_you_393x759.json",
         "rust/cards/a/lea/island.rs",
     ]
+    # A mid-game target is named by its test and its moment, apart from the recording's end.
+    assert "b3d-web-match:combat-attackers/you/1600x900@2#102500ms" in names
     document = reference.load_ratchet()
     for target in reference.targets():
-        assert reference.path(target).is_file(), target.test_name()
-        assert reference.entry(document, target.test_name()) is not None
+        name = reference.entry_name(target)
+        assert reference.path(target).is_file(), name
+        assert reference.entry(document, name) is not None, name
+        assert reference.by_check_name(reference.check_name(target)) == target
 
 
 def test_web_match_fails_only_when_a_count_rises(

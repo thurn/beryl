@@ -3,7 +3,10 @@
 interface's look").
 
 - **The reference targets.** One desktop and one phone window of every screen kind in
-  `data/beryl3d/screens.json`, each at the recording's end, seat `you` and scale 2.
+  `data/beryl3d/screens.json`, each at the recording's end, seat `you` and scale 2, and the
+  mid-game moments of `MOMENTS` in the desktop window. A target at its recording's end is
+  named by its test's name, and one at another moment by its test's name and `#<moment>`
+  (`entry_name`).
 - **The reference.** `data/beryl3d/match/web/<slug>.json` holds the web interface's element
   records of each reference target, trimmed to what the score reads (`trim`) and written one
   element to a line, so that a change to the web interface shows as a short diff. A check that
@@ -56,9 +59,23 @@ WINDOWS = (("desktop", "1600x900@2"), ("phone", "393x759"))
 UNDRAWABLE = {"screen/testing": "a frame of 59467 records, over the renderer's 27728"}
 
 
+# Moments in the middle of a game, which no screen's end shows, each as a recording and a
+# moment played at real time (`--no-catch-up`), held in the desktop window. Arrows and lines of
+# combat show only mid-game, and every arrow once drew nothing while each target at a
+# recording's end still matched.
+MOMENTS: tuple[tuple[str, str], ...] = (
+    # Counterspell on the stack, its arrow at Currency Converter and its line to its source.
+    ("combat-attackers", "102500ms"),
+    # Blockers declared: an attacking token with its wedge, and the line of combat from the
+    # creature that blocks it.
+    ("combat-attackers", "118000ms"),
+)
+
+
 def targets() -> list[Target]:
     """The reference targets: for every screen kind, its recording in the desktop window and in
-    the phone window, as the tests of `just b3d test --list` name them."""
+    the phone window, as the tests of `just b3d test --list` name them, and each of `MOMENTS`
+    in the desktop window."""
     screens = json.loads(SCREENS.read_text())["screens"]
     found: list[Target] = []
     for screen in screens:
@@ -66,21 +83,30 @@ def targets() -> list[Target]:
             continue
         for _, window in WINDOWS:
             found.append(named(f"b3d:{screen['recording']}/you/{window}"))
+    desktop = dict(WINDOWS)["desktop"]
+    for recording, at in MOMENTS:
+        found.append(named(f"b3d:{recording}/you/{desktop}", at))
     return found
 
 
-def named(test: str) -> Target:
-    """The target of the test named `test`, at `AT`."""
+def named(test: str, at: str = AT) -> Target:
+    """The target of the test named `test`, at `at`."""
     return target(
         argparse.Namespace(
-            recording=test, at=AT, seat=None, layout=None, size=None, scale=None
+            recording=test, at=at, seat=None, layout=None, size=None, scale=None
         )
     )
 
 
+def entry_name(t: Target) -> str:
+    """The target's name in the ratchet file: its test's name, with `#<moment>` after it for a
+    target that is not at its recording's end."""
+    return t.test_name() if t.at == AT else f"{t.test_name()}#{t.at}"
+
+
 def check_name(t: Target) -> str:
-    """The target's name as a check names it: its test's name without the `b3d:`."""
-    return t.test_name().removeprefix("b3d:")
+    """The target's name as a check names it: its entry's name without the `b3d:`."""
+    return entry_name(t).removeprefix("b3d:")
 
 
 def by_check_name(name: str) -> Target | None:
