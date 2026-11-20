@@ -370,10 +370,11 @@ fn effect_records(frame: &Frame, size: Size, elements: usize) -> Vec<Value> {
         .collect()
 }
 
-/// The record of `ring`, the mark outline at `z` in paint order, after every element and effect: its box
-/// is the line the outline is drawn along, and its look one `box-shadow` in the mark's color
-/// whose blur reaches as far as the outline's glow, with the opacity the mark has as it comes
-/// and goes. Its parent and object are those of the card, ability or life total it rings.
+/// The record of `ring`, the mark outline at `z` in paint order, after every element and
+/// effect: its box is the line the outline is drawn along, and its look the box shadows it is
+/// drawn with in the mark's color (or one whose blur reaches as far as a sprite outline's glow),
+/// with the opacity the mark has as it comes and goes. Its parent and object are those of the
+/// card, ability or life total it rings.
 fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
     let line = ring_rect(ring, frame.view_projection, size);
     let outer = ring_outer(ring, frame.view_projection, size);
@@ -400,16 +401,39 @@ fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
         Ringed::Player(Side::Opponent) => Value::from("opponent"),
     };
     let [red, green, blue, alpha] = ring.tint;
-    let glow = Shadow {
-        inset: false,
-        x: 0.0,
-        y: 0.0,
-        blur: ((outer.width - line.width) / 2.0).max(0.0),
-        spread: 0.0,
-        color: [red, green, blue, 255],
+    // An outline drawn with the stylesheet's box shadows is recorded with them, their lengths
+    // in points of the window by the box's width on screen; one drawn as a sprite as a single
+    // glow as far as the sprite reaches.
+    let points = if ring.frames > 0.0 {
+        line.width / ring.frames
+    } else {
+        0.0
     };
-    let shadows = (Value::Array(vec![shadow(&glow)]), Value::from("none"));
+    let layers: Vec<Value> = if ring.shadows.is_empty() {
+        vec![shadow(&Shadow {
+            inset: false,
+            x: 0.0,
+            y: 0.0,
+            blur: ((outer.width - line.width) / 2.0).max(0.0),
+            spread: 0.0,
+            color: [red, green, blue, 255],
+        })]
+    } else {
+        (ring.shadows.iter())
+            .map(|layer| {
+                shadow(&Shadow {
+                    blur: layer.blur * points,
+                    spread: layer.spread * points,
+                    color: [red, green, blue, layer.color[3]],
+                    ..*layer
+                })
+            })
+            .collect()
+    };
+    let shadows = (Value::Array(layers), Value::from("none"));
     let images = (Value::from("none"), Value::from("none"), Vec::new());
+    let mut mark_style = style((f32::from(alpha) / 255.0, None), None, shadows, images);
+    mark_style["border-radius"] = round(ring.radius * points);
     json!({
         "key": Value::Null,
         "role": "mark",
@@ -419,7 +443,7 @@ fn mark_record(frame: &Frame, ring: &Ring, size: Size, z: usize) -> Value {
         "box": [round(line.x), round(line.y), round(line.width), round(line.height)],
         "z": z,
         "parent": parent,
-        "style": style((f32::from(alpha) / 255.0, None), None, shadows, images),
+        "style": mark_style,
         "text": [],
     })
 }

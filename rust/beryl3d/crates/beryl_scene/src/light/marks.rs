@@ -3,9 +3,10 @@
 //! `data/ui-conventions.json`, drawn as the web interface draws it (`ui/src/stage/stage.css`,
 //! `.stage-mark-*`):
 //!
-//! - eligible, selected and the two target marks are an outline a little larger than the card
-//!   or ability, in the mark's color, that moves and turns with it;
-//! - suggested is the same outline in the ember color;
+//! - eligible, selected and the two target marks are an outline round the card or ability, in
+//!   the mark's color, that moves and turns with it: the stylesheet's four box shadows (a solid
+//!   ring, two halos and a line inside the edge), each a `BoxShadow` record (`Outline`);
+//! - suggested is a thin line in the ember color a little outside the card;
 //! - paying draws no outline: the permanent turns as it would tap, and a tap symbol lies on its
 //!   middle;
 //! - a mark on a player is the outline round their life total.
@@ -22,10 +23,14 @@ use glam::{Affine3A, Quat, Vec2, Vec3};
 use super::{Lit, MarkSpan, Open, Span};
 use crate::art::orb;
 use crate::data::space::light;
-use crate::frame::{Band, Draw, ElementId, FrameBuilder, Ringed, StateBits, sprites};
+use crate::element::Shadow;
+use crate::frame::{
+    Band, Draw, ElementId, FrameBuilder, Ring, Ringed, StateBits, box_shadow_reach, rows, sprites,
+};
+use crate::layout::shape_radius;
 use crate::play::Scene;
 use crate::pose::{Curve, Pose};
-use crate::table::{ABILITY_IDS, CARD_HEIGHT, Look};
+use crate::table::{ABILITY_IDS, CARD_HEIGHT, CARD_WIDTH, Look};
 use crate::tokens::color;
 
 /// How far through its coming and going an open mark is at `now`, from 0 (not seen) to 1
@@ -113,9 +118,10 @@ fn tint(mark: Mark) -> [u8; 4] {
     }
 }
 
-/// Writes the records of the marks in `lit` as they are at `now`: for each, one quad lying
-/// just over the face of the thing it is on, so that it moves and turns with it. Two marks on
-/// one thing are both drawn, the later begun outside the earlier. A quad over a card lying on
+/// Writes the records of the marks in `lit` as they are at `now`: for each, quads lying just
+/// over the face of the thing it is on, so that they move and turn with it. Two marks on one
+/// card or ability are both drawn over the same box, as the web's are; two on a player are
+/// drawn the later begun outside the earlier. A quad over a card lying on
 /// the table goes in `Band::TableMarks`, which the depth test of the cards drawn opaque before
 /// it covers where another card lies over that one; a quad over anything raised (in flight, in
 /// a hand, on the stack) or on a player goes in `Band::RaisedMarks`, and one over a card held
@@ -169,6 +175,23 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
             builder.draw(band, Draw::glow(transform, tint, sprites::TAP, 0.0));
             continue;
         }
+        if let (Some(outline), Subject::Object { .. } | Subject::Ability { .. }) =
+            (Outline::of(mark), on)
+        {
+            let ring = |model, line, outer| Ring {
+                on: ringed(on),
+                mark,
+                model,
+                line,
+                outer,
+                tint,
+                shadows: outline.shadows,
+                frames: 0.0,
+                radius: outline.radius,
+            };
+            outline.write(band, (&pose, position), reach.half, tint, ring, builder);
+            continue;
+        }
         let half = match on {
             Subject::Player { .. } => player_half(scene, pose.scale),
             Subject::Object { .. } | Subject::Ability { .. } => reach.half,
@@ -186,12 +209,133 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let size = sprites::outline_size(half + Vec2::splat(grow));
         let transform =
             Affine3A::from_scale_rotation_translation(size.extend(1.0), pose.rotation, position);
-        builder.ring(
-            band,
-            ringed(on),
+        let outline = Draw::glow(transform, tint, sprites::OUTLINE, 0.0);
+        builder.ring(Ring {
+            on: ringed(on),
             mark,
-            Draw::glow(transform, tint, sprites::OUTLINE, 0.0),
-        );
+            model: outline.model,
+            line: sprites::OUTLINE_LINE,
+            outer: sprites::OUTLINE_OUTER,
+            tint,
+            shadows: &[],
+            frames: 0.0,
+            radius: 0.0,
+        });
+        builder.draw(band, outline);
+    }
+}
+
+/// One layer of a mark's outline as `ui/src/stage/stage.css` writes it, centred on the box:
+/// blurred by `blur` and grown by `spread`, both in frames (the stylesheet's `--frame`, a
+/// card's width), in white at `opacity` out of 255, which the mark's color tints.
+const fn layer(blur: f32, spread: f32, opacity: u8) -> Shadow {
+    Shadow::new(0.0, 0.0, blur, [255, 255, 255, opacity]).spread(spread)
+}
+
+/// The `box-shadow` of `.stage-mark-eligible` and `.stage-mark-selected`: a solid ring, a halo
+/// at 80%, a wider halo at 45% and a line inside the edge at 90%.
+const LIT: [Shadow; 4] = [
+    layer(0.0, 0.014, 255),
+    layer(0.05, 0.03, 204),
+    layer(0.14, 0.05, 115),
+    layer(0.0, 0.012, 230).inset(),
+];
+
+/// The `box-shadow` of the two target marks, whose halo is wider and fuller than `LIT`'s: a
+/// solid ring, a halo, a wider halo at 70% and a blurred line inside the edge.
+const TARGET: [Shadow; 4] = [
+    layer(0.0, 0.018, 255),
+    layer(0.07, 0.045, 255),
+    layer(0.2, 0.08, 179),
+    layer(0.04, 0.014, 255).inset(),
+];
+
+/// `.stage-mark-suggested`'s solid border of 0.016 frames, as an inset shadow of that spread
+/// inside its box.
+const SUGGESTED: [Shadow; 1] = [layer(0.0, 0.016, 255).inset()];
+
+/// A mark's outline as the web interface's `.stage-mark` element draws it: a box over the card
+/// or ability, `grow` frames larger on every side (the element's negative `inset`), with
+/// corners of `radius` frames, and its CSS box shadows.
+struct Outline {
+    grow: f32,
+    radius: f32,
+    shadows: &'static [Shadow],
+}
+
+impl Outline {
+    /// The outline of `mark`, or none for `paying`, which draws a symbol and no outline.
+    fn of(mark: Mark) -> Option<Self> {
+        let (grow, radius, shadows): (f32, f32, &'static [Shadow]) = match mark {
+            Mark::Eligible | Mark::Selected => (0.0, 0.05, &LIT),
+            Mark::FriendlyTarget | Mark::HostileTarget => (0.0, 0.05, &TARGET),
+            Mark::Suggested => (0.04, 0.08, &SUGGESTED),
+            Mark::Paying => return None,
+        };
+        Some(Self {
+            grow,
+            radius,
+            shadows,
+        })
+    }
+
+    /// Writes one `BoxShadow` record for each of the outline's shadows round the thing `half`
+    /// millimetres across and up from `position`, at `pose`, in the color `tint`, and its ring
+    /// `ring(model, line, outer)`. The records lie in the card's own plane and units, a frame
+    /// being `CARD_WIDTH`, and `pose` turns and scales them with it. The outer shadows come
+    /// first, the inset ones after, each kind last first, as CSS paints them. Allocates
+    /// nothing.
+    fn write(
+        &self,
+        band: Band,
+        (pose, position): (&Pose, Vec3),
+        half: Vec2,
+        tint: [u8; 4],
+        ring: impl Fn([f32; 12], [f32; 2], [f32; 2]) -> Ring,
+        builder: &mut FrameBuilder<'_>,
+    ) {
+        let frame = CARD_WIDTH;
+        let scale = pose.scale.max(f32::EPSILON);
+        let size = 2.0 * (half / scale + Vec2::splat(self.grow * frame));
+        let radius = self.radius * frame;
+        let placed = |quad: Vec2| {
+            Affine3A::from_scale_rotation_translation(
+                (quad * scale).extend(1.0),
+                pose.rotation,
+                position,
+            )
+        };
+        let mut farthest = 0.0_f32;
+        for inset in [false, true] {
+            for layer in self.shadows.iter().rev().filter(|layer| layer.inset == inset) {
+                let [red, green, blue, _] = tint;
+                let opacity = u16::from(layer.color[3]) * u16::from(tint[3]) / 255;
+                let shadow = Shadow {
+                    blur: layer.blur * frame,
+                    spread: layer.spread * frame,
+                    color: [red, green, blue, u8::try_from(opacity).unwrap_or(u8::MAX)],
+                    ..*layer
+                };
+                let reach = box_shadow_reach(&shadow);
+                farthest = farthest.max(reach);
+                let spread = if inset { -shadow.spread } else { shadow.spread };
+                builder.draw(
+                    band,
+                    Draw::box_shadow(
+                        placed(size + Vec2::splat(2.0 * reach)),
+                        shadow.color,
+                        size,
+                        radius,
+                        &shadow,
+                        shape_radius(size, radius, spread),
+                    ),
+                );
+            }
+        }
+        let outer = Vec2::splat(0.5) + Vec2::splat(farthest) / size.max(Vec2::splat(f32::EPSILON));
+        let mut record = ring(rows(placed(size)), [0.5, 0.5], outer.to_array());
+        record.frames = size.x / frame;
+        builder.ring(record);
     }
 }
 

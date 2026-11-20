@@ -4,6 +4,7 @@
 use glam::Vec2;
 
 use super::{ABILITIES, ElementId, Frame, OBJECTS};
+use crate::element::Shadow;
 use beryl_protocol::protocol::Side;
 use beryl_protocol::script::Mark;
 
@@ -24,18 +25,32 @@ pub enum Ringed {
     Player(Side),
 }
 
-/// A mark's outline as the frame draws it: the thing it rings, which mark it is, and the
-/// transform of its record (`Draw::model`), which places the `sprites::OUTLINE` quad in the
-/// table's space.
+/// A mark's outline as the frame draws it: the thing it rings, which mark it is, and where it
+/// lies. `model` places a unit quad (-0.5 to 0.5 across) in the table's space, as a record's
+/// `Draw::model` does: the box the outline is drawn round, the card's own for a card, as the web
+/// interface's `.stage-mark` element is.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ring {
     pub on: Ringed,
     /// Which mark the outline draws, which `just b3d match` names its record by.
     pub mark: Mark,
     pub model: [f32; 12],
-    /// The outline's color and opacity (`Draw::tint`), the opacity falling as the mark comes
-    /// and goes.
+    /// Half the width and height, in the units of `model`'s quad, of the rectangle the
+    /// outline's line runs along.
+    pub line: [f32; 2],
+    /// Half the width and height, in the same units, of the rectangle outside which the
+    /// outline and its glow draw nothing.
+    pub outer: [f32; 2],
+    /// The outline's color and opacity, the opacity falling as the mark comes and goes.
     pub tint: [u8; 4],
+    /// The CSS box shadows the outline is drawn with, their lengths in frames (the web
+    /// interface's `--frame`, a card's width), their colors white at each shadow's own opacity,
+    /// which `tint` colors. Empty for an outline drawn as a sprite (a player's).
+    pub shadows: &'static [Shadow],
+    /// How many frames wide the box `model` places is.
+    pub frames: f32,
+    /// The box's corner radius, in frames.
+    pub radius: f32,
 }
 
 /// A hand card up out of its place in the fan, and the box it has resting there.

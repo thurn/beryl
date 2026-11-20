@@ -16,7 +16,7 @@ use glam::{Mat4, Vec2};
 pub use backdrop::Backdrop;
 pub use draw::{
     Draw, Material, Mesh, RADIAL, SIDE_BOTTOM, SIDE_LEFT, SIDE_RIGHT, SIDE_TOP, Sprite,
-    TextureArray, box_shadow_reach, fixed, gradient_reach, sprites,
+    TextureArray, box_shadow_reach, fixed, gradient_reach, rows, sprites,
 };
 pub use look::{EffectLook, ElementLook, LookPaint, LookShadow, Looks};
 pub use paint::{GRADIENTS, GradientEntry, MaskEntry, PaintTable, Paints};
@@ -645,24 +645,12 @@ impl<'a> FrameBuilder<'a> {
         self.frame.work.records += 1;
     }
 
-    /// Adds the record of the outline of `mark` that rings `on` to `band`, as `draw` does, and
-    /// records it in `Frame::rings` for the checks and the element records.
-    pub fn ring(
-        &mut self,
-        band: Band,
-        on: Ringed,
-        mark: beryl_protocol::script::Mark,
-        outline: Draw,
-    ) {
+    /// Records the outline `ring` in `Frame::rings` for the checks and the element records. Its
+    /// records are drawn apart, with `draw`.
+    pub fn ring(&mut self, ring: Ring) {
         if self.frame.rings.len() < RINGS {
-            self.frame.rings.push(Ring {
-                on,
-                mark,
-                model: outline.model,
-                tint: outline.tint,
-            });
+            self.frame.rings.push(ring);
         }
-        self.draw(band, outline);
     }
 
     /// Starts `sound` in this frame.

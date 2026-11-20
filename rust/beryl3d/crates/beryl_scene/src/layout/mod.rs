@@ -20,6 +20,7 @@ mod pointed;
 mod reconcile;
 mod scroll;
 mod shadows;
+pub(crate) use shadows::shape_radius;
 mod style;
 mod tip;
 mod write;

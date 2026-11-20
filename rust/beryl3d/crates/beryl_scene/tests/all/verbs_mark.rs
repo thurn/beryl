@@ -20,7 +20,7 @@ use beryl_scene::light::marks::band;
 use beryl_scene::play::Show;
 use beryl_scene::play::record::ScriptRecord;
 use beryl_scene::testing::ScriptBuilder;
-use glam::{Vec2, Vec3};
+use glam::Vec3;
 
 const fn card(slot: ObjectId) -> Subject {
     Subject::Object { slot }
@@ -115,17 +115,6 @@ fn quad_point(draw: &Draw, x: f32, y: f32) -> Vec3 {
     )
 }
 
-/// Whether `point` lies inside the convex quadrilateral `corners`, taken in order.
-fn inside(corners: [Vec2; 4], point: Vec2) -> bool {
-    let sides: Vec<f32> = (0..4)
-        .map(|i| {
-            let (a, b) = (corners[i], corners[(i + 1) % 4]);
-            (b - a).perp_dot(point - a)
-        })
-        .collect();
-    sides.iter().all(|side| *side >= 0.0) || sides.iter().all(|side| *side <= 0.0)
-}
-
 #[test]
 fn every_case_of_mark_plays_to_its_place() {
     let (start, cards) = before();
@@ -210,8 +199,11 @@ fn a_card_wears_its_mark_from_the_marks_begin_to_its_end_across_scripts() {
     }
 }
 
+/// A selected card's outline is the stylesheet's four box shadows round the card's own box,
+/// as the web interface's `.stage-mark` element is the card's size, through a flight that turns
+/// and scales the card.
 #[test]
-fn an_outline_encloses_its_card_through_a_flight() {
+fn an_outline_rings_its_card_through_a_flight() {
     let (start, cards) = before();
     let begun = marked(&start, Edge::Begin, Mark::Selected, card(cards.discard));
     let (flown, _) = discard(&begun, cards);
@@ -223,28 +215,32 @@ fn an_outline_encloses_its_card_through_a_flight() {
         .iter()
         .filter(|(t, _)| *t >= from && *t <= to + 20 * MS)
     {
-        let outlines = sprites_of(frame, sprites::OUTLINE.rect);
-        assert_eq!(outlines.len(), 1, "one outline at {} ms", t / MS);
-        // The rectangle the sprite's line runs along, not the whole quad: the quad of a line
-        // drawn at seven tenths of the card's width still held the card.
-        let [x, y] = sprites::OUTLINE_LINE;
-        let outline = [(-x, -y), (x, -y), (x, y), (-x, y)]
-            .map(|(x, y)| camera.to_screen(quad_point(outlines[0], x, y)));
+        let shadows = (frame.draws.iter())
+            .filter(|draw| draw.material == Material::BoxShadow as u8)
+            .count();
+        assert_eq!(shadows, 4, "four box shadows at {} ms", t / MS);
+        assert_eq!(frame.rings.len(), 1, "one outline at {} ms", t / MS);
+        let ring = &frame.rings[0];
+        let m = ring.model;
+        let [x, y] = ring.line;
+        let outline = [(-x, -y), (x, -y), (x, y), (-x, y)].map(|(x, y)| {
+            camera.to_screen(Vec3::new(
+                m[0] * x + m[1] * y + m[3],
+                m[4] * x + m[5] * y + m[7],
+                m[8] * x + m[9] * y + m[11],
+            ))
+        });
         let corners = element(frame, cards.discard).corners;
-        for corner in corners {
-            assert!(
-                inside(outline, corner),
-                "at {} ms the card's corner {corner} is outside its outline {outline:?}",
-                t / MS
-            );
-        }
-        // And close around it: inside the card grown by a fifth about its middle.
-        let middle = corners.iter().copied().sum::<Vec2>() / 4.0;
-        let grown = corners.map(|corner| middle + (corner - middle) * 1.2);
+        // The line runs along the card's edge: each of its corners within a point of one of
+        // the card's.
         for corner in outline {
+            let nearest = (corners.iter())
+                .map(|card| card.distance(corner))
+                .fold(f32::MAX, f32::min);
             assert!(
-                inside(grown, corner),
-                "at {} ms the outline's corner {corner} is far outside its card {corners:?}",
+                nearest < 1.0,
+                "at {} ms the outline's corner {corner} is {nearest} points from the card's \
+                 {corners:?}",
                 t / MS
             );
         }
@@ -306,10 +302,7 @@ fn a_permanent_picked_to_pay_turns_and_wears_a_tap_symbol() {
         .expect("a frame after the mark came up");
     let turned = extent(after);
     assert!(turned.x > turned.y, "paying, it lies turned: {turned}");
-    assert!(
-        sprites_of(after, sprites::OUTLINE.rect).is_empty(),
-        "no outline"
-    );
+    assert!(after.rings.is_empty(), "no outline");
     let taps = sprites_of(after, sprites::TAP.rect);
     assert_eq!(taps.len(), 1, "a tap symbol");
     // The symbol lies over the card's face, which the mark lifts off the table, so that the

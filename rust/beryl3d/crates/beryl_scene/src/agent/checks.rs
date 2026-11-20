@@ -14,7 +14,7 @@ use super::hit::{
 use super::tree::locator_of;
 use crate::data::audit;
 use crate::frame::{
-    Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits, sprites,
+    Draw, Frame, Missing, Place, REVEALED_FACE, Ring, Ringed, Role, StateBits,
 };
 use crate::input::{Rect, Size};
 
@@ -553,14 +553,14 @@ fn ringed_element(frame: &Frame, on: Ringed) -> Option<u32> {
 /// drawn along, through `projection`, in a window of `size`.
 #[must_use]
 pub fn ring_rect(ring: &Ring, projection: glam::Mat4, size: Size) -> Rect {
-    ring_reach(ring, projection, size, sprites::OUTLINE_LINE)
+    ring_reach(ring, projection, size, ring.line)
 }
 
 /// The rectangle on the window, in logical points, outside which `ring`'s outline and its glow
-/// draw nothing (`sprites::OUTLINE_OUTER`), through `projection`, in a window of `size`.
+/// draw nothing (`Ring::outer`), through `projection`, in a window of `size`.
 #[must_use]
 pub fn ring_outer(ring: &Ring, projection: glam::Mat4, size: Size) -> Rect {
-    ring_reach(ring, projection, size, sprites::OUTLINE_OUTER)
+    ring_reach(ring, projection, size, ring.outer)
 }
 
 /// The rectangle on the window that bounds the rectangle `half` across and up from the middle

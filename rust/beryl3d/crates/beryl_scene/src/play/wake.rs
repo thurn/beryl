@@ -6,10 +6,14 @@ use crate::frame::Wake;
 use crate::motion::Track;
 
 impl Show {
-    /// When the next frame is needed: now while a segment, streak, effect, notice, rising or
-    /// falling hand card or row's slide is under way or a script waits to start, at the start of
-    /// the next segment, effect or notice or the end of the script while all holds still, and
-    /// never when nothing plays.
+    /// When the next frame is needed: now while a segment, streak, effect, notice, span's fade,
+    /// rising or falling hand card or row's slide is under way or a script waits to start, at
+    /// the start of the next segment, effect, notice or fade or the end of the script while all
+    /// holds still, and never when nothing plays.
+    ///
+    /// A span's fades count because a prompt begins and ends its marks and arrows itself, in no
+    /// script (`prompts::own`): the eligible marks a priority prompt opens with come up a beat
+    /// after the table rests, and without them the table counted as still before they showed.
     #[must_use]
     pub fn wake(&self, now: u64) -> Wake {
         if self.pointer.moving(now)
@@ -23,7 +27,11 @@ impl Show {
         let effects = (self.effects.iter()).map(|run| (run.start, run.start + run.duration));
         let notices =
             (self.notices.iter()).map(|announced| (announced.over.from, announced.over.to));
-        for (start, end) in effects.chain(notices) {
+        let fades = (self.lit.open().iter())
+            .flat_map(|open| [Some(open.begins), open.ends])
+            .flatten()
+            .map(|over| (over.from, over.to));
+        for (start, end) in effects.chain(notices).chain(fades) {
             if start > now {
                 next = Some(next.map_or(start, |next| next.min(start)));
             } else if now < end {

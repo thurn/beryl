@@ -553,8 +553,9 @@ pub fn fixed(points: f32) -> u16 {
     value
 }
 
-/// `transform` as three rows of four numbers.
-fn rows(transform: Affine3A) -> [f32; 12] {
+/// `transform` as three rows of four numbers, as `Draw::model` holds it.
+#[must_use]
+pub fn rows(transform: Affine3A) -> [f32; 12] {
     let m = transform.matrix3;
     let t = transform.translation;
     [
