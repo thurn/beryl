@@ -307,6 +307,8 @@ struct State {
     /// Hand-offs, messages and checks for CLI slots and sessions, to carry out once the state
     /// is unlocked (see `cli`).
     cli_calls: Vec<cli::Call>,
+    /// The `Begin` calls taken from `cli_calls` that have not finished running (see `cli`).
+    begins_running: Vec<cli::Call>,
     /// The apps in CLI mode at the last step, with their slots (see `cli`).
     cli_layout: Vec<cli::Layout>,
     /// The shared failure in force, if any (see `shared`).

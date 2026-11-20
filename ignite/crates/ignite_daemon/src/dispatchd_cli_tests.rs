@@ -14,7 +14,12 @@ use crate::clid::{FakeCliPool, SessionCheck};
 
 /// Puts `rig`'s Claude app in CLI mode with `slots` slots, through a fake CLI pool.
 pub(super) fn cli(rig: &Rig, slots: u32) -> Arc<FakeCliPool> {
-    let fake = Arc::new(FakeCliPool::default());
+    cli_with(rig, slots, Arc::new(FakeCliPool::default()))
+}
+
+/// [`cli`] through `fake`, which a restarted rig shares with the one before it, as a restarted
+/// daemon finds the slots its CLI pool wrote to the database.
+pub(super) fn cli_with(rig: &Rig, slots: u32, fake: Arc<FakeCliPool>) -> Arc<FakeCliPool> {
     let mut config = rig.ctx.config.clone();
     config.pool.cli.insert(
         "claude".to_owned(),

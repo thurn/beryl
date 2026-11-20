@@ -24,12 +24,21 @@ fn land_t1(rig: &Rig) -> SessionId {
 /// Begins the regression R.1, caused by T.1, on slot 1 with the regression's own model and
 /// effort.
 fn begin_regression(rig: &Rig) -> SessionId {
+    begin_regression_with(rig, "c0de")
+}
+
+/// [`begin_regression`] under the reservation code `code`.
+fn begin_regression_with(rig: &Rig, code: &str) -> SessionId {
     let resume = Resume {
         culprit: ticket(),
         prompt: REGRESSION_PROMPT.to_owned(),
     };
+    let reservation = Reservation {
+        code: code.to_owned(),
+        ..reservation("R.1", 1)
+    };
     rig.daemon
-        .begin(&reservation("R.1", 1), "m-1", Some("low"), Some(&resume))
+        .begin(&reservation, "m-1", Some("low"), Some(&resume))
         .unwrap()
 }
 
@@ -62,7 +71,7 @@ fn a_regression_resumes_the_culprits_transcript_within_24_hours() {
     assert_eq!(row.effort.as_deref(), Some("low"));
     assert_eq!(row.ticket.as_deref(), Some("R.1"));
     // The record is used once: a second regression of the same culprit starts fresh.
-    let other = begin_regression(&rig);
+    let other = begin_regression_with(&rig, "f00d");
     let starts = rig.turns.starts();
     assert_eq!(starts[2].0, other.as_str());
     assert!(!has_resume(&starts[2].2));

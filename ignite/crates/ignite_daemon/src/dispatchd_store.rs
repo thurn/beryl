@@ -12,7 +12,9 @@
 //! restart does not let one claim again, the next instruction ID, the justiciar worker, the
 //! shared failure in force (see `shared`), so a restart does not lift it, and the last tell
 //! delivered for each ticket that is held now, so a restart does not send it again (for a CLI
-//! worker, an old `tell --now` would end its running turn again). An
+//! worker, an old `tell --now` would end its running turn again). The hand-offs to CLI
+//! slots that were queued or running and had not moved their reservation to a new session are
+//! saved too (`cli_begin`), and run again after a restart (see `cli`). An
 //! instruction that was given and not acknowledged is queued again first, so that it is given
 //! again at once. Instruction IDs continue where they were, so an acknowledgement of an old ID
 //! cannot be taken for a new instruction. What is not saved is rebuilt from the hub and the
@@ -37,6 +39,7 @@ const STALL: &str = "stall";
 const RELEASED: &str = "released";
 const TELL: &str = "tell";
 const META: &str = "meta";
+const CLI_BEGIN: &str = "cli_begin";
 
 fn entry(kind: &str, key: &impl ToString, body: &impl Serialize) -> Option<DispatchEntry> {
     Some(DispatchEntry {
@@ -76,6 +79,11 @@ fn entries_of(state: &State) -> Vec<DispatchEntry> {
         if state.held.values().any(|held| held == ticket) {
             entries.extend(entry(TELL, ticket, tell));
         }
+    }
+    let begins = state.begins_running.iter().chain(&state.cli_calls);
+    let begins = begins.filter(|call| matches!(call, super::cli::Call::Begin { .. }));
+    for (index, call) in begins.enumerate() {
+        entries.extend(entry(CLI_BEGIN, &index, call));
     }
     entries.extend(entry(META, &"next_id", &state.next_id));
     if let Some(justiciar) = &state.justiciar {
@@ -134,6 +142,7 @@ pub(super) fn restore(entries: &[DispatchEntry]) -> State {
                     state.tells.insert(ticket, tell);
                 }
             }
+            CLI_BEGIN => state.cli_calls.extend(read::<super::cli::Call>(row)),
             META => match row.key.as_str() {
                 "next_id" => state.next_id = read(row).unwrap_or(0),
                 "justiciar" => state.justiciar = read(row),

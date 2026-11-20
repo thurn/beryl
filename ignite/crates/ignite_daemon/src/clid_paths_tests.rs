@@ -47,8 +47,14 @@ fn hand_offs_racing_each_other_and_the_loop_each_get_a_slot() {
                     let _ = rig.daemon.step();
                 }
             });
+            // Each hand-off is a reservation of its own: one the pool already took returns the
+            // session it started.
             let handing: Vec<_> = (0..HAND_OFFS)
-                .map(|_| scope.spawn(|| rig.try_begin()))
+                .map(|n| {
+                    let reservation = reservation(&format!("T.{}", n + 1), 1);
+                    let daemon = &rig.daemon;
+                    scope.spawn(move || daemon.begin(&reservation, "m-1", Some("high"), None))
+                })
                 .collect();
             let sessions = handing.into_iter().map(|h| h.join().unwrap()).collect();
             stop.store(true, Ordering::Relaxed);

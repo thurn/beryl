@@ -30,10 +30,14 @@ pub struct JusticiarStart {
 
 /// A [`CliPool`] held in memory. `begin` names each new session `cli-<app>-<n>` with `n`
 /// counting from 1 in hexadecimal, padded to 8 digits, and answers `check` with `Idle` for it;
-/// a test sets other answers, slots and holds directly.
+/// a test sets other answers, slots and holds directly. Like the real pool, a `begin` of a
+/// reservation (its ticket and code) that an earlier `begin` took returns that session and
+/// records nothing.
 #[derive(Debug, Default)]
 pub struct FakeCliPool {
     begun: Mutex<Vec<(Reservation, String, Option<String>)>>,
+    /// The session each `begin` started, by the reservation's ticket and code.
+    taken: Mutex<BTreeMap<(String, String), SessionId>>,
     /// The `resume` of each `begin`, in the same order as `begun`.
     resumes: Mutex<Vec<Option<Resume>>>,
     justiciars: Mutex<Vec<JusticiarStart>>,
@@ -126,6 +130,10 @@ impl CliPool for FakeCliPool {
         if let Some(error) = lock(&self.refuse).clone() {
             return Err(Error::Io(error));
         }
+        let key = (reservation.ticket.to_string(), reservation.code.clone());
+        if let Some(session) = lock(&self.taken).get(&key) {
+            return Ok(session.clone());
+        }
         lock(&self.resumes).push(resume.cloned());
         let mut begun = lock(&self.begun);
         begun.push((
@@ -136,6 +144,7 @@ impl CliPool for FakeCliPool {
         let session = SessionId::new(format!("cli-{app}-{:08x}", begun.len()))
             .map_err(|e| Error::Invalid(e.to_string()))?;
         lock(&self.checks).insert(session.clone(), SessionCheck::Idle);
+        lock(&self.taken).insert(key, session.clone());
         Ok(session)
     }
 

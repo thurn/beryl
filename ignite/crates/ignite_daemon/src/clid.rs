@@ -93,7 +93,7 @@ pub const LANDED_KEEP_S: f64 = 24.0 * 3600.0;
 /// it: a regression, or a ticket whose landing was reverted (then `culprit` is the ticket
 /// itself). The first turn resumes that worker's transcript with `prompt` when `culprit` landed
 /// from a slot of the same app in the last 24 hours, and starts fresh otherwise.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Resume {
     pub culprit: TicketId,
     pub prompt: String,
@@ -128,7 +128,8 @@ pub trait CliPool: Send + Sync {
     /// `lane:` chain): creates the slot's row with a new Ignite session, or the same one, and
     /// starts its first turn with the hand-off prompt. With `resume`, a new session's first
     /// turn may resume the culprit's transcript instead (see [`Resume`]). Returns the session,
-    /// which the dispatcher adds to the pool as a single-use worker.
+    /// which the dispatcher adds to the pool as a single-use worker. A reservation (its ticket
+    /// and code) that a slot already took returns that slot's session and starts nothing.
     fn begin(
         &self,
         reservation: &Reservation,
@@ -649,6 +650,7 @@ impl CliPool for CliDaemon {
     /// chain) keeps its session ID and resumes the transcript its last turn named, once its
     /// slot is free. A new session given `resume` resumes the culprit's transcript when it has
     /// one (see `claim`). The dispatcher adds the returned session to the pool.
+    /// A reservation a slot already took is one a restarted dispatcher had not seen begun.
     fn begin(
         &self,
         reservation: &Reservation,
@@ -656,6 +658,11 @@ impl CliPool for CliDaemon {
         effort: Option<&str>,
         resume: Option<&Resume>,
     ) -> Result<SessionId> {
+        let ticket = reservation.ticket.as_str();
+        let taken = self.database(|conn| store::by_reservation(conn, ticket, &reservation.code))?;
+        if let Some(session) = taken.and_then(|row| row.session) {
+            return SessionId::new(session).map_err(|e| Error::Invalid(e.to_string()));
+        }
         let named = &reservation.session;
         let (app, preferred, earlier) = if let Some((app, index)) = placeholder(named) {
             (app, index, None)

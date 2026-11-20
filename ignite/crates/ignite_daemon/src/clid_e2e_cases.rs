@@ -303,3 +303,24 @@ fn cli_e2e_a_clean_end_holding_the_ticket_gets_the_block_text_once_then_releases
     assert_eq!(rig.slot().state, SlotState::Free);
     assert_eq!(rig.invocations(), 2);
 }
+
+#[test]
+fn cli_e2e_a_hand_off_begun_again_after_a_restart_starts_no_second_turn() {
+    let mut rig = Rig::new("rebegin");
+    rig.script(1, HELD);
+    rig.fifo(1);
+    let session = rig.begin();
+    rig.wait_started(1);
+
+    // The dispatcher saves a hand-off before `begin` and its new session after it, so a daemon
+    // that died in between asks again for the same reservation.
+    rig.restart();
+    rig.daemon.recover().unwrap();
+    assert_eq!(rig.try_begin().unwrap(), session);
+    assert_eq!(rig.invocations(), 1, "no second turn started");
+    assert_eq!(rig.daemon.slots("claude").len(), 1);
+
+    rig.open_gate(1);
+    rig.wait_turn(&session, 1);
+    assert_eq!(turns_of(&rig, &session).len(), 1);
+}

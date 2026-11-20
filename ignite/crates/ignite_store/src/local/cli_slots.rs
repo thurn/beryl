@@ -203,6 +203,24 @@ pub fn by_session(conn: &Connection, session: &str) -> Result<Option<CliSlot>> {
     Ok(slot)
 }
 
+/// The slot whose session took the hub's reservation of `ticket` with the one-time code `code`,
+/// if any. A reservation's code is unique to it, so a slot found here already started that
+/// hand-off.
+pub fn by_reservation(conn: &Connection, ticket: &str, code: &str) -> Result<Option<CliSlot>> {
+    let slot = conn
+        .query_row(
+            &format!(
+                "SELECT {} FROM cli_slots WHERE ticket = ?1 AND reservation = ?2 \
+                 AND session IS NOT NULL",
+                columns(CliSlot::COLUMNS)
+            ),
+            params![ticket, code],
+            read_slot,
+        )
+        .optional()?;
+    Ok(slot)
+}
+
 /// Records `turn` as starting and marks the messages `deliver` as carried by it, in one
 /// transaction: the turn's row is inserted, the slot of its session takes its number with the
 /// state `starting` and no pending prompt, and each message not yet delivered gets the turn's
@@ -613,6 +631,10 @@ mod tests {
         assert_eq!(turns(&conn, session).unwrap(), [turn(session, 1)]);
         assert_eq!(list(&conn).unwrap().len(), 1);
         assert!(by_session(&conn, "cli-claude-ffffffff").unwrap().is_none());
+        let taken = by_reservation(&conn, "T.1", "code").unwrap().unwrap();
+        assert_eq!(taken.session.as_deref(), Some(session));
+        assert!(by_reservation(&conn, "T.1", "other").unwrap().is_none());
+        assert!(by_reservation(&conn, "T.2", "code").unwrap().is_none());
     }
 
     fn landed(ticket: &str, at: &str) -> CliLanded {

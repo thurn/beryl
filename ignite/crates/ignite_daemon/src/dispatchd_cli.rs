@@ -61,8 +61,9 @@ pub(super) struct Layout {
     pub(super) offered: bool,
 }
 
-/// Something to ask the [`CliPool`] once the state is unlocked.
-#[derive(Clone, Debug, PartialEq)]
+/// Something to ask the [`CliPool`] once the state is unlocked. A `Begin` is saved with the
+/// dispatcher's queue until it has run (see `store`).
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(super) enum Call {
     /// Start a session for `reserved` in the slot whose placeholder is `slot`, or, when `slot`
     /// is a CLI session (the next ticket of a `lane:` chain), in that session's slot. With
@@ -236,9 +237,35 @@ impl Dispatcher {
 
     /// Carries out the calls queued while the state was locked, and those that carrying them
     /// out queues: the answer to a check can queue a reminder for the same session.
+    ///
+    /// A `Begin` stays in `begins_running`, which is saved, until it has run and moved its
+    /// reservation to the new session. A daemon that dies before then runs it again after its
+    /// restart, and [`CliPool::begin`] returns the session it already started, if it did.
+    ///
+    /// Before the daemon gives the dispatcher its CLI pool, a `Begin` restored from the saved
+    /// queue waits in `cli_calls` until its reservation lapses.
     pub(super) fn run_cli_calls(&self, ctx: &Context) {
         loop {
-            let calls = std::mem::take(&mut self.state().cli_calls);
+            let calls = {
+                let mut state = self.state();
+                let mut calls = std::mem::take(&mut state.cli_calls);
+                if self.cli.get().is_none() {
+                    let now = ctx.clock.now();
+                    let (begins, rest): (Vec<Call>, Vec<Call>) = calls
+                        .into_iter()
+                        .partition(|c| matches!(c, Call::Begin { .. }));
+                    state.cli_calls = begins
+                        .into_iter()
+                        .filter(|c| {
+                            matches!(c, Call::Begin { reserved, .. } if reserved.expires_at > now)
+                        })
+                        .collect();
+                    calls = rest;
+                }
+                let begins = calls.iter().filter(|c| matches!(c, Call::Begin { .. }));
+                state.begins_running.extend(begins.cloned());
+                calls
+            };
             if calls.is_empty() {
                 break;
             }
@@ -261,7 +288,18 @@ impl Dispatcher {
                     slot,
                     reserved,
                     resume,
-                } => self.begin(ctx, cli, &slot, reserved, resume.as_ref()),
+                } => {
+                    let call = Call::Begin {
+                        slot: slot.clone(),
+                        reserved: reserved.clone(),
+                        resume: resume.clone(),
+                    };
+                    self.begin(ctx, cli, &slot, reserved, resume.as_ref());
+                    let mut state = self.state();
+                    if let Some(index) = state.begins_running.iter().position(|c| *c == call) {
+                        state.begins_running.remove(index);
+                    }
+                }
                 Call::Message {
                     session,
                     text,
@@ -297,6 +335,23 @@ impl Dispatcher {
         resume: Option<&Resume>,
     ) {
         let now = ctx.clock.now();
+        // A hand-off saved before a restart may run after its reservation lapsed at the hub,
+        // which would refuse the `ignite start` of its prompt.
+        if reserved.expires_at <= now {
+            eprintln!(
+                "ignite: {} not started in {slot}: its reservation lapsed",
+                reserved.ticket
+            );
+            let mut state = self.state();
+            if state
+                .reserved
+                .get(slot)
+                .is_some_and(|r| r.ticket == reserved.ticket)
+            {
+                state.reserved.remove(slot);
+            }
+            return;
+        }
         // A hold starts no turn, so a reservation made just before it began lapses instead.
         if let Some(hold) = cli.pool.held(&reserved.app) {
             eprintln!(

@@ -371,12 +371,19 @@ fn begin_starts_the_first_turn_with_the_hand_off_prompt() {
     assert_eq!(rig.daemon.check(&session), SessionCheck::Running);
     // The dispatcher counts busy sessions, not slot numbers, so a placeholder can name a busy
     // slot: the ticket takes the lowest free one.
-    let second = rig.try_begin().unwrap();
+    // The same reservation again, as a restarted dispatcher that had not saved the session
+    // asks, returns the session and starts no turn.
+    assert_eq!(rig.try_begin().unwrap(), session);
+    assert_eq!(rig.turns.starts().len(), 1);
+    let second = rig
+        .daemon
+        .begin(&reservation("T.2", 1), "m-1", Some("high"), None)
+        .unwrap();
     let slots = rig.daemon.slots("fake");
     assert_eq!(slots[1].index, 2);
     assert_eq!(slots[1].session.as_ref(), Some(&second));
     // A placeholder of an app not in CLI mode is refused.
-    let mut other = reservation("T.2", 1);
+    let mut other = reservation("T.3", 1);
     other.session = SessionId::new("cli-codex-slot-1").unwrap();
     assert!(rig.daemon.begin(&other, "m-1", None, None).is_err());
 }
@@ -629,6 +636,7 @@ fn the_next_ticket_of_a_lane_keeps_the_session_and_resumes_its_transcript() {
     assert_eq!(slot.ticket, Some(TicketId::new("T.2").unwrap()));
     // A session that never ran a turn here is not a CLI slot.
     next.session = SessionId::new("cli-fake-0badc0de").unwrap();
+    "f00d".clone_into(&mut next.code);
     assert!(matches!(
         rig.daemon.begin(&next, "m-1", None, None),
         Err(Error::Invalid(_))
