@@ -11,6 +11,11 @@
 //! - The `ignite-cli-health` loop runs the probe turns of the apps in CLI mode and sends each
 //!   CLI hold's report ([`Health::tick`]). A probe runs a whole turn, so it has a loop of its
 //!   own and never holds up the turns of other slots.
+//! - The `ignite-cli-dispatch` loop runs [`Dispatcher::tick`] every [`DISPATCH_EVERY`] while
+//!   any app is in CLI mode, so idle CLI slots are offered to the hub. A machine whose apps all
+//!   run in CLI mode has no dispatcher session, and nothing else asks for its steps once every
+//!   worker is idle: before this loop, such a machine stopped taking tickets until some `ignite`
+//!   verb happened to run a dispatch step.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -42,6 +47,13 @@ const HEALTH_EVERY: Duration = Duration::from_secs(30);
 const HEALTH_STALLS_AFTER: Duration = Duration::from_mins(30);
 /// The name the health loop registers under.
 const HEALTH_LOOP: &str = "ignite-cli-health";
+/// How often the dispatch loop runs the dispatcher's step. A step asks the hub for tickets only
+/// while a worker is idle and a ticket tree is free.
+const DISPATCH_EVERY: Duration = Duration::from_secs(10);
+/// A dispatch round asks the hub once per group of idle workers and reads each reserved ticket.
+const DISPATCH_STALLS_AFTER: Duration = Duration::from_mins(10);
+/// The name the dispatch loop registers under.
+const DISPATCH_LOOP: &str = "ignite-cli-dispatch";
 
 /// The adapter of each app that `config` gives a CLI program, by name.
 fn adapters(config: &Config) -> Vec<Arc<dyn CliApp>> {
@@ -132,7 +144,7 @@ pub fn cli_mode(
 }
 
 impl CliMode {
-    /// Starts the `ignite-cli` and `ignite-cli-health` loops.
+    /// Starts the `ignite-cli`, `ignite-cli-health` and `ignite-cli-dispatch` loops.
     pub fn spawn(&self, parts: &Parts) {
         let daemon = self.daemon.clone();
         parts.start_loop(clid::LOOP, CLI_STALLS_AFTER, move |ticker| {
@@ -165,6 +177,25 @@ impl CliMode {
                     Ok(())
                 });
                 thread::sleep(HEALTH_EVERY);
+            }
+        });
+        let (apps, dispatcher, ctx) = (
+            self.apps.clone(),
+            self.dispatcher.clone(),
+            self.ctx.clone(),
+        );
+        parts.start_loop(DISPATCH_LOOP, DISPATCH_STALLS_AFTER, move |ticker| {
+            loop {
+                ticker.round(|| {
+                    if apps
+                        .iter()
+                        .any(|app| dispatcher.mode(app.name()).0 == PoolMode::Cli)
+                    {
+                        dispatcher.tick(&ctx);
+                    }
+                    Ok(())
+                });
+                thread::sleep(DISPATCH_EVERY);
             }
         });
     }
