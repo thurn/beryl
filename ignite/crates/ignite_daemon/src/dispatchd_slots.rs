@@ -22,13 +22,21 @@
 //!
 //! Slots are counted per dispatcher, not per machine, so a Claude pool and a Codex pool on one
 //! machine stay independent. Both still share the machine's ticket trees and cores.
+//!
+//! An app in CLI mode (see `cli`) offers slots the same way with no dispatcher at all: `slots`
+//! placeholders `cli-<app>-slot-<k>` from `[machine.<host>.pool.<app>]`, and one more,
+//! `cli-<app>-slot-<slots + 1>`, that the hub is asked to fill only with a ticket that holds
+//! `master` back. That extra slot replaces keeping the last idle worker for justiciar tickets.
+//! A reservation for a slot starts a CLI session `cli-<app>-<id>`, which joins the pool as a
+//! single-use worker and fills a slot until its ticket ends, as a Codex chat does. While the app
+//! runs in CLI mode, its desktop workers and its Codex dispatcher's slots are offered nothing.
 
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::hub::{WorkerRole, WorkerState};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Result;
 
-use super::{Dispatcher, Purpose, Queued, State};
+use super::{Dispatcher, Purpose, Queued, State, cli};
 use crate::pool::Member;
 
 /// The start of every slot's placeholder session.
@@ -44,10 +52,12 @@ pub(super) fn is_slot(session: &SessionId) -> bool {
 /// chats that already hold tickets fill the other placeholders first.
 fn placeholders(state: &State, members: &[Member]) -> Vec<Member> {
     let mut slots = Vec::new();
-    for dispatcher in members
-        .iter()
-        .filter(|m| m.role == WorkerRole::Dispatcher && m.slots > 0 && !m.down)
-    {
+    for dispatcher in members.iter().filter(|m| {
+        m.role == WorkerRole::Dispatcher
+            && m.slots > 0
+            && !m.down
+            && !cli::in_cli_mode(state, &m.app)
+    }) {
         let chats = members
             .iter()
             .filter(|m| m.single_use && !m.down && m.parent.as_ref() == Some(&dispatcher.session))
@@ -73,6 +83,50 @@ fn placeholders(state: &State, members: &[Member]) -> Vec<Member> {
             single_use: false,
         }));
     }
+    slots.extend(cli_placeholders(state, members));
+    slots
+}
+
+/// The placeholder of every CLI slot that no CLI session fills, reserved or not, for each app in
+/// CLI mode. The slot for tickets that hold `master` back is offered only while fewer than all
+/// of the app's slots are busy.
+fn cli_placeholders(state: &State, members: &[Member]) -> Vec<Member> {
+    let mut slots = Vec::new();
+    for layout in &state.cli_layout {
+        let sessions = members
+            .iter()
+            .filter(|m| {
+                m.single_use && !m.down && m.app == layout.app && cli::is_cli_session(&m.session)
+            })
+            .count();
+        let all: Vec<SessionId> = (1..=layout.slots + 1)
+            .filter_map(|k| cli::placeholder(&layout.app, k))
+            .collect();
+        let Some((extra, ordinary)) = all.split_last() else {
+            continue;
+        };
+        let reserved = |s: &SessionId| state.reserved.contains_key(s);
+        let busy = sessions + all.iter().filter(|s| reserved(s)).count();
+        let free = ordinary.iter().filter(|s| !reserved(s)).skip(sessions);
+        let extra_offered = reserved(extra) || busy < all.len();
+        let chosen = ordinary
+            .iter()
+            .filter(|s| reserved(s))
+            .chain(free)
+            .chain(extra_offered.then_some(extra));
+        slots.extend(chosen.map(|session| Member {
+            session: session.clone(),
+            app: layout.app.clone(),
+            role: WorkerRole::Worker,
+            down: false,
+            models: layout.models.clone(),
+            parent: None,
+            files: Vec::new(),
+            added_at: Timestamp::from_millis(0),
+            slots: 0,
+            single_use: false,
+        }));
+    }
     slots
 }
 
@@ -84,18 +138,22 @@ pub(super) fn with_slots(state: &State, members: &[Member]) -> Vec<Member> {
     all
 }
 
-/// The workers that can be handed tickets, idle or not: the standing workers that are not down
-/// and every Codex dispatcher's slots.
-pub(super) fn capacity(members: &[Member]) -> usize {
+/// The workers that can be handed tickets, idle or not: the standing workers that are not down,
+/// every Codex dispatcher's slots, and every CLI slot that takes any ticket, leaving out the
+/// workers of apps in CLI mode that are not CLI slots.
+pub(super) fn capacity(state: &State, members: &[Member]) -> usize {
     let standing = members
         .iter()
         .filter(|m| m.role == WorkerRole::Worker && !m.down && !m.single_use)
+        .filter(|m| !cli::in_cli_mode(state, &m.app))
         .count();
     let slots: u32 = members
         .iter()
         .filter(|m| m.role == WorkerRole::Dispatcher && !m.down)
+        .filter(|m| !cli::in_cli_mode(state, &m.app))
         .map(|m| m.slots)
-        .sum();
+        .sum::<u32>()
+        + state.cli_layout.iter().map(|l| l.slots).sum::<u32>();
     standing + usize::try_from(slots).unwrap_or(usize::MAX)
 }
 
@@ -192,6 +250,7 @@ impl Dispatcher {
     /// Every member as the hub's heartbeat and `ignite pool list` show it, and each slot no chat
     /// fills as an idle or reserved worker of its app.
     pub fn view(&self) -> Result<Vec<WorkerState>> {
+        self.update_cli_layout();
         let members = self.pool.members()?;
         let holders = self.host.holders();
         let state = self.state();

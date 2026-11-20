@@ -32,7 +32,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Write as _;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use serde::{Deserialize, Serialize};
 
@@ -50,6 +50,8 @@ use crate::server::Context;
 
 #[path = "dispatchd_allowed.rs"]
 mod allowed;
+#[path = "dispatchd_cli.rs"]
+mod cli;
 #[path = "dispatchd_feed.rs"]
 mod feed;
 #[path = "dispatchd_justiciar.rs"]
@@ -75,6 +77,7 @@ mod wake;
 #[path = "dispatchd_work.rs"]
 mod work;
 
+pub use cli::APPS;
 pub use stall::RunningVerb;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
@@ -291,6 +294,11 @@ struct State {
     idle_reason: Option<(usize, String)>,
     /// When a `usage` instruction was last queued, or the last sample taken (see `usage`).
     usage_asked: Option<Timestamp>,
+    /// Hand-offs, messages and checks for CLI slots and sessions, to carry out once the state
+    /// is unlocked (see `cli`).
+    cli_calls: Vec<cli::Call>,
+    /// The apps in CLI mode at the last step, with their slots (see `cli`).
+    cli_layout: Vec<cli::Layout>,
 }
 
 /// The dispatcher's state and the pool, shared by the `dispatch`, `pool` and `tell` verbs.
@@ -301,6 +309,8 @@ pub struct Dispatcher {
     state: Mutex<State>,
     /// The rows last written to the database (see `store`).
     saved: Mutex<Vec<DispatchEntry>>,
+    /// How the apps in CLI mode run, once the daemon gives the dispatcher a CLI pool.
+    cli: OnceLock<cli::CliMode>,
 }
 
 /// The exit code for an error from the hub or the store.
@@ -351,6 +361,7 @@ impl Dispatcher {
             setup,
             state: Mutex::new(state),
             saved: Mutex::default(),
+            cli: OnceLock::new(),
         }
     }
 
@@ -427,6 +438,7 @@ impl Dispatcher {
         );
         drop(state);
         self.save();
+        self.run_cli_calls(ctx);
     }
 
     /// Brings the state up to date and gives the next instruction for the dispatcher `asking`,
@@ -560,6 +572,7 @@ impl Dispatcher {
         }
         drop(state);
         self.save();
+        self.run_cli_calls(ctx);
         Ok(())
     }
 
@@ -652,6 +665,7 @@ impl Dispatcher {
         if let Some(due) = release {
             text.push_str(&self.release(&due));
         }
+        self.run_cli_calls(ctx);
         Reply::text(Exit::Success, text)
     }
 
@@ -772,6 +786,14 @@ impl Dispatcher {
         clear: bool,
     ) {
         state.reserved.insert(session.clone(), reserved.clone());
+        // A CLI slot's session is started by the daemon with the hand-off prompt (see `cli`).
+        if cli::is_cli_slot(session) || cli::is_cli_session(session) {
+            state.cli_calls.push(cli::Call::Begin {
+                slot: session.clone(),
+                reserved,
+            });
+            return;
+        }
         let id = Self::next_id(state);
         let slot = slots::is_slot(session);
         state.pending.push_back(Queued {
@@ -811,6 +833,18 @@ impl Dispatcher {
         text: &str,
         purpose: Purpose,
     ) {
+        // A message or a check for a CLI session goes to the CLI pool, never to the dispatcher.
+        if let Some(session) = session.filter(|s| cli::is_cli_session(s)) {
+            let session = session.clone();
+            match purpose {
+                Purpose::Check => state.cli_calls.push(cli::Call::Check { session }),
+                _ => state.cli_calls.push(cli::Call::Message {
+                    session,
+                    text: text.to_owned(),
+                }),
+            }
+            return;
+        }
         let id = Self::next_id(state);
         state.pending.push_back(Queued {
             body: DispatchInstruction {
@@ -860,6 +894,9 @@ impl Dispatcher {
 #[cfg(test)]
 #[path = "dispatchd_allowed_tests.rs"]
 mod allowed_tests;
+#[cfg(test)]
+#[path = "dispatchd_cli_tests.rs"]
+mod cli_tests;
 #[cfg(test)]
 #[path = "dispatchd_hold_tests.rs"]
 mod hold_tests;

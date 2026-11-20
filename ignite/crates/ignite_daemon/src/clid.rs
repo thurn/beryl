@@ -72,6 +72,21 @@ pub trait CliPool: Send + Sync {
     fn slots(&self, app: &str) -> Vec<Slot>;
     /// `app`'s CLI hold, if it is on one.
     fn held(&self, app: &str) -> Option<Hold>;
+    /// Starts a session of `app` that holds no ticket, whose first turn runs `prompt` on `model`
+    /// at `effort`: the justiciar the daemon starts when the hub cannot be reached. Returns the
+    /// new session. The default refuses, for a pool that cannot start one.
+    fn begin_justiciar(
+        &self,
+        app: &str,
+        prompt: &str,
+        model: &str,
+        effort: &str,
+    ) -> Result<SessionId> {
+        let _ = (prompt, model, effort);
+        Err(Error::Invalid(format!(
+            "this CLI pool cannot start a justiciar for {app}"
+        )))
+    }
 }
 
 /// A message [`FakeCliPool`] was given.
@@ -82,12 +97,24 @@ pub struct SentMessage {
     pub urgent: bool,
 }
 
+/// A justiciar session [`FakeCliPool`] was asked to start.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct JusticiarStart {
+    pub app: String,
+    pub prompt: String,
+    pub model: String,
+    pub effort: String,
+}
+
 /// A [`CliPool`] held in memory. `begin` names each new session `cli-<app>-<n>` with `n`
 /// counting from 1 in hexadecimal, padded to 8 digits, and answers `check` with `Idle` for it;
 /// a test sets other answers, slots and holds directly.
 #[derive(Debug, Default)]
 pub struct FakeCliPool {
     begun: Mutex<Vec<(Reservation, String, Option<String>)>>,
+    justiciars: Mutex<Vec<JusticiarStart>>,
+    /// `begin` fails with this error while it is set.
+    refuse: Mutex<Option<String>>,
     sent: Mutex<Vec<SentMessage>>,
     checks: Mutex<BTreeMap<SessionId, SessionCheck>>,
     slots: Mutex<BTreeMap<String, Vec<Slot>>>,
@@ -102,6 +129,16 @@ impl FakeCliPool {
     /// Every `begin` so far: the reservation, model and effort.
     pub fn begun(&self) -> Vec<(Reservation, String, Option<String>)> {
         lock(&self.begun).clone()
+    }
+
+    /// Every justiciar session started so far, in order.
+    pub fn justiciars(&self) -> Vec<JusticiarStart> {
+        lock(&self.justiciars).clone()
+    }
+
+    /// Makes every later `begin` fail with `error`, or with `None` succeed again.
+    pub fn refuse(&self, error: Option<&str>) {
+        *lock(&self.refuse) = error.map(str::to_owned);
     }
 
     /// Every message so far, in order.
@@ -141,6 +178,9 @@ impl CliPool for FakeCliPool {
             .and_then(|rest| rest.split_once("-slot-"))
             .map(|(app, _)| app.to_owned())
             .ok_or_else(|| Error::Invalid(format!("{} is not a CLI slot", reservation.session)))?;
+        if let Some(error) = lock(&self.refuse).clone() {
+            return Err(Error::Io(error));
+        }
         let mut begun = lock(&self.begun);
         begun.push((
             reservation.clone(),
@@ -175,6 +215,26 @@ impl CliPool for FakeCliPool {
 
     fn held(&self, app: &str) -> Option<Hold> {
         lock(&self.holds).get(app).cloned()
+    }
+
+    fn begin_justiciar(
+        &self,
+        app: &str,
+        prompt: &str,
+        model: &str,
+        effort: &str,
+    ) -> Result<SessionId> {
+        let mut started = lock(&self.justiciars);
+        started.push(JusticiarStart {
+            app: app.to_owned(),
+            prompt: prompt.to_owned(),
+            model: model.to_owned(),
+            effort: effort.to_owned(),
+        });
+        let session = SessionId::new(format!("cli-{app}-j{:07x}", started.len()))
+            .map_err(|e| Error::Invalid(e.to_string()))?;
+        lock(&self.checks).insert(session.clone(), SessionCheck::Idle);
+        Ok(session)
     }
 }
 

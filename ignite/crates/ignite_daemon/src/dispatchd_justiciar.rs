@@ -7,6 +7,10 @@
 //! [`HOLD_S`], the time it may spend on the repair. A hand-off that fails, or that is dropped
 //! after its last give, releases the hold, so the worker goes back to tickets and the next
 //! check of the hub may give the prompt to another worker.
+//!
+//! On a machine with an app in CLI mode, the daemon starts a CLI session of that app with the
+//! prompt and no ticket instead (see `cli`), whether or not a dispatcher answers. A desktop
+//! worker is tried only when no app runs in CLI mode or the start failed.
 
 use ignite_core::ids::SessionId;
 use ignite_core::protocol::client::{DispatchAction, DispatchInstruction};
@@ -16,10 +20,10 @@ use super::{Dispatcher, Purpose, Queued, State};
 use crate::server::Context;
 
 /// The tier a justiciar runs on.
-const TIER: &str = "opus";
+pub(super) const TIER: &str = "opus";
 
 /// A justiciar handles an emergency, so it keeps a high effort whatever the default is.
-const EFFORT: &str = "high";
+pub(super) const EFFORT: &str = "high";
 
 /// How long a worker given a justiciar prompt is kept from tickets.
 pub const HOLD_S: f64 = 2.0 * 3_600.0;
@@ -52,6 +56,18 @@ impl Dispatcher {
     /// justiciar prompt or no worker is idle. Returns the worker given it.
     pub fn hand_off_justiciar(&self, ctx: &Context, prompt: &str) -> Option<SessionId> {
         let now = ctx.clock.now();
+        let held = self
+            .state()
+            .justiciar
+            .as_ref()
+            .is_some_and(|(_, at)| now.seconds_since(*at) < HOLD_S);
+        if held {
+            return None;
+        }
+        // An app in CLI mode starts a session for it, whether or not a dispatcher answers.
+        if let Some(session) = self.cli_justiciar(ctx, prompt) {
+            return Some(session);
+        }
         let members = self.pool.members().unwrap_or_default();
         let mut state = self.state();
         if state.down {

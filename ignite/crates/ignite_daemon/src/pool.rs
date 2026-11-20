@@ -1,6 +1,7 @@
 //! The pool: the machine's worker and dispatcher sessions, kept in the local database so a
 //! restarted daemon keeps them, and the `ignite pool` verb that lists, adds, removes, pauses and
-//! resumes them.
+//! resumes them, and switches an app between its desktop dispatcher and CLI mode
+//! (`ignite pool mode`, see `dispatchd_cli`).
 //!
 //! A member's stored state is only `idle` or `down`. Whether a worker is reserved, working or
 //! stalled is worked out by the [`Dispatcher`] from what it handed off and from which session
@@ -10,7 +11,9 @@ use std::fmt::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use ignite_core::config::PoolMode;
 use ignite_core::ids::{MachineId, SessionId};
+use ignite_core::protocol::cli::PoolModeSetting;
 use ignite_core::protocol::client::{Exit, Reply, Request};
 use ignite_core::protocol::hub::{Pause, WorkerRole, WorkerState};
 use ignite_core::time::Timestamp;
@@ -220,6 +223,7 @@ impl Verb for PoolVerb {
             Some((&"remove", [session])) => self.remove(session),
             Some((&"pause", rest)) => self.pause(ctx, rest.contains(&"--all"), true),
             Some((&"resume", rest)) => self.pause(ctx, rest.contains(&"--all"), false),
+            Some((&"mode", [app, setting])) => self.mode(app, setting),
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
                 self.dispatcher.pool(),
                 ctx.clock.now(),
@@ -228,7 +232,7 @@ impl Verb for PoolVerb {
             Some(_) => Err(Error::Invalid(
                 "usage: ignite pool list | add <session>... --app <app> [--dispatcher [--slots <n>]] \
                  | remove <session> \
-                 | pause [--all] | resume [--all] | usage"
+                 | pause [--all] | resume [--all] | usage | mode <app> cli|desktop|config"
                     .to_owned(),
             )),
         };
@@ -266,6 +270,17 @@ impl PoolVerb {
             .iter()
             .map(crate::dispatchd::hold_line),
         );
+        for app in crate::dispatchd::APPS {
+            let (mode, overridden) = self.dispatcher.mode(app);
+            if mode == PoolMode::Cli || overridden {
+                let forced = if overridden {
+                    " (set by `ignite pool mode`)"
+                } else {
+                    ""
+                };
+                lines.push(format!("mode     {app} {mode}{forced}"));
+            }
+        }
         if self.dispatcher.is_down() {
             lines.push("down     the dispatcher left three instructions unacknowledged".to_owned());
         }
@@ -439,6 +454,40 @@ impl PoolVerb {
             }
         }
         Ok(removed)
+    }
+
+    /// `ignite pool mode <app> cli|desktop|config`. The mode is read on every step, so the
+    /// switch needs no restart. A ticket in progress is never touched: workers of the old mode
+    /// finish it, and only new hand-offs follow the new mode.
+    fn mode(&self, app: &str, setting: &str) -> Result<Reply> {
+        let setting = PoolModeSetting::parse(setting).ok_or_else(|| {
+            Error::Invalid(format!(
+                "not a mode: {setting:?}; use cli, desktop or config"
+            ))
+        })?;
+        let reply = self.dispatcher.set_mode(app, setting)?;
+        let source = if reply.overridden {
+            "until `ignite pool mode <app> config`"
+        } else {
+            "as ignite.toml says"
+        };
+        let mut text = format!(
+            "mode     {} runs in {} mode on this machine, {source}; tickets in progress finish as \
+             they started",
+            reply.app, reply.mode
+        );
+        if setting == PoolModeSetting::Cli
+            && reply.mode != PoolMode::Cli
+            && let Some(why) = self.dispatcher.cli_unavailable(app)
+        {
+            let _ = write!(text, "\nnot cli  {why}");
+        }
+        Ok(Reply {
+            exit: Exit::Success,
+            text,
+            json: serde_json::to_value(&reply).ok(),
+            handle: None,
+        })
     }
 
     fn remove(&self, session: &str) -> Result<Reply> {

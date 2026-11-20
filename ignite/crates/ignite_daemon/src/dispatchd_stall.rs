@@ -21,6 +21,9 @@
 //! silence and asked again: one worker writing code without running `ignite` was checked about
 //! twice a minute. A release that failed did the same, which reminded an archived session every
 //! 15 minutes for hours.
+//!
+//! A CLI session (see `cli`) is watched by the same rules. Its `check` is answered at once by the
+//! CLI pool instead of a dispatcher, and its reminder is queued for its next turn.
 
 use std::fmt::Write as _;
 

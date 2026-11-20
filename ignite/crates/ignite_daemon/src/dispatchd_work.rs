@@ -13,7 +13,7 @@ use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
 use super::{
-    DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, feed, label, slots, suits, tier_for,
+    DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, cli, feed, label, slots, suits, tier_for,
 };
 use crate::pool::Member;
 use crate::server::Context;
@@ -24,6 +24,8 @@ type Offer = (Reservation, String, Option<TicketDetail>);
 /// What a step needs to ask the hub for tickets.
 struct Asking {
     idle: Vec<Member>,
+    /// The idle CLI slots that take only tickets that hold `master` back (see `slots`).
+    extra: Vec<Member>,
     trees: u32,
     /// The pool's workers that are not down and its Codex slots, idle or not.
     workers: usize,
@@ -55,8 +57,15 @@ impl Drop for AskingGuard<'_> {
 impl Dispatcher {
     /// Brings the state up to date: notices claims, finished tickets and lapsed reservations,
     /// retries what could not be read, gives overdue instructions again and, while workers are
-    /// idle and trees are free, asks the hub for tickets.
+    /// idle and trees are free, asks the hub for tickets. Then starts the CLI sessions and sends
+    /// the CLI messages and checks this decided on (see `cli`).
     pub(super) fn refresh(&self, ctx: &Context, members: &[Member]) {
+        self.update_cli_layout();
+        self.refresh_state(ctx, members);
+        self.run_cli_calls(ctx);
+    }
+
+    fn refresh_state(&self, ctx: &Context, members: &[Member]) {
         let now = ctx.clock.now();
         let (finished, unread) = {
             let mut state = self.state();
@@ -159,6 +168,7 @@ impl Dispatcher {
             state.reserved.remove(&session);
             // A slot or a chat opened for this ticket is simply free again (see `slots`).
             let chat = slots::is_slot(&session)
+                || cli::is_cli_slot(&session)
                 || self
                     .pool
                     .member(&session)
@@ -210,28 +220,43 @@ impl Dispatcher {
         if state.asking_hub {
             return None;
         }
-        if state.down || state.draining || master_only && self.pool.paused_everywhere() {
+        if state.draining || master_only && self.pool.paused_everywhere() {
             state.idle_reason = None;
             return None;
         }
         let workers = slots::with_slots(state, members);
-        let idle: Vec<Member> = Self::idle_workers(state, &workers, now)
+        let mut idle: Vec<Member> = Self::idle_workers(state, &workers, now)
             .into_iter()
+            // An app in CLI mode is offered only its CLI slots; its desktop workers finish.
+            .filter(|m| cli::is_cli_slot(&m.session) || !cli::in_cli_mode(state, &m.app))
             .cloned()
             .collect();
+        // A dispatcher that stopped answering stops only the hand-offs it would carry out.
+        if state.down {
+            idle.retain(|m| cli::is_cli_slot(&m.session));
+            if idle.is_empty() {
+                state.idle_reason = None;
+                return None;
+            }
+        }
+        let (extra, idle): (Vec<Member>, Vec<Member>) = idle
+            .into_iter()
+            .partition(|m| cli::is_extra_slot(state, &m.session));
         let reserved = u32::try_from(state.reserved.len()).unwrap_or(u32::MAX);
         let trees = self.host.free_ticket_trees().saturating_sub(reserved);
-        if idle.is_empty() || trees == 0 {
+        if idle.is_empty() && extra.is_empty() || trees == 0 {
+            let waiting = idle.len() + extra.len();
             state.idle_reason =
-                (!idle.is_empty()).then(|| (idle.len(), "no ticket tree is free".to_owned()));
+                (waiting > 0).then(|| (waiting, "no ticket tree is free".to_owned()));
             return None;
         }
         let waited = self.host.ticket_work_wait();
         state.asking_hub = true;
         Some(Asking {
             idle,
+            extra,
             trees,
-            workers: slots::capacity(members),
+            workers: slots::capacity(state, members),
             master_only,
             backlog: (waited >= BACKLOG_SECONDS).then_some(waited),
         })
@@ -255,6 +280,7 @@ impl Dispatcher {
     fn ask_for_work(&self, ctx: &Context, asking: Asking) -> (Vec<Offer>, Option<(usize, String)>) {
         let Asking {
             idle,
+            extra,
             mut trees,
             workers,
             master_only,
@@ -325,7 +351,24 @@ impl Dispatcher {
                 );
             }
         }
-        let idle_left = free.len() + held.len();
+        // The extra CLI slots are asked last, so that a ticket that holds `master` back goes to
+        // an ordinary slot while one is free.
+        let mut extra: Vec<(Member, Vec<String>)> = extra
+            .into_iter()
+            .map(|member| {
+                let models = offered_models(&ctx.config.pool, &member.app, &member.models);
+                (member, models)
+            })
+            .collect();
+        if !extra.is_empty() {
+            let extra_why = self.ask_group(ctx, &mut extra, &mut trees, workers, true, &mut offers);
+            if free.is_empty() && held.is_empty() && !extra.is_empty() {
+                why = format!(
+                    "only tickets that hold master back go to the extra CLI slot ({extra_why})"
+                );
+            }
+        }
+        let idle_left = free.len() + held.len() + extra.len();
         let left = (idle_left > 0).then_some((idle_left, why));
         (offers, left)
     }
@@ -362,7 +405,11 @@ impl Dispatcher {
                 name: None,
                 // The last idle worker of a pool of several is kept for justiciar tickets.
                 // A paused pool asks for justiciar and regression tickets alike.
-                justiciar_only: !master_only && group.len() == 1 && workers > 1,
+                // An app in CLI mode keeps its extra slot for them instead (see `slots`).
+                justiciar_only: !master_only
+                    && group.len() == 1
+                    && workers > 1
+                    && !cli::is_cli_slot(&group[0].0.session),
                 master_only,
                 // `next_explained` asks for the reason itself.
                 explain: false,

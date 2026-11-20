@@ -8,6 +8,8 @@
 //! and nothing woke it. So the daemon guarantees the wake-up. The turn end is recorded, and once
 //! nothing the session started is running any more, and [`WAKE_S`] has passed since the last one
 //! ended, the session is checked through the dispatcher as a silent one would be (see `stall`).
+//! A CLI session is checked as soon as its verb ends, without the wait: it has no tool of its
+//! own that could have woken it, and its check is answered by the CLI pool (see `cli`).
 //! A worker that its tool already woke answers `running` and nothing more happens; an idle one
 //! gets [`WAKE`], and is released if it stays idle 15 minutes after that, as after any reminder.
 //! A background shell command is not an `ignite` verb: the turn-end check finds it among the
@@ -125,7 +127,10 @@ impl Dispatcher {
             Some(command) => Some(command.since),
             None => self.host.quiet_since(session),
         };
-        let due = ended.is_none_or(|at| now.seconds_since(at) >= WAKE_S);
+        // A CLI session's next turn is started by the daemon, not by a tool that may already
+        // have woken it, so its wake-up goes out as soon as the verb ends.
+        let due = super::cli::is_cli_session(session)
+            || ended.is_none_or(|at| now.seconds_since(at) >= WAKE_S);
         if !due || Self::check_outstanding(state, session) {
             return true;
         }
