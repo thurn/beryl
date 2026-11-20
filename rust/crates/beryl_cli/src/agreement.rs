@@ -52,7 +52,7 @@ pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-fn agreement(
+pub fn agreement(
     catalog: &'static Catalog,
     dir: &Path,
     entrant: &str,

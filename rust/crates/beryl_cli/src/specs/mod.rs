@@ -16,14 +16,14 @@
 //! generates comes from a scenario in its file, or a general capability of the generator: the
 //! `specs` skill (`.agents/skills/specs/SKILL.md`) says which.
 
-mod auto;
-mod describe;
+pub mod auto;
+pub mod describe;
 mod listing;
-mod playground;
+pub mod playground;
 pub mod reviews;
-mod script;
+pub mod script;
 pub mod serve;
-mod start;
+pub mod start;
 
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -38,20 +38,18 @@ use describe::reach;
 pub use describe::{Unreached, describe, trace};
 pub use script::scripts;
 pub(crate) use script::text as script_text;
-#[cfg(test)]
-pub(crate) use start::FAULTS;
-pub use start::{Phase, start};
+pub use start::{FAULTS, Phase, start};
 use start::{at_checkpoint, review_position, start_guarded, start_review};
 
 /// The specs, one per implemented card, each generated on its first request: asking for one
 /// card's moments plays no other card's.
-struct Library {
+pub struct Library {
     catalog: &'static Catalog,
-    specs: Vec<Spec>,
+    pub specs: Vec<Spec>,
 }
 
 impl Library {
-    fn new(catalog: &'static Catalog) -> Library {
+    pub fn new(catalog: &'static Catalog) -> Library {
         Library {
             catalog,
             specs: (catalog.cards.cards().iter())
@@ -60,7 +58,7 @@ impl Library {
         }
     }
 
-    fn find(&self, card: &str) -> Option<&Spec> {
+    pub fn find(&self, card: &str) -> Option<&Spec> {
         self.specs.iter().find(|s| s.card == card || s.slug == card)
     }
 }
@@ -111,16 +109,12 @@ fn from_store(catalog: &'static Catalog, card: &str) -> Option<&'static Spec> {
 
 /// New specs of `cards`, by name, apart from the library's: a test that changes how their games
 /// play leaves the library's specs alone.
-#[cfg(test)]
-pub(crate) fn fresh(cards: &[&str]) -> Vec<Spec> {
+pub fn fresh(catalog: &'static Catalog, cards: &[&str]) -> Vec<Spec> {
     cards
         .iter()
         .map(|&card| {
-            let cards = crate::catalog::TEST.cards.cards();
-            Spec::new(
-                &crate::catalog::TEST,
-                cards.iter().find(|d| d.name == card).unwrap(),
-            )
+            let defs = catalog.cards.cards();
+            Spec::new(catalog, defs.iter().find(|d| d.name == card).unwrap())
         })
         .collect()
 }
@@ -128,7 +122,7 @@ pub(crate) fn fresh(cards: &[&str]) -> Vec<Spec> {
 /// The specs `cards` name (by name or slug; every one if none), each generated, failing on an
 /// unknown card. Generating every card is a sweep someone asked for (`specs-check` with no
 /// card), so it runs on a pool the size of the machine, not a thread per card.
-fn chosen(catalog: &'static Catalog, cards: &[String]) -> Result<Vec<&'static Spec>, String> {
+pub fn chosen(catalog: &'static Catalog, cards: &[String]) -> Result<Vec<&'static Spec>, String> {
     let chosen: Vec<&'static Spec> = if cards.is_empty() {
         self::cards(catalog).iter().collect()
     } else {
@@ -193,7 +187,7 @@ pub struct Spec {
     /// The cards its games are played with.
     catalog: &'static Catalog,
     def: &'static CardDef,
-    generated: OnceLock<auto::Generated>,
+    pub generated: OnceLock<auto::Generated>,
     checkpoints: OnceLock<auto::ReviewSet>,
     playground: OnceLock<playground::Playground>,
 }
@@ -233,7 +227,7 @@ impl Spec {
         })
     }
 
-    fn playground(&self) -> &playground::Playground {
+    pub fn playground(&self) -> &playground::Playground {
         self.playground
             .get_or_init(|| playground::generate(self.catalog, self.card))
     }
@@ -305,7 +299,7 @@ impl View {
         View::ALL.into_iter().find(|v| v.name() == name)
     }
 
-    pub(crate) const fn seat(self) -> Seat {
+    pub const fn seat(self) -> Seat {
         match self {
             View::Yours => Seat::P0,
             View::Theirs => Seat::P1,
@@ -390,8 +384,7 @@ pub fn check_all(catalog: &'static Catalog, cards: &[String]) -> Result<(), Stri
 /// The specs a test that walks every spec takes: every card while there are at most 64, and
 /// otherwise a fixed 64 chosen by a stable hash of the name, so a failure reproduces. The full
 /// sweep is `beryl_cli specs-check` with no card, which runs nightly (`by nightly`).
-#[cfg(test)]
-fn sample(catalog: &'static Catalog) -> Vec<&'static Spec> {
+pub fn sample(catalog: &'static Catalog) -> Vec<&'static Spec> {
     const SAMPLE: usize = 64;
     // FNV-1a: stable across runs and platforms, unlike std's hasher.
     let hash = |name: &str| {
@@ -410,257 +403,10 @@ fn sample(catalog: &'static Catalog) -> Vec<&'static Spec> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::TEST;
-    use beryl_session::Status;
 
     #[test]
     fn slugs_name_cards() {
         assert_eq!(slug("Currency Converter"), "currency-converter");
         assert_eq!(slug("Jace, Vryn's Prodigy"), "jace-vryns-prodigy");
-    }
-
-    #[test]
-    fn a_card_without_hand_written_scenarios_gets_playable_moments() {
-        let spec = spec(&TEST, beryl_card_names::names::HOLY_STRENGTH).unwrap();
-        let moment = spec
-            .moments()
-            .iter()
-            .find(|m| m.name.starts_with("generated-"))
-            .expect("a moment from a generated scenario");
-        for view in View::ALL {
-            assert!(reach(&TEST, moment, view).is_ok(), "{view:?}");
-        }
-    }
-
-    #[test]
-    fn review_shares_the_payment_choice_and_its_result() {
-        use beryl_card_names::names::MANA_TITHE;
-        const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
-        use beryl_session::CandidateIndex;
-        use beryl_session::protocol::{Candidate, ZoneName};
-
-        let def = TEST
-            .cards
-            .cards()
-            .iter()
-            .copied()
-            .find(|d| d.name == MANA_TITHE)
-            .unwrap();
-        let (_, scenarios) = beryl_cards::scenarios()
-            .iter()
-            .find(|(n, _)| *n == MANA_TITHE)
-            .unwrap();
-        let checkpoints = auto::checkpoints(&TEST, def, scenarios).examples;
-        assert_eq!(checkpoints.len(), 3);
-        let payment = checkpoints
-            .iter()
-            .find(|c| c.moment.title == "Pay {1}.")
-            .unwrap();
-        assert_eq!(payment.first, View::Yours);
-        for (answer, expected) in [
-            (Candidate::Yes, ZoneName::Battlefield),
-            (Candidate::No, ZoneName::Graveyard),
-        ] {
-            let (send, receive) = std::sync::mpsc::channel();
-            let sessions = start_review(&TEST, &payment.moment, move |updates, live| {
-                if at_checkpoint(&updates, live) {
-                    let _ = send.send(updates);
-                }
-            })
-            .unwrap();
-            let [payer, caster] = receive
-                .recv_timeout(std::time::Duration::from_secs(5))
-                .unwrap();
-            assert_eq!(caster.view.status, Status::Thinking);
-            let Status::Deciding { decision } = payer.view.status else {
-                panic!("payer has no prompt")
-            };
-            assert!(decision.prompt.is(beryl_engine::card::Purpose::UnlessPays));
-            let index = decision
-                .candidates
-                .iter()
-                .position(|c| c.option == answer)
-                .unwrap();
-            sessions
-                .choose(decision.id, CandidateIndex(u16::try_from(index).unwrap()))
-                .unwrap();
-            let views = receive
-                .recv_timeout(std::time::Duration::from_secs(5))
-                .unwrap();
-            for update in views {
-                assert!(
-                    update
-                        .view
-                        .objects
-                        .iter()
-                        .any(|o| { o.name.as_deref() == Some(ARTIFACT) && o.zone == expected }),
-                    "{:?}",
-                    update
-                        .view
-                        .objects
-                        .iter()
-                        .map(|o| (o.name.clone(), o.zone))
-                        .collect::<Vec<_>>()
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn counter_review_starts_before_the_target_spell_is_cast() {
-        use beryl_card_names::names::MANA_TITHE;
-        const ARTIFACT: &str = beryl_cards::props::ARTIFACT.card;
-        use beryl_session::protocol::ZoneName;
-
-        let def = TEST
-            .cards
-            .cards()
-            .iter()
-            .copied()
-            .find(|d| d.name == MANA_TITHE)
-            .unwrap();
-        let (_, scenarios) = beryl_cards::scenarios()
-            .iter()
-            .find(|(n, _)| *n == MANA_TITHE)
-            .unwrap();
-        let checkpoints = auto::checkpoints(&TEST, def, scenarios).examples;
-        let counter = checkpoints
-            .iter()
-            .find(|c| !c.review_casts.is_empty())
-            .unwrap();
-        assert_eq!(counter.first, View::Yours);
-
-        let (send, receive) = std::sync::mpsc::channel();
-        let casts = std::sync::Mutex::new(counter.review_casts);
-        let sessions = start_review(&TEST, &counter.moment, move |updates, live| {
-            if live {
-                let steps = serve::recorded_cast_moves(&mut casts.lock().unwrap(), &updates);
-                if at_checkpoint(&updates, live) {
-                    let _ = send.send((updates, steps));
-                }
-            }
-        })
-        .unwrap();
-        let next = || {
-            receive
-                .recv_timeout(std::time::Duration::from_secs(5))
-                .unwrap()
-        };
-        for (actor, card) in [(0, ARTIFACT), (1, MANA_TITHE)] {
-            let (views, steps) = next();
-            let Status::Deciding { decision } = &views[actor].view.status else {
-                panic!("expected the {card} caster to act");
-            };
-            assert!(steps[actor].is_none());
-            let (id, index) = steps[1 - actor].expect("the observer can play the cast");
-            assert_eq!(id, decision.id);
-            assert_eq!(
-                decision.candidates[usize::from(index.0)].label,
-                format!("Cast {card}")
-            );
-            sessions.choose(id, index).unwrap();
-        }
-        let (views, steps) = next();
-        assert!(steps.iter().all(Option::is_none));
-        for update in views {
-            assert!(!matches!(update.view.status, Status::Deciding { decision }
-                if decision.prompt.is(beryl_engine::card::Purpose::UnlessPays)));
-            assert!(
-                update.view.objects.iter().any(|o| {
-                    o.name.as_deref() == Some(ARTIFACT) && o.zone == ZoneName::Graveyard
-                })
-            );
-        }
-    }
-
-    /// A scripted action that never fits says so when the game ends without it: which action
-    /// waited, and the decision it fit no candidate of, not just that the game ended.
-    #[test]
-    fn a_stalled_script_names_the_decision_it_missed() {
-        use beryl_card_names::names::{COUNTERSPELL, ISLAND};
-        use beryl_scenario::{P0, Permanent};
-        static MOMENT: Moment = Moment::new(
-            "stalled",
-            "Stalled",
-            Scenario::new("Counterspell with nothing to counter")
-                .permanents(P0, &[Permanent::new(ISLAND), Permanent::new(ISLAND)])
-                .hand(P0, &[COUNTERSPELL])
-                .library(P0, &[ISLAND])
-                .library(beryl_scenario::P1, &[ISLAND])
-                .at(2, beryl_scenario::P1, beryl_engine::TurnStep::PrecombatMain),
-        )
-        .play(&[Action::cast(P0, COUNTERSPELL)]);
-        let error = reach(&TEST, &MOMENT, View::Yours)
-            .expect_err("Counterspell has no target")
-            .to_string();
-        assert!(error.contains("Counterspell"), "{error}");
-        assert!(error.contains("fit no candidate"), "{error}");
-    }
-
-    /// Asking for one card's spec generates that card and no other.
-    #[test]
-    fn a_spec_generates_only_its_card() {
-        use beryl_card_names::names::COUNTERSPELL;
-        let library = Library::new(&TEST);
-        let spec = library
-            .find(&slug(COUNTERSPELL))
-            .expect("Counterspell has a spec");
-        assert!(library.specs.iter().all(|s| s.generated.get().is_none()));
-        assert!(!spec.moments().is_empty());
-        let generated: Vec<&str> = library
-            .specs
-            .iter()
-            .filter(|s| s.generated.get().is_some())
-            .map(|s| s.card)
-            .collect();
-        assert_eq!(generated, [COUNTERSPELL]);
-    }
-
-    /// Generating a spec plays every moment from both seats: a moment is kept only once it
-    /// reaches a live decision from each.
-    /// A stand-in pays for the viewer while the spell that asks resolves: every view they
-    /// watch meanwhile keeps that spell on the stack, where its card still lies.
-    #[test]
-    fn a_spell_that_asks_a_stand_in_stays_on_the_watched_stack() {
-        use beryl_session::protocol::{StackItem, ZoneName};
-        let (_, moment) = find(&TEST, "mana-tithe", "the-controller-pays-1").expect("the moment");
-        let (_, views) = describe::trace(&TEST, moment, View::Yours).expect("the moment plays");
-        let mut watched = 0;
-        for view in &views {
-            if matches!(view.status, Status::Deciding { .. }) {
-                continue;
-            }
-            for card in view.objects.iter().filter(|o| o.zone == ZoneName::Stack) {
-                watched += 1;
-                assert!(
-                    view.stack.iter().any(
-                        |item| matches!(item, StackItem::Spell { slot, .. } if *slot == card.slot)
-                    ),
-                    "turn {} {:?}: {:?} lies on the stack, which lists {:?}",
-                    view.turn.number,
-                    view.turn.step,
-                    card.name,
-                    view.stack
-                );
-            }
-        }
-        assert!(watched > 0, "no view shows a spell on the stack");
-    }
-
-    #[test]
-    fn moments_are_named_uniquely() {
-        let specs = sample(&TEST);
-        generate(&specs);
-        for spec in specs {
-            let moments = spec.moments();
-            for (i, m) in moments.iter().enumerate() {
-                assert!(
-                    moments[..i].iter().all(|n| n.name != m.name),
-                    "{}: two moments are named {}",
-                    spec.card,
-                    m.name
-                );
-            }
-        }
     }
 }

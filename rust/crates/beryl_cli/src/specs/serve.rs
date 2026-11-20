@@ -63,7 +63,7 @@ const SETUP: Duration = Duration::from_secs(20);
 const PING: Duration = Duration::from_secs(5);
 
 #[derive(Default, PartialEq, Eq)]
-enum FeedMode {
+pub enum FeedMode {
     #[default]
     Replay,
     Manual,
@@ -72,44 +72,44 @@ enum FeedMode {
 
 /// One instance's views, as its game emits them.
 #[derive(Default)]
-struct Feed {
-    views: Vec<GameUpdate>,
+pub struct Feed {
+    pub views: Vec<GameUpdate>,
     /// Views delivered to this board, retained for reproducible UI bug fixtures.
-    history: Vec<GameUpdate>,
+    pub history: Vec<GameUpdate>,
     /// The first view after the setup: what the page shows at once.
-    start: Option<usize>,
+    pub start: Option<usize>,
     /// Whether views past the start go to the streams yet.
-    released: bool,
+    pub released: bool,
     /// Whether its moment has actions of its own to play, which a page holds for its button.
-    plays: bool,
-    mode: FeedMode,
-    opponent_move: Option<(DecisionId, CandidateIndex)>,
-    streams: Vec<Sender<String>>,
+    pub plays: bool,
+    pub mode: FeedMode,
+    pub opponent_move: Option<(DecisionId, CandidateIndex)>,
+    pub streams: Vec<Sender<String>>,
     /// The seat's screen as the views so far leave it, which the view shown at once starts
     /// over from.
-    follow: Follow,
+    pub follow: Follow,
     /// Its key, and the page stream it goes to as well, if its key names a page.
-    key: String,
-    page: Option<(Pages, String)>,
+    pub key: String,
+    pub page: Option<(Pages, String)>,
 }
 
 /// Each page's stream, by the page's name.
 type Pages = Arc<Mutex<HashMap<String, Sender<String>>>>;
 
-type SharedFeed = Arc<(Mutex<Feed>, Condvar)>;
+pub type SharedFeed = Arc<(Mutex<Feed>, Condvar)>;
 
-struct Instance {
-    key: String,
+pub struct Instance {
+    pub key: String,
     /// Keeps the game running; dropped, it stops.
-    sessions: Sessions,
-    feed: SharedFeed,
-    mirror: Option<SharedFeed>,
-    used: Instant,
+    pub sessions: Sessions,
+    pub feed: SharedFeed,
+    pub mirror: Option<SharedFeed>,
+    pub used: Instant,
 }
 
-type Instances = Arc<Mutex<Vec<Instance>>>;
+pub type Instances = Arc<Mutex<Vec<Instance>>>;
 
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
@@ -418,7 +418,7 @@ fn new_feed(pages: &Pages, key: &str, plays: bool, manual: bool) -> SharedFeed {
 }
 
 /// Both seats of a manual checkpoint share one session and have their own feeds.
-fn instance(
+pub fn instance(
     catalog: &'static Catalog,
     instances: &Instances,
     pages: &Pages,
@@ -568,7 +568,7 @@ fn shown_first(feed: &mut Feed, update: &mut GameUpdate) {
 
 /// Follow the recorded casts only while the game takes them in order. The other seat may
 /// take the next legal cast explicitly, by the same decision ID as a click in the game.
-pub(super) fn recorded_cast_moves(
+pub fn recorded_cast_moves(
     remaining: &mut &'static [Action],
     updates: &[GameUpdate; 2],
 ) -> [Option<(DecisionId, CandidateIndex)>; 2] {
@@ -651,7 +651,7 @@ fn broadcast(feed: &mut Feed, update: &GameUpdate) {
 }
 
 /// The view the page shows at once, once the setup is done.
-fn current(feed: &SharedFeed) -> Value {
+pub fn current(feed: &SharedFeed) -> Value {
     let (lockable, ready) = &**feed;
     let deadline = Instant::now() + SETUP;
     let mut f = lock(lockable);
@@ -674,7 +674,7 @@ fn current(feed: &SharedFeed) -> Value {
 
 /// Whether the instance, its first view shown, holds views to play: its moment's own actions,
 /// or a game that goes on without the viewer, not yet waiting on their decision.
-fn holds(f: &Feed) -> bool {
+pub fn holds(f: &Feed) -> bool {
     f.mode != FeedMode::Manual
         && !f.released
         && f.start.is_some_and(|start| {
@@ -726,49 +726,4 @@ fn pump(mut stream: TcpStream, received: &std::sync::mpsc::Receiver<String>) -> 
         }
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::catalog::TEST;
-
-    /// A view shown at once starts the page's stage over, from each seat; one that opens with
-    /// an ability on the stack numbers it as the scripts after the setup do, so the stage has
-    /// a node for what the next script resolves.
-    #[test]
-    fn the_view_shown_at_once_starts_over_with_the_stack_numbered() {
-        let instances = Arc::new(Mutex::new(Vec::new()));
-        let pages = Arc::new(Mutex::new(HashMap::new()));
-        let card = "the-wandering-emperor";
-        let moment = "1-grows-a-creature-and-gives-it-first-strike-pass";
-        for (view, abilities) in [("yours", json!([1])), ("theirs", json!([]))] {
-            let key = format!("{card}/{moment}/{view}/reset-test");
-            let feed = instance(&TEST, &instances, &pages, &key, card, moment, view).unwrap();
-            let shown = current(&feed);
-            assert_eq!(
-                shown["ok"]["view"]["script"]["reset"],
-                json!({ "abilities": abilities }),
-                "{view}: {}",
-                shown["ok"]["view"]["script"]
-            );
-        }
-    }
-
-    #[test]
-    fn playground_priority_needs_no_play_button() {
-        let instances = Arc::new(Mutex::new(Vec::new()));
-        let pages = Arc::new(Mutex::new(HashMap::new()));
-        let card = "aangs-iceberg";
-        let moment =
-            "playground-exiles-a-permanent-until-it-leaves-waterbend-taps-a-creature-to-pay-4";
-        let key = format!("{card}/{moment}/yours/priority-test");
-        let feed = instance(&TEST, &instances, &pages, &key, card, moment, "yours").unwrap();
-        let shown = current(&feed);
-        assert_eq!(shown["ok"]["view"]["status"]["kind"], "deciding");
-        assert!(
-            !holds(&lock(&feed.0)),
-            "a human decision is already playable"
-        );
-    }
 }

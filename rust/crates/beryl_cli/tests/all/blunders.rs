@@ -1,5 +1,9 @@
-use super::*;
-use crate::catalog::TEST;
+use crate::common::TEST;
+use beryl_cli::blunders::*;
+use beryl_cli::game::mirror;
+use beryl_cli::transcript::labels;
+use beryl_engine::{Decision, GameTable, Scratch, observe, view};
+use beryl_search::{Agent, AgentDecision, DEEP_SEARCHER};
 
 /// Detects any search, including one that ultimately plays the policy's answer.
 struct PolicyOnly(beryl_search::LongSearch);

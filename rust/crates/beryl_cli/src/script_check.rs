@@ -37,9 +37,9 @@ const FIXTURES: &str = "fixtures";
 
 /// One check's result: its seconds and, failed, why.
 #[derive(Default)]
-struct Check {
-    seconds: f64,
-    failure: Option<String>,
+pub struct Check {
+    pub seconds: f64,
+    pub failure: Option<String>,
 }
 
 /// Runs the checks: every one, or those `filters` name, each a check's id or what one begins
@@ -124,7 +124,7 @@ fn add(checks: &mut BTreeMap<String, Check>, id: String, seconds: f64, failure: 
 
 /// The candidates of `chosen`'s specs, played from both seats as their generation does: a kept
 /// moment's seat is a check, and so is any seat that panicked, kept or not.
-fn moments(chosen: &[&specs::Spec], filters: &[&str], checks: &mut BTreeMap<String, Check>) {
+pub fn moments(chosen: &[&specs::Spec], filters: &[&str], checks: &mut BTreeMap<String, Check>) {
     specs::generate(chosen);
     for spec in chosen {
         for played in spec.played() {
@@ -315,66 +315,5 @@ mod tests {
         assert!(wanted(&["!fixtures/stack-two"], id));
         assert!(group_wanted(&["!fixtures/late-game"], FIXTURES));
         assert!(!group_wanted(&["counterspell", "!fixtures/x"], FIXTURES));
-    }
-
-    /// A moment whose session panics fails its own checks, from each seat, with the panic; the
-    /// card's other moments and another card's pass.
-    #[test]
-    fn a_failing_moment_fails_only_its_own_checks() {
-        use beryl_card_names::names::{MANA_DRAIN, REPRIEVE};
-        let scenarios = |card| {
-            beryl_cards::scenarios()
-                .iter()
-                .find(|(name, _)| *name == card)
-                .unwrap()
-                .1
-        };
-        // A moment's name is its scenario's slug with the card's left off.
-        let card = specs::slug(MANA_DRAIN);
-        let [broken, whole] = [0, 1].map(|i| {
-            let slug = specs::slug(scenarios(MANA_DRAIN)[i].name);
-            slug.strip_prefix(&card)
-                .unwrap()
-                .trim_start_matches('-')
-                .to_owned()
-        });
-        specs::FAULTS
-            .lock()
-            .unwrap()
-            .push(scenarios(MANA_DRAIN)[0].name);
-        let fresh = specs::fresh(&[MANA_DRAIN, REPRIEVE]);
-        let chosen: Vec<&specs::Spec> = fresh.iter().collect();
-        let mut checks = BTreeMap::new();
-        moments(&chosen, &[], &mut checks);
-        specs::FAULTS.lock().unwrap().clear();
-        let under = |prefix: &str| {
-            let prefix = format!("{card}/{prefix}");
-            checks
-                .iter()
-                .filter(move |(id, _)| id.starts_with(&prefix))
-                .collect::<Vec<_>>()
-        };
-        for seat in ["yours", "theirs"] {
-            let failed: Vec<_> = under(&broken)
-                .into_iter()
-                .filter(|(id, _)| id.ends_with(seat))
-                .collect();
-            assert!(!failed.is_empty(), "no {seat} check of {broken}");
-            for (id, check) in failed {
-                let why = check.failure.as_deref().unwrap_or_default();
-                assert!(why.contains("a fault injected into"), "{id}: {why:?}");
-            }
-        }
-        let failed = format!("{card}/{broken}");
-        let passed: Vec<&String> = checks
-            .iter()
-            .filter(|(id, _)| !id.starts_with(&failed))
-            .map(|(id, check)| {
-                assert!(check.failure.is_none(), "{id} failed");
-                id
-            })
-            .collect();
-        assert!(passed.iter().any(|id| id.contains(&whole)), "{passed:?}");
-        assert!(passed.iter().any(|id| id.starts_with("reprieve/")));
     }
 }

@@ -8,7 +8,6 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use serde::Serialize;
-#[cfg(test)]
 use serde::de::DeserializeOwned;
 
 /// A JSONL file open for appending.
@@ -54,7 +53,6 @@ impl Log {
 
 /// The whole lines of JSONL file `path`, none if it is missing. A last line without its
 /// newline is being written, or was torn by a stop mid-write: it is not returned.
-#[cfg(test)]
 pub fn read<T: DeserializeOwned>(path: &Path) -> Result<Vec<T>, String> {
     let at = |e: &dyn std::fmt::Display| format!("{}: {e}", path.display());
     let text = match fs::read_to_string(path) {

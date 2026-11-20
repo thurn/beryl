@@ -8,7 +8,7 @@
 pub mod agreement;
 pub mod anchor_replay;
 pub mod blunders;
-mod boards;
+pub mod boards;
 pub mod catalog;
 pub mod evalfit;
 pub mod fit;
@@ -18,7 +18,7 @@ pub mod game;
 pub mod gate;
 pub mod hunt;
 pub mod ladder;
-mod match_log;
+pub mod match_log;
 mod panics;
 pub mod positions;
 pub mod review;

@@ -5,7 +5,7 @@
 //! human's prompts ([`clicks`]). A manual table instead starts from a sample deck and
 //! plays a fixed list of actions through the solo session.
 
-mod clicks;
+pub mod clicks;
 mod condition;
 mod prop;
 mod table;
@@ -46,7 +46,7 @@ struct Definitions {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
-    name: String,
+    pub name: String,
     /// A seeded game's seed, with `decks`; or none, with `board`.
     seed: Option<u64>,
     /// Each seat's deck: `wu-control` (the mirror) or `fuzz:<seed>` for a fuzz deck.
@@ -233,7 +233,7 @@ type Seen = (GameUpdate, Option<GameUpdate>);
 /// A session whose thread panicked (in a debug build, a script that breaks its checks)
 /// says where. With `across`, the views recorded are the seat's across the table from the
 /// human, and none of the human's answers is.
-fn record_game(
+pub fn record_game(
     catalog: &'static Catalog,
     def: &Definition,
     across: bool,
@@ -582,12 +582,10 @@ fn number<T: std::str::FromStr>(text: &str, n: &str) -> Result<T, String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::catalog::TEST;
-    use beryl_session::GameUpdate;
+    use super::*;
     use beryl_session::protocol::{Kind, Step, ZoneName};
 
-    use super::condition::Mark;
-    use super::*;
+    use self::condition::Mark;
 
     #[test]
     fn stopping_conditions_parse() {
@@ -717,82 +715,5 @@ mod tests {
         assert!(Condition::parse("many nonland permanents a side").is_err());
         assert!(Condition::parse("step lunch").is_err());
         assert!(Condition::parse("raining").is_err());
-    }
-
-    #[test]
-    fn a_recording_stops_at_its_condition() {
-        let def = Definition {
-            name: "t".to_owned(),
-            seed: Some(4),
-            // Fixed decks: fuzz decks are drawn from every card, so a new card changes the game.
-            decks: Some(["wu-control".to_owned(), "wu-control".to_owned()]),
-            board: None,
-            table: None,
-            agents: Some(["random".to_owned(), "random".to_owned()]),
-            stops: None,
-            until: Some("first target decision for seat 1".to_owned()),
-            conditions: vec![],
-            after: 0,
-            clicks: vec![],
-            prop: None,
-        };
-        let messages = record_game(&TEST, &def, false).unwrap();
-        let Some(FixtureMessage::Event { payload, .. }) = messages.last() else {
-            panic!("a recording ends on a view");
-        };
-        let update: GameUpdate = serde_json::from_value(payload.clone()).unwrap();
-        let Status::Deciding { decision } = update.view.status else {
-            panic!("a recording stops at a decision");
-        };
-        assert_eq!(decision.kind, Kind::Target);
-    }
-
-    /// The views of `messages`, a recording.
-    fn views(messages: &[FixtureMessage]) -> Vec<PlayerView> {
-        (messages.iter())
-            .filter_map(|message| match message {
-                FixtureMessage::Event { payload, .. } => Some(
-                    serde_json::from_value::<GameUpdate>(payload.clone())
-                        .unwrap()
-                        .view,
-                ),
-                FixtureMessage::Response { .. } => None,
-            })
-            .collect()
-    }
-
-    /// Seen from across the table, a recording is the same game to the same stop, a view of
-    /// each update the human was shown, from the other side and with nothing to decide: for a
-    /// seeded game, and for a board whose clicks play on past its stop.
-    #[test]
-    fn a_recording_from_across_the_table_shows_the_same_updates() {
-        let seeded = serde_json::json!({
-            "name": "t",
-            "seed": 4,
-            "decks": ["wu-control", "wu-control"],
-            "agents": ["random", "random"],
-            "until": "first target decision for seat 1",
-        });
-        let clicked = serde_json::json!({
-            "name": "t",
-            "board": "shape-pick",
-            "until": "first priority decision for seat 0",
-            "clicks": ["Counterspell", "Island", "press decline"],
-        });
-        for json in [seeded, clicked] {
-            let def: Definition = serde_json::from_value(json).unwrap();
-            let seats = def.seats().unwrap();
-            assert_eq!(seats.len(), 2);
-            let path = Path::new("unused");
-            let human = views(&record_from(&TEST, &def, path, seats[0]).unwrap());
-            let across = views(&record_from(&TEST, &def, path, seats[1]).unwrap());
-            assert_eq!(human.len(), across.len(), "{}", def.name);
-            for (mine, theirs) in human.iter().zip(&across) {
-                assert_eq!(mine.turn.number, theirs.turn.number);
-                assert_eq!(mine.turn.step, theirs.turn.step);
-                assert_ne!(mine.turn.active, theirs.turn.active);
-                assert!(!matches!(theirs.status, Status::Deciding { .. }));
-            }
-        }
     }
 }

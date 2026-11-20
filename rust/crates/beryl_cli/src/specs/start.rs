@@ -24,8 +24,7 @@ pub enum Phase {
 
 /// The scenarios whose moments' games panic on their session's thread once their first view
 /// is out: a test's stand-in for a script that breaks its checks.
-#[cfg(test)]
-pub(crate) static FAULTS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+pub static FAULTS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
 
 /// Starts `moment` in its own [`Sessions`], seen from `view`, each view sent to `emit` with the
 /// phase it was emitted in. Scripts that fail report to the view's phase as `Live` with the
@@ -40,7 +39,7 @@ pub fn start(
 }
 
 /// [`start`], the session's thread owning `guard`, if given, which tells of its panic.
-pub(super) fn start_guarded(
+pub fn start_guarded(
     catalog: &'static Catalog,
     moment: &'static Moment,
     view: View,
@@ -62,10 +61,8 @@ pub(super) fn start_guarded(
         boards::lock(&progress).until = Some(*turn);
     }
     let watched = Arc::clone(&progress);
-    #[cfg(test)]
     let first = std::sync::atomic::AtomicBool::new(true);
     let sessions = Sessions::new(catalog.cards, None, move |update| {
-        #[cfg(test)]
         if !first.swap(false, std::sync::atomic::Ordering::Relaxed)
             && FAULTS.lock().unwrap().contains(&moment.board.name)
         {
@@ -132,7 +129,7 @@ pub(super) fn start_guarded(
 }
 
 /// Run the setup in one shared game, then publish both seats at every manual decision.
-pub(super) fn start_review(
+pub fn start_review(
     catalog: &'static Catalog,
     moment: &Moment,
     emit: impl Fn([GameUpdate; 2], bool) + Send + 'static,
@@ -174,13 +171,13 @@ pub(super) fn start_review(
     Ok(sessions)
 }
 
-pub(super) fn at_checkpoint(updates: &[GameUpdate; 2], live: bool) -> bool {
+pub fn at_checkpoint(updates: &[GameUpdate; 2], live: bool) -> bool {
     live && updates
         .iter()
         .any(|u| matches!(u.view.status, Status::Deciding { .. } | Status::Over { .. }))
 }
 
-pub(super) fn review_position(
+pub fn review_position(
     catalog: &'static Catalog,
     moment: &Moment,
 ) -> Result<([beryl_session::PlayerView; 2], Option<String>), String> {

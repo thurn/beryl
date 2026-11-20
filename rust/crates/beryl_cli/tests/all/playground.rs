@@ -1,5 +1,7 @@
-use super::*;
-use crate::catalog::TEST;
+use crate::common::TEST;
+use beryl_cli::specs::playground::*;
+use beryl_cli::specs::{Phase, View};
+use beryl_engine::card::Types;
 use beryl_session::protocol::{Candidate, Side, Status, ZoneName};
 use std::sync::mpsc::channel;
 use std::time::Duration;
@@ -54,7 +56,7 @@ fn one_card_manifest_example_has_no_filler_to_choose_or_mill() {
 
 #[test]
 fn first_example_offers_the_card_in_hand() {
-    for spec in super::super::sample(&TEST) {
+    for spec in beryl_cli::specs::sample(&TEST) {
         let card = spec.card;
         let generated = Box::leak(Box::new(generate(&TEST, card)));
         assert!(
@@ -85,7 +87,7 @@ fn first_example_offers_the_card_in_hand() {
 #[test]
 fn every_prepared_example_reaches_its_interaction() {
     let mut failures = Vec::new();
-    for spec in super::super::sample(&TEST) {
+    for spec in beryl_cli::specs::sample(&TEST) {
         for example in &spec.playground().examples {
             for variant in &example.variants {
                 match prepare(&TEST, variant) {

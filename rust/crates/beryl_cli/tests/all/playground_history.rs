@@ -2,7 +2,10 @@
 //! not just in a fully scripted scenario replay. These check opportunity to review the UI;
 //! the browser's motion and gesture checks still judge its presentation.
 
-use super::*;
+use beryl_cli::specs::View;
+use serde_json::json;
+
+use beryl_cli::specs::playground::*;
 use beryl_engine::card::Purpose;
 use beryl_session::protocol::{
     Candidate, CandidateIndex, CardHandling, GameEvent, Kind, ObjectId, PlayerView, Side, Status,
@@ -11,14 +14,14 @@ use beryl_session::protocol::{
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
-use crate::catalog::TEST;
+use crate::common::TEST;
 
 /// How long a test waits for the next view before it calls the playground hung. Healthy views
 /// arrive in milliseconds; a loaded machine only slows that, so the limit is far above it.
 const HANG_LIMIT: Duration = Duration::from_secs(120);
 
 fn variant(card: &str, fragment: &str) -> &'static Variant {
-    super::super::spec(&TEST, card)
+    beryl_cli::specs::spec(&TEST, card)
         .unwrap()
         .playground()
         .examples

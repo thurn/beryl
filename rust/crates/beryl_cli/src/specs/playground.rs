@@ -17,8 +17,6 @@ use super::{Moment, Phase, View, auto, slug};
 use crate::Catalog;
 use crate::boards::{self, Scripted, Shared};
 
-#[cfg(test)]
-mod history_tests;
 mod opponent;
 
 pub struct Variant {
@@ -570,7 +568,7 @@ pub fn find(catalog: &'static Catalog, card: &str, name: &str) -> Option<&'stati
 /// Finish setup before creating either visible game. A cast in the setup is not finished
 /// merely because its first action was taken: its targets, payment and resolution may still
 /// be pending. Stop only when the intended interaction is actually offered.
-fn prepare(
+pub fn prepare(
     catalog: &'static Catalog,
     variant: &Variant,
 ) -> Result<(beryl_engine::GameTable, beryl_engine::State), String> {
@@ -658,6 +656,3 @@ pub fn start(
         .map_err(|e| e.to_string())?;
     Ok(sessions)
 }
-
-#[cfg(test)]
-mod tests;

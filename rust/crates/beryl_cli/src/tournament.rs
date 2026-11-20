@@ -334,7 +334,6 @@ pub fn table(r: &Results) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::TEST;
 
     #[test]
     fn wilson_intervals_match_known_values() {
@@ -364,39 +363,11 @@ mod tests {
         }
     }
 
-    /// Seats alternate and each win is credited to the agent that won it, whichever seat it
-    /// held: greedy beats random from both.
-    #[test]
-    fn wins_go_to_the_agent_not_the_seat() {
-        let agents = ["greedy".to_owned(), "random".to_owned()];
-        let r = run(&TEST, &agents, 8, 3, Budget::DEFAULT, false, false, None).unwrap();
-        let p = &r.pairings[0];
-        assert_eq!(
-            (p.a.as_str(), p.b.as_str(), p.games),
-            ("greedy", "random", 8)
-        );
-        assert!(p.a_wins >= 6, "{p:?}");
-    }
-
     #[test]
     fn every_pair_of_distinct_agents_meets_once() {
         let names = |v: &[&str]| v.iter().map(|&s| s.to_owned()).collect::<Vec<_>>();
         assert_eq!(pairings(&names(&["a"])), [(0, 0)]);
         assert_eq!(pairings(&names(&["a", "b", "c"])), [(0, 1), (0, 2), (1, 2)]);
-    }
-
-    /// A paired tournament plays each seed from both seats and sorts its seeds by how the
-    /// first agent fared over the two.
-    #[test]
-    fn paired_games_share_a_seed_from_both_seats() {
-        let agents = ["greedy".to_owned(), "random".to_owned()];
-        let r = run(&TEST, &agents, 6, 5, Budget::DEFAULT, false, true, None).unwrap();
-        let q = r.pairings[0].paired.expect("paired seeds");
-        assert_eq!(q.a_swept + q.split + q.b_swept, 3);
-        assert!(q.a_swept >= 2, "{q:?}");
-        assert!(r.pairings[0].paired.is_some());
-        let unpaired = run(&TEST, &agents, 2, 5, Budget::DEFAULT, false, false, None).unwrap();
-        assert!(unpaired.pairings[0].paired.is_none());
     }
 
     #[test]

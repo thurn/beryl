@@ -108,7 +108,7 @@ fn lock(streams: &Streams) -> std::sync::MutexGuard<'_, Vec<Sender<String>>> {
 }
 
 /// The headers every response carries: the UI is served from another port.
-pub(crate) const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
+pub const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
                     Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
                     Access-Control-Allow-Headers: Content-Type\r\n";
 
@@ -201,14 +201,14 @@ fn handle(mut stream: TcpStream, seats: &[BrowserSeat; 2]) -> Result<(), String>
     }
 }
 
-pub(crate) struct HttpRequest {
+pub struct HttpRequest {
     pub method: String,
     pub path: String,
     pub headers: HashMap<String, String>,
     pub body: Vec<u8>,
 }
 
-pub(crate) fn read_request(stream: &TcpStream) -> Result<HttpRequest, String> {
+pub fn read_request(stream: &TcpStream) -> Result<HttpRequest, String> {
     let mut reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
     let mut line = String::new();
     reader.read_line(&mut line).map_err(|e| e.to_string())?;
@@ -239,7 +239,7 @@ pub(crate) fn read_request(stream: &TcpStream) -> Result<HttpRequest, String> {
     })
 }
 
-pub(crate) fn respond(stream: &mut TcpStream, status: &str, body: &str) -> Result<(), String> {
+pub fn respond(stream: &mut TcpStream, status: &str, body: &str) -> Result<(), String> {
     write!(
         stream,
         "HTTP/1.1 {status}\r\n{CORS}Content-Type: application/json\r\n\
@@ -270,7 +270,7 @@ fn events(mut stream: TcpStream, streams: &Streams) -> Result<(), String> {
 
 /// The [`ipc::CARD_RECORDS`] command's answer for `cards`, which needs no game: the spec
 /// server's too.
-pub(crate) fn card_records(cards: &'static CardTable, args: Value) -> Value {
+pub fn card_records(cards: &'static CardTable, args: Value) -> Value {
     match serde_json::from_value::<Request<CardRecordsRequest>>(args) {
         Ok(r) => {
             json!({ "ok": beryl_session::card_records::card_records(&r.request, cards) })
@@ -308,7 +308,7 @@ where
 }
 
 /// Runs `command` as `beryl_app` would: `{"ok": result}` or `{"err": error}`.
-pub(crate) fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
+pub fn invoke(sessions: &Sessions, command: &str, args: Value) -> Value {
     match command {
         ipc::APP_INFO => answer::<_, ()>(Ok(AppInfo {
             version: format!("{} (live)", env!("CARGO_PKG_VERSION")),

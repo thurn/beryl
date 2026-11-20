@@ -63,7 +63,7 @@ pub const SEEDS: u32 = 5;
 
 /// The repository, whose `data/` and `docs/` the entries name files in: above this crate
 /// when run under cargo, else the nearest directory up from here that holds the suite.
-fn root() -> PathBuf {
+pub fn root() -> PathBuf {
     if let Some(dir) = std::env::var_os("CARGO_MANIFEST_DIR") {
         return Path::new(&dir).join("../../..");
     }
@@ -235,7 +235,7 @@ pub struct Report {
 
 /// The seed of run `k` at entry `name`: its own stream per entry, so adding an entry moves
 /// no other's.
-pub(crate) fn run_seed(name: &str, k: u32) -> u64 {
+pub fn run_seed(name: &str, k: u32) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for byte in name.bytes() {
         h = (h ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
@@ -245,7 +245,7 @@ pub(crate) fn run_seed(name: &str, k: u32) -> u64 {
 
 /// The agent `name` for a run from `seed`: a registered agent, or a long-think entrant
 /// searching on every core.
-fn build(t: &GameTable, name: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
+pub fn build(t: &GameTable, name: &str, seed: u64) -> Result<Box<dyn Agent>, String> {
     if let Some(info) = beryl_search::find_agent(name)? {
         return Ok((info.new)(t, seed, Budget::DEFAULT));
     }
@@ -421,6 +421,3 @@ pub fn main(catalog: &'static Catalog, args: &[String]) -> Result<(), String> {
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

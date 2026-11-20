@@ -35,8 +35,7 @@ tempfile = "3"
 windows-sys = { version = "0.61.2", features = ["Win32_System_Threading"] }
 
 [dev-dependencies]
-# The unit tests' catalog (`catalog::TEST`), until they move to tests/ and use only the
-# public API.
+# The integration tests' catalog (`tests/all/common.rs`): the commands played with every card.
 beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 # Every shared dependency with the whole workspace's features, so that a build of this
 # package's tests alone builds what the whole workspace's does (beryl_workspace_hack).
