@@ -299,6 +299,28 @@ fn nothing_is_granted_beyond_what_processes_outside_ignite_leave() {
 }
 
 #[test]
+fn outside_load_fills_the_idle_express_cores_first() {
+    // 18 cores, 3 kept for the express lane.
+    let mut ledger = Ledger::new(Limits {
+        cores: 15,
+        reserved: 3,
+        ..limits()
+    });
+    // 7 cores busy and none of them Ignite's: 3 fit on the idle express cores, 4 are outside.
+    ledger.observe(Some(7.0 / 18.0), None);
+    assert_eq!(ledger.status().outside, 4);
+    ledger.enqueue(ask(Class::Agent, 10), T0);
+    assert_eq!(ledger.step(T0).granted[0].cores, 10);
+
+    // The express lane, which runs in the daemon's tree, now uses its 3 cores: the same
+    // outside processes count fully again.
+    ledger.observe_tree(at(1.0), Some(0.0));
+    ledger.observe_tree(at(2.0), Some(13.0));
+    ledger.observe(Some(1.0), None);
+    assert_eq!(ledger.status().outside, 5);
+}
+
+#[test]
 fn idle_work_starts_only_under_seventy_percent_busy() {
     let mut ledger = Ledger::new(limits());
     ledger.observe(Some(0.5), None);

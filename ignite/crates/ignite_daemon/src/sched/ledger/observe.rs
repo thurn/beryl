@@ -8,7 +8,8 @@ use super::{Ledger, Origin};
 impl Ledger {
     /// Records a reading of the machine: the fraction of all its cores busy, from 0 to 1, and
     /// the free memory, each if it could be read. Whatever is busy beyond what Ignite uses
-    /// belongs to processes outside Ignite, and is not granted until they finish.
+    /// belongs to processes outside Ignite, and is not granted until they finish, except what
+    /// fits on the express cores the express lane leaves idle.
     ///
     /// The fraction covers every logical core, the express lane's too, so it is read against
     /// [`super::Limits::machine_cores`]. Read against the cores handed out, a fully busy
@@ -37,7 +38,14 @@ impl Ledger {
                 .tree
                 .latest()
                 .map_or(grants, |tree| (tree + counted(true)).max(grants));
-            self.outside = (busy_cores - ours).max(0.0).round() as u32;
+            // The express cores are kept out of the cores handed out, but while the express
+            // lane leaves them idle, processes outside Ignite run on them first. Subtracting
+            // that load from the cores handed out as well left them idle twice over: on
+            // 2026-11-20 jarvis read 7 cores busy outside Ignite, granted 9 of 15, kept 20 agent
+            // commands waiting and stood 43% idle. Ignite's use beyond its grants is the express
+            // lane, the verb processes and the daemon, and counts against the express cores.
+            let spare = (f64::from(self.limits.reserved) - (ours - grants).max(0.0)).max(0.0);
+            self.outside = (busy_cores - ours - spare).max(0.0).round() as u32;
         }
         if free_memory_mb.is_some() {
             self.free_memory_mb = free_memory_mb;

@@ -71,8 +71,9 @@ fn a_failed_tree_reading_counts_only_the_grants() {
 }
 
 /// The busy fraction covers every logical core. With half of a 24-core machine reserved for the
-/// express lane and half of it busy outside Ignite, 12 cores are busy, which is every core the
-/// scheduler may hand out; read against the 12 it hands out, it was 6.
+/// express lane and three quarters of it busy outside Ignite, 18 cores are busy: 12 on the idle
+/// express cores and 6 on the cores the scheduler hands out. Read against the 12 it hands out,
+/// it was 9.
 #[test]
 fn the_busy_fraction_is_read_against_every_logical_core() {
     let mut ledger = Ledger::new(Limits {
@@ -81,8 +82,8 @@ fn the_busy_fraction_is_read_against_every_logical_core() {
         floor: Floor::default(),
         resources: BTreeMap::new(),
     });
-    ledger.observe(Some(0.5), None);
-    assert_eq!(ledger.status().outside, 12);
-    ledger.enqueue(ask(Class::Agent, 4), T0);
-    assert!(ledger.step(T0).granted.is_empty());
+    ledger.observe(Some(0.75), None);
+    assert_eq!(ledger.status().outside, 6);
+    ledger.enqueue(ask(Class::Agent, 8), T0);
+    assert_eq!(ledger.step(T0).granted[0].cores, 6);
 }
