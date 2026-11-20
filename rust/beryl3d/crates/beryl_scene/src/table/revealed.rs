@@ -14,7 +14,7 @@ use super::{CARD_HEIGHT, CARD_WIDTH};
 use crate::data::space::layout::phone;
 use crate::data::space::revealed;
 use crate::faces::Faces;
-use crate::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role};
+use crate::frame::{ElementId, FrameBuilder, Place, REVEALED_FACE, Role, StateBits};
 use crate::light::{Open, Span};
 use crate::pose::{Curve, Segment, Shape};
 
@@ -84,7 +84,10 @@ impl Table {
                 whiten: 0.0,
                 face: face_of(faces, shown),
                 full: None,
-                state: 0,
+                // A press goes through a face to the permanent under it, as the web's
+                // Revealed Cards lie over rows on purpose (`DESKTOP_REVEALED`); the pill and
+                // the viewer are how a face is opened.
+                state: StateBits::PASSES,
                 interactive: false,
             };
             let place = Place::Revealed;
