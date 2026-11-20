@@ -78,7 +78,7 @@ mod work;
 pub use stall::RunningVerb;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
-pub use usage::usage_report;
+pub use usage::{hold_line, usage_holds, usage_report};
 pub use verb::DispatchVerb;
 
 /// Seconds an instruction may go unacknowledged before it is given again.
@@ -860,6 +860,9 @@ impl Dispatcher {
 #[cfg(test)]
 #[path = "dispatchd_allowed_tests.rs"]
 mod allowed_tests;
+#[cfg(test)]
+#[path = "dispatchd_hold_tests.rs"]
+mod hold_tests;
 #[cfg(test)]
 #[path = "dispatchd_hub_tests.rs"]
 mod hub_tests;

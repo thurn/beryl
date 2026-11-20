@@ -183,6 +183,8 @@ fn a_paused_pool_asks_only_for_tickets_holding_master_back() {
     let status = crate::pool::PauseSection {
         dispatcher: rig.dispatcher.clone(),
         hub: rig.hub.clone(),
+        clock: rig.clock.clone(),
+        usage_hold_percent: 99,
     };
     assert!(status.lines().is_empty(), "nothing to say while not paused");
     assert_eq!(rig.pool(&["pause"], None).exit, Exit::Success);

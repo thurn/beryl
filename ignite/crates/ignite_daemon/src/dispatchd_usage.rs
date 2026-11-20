@@ -18,11 +18,16 @@
 //!   source [`SOURCE`], one metrics row per window, so a row the hub missed goes with the next
 //!   sample.
 //! - `ignite pool usage` prints the newest row of each window ([`usage_report`]).
+//! - A window whose newest row is at or above `[pool] usage_hold_percent` puts the machine on a
+//!   usage hold ([`usage_holds`], and `ignite_core::plan_usage` for the rule). Each metrics row
+//!   says whether it holds (`holds`), so the dashboard can show the hold without the threshold.
+//!   While held, samples are still taken every [`USAGE_EVERY_S`], so the hold ends promptly.
 
 use std::fmt::Write as _;
 
 use serde_json::{Value, json};
 
+use ignite_core::plan_usage::{self as hold_rule, Hold};
 use ignite_core::protocol::client::{DispatchAction, Exit, Reply};
 use ignite_core::protocol::hub::{MetricsImport, WorkerRole};
 use ignite_core::time::Timestamp;
@@ -109,9 +114,11 @@ fn sample_rows(raw: &str, machine: &str, now: Timestamp) -> Vec<PlanUsage> {
     windows
 }
 
-/// One sample row as the hub's metrics row.
-fn metrics_row(row: &PlanUsage) -> Value {
+/// One sample row as the hub's metrics row. `holds` says whether the row's percentage is at or
+/// above `threshold`; the dashboard checks `resets_at` itself.
+fn metrics_row(row: &PlanUsage, threshold: u32) -> Value {
     json!({
+        "holds": row.percent_used.is_some_and(|p| p >= f64::from(threshold)),
         "at": row.at,
         "status": row.status,
         "window": row.label,
@@ -235,7 +242,10 @@ impl Dispatcher {
         ctx.hub.metrics(&MetricsImport {
             machine: ctx.machine.clone(),
             source: SOURCE.to_owned(),
-            rows: waiting.iter().map(metrics_row).collect(),
+            rows: waiting
+                .iter()
+                .map(|row| metrics_row(row, ctx.config.pool.usage_hold_percent))
+                .collect(),
         })?;
         let ids: Vec<i64> = waiting.iter().map(|row| row.id).collect();
         self.pool
@@ -244,9 +254,42 @@ impl Dispatcher {
     }
 }
 
-/// `ignite pool usage`: the newest sample of each window of the plan, its age and when the
-/// window resets, and the newest sample that had no windows if it is newer still.
-pub fn usage_report(pool: &Pool, now: Timestamp) -> Reply {
+/// The windows of the plan whose newest sample holds Claude hand-offs at `now`, given the
+/// threshold `[pool] usage_hold_percent`. A database that cannot be read holds nothing: the
+/// samples are a guard against running out, not a gate that a fault should close.
+pub fn usage_holds(pool: &Pool, threshold: u32, now: Timestamp) -> Vec<Hold> {
+    pool.with_database(|conn| plan_usage::latest(conn))
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|row| {
+            hold_rule::hold(
+                row.label.as_deref()?,
+                row.percent_used,
+                row.resets_at.as_deref(),
+                threshold,
+                now,
+            )
+        })
+        .collect()
+}
+
+/// The line `ignite pool list`, `ignite pool usage` and `ignite status` print for a hold.
+pub fn hold_line(hold: &Hold) -> String {
+    let which = match &hold.family {
+        Some(family) => format!("Claude hand-offs on {family} models"),
+        None => "Claude hand-offs".to_owned(),
+    };
+    format!(
+        "usage hold: {}; {which} wait, except tickets that hold master back, one at a time, \
+         until a sample is lower or the window resets",
+        hold.describe()
+    )
+}
+
+/// `ignite pool usage`: the usage hold, if any, then the newest sample of each window of the
+/// plan, its age and when the window resets, and the newest sample that had no windows if it is
+/// newer still.
+pub fn usage_report(pool: &Pool, now: Timestamp, threshold: u32) -> Reply {
     let rows = match pool.with_database(|conn| plan_usage::latest(conn)) {
         Ok(rows) => rows,
         Err(error) => return Reply::text(Exit::Usage, error.to_string()),
@@ -258,20 +301,19 @@ pub fn usage_report(pool: &Pool, now: Timestamp) -> Reply {
              15 minutes",
         );
     }
-    let lines: Vec<String> = rows
-        .iter()
-        .map(|row| {
-            let mut line = format!("{:<32} {}", describe(row), ago(now, &row.at));
-            if let Some(resets) = &row.resets_at {
-                let _ = write!(line, ", resets {resets}");
-            }
-            line
-        })
-        .collect();
+    let holds = usage_holds(pool, threshold, now);
+    let mut lines: Vec<String> = holds.iter().map(hold_line).collect();
+    lines.extend(rows.iter().map(|row| {
+        let mut line = format!("{:<32} {}", describe(row), ago(now, &row.at));
+        if let Some(resets) = &row.resets_at {
+            let _ = write!(line, ", resets {resets}");
+        }
+        line
+    }));
     Reply {
         exit: Exit::Success,
         text: lines.join("\n"),
-        json: Some(json!({ "samples": rows })),
+        json: Some(json!({ "samples": rows, "holds": holds })),
         handle: None,
     }
 }

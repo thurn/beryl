@@ -215,7 +215,7 @@ impl Verb for PoolVerb {
     fn run(&self, ctx: &Context, req: &Request) -> Reply {
         let words: Vec<&str> = req.args.iter().map(String::as_str).collect();
         let result = match words.split_first() {
-            Some((&"list", _)) | None => Ok(self.list()),
+            Some((&"list", _)) | None => Ok(self.list(ctx)),
             Some((&"add", rest)) => self.add(ctx, req, rest),
             Some((&"remove", [session])) => self.remove(session),
             Some((&"pause", rest)) => self.pause(ctx, rest.contains(&"--all"), true),
@@ -223,6 +223,7 @@ impl Verb for PoolVerb {
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
                 self.dispatcher.pool(),
                 ctx.clock.now(),
+                ctx.config.pool.usage_hold_percent,
             )),
             Some(_) => Err(Error::Invalid(
                 "usage: ignite pool list | add <session>... --app <app> [--dispatcher [--slots <n>]] \
@@ -236,7 +237,7 @@ impl Verb for PoolVerb {
 }
 
 impl PoolVerb {
-    fn list(&self) -> Reply {
+    fn list(&self, ctx: &Context) -> Reply {
         let view = match self.dispatcher.view() {
             Ok(view) => view,
             Err(error) => return Reply::text(hub_exit(&error), error.to_string()),
@@ -256,6 +257,15 @@ impl PoolVerb {
                     .to_owned(),
             );
         }
+        lines.extend(
+            crate::dispatchd::usage_holds(
+                pool,
+                ctx.config.pool.usage_hold_percent,
+                ctx.clock.now(),
+            )
+            .iter()
+            .map(crate::dispatchd::hold_line),
+        );
         if self.dispatcher.is_down() {
             lines.push("down     the dispatcher left three instructions unacknowledged".to_owned());
         }
@@ -488,12 +498,15 @@ impl PoolVerb {
 /// verification found failing) and a justiciar ticket (a fault in Ignite itself).
 const HOLDING_MASTER: [&str; 2] = ["regression", ignite_core::dispatch::JUSTICIAR];
 
-/// `ignite status`'s `pool` lines, shown only while hand-offs are paused: how far the pause
-/// reaches, and the tickets that hold `master` back, which a person who paused the pool may not
-/// know are waiting.
+/// `ignite status`'s `pool` lines, shown only while hand-offs are paused or on a usage hold: how
+/// far the pause reaches, which window of the plan holds, and the tickets that hold `master`
+/// back, which a person who paused the pool may not know are waiting.
 pub struct PauseSection {
     pub dispatcher: Arc<Dispatcher>,
     pub hub: Arc<dyn ignite_core::traits::Hub>,
+    pub clock: Arc<dyn ignite_core::traits::Clock>,
+    /// `[pool] usage_hold_percent` from `ignite.toml`.
+    pub usage_hold_percent: u32,
 }
 
 impl crate::doctor::StatusSection for PauseSection {
@@ -503,14 +516,25 @@ impl crate::doctor::StatusSection for PauseSection {
 
     fn lines(&self) -> Vec<String> {
         let pool = self.dispatcher.pool();
-        let mut lines =
-            vec![if pool.paused_everywhere() {
-            "paused on every machine: nothing is handed off, not even the tickets that hold \
-             master back"
+        let holds: Vec<String> =
+            crate::dispatchd::usage_holds(pool, self.usage_hold_percent, self.clock.now())
+                .iter()
+                .map(crate::dispatchd::hold_line)
+                .collect();
+        let pause = if pool.paused_everywhere() {
+            Some(
+                "paused on every machine: nothing is handed off, not even the tickets that hold \
+                 master back",
+            )
         } else if pool.paused().unwrap_or(false) {
-            "paused on this machine: only tickets that hold master back are handed off, one at \
-             a time"
+            Some(
+                "paused on this machine: only tickets that hold master back are handed off, one \
+                 at a time",
+            )
         } else {
+            None
+        };
+        if pause.is_none() && holds.is_empty() {
             // Whether more workers would help: only when the reason is about workers, never
             // when it is about tickets or cores.
             return self
@@ -522,7 +546,8 @@ impl crate::doctor::StatusSection for PauseSection {
                 })
                 .unwrap_or_default();
         }
-        .to_owned()];
+        let mut lines: Vec<String> = pause.map(str::to_owned).into_iter().collect();
+        lines.extend(holds);
         let query = ignite_core::protocol::tickets::TicketQuery {
             label_any: HOLDING_MASTER.iter().map(|l| (*l).to_owned()).collect(),
             ..Default::default()

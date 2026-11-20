@@ -364,7 +364,7 @@ impl Rules {
 }
 
 /// What the worker pool's apps accept.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PoolConfig {
     /// The model ID each app's session tool accepts for each `tier:` label, as
     /// `app -> tier -> id`. Tier labels on tickets and in a pool member's `models` list stay the
@@ -377,6 +377,25 @@ pub struct PoolConfig {
     /// a ticket goes to any worker.
     #[serde(default)]
     pub default_owner: Option<crate::owner::Owner>,
+    /// The percentage of a Claude plan window at which the machine stops handing out Claude
+    /// tickets other than those that hold `master` back, until a newer sample is lower or the
+    /// window resets (see `crate::plan_usage`).
+    #[serde(default = "default_hold_percent")]
+    pub usage_hold_percent: u32,
+}
+
+fn default_hold_percent() -> u32 {
+    crate::plan_usage::DEFAULT_HOLD_PERCENT
+}
+
+impl Default for PoolConfig {
+    fn default() -> PoolConfig {
+        PoolConfig {
+            models: BTreeMap::new(),
+            default_owner: None,
+            usage_hold_percent: default_hold_percent(),
+        }
+    }
 }
 
 impl PoolConfig {

@@ -163,6 +163,76 @@ fn machine_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)
     Ok(found)
 }
 
+/// How far back the usage hold looks for samples. The plan's longest window is a week, so a
+/// sample older than that belongs to a window that has reset.
+const USAGE_LOOKBACK_SECONDS: f64 = 8.0 * 86_400.0;
+
+/// Machines on a usage hold (see `ignite_core::plan_usage`). Each daemon posts its samples of the
+/// Claude plan's usage to the metrics under the source `plan_usage`, one row per window, with
+/// `holds` set when the row is at or above the machine's `[pool] usage_hold_percent`. A machine
+/// is held while the newest row of some window holds and that window has not reset.
+fn usage_items(conn: &Connection, now: Timestamp) -> Result<Vec<(Tone, String)>, ReadError> {
+    let mut statement = conn.prepare(
+        "SELECT m.name, x.data FROM metrics x JOIN machines m ON m.id = x.machine
+         WHERE x.source = 'plan_usage' AND x.at >= ?1",
+    )?;
+    let since = now.plus_seconds(-USAGE_LOOKBACK_SECONDS).to_string();
+    let rows = statement
+        .query_map([since], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    // The newest row of each machine's windows, by the time the sample was taken.
+    let mut newest: std::collections::BTreeMap<(String, String), serde_json::Value> =
+        std::collections::BTreeMap::new();
+    for (machine, data) in rows {
+        let Ok(row) = serde_json::from_str::<serde_json::Value>(&data) else {
+            continue;
+        };
+        let Some(window) = row["window"].as_str().map(str::to_owned) else {
+            continue;
+        };
+        let at = |row: &serde_json::Value| row["at"].as_str().unwrap_or_default().to_owned();
+        let key = (machine, window);
+        if newest.get(&key).is_none_or(|kept| at(kept) < at(&row)) {
+            newest.insert(key, row);
+        }
+    }
+    let mut held: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for ((machine, window), row) in &newest {
+        if row["holds"].as_bool() != Some(true) {
+            continue;
+        }
+        // The machine decided the row holds; the threshold here only asks for a percentage.
+        if let Some(hold) = ignite_core::plan_usage::hold(
+            window,
+            row["percent_used"].as_f64(),
+            row["resets_at"].as_str(),
+            0,
+            now,
+        ) {
+            held.entry(machine.clone())
+                .or_default()
+                .push(hold.describe());
+        }
+    }
+    Ok(held
+        .into_iter()
+        .map(|(machine, windows)| {
+            (
+                Tone::Amber,
+                format!(
+                    "{} is on a usage hold ({}); it hands out only tickets that hold master \
+                     back until the window resets or a sample is lower",
+                    esc(&machine),
+                    esc(&windows.join("; "))
+                ),
+            )
+        })
+        .collect())
+}
+
 /// Open regressions that no worker can take: none exists on a machine with a running
 /// dispatcher.
 fn regression_items(conn: &Connection, root: &str) -> Result<Vec<(Tone, String)>, ReadError> {
@@ -294,6 +364,7 @@ pub fn items(
 ) -> Result<Vec<(Tone, String)>, ReadError> {
     let mut found = person_items(conn, root)?;
     found.extend(machine_items(conn, now)?);
+    found.extend(usage_items(conn, now)?);
     found.extend(regression_items(conn, root)?);
     found.extend(held_items(conn, root)?);
     found.extend(stranded_items(conn, root)?);

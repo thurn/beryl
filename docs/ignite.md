@@ -3342,6 +3342,23 @@ Each machine has one standing pool that serves every active epic.
   included, until `ignite pool resume --all`. While any pool is paused,
   `ignite status` and the dashboard's first line name the tickets that hold
   `master` back. Nothing but a person's `resume` ends a pause.
+- A usage hold is a different state, which Ignite starts and ends by itself.
+  When the newest sample of a Claude plan window (see `usage` under "The
+  dispatcher") is at or above `usage_hold_percent` under `[pool]` in
+  `ignite.toml` (99 unless set), the machine behaves as `ignite pool pause`
+  makes it: running workers finish, no new Claude ticket is handed out, and the
+  tickets that hold `master` back still go to one worker at a time. When the
+  plan runs out, every running worker fails mid-ticket and new tickets cannot
+  run at all; a median ticket uses about 0.06 to 0.14% of the weekly limit, so
+  99% leaves room for the tickets already running. The hold ends when a newer
+  sample of that window is below the threshold or when the window's `resetsAt`
+  passes, and samples are still taken every 15 minutes while it lasts. A window
+  named for one model family, such as `Weekly · Fable`, holds only hand-offs
+  whose model ID contains that name; any other window, such as
+  `Weekly · all models` or `5-hour`, holds every Claude hand-off on the machine.
+  Codex hand-offs are never held. `ignite status`, `ignite pool list`,
+  `ignite pool usage` and the dashboard's first line name the window that holds,
+  its percentage and when it resets.
 - `ignite pool usage` prints how much of the Claude plan is used, from the
   dispatcher's latest samples (see `usage` under "The dispatcher").
 - The pool outlives epics. Nothing is rebuilt when a plan starts or ends.
@@ -3515,7 +3532,9 @@ cannot call, so it asks a Claude dispatcher with `usage`:
   `ok` (`not_applicable`, `unavailable`) is stored as one row with no window and
   the plan's note, and a report that is not `get_usage`'s JSON as `unreadable`.
 - Each row goes to the hub's `POST /metrics/import` under the source
-  `plan_usage`. A row the hub did not acknowledge is sent with the next sample.
+  `plan_usage`, with `holds` set when it is at or above `usage_hold_percent`,
+  which is how the dashboard knows of a usage hold (see "The pool"). A row the
+  hub did not acknowledge is sent with the next sample.
 - `ignite pool usage` prints the newest sample of each window, its age and when
   the window resets.
 - `ignite pool init` no longer denies `get_usage` in the dispatcher folder's

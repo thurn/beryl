@@ -620,6 +620,8 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
         Box::new(crate::pool::PauseSection {
             dispatcher: parts.dispatcher.clone(),
             hub: parts.ctx.hub.clone(),
+            clock: parts.ctx.clock.clone(),
+            usage_hold_percent: parts.ctx.config.pool.usage_hold_percent,
         }),
         Box::new(LoopsSection(parts.health.clone())),
         Box::new(doctor::TipRoundSection {

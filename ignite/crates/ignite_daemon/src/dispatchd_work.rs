@@ -247,9 +247,14 @@ impl Dispatcher {
     /// Asks the hub for tickets while workers are idle and ticket trees are free, and reads
     /// each reserved ticket. Runs with the state unlocked. Also returns how many workers are
     /// left idle and why, or `None` when every one got a ticket.
+    ///
+    /// While the machine is on a usage hold (see `ignite_core::plan_usage`), a Claude worker is
+    /// not offered the tiers whose model a held window counts. A Claude worker left with no tier
+    /// is asked for separately, only for the tickets that hold `master` back, which the hub gives
+    /// a machine one at a time, as it does for a paused machine.
     fn ask_for_work(&self, ctx: &Context, asking: Asking) -> (Vec<Offer>, Option<(usize, String)>) {
         let Asking {
-            mut idle,
+            idle,
             mut trees,
             workers,
             master_only,
@@ -258,28 +263,106 @@ impl Dispatcher {
         // While ticket work waits long for cores, only a ticket that holds `master` back starts:
         // the pool asks as a paused pool does.
         let master_only = master_only || backlog.is_some();
+        let holds = super::usage_holds(
+            &self.pool,
+            ctx.config.pool.usage_hold_percent,
+            ctx.clock.now(),
+        );
+        let mut free = Vec::new();
+        let mut held = Vec::new();
+        for member in idle {
+            let models = offered_models(&ctx.config.pool, &member.app, &member.models);
+            if member.app != "claude" || holds.is_empty() {
+                free.push((member, models));
+                continue;
+            }
+            let open: Vec<String> = models
+                .iter()
+                .filter(|tier| {
+                    let id = ctx
+                        .config
+                        .pool
+                        .model_id(&member.app, tier)
+                        .unwrap_or_else(|| (*tier).clone());
+                    !holds.iter().any(|hold| hold.holds_model(&id))
+                })
+                .cloned()
+                .collect();
+            if open.is_empty() {
+                held.push((member, models));
+            } else {
+                free.push((member, open));
+            }
+        }
         let mut offers = Vec::new();
+        let mut why = self.ask_group(
+            ctx,
+            &mut free,
+            &mut trees,
+            workers,
+            master_only,
+            &mut offers,
+        );
+        if let Some(waited) = backlog
+            && !free.is_empty()
+        {
+            why = format!(
+                "commands have waited {waited:.0} s for cores, so only tickets that hold master \
+                 back start ({why})"
+            );
+        }
+        if !held.is_empty() {
+            let held_why = self.ask_group(ctx, &mut held, &mut trees, workers, true, &mut offers);
+            if !held.is_empty() {
+                let windows: Vec<String> = holds
+                    .iter()
+                    .map(ignite_core::plan_usage::Hold::describe)
+                    .collect();
+                why = format!(
+                    "the machine is on a usage hold ({}), so only tickets that hold master back \
+                     start ({held_why})",
+                    windows.join("; ")
+                );
+            }
+        }
+        let idle_left = free.len() + held.len();
+        let left = (idle_left > 0).then_some((idle_left, why));
+        (offers, left)
+    }
+
+    /// Asks the hub for tickets for `group`, each idle worker with the tiers it may be offered,
+    /// while it has workers and ticket trees are free. A worker that gets a ticket leaves the
+    /// group. Returns why the rest got none.
+    fn ask_group(
+        &self,
+        ctx: &Context,
+        group: &mut Vec<(Member, Vec<String>)>,
+        trees: &mut u32,
+        workers: usize,
+        master_only: bool,
+        offers: &mut Vec<Offer>,
+    ) -> String {
         let mut why = "no ticket tree is free".to_owned();
-        while !idle.is_empty() && trees > 0 {
+        while !group.is_empty() && *trees > 0 {
             let free = MachineFree {
                 machine: ctx.machine.clone(),
                 os: self.setup.os,
-                idle_workers: idle
+                idle_workers: group
                     .iter()
-                    .map(|m| IdleWorker {
+                    .map(|(m, models)| IdleWorker {
                         session: m.session.clone(),
                         app: m.app.clone(),
-                        models: offered_models(&ctx.config.pool, &m.app, &m.models),
+                        models: models.clone(),
                     })
                     .collect(),
-                free_ticket_trees: trees,
+                free_ticket_trees: *trees,
                 free_cores: self.host.free_cores(),
                 admit_cores: Some(self.host.admit_cores()),
                 families: self.setup.families.clone(),
                 name: None,
                 // The last idle worker of a pool of several is kept for justiciar tickets.
                 // A paused pool asks for justiciar and regression tickets alike.
-                justiciar_only: !master_only && idle.len() == 1 && workers > 1,
+                justiciar_only: !master_only && group.len() == 1 && workers > 1,
                 master_only,
                 // `next_explained` asks for the reason itself.
                 explain: false,
@@ -295,25 +378,19 @@ impl Dispatcher {
                     break;
                 }
             };
-            let Some(index) = idle.iter().position(|m| m.session == reservation.session) else {
+            let Some(index) = group
+                .iter()
+                .position(|(m, _)| m.session == reservation.session)
+            else {
                 "the hub reserved a ticket for a worker that is not idle".clone_into(&mut why);
                 break;
             };
-            let worker = idle.remove(index);
-            trees -= 1;
+            let (worker, _) = group.remove(index);
+            *trees -= 1;
             let detail = ctx.hub.ticket(&reservation.ticket).ok();
             offers.push((reservation, worker.app, detail));
         }
-        if let Some(waited) = backlog
-            && !idle.is_empty()
-        {
-            why = format!(
-                "commands have waited {waited:.0} s for cores, so only tickets that hold master \
-                 back start ({why})"
-            );
-        }
-        let left = (!idle.is_empty()).then_some((idle.len(), why));
-        (offers, left)
+        why
     }
 
     /// Turns a reservation into a hand-off. `detail` is the ticket as the hub has it. The model
@@ -535,6 +612,7 @@ mod offered_models_tests {
                 ),
             ]),
             default_owner: None,
+            usage_hold_percent: 99,
         };
         assert_eq!(offered_models(&pool, "codex", &[]), ["opus", "sonnet"]);
         let listed = ["opus".to_owned(), "light".to_owned()];

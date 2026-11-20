@@ -17,6 +17,7 @@ pub mod inputs;
 pub mod manifest;
 pub mod output;
 pub mod owner;
+pub mod plan_usage;
 pub mod prime;
 pub mod protocol;
 pub mod ready;
