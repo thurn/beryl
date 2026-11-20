@@ -17,7 +17,7 @@
 // document's timeline, which no fake clock stops (ui/scripts/counts.mjs), so each is paused
 // when first seen and its current time is set by hand from then on.
 import { readFile, writeFile } from "node:fs/promises";
-import { FRAME, records, withPage } from "./page.mjs";
+import { FRAME, records, run, withPage } from "./page.mjs";
 
 const job = JSON.parse(await readFile(process.argv[2], "utf8"));
 
@@ -62,8 +62,8 @@ async function advance(ms) {
 const frames = [];
 const failed = await withPage(job, async (page, errors) => {
     // Where the clock stands, in ms after the first advance. It moves a whole frame at a time
-    // while a frame fits before the next time, so that the stage sees 60 Hz frames as it does
-    // in the app, and by the remainder after that.
+    // while a frame fits before the next time or advance, so that the stage sees 60 Hz frames
+    // as it does in the app, and by the remainder after that.
     let clock = 0;
     const advances = [...job.advances];
     // Hands the page the views due by now.
@@ -75,16 +75,18 @@ const failed = await withPage(job, async (page, errors) => {
             }, count);
         }
     };
-    const step = async (ms) => {
-        await due();
-        await page.clock.runFor(ms);
-        await page.evaluate(advance, ms);
-        clock += ms;
-    };
     await due();
     for (const time of job.times_ms) {
-        while (clock + FRAME <= time + 1e-6) await step(FRAME);
-        if (time - clock > 1e-6) await step(time - clock);
+        // A step stops short of a frame at the time of the next advance, so that the page is
+        // handed each view when Beryl 3D was.
+        while (time - clock > 1e-6) {
+            const next = advances.length ? advances[0][0] : Infinity;
+            const ms = Math.min(FRAME, time - clock, next - clock);
+            await run(page, ms);
+            await page.evaluate(advance, ms);
+            clock += ms;
+            await due();
+        }
         const elements = await page.evaluate(records, {
             roles: job.roles,
             only: null,

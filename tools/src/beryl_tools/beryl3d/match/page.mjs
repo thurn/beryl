@@ -20,6 +20,29 @@ export const FRAME = 1000 / 60;
 /** The most frames to run before giving up on the page loading or coming to rest. */
 export const MOST = 3000;
 
+/** Runs the page's clock on by `ms`, and the stage's clock (ui/src/stage/clock.ts) by exactly
+ * as much.
+ *
+ * Left alone, the stage's clock moves only on the page's animation frames, and Playwright's
+ * paused clock gives those on a 16 ms grid of its own time (`getTimeToNextFrame`), not every
+ * 1000/60 ms as Beryl 3D's frames come. So after a step to a 60 Hz time the stage stood at the
+ * last multiple of 16 ms before it, from 0 to 16 ms behind, by 2/3 ms more each frame until it
+ * caught up every 24 frames. A card fading in on the web trailed Beryl 3D's by up to 0.05 of a
+ * 340 ms fade, and the fan made room a frame late. The stage's clock is therefore held, so that
+ * no frame moves it, and advanced by hand after the page's own timers have run. It is held
+ * again at every step, since the stage starts following frames once more when a view comes
+ * after a game has ended (ui/src/stage/idle.ts). */
+export async function run(page, ms) {
+    await page.evaluate(() => window.berylStage?.clock.hold());
+    await page.clock.runFor(ms);
+    await page.evaluate((by) => {
+        const clock = window.berylStage?.clock;
+        if (!clock) return;
+        clock.hold();
+        clock.advance(by);
+    }, ms);
+}
+
 /** Opens the job's fixture page and runs `use(page, errors)` on it, then closes it; whether it
  * failed. The job is {base, route, click, fixture, width, height, scale, art_dir}: `click`, if
  * set, is the selector of a button to press once the page has loaded, for a screen the app
@@ -105,10 +128,11 @@ export async function withPage(job, use) {
         );
         // `preroll_ms` runs the page's own timers, such as the opening's coin, to where Beryl
         // 3D's stood when the page opens (clock.py's `preroll`), a frame at a time so that the
-        // page renders between them.
-        for (let ran = 0; ran + FRAME <= (job.preroll_ms ?? 0) + 1e-6; ran += FRAME) {
-            await page.clock.runFor(FRAME);
-        }
+        // page renders between them, and the part of a frame left over last.
+        const preroll = job.preroll_ms ?? 0;
+        let ran = 0;
+        for (; ran + FRAME <= preroll + 1e-6; ran += FRAME) await run(page, FRAME);
+        if (preroll - ran > 1e-6) await run(page, preroll - ran);
         await use(page, errors);
         await context.close();
     } catch (e) {

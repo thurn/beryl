@@ -10,7 +10,8 @@ use crate::verbs::{self, Interval};
 /// How long a card fading in where it rests takes to go to its new place, in nanoseconds: one
 /// frame at 60 Hz. The web stage moves it between one frame and the next; a slide that short
 /// looks the same and keeps the card on a path, which the "no jumps" check asks of every card
-/// that can be seen.
+/// that can be seen. The slide ends when room is made, as the web stage's card stands at its
+/// new place from that time on.
 const MOVE: u64 = 16_666_667;
 
 /// Sends every segment of the object in `slot` that lands at `was` and has not ended by
@@ -74,10 +75,15 @@ pub(super) enum Regrouped {
 /// after the web's did.
 ///
 /// A fade that has not begun by `room.from` plays at the new place. From one under way, whole
-/// or already cut short by an earlier regroup, the card slides from where it is at `room.from`
-/// to the new place in `MOVE` and fades on there as the fade was. Both segments follow the
-/// fade's opacity (`Shape::Regrouping`) and take the place of what the card would have done
-/// after `room.from`. The records, which the interface checks read, change with the track.
+/// or already cut short by an earlier regroup, the card slides to the new place over the `MOVE`
+/// before `room.from` (from when the fade began, if that is later) and fades on there as the
+/// fade was. On the web stage the card stands at its new place from `room.from`, so a slide
+/// that began then was a frame behind it: `just b3d match` reads both clients at step starts,
+/// and there every card the step made room for stood half a slot from the web's. Both segments
+/// follow the fade's opacity (`Shape::Regrouping`) and take the place of what the card would
+/// have done after the slide begins; the beat is laid out before it plays, so the slide is
+/// known before it starts. The records, which the interface checks read, change with the
+/// track.
 pub(super) fn regroup_fade(
     track: Option<&mut Track>,
     records: &mut [SegmentRecord],
@@ -125,16 +131,17 @@ pub(super) fn regroup_fade(
         });
         part
     };
-    let moved = room.from + MOVE;
+    let moved = room.from;
+    let leaves = room.from.saturating_sub(MOVE).max(began);
     let there = Pose {
         opacity: Fade { begun: 0, ..fade }.opacity(moved - began),
         ..*to
     };
     let slide = verbs::slide(
-        track.pose_at(room.from),
+        track.pose_at(leaves),
         there,
         Interval {
-            from: room.from,
+            from: leaves,
             to: moved,
         },
     );

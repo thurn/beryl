@@ -15,7 +15,7 @@
 //
 // page.mjs opens the page and reads its records.
 import { readFile, writeFile } from "node:fs/promises";
-import { FRAME, MOST, fontFallbacks, records, withPage } from "./page.mjs";
+import { FRAME, MOST, fontFallbacks, records, run, withPage } from "./page.mjs";
 
 /** Frames in a row the stage must be idle for the view to count as at rest. */
 const TAIL = 30;
@@ -75,14 +75,17 @@ const failed = await withPage(job, async (page, errors) => {
                 }, count);
             }
         };
+        // The clock moves a 60 Hz frame at a time, and stops short of a frame at the time of
+        // the next advance, so that the page is handed each view when Beryl 3D was.
         const offset = Math.max(0, job.offset_ms);
         await due();
-        while (clock + FRAME <= offset + 1e-6) {
-            await page.clock.runFor(FRAME);
-            clock += FRAME;
+        while (offset - clock > 1e-6) {
+            const next = advances.length ? advances[0][0] : Infinity;
+            const ms = Math.min(FRAME, offset - clock, next - clock);
+            await run(page, ms);
+            clock += ms;
             await due();
         }
-        if (offset - clock > 1e-6) await page.clock.runFor(offset - clock);
     }
     // The records are read before anything is hidden, since a hidden node is not kept.
     let elements;

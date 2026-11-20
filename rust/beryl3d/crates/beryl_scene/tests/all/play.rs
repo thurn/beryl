@@ -564,11 +564,13 @@ fn the_turn_step_shown_follows_the_scripts_set_steps_not_the_latest_view() {
 
 /// Two cards appear in the hand in one beat, the second 100 ms after the first, as the opening
 /// hand is dealt. Each fades in where it rests, so when the second makes room, the first goes
-/// to its new place within a frame and keeps fading there, as on the web stage, where a card's
-/// own fade only changes its opacity. It used to glide there over the rest of its fade, and
-/// reached its place long after the web's card did.
+/// to its new place over the frame before and keeps fading there, as on the web stage, where a
+/// card's own fade only changes its opacity and the card stands at its new place from the time
+/// room is made. It used to glide there over the rest of its fade, and reached its place long
+/// after the web's card did; then it slid over the frame after, and stood half a slot from the
+/// web's card at that time.
 #[test]
-fn a_card_fading_into_the_hand_goes_to_its_new_place_within_a_frame() {
+fn a_card_fading_into_the_hand_stands_at_its_new_place_when_room_is_made() {
     use beryl_protocol::script::Room;
     let (start, cards) = before();
     let library = &start.view.players.you.library;
@@ -616,16 +618,16 @@ fn a_card_fading_into_the_hand_goes_to_its_new_place_within_a_frame() {
     let rest = show
         .latest_rest(top)
         .expect("the first card rests in the hand");
-    let before_room = show.pose(top, 90 * MS).expect("the first card is drawn");
+    let before_room = show.pose(top, 80 * MS).expect("the first card is drawn");
     assert_ne!(
         before_room.position, rest.position,
-        "until the second card makes room, the first stands where it first rested"
+        "until a frame before the second card makes room, the first stands where it first \
+         rested"
     );
-    let after_room = show.pose(top, 120 * MS).expect("the first card is drawn");
+    let after_room = show.pose(top, 100 * MS).expect("the first card is drawn");
     assert!(
         after_room.position.distance(rest.position) < 0.01,
-        "a frame after the second card makes room, the first stands at its new place: {} \
-         and {}",
+        "when the second card makes room, the first stands at its new place: {} and {}",
         after_room.position,
         rest.position
     );
