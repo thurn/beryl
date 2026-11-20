@@ -34,7 +34,7 @@ pub use encode::{ENCODER_VERSION, EncodeError, Format, Layer, decode, dimensions
 #[cfg(feature = "decklists")]
 pub use faces::decklist_faces;
 pub use faces::{CARD_BACK, MatchFace, MatchFaces};
-pub use frame::{frame, frames_drawn_on_this_thread, plate_over};
+pub use frame::{card_back, frame, frames_drawn_on_this_thread, plate_over};
 pub use prepare::{
     Config, FULL_LAYERS, Full, Preparer, Source, default_workers, faces_built_on_this_thread,
 };

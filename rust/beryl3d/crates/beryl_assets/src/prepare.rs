@@ -29,8 +29,8 @@ use beryl_scene::input::{AssetReady, FaceId, FaceSize};
 
 use crate::cache::{self, CacheKey};
 use crate::encode::{ENCODER_VERSION, Format, Layer, decode, encode};
-use crate::faces::{MatchFace, MatchFaces};
-use crate::frame::{frame, plate_over};
+use crate::faces::{CARD_BACK, MatchFace, MatchFaces};
+use crate::frame::{card_back, frame, plate_over};
 use crate::{Prepared, Upload};
 
 /// How many full-size faces are kept: the layers of the full-size texture array.
@@ -421,7 +421,8 @@ fn compress(pixels: &[u8], job: &Job, face: &MatchFace, file: Option<&PathBuf>) 
 }
 
 /// The face's layer from the compressed cache, or else made from its scan and cached, or else
-/// drawn as Beryl's frame, with the receiver of its scan's download when one was queued.
+/// drawn as Beryl's frame (the card back as the web's plain back), with the receiver of its
+/// scan's download when one was queued.
 /// `None`, with a log line, when the encoder fails.
 fn build(shared: &Shared, job: &Job) -> Option<(Layer, Source, Option<Download>)> {
     FACES_BUILT.with(|built| built.set(built.get() + 1));
@@ -440,6 +441,11 @@ fn build(shared: &Shared, job: &Job) -> Option<(Layer, Source, Option<Download>)
         let layer = compress(&pixels, job, face, Some(&file))?;
         return Some((layer, Source::Encoded, None));
     }
-    let layer = compress(&frame(face, job.size), job, face, None)?;
+    let drawn = if job.face == CARD_BACK {
+        card_back(job.size)
+    } else {
+        frame(face, job.size)
+    };
+    let layer = compress(&drawn, job, face, None)?;
     Some((layer, Source::Drawn, answer))
 }

@@ -15,7 +15,11 @@
 //!
 //! Only the asset workers draw frames, never the frame thread: [`frames_drawn_on_this_thread`]
 //! counts them.
+//!
+//! The card back has no frame: without its scan it is drawn as the web interface's plain back
+//! ([`card_back`]).
 
+mod back;
 mod layout;
 mod paint;
 
@@ -25,6 +29,8 @@ use beryl_scene::faces::{Plate, PrintedText};
 use beryl_scene::input::FaceSize;
 use beryl_scene::text::fonts::Font;
 use tiny_skia::{Pixmap, Point, Shader};
+
+pub use back::card_back;
 
 use crate::encode::dimensions;
 use crate::faces::MatchFace;
