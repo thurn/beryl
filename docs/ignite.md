@@ -3169,9 +3169,9 @@ tickets run beside expensive ones.
 - A ticket that names files in several areas takes the largest figure. A ticket
   that names no files takes the machine's median.
 - A planner can state the figure directly with `--cores`.
-- The hub keeps a total for the tickets in progress on a machine or reserved
-  for it, counting each at its expectation. It cannot see what a ticket has used
-  so far.
+- The hub keeps a total for the tickets in progress on a machine or reserved for
+  it, counting each at its expectation. It cannot see what a ticket has used so
+  far.
 - A ticket is admitted when that total plus its own figure is within the
   machine's `admit_cores`: every core its scheduler hands out, which is its
   cores less its `express_cores`. On jarvis, with 18 cores and 3 express cores,
@@ -4106,9 +4106,9 @@ These show that cores, trees and workers go where the rules say.
   five and two in progress. Close all but one of the second epic's tickets and
   expect six and one.
 - **A light ticket on a busy machine.** Fill the machine with core-crate tickets
-  until `ignite status` shows idle workers waiting for cores. File a ticket
-  that names only a Python file. Expect it handed off at once, in the tree with
-  the oldest build, with no Rust build started.
+  until `ignite status` shows idle workers waiting for cores. File a ticket that
+  names only a Python file. Expect it handed off at once, in the tree with the
+  oldest build, with no Rust build started.
 - **A plan.** Give `/ignite` a plan document. Expect an epic filed in one batch,
   a `plan check` report, and the planning session ending while the pool starts
   the ready tickets.
