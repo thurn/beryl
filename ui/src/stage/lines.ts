@@ -283,16 +283,20 @@ const SAG_DEEP = 0.32;
  * toward the source going up. */
 const SAG_BOW = 0.25;
 const SAG_ALONG = 0.225;
+/** How far into the stack card, in stage pixels, the hanging line may pass before it counts
+ * as crossing the card: less than the line is wide. A curve that clipped the card's corner
+ * by less than a pixel was redrawn as the short curve rising from the card's top. */
+const SAG_GRAZE = 1;
 
 /** Whether the curve from `a` round `c` to `b` passes over the card `end` anywhere between
- * its own two ends, sampled at `CROSS_STEPS` points along it. */
+ * its own two ends, sampled at `CROSS_STEPS` points along it, further in than `SAG_GRAZE`. */
 function crosses([a, c, b]: [Point, Point, Point], end: Reach): boolean {
   for (let i = 1; i < CROSS_STEPS; i++) {
     const t = i / CROSS_STEPS;
     const p = mix(mix(a, c, t), mix(c, b, t), t);
     if (
-      Math.abs(p.x - end.middle.x) < end.half.x &&
-      Math.abs(p.y - end.middle.y) < end.half.y
+      Math.abs(p.x - end.middle.x) < end.half.x - SAG_GRAZE &&
+      Math.abs(p.y - end.middle.y) < end.half.y - SAG_GRAZE
     ) {
       return true;
     }

@@ -202,7 +202,8 @@
     "hang": {
       "deep": 0.32,
       "bow": 0.25,
-      "along": 0.225
+      "along": 0.225,
+      "graze": 1
     },
     "bow": {
       "share": 0.2,

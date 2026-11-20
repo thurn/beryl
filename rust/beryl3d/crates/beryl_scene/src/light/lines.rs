@@ -13,7 +13,8 @@
 //!
 //! Every point is in logical points from the window's top left corner, y down, and the values of
 //! `light` in `data/beryl3d/space.json` are copied from `lines.ts`: shares of a way or of an
-//! end's half-height, which do not depend on units.
+//! end's half-height, which do not depend on units, but for `hang.graze`, in points, which the
+//! web's desktop stage measures as pixels.
 
 use beryl_protocol::script::Arrow;
 use glam::Vec2;
@@ -255,12 +256,14 @@ fn hung(from: End, source: End, sag: f32) -> [Vec2; 3] {
 const CROSS_STEPS: u16 = 64;
 
 /// Whether the quadratic curve from `a` round `c` to `b` passes over `end` anywhere between its
-/// own two ends.
+/// own two ends, further in than `hang::GRAZE` points, less than the line is wide: a curve that
+/// clips a corner of the stack card by less than that still hangs.
 fn crosses([a, c, b]: [Vec2; 3], end: End) -> bool {
+    let inside = end.half - Vec2::splat(hang::GRAZE);
     (1..CROSS_STEPS).any(|i| {
         let t = f32::from(i) / f32::from(CROSS_STEPS);
         let p = a.lerp(c, t).lerp(c.lerp(b, t), t);
-        (p.x - end.middle.x).abs() < end.half.x && (p.y - end.middle.y).abs() < end.half.y
+        (p.x - end.middle.x).abs() < inside.x && (p.y - end.middle.y).abs() < inside.y
     })
 }
 
@@ -271,4 +274,39 @@ fn straight(from: End, to: End) -> Option<[Vec2; 2]> {
     let way = (to.middle - from.middle).abs();
     let apart = way.x >= from.half.x / 2.0 || way.y >= from.half.y / 2.0;
     apart.then_some([from.middle, to.middle])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The ends of `combat-attackers` at 102500 ms in a 1600x900 window: an ability on the stack
+    /// and its tapped source on the opponent's row, up and to the left of it. Its hanging curve
+    /// clips the stack card's bottom left corner by less than a point, and still hangs low rather
+    /// than rising from the top of the stack card.
+    #[test]
+    fn a_curve_that_grazes_the_stack_card_still_hangs() {
+        let ability = End {
+            middle: Vec2::new(1342.33, 400.0),
+            half: Vec2::new(92.79, 129.61),
+            round: false,
+            toward: 1.0,
+        };
+        let source = End {
+            middle: Vec2::new(1200.62, 159.47),
+            half: Vec2::new(51.14, 34.37),
+            round: false,
+            toward: 1.0,
+        };
+        let [a, c, b] = way_of(Arrow::Source, ability, source, Some(810.0)).unwrap();
+        assert!(
+            a.distance(Vec2::new(1342.33, 529.61)) < 0.01,
+            "leaves at {a}"
+        );
+        assert!(c.y > a.y, "the curve hangs below the stack card, at {c}");
+        assert!(
+            b.distance(Vec2::new(1200.62, 193.84)) < 0.01,
+            "meets at {b}"
+        );
+    }
 }
