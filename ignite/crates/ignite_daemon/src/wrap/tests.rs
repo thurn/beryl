@@ -99,19 +99,23 @@ fn a_shim_directory_holds_no_cargo() {
     for retired in [".ignite-shims", "cargo", "cargo.cmd"] {
         fs::write(dir.join(retired), "old").unwrap();
     }
-    write_shims(&dir, Path::new("/opt/ignite")).unwrap();
+    let ignite = dir.join("ignite-exe");
+    fs::write(&ignite, "program").unwrap();
+    write_shims(&dir, &ignite).unwrap();
     let mut names: Vec<String> = fs::read_dir(&dir)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
+    names.retain(|name| name != "ignite-exe");
     let mut expected = vec![RUNNER_SCRIPT.to_owned(), RUSTC_WRAP_SCRIPT.to_owned()];
     expected.sort();
     assert_eq!(names, expected);
     let wrapper = fs::read_to_string(dir.join(RUSTC_WRAP_SCRIPT)).unwrap();
-    assert!(wrapper.contains("/opt/ignite") && wrapper.contains("rustc-wrap"));
+    #[cfg(unix)]
+    assert!(wrapper.contains("ignite-exe") && wrapper.contains("rustc-wrap"));
     // Writing again over unchanged scripts succeeds and changes nothing.
-    write_shims(&dir, Path::new("/opt/ignite")).unwrap();
+    write_shims(&dir, &ignite).unwrap();
     assert_eq!(
         fs::read_to_string(dir.join(RUSTC_WRAP_SCRIPT)).unwrap(),
         wrapper
@@ -137,21 +141,22 @@ fn cargo_env_points_cargo_at_the_scripts() {
     );
 }
 
-/// `canonicalize` gives a verbatim `\\?\` path on Windows, and `cmd.exe` cannot run a program
-/// through one, so the shim script must name the plain drive path.
+/// On Windows a shim is `ignite.exe` itself, linked or copied, not a batch file: `cmd.exe`
+/// refuses a command line over 8191 characters, which a `windows-sys` compile exceeds.
 #[cfg(windows)]
 #[test]
-fn a_batch_script_names_a_plain_drive_path() {
-    assert_eq!(
-        batch_quote(r"\\?\D:\a b\ignite.exe"),
-        r#""D:\a b\ignite.exe""#
-    );
-    assert_eq!(
-        batch_quote(r"\\?\UNC\host\share\ignite.exe"),
-        r#""\\?\UNC\host\share\ignite.exe""#
-    );
-    assert_eq!(
-        batch_quote(r"C:\100%\ignite.exe"),
-        r#""C:\100%%\ignite.exe""#
-    );
+fn a_shim_is_the_ignite_executable_itself() {
+    let dir = scratch("exe-shims");
+    let ignite = dir.join("ignite.exe");
+    fs::write(&ignite, "program").unwrap();
+    let shims = dir.join("shims");
+    write_shims(&shims, &ignite).unwrap();
+    for name in [RUSTC_WRAP_SCRIPT, RUNNER_SCRIPT] {
+        assert_eq!(fs::read_to_string(shims.join(name)).unwrap(), "program");
+    }
+    // A batch shim from an earlier release is removed, and a second write changes nothing.
+    fs::write(shims.join("rustc-wrap.cmd"), "old").unwrap();
+    write_shims(&shims, &ignite).unwrap();
+    assert!(!shims.join("rustc-wrap.cmd").exists());
+    fs::remove_dir_all(&dir).unwrap();
 }

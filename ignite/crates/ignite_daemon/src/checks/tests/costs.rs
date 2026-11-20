@@ -270,7 +270,7 @@ fn a_product_build_is_recorded_with_its_compile_units() {
     assert_eq!(build.compile_units.len(), 2);
 }
 
-/// A shim's path without the `.cmd` that Windows shims end in.
+/// A shim's path without the `.exe` that Windows shims end in.
 fn shim(path: &str) -> &str {
-    path.strip_suffix(".cmd").unwrap_or(path)
+    path.strip_suffix(".exe").unwrap_or(path)
 }

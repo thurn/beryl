@@ -347,7 +347,12 @@ fn world(manifest: &str, changed: &[&str], history: FakeHistory) -> World {
         outputs: dir.join("results"),
         cores: 4,
         ignite: "test".to_owned(),
-        ignite_exe: PathBuf::from("/bin/ignite"),
+        ignite_exe: {
+            // On Windows the shims are links to this file, so it has to exist.
+            let exe = dir.join("ignite-exe");
+            fs::write(&exe, "program").unwrap();
+            exe
+        },
         shims: dir.join("shims"),
     };
     let cache = ResultCache::new(

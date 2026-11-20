@@ -27,7 +27,7 @@ use ignite_core::protocol::client::Reply;
 use crate::args::{Cli, Command, DispatchCommand, HubCommand, InternalCommand, PoolCommand};
 
 fn main() -> ExitCode {
-    let raw: Vec<String> = std::env::args().collect();
+    let raw = with_shim_verb(std::env::args().collect());
     let cli = Cli::try_parse_from(&raw).unwrap_or_else(|error| rejected::exit(&error, &raw));
     let reply = answer(&cli, &raw);
     if cli.json && reply.json.is_none() && reply.text.is_empty() {
@@ -42,6 +42,24 @@ fn main() -> ExitCode {
         println!("{}", reply.text.trim_end());
     }
     ExitCode::from(reply.exit.code())
+}
+
+/// Cargo runs the compiler wrapper and the test runner as one program with no verb in front of
+/// its arguments. On Windows the shims are copies of this executable named `rustc-wrap.exe`
+/// and `test-runner.exe` (`ignite_daemon::wrap`), so a call by one of those names gets the
+/// matching verb inserted after the program name.
+fn with_shim_verb(mut raw: Vec<String>) -> Vec<String> {
+    let stem = raw
+        .first()
+        .and_then(|program| std::path::Path::new(program).file_stem())
+        .and_then(|stem| stem.to_str());
+    let verb = match stem {
+        Some("rustc-wrap") => "rustc-wrap",
+        Some("test-runner") => "runner",
+        _ => return raw,
+    };
+    raw.insert(1, verb.to_owned());
+    raw
 }
 
 fn answer(cli: &Cli, raw: &[String]) -> Reply {
@@ -270,4 +288,29 @@ fn exit_reply(code: i32) -> Reply {
         .and_then(|c| Exit::try_from(c).ok())
         .unwrap_or(Exit::Usage);
     Reply::text(exit, "")
+}
+
+#[cfg(test)]
+mod shim_tests {
+    use super::with_shim_verb;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn a_shim_name_inserts_its_verb() {
+        assert_eq!(
+            with_shim_verb(args(&[r"C:\s\rustc-wrap.exe", "rustc.exe", "-vV"])),
+            args(&[r"C:\s\rustc-wrap.exe", "rustc-wrap", "rustc.exe", "-vV"])
+        );
+        assert_eq!(
+            with_shim_verb(args(&["/s/test-runner", "t"])),
+            args(&["/s/test-runner", "runner", "t"])
+        );
+        assert_eq!(
+            with_shim_verb(args(&["ignite", "ticket", "list"])),
+            args(&["ignite", "ticket", "list"])
+        );
+    }
 }

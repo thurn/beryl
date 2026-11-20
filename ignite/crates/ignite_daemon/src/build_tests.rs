@@ -253,6 +253,9 @@ fn manager_in(dir: PathBuf, git: Arc<FakeGit>, gated: bool) -> Fixture {
             packages: vec![package("a", &[]), package("b", &["a"])],
         },
     });
+    // On Windows the shims are links to this file, so it has to exist.
+    fs::create_dir_all(dir.join("bin")).unwrap();
+    fs::write(dir.join("bin").join("ignite"), "program").unwrap();
     let launcher = Arc::new(TestLauncher::new(dir.clone(), gated));
     let settings = BuildSettings {
         manifest: manifest.into(),
@@ -424,9 +427,14 @@ fn builds_compile_through_the_wrapper_that_records_units() {
         f.dir.join("shims").join(crate::wrap::RUSTC_WRAP_SCRIPT)
     );
     let script = fs::read_to_string(&wrapper).unwrap();
-    assert!(script.contains("rustc-wrap"), "{script}");
     let ignite = f.dir.join("bin").join("ignite");
-    assert!(script.contains(&*ignite.to_string_lossy()), "{script}");
+    if cfg!(windows) {
+        // The shim is the executable itself, which names its verb by its own file name.
+        assert_eq!(script, "program");
+    } else {
+        assert!(script.contains("rustc-wrap"), "{script}");
+        assert!(script.contains(&*ignite.to_string_lossy()), "{script}");
+    }
     let units = PathBuf::from(var(UNITS_ENV));
     assert_eq!(units.parent(), Some(f.dir.join("records").as_path()));
 }

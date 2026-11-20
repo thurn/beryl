@@ -7,7 +7,10 @@
 //!
 //! Cargo runs `RUSTC_WRAPPER` and the runner as one program path with no arguments of its own,
 //! so [`write_shims`] writes a small script for each into a shim directory, and [`cargo_env`]
-//! points Cargo at them. The scripts are POSIX shell scripts, or `.cmd` batch files on Windows.
+//! points Cargo at them. The scripts are POSIX shell scripts. On Windows each shim is instead a
+//! hard link (or a copy) of `ignite.exe` that picks its verb from its own file name, because a
+//! `.cmd` file runs through `cmd.exe`, which refuses a command line over 8191 characters, and
+//! the compile line of a crate such as `windows-sys` is longer than that.
 //!
 //! The shim directory holds no `cargo` and never goes on a session's `PATH`. A `cargo` that
 //! sent each call through `ignite run` would break the cargo calls agents and recipes make: the
@@ -34,7 +37,14 @@ pub const UNITS_ENV: &str = "IGNITE_UNITS";
 
 /// Files that earlier releases wrote into a shim directory, for a `cargo` shim that is gone.
 /// [`write_shims`] deletes them, so no `cargo` is left in a shim directory to divert a call.
-const RETIRED: [&str; 3] = [".ignite-shims", "cargo", "cargo.cmd"];
+const RETIRED: [&str; 5] = [
+    ".ignite-shims",
+    "cargo",
+    "cargo.cmd",
+    // The batch shims that Windows releases wrote before the shims became executables.
+    "rustc-wrap.cmd",
+    "test-runner.cmd",
+];
 
 /// The compiler wrapper script's name in a shim directory.
 #[cfg(unix)]
@@ -44,10 +54,10 @@ pub const RUSTC_WRAP_SCRIPT: &str = "rustc-wrap";
 pub const RUNNER_SCRIPT: &str = "test-runner";
 /// The compiler wrapper script's name in a shim directory.
 #[cfg(windows)]
-pub const RUSTC_WRAP_SCRIPT: &str = "rustc-wrap.cmd";
+pub const RUSTC_WRAP_SCRIPT: &str = "rustc-wrap.exe";
 /// The test runner script's name in a shim directory.
 #[cfg(windows)]
-pub const RUNNER_SCRIPT: &str = "test-runner.cmd";
+pub const RUNNER_SCRIPT: &str = "test-runner.exe";
 
 /// The mode recorded for a test process run by `ignite runner`.
 pub const RUN_MODE: &str = "run";
@@ -63,6 +73,12 @@ pub fn write_shims(dir: &Path, ignite: &Path) -> io::Result<()> {
             _ => {}
         }
     }
+    install(dir, ignite)
+}
+
+/// Writes the two scripts. A script that already holds the same text is left alone.
+#[cfg(unix)]
+fn install(dir: &Path, ignite: &Path) -> io::Result<()> {
     for (name, text) in scripts(&ignite.display().to_string()) {
         // Written beside the script and renamed over it, so a build that starts the script
         // while it is being rewritten runs either the old text or the new, never a part.
@@ -76,6 +92,44 @@ pub fn write_shims(dir: &Path, ignite: &Path) -> io::Result<()> {
         fs::rename(&partial, &path)?;
     }
     Ok(())
+}
+
+/// Makes each shim a hard link to `ignite`, or a copy where a link is impossible. The
+/// executable starts as `rustc-wrap.exe` or `test-runner.exe` and `ignite` reads the verb from
+/// that name (`ignite_cli`'s `main`). A link keeps the release's file alive after the updater
+/// deletes its directory, so a shim never names a missing executable.
+#[cfg(windows)]
+fn install(dir: &Path, ignite: &Path) -> io::Result<()> {
+    for name in [RUSTC_WRAP_SCRIPT, RUNNER_SCRIPT] {
+        let path = dir.join(name);
+        if same_file(&path, ignite) {
+            continue;
+        }
+        let partial = dir.join(format!("{name}.{}.partial", std::process::id()));
+        let _ = fs::remove_file(&partial);
+        if fs::hard_link(ignite, &partial).is_err() {
+            fs::copy(ignite, &partial)?;
+        }
+        if let Err(error) = fs::rename(&partial, &path) {
+            let _ = fs::remove_file(&partial);
+            // Windows will not replace a running executable. The shim that is running is a
+            // complete older release, which does the same work, so keep it.
+            if !path.exists() {
+                return Err(error);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Whether `a` and `b` have the same size and modification time, as a hard link or a copy of
+/// a file does.
+#[cfg(windows)]
+fn same_file(a: &Path, b: &Path) -> bool {
+    let (Ok(a), Ok(b)) = (fs::metadata(a), fs::metadata(b)) else {
+        return false;
+    };
+    a.len() == b.len() && a.modified().ok() == b.modified().ok()
 }
 
 /// The two scripts' names and texts, each calling the `ignite` executable at `ignite`.
@@ -94,28 +148,10 @@ fn scripts(ignite: &str) -> [(&'static str, String); 2] {
     ]
 }
 
-/// The two scripts' names and texts, each calling the `ignite` executable at `ignite`.
-#[cfg(windows)]
-fn scripts(ignite: &str) -> [(&'static str, String); 2] {
-    let ignite = batch_quote(ignite);
-    let call = |verb: &str| format!("@{ignite} {verb} %*\r\n@exit /b %ERRORLEVEL%\r\n");
-    [
-        (RUSTC_WRAP_SCRIPT, call("rustc-wrap")),
-        (RUNNER_SCRIPT, call("runner")),
-    ]
-}
-
 #[cfg(unix)]
 fn make_executable(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
-}
-
-/// Windows runs a `.cmd` file by its name, so it needs no permission bits.
-#[cfg(windows)]
-#[allow(clippy::unnecessary_wraps)]
-fn make_executable(_path: &Path) -> io::Result<()> {
-    Ok(())
 }
 
 /// The variables that make Cargo compile through the wrapper and run tests through the runner
@@ -149,19 +185,6 @@ fn runner_variable() -> String {
 #[cfg(unix)]
 fn shell_quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', r"'\''"))
-}
-
-/// Quotes a path for a batch file. A Windows path cannot hold `"`, but a `%` would start a
-/// variable, so it is doubled. A verbatim `\\?\` prefix, which `canonicalize` adds, is dropped
-/// for a drive path because `cmd.exe` cannot run a program through it ("The system cannot
-/// find the path specified", exit code 3).
-#[cfg(windows)]
-fn batch_quote(text: &str) -> String {
-    let plain = match text.strip_prefix(r"\\?\") {
-        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => rest,
-        _ => text,
-    };
-    format!("\"{}\"", plain.replace('%', "%%"))
 }
 
 /// The hidden `ignite rustc-wrap <rustc> <args...>` subcommand.
