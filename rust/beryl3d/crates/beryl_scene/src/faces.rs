@@ -613,10 +613,7 @@ impl Faces {
     /// from the full-size array takes its back from that array too.
     #[must_use]
     pub fn full_layers(&self, face: Option<FaceId>) -> Option<[u16; 2]> {
-        Some([
-            self.full_layer_of(face?)?,
-            self.full_layer_of(CARD_BACK)?,
-        ])
+        Some([self.full_layer_of(face?)?, self.full_layer_of(CARD_BACK)?])
     }
 
     /// The full-size layers of the face that shows `object` (`FaceList::find_object`) and of

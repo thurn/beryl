@@ -265,7 +265,12 @@ fn hand_and_stack_cards_draw_their_full_frame_and_permanents_their_battlefield_f
         }));
     }
     let draws = card_draws(client.frame(1));
-    let full_layer = |name| full.iter().find(|(f, _)| *f == find(&client, name)).unwrap().1;
+    let full_layer = |name| {
+        full.iter()
+            .find(|(f, _)| *f == find(&client, name))
+            .unwrap()
+            .1
+    };
     for name in ["Lightning Bolt", "Counterspell"] {
         assert!(
             draws.contains(&(true, full_layer(name))),

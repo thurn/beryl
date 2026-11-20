@@ -236,10 +236,10 @@ fn load_faces(
     // Each face is sent once at board size, unless its encoder failed, which the wait gives up
     // on.
     for _ in 0..list.faces().len() {
-        let Ok(prepared) = results.recv_timeout(FACE_WAIT) else {
+        let Ok(face) = results.recv_timeout(FACE_WAIT) else {
             break;
         };
-        renderer.upload_layer(&prepared);
+        renderer.upload_layer(&face);
     }
     (preparer, results)
 }
