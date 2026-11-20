@@ -113,6 +113,16 @@ situation, and a command names the topic when it applies.
   check one, run `ignite ticket show <ticket>`: it must be labelled `justiciar`
   and held by the session the order names, which also signs the ticket's
   comments.
+- `ignite land` lands a change that passed `ignite check` by rebasing it onto
+  `staging` and pushing, without checking it again when other changes landed
+  meanwhile. Two changes that each pass alone can still break the build
+  together. A landing that breaks the build is reverted by a tip round (the
+  check that runs on the newest `staging` commit after landings), and its ticket
+  opens again with the compiler's output. Every other failing check is fixed
+  forward: the round files a regression ticket and the fix lands on top. A
+  change to Ignite's own source (files under `ignite/`) lands on its own, never
+  mixed with other files, so `ignite land` refuses a mixed change and says to
+  split it into two tickets.
 - **Session titles show status**: `⚒️ [<ticket>] <short summary>` while working,
   `🚒` instead while working a regression ticket (a check that tip verification
   found failing, which holds `master` back), `🔍` while waiting on the person's
