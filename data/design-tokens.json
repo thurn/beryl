@@ -575,6 +575,188 @@
         "size": 16,
         "line_height": 1.4,
         "note": "The word under the permanent that holds a player to sorcery speed: `.timing-refusal`, 16 points at weight 600."
+      },
+      "GALLERY_WORDMARK": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 37,
+        "line_height": 1.189,
+        "note": "The gallery's \"PROJECT BERYL\" wordmark: `.wordmark h1` in `ui/src/screens/styles/gallery.css`, 37 points on a 44-point line."
+      },
+      "GALLERY_SUBTITLE": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 26,
+        "line_height": 1.3077,
+        "note": "The gallery's subtitle under its wordmark: `.gallery-subtitle`, 26 points on a 34-point line."
+      },
+      "GALLERY_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 26,
+        "line_height": 1.3077,
+        "note": "A gallery panel's numbered title: `.panel-title`, bold 26 points on a 34-point line."
+      },
+      "GALLERY_CAPTION": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 17,
+        "line_height": 1.1765,
+        "note": "A caption the gallery centres under a sample: `.caption` in a 240-point `.caption-at` box, 17 points on a 20-point line."
+      },
+      "GALLERY_SWATCH": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 17,
+        "line_height": 1.2941,
+        "note": "A color swatch's name: `.swatch figcaption`, 17 points on a 22-point line."
+      },
+      "GALLERY_HEX": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 14,
+        "line_height": 1.2857,
+        "note": "A color swatch's hex value: `.swatch small`, 14 points on an 18-point line."
+      },
+      "GALLERY_SPECIMEN_CAPTION": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 15.7,
+        "line_height": 1.4013,
+        "note": "The captions under the gallery's two type specimens: `.specimen .caption`, 15.7 points on a 22-point line."
+      },
+      "GALLERY_MATERIAL_CAPTION": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 16,
+        "line_height": 1.375,
+        "note": "The caption under the gallery's tabletop swatch: `.material-specimens .caption`, 16 points on a 22-point line."
+      },
+      "GALLERY_METAL_CAPTION": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 15.5,
+        "line_height": 1.4194,
+        "note": "The caption under the gallery's metallic rules, a little smaller than the tabletop's: 15.5 points on a 22-point line."
+      },
+      "GALLERY_ROW_CAPTION": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 17.5,
+        "line_height": 1.2571,
+        "note": "The captions beside the gallery's three buttons: `.button-rows .caption`, 17.5 points on a 22-point line."
+      },
+      "GALLERY_SERIF": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 56,
+        "line_height": 1,
+        "note": "The gallery's serif type specimen, \"Scry\": `.specimen-serif`, bold 56 points."
+      },
+      "GALLERY_SANS": {
+        "font": "OpenSans",
+        "weight": 500,
+        "size": 20,
+        "line_height": 1.5,
+        "note": "The gallery's sans-serif type specimen: `.specimen-sans`, 20 points at weight 500 on a 30-point line."
+      },
+      "GALLERY_LIFE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 35.52,
+        "line_height": 0.999,
+        "note": "A life total on the gallery's smaller orbs (`--orb: 0.74px`): `.life-orb-total` at 48 orb units."
+      },
+      "GALLERY_BADGE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 20.5,
+        "line_height": 1.05,
+        "note": "The player badge's name in the gallery: `.panel-03 .player-badge`, bold 20.5 points."
+      },
+      "GALLERY_LAND_COUNT": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 22,
+        "line_height": 1.4,
+        "note": "The count on the gallery's stack of lands, \"×3\": `.land-stack-count`, bold 22 points."
+      },
+      "GALLERY_PRIMARY": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 29.5,
+        "line_height": 1,
+        "note": "The gallery's primary button sample: `.button-rows .button-primary`, 29.5 points."
+      },
+      "GALLERY_SECONDARY": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 24.5,
+        "line_height": 1,
+        "note": "The gallery's secondary button sample: `.button-rows .button-secondary`, 24.5 points."
+      },
+      "GALLERY_DISABLED": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 28.5,
+        "line_height": 1,
+        "note": "The gallery's disabled button sample: `.button-rows .button:disabled`, 28.5 points."
+      },
+      "GALLERY_PILL": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 20,
+        "line_height": 1,
+        "note": "The priority pill in the gallery: `.panel-02 .priority-pill`, 20 points."
+      },
+      "GALLERY_SCRY_TITLE": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 22.6,
+        "line_height": 1,
+        "note": "The title of the gallery's scry overlay, drawn at 0.35 of the overlay's size as `.scry-preview-inner` scales it."
+      },
+      "GALLERY_SCRY_TEXT": {
+        "font": "OpenSans",
+        "weight": 400,
+        "size": 8,
+        "line_height": 1.2,
+        "note": "The instruction and button labels of the gallery's scry overlay, at 0.35 of their size in the overlay."
+      },
+      "GALLERY_SCRY_LABEL": {
+        "font": "CrimsonPro",
+        "weight": 400,
+        "size": 11.55,
+        "line_height": 1,
+        "note": "The \"Bottom\" and \"Top\" labels of the gallery's scry overlay, at 0.35 of their size in the overlay."
+      },
+      "GALLERY_FIELD": {
+        "font": "OpenSans",
+        "weight": 600,
+        "size": 20,
+        "line_height": 1.2,
+        "note": "The value in a gallery prompt's field: `.ask-field` in the gallery's table prompts, 20 points at weight 600."
+      },
+      "GALLERY_STEPPER": {
+        "font": "OpenSans",
+        "weight": 700,
+        "size": 22,
+        "line_height": 1,
+        "note": "The minus and plus on a gallery prompt's stepper buttons: bold 22 points."
+      },
+      "GALLERY_SCRY_BUTTON": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 8.4,
+        "line_height": 1,
+        "note": "The labels of the buttons on the gallery's scry overlay: the buttons' 24 points at the 0.35 the overlay is drawn at."
+      },
+      "GALLERY_TITLE_NUMBER": {
+        "font": "CrimsonPro",
+        "weight": 700,
+        "size": 26,
+        "line_height": 1.1077,
+        "note": "A gallery panel title's gold number: `.panel-number`, bold 26 points, whose line the web draws 28.8 points tall."
       }
     },
     "size": {
@@ -1211,6 +1393,30 @@
       "FULL_CONTROL_RIGHT": {
         "value": 301,
         "note": "How far full control's stop sign stands from the window's right edge: `.full-control`'s `right: 301px`."
+      },
+      "GALLERY_CHIP_RADIUS": {
+        "value": 9,
+        "note": "The radius of a gallery color swatch's corners: `.swatch-chip`."
+      },
+      "GALLERY_TABLETOP_RADIUS": {
+        "value": 8,
+        "note": "The radius of the gallery's tabletop swatch: `.tabletop-chip`."
+      },
+      "GALLERY_PILE_RADIUS": {
+        "value": 7,
+        "note": "The radius of each card under the top of a gallery pile."
+      },
+      "GALLERY_LAND_COUNT_RADIUS": {
+        "value": 6.6,
+        "note": "The radius of the gallery's land count badge."
+      },
+      "GALLERY_SCRY_ZONE_RADIUS": {
+        "value": 10,
+        "note": "The radius of the drop zone in the gallery's scry overlay."
+      },
+      "GALLERY_FIELD_RADIUS": {
+        "value": 4,
+        "note": "The radius of a gallery prompt's field."
       }
     },
     "color": {
@@ -1418,6 +1624,30 @@
       "TIMING_REFUSAL": {
         "value": "rgb(27 26 24 / 95%)",
         "note": "The face of the word under the permanent that holds a player to sorcery speed: `.timing-refusal`'s `background`; its rim is `stat-down`."
+      },
+      "GALLERY_PAGE": {
+        "value": "#413631",
+        "note": "The gallery page under its panels: `.gallery`'s background color in `ui/src/screens/styles/gallery.css`."
+      },
+      "GALLERY_PANEL": {
+        "value": "#29231f",
+        "note": "A gallery panel's face: `.panel`'s background."
+      },
+      "GALLERY_PANEL_RIM": {
+        "value": "#8a735a",
+        "note": "A gallery panel's border at its sides; its top is `#e9c88a` and its bottom `#a9895f`, lit from above."
+      },
+      "GALLERY_WORDMARK": {
+        "value": "#efc68c",
+        "note": "The gallery's wordmark: `.wordmark h1`'s color."
+      },
+      "GALLERY_LAND_COUNT": {
+        "value": "#1d1b19",
+        "note": "The dark numerals on the gallery's land count badge."
+      },
+      "GALLERY_CAPTION_RULE": {
+        "value": "rgb(214 192 150 / 42%)",
+        "note": "The faint line before the gallery's second and third scry captions: their left border."
       }
     },
     "mana": {
@@ -1572,6 +1802,62 @@
       "PASS_ON": {
         "value": "0 1px 1px rgb(70 25 4 / 75%)",
         "note": "The pass-on button's glyph's dark brown drop shadow: `.pass-on-face > svg`'s `filter` in `controls.css`."
+      },
+      "GALLERY_PANEL": {
+        "value": "inset 0 0 0 1px rgb(14 11 10 / 55%), 0 2px 6px rgb(0 0 0 / 30%)",
+        "note": "A gallery panel's dark inner hairline and soft drop shadow: `.panel`'s `box-shadow`."
+      },
+      "GALLERY_RULE": {
+        "value": "0 -1px 0 rgb(20 16 14 / 45%), 0 1px 0 rgb(20 16 14 / 45%)",
+        "note": "The dark lines above and below a gallery panel's engraved rule: `.panel-rule`'s `box-shadow`."
+      },
+      "GALLERY_SWATCH": {
+        "value": "0 0 0 1px rgb(10 8 7 / 60%), 0 3px 6px rgb(0 0 0 / 40%)",
+        "note": "The ring and drop shadow under a gallery color swatch."
+      },
+      "GALLERY_METAL_GOLD": {
+        "value": "0 0 3px 1px rgb(150 85 35 / 55%)",
+        "note": "The warm haze round the gallery's gold rule: `.metal-gold`'s `box-shadow`."
+      },
+      "GALLERY_METAL_SILVER": {
+        "value": "0 1px 0 rgb(0 0 0 / 50%)",
+        "note": "The dark line under the gallery's silver rule: `.metal-silver`'s `box-shadow`."
+      },
+      "GALLERY_SWATCH_LIGHT": {
+        "value": "0 1px 0 #191310, 0 0 0 1px rgb(10 8 7 / 50%), 0 3px 6px rgb(0 0 0 / 40%)",
+        "note": "The dark line, ring and drop shadow under the gallery's three light color swatches: `.swatch-chip`'s `box-shadow`."
+      },
+      "GALLERY_TABLETOP": {
+        "value": "0 0 0 1px rgb(10 8 6 / 55%), 0 3px 6px rgb(0 0 0 / 40%)",
+        "note": "The ring and drop shadow under the gallery's tabletop swatch."
+      },
+      "GALLERY_LAND_COUNT": {
+        "value": "0 0 0 1px rgb(30 24 18 / 70%), 0 3px 8px rgb(0 0 0 / 65%)",
+        "note": "The dark ring and drop shadow under the gallery's land count badge."
+      },
+      "GALLERY_PILE_FOOT": {
+        "value": "0 2px 3px rgb(0 0 0 / 45%), 0 10px 18px rgb(0 0 0 / 35%)",
+        "note": "The shadow under the lowest card of a gallery pile, the web's `--shadow-card`."
+      },
+      "GALLERY_TRACKER": {
+        "value": "0 0 0 1px rgb(12 10 9 / 45%), 0 3px 6px rgb(0 0 0 / 30%)",
+        "note": "The dark ring and drop shadow round the gallery's phase tracker: `.phase-tracker`'s `box-shadow`."
+      },
+      "GALLERY_PILL": {
+        "value": "0 0 0 1px rgb(12 10 9 / 50%), 0 3px 6px rgb(0 0 0 / 30%)",
+        "note": "The dark ring and drop shadow round the gallery's priority pill: `.priority-pill`'s `box-shadow`."
+      },
+      "GALLERY_SOURCE_RING": {
+        "value": "0 0 0 1.5px #e4a242",
+        "note": "The gold ring round the gallery's source card, where the web lights its `highlight=\"source\"` card."
+      },
+      "GALLERY_TARGET_RING": {
+        "value": "0 0 0 1.5px #33dcfe",
+        "note": "The cyan ring round the gallery's target card and its blocker."
+      },
+      "GALLERY_ATTACK_RING": {
+        "value": "0 0 0 1.5px #e0572c",
+        "note": "The ember ring round the gallery's attacker."
       }
     },
     "gradient": {
@@ -1598,6 +1884,42 @@
       "LOG_MASK": {
         "value": "linear-gradient(to bottom, transparent, #000 40px)",
         "note": "The game log's mask, which fades its oldest lines out over its top 40 points: `.game-log-list`'s `mask-image` in `table.css`."
+      },
+      "GALLERY_RULE": {
+        "value": "linear-gradient(90deg, transparent, rgb(160 138 112 / 90%) 25%, rgb(160 138 112 / 85%) 70%, transparent)",
+        "note": "A gallery panel's engraved rule, fading out at both ends: `.panel-rule`'s `background`."
+      },
+      "GALLERY_DIVIDER": {
+        "value": "linear-gradient(180deg, transparent, #8a745f 20%, #947d66 50%, #8a745f 80%, transparent)",
+        "note": "The upright divider between gallery samples: `.specimen-divider`'s `background`."
+      },
+      "GALLERY_WORDMARK_RULE": {
+        "value": "linear-gradient(90deg, transparent, rgb(233 173 74 / 85%) 30%, rgb(255 226 170 / 95%) 50%, rgb(233 173 74 / 85%) 70%, transparent)",
+        "note": "The gold rule either side of the gallery's wordmark: `.wordmark-rule`'s `--metal-line`."
+      },
+      "GALLERY_TABLETOP": {
+        "value": "radial-gradient(ellipse at 50% 75%, #67584f, #594c44 60%, #51453f)",
+        "note": "The gallery's tabletop swatch, the table's material without its lighting: `.tabletop-chip`."
+      },
+      "GALLERY_METAL_GOLD": {
+        "value": "linear-gradient(90deg, #c99d62, #e2bb84 15%, #ecca98 40%, #fff2cf 47%, #fffbe6 50%, #fff2cf 53%, #ecca98 60%, #e2bb84 85%, #c99d62)",
+        "note": "The gallery's gold rule, amber at its ends and white-hot in its middle: `.metal-gold`."
+      },
+      "GALLERY_METAL_SILVER": {
+        "value": "linear-gradient(90deg, rgb(190 184 176 / 40%), #c6c0b8 3%, #e6e1da 50%, #c6c0b8 97%, rgb(190 184 176 / 40%))",
+        "note": "The gallery's silver rule: `.metal-silver`."
+      },
+      "GALLERY_BADGE": {
+        "value": "linear-gradient(90deg, rgb(24 21 19 / 55%), rgb(30 26 24 / 92%) 4.17%, rgb(30 26 24 / 88%) 55%, transparent)",
+        "note": "The shade behind the player badge in the gallery, fading out to its right: `.player-badge`."
+      },
+      "GALLERY_LAND_COUNT": {
+        "value": "linear-gradient(180deg, #fbf0d8, #dcc49a)",
+        "note": "The pale gold face of the gallery's land count badge."
+      },
+      "GALLERY_WORDMARK_SHADE": {
+        "value": "linear-gradient(180deg, rgb(150 115 70 / 85%) 50%, transparent 50%)",
+        "note": "The darker upper half of the gold rule either side of the gallery's wordmark, drawn over `GALLERY_WORDMARK_RULE`."
       }
     }
   }

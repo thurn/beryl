@@ -1,5 +1,7 @@
-//! The web component gallery's samples, in a scrolling column that fits the desktop window.
+//! The web component gallery's samples. On the desktop they stand on the web's page of numbered
+//! panels (`desktop`); on a phone they stand in one scrolling column.
 
+mod desktop;
 mod samples;
 
 pub(crate) use samples::faces;
@@ -60,6 +62,9 @@ pub fn gallery(input: &ScreenIn) -> Element {
     let inset = input.window.safe_area;
     let width = (input.window.size.width - inset.left - inset.right).max(0.0);
     let height = (input.window.size.height - inset.top - inset.bottom).max(0.0);
+    if !super::phone(input) {
+        return on_desktop(input, faces, width, height);
+    }
     // On a phone the samples stand in one column the phone's gutter in from the safe area's
     // sides, as the other portrait screens do; the sample rows wrap to that width.
     let edge = if super::phone(input) {
@@ -129,6 +134,68 @@ pub fn gallery(input: &ScreenIn) -> Element {
         screen = screen.child(context_menu(at, example_menu(kind)));
     }
     screen
+}
+
+/// The gallery on the desktop: the web's page, centred in the window, which scrolls to show
+/// its lower panels. A menu opens where its button was pressed, and the command list's preview
+/// stands in the middle of the window, as the web's `CommandList` panel does.
+fn on_desktop(input: &ScreenIn, faces: &FaceList, width: f32, height: f32) -> Element {
+    let GalleryState {
+        menu: opened,
+        query,
+    } = input.gallery;
+    let inset = input.window.safe_area;
+    let mut screen = column()
+        .name("gallery")
+        .width(width)
+        .height(height)
+        .background(color::GALLERY_PAGE)
+        .overflow(Overflow::Scroll)
+        .align_items(Align::Center)
+        .child(desktop::page(faces, opened.is_none() && query.is_none()))
+        .shortcut("Escape", escape(input.gallery));
+    screen.anchor = Some(Anchor::Point(Vec2::new(inset.left, inset.top), Vec2::ZERO));
+    if let Some(query) = query {
+        let mut preview = command_preview(query)
+            .padding(space::L)
+            .background(color::SURFACE)
+            .border((color::METAL, size::BORDER))
+            .radius(size::PANEL_RADIUS);
+        preview.anchor = Some(Anchor::Point(
+            Vec2::new(input.window.size.width, input.window.size.height) / 2.0,
+            Vec2::splat(0.5),
+        ));
+        screen = screen.child(preview);
+    }
+    if let Some((kind, at)) = opened {
+        screen = screen.child(context_menu(
+            menu_point(input, kind, at),
+            example_menu(kind),
+        ));
+    }
+    screen
+}
+
+/// What Escape does on the gallery: closes an open menu, then the command list's preview, then
+/// goes back to the start screen.
+fn escape(state: GalleryState) -> Press {
+    if state.menu.is_some() {
+        Press::Dismiss(Dismiss::Menu)
+    } else if state.query.is_some() {
+        Press::GalleryQuery(None)
+    } else {
+        Press::Open(Screen::Start)
+    }
+}
+
+/// Where menu `kind` opens: at the point its button gave, or at the window's bottom right corner
+/// for the corner sample.
+fn menu_point(input: &ScreenIn, kind: GalleryMenu, at: Vec2) -> Vec2 {
+    if kind == GalleryMenu::Corner {
+        Vec2::new(input.window.size.width, input.window.size.height)
+    } else {
+        at
+    }
 }
 
 fn section(name: &str) -> Element {
