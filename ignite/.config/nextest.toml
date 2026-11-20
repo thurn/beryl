@@ -11,6 +11,19 @@
 period = "30s"
 terminate-after = 4
 
+# The tests of `ignite_daemon`'s tree manager (`trees::`) build git repositories and lease
+# worktrees, so nearly all their time is spent in git subprocesses, which are slow on Windows. On
+# cygnus (20 cores), with a tip round compiling the Rust workspace on 13 to 17 of its 18 granted
+# cores, these tests ran past 120 s in two gates in a row: once one test, then about 20 at once
+# at 150 s. The slowest of them took 6 s alone there and 25 s in a full workspace run, so they
+# were slow, not hung. A timeout may only catch a hang, so they get ten minutes, which still
+# ends a hang with its name well inside the express lane's 1800 s verb limit. On jarvis each
+# takes 1 to 2 s. Overrides belong to one profile, so `express` repeats this one below.
+
+[[profile.ignite.overrides]]
+filter = "binary_id(ignite_daemon) & test(/^trees::/)"
+slow-timeout = { period = "60s", terminate-after = 10 }
+
 # The express lane leaves out the tests that took over 3 s each. On 2026-11-19, at a load average
 # of about 20, the workspace's 1638 tests took 257 s on one thread, and these ten took 121 s of
 # it; the build through the wrapper alone took 51 s. With them, the test run took 90 to 96 s on 3
@@ -47,3 +60,8 @@ not (
 [profile.express.slow-timeout]
 period = "30s"
 terminate-after = 4
+
+# The tree manager's tests get ten minutes here too, as in the `ignite` profile above.
+[[profile.express.overrides]]
+filter = "binary_id(ignite_daemon) & test(/^trees::/)"
+slow-timeout = { period = "60s", terminate-after = 10 }
