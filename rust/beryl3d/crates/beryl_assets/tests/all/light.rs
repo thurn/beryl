@@ -10,7 +10,7 @@ const ALL: [Sprite; 16] = [
     sprites::RING,
     sprites::CONE,
     sprites::COMET,
-    sprites::RIBBON,
+    sprites::RIBBON_CELL,
     sprites::OUTLINE,
     sprites::HEAD,
     sprites::WEDGE,

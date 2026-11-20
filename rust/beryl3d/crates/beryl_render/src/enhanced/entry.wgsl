@@ -40,7 +40,8 @@ struct LitOut {
 
 @vertex
 fn vs_lit(v: VertexIn) -> LitOut {
-    let position = world(v, v.position);
+    let kept = taper(v);
+    let position = world(v, on_record(v, kept));
     var clip = u.view_projection * vec4<f32>(position, 1.0);
     if (v.edge > 0.0) {
         // The outer ring of the edge strip, as `vs` places it.
@@ -53,7 +54,7 @@ fn vs_lit(v: VertexIn) -> LitOut {
         clip = vec4<f32>(clip.xy + vec2<f32>(u.shake.x, -u.shake.y) * 2.0 / u.target_size * clip.w, clip.zw);
     }
     var out: LitOut;
-    out.clip = clip;
+    out.clip = narrowed(clip, kept);
     out.material = v.layer_material.y & 255u;
     out.mesh_uv = v.uv;
     out.tint = v.tint;

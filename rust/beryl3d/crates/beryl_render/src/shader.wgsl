@@ -103,9 +103,48 @@ fn world(v: VertexIn, p: vec2<f32>) -> vec3<f32> {
     return vec3<f32>(dot(v.row0, point), dot(v.row1, point), dot(v.row2, point));
 }
 
+// How much of its height a glow's quad keeps at the vertex `v`: a glow whose `params.y` is above
+// 0 narrows along its length, from `params.y` of its height at its start (the mesh's left) to
+// `params.z` at its end (`Draw::tapered`), so that the pieces of a ribbon meet with no step in
+// width. Any other record keeps all of it.
+fn taper(v: VertexIn) -> f32 {
+    let tapered = (v.layer_material.y & 255u) == GLOW && v.params.y > 0.0;
+    return select(1.0, max(mix(v.params.y, v.params.z, v.position.x + 0.5), 1e-3), tapered);
+}
+
+// Where the vertex `v` lies on its record before its transform, its quad narrowed to `kept` of
+// its height there (`taper`). A glow whose `params.w` is above 0 has its two ends cut aslant
+// (`Draw::mitred`): `params.w - 1` packs the slant of its start and of its end, each from -1 to
+// 1 in 2048 steps, as `start * 2048 + end`, which a float holds exactly. A slant is how far
+// along the quad, in lengths across it, its end moves for each length across: the pieces of a
+// ribbon cut so meet on the line that halves the turn between them, with no gap or overlap
+// where the ribbon bends.
+fn on_record(v: VertexIn, kept: f32) -> vec2<f32> {
+    var p = vec2<f32>(v.position.x, v.position.y * kept);
+    if ((v.layer_material.y & 255u) == GLOW && v.params.w > 0.5) {
+        let code = v.params.w - 1.0;
+        let start = floor(code / 2048.0);
+        let slants = vec2<f32>(start, code - start * 2048.0) / 1023.5 - 1.0;
+        let across = length(vec3<f32>(v.row0.y, v.row1.y, v.row2.y));
+        let long = max(length(vec3<f32>(v.row0.x, v.row1.x, v.row2.x)), 1e-6);
+        p.x += p.y * mix(slants.x, slants.y, v.position.x + 0.5) * across / long;
+    }
+    return p;
+}
+
+// `clip`, a vertex of a quad narrowed by `kept` (`taper`) where it lies, scaled so that its
+// texture coordinates are interpolated as they would be across the quad seen in perspective,
+// its narrow end the farther: then a sprite's profile across the quad narrows with it
+// evenly, with no crease along the diagonal between its two triangles. Its place on the
+// screen and its depth do not change.
+fn narrowed(clip: vec4<f32>, kept: f32) -> vec4<f32> {
+    return clip / kept;
+}
+
 @vertex
 fn vs(v: VertexIn) -> VertexOut {
-    var clip = u.view_projection * vec4<f32>(world(v, v.position), 1.0);
+    let kept = taper(v);
+    var clip = u.view_projection * vec4<f32>(world(v, on_record(v, kept)), 1.0);
     if (v.edge > 0.0) {
         // The outer ring of the edge strip: one physical pixel outward on screen, along the
         // outline's outward direction as the camera sees it.
@@ -118,7 +157,7 @@ fn vs(v: VertexIn) -> VertexOut {
         clip = vec4<f32>(clip.xy + vec2<f32>(u.shake.x, -u.shake.y) * 2.0 / u.target_size * clip.w, clip.zw);
     }
     var out: VertexOut;
-    out.clip = clip;
+    out.clip = narrowed(clip, kept);
     out.material = v.layer_material.y & 255u;
     out.mesh_uv = v.uv;
     out.tint = v.tint;

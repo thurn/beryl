@@ -2251,7 +2251,15 @@ adds to some of them.
   web's burst as its light painter draws it at its brightest (core, bloom and
   rays at a gain of 2, soft-clipped as `glow.ts` does), and the halo holds the
   two box shadows of `.stage-effect-glow`, so that a record's tint and progress
-  only fade them, as the web's gain does.
+  only fade them, as the web's gain does. The ribbon's cell holds three shapes
+  side by side, each the same all along: a soft band, an arrow's hot core, and
+  one column for each share of its quad's height that a ribbon's body takes,
+  holding that body with its halo as the web's ribbon shader lights them,
+  soft-clipped. An arrow or line of combat is drawn as pieces, each a quad of
+  body and halo in its tone and a quad of core in the tone's core color. A
+  glow's quad can narrow along its length (`Draw::tapered`) and have its ends
+  cut aslant (`Draw::mitred`), both in the vertex shader, so that the pieces of
+  a curved ribbon meet with no step in width and no gap.
 - **The broken edge of a dissolve** is computed in the shader from the card's
   texture coordinates, with no second texture. A dissolving card is among the
   blended records, so no pixel is discarded in the opaque pass.

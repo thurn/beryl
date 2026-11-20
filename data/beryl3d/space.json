@@ -259,6 +259,28 @@
       "dart": 7.6,
       "from": 5.4,
       "to": 2.3
+    },
+    "glow": {
+      "pixel": 0.4917,
+      "reach_share": 2.6,
+      "reach_pixels": 16,
+      "halo_share": 0.9,
+      "halo_pixels": 3.25,
+      "body": 0.95,
+      "halo": 0.4,
+      "core": 0.74,
+      "core_lean": 0.22,
+      "core_reach": 1.2,
+      "gain": 1.15,
+      "fade_pixels": 8,
+      "width_weight": 1.5,
+      "turn_weight": 3,
+      "gains": {
+        "target": 1.05,
+        "source": 1.15,
+        "attack": 0.75,
+        "block": 1
+      }
     }
   },
   "pointer": {

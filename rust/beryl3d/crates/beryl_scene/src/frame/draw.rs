@@ -113,7 +113,71 @@ pub mod sprites {
     pub const RING: Sprite = cell(512, 0);
     pub const CONE: Sprite = cell(768, 0);
     pub const COMET: Sprite = cell(0, 256);
-    pub const RIBBON: Sprite = cell(256, 256);
+    /// The cell that holds the ribbons' shapes, side by side in columns, each the same all
+    /// along: `RIBBON`, `RIBBON_CORE` and the columns of `ribbon_lit`.
+    pub const RIBBON_CELL: Sprite = cell(256, 256);
+    /// A ribbon running left to right: a soft band, the same all along. Columns 8 to 56 of
+    /// `RIBBON_CELL`.
+    pub const RIBBON: Sprite = ribbon_columns(8, 48);
+    /// The hot core of an arrow's ribbon, which the web's ribbon shader lights in the `core`
+    /// color of its tone: narrower than the ribbon's body, a quad as high as
+    /// `light.glow.core_reach` times the body's width. Columns 80 to 112 of `RIBBON_CELL`.
+    pub const RIBBON_CORE: Sprite = ribbon_columns(80, 32);
+    /// The first column of `RIBBON_CELL` that `ribbon_lit` draws from.
+    pub const RIBBON_LIT_FIRST: u16 = 128;
+    /// How many columns `ribbon_lit` draws from, each the body and halo of a ribbon at one
+    /// share of its body in its quad's height.
+    pub const RIBBON_LIT_COLUMNS: u16 = 120;
+    /// The largest share of its quad's height that a ribbon's body takes, which the last of
+    /// `ribbon_lit`'s columns draws: a quad is `light.glow.reach_share` times the body's width
+    /// and more, so the share is less than its inverse.
+    pub const RIBBON_LIT_MOST: f32 = 0.4;
+
+    const fn ribbon_columns(first: u16, count: u16) -> Sprite {
+        Sprite {
+            page: PAGE,
+            rect: [
+                RIBBON_CELL.rect[0] + first,
+                RIBBON_CELL.rect[1],
+                count,
+                CELL,
+            ],
+        }
+    }
+
+    /// The column boundary of `ribbon_lit`'s columns where a ribbon's body is `share` of its
+    /// quad's height (from 0 to `RIBBON_LIT_MOST`): a sampler filtering there blends the two
+    /// columns beside it, whose shares lie half a column below and above. It is never the
+    /// first or last boundary, which the columns beyond them would blend into.
+    #[must_use]
+    pub fn ribbon_lit_column(share: f32) -> u16 {
+        let last = f32::from(RIBBON_LIT_COLUMNS - 1);
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a column from 1 to RIBBON_LIT_COLUMNS - 1"
+        )]
+        let column = (share / RIBBON_LIT_MOST * f32::from(RIBBON_LIT_COLUMNS))
+            .round()
+            .clamp(1.0, last) as u16;
+        column
+    }
+
+    /// The columns of `RIBBON_CELL` that draw a ribbon's body and halo as the web's ribbon
+    /// shader does, from the column boundary `from` to `to` (`ribbon_lit_column`, `from` no
+    /// greater than `to`): one record of the ribbon's tone, on a quad as high as the halo
+    /// reaches, lights both, its body's share of the quad changing along its length from one
+    /// to the other.
+    #[must_use]
+    pub const fn ribbon_lit(from: u16, to: u16) -> Sprite {
+        ribbon_columns(RIBBON_LIT_FIRST + from, to - from)
+    }
+
+    /// The share of its quad's height that the body of column `column` of `ribbon_lit` takes.
+    #[must_use]
+    pub fn ribbon_lit_share(column: u16) -> f32 {
+        (f32::from(column) + 0.5) / f32::from(RIBBON_LIT_COLUMNS) * RIBBON_LIT_MOST
+    }
     pub const OUTLINE: Sprite = cell(512, 256);
     pub const HEAD: Sprite = cell(768, 256);
     pub const WEDGE: Sprite = cell(0, 512);
@@ -293,6 +357,40 @@ impl Draw {
             draw.flags = (draw.flags & !MESH_BITS) | ((Mesh::Outline as u8) << MESH_SHIFT);
         }
         draw
+    }
+
+    /// The same glow on a quad that narrows along its length (its local x), from `start` of its
+    /// height at its start to `end` at its end, each from 0 to 1, with its sprite narrowing
+    /// with it (`params.y` and `params.z`, which the vertex shader's `taper` reads). The pieces
+    /// of a ribbon drawn this way meet with no step in width.
+    #[must_use]
+    pub fn tapered(mut self, start: f32, end: f32) -> Self {
+        debug_assert_eq!(self.material, Material::Glow as u8, "only a glow tapers");
+        self.params[1] = start.clamp(1e-3, 1.0);
+        self.params[2] = end.clamp(1e-3, 1.0);
+        self
+    }
+
+    /// The same glow with its two ends cut aslant: each end moves along the quad by `start` or
+    /// `end` lengths across it for each length across (from -1 to 1, in 2048 steps), so that
+    /// the pieces of a bending ribbon meet on the line that halves the turn between them
+    /// (`params.w`, which the vertex shader's `on_record` reads).
+    #[must_use]
+    pub fn mitred(mut self, start: f32, end: f32) -> Self {
+        debug_assert_eq!(self.material, Material::Glow as u8, "only a glow is mitred");
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a step from 0 to 2047"
+        )]
+        let step = |slant: f32| ((slant.clamp(-1.0, 1.0) + 1.0) * 1023.5).round() as u32;
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "below 2^23, which a float holds exactly"
+        )]
+        let code = (step(start) * 2048 + step(end)) as f32;
+        self.params[3] = code + 1.0;
+        self
     }
 
     /// A streak whose head is `head` of the way along its path and whose tail is `tail` of

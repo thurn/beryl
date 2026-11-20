@@ -8,6 +8,7 @@
 //! The glyph worker's pages start at page 1 (`glyphs`), and a host uploads this page before
 //! its first frame.
 
+use beryl_scene::data::space::light::glow;
 use beryl_scene::frame::{Sprite, sprites};
 use beryl_scene::input::AssetReady;
 
@@ -62,7 +63,7 @@ const SHAPES: [(Sprite, Shape); 16] = [
     (sprites::RING, ring),
     (sprites::CONE, cone),
     (sprites::COMET, comet),
-    (sprites::RIBBON, ribbon),
+    (sprites::RIBBON_CELL, ribbons),
     (sprites::OUTLINE, outline),
     (sprites::HEAD, head),
     (sprites::WEDGE, wedge),
@@ -202,9 +203,69 @@ fn comet(x: f32, y: f32) -> f32 {
     head.max(tail)
 }
 
-/// A ribbon running left to right: soft across, the same all along.
-fn ribbon(_x: f32, y: f32) -> f32 {
+/// The ribbons' cell (`sprites::RIBBON_CELL`): side by side, `sprites::RIBBON`, a soft band,
+/// `sprites::RIBBON_CORE`, an arrow's hot core, and the columns of `sprites::ribbon_lit`, each
+/// a ribbon's body and halo. Each is the same all along, so a record draws its profile across
+/// whatever stretch of the ribbon its quad covers.
+fn ribbons(x: f32, y: f32) -> f32 {
+    // The texel column `x` is the middle of, counted from the cell's left edge.
+    let column = (x + 1.0) * HALF + f32::from(BORDER) - 0.5;
+    let first = f32::from(sprites::RIBBON_LIT_FIRST);
+    if column >= first {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a column of the cell, from 0 to 255"
+        )]
+        let lit = (column - first).round() as u16;
+        if lit >= sprites::RIBBON_LIT_COLUMNS {
+            return 0.0;
+        }
+        return ribbon_lit(sprites::ribbon_lit_share(lit), y.abs());
+    }
+    let core = f32::from(sprites::RIBBON_CORE.rect[0] - sprites::RIBBON_CELL.rect[0]);
+    if column >= core - 8.0 {
+        return ribbon_core(y.abs());
+    }
     falloff(y.abs())
+}
+
+/// Soft-clipped light, as the web stage's `lit` takes a sum of light (`ui/src/stage/glow.ts`):
+/// `1 - exp(-1.5 x)`, which burns what is past full toward white as a bloom does. A shape of
+/// light holds its light soft-clipped at the gain `light.glow.gain`, and a record's tint
+/// fades it from there.
+fn soft_clipped(light: f32) -> f32 {
+    1.0 - (-1.5 * glow::GAIN * light).exp()
+}
+
+/// A ribbon's body and halo `across` from its middle, in shares of its quad's half height, where
+/// its body is `share` of that height, as the web's ribbon shader lights them in its tone's
+/// color: a band with soft edges out to a little past the body's width (`body`), and a halo
+/// that falls off from the middle as `exp(-d / (0.9 b + 3.25))` (`glow`), with `b` the body's
+/// half-width and `d` the distance from the middle, in web stage pixels. The quad is
+/// `2.6 b + 16` pixels high on each side, as the web's strip is, so the halo's scale is a share
+/// of that height that depends on `share` alone. The web's noise along the ribbon averages
+/// about 1, and its edge here is faded over the last tenth of the quad.
+fn ribbon_lit(share: f32, across: f32) -> f32 {
+    // From `share = b / h` and `h = reach_share b + reach_pixels`: the pixel, in shares of h.
+    let pixel = ((1.0 - glow::REACH_SHARE * share) / glow::REACH_PIXELS).max(0.0);
+    let halo_scale = glow::HALO_SHARE * share + glow::HALO_PIXELS * pixel;
+    let body = if share > 0.0 {
+        1.0 - smooth(0.4, 1.08, across / share)
+    } else {
+        0.0
+    };
+    let halo = (-across / halo_scale).exp();
+    let edge = 1.0 - smooth(0.9, 1.0, across);
+    soft_clipped(glow::BODY * body + glow::HALO * halo) * edge
+}
+
+/// An arrow's hot core `across` from its middle, in shares of its quad's half height, which is
+/// `light.glow.core_reach` times the body's half-width: the web's `exp(-(2.5 x)^2)`, with `x`
+/// the distance in body half-widths, at the strength of its noise's average.
+fn ribbon_core(across: f32) -> f32 {
+    let x = across * glow::CORE_REACH;
+    soft_clipped(glow::CORE * (-(2.5 * x).powi(2)).exp()) * (1.0 - smooth(0.9, 1.0, across))
 }
 
 /// A card-shaped outline: the ring of a rounded rectangle of a card's proportions, solid on

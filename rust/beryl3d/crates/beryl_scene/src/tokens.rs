@@ -69,6 +69,13 @@ pub mod color {
     pub const ATTACK_LINE: [u8; 4] = [26, 214, 242, 255];
     pub const BLOCK_LINE: [u8; 4] = [255, 168, 26, 255];
     pub const SOURCE_LINE: [u8; 4] = [219, 184, 117, 255];
+    /// The hot core of each of those, the `core` of its tone in `TONES`, which lights the middle
+    /// of its ribbon.
+    pub const FRIENDLY_TARGET_CORE: [u8; 4] = [219, 255, 230, 255];
+    pub const HOSTILE_TARGET_CORE: [u8; 4] = [255, 219, 179, 255];
+    pub const ATTACK_LINE_CORE: [u8; 4] = [217, 252, 255, 255];
+    pub const BLOCK_LINE_CORE: [u8; 4] = [255, 247, 204, 255];
+    pub const SOURCE_LINE_CORE: [u8; 4] = [255, 242, 217, 255];
 
     /// A life total that falls: the `--flare` of the `[data-life] > .stage-effect` rule.
     pub const LOSS: [u8; 4] = [255, 106, 85, 255];

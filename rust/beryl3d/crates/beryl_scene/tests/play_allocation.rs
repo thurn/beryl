@@ -344,7 +344,8 @@ fn fifty_arrows_allocate_nothing(show: &mut Show, cards: Cards) {
             },
         );
     }
-    let mut frame = Frame::with_capacity(512, 2048, 16384);
+    // Each arrow writes two records for each piece of its ribbon and one for a target's head.
+    let mut frame = Frame::with_capacity(512, 4096, 16384);
     show.prepare(1_900 * MS);
     let before = ALLOCATIONS.load(Ordering::Relaxed);
     let mut builder = FrameBuilder::new(&mut frame, Tier::Baseline);
