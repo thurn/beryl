@@ -209,7 +209,14 @@ time, largest differences first, and land each improvement as you go:
    differently, then the elements only one side has. A whole row of cards
    offset by one card width is an order difference, not a placement one: look
    at how each client orders that zone before moving anything. An element only
-   the web has (such as a button) is a missing feature, not a style.
+   the web has (such as a button) is a missing feature, not a style. The
+   matcher leaves out wrappers (a `region` or `list` that draws nothing of its
+   own), so `unmatched` counts only elements that draw something, and
+   `joined.json` gives each one a `reason`. When an element is unmatched only
+   because the two sides name it differently, give the web element Beryl 3D's
+   role (and, with a `name` pattern, its name) in
+   `data/beryl3d/match/roles.json`, or change Beryl 3D's name where it differs
+   from the web's accessible name.
 3. **Fix style values.** `just b3d match styles <target> --at <moment>` lists each
    paired element's property that differs, with the web's value and Beryl 3D's.
    Change the Beryl 3D `Style` or the design token it reads

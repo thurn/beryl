@@ -1,8 +1,15 @@
 {
-  "about": "CSS selectors of the web interface's elements with the Beryl 3D role each stands for, for `just b3d match snapshot` (tools/src/beryl_tools/beryl3d/match/dump.mjs). The first selector an element matches gives its role; an element matching none takes its ARIA role, then its tag's.",
+  "about": "CSS selectors of the web interface's elements with the Beryl 3D role each stands for, for `just b3d match snapshot` (tools/src/beryl_tools/beryl3d/match/dump.mjs). The first selector an element matches gives its role; an element matching none takes its ARIA role, then its tag's. An entry's `name`, a regular expression, names the element with its first group where it matches the element's accessible name. The life orb's art stands for nothing in Beryl 3D, which draws the orb in the table; Beryl 3D's `player` is the life total.",
   "roles": [
     { "selector": ".card-el, [data-stage][data-card]", "role": "card" },
-    { "selector": "[data-life]", "role": "player" },
+    { "selector": "[data-life] .life-orb-total", "role": "player" },
+    {
+      "selector": ".pile-button",
+      "role": "pile",
+      "name": "^(.*), \\d+ cards?$"
+    },
+    { "selector": ".hand-cost", "role": "text" },
+    { "selector": ".step-toggle", "role": "toggle" },
     { "selector": ".icon-button", "role": "button" },
     { "selector": ".button, button", "role": "button" },
     { "selector": "input[type=checkbox], [role=switch]", "role": "toggle" },

@@ -303,20 +303,45 @@ export function records({ roles, only, light = false }) {
         (parseFloat(s.borderTopWidth) > 0 && (color(s.borderTopColor)?.[3] ?? 0) > 0);
     const ownText = (el) =>
         [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.data.trim());
-    const roleOf = (el) => {
-        for (const { selector, role } of roles) {
+    /** The first entry of roles.json that `el` matches, or undefined. */
+    const ruleOf = (el) =>
+        roles.find(({ selector }) => {
             try {
-                if (el.matches(selector)) return role;
+                return el.matches(selector);
             } catch {
-                // A selector WebKit cannot read gives no role.
+                // A selector WebKit cannot read matches nothing.
+                return false;
             }
-        }
+        });
+    const roleOf = (el) => {
+        const rule = ruleOf(el);
+        if (rule) return rule.role;
         const aria = el.getAttribute("role");
         if (aria && ARIA[aria]) return ARIA[aria];
         return TAGS[el.tagName] ?? (ownText(el) ? "text" : "region");
     };
     const words = (text) => text.replace(/\s+/g, " ").trim();
+    /** The words inside `el`, as an accessible name is computed from content: a child with a
+     * label of its own (such as a mana symbol labelled "{U}") gives its label in place of its
+     * text, and a hidden child gives nothing. */
+    const content = (el) =>
+        [...el.childNodes]
+            .map((node) => {
+                if (node.nodeType === Node.TEXT_NODE) return node.data;
+                if (node.nodeType !== Node.ELEMENT_NODE) return "";
+                if (node.getAttribute("aria-hidden") === "true") return "";
+                return node.getAttribute("aria-label") ?? content(node);
+            })
+            .join("");
+    /** `el`'s name, cut to the first group of its roles.json entry's `name` pattern where it
+     * has one, so that "Your library, 32 cards" can be named "Your library" as Beryl 3D names
+     * it. */
     const nameOf = (el) => {
+        const name = fullName(el);
+        const pattern = ruleOf(el)?.name;
+        return (pattern && new RegExp(pattern).exec(name)?.[1]) ?? name;
+    };
+    const fullName = (el) => {
         const label = el.getAttribute("aria-label");
         if (label) return words(label);
         const by = el.getAttribute("aria-labelledby");
@@ -330,7 +355,7 @@ export function records({ roles, only, light = false }) {
         const alt = el.getAttribute("alt") ?? el.getAttribute("title");
         if (alt) return words(alt);
         if (el.dataset.card) return el.dataset.card;
-        return words(el.textContent ?? "").slice(0, 200);
+        return words(content(el)).slice(0, 200);
     };
     const objectOf = (el) => {
         const stage = el.dataset.stage;

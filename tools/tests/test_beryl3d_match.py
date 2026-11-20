@@ -209,15 +209,23 @@ def plain(role: str, name: str, at: list[float], **given: object) -> dict[str, o
     )
 
 
+def panel(role: str, name: str, at: list[float], **given: object) -> dict[str, object]:
+    """An element like `plain`'s that draws a background, so that the matcher keeps it."""
+    drawn = plain(role, name, at, **given)
+    style = drawn["style"]
+    assert isinstance(style, dict)
+    return {**drawn, "style": {**style, "background-color": [33, 31, 28, 0.9]}}
+
+
 def test_the_matcher_pairs_by_key_then_role_name_and_parent_then_nearest_box() -> None:
     web = [
         # 0: the same locator on both sides.
         element(key='button "Play" #7'),
         # 1, 2: no key on the web; the prompt pairs by name, and the two labels named alike
         # pair under it, not under the other region.
-        plain("region", "prompt", [980, 733, 580, 80]),
+        panel("region", "prompt", [980, 733, 580, 80]),
         plain("text", "Pay", [996, 749, 144, 48], parent=1),
-        plain("region", "log", [0, 0, 300, 900]),
+        panel("region", "log", [0, 0, 300, 900]),
         plain("text", "Pay", [10, 10, 40, 20], parent=3),
         # 5: unnamed, so only its box can pair it: 3 points away pairs, 30 does not.
         plain("icon", "", [29, 29, 22, 22]),
@@ -225,9 +233,9 @@ def test_the_matcher_pairs_by_key_then_role_name_and_parent_then_nearest_box() -
     ]
     b3d = [
         element(key='button "Play" #7', box=[1150, 749, 192, 48]),
-        plain("region", "log", [0, 0, 300, 900], key='region "log" #3'),
+        panel("region", "log", [0, 0, 300, 900], key='region "log" #3'),
         plain("text", "Pay", [12, 12, 40, 20], parent=1, key='text "Pay" #4'),
-        plain("region", "prompt", [980, 733, 580, 80], key='region "prompt" #5'),
+        panel("region", "prompt", [980, 733, 580, 80], key='region "prompt" #5'),
         plain("text", "Pay", [12, 12, 40, 20], parent=3, key='text "Pay" #6'),
         plain("icon", "", [32, 29, 22, 22]),
         plain("icon", "", [130, 100, 22, 22]),
@@ -247,7 +255,66 @@ def test_the_matcher_pairs_by_key_then_role_name_and_parent_then_nearest_box() -
     unmatched = found["unmatched"]
     assert isinstance(unmatched, dict)
     assert [e["index"] for e in unmatched["web"]] == [6]
-    assert [e["box"] for e in unmatched["b3d"]] == [[130, 100, 22, 22]]
+    assert [(e["box"], e["reason"]) for e in unmatched["b3d"]] == [
+        (
+            [130, 100, 22, 22],
+            "the nearest unpaired web icon, '', is 30 points away, over 24",
+        )
+    ]
+
+
+def test_wrappers_that_draw_nothing_are_left_out_and_a_lone_element_says_why() -> None:
+    web = [
+        # A layout wrapper with no role a player would name and nothing drawn: left out.
+        plain("region", "", [0, 0, 1600, 900]),
+        # A region that draws a panel is kept, and pairs by its box.
+        panel("region", "", [1311, 749, 250, 80], parent=0),
+    ]
+    b3d = [
+        # Beryl 3D's wrapper, named but drawing nothing: left out too.
+        plain("region", "steps", [1561, 707, 0, 106], key='region "steps" #1'),
+        panel("region", "prompt", [1315, 749, 250, 80], key='region "prompt" #2'),
+        # Nothing on the web side stands for a count by a pile.
+        plain(
+            "text",
+            "Your library 32",
+            [61, 764, 18, 22],
+            key='text "Your library 32" #3',
+            text=[line("32", [61, 764, 18, 22])],
+        ),
+    ]
+    found = joined.join(web, b3d)
+    assert found["pairs"] == [{"web": 1, "b3d": 1, "pass": "box"}]
+    assert found["wrappers"] == {"web": 1, "b3d": 1}
+    unmatched = found["unmatched"]
+    assert isinstance(unmatched, dict)
+    assert unmatched["web"] == []
+    assert [(e["name"], e["reason"]) for e in unmatched["b3d"]] == [
+        ("Your library 32", "the web side draws no text")
+    ]
+
+
+def test_cards_pair_by_object_first_and_a_renamed_pair_by_name_anywhere() -> None:
+    web = [
+        # The web's hand puts the card of object 7 where Beryl 3D puts object 8, so their boxes
+        # would pair the wrong cards; the object pairs the right ones.
+        plain("card", "Island", [400, 730, 200, 270], object=7),
+        plain("card", "Plains", [490, 730, 200, 270], object=8),
+        # The web draws each hand card's cost over the whole hand, Beryl 3D inside the card,
+        # 90 points from where the web draws it: the same role and name pair them anyway.
+        plain("region", "", [0, 0, 1600, 900]),
+        plain("text", "{2}{U}{U}", [586, 707, 80, 27], parent=2),
+    ]
+    b3d = [
+        plain("card", "Plains", [400, 730, 200, 270], object=8, key="card #8"),
+        plain("card", "Island", [490, 730, 200, 270], object=7, key="card #7"),
+        plain("text", "{2}{U}{U}", [676, 707, 80, 27], parent=0, key="text #9"),
+    ]
+    found = joined.join(web, b3d)
+    listed = found["pairs"]
+    assert isinstance(listed, list)
+    pairs = {(p["web"], p["b3d"]): p["pass"] for p in listed}
+    assert pairs == {(0, 1): "object", (1, 0): "object", (3, 2): "anywhere"}
 
 
 def test_boxes_lists_moved_and_rewrapped_elements_worst_first_and_text_drawn_over_text() -> (
