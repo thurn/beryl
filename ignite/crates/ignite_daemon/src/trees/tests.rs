@@ -546,6 +546,37 @@ fn the_main_checkout_is_left_alone_while_it_has_a_local_change() {
 }
 
 #[test]
+fn a_branch_the_remote_lacks_is_skipped_and_the_others_still_move() {
+    // `repository.green` is fast-forwarded with the integration branches, but the remote has
+    // no `green` until a tip round's build checks first pass. Its fetch failing with "couldn't
+    // find remote ref" once failed every round of the daemon's main loop.
+    let f = Fixture::new(1, 1);
+    write(&f.seed, "a.txt", "newer\n");
+    let newer = commit_all(&f.seed, "newer");
+    git(&f.seed, &["push", "--quiet", "origin", "main"]);
+
+    let branches = ["main".to_owned(), "green".to_owned()];
+    let FastForward::Branches(moved) =
+        ignite_git::fastforward::main_checkout(&f.repo, "origin", &branches).unwrap()
+    else {
+        panic!("the checkout is clean");
+    };
+    assert_eq!(
+        moved,
+        [
+            (
+                "main".to_owned(),
+                Branch::Moved {
+                    from: f.tip(),
+                    to: newer
+                }
+            ),
+            ("green".to_owned(), Branch::NotOnRemote),
+        ]
+    );
+}
+
+#[test]
 fn replaced_builds_are_swept_and_then_the_free_trees_used_longest_ago_are_cleared() {
     let f = Fixture::new(2, 1);
     let profile = f.repo.join(".worktrees/tree-01/out/debug");

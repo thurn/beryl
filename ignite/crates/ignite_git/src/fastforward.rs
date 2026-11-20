@@ -23,6 +23,9 @@ pub enum Branch {
     Diverged,
     /// The checkout has no local branch of that name.
     Missing,
+    /// The remote has no branch of that name. A branch that a tip round creates, such as
+    /// `repository.green`, is absent until the first round pushes it.
+    NotOnRemote,
 }
 
 /// What [`main_checkout`] did.
@@ -47,7 +50,14 @@ pub fn main_checkout(repo: &Path, remote: &str, branches: &[String]) -> Result<F
         .map(|name| name.trim().to_owned());
     let mut done = Vec::new();
     for branch in branches {
-        let remote_tip = refs::remote_tip(repo, remote, branch)?;
+        let remote_tip = match refs::remote_tip(repo, remote, branch) {
+            Ok(tip) => tip,
+            Err(Error::NotFound(_)) => {
+                done.push((branch.clone(), Branch::NotOnRemote));
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         let local_ref = format!("refs/heads/{branch}");
         let Ok(local) = cmd::run(repo, ["rev-parse", "--verify", "--quiet", &local_ref]) else {
             done.push((branch.clone(), Branch::Missing));
