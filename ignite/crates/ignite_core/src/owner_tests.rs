@@ -12,6 +12,7 @@ fn routing() -> Routing {
             machine("multivac", Os::Macos),
         ],
         apps: vec!["claude".to_owned(), "codex".to_owned()],
+        default_owner: None,
     }
 }
 
@@ -76,6 +77,25 @@ fn a_ticket_goes_to_its_owner_and_otherwise_to_any_worker() {
         std::slice::from_ref(&own)
     );
     assert!(routing.destinations(None, false, None, never).is_empty());
+}
+
+#[test]
+fn a_ticket_with_no_owner_goes_to_the_default_owner_and_nowhere_else() {
+    let routing = Routing {
+        default_owner: Some(owner("jarvis/claude")),
+        ..routing()
+    };
+    let never = |_: &str| false;
+    assert_eq!(
+        routing.destinations(None, false, None, never),
+        [owner("jarvis/claude")]
+    );
+    // A named owner still wins over the default.
+    let cygnus = owner("cygnus/codex");
+    assert_eq!(
+        routing.destinations(Some(&cygnus), false, None, never),
+        std::slice::from_ref(&cygnus)
+    );
 }
 
 #[test]

@@ -14,10 +14,13 @@ use super::data::ReadError;
 pub struct OwnerView {
     /// The ticket's own owner, as stored.
     pub own: Option<String>,
-    /// The owner in force: its own or an ancestor's. `None` lets any worker take it.
+    /// The owner in force: its own, an ancestor's or the default owner. `None` lets any worker
+    /// take it.
     pub effective: Option<Owner>,
     /// The ancestor whose owner it follows, when it follows one.
     pub inherited_from: Option<String>,
+    /// Whether `effective` is the default owner, because nothing in the ticket's line names one.
+    pub by_default: bool,
     /// Every owner a person may pick.
     pub choices: Vec<Owner>,
 }
@@ -78,10 +81,15 @@ pub fn view(conn: &Connection, id: &str) -> Result<OwnerView, ReadError> {
         parent = next;
         steps += 1;
     }
+    let by_default = effective.is_none() && routing.default_owner.is_some();
+    if by_default {
+        effective.clone_from(&routing.default_owner);
+    }
     Ok(OwnerView {
         own,
         effective,
         inherited_from,
+        by_default,
         choices: routing.choices(),
     })
 }
@@ -91,17 +99,16 @@ pub fn property_view(view: &OwnerView, link: impl Fn(&str) -> String) -> String 
     let Some(effective) = &view.effective else {
         return c::muted("Any machine");
     };
-    let source = view
-        .inherited_from
-        .as_deref()
-        .map_or_else(String::new, |ancestor| {
-            format!(" <span class=\"c-muted\">from {}</span>", link(ancestor))
-        });
+    let source = match view.inherited_from.as_deref() {
+        Some(ancestor) => format!(" <span class=\"c-muted\">from {}</span>", link(ancestor)),
+        None if view.by_default => " <span class=\"c-muted\">by default</span>".to_owned(),
+        None => String::new(),
+    };
     format!("{}{source}", esc(&label(effective)))
 }
 
 /// The choices of the Owner dropdown as `value=label` lines, the first being "None", which
-/// clears the ticket's own owner so that it follows its ancestors' or goes to any worker.
+/// clears the ticket's own owner so that it follows its ancestors' or the default owner.
 /// `edit.js` builds the dropdown from them.
 pub fn choices(view: &OwnerView) -> String {
     std::iter::once("=None".to_owned())

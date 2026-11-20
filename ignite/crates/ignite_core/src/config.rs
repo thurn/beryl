@@ -358,6 +358,11 @@ pub struct PoolConfig {
     /// for once a worker has been chosen.
     #[serde(default)]
     pub models: BTreeMap<String, BTreeMap<String, String>>,
+    /// The owner of every ticket that has no owner of its own and no ancestor with one, such
+    /// as `jarvis/claude` (see `crate::owner`). It names a declared machine. Without it such
+    /// a ticket goes to any worker.
+    #[serde(default)]
+    pub default_owner: Option<crate::owner::Owner>,
 }
 
 impl PoolConfig {
@@ -473,6 +478,27 @@ impl Config {
         })
     }
 
+    /// The `[pool]` table: no empty model ID, and a default owner on a declared machine.
+    fn validate_pool(&self) -> Result<(), (String, String)> {
+        let fail = |key: &str, message: &str| Err((key.to_owned(), message.to_owned()));
+        for (app, table) in &self.pool.models {
+            for (tier, id) in table {
+                if id.trim().is_empty() {
+                    return fail(&format!("pool.models.{app}.{tier}"), "must not be empty");
+                }
+            }
+        }
+        if let Some(owner) = &self.pool.default_owner
+            && !self
+                .machine
+                .keys()
+                .any(|name| name.eq_ignore_ascii_case(&owner.machine))
+        {
+            return fail("pool.default_owner", "must name a declared machine");
+        }
+        Ok(())
+    }
+
     fn validate(&self) -> Result<(), (String, String)> {
         let fail = |key: &str, message: &str| Err((key.to_owned(), message.to_owned()));
         for (key, value) in [
@@ -528,16 +554,10 @@ impl Config {
                 return fail("metrics.export", "must contain {out}");
             }
         }
-        for (app, table) in &self.pool.models {
-            for (tier, id) in table {
-                if id.trim().is_empty() {
-                    return fail(&format!("pool.models.{app}.{tier}"), "must not be empty");
-                }
-            }
-        }
         if self.machine.is_empty() {
             return fail("machine", "declares no machine");
         }
+        self.validate_pool()?;
         for (name, machine) in &self.machine {
             if machine.ticket_trees == 0 {
                 return fail(

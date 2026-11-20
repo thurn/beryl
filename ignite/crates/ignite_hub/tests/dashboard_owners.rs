@@ -26,6 +26,9 @@ project = "pj"
 threshold = 0.004
 cap = 400
 
+[pool]
+default_owner = "jarvis/claude"
+
 [pool.models.claude]
 opus = "o"
 
@@ -77,7 +80,7 @@ fn send(
 }
 
 #[test]
-fn owners_show_on_pages_and_a_ticket_without_one_goes_to_any_machine() {
+fn owners_show_on_pages_and_a_ticket_without_one_goes_to_the_default_owner() {
     let dir = std::env::temp_dir().join(format!("ignite-dashboard-owners-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -108,13 +111,13 @@ fn owners_show_on_pages_and_a_ticket_without_one_goes_to_any_machine() {
     let reply: Value = serde_json::from_str(&reply).unwrap();
     let id = |n: usize| reply["results"][n]["id"].as_str().unwrap().to_owned();
 
-    // A child shows its epic's owner. The dashboard's writer has no machine, so a loose ticket
-    // it files has no owner and goes to any machine.
+    // A child shows its epic's owner. A loose ticket with no owner shows the default owner.
     let (_, child) = send(public.address(), "GET", &format!("/{}", id(1)), &[], "");
     assert!(child.contains("cygnus · Codex"), "{child}");
     assert!(child.contains("from "));
     let (_, loose) = send(public.address(), "GET", &format!("/{}", id(2)), &[], "");
-    assert!(loose.contains("Any machine"), "{loose}");
+    assert!(loose.contains("jarvis · Claude"), "{loose}");
+    assert!(loose.contains("by default"), "{loose}");
     // The epic's own card in a list carries its owner chip.
     let (_, home) = send(public.address(), "GET", "/", &[], "");
     assert!(home.contains("cygnus · Codex"), "{home}");

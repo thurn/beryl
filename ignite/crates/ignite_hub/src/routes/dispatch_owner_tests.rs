@@ -19,6 +19,7 @@ fn routing() -> Routing {
     Routing {
         machines: vec![machine("cygnus", Os::Windows), machine("jarvis", Os::Macos)],
         apps: vec!["claude".to_owned(), "codex".to_owned()],
+        default_owner: None,
     }
 }
 
@@ -69,6 +70,28 @@ fn a_ticket_goes_only_to_workers_of_its_owner() {
         at(2.0),
     );
     assert_eq!(codex["ticket"], ids[1].as_str());
+}
+
+#[test]
+fn an_unowned_ticket_goes_only_to_the_default_owner() {
+    let mut conn = hub::open_in_memory().unwrap();
+    register(&mut conn);
+    let routing = Routing {
+        default_owner: Some("jarvis/claude".parse().unwrap()),
+        ..routing()
+    };
+    owners::record_routing(&conn, &routing).unwrap();
+    let ids = file(&mut conn, &[("unowned", &[], &[])]);
+    // A Codex worker on the same machine is not the default owner, so it gets nothing.
+    let (_, none) = post(
+        &mut conn,
+        "/next",
+        &free_app(&["local_x"], "codex"),
+        start(),
+    );
+    assert_eq!(none, Value::Null);
+    let (_, claude) = post(&mut conn, "/next", &free("m-1", &["local_a"]), at(1.0));
+    assert_eq!(claude["ticket"], ids[0].as_str());
 }
 
 #[test]

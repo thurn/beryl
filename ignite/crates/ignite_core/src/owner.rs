@@ -3,12 +3,13 @@
 //!
 //! Owners are a ticket field of their own, not labels:
 //!
-//! - A ticket filed with no owner and no ancestor that has one is owned by whoever filed it: the
-//!   machine and app of the session that ran `ignite ticket create` (see
-//!   `ignite_store::hub::owners::add_creator_owners`). A ticket under an owned ancestor takes
-//!   the nearest ancestor's owner, so changing an epic's owner moves its tickets.
+//! - A ticket takes its own owner or, failing that, its nearest ancestor's, so changing an
+//!   epic's owner moves its tickets. A ticket with neither goes to the default owner,
+//!   `[pool] default_owner` in `ignite.toml`. Which machine filed a ticket never decides
+//!   where it goes: a ticket reaches another machine only when it, or an ancestor, names that
+//!   machine as its owner.
 //! - Dispatch offers a ticket only to workers of its owner. An idle worker elsewhere is never
-//!   offered it. A ticket with no owner at all, such as one filed before owners existed, goes to
+//!   offered it. Only when no default owner is configured does a ticket with no owner go to
 //!   any worker.
 //! - An owner may name a machine without an app (`cygnus`), meaning any app's workers on that
 //!   machine. A ticket the hub files itself is owned this way by the machine that saw the fault,
@@ -111,6 +112,9 @@ pub struct Routing {
     pub machines: Vec<RoutedMachine>,
     /// The apps the pool runs: those with a `[pool.models.<app>]` table.
     pub apps: Vec<String>,
+    /// The owner of a ticket with no owner in its line, from `[pool] default_owner`.
+    #[serde(default)]
+    pub default_owner: Option<Owner>,
 }
 
 /// One declared machine, as routing sees it.
@@ -133,6 +137,7 @@ impl Routing {
                 })
                 .collect(),
             apps: config.pool.models.keys().cloned().collect(),
+            default_owner: config.pool.default_owner.clone(),
         }
     }
 
@@ -152,12 +157,14 @@ impl Routing {
 
     /// The owners a ticket may go to.
     ///
-    /// - `own` is the ticket's owner or, failing that, its nearest ancestor's.
+    /// - `own` is the ticket's owner or, failing that, its nearest ancestor's. With neither,
+    ///   the default owner stands in for it.
     /// - With `fallback`, when `silent` says the owner's machine has not been heard from for
     ///   [`FALLBACK_SECONDS`], every other machine that runs `needs_os` (or any machine, when the
     ///   ticket needs no system) is added, with any app.
     ///
-    /// Empty only when there is no owner, which leaves the ticket to any worker.
+    /// Empty only when there is no owner and no default owner, which leaves the ticket to any
+    /// worker.
     pub fn destinations(
         &self,
         own: Option<&Owner>,
@@ -165,7 +172,7 @@ impl Routing {
         needs_os: Option<Os>,
         silent: impl Fn(&str) -> bool,
     ) -> Vec<Owner> {
-        let Some(owner) = own else {
+        let Some(owner) = own.or(self.default_owner.as_ref()) else {
             return Vec::new();
         };
         let mut owners = vec![owner.clone()];

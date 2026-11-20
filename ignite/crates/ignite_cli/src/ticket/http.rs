@@ -76,9 +76,6 @@ pub struct Hub {
     /// The title the desktop app shows for the actor's session, sent with each write so the
     /// dashboard can name the session by its title (`ignite_daemon::session_title`).
     pub actor_title: Option<String>,
-    /// The actor's app, `claude` or `codex`, sent with each write so that a ticket it files is
-    /// owned by its machine and app (`ignite_store::hub::owners::add_creator_owners`).
-    pub actor_app: Option<String>,
     pub retry_for: Duration,
 }
 
@@ -106,7 +103,6 @@ impl Hub {
             token,
             actor,
             actor_title: None,
-            actor_app: None,
             retry_for,
         }
     }
@@ -142,7 +138,6 @@ impl Hub {
             Duration::from_secs_f64(retry_for),
         );
         hub.actor_title = actor_title;
-        hub.actor_app = crate::client::app_from_env(&env);
         Ok(hub)
     }
 

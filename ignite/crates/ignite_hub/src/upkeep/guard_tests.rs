@@ -260,6 +260,7 @@ fn a_ticket_owned_by_an_undeclared_machine_or_app_is_unassignable() {
             os: Some(Os::Macos),
         }],
         apps: vec!["claude".to_owned()],
+        default_owner: None,
     };
     owners::record_routing(&conn, &routing).unwrap();
     // Listed by ticket ID, which is random, so each is found by its ID.

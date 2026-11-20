@@ -3106,14 +3106,13 @@ Every ticket goes to one owner: a machine and the desktop app whose workers on
 that machine take it, such as `jarvis/claude` or `cygnus/codex`.
 
 - A ticket's owner is its own `owner` field or, when that is empty, its nearest
-  ancestor's. A ticket with neither goes to any worker.
-- A ticket filed with `ignite ticket create` is owned by whoever filed it: the
-  machine and app of the session that ran the command, such as
-  `multivac/claude`. A ticket filed under an epic that has an owner takes the
-  epic's owner instead, so changing an epic's owner moves its tickets. The
-  client tells its app from `IGNITE_APP`, or from the variables Claude Code and
-  Codex set in their sessions, and the hub also knows the app of a pool worker's
-  session. When neither knows, the owner names only the machine.
+  ancestor's, so changing an epic's owner moves its tickets. A ticket with
+  neither goes to the default owner, `[pool] default_owner` in `ignite.toml`
+  (`jarvis/claude` here). Only a hub with no default owner configured offers
+  such a ticket to any worker.
+- Which machine or app filed a ticket never decides where it goes. A ticket
+  reaches another machine only when it, or an ancestor, names that machine as
+  its owner, with `--owner` or `ignite release --needs <machine>`.
 - Dispatch offers a ticket only to its owner's workers. An idle worker on
   another machine or of another app is never offered it, so the other five
   destinations get only work that is routed to them.
@@ -3125,7 +3124,8 @@ that machine take it, such as `jarvis/claude` or `cygnus/codex`.
 - A ticket the hub files from a machine's report, such as a regression, checks
   left incomplete, a machine fault or a justiciar report, is owned by that
   machine alone, because the fault is often reproducible only there. Upkeep's
-  own tickets, such as `master` not moving, have no owner and go to any worker.
+  own tickets, such as `master` not moving, have no owner and go to the default
+  owner.
 - A ticket that holds `master` back (each one the hub files released) falls back
   when its owner's machine has not been heard from for 30 minutes: then any
   machine that runs the operating system the ticket needs may take it.
