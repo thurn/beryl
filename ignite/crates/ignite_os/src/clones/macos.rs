@@ -123,7 +123,8 @@ mod tests {
     fn a_cloned_tree_keeps_each_files_time_mode_and_links() {
         use std::os::unix::fs::PermissionsExt as _;
         use std::time::{Duration, SystemTime};
-        let dir = std::env::temp_dir().join(format!("ignite-clone-tree-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-clone-tree-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let from = dir.join("from");
         fs::create_dir_all(from.join("deep/er")).unwrap();

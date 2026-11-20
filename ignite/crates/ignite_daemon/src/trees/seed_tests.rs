@@ -42,7 +42,8 @@ fn text_is_replaced_everywhere() {
 
 /// A fresh directory under the temporary directory for one test.
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ignite-seed-{name}-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-seed-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

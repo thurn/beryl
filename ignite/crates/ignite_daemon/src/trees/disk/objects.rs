@@ -173,7 +173,8 @@ mod tests {
     /// the second compile's.
     #[test]
     fn each_codegen_unit_keeps_only_its_newest_object() {
-        let target = std::env::temp_dir().join(format!("ignite-objects-{}", std::process::id()));
+        let target = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-objects-{}", std::process::id()));
         let _ = fs::remove_dir_all(&target);
         let deps = target.join("debug/deps");
         fs::create_dir_all(target.join("debug/.fingerprint")).unwrap();
