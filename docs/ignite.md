@@ -653,14 +653,14 @@ How the executable is installed and kept current:
   A build opens a database newer than its last migration, applying nothing, when
   its last migration is at least that value, so a rollback to `bin/last-good`
   still starts after a release that added a table or column.
-- Settings for landing by verdict exist and change nothing yet:
-  `[land] mode` (`"strict"`, the default, or `"verdict"`) with
-  `max_base_age_hours` (default 12), `[revert] broken_build` (default false) and
-  `repository.green` (unset by default; it must differ from `staging` and
-  `master`). The hub's `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted`
-  and git's `Git::replay`, `revert`, `merge_base`, `committed_at` and `tree_id`
-  are declared, with fakes, and the real clients answer that they cannot do
-  them yet. A verdict is keyed by the tree ID, the merge base with the tip and
+- Settings for landing by verdict exist and change nothing yet: `[land] mode`
+  (`"strict"`, the default, or `"verdict"`) with `max_base_age_hours` (default
+  12), `[revert] broken_build` (default false) and `repository.green` (unset by
+  default; it must differ from `staging` and `master`). The hub's
+  `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted` and git's
+  `Git::replay`, `revert`, `merge_base`, `committed_at` and `tree_id` are
+  declared, with fakes, and the real clients answer that they cannot do them
+  yet. A verdict is keyed by the tree ID, the merge base with the tip and
   `verdict_settings`, a digest of the `[gate]` section that holds nothing about
   Ignite's own release.
 - A landing that changed Ignite's own source moves the release branch to the
