@@ -272,3 +272,25 @@ fn a_machine_whose_scheduler_is_full_is_offered_what_its_held_tickets_leave_room
     // One in progress and one reserved fill the two cores.
     assert_eq!(ask(&mut conn, "local_c"), Value::Null);
 }
+
+/// `POST /next` holds the database's write lock for its whole transaction, so it must not read
+/// the `metrics` table, which holds gigabytes of efficiency rows. When it summed last week's
+/// dollars there, a slow scan held the lock for minutes and every other write failed with
+/// `database is locked`. With the table renamed away, any read of it fails the request.
+#[test]
+fn a_hand_off_reads_no_metrics_rows() {
+    let mut conn = hub::open_in_memory().unwrap();
+    let ids = file(
+        &mut conn,
+        &[("plain", &[], &[]), ("saving", &["improvement"], &[])],
+    );
+    crate::rules::backlog::refresh(&conn, start()).unwrap();
+    conn.execute("ALTER TABLE metrics RENAME TO metrics_away", [])
+        .unwrap();
+    let (status, reply) = post(&mut conn, "/next", &free("m-1", &["local_a"]), start());
+    assert_eq!(status, 200, "{reply}");
+    assert!(
+        ids.iter().any(|id| reply["ticket"] == id.as_str()),
+        "{reply}"
+    );
+}

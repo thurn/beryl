@@ -12,7 +12,8 @@
 //!   run them.
 //! - A ticket goes only to workers of its owner or its nearest ancestor's, resolved here into
 //!   its destinations ([`ignite_core::owner::Routing::destinations`]).
-//! - The backlog's ratios for the improvement share come from `crate::rules::backlog`.
+//! - The backlog's ratios for the improvement share come from `crate::rules::backlog`, which
+//!   reads last week's use from `meta`, never from `metrics` inside this transaction.
 //!
 //! Not every ready ticket is offered (see [`Snapshot::offered`]): only a ticket under an active
 //! epic, under no epic, or one the hub filed itself, never one set aside for a person. While the
@@ -111,7 +112,7 @@ pub fn next(
         .collect();
     ready.retain(|ticket| ticket.kind != TicketKind::Improvement || !full.contains(&ticket.epic));
     let epic_order = shares::epic_order(&demand);
-    let improvements = improvements_due(conn, machine, now)?;
+    let improvements = improvements_due(conn, machine)?;
     let last_files = last_files(conn, machine)?;
     let Some(handoff) = dispatch::next_for(&free, &ready, &epic_order, improvements, &last_files)
     else {
@@ -650,7 +651,7 @@ fn history(conn: &Connection, machine: &str) -> Result<Vec<Worked>> {
 
 /// `None` when improvements have their share of the machine's recent hand-offs, and otherwise
 /// the unit whose largest saving goes first: the one after the last improvement's unit.
-fn improvements_due(conn: &Connection, machine: &str, now: Timestamp) -> Result<Option<Unit>> {
+fn improvements_due(conn: &Connection, machine: &str) -> Result<Option<Unit>> {
     let config = Improvement::default();
     let recent = taken_handoffs(conn, machine, config.window)?;
     let kinds: Vec<TicketKind> = recent
@@ -662,7 +663,7 @@ fn improvements_due(conn: &Connection, machine: &str, now: Timestamp) -> Result<
             _ => TicketKind::Ordinary,
         })
         .collect();
-    let share = shares::improvement_share(rules::backlog::ratios(conn, now)?.fraction, &config);
+    let share = shares::improvement_share(rules::backlog::ratios(conn)?.fraction, &config);
     if !shares::improvements_due(&kinds, share, &config) {
         return Ok(None);
     }

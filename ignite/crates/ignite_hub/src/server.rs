@@ -125,7 +125,7 @@ impl HubServer {
             returned: Condvar::new(),
             active: AtomicUsize::new(0),
             read_only,
-            evaluated: Mutex::new(None),
+            evaluations: EvaluationGate::default(),
         });
         let accepting = Arc::clone(&server);
         let thread = thread::spawn(move || {
@@ -198,9 +198,8 @@ struct Shared {
     active: AtomicUsize,
     /// Whether only reads are served; see [`HubServer::start_read_only`].
     read_only: bool,
-    /// When the improvement rules were last tried, held while an evaluation runs; see
-    /// [`evaluate_rules`].
-    evaluated: Mutex<Option<Instant>>,
+    /// Lets one evaluation of the improvement rules run at a time; see [`evaluate_rules`].
+    evaluations: EvaluationGate,
 }
 
 struct Pool {
@@ -276,30 +275,47 @@ fn answer(shared: &Shared, mut http: tiny_http::Request) {
 
 /// Evaluates the improvement rules after new records or efficiency rows have been stored and
 /// answered, so the machine that sent them does not wait. A failed evaluation leaves the rows
-/// stored, and the next arrival tries again.
+/// stored, and a later arrival tries again.
 ///
 /// An evaluation reads every efficiency row, which takes minutes once the `metrics` table is
-/// gigabytes. So only one runs at a time, and a new one starts at most every
+/// gigabytes. So [`EvaluationGate`] lets only one run at a time and starts a new one at most every
 /// [`EVALUATION_RETRY`], even after a failure. Before this, each arrival started another
 /// evaluation while earlier ones were still reading, and their reads slowed the dispatch
 /// transaction until other writers failed with `database is locked`.
 fn evaluate_rules(shared: &Shared, now: Timestamp) {
-    let mut evaluated = match shared.evaluated.try_lock() {
-        Ok(guard) => guard,
-        Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
-        Err(std::sync::TryLockError::WouldBlock) => return,
-    };
-    if evaluated.is_some_and(|at| at.elapsed() < EVALUATION_RETRY) {
-        return;
+    shared.evaluations.run(Instant::now(), || {
+        let Ok(mut conn) = shared.connection() else {
+            return;
+        };
+        if let Err(error) = rules::filing::evaluate_if_due(&mut conn, &shared.rules, now) {
+            eprintln!("ignite hub: evaluating the improvement rules failed: {error}");
+        }
+        shared.give_back(conn);
+    });
+}
+
+/// When the improvement rules were last tried, locked while an evaluation runs.
+#[derive(Default)]
+struct EvaluationGate {
+    started: Mutex<Option<Instant>>,
+}
+
+impl EvaluationGate {
+    /// Calls `evaluate` unless an evaluation is running or one started less than
+    /// [`EVALUATION_RETRY`] before `now`, whether or not it succeeded. Returns whether it ran.
+    fn run(&self, now: Instant, evaluate: impl FnOnce()) -> bool {
+        let mut started = match self.started.try_lock() {
+            Ok(guard) => guard,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return false,
+        };
+        if started.is_some_and(|at| now.saturating_duration_since(at) < EVALUATION_RETRY) {
+            return false;
+        }
+        *started = Some(now);
+        evaluate();
+        true
     }
-    *evaluated = Some(Instant::now());
-    let Ok(mut conn) = shared.connection() else {
-        return;
-    };
-    if let Err(error) = rules::filing::evaluate_if_due(&mut conn, &shared.rules, now) {
-        eprintln!("ignite hub: evaluating the improvement rules failed: {error}");
-    }
-    shared.give_back(conn);
 }
 
 fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Response {
@@ -541,6 +557,36 @@ mod tests {
             ]
         );
         assert_eq!(percent_decode("/tickets/a%2E1%zz"), "/tickets/a.1%zz");
+    }
+
+    #[test]
+    fn rule_evaluations_run_one_at_a_time_and_not_again_within_the_retry() {
+        let gate = EvaluationGate::default();
+        let start = Instant::now();
+        // An arrival while an evaluation runs starts none.
+        let mut nested = None;
+        assert!(gate.run(start, || nested = Some(gate.run(start, || {}))));
+        assert_eq!(nested, Some(false));
+        // Nor does the next arrival right after it.
+        assert!(!gate.run(start, || {}));
+        // An evaluation that failed is not tried again until the retry interval has passed.
+        let mut conn = ignite_store::hub::open_in_memory().unwrap();
+        conn.execute("ALTER TABLE findings RENAME TO findings_away", [])
+            .unwrap();
+        let later = start + EVALUATION_RETRY;
+        let mut failed = false;
+        assert!(gate.run(later, || {
+            failed = rules::filing::evaluate_if_due(
+                &mut conn,
+                &ignite_core::config::Rules::default(),
+                SystemClock.now(),
+            )
+            .is_err();
+        }));
+        assert!(failed);
+        let almost = later + EVALUATION_RETRY.saturating_sub(Duration::from_secs(1));
+        assert!(!gate.run(almost, || {}));
+        assert!(gate.run(later + EVALUATION_RETRY, || {}));
     }
 
     #[test]

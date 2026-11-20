@@ -446,7 +446,10 @@ fn backlog_ratios_take_the_largest_unit() {
         )
         .unwrap();
     }
-    let ratios = backlog::ratios(&conn, now()).unwrap();
+    // Before the first refresh there is no use last week, so no unit counts.
+    assert!(backlog::ratios(&conn).unwrap().fraction.abs() < 1e-12);
+    backlog::refresh(&conn, now()).unwrap();
+    let ratios = backlog::ratios(&conn).unwrap();
     assert!((ratios.last_week.dollars - 1000.0).abs() < 1e-9);
     assert!((ratios.last_week.core_hours - 100.0).abs() < 1e-6);
     assert!((ratios.fraction - 0.11).abs() < 1e-9);

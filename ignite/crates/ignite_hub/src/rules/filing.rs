@@ -1,7 +1,9 @@
 //! Evaluating the rules and filing their tickets (docs/ignite.md, "Improvement tickets").
 //!
 //! - The hub evaluates the rules when new records or efficiency rows arrive, at most once an
-//!   hour ([`evaluate_if_due`]), since each evaluation reads a month of records.
+//!   hour ([`evaluate_if_due`]), since each evaluation reads a month of records. Each
+//!   evaluation also stores last week's use for the improvement share
+//!   ([`super::backlog::refresh`]).
 //! - A finding files a ticket when no ticket for its (rule, subject) is open, none closed in the
 //!   last 30 days ([`findings::may_file`]), its rule is not report-only, and its saving reaches
 //!   the minimum for its unit ([`super::minimum`]).
@@ -67,6 +69,8 @@ pub fn evaluate_if_due(
     {
         return Ok(None);
     }
+    // Last week's use is too large a read for the dispatch transaction, so it is taken here.
+    super::backlog::refresh(conn, now)?;
     // The time is recorded only after a successful evaluation, so a failed one is tried again
     // when the next records arrive instead of waiting an hour.
     let evaluation = evaluate(conn, &super::all(config), config, now)?;

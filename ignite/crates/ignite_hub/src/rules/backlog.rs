@@ -7,8 +7,16 @@
 //! - Dollars come from the efficiency rows machines post: each model window's dollars, split by
 //!   token class so that every priced dollar is counted once. A unit with no use last week is
 //!   left out of the fraction.
+//! - Last week's use is read from the `records` and `metrics` tables, which hold gigabytes, so
+//!   it is taken once per rule evaluation ([`refresh`], called from
+//!   `filing::evaluate_if_due`) and kept in `meta`. [`ratios`] runs inside the dispatch
+//!   transaction, which holds the database's write lock, and reads only that one row and the
+//!   open tickets' savings. When last week's use was read inside that transaction, a slow
+//!   `metrics` scan held the write lock for minutes and every other hub write failed with
+//!   `database is locked`.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
+use serde_json::json;
 
 use ignite_core::protocol::tickets::Saving;
 use ignite_core::shares::{self, Amounts, Unit};
@@ -16,24 +24,70 @@ use ignite_core::time::Timestamp;
 
 use super::WEEK_SECONDS;
 
+/// Where last week's use is kept in `meta`, as `{"dollars", "agent_hours", "core_hours"}`.
+const LAST_WEEK_KEY: &str = "backlog_last_week";
+
 /// The amounts the share is computed from.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Ratios {
     /// The open improvement tickets' estimated weekly saving.
     pub backlog: Amounts,
-    /// The fleet's use over the last week.
+    /// The fleet's use over the week before the last [`refresh`], or nothing before the first.
     pub last_week: Amounts,
     /// The largest of `backlog / last_week` over the units with any use.
     pub fraction: f64,
 }
 
-pub fn ratios(conn: &Connection, now: Timestamp) -> rusqlite::Result<Ratios> {
+/// The ratios from the open tickets and the last week's use that [`refresh`] stored. Reads no
+/// `records` or `metrics` rows, so it is safe inside a write transaction.
+pub fn ratios(conn: &Connection) -> rusqlite::Result<Ratios> {
     let backlog = backlog(conn)?;
-    let last_week = last_week(conn, now)?;
+    let last_week = stored_last_week(conn)?;
     Ok(Ratios {
         backlog,
         last_week,
         fraction: shares::backlog_fraction(&backlog, &last_week),
+    })
+}
+
+/// Takes the fleet's use over the week before `now` and stores it for [`ratios`].
+pub fn refresh(conn: &Connection, now: Timestamp) -> rusqlite::Result<()> {
+    let amounts = last_week(conn, now)?;
+    let value = json!({
+        "dollars": amounts.dollars,
+        "agent_hours": amounts.agent_hours,
+        "core_hours": amounts.core_hours,
+    });
+    conn.execute(
+        "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
+        params![LAST_WEEK_KEY, value.to_string()],
+    )?;
+    Ok(())
+}
+
+/// The use [`refresh`] stored last; nothing when it never ran or its row does not parse.
+fn stored_last_week(conn: &Connection) -> rusqlite::Result<Amounts> {
+    let text: Option<String> = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = ?1",
+            [LAST_WEEK_KEY],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(value) = text.and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+    else {
+        return Ok(Amounts::default());
+    };
+    let amount = |name: &str| {
+        value
+            .get(name)
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+    };
+    Ok(Amounts {
+        dollars: amount("dollars"),
+        agent_hours: amount("agent_hours"),
+        core_hours: amount("core_hours"),
     })
 }
 
