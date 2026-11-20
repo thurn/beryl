@@ -3572,6 +3572,129 @@ Claude, the dispatcher stays titled `🔮 dispatcher <machine>` while it waits.
 Each instruction identifies an action and its inputs. The numbered tool calls
 for each action live in the dispatcher's `AGENTS.md`.
 
+### CLI mode
+
+A dispatcher is a session only a person can start, it can make mistakes, and
+when it stops answering nothing automatic repairs the pool. In CLI mode an app
+has no dispatcher on a machine: the daemon runs each worker itself as a headless
+CLI process, `claude -p` or `codex exec`, one process per turn. This section is
+the design; `ignite pool list` shows which mode each app on a machine runs.
+
+```toml
+# How each app's workers run on this machine: "desktop" (the default) or "cli".
+[machine.jarvis.pool.claude]
+mode = "cli"
+slots = 8
+
+# The program and the arguments every turn of the app gets.
+[pool.cli.claude]
+program = "claude"
+args = ["--dangerously-skip-permissions"]
+```
+
+- `ignite pool mode <app> cli|desktop|config` stores an override in the daemon's
+  database that outranks the file until it is set back to `config`, so a machine
+  switches back without a landing or a restart. A switch never touches a ticket
+  in progress: workers of the old mode finish, and only new hand-offs follow the
+  new mode.
+- Nothing about a session lives in the daemon's memory. A worker is a row in
+  `cli_slots` (its ticket, app, model, effort, turn number and next prompt) and
+  the transcript the CLI keeps on disk.
+- A slot is offered to the hub as an idle worker under a placeholder session,
+  `cli-<app>-slot-<k>`, as a Codex dispatcher's slots are. One slot above
+  `slots` takes only tickets that hold `master` back, which replaces keeping a
+  worker free for the justiciar. A reservation gives the slot an Ignite session
+  ID, `cli-<app>-<8 hex>`, which every turn carries in `IGNITE_SESSION`. Each
+  claim starts a new transcript; only the next ticket of a `lane:` chain resumes
+  one.
+- An app's slots are offered only after a one-word probe turn has succeeded on
+  that machine since the daemon started.
+
+A turn:
+
+- A turn is a supervised command, so it outlives the daemon like any other. Its
+  `output.log` is the CLI's event stream, one JSON object per line.
+- Starting is two-phase. One transaction records the turn as starting, with its
+  prompt and the messages it delivers; then the supervisor starts, with the slot
+  and turn number in its `spec.json`. A daemon that dies between the two finds
+  no run for the turn and starts it, and one that finds the run takes it over,
+  so a turn is never started twice.
+- The supervisor's command takes `sessions/<slot>/lock` in the Ignite home and
+  then becomes the CLI program. Two turns on one transcript are therefore
+  impossible whatever a daemon decides.
+- The model and effort are arguments of every turn. Claude's first line names
+  the model before any request is made. If it is not the one asked for, the
+  daemon ends the turn, releases the ticket and stops reporting that tier to the
+  hub for 10 minutes. Codex names no model, so its turns rely on the argument
+  and on the refusal it prints.
+- The transcript ID is read from each turn's first line and never assumed: a
+  Claude turn resumed after its process was killed reported a new one.
+- The daemon that is running reads the events and decides what follows a turn's
+  end, so a fix to that logic reaches every worker at the next restart. Reading
+  is repeatable: what a line causes is keyed by slot, turn and line number. A
+  line that is not JSON, and an event of an unknown type, is skipped.
+
+What follows a turn's end:
+
+1. The ticket is no longer held (landed, released or closed): the slot is free.
+2. The turn ended normally with the ticket held. If an `ignite` verb of the
+   session still runs, the daemon resumes the worker when the verb ends. If
+   messages wait, it resumes with them. Otherwise it resumes once with the text
+   that `ignite turn-ended` blocks with, and a second such end releases the
+   ticket with the worker's last message as the note. Claude's `Stop` hook runs
+   in a headless turn too and gives the same block inside the process; this rule
+   covers Codex and a hook that fails.
+3. The turn was interrupted: it printed no result, because the process crashed,
+   was killed, the machine rebooted, or the daemon ended a hung turn. The daemon
+   resumes it at once and tells the worker its last tool call may not have
+   finished. After 5 such ends in a row with no `ignite` command between them,
+   it releases the ticket and reports to the justiciar.
+4. The plan limit was reached: the ticket is released, and a 100% sample of that
+   window starts the usage hold.
+5. The failure is not the session's: not logged in, a refused model, a program
+   that is missing or fails before its first line, or an API error. The slot is
+   parked with its ticket held and the app goes on a CLI hold. During a hold no
+   turn starts for that app on this machine, and the daemon runs the probe turn
+   every 5 minutes; the first success resumes every parked slot. A hold posts
+   one notification and one justiciar report. A single API error first retries
+   after 30 seconds.
+6. Anything else parks the slot and is reported. An end the daemon cannot place
+   never releases a ticket and never starts a turn.
+
+A turn is hung when its `output.log` has not grown for 30 minutes while no
+`ignite` verb of the session runs and the CLI has no live child process.
+
+Messages, usage and repair:
+
+- `ignite tell`, stall reminders and wake-ups for a CLI session are rows in
+  `cli_messages`, and the next turn's prompt is every undelivered one in order.
+  A message is marked delivered in the transaction that records the turn as
+  starting, and queued again if that turn printed nothing.
+- `ignite tell --now`, and every order from the session that holds a justiciar
+  ticket, ends the running turn's processes and resumes with the message. It
+  waits while a `land` of the session has begun its push. An ordinary `tell`
+  waits for the turn's end.
+- Every `rate_limit_event` of a Claude turn is a sample of the plan's usage, so
+  a machine whose Claude app is in CLI mode queues no `usage` instruction. Each
+  turn's cost and token counts go to the hub with its ticket.
+- Every column of the CLI tables and every field of JSON kept in them has a
+  default, and the release selftest decodes every row of the copied database
+  with the new build, so a release that cannot read an older build's rows is
+  rejected before any daemon restarts into it.
+- When the daemon has been down for 15 minutes and `justiciar-needed.json`
+  exists, the monitor starts one headless justiciar turn in the main checkout
+  with the crash evidence and resumes it on later runs, at most 6 turns per
+  incident and never two at once.
+- The daemon sends a digest of each transcript to the hub, which shows it at
+  `/pool/session/<id>` with a box that sends `ignite tell`.
+  `ignite pool watch <ticket>` follows the same digest in a terminal.
+  Transcripts can hold secrets, so the hub serves them on the Tailscale listener
+  only.
+
+Clearing a worker, the settle time after a ticket, the model read-back, the
+`dispatch allowed` hooks, rotation and session titles exist only for the desktop
+dispatcher.
+
 ### What the daemon hands off, and when
 
 A daemon with an idle worker asks the hub for the next ticket and says what the
