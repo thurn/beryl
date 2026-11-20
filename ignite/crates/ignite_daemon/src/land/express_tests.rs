@@ -473,3 +473,77 @@ fn the_tree_s_ignite_toml_is_read_for_its_express_section_with_the_daemons_as_fa
     assert_eq!(section_in(&root, None), None);
     let _ = fs::remove_dir_all(root);
 }
+
+/// On 2026-11-20 an express landing ran its commands while the tree's seed was still copying
+/// another tree's build, and the seed swapped the target directory in under cargo-nextest. A run
+/// now waits while the tree's seed directory is on disk, and runs once it is set aside.
+#[test]
+fn a_run_waits_until_the_trees_seed_has_ended() {
+    let root = std::env::temp_dir().join(format!("ignite-express-seed-{}", std::process::id()));
+    let seed = root.join(".repo.seeding");
+    let (root, lane, _) = lane("seed", &[&format!("test ! -e {}", seed.display())]);
+    fs::create_dir_all(&seed).unwrap();
+    let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
+    let landing = steps.begin(
+        crate::steps::Kind::Verb("land".to_owned()),
+        crate::steps::Work::default(),
+    );
+    let lane = Arc::new(lane);
+    let runner = {
+        let (lane, landing) = (Arc::clone(&lane), Arc::clone(&landing));
+        std::thread::spawn(move || {
+            let _entered = landing.enter();
+            lane.run_in(&lane.repo, &section(&lane), &[])
+        })
+    };
+    while landing.view().waiting_for.is_none() {
+        std::thread::yield_now();
+    }
+    assert!(
+        !lane.repo.join("tool/target/express.log").exists(),
+        "no command started while the seed ran"
+    );
+    fs::remove_dir(&seed).unwrap();
+    let run = runner.join().unwrap();
+    assert!(run.passed(), "the command ran after the seed: {run:?}");
+    let _ = fs::remove_dir_all(root);
+}
+
+/// A run stopped while it waits for the tree's seed ends at once and runs no command.
+#[test]
+fn a_run_stopped_while_the_seed_runs_runs_no_command() {
+    let (root, lane, _) = lane("seed-stop", &["touch ran"]);
+    fs::create_dir_all(root.join(".repo.seeding")).unwrap();
+    let steps = crate::steps::Steps::new(Arc::new(ignite_core::time::SystemClock));
+    let landing = steps.begin(
+        crate::steps::Kind::Verb("land".to_owned()),
+        crate::steps::Work::default(),
+    );
+    landing.request_stop().unwrap();
+    let _entered = landing.enter();
+    let run = lane.run_in(&lane.repo, &section(&lane), &[]);
+    let (step, why) = run.failure.clone().unwrap();
+    assert_eq!(step, "waiting for the tree's seed");
+    assert!(why.contains("asked to stop"), "{why}");
+    assert!(run.ran.is_empty() && !lane.repo.join("tool/ran").exists());
+    let _ = fs::remove_dir_all(root);
+}
+
+/// On 2026-11-20 a landing failed with the end of another tree's express log, which said every test passed: the
+/// seed had moved the tree's target directory, log and all, away under the running command, and
+/// the failure was read back from the log's path. It is now read from the file the command wrote.
+#[test]
+fn a_failure_shows_what_the_command_wrote_after_its_log_was_moved_away() {
+    let (root, lane, _) = lane("moved-log", &["sh swap.sh"]);
+    fs::write(
+        lane.repo.join("tool/swap.sh"),
+        "mv target target.gone\nmkdir target\necho '1747 tests run: 1747 passed' > \
+         target/express.log\necho 'the real failure'\nexit 1\n",
+    )
+    .unwrap();
+    let run = lane.run_in(&lane.repo, &section(&lane), &[]);
+    let (_, output) = run.failure.clone().unwrap();
+    assert!(output.contains("the real failure"), "{output}");
+    assert!(!output.contains("1747 passed"), "{output}");
+    let _ = fs::remove_dir_all(root);
+}

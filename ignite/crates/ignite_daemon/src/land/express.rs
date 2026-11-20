@@ -564,6 +564,12 @@ impl MachineExpress {
     /// Runs the commands in order in `tree`'s commands directory, logging to `express.log` in
     /// its `target` directory, and records each in `run`; stops at the first failure.
     fn run_commands(&self, tree: &Path, dir: &str, commands: &[String], run: &mut ExpressRun) {
+        // A seed swaps the target directory in once no build holds Cargo's lock, which
+        // cargo-nextest gives up while the tests run (see `trees::wait_for_seed_on_disk`).
+        if let Err(why) = crate::trees::wait_for_seed_on_disk(tree, HANG_LIMIT) {
+            run.failure = Some(("waiting for the tree's seed".to_owned(), why));
+            return;
+        }
         let dir = tree.join(dir);
         let target = dir.join("target");
         let log = target.join("express.log");
@@ -607,6 +613,9 @@ impl MachineExpress {
         let start = out.metadata().map_or(0, |m| m.len());
         let _ = writeln!(out, "$ {command}");
         let err = out.try_clone().map_err(|e| e.to_string())?;
+        // Read back through this handle, not the path: a log moved away meanwhile, as a seed
+        // once swapped a whole target directory, still holds what the command wrote.
+        let written = File::open(log).map_err(|e| format!("cannot open {}: {e}", log.display()))?;
         let cores = cores.to_string();
         let mut process = Command::new(program);
         process
@@ -657,7 +666,7 @@ impl MachineExpress {
         if status.success() {
             Ok(())
         } else {
-            Err(tail(log, start))
+            Err(tail(written, start))
         }
     }
 }
@@ -752,13 +761,11 @@ impl ExpressLane for MachineExpress {
     }
 }
 
-/// The last [`TAIL_LINES`] lines `log` holds past byte `start`.
-fn tail(log: &Path, start: u64) -> String {
+/// The last [`TAIL_LINES`] lines the log `file` holds past byte `start`.
+fn tail(mut file: File, start: u64) -> String {
     let mut text = String::new();
-    if let Ok(mut file) = File::open(log) {
-        let _ = file.seek(SeekFrom::Start(start));
-        let _ = file.read_to_string(&mut text);
-    }
+    let _ = file.seek(SeekFrom::Start(start));
+    let _ = file.read_to_string(&mut text);
     let lines: Vec<&str> = text.lines().collect();
     let from = lines.len().saturating_sub(TAIL_LINES);
     let shown = lines[from..].join("\n");

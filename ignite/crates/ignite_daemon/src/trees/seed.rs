@@ -67,6 +67,7 @@ use super::{Kind, LeaseRequest, Trees, store_error};
 #[cfg(test)]
 pub(super) use copy::clone_dir;
 use copy::clone_target;
+pub use swap::wait_for_seed_on_disk;
 use swap::{clear, delete, move_dir, set_aside, staging, swap_in, tree_locks, tree_profiles};
 
 /// The lock files Cargo holds in a profile directory while it builds there: Cargo 1.98 holds the

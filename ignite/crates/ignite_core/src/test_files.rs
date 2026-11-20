@@ -168,9 +168,15 @@ mod tests {
         assert_eq!(file_name(42, "tests::reads$dir"), "42-tests__reads_dir");
     }
 
+    /// The package directory is read at run time, as [`root`] reads it. A test binary that
+    /// Ignite copied from another tree's build is current there, and a path compiled into it
+    /// with `env!` names the other tree: on 2026-11-20 this test compared that path with the
+    /// root and failed an express landing.
     #[test]
     fn the_root_holds_this_crate() {
         let root = root().unwrap();
-        assert!(Path::new(env!("CARGO_MANIFEST_DIR")).starts_with(root));
+        let package = std::env::var_os("CARGO_MANIFEST_DIR").expect("Cargo names the package");
+        assert!(Path::new(&package).starts_with(&root), "{}", root.display());
+        assert!(root.join(".git").exists());
     }
 }

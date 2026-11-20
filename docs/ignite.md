@@ -2194,6 +2194,14 @@ express_cores = 3
   did not check, so the tree changed and the landing had to run all commands
   again (87 s). `ignite test ignite:` and `ignite check` run it too, so the
   agent sees the failure before landing.
+- The commands wait while the tree's seed (the copy of another tree's build
+  that a lease makes) is under way, which they see by its directory beside the
+  tree, `.<tree>.seeding`. A seed swaps the target directory in once no build
+  holds Cargo's lock, and cargo-nextest gives up that lock while the tests run.
+  On 2026-11-20 a seed swapped a landing tree's target directory in under
+  cargo-nextest: the run failed and showed the end of the donor tree's express
+  log, in which every test had passed. A failure's output is now read from the
+  log file the command wrote, wherever it was moved.
 - The nextest command uses the `express` profile in
   `ignite/.config/nextest.toml`, which kills a test after 120 s (30 s, four
   times). On 2026-11-18 one hung test held a landing for the whole 1800 s verb

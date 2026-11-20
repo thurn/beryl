@@ -12,6 +12,7 @@
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use super::super::disk::profile_dirs;
 use super::CARGO_LOCKS;
@@ -26,6 +27,43 @@ pub(super) fn staging(to: &Path) -> PathBuf {
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     to.with_file_name(format!(".{name}.seeding"))
+}
+
+/// How often [`wait_for_seed_on_disk`] looks for the seed directory again.
+const LOOK_EVERY: Duration = Duration::from_millis(100);
+
+/// Returns once no seed of the tree at `tree` is under way, judged by its seed directory
+/// ([`staging`]), which the lease makes before it returns and sets aside when the seed ends. It
+/// is for a process other than the daemon, such as a verb process, which cannot see the
+/// daemon's marks and so cannot use [`super::wait_until_seeded`]. `Err` says why it stopped
+/// waiting: the work was asked to stop, or the directory stayed past `limit`.
+///
+/// On 2026-11-20 an express landing ran its commands in a tree whose seed was still copying
+/// another tree's build. Cargo holds its lock only while it compiles, so the seed swapped the
+/// target directory in while cargo-nextest ran the tests. The run failed, and its report showed
+/// the end of the donor tree's own express log, in which every test had passed. The next
+/// landing ran test binaries built in the donor, whose compiled-in paths name the donor.
+pub fn wait_for_seed_on_disk(tree: &Path, limit: Duration) -> Result<(), String> {
+    let dir = staging(tree);
+    if fs::symlink_metadata(&dir).is_err() {
+        return Ok(());
+    }
+    let _waiting = crate::steps::waiting("this tree's build directories to be copied");
+    let began = Instant::now();
+    while fs::symlink_metadata(&dir).is_ok() {
+        if crate::steps::stop_requested() {
+            return Err("stopped waiting for this tree's seed: the work was asked to stop".into());
+        }
+        if began.elapsed() > limit {
+            return Err(format!(
+                "{} is still there after {} s, so a seed of this tree has not ended",
+                dir.display(),
+                limit.as_secs()
+            ));
+        }
+        std::thread::sleep(LOOK_EVERY);
+    }
+    Ok(())
 }
 
 /// Every profile directory the tree at `to` has in `own`, and every one the donor at `from`

@@ -56,7 +56,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 
 pub use disk::DiskReport;
-pub use seed::{Seeding, wait_until_seeded};
+pub use seed::{Seeding, wait_for_seed_on_disk, wait_until_seeded};
 pub use setup::Unfinished;
 use wait::Slot;
 pub use wait::Waiter;
