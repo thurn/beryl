@@ -236,6 +236,13 @@ pub fn written(verb: &str, reply: &Value) -> String {
             filed.join(", ")
         );
     }
+    for added in reply["filer_dependencies"].as_array().into_iter().flatten() {
+        let _ = write!(
+            out,
+            "\ndepends on {}, which you hold unlanded; add --independent to file without that",
+            text(added, "on")
+        );
+    }
     out
 }
 

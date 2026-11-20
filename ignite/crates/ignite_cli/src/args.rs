@@ -489,9 +489,15 @@ pub enum TicketCommand {
         /// Comma-separated labels.
         #[arg(long, value_delimiter = ',')]
         labels: Vec<String>,
-        /// Comma-separated tickets the new one depends on.
+        /// Comma-separated tickets the new one depends on. The hub also adds a dependency on each
+        /// unlanded ticket you hold under the same parent; see `--independent`.
         #[arg(long, value_delimiter = ',')]
         deps: Vec<String>,
+        /// A follow-up that does not need your own unlanded change. Without it the hub makes the
+        /// new ticket depend on every ticket you hold in progress, unlanded, under the same
+        /// parent (or as its parent), so the pool does not hand it out before that change lands.
+        #[arg(long)]
+        independent: bool,
         /// File it released for implementation even if it is an epic or under a pending one.
         /// Without this flag an epic, and a ticket under a pending epic, are filed
         /// `pending_approval` and the pool is never offered them until a person releases them;

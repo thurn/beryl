@@ -678,7 +678,7 @@ pub(crate) fn status_name(status: Status) -> &'static str {
     }
 }
 
-fn collect_strings(conn: &Connection, sql: &str, args: &[&str]) -> Result<Vec<String>> {
+pub(crate) fn collect_strings(conn: &Connection, sql: &str, args: &[&str]) -> Result<Vec<String>> {
     let mut statement = conn.prepare(sql)?;
     let rows = statement.query_map(params_from_iter(args), |row| row.get::<_, String>(0))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)

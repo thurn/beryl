@@ -83,6 +83,7 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             fields,
             labels,
             deps,
+            independent,
             release,
             pending,
             automatic,
@@ -98,7 +99,11 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             if let Some(filer) = &hub.actor_title {
                 op["fields"]["metadata"] = json!({ CREATED_BY_TITLE: filer });
             }
-            write(hub, "created", build::filed(build::single(op), *automatic))
+            write(
+                hub,
+                "created",
+                build::filed(build::single(op), *automatic, *independent),
+            )
         }
         TicketCommand::Update {
             id,

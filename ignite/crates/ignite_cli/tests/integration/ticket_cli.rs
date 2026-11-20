@@ -55,10 +55,9 @@ fn json(output: &Output) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-#[test]
-fn another_process_closing_a_ticket_ends_a_waiting_process() {
-    let dir =
-        ignite_core::test_files::temp_dir().join(format!("ignite-cli-bin-{}", std::process::id()));
+/// A hub in this process and a directory whose `ignite.toml` points at it, with a token.
+fn hub_in_dir(name: &str) -> (std::path::PathBuf, String, ignite_hub::server::RunningHub) {
+    let dir = ignite_core::test_files::temp_dir().join(format!("{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let conn = hub::open(&dir.join("hub.sqlite")).unwrap();
@@ -75,7 +74,12 @@ fn another_process_closing_a_ticket_ends_a_waiting_process() {
     .start()
     .unwrap();
     std::fs::write(dir.join("ignite.toml"), config(running.address())).unwrap();
+    (dir, token, running)
+}
 
+#[test]
+fn another_process_closing_a_ticket_ends_a_waiting_process() {
+    let (dir, token, running) = hub_in_dir("ignite-cli-bin");
     let created = json(
         &ignite(&dir, &token, &["create", "Waited"])
             .output()
@@ -112,4 +116,50 @@ fn another_process_closing_a_ticket_ends_a_waiting_process() {
     );
     running.stop();
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_follow_up_depends_on_the_filers_unlanded_ticket_unless_independent_or_automatic() {
+    let (dir, token, running) = hub_in_dir("ignite-cli-follow-up");
+    let as_session = |args: &[&str]| {
+        let mut command = ignite(&dir, &token, args);
+        command
+            .env_remove("CLAUDE_CODE_HOST_SESSION_ID")
+            .env("IGNITE_SESSION", "s-filer");
+        command.output().unwrap()
+    };
+    let held = json(&as_session(&["create", "Held"]))["results"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    json(&as_session(&["claim", &held]));
+
+    let follow_up = json(&as_session(&["create", "Follow-up"]));
+    assert_eq!(follow_up["filer_dependencies"][0]["on"], held.as_str());
+    let text = ignite_cli_text(&dir, &token, &["create", "Follow-up text"]);
+    assert!(text.contains(&format!("depends on {held}")), "{text}");
+    assert!(text.contains("--independent"), "{text}");
+
+    for flag in ["--independent", "--automatic"] {
+        let reply = json(&as_session(&["create", "Free", flag]));
+        assert!(reply.get("filer_dependencies").is_none(), "{flag}: {reply}");
+    }
+    running.stop();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The text reply of `ignite ticket <args>` as the session that holds the ticket.
+fn ignite_cli_text(dir: &Path, token: &str, args: &[&str]) -> String {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ignite"));
+    command
+        .current_dir(dir)
+        .env("IGNITE_TOKEN", token)
+        .env("IGNITE_RETRY_FOR_S", "0")
+        .env_remove("CLAUDE_CODE_HOST_SESSION_ID")
+        .env("IGNITE_SESSION", "s-filer")
+        .arg("ticket")
+        .args(args);
+    let output = command.output().unwrap();
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
 }

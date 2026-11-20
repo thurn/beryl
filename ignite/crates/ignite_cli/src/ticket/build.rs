@@ -83,9 +83,14 @@ fn dependency(spec: &str) -> Result<Value> {
 /// The status of a ticket filed but not yet released for implementation.
 /// `body` marked as filed by a program when `automatic` (`ignite ticket create --automatic`), so
 /// that the hub makes the writer's machine the owner of the tickets it creates.
-pub fn filed(mut body: Value, automatic: bool) -> Value {
+/// It is also marked `independent` when the filer says the tickets need none of its unlanded
+/// work (`--independent`), so that the hub adds no dependency on it.
+pub fn filed(mut body: Value, automatic: bool, independent: bool) -> Value {
     if automatic {
         body["automatic"] = Value::Bool(true);
+    }
+    if independent {
+        body["independent"] = Value::Bool(true);
     }
     body
 }

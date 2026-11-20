@@ -72,6 +72,18 @@ impl Hub {
             .collect()
     }
 
+    /// The IDs a batch's operations returned when `actor` writes it.
+    pub fn ids_as(&mut self, actor: &str, ops: Value) -> Vec<String> {
+        match self.post_as(actor, ops, json!([])).unwrap() {
+            batch::BatchOutcome::Applied(reply) => reply
+                .results
+                .into_iter()
+                .map(|r| r.id.to_string())
+                .collect(),
+            batch::BatchOutcome::Conflict(conflict) => panic!("conflict: {conflict:?}"),
+        }
+    }
+
     pub fn show(&self, id: &str) -> TicketDetail {
         tickets::get(&self.conn, id, true, true, self.now)
             .unwrap()

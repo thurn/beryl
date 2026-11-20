@@ -19,7 +19,7 @@ use ignite_core::protocol::tickets::{BatchRequest, LeaseOp, LeaseReply, TicketQu
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{feed, fleet, leases, owners, session_titles, tickets};
+use ignite_store::hub::{feed, filer_deps, fleet, leases, owners, session_titles, tickets};
 
 use super::{Request, Response};
 
@@ -97,6 +97,16 @@ fn apply_batch(
             fleet::name_of(conn, writer.machine.as_str()).map_err(|e| store_failure(&e))?;
         owners::add_filing_machine(&mut batch, machine.as_deref());
     }
+    // A follow-up filed by a session that holds unlanded work in the same line depends on that
+    // work, unless the filer opts out or a program filed it; see `filer_deps`.
+    let independent = raw.get(INDEPENDENT).and_then(Value::as_bool) == Some(true);
+    let automatic = raw.get(AUTOMATIC).and_then(Value::as_bool) == Some(true);
+    let added = if independent || automatic {
+        Vec::new()
+    } else {
+        filer_deps::add_filer_dependencies(conn, &mut batch, &writer.actor)
+            .map_err(|e| store_failure(&e))?
+    };
     tickets::add_holds(conn, &mut batch).map_err(|e| store_failure(&e))?;
     tickets::add_releases(conn, &mut batch).map_err(|e| store_failure(&e))?;
     // The CLI sends the writing session's title beside the operations, so the dashboard can
@@ -105,11 +115,25 @@ fn apply_batch(
         session_titles::record(conn, &writer.actor, title, now).map_err(|e| store_failure(&e))?;
     }
     match batch::apply(conn, &batch, &writer.actor, writer.machine.as_str(), now) {
-        Ok(BatchOutcome::Applied(reply)) => ok(&reply),
+        Ok(BatchOutcome::Applied(reply)) => {
+            let mut value = json!(reply);
+            if !added.is_empty() {
+                value[FILER_DEPENDENCIES] = json!(added);
+            }
+            Ok(Response::json(200, &value))
+        }
         Ok(BatchOutcome::Conflict(conflict)) => Ok(Response::json(409, &json!(conflict))),
         Err(error) => Err(store_failure(&error)),
     }
 }
+
+/// The key of `POST /batch`'s body that is `true` when the filer says its tickets do not need
+/// its own unlanded work (`ignite ticket create --independent`), so the hub adds no dependency.
+pub const INDEPENDENT: &str = "independent";
+
+/// The key of `POST /batch`'s reply listing the dependencies the hub added on the filer's
+/// unlanded work, each as `{"op": <index of the create>, "on": <ticket>}`. Left out when none.
+pub const FILER_DEPENDENCIES: &str = "filer_dependencies";
 
 /// The key of `POST /batch`'s body that is `true` when a program filed the batch's tickets, such
 /// as a check (`ignite ticket create --automatic`). Each ticket it creates without an owner is

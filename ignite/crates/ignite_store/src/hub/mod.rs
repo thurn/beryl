@@ -9,6 +9,7 @@ pub mod cycles;
 pub mod edges;
 pub mod emergency;
 pub mod feed;
+pub mod filer_deps;
 pub mod findings;
 pub mod fleet;
 pub mod leases;

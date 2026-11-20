@@ -609,3 +609,69 @@ fn an_epic_filed_without_workers_gets_the_default_share_and_an_explicit_one_is_k
         ]
     );
 }
+
+/// Applies `ops` through the hub's filer-dependency step, as `actor` does, and returns the IDs
+/// created and what the step added.
+fn file_as(
+    hub: &mut Hub,
+    actor: &str,
+    ops: serde_json::Value,
+) -> (
+    Vec<String>,
+    Vec<ignite_store::hub::filer_deps::AddedDependency>,
+) {
+    let mut request: ignite_core::protocol::tickets::BatchRequest =
+        serde_json::from_value(json!({"ops": ops})).unwrap();
+    let added =
+        ignite_store::hub::filer_deps::add_filer_dependencies(&hub.conn, &mut request, actor)
+            .unwrap();
+    let ops = serde_json::to_value(&request.ops).unwrap();
+    (hub.ids_as(actor, ops), added)
+}
+
+#[test]
+fn a_ticket_filed_beside_the_filers_unlanded_ticket_depends_on_it() {
+    let mut hub = Hub::new();
+    let epic = hub.ids(json!([create("Epic", None, json!({"type": "epic"}))]))[0].clone();
+    let ids = hub.ids(json!([
+        create("Held", Some(&epic), json!({})),
+        create("Other", Some(&epic), json!({})),
+        create("Elsewhere", None, json!({})),
+    ]));
+    hub.post_as("me", json!([{"op": "claim", "id": ids[0]}]), json!([]))
+        .unwrap();
+
+    // A sibling of the held ticket depends on it; a child (which the held ticket waits for), a
+    // ticket in another line, one that already lists it, and another session's filing do not.
+    let (created, added) = file_as(
+        &mut hub,
+        "me",
+        json!([
+            create("Sibling", Some(&epic), json!({})),
+            create("Child", Some(&ids[0]), json!({})),
+            create("Unrelated", None, json!({})),
+            create_with(
+                "Listed",
+                Some(&epic),
+                json!({}),
+                json!({"deps": [{"on": ids[0]}]})
+            ),
+        ]),
+    );
+    assert_eq!(
+        added
+            .iter()
+            .map(|a| (a.op, a.on.to_string()))
+            .collect::<Vec<_>>(),
+        [(0, ids[0].clone())]
+    );
+    assert_eq!(hub.blocked_by(&created[0]), [pair(&ids[0], 2)]);
+    assert_eq!(hub.blocked_by(&created[1]), []);
+    assert_eq!(hub.blocked_by(&created[2]), []);
+    let (_, none) = file_as(
+        &mut hub,
+        "someone-else",
+        json!([create("Mine", Some(&epic), json!({}))]),
+    );
+    assert!(none.is_empty());
+}
