@@ -418,6 +418,9 @@ pub enum PoolCommand {
         #[arg(long)]
         all: bool,
     },
+    /// Print the newest sample of each Claude plan window, and the usage hold if one is in
+    /// force.
+    Usage,
 }
 
 #[derive(Debug, Subcommand)]
@@ -791,6 +794,19 @@ mod tests {
             Command::Dispatch {
                 wait: ignite_core::protocol::client::DISPATCH_WAIT_S,
                 command: None,
+            }
+        ));
+    }
+
+    /// `ignite pool usage` reaches the daemon's `pool` verb, which prints the plan's usage.
+    #[test]
+    fn parses_pool_usage() {
+        assert!(matches!(
+            Cli::try_parse_from(["ignite", "pool", "usage"])
+                .unwrap()
+                .command,
+            Command::Pool {
+                command: PoolCommand::Usage
             }
         ));
     }
