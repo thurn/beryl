@@ -241,7 +241,10 @@ fn a_long_wait_for_cores_asks_only_for_tickets_holding_master_back() {
     );
     let (idle, why) = rig.dispatcher.idle_reason().unwrap();
     assert_eq!(idle, 2);
-    assert!(why.starts_with("commands have waited 150 s for cores"), "{why}");
+    assert!(
+        why.starts_with("commands have waited 150 s for cores"),
+        "{why}"
+    );
 
     // A regression still starts.
     rig.reserve("R", "local_w1", &["regression"]);

@@ -399,8 +399,10 @@ impl Host for DaemonHost {
     }
 
     fn ticket_work_wait(&self) -> f64 {
-        self.scheduler
-            .longest_wait(&[ignite_core::protocol::Class::Land, ignite_core::protocol::Class::Agent])
+        self.scheduler.longest_wait(&[
+            ignite_core::protocol::Class::Land,
+            ignite_core::protocol::Class::Agent,
+        ])
     }
 
     fn holders(&self) -> BTreeMap<SessionId, TicketId> {

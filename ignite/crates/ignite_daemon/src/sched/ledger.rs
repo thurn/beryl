@@ -15,8 +15,8 @@ use super::{Grant, GrantRequest, Limits, Status};
 mod observe;
 mod order;
 
-use order::{in_order, share};
 pub use order::{AGED_SECONDS, SMALL_CORES};
+use order::{in_order, share};
 
 /// `idle` work starts only while the machine is under this share of its cores busy.
 const IDLE_BUSY_LIMIT: f64 = 0.7;

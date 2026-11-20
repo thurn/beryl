@@ -1204,10 +1204,10 @@ Rules for cores:
   free cores evenly, so each command ran on about one core. A one-card change's
   `ignite check` ran 80 minutes without finishing: its one-core listing steps
   waited behind ten-core builds.
-- A build that only compiles gives a core back on each step to a waiting
-  request of its own class, but only to a small one (at most two cores) or one
-  that has waited two minutes. Before this rule, every waiting request counted,
-  and with eighteen waiting every build shrank to one core.
+- A build that only compiles gives a core back on each step to a waiting request
+  of its own class, but only to a small one (at most two cores) or one that has
+  waited two minutes. Before this rule, every waiting request counted, and with
+  eighteen waiting every build shrank to one core.
 - The daemon reads the machine's total CPU use from the operating system about
   once a second, and with it the CPU each command has used: its process group,
   every process those started (even one that left the group), and the children

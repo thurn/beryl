@@ -209,7 +209,10 @@ fn a_compiling_build_keeps_its_cores_from_a_large_request_until_it_has_waited_lo
     let mut now = 1.0;
     while now < AGED_SECONDS {
         let step = ledger.step(at(now));
-        assert!(step.resized.is_empty() && step.granted.is_empty(), "at {now} s");
+        assert!(
+            step.resized.is_empty() && step.granted.is_empty(),
+            "at {now} s"
+        );
         now += 1.0;
     }
     let step = ledger.step(at(AGED_SECONDS + 1.0));
@@ -260,7 +263,11 @@ fn a_grant_that_grew_gives_its_growth_back_while_land_waits() {
     let other = ledger.enqueue(ask(Class::Agent, 12), T0);
     let step = ledger.step(T0);
     let first = |id| step.granted.iter().find(|g| g.id == id).unwrap().cores;
-    assert_eq!(first(compare), 12, "the other agent took 12 of the 24 cores first");
+    assert_eq!(
+        first(compare),
+        12,
+        "the other agent took 12 of the 24 cores first"
+    );
     ledger.release(other);
     let step = ledger.step(at(1.0));
     assert_eq!(step.resized, [(compare, 16)], "grew into the free cores");
