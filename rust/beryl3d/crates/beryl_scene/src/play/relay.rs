@@ -9,7 +9,7 @@
 //!
 //! When a script with such a step starts, every beat is laid out again with both answered, and
 //! each thing the script holds that has a time (segments, spans, streaks, notices, effects,
-//! counts and sounds) moves by how much later the step it keeps to
+//! counts, turn steps and sounds) moves by how much later the step it keeps to
 //! now plays. No pose is worked out again, which is exact because the steps that wait move
 //! nothing: the session ends a span in a beat of its own before the beat that moves either of
 //! its ends (`beryl_protocol::script`, "Spans"), and a coin moves no card.
@@ -249,6 +249,7 @@ fn shift(compiled: &mut Compiled, end: u64) {
         notices,
         effects,
         counts,
+        turn_changes,
         sounds,
         turns,
         pile_counts,
@@ -308,6 +309,10 @@ fn shift(compiled: &mut Compiled, end: u64) {
         change.at += start(change.step);
     }
     settle(counts, |change| change.at);
+    for change in turn_changes.iter_mut() {
+        change.at += start(change.step);
+    }
+    settle(turn_changes, |change| change.at);
     for run in sounds.iter_mut() {
         run.at += start(run.step);
     }

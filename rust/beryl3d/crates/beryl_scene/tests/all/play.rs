@@ -5,7 +5,7 @@ use crate::common::{
     MS, before, discard, draw, emerge, empty_frame, frame, resolve, show, three_beats, window,
 };
 use beryl_protocol::GameUpdate;
-use beryl_protocol::protocol::{Side, StackItem, Why, ZoneName};
+use beryl_protocol::protocol::{Side, StackItem, Step as TurnStep, Why, ZoneName};
 use beryl_protocol::script::{Act, Fact, Step, Subject};
 use beryl_scene::frame::Wake;
 use beryl_scene::play::Show;
@@ -514,4 +514,50 @@ fn an_ability_that_emerges_ends_on_the_stack_and_one_that_vanishes_leaves_it() {
     assert!(show.table().abilities().is_empty());
     assert_eq!(show.ability_pose(5, 700 * MS), None);
     at_rest(&show, &resolved, 700 * MS);
+}
+
+#[test]
+fn the_turn_step_shown_follows_the_scripts_set_steps_not_the_latest_view() {
+    // The step row lights the step the table shows (`Show::turn_at`). It used to light the
+    // latest view's step as soon as that view arrived, while its script was still playing the
+    // steps before it, so the row ran ahead of the table.
+    let (mut start, _) = before();
+    start.view.turn.step = TurnStep::Untap;
+    let mut after = start.clone();
+    after.view.turn.step = TurnStep::PrecombatMain;
+    let turn = &start.view.turn;
+    let begins = |step| Act::Set {
+        fact: Fact::Turn {
+            number: turn.number,
+            own_number: turn.own_number,
+            active: turn.active,
+            step,
+        },
+    };
+    after.view.script = Some(
+        ScriptBuilder::default()
+            .beat([begins(TurnStep::Upkeep)])
+            .beat([begins(TurnStep::Draw)])
+            .beat([begins(TurnStep::PrecombatMain)])
+            .build(),
+    );
+    let mut show = show();
+    show.push(Box::new(start), Vec::new());
+    show.push(Box::new(after), vec![timing(100.0); 3]);
+    let mut scratch = empty_frame();
+    let mut shown = Vec::new();
+    for ms in [0, 50, 150, 250, 400] {
+        frame(&mut show, &mut scratch, ms * MS);
+        shown.push(show.turn_at(ms * MS).map(|turn| turn.step));
+    }
+    assert_eq!(
+        shown,
+        [
+            Some(TurnStep::Upkeep),
+            Some(TurnStep::Upkeep),
+            Some(TurnStep::Draw),
+            Some(TurnStep::PrecombatMain),
+            Some(TurnStep::PrecombatMain),
+        ]
+    );
 }

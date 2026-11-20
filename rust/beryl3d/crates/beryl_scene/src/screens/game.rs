@@ -29,14 +29,7 @@ pub fn game(input: &ScreenIn) -> Element {
     let shown = opening::shown(input);
     let hud = [
         players::players(input),
-        // The overlay takes the presses that would reach the stops under it.
-        steps::steps(input).map(|steps| {
-            if shown {
-                inert(steps).opacity(ratio::OPENING_HUD_OPACITY)
-            } else {
-                steps
-            }
-        }),
+        game_steps(input),
         full_control::full_control(input).filter(|_| !shown),
     ];
     let over = [
@@ -76,6 +69,20 @@ fn inert(mut element: Element) -> Element {
     element.shortcuts = Shortcuts::default();
     element.children = element.children.into_iter().map(inert).collect();
     element
+}
+
+/// The step row as the game screen shows it (`steps::steps`): under the opening's backdrop,
+/// dimmed and with no presses, since the overlay takes the presses that would reach the stops
+/// under it. The client builds it again on its own as the table reaches a step of the turn
+/// (`Layer::replace`).
+#[must_use]
+pub fn game_steps(input: &ScreenIn) -> Option<Element> {
+    let steps = steps::steps(input)?;
+    Some(if opening::shown(input) {
+        inert(steps).opacity(ratio::OPENING_HUD_OPACITY)
+    } else {
+        steps
+    })
 }
 
 /// The open prompt, or what the screen shows while the opponent decides, waiting for the table

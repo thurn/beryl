@@ -432,7 +432,7 @@ impl Client {
         self.show.pointer_mut().advance(table_now);
         self.show.advance_slide(table_now);
         self.inspect(table_now);
-        self.viewing_frame(self.screen == Screen::Game && self.sheet.is_none());
+        self.viewing_frame(table_now);
         let visible = self.hud_shown();
         // The guided start's opening covers the table's life totals and pile counts, not notices.
         let counted = visible && !self.guided_start();

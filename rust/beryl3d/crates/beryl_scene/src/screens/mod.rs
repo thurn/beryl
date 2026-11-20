@@ -5,6 +5,7 @@
 mod bug_report;
 mod gallery;
 mod game;
+pub use game::game_steps;
 mod game_over;
 mod lobby;
 pub(crate) mod opening;
@@ -27,7 +28,7 @@ pub use table::sheet_face;
 
 use beryl_protocol::prompt::PromptView;
 use beryl_protocol::protocol::{OutcomeView, Side, Status};
-use beryl_protocol::script::Subject;
+use beryl_protocol::script::{Subject, Turn};
 use beryl_protocol::{AgentView, PlayerView};
 
 use crate::element::{Element, Viewed};
@@ -117,6 +118,9 @@ pub struct ScreenIn<'a> {
     /// `ui/src/stage/playback.ts`), so a screen that must keep in step with the table, as the
     /// opening does while the hands are dealt and mulliganed, reads it rather than `view`.
     pub played: Option<&'a PlayerView>,
+    /// The turn and step the table shows now, as the scripts played so far set them
+    /// (`Show::turn_at`), which the step row lights; `None` until the table has shown a view.
+    pub turn: Option<Turn>,
     /// The open prompt, if any.
     pub prompt: Option<&'a PromptView>,
     pub settings: &'a Settings,

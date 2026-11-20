@@ -231,6 +231,7 @@ mod milestone_three {
             window: Window::default(),
             view: None,
             played: None,
+            turn: None,
             prompt,
             settings,
             sheet: None,

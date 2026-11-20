@@ -20,6 +20,7 @@ use super::step::{Motion, add, numbers_of};
 use crate::beat::{Laid, beat};
 use crate::effects::{Effect, EffectRun};
 use crate::hud::counts::CountChange;
+use crate::hud::steps::TurnChange;
 use crate::light::{MarkSpan, Span, SpanChange, StreakRun};
 use crate::motion::Track;
 use crate::notice::NoticeRun;
@@ -74,6 +75,8 @@ pub(crate) struct Compiled {
     /// The life totals and pools its `count` steps set, ordered by when each is set on its
     /// clock, and as its steps wrote them where two are set together.
     pub counts: Vec<CountChange>,
+    /// The steps of the turn its `set` steps begin, ordered by when each begins on its clock.
+    pub turn_changes: Vec<TurnChange>,
     /// The sounds its steps ask for, ordered by when each begins on its clock.
     pub sounds: Vec<SoundRun>,
     /// When cards show the record the script leads to, where a step says, ordered by time.
@@ -339,6 +342,9 @@ impl<'a> Compiling<'a> {
             take(&mut written.streaks, &mut out.streaks, |run| run.over.from);
             take(&mut written.notices, &mut out.notices, |run| run.over.from);
             take(&mut written.counts, &mut out.counts, |change| change.at);
+            take(&mut written.turn_changes, &mut out.turn_changes, |change| {
+                change.at
+            });
             take(&mut written.turns, &mut out.turns, |turn| {
                 (turn.slot, turn.at)
             });

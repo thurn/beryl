@@ -4,19 +4,19 @@
 //! pile holds a face.
 
 use beryl_protocol::PlayerView;
-use beryl_protocol::protocol::{Declaration, ObjectId, Side, ZoneName};
-use beryl_protocol::script::{Act, OwnStep};
+use beryl_protocol::protocol::{Declaration, ObjectId, Side, Step, StopsSetting, ZoneName};
+use beryl_protocol::script::{Act, OwnStep, Turn};
 
 use super::Client;
 use crate::data::space::shown::opening;
-use crate::element::{Viewed, floats};
+use crate::element::{Element, Viewed, floats};
 use crate::frame::Place;
 use crate::input::Rect;
 use crate::inspect::revealed::{self, RevealedFace};
 use crate::layout::FloatLook;
 use crate::light::Span;
 use crate::pose::Curve;
-use crate::screens::{self, Screen};
+use crate::screens::{self, Screen, ScreenIn};
 use crate::table::{Moves, Relaid, Window};
 use crate::verbs::Interval;
 
@@ -51,6 +51,26 @@ pub(super) struct Viewing {
     /// How many views the table had shown at rest when the screen was last checked for a
     /// script's end (`Show::views_shown`).
     views_shown: usize,
+    /// The turn and step the step row was last built for (`Show::turn_at`).
+    pub(super) turn: Option<Turn>,
+    /// The game screen's step row built ahead for each step of the turn the scripts to come
+    /// will show, with that turn (`Client::prepare_steps`), so that a frame builds none.
+    steps_ahead: Vec<(Turn, Element)>,
+    /// The steps of the turn the scripts to come will show, once each, kept so that listing
+    /// them allocates nothing.
+    coming: Vec<Turn>,
+    /// What else the rows in `steps_ahead` were built from (`RowsFrom`).
+    steps_from: Option<RowsFrom>,
+}
+
+/// Everything besides the turn that the game screen's step row is built from: the stops, the
+/// window, the pile whose viewer is open and whether the opening is shown. A row built ahead
+/// is kept until one of them changes.
+type RowsFrom = (StopsSetting, Window, Option<Viewed>, bool);
+
+/// The active player and step of `turn`, which are all the step row shows of it.
+fn lit(turn: Turn) -> (Side, Step) {
+    (turn.active, turn.step)
 }
 
 /// Where the opening's coin flip stands: no opening has begun; the coin spins until a time in
@@ -253,8 +273,11 @@ impl Client {
     /// What each frame does for the screen's own clock: once the opening's coin has stopped
     /// spinning, shows who starts and the decision; as a script ends while the opening is or
     /// will be shown, lays the opening out again for the view it played out; and shows or
-    /// hides the Revealed Cards pill (`write_pill`).
-    pub(super) fn viewing_frame(&mut self, visible: bool) {
+    /// hides the Revealed Cards pill (`write_pill`) on the game screen with no sheet open. It
+    /// also lights the step the table reaches at `table_now` (`steps_frame`).
+    pub(super) fn viewing_frame(&mut self, table_now: u64) {
+        let visible = self.screen == Screen::Game && self.sheet.is_none();
+        self.steps_frame(table_now);
         if (self.viewing.spin_due()).is_some_and(|until| self.now >= until) {
             self.viewing.coin = Coin::Landed;
             self.show_screen();
@@ -269,6 +292,88 @@ impl Client {
             }
         }
         self.write_pill(visible);
+    }
+
+    /// Builds the game screen's step row again, and nothing else, when the turn step the table
+    /// shows at `table_now` differs from the one the row shows: a script's `set` step began a
+    /// step of the turn. Where the screen shows no step row, the next screen built shows it.
+    fn steps_frame(&mut self, table_now: u64) {
+        let turn = self.show.turn_at(table_now);
+        if turn == self.viewing.turn {
+            return;
+        }
+        // Until the table shows a view, the row shows the latest view's step, so a first turn
+        // that only names that step again changes nothing on the screen.
+        let latest = (self.show.latest()).map(|update| {
+            let turn = &update.view.turn;
+            (turn.active, turn.step)
+        });
+        let shows = turn.map(lit).or(latest);
+        let changed = shows != self.viewing.turn.map(lit).or(latest);
+        self.viewing.turn = turn;
+        if !changed || self.screen != Screen::Game {
+            return;
+        }
+        let ahead = &mut self.viewing.steps_ahead;
+        let steps = match ahead.iter().position(|(turn, _)| Some(lit(*turn)) == shows) {
+            Some(at) => Some(ahead.swap_remove(at).1),
+            // A step no script to come named when the client last prepared.
+            None => screens::game_steps(&self.screen_in()),
+        };
+        if let Some(steps) = steps {
+            self.layer.replace(steps);
+        }
+    }
+
+    /// Builds the game screen's step row ahead for each step of the turn the scripts to come
+    /// will show (`Show::coming_turns`) that has none yet, and drops those built for a step
+    /// none of them shows. `prepare` calls it, where allocating is allowed, so that a row the
+    /// last frame used is built again before the next frame needs it.
+    pub(super) fn prepare_steps(&mut self) {
+        if self.screen != Screen::Game {
+            self.viewing.steps_ahead.clear();
+            return;
+        }
+        let from = {
+            let input = self.screen_in();
+            let opening = screens::opening::shown(&input);
+            (input.settings.stops, input.window, input.viewing, opening)
+        };
+        if self.viewing.steps_from != Some(from) {
+            self.viewing.steps_from = Some(from);
+            self.viewing.steps_ahead.clear();
+        }
+        // The step the row shows now needs no row ahead: a frame changes the row only to show
+        // another step, and the next `prepare` builds this one again if a script comes back
+        // to it.
+        let latest = (self.show.latest()).map(|update| {
+            let turn = &update.view.turn;
+            (turn.active, turn.step)
+        });
+        let shown = self.viewing.turn.map(lit).or(latest);
+        let mut coming = std::mem::take(&mut self.viewing.coming);
+        coming.clear();
+        for turn in self.show.coming_turns() {
+            if Some(lit(turn)) != shown && !coming.iter().any(|&other| lit(other) == lit(turn)) {
+                coming.push(turn);
+            }
+        }
+        (self.viewing.steps_ahead)
+            .retain(|&(turn, _)| coming.iter().any(|&shown| lit(shown) == lit(turn)));
+        for &turn in &coming {
+            let mut built = self.viewing.steps_ahead.iter();
+            if built.any(|&(shown, _)| lit(shown) == lit(turn)) {
+                continue;
+            }
+            let input = ScreenIn {
+                turn: Some(turn),
+                ..self.screen_in()
+            };
+            if let Some(steps) = screens::game_steps(&input) {
+                self.viewing.steps_ahead.push((turn, steps));
+            }
+        }
+        self.viewing.coming = coming;
     }
 
     /// Shows the Revealed Cards pill over the pile while the pile holds a face, on the game

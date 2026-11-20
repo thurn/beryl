@@ -116,6 +116,7 @@ impl Client {
             window: self.window,
             view: self.show.latest().map(|update| &update.view),
             played: self.show.shown().map(|update| &update.view),
+            turn: self.viewing.turn,
             // While the opening's coin spins, no decision is offered, as the web's `Opening` offers
             // none.
             prompt: (self.prompt.as_ref())

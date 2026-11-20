@@ -357,6 +357,7 @@ impl Client {
         if self.show.rows_key() != rows {
             (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
         }
+        self.prepare_steps();
     }
 
     /// Lays out again, for a window of a new size or a table placed again (`Show::resize`), the

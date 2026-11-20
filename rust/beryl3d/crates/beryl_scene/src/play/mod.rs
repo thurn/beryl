@@ -54,7 +54,7 @@ use std::rc::Rc;
 use beryl_protocol::GameUpdate;
 use beryl_protocol::protocol::{Kind, PlayerView, Status};
 use beryl_protocol::script::{
-    Act, OwnStep, StepTiming, Subject, Table as Played, Verb, own_timings,
+    Act, OwnStep, StepTiming, Subject, Table as Played, Turn, Verb, own_timings,
 };
 use glam::Vec2;
 
@@ -130,6 +130,8 @@ pub struct Show {
     pointer: Pointer,
     /// The life totals and pools the table shows.
     counts: Counts,
+    /// The turn and step of the view the table last showed at rest (`turn_at`).
+    turn: Option<Turn>,
     /// The numbers the badges on permanents are made of.
     badges: Badges,
     /// How many scripts were laid out again as they started (`relay`).
@@ -177,6 +179,7 @@ impl Show {
             notices: Vec::with_capacity(notices::NOTICES),
             pointer: Pointer::default(),
             counts: Counts::default(),
+            turn: None,
             badges: Badges::default(),
             relays: 0,
             placed_let_go: None,
@@ -637,6 +640,7 @@ impl Show {
         self.playing = None;
         if let Some(shown) = &self.shown {
             self.counts.take_view(&shown.view);
+            self.turn = Some(playing::turn_of(&shown.view));
         }
     }
 
@@ -646,6 +650,10 @@ impl Show {
             && let Some(update) = playing.update.take()
         {
             self.table.swap_objects(&mut playing.compiled.finals);
+            // A script the table takes at once shows its view's step as it starts.
+            if playing.compiled.immediate {
+                self.turn = Some(playing::turn_of(&update.view));
+            }
             self.shown = Some(update);
             self.views_shown += 1;
         }

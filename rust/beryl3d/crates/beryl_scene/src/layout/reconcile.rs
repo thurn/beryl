@@ -47,6 +47,49 @@ impl Layer {
         node
     }
 
+    /// Shows `element` in place of the screen's node with the same role and name, matching it
+    /// against that node as `show` matches a whole screen, so that a part of the screen that
+    /// changes on its own (the step row, as the table reaches a step of the turn) is built
+    /// again without the rest. Returns false, and changes nothing, when the screen has no such
+    /// node.
+    ///
+    /// Unlike `show`, it changes the node at once: nothing fades or slides. The web fades a step
+    /// icon's opacity over 120 ms, but a fade that starts as a step begins keeps the layer
+    /// animating after the table has come to rest, which made the interface tests draw a
+    /// tenth more frames.
+    pub fn replace(&mut self, element: Element) -> bool {
+        let Some(mut screen) = self.screen.take() else {
+            return false;
+        };
+        let mut element = Some(element);
+        let found = self.replace_in(&mut screen, &mut element);
+        self.screen = Some(screen);
+        if found {
+            self.relayout();
+        }
+        found
+    }
+
+    /// Finds, depth first among `node`'s descendants, the first node with `element`'s role and
+    /// name, and updates it to show `element`. Returns whether it found one.
+    fn replace_in(&mut self, node: &mut Node, element: &mut Option<Element>) -> bool {
+        for child in &mut node.children {
+            if element
+                .as_ref()
+                .is_some_and(|element| same_identity(&child.element, element))
+            {
+                if let Some(element) = element.take() {
+                    self.update(child, element);
+                }
+                return true;
+            }
+            if self.replace_in(child, element) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// A node for `element` that holds none of its text or children yet, so that `update`
     /// gives it them.
     fn new_node(&mut self, element: &Element) -> Node {
@@ -81,10 +124,17 @@ impl Layer {
     /// only what differs.
     fn update(&mut self, node: &mut Node, mut element: Element) {
         let children = std::mem::take(&mut element.children);
+        // A change to how a node looks and not where it stands (a color, its opacity, a
+        // shadow) leaves its layout alone, so that a step icon lighting up in a frame lays out
+        // nothing; laying out a grid allocates. A node with text is laid out again for any
+        // change, since the glyphs it asks for depend on its shadow.
         if node.element.style != element.style {
-            self.taffy
-                .set_style(node.taffy, taffy_style(&element.style))
-                .expect("the node is in the tree");
+            let style = taffy_style(&element.style);
+            if element.text.is_some() || taffy_style(&node.element.style) != style {
+                self.taffy
+                    .set_style(node.taffy, style)
+                    .expect("the node is in the tree");
+            }
         }
         let text_changed = node.element.text != element.text
             || node.element.style.text != element.style.text

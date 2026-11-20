@@ -15,7 +15,10 @@
 //! - Combat's two damage steps share one icon, and its stop stops in both.
 //! - The rows centre on the orb's core, each side's inner edge 70 points from it, as
 //!   `.turn-controls .step-stops` places them (`ui/src/screens/styles/controls.css`).
-//! - The current step burns gold in the active player's rows.
+//! - The current step burns gold in the active player's rows. It is the step the table shows
+//!   now (`ScreenIn::turn`), which each `set` step of a script that begins a step of the turn
+//!   changes as it begins (`TurnChange`), as the web draws the row from the table it shows
+//!   step by step. Until the table has shown a view, it is the latest view's step.
 //! - On the phone layout the icons are too small to touch, so they are not shown, and they are
 //!   hidden while a pile's viewer is open over the table.
 //! - On the manual table (`table_steps`) the icons are the step track: none is a stop, the
@@ -25,7 +28,8 @@
 //! [CR 502.4]: https://yawgatog.com/resources/magic-rules/#R5024
 //! [CR 514.3]: https://yawgatog.com/resources/magic-rules/#R5143
 
-use beryl_protocol::protocol::{PlayerView, Side, Step, StepSet};
+use beryl_protocol::protocol::{Side, Step, StepSet};
+use beryl_protocol::script::Turn;
 use glam::Vec2;
 
 use super::players::face_centre;
@@ -37,6 +41,15 @@ use crate::screens::ScreenIn;
 use crate::table::Window;
 use crate::tokens::{color, shadow, size};
 use crate::widgets::icons;
+
+/// A step of the turn that a script's `set` step begins at `at`, on the script's clock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TurnChange {
+    pub turn: Turn,
+    pub at: u64,
+    /// The number of the step that wrote it.
+    pub step: usize,
+}
 
 /// One icon of the twelve: its label and the steps a stop at it stops in, or none for a step
 /// that is never a stop. The order is the web's `STEP_STOPS`, which `icons::STEPS` follows.
@@ -110,12 +123,21 @@ pub fn steps(input: &ScreenIn) -> Option<Element> {
         return None;
     }
     let stops = &input.settings.stops;
+    let (active, step) = input
+        .turn
+        .map_or((view.turn.active, view.turn.step), |turn| {
+            (turn.active, turn.step)
+        });
+    let current = |side: Side| (active == side).then_some(step);
     Some(holder().name("steps").children([
-        rows(view, Side::You, Mode::Stops(stops.yours), input.window),
         rows(
-            view,
+            Side::You,
+            (Mode::Stops(stops.yours, current(Side::You)), active),
+            input.window,
+        ),
+        rows(
             Side::Opponent,
-            Mode::Stops(stops.theirs),
+            (Mode::Stops(stops.theirs, current(Side::Opponent)), active),
             input.window,
         ),
     ]))
@@ -133,27 +155,30 @@ pub fn table_steps(input: &ScreenIn) -> Option<Element> {
         return None;
     }
     let lit = crate::manual::turn::icon_of(table.phase);
+    let active = view.turn.active;
     Some(holder().name("steps").children([
-        rows(view, Side::You, Mode::Table(lit), input.window),
-        rows(view, Side::Opponent, Mode::Table(lit), input.window),
+        rows(Side::You, (Mode::Table(lit), active), input.window),
+        rows(Side::Opponent, (Mode::Table(lit), active), input.window),
     ]))
 }
 
-/// What a player's rows are for: a game's stops, with the steps of their turns that stop, or
-/// the manual table's step track, with the index in `STEP_STOPS` of the icon its phase lights.
+/// What a player's rows are for: a game's stops, with the steps of their turns that stop and
+/// the current step if it is their turn, or the manual table's step track, with the index in
+/// `STEP_STOPS` of the icon its phase lights.
 #[derive(Clone, Copy)]
 enum Mode {
-    Stops(StepSet),
+    Stops(StepSet, Option<Step>),
     Table(usize),
 }
 
-/// `side`'s twelve icons about their orb, for `mode`.
-fn rows(view: &PlayerView, side: Side, mode: Mode, window: Window) -> Element {
+/// `side`'s twelve icons about their orb, for `mode`, in a turn whose active player is
+/// `active`.
+fn rows(side: Side, (mode, active): (Mode, Side), window: Window) -> Element {
     let whose = match side {
         Side::You => "Your",
         Side::Opponent => "Opponent's",
     };
-    let active = view.turn.active == side;
+    let active = active == side;
     // The columns are `STEP_GAP` apart and the rows `STEP_ROW_GAP`, but a grid here has one gap
     // for both, so each column is wider by the difference and its icon stands in its middle.
     let margin = (size::STEP_GAP - size::STEP_ROW_GAP) / 2.0;
@@ -178,7 +203,7 @@ fn rows(view: &PlayerView, side: Side, mode: Mode, window: Window) -> Element {
     ));
     element.children((0..STEP_STOPS.len()).map(|at| {
         let icon = match mode {
-            Mode::Stops(set) => icon(at, whose, side, set, active.then_some(view.turn.step)),
+            Mode::Stops(set, current) => icon(at, whose, side, set, current),
             Mode::Table(lit) => track_icon(at, whose, active, active && at == lit),
         };
         icon.grid_column(column_of(at))

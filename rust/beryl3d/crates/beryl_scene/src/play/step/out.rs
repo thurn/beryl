@@ -1,9 +1,10 @@
 //! What a verb writes for one step (`StepOut`), and what the verbs of a script have written so
 //! far (`Written`).
 
-use beryl_protocol::script::Subject;
+use beryl_protocol::script::{Subject, Turn as TurnStep};
 
 use crate::hud::counts::CountChange;
+use crate::hud::steps::TurnChange;
 use crate::light::{SpanChange, StreakRun};
 use crate::notice::NoticeRun;
 use crate::pose::{Pose, Segment};
@@ -22,6 +23,7 @@ pub(crate) struct Written {
     pub streaks: Vec<StreakRun>,
     pub notices: Vec<NoticeRun>,
     pub counts: Vec<CountChange>,
+    pub turn_changes: Vec<TurnChange>,
     pub turns: Vec<Turn>,
     pub pile_counts: Vec<PileCount>,
 }
@@ -83,6 +85,15 @@ impl StepOut<'_> {
                 step: self.number,
             });
         }
+    }
+
+    /// A step of the turn begins as this step does, which the step row then shows.
+    pub fn step_begins(&mut self, turn: TurnStep) {
+        self.written.turn_changes.push(TurnChange {
+            turn,
+            at: self.own.from,
+            step: self.number,
+        });
     }
 
     /// A banner or pill is shown.

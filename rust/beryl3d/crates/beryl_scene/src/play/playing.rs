@@ -2,9 +2,10 @@
 
 use std::rc::Rc;
 
-use beryl_protocol::GameUpdate;
-use beryl_protocol::script::{self, StepTiming, Table as Played};
+use beryl_protocol::script::{self, StepTiming, Table as Played, Turn};
+use beryl_protocol::{GameUpdate, PlayerView};
 
+use super::Show;
 use super::compile::Compiled;
 use super::part::Part;
 use crate::hud::counts::Counts;
@@ -113,6 +114,16 @@ impl Playing {
         })
     }
 
+    /// The turn and step the table shows at `now`, in real time, while this script plays,
+    /// from `before`, which it showed as the script started: the last its `set` steps have
+    /// begun by then (`TurnChange`).
+    fn turn_at(&self, now: u64, before: Option<Turn>) -> Option<Turn> {
+        (self.compiled.turn_changes.iter())
+            .take_while(|change| self.real(change.at) <= now)
+            .last()
+            .map_or(before, |change| Some(change.turn))
+    }
+
     /// The time on the script's own clock at `now`.
     pub(super) fn clock(&self, now: u64) -> u64 {
         now.saturating_sub(self.start).saturating_mul(self.rate)
@@ -156,5 +167,70 @@ impl Playing {
             lit.streak(StreakRun { over, ..*run });
             self.streaks_given += 1;
         }
+    }
+}
+
+impl Show {
+    /// The turn and step the table shows at `now`, in nanoseconds since the client started:
+    /// the view's it last showed at rest, changed by each `set` step of the playing script that
+    /// has begun a step of the turn by `now`; `None` until the table has shown a view. The web
+    /// draws its step row from the table it shows step by step in the same way, so the row
+    /// shows a step of the turn as the script reaches it, not when its view arrives.
+    #[must_use]
+    pub fn turn_at(&self, now: u64) -> Option<Turn> {
+        self.playing
+            .as_ref()
+            .map_or(self.turn, |playing| playing.turn_at(now, self.turn))
+    }
+
+    /// Every turn and step the table may show from now on, in order, with repeats: each the
+    /// playing script's `set` steps begin and the step of the view it leads to, then each
+    /// waiting script's, so that the client can build the step row for each ahead
+    /// (`Client::prepare`). The playing script's are listed whether or not its clock has
+    /// passed them: a script that starts in a frame starts at the time the one before ended,
+    /// which may be before the last frame. A waiting script's are read from its steps, since
+    /// one may be compiled only as it starts, in the frame that plays its first steps.
+    pub fn coming_turns(&self) -> impl Iterator<Item = Turn> + '_ {
+        let playing = self.playing.iter().flat_map(|playing| {
+            let changes = (playing.compiled.turn_changes.iter()).map(|change| change.turn);
+            let view = (playing.update.as_deref()).map(|update| turn_of(&update.view));
+            changes.chain(view)
+        });
+        let waiting = self.waiting.iter().flat_map(|waiting| {
+            let view = &waiting.update.view;
+            let steps = view
+                .script
+                .iter()
+                .flat_map(|script| script.beats.iter().flatten());
+            let changes = steps.filter_map(|step| match step.act {
+                script::Act::Set {
+                    fact:
+                        script::Fact::Turn {
+                            number,
+                            own_number,
+                            active,
+                            step,
+                        },
+                } => Some(Turn {
+                    number,
+                    own_number,
+                    active,
+                    step,
+                }),
+                _ => None,
+            });
+            changes.chain(std::iter::once(turn_of(view)))
+        });
+        playing.chain(waiting)
+    }
+}
+
+/// The turn and step `view` is in.
+pub(super) fn turn_of(view: &PlayerView) -> Turn {
+    Turn {
+        number: view.turn.number,
+        own_number: view.turn.own_number,
+        active: view.turn.active,
+        step: view.turn.step,
     }
 }
