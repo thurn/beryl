@@ -562,6 +562,11 @@ def run_ignite(names: Sequence[str], root: Path, results: Path) -> None:
         done = subprocess.run(
             command,
             cwd=root / IGNITE_DIR,
+            # Incremental compilation saves nothing for a check that runs once per input hash,
+            # and on Windows rustc fails to finalize its session directory ("Access is
+            # denied", os error 5) when an indexer or virus scanner holds it, which made
+            # clippy fail on cygnus alone.
+            env={**os.environ, "CARGO_INCREMENTAL": "0"},
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
