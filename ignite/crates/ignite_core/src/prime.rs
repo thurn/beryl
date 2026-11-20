@@ -39,7 +39,7 @@ pub const VERB_HELP: &[(&str, &str)] = &[
     ("tell <to> <text>", "correct work in flight"),
     (
         "justiciar <reason>",
-        "an emergency that stops everyone's work",
+        "an emergency, or a ticket impossible as written",
     ),
     ("why <check>", "a check's cost, failures and where it runs"),
     ("status, doctor", "this machine's state and health"),
@@ -79,6 +79,9 @@ last.
 - Start `land`, `check`, `test` and `wait` in the background where your tool can and end
   the turn: the exit wakes you. Never poll with `sleep` or a loop. Never end a turn on work
   that nothing will report, or stop for good holding a ticket: release it with its state.
+- A ticket you file names a deterministic, observable acceptance (what was built, a decision,
+  a file). A timing on a shared machine is recorded, never the gate. File `run X and see Y`
+  only after running X once.
 - Never work in another session's tree, take over its ticket or change another ticket's
   scope.
 - A `changed` line is an instruction about your ticket. Read it before you continue.
@@ -138,6 +141,9 @@ mod tests {
             "never decide yourself that a failure is unrelated",
             "nothing will report",
             "Never poll with `sleep` or a loop",
+            "names a deterministic, observable acceptance",
+            "A timing on a shared machine is recorded, never the gate",
+            "only after running X once",
             "Never work in another session's tree",
             "A `changed` line is an instruction about your ticket",
             "landing note says",

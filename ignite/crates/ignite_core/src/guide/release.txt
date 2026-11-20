@@ -10,11 +10,10 @@ You cannot reproduce the fault a ticket reports:
   and where. A fault that returns gets a new ticket naming this one.
 
 Your ticket needs another ticket's work that has not landed:
-- Do not wait, and do not watch the integration branch. Commit what you
-  have, add the dependency, say in the note what you need and where you
-  stopped, and release.
-- If the work you need has no ticket, file one first.
-- If the ticket you need is closed, its work has landed: run ignite sync.
+- Do not wait or watch the integration branch. Commit what you have, add
+  the dependency, say in the note what you need and where you stopped,
+  and release. If that work has no ticket, file one first. If the ticket
+  you need is closed, its work has landed: run ignite sync.
 
 Only another machine can do or check the work (its operating system, a
 device, its local logs), or the failure is that machine's own environment:
@@ -27,9 +26,14 @@ or an irreversible outward action:
   tried. Never close it as done, and never release it plainly: the next
   worker would meet the same wall.
 
-Several tickets fail for one cause:
-- File one ticket for the cause, make each affected ticket depend on it,
-  and release yours with a pointer to it.
+The ticket cannot be completed as written: its acceptance contradicts its
+body, gates on something you cannot control (a timing on a loaded
+machine), or needs a constraint relaxed. This is not ordinary difficulty:
+- Do not wait and do not close it. Run ignite justiciar "<ticket>: <what
+  is impossible, and the evidence>", then ignite release -m <exact state>.
+
+Several tickets fail for one cause: file one ticket for the cause, make
+each affected ticket depend on it, and release yours with a pointer to it.
 
 Other cases:
 - A reported-only ticket (a benchmark, a measurement) blocks other work:
@@ -40,8 +44,6 @@ Other cases:
 - A figure measured on a loaded machine is reported, never gated on or
   chased, unless the acceptance names a deterministic measure.
 
-After a release, never use the tree's path again: it may belong to another
-session.
-
-After an interruption (a usage limit, a crash, a nudge), run ignite brief
-before anything else, and continue only if you still hold the ticket.
+After a release, never use the tree's path again. After an interruption
+(a usage limit, a crash, a nudge), run ignite brief before anything else,
+and continue only if you still hold the ticket.

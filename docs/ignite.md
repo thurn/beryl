@@ -1083,6 +1083,13 @@ work lost at release has to be done again from nothing.
 - A ticket that waits on another ticket's work is released with a dependency on
   that ticket, never held while its session watches `staging`. It is handed out
   again when the other ticket closes.
+- A ticket that cannot be completed as written goes to a justiciar. Its
+  acceptance may contradict its body, gate on something the worker cannot
+  control (such as a timing on a loaded machine), or need a constraint relaxed.
+  The worker runs `ignite justiciar "<ticket>: <what is impossible, and the
+  evidence>"` and then releases the ticket with its exact state. This is
+  distinct from ordinary difficulty, which stays the worker's job. See
+  [The justiciar](#the-justiciar).
 
 ```text
 $ ignite release --needs person -m "Needs the App Store Connect key. Tried the
@@ -3499,6 +3506,20 @@ release branch when Ignite blocks its own landing.
   skill in any session. That session files or claims the justiciar ticket,
   declares the emergency pause (below), fixes the fault first and validates
   afterwards, and ends the emergency. Only it or the person ends the emergency.
+- A worker also sends for a justiciar for one ticket it cannot complete as
+  written, not only for a fleet-wide emergency. Hard work goes back to its
+  worker, but an impossible ticket is the justiciar's: it relaxes the
+  self-imposed constraint (rewrites the acceptance, removes an impossible edge
+  or narrows the scope), records the old rule, the new rule and why on the
+  ticket, and releases it to the pool.
+- When relaxing a constraint cannot resolve it, because the work needs
+  credentials, access or a decision only the person has, the justiciar does two
+  things. It files a ticket for the person with `--needs person`, stating the
+  exact need and what was tried. And it rewrites the blocked work to continue
+  in the interim with fake data, a stub, a fixture or a local substitute, filing
+  the step that swaps in the real thing as a ticket that depends on the
+  person's ticket. Nothing in the pool waits on the person. The justiciar then
+  closes its ticket, and titles itself ⛔ only when no interim path exists.
 - An order is a message from the dispatcher that starts
   `Message about <ticket>:`. `ignite tell` signs each comment `from <session>`,
   taken from the session the caller's environment names. A worker checks an

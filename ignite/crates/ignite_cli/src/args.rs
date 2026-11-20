@@ -156,7 +156,8 @@ pub enum Command {
         #[arg(required = true, num_args = 1..=2)]
         words: Vec<String>,
     },
-    /// Ask for a justiciar, for an emergency that stops work and no ordinary ticket fixes:
+    /// Ask for a justiciar, for an emergency that stops work and no ordinary ticket fixes, or
+    /// for a ticket that cannot be completed as written:
     /// `ignite justiciar [--here] "<what is broken, and the evidence>"`.
     Justiciar {
         /// Only this machine can work it, such as for its disk or its tools.

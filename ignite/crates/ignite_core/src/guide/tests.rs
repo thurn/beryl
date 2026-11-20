@@ -72,3 +72,28 @@ fn the_blocked_topic_exists_and_is_listed() {
     assert!(blocked.text.contains("known-failing"));
     assert!(list().lines().any(|l| l.starts_with("blocked ")));
 }
+
+#[test]
+fn release_sends_an_impossible_ticket_to_a_justiciar() {
+    let release = reply(Some("release")).text;
+    let flat = release.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flat.contains("cannot be completed as written"), "{release}");
+    assert!(flat.contains("Run ignite justiciar"), "{release}");
+}
+
+#[test]
+fn justiciar_relaxes_constraints_or_files_a_person_ticket_with_an_interim_path() {
+    let justiciar = reply(Some("justiciar")).text;
+    let flat = justiciar.split_whitespace().collect::<Vec<_>>().join(" ");
+    for phrase in [
+        "cannot be completed as written is yours",
+        "relax the self-imposed constraint",
+        "--needs person",
+        "fake data, a stub",
+        "depends on the person's ticket",
+        "Nothing in the pool waits on the person",
+    ] {
+        assert!(flat.contains(phrase), "missing {phrase}: {justiciar}");
+    }
+    assert!(!flat.contains("one hard ticket are no emergency"));
+}

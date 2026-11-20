@@ -129,6 +129,10 @@ situation, and a command names the topic when it applies.
   tickets until the user releases it (`ignite ticket update <epic> --release`);
   agents never pass `--release`. Player bug reports (`just bugs file`) are filed
   pending too, so the `bugfix` planner reviews them first.
+- A ticket's acceptance names a deterministic result that someone can observe:
+  what was built, a decision, a file. A timing measured on a shared machine is
+  recorded as information, never the gate. File a ticket whose acceptance is
+  "run X and see Y" only after X has been run once.
 - Every session has to spend time learning the code it touches, so each ticket
   names the files, helpers and tests it needs by path, so that its session can
   read them all in its first message.

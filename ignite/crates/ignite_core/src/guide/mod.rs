@@ -73,7 +73,7 @@ pub const TOPICS: &[Topic] = &[
     },
     Topic {
         name: "justiciar",
-        summary: "emergency authority to unblock the fleet",
+        summary: "unblocking the fleet, or a ticket impossible as written",
         text: include_str!("justiciar.txt"),
     },
 ];
