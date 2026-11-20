@@ -23,6 +23,8 @@ use crate::dispatchd::{RunningVerb, SessionCommand};
 mod actions;
 #[path = "clid_resume_tests.rs"]
 mod resume;
+#[path = "clid_transcript_tests.rs"]
+mod transcripts;
 
 const START: i64 = 1_800_000_000_000;
 const PID: u32 = 77;

@@ -22,6 +22,7 @@ use serde::de::DeserializeOwned;
 
 use ignite_core::config::HubConfig;
 use ignite_core::ids::{Commit, RecordId, Seq, TicketId};
+use ignite_core::protocol::cli::TranscriptAppend;
 use ignite_core::protocol::hub::{
     AdhocClaim, AuditReport, CachedResult, Claim, Close, ExplorationFind, FlakyReport, Heartbeat,
     HeartbeatReply, IncompleteReport, JusticiarReport, Landed, LandedCommit, LandingsReply,
@@ -506,6 +507,11 @@ impl Hub for HubClient {
 
     fn flaky(&self, report: &FlakyReport) -> Result<()> {
         let _: serde_json::Value = self.post("/flaky", report)?;
+        Ok(())
+    }
+
+    fn transcripts(&self, append: &TranscriptAppend) -> Result<()> {
+        let _: serde_json::Value = self.post("/transcripts/append", append)?;
         Ok(())
     }
 

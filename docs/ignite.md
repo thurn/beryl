@@ -3693,9 +3693,17 @@ Messages, usage and repair:
   incident and never two at once.
 - The daemon sends a digest of each transcript to the hub, which shows it at
   `/pool/session/<id>` with a box that sends `ignite tell`.
-  `ignite pool watch <ticket>` follows the same digest in a terminal.
-  Transcripts can hold secrets, so the hub serves them on the Tailscale listener
-  only.
+  `ignite pool watch <ticket or session>` follows the same digest in a terminal,
+  read from the local logs (`--no-follow` prints what exists and exits). The
+  digest of a turn is one line for each message the worker wrote, each tool call
+  (its name and the first line of its input) and the turn's result, each cut to
+  2,000 characters. The daemon queues new lines in its outbox, so a hub outage
+  loses none. It forgets what it queued when it restarts and queues a running
+  turn's lines again, which the hub stores once, keyed by session, turn and line
+  number. `ignite pool list` shows each CLI slot's state and each CLI hold, and
+  `ignite doctor` warns when an app in CLI mode has no program on the daemon's
+  `PATH`. Transcripts can hold secrets, so the hub serves them on the Tailscale
+  listener only.
 
 A CLI worker's `ignite turn-ended` follows the desktop rules with two changes. A
 live process under the session that is not an `ignite` verb does not let the

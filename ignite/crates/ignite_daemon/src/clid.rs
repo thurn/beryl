@@ -38,8 +38,9 @@ use ignite_core::cli::{
     UsageSample,
 };
 use ignite_core::config::CliProgram;
-use ignite_core::ids::{SessionId, TicketId};
+use ignite_core::ids::{MachineId, SessionId, TicketId};
 use ignite_core::protocol::Class;
+use ignite_core::protocol::cli::TranscriptLine;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Clock, CommandSpec, Error, Result};
@@ -159,6 +160,13 @@ pub trait CliPool: Send + Sync {
             "this CLI pool cannot start a justiciar for {app}"
         )))
     }
+    /// The digest of every turn of the session `target` names (a session ID, or the ticket it
+    /// holds or last held), for `ignite pool watch`. `None` when no slot has it. The default is
+    /// for a pool that keeps no transcripts.
+    fn digest(&self, target: &str) -> Result<Option<(SessionId, Vec<TranscriptLine>)>> {
+        let _ = target;
+        Ok(None)
+    }
     /// The model IDs of `app` that its slots must not offer now, because a turn asked for one
     /// of them started another model in the last 10 minutes.
     fn hidden_models(&self, app: &str) -> Vec<String> {
@@ -268,6 +276,11 @@ pub struct CliDaemon {
     rules: Rules,
     /// Models a turn refused to start, by app and model, until when they are hidden.
     hidden: Mutex<BTreeMap<(String, String), Timestamp>>,
+    /// The machine digest lines are sent as; without one, no digest is sent.
+    machine: Option<MachineId>,
+    /// How many lines of each turn's digest (by session and turn) are in the outbox, as far as
+    /// this daemon knows. A restart forgets it, and the hub drops the repeats.
+    sent: Mutex<BTreeMap<(SessionId, u32), usize>>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -355,12 +368,21 @@ impl CliDaemon {
             effects: Arc::new(NoEffects),
             rules: Rules::standard(),
             hidden: Mutex::new(BTreeMap::new()),
+            machine: None,
+            sent: Mutex::new(BTreeMap::new()),
         }
     }
 
     #[must_use]
     pub fn with_effects(mut self, effects: Arc<dyn Effects>) -> CliDaemon {
         self.effects = effects;
+        self
+    }
+
+    /// Sends the digest of each turn's transcript to the hub as `machine`.
+    #[must_use]
+    pub fn with_machine(mut self, machine: MachineId) -> CliDaemon {
+        self.machine = Some(machine);
         self
     }
 
@@ -757,5 +779,9 @@ impl CliPool for CliDaemon {
             .filter(|(a, _)| a == app)
             .map(|(_, model)| model.clone())
             .collect()
+    }
+
+    fn digest(&self, target: &str) -> Result<Option<(SessionId, Vec<TranscriptLine>)>> {
+        self.session_digest(target)
     }
 }

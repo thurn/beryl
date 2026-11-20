@@ -52,6 +52,8 @@ use crate::server::Context;
 mod allowed;
 #[path = "dispatchd_cli.rs"]
 mod cli;
+#[path = "dispatchd_cli_view.rs"]
+mod cli_view;
 #[path = "dispatchd_feed.rs"]
 mod feed;
 #[path = "dispatchd_justiciar.rs"]
@@ -80,6 +82,7 @@ mod wake;
 mod work;
 
 pub use cli::APPS;
+pub use cli_view::digest_text;
 pub use stall::RunningVerb;
 pub use tell::TellVerb;
 pub use turn::TurnEndedVerb;
@@ -903,6 +906,9 @@ mod allowed_tests;
 #[cfg(test)]
 #[path = "dispatchd_cli_tests.rs"]
 mod cli_tests;
+#[cfg(test)]
+#[path = "dispatchd_cli_view_tests.rs"]
+mod cli_view_tests;
 #[cfg(test)]
 #[path = "dispatchd_shared_tests.rs"]
 mod dispatchd_shared_tests;

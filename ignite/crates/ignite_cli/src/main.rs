@@ -11,6 +11,7 @@ mod import;
 mod manifest;
 mod plan;
 mod pool_init;
+mod pool_watch;
 mod reattach;
 mod rejected;
 mod replay;
@@ -107,6 +108,10 @@ fn answer(cli: &Cli, raw: &[String]) -> Reply {
         } => dispatch_allowed::cleared(session.as_deref()),
         // Answered here, without the daemon: it is what looks after a daemon that is down.
         Command::Monitor => ignite_daemon::monitor::run(),
+        // Sent to the daemon here once a second, so that the digest is followed.
+        Command::Pool {
+            command: PoolCommand::Watch { target, no_follow },
+        } => pool_watch::run(target, *no_follow, &current_dir()),
         Command::Daemon => exit_reply(ignite_daemon::main::run_daemon(&current_dir())),
         // Answered here: it is the hub, which runs beside the daemon, not in it.
         Command::Hub { command: None } => exit_reply(ignite_daemon::main::run_hub(&current_dir())),

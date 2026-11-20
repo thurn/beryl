@@ -40,7 +40,7 @@ pub const APPS: [&str; 2] = ["claude", "codex"];
 
 /// What the dispatcher needs to run apps in CLI mode.
 pub(super) struct CliMode {
-    pool: Arc<dyn CliPool>,
+    pub(super) pool: Arc<dyn CliPool>,
     /// The machine's hostname, which names its `[machine.<host>]` table.
     hostname: String,
     config: Config,

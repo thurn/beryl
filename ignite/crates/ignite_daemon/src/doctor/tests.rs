@@ -267,6 +267,43 @@ fn doctor_warns_about_a_claude_tier_with_no_model_id() {
 }
 
 #[test]
+fn doctor_warns_when_an_app_in_cli_mode_has_no_program_on_the_path() {
+    let mut config = config();
+    config.pool.cli.insert(
+        "claude".to_owned(),
+        ignite_core::config::CliProgram {
+            program: "claude-not-installed".to_owned(),
+            args: Vec::new(),
+        },
+    );
+    config.machine.get_mut("testbox").unwrap().pool.insert(
+        "claude".to_owned(),
+        ignite_core::config::MachinePool {
+            mode: ignite_core::config::PoolMode::Cli,
+            slots: 2,
+        },
+    );
+    let findings = diagnose(&DoctorInput {
+        config: &config,
+        repo: Path::new("/repo"),
+        host: &healthy_host(),
+        trees: &all_trees(),
+        hub: &FakeHub::default(),
+        probe: &Writable,
+        manifest: Ok(manifest()),
+        version: Commit::new("abc1234").ok(),
+    });
+    let lines: Vec<String> = findings
+        .iter()
+        .filter(|f| f.label == "cli")
+        .map(Finding::line)
+        .collect();
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert!(lines[0].starts_with("WARNING"), "{lines:?}");
+    assert!(lines[0].contains("claude-not-installed"), "{lines:?}");
+}
+
+#[test]
 fn an_unreachable_hub_and_a_missing_tree_each_get_a_line_with_a_fix() {
     let hub = FakeHub::default();
     hub.set_unreachable(true);

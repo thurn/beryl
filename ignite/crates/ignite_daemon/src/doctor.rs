@@ -615,6 +615,7 @@ pub fn diagnose(input: &DoctorInput) -> Vec<Finding> {
     });
 
     findings.extend(model_findings(input.config));
+    findings.extend(cli_findings(input.config, input.host, &hostname));
 
     let Some(machine) = input.config.machine(&hostname) else {
         findings.push(Finding::problem(
@@ -661,6 +662,34 @@ fn model_findings(config: &Config) -> Option<Finding> {
              app's session tool accepts",
         )
     })
+}
+
+/// A warning for each app in CLI mode on this machine whose program is not on the `PATH` the
+/// daemon runs with: every turn of the app would fail to start, and the app would go on a CLI
+/// hold.
+fn cli_findings(config: &Config, host: &dyn Host, hostname: &str) -> Vec<Finding> {
+    crate::dispatchd::APPS
+        .into_iter()
+        .filter(|app| config.machine_pool(hostname, app).mode == ignite_core::config::PoolMode::Cli)
+        .filter_map(|app| {
+            let program = config.cli_program(app)?;
+            host.tool_path(&program.program).is_none().then(|| {
+                Finding::warning(
+                    "cli",
+                    format!(
+                        "{app} is in CLI mode on this machine, but its program `{}` is not on \
+                         the daemon's PATH, so no turn can start.",
+                        program.program
+                    ),
+                    format!(
+                        "install `{}` or put its folder on the PATH of the daemon's service, or \
+                         run `ignite pool mode {app} desktop`",
+                        program.program
+                    ),
+                )
+            })
+        })
+        .collect()
 }
 
 fn family_findings(input: &DoctorInput, machine: &Machine, findings: &mut Vec<Finding>) {

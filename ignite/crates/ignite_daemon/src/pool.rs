@@ -224,6 +224,7 @@ impl Verb for PoolVerb {
             Some((&"pause", rest)) => self.pause(ctx, rest.contains(&"--all"), true),
             Some((&"resume", rest)) => self.pause(ctx, rest.contains(&"--all"), false),
             Some((&"mode", [app, setting])) => self.mode(app, setting),
+            Some((&"watch", rest)) => self.watch(rest),
             Some((&"usage", [])) => Ok(crate::dispatchd::usage_report(
                 self.dispatcher.pool(),
                 ctx.clock.now(),
@@ -232,7 +233,8 @@ impl Verb for PoolVerb {
             Some(_) => Err(Error::Invalid(
                 "usage: ignite pool list | add <session>... --app <app> [--dispatcher [--slots <n>]] \
                  | remove <session> \
-                 | pause [--all] | resume [--all] | usage | mode <app> cli|desktop|config"
+                 | pause [--all] | resume [--all] | usage | mode <app> cli|desktop|config \
+                 | watch <ticket | session> [--after <n>]"
                     .to_owned(),
             )),
         };
@@ -284,6 +286,7 @@ impl PoolVerb {
                 lines.push(format!("mode     {app} {mode}{forced}"));
             }
         }
+        lines.extend(self.dispatcher.cli_lines(ctx.clock.now()));
         if self.dispatcher.is_down() {
             lines.push("down     the dispatcher left three instructions unacknowledged".to_owned());
         }
@@ -489,6 +492,41 @@ impl PoolVerb {
             exit: Exit::Success,
             text,
             json: serde_json::to_value(&reply).ok(),
+            handle: None,
+        })
+    }
+
+    /// `ignite pool watch <ticket | session> [--after <n>]`: the digest lines of a CLI
+    /// session's transcript after the first `n`, and in the JSON the number of lines there are
+    /// now, which the client sends as `--after` to get only what is new. The client does the
+    /// following, so the daemon answers at once.
+    fn watch(&self, words: &[&str]) -> Result<Reply> {
+        let mut target = None;
+        let mut after = 0usize;
+        let mut rest = words.iter();
+        while let Some(word) = rest.next() {
+            match *word {
+                "--after" => {
+                    let number = rest.next().copied().unwrap_or_default();
+                    after = number
+                        .parse()
+                        .map_err(|_| Error::Invalid(format!("not a line count: {number:?}")))?;
+                }
+                "--no-follow" => {}
+                other => target = Some(other),
+            }
+        }
+        let target = target
+            .ok_or_else(|| Error::Invalid("usage: ignite pool watch <ticket | session>".into()))?;
+        let Some((session, lines)) = self.dispatcher.cli_digest(target)? else {
+            return Err(Error::NotFound(format!(
+                "no CLI session works or worked {target}; `ignite pool list` shows the slots"
+            )));
+        };
+        Ok(Reply {
+            exit: Exit::Success,
+            text: crate::dispatchd::digest_text(&lines, after),
+            json: Some(serde_json::json!({"session": session, "next": lines.len()})),
             handle: None,
         })
     }

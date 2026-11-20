@@ -11,6 +11,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::ids::{Commit, RecordId, Seq, TicketId};
 use crate::protocol::Usage;
+use crate::protocol::cli::TranscriptAppend;
+use crate::protocol::cli::TranscriptLine;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
@@ -142,6 +144,7 @@ pub struct FakeHub {
     metrics: Mutex<Vec<MetricsImport>>,
     flaky: Mutex<Vec<FlakyReport>>,
     session_titles: Mutex<Vec<SessionTitle>>,
+    transcript_lines: Mutex<Vec<TranscriptLine>>,
     tip_claims: Mutex<Vec<TipClaim>>,
     /// Every tip claim asked, renewals included.
     tip_claim_asks: Mutex<Vec<TipClaim>>,
@@ -245,6 +248,12 @@ impl FakeHub {
 
     pub fn flaky_reports(&self) -> Vec<FlakyReport> {
         lock(&self.flaky).clone()
+    }
+
+    /// Every transcript line the hub holds, in the order they were first sent. A line sent again
+    /// (the same session, turn and index) is held once, as the real hub holds it.
+    pub fn transcript_lines(&self) -> Vec<TranscriptLine> {
+        lock(&self.transcript_lines).clone()
     }
 
     /// Every session title reported so far, in order.
@@ -488,6 +497,20 @@ impl Hub for FakeHub {
     fn flaky(&self, report: &FlakyReport) -> Result<()> {
         self.reachable()?;
         lock(&self.flaky).push(report.clone());
+        Ok(())
+    }
+
+    fn transcripts(&self, append: &TranscriptAppend) -> Result<()> {
+        self.reachable()?;
+        let mut held = lock(&self.transcript_lines);
+        for line in &append.lines {
+            let known = held
+                .iter()
+                .any(|h| h.session == line.session && h.turn == line.turn && h.index == line.index);
+            if !known {
+                held.push(line.clone());
+            }
+        }
         Ok(())
     }
 

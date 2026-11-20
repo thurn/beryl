@@ -17,6 +17,7 @@ use crate::time::Timestamp;
 pub mod claude;
 pub mod codex;
 pub mod decide;
+pub mod digest;
 
 /// Where one CLI worker slot is between turns and during one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

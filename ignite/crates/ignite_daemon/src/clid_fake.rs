@@ -5,6 +5,7 @@ use std::sync::Mutex;
 
 use ignite_core::cli::{Hold, Slot};
 use ignite_core::ids::SessionId;
+use ignite_core::protocol::cli::TranscriptLine;
 use ignite_core::protocol::hub::Reservation;
 use ignite_core::traits::{Error, Result};
 
@@ -44,6 +45,7 @@ pub struct FakeCliPool {
     holds: Mutex<BTreeMap<String, Hold>>,
     /// Apps no probe has passed for yet, whose slots are not offered.
     unprobed: Mutex<BTreeSet<String>>,
+    digests: Mutex<BTreeMap<String, (SessionId, Vec<TranscriptLine>)>>,
 }
 
 impl FakeCliPool {
@@ -74,6 +76,11 @@ impl FakeCliPool {
 
     pub fn set_check(&self, session: &SessionId, answer: SessionCheck) {
         lock(&self.checks).insert(session.clone(), answer);
+    }
+
+    /// Sets the digest `digest(target)` answers for `target`, a session ID or a ticket.
+    pub fn set_digest(&self, target: &str, session: &SessionId, lines: Vec<TranscriptLine>) {
+        lock(&self.digests).insert(target.to_owned(), (session.clone(), lines));
     }
 
     pub fn set_slots(&self, app: &str, slots: Vec<Slot>) {
@@ -150,6 +157,10 @@ impl CliPool for FakeCliPool {
 
     fn slots(&self, app: &str) -> Vec<Slot> {
         lock(&self.slots).get(app).cloned().unwrap_or_default()
+    }
+
+    fn digest(&self, target: &str) -> Result<Option<(SessionId, Vec<TranscriptLine>)>> {
+        Ok(lock(&self.digests).get(target).cloned())
     }
 
     fn held(&self, app: &str) -> Option<Hold> {

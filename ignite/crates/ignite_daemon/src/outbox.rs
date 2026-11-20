@@ -10,6 +10,7 @@ use std::time::Duration;
 use rusqlite::Connection;
 use serde::Serialize;
 
+use ignite_core::protocol::cli::TranscriptAppend;
 use ignite_core::protocol::hub::{FlakyReport, MetricsImport, NewResult, Record};
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Hub, Result};
@@ -21,6 +22,7 @@ const RECORD: &str = "record";
 const RESULT: &str = "result";
 const FLAKY: &str = "flaky";
 const METRICS: &str = "metrics";
+const TRANSCRIPT: &str = "transcript";
 
 /// How many entries one flush reads at a time.
 const BATCH: u32 = 200;
@@ -40,6 +42,12 @@ pub fn push_flaky(conn: &Connection, report: &FlakyReport, at: Timestamp) -> Res
 /// Queues rows for the hub's `POST /metrics/import`, such as a CLI turn's cost.
 pub fn push_metrics(conn: &Connection, import: &MetricsImport, at: Timestamp) -> Result<()> {
     push(conn, METRICS, import, at)
+}
+
+/// Queues digest lines of a CLI worker's transcript. The hub stores a line once whatever
+/// the number of times it is sent, so a line queued again after a restart does no harm.
+pub fn push_transcript(conn: &Connection, append: &TranscriptAppend, at: Timestamp) -> Result<()> {
+    push(conn, TRANSCRIPT, append, at)
 }
 
 fn push(conn: &Connection, kind: &str, body: &impl Serialize, at: Timestamp) -> Result<()> {
@@ -141,6 +149,17 @@ fn send(hub: &dyn Hub, kind: &str, run: &[&rows::OutboxEntry]) -> Result<()> {
         METRICS => parse::<MetricsImport>(run)?
             .iter()
             .try_for_each(|import| hub.metrics(import)),
+        TRANSCRIPT => {
+            // One request for the run: its entries are appends of one machine, in order.
+            let appends = parse::<TranscriptAppend>(run)?;
+            let Some(first) = appends.first() else {
+                return Ok(());
+            };
+            hub.transcripts(&TranscriptAppend {
+                machine: first.machine.clone(),
+                lines: appends.into_iter().flat_map(|a| a.lines).collect(),
+            })
+        }
         other => Err(Error::Invalid(format!("unknown outbox kind {other:?}"))),
     }
 }

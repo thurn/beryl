@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::ids::{Commit, Oid, RecordId, Seq, SessionId, TicketId, TreeId};
 use crate::protocol::Class;
 use crate::protocol::Usage;
+use crate::protocol::cli::TranscriptAppend;
 use crate::protocol::hub::{
     AuditReport, CachedResult, Claim, CompileUnit, ExplorationFind, FlakyReport, IncompleteReport,
     JusticiarReport, Landed, LandedCommit, ListingKey, MachineFree, MetricsImport, NewResult,
@@ -387,6 +388,12 @@ pub trait Hub: Send + Sync {
     /// Reports the title a desktop session shows (`POST /session-titles`). A hub that keeps no
     /// titles accepts and drops it.
     fn session_title(&self, _title: &SessionTitle) -> Result<()> {
+        Ok(())
+    }
+    /// Sends digest lines of CLI workers' transcripts (`POST /transcripts/append`). The hub
+    /// stores a line it already has once, so sending a line again is harmless. A hub that keeps
+    /// no transcripts accepts and drops them.
+    fn transcripts(&self, _append: &TranscriptAppend) -> Result<()> {
         Ok(())
     }
     /// Claims one batch of one family's checks at a tip, so two machines never run the same

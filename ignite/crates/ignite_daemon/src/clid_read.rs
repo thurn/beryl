@@ -31,7 +31,7 @@ use super::{CliDaemon, Recovery, slot_of};
 pub const HANG_S: f64 = 1800.0;
 
 /// `text` cut after its last newline: the lines the CLI has finished writing.
-fn whole_lines(text: &str) -> &str {
+pub fn whole_lines(text: &str) -> &str {
     text.rfind('\n').map_or("", |end| &text[..=end])
 }
 
@@ -89,6 +89,7 @@ impl CliDaemon {
         let recovery = self.turns.recover(&session, slot.turn);
         let text = self.turns.output(&session, slot.turn).unwrap_or_default();
         let events = read_text(app.as_ref(), &text);
+        self.send_digest(&row.app, &session, slot.ticket.as_ref(), slot.turn, &text);
         let mut row = row.clone();
         let turn = self.apply_lines(&mut row, turn, app.as_ref(), &text, &events)?;
         let row = &row;

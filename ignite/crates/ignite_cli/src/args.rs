@@ -433,6 +433,15 @@ pub enum PoolCommand {
     /// Print the newest sample of each Claude plan window, and the usage hold if one is in
     /// force.
     Usage,
+    /// Print the digest of a CLI worker's transcript (what it said, its tool calls and how each
+    /// turn ended) and follow it until interrupted.
+    Watch {
+        /// The ticket the worker holds or last held, or its session.
+        target: String,
+        /// Print what exists and exit.
+        #[arg(long)]
+        no_follow: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
