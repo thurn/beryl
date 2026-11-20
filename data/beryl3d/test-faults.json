@@ -1,10 +1,3 @@
 {
-  "tests": {
-    "b3d:order-long/you/1440x900": {
-      "text-overlap": 2
-    },
-    "b3d:order-long/you/1600x900@2": {
-      "text-overlap": 2
-    }
-  }
+  "tests": {}
 }
