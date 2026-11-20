@@ -382,6 +382,17 @@ pub fn update_turn(conn: &Connection, turn: &CliTurn) -> Result<()> {
     Ok(())
 }
 
+/// Puts back every message that turn `turn` of `session` carried, so the next turn carries them
+/// again, and returns how many. For a turn that printed no line: its prompt never reached the
+/// worker.
+pub fn requeue_messages(conn: &Connection, session: &str, turn: i64) -> Result<usize> {
+    let count = conn.execute(
+        "UPDATE cli_messages SET delivered_turn = NULL WHERE session = ?1 AND delivered_turn = ?2",
+        params![session, turn],
+    )?;
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -841,6 +841,7 @@ impl Dispatcher {
                 _ => state.cli_calls.push(cli::Call::Message {
                     session,
                     text: text.to_owned(),
+                    urgent: false,
                 }),
             }
             return;

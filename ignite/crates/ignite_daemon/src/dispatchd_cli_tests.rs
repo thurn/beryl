@@ -13,7 +13,7 @@ use super::*;
 use crate::clid::{FakeCliPool, SessionCheck};
 
 /// Puts `rig`'s Claude app in CLI mode with `slots` slots, through a fake CLI pool.
-fn cli(rig: &Rig, slots: u32) -> Arc<FakeCliPool> {
+pub(super) fn cli(rig: &Rig, slots: u32) -> Arc<FakeCliPool> {
     let fake = Arc::new(FakeCliPool::default());
     let mut config = rig.ctx.config.clone();
     config.pool.cli.insert(
@@ -35,7 +35,7 @@ fn cli(rig: &Rig, slots: u32) -> Arc<FakeCliPool> {
 }
 
 /// The hub reserves `ticket`, labelled `labels`, for the slot `slot`.
-fn reserve(rig: &Rig, ticket: &str, slot: &str, labels: &[&str]) {
+pub(super) fn reserve(rig: &Rig, ticket: &str, slot: &str, labels: &[&str]) {
     rig.hub
         .insert_ticket(detail(ticket, "open", None, labels, ""));
     rig.hub.queue_reservation(Reservation {
@@ -64,7 +64,7 @@ fn asks(rig: &Rig) -> Vec<(Vec<String>, bool)> {
         .collect()
 }
 
-fn tick(rig: &Rig) {
+pub(super) fn tick(rig: &Rig) {
     rig.dispatcher.tick(&rig.ctx);
 }
 

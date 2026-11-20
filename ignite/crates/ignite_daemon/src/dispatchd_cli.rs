@@ -61,8 +61,13 @@ pub(super) enum Call {
     /// Start a session for `reserved` in the slot whose placeholder is `slot`, or, when `slot`
     /// is a CLI session (the next ticket of a `lane:` chain), in that session's slot.
     Begin { slot: SessionId, reserved: Reserved },
-    /// Queue `text` for the session's next turn.
-    Message { session: SessionId, text: String },
+    /// Queue `text` for the session's next turn. An urgent message (`ignite tell --now`, or an
+    /// order from a justiciar) also ends the running turn.
+    Message {
+        session: SessionId,
+        text: String,
+        urgent: bool,
+    },
     /// Ask whether the session is running, and apply the answer as a `check` acknowledgement.
     Check { session: SessionId },
 }
@@ -241,8 +246,12 @@ impl Dispatcher {
         for call in calls {
             match call {
                 Call::Begin { slot, reserved } => self.begin(ctx, cli, &slot, reserved),
-                Call::Message { session, text } => {
-                    if let Err(error) = cli.pool.message(&session, &text, false) {
+                Call::Message {
+                    session,
+                    text,
+                    urgent,
+                } => {
+                    if let Err(error) = cli.pool.message(&session, &text, urgent) {
                         eprintln!("ignite: could not queue a message for {session}: {error}");
                     }
                 }

@@ -5,13 +5,17 @@ use ignite_core::ids::{SessionId, TicketId};
 use ignite_core::protocol::client::{DispatchAction, Exit, Reply};
 use ignite_core::protocol::tickets::{Status, TicketDetail};
 
-use super::{Dispatcher, Purpose, State};
+use super::{Dispatcher, Purpose, State, cli, tell};
 
 /// Sends a new `tell` on `detail`'s ticket to `holder`, the session working it here, as a
 /// `message` instruction. If the session is inside `ignite wait`, the wait ends with a reply that
 /// says a message is waiting but does not carry its text: a wait's reply is tool output, which
 /// agents rightly treat as data rather than instructions, while the dispatcher's message reaches
 /// them as a teammate's request once their turn ends.
+///
+/// A CLI session gets the text through the CLI pool instead, which ends its wait itself, and
+/// ends its running turn when the tell is urgent: when the ticket's `tell_now` key holds the
+/// same comment number as `tell`.
 ///
 /// Nothing is sent unless the ticket is in progress and assigned to `holder`, and its claim is
 /// not newer than the comment. A tell made before the session claimed the ticket is already in
@@ -54,6 +58,19 @@ pub(super) fn deliver_tell(
         return;
     }
     let text = format!("Message about {}: {}", ticket.id, comment.text);
+    if cli::is_cli_session(holder) {
+        let urgent = ticket
+            .metadata
+            .get(tell::NOW_KEY)
+            .and_then(serde_json::Value::as_u64)
+            == Some(tell);
+        state.cli_calls.push(cli::Call::Message {
+            session: holder.clone(),
+            text,
+            urgent,
+        });
+        return;
+    }
     Dispatcher::queue(
         state,
         Some(holder),

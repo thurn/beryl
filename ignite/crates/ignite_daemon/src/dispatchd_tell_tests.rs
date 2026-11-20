@@ -76,3 +76,79 @@ fn a_restarted_dispatcher_does_not_send_a_tell_from_before_the_claim() {
     change(&rig, "T.1");
     nothing_sent(&rig);
 }
+
+/// A Claude CLI session that holds T.1, which it claimed long before any tell, with the
+/// dispatcher's feed read up to now.
+fn cli_holder(rig: &Rig) -> (std::sync::Arc<crate::clid::FakeCliPool>, &'static str) {
+    use super::cli_tests::{cli, reserve, tick};
+    let fake = cli(rig, 1);
+    reserve(rig, "T.1", "cli-claude-slot-1", &[]);
+    tick(rig);
+    let worker = "cli-claude-00000001";
+    rig.hold(worker, "T.1");
+    rig.hub
+        .insert_ticket(claimed("T.1", worker, &[], "1970-01-01T00:00:00.000Z"));
+    tick(rig);
+    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    (fake, worker)
+}
+
+#[test]
+fn tell_now_ends_a_cli_workers_turn_and_a_plain_tell_waits() {
+    let rig = rig(&[]);
+    let (fake, worker) = cli_holder(&rig);
+    let reply = rig.tell(&["--now", "T.1", "Stop and release."]);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    assert!(reply.text.contains("running turn ends now"), "{}", reply.text);
+    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    let sent = fake.sent();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].session.as_str(), worker);
+    assert_eq!(sent[0].text, "Message about T.1: Stop and release.");
+    assert!(sent[0].urgent);
+    // The CLI pool ends the session's wait itself, so the dispatcher does not.
+    assert!(lock(&rig.host.interrupts).is_empty());
+
+    assert_eq!(rig.tell(&["T.1", "Also this."]).exit, Exit::Success);
+    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    let sent = fake.sent();
+    assert_eq!(sent.len(), 2);
+    assert!(!sent[1].urgent);
+}
+
+#[test]
+fn every_tell_from_a_justiciar_is_urgent_for_a_cli_worker() {
+    let rig = rig(&[]);
+    let (fake, _) = cli_holder(&rig);
+    rig.hub.insert_ticket(detail(
+        "J.1",
+        "in_progress",
+        Some("local_j1"),
+        &["justiciar"],
+        "",
+    ));
+    let reply = rig.tell_as("local_j1", &["T.1", "Release it."]);
+    assert_eq!(reply.exit, Exit::Success, "{}", reply.text);
+    rig.dispatcher.poll_feed(&rig.ctx, 0).unwrap();
+    let sent = fake.sent();
+    assert_eq!(sent.len(), 1);
+    assert_eq!(sent[0].text, "Message about T.1: from local_j1: Release it.");
+    assert!(sent[0].urgent);
+}
+
+#[test]
+fn tell_now_to_a_desktop_session_is_refused() {
+    let rig = rig(&["local_w1"]);
+    rig.hub
+        .insert_ticket(claimed("T.1", "local_w1", &[], "1970-01-01T00:00:00.000Z"));
+    rig.hold("local_w1", "T.1");
+    let reply = rig.tell(&["--now", "T.1", "Stop."]);
+    assert_eq!(reply.exit, Exit::Usage);
+    assert_eq!(
+        reply.text,
+        "refused  `--now` works only for CLI workers, and local_w1 is a desktop session"
+    );
+    assert!(rig.hub.batches().is_empty(), "nothing was written");
+    assert_eq!(rig.tell(&["--all", "--now", "Stop."]).exit, Exit::Usage);
+    assert!(rig.hub.batches().is_empty());
+}

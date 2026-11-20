@@ -152,6 +152,10 @@ pub enum Command {
         /// Every ticket in progress, on every machine.
         #[arg(long)]
         all: bool,
+        /// End the CLI worker's running turn and start the next one with the text, instead of
+        /// waiting for the turn to end. Only for CLI workers.
+        #[arg(long)]
+        now: bool,
         /// The ticket or session, then the text; only the text with `--all`.
         #[arg(required = true, num_args = 1..=2)]
         words: Vec<String>,
@@ -895,7 +899,7 @@ mod tests {
         );
         assert!(matches!(
             parse("ignite tell --all Skip"),
-            Command::Tell { all: true, words } if words == ["Skip"]
+            Command::Tell { all: true, now: false, words } if words == ["Skip"]
         ));
         assert!(matches!(
             parse("ignite pool pause --all"),
@@ -971,6 +975,15 @@ mod tests {
             Command::Internal {
                 command: InternalCommand::Restart
             }
+        ));
+    }
+
+    #[test]
+    fn tell_takes_now() {
+        let line = "ignite tell --now T.1 Stop";
+        assert!(matches!(
+            Cli::try_parse_from(line.split_whitespace()).unwrap().command,
+            Command::Tell { all: false, now: true, words } if words == ["T.1", "Stop"]
         ));
     }
 }

@@ -72,7 +72,7 @@ use super::Dispatcher;
 use crate::server::{Context, Verb};
 
 /// The label that marks a justiciar's ticket, whose session is never blocked or released.
-const JUSTICIAR_LABEL: &str = "justiciar";
+pub(super) const JUSTICIAR_LABEL: &str = "justiciar";
 
 /// The label of a ticket that waits on the person, which a ⛔ title does not release.
 const NEEDS_PERSON_LABEL: &str = "needs:person";
