@@ -962,7 +962,23 @@
   "hud": {
     "step_off": 0.6,
     "step_fixed": 0.32,
-    "incoming_gap": 6,
+    "incoming": {
+      "left": 30,
+      "top": 6,
+      "opponent_top": 82,
+      "min_width": 44,
+      "padding_x": 8,
+      "padding_y": 3,
+      "text": 20,
+      "phone": {
+        "left": 22,
+        "top": -4,
+        "min_width": 26,
+        "padding_x": 5,
+        "padding_y": 1,
+        "text": 13
+      }
+    },
     "banner": 2500,
     "banner_gap": 12,
     "log_left": 18,

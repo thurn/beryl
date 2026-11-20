@@ -15,20 +15,23 @@
 //! - While the opponent is deciding, a gold ring stands under their orb: a float of its own,
 //!   hidden while the step banner is up (`hud::banner`).
 //! - From the declaration of attackers until combat damage is dealt, the combat damage a
-//!   player stands to take stands beside their orb, red when it would be lethal.
+//!   player stands to take is a badge on the rim of their orb toward the table, solid red when
+//!   it would be lethal: the web's `.life-incoming` (`ui/src/screens/styles/table.css`, and
+//!   `.phone-orb .life-incoming` in `ui/src/mobile/phone.css` on a phone).
 
 use beryl_protocol::protocol::{Combat, PlayerView, Side, Step};
 use beryl_protocol::script::Subject;
 use glam::Vec2;
 
 use crate::art::orb;
-use crate::data::space::hud::INCOMING_GAP;
-use crate::element::{Align, Anchor, Element, Justify, Position, Shown, holder, text};
+use crate::data::space::hud::incoming as badge;
+use crate::element::{Anchor, Element, Position, Shadow, Shown, TextAlign, holder, text};
 use crate::input::Rect;
 use crate::screens::ScreenIn;
 use crate::table::phone::strip;
 use crate::table::{DESKTOP, Window};
-use crate::tokens::{color, type_style};
+use crate::text::TypeStyle;
+use crate::text::fonts::Font;
 
 use super::counts::{index, points};
 
@@ -96,16 +99,17 @@ fn orb(view: &PlayerView, side: Side, window: Window) -> Element {
     // web's `.phone-orb .life-orb` scales it.
     let scale = u8::from(window.phone());
     let units = orb::SCALES[usize::from(scale)];
-    let [left, _, width, height] = orb::ART;
-    // Where the core's bezel ends on the right, from the art's left edge.
-    let core_right = (orb::CORE_RX + orb::BEZEL / 2.0 - left) * units;
+    let [_, _, width, height] = orb::ART;
     let mut element = Element::new(crate::frame::Role::Region)
         .name(orb_name(side))
         .width(width * units)
         .height(height * units)
         .selected(active)
         .passes(true)
-        .children(incoming(view, side).map(|damage| incoming_text(damage, life, core_right)));
+        .children(
+            incoming(view, side)
+                .map(|damage| incoming_text(damage, life, side, width * units, window.phone())),
+        );
     element.shows = Some(Shown::Orb {
         side,
         active,
@@ -130,28 +134,87 @@ pub fn face_centre(side: Side, window: Window) -> Vec2 {
     orb_centre(side, window) + Vec2::new(0.0, orb::face_offset(side) * units)
 }
 
-/// The combat damage `damage` a player at `life` stands to take, beside their orb as the web's
-/// `Incoming` writes it: "−3", or "0", red when it is lethal.
-fn incoming_text(damage: i32, life: i32, core_right: f32) -> Element {
+/// The incoming badge's colors, from `.life-incoming` in `ui/src/screens/styles/table.css`:
+/// a dark pill with a faint red ring and pale red numerals.
+const INCOMING_FILL: [u8; 4] = [24, 21, 19, 217];
+const INCOMING_RING: [u8; 4] = [255, 120, 90, 140];
+const INCOMING_INK: [u8; 4] = [255, 154, 122, 255];
+/// A lethal badge's, from `.life-incoming-lethal`: solid red with a pale ring, a red glow
+/// around it and white numerals.
+const LETHAL_FILL: [u8; 4] = [179, 38, 30, 255];
+const LETHAL_RING: [u8; 4] = [255, 180, 168, 255];
+const LETHAL_GLOW: [u8; 4] = [230, 40, 30, 191];
+const LETHAL_INK: [u8; 4] = [255, 255, 255, 255];
+/// The blur of a lethal badge's glow.
+const LETHAL_GLOW_BLUR: f32 = 14.0;
+/// The badge's line height, as a share of its text size: `.life-incoming`'s `font`.
+const INCOMING_LINE: f32 = 1.1;
+
+/// The combat damage `damage` that `side`, at `life`, stands to take, as the web's `Incoming`
+/// writes it ("−3", or "0") on a badge on the rim of their orb toward the table: the upper rim
+/// for the viewer and the lower for the opponent, as `.life-incoming` places it, a fixed
+/// distance right of the middle of the orb's art, which is `orb_width` wide. A phone puts it on
+/// the upper rim for both players, as `.phone-orb .life-incoming` does.
+fn incoming_text(damage: i32, life: i32, side: Side, orb_width: f32, phone: bool) -> Element {
     let lethal = damage > 0 && damage >= life;
     let words = if damage > 0 {
         format!("\u{2212}{damage}")
     } else {
         "0".to_owned()
     };
+    let (left, top, min_width, padding_x, padding_y, text_size) = if phone {
+        (
+            badge::phone::LEFT,
+            badge::phone::TOP,
+            badge::phone::MIN_WIDTH,
+            badge::phone::PADDING_X,
+            badge::phone::PADDING_Y,
+            badge::phone::TEXT,
+        )
+    } else {
+        let top = match side {
+            Side::You => badge::TOP,
+            Side::Opponent => badge::OPPONENT_TOP,
+        };
+        (
+            badge::LEFT,
+            top,
+            badge::MIN_WIDTH,
+            badge::PADDING_X,
+            badge::PADDING_Y,
+            badge::TEXT,
+        )
+    };
+    let (fill, ring, ink) = if lethal {
+        (LETHAL_FILL, LETHAL_RING, LETHAL_INK)
+    } else {
+        (INCOMING_FILL, INCOMING_RING, INCOMING_INK)
+    };
+    let mut shadows = vec![Shadow::new(0.0, 0.0, 0.0, ring).spread(1.0).inset()];
+    if lethal {
+        shadows.push(Shadow::new(0.0, 0.0, LETHAL_GLOW_BLUR, LETHAL_GLOW));
+    }
     let mut element = text(&words)
         .name(&format!(
             "{damage} combat damage{}",
             if lethal { ", lethal" } else { "" }
         ))
-        .style(type_style::TITLE)
+        .style(TypeStyle {
+            font: Font::OpenSans,
+            weight: 700,
+            size: text_size,
+            line_height: INCOMING_LINE,
+        })
+        .text_align(TextAlign::Center)
         .position(Position::Absolute)
-        .inset([Some(0.0), None, Some(0.0), Some(core_right + INCOMING_GAP)])
-        .align_items(Align::Center)
-        .justify_content(Justify::Center);
-    if lethal {
-        element = element.color(color::DAMAGE);
-    }
+        .inset([Some(top), None, None, Some(orb_width / 2.0 + left)])
+        .min_width(min_width)
+        .background(fill)
+        // `border-radius: 999px`: half the badge's height rounds its ends fully.
+        .radius(text_size * INCOMING_LINE / 2.0 + padding_y)
+        .box_shadow(shadows)
+        .color(ink);
+    element.style.padding = [padding_y, padding_x, padding_y, padding_x];
     element
 }
 
