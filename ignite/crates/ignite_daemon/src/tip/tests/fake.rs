@@ -56,6 +56,8 @@ pub(super) struct FakeWork {
     pub(super) masters: Mutex<Vec<(Vec<CheckName>, Commit)>>,
     /// The checks each commit's listing finds switched off.
     pub(super) off: Mutex<HashMap<Commit, Vec<TipCheck>>>,
+    /// The families declared `builds = true`.
+    pub(super) builds: Mutex<std::collections::BTreeSet<String>>,
     /// Called when a family's batches start, before the first claim, where the real work
     /// builds and lists the family.
     pub(super) before_batches: Mutex<HashMap<String, BeforeBatches>>,
@@ -187,6 +189,10 @@ impl TipWork for FakeWork {
 
     fn covered_by(&self) -> BTreeMap<String, String> {
         self.covered_by.lock().unwrap().clone()
+    }
+
+    fn build_families(&self) -> std::collections::BTreeSet<String> {
+        self.builds.lock().unwrap().clone()
     }
 
     fn run_batches(

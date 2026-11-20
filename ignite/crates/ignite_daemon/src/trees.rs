@@ -113,10 +113,16 @@ impl TreeConfig {
             repo: repo.to_path_buf(),
             dir: repo.join(&config.repository.trees),
             remote: config.repository.remote.clone(),
-            branches: vec![
-                config.repository.staging.clone(),
-                config.repository.master.clone(),
-            ],
+            // `green`, when set, is fast-forwarded too, so that work started from it locally
+            // sees where it is. A branch missing locally is skipped.
+            branches: [
+                Some(config.repository.staging.clone()),
+                Some(config.repository.master.clone()),
+                config.repository.green.clone(),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
             ticket_trees: machine.ticket_trees,
             landing_trees: machine.landing_trees,
             disk_limit: machine

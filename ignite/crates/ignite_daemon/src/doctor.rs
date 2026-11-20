@@ -28,7 +28,10 @@ mod loops;
 mod mirror;
 mod running;
 mod scanning;
+mod tip_round;
 mod trees;
+
+pub use tip_round::{GreenAt, TipRoundSection};
 
 pub use loops::LoopsSection;
 pub use running::{ExecutableOf, RunningSection};
@@ -238,29 +241,6 @@ pub trait StatusSection: Send + Sync {
     }
     fn title(&self) -> &str;
     fn lines(&self) -> Vec<String>;
-}
-
-/// The last tip verification round any machine recorded at the hub: its tip, machine and where
-/// its time went.
-pub struct TipRoundSection(pub Arc<dyn ignite_core::traits::Hub>);
-
-impl StatusSection for TipRoundSection {
-    fn title(&self) -> &'static str {
-        "tip round"
-    }
-
-    fn lines(&self) -> Vec<String> {
-        match self.0.last_tip_round() {
-            Ok(Some(round)) => vec![format!(
-                "{} on {}: {}",
-                round.commit,
-                round.machine,
-                round.summary()
-            )],
-            Ok(None) => vec!["none recorded".to_owned()],
-            Err(error) => vec![format!("the hub did not answer: {error}")],
-        }
-    }
 }
 
 /// Cores and memory, from the scheduler.

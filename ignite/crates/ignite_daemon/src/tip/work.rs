@@ -1,13 +1,13 @@
 //! The real [`TipWork`]: the check runner in a leased landing tree, and the landings from git.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
 use ignite_core::ids::{CheckName, Commit, TicketId, TreeId};
 use ignite_core::protocol::hub::IncompleteReason;
 use ignite_core::protocol::{Class, Outcome};
-use ignite_core::traits::{Clock, Error, Result};
+use ignite_core::traits::{Clock, Error, Reserve, Result};
 
 use ignite_git::changed::CommitPaths;
 
@@ -64,6 +64,18 @@ impl CheckTipWork {
             .collect()
     }
 
+    /// The cores set aside for runs of `families`: the build step's (`Reserve::TipBuild`)
+    /// when `repository.green` is set and every one of them is a build family, so that the
+    /// checks that decide whether `green` moves do not wait behind the rest of the round.
+    fn reserve<'a>(
+        &self,
+        ctx: &Context,
+        families: impl IntoIterator<Item = &'a str>,
+    ) -> Option<Reserve> {
+        let green = ctx.config.repository.green.is_some();
+        reserve_for(green, &self.build_families(), families)
+    }
+
     /// [`CheckTipWork::at_for`] for one lease at a time, as listing and single runs take.
     fn at<T>(&self, ctx: &Context, commit: &Commit, f: impl FnOnce(&TreeId) -> T) -> Result<T> {
         self.at_for(ctx, &format!("tip {commit}"), commit, f)
@@ -82,7 +94,10 @@ impl TipWork for CheckTipWork {
         checks: &[CheckName],
         rerun: bool,
     ) -> Vec<TipRun> {
-        let options = options(rerun);
+        let options = options(
+            rerun,
+            self.reserve(ctx, checks.iter().map(CheckName::family)),
+        );
         match self.at(ctx, commit, |tree| {
             self.checks.run(ctx, tree, checks, &options)
         }) {
@@ -99,7 +114,7 @@ impl TipWork for CheckTipWork {
         batches: &[(u32, Vec<CheckName>)],
         claim: &dyn Fn(u32) -> bool,
     ) -> (Vec<TipRun>, usize) {
-        let options = options(false);
+        let options = options(false, self.reserve(ctx, [family]));
         // Families run at once, each in a tree of its own.
         let ran = self.at_for(ctx, &format!("tip {commit} {family}"), commit, |tree| {
             self.checks
@@ -116,6 +131,14 @@ impl TipWork for CheckTipWork {
 
     fn covered_by(&self) -> std::collections::BTreeMap<String, String> {
         self.checks.covered_by().clone()
+    }
+
+    fn build_families(&self) -> BTreeSet<String> {
+        self.checks
+            .families()
+            .filter(|(_, family)| family.builds)
+            .map(|(name, _)| name.to_owned())
+            .collect()
     }
 
     /// One fewer than the landing trees, so that a landing always finds a tree free.
@@ -189,15 +212,32 @@ pub fn ticketed_landings(ctx: &Context, commits: Vec<CommitPaths>) -> Result<Vec
         .collect())
 }
 
-fn options(rerun: bool) -> RunOptions {
+fn options(rerun: bool, reserve: Option<Reserve>) -> RunOptions {
     RunOptions {
         verb: "tip".to_owned(),
         class: Class::Tip,
         rerun,
         ticket: None,
         session: None,
-        reserve: None,
+        reserve,
     }
+}
+
+/// `Reserve::TipBuild` when `green` (whether `repository.green` is set) and `families` are all
+/// among `builds`, and there is at least one; otherwise `None`, an ordinary request.
+fn reserve_for<'a>(
+    green: bool,
+    builds: &BTreeSet<String>,
+    families: impl IntoIterator<Item = &'a str>,
+) -> Option<Reserve> {
+    if !green {
+        return None;
+    }
+    let mut families = families.into_iter().peekable();
+    families.peek()?;
+    families
+        .all(|family| builds.contains(family))
+        .then_some(Reserve::TipBuild)
 }
 
 /// Each check's outcome from a run. A check that a failed build kept from running names the
@@ -298,6 +338,20 @@ mod tests {
     use ignite_core::time::Timestamp;
 
     use super::*;
+
+    /// Only the build checks' runs ask for the build step's cores, and only with a green
+    /// branch configured.
+    #[test]
+    fn the_build_checks_run_on_the_reserved_cores() {
+        let builds: BTreeSet<String> = ["types".to_owned()].into();
+        assert_eq!(
+            reserve_for(true, &builds, ["types"]),
+            Some(Reserve::TipBuild)
+        );
+        assert_eq!(reserve_for(false, &builds, ["types"]), None);
+        assert_eq!(reserve_for(true, &builds, ["types", "unit"]), None);
+        assert_eq!(reserve_for(true, &builds, []), None);
+    }
 
     #[test]
     fn a_round_waits_for_a_busy_landing_tree() {

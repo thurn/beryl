@@ -124,6 +124,8 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env"]
 always = true
+# A build check: a failure means the code does not type-check, so `green` does not move.
+builds = true
 always_when = [
   "rust/beryl3d/**",
   "rust-toolchain.toml",

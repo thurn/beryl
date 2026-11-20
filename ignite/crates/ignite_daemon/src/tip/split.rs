@@ -20,6 +20,9 @@
 //!   round would find `master` at the tip and run nothing.
 //! - When nothing can be scored (the hub or git cannot be read), every check runs before
 //!   `master` moves, as before the budget.
+//! - With `repository.green` set, the checks of families declared `builds = true` (the build
+//!   checks, which fail when the code does not compile or type-check) are a group of their own,
+//!   outside the budget, which the round runs before any other check (see `green`).
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -39,6 +42,13 @@ use crate::server::Context;
 
 /// A round's checks to run, split by the tip budget.
 pub(super) struct Split<'a> {
+    /// The build checks to run first, before the others, which move `green` when they pass.
+    /// Empty when `repository.green` is unset.
+    pub build: Vec<&'a TipCheck>,
+    /// The build checks to run again, ignoring their cached results, with `build`.
+    pub build_recheck: Vec<&'a TipCheck>,
+    /// The other checks to run again, ignoring their cached results, before `master` moves.
+    pub recheck: Vec<&'a TipCheck>,
     /// The checks to run before `master` moves: forced and within the budget.
     pub within: Vec<&'a TipCheck>,
     /// The checks to run after `master` moves.
@@ -57,16 +67,42 @@ impl Split<'_> {
 
 impl TipVerifier {
     /// Splits `to_run` by the tip budget. `recheck`, the cached failures and checks the hub no
-    /// longer trusts the cache for, run before `master` moves and are counted as forced.
+    /// longer trusts the cache for, run before `master` moves and are counted as forced. With
+    /// `repository.green` set, the build checks of both leave them for the `build` group, which
+    /// is outside the budget.
     pub(super) fn split<'a>(
         &self,
         ctx: &Context,
         last: &Commit,
         tip: &Commit,
         to_run: &[&'a TipCheck],
-        recheck: &[&TipCheck],
+        recheck: &[&'a TipCheck],
+    ) -> Split<'a> {
+        let builds = self.build_families(ctx);
+        let is_build = |check: &&TipCheck| builds.contains(&check.family);
+        let (build, to_run): (Vec<&TipCheck>, Vec<&TipCheck>) =
+            to_run.iter().copied().partition(is_build);
+        let (build_recheck, recheck): (Vec<&TipCheck>, Vec<&TipCheck>) =
+            recheck.iter().copied().partition(is_build);
+        let mut split = self.split_rest(ctx, last, tip, &to_run, &recheck);
+        split.build = build;
+        split.build_recheck = build_recheck;
+        split
+    }
+
+    /// [`TipVerifier::split`] for the checks other than the build checks.
+    fn split_rest<'a>(
+        &self,
+        ctx: &Context,
+        last: &Commit,
+        tip: &Commit,
+        to_run: &[&'a TipCheck],
+        recheck: &[&'a TipCheck],
     ) -> Split<'a> {
         let unbudgeted = || Split {
+            build: Vec::new(),
+            build_recheck: Vec::new(),
+            recheck: recheck.to_vec(),
             within: to_run.to_vec(),
             after: Vec::new(),
             budget: None,
@@ -176,7 +212,7 @@ pub(super) fn note_unrun(tally: &mut Tally, left: BTreeMap<String, u32>, ended_b
 /// A check with no record (switched off since it was listed, say) runs before `master` moves.
 fn split_by<'a>(
     to_run: &[&'a TipCheck],
-    recheck: &[&TipCheck],
+    recheck: &[&'a TipCheck],
     areas: &[String],
     scored: &[GateCheck],
     budget: &Budget,
@@ -251,6 +287,9 @@ fn split_by<'a>(
     figures.unrun = unrun(after.iter(), &[]);
     Split {
         after_keys: after.iter().map(|c| c.key.clone()).collect(),
+        build: Vec::new(),
+        build_recheck: Vec::new(),
+        recheck: recheck.to_vec(),
         within,
         after,
         budget: Some(figures),

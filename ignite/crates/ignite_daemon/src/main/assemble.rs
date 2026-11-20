@@ -617,13 +617,31 @@ fn status_sections(base: &Base, parts: &loops::Parts) -> Vec<Box<dyn StatusSecti
             hub: parts.ctx.hub.clone(),
         }),
         Box::new(LoopsSection(parts.health.clone())),
-        Box::new(doctor::TipRoundSection(parts.ctx.hub.clone())),
+        Box::new(doctor::TipRoundSection {
+            hub: parts.ctx.hub.clone(),
+            green: green_at(base, parts),
+        }),
         Box::new(crate::deploy::ReleaseSection {
             state: parts.update.clone(),
             hub: parts.ctx.hub.clone(),
             clock: base.clock.clone(),
         }),
     ]
+}
+
+/// Where `repository.green` is and how many commits the `staging` tip is ahead of it, as this
+/// checkout last fetched them; `None` when no green branch is configured.
+fn green_at(base: &Base, parts: &loops::Parts) -> Option<doctor::GreenAt> {
+    let green = base.config.repository.green.clone()?;
+    let staging = base.config.repository.staging.clone();
+    let git = parts.ctx.git.clone();
+    let repo = base.options.repo.clone();
+    Some(Arc::new(move || {
+        let at = git.known_tip(&green)?;
+        let tip = git.known_tip(&staging)?;
+        let behind = ignite_git::refs::commits_between(&repo, &at, &tip)?.len();
+        Ok((at, behind))
+    }))
 }
 
 /// The machine's ID and write token. A machine with no token yet, such as one whose

@@ -656,10 +656,12 @@ How the executable is installed and kept current:
   A build opens a database newer than its last migration, applying nothing, when
   its last migration is at least that value, so a rollback to `bin/last-good`
   still starts after a release that added a table or column.
-- Settings for landing by verdict exist and change nothing yet: `[land] mode`
-  (`"strict"`, the default, or `"verdict"`) with `max_base_age_hours` (default
-  12), `[revert] broken_build` (default false) and `repository.green` (unset by
-  default; it must differ from `staging` and `master`). The hub's
+- Settings for landing by verdict exist: `[land] mode` (`"strict"`, the
+  default, or `"verdict"`) with `max_base_age_hours` (default 12) and
+  `[revert] broken_build` (default false) change nothing yet, and
+  `repository.green` (unset by default; it must differ from `staging` and
+  `master`) gives tip rounds a build step (see
+  [Tip verification](#tip-verification)). The hub's
   `Hub::verdict`, `Hub::store_verdict` and `Hub::reverted` are declared, with
   fakes. The hub stores and looks up verdicts (`POST /verdicts/store`, which
   needs a registered machine's token, and `POST /verdicts/lookup`, which replies
@@ -1518,9 +1520,12 @@ The fields:
   For any other change the family's checks are scored. See
   [The always set](#the-always-set).
 - `builds = true` marks a family whose checks fail when the code does not
-  compile or type-check, such as clippy or `tsc`. No code reads it yet: tip
-  rounds will run these build checks first, move `repository.green` once they
-  pass, and revert the landing that made one fail. No manifest sets it yet.
+  compile or type-check: Beryl's clippy, Beryl 3D's clippy, `tsc` (`ui-types`)
+  and pyre. With `repository.green` set, a tip round runs these build checks
+  first and moves `green` once they pass (see
+  [Tip verification](#tip-verification)). Formatting and the source rules are
+  not build checks, and neither is Ignite's own lint: a change to Ignite's
+  source lands checked on the exact tip, and `green` is not held back for it.
 - `covered_by` names a family whose checks find every fault this family's checks
   find. Tip verification then runs the covering family only. See
   [How long a round takes](#how-long-a-round-takes).
@@ -2403,6 +2408,19 @@ How a daemon verifies a tip:
 
   Builds are outside the budget, and a tip round builds what it needs, cold
   builds included.
+
+- With `repository.green` set, the build checks (the checks of families declared
+  `builds = true`) are outside the budget and run first, before any other check
+  of the round, on the cores the machine sets aside for them
+  (`tip_build_cores`). When every build check of the tip has a pass, run or
+  cached, and none waits, the round pushes the tip to `green` and goes on with
+  its other checks; whatever they find, `green` stays. A refused push is fine
+  when `green` already holds the tip. A failing build check is blamed like any
+  failure and ends the round as failed without running its other checks, and
+  `green` and `master` both stay. With `green` unset a round has no build step.
+  The main checkout fast-forwards its local `green` with `staging` and `master`,
+  and `ignite status` shows beside the tip round which commit `green` is at and
+  how many commits it is behind the tip.
 
 - It claims those checks from the hub in batches, so two machines do not run the
   same ones, then runs them in the `tip` class. Each family is listed once per

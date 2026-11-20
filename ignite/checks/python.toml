@@ -33,6 +33,8 @@ adapter = "jsonl"
 platforms = ["macos"]
 needs = ["python-env"]
 always = true
+# A build check: a failure means the code does not type-check, so `green` does not move.
+builds = true
 list = "uv run --quiet --project tools python -m beryl_tools.ignite.python list pyre"
 run = "uv run --quiet --project tools python -m beryl_tools.ignite.python run pyre {checks}"
 inputs = [

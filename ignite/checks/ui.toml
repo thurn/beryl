@@ -24,6 +24,8 @@ adapter = "jsonl"
 platforms = "any"
 needs = ["ui-deps"]
 always = true
+# A build check: a failure means the code does not type-check, so `green` does not move.
+builds = true
 list = "node ui/scripts/ignite-checks.mjs ui-types --list"
 run = "node ui/scripts/ignite-checks.mjs ui-types {checks}"
 inputs = [

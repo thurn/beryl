@@ -16,6 +16,8 @@
 //!   machine from costs the hub fixes for the tip. Checks only this machine's platform can run
 //!   go first. Each family is listed once and several families run at once (see `families`).
 //! - Each round sends the hub a record of where its time went (see `meter`).
+//! - With `repository.green` set, the build checks run before any other, and `green` moves to
+//!   the tip once they pass (see `green`).
 //! - `master` moves to the tip once every check in its set has a pass on each platform it
 //!   needs. A failure or an `incomplete` check holds it. A cached failure is run once here
 //!   before it holds `master`, so a fault of one run, or of Ignite, heals.
@@ -44,6 +46,7 @@ mod cache;
 mod covered;
 mod culprit;
 mod families;
+mod green;
 mod meter;
 mod report;
 mod round;
@@ -209,6 +212,12 @@ pub trait TipWork: Send + Sync {
     /// name.
     fn covered_by(&self) -> BTreeMap<String, String> {
         BTreeMap::new()
+    }
+    /// The families declared `builds = true`, whose checks fail when the code does not compile
+    /// or type-check. The work runs their checks with the cores reserved for them when
+    /// `repository.green` is set.
+    fn build_families(&self) -> std::collections::BTreeSet<String> {
+        std::collections::BTreeSet::new()
     }
     /// The landings after `from` up to and including `to`, oldest first.
     fn landings(&self, ctx: &Context, from: &Commit, to: &Commit) -> Result<Vec<TipLanding>>;
@@ -489,16 +498,30 @@ impl TipVerifier {
         // The tip budget: the best-scored checks run before `master` moves, the rest after.
         let split = self.split(ctx, last, tip, &to_run, &recheck);
         tally.budget.clone_from(&split.budget);
-        let (superseded, runs) = self.run_families(ctx, tip, &split.within, false)?;
-        if let Some(by) = superseded {
+        // The build checks first; a broken build runs nothing more (see `green`).
+        let step = self.run_build(ctx, tip, &checks, &unlisted, &split, &mut verdicts, tally)?;
+        let mut superseded = match &step {
+            green::BuildStep::Superseded(by) => Some((by.clone(), Vec::new())),
+            _ => None,
+        };
+        if step == green::BuildStep::Continue {
+            let (newer, runs) = self.run_families(ctx, tip, &split.within, false)?;
+            if let Some(by) = newer {
+                superseded = Some((by, runs));
+            } else {
+                tally.ran = tally
+                    .ran
+                    .saturating_add(u32::try_from(runs.len()).unwrap_or(u32::MAX));
+                settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
+            }
+        }
+        if let Some((by, runs)) = superseded {
             let left = split::unrun(split.within.iter().chain(&split.after), &runs);
             split::note_unrun(tally, left, Some(by.clone()));
             return Ok(TipOutcome::Superseded { by });
         }
-        tally.ran = u32::try_from(runs.len()).unwrap_or(u32::MAX);
-        settle_runs(&checks, runs, &mut verdicts, &mut self.own_outputs);
-        if !recheck.is_empty() {
-            let names: Vec<CheckName> = recheck.iter().map(|c| c.check.clone()).collect();
+        if step == green::BuildStep::Continue && !split.recheck.is_empty() {
+            let names: Vec<CheckName> = split.recheck.iter().map(|c| c.check.clone()).collect();
             let runs = self.work.run(ctx, tip, &names, true);
             tally.ran = tally
                 .ran

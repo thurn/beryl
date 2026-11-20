@@ -654,5 +654,10 @@
     "label": "`ignite check` stores a verdict when its gate passes (keyed by the tree's files, its merge base with the tip and the `[gate]` section, at the hub and in the daemon's local table), so a later landing of the same tree can look the pass up instead of running the gate again",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "With `repository.green` set, a tip round runs the build checks (clippy, `tsc`, pyre) before its other checks and moves the `green` branch once they pass, so that new work can start from a commit known to compile within minutes of landing instead of after the whole round (median 5.2 minutes, up to 89, on 2026-11-19)",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]
