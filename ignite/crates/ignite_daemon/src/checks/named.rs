@@ -139,7 +139,12 @@ pub(crate) fn test_families<'a>(
         let hits: Vec<usize> = bare
             .iter()
             .enumerate()
-            .filter(|(_, word)| listing.checks.iter().any(|l| matches(word, l.check.as_str())))
+            .filter(|(_, word)| {
+                listing
+                    .checks
+                    .iter()
+                    .any(|l| matches(word, l.check.as_str()))
+            })
             .map(|(index, _)| index)
             .collect();
         if hits.is_empty() {

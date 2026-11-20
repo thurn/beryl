@@ -14,9 +14,9 @@ use ignite_core::protocol::tickets::{Status, TicketQuery};
 use ignite_core::protocol::{Class, Outcome};
 
 use super::express::{Asked, express_reply};
-use super::named::test_families;
 pub(crate) use super::gate::gate_lines;
 use super::gate::scope_line;
+use super::named::test_families;
 use super::plan::{self, GateView};
 use super::time_lines::{Stopwatch, slow_line, took_line};
 pub(crate) use super::time_lines::{built_lines, listed_line};
@@ -68,8 +68,7 @@ impl Verb for TestVerb {
         let (families, scopes) = (&found.families, &found.scopes);
         run.stage(ctx, "finding families", finding);
         let listing = Stopwatch::start(ctx);
-        let mut prepared =
-            checks.prepare_scoped(ctx, &tree, families, scopes, &options, &mut run);
+        let mut prepared = checks.prepare_scoped(ctx, &tree, families, scopes, &options, &mut run);
         run.stage(ctx, "listing", listing);
         let unmatched: Vec<&str> = words
             .iter()
