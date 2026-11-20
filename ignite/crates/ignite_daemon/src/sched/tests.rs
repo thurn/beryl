@@ -314,8 +314,8 @@ fn outside_load_fills_the_idle_express_cores_first() {
 
     // The express lane, which runs in the daemon's tree, now uses its 3 cores: the same
     // outside processes count fully again.
-    ledger.observe_tree(at(1.0), Some(0.0));
-    ledger.observe_tree(at(2.0), Some(13.0));
+    ledger.observe_trees(at(1.0), Some(&[(1, 0.0)]));
+    ledger.observe_trees(at(2.0), Some(&[(1, 13.0)]));
     ledger.observe(Some(1.0), None);
     assert_eq!(ledger.status().outside, 5);
 }
@@ -392,6 +392,9 @@ fn a_grant_sets_the_thread_counts() {
 /// A host whose CPU and memory readings the test sets.
 struct FakeHost {
     busy: Mutex<f64>,
+    /// The CPU seconds each process tree has used so far, by the PID at its root. A PID not
+    /// listed does not run.
+    trees: Mutex<BTreeMap<u32, f64>>,
 }
 
 impl HostCpu for FakeHost {
@@ -406,12 +409,22 @@ impl HostCpu for FakeHost {
     fn free_memory_mb(&self) -> io::Result<u64> {
         Err(io::Error::other("not read"))
     }
+
+    fn process_tree_cpu_seconds(&self, pid: u32) -> io::Result<f64> {
+        self.trees
+            .lock()
+            .unwrap()
+            .get(&pid)
+            .copied()
+            .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
+    }
 }
 
 fn scheduler() -> (Arc<Scheduler>, Arc<FakeClock>, Arc<FakeHost>) {
     let clock = Arc::new(FakeClock::new(T0));
     let host = Arc::new(FakeHost {
         busy: Mutex::new(0.0),
+        trees: Mutex::new(BTreeMap::new()),
     });
     let scheduler = Scheduler::new(limits(), clock.clone(), host.clone());
     (Arc::new(scheduler), clock, host)

@@ -182,21 +182,38 @@ impl Native {
     /// with the time of the children it reaped. A process that exits between the listing and
     /// its reading is skipped.
     pub(crate) fn tree_cpu_seconds_of(self, group: u64) -> io::Result<f64> {
-        Ok(descendants_cpu_seconds(self.group_members(group)?))
+        Ok(descendants_cpu_seconds(
+            self.group_members(group)?,
+            &mut HashSet::new(),
+        ))
     }
 
     /// See `HostCpu::process_tree_cpu_seconds`: `pid` and every process it started, through any
     /// number of generations, whatever their process groups.
     pub(crate) fn process_tree_cpu_seconds_of(pid: u32) -> f64 {
-        descendants_cpu_seconds(vec![pid])
+        descendants_cpu_seconds(vec![pid], &mut HashSet::new())
+    }
+
+    /// See `HostCpu::process_trees_cpu_seconds`: each root's tree, with a process that an
+    /// earlier root's tree holds counted under that root only. A root that cannot be read, as
+    /// one that has exited, is left out.
+    pub(crate) fn process_trees_cpu_seconds_of(roots: &[u32]) -> Vec<(u32, f64)> {
+        let mut seen = HashSet::new();
+        let mut readings = Vec::with_capacity(roots.len());
+        for &root in roots {
+            if seen.contains(&root) || read(root).is_ok() {
+                readings.push((root, descendants_cpu_seconds(vec![root], &mut seen)));
+            }
+        }
+        readings
     }
 }
 
 /// The CPU seconds of every process in `start` and, through their child lists, every process
 /// they started, each counted once with the time of the children it reaped. A process that
-/// exits between the listing and its reading is skipped.
-fn descendants_cpu_seconds(start: Vec<u32>) -> f64 {
-    let mut seen: HashSet<u32> = HashSet::new();
+/// exits between the listing and its reading is skipped, and so is a process in `seen`, which
+/// gains every process counted.
+fn descendants_cpu_seconds(start: Vec<u32>, seen: &mut HashSet<u32>) -> f64 {
     let mut pending = start;
     let mut total = 0.0;
     while let Some(pid) = pending.pop() {
@@ -576,5 +593,39 @@ mod tests {
 
         drop(shell.stdin.take());
         assert!(shell.wait().unwrap().success());
+    }
+
+    /// The scheduler reads the daemon's tree beside the trees of the verb processes it knows,
+    /// some of which are the daemon's own children: each process counts once, under the first
+    /// root, and a root that has exited counts as nothing.
+    #[test]
+    fn process_trees_count_each_process_once_and_leave_out_the_dead() {
+        let mut child = Command::new("/bin/sh")
+            .args([
+                "-c",
+                "i=0; while [ $i -lt 20000 ]; do i=$((i+1)); done; read line",
+            ])
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut gone = Command::new("/usr/bin/true").spawn().unwrap();
+        let gone_pid = gone.id();
+        gone.wait().unwrap();
+        let own = std::process::id();
+        // Let the shell use some CPU before reading.
+        while read(child.id()).unwrap().usage.cpu_s <= 0.0 {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        let readings = Native::process_trees_cpu_seconds_of(&[own, child.id(), gone_pid]);
+        let roots: Vec<u32> = readings.iter().map(|&(root, _)| root).collect();
+        assert_eq!(roots, [own, child.id()], "the exited root is left out");
+        assert!(readings[0].1 > 0.0);
+        assert!(
+            readings[1].1.abs() < f64::EPSILON,
+            "the child was counted in the test's own tree, so it reads 0"
+        );
+
+        drop(child.stdin.take());
+        child.wait().unwrap();
     }
 }

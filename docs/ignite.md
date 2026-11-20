@@ -1223,6 +1223,17 @@ Rules for cores:
   is left. The reading compares the operating system's counters with the
   previous reading, and reports no reading, not zero, when none of them moved. A
   command whose use has not been read yet counts all its cores.
+- Ignite's own use is the larger of what its commands used and what its
+  processes used: the daemon and every process it started, every verb process,
+  and on the hub's machine the hub, each with every process it started, and each
+  process counted once. The hub and a verb process that a previous daemon
+  started run outside the daemon's process tree: launchd starts the hub, and
+  adopts a verb process when the daemon that started it exits. So `ignite hub`
+  writes its PID to `hub/pid` in the Ignite home and holds `hub/lock` while it
+  runs, and the daemon reads the PIDs of verb processes from their handles' rows
+  while each holds its handle's lock. On 2026-11-19 jarvis counted the hub and a
+  verb process from an older release, about two cores, as load outside Ignite
+  while 9 agent commands waited for cores.
 - A command that uses well below its grant lends the idle cores to waiting
   requests. After 30 seconds of measurement a grant counts as using its measured
   use plus one core, rounded up: the larger of its average over the last 30

@@ -107,8 +107,9 @@ pub struct Ledger {
     /// An update waits for the daemon's commands to finish: no `idle` work starts, and what
     /// runs is stopped.
     draining: bool,
-    /// The CPU the daemon's whole process tree has used ([`Self::observe_tree`]).
-    tree: GrantUse,
+    /// The CPU used by each tree of processes that counts as Ignite's, by the PID at its root:
+    /// the daemon's, the verb processes' and the hub's ([`Self::observe_trees`]).
+    trees: BTreeMap<u32, GrantUse>,
 }
 
 impl Ledger {
@@ -122,7 +123,7 @@ impl Ledger {
             waiting: Vec::new(),
             held: BTreeMap::new(),
             draining: false,
-            tree: GrantUse::default(),
+            trees: BTreeMap::new(),
         }
     }
 

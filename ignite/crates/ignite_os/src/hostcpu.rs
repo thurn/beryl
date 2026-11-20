@@ -59,4 +59,22 @@ pub trait HostCpu {
         let _ = pid;
         Err(io::Error::from(io::ErrorKind::Unsupported))
     }
+    /// [`Self::process_tree_cpu_seconds`] for each of `roots`, as `(root, CPU seconds)`, with
+    /// every process counted once, under the first root whose tree holds it: a root inside an
+    /// earlier root's tree reads as 0. A root that no longer runs is left out. An error means the
+    /// first root could not be read.
+    ///
+    /// The default reads each root on its own, so it counts a process twice when trees overlap;
+    /// an implementation whose roots can overlap overrides it.
+    fn process_trees_cpu_seconds(&self, roots: &[u32]) -> io::Result<Vec<(u32, f64)>> {
+        let mut readings = Vec::with_capacity(roots.len());
+        for (index, &root) in roots.iter().enumerate() {
+            match self.process_tree_cpu_seconds(root) {
+                Ok(cpu_s) => readings.push((root, cpu_s)),
+                Err(error) if index == 0 => return Err(error),
+                Err(_) => {}
+            }
+        }
+        Ok(readings)
+    }
 }

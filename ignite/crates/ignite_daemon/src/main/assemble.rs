@@ -161,6 +161,12 @@ pub fn machinery(base: &Base, setup: TreeSetup) -> Result<Machinery> {
         // first would see no CPU ticks.
         Arc::new(ignite_os::hostcpu::HostMeter::new()),
     ));
+    // The hub and the verb processes a previous daemon started run outside the daemon's tree;
+    // their CPU is Ignite's, not load from outside it.
+    scheduler.count_as_ignite(crate::sched::roots::native(
+        base.options.home.root.clone(),
+        base.open()?,
+    ));
     Scheduler::sample_every(&scheduler);
     let supervised = Arc::new(
         SupervisedLauncher::new(&base.options.ignite, base.home("runs"))

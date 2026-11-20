@@ -63,6 +63,10 @@ impl HostCpu for HostMeter {
     fn process_tree_cpu_seconds(&self, pid: u32) -> io::Result<f64> {
         Native.process_tree_cpu_seconds(pid)
     }
+
+    fn process_trees_cpu_seconds(&self, roots: &[u32]) -> io::Result<Vec<(u32, f64)>> {
+        Native.process_trees_cpu_seconds(roots)
+    }
 }
 
 impl HostCpu for Native {
@@ -150,6 +154,10 @@ impl HostCpu for Native {
 
     fn process_tree_cpu_seconds(&self, pid: u32) -> io::Result<f64> {
         Ok(Self::process_tree_cpu_seconds_of(pid))
+    }
+
+    fn process_trees_cpu_seconds(&self, roots: &[u32]) -> io::Result<Vec<(u32, f64)>> {
+        Ok(Self::process_trees_cpu_seconds_of(roots))
     }
 }
 

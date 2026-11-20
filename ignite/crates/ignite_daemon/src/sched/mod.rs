@@ -44,6 +44,7 @@
 
 mod ledger;
 mod measured;
+pub mod roots;
 
 #[cfg(test)]
 mod tests;
@@ -247,7 +248,14 @@ pub struct Scheduler {
     /// A sampler thread runs. One host reading serves every sample, and two samplers would each
     /// see the counters microseconds after the other's reading.
     sampling: AtomicBool,
+    /// Lists the PIDs of Ignite's processes outside the daemon's tree, whose CPU counts as
+    /// Ignite's ([`Self::count_as_ignite`]).
+    roots: Mutex<Option<Arc<IgniteRoots>>>,
 }
+
+/// Lists the PIDs of processes whose trees count as Ignite's beside the daemon's own: the
+/// verb processes and, on the hub's machine, the hub. See [`Scheduler::count_as_ignite`].
+pub type IgniteRoots = dyn Fn() -> Vec<u32> + Send + Sync;
 
 struct State {
     ledger: Ledger,
@@ -284,7 +292,15 @@ impl Scheduler {
             clock,
             host,
             sampling: AtomicBool::new(false),
+            roots: Mutex::new(None),
         }
+    }
+
+    /// Counts the CPU of the processes `roots` lists, and of every process they started, as
+    /// Ignite's from the next sample on, beside the daemon's own tree. Each sample calls it
+    /// once; a PID that no longer runs counts as nothing.
+    pub fn count_as_ignite(&self, roots: Arc<IgniteRoots>) {
+        *self.roots.lock().unwrap_or_else(PoisonError::into_inner) = Some(roots);
     }
 
     /// Blocks until the request can be granted.
@@ -405,8 +421,21 @@ impl Scheduler {
                 Some((id, self.host.tree_cpu_seconds(group).ok()?))
             })
             .collect();
-        // The daemon's whole tree: grants' commands, verb processes, express runs and the daemon.
-        let tree = self.host.process_tree_cpu_seconds(std::process::id()).ok();
+        // The daemon's whole tree (grants' commands, verb processes, express runs and the
+        // daemon) first, so a listed process inside it counts under the daemon only.
+        let daemon = std::process::id();
+        let listed = self
+            .roots
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        let mut roots = vec![daemon];
+        for root in listed.map(|list| list()).unwrap_or_default() {
+            if !roots.contains(&root) {
+                roots.push(root);
+            }
+        }
+        let trees = self.host.process_trees_cpu_seconds(&roots).ok();
         let busy = self.host.busy().ok();
         let memory = self.host.free_memory_mb().ok();
         let swap = self.host.swap_used_mb().ok();
@@ -418,7 +447,7 @@ impl Scheduler {
         if let Some(swap) = swap {
             state.ledger.observe_swap(now, swap);
         }
-        state.ledger.observe_tree(now, tree);
+        state.ledger.observe_trees(now, trees.as_deref());
         state.ledger.observe(busy, memory);
         self.advance(&mut state);
     }

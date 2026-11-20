@@ -624,5 +624,10 @@
     "label": "`beryl_cli`'s library takes the cards as a `Catalog` from its binary, now the package `beryl_cli_main`, and Beryl 3D's recorder, so a card file edit relinks those binaries and recompiles none of the library's 20,000 lines, here or in Beryl 3D's build",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "Ignite's scheduler counts the hub and verb processes outside the daemon's process tree as Ignite's own CPU, not as load outside Ignite, so it hands out the cores they use instead of holding them back from waiting agent commands",
+    "metric": "bead.agent-minutes",
+    "expect": "down"
   }
 ]

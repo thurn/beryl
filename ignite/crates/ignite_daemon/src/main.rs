@@ -303,6 +303,15 @@ pub fn run_hub(cwd: &Path) -> i32 {
     })) {
         eprintln!("ignite: a stop will count as a crash: {error}");
     }
+    // The daemon's scheduler finds the hub through this lock and PID file, so the hub's CPU
+    // counts as Ignite's and not as load from outside it (see `crate::sched::roots`).
+    let _hub_lock = match crate::sched::roots::hold_hub(&home.root) {
+        Ok(lock) => lock,
+        Err(error) => {
+            eprintln!("ignite: cannot record the hub's PID: {error}");
+            None
+        }
+    };
     let dir = home.root.join("hub");
     if let Err(error) = loops::serve_hub_at(&repo, &addresses, &dir, &version, HUB_BIND_WINDOW) {
         eprintln!("ignite: the hub did not start: {error}");
