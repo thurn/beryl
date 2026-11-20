@@ -36,6 +36,7 @@ pub mod parts;
 mod playing;
 pub mod record;
 mod relay;
+mod resize;
 mod scene;
 mod scroll;
 mod sounds;
@@ -71,7 +72,7 @@ use crate::notice::Announced;
 use crate::pointer::Pointer;
 use crate::pose::Pose;
 use crate::table::badges::Badges;
-use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, Window, ability_track};
+use crate::table::{CARD_HEIGHT, CARD_WIDTH, Dress, Table, ability_track};
 use crate::text::{Glyphs, Text};
 
 /// How many spans, streaks and effects the show holds before holding more allocates.
@@ -84,6 +85,8 @@ pub struct Show {
     faces: Faces,
     /// The view the table shows at rest.
     shown: Option<Rc<GameUpdate>>,
+    /// How many views the table has shown at rest, counting `shown` (`views_shown`).
+    views_shown: usize,
     playing: Option<Playing>,
     waiting: VecDeque<Waiting>,
     /// Whether a script plays faster while many updates wait (`rate_for`).
@@ -152,6 +155,7 @@ impl Show {
             table,
             faces: Faces::default(),
             shown: None,
+            views_shown: 0,
             playing: None,
             waiting: VecDeque::new(),
             catch_up: true,
@@ -354,6 +358,13 @@ impl Show {
         self.shown.as_deref()
     }
 
+    /// How many views the table has shown at rest so far: a number that changes whenever
+    /// `shown` does, so that what is drawn from it knows to be laid out again.
+    #[must_use]
+    pub fn views_shown(&self) -> usize {
+        self.views_shown
+    }
+
     /// Where the object in `slot` is at `now`, as the last frame left the clock: on its track
     /// while the playing script moves it, and otherwise where it rests in the view shown.
     #[must_use]
@@ -485,67 +496,6 @@ impl Show {
     /// shown.
     fn before_next(&self) -> Option<&PlayerView> {
         self.latest().map(|update| &update.view)
-    }
-
-    /// Fits the table to a window of a new shape, and compiles every script not yet ended again
-    /// for it, whole. A waiting script whose compiling had not begun is played from the table
-    /// the script before it ends with, compiled again.
-    pub fn resize(&mut self, window: Window) {
-        self.complete();
-        let shown = self.shown.as_ref().map(|update| &update.view);
-        self.table.resize(window, shown);
-        let mut before = shown;
-        let mut ended: Option<Rc<Played>> = None;
-        let mut compiled = Vec::new();
-        if let Some(playing) = &self.playing
-            && let Some(update) = &playing.update
-        {
-            let (again, played) = self.compile(
-                playing.number,
-                before,
-                playing.from.as_deref(),
-                update,
-                timings_of(update, playing.timings.as_deref()),
-            );
-            compiled.push((playing.number, again, None));
-            ended = Some(Rc::new(played));
-            before = Some(&update.view);
-        }
-        for waiting in &self.waiting {
-            let from = if waiting.pending {
-                ended.clone().or_else(|| waiting.from.clone())
-            } else {
-                waiting.from.clone()
-            };
-            let (again, played) = self.compile(
-                waiting.number,
-                before,
-                from.as_deref(),
-                &waiting.update,
-                timings_of(&waiting.update, waiting.timings.as_deref()),
-            );
-            compiled.push((waiting.number, again, from));
-            ended = Some(Rc::new(played));
-            before = Some(&waiting.update.view);
-        }
-        let pending = self.waiting.iter().any(|waiting| waiting.pending);
-        for (number, again, from) in compiled {
-            self.write_record(number, &again);
-            if let Some(waiting) = self.waiting.iter_mut().find(|w| w.number == number) {
-                if waiting.pending {
-                    waiting.pending = false;
-                    waiting.from = from;
-                    self.unplaced += again.unplaced;
-                }
-                waiting.compiled = again;
-            } else {
-                self.recompiled = Some(again);
-            }
-        }
-        // The next script to arrive is played from the table the last one ends with.
-        if pending && let Some(ended) = ended {
-            self.played = Some(Rc::unwrap_or_clone(ended));
-        }
     }
 
     /// Drops the effect runs and notices that have ended by `now`. A run is under way from its
@@ -697,6 +647,7 @@ impl Show {
         {
             self.table.swap_objects(&mut playing.compiled.finals);
             self.shown = Some(update);
+            self.views_shown += 1;
         }
     }
 

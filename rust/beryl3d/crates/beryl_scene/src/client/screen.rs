@@ -30,8 +30,9 @@ impl Client {
         }
         self.inspector.due = true;
         let view = self.show.latest().map(|update| &update.view);
+        let played = self.show.shown().map(|update| &update.view);
         self.viewing
-            .spin(view.filter(|_| self.screen == Screen::Game), self.now);
+            .spin(played.filter(|_| self.screen == Screen::Game), self.now);
         // A result put aside comes back with the next game's end.
         if view.is_none_or(|view| !matches!(view.status, Status::Over { .. } | Status::Stopped)) {
             self.viewing.result_aside = false;
@@ -65,12 +66,19 @@ impl Client {
             && self.sheet.is_none()
             && self.screen == Screen::Game
             && screens::opening::shown(&input);
+        let away = self.screen == Screen::Game && screens::opening::shown(&input);
         let shown = match self.sheet {
             Some(sheet) => Some(screens::sheet(sheet, under, &input)),
             None => under,
         };
         let music = screens::music(self.screen, view);
         self.viewing.opening = opening;
+        // While the opening shows the hand, the table's hand waits below the window, as the web's
+        // desktop board holds it away under the opening, a sheet open over it or not; the
+        // phone's board does not.
+        if !self.window.phone() && self.show.hold_hand_away(away, self.window) {
+            self.prepare_resized();
+        }
         self.layer.show(shown);
         self.layer.scroll_to_end(crate::hud::log::LIST);
         self.place_shown();
@@ -107,6 +115,7 @@ impl Client {
             screen: self.screen,
             window: self.window,
             view: self.show.latest().map(|update| &update.view),
+            played: self.show.shown().map(|update| &update.view),
             // While the opening's coin spins, no decision is offered, as the web's `Opening` offers
             // none.
             prompt: (self.prompt.as_ref())

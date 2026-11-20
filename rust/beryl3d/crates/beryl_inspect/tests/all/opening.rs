@@ -179,13 +179,20 @@ fn the_opening_shows_the_flip_while_the_coin_spins_and_then_the_hand() {
     let moment = Moment::from_str("899ms").unwrap_or_else(|why| panic!("{why:?}"));
     page.seek(&moment).unwrap_or_else(|why| panic!("{why}"));
     let tree = page.tree();
-    // The opening is drawn while the deal plays, with the flip's title and the dots, and no
-    // card of the hand, no word of who starts and no button yet.
+    // The opening is drawn while the deal plays, with the flip's title and the dots, no word
+    // of who starts and no button yet. The hand is dealt below the window, as the web's
+    // desktop board holds it away under the opening, and the opening's row shows none of it.
     assert!(tree.contains("text \"Opponent won the flip\""), "{tree}");
     assert!(tree.contains("region \"waiting\""), "{tree}");
     assert!(!tree.contains("On the draw"), "{tree}");
     assert!(!tree.contains("button \"Keep 7\""), "{tree}");
-    assert!(!tree.contains("card \"Plains\" #33"), "{tree}");
+    let plains = (tree.lines())
+        .find(|line| line.contains("card \"Plains\" #33"))
+        .unwrap_or_else(|| panic!("{tree}"));
+    let top: f32 = (plains.split_whitespace())
+        .find_map(|word| word.split_once(',').and_then(|(_, y)| y.parse().ok()))
+        .unwrap_or_else(|| panic!("{plains}"));
+    assert!(top >= SIZE.height, "{plains}");
     assert!(tree.contains("player \"You 20\""), "{tree}");
     // Once it has stopped, the hand stands in the row and the decision is offered.
     let mut page = at("opening-bottom", "prompt:1");

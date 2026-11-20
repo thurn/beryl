@@ -149,6 +149,10 @@ impl Table {
     pub(super) fn pressable(&self, slot: usize, place: crate::frame::Place, waiting: bool) -> bool {
         match self.held {
             _ if self.covered() => false,
+            // The hand held below the window lies under the opening, whose overlay takes the
+            // pointer, as the web's does; the cards the opening shows in its boxes still take
+            // presses.
+            _ if self.hand_away() && is_your_hand(place) && !self.in_box(slot) => false,
             Some(_) => self.in_tray(slot),
             None => !waiting && !self.prompt_covers && crate::pointer::takes_pointer(place),
         }
@@ -419,4 +423,16 @@ impl Table {
             builder.draw(Band::LayerCards, draw);
         }
     }
+}
+
+/// Whether `place` is the viewer's hand.
+fn is_your_hand(place: crate::frame::Place) -> bool {
+    matches!(
+        place,
+        crate::frame::Place::Card {
+            zone: beryl_protocol::protocol::ZoneName::Hand,
+            side: beryl_protocol::protocol::Side::You,
+            ..
+        }
+    )
 }

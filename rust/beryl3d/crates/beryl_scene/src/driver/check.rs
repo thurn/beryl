@@ -104,6 +104,9 @@ struct Judged {
     subject: Option<Subject>,
     /// Whether any frame was evaluated while it played.
     evaluated: bool,
+    /// Whether every frame evaluated while it played drew the opening's screen
+    /// (`steps::opening_up`), which shows what the step does in its place.
+    under_opening: bool,
 }
 
 impl Page {
@@ -184,6 +187,7 @@ impl Page {
                         .subject
                         .expect("only steps with a subject are judged");
                     step.evaluated |= t <= step.to;
+                    step.under_opening &= t > step.to || steps::opening_up(frame);
                     if let Some(sample) = sample(frame, slot, t, size) {
                         step.samples.push(sample);
                         step.subject.get_or_insert_with(|| subject(frame, slot));
@@ -204,7 +208,7 @@ impl Page {
         for (found, elements) in found.iter().zip(named) {
             faults.push(fault(found, elements));
         }
-        for step in judged.iter().filter(|step| step.evaluated) {
+        for step in (judged.iter()).filter(|step| step.evaluated && !step.under_opening) {
             tally.step_shown(step.samples.len());
             let record = &history[step.script].steps[step.step];
             if let Some(message) = steps::step_shown(record, step.from, step.to, &step.samples) {
@@ -512,6 +516,7 @@ fn judged(history: &[ScriptRecord], camera: &Camera) -> Vec<Judged> {
                 to,
                 until: to + step_nanoseconds(),
                 samples: Vec::new(),
+                under_opening: true,
                 subject: None,
                 evaluated: false,
             });

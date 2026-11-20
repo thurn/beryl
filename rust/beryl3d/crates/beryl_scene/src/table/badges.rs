@@ -305,6 +305,7 @@ impl Name<'_> {
 
 /// Where a card's badges go: the card's pose, the band they are drawn in and their opacity,
 /// and whether the table takes the phone layout, whose cards wear no copy label.
+#[derive(Clone, Copy)]
 pub(super) struct On {
     pub pose: Pose,
     pub band: Band,

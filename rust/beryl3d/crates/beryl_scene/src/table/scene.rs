@@ -39,6 +39,12 @@ mod scroll;
 pub(crate) use motion::PileCount;
 pub use motion::{Motion, Turn};
 
+/// How far below the window's bottom edge the viewer's hand waits while it is held away, in
+/// points of the web's stage (`HAND_AWAY` in `ui/src/game/handLayout.ts`).
+const HAND_AWAY: f32 = crate::data::space::shown::opening::HAND_AWAY;
+/// The height of the web's desktop stage, in points (`STAGE` in `ui/src/game/perspective.ts`).
+const WEB_STAGE_HEIGHT: f32 = 900.0;
+
 /// How large the table cloth is, in millimetres: past every edge of any window.
 const CLOTH: f32 = 4000.0;
 /// The cloth lies this far below the cards lying on the table, so that the two never share a
@@ -136,6 +142,9 @@ pub struct Table {
     /// Whether the open prompt lists what it asks about over the table, which then takes no
     /// press (`Table::cover_for_prompt`).
     pub(super) prompt_covers: bool,
+    /// Whether the viewer's hand waits below the window, as it does while the opening shows the
+    /// hand itself (`Table::set_hand_away`).
+    hand_away: bool,
 }
 
 /// How many objects a table has placed since its count was last taken, for `Work::placed`.
@@ -183,6 +192,7 @@ impl Table {
             tray: TrayMotion::new(),
             shown: Shown::default(),
             prompt_covers: false,
+            hand_away: false,
         }
     }
 
@@ -230,11 +240,31 @@ impl Table {
     /// recomputes every resting place.
     pub fn resize(&mut self, window: Window, view: Option<&PlayerView>) {
         self.layout = self.base.for_window(window);
+        if self.hand_away && self.layout.phone.is_none() {
+            // The web lays the desktop's hand out on a stage 900 points tall, whose height is
+            // the whole of normalized device coordinates' 2, so its `HAND_AWAY` points lower
+            // the fan's edge by that share of 2.
+            self.layout.hand.edge -= 2.0 * HAND_AWAY / WEB_STAGE_HEIGHT;
+        }
         self.camera = self.layout.fit(window);
         self.row_fits = RowFits::new(&self.layout, &self.camera);
         if let Some(view) = view {
             self.apply(view);
         }
+    }
+
+    /// Whether the viewer's hand waits below the window (`set_hand_away`).
+    #[must_use]
+    pub fn hand_away(&self) -> bool {
+        self.hand_away
+    }
+
+    /// Holds the viewer's hand below the window on the desktop layout, or brings it back to
+    /// the window's bottom edge, as the web's `handPlacements` holds it `away` while the opening
+    /// shows the hand itself (`ui/src/game/handLayout.ts`), so that it is not seen twice and is
+    /// dealt out of sight. Takes effect at the next `resize`.
+    pub(crate) fn set_hand_away(&mut self, away: bool) {
+        self.hand_away = away;
     }
 
     /// Where the object in `slot` rests in the view the table shows, if it shows it.
@@ -360,9 +390,16 @@ impl Table {
             .max(self.objects.cards.len());
         for slot in 0..slots {
             builder.visit();
-            let Some((mut object, drawn, mut under_way)) =
-                self.object_at(slot, view, motion, builder)
-            else {
+            // A box shows the card as the table holds it at rest, in the view the table shows,
+            // which the screen laying the box out was drawn from: while a script plays, the
+            // card it moves may already have left for another zone, or its slot hold another
+            // card, as a mulligan's new hand reuses the old hand's slots.
+            let boxed = (self.in_box(slot))
+                .then(|| self.objects.cards.get(slot).copied().flatten())
+                .flatten();
+            let Some((mut object, mut drawn, mut under_way)) = (self
+                .object_at(slot, view, motion, builder))
+            .or_else(|| boxed.map(|resting| (resting, view, false))) else {
                 self.fights.forget(slot);
                 continue;
             };
@@ -370,6 +407,13 @@ impl Table {
             // or out of a prompt's tray.
             under_way = under_way || self.slide_look(slot, &mut object, dress.now);
             under_way = under_way || self.tray_look(slot, &mut object, dress.now);
+            // A card a box shows takes no effect there: its effects play where the table holds
+            // it, as the web's opening and viewer draw their own copy of the card while the
+            // stage's card plays the script (`write_card`).
+            let held_at = boxed.map(|_| object.pose);
+            if let Some(resting) = boxed {
+                (object, drawn) = (resting, view);
+            }
             under_way = self.shown_look(slot, &mut object, dress.now) || under_way;
             if !object.visible {
                 self.fights.forget(slot);
@@ -382,7 +426,7 @@ impl Table {
             });
             self.write_card(
                 slot,
-                (&object, drawn, (under_way, paused)),
+                (&object, drawn, (under_way, paused), held_at),
                 (view, faces),
                 (back, dress, self.handed_waiting(motion)),
                 builder,
@@ -501,7 +545,12 @@ impl Table {
     fn write_card(
         &self,
         slot: usize,
-        (object, view, (under_way, paused)): (&SceneObject, &PlayerView, (bool, bool)),
+        (object, view, (under_way, paused), held_at): (
+            &SceneObject,
+            &PlayerView,
+            (bool, bool),
+            Option<Pose>,
+        ),
         (shown_view, faces): (&PlayerView, &Faces),
         (back, dress, waiting): (u16, &Dress<'_>, bool),
         builder: &mut FrameBuilder,
@@ -564,10 +613,18 @@ impl Table {
                     face_of(faces, &shown_view.objects[resting.view_index as usize])
                 })
         };
-        effects::card::look_with_face(dress.effects, on, dress.now, earlier_face, &mut look);
+        // A card shown in a box (`held_at`) is drawn there whole, and its effects at the place
+        // the table holds it.
+        let effects_on_card = if held_at.is_some() {
+            &[][..]
+        } else {
+            dress.effects
+        };
+        effects::card::look_with_face(effects_on_card, on, dress.now, earlier_face, &mut look);
         light::marks::look(dress.lit, on, dress.now, &mut look);
         pointer::look(dress.pointer, slot, (dress.now, &self.camera), &mut look);
-        effects::card::write(dress.effects, on, dress.now, &look, builder);
+        let held = held_at.map_or(look, |pose| Look { pose, ..look });
+        effects::card::write(dress.effects, on, dress.now, &held, builder);
         if shown.zone == ZoneName::Battlefield {
             own::write((slot, shown), &look, &self.fights, dress.now, builder);
         } else {
@@ -589,7 +646,22 @@ impl Table {
         if let Some(really) = shown.really.as_deref() {
             builder.really(at, really);
         }
-        let on = badges::On {
+        let on = self.badges_on(&look, under_way);
+        let note = (dress.badges).write((shown, listed, object.copies), &on, builder);
+        if let Some(note) = note {
+            builder.note(at, note);
+        }
+        // A hand card's cost stands over the card where the table holds it, not over its box:
+        // the web's opening draws its copies of the hand without costs.
+        let cost = (shown, listed, at, object.place);
+        let held = held_at.map_or(on, |pose| badges::On { pose, ..on });
+        (dress.badges).write_cost(cost, (&held, &self.camera), builder);
+    }
+
+    /// Where the badges of a card drawn as `look` go, raised over the table's marks while it
+    /// moves (`under_way`).
+    fn badges_on(&self, look: &Look, under_way: bool) -> badges::On {
+        badges::On {
             pose: look.pose,
             band: if under_way {
                 Band::RaisedMarks
@@ -598,13 +670,7 @@ impl Table {
             },
             opacity: look.pose.opacity,
             phone: self.camera.window.phone(),
-        };
-        let note = (dress.badges).write((shown, listed, object.copies), &on, builder);
-        if let Some(note) = note {
-            builder.note(at, note);
         }
-        let cost = (shown, listed, at, object.place);
-        dress.badges.write_cost(cost, (&on, &self.camera), builder);
     }
 
     /// Writes the resolved element and the draw record of a card named `name` with this `id`

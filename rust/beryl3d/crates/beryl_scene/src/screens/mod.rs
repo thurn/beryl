@@ -112,6 +112,11 @@ pub struct ScreenIn<'a> {
     pub window: Window,
     /// The latest view of the game, if one has started.
     pub view: Option<&'a PlayerView>,
+    /// The latest view whose script has played out, which the table shows at rest. The web
+    /// interface draws the screen around its table from this view (`Playback.update` in
+    /// `ui/src/stage/playback.ts`), so a screen that must keep in step with the table, as the
+    /// opening does while the hands are dealt and mulliganed, reads it rather than `view`.
+    pub played: Option<&'a PlayerView>,
     /// The open prompt, if any.
     pub prompt: Option<&'a PromptView>,
     pub settings: &'a Settings,

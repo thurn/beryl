@@ -18,7 +18,7 @@
     },
     "The kept opening hand": {
       "recording": "opening-keep",
-      "at": "2300ms",
+      "at": "2700ms",
       "still": false,
       "shows": "card \"Plains\" #33 hand.yours 405,735 209x273 interactive covered"
     },

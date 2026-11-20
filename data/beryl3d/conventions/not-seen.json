@@ -96,10 +96,10 @@
       "shows": "card hand.theirs face-down moving"
     },
     "A mulligan's hand": {
-      "recording": "greedy-turn-9",
-      "at": "step:4.1.0",
+      "recording": "verbs-opening-theirs",
+      "at": "step:4.0.7",
       "still": false,
-      "shows": "card library.yours moving faded(25%)"
+      "shows": "card library.theirs face-down moving covered(4%) faded(25%)"
     },
     "Milled cards": {
       "recording": "jace-wielder-of-mysteries/1-mills-the-target-player-two-then-draws",

@@ -321,6 +321,19 @@ pub fn card_of(frame: &Frame, slot: usize) -> Option<u32> {
         .and_then(|index| u32::try_from(index).ok())
 }
 
+/// Whether `frame` draws the opening's screen (`screens::opening::SCREEN_NAME`). A step that
+/// plays wholly while it does is not judged by "every step shown": the opening shows the hands
+/// dealt, the mulligans and the cards put back, over a table that plays them beneath it, as the
+/// web interface's stage audit counts every step under its opening as shown (`seen` in
+/// `ui/scripts/stage-audit.mjs`).
+#[must_use]
+pub fn opening_up(frame: &Frame) -> bool {
+    (frame.resolved.iter()).any(|element| {
+        element.role == Role::Region
+            && frame.name(element.name) == crate::screens::opening::SCREEN_NAME
+    })
+}
+
 /// The scene object in `slot` as `frame`, drawn at `t` in a window of `size`, shows it.
 #[must_use]
 pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> {
@@ -348,7 +361,13 @@ pub fn sample(frame: &Frame, slot: usize, t: u64, size: Size) -> Option<Sample> 
                 && top.opacity > audit::TRANSPARENT
                 && frame.name(top.name) == frame.name(element.name)
         });
-    let hidden = if !inside {
+    // While the opening's screen is up, it shows the hands dealt, the mulligans and the cards
+    // put back, over a table that plays them beneath it or holds its hand below the window, so
+    // every card counts as seen, as the web interface's stage audit counts it (`seen` in
+    // `ui/scripts/stage-audit.mjs`).
+    let hidden = if opening_up(frame) {
+        None
+    } else if !inside {
         Some("outside the window")
     } else if element.opacity <= audit::TRANSPARENT {
         Some("transparent")

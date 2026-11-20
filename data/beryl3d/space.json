@@ -1052,6 +1052,7 @@
     "depth": 280,
     "opening": {
       "flip_ms": 1500,
+    "hand_away": 420,
       "kept_ms": 130,
       "cross_ms": 250,
       "shift_ms": 170

@@ -359,11 +359,18 @@ impl Client {
         }
     }
 
-    /// Lays out again, for a window of a new size, the counts each row of cards shows and the
-    /// life totals, whose type depends on the layout.
+    /// Lays out again, for a window of a new size or a table placed again (`Show::resize`), the
+    /// counts each row of cards shows, the life totals, whose type depends on the layout, and
+    /// the notices of the scripts to come: a script that waited to be compiled is compiled
+    /// whole as the table is placed again, and its notices are laid out only now.
     pub(super) fn prepare_resized(&mut self) {
         (self.row_counts).prepare(&mut self.layer, self.show.coming_rows());
         self.prepare_counts();
+        NoticeFloats::prepare(
+            &mut self.layer,
+            self.show.coming_notices(),
+            self.show.notices(),
+        );
     }
 
     /// Lays out every life total and pool the scripts to come will show, so that a frame lays

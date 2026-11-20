@@ -43,6 +43,10 @@ use crate::text::TypeStyle;
 use crate::tokens::{color, size, type_style};
 use crate::widgets::{button, primary};
 
+/// The name of the element that holds the whole opening, its backdrop and its group, which
+/// "every step shown" looks for (`agent::steps::sample`).
+pub const SCREEN_NAME: &str = "opening screen";
+
 /// The starting hand size ([CR 103.5]): "Each player draws a number of cards equal to their
 /// starting hand size, which is normally seven."
 ///
@@ -66,6 +70,13 @@ pub(crate) fn in_opening(view: &PlayerView) -> bool {
         )
 }
 
+/// The view the opening shows: the latest whose script has played out, while it is in the
+/// opening. The web's `Opening` is drawn from that view, so that its title and hand change only
+/// as the table finishes playing the deal, a mulligan or the new hand, never ahead of it.
+fn opening_view<'a>(input: &ScreenIn<'a>) -> Option<&'a PlayerView> {
+    input.played.filter(|view| in_opening(view))
+}
+
 /// Whether the opening shows the open prompt's buttons itself, side by side under the title,
 /// instead of the prompt bar: play or draw, asked before anyone has started, on the desktop
 /// layout (`choosingStart` in `ui/src/screens/Opening.tsx`). While it does, the game screen
@@ -74,9 +85,10 @@ pub(crate) fn in_opening(view: &PlayerView) -> bool {
 pub(crate) fn choosing_start(input: &ScreenIn) -> bool {
     !super::phone(input)
         && !input.spinning
-        && input
-            .view
-            .is_some_and(|view| in_opening(view) && view.turn.starting.is_none())
+        && opening_view(input).is_some_and(|view| {
+            view.turn.starting.is_none()
+                && input.view.is_some_and(|latest| std::ptr::eq(latest, view))
+        })
         && input
             .prompt
             .is_some_and(|prompt| !prompt.buttons.is_empty())
@@ -85,18 +97,21 @@ pub(crate) fn choosing_start(input: &ScreenIn) -> bool {
 /// Whether the game screen shows the opening.
 #[must_use]
 pub fn shown(input: &ScreenIn) -> bool {
-    input.view.is_some_and(in_opening)
+    opening_view(input).is_some()
 }
 
 /// What the game screen shows in the opening, or none once it is over.
 #[must_use]
 pub fn opening(input: &ScreenIn) -> Option<Element> {
-    let view = input.view.filter(|view| in_opening(view))?;
+    let view = opening_view(input)?;
     let you = &view.players.you;
     // While the coin spins, the opening does not show who starts, as the web's `Opening` holds
     // it back; the client offers no decision meanwhile.
     let starting = view.turn.starting.filter(|_| !input.spinning);
-    let prompt = input.prompt;
+    // The open prompt belongs to the latest view, so while scripts before it still play the
+    // opening offers no decision, as the web's offers none until its view has played out.
+    let caught_up = input.view.is_some_and(|latest| std::ptr::eq(latest, view));
+    let prompt = input.prompt.filter(|_| caught_up);
     let picking = prompt.filter(|prompt| prompt.is(Purpose::PutOnBottom));
     let hand: Vec<ObjectId> = (view.objects.iter())
         .filter(|object| object.zone == ZoneName::Hand && object.owner == Side::You)
@@ -271,7 +286,7 @@ pub(crate) fn present(shown: &Presentation, input: &ScreenIn) -> Element {
     let top = Vec2::new(input.window.size.width / 2.0, sizes.top);
     screen.anchor = Some(Anchor::Point(top, Vec2::new(0.5, 0.0)));
     row()
-        .name("opening screen")
+        .name(SCREEN_NAME)
         .passes(passes)
         // The opening's backdrop is a gradient that leaves the opponent's side of the table
         // clear, in place of the backdrop's flat color.

@@ -48,6 +48,9 @@ pub(super) struct Viewing {
     laid_in: Option<Window>,
     /// Where the opening's coin flip stands.
     coin: Coin,
+    /// How many views the table had shown at rest when the screen was last checked for a
+    /// script's end (`Show::views_shown`).
+    views_shown: usize,
 }
 
 /// Where the opening's coin flip stands: no opening has begun; the coin spins until a time in
@@ -63,8 +66,8 @@ enum Coin {
 }
 
 impl Viewing {
-    /// Notes whether `view`, the game screen's latest view if the game screen is shown, is in
-    /// its opening. As the opening begins after the opponent won the flip and before anyone
+    /// Notes whether `view`, the latest view whose script has played out if the game screen is
+    /// shown, is in its opening. As the opening begins after the opponent won the flip and before anyone
     /// has declared, its coin spins for `FLIP_MS` from `now`, however soon they chose, as the
     /// web's `Opening` spins it from when it first shows.
     pub(super) fn spin(&mut self, view: Option<&PlayerView>, now: u64) {
@@ -215,11 +218,14 @@ impl Client {
             cross: (ns(opening::CROSS_MS), GLIDE),
             shift: (ns(opening::SHIFT_MS), GLIDE),
         });
-        let moves = Moves {
-            into: timing(OwnStep::TrayLifts { sorted: false }),
-            back,
-            relaid,
+        // A card the opening shows stands in its box at once, as the web's opening draws its own
+        // copy of each card in place rather than moving the table's card there.
+        let into = if self.viewing.opening {
+            (0, Curve::EASE_OUT)
+        } else {
+            timing(OwnStep::TrayLifts { sorted: false })
         };
+        let moves = Moves { into, back, relaid };
         // A pile's viewer covers the table, and so, on a manual table, do the guided start's
         // opening and the banner of a frozen table, whose cards take no press.
         let covered = (self.viewing.open.is_some()
@@ -245,12 +251,22 @@ impl Client {
     }
 
     /// What each frame does for the screen's own clock: once the opening's coin has stopped
-    /// spinning, shows who starts and the decision; and shows or hides the Revealed Cards pill
-    /// (`write_pill`).
+    /// spinning, shows who starts and the decision; as a script ends while the opening is or
+    /// will be shown, lays the opening out again for the view it played out; and shows or
+    /// hides the Revealed Cards pill (`write_pill`).
     pub(super) fn viewing_frame(&mut self, visible: bool) {
         if (self.viewing.spin_due()).is_some_and(|until| self.now >= until) {
             self.viewing.coin = Coin::Landed;
             self.show_screen();
+        }
+        let views_shown = self.show.views_shown();
+        if views_shown != self.viewing.views_shown {
+            self.viewing.views_shown = views_shown;
+            let played = self.show.shown().map(|update| &update.view);
+            let was_opening = self.viewing.opening || self.show.table().hand_away();
+            if was_opening || played.is_some_and(screens::opening::in_opening) {
+                self.show_screen();
+            }
         }
         self.write_pill(visible);
     }

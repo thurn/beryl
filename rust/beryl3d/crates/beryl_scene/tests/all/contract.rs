@@ -230,6 +230,7 @@ mod milestone_three {
             screen: Screen::Game,
             window: Window::default(),
             view: None,
+            played: None,
             prompt,
             settings,
             sheet: None,
