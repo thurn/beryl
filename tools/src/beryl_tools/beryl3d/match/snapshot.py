@@ -35,6 +35,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -86,12 +87,16 @@ class Shared:
 
     base: str
     env: dict[str, str]
+    # Held while a browser page is open, when the caller limits how many pages its snapshots
+    # open at once (`measured`'s `pages`); None for no limit beyond the machine's page slots.
+    pages: threading.Semaphore | None = None
 
 
 @contextmanager
-def shared() -> Iterator[Shared | None]:
+def shared(pages: int | None = None) -> Iterator[Shared | None]:
     """Builds both programs and serves ui/ for the duration, for many `ensure` calls; yields
-    None after printing why it could not."""
+    None after printing why it could not. With `pages`, the snapshots taken with it open at
+    most that many browser pages at once."""
     from .. import cli
 
     if cli.quick_build(B3D_BUILD) != 0 or cli.quick_build(RENDER_BUILD) != 0:
@@ -101,7 +106,8 @@ def shared() -> Iterator[Shared | None]:
     env = shots.browser_env()
     try:
         with shots.served_ui(env) as url:
-            yield Shared(url, env)
+            limit = None if pages is None else threading.BoundedSemaphore(pages)
+            yield Shared(url, env, limit)
     except shots.UiError as error:
         print(f"match: {error}", file=sys.stderr)
         yield None
@@ -219,7 +225,10 @@ def run_page(
         )
 
     try:
-        if serving is not None:
+        if serving is not None and serving.pages is not None:
+            with serving.pages:
+                done = dump(serving.base, serving.env)
+        elif serving is not None:
             done = dump(serving.base, serving.env)
         else:
             env = shots.browser_env()
@@ -547,12 +556,16 @@ def measured(
     fresh: bool,
     art: bool,
     measure: Callable[[Target, Path], R],
+    pages: int | None = None,
 ) -> Iterator[tuple[Target, R | None]]:
+    """`measure` run on the snapshot of each of `targets`, yielding each target with what it
+    measured, or None where the snapshot failed, in the order they finish. With `pages`, at
+    most that many browser pages are open at once."""
     # Each target's snapshot runs three programs and a browser page, so the targets run on as
     # many threads as the machine's cores; the pages also wait for the machine's browser page
     # slots (ui/scripts/slots.mjs).
     workers = max(1, int(os.environ.get("IGNITE_CORES") or os.cpu_count() or 1))
-    with shared() as given:
+    with shared(pages) as given:
         if given is None:
             return
         serving: Shared = given

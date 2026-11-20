@@ -151,6 +151,12 @@ pub(super) fn info(options: &Options) -> Result<Printed, Usage> {
     );
     if options.json {
         let rows: Vec<Value> = listed.into_iter().map(|row| row.value).collect();
+        // The interface tests' check times (`Page::check_times`), rounded up to whole
+        // milliseconds so that `--at <n>ms` lands on or just after each one. `just b3d match
+        // census` samples its moments from them.
+        let checks: Vec<u64> = (page.check_times().into_iter())
+            .map(|at| at.div_ceil(1_000_000))
+            .collect();
         let value = json!({
             "command": options.command_line(),
             "recording": options.name(),
@@ -159,6 +165,7 @@ pub(super) fn info(options: &Options) -> Result<Printed, Usage> {
             "steps": steps.len(),
             "end_ms": milliseconds(end),
             "moments": rows,
+            "check_times_ms": checks,
         });
         return Ok(Printed::text(format!("{value}\n")));
     }

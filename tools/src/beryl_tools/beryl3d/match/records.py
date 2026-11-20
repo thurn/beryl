@@ -5,6 +5,9 @@ interface's look"):
     {"target", "scale", "elements": [{"key", "role", "name", "object", "box", "z", "parent",
                                       "style", "text"}]}
 
+Beryl 3D's records also hold `place`, where on the table the element lies (`hand.yours`,
+`stack`), or empty for the flat layer; the web's do not.
+
 `box` is `[x, y, width, height]` in points, `z` the paint order, `parent` the index of the
 parent element or null, `style` CSS property names to normalized values, and `text` a list of
 lines `{"string", "family", "size", "weight", "color", "baseline", "box"}`. A color is

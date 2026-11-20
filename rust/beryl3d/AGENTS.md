@@ -164,6 +164,15 @@ through the client with no window or GPU (the `b3d` skill has the details):
   `data/beryl3d/match/web/<target>.json`. The `b3d-web-match` check holds the
   record counts without a browser; `b3d-web-drift` files a ticket when the live
   web interface moves. A prefix of a test's name scores those tests instead.
+- `just b3d match census` measures the moments listed in
+  `data/beryl3d/match/census.json` (up to eight of each recording's check times)
+  as `boxes`, `styles` and `pixels` do, gives each difference to a screen area
+  (hand, battlefield, stack, prompt, game log, piles, life orbs, steps, card
+  face, cloth, screens) by its Beryl 3D element, and ranks the areas, each with
+  its source directory and its three worst moments. `--areas`,
+  `--recordings <prefix>` and `--json` narrow and format the report, written to
+  `$BERYL_CACHE/b3d/match/census/<digest>/`; `--choose` chooses the moments
+  again.
 - `just b3d match samples [prefix]` is the conformance suite for CSS effects:
   each sample of `data/beryl3d/match/samples.json` is one element with the web
   interface's CSS (shadows, gradients, drop shadows, filters, masks, borders,
@@ -276,6 +285,12 @@ project, and selects the main lanes.
   `just b3d match snapshot` gives the web's element records. The first selector
   an element matches wins; an element matching none takes its ARIA role, then
   its tag's.
+
+- `data/beryl3d/match/census.json`: the moments `just b3d match census`
+  measures, in milliseconds, by recording (every built screen and every UI
+  fixture two agents play from a seed), one recording to a line.
+  `just b3d match census --choose [--recordings <prefix>]` rewrites them from
+  the check times `just b3d info --json` lists.
 
 - `data/beryl3d/match/samples.json`: the conformance samples of
   `just b3d match samples`, each `{"name", "about", "box", "page", "style"}`

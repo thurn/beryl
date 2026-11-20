@@ -1,7 +1,7 @@
 //! `tree --records`: a frame's elements as the element records that `just b3d match` compares
 //! with the web interface's (docs/beryl-3d.md, "Matching the web interface's look"). Each
-//! record is `{key, role, name, object, box, z, parent, style, text}`, with `style` in CSS's
-//! property names and values normalized as the web side's dump script writes them
+//! record is `{key, role, name, object, place, box, z, parent, style, text}`, with `style`
+//! in CSS's property names and values normalized as the web side's dump script writes them
 //! (`tools/src/beryl_tools/beryl3d/match/dump.mjs`): colors as `[r, g, b, a]` with the alpha
 //! from 0 to 1, lengths in points, shadows as `{inset, x, y, blur, spread, color}` (`box-shadow`
 //! and each `drop-shadow` of `filter`), gradients as `{kind, repeating, shape, stops}`
@@ -9,7 +9,7 @@
 //! `"none"` for what Beryl 3D's `Style` cannot say yet (transforms).
 
 use beryl_scene::agent::hit::bounds;
-use beryl_scene::agent::tree::locator_of;
+use beryl_scene::agent::tree::{locator_of, place_word};
 use beryl_scene::element::{Extent, Filter, Gradient, Length, Shadow, Shape};
 use beryl_scene::frame::{ElementLook, Frame, LookPaint, LookShadow, Place, REVEALED_FACE, Role};
 use serde_json::{Map, Value, json};
@@ -277,6 +277,10 @@ pub fn records(frame: &Frame) -> Vec<Value> {
                 "role": element.role.word(),
                 "name": frame.name(element.name),
                 "object": object,
+                // Where on the table it lies, as the tree writes it (`battlefield.yours.lands`,
+                // `stack`), or empty for the flat layer. `just b3d match census` reads it to
+                // tell a card in hand from one on the battlefield or the stack.
+                "place": place_word(element.place),
                 "box": [round(rect.x), round(rect.y), round(rect.width), round(rect.height)],
                 "z": z[at],
                 "parent": (element.parent != u32::MAX).then_some(element.parent),

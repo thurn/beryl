@@ -188,28 +188,34 @@ gives another, and `just b3d test` plays its 1600x900 window at scale 2.
 
 ## Matching the web
 
-To bring a screen of Beryl 3D closer to the web interface's look, work one
-target at a time, largest differences first, and land each improvement as you
-go:
+To bring Beryl 3D closer to the web interface's look, work one screen area at a
+time, largest differences first, and land each improvement as you go:
 
-1. **Pick the worst target.** `just b3d match score` prints every reference
-   target's counts against `data/beryl3d/web-match.json`. Start from the target
-   with the most `boxes`, `styles` or `pixels` in the area you can change.
-2. **Fix boxes.** `just b3d match boxes <target> --at end` lists elements laid
+1. **Pick the worst area.** `just b3d match census` measures a fixed list of
+   moments across many recordings (`data/beryl3d/match/census.json`) and ranks
+   screen areas (hand, battlefield, stack, prompt, game log, piles, life orbs,
+   steps, card face, cloth, screens) by differing pixels, with their box and
+   style differences, the web values `Style` cannot express, the unpaired
+   elements and the Beryl 3D source each area lives in. Each area lists its
+   three worst moments with the `just b3d match pixels` command that shows
+   each; take one of those as your target. `--areas hand,prompt` and
+   `--recordings <prefix>` narrow a run, and `--json` prints the report.
+   `just b3d match score` then shows which reference targets the change moves.
+2. **Fix boxes.** `just b3d match boxes <target> --at <moment>` lists elements laid
    out in a different place, at a different size or with text wrapped
    differently, then the elements only one side has. A whole row of cards
    offset by one card width is an order difference, not a placement one: look
    at how each client orders that zone before moving anything. An element only
    the web has (such as a button) is a missing feature, not a style.
-3. **Fix style values.** `just b3d match styles <target> --at end` lists each
+3. **Fix style values.** `just b3d match styles <target> --at <moment>` lists each
    paired element's property that differs, with the web's value and Beryl 3D's.
    Change the Beryl 3D `Style` or the design token it reads
    (`data/design-tokens.json`), never the web's CSS.
-4. **Teach `Style` what it lacks.** `just b3d match gaps <target> --at end`
+4. **Teach `Style` what it lacks.** `just b3d match gaps <target> --at <moment>`
    ranks the web's values `Style` cannot express by screen area. Tune a new
    effect against `just b3d match samples` before replaying a recording, and add
    the shape to `data/beryl3d/match/supported.json`.
-5. **Fix pixel regions, worst first.** `just b3d match pixels <target> --at end`
+5. **Fix pixel regions, worst first.** `just b3d match pixels <target> --at <moment>`
    names the element answerable for each region and writes crops of the worst
    ten. Read the crops: a dark ring round the screen in the difference picture
    is the table's background, a block on one side only is an element the other
@@ -219,9 +225,11 @@ go:
 7. **Check one element alone.** `--only '<locator>'` on `snapshot` and `pixels`
    draws one element and its web pair on black, so its own error shows apart
    from what lies behind it.
-8. **Lower the ratchet and land.** `just b3d match score --update` lowers the
-   entries of the targets that improved; commit it with the change and land
-   with `ignite land`.
+8. **Measure again, lower the ratchet and land.** Run the census over the
+   recordings you touched (`--recordings <prefix>`) to see the area's totals
+   fall. `just b3d match score --update` lowers the entries of the reference
+   targets that improved; commit it with the change and land with
+   `ignite land`.
 
 A difference the loop cannot close in one change (a missing feature, a
 placement rule, a new shader effect) gets its own ticket naming the files its

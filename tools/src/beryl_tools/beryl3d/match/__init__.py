@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from ..command import Command
-from . import boxes, gaps, motion, pixels, samples, score, snapshot, styles
+from . import boxes, census, gaps, motion, pixels, samples, score, snapshot, styles
 
 SNAPSHOT = Command(
     "snapshot",
@@ -145,9 +145,29 @@ SCORE = Command(
     score.score_arguments,
 )
 
+CENSUS = Command(
+    "census",
+    "the differences from the web interface over a fixed list of moments of many recordings, "
+    "by screen area, largest first",
+    (
+        ("just b3d match census", "every moment of data/beryl3d/match/census.json"),
+        (
+            "just b3d match census --areas hand,prompt --recordings combat",
+            "two areas, over the recordings whose names start with combat",
+        ),
+        (
+            "just b3d match census --choose",
+            "choose the moments again from the recordings' check times",
+        ),
+    ),
+    census.run,
+    census.census_arguments,
+)
+
 # Each subcommand, in the order `just b3d match --help` lists them. A module adds one by writing
 # its `Command` and adding it here.
 SUBCOMMANDS: tuple[Command, ...] = (
+    CENSUS,
     SNAPSHOT,
     BOXES,
     PIXELS,

@@ -337,6 +337,8 @@ fn report(out: &mut String, dir: &Path, found: &Found<'_>) -> Result<(), Error> 
             "pixels": row.pixels(),
             "web_pixels": row.web_pixels,
             "b3d_pixels": row.b3d_pixels,
+            "b3d_bare": row.b3d_bare,
+            "web_bare": row.web_bare,
             "hint": row.hint(),
             "crop": crop.map(|path| path.display().to_string()),
         }));
