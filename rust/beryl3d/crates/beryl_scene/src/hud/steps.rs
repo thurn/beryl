@@ -212,31 +212,16 @@ fn step_shadow(here: bool) -> Vec<Shadow> {
     }
 }
 
-/// The icon at `at` in `side`'s rows.
-fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>) -> Element {
-    let stop = &STEP_STOPS[at];
-    let here = current.is_some_and(|step| {
-        stop.steps.contains(&step) || NEVER.iter().any(|&(never, s)| never == at && s == step)
-    });
-    let name = format!("{whose} {}", stop.label);
-    let on = stop.steps.iter().any(|&step| set.has(step.into()));
-    let (role, glyph, opacity) = match stop.steps.first() {
-        None => (Role::Icon, icons::STEPS_OUTLINED[at], STEP_FIXED),
-        Some(_) if on => (Role::Toggle, icons::STEPS[at], 1.0),
-        Some(_) => (Role::Toggle, icons::STEPS_OUTLINED[at], STEP_OFF),
-    };
-    let mut element = Element::new(role)
-        .name(&name)
+/// The glyph of a step icon, an element of its own as the web's `.step-icon` svg is: it carries
+/// the color, the fade and the drop shadows, which the `.step-toggle` button around it does not.
+fn glyph_element(name: &str, glyph: icons::IconId, color: [u8; 4], opacity: f32, here: bool) -> Element {
+    let mut element = Element::new(Role::Icon)
+        .name(name)
         .width(size::STEP)
         .height(size::STEP)
-        .color(if here {
-            color::STEP_CURRENT
-        } else {
-            color::STEP
-        })
-        .opacity(if here { 1.0 } else { opacity })
-        .drop_shadow(step_shadow(here))
-        .selected(on);
+        .color(color)
+        .opacity(opacity)
+        .drop_shadow(step_shadow(here));
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -244,42 +229,69 @@ fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>)
     )]
     let side_points = size::STEP as u16;
     element.shows = Some(Shown::Icon(glyph, side_points));
-    if let Some(&step) = stop.steps.last() {
-        element = element.on_press(Press::Stop {
+    element
+}
+
+/// The icon at `at` in `side`'s rows. A step that can stop is a toggle holding its glyph, as the
+/// web's `.step-toggle` button holds its `.step-icon`; one that never stops is the glyph alone.
+fn icon(at: usize, whose: &str, side: Side, set: StepSet, current: Option<Step>) -> Element {
+    let stop = &STEP_STOPS[at];
+    let here = current.is_some_and(|step| {
+        stop.steps.contains(&step) || NEVER.iter().any(|&(never, s)| never == at && s == step)
+    });
+    let name = format!("{whose} {}", stop.label);
+    let on = stop.steps.iter().any(|&step| set.has(step.into()));
+    let (glyph, opacity) = match stop.steps.first() {
+        None => (icons::STEPS_OUTLINED[at], STEP_FIXED),
+        Some(_) if on => (icons::STEPS[at], 1.0),
+        Some(_) => (icons::STEPS_OUTLINED[at], STEP_OFF),
+    };
+    let tint = if here {
+        color::STEP_CURRENT
+    } else {
+        color::STEP
+    };
+    let glyph = glyph_element(&name, glyph, tint, if here { 1.0 } else { opacity }, here);
+    let Some(&step) = stop.steps.last() else {
+        return glyph;
+    };
+    Element::new(Role::Toggle)
+        .name(&name)
+        .width(size::STEP)
+        .height(size::STEP)
+        .selected(on)
+        .on_press(Press::Stop {
             step,
             theirs: side == Side::Opponent,
-        });
-    }
-    element
+        })
+        .children([glyph])
 }
 
 /// The icon at `at` of a manual table's step track, lit if `here`, which a press sets the phase
 /// to; `active` says whether its rows are the active player's.
 fn track_icon(at: usize, whose: &str, active: bool, here: bool) -> Element {
     let name = format!("{whose} {}", STEP_STOPS[at].label);
-    let mut element = Element::new(Role::Button)
+    let tint = if here {
+        color::STEP_CURRENT
+    } else {
+        color::STEP
+    };
+    let glyph = glyph_element(
+        &name,
+        icons::STEPS_OUTLINED[at],
+        tint,
+        if here { 1.0 } else { STEP_OFF },
+        here,
+    );
+    Element::new(Role::Button)
         .name(&name)
         .width(size::STEP)
         .height(size::STEP)
-        .color(if here {
-            color::STEP_CURRENT
-        } else {
-            color::STEP
-        })
-        .opacity(if here { 1.0 } else { STEP_OFF })
-        .drop_shadow(step_shadow(here))
         .selected(here)
         .on_press(Press::Table(TablePress::Step {
             #[expect(clippy::cast_possible_truncation, reason = "twelve icons")]
             at: at as u8,
             active,
-        }));
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "an icon is a whole number of points"
-    )]
-    let side_points = size::STEP as u16;
-    element.shows = Some(Shown::Icon(icons::STEPS_OUTLINED[at], side_points));
-    element
+        }))
+        .children([glyph])
 }
