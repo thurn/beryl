@@ -212,13 +212,23 @@ pub enum Sent {
     Other,
 }
 
-/// A table action sent and not yet answered: what its answer asks of the client, and the card a
-/// click sent it from, which shakes if the table refuses it, as the web's `send` names the
-/// element that `shakeRefusal` shakes.
+/// The element a press sent a table action from, which shakes if the table refuses the action,
+/// as the web's `send` names the element that `shakeRefusal` shakes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pressed {
+    /// The card in this slot.
+    Card(ObjectId),
+    /// The flat-layer button a `TablePress` is the press of: a mana or player counter, or the
+    /// minus button beside one.
+    Button(TablePress),
+}
+
+/// A table action sent and not yet answered: what its answer asks of the client, and the
+/// element a press sent it from.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Pending {
     pub sent: Sent,
-    pub from: Option<ObjectId>,
+    pub from: Option<Pressed>,
 }
 
 impl TableState {

@@ -16,8 +16,9 @@ use crate::manual::menus::{self, Act};
 use crate::manual::tokens::TokenChoice;
 use crate::manual::viewers::{self, Look, ViewerControl};
 use crate::manual::{
-    self, Context, Pending, Sent, TablePress, TableState, Target, commands, pools,
+    self, Context, Pending, Pressed, Sent, TablePress, TableState, Target, commands, pools,
 };
+use crate::pointer::refusal::Shake;
 use crate::screens::Screen;
 use crate::widgets::BACK;
 use beryl_protocol::ipc::TableActReply;
@@ -42,9 +43,12 @@ pub(super) struct Manual {
     /// last frame, which then plays the refusal sound, as the web's `shakeRefusal` plays it for
     /// every refused table action and `useRefusal` for every refused click.
     pub(super) refused: bool,
-    /// The card whose click is sending table actions, while `table_click` runs its command,
-    /// which `send_table` records as where each action came from.
-    clicked: Option<ObjectId>,
+    /// The card or button whose press is sending table actions, while `table_click` or
+    /// `adjust_counter` sends them, which `send_table` records as where each action came from.
+    clicked: Option<Pressed>,
+    /// The flat-layer button shaking because the table refused the action its press sent, and
+    /// how far along the shake is (`Client::shake_button`).
+    shaking: Option<(TablePress, Shake)>,
 }
 
 impl std::ops::Deref for Manual {
@@ -117,15 +121,16 @@ impl Client {
             && let Some((_, Press::Table(TablePress::Counter { side, at }), _)) =
                 self.layer.press_at(pointer.position, self.open)
         {
-            self.adjust_counter(side, at, false);
+            self.adjust_counter(side, at, false, TablePress::Counter { side, at });
             return true;
         }
         self.open_table_menu_at(pointer.position)
     }
 
     /// Adds one to the counter at `at` of `side`'s row of mana and player counters, or removes
-    /// one unless `add` (`manual::pools`), unless the table is frozen.
-    pub(super) fn adjust_counter(&mut self, side: Side, at: u8, add: bool) {
+    /// one unless `add` (`manual::pools`), unless the table is frozen. `pressed` is the button
+    /// that was pressed, which shakes if the table refuses.
+    pub(super) fn adjust_counter(&mut self, side: Side, at: u8, add: bool, pressed: TablePress) {
         if self.table_frozen() {
             return;
         }
@@ -141,7 +146,9 @@ impl Client {
         let mut values = commands::Values::new();
         values.insert("text", name.into());
         let actions = commands::actions_with(command, Target::Life(side), view, &values);
+        self.manual.clicked = Some(Pressed::Button(pressed));
         self.send_table(actions);
+        self.manual.clicked = None;
     }
 
     /// A click on the card in `slot` on the table, one that picked nothing up, as the web's
@@ -179,7 +186,7 @@ impl Client {
             ZoneName::Library => ("library.draw", Target::Pile(side, ZoneName::Library)),
             _ => return true,
         };
-        self.manual.clicked = Some(slot);
+        self.manual.clicked = Some(Pressed::Card(slot));
         self.run_table_command(id, target);
         self.manual.clicked = None;
         true
@@ -382,11 +389,27 @@ impl Client {
             && (self.show.latest()).is_some_and(|update| crate::manual::link::frozen(&update.view))
     }
 
+    /// Advances the shake of a refused button to the frame at `now` and moves the flat layer's
+    /// elements that take its press. Returns whether it is still shaking.
+    pub(super) fn shake_button(&mut self, now: u64) -> bool {
+        let Some((button, shake)) = &mut self.manual.shaking else {
+            return false;
+        };
+        if !shake.advance(now) {
+            self.manual.shaking = None;
+            self.layer.shake(None);
+            return false;
+        }
+        self.layer
+            .shake(Some((&Press::Table(*button), shake.offset(now))));
+        true
+    }
+
     /// The table answered the oldest table action not yet answered: a token it made is the one
     /// Create another token makes again, and an undo or rewind it refused because later lines
     /// depend on it opens the log with those lines highlighted. Any refusal plays the refusal
     /// sound in the next frame, so that a key or a drop the table would not take does not
-    /// pass in silence, and shakes the card clicked to send the action, if one was, unless
+    /// pass in silence, and shakes the card or button clicked to send the action, if one was, unless
     /// the table froze since (`shakeRefusal` in `ui/src/stage/Refusal.tsx`).
     pub(super) fn take_table_reply(&mut self, reply: TableActReply) {
         let refused = matches!(reply, TableActReply::Refused(_));
@@ -396,8 +419,10 @@ impl Client {
         let Some(Pending { sent, from }) = self.manual.pending.pop_front() else {
             return;
         };
-        if let Some(slot) = from.filter(|_| refused && !self.table_frozen()) {
-            self.show.pointer_mut().refuse(usize::from(slot.0));
+        match from.filter(|_| refused && !self.table_frozen()) {
+            Some(Pressed::Card(slot)) => self.show.pointer_mut().refuse(usize::from(slot.0)),
+            Some(Pressed::Button(button)) => self.manual.shaking = Some((button, Shake::new())),
+            None => {}
         }
         match (sent, reply) {
             (Sent::Token(token), TableActReply::Ok { .. }) => {

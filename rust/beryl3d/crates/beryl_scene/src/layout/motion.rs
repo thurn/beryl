@@ -12,6 +12,7 @@ use glam::Vec2;
 
 use super::{Layer, Node};
 use crate::data::space::flat::transition::MS;
+use crate::element::Press;
 use crate::pose::Curve;
 
 /// A node's transition, from where and how opaque it was toward where its layout puts it and
@@ -81,6 +82,14 @@ impl Node {
 }
 
 impl Layer {
+    /// Shakes every element that takes `press` across the screen by `across` logical points
+    /// from the next frame on, or stops shaking with `None`, as the web's `shakeRefusal` moves
+    /// a refused button. It lays nothing out and allocates nothing, so the client calls it on
+    /// every frame of the shake.
+    pub fn shake(&mut self, shaken: Option<(&Press, f32)>) {
+        self.shaken = shaken.map(|(press, across)| (press.clone(), across));
+    }
+
     /// Stamps the transitions found since the last frame with `now`, and works out where every
     /// node of the screen stands and how opaque it is at `now`. Returns whether any transition
     /// is still under way, and whether one began at `now`. A tooltip whose wait is over shows

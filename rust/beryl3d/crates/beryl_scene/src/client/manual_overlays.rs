@@ -157,8 +157,8 @@ impl Client {
                 let id = crate::manual::turn::step_command(view, at, active);
                 self.run_table_command(id, crate::manual::Target::Table);
             }
-            TablePress::Counter { side, at } => self.adjust_counter(side, at, true),
-            TablePress::CounterRemove { side, at } => self.adjust_counter(side, at, false),
+            TablePress::Counter { side, at } => self.adjust_counter(side, at, true, press),
+            TablePress::CounterRemove { side, at } => self.adjust_counter(side, at, false, press),
             TablePress::ManaSheet(side) => {
                 self.manual.mana_sheet = side;
                 self.show_screen();

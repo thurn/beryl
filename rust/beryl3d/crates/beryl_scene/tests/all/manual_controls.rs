@@ -196,6 +196,66 @@ fn a_refused_click_shakes_the_card_clicked_and_an_accepted_one_does_not() {
 }
 
 #[test]
+fn a_refused_counter_press_shakes_that_button_and_an_accepted_one_does_not() {
+    use beryl_protocol::ipc::{TableActReply, TableRefusalReason, TableRefused};
+    use beryl_scene::command::Reply;
+    use beryl_scene::input::Input;
+
+    const MS: u64 = 1_000_000;
+    let view = table_view();
+    let (mut client, frame) = client_at_table(&view);
+    let blue = middle(&frame, Role::Button, "U counter: 0");
+    let green = middle(&frame, Role::Button, "G counter: 0");
+    let across = |client: &mut beryl_scene::Client, now: u64, name: &str| {
+        let frame = client.frame(now).clone();
+        middle(&frame, Role::Button, name).x
+    };
+    let click = |client: &mut beryl_scene::Client| {
+        client.handle(pointer(PointerPhase::Down, blue, Button::Primary));
+        client.handle(pointer(PointerPhase::Up, blue, Button::Primary));
+        client.frame(MS);
+        assert_eq!(acts(client).len(), 1, "the click adds blue mana");
+    };
+
+    click(&mut client);
+    client.handle(Input::Reply(Reply::TableAct(TableActReply::Refused(
+        TableRefused {
+            refused: TableRefusalReason::Permission,
+            blocked_by: None,
+        },
+    ))));
+    // The shake starts at the first frame after the reply.
+    assert!((across(&mut client, 10 * MS, "U counter: 0") - blue.x).abs() < 0.01);
+    let shaken: Vec<f32> = (1..12)
+        .map(|ms| across(&mut client, (10 + 10 * ms) * MS, "U counter: 0") - blue.x)
+        .collect();
+    assert!(
+        shaken.iter().any(|x| *x < -2.0) && shaken.iter().any(|x| *x > 1.0),
+        "the blue button shakes left and right: {shaken:?}"
+    );
+    assert!(
+        (across(&mut client, 300 * MS, "G counter: 0") - green.x).abs() < 0.01,
+        "the buttons beside it stay still"
+    );
+    assert!(
+        (across(&mut client, 400 * MS, "U counter: 0") - blue.x).abs() < 0.01,
+        "and it comes to rest where it was"
+    );
+
+    click(&mut client);
+    client.handle(Input::Reply(Reply::TableAct(TableActReply::Ok {
+        ok: true,
+    })));
+    let still: Vec<f32> = (0..12)
+        .map(|ms| across(&mut client, (500 + 10 * ms) * MS, "U counter: 0") - blue.x)
+        .collect();
+    assert!(
+        still.iter().all(|x| x.abs() < 0.01),
+        "an accepted press shakes nothing: {still:?}"
+    );
+}
+
+#[test]
 fn on_a_phone_the_mana_button_opens_a_sheet_that_adds_and_removes_mana() {
     let view = table_view();
     let (mut client, frame) = client_in(&view, 393.0, 759.0);

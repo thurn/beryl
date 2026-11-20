@@ -138,6 +138,9 @@ pub struct Layer {
     submenu: Option<ElementId>,
     /// The menu row the pointer is on, which it highlighted when it came onto it (`tip`).
     pointed: Option<ElementId>,
+    /// The press whose elements are shaken, and how far across the screen they are moved now, in
+    /// logical points (`Layer::shake`).
+    shaken: Option<(Press, f32)>,
     /// The tooltip the pointer is resting toward, if any (`tip`).
     tip: Option<tip::Resting>,
 }
@@ -179,6 +182,7 @@ impl Layer {
             animating: false,
             submenu: None,
             pointed: None,
+            shaken: None,
             tip: None,
         }
     }

@@ -16,7 +16,7 @@
 
 mod held;
 pub use held::Hold;
-mod refusal;
+pub(crate) mod refusal;
 
 pub mod rows;
 pub mod touch;
@@ -66,7 +66,7 @@ pub struct Pointer {
     /// as on the manual table, where the client finds the place it lands.
     drops_anywhere: bool,
     /// The card shaking because the manual table refused an action sent from it (`refuse`).
-    shake: Option<Shake>,
+    shake: Option<(usize, Shake)>,
 }
 
 /// One hand card easing from `from` to `to` (0 in the fan, 1 raised) since the time `since`.
@@ -233,26 +233,25 @@ impl Pointer {
         if let Some(grip) = self.grip.filter(|grip| grip.held) {
             self.lean.advance(grip.at, now);
         }
-        if let Some(shake) = &mut self.shake {
-            shake.since.get_or_insert(now);
-            if shake.done(now) {
-                self.shake = None;
-            }
+        if let Some((_, shake)) = &mut self.shake
+            && !shake.advance(now)
+        {
+            self.shake = None;
         }
     }
 
     /// Shakes the card in `slot`, from the next frame, because the manual table refused the
     /// action a click on it sent. A shake under way on another card stops.
     pub fn refuse(&mut self, slot: usize) {
-        self.shake = Some(Shake { slot, since: None });
+        self.shake = Some((slot, Shake::new()));
     }
 
     /// How far across the screen the card in `slot` is shaken at `now`, in logical points.
     #[must_use]
     pub fn shaken(&self, slot: usize, now: u64) -> f32 {
         self.shake
-            .filter(|shake| shake.slot == slot)
-            .map_or(0.0, |shake| shake.offset(now))
+            .filter(|(shaking, _)| *shaking == slot)
+            .map_or(0.0, |(_, shake)| shake.offset(now))
     }
 
     /// Where the card in `slot` is drawn at `now` by `camera` because of the pointer, if it is
@@ -302,7 +301,7 @@ impl Pointer {
         self.lifts.iter().any(|lift| !lift.done(now))
             || self.held().is_some()
             || self.fall.is_some_and(|fall| !fall.done(now))
-            || self.shake.is_some_and(|shake| !shake.done(now))
+            || self.shake.is_some_and(|(_, shake)| !shake.done(now))
     }
 
     /// Starts the hand card in `slot` easing toward `to` at `now`, from where it is then.

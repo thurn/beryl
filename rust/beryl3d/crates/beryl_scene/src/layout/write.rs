@@ -97,6 +97,17 @@ impl Layer {
         }
     }
 
+    /// How far a refused press shakes `node` across the screen (`Layer::shake`): every element
+    /// that takes that press moves, with what is under it.
+    fn shake_of(&self, node: &Node) -> Vec2 {
+        match &self.shaken {
+            Some((press, across)) if node.element.press.as_ref() == Some(press) => {
+                Vec2::new(*across, 0.0)
+            }
+            _ => Vec2::ZERO,
+        }
+    }
+
     /// Writes `node` and everything under it, moved so that its tree's top left corner stands
     /// at `look.point`, with `look`'s opacity, text color and clip. A node shown with
     /// `Display::None` is not written, and an anchored child is written at its own corner, or
@@ -131,6 +142,7 @@ impl Layer {
         } else {
             Vec2::ZERO
         };
+        let sink = sink + self.shake_of(node);
         let rect = moved(node.rect, look.point + node.offset() + sink);
         // A menu row is drawn highlighted while it has the focus or its submenu is open.
         let active = element.role == Role::MenuItem
