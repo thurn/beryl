@@ -68,7 +68,8 @@ fn first_daemon(root: &std::path::Path) -> std::process::Child {
 }
 
 fn scratch_home(name: &str) -> Home {
-    let root = ignite_core::test_files::temp_dir().join(format!("ignite-{name}-{}", std::process::id()));
+    let root =
+        ignite_core::test_files::temp_dir().join(format!("ignite-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     Home { root }
 }
@@ -154,7 +155,8 @@ fn a_missing_socket_means_starting_only_after_a_recent_start() {
 #[test]
 fn the_home_folder_is_private_to_its_user() {
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    let base = ignite_core::test_files::temp_dir().join(format!("ignite-home-mode-{}", std::process::id()));
+    let base = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-home-mode-{}", std::process::id()));
     let _ = fs::remove_dir_all(&base);
     let mode = |path: &std::path::Path| fs::metadata(path).unwrap().mode() & 0o777;
 

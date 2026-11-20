@@ -200,7 +200,8 @@ mod tests {
     }
 
     fn result(wall_s: f64, output: &str, name: &str) -> RunResult {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-units-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-units-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join(name);
         fs::write(&path, output).unwrap();

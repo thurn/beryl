@@ -214,7 +214,8 @@ mod tests {
     /// connection to the daemon's database: what one gate chose reaches the next.
     #[test]
     fn a_gate_in_another_process_finds_what_the_last_gate_chose() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-spent-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-spent-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("daemon.db");
         let _ = std::fs::remove_file(&path);

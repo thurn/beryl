@@ -37,7 +37,8 @@ fn a_usage_error_exits_nonzero() {
 /// A git repository in the temporary directory with an `ignite.toml`, one tracked source file
 /// and a manifest whose inputs are `inputs`.
 fn lint_repository(name: &str, inputs: &str) -> std::path::PathBuf {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-lint-{name}-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-lint-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("checks")).unwrap();
     std::fs::create_dir_all(dir.join("src")).unwrap();
@@ -94,14 +95,16 @@ fn manifest_lint_exits_1_on_a_pattern_that_matches_nothing() {
     let output = lint_in(&dir);
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     for name in ["bad", "good"] {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-lint-{name}-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-lint-{name}-{}", std::process::id()));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
 
 #[test]
 fn an_unknown_subcommand_prints_the_parsers_error_when_the_hub_is_down() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-rejected-{}", std::process::id()));
+    let dir =
+        ignite_core::test_files::temp_dir().join(format!("ignite-rejected-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     // Port 1 refuses connections, so the report to the hub fails at once.

@@ -19,7 +19,8 @@ fn a_stop_runs_the_last_step_and_still_ends_by_sigterm() {
         std::thread::sleep(std::time::Duration::from_secs(30));
         panic!("SIGTERM did not end the process");
     }
-    let marker = ignite_core::test_files::temp_dir().join(format!("ignite-terminate-{}", std::process::id()));
+    let marker = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-terminate-{}", std::process::id()));
     let _ = std::fs::remove_file(&marker);
     let status = Command::new(std::env::current_exe().unwrap())
         .args([

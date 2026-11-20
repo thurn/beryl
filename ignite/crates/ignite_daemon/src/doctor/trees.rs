@@ -251,7 +251,8 @@ mod tests {
     /// kept only in memory never reached `doctor`. A saved measurement is read back.
     #[test]
     fn a_measurement_is_read_back_after_a_restart() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-used-test-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-used-test-{}", std::process::id()));
         let at = SystemTime::now();
         save(&dir, at, 287);
         let (_, read_at, gb) = saved(&dir).unwrap();

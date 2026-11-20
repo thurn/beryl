@@ -112,7 +112,8 @@ impl Drop for World {
 impl World {
     /// A fresh world under a short temporary path, so the daemons' socket paths stay short.
     pub fn new(name: &str) -> World {
-        let root = ignite_core::test_files::temp_dir().join(format!("ie2e-{name}-{}", std::process::id()));
+        let root =
+            ignite_core::test_files::temp_dir().join(format!("ie2e-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let placeholder = Config::parse("ignite.toml", &config("http://127.0.0.1:1")).unwrap();

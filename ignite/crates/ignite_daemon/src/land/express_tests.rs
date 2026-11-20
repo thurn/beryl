@@ -18,7 +18,8 @@ fn git(dir: &Path, args: &[&str]) -> String {
 
 /// A repository with a `tool/` directory, and the express lane over it with `commands`.
 fn lane(name: &str, commands: &[&str]) -> (PathBuf, MachineExpress, Commit) {
-    let root = ignite_core::test_files::temp_dir().join(format!("ignite-express-{name}-{}", std::process::id()));
+    let root = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-express-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     let repo = root.join("repo");
     fs::create_dir_all(repo.join("tool")).unwrap();
@@ -453,7 +454,8 @@ fn a_run_in_uses_the_commands_of_the_section_it_is_given() {
 
 #[test]
 fn the_tree_s_ignite_toml_is_read_for_its_express_section_with_the_daemons_as_fallback() {
-    let root = ignite_core::test_files::temp_dir().join(format!("ignite-section-{}", std::process::id()));
+    let root =
+        ignite_core::test_files::temp_dir().join(format!("ignite-section-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     let daemons = ignite_core::config::Express {

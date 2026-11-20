@@ -498,7 +498,8 @@ mod tests {
 
     #[test]
     fn observe_reads_the_files_under_each_profile() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-observed-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-observed-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let deps = dir.join("rust/target/debug/deps");
         let build = dir.join("rust/target/debug/build/cards-0f3e");

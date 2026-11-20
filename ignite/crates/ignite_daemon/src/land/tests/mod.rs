@@ -118,7 +118,8 @@ fn world_with(
         ..CacheGate::default()
     });
     let n = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
-    let records = ignite_core::test_files::temp_dir().join(format!("ignite-land-{}-{n}", std::process::id()));
+    let records =
+        ignite_core::test_files::temp_dir().join(format!("ignite-land-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&records);
     let pause_clock = clock.clone();
     let landing = Arc::new(Landing {

@@ -21,7 +21,8 @@ use ignite_daemon::supervise::{GrantFile, SpecFile, SupervisedLauncher};
 use ignite_os::hostcpu::HostCpu;
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-cleanup-{name}-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-cleanup-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

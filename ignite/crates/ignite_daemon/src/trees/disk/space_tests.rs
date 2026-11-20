@@ -11,7 +11,8 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Scratch {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-space-{}-{name}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-space-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("a")).unwrap();
         fs::create_dir_all(dir.join("b")).unwrap();

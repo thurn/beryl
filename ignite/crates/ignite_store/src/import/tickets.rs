@@ -321,7 +321,8 @@ mod tests {
     /// Writes an old database with an epic, two children, an edge, comments, history, an
     /// alias, an event and a lease, at a fresh path.
     pub(crate) fn old_database(name: &str) -> std::path::PathBuf {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-import-{}-{name}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-import-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("old.db");
         let _ = std::fs::remove_file(&path);

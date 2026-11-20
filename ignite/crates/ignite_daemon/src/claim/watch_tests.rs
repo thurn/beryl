@@ -187,7 +187,8 @@ fn record_lease(conn: &rusqlite::Connection) {
 
 #[test]
 fn a_restarted_daemon_does_not_repeat_a_change() {
-    let path = ignite_core::test_files::temp_dir().join(format!("ignite-claim-restart-{}.db", std::process::id()));
+    let path = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-claim-restart-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let world = World::with_db(ignite_store::local::open(&path).unwrap());
     world.desk.add(ticket("Tq.48", "Counter names", ""));
@@ -228,7 +229,8 @@ fn restarted_at(path: &std::path::Path, minutes: f64) -> World {
 
 #[test]
 fn a_restart_keeps_how_long_a_session_has_been_quiet() {
-    let path = ignite_core::test_files::temp_dir().join(format!("ignite-claim-quiet-{}.db", std::process::id()));
+    let path = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-claim-quiet-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let world = World::with_db(ignite_store::local::open(&path).unwrap());
     world.desk.add(ticket("Tq.48", "Counter names", ""));
@@ -251,7 +253,8 @@ fn a_restart_keeps_how_long_a_session_has_been_quiet() {
 
 #[test]
 fn a_freed_tree_leaves_no_clock_behind() {
-    let path = ignite_core::test_files::temp_dir().join(format!("ignite-claim-freed-{}.db", std::process::id()));
+    let path = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-claim-freed-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let world = World::with_db(ignite_store::local::open(&path).unwrap());
     world.desk.add(ticket("Tq.48", "Counter names", ""));

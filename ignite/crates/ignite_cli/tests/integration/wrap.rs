@@ -9,7 +9,8 @@ use ignite_core::protocol::hub::CompileUnit;
 use ignite_daemon::wrap::{RUN_MODE, cargo_env, write_shims};
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-wrap-{name}-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-wrap-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

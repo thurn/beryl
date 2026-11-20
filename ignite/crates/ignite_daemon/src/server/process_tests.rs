@@ -49,8 +49,8 @@ struct Scratch {
 
 impl Scratch {
     fn new(name: &str) -> Scratch {
-        let home =
-            ignite_core::test_files::temp_dir().join(format!("ignite-process-{name}-{}", std::process::id()));
+        let home = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-process-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(home.join("runs")).unwrap();
         Scratch { home }

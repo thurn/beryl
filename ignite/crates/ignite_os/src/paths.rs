@@ -70,7 +70,10 @@ mod tests {
 
     #[test]
     fn a_drive_path_and_a_share_lose_the_prefix() {
-        assert_eq!(plain(r"\\?\C:\Users\me\ignite.exe"), r"C:\Users\me\ignite.exe");
+        assert_eq!(
+            plain(r"\\?\C:\Users\me\ignite.exe"),
+            r"C:\Users\me\ignite.exe"
+        );
         assert_eq!(plain(r"\\?\d:"), "d:");
         assert_eq!(plain(r"\\?\UNC\server\share\x"), r"\\server\share\x");
     }
@@ -79,7 +82,10 @@ mod tests {
     fn other_paths_are_unchanged() {
         assert_eq!(plain("/var/folders/x"), "/var/folders/x");
         assert_eq!(plain(r"C:\Users\me"), r"C:\Users\me");
-        assert_eq!(plain(r"\\?\GLOBALROOT\Device\x"), r"\\?\GLOBALROOT\Device\x");
+        assert_eq!(
+            plain(r"\\?\GLOBALROOT\Device\x"),
+            r"\\?\GLOBALROOT\Device\x"
+        );
         assert_eq!(plain(r"\\?\C:x"), r"\\?\C:x");
     }
 
@@ -92,7 +98,11 @@ mod tests {
     #[test]
     fn a_real_path_has_no_prefix() {
         let real = canonicalize(std::env::current_dir().unwrap()).unwrap();
-        assert!(!real.to_string_lossy().starts_with(r"\\?\"), "{}", real.display());
+        assert!(
+            !real.to_string_lossy().starts_with(r"\\?\"),
+            "{}",
+            real.display()
+        );
         assert!(real.is_absolute());
     }
 }

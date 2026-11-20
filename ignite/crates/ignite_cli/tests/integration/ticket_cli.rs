@@ -57,7 +57,8 @@ fn json(output: &Output) -> Value {
 
 #[test]
 fn another_process_closing_a_ticket_ends_a_waiting_process() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-cli-bin-{}", std::process::id()));
+    let dir =
+        ignite_core::test_files::temp_dir().join(format!("ignite-cli-bin-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let conn = hub::open(&dir.join("hub.sqlite")).unwrap();

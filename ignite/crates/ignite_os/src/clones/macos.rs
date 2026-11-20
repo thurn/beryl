@@ -92,7 +92,8 @@ mod tests {
     /// owns its blocks. The temporary directory is on the startup disk, which is APFS.
     #[test]
     fn a_clone_owns_none_of_its_blocks_and_a_copy_owns_all_of_them() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-clones-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-clones-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let source = dir.join("source");

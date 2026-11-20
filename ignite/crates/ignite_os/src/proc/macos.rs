@@ -284,7 +284,8 @@ mod tests {
     /// loses a descriptor that has no close-on-exec mark, which a plain `exec` would keep.
     #[test]
     fn replacing_the_image_keeps_only_standard_io() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ign-replace-{}", std::process::id()));
+        let dir =
+            ignite_core::test_files::temp_dir().join(format!("ign-replace-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let expected = format!(

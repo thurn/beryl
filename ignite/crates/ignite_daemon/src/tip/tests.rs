@@ -608,8 +608,8 @@ fn a_failure_with_no_landing_between_the_commits_still_reports_the_range() {
 fn scratch_file(text: &str) -> PathBuf {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let path =
-        ignite_core::test_files::temp_dir().join(format!("ignite-tip-output-{}-{n}.txt", std::process::id()));
+    let path = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-tip-output-{}-{n}.txt", std::process::id()));
     std::fs::write(&path, text).unwrap();
     path
 }

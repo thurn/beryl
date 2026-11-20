@@ -264,7 +264,8 @@ fn database() -> Arc<Mutex<Connection>> {
 }
 
 fn runs_folder(name: &str) -> PathBuf {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-host-{name}-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-host-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

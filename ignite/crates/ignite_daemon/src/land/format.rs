@@ -256,8 +256,8 @@ mod tests {
     /// rewriting each file they are given. `sed -i` takes its suffix in a separate word on
     /// macOS, so the stand-ins copy through a temporary file instead.
     fn repository(name: &str) -> std::path::PathBuf {
-        let repo =
-            ignite_core::test_files::temp_dir().join(format!("ignite-format-{name}-{}", std::process::id()));
+        let repo = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-format-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&repo);
         fs::create_dir_all(repo.join("tool/src")).unwrap();
         git(&repo, &["init", "--quiet", "-b", "main"]);

@@ -528,7 +528,8 @@ fn an_export_names_its_tickets_and_reads_json_lines() {
 fn a_refused_token_is_read_again_from_the_identity_file_and_sent_once_more() {
     // `ignite install` saved a new token while the client held the old one: the hub refuses the
     // old one, and the client sends the request again with the token in the file.
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-hubclient-reread-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-hubclient-reread-{}", std::process::id()));
     let file = crate::update::IdentityFile {
         path: dir.join("machine.json"),
     };
@@ -566,7 +567,8 @@ fn a_refused_token_is_read_again_from_the_identity_file_and_sent_once_more() {
 
 #[test]
 fn a_token_still_refused_after_reading_it_again_fails_once_and_names_install() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-hubclient-refused-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-hubclient-refused-{}", std::process::id()));
     let file = crate::update::IdentityFile {
         path: dir.join("machine.json"),
     };

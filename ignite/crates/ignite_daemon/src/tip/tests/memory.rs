@@ -9,7 +9,8 @@ use super::*;
 fn database() -> PathBuf {
     static NEXT: AtomicU32 = AtomicU32::new(0);
     let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-tip-memory-{}-{n}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-tip-memory-{}-{n}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir.join("daemon.db")
 }

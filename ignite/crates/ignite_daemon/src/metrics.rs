@@ -388,8 +388,8 @@ mod tests {
 
     impl Scratch {
         fn new(name: &str) -> Self {
-            let dir =
-                ignite_core::test_files::temp_dir().join(format!("ignite-metrics-{name}-{}", std::process::id()));
+            let dir = ignite_core::test_files::temp_dir()
+                .join(format!("ignite-metrics-{name}-{}", std::process::id()));
             let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(dir.join("transcripts")).unwrap();
             Scratch(dir)

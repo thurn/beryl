@@ -13,8 +13,8 @@ pub(super) struct DbFile(PathBuf);
 
 impl DbFile {
     pub(super) fn new(name: &str) -> DbFile {
-        let path =
-            ignite_core::test_files::temp_dir().join(format!("ignite-dispatch-{name}-{}.db", std::process::id()));
+        let path = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-dispatch-{name}-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         DbFile(path)
     }

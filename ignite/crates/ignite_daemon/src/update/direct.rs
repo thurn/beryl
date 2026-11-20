@@ -165,7 +165,8 @@ mod tests {
             asked: Mutex::default(),
             returned: Mutex::default(),
         });
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-direct-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-direct-{}", std::process::id()));
         let launcher = ExpressLauncher {
             cores: 3,
             lender: Some(lender.clone()),

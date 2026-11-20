@@ -157,7 +157,8 @@ fn an_adopted_command_is_ended_when_its_caller_cancels() {
 
 #[test]
 fn files_an_adopted_command_wrote_reach_the_paths_the_second_run_named() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-adopt-carry-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-adopt-carry-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let (first, second) = (dir.join("results-1.jsonl"), dir.join("results-2.jsonl"));
@@ -223,7 +224,8 @@ fn a_command_that_started_at_another_commit_is_ended_not_adopted() {
 /// its target directory, so the next build there clears what the compile left unfinished.
 #[test]
 fn ending_a_compiling_run_in_a_reset_tree_marks_its_target_directory() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-adopt-{}-ended", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-adopt-{}-ended", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let tree = dir.join("trees").join("landing-2");
     let target = tree.join("rust").join("target");

@@ -184,7 +184,8 @@ mod tests {
 
     #[test]
     fn finds_a_process_by_its_executable_and_ends_it() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-occupants-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-occupants-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         // A copy of the command interpreter inside the directory, which waits for input that
         // never comes.

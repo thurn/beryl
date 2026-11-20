@@ -205,7 +205,8 @@ mod tests {
 
     #[test]
     fn a_read_only_open_neither_migrates_nor_writes() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-hub-ro-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-hub-ro-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("hub.sqlite");
         let _ = std::fs::remove_file(&path);
@@ -236,7 +237,8 @@ mod tests {
 
     #[test]
     fn reopening_a_file_keeps_its_rows() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-hub-{}", std::process::id()));
+        let dir =
+            ignite_core::test_files::temp_dir().join(format!("ignite-hub-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("hub.sqlite");
         let _ = std::fs::remove_file(&path);

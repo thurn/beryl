@@ -254,7 +254,8 @@ fn carry_outputs(previous: &[(String, String)], wanted: &[(String, String)]) {
 }
 
 fn same_dir(a: &Path, b: &Path) -> bool {
-    a == b || matches!((ignite_os::paths::canonicalize(a), ignite_os::paths::canonicalize(b)), (Ok(a), Ok(b)) if a == b)
+    a == b
+        || matches!((ignite_os::paths::canonicalize(a), ignite_os::paths::canonicalize(b)), (Ok(a), Ok(b)) if a == b)
 }
 
 /// Waits for an adopted command, ending it once `stop` turns true, as the supervised launcher

@@ -177,7 +177,8 @@ pub(super) fn release(ticket: &str, session: &str) -> Value {
 
 #[test]
 fn two_machines_asking_at_once_never_get_one_ticket() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-dispatch-race-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-dispatch-race-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("hub.sqlite");
     let _ = std::fs::remove_file(&path);

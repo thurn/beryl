@@ -197,8 +197,8 @@ mod tests {
     // The jobserver's FIFO exists only on Unix; Windows has no FIFOs (`ignite_os::fifo`).
     #[cfg(unix)]
     fn scratch(name: &str) -> PathBuf {
-        let dir =
-            ignite_core::test_files::temp_dir().join(format!("ignite-jobserver-{name}-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-jobserver-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir

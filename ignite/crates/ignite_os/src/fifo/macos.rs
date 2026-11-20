@@ -37,7 +37,8 @@ mod tests {
     /// waiting for a writer.
     #[test]
     fn a_fifo_holds_bytes_and_never_blocks() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-fifo-{}", std::process::id()));
+        let dir =
+            ignite_core::test_files::temp_dir().join(format!("ignite-fifo-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut fifo = Native.open_fifo(&dir.join("fifo")).unwrap();

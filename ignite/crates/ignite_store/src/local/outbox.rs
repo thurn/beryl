@@ -78,7 +78,8 @@ mod tests {
 
     #[test]
     fn unsent_entries_survive_reopening_the_database() {
-        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-outbox-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-outbox-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("local.db");
         let _ = std::fs::remove_file(&path);

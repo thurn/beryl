@@ -40,7 +40,8 @@ mod tests {
 
     #[test]
     fn only_changed_tracked_files_are_committed() {
-        let repo = ignite_core::test_files::temp_dir().join(format!("ignite-git-commit-{}", std::process::id()));
+        let repo = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-git-commit-{}", std::process::id()));
         let _ = fs::remove_dir_all(&repo);
         fs::create_dir_all(&repo).unwrap();
         git(&repo, &["init", "--quiet", "-b", "main"]);

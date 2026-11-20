@@ -26,7 +26,8 @@ fn line(time: &str, place: &str, commit: &str, check: &str, outcome: &str, extra
 /// A run log of two staging commits and two commits of one branch, with every kind of line the
 /// importer leaves out.
 fn write_log(name: &str) -> PathBuf {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-runlog-{}-{name}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-runlog-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let first = [

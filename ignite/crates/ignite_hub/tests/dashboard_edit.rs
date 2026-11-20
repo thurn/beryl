@@ -72,7 +72,8 @@ fn send(
 
 #[test]
 fn a_tailscale_user_edits_tickets_on_the_private_listener_only() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-dashboard-edit-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-dashboard-edit-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let server = HubServer {

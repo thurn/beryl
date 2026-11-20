@@ -64,7 +64,8 @@ fn checks_each_precondition_and_reports_the_one_that_failed() {
 
 #[test]
 fn of_two_simultaneous_claims_one_wins_and_one_conflicts() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-claims-{}", std::process::id()));
+    let dir =
+        ignite_core::test_files::temp_dir().join(format!("ignite-claims-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("hub.sqlite");
     let _ = std::fs::remove_file(&path);

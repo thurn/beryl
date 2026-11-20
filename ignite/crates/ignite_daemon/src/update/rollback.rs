@@ -292,7 +292,10 @@ pub fn hold_release(executable: &Path) {
     static HELD: OnceLock<Option<fs::File>> = OnceLock::new();
     HELD.get_or_init(|| {
         ExecutableStore::version_of(executable)?;
-        let dir = ignite_os::paths::canonicalize(executable).ok()?.parent()?.to_path_buf();
+        let dir = ignite_os::paths::canonicalize(executable)
+            .ok()?
+            .parent()?
+            .to_path_buf();
         let file = lock_shared(&dir.join(IN_USE));
         if let Err(error) = &file {
             eprintln!(

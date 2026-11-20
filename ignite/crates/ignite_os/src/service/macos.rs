@@ -614,7 +614,8 @@ mod tests {
         assert!(text.contains("<string>daemon</string>"));
         assert!(text.contains("<string>a&lt;&amp;b&gt;</string>"));
 
-        let path = ignite_core::test_files::temp_dir().join(format!("ignite-{}.plist", std::process::id()));
+        let path = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-{}.plist", std::process::id()));
         fs::write(&path, &text).unwrap();
         let lint = Command::new("/usr/bin/plutil")
             .arg("-lint")
@@ -670,7 +671,8 @@ mod tests {
         );
         assert!(text.contains("<string>ignite.hub</string>"));
         assert!(text.contains("<key>KeepAlive</key>"));
-        let path = ignite_core::test_files::temp_dir().join(format!("ignite-hub-{}.plist", std::process::id()));
+        let path = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-hub-{}.plist", std::process::id()));
         fs::write(&path, &text).unwrap();
         let listen = plist_variable(&path, "IGNITE_HUB_LISTEN").unwrap();
         let public = plist_variable(&path, "IGNITE_HUB_PUBLIC_LISTEN").unwrap();
@@ -703,7 +705,8 @@ mod tests {
         assert!(text.contains("<key>RunAtLoad</key>\n  <true/>"));
         assert!(!text.contains("KeepAlive"));
         assert!(!text.contains("Background"));
-        let path = ignite_core::test_files::temp_dir().join(format!("ignite-mon-{}.plist", std::process::id()));
+        let path = ignite_core::test_files::temp_dir()
+            .join(format!("ignite-mon-{}.plist", std::process::id()));
         fs::write(&path, &text).unwrap();
         let lint = Command::new("/usr/bin/plutil")
             .arg("-lint")

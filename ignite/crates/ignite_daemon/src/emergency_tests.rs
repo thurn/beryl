@@ -107,7 +107,8 @@ fn an_emergency_nobody_renews_lapses_on_the_daemon_too() {
 
 #[test]
 fn a_local_clear_lifts_only_that_emergency_and_outlives_a_restart() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-emergency-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-emergency-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("daemon.db");
     let _ = std::fs::remove_file(&path);

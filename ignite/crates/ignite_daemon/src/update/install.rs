@@ -145,7 +145,10 @@ fn declared<'c>(deps: &InstallDeps, config: &'c Config) -> Result<&'c Machine> {
 
 /// Whether two paths name the same file, following links.
 fn same_file(a: &Path, b: &Path) -> bool {
-    match (ignite_os::paths::canonicalize(a), ignite_os::paths::canonicalize(b)) {
+    match (
+        ignite_os::paths::canonicalize(a),
+        ignite_os::paths::canonicalize(b),
+    ) {
         (Ok(a), Ok(b)) => a == b,
         _ => a == b,
     }

@@ -115,7 +115,8 @@ mod tests {
 
     /// A fresh folder for one test. Socket paths are limited to about 100 bytes, so it is short.
     fn folder(test: &str) -> PathBuf {
-        let path = ignite_core::test_files::temp_dir().join(format!("ign-{}-{test}", std::process::id()));
+        let path =
+            ignite_core::test_files::temp_dir().join(format!("ign-{}-{test}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         path
     }

@@ -17,7 +17,8 @@ use ignite_daemon::steps::{Kind, Steps, Work};
 use ignite_daemon::supervise::SupervisedLauncher;
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-adopt-{name}-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-adopt-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

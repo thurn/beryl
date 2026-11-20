@@ -115,7 +115,8 @@ fn the_run_verb_hands_the_command_to_the_launcher_in_the_callers_directory() {
 
 #[test]
 fn a_failed_command_replies_check_failed_with_its_exit_and_the_end_of_its_output() {
-    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-run-reply-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-run-reply-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let output = dir.join("output.log");
     let lines: Vec<String> = (1..=100).map(|n| format!("line {n}")).collect();
