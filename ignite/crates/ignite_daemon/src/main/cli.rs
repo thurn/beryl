@@ -179,11 +179,8 @@ impl CliMode {
                 thread::sleep(HEALTH_EVERY);
             }
         });
-        let (apps, dispatcher, ctx) = (
-            self.apps.clone(),
-            self.dispatcher.clone(),
-            self.ctx.clone(),
-        );
+        let (apps, dispatcher, ctx) =
+            (self.apps.clone(), self.dispatcher.clone(), self.ctx.clone());
         parts.start_loop(DISPATCH_LOOP, DISPATCH_STALLS_AFTER, move |ticker| {
             loop {
                 ticker.round(|| {
