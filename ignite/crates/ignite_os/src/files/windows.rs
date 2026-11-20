@@ -3,6 +3,7 @@
 
 use std::io;
 
+#[allow(clippy::unnecessary_wraps)] // Same signature as the macOS half.
 pub fn open_file_limit() -> io::Result<u64> {
     Ok(u64::MAX)
 }
