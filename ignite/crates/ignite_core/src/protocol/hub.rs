@@ -248,6 +248,10 @@ pub struct TicketBrief {
     /// The branch on the remote where an earlier release saved the ticket's unfinished work.
     #[serde(default)]
     pub saved_branch: Option<String>,
+    /// The ticket's image attachments, which `ignite start` lists with the command that fetches
+    /// each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::protocol::attachments::Attachment>,
 }
 
 /// `POST /landed`.

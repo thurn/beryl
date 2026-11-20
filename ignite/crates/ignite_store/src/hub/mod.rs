@@ -1,5 +1,6 @@
 //! The hub's shared database. Each submodule owns the queries over its tables.
 
+pub mod attachments;
 pub mod batch;
 pub mod capital_ids;
 pub mod catches;
@@ -172,6 +173,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 26,
         sql: include_str!("transcript_calls.sql"),
+        code: None,
+    },
+    Migration {
+        version: 27,
+        sql: include_str!("attachments.sql"),
         code: None,
     },
 ];

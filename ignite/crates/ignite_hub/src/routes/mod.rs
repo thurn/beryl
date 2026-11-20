@@ -1,6 +1,7 @@
 //! The hub's API routes under `/<project>/api`. Each module answers the paths it owns and
 //! returns `None` for any other, so [`crate::server`] tries them in turn.
 
+pub mod attachments;
 pub mod check_state;
 pub mod checks;
 pub mod commands;

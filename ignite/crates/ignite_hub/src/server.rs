@@ -38,6 +38,7 @@ use ignite_core::time::{SystemClock, Timestamp};
 use ignite_core::traits::Clock;
 use ignite_store::hub;
 
+use crate::attachments::AttachmentFiles;
 use crate::auth;
 use crate::dashboard;
 use crate::routes::{self, Request, Response};
@@ -118,6 +119,10 @@ impl HubServer {
             wordmark: self.wordmark.clone(),
             rules: self.config.rules.clone(),
             database: self.database.clone(),
+            attachments: AttachmentFiles::beside(
+                &self.database,
+                self.config.hub.attachment_budget_bytes(),
+            ),
             pool: Mutex::new(Pool {
                 idle: vec![first],
                 open: 1,
@@ -189,6 +194,8 @@ struct Shared {
     /// The improvement rules' settings, evaluated when records or efficiency rows arrive.
     rules: Rules,
     database: PathBuf,
+    /// The image files attached to tickets, beside the database.
+    attachments: AttachmentFiles,
     /// Idle connections and how many are open; a request takes one, opens a new one while
     /// fewer than [`MAX_CONNECTIONS`] are open, and gives it back.
     pool: Mutex<Pool>,
@@ -410,9 +417,7 @@ fn respond(shared: &Shared, http: &mut tiny_http::Request, now: Timestamp) -> Re
     };
     let (response, conn) = if let Some(api) = api {
         api.clone_into(&mut request.path);
-        caught(conn, |conn| {
-            api_route(conn, &request, !shared.read_only, now)
-        })
+        caught(conn, |conn| api_route(conn, &request, shared, now))
     } else {
         path.clone_into(&mut request.path);
         caught(conn, |conn| page(conn, &request, shared, editable, now))
@@ -466,9 +471,17 @@ fn caught(
     }
 }
 
-/// Tries each API module in turn. `private` says the request came on the private listener.
-fn api_route(conn: &mut Connection, request: &Request, private: bool, now: Timestamp) -> Response {
+/// Tries each API module in turn. Some answer only on the private listener.
+fn api_route(
+    conn: &mut Connection,
+    request: &Request,
+    shared: &Shared,
+    now: Timestamp,
+) -> Response {
+    let private = !shared.read_only;
+    let attachments = &shared.attachments;
     routes::tickets::handle(conn, request, now)
+        .or_else(|| routes::attachments::handle(conn, request, private, attachments, now))
         .or_else(|| routes::feed::handle(conn, request, private, now))
         .or_else(|| routes::checks::handle(conn, request, now))
         .or_else(|| routes::listings::handle(conn, request, now))
@@ -491,6 +504,16 @@ fn page(
     editable: bool,
     now: Timestamp,
 ) -> Response {
+    // An attachment's file, which only the private listener serves (see `routes::attachments`).
+    if let Some(sha256) = request.path.strip_prefix("/attachments/") {
+        return routes::attachments::serve_file(
+            conn,
+            request,
+            sha256,
+            !shared.read_only,
+            &shared.attachments,
+        );
+    }
     dashboard::serve::serve_with(
         conn,
         request,

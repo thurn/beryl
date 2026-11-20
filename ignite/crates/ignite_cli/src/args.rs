@@ -547,6 +547,18 @@ pub enum TicketCommand {
         /// goes to `[pool] default_owner`.
         #[arg(long)]
         automatic: bool,
+        /// An image file to attach once the ticket is filed (repeatable). The text can show it
+        /// with `![caption](attachment:<file name>)`.
+        #[arg(long)]
+        attach: Vec<PathBuf>,
+    },
+    /// Attach images to a ticket: files, an image pasted into this Claude Code session
+    /// (`--pasted`) or the clipboard. Adds a comment showing them unless `--no-comment`.
+    Attach(crate::ticket::attach::AttachArgs),
+    /// Download or list a ticket's attachments.
+    Attachment {
+        #[command(subcommand)]
+        command: crate::ticket::attach::AttachmentCommand,
     },
     /// Show one or more tickets.
     Show {

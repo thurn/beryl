@@ -606,7 +606,12 @@ pub fn serve_hub_at(
         let running = retry_bind(bind_for, || server(public).start_read_only())?;
         crash::spawn_loop("ignite-hub-public-accept", move || running.wait());
     }
-    let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups"))).map_err(store)?;
+    let upkeep = ignite_hub::upkeep::Upkeep::new(Some(dir.join("backups")))
+        .map_err(store)?
+        .with_attachments(ignite_hub::attachments::AttachmentFiles::beside(
+            &database,
+            config.hub.attachment_budget_bytes(),
+        ));
     crash::spawn_loop("ignite-hub-upkeep", move || upkeep.run(conn, &SystemClock));
     let routing_conn = ignite_store::hub::open(&database).map_err(store)?;
     let repo = repo.to_path_buf();

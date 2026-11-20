@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 
 use ignite_core::ids::{Seq, TicketId};
 use ignite_core::protocol::tickets::{FeedChange, ImportReply, ImportRequest, WholeTicket};
-use ignite_store::hub::{edges, feed, renumber, tickets};
+use ignite_store::hub::{attachments, edges, feed, renumber, tickets};
 use ignite_store::{Result, StoreError};
 
 use super::{failure, store_failure};
@@ -100,6 +100,7 @@ fn whole_ticket(conn: &Connection, id: &str) -> Result<Option<WholeTicket>> {
         comments: tickets::comments(conn, id)?,
         history: tickets::history(conn, id)?,
         aliases: aliases(conn, id)?,
+        attachments: attachments::list(conn, id)?,
     }))
 }
 

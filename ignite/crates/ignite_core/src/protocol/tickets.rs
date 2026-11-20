@@ -596,6 +596,10 @@ pub struct WholeTicket {
     pub history: Vec<History>,
     #[serde(default)]
     pub aliases: Vec<String>,
+    /// The ticket's image attachments, without their bytes, which only the hub keeps. An import
+    /// leaves the hub's attachment rows as they are.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::protocol::attachments::Attachment>,
 }
 
 /// `POST /import`: up to 200 tickets.

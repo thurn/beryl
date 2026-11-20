@@ -4,6 +4,7 @@
 //! [`serve::serve`] routes a request to them.
 
 pub mod assets;
+pub mod attachments;
 pub mod attention;
 pub mod common;
 pub mod components;

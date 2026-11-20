@@ -22,7 +22,7 @@ use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
 use ignite_store::hub::{
-    feed, filer_deps, fleet, leases, owners, releases, session_titles, tickets,
+    attachments, feed, filer_deps, fleet, leases, owners, releases, session_titles, tickets,
 };
 
 use super::{Request, Response};
@@ -156,8 +156,8 @@ fn forget_releases(conn: &Connection, batch: &BatchRequest) -> Result<(), StoreE
 }
 
 /// `GET /tickets/<id>`'s reply: the ticket, with its counted releases under `releases` when it
-/// has any, and why it is held back under `held_back` when it is. `ignite ticket show` prints
-/// both.
+/// has any, why it is held back under `held_back` when it is, and its image attachments under
+/// `attachments` when it has any. `ignite ticket show` prints all three.
 fn with_releases(
     conn: &Connection,
     detail: &ignite_core::protocol::tickets::TicketDetail,
@@ -172,6 +172,11 @@ fn with_releases(
     }
     if let Some(reason) = counted.reason() {
         value["held_back"] = json!(reason);
+    }
+    let attached =
+        attachments::list(conn, detail.ticket.id.as_str()).map_err(|e| store_failure(&e))?;
+    if !attached.is_empty() {
+        value["attachments"] = json!(attached);
     }
     Ok(Response::json(200, &value))
 }

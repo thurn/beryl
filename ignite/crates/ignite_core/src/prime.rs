@@ -35,7 +35,8 @@ pub const VERB_HELP: &[(&str, &str)] = &[
     ),
     (
         "ticket <verb>",
-        "create, show, list, link, comment on tickets",
+        "create, show, list, link, comment on tickets; a screenshot the user pastes for a \
+         ticket goes on it with `ignite ticket attach <id> --pasted`",
     ),
     ("tell <to> <text>", "correct work in flight"),
     (
@@ -184,6 +185,7 @@ mod tests {
             "A `changed` line is an instruction about your ticket",
             "landing note says",
             "The title shows the state",
+            "`ignite ticket attach <id> --pasted`",
             "`ignite guide <topic>`",
         ] {
             let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");

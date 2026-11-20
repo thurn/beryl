@@ -184,6 +184,34 @@ impl Hub {
         )
     }
 
+    /// `POST path?query` with raw bytes of `content_type` as the body, such as an image. It is
+    /// sent again after an unclear failure, since the hub keeps an image uploaded twice to the
+    /// same ticket under the same name once.
+    pub fn post_bytes(
+        &self,
+        path: &[&str],
+        query: &[(&str, String)],
+        bytes: &[u8],
+        content_type: &str,
+    ) -> Result<Response> {
+        let body = Body::Bytes(bytes, content_type);
+        let raw = self.send_raw(
+            &self.url(path, query),
+            Some(body),
+            true,
+            self.retry_for,
+            None,
+        )?;
+        Ok(Response {
+            body: String::from_utf8_lossy(&raw).into_owned(),
+        })
+    }
+
+    /// `GET path?query`, answering the body's bytes, such as an image.
+    pub fn get_bytes(&self, path: &[&str], query: &[(&str, String)]) -> Result<Vec<u8>> {
+        self.send_raw(&self.url(path, query), None, true, self.retry_for, None)
+    }
+
     /// `POST path` once, waiting at most `timeout`, for a report whose loss does no harm.
     /// Returns whether the hub accepted it.
     pub fn post_once(&self, path: &[&str], body: &Value, timeout: Duration) -> bool {
@@ -225,6 +253,24 @@ impl Hub {
         budget: Duration,
         hold: Option<Duration>,
     ) -> Result<Response> {
+        let encoded = body.map(Value::to_string);
+        let body = encoded
+            .as_deref()
+            .map(|text| Body::Bytes(text.as_bytes(), "application/json"));
+        let raw = self.send_raw(url, body, replay_safe, budget, hold)?;
+        String::from_utf8(raw)
+            .map(|body| Response { body })
+            .map_err(usage)
+    }
+
+    fn send_raw(
+        &self,
+        url: &str,
+        body: Option<Body<'_>>,
+        replay_safe: bool,
+        budget: Duration,
+        hold: Option<Duration>,
+    ) -> Result<Vec<u8>> {
         let authorization = match body {
             Some(_) => Some(format!(
                 "Bearer {}",
@@ -234,7 +280,6 @@ impl Hub {
             )),
             None => None,
         };
-        let encoded = body.map(Value::to_string);
         let start = Instant::now();
         let mut delay = Duration::from_millis(200);
         loop {
@@ -249,17 +294,17 @@ impl Hub {
                 },
                 |hold| hold + Duration::from_secs(10),
             );
-            let response = match (&encoded, &authorization) {
-                (Some(encoded), Some(authorization)) => self
+            let response = match (body, &authorization) {
+                (Some(Body::Bytes(bytes, content_type)), Some(authorization)) => self
                     .agent
                     .post(url)
                     .header("Authorization", authorization)
                     .header("X-Actor", &self.actor)
-                    .header("Content-Type", "application/json")
+                    .header("Content-Type", content_type)
                     .config()
                     .timeout_global(Some(timeout))
                     .build()
-                    .send(encoded.as_bytes()),
+                    .send(bytes),
                 _ => self
                     .agent
                     .get(url)
@@ -271,17 +316,17 @@ impl Hub {
             let failure = match response {
                 Ok(mut response) => {
                     let status = response.status().as_u16();
-                    let text = response
+                    let read = response
                         .body_mut()
                         .with_config()
                         .limit(64 * 1024 * 1024)
-                        .read_to_string();
-                    match text {
+                        .read_to_vec();
+                    match read {
                         Ok(body) if (200..300).contains(&status) => {
-                            return Ok(Response { body });
+                            return Ok(body);
                         }
                         Ok(body) => {
-                            let failure = http_failure(status, &body);
+                            let failure = http_failure(status, &String::from_utf8_lossy(&body));
                             if !(failure.exit == Exit::Unreachable && replay_safe) {
                                 return Err(failure);
                             }
@@ -301,6 +346,12 @@ impl Hub {
             delay = (delay * 2).min(Duration::from_secs(10));
         }
     }
+}
+
+/// A request body: its bytes and their content type.
+#[derive(Clone, Copy)]
+enum Body<'a> {
+    Bytes(&'a [u8], &'a str),
 }
 
 /// An unreachable hub is retried when the request was never sent or can be repeated; any other

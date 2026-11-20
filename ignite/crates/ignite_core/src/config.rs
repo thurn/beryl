@@ -278,6 +278,21 @@ pub struct HubConfig {
     /// of every page's header in place of the name "Ignite". The hub reads it when it starts.
     #[serde(default)]
     pub wordmark: Option<String>,
+    /// The most the hub's stored attachment files may total, in MiB; unset is
+    /// [`crate::protocol::attachments::DEFAULT_BUDGET_MB`]. Upkeep removes the files of closed
+    /// tickets to stay under it, and an upload is refused while open tickets alone fill it.
+    #[serde(default)]
+    pub attachment_budget_mb: Option<u64>,
+}
+
+impl HubConfig {
+    /// The attachment budget in bytes.
+    #[must_use]
+    pub fn attachment_budget_bytes(&self) -> u64 {
+        self.attachment_budget_mb
+            .unwrap_or(crate::protocol::attachments::DEFAULT_BUDGET_MB)
+            .saturating_mul(1024 * 1024)
+    }
 }
 
 /// The landing gate's values. Only a commit changes them.

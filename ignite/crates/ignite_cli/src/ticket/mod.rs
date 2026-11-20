@@ -5,6 +5,7 @@
 //! Every write is one `POST /batch`, so it succeeds or fails as a whole. Text output is one line
 //! per ticket; `--json` prints the hub's reply with each ticket ID spelled with its `T`.
 
+pub mod attach;
 mod build;
 pub mod http;
 mod ids;
@@ -87,18 +88,21 @@ pub fn execute(hub: &Hub, command: &TicketCommand) -> Result<Reply> {
             release,
             pending,
             automatic,
+            attach,
         } => {
             let status = build::filing_status(*release, *pending);
             let mut op = build::create(title, fields, labels, deps, status)?;
             if let Some(filer) = &hub.actor_title {
                 op["fields"]["metadata"] = json!({ CREATED_BY_TITLE: filer });
             }
-            write(
+            let created = write(
                 hub,
                 "created",
                 build::filed(build::single(op), *automatic, *independent),
-            )
+            )?;
+            attach::after_create(hub, created, attach)
         }
+        TicketCommand::Attach(args) => attach::attach(hub, args),
         TicketCommand::Update {
             id,
             fields,
@@ -231,6 +235,7 @@ fn lookup(hub: &Hub, command: &TicketCommand) -> Result<Option<Reply>> {
             query.extend(limit.filter(|&n| n != 0).map(|n| ("limit", n.to_string())));
             brief_reply(read(hub, &["tickets"], &query)?, render::list)
         }
+        TicketCommand::Attachment { command } => attach::attachment(hub, command)?,
         TicketCommand::Graph { all } => {
             let mut query = vec![];
             flag(&mut query, "all", *all);

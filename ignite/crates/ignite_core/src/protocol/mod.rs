@@ -7,10 +7,12 @@
 //! - [`fleet`]: the Ignite version the hub and each machine runs.
 //! - [`emergency`]: the justiciar's emergency pause, which every daemon enforces.
 //! - [`cli`]: CLI mode's verbs and the hub's transcript routes.
+//! - [`attachments`]: image attachments on tickets.
 //!
 //! Types that more than one of those use (the command classes, the cost of a command, a
 //! check's outcome) are defined here.
 
+pub mod attachments;
 pub mod cli;
 pub mod client;
 pub mod emergency;

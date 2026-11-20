@@ -17,6 +17,8 @@
 //!   (`ignite_store::hub::metrics::delete_expired`);
 //! - deletes transcript digest lines a week after they arrived
 //!   (`ignite_store::hub::transcripts::delete_expired`);
+//! - once an hour, removes the attachment files of tickets closed long ago or beyond the
+//!   budget, and files a ticket when open tickets alone fill it ([`attachments`]);
 //! - takes an hourly snapshot of the database and a daily export ([`backup`]).
 //!
 //! The routes call the rest as reports arrive: a landing a tip round reverted ([`reverted::file`]),
@@ -30,6 +32,7 @@
 //! Every ticket the hub files by itself is matched against earlier ones by a signature
 //! ([`signature`], [`filing`]), so a repeated fault adds a comment and never a second ticket.
 
+pub mod attachments;
 pub mod backup;
 pub mod clearing;
 mod clearing_kinds;
@@ -46,6 +49,8 @@ pub mod schedules;
 pub mod signature;
 pub mod stuck;
 
+#[cfg(test)]
+mod attachments_tests;
 #[cfg(test)]
 mod clearing_tests;
 #[cfg(test)]
@@ -94,6 +99,8 @@ pub struct UpkeepReport {
     pub checks_switched_off: Vec<String>,
     /// Efficiency rows deleted for being older than any reader needs.
     pub metrics_deleted: usize,
+    /// Tickets whose attachment files were removed.
+    pub attachments_removed: Vec<String>,
     pub snapshot: Option<PathBuf>,
     pub export: Option<PathBuf>,
 }
@@ -105,6 +112,9 @@ pub struct Upkeep {
     backups: Option<PathBuf>,
     last_snapshot: Option<Timestamp>,
     last_export_day: Option<String>,
+    /// The attachment files to keep within their budget; `None` tidies none.
+    attachments: Option<crate::attachments::AttachmentFiles>,
+    last_tidy: Option<Timestamp>,
 }
 
 impl Upkeep {
@@ -121,7 +131,16 @@ impl Upkeep {
             backups,
             last_snapshot,
             last_export_day,
+            attachments: None,
+            last_tidy: None,
         })
+    }
+
+    /// The same upkeep, also keeping `files` within their budget once an hour.
+    #[must_use]
+    pub fn with_attachments(mut self, files: crate::attachments::AttachmentFiles) -> Self {
+        self.attachments = Some(files);
+        self
     }
 
     /// One pass. A step that fails does not stop the steps after it; the first error is
@@ -155,6 +174,17 @@ impl Upkeep {
         keep(stuck::stuck_epics(conn, now).map(|filed| note(&mut report, filed)));
         keep(justiciar::master_lag(conn, now).map(|filed| note(&mut report, filed)));
         keep(schedules::file_due(conn, now).map(|copies| report.tickets_filed.extend(copies)));
+        if let Some(files) = self.attachments.clone()
+            && self
+                .last_tidy
+                .is_none_or(|last| now.seconds_since(last) >= attachments::TIDY_SECONDS)
+        {
+            self.last_tidy = Some(now);
+            keep(attachments::tidy(conn, &files, now).map(|tidied| {
+                report.attachments_removed = tidied.removed;
+                note(&mut report, tidied.filed.into_iter().collect());
+            }));
+        }
         // After every step that files, so a fault seen again on this pass keeps its ticket open.
         keep(clearing::close_cleared(conn, now).map(|closed| report.tickets_closed = closed));
         keep(

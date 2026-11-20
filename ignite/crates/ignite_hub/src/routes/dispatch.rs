@@ -456,10 +456,12 @@ fn brief(conn: &Connection, id: &str) -> Result<TicketBrief, Response> {
         .get(SAVED_BRANCH)
         .and_then(Value::as_str)
         .map(str::to_owned);
+    let attachments = ignite_store::hub::attachments::list(conn, id);
     Ok(TicketBrief {
         ticket,
         needs,
         saved_branch,
+        attachments: attachments.map_err(|e| store_failure(&e))?,
     })
 }
 

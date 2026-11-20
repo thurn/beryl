@@ -2,10 +2,12 @@
 //! network, to every machine's daemon and to people through the dashboard.
 //!
 //! - [`server`] accepts connections and hands each request to [`routes`] or [`dashboard`].
+//! - [`attachments`] keeps the image files attached to tickets.
 //! - [`auth`] checks the write token and the actor on every write.
 //! - [`rules`] find sources of waste in the records and file improvement tickets.
 //! - [`upkeep`] files regression and flaky-check tickets and frees stuck work.
 
+pub mod attachments;
 pub mod auth;
 pub mod dashboard;
 pub mod routes;

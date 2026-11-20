@@ -103,6 +103,12 @@ pub fn detail(ticket: &Value) -> String {
     if let Some(reason) = ticket["held_back"].as_str() {
         out.push(format!("held back: {reason}"));
     }
+    let attachments: Vec<ignite_core::protocol::attachments::Attachment> =
+        serde_json::from_value(ticket["attachments"].clone()).unwrap_or_default();
+    if !attachments.is_empty() {
+        out.push("attachments:".to_owned());
+        out.extend(super::attach::lines(text(ticket, "id"), &attachments));
+    }
     let blockers = other_blockers(ticket);
     if !blockers.is_empty() {
         out.push(format!("blocked by: {}", blockers.join(", ")));

@@ -1,7 +1,10 @@
 //! The Markdown subset ticket bodies and comments use, rendered to HTML.
 //!
 //! The subset is headings, paragraphs, bullet and numbered lists (nested), block quotes, fenced
-//! code, tables, code spans, links, bare URLs, bold and italic. Source text is escaped; only the
+//! code, tables, code spans, links, bare URLs, bold and italic, and images of the ticket's own
+//! attachments, `![alt](attachment:<name>)`, which an [`Images`] hook turns into HTML. No other
+//! image is shown: `![alt](https://...)` stays a plain link, so a ticket cannot make the
+//! dashboard load images from elsewhere. Source text is escaped; only the
 //! renderer and its trusted autolink hook supply HTML. The renderer is a port of the ticket
 //! service's, which follows a Python original, so the matching rules below are written out by
 //! hand to behave as the regular expressions they replace did (the workspace has no regex
@@ -17,6 +20,12 @@ pub type Autolink<'a> = &'a dyn Fn(&str) -> String;
 
 /// Rewrites a block's source text before its inline pass.
 pub type Prepare<'a> = &'a dyn Fn(&str) -> String;
+
+/// Turns an attachment image into HTML, given its alt text and the attachment's name.
+pub type Images<'a> = &'a dyn Fn(&str, &str) -> String;
+
+/// The target prefix that names one of the ticket's attachments.
+pub const ATTACHMENT_TARGET: &str = "attachment:";
 
 /// A character that separates nothing: the stand-in for text kept out of later passes.
 const MARK: char = '\u{E000}';
@@ -133,6 +142,28 @@ fn safe_target(target: &str) -> bool {
 
 /// `[label](target)`: a label without `]`, a target without `)` or space.
 fn link(chars: &[char], at: usize) -> Found {
+    let (end, label, target) = link_parts(chars, at)?;
+    let html = if safe_target(&target) {
+        format!("<a href=\"{}\">{}</a>", esc(&target), esc(&label))
+    } else {
+        esc(&string(&chars[at..=end]))
+    };
+    Some((end + 1, html))
+}
+
+/// `![alt](attachment:<name>)`, rendered by `images`. Any other image target is no match, so
+/// its `[alt](target)` is then read as a link.
+fn image(chars: &[char], at: usize, images: Images) -> Found {
+    if chars[at] != '!' || chars.get(at + 1) != Some(&'[') {
+        return None;
+    }
+    let (end, alt, target) = link_parts(chars, at + 1)?;
+    let name = target.strip_prefix(ATTACHMENT_TARGET)?;
+    (!name.is_empty()).then(|| (end + 1, images(&alt, name)))
+}
+
+/// The index of the closing `)`, the label and the target of the link starting at `at`.
+fn link_parts(chars: &[char], at: usize) -> Option<(usize, String, String)> {
     if chars[at] != '[' {
         return None;
     }
@@ -149,14 +180,11 @@ fn link(chars: &[char], at: usize) -> Found {
     if end == start || chars.get(end) != Some(&')') {
         return None;
     }
-    let label = string(&chars[at + 1..close]);
-    let target = string(&chars[start..end]);
-    let html = if safe_target(&target) {
-        format!("<a href=\"{}\">{}</a>", esc(&target), esc(&label))
-    } else {
-        esc(&string(&chars[at..=end]))
-    };
-    Some((end + 1, html))
+    Some((
+        end,
+        string(&chars[at + 1..close]),
+        string(&chars[start..end]),
+    ))
 }
 
 /// A bare `http(s)://` URL that does not end in punctuation and is not part of a word or an
@@ -238,6 +266,11 @@ fn italic(chars: &[char], at: usize) -> Found {
 
 /// Renders inline Markdown, leaving the autolink hook out of code and links.
 pub fn inline(source: &str, autolink: Autolink) -> String {
+    inline_with(source, autolink, None)
+}
+
+/// [`inline`], with attachment images rendered by `images`; without it they stay text.
+fn inline_with(source: &str, autolink: Autolink, images: Option<Images>) -> String {
     // A delimiter absent from the source keeps literal text out of the lookup.
     let mut delimiter = MARK.to_string();
     while source.contains(&delimiter) {
@@ -250,9 +283,14 @@ pub fn inline(source: &str, autolink: Autolink) -> String {
         format!("{delimiter}{}{delimiter}", kept.len() - 1)
     };
 
-    let text = replace_all(source, &|chars, at| {
+    let mut text = replace_all(source, &|chars, at| {
         code_span(chars, at).map(|(end, html)| (end, keep(html)))
     });
+    if let Some(images) = images {
+        text = replace_all(&text, &|chars, at| {
+            image(chars, at, images).map(|(end, html)| (end, keep(html)))
+        });
+    }
     let text = replace_all(&text, &|chars, at| {
         link(chars, at).map(|(end, html)| (end, keep(html)))
     });
@@ -447,9 +485,28 @@ fn paragraph_ends(line: &str) -> bool {
 /// Renders blocks, including fenced code, tables, lists and quotes. `prepare` rewrites each
 /// block's text before its inline pass, and `autolink` links the inline text.
 pub fn render(source: &str, autolink: Autolink, prepare: Prepare) -> String {
+    render_blocks(source, autolink, prepare, None)
+}
+
+/// [`render`], with the ticket's attachment images rendered by `images`.
+pub fn render_with_images(
+    source: &str,
+    autolink: Autolink,
+    prepare: Prepare,
+    images: Images,
+) -> String {
+    render_blocks(source, autolink, prepare, Some(images))
+}
+
+fn render_blocks(
+    source: &str,
+    autolink: Autolink,
+    prepare: Prepare,
+    images: Option<Images>,
+) -> String {
     let normalized = source.replace("\r\n", "\n");
     let lines: Vec<&str> = normalized.split('\n').collect();
-    let inlines = |text: &str| inline(&prepare(text), autolink);
+    let inlines = |text: &str| inline_with(&prepare(text), autolink, images);
     let mut out: Vec<String> = Vec::new();
     let mut index = 0;
 
@@ -497,7 +554,7 @@ pub fn render(source: &str, autolink: Autolink, prepare: Prepare) -> String {
             }
             out.push(format!(
                 "<blockquote>{}</blockquote>",
-                render(&quoted.join("\n"), autolink, prepare)
+                render_blocks(&quoted.join("\n"), autolink, prepare, images)
             ));
             continue;
         }

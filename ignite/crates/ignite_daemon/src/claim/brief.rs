@@ -269,6 +269,19 @@ pub fn render(brief: &TicketBrief, tree: &TreeView) -> String {
             format!("(+{more} more: ignite ticket show {})", ticket.id),
         ));
     }
+    for (i, attachment) in brief.attachments.iter().enumerate() {
+        let line = if attachment.removed_at.is_some() {
+            attachment.summary()
+        } else {
+            format!(
+                "{}: ignite ticket attachment get {} {}",
+                attachment.summary(),
+                ticket.id,
+                attachment.name
+            )
+        };
+        rows.push((if i == 0 { "images" } else { "" }, line));
+    }
     if let Some(line) = reverted_line(ticket) {
         rows.push(("reverted", line));
     }

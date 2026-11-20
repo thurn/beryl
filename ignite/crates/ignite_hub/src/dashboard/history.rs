@@ -210,10 +210,7 @@ fn describe(actor: &str, at: &str, changed: &[(String, Value)], kind: Option<&st
                 }
             }
             "close_reason" => {}
-            other => parts.push(field_words(other).map_or_else(
-                || format!("changed {}", esc(&other.replace('_', " "))),
-                str::to_owned,
-            )),
+            other => parts.push(other_change(other, value)),
         }
     }
     let detail = get(delta, "close_reason")
@@ -222,6 +219,18 @@ fn describe(actor: &str, at: &str, changed: &[(String, Value)], kind: Option<&st
         .map(str::to_owned);
     let quiet = parts.is_empty() && detail.is_none();
     entry(parts.join(", "), detail, quiet)
+}
+
+/// The words for a change to `field` that `describe` has no arm of its own for. An upload
+/// records `{"attachment": [null, <name>]}` (see `ignite_store::hub::attachments`).
+fn other_change(field: &str, value: &Value) -> String {
+    if field == "attachment" {
+        return format!("attached {}", c::mono(&text(value)));
+    }
+    field_words(field).map_or_else(
+        || format!("changed {}", esc(&field.replace('_', " "))),
+        str::to_owned,
+    )
 }
 
 fn describe_imported(event: &Value) -> Entry {

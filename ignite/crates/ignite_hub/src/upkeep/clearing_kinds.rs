@@ -180,6 +180,7 @@ pub fn verdict(
         }
         category if INCOMPLETE.contains(&category) => checks_reported(conn, ticket, fault, sighted),
         rounds_route::CATEGORY => Ok(quick_rounds(&world.rounds, sighted)),
+        super::attachments::CATEGORY => super::attachments::verdict(conn, ticket),
         _ => Ok(Verdict::Unwatched),
     }
 }

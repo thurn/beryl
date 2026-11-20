@@ -337,4 +337,19 @@ crate::tables! {
         stored_at: String,
         call_index: Option<i64>,
     }
+
+    /// One image attached to a ticket; the file is on disk under `sha256`.
+    Attachment = "attachments" {
+        ticket: String,
+        name: String,
+        sha256: String,
+        media_type: String,
+        bytes: i64,
+        width: i64,
+        height: i64,
+        caption: Option<String>,
+        created_at: String,
+        created_by: String,
+        removed_at: Option<String>,
+    }
 }

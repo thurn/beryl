@@ -268,7 +268,8 @@ pub struct Site<'a> {
     /// listener, for a request from a Tailscale user (see `crate::auth`).
     pub editable: bool,
     /// Whether this is the private listener. A transcript can hold secrets, so the worker
-    /// session page is served only there; the public copy answers 404 for it.
+    /// session page is served only there; the public copy answers 404 for it. Ticket images
+    /// are shown only there too, for the same reason.
     pub private: bool,
 }
 
@@ -378,7 +379,7 @@ fn serve_pages(
                         .map_or_else(|error| failed(&error), |body| fragment(&seq, body, head)),
                 );
             }
-            match ticket::options(conn, &root, project, id.as_str(), &seq, editable)
+            match ticket::options(conn, &root, project, id.as_str(), &seq, (editable, private))
                 .map(|o| o.map(brand))
             {
                 Err(error) => failed(&error),

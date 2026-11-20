@@ -15,6 +15,9 @@
 //! - `--refresh`: copy the database again. Otherwise the copy from an earlier run is reused,
 //!   since a large hub database takes a while to copy.
 //!
+//! The copy also gets one ticket, "Preview: attachments", with an image embedded in its text,
+//! one that no text embeds and one whose file was removed, so the ticket page shows all three.
+//!
 //! The copy lives in the system temporary directory. Edits made in the preview change only the
 //! copy. The page assets are compiled into the binary, so after editing a file under `static/`,
 //! stop the preview and run it again.
@@ -72,6 +75,10 @@ fn run() -> Result<(), String> {
     let database = dir.join("hub.db");
     if refresh || !database.is_file() {
         copy(&from, &database)?;
+    }
+    let budget = config.hub.attachment_budget_bytes();
+    if let Some(id) = seed_attachments(&database, budget)? {
+        println!("preview: attachments are shown on /{id}");
     }
 
     let running = HubServer {
@@ -132,4 +139,126 @@ fn copy(from: &Path, to: &Path) -> Result<(), String> {
         .execute("VACUUM INTO ?1", [to.to_string_lossy()])
         .map_err(|e| format!("copying {}: {e}", from.display()))?;
     Ok(())
+}
+
+/// Files the ticket that shows each kind of attachment, unless the copy has it already, and
+/// returns its ID.
+fn seed_attachments(database: &Path, budget: u64) -> Result<Option<String>, String> {
+    use ignite_core::protocol::attachments::sniff;
+    use ignite_core::protocol::tickets::{BatchRequest, Operation, TicketFields};
+    use ignite_core::time::Timestamp;
+    use ignite_store::hub::{self, attachments, batch};
+
+    const TITLE: &str = "Preview: attachments";
+    let text = |e: &dyn std::fmt::Display| e.to_string();
+    let mut conn = hub::open(database).map_err(|e| text(&e))?;
+    let found: Option<String> = conn
+        .query_row("SELECT id FROM tickets WHERE title = ?1", [TITLE], |row| {
+            row.get(0)
+        })
+        .ok();
+    if found.is_some() {
+        return Ok(found);
+    }
+    let now = Timestamp::parse("2026-11-20T06:00:00Z").map_err(|e| text(&e))?;
+    let body = "The board drew the attacker twice:\n\n![The board](attachment:board.png)\n\n\
+                An earlier capture:\n\n![Earlier](attachment:old.png)";
+    let request = BatchRequest {
+        preconditions: Vec::new(),
+        ops: vec![Operation::Create {
+            fields: TicketFields {
+                title: Some(TITLE.to_owned()),
+                body: Some(body.to_owned()),
+                ..TicketFields::default()
+            },
+            parent: None,
+            deps: Vec::new(),
+            request_key: None,
+        }],
+    };
+    let id = match batch::apply(&mut conn, &request, "preview", "preview", now)
+        .map_err(|e| text(&e))?
+    {
+        batch::BatchOutcome::Applied(reply) => reply.results[0].id.clone(),
+        batch::BatchOutcome::Conflict(_) => return Err("seeding the ticket conflicted".to_owned()),
+    };
+    let files = ignite_hub::attachments::AttachmentFiles::beside(database, budget);
+    for (name, width, height, colour) in [
+        ("board.png", 960, 540, [29, 122, 114]),
+        ("notes.png", 320, 480, [217, 122, 38]),
+        ("old.png", 640, 360, [107, 107, 114]),
+    ] {
+        let bytes = sample_png(width, height, colour);
+        let sha256 = files.write(&bytes).map_err(|e| text(&e))?;
+        let upload = attachments::Upload {
+            ticket: &id,
+            name,
+            sha256: &sha256,
+            image: sniff(&bytes).ok_or("the sample is not a PNG")?,
+            bytes: bytes.len() as u64,
+            caption: None,
+        };
+        attachments::insert(&mut conn, &upload, "preview", now).map_err(|e| text(&e))?;
+    }
+    conn.execute(
+        "UPDATE attachments SET removed_at = ?2 WHERE ticket = ?1 AND name = 'old.png'",
+        [id.as_str(), "2026-11-21T06:00:00Z"],
+    )
+    .map_err(|e| text(&e))?;
+    Ok(Some(id.to_string()))
+}
+
+/// A PNG of one colour, its pixels in uncompressed deflate blocks, which needs no compressor.
+fn sample_png(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = !0u32;
+        for &byte in bytes {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = if crc & 1 == 1 {
+                    (crc >> 1) ^ 0xEDB8_8320
+                } else {
+                    crc >> 1
+                };
+            }
+        }
+        !crc
+    }
+    fn chunk(out: &mut Vec<u8>, kind: [u8; 4], data: &[u8]) {
+        out.extend(u32::try_from(data.len()).unwrap_or(0).to_be_bytes());
+        let start = out.len();
+        out.extend(kind);
+        out.extend(data);
+        let crc = crc32(&out[start..]);
+        out.extend(crc.to_be_bytes());
+    }
+    // Each row is a filter byte (none) and then the pixels.
+    let row: Vec<u8> = std::iter::once(0)
+        .chain((0..width).flat_map(|_| rgb))
+        .collect();
+    let raw: Vec<u8> = (0..height).flat_map(|_| row.iter().copied()).collect();
+    let (mut a, mut b) = (1u32, 0u32);
+    for &byte in &raw {
+        a = (a + u32::from(byte)) % 65_521;
+        b = (b + a) % 65_521;
+    }
+    let mut zlib = vec![0x78, 0x01];
+    let blocks: Vec<&[u8]> = raw.chunks(65_535).collect();
+    for (index, block) in blocks.iter().enumerate() {
+        zlib.push(u8::from(index + 1 == blocks.len()));
+        let length = u16::try_from(block.len()).unwrap_or(u16::MAX);
+        zlib.extend(length.to_le_bytes());
+        zlib.extend((!length).to_le_bytes());
+        zlib.extend(*block);
+    }
+    zlib.extend(((b << 16) | a).to_be_bytes());
+    let mut header = Vec::new();
+    header.extend(width.to_be_bytes());
+    header.extend(height.to_be_bytes());
+    header.extend([8, 2, 0, 0, 0]);
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    chunk(&mut png, *b"IHDR", &header);
+    chunk(&mut png, *b"IDAT", &zlib);
+    chunk(&mut png, *b"IEND", &[]);
+    png
 }

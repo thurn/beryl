@@ -157,3 +157,75 @@ fn feed_attributes_name_the_position_and_the_tickets() {
         "<main class=\"c-main\" id=\"c-main\" data-feed-seq=\"7\" data-feed-tickets=\"a a.1\">"
     ));
 }
+
+/// An attachment of a ticket, as the store returns it.
+fn attachment(name: &str, removed: Option<&str>) -> ignite_core::protocol::attachments::Attachment {
+    ignite_core::protocol::attachments::Attachment {
+        ticket: "T1".parse().unwrap(),
+        name: name.to_owned(),
+        sha256: "ab".repeat(32),
+        media_type: "image/png".to_owned(),
+        bytes: 4096,
+        width: 640,
+        height: 480,
+        caption: None,
+        created_at: ignite_core::time::Timestamp::parse("2026-11-20T06:00:00Z").unwrap(),
+        created_by: "tester".to_owned(),
+        removed_at: removed.map(|at| ignite_core::time::Timestamp::parse(at).unwrap()),
+    }
+}
+
+#[test]
+fn attachment_images_render_only_for_the_tickets_own_attachments() {
+    use ignite_hub::dashboard::attachments::embedded;
+    use ignite_hub::dashboard::markdown::render_with_images;
+    let list = [
+        attachment("shot.png", None),
+        attachment("old.png", Some("2026-12-01T00:00:00Z")),
+    ];
+    let render = |text: &str, private: bool| {
+        let images = |alt: &str, name: &str| embedded(&list, name, alt, private);
+        render_with_images(
+            text,
+            &|t: &str| t.to_owned(),
+            &|t: &str| t.to_owned(),
+            &images,
+        )
+    };
+    let sha = "ab".repeat(32);
+    assert_eq!(
+        render("See ![the <board>](attachment:shot.png).", true),
+        format!(
+            "<p>See <a class=\"c-attachment\" href=\"/attachments/{sha}\" target=\"_blank\" \
+             rel=\"noopener\"><img src=\"/attachments/{sha}\" alt=\"the &lt;board&gt;\" \
+             loading=\"lazy\" width=\"640\" height=\"480\"></a>.</p>"
+        )
+    );
+    assert_eq!(
+        render("![x](attachment:shot.png)", false),
+        "<p><span class=\"c-muted\">Image, visible on the private dashboard</span></p>"
+    );
+    assert_eq!(
+        render("![x](attachment:nope.png)", true),
+        "<p>[missing attachment: nope.png]</p>"
+    );
+    assert_eq!(
+        render("![x](attachment:old.png)", true),
+        "<p>[image removed 2026-12-01: old.png]</p>"
+    );
+    // An image from elsewhere stays a link, so a ticket cannot make the page load it.
+    assert_eq!(
+        render("![x](https://example.com/a.png)", true),
+        "<p>!<a href=\"https://example.com/a.png\">x</a></p>"
+    );
+    // Inside code it is text, and without the hook it is never an image.
+    assert_eq!(
+        render("`![x](attachment:shot.png)`", true),
+        "<p><code>![x](attachment:shot.png)</code></p>"
+    );
+    assert!(!render_html("![x](attachment:shot.png)").contains("<img"));
+}
+
+fn render_html(text: &str) -> String {
+    render(text, &|t: &str| t.to_owned(), &|t: &str| t.to_owned())
+}

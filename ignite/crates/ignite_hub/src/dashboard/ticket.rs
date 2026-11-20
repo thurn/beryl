@@ -22,13 +22,14 @@ use super::data::{
 };
 use super::edit;
 use super::history::timeline;
-use super::markdown::render as render_markdown;
+use super::markdown::render_with_images as render_markdown;
 use super::milestones::is_milestone;
 use super::owners;
 use super::references::{display_id, mentions, rewrite_ticket_paths, ticket_url};
 
 /// A ticket's page for the project `project` at `root`, at feed position `seq`. An `editable`
-/// page carries the controls that edit the ticket (see [`edit`]).
+/// page carries the controls that edit the ticket (see [`edit`]). Only a `private` page, from
+/// the private listener, shows the ticket's images (see [`super::attachments`]).
 #[allow(clippy::too_many_lines)]
 pub fn page(
     root: &str,
@@ -36,7 +37,7 @@ pub fn page(
     data: &TicketData,
     owner: &owners::OwnerView,
     seq: &str,
-    editable: bool,
+    (editable, private): (bool, bool),
 ) -> PageOptions {
     let TicketData {
         ticket,
@@ -107,7 +108,9 @@ pub fn page(
             lookup(name).map(|found| display_id(&found.id))
         })
     };
-    let markdown = |text: &str| render_markdown(text, &link_text, &ticket_markup);
+    let image =
+        |alt: &str, name: &str| super::attachments::embedded(&data.attachments, name, alt, private);
+    let markdown = |text: &str| render_markdown(text, &link_text, &ticket_markup, &image);
 
     let mut entries: Vec<c::TocEntry> = Vec::new();
     let mut main: Vec<String> = Vec::new();
@@ -227,6 +230,13 @@ pub fn page(
         add(heading, &list_html(cards), Some(cards.len()));
     }
 
+    if !data.attachments.is_empty() {
+        add(
+            "Attachments",
+            &super::attachments::grid(&data.attachments, private),
+            Some(data.attachments.len()),
+        );
+    }
     if !comments.is_empty() || editable {
         let mut body: String = comments
             .iter()
@@ -605,14 +615,21 @@ pub(crate) fn options(
     project: &str,
     id: &str,
     seq: &str,
-    editable: bool,
+    (editable, private): (bool, bool),
 ) -> Result<Option<PageOptions>, ReadError> {
     let Some(row): Option<TicketRow> = ticket_row(conn, id)? else {
         return Ok(None);
     };
     let data = ticket_data(conn, project, row)?;
     let owner = owners::view(conn, id)?;
-    Ok(Some(page(root, project, &data, &owner, seq, editable)))
+    Ok(Some(page(
+        root,
+        project,
+        &data,
+        &owner,
+        seq,
+        (editable, private),
+    )))
 }
 
 /// The assignee of a ticket. A CLI worker's links to its session page, which only the private
