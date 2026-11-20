@@ -43,7 +43,12 @@ impl Ledger {
             // 2026-11-20 jarvis read 7 cores busy outside Ignite, granted 9 of 15, kept 20 agent
             // commands waiting and stood 43% idle. Ignite's use beyond its grants is the express
             // lane, the verb processes and the daemon, and counts against the express cores.
-            let spare = (f64::from(self.limits.reserved) - (ours - grants).max(0.0)).max(0.0);
+            // The tip reserve's cores that grants hold are busy with those grants, whose use
+            // `grants` already counts, so they leave no room for outside load.
+            let in_reserve: u32 = self.held.values().map(|h| h.reserved + h.lent).sum();
+            let spare = (f64::from(self.limits.reserved.saturating_sub(in_reserve))
+                - (ours - grants).max(0.0))
+            .max(0.0);
             self.outside = (busy_cores - ours - spare).max(0.0).round() as u32;
         }
         if free_memory_mb.is_some() {

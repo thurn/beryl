@@ -144,6 +144,7 @@ fn a_command_whose_work_is_stopped_is_ended_and_its_cores_are_given_back() {
         Limits {
             cores: 6,
             reserved: 0,
+            tip_build: 0,
             floor: Floor::default(),
             resources: BTreeMap::new(),
         },
@@ -303,6 +304,7 @@ mod grants {
         let limits = Limits {
             cores: 6,
             reserved: 0,
+            tip_build: 0,
             floor: Floor::default(),
             resources: BTreeMap::new(),
         };
@@ -589,6 +591,7 @@ mod stop_grace {
             Limits {
                 cores: 6,
                 reserved: 0,
+                tip_build: 0,
                 floor: Floor::default(),
                 resources: BTreeMap::new(),
             },

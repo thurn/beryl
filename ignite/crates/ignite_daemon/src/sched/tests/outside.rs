@@ -81,6 +81,7 @@ fn the_busy_fraction_is_read_against_every_logical_core() {
     let mut ledger = Ledger::new(Limits {
         cores: 12,
         reserved: 12,
+        tip_build: 0,
         floor: Floor::default(),
         resources: BTreeMap::new(),
     });

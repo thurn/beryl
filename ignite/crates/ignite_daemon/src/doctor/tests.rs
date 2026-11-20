@@ -380,6 +380,8 @@ fn status_shows_the_sections_its_flags_ask_for() {
         memory_pressed: false,
         max_per_command: 6,
         free_memory_mb: Some(2048),
+        tip_build: 0,
+        tip_build_used: 0,
         classes: vec![],
         resources: vec![],
     });
@@ -410,6 +412,32 @@ fn status_shows_the_sections_its_flags_ask_for() {
             .as_object()
             .unwrap()
             .contains_key("admission")
+    );
+}
+
+#[test]
+fn status_says_how_many_cores_are_kept_for_tip_builds() {
+    let status = Arc::new(|| sched::Status {
+        cores: 10,
+        outside: 0,
+        granted: 0,
+        committed: 0,
+        used: 0,
+        swap_used_mb: None,
+        memory_pressed: false,
+        max_per_command: 6,
+        free_memory_mb: None,
+        tip_build: 4,
+        tip_build_used: 3,
+        classes: vec![],
+        resources: vec![],
+    });
+    let verb = StatusVerb::new(vec![Box::new(CoresSection(status))]);
+    let plain = verb.render("m-1", None, &[]);
+    assert!(
+        plain.text.contains("4 kept for tip builds (3 in use)"),
+        "{}",
+        plain.text
     );
 }
 

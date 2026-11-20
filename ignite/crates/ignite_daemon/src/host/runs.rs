@@ -226,7 +226,7 @@ impl RunStarter for SupervisedStarter {
     }
 
     fn borrow_cores(&self, cores: u32) -> Option<(u64, u32)> {
-        let grant = self.scheduler.as_ref()?.try_acquire(&GrantRequest {
+        let grant = self.scheduler.as_ref()?.try_borrow(&GrantRequest {
             class: Class::Land,
             cores,
             resources: Vec::new(),

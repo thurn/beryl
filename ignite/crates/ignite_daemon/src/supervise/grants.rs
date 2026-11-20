@@ -121,6 +121,7 @@ impl SupervisedLauncher {
                         resources: file.resources,
                         memory_mb: None,
                         follow,
+                        reserve: file.reserve,
                     });
                     adopted.push((run, class));
                 }

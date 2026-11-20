@@ -38,6 +38,7 @@ fn scheduler() -> Arc<Scheduler> {
         Limits {
             cores: 6,
             reserved: 0,
+            tip_build: 0,
             floor: Floor::default(),
             resources: BTreeMap::from([("pages".to_owned(), 1)]),
         },

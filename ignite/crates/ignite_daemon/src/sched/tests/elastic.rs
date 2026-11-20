@@ -235,6 +235,7 @@ fn commands_taken_over_after_a_restart_never_hold_more_than_the_machine() {
         cores,
         resources: Vec::new(),
         memory_mb: None,
+        reserve: None,
         follow: follow.map(|name| crate::sched::Follow {
             cores_file: dir.join(name),
             asked: 16,

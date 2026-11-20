@@ -1246,7 +1246,9 @@ Rules for cores:
 - A command starts with as many threads as it was granted
   (`NEXTEST_TEST_THREADS`, `RUST_TEST_THREADS`, `IGNITE_CORES`). Where there is
   no jobserver (on Windows), `CARGO_BUILD_JOBS` is the grant too.
+
 - One command takes at most two thirds of the machine's cores.
+
 - Within a class, a request that has waited two minutes goes first, in arrival
   order. The others go smallest first, then in arrival order. Each request gets
   all the cores it asked for before the next one gets any. On 2026-11-20, 16 to
@@ -1254,10 +1256,12 @@ Rules for cores:
   free cores evenly, so each command ran on about one core. A one-card change's
   `ignite check` ran 80 minutes without finishing: its one-core listing steps
   waited behind ten-core builds.
+
 - A build that only compiles gives a core back on each step to a waiting request
   of its own class, but only to a small one (at most two cores) or one that has
   waited two minutes. Before this rule, every waiting request counted, and with
   eighteen waiting every build shrank to one core.
+
 - The daemon reads the machine's total CPU use from the operating system about
   once a second, and with it the CPU each command has used: its process group,
   every process those started (even one that left the group), and the children
@@ -1266,6 +1270,7 @@ Rules for cores:
   is left. The reading compares the operating system's counters with the
   previous reading, and reports no reading, not zero, when none of them moved. A
   command whose use has not been read yet counts all its cores.
+
 - Ignite's own use is the larger of what its commands used and what its
   processes used: the daemon and every process it started, every verb process,
   and on the hub's machine the hub, each with every process it started, and each
@@ -1277,6 +1282,7 @@ Rules for cores:
   while each holds its handle's lock. On 2026-11-19 jarvis counted the hub and a
   verb process from an older release, about two cores, as load outside Ignite
   while 9 agent commands waited for cores.
+
 - Some of the load outside Ignite is caused by Ignite's builds. On jarvis on
   2026-11-20, `fseventsd` used about one core recording file events, four fifths
   of them for the codegen-unit object files that `rustc` writes and deletes in
@@ -1290,6 +1296,7 @@ Rules for cores:
   release is signed ad hoc, so macOS knows it only by its code hash, and a grant
   lapses at the next release. Spotlight does not index the trees, because they
   are under a hidden folder.
+
 - A command that uses well below its grant lends the idle cores to waiting
   requests. After 30 seconds of measurement a grant counts as using its measured
   use plus one core, rounded up: the larger of its average over the last 30
@@ -1300,20 +1307,25 @@ Rules for cores:
   every core was granted while the machine stayed half idle and requests queued:
   Ignite's commands used about one core on average. `ignite status` shows the
   cores granted, used and counted.
+
 - While swap grows by a quarter of a gigabyte within a minute, or free memory is
   under a gigabyte, nothing new starts and no grant grows, unless Ignite runs
   nothing.
+
 - `land`, and a class with a floor, always get one core while they hold none,
   even when processes outside Ignite fill the machine, so a landing and `master`
   always make progress.
+
 - `tip` and `batch` each have a floor of cores per machine that higher classes
   cannot take while a request of that class waits, so `master` keeps moving and
   an experiment is slowed but never stopped. A floor class whose commands are
   running and that waits for nothing more keeps no cores back.
+
 - `idle` work starts only while the machine is under 70% busy, and is the first
   thing stopped when a higher class waits for cores, or for a resource the idle
   work holds. Stopping sends `SIGTERM`, then `SIGKILL` ten seconds later. While
   an update waits for commands to finish, idle work is stopped and none starts.
+
 - An idle job that fails waits before it runs again: half an hour after its
   first failure, then twice as long after each later one, up to a day. The wait
   is kept in the idle state file, so a restart does not retry at once. After
@@ -1321,24 +1333,51 @@ Rules for cores:
   (subject `idle:<job>`, such as `idle:rebuild:kernel-body`), and nothing more
   until the job succeeds. A failure because the hub cannot be reached is not
   counted.
+
 - Time spent waiting for cores is recorded apart from a command's own time.
+
 - A quick command starts at once on one core, without waiting for a grant: one
   whose last five or more runs each used under 2 CPU-seconds, that needs no
   shared resource, is not `idle` work and does not name Cargo. `uv sync`, which
   builds the Python environment most families list their checks with, used at
   most 1.2 CPU-seconds in 82 runs but had waited up to 726 s for a core.
+
 - A machine's `express_cores` are never granted: they are kept for the express
   lane's commands, which run outside the scheduler (see
   [Express landings](#express-landings)).
-- A machine's `tip_build_cores` (default 0) will be kept for the build checks of
-  a tip round, whose commands carry `Reserve::TipBuild` in their `CommandSpec`.
-  The setting, the `reserve` field of a command, its grant request and its
-  `spec.json` grant exist, but the scheduler does not read them yet. The field
-  is left out of `spec.json` and of the host protocol when it is unset, so
-  daemons of older and newer releases still read each other's files.
+
+- A machine's `tip_build_cores` (default 0) are kept for the build checks of a
+  tip round, whose commands carry `Reserve::TipBuild` in their `CommandSpec`.
+  These checks decide when `green` moves, and every new ticket waits on `green`.
+  On 2026-11-19, 8,053 of 9,692 commands started on one core, and every command
+  of the slowest landing ran on one, because a higher class does not take cores
+  from the running grants of a lower one. So the scheduler leaves the reserve
+  out of the cores it shares, as it does `express_cores`:
+
+  - A request with `Reserve::TipBuild` takes up to all of the reserve that no
+    other such grant holds and starts at once, whatever the shared cores and the
+    load outside Ignite. It takes the rest of what it wants from the shared
+    cores in its class, at once or, with a cores file, by growing. Several such
+    requests share the reserve in the order they were first asked for. A grant
+    that shrinks gives back only its shared cores.
+  - No other request is ever granted the reserve's cores. Cores of the reserve
+    that no grant holds are lent to the express lane and the release build when
+    they borrow free cores (see [Express landings](#express-landings)); a tip
+    build that arrives during the loan still takes them.
+  - The reserve's cores come back when the grant is released, also for a grant a
+    restarted daemon took over, whose `spec.json` grant names the reserve.
+  - The `cores` line of `ignite status` says how many cores are kept for tip
+    builds and how many of them are in use. With `tip_build_cores = 0` nothing
+    changes.
+
+  The `reserve` field is left out of `spec.json` and of the host protocol when
+  it is unset, so daemons of older and newer releases still read each other's
+  files.
+
 - Classes are enforced by what the daemon grants, never by the operating
   system's priority. Work run at low priority on this machine once got almost no
   CPU for hours.
+
 - A grant can change while its command runs. Every command runs under a
   jobserver its supervisor keeps at the grant's size, whatever its first word,
   so a Cargo build started inside `uv`, `just` or a script follows the grant
@@ -2186,7 +2225,8 @@ express_cores = 3
   less.
 - When a run starts it also asks the scheduler, without waiting, for the cores
   that are free at that moment, as a `land` grant of up to 12 cores in all
-  counting `express_cores`, and sets the four variables to the total. On
+  counting `express_cores`, and sets the four variables to the total. Cores of
+  the tip reserve (`tip_build_cores`) that no tip build holds count as free. On
   2026-11-18 eight landings queued behind a lane of 3 cores while the scheduler
   had granted none of its 15 cores; a run took about 164 s on 3 cores under load
   and about 65 s on 12. The reserved cores stay the floor: when nothing is free,

@@ -264,9 +264,12 @@ impl StatusSection for CoresSection {
         } else {
             ""
         };
+        let (kept, held) = (s.tip_build, s.tip_build_used);
+        let tip = (kept > 0).then(|| format!(", {kept} kept for tip builds ({held} in use)"));
+        let tip = tip.unwrap_or_default();
         vec![format!(
             "{} of {} granted to Ignite (using {}, {} counted), {} busy outside it, \
-             at most {} per command{memory}{swap}{pressed}",
+             at most {} per command{tip}{memory}{swap}{pressed}",
             s.granted, s.cores, s.used, s.committed, s.outside, s.max_per_command
         )]
     }

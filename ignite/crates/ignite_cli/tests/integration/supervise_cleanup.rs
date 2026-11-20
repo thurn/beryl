@@ -174,6 +174,7 @@ fn a_restarted_daemon_registers_the_grants_of_commands_still_running() {
     let limits = Limits {
         cores: 8,
         reserved: 0,
+        tip_build: 0,
         floor: Floor::default(),
         resources: BTreeMap::from([("oracle".to_owned(), 1)]),
     };
@@ -230,6 +231,7 @@ fn an_adopted_grant_keeps_growing_through_its_cores_file() {
     let limits = Limits {
         cores: 12,
         reserved: 0,
+        tip_build: 0,
         floor: Floor::default(),
         resources: BTreeMap::new(),
     };

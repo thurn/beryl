@@ -664,5 +664,10 @@
     "label": "A change to a skill under `.agents/` or `.claude/` no longer puts Ignite's own tests in scope, because `ignite_cli`'s tests do not read those directories",
     "metric": "bead.agent-minutes",
     "expect": "down"
+  },
+  {
+    "label": "The scheduler keeps a machine's `tip_build_cores` for the build checks of a tip round (`Reserve::TipBuild`), which start at once on them however full the machine is, so `green` and the tickets waiting on it are not held behind a dozen one-core commands; idle reserved cores are lent to the express lane and the release build",
+    "metric": "ignite.master-lag-minutes",
+    "expect": "down"
   }
 ]

@@ -116,7 +116,7 @@ pub struct SchedulerLender(pub Arc<Scheduler>);
 
 impl CoreLender for SchedulerLender {
     fn borrow(&self, wanted: u32) -> Option<Loan> {
-        let grant = self.0.try_acquire(&GrantRequest {
+        let grant = self.0.try_borrow(&GrantRequest {
             class: Class::Land,
             cores: wanted,
             resources: Vec::new(),
