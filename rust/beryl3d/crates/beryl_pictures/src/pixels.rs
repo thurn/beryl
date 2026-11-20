@@ -234,19 +234,11 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
     let mut page = cli::open(options)?;
     cli::seek_and_act(&mut page, options, &options.at)?;
     let frame = page.frame();
-    let marks = frame.rings.len();
-    same_elements(frame.resolved.len(), b3d_records.len() - b3d_effects - marks)?;
-    // A snapshot drawn with `--only` holds the whole window's records, but only one element's
-    // subtree is drawn on each side, so only those elements can be answerable.
-    if let Some(locator) = options.value("--only") {
-        let root = beryl_scene::agent::locate(frame, locator)
-            .map_err(|error| Usage(format!("--only: {error}")))?;
-        only_inside(&mut b3d_records, root as usize);
-        let web_root = (options.value("--web-only"))
-            .and_then(|at| at.parse::<usize>().ok())
-            .ok_or_else(|| Usage("--only needs --web-only <index of its web pair>".to_owned()))?;
-        only_inside(&mut web_records, web_root);
-    }
+    same_elements(
+        frame.resolved.len(),
+        b3d_records.len() - b3d_effects - frame.rings.len(),
+    )?;
+    keep_only(options, frame, &mut web_records, &mut b3d_records)?;
 
     let mask = diff::glyph_mask(
         [(web_image, &web_records), (b3d_image, &b3d_records)],
@@ -310,6 +302,29 @@ pub(crate) fn pixels(options: &Options) -> Result<String, Error> {
     };
     report(&mut out, dir, &found)?;
     Ok(out)
+}
+
+/// Leaves painting only to the element `--only` names and its web pair (`--web-only`), with
+/// what lies inside each, when the snapshot drew that element alone. Such a snapshot holds the
+/// whole window's records, but only one element's subtree is drawn on each side, so only those
+/// elements can be answerable.
+fn keep_only(
+    options: &Options,
+    frame: &beryl_scene::frame::Frame,
+    web_records: &mut [Record],
+    b3d_records: &mut [Record],
+) -> Result<(), Error> {
+    let Some(locator) = options.value("--only") else {
+        return Ok(());
+    };
+    let root = beryl_scene::agent::locate(frame, locator)
+        .map_err(|error| Usage(format!("--only: {error}")))?;
+    only_inside(b3d_records, root as usize);
+    let web_root = (options.value("--web-only"))
+        .and_then(|at| at.parse::<usize>().ok())
+        .ok_or_else(|| Usage("--only needs --web-only <index of its web pair>".to_owned()))?;
+    only_inside(web_records, web_root);
+    Ok(())
 }
 
 /// What `pixels` found, for `report`.
