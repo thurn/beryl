@@ -38,6 +38,7 @@ def test_the_manifest_declares_the_families_and_products() -> None:
         "scale",
         "iroh",
         "ignite",
+        "ignite-platform",
         "ignite-lint",
     }
     assert set(declared["product"]) == {
@@ -105,7 +106,7 @@ def test_a_change_under_ignite_selects_only_ignites_families() -> None:
             for i in family["inputs"]
         ):
             selected.add(name)
-    assert selected == {"ignite", "ignite-lint"}
+    assert selected == {"ignite", "ignite-platform", "ignite-lint"}
 
 
 def card(name: str) -> str:
