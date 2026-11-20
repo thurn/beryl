@@ -894,8 +894,8 @@ mod tests;
 #[path = "dispatchd_turn_tests.rs"]
 mod turn_tests;
 #[cfg(test)]
-#[path = "dispatchd_wake_tests.rs"]
-mod wake_tests;
-#[cfg(test)]
 #[path = "dispatchd_usage_tests.rs"]
 mod usage_tests;
+#[cfg(test)]
+#[path = "dispatchd_wake_tests.rs"]
+mod wake_tests;
