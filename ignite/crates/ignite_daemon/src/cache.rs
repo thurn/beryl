@@ -16,12 +16,13 @@
 //! The local database also keeps how long each check command took when it passed, from which
 //! the check runner computes the command's hang limit ([`ResultCache::slowest_pass`]).
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use rusqlite::Connection;
 
 use ignite_core::config::Os;
-use ignite_core::ids::{MachineId, RecordId};
+use ignite_core::ids::{CheckName, MachineId, RecordId, SessionId};
 use ignite_core::protocol::Outcome;
 use ignite_core::protocol::hub::{
     CachedResult, FlakyReport, ListingKey, NewResult, Record, ResultKey, StoredListing,
@@ -35,6 +36,12 @@ use crate::outbox;
 /// The hash a listing that must not be kept is stored under on this machine. A listing hash is
 /// hex, so it never equals this word.
 const UNKEPT: &str = "unkept";
+
+/// The message of a failure found in the result cache instead of run.
+pub const FAILED_BEFORE: &str = "failed before on these inputs";
+
+/// The verbs whose outcomes are kept per session for the dispatcher (see `note_sightings`).
+const SIGHTED_VERBS: &[&str] = &["test", "check", "land"];
 
 /// How far back a command's passes count toward its hang limit: 30 days.
 const PASSES_KEPT_S: f64 = 30.0 * 24.0 * 60.0 * 60.0;
@@ -130,6 +137,72 @@ impl ResultCache {
                 let _ = outbox::push_result(&conn, result, at);
             }
         }
+    }
+
+    /// Records, for the dispatcher, each pass and failure in `run` as `session`'s latest outcome
+    /// of the check, when `verb` is `test`, `check` or `land` (see `dispatchd_shared`). `hashes`
+    /// gives each check's input hash. A failure that cannot be written only goes unseen.
+    pub fn note_sightings(
+        &self,
+        session: Option<&SessionId>,
+        verb: &str,
+        run: &crate::checks::CheckRun,
+        hashes: &HashMap<CheckName, String>,
+    ) {
+        let Some(session) = session else {
+            return;
+        };
+        if !SIGHTED_VERBS.contains(&verb) {
+            return;
+        }
+        let at = self.clock.now().to_string();
+        let conn = self.conn();
+        for (check, outcome) in &run.outcomes {
+            let outcome = match outcome {
+                Outcome::Pass => "pass",
+                Outcome::Fail => "fail",
+                Outcome::Flaky | Outcome::Incomplete => continue,
+            };
+            let first_line = run
+                .failures
+                .iter()
+                .find(|f| f.check == *check)
+                .and_then(|f| f.message.as_deref())
+                .filter(|message| *message != FAILED_BEFORE)
+                .and_then(|message| message.lines().map(str::trim).find(|l| !l.is_empty()))
+                .map(str::to_owned);
+            let _ = results::note_sighting(
+                &conn,
+                &rows::CheckSighting {
+                    session: session.to_string(),
+                    check_name: check.to_string(),
+                    verb: verb.to_owned(),
+                    outcome: outcome.to_owned(),
+                    hash: hashes.get(check).cloned(),
+                    first_line,
+                    tip_unknown: 0,
+                    at: at.clone(),
+                },
+            );
+        }
+    }
+
+    /// Marks `session`'s failures of `checks` as ones whose result at the tip could not be
+    /// found or run (see `dispatchd_shared`).
+    pub fn mark_tip_unknown(&self, session: Option<&SessionId>, checks: &[CheckName]) {
+        let Some(session) = session else {
+            return;
+        };
+        let conn = self.conn();
+        for check in checks {
+            let _ = results::mark_tip_unknown(&conn, session.as_str(), check.as_str());
+        }
+    }
+
+    /// Every session's latest outcome of every check recorded at or after `since`, oldest
+    /// first; empty when the database cannot be read.
+    pub fn sightings_since(&self, since: Timestamp) -> Vec<rows::CheckSighting> {
+        results::sightings_since(&self.conn(), &since.to_string()).unwrap_or_default()
     }
 
     /// Sends a command's record to the hub, or queues it when the hub cannot take it. Returns
@@ -481,5 +554,60 @@ mod tests {
         assert_eq!(body.key, key("f:a"));
         // The local copy already answers.
         assert!(cache.lookup(&[key("f:a")])[0].is_some());
+    }
+
+    #[test]
+    fn a_sessions_outcomes_are_noted_with_the_first_line_of_a_run_failure_only() {
+        use crate::checks::{CheckRun, Failure};
+        let hub = Arc::new(FakeHub::default());
+        let cache = cache(&hub);
+        let failure = |name: &str, message: &str| Failure {
+            check: CheckName::new(name).unwrap(),
+            outcome: Outcome::Fail,
+            at: None,
+            message: Some(message.to_owned()),
+            output: None,
+            reason: None,
+        };
+        let run = CheckRun {
+            outcomes: vec![
+                (CheckName::new("rust:a").unwrap(), Outcome::Fail),
+                (CheckName::new("rust:b").unwrap(), Outcome::Fail),
+                (CheckName::new("rust:c").unwrap(), Outcome::Pass),
+                (CheckName::new("rust:d").unwrap(), Outcome::Incomplete),
+            ],
+            failures: vec![
+                failure("rust:a", "\nassertion failed\nmore"),
+                failure("rust:b", FAILED_BEFORE),
+            ],
+            ..CheckRun::default()
+        };
+        let session = SessionId::new("local_s1").unwrap();
+        let hashes = HashMap::from([(CheckName::new("rust:b").unwrap(), "h".to_owned())]);
+        cache.note_sightings(Some(&session), "status", &run, &hashes);
+        assert!(
+            cache.sightings_since(Timestamp::EPOCH).is_empty(),
+            "not a sighted verb"
+        );
+        cache.note_sightings(Some(&session), "test", &run, &hashes);
+        let seen: Vec<(String, String, Option<String>, Option<String>)> = cache
+            .sightings_since(Timestamp::EPOCH)
+            .into_iter()
+            .map(|s| (s.check_name, s.outcome, s.first_line, s.hash))
+            .collect();
+        let text = |s: &str| s.to_owned();
+        assert_eq!(
+            seen,
+            [
+                (
+                    text("rust:a"),
+                    text("fail"),
+                    Some(text("assertion failed")),
+                    None
+                ),
+                (text("rust:b"), text("fail"), None, Some(text("h"))),
+                (text("rust:c"), text("pass"), None, None),
+            ]
+        );
     }
 }

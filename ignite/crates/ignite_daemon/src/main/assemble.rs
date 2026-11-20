@@ -414,6 +414,7 @@ pub fn desks(base: &Base, ctx: &Context, machinery: &Machinery) -> Result<Desks>
         claims: claims.clone(),
         ctx: ctx.clone(),
         server: OnceLock::new(),
+        results: std::sync::Mutex::new(base.open()?),
     });
     let setup = Setup {
         os: base.os,

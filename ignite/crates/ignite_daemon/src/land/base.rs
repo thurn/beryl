@@ -83,6 +83,7 @@ impl Landing {
             let verdicts = match self.at_base(ctx, pass, &failed) {
                 Ok(verdicts) => verdicts,
                 Err(why) => {
+                    self.gate.tip_unknown(&failed, pass.options);
                     gated.base = Some(format!("not compared with the tip: {why}"));
                     return gated;
                 }

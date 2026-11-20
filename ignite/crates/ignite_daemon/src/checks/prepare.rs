@@ -4,11 +4,12 @@
 //! ([`on_threads`]); the landing gate lists in two rounds, so a fault found without building
 //! anything stops it before the families that need a product are listed.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::panic::resume_unwind;
 use std::sync::Arc;
 use std::thread;
 
+use ignite_core::ids::CheckName;
 use ignite_core::manifest::Family;
 use ignite_core::protocol::hub::{CachedResult, ListingKey};
 
@@ -383,10 +384,18 @@ impl Checks {
                 (family.family, items.collect())
             })
             .collect();
+        let hashes: HashMap<CheckName, String> = families
+            .iter()
+            .flat_map(|(_, items)| items)
+            .map(|(keyed, _)| (keyed.listed.check.clone(), keyed.key.hash.to_string()))
+            .collect();
         let ran = on_threads(families, |(name, items), own| {
             self.execute(ctx, tree, &name, items, options, own, None);
         });
         for ((), own) in ran {
+            // Each session's outcomes let the dispatcher see a failure several sessions share.
+            self.cache
+                .note_sightings(options.session.as_ref(), &options.verb, &own, &hashes);
             run.absorb(own);
         }
     }

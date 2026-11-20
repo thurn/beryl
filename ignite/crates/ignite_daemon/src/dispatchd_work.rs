@@ -13,7 +13,8 @@ use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 
 use super::{
-    DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, cli, feed, label, slots, suits, tier_for,
+    DEFAULT_EFFORT, Dispatcher, Purpose, Reserved, State, cli, feed, label, shared, slots, suits,
+    tier_for,
 };
 use crate::pool::Member;
 use crate::server::Context;
@@ -34,6 +35,9 @@ struct Asking {
     /// Seconds the oldest request of ticket work has waited for cores, when that is at least
     /// [`BACKLOG_SECONDS`]: the hub is then asked only for tickets that hold `master` back.
     backlog: Option<f64>,
+    /// Why only tickets that hold `master` back start while a shared failure lasts (see
+    /// `shared`).
+    shared: Option<String>,
 }
 
 /// How long ticket work may wait for cores before the dispatcher stops starting ordinary
@@ -118,6 +122,7 @@ impl Dispatcher {
             }
             Self::expire_given(&mut state, now);
             self.watch_silence(&mut state, now);
+            self.watch_shared(&mut state, members, now);
             Self::retry_orphans(&mut state, members, now);
             Self::drop_expired_handoffs(&mut state, now);
             self.plan_asking(&mut state, members, now)
@@ -259,6 +264,11 @@ impl Dispatcher {
             workers: slots::capacity(state, members),
             master_only,
             backlog: (waited >= BACKLOG_SECONDS).then_some(waited),
+            shared: state
+                .shared
+                .current
+                .as_ref()
+                .map(shared::SharedFailure::reason),
         })
     }
 
@@ -285,10 +295,11 @@ impl Dispatcher {
             workers,
             master_only,
             backlog,
+            shared,
         } = asking;
         // While ticket work waits long for cores, only a ticket that holds `master` back starts:
         // the pool asks as a paused pool does.
-        let master_only = master_only || backlog.is_some();
+        let master_only = master_only || backlog.is_some() || shared.is_some();
         let holds = super::usage_holds(
             &self.pool,
             ctx.config.pool.usage_hold_percent,
@@ -336,6 +347,11 @@ impl Dispatcher {
                 "commands have waited {waited:.0} s for cores, so only tickets that hold master \
                  back start ({why})"
             );
+        }
+        if let Some(reason) = &shared
+            && !free.is_empty()
+        {
+            why = format!("{reason} ({why})");
         }
         if !held.is_empty() {
             let held_why = self.ask_group(ctx, &mut held, &mut trees, workers, true, &mut offers);

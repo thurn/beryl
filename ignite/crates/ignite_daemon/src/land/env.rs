@@ -102,6 +102,10 @@ pub trait LandGate: Send + Sync {
         carried: Option<&Carried>,
         excused: &Excused,
     ) -> GateRun;
+    /// Records that the landing of `options.session` was refused because the results of
+    /// `checks` at the tip could not be found or run, so that the dispatcher can stop starting
+    /// tickets into that failure (see `dispatchd_shared`).
+    fn tip_unknown(&self, _checks: &[CheckName], _options: &RunOptions) {}
     /// Runs `checks` in `tree` as it is, each from the result cache where it can be, with the
     /// immediate rerun of a failure. A check the manifests no longer declare has no verdict.
     fn run_checks(
@@ -280,6 +284,12 @@ impl LandGate for ChecksGate {
 
     fn began(&self, handle: &Handle) -> Option<Timestamp> {
         self.checks.handle_began(handle)
+    }
+
+    fn tip_unknown(&self, checks: &[CheckName], options: &RunOptions) {
+        self.checks
+            .cache()
+            .mark_tip_unknown(options.session.as_ref(), checks);
     }
 
     fn verdict(&self, ctx: &Context, key: &VerdictKey) -> Option<Verdict> {

@@ -99,7 +99,7 @@ impl Checks {
                         check: keyed.listed.check.clone(),
                         outcome: Outcome::Fail,
                         at: None,
-                        message: Some("failed before on these inputs".to_owned()),
+                        message: Some(crate::cache::FAILED_BEFORE.to_owned()),
                         output: hit.output.clone(),
                         reason: None,
                     });

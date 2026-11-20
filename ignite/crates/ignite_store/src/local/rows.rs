@@ -310,4 +310,20 @@ crate::tables! {
         /// 1 once the hold's notification and justiciar report were sent.
         reported: i64,
     }
+
+    /// The latest outcome of one check for one session (see `results::note_sighting`).
+    CheckSighting = "check_sightings" {
+        session: String,
+        check_name: String,
+        /// `test`, `check` or `land`.
+        verb: String,
+        /// `pass` or `fail`.
+        outcome: String,
+        hash: Option<String>,
+        /// The first line of a failure's message; `None` for a cached failure.
+        first_line: Option<String>,
+        /// 1 when a landing was refused because the check's result at the tip was unknown.
+        tip_unknown: i64,
+        at: String,
+    }
 }

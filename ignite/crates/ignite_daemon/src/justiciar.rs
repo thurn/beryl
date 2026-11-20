@@ -14,6 +14,8 @@
 //!   agent's build used all 18, which is how idle work is meant to behave. A scheduler that
 //!   grants nothing at all would also stall landings and tip rounds, and the hub files a ticket
 //!   when `master` stops moving.
+//! - A shared failure, one check failing the same way for several workers here, is reported
+//!   once, unless an open regression ticket already names the check (see `dispatchd_shared.rs`).
 //! - A request `ignite justiciar` made while the hub was down is sent once it answers again.
 //! - When the hub has not answered for [`HUB_DOWN_S`], the dispatcher hands a justiciar prompt
 //!   to an idle worker of this machine directly (see `dispatchd_justiciar.rs`).
@@ -174,6 +176,7 @@ impl Reporter {
         self.state().hub_down_since = None;
         self.send_crashes(ctx);
         self.send_loops(ctx, now);
+        self.dispatcher.report_shared(ctx, &self.host);
         self.send_local_request(ctx);
     }
 

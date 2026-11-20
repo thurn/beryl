@@ -270,6 +270,9 @@ impl PoolVerb {
             .iter()
             .map(crate::dispatchd::hold_line),
         );
+        if let Some(shared) = self.dispatcher.shared_failure() {
+            lines.push(format!("shared   {shared}"));
+        }
         for app in crate::dispatchd::APPS {
             let (mode, overridden) = self.dispatcher.mode(app);
             if mode == PoolMode::Cli || overridden {
@@ -583,7 +586,8 @@ impl crate::doctor::StatusSection for PauseSection {
         } else {
             None
         };
-        if pause.is_none() && holds.is_empty() {
+        let shared = self.dispatcher.shared_failure();
+        if pause.is_none() && holds.is_empty() && shared.is_none() {
             // Whether more workers would help: only when the reason is about workers, never
             // when it is about tickets or cores.
             return self
@@ -596,6 +600,7 @@ impl crate::doctor::StatusSection for PauseSection {
                 .unwrap_or_default();
         }
         let mut lines: Vec<String> = pause.map(str::to_owned).into_iter().collect();
+        lines.extend(shared);
         lines.extend(holds);
         let query = ignite_core::protocol::tickets::TicketQuery {
             label_any: HOLDING_MASTER.iter().map(|l| (*l).to_owned()).collect(),

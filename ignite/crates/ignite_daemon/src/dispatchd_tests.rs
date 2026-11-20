@@ -33,6 +33,10 @@ pub(super) struct FakeHost {
     /// The live processes under each process, with the asker's branch already left out; a
     /// process missing here cannot be read.
     pub(super) processes: Mutex<BTreeMap<u32, Vec<u32>>>,
+    /// Each session's latest outcome of each check, as the result cache records them.
+    pub(super) sightings: Mutex<Vec<CheckSighting>>,
+    /// Where `green` points; `None` when there is no `green` branch.
+    pub(super) green: Mutex<Option<String>>,
 }
 
 pub(super) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -83,6 +87,19 @@ impl Host for FakeHost {
 
     fn running_under(&self, root: u32, _asker: Option<u32>) -> Option<Vec<u32>> {
         lock(&self.processes).get(&root).cloned()
+    }
+
+    fn check_sightings(&self, since: Timestamp) -> Vec<CheckSighting> {
+        let since = since.to_string();
+        lock(&self.sightings)
+            .iter()
+            .filter(|s| s.at >= since)
+            .cloned()
+            .collect()
+    }
+
+    fn green(&self) -> Option<String> {
+        lock(&self.green).clone()
     }
 
     /// Releasing frees the session's tree, as the real release does.

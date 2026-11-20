@@ -358,6 +358,8 @@ pub struct DaemonHost {
     pub ctx: Context,
     /// Set once the server exists.
     pub server: OnceLock<Weak<Server>>,
+    /// The local database, for the sessions' latest check outcomes (see `dispatchd_shared`).
+    pub results: Mutex<rusqlite::Connection>,
 }
 
 impl DaemonHost {
@@ -462,6 +464,20 @@ impl Host for DaemonHost {
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool {
         self.server()
             .is_some_and(|server| server.handles().interrupt(session, &reply) > 0)
+    }
+
+    fn check_sightings(&self, since: Timestamp) -> Vec<ignite_store::local::rows::CheckSighting> {
+        let conn = self.results.lock().unwrap_or_else(PoisonError::into_inner);
+        ignite_store::local::results::sightings_since(&conn, &since.to_string()).unwrap_or_default()
+    }
+
+    fn green(&self) -> Option<String> {
+        let green = self.ctx.config.repository.green.as_ref()?;
+        self.ctx
+            .git
+            .tip(green)
+            .ok()
+            .map(|commit| commit.to_string())
     }
 
     fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()> {

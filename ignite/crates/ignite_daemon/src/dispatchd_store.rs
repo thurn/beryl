@@ -9,7 +9,8 @@
 //! Saved: the pending and given instructions, the reservations, the hand-offs that wait for
 //! another worker (`orphan`), the workers that refused (`refused`), the stalls (when a silent
 //! worker was checked and messaged), the sessions whose ticket Ignite released (`released`), so a
-//! restart does not let one claim again, the next instruction ID and the justiciar worker. An
+//! restart does not let one claim again, the next instruction ID, the justiciar worker and the
+//! shared failure in force (see `shared`), so a restart does not lift it. An
 //! instruction that was given and not acknowledged is queued again first, so that it is given
 //! again at once. Instruction IDs continue where they were, so an acknowledgement of an old ID
 //! cannot be taken for a new instruction. What is not saved is rebuilt from the hub and the
@@ -70,6 +71,9 @@ fn entries_of(state: &State) -> Vec<DispatchEntry> {
     if let Some(justiciar) = &state.justiciar {
         entries.extend(entry(META, &"justiciar", justiciar));
     }
+    if state.shared != super::shared::Watch::default() {
+        entries.extend(entry(META, &"shared", &state.shared));
+    }
     entries
 }
 
@@ -118,6 +122,7 @@ pub(super) fn restore(entries: &[DispatchEntry]) -> State {
             META => match row.key.as_str() {
                 "next_id" => state.next_id = read(row).unwrap_or(0),
                 "justiciar" => state.justiciar = read(row),
+                "shared" => state.shared = read(row).unwrap_or_default(),
                 _ => {}
             },
             _ => {}

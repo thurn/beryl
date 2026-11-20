@@ -43,7 +43,7 @@ use ignite_core::protocol::hub::{Reservation, WorkerRole};
 use ignite_core::protocol::tickets::TicketDetail;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::{Error, Result};
-use ignite_store::local::rows::DispatchEntry;
+use ignite_store::local::rows::{CheckSighting, DispatchEntry};
 
 use crate::pool::{Member, Pool};
 use crate::server::Context;
@@ -58,6 +58,8 @@ mod feed;
 mod justiciar;
 #[path = "dispatchd_raw.rs"]
 mod raw;
+#[path = "dispatchd_shared.rs"]
+mod shared;
 #[path = "dispatchd_slots.rs"]
 mod slots;
 #[path = "dispatchd_stall.rs"]
@@ -170,6 +172,11 @@ pub trait Host: Send + Sync {
     /// Whether a command that ends the session's ticket is still running: its current command,
     /// or an operation it started that runs under a handle after its caller stopped waiting.
     /// Other commands (`test`, `check`, `wait`, ...) do not count.
+    /// Every session's latest outcome of every check on this machine recorded at or after
+    /// `since`, oldest first (see `shared`).
+    fn check_sightings(&self, since: Timestamp) -> Vec<CheckSighting>;
+    /// The commit the `green` branch points at; `None` when there is none (see `shared`).
+    fn green(&self) -> Option<String>;
     fn ending_ticket(&self, session: &SessionId) -> bool {
         self.command(session)
             .is_some_and(|command| command.running && ends_ticket(&command.command))
@@ -299,6 +306,8 @@ struct State {
     cli_calls: Vec<cli::Call>,
     /// The apps in CLI mode at the last step, with their slots (see `cli`).
     cli_layout: Vec<cli::Layout>,
+    /// The shared failure in force, if any (see `shared`).
+    shared: shared::Watch,
 }
 
 /// The dispatcher's state and the pool, shared by the `dispatch`, `pool` and `tell` verbs.
@@ -898,6 +907,9 @@ mod allowed_tests;
 #[cfg(test)]
 #[path = "dispatchd_cli_tests.rs"]
 mod cli_tests;
+#[cfg(test)]
+#[path = "dispatchd_shared_tests.rs"]
+mod dispatchd_shared_tests;
 #[cfg(test)]
 #[path = "dispatchd_hold_tests.rs"]
 mod hold_tests;
