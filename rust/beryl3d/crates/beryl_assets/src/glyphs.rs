@@ -117,7 +117,11 @@ impl GlyphWorker {
     /// [`GlyphWorker::request`], it fills only the pages that leave the atlas's last
     /// `DEMAND_PAGES` free, after the icons and glyphs asked for with it: at two pixels to a
     /// point and more, the Latin glyphs of every type style would fill more pages than the atlas
-    /// holds. A glyph left out is rasterized when it is requested.
+    /// holds. A glyph left out is rasterized when it is requested. Ask for the icons
+    /// ([`GlyphWorker::icons`]) first: the worker batches the requests that are waiting, and a
+    /// batch rasterizes icons before these glyphs, so asking for these first lets a batch that
+    /// holds only them fill the pages the icons need, and which batches form is a matter of
+    /// timing.
     pub fn prepare(&self, keys: impl IntoIterator<Item = GlyphKey>) {
         let keys: Vec<GlyphKey> = keys.into_iter().collect();
         if keys.is_empty() {

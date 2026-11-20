@@ -77,8 +77,8 @@ impl Headless {
         let target = Target::offscreen(&renderer, pixels(width), pixels(height));
         let (out, pages) = mpsc::channel();
         let glyphs = GlyphWorker::spawn(out, || {}, crate::threads::asset_thread);
-        glyphs.prepare(prepare_latin(scale));
         glyphs.icons(scale);
+        glyphs.prepare(prepare_latin(scale));
         let mut head = Self {
             page,
             renderer,

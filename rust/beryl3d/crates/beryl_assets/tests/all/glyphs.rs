@@ -213,8 +213,8 @@ fn a_mana_symbol_is_inked() {
 fn prepared_then_demanded(scale: f32) -> (Vec<u16>, Vec<GlyphCell>, usize, Vec<GlyphKey>) {
     let (out, results) = mpsc::channel();
     let worker = GlyphWorker::spawn(out, || {}, || {});
-    worker.prepare(prepare_latin(scale));
     worker.icons(scale);
+    worker.prepare(prepare_latin(scale));
     let size = (32.0 * scale) as u16;
     let mana = FontRef::from_index(Font::Mana.file().data, 0).expect("the Mana font parses");
     let mut demanded = vec![GlyphKey {
@@ -245,7 +245,9 @@ fn prepared_then_demanded(scale: f32) -> (Vec<u16>, Vec<GlyphCell>, usize, Vec<G
 /// On a Retina display (scale 2) and a phone (scale 3), the Latin glyphs a host asks for before
 /// its first frame filled more pages than the atlas holds. The renderer refused the pages past
 /// its last, so every icon and the glyphs laid-out text asked for afterwards, such as mana
-/// symbols and letters of "You won the flip", never drew.
+/// symbols and letters of "You won the flip", never drew. The test asks as hosts do, icons
+/// first: the worker takes whatever requests are waiting as one batch, so a request's place in
+/// the atlas must not depend on how the messages were split into batches.
 #[test]
 fn every_icon_and_demanded_glyph_fits_the_atlas_at_every_display_scale() {
     for scale in [1.0, 2.0, 3.0] {
