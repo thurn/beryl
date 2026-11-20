@@ -387,7 +387,15 @@ impl Dispatcher {
         let members = self.pool.members().unwrap_or_default();
         let mut state = self.state();
         let now = ctx.clock.now();
-        Self::queue_handoff(&ctx.config, &mut state, reservation, &app, detail, &members, now);
+        Self::queue_handoff(
+            &ctx.config,
+            &mut state,
+            reservation,
+            &app,
+            detail,
+            &members,
+            now,
+        );
         drop(state);
         self.save();
     }

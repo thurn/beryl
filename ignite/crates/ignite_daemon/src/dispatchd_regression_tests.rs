@@ -47,8 +47,14 @@ fn a_regression_goes_to_the_idle_worker_whose_ticket_caused_it() {
     // The culprit keeps the conversation in which it made the change.
     assert!(!handoff.clear);
     let prompt = handoff.prompt.unwrap();
-    assert!(prompt.contains("regression caused by your last ticket"), "{prompt}");
-    assert!(prompt.contains("`ignite start R --reservation 7f3a`"), "{prompt}");
+    assert!(
+        prompt.contains("regression caused by your last ticket"),
+        "{prompt}"
+    );
+    assert!(
+        prompt.contains("`ignite start R --reservation 7f3a`"),
+        "{prompt}"
+    );
     assert_eq!(rig.state_of("local_w1"), "reserved");
     assert_eq!(rig.state_of("local_w2"), "idle");
 }
@@ -96,8 +102,7 @@ fn a_ticket_for_the_culprit_goes_to_another_idle_worker() {
     let rig = rig(&["local_w1", "local_w2"]);
     finished(&rig, "local_w1", "T.1");
     rig.hub.insert_ticket(regression("R", "T.1"));
-    rig.hub
-        .insert_ticket(detail("U", "open", None, &[], ""));
+    rig.hub.insert_ticket(detail("U", "open", None, &[], ""));
     // In one request for work, the hub names `local_w2` for the regression and `local_w1` for
     // an ordinary ticket. The regression goes to `local_w1`, so the ticket goes to `local_w2`.
     reserve_for(&rig, "R", "local_w2");
@@ -105,6 +110,11 @@ fn a_ticket_for_the_culprit_goes_to_another_idle_worker() {
     let first = rig.step().unwrap();
     let second = rig.step().unwrap();
     assert_eq!(first.session, Some(session("local_w1")));
-    assert!(first.prompt.unwrap().contains("ignite start R --reservation"));
+    assert!(
+        first
+            .prompt
+            .unwrap()
+            .contains("ignite start R --reservation")
+    );
     assert_eq!(handoff_to(&second), ("local_w2", "U"));
 }
