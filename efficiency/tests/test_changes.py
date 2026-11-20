@@ -40,7 +40,7 @@ def test_the_changes_file_is_valid() -> None:
     checkout = Path(__file__).resolve().parents[2]
     refs = [
         ref
-        for ref in ("origin/staging", "staging")
+        for ref in ("origin/ignite/staging", "staging")
         if subprocess.run(
             ["git", "rev-parse", "--verify", "--quiet", ref],
             cwd=checkout,

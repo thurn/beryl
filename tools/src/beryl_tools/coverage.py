@@ -8,9 +8,9 @@ that ran to the lines of ui/src's files: JavaScript and CSS both at line granula
 also names the fixtures its page fetched, and the file each fixture's recording's hash, for
 changes to the Rust that records them.
 
-By default it measures origin/staging in a detached worktree of its own, which it removes after;
-`--commit` names another commit, and `--here` measures this checkout as it is. The result goes to
-`$BERYL_CACHE/ci/coverage/<commit>.json`, keyed by the checks' ids (`ui-test:<title>`,
+By default it measures origin/ignite/staging in a detached worktree of its own, which it removes
+after; `--commit` names another commit, and `--here` measures this checkout as it is. The result
+goes to `$BERYL_CACHE/ci/coverage/<commit>.json`, keyed by the checks' ids (`ui-test:<title>`,
 `verb:<verb>/<seat>/<layout>`, `shots:<name>`), with `latest.json` naming the newest clean one.
 A coverage run is not a check: it fails on no check's failure, but lists the checks that
 failed.
@@ -375,8 +375,16 @@ def in_tree(
     place = place or folder()
     with system.file_lock(place / ".lock"):
         if commit.startswith("origin/"):
+            name = commit.removeprefix("origin/")
+            # Ignite's refs (`origin/ignite/staging`) are not branches: they live under
+            # `refs/ignite/` on the remote, so a bare name would look for a branch.
+            refspec = (
+                f"refs/{name}:refs/remotes/{commit}"
+                if name.startswith("ignite/")
+                else name
+            )
             subprocess.run(
-                ["git", "fetch", "--quiet", "origin", commit.removeprefix("origin/")],
+                ["git", "fetch", "--quiet", "origin", refspec],
                 cwd=paths.REPO,
                 check=False,
             )
@@ -431,8 +439,8 @@ def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     )
     p.add_argument(
         "--commit",
-        default="origin/staging",
-        help="the commit to measure, in a worktree of its own (origin/staging)",
+        default="origin/ignite/staging",
+        help="the commit to measure, in a worktree of its own (origin/ignite/staging)",
     )
     p.add_argument(
         "--here", action="store_true", help="measure this checkout as it is instead"

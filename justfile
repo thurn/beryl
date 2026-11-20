@@ -362,7 +362,7 @@ blunder-hunt *args:
 test-py *args:
     cd tools && uv run --quiet pytest "$@"
 
-# The source lines each browser check runs, at low priority, into the cache (--commit REF, default origin/staging; --here)
+# The source lines each browser check runs, at low priority, into the cache (--commit REF, default origin/ignite/staging; --here)
 [group('checks')]
 coverage *args:
     {{ low }} {{ by }} coverage "$@"

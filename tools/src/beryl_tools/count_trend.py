@@ -147,8 +147,8 @@ def git(*args: str) -> tuple[int, str]:
 
 
 def on_staging() -> str | None:
-    """HEAD's full hash, when it is a clean, detached commit already on origin/staging, as
-    Ignite's checkouts of a tip are; None for a branch or a working tree with changes, whose
+    """HEAD's full hash, when it is a clean, detached commit already on origin/ignite/staging,
+    as Ignite's checkouts of a tip are; None for a branch or a working tree with changes, whose
     counts say nothing about staging."""
     code, branch = git("symbolic-ref", "-q", "HEAD")
     if code == 0 and branch:
@@ -156,7 +156,7 @@ def on_staging() -> str | None:
     _, dirty = git("status", "--porcelain", "--untracked-files=no")
     if dirty:
         return None
-    code, _ = git("merge-base", "--is-ancestor", "HEAD", "origin/staging")
+    code, _ = git("merge-base", "--is-ancestor", "HEAD", "origin/ignite/staging")
     if code != 0:
         return None
     _, head = git("rev-parse", "HEAD")
