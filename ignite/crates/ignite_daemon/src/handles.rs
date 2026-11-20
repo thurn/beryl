@@ -268,13 +268,14 @@ impl Handles {
         running
     }
 
-    /// Whether an operation that `session` asked for is still running, such as a `land` whose
-    /// caller's wait ended and that now runs under its handle.
-    pub fn running_for(&self, session: &SessionId) -> bool {
-        lock(&self.state)
-            .replies
-            .values()
-            .any(|entry| entry.reply.is_none() && entry.session.as_ref() == Some(session))
+    /// Whether an operation of one of `verbs` that `session` asked for is still running, such as
+    /// a `land` whose caller's wait ended and that now runs under its handle.
+    pub fn running_for(&self, session: &SessionId, verbs: &[&str]) -> bool {
+        lock(&self.state).replies.values().any(|entry| {
+            entry.reply.is_none()
+                && entry.session.as_ref() == Some(session)
+                && verbs.contains(&entry.verb.as_str())
+        })
     }
 
     /// Records the reply of a finished operation and wakes everyone waiting on it.

@@ -3276,19 +3276,25 @@ leased for nothing.
   without waiting for the silence above. The repository's `Stop` hook
   (`.claude/settings.json`) runs at the end of every turn and asks
   `ignite turn-ended`, which decides. The first stop with the ticket held is
-  blocked with a message that names the ticket and says to run `ignite land` or
-  `ignite release`. If the worker stops again in the same turn without doing
-  either, the daemon releases the ticket itself, saving the tree as
-  `ignite/<ticket>` and using the worker's last message as the release note.
-  This applies only to a worker of the machine's pool that holds a ticket. A
-  person's own session, including one running `/ignite`, ends turns to talk to
-  the person, and is never blocked. Neither is a justiciar's session, nor a
-  worker with an `ignite` command still running, such as a `land` waiting in the
-  background. The hook names the session by the desktop app's
-  `CLAUDE_CODE_HOST_SESSION_ID`, the ID Ignite records for the lease; the hook
-  input's own `session_id` is Claude Code's internal ID, which Ignite never
-  sees. Codex has no such hook, so Codex workers rely on the silence check
-  alone, which also still catches workers that died.
+  blocked with a message that names the ticket and every way out: `ignite land`
+  if the work is done, `ignite release` if it is not, and `ignite justiciar`
+  followed by `ignite release` when the ticket cannot be completed as written
+  (its acceptance contradicts its body, or gates on something the worker cannot
+  control, such as a timing on a loaded machine). If the worker stops again in
+  the same turn without doing either, the daemon releases the ticket itself,
+  saving the tree as `ignite/<ticket>` and using the worker's last message as
+  the release note. This applies only to a worker of the machine's pool that
+  holds a ticket. A person's own session, including one running `/ignite`, ends
+  turns to talk to the person, and is never blocked. Neither is a justiciar's
+  session, nor a worker with a `land`, `release` or `close` still running, such
+  as a `land` waiting in the background: those verbs end the ticket and their
+  finish wakes the worker. A running `test`, `check`, `sync` or `wait` does not
+  exempt the worker, because nothing wakes it when that command finishes. The
+  hook names the session by the desktop app's `CLAUDE_CODE_HOST_SESSION_ID`, the
+  ID Ignite records for the lease; the hook input's own `session_id` is Claude
+  Code's internal ID, which Ignite never sees. Codex has no such hook, so Codex
+  workers rely on the silence check alone, which also still catches workers that
+  died.
 - The hub releases the claims of a machine that has not reported for 2 hours,
   with a comment on each ticket.
 - The hub also releases a ticket that is in progress although no Ignite session

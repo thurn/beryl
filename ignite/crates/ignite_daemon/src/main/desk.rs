@@ -21,7 +21,7 @@ use crate::claim::{
     self, ClaimRequest, Claims, Leased, ReleaseRequest, Resumed, Saved, Target, TicketDesk,
     TreeDesk,
 };
-use crate::dispatchd::{Host, SessionCommand};
+use crate::dispatchd::{Host, SessionCommand, TICKET_ENDING_VERBS, ends_ticket};
 use crate::handles::Handles;
 use crate::hubclient::HubClient;
 use crate::sched::Scheduler;
@@ -437,11 +437,12 @@ impl Host for DaemonHost {
             .release_session(&self.ctx, session, ticket, reason)
     }
 
-    fn busy(&self, session: &SessionId) -> bool {
-        self.command(session).is_some_and(|command| command.running)
+    fn ending_ticket(&self, session: &SessionId) -> bool {
+        self.command(session)
+            .is_some_and(|command| command.running && ends_ticket(&command.command))
             || self
                 .server()
-                .is_some_and(|server| server.handles().running_for(session))
+                .is_some_and(|server| server.handles().running_for(session, TICKET_ENDING_VERBS))
     }
 }
 

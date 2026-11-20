@@ -110,6 +110,18 @@ pub struct SessionCommand {
     pub running: bool,
 }
 
+/// The verbs that end a ticket. Finishing one of them reports on the ticket or hands it back,
+/// so a worker that stops while one runs in the background is not abandoning the ticket.
+pub const TICKET_ENDING_VERBS: &[&str] = &["land", "release", "close"];
+
+/// Whether `command` (a verb and its first argument, as in [`SessionCommand`]) ends a ticket.
+pub fn ends_ticket(command: &str) -> bool {
+    command
+        .split_whitespace()
+        .next()
+        .is_some_and(|verb| TICKET_ENDING_VERBS.contains(&verb))
+}
+
 /// What the dispatcher needs from the rest of the daemon.
 pub trait Host: Send + Sync {
     /// Ticket trees free to lease.
@@ -130,10 +142,12 @@ pub trait Host: Send + Sync {
     fn interrupt(&self, session: &SessionId, reply: Reply) -> bool;
     /// Gives back the ticket of a session that is gone or idle, keeping its work.
     fn release(&self, session: &SessionId, ticket: &TicketId, reason: &str) -> Result<()>;
-    /// Whether an `ignite` command of the session is still running: its current command, or an
-    /// operation it started that runs under a handle after its caller stopped waiting.
-    fn busy(&self, session: &SessionId) -> bool {
-        self.command(session).is_some_and(|command| command.running)
+    /// Whether a command that ends the session's ticket is still running: its current command,
+    /// or an operation it started that runs under a handle after its caller stopped waiting.
+    /// Other commands (`test`, `check`, `wait`, ...) do not count.
+    fn ending_ticket(&self, session: &SessionId) -> bool {
+        self.command(session)
+            .is_some_and(|command| command.running && ends_ticket(&command.command))
     }
 }
 

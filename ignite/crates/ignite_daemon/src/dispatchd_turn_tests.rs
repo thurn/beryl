@@ -33,6 +33,7 @@ fn a_worker_that_stops_holding_its_ticket_is_told_once_to_land_or_release() {
     assert!(reply.text.contains("T.1"), "{}", reply.text);
     assert!(reply.text.contains("ignite land -m"), "{}", reply.text);
     assert!(reply.text.contains("ignite release -m"), "{}", reply.text);
+    assert!(reply.text.contains("ignite justiciar"), "{}", reply.text);
     assert!(lock(&rig.host.releases).is_empty());
 }
 
@@ -88,16 +89,31 @@ fn a_justiciars_session_is_never_blocked_or_released() {
 }
 
 #[test]
-fn a_worker_with_a_running_command_is_never_blocked_or_released() {
+fn a_worker_with_a_running_test_is_blocked_then_released() {
     let rig = holding(&[]);
+    run(&rig, "test rust");
+    assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "block");
+    assert_eq!(
+        verdict(&ended(&rig, &["--session", "local_w1", "--again"])),
+        "released"
+    );
+}
+
+fn run(rig: &Rig, command: &str) {
     lock(&rig.host.commands).insert(
         session("local_w1"),
         SessionCommand {
-            command: "land".to_owned(),
+            command: command.to_owned(),
             since: ignite_core::traits::Clock::now(rig.clock.as_ref()),
             running: true,
         },
     );
+}
+
+#[test]
+fn a_worker_with_a_running_land_is_never_blocked_or_released() {
+    let rig = holding(&[]);
+    run(&rig, "land T.1");
     assert_eq!(verdict(&ended(&rig, &["--session", "local_w1"])), "pass");
     assert_eq!(
         verdict(&ended(&rig, &["--session", "local_w1", "--again"])),

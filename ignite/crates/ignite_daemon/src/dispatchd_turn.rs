@@ -7,10 +7,14 @@
 //!
 //! - `pass`: the session may stop. It is not a worker of this machine's pool (a person's own
 //!   session, even one running `/ignite`, ends turns to talk to the person), it holds no ticket,
-//!   it holds a justiciar ticket, or one of its `ignite` commands is still running (a `land`
-//!   waiting in the background holds the work legitimately).
-//! - `block`: the first stop with the ticket held. The text names the ticket and the two ways
-//!   out, `ignite land` and `ignite release`, and the hook keeps the worker going with it.
+//!   it holds a justiciar ticket, or a `land`, `release` or `close` of the session is still
+//!   running. Those verbs end the ticket, and their finish wakes the worker, so a `land` waiting
+//!   in the background holds the work legitimately. A running `test`, `check`, `sync` or `wait`
+//!   gives no such guarantee (a worker once ended many turns with a background `test` running
+//!   and nothing woke it), so it does not exempt the worker.
+//! - `block`: the first stop with the ticket held. The text names the ticket and every way out
+//!   (`ignite land`, `ignite release`, and `ignite justiciar` for a ticket that cannot be done
+//!   as written), and the hook keeps the worker going with it.
 //! - `released`: the worker stopped again (`--again`, from the hook's `stop_hook_active`) without
 //!   landing or releasing, so Ignite gives the ticket back as the stall rule would. The tree is
 //!   saved as the ticket's branch and the worker's last message (`--note`) is the release note.
@@ -102,11 +106,18 @@ impl Verb for TurnEndedVerb {
 fn block_text(ticket: &TicketId) -> String {
     format!(
         "block    You are ending your turn while you hold {ticket}, and nothing will report on \
-         it. Before you stop, run `ignite land -m <note>` if the work is done, or `ignite \
-         release -m <exact state>` if it is not, with the dependency when it waits on another \
-         ticket (see `ignite guide release`). If you stop again without either, Ignite releases \
-         {ticket} itself, saves its tree as ignite/{ticket} and uses your last message as the \
-         note."
+         it. Before you stop, do one of these:\n\
+         1. If the work is done, run `ignite land -m <note>`.\n\
+         2. If it is not, run `ignite release -m <exact state>`, with the dependency when it \
+         waits on another ticket (see `ignite guide release`).\n\
+         3. If the ticket cannot be completed as written (its acceptance contradicts its body, \
+         or gates on something you cannot control, such as a timing on a loaded machine), run \
+         `ignite justiciar \"<what is impossible, and the evidence>\"` and then `ignite \
+         release`.\n\
+         A figure measured on a loaded machine is reported, never gated on or chased, unless \
+         the acceptance names a deterministic measure.\n\
+         If you stop again without any of these, Ignite releases {ticket} itself, saves its tree \
+         as ignite/{ticket} and uses your last message as the note."
     )
 }
 
@@ -144,8 +155,8 @@ impl Dispatcher {
         let Some(ticket) = self.host.holders().get(session).cloned() else {
             return pass("holds no ticket");
         };
-        if self.host.busy(session) {
-            return pass("an ignite command of the session is still running");
+        if self.host.ending_ticket(session) {
+            return pass("a land, release or close of the session is still running");
         }
         // A lookup that fails proves nothing, so the session is let go rather than blocked.
         match ctx.hub.ticket(&ticket) {

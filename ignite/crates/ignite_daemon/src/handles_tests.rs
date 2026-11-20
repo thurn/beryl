@@ -222,12 +222,13 @@ fn a_sessions_operation_counts_as_running_until_it_finishes_even_across_a_restar
     let worker = session("local_w1");
     let before = Handles::open(clock.clone(), db.clone()).unwrap();
     let handle = before.create("land", Some(&worker), None);
-    assert!(before.running_for(&worker));
-    assert!(!before.running_for(&session("local_other")));
+    assert!(before.running_for(&worker, &["land"]));
+    assert!(!before.running_for(&worker, &["test"]));
+    assert!(!before.running_for(&session("local_other"), &["land"]));
     drop(before);
 
     let after = Handles::open(clock, db).unwrap();
-    assert!(after.running_for(&worker));
+    assert!(after.running_for(&worker, &["land"]));
     after.finish(&handle, Reply::text(Exit::Success, "landed"));
-    assert!(!after.running_for(&worker));
+    assert!(!after.running_for(&worker, &["land"]));
 }
