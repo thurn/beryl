@@ -1924,8 +1924,8 @@
         "note": "The gallery's silver rule: `.metal-silver`."
       },
       "GALLERY_BADGE": {
-        "value": "linear-gradient(90deg, rgb(24 21 19 / 55%), rgb(30 26 24 / 92%) 4.17%, rgb(30 26 24 / 88%) 55%, transparent)",
-        "note": "The shade behind the player badge in the gallery, fading out to its right: `.player-badge`."
+        "value": "linear-gradient(90deg, rgb(24 21 19 / 55%), rgb(30 26 24 / 92%) 6.97px, rgb(30 26 24 / 88%) 55%, transparent)",
+        "note": "The shade behind the player badge in the gallery, fading out to its right: `.player-badge`. Its second stop is the web's `0.34em` at the gallery badge's 20.5px font size, a length rather than a share of the badge's width."
       },
       "GALLERY_LAND_COUNT": {
         "value": "linear-gradient(180deg, #fbf0d8, #dcc49a)",
