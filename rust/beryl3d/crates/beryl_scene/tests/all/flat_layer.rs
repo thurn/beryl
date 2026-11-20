@@ -228,8 +228,7 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
     assert!(!frame.resolved[title].interactive);
     assert!(text_fits(frame, &context()).is_empty());
     // Three panels for each button (its rim is lighter on top and darker below than at its
-    // sides, a record for each color) and one under the count of each of the six piles, the corner's
-    // settings gear and bug button, the button of the game log, folded because the opponent's
+    // sides, a record for each color), the corner's settings gear and bug button, the button of the game log, folded because the opponent's
     // lands reach into its column, and the disc of each of the title's two mana symbols, all in
     // the flat layer's band. The dock draws no panel, as the web's draws none, and neither do
     // the orbs or the life totals on them.
@@ -238,7 +237,7 @@ fn the_prompt_bar_shows_its_title_and_buttons_in_the_dock() {
         .iter()
         .filter(|draw| draw.material == Material::Panel as u8)
         .count();
-    assert_eq!(panels, 17);
+    assert_eq!(panels, 11);
 }
 
 #[test]

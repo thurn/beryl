@@ -175,8 +175,9 @@ fn one_glow_lights_little_of_the_screen() {
     assert!(area > 0.0, "the glow is drawn");
     // The web's halo reaches about a third of a card's width past each edge of the card (the
     // 0.1 spread and 0.22 blur of `.stage-effect-glow`), so its quad is about 2.4 cards large:
-    // 0.035 screens on this card. A glow drawn as a thin ring covered under 0.02.
-    assert!(area < 0.04, "a glow covers {area} screens");
+    // 0.05 screens on this card, which battlefield rows now draw as large as the web's. A glow
+    // drawn as a thin ring covered under 0.02.
+    assert!(area < 0.055, "a glow covers {area} screens");
 }
 
 #[test]

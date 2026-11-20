@@ -133,9 +133,10 @@ fn each_pile_is_named_with_its_count_and_an_empty_one_has_neither() {
         ("Opponent's exile", 1),
     ] {
         assert!(named(Role::Pile, pile), "{pile} has an element");
+        // The count shows only while the pointer is over the pile, as the web's tip does.
         assert!(
-            named(Role::Text, &format!("{pile} {count}")),
-            "{pile} shows its count"
+            !named(Role::Text, &format!("{pile} {count}")),
+            "{pile} shows its count at rest"
         );
     }
     let frame = frame_of(&library(3));
