@@ -30,11 +30,12 @@ pub const MAX_WAITERS: usize = 16;
 
 static WAITERS: AtomicUsize = AtomicUsize::new(0);
 
-/// A place among the waiting requests, given back when dropped.
-struct Waiter;
+/// A place among the waiting requests, given back when dropped. `GET /transcripts/<session>`
+/// waits with the same places.
+pub(crate) struct Waiter;
 
 impl Waiter {
-    fn take() -> Option<Waiter> {
+    pub(crate) fn take() -> Option<Waiter> {
         if WAITERS.fetch_add(1, Ordering::SeqCst) >= MAX_WAITERS {
             WAITERS.fetch_sub(1, Ordering::SeqCst);
             return None;
@@ -53,13 +54,13 @@ impl Drop for Waiter {
 const LIMIT: u32 = 1000;
 
 /// How long a waiting request sleeps before it looks at the database again.
-const RECHECK: Duration = Duration::from_secs(1);
+pub(crate) const RECHECK: Duration = Duration::from_secs(1);
 
 /// Counts writes, so a waiting request knows whether one happened since it last looked.
 static WRITES: Mutex<u64> = Mutex::new(0);
 static WRITTEN: Condvar = Condvar::new();
 
-/// Wakes every waiting feed request. The server calls it after each request that may have
+/// Wakes every waiting feed and transcript request. The server calls it after each request that may have
 /// written.
 pub fn notify() {
     let mut writes = WRITES.lock().unwrap_or_else(PoisonError::into_inner);
@@ -67,12 +68,12 @@ pub fn notify() {
     WRITTEN.notify_all();
 }
 
-fn writes() -> u64 {
+pub(crate) fn writes() -> u64 {
     *WRITES.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Sleeps until a write after `seen`, or for `timeout`.
-fn wait_for_write(seen: u64, timeout: Duration) {
+pub(crate) fn wait_for_write(seen: u64, timeout: Duration) {
     let writes = WRITES.lock().unwrap_or_else(PoisonError::into_inner);
     let _unused = WRITTEN
         .wait_timeout_while(writes, timeout, |writes| *writes == seen)

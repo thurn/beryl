@@ -169,6 +169,11 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: include_str!("transcripts.sql"),
         code: None,
     },
+    Migration {
+        version: 26,
+        sql: include_str!("transcript_calls.sql"),
+        code: None,
+    },
 ];
 
 /// Opens (creating if needed) and migrates the hub's database.

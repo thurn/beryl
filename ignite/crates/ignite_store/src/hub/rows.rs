@@ -335,5 +335,6 @@ crate::tables! {
         text: String,
         at: Option<String>,
         stored_at: String,
+        call_index: Option<i64>,
     }
 }

@@ -1,22 +1,26 @@
-//! The page `/pool/session/<id>` of a CLI worker: its ticket, app, model, turn and state, the
-//! digest of its transcript as the daemon sends it, and a box that tells the worker something.
+//! The page `/pool/session/<id>` of a CLI worker, laid out like a conversation in the Claude
+//! desktop app: a compact header with its ticket, app, model, turn and state, the digest of its
+//! transcript as the daemon sends it, and a box at the bottom that tells the worker something.
 //!
 //! A transcript can hold secrets, so the page is served on the private listener only (see
 //! `Site::private`); the public read-only copy answers 404 for it. The box is shown only on a
 //! page with edit controls, to a Tailscale user.
 //!
-//! The lines are rendered with the page and `static/session.js` fetches later ones from
-//! `GET /transcripts/<session>?after=<seq>`. The box does what `ignite tell` does: it comments
-//! on the ticket and marks the comment for delivery with the ticket's `tell` key, and with the
-//! "now" box ticked also its `tell_now` key, so the daemon ends the running turn and resumes
-//! with the message.
+//! The page carries its first lines as JSON, and `static/session.js` renders them and every
+//! later line, which it follows with a long poll on
+//! `GET /transcripts/<session>?after=<seq>&wait=<seconds>`. Rendering only in the script keeps
+//! one copy of the grouping of tool calls and of the Markdown of what the worker wrote.
+//!
+//! The box does what `ignite tell` does: it comments on the ticket and marks the comment for
+//! delivery with the ticket's `tell` key, and with the "now" box ticked also its `tell_now` key,
+//! so the daemon ends the running turn and resumes with the message.
 // Pages are built from many small fragments; building them with `format!` reads better than
 // the allocation-free forms these lints suggest.
 #![allow(clippy::format_collect, clippy::format_push_string)]
 
 use rusqlite::{Connection, OptionalExtension};
 
-use ignite_core::protocol::cli::{TELL_NOW_KEY, TranscriptKind};
+use ignite_core::protocol::cli::{StoredTranscriptLine, TELL_NOW_KEY};
 use ignite_store::hub::transcripts;
 
 use super::common::brand;
@@ -31,16 +35,6 @@ const INITIAL_LINES: usize = 400;
 /// The address of the page of `session`, under the dashboard's `root`.
 pub fn session_url(root: &str, session: &str) -> String {
     format!("{root}pool/session/{}", percent_encode(session))
-}
-
-/// The label of a line's kind.
-fn kind_label(kind: TranscriptKind) -> (&'static str, &'static str) {
-    match kind {
-        TranscriptKind::Assistant => ("assistant", "Assistant"),
-        TranscriptKind::Tool => ("tool", "Tool"),
-        TranscriptKind::Result => ("result", "Result"),
-        TranscriptKind::Prompt => ("prompt", "Prompt"),
-    }
 }
 
 /// The page of `session`, or `None` when the hub knows nothing of it: no worker of that name and
@@ -81,9 +75,8 @@ pub(crate) fn options(
         Some(id) => tier_of(conn, id)?,
         None => None,
     };
-    let turn = last.map(|line| line.line.turn);
     let ticket_link = ticket.as_ref().map_or_else(
-        || c::muted("none"),
+        || c::muted("no ticket"),
         |id| c::link(&ticket_url(root, id), &esc(&display_id(id)), None, ""),
     );
     let tone = match state {
@@ -91,34 +84,35 @@ pub(crate) fn options(
         "idle" | "gone" => Tone::Muted,
         _ => Tone::Green,
     };
-    let fact = |label: &str, value: String| c::row(&c::muted(label), &value, None);
-    let facts = c::rows([
-        fact("Ticket", ticket_link),
-        fact("App", esc(app)),
-        fact(
-            "Model",
-            tier.map_or_else(|| c::muted("unknown"), |tier| esc(&tier)),
-        ),
-        fact(
-            "Turn",
-            turn.map_or_else(|| c::muted("none yet"), |turn| turn.to_string()),
-        ),
-        fact("State", c::dot(tone, state, None)),
-    ]);
-    let items: String = lines.iter().map(|stored| line_item(&stored.line)).collect();
+    let model = tier.map_or_else(|| c::muted("model unknown"), |tier| esc(&tier));
+    let turn = last.map_or_else(
+        || c::muted("no turn yet"),
+        |line| format!("turn {}", line.line.turn),
+    );
+    let header = format!(
+        "<header class=\"c-session-head\"><h1 class=\"c-session-name\">{}</h1>\
+         <p class=\"c-session-facts\"><span>{ticket_link}</span><span>{}</span>\
+         <span>{model}</span><span>{turn}</span><span>{}</span></p></header>",
+        c::mono(session),
+        esc(app),
+        c::dot(tone, state, None),
+    );
     let after = last.map_or(0, |line| line.seq);
     let transcript = format!(
-        "<ol class=\"c-transcript\" id=\"c-transcript\" data-after=\"{after}\">{items}</ol>\
-         <p class=\"c-muted c-transcript-empty\"{}>No lines yet.</p>",
+        "<section id=\"transcript\"><div class=\"c-convo\" id=\"c-transcript\" data-after=\"{after}\"></div>\
+         <script type=\"application/json\" id=\"c-transcript-lines\">{}</script>\
+         <p class=\"c-muted c-transcript-empty\"{}>No lines yet.</p></section>",
+        lines_json(&lines),
         if lines.is_empty() { "" } else { " hidden" }
     );
     let tell = if !editable {
         String::new()
-    } else if let (Some(id), true) = (&ticket, held) {
-        let _ = id;
+    } else if ticket.is_some() && held {
         tell_box()
     } else {
-        c::muted("The worker holds no ticket, so there is nothing to tell it.")
+        "<p class=\"c-session-composer c-muted\">\
+         The worker holds no ticket, so there is nothing to tell it.</p>"
+            .to_owned()
     };
     let context = format!(
         "<div id=\"c-session\" hidden data-session=\"{}\" data-ticket=\"{}\" data-api=\"/{}/api\"></div>",
@@ -126,11 +120,7 @@ pub(crate) fn options(
         esc(ticket.as_deref().unwrap_or_default()),
         esc(project)
     );
-    let body = c::title("Session", "", &format!("{} {}", esc(app), c::mono(session)))
-        + &c::section("", &facts, None, None, 2)
-        + &c::section("Transcript", &transcript, None, Some("transcript"), 2)
-        + &tell
-        + &context;
+    let body = format!("<div class=\"c-session\">{header}{transcript}{tell}{context}</div>");
     Ok(Some(PageOptions {
         title: format!("Session {session} · {}", brand()),
         body,
@@ -165,21 +155,23 @@ fn tier_of(conn: &Connection, ticket: &str) -> Result<Option<String>, ReadError>
         }))
 }
 
-/// One line of the digest as the page and the script both render it.
-fn line_item(line: &ignite_core::protocol::cli::TranscriptLine) -> String {
-    let (class, label) = kind_label(line.kind);
-    format!(
-        "<li class=\"c-transcript-line\" data-kind=\"{class}\"><span class=\"c-transcript-kind\">{label}</span>\
-         <span class=\"c-transcript-text\">{}</span></li>",
-        esc(&line.text)
-    )
+/// The lines as JSON for a `<script type="application/json">` element, in the shape
+/// `GET /transcripts/<session>` answers them. A transcript is untrusted text, so every `<`, `>`
+/// and `&` is written as a JSON escape, which keeps a `</script>` in a line from ending the
+/// element.
+fn lines_json(lines: &[StoredTranscriptLine]) -> String {
+    serde_json::to_string(lines)
+        .unwrap_or_else(|_| "[]".to_owned())
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e")
+        .replace('&', "\\u0026")
 }
 
-/// The box under the transcript that tells the worker something.
+/// The box at the bottom of the page that tells the worker something.
 fn tell_box() -> String {
     format!(
-        "<form class=\"c-edit-composer c-tell\" data-tell data-now-key=\"{TELL_NOW_KEY}\">\
-         <textarea name=\"text\" rows=\"3\" placeholder=\"Tell the worker\" aria-label=\"Message\"></textarea>\
+        "<form class=\"c-edit-composer c-tell c-session-composer\" data-tell data-now-key=\"{TELL_NOW_KEY}\">\
+         <textarea name=\"text\" rows=\"2\" placeholder=\"Tell the worker\" aria-label=\"Message\"></textarea>\
          <div class=\"c-edit-buttons\">\
          <button type=\"submit\" class=\"c-edit-action c-primary\">Send</button>\
          <label class=\"c-tell-now\"><input type=\"checkbox\" name=\"now\"> Now</label>\

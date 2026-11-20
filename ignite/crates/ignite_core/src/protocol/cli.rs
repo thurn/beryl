@@ -5,8 +5,9 @@
 //! - `POST /transcripts/append` takes a [`TranscriptAppend`] from a registered machine and
 //!   answers a [`TranscriptAppendReply`]. Appending a line twice stores it once: a line is keyed
 //!   by session, turn and index.
-//! - `GET /transcripts/<session>?after=<seq>` answers a [`TranscriptPage`] of the lines stored
-//!   after `seq`, oldest first.
+//! - `GET /transcripts/<session>?after=<seq>&wait=<seconds>` answers a [`TranscriptPage`] of
+//!   the lines stored after `seq`, oldest first. With `wait`, the hub holds the request open
+//!   until such a line exists or the wait ends, as `GET /feed` does.
 //!
 //! Transcripts can hold secrets, so the hub serves both routes on its private listener only.
 
@@ -30,6 +31,10 @@ pub const WATCH_NO_FOLLOW_FLAG: &str = "--no-follow";
 
 /// The most characters of one digest line; a longer one is cut.
 pub const DIGEST_LINE_CHARS: usize = 2000;
+
+/// The most characters of a tool result's line ([`TranscriptKind::ToolResult`]). A reader only
+/// glances at a result, so it is cut much shorter than other lines.
+pub const TOOL_RESULT_CHARS: usize = 400;
 
 /// Days the hub keeps transcript lines.
 pub const TRANSCRIPT_KEEP_DAYS: f64 = 7.0;
@@ -88,6 +93,9 @@ pub enum TranscriptKind {
     Result,
     /// A message the daemon delivered as a turn's prompt.
     Prompt,
+    /// The start of what a tool call returned, at most [`TOOL_RESULT_CHARS`] characters. Its
+    /// [`TranscriptLine::call`] names the call's line.
+    ToolResult,
 }
 
 /// One line of a CLI worker's transcript digest.
@@ -104,6 +112,10 @@ pub struct TranscriptLine {
     pub text: String,
     #[serde(default)]
     pub at: Option<Timestamp>,
+    /// For a [`TranscriptKind::ToolResult`], the index of its tool call's line in the same turn.
+    /// A daemon from before tool results sends none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call: Option<u32>,
 }
 
 /// `POST /transcripts/append`.
@@ -150,6 +162,7 @@ mod tests {
         .unwrap();
         assert_eq!(append.lines[0].kind, TranscriptKind::Tool);
         assert_eq!(append.lines[0].at, None);
+        assert_eq!(append.lines[0].call, None);
         let stored = StoredTranscriptLine {
             seq: 7,
             machine: append.machine.clone(),

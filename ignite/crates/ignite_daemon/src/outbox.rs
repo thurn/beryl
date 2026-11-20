@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Condvar, Mutex, PoisonError};
 use std::time::Duration;
 
 use rusqlite::Connection;
@@ -46,8 +47,34 @@ pub fn push_metrics(conn: &Connection, import: &MetricsImport, at: Timestamp) ->
 
 /// Queues digest lines of a CLI worker's transcript. The hub stores a line once whatever
 /// the number of times it is sent, so a line queued again after a restart does no harm.
+///
+/// Someone may be following the transcript on the dashboard, so queueing lines also wakes the
+/// daemon's sender (see [`wait_for_transcripts`]), which sends them without waiting for its
+/// next round.
 pub fn push_transcript(conn: &Connection, append: &TranscriptAppend, at: Timestamp) -> Result<()> {
-    push(conn, TRANSCRIPT, append, at)
+    push(conn, TRANSCRIPT, append, at)?;
+    *TRANSCRIPTS_QUEUED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner) = true;
+    QUEUED.notify_all();
+    Ok(())
+}
+
+/// Whether transcript lines were queued since the sender last looked.
+static TRANSCRIPTS_QUEUED: Mutex<bool> = Mutex::new(false);
+static QUEUED: Condvar = Condvar::new();
+
+/// Waits up to `most` for [`push_transcript`] to queue lines, and says whether it did. Lines
+/// queued before the call count, and the call clears the mark, so the next call waits for new
+/// lines.
+pub fn wait_for_transcripts(most: Duration) -> bool {
+    let queued = TRANSCRIPTS_QUEUED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let (mut queued, _) = QUEUED
+        .wait_timeout_while(queued, most, |queued| !*queued)
+        .unwrap_or_else(PoisonError::into_inner);
+    std::mem::replace(&mut *queued, false)
 }
 
 fn push(conn: &Connection, kind: &str, body: &impl Serialize, at: Timestamp) -> Result<()> {

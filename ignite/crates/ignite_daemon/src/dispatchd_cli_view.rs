@@ -43,7 +43,7 @@ fn describe(slot: &Slot, now: Timestamp) -> String {
 
 /// The digest lines after the first `after`, as `ignite pool watch` prints them: a `turn` line
 /// before the first line of each turn, then one line each for what the worker said, each tool
-/// call and each turn's result. Empty when there is nothing after `after`.
+/// call, the start of each call's output and each turn's result. Empty when there is nothing after `after`.
 pub fn digest_text(lines: &[TranscriptLine], after: usize) -> String {
     let mut out = Vec::new();
     for line in lines.iter().skip(after) {
@@ -55,6 +55,7 @@ pub fn digest_text(lines: &[TranscriptLine], after: usize) -> String {
             TranscriptKind::Tool => "tool",
             TranscriptKind::Result => "result",
             TranscriptKind::Prompt => "prompt",
+            TranscriptKind::ToolResult => "output",
         };
         out.push(format!("{label:<8} {}", line.text));
     }

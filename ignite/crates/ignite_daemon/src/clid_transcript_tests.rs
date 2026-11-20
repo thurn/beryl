@@ -1,5 +1,5 @@
 //! Tests of the digest of recorded Claude and Codex streams, and of sending a turn's digest to the
-//! hub through the outbox, including after a restart.
+//! hub through the outbox, including after a restart and as soon as the lines are queued.
 
 use ignite_core::fakes::FakeHub;
 use ignite_core::protocol::cli::{DIGEST_LINE_CHARS, TranscriptKind};
@@ -45,10 +45,13 @@ fn a_recorded_codex_turn_is_digested() {
                 TranscriptKind::Tool,
                 "command_execution: /bin/zsh -lc 'echo hi'"
             ),
-            (2, TranscriptKind::Assistant, "done"),
-            (3, TranscriptKind::Result, "completed"),
+            (2, TranscriptKind::ToolResult, "hi"),
+            (3, TranscriptKind::Assistant, "done"),
+            (4, TranscriptKind::Result, "completed"),
         ]
     );
+    assert_eq!(lines[2].call, Some(1), "the output names its command's line");
+    assert!(lines.iter().filter(|l| l.index != 2).all(|l| l.call.is_none()));
 }
 
 #[test]
@@ -140,4 +143,22 @@ fn a_session_digest_reads_every_turn_from_its_log() {
     assert_eq!(found, session);
     assert!(lines.is_empty());
     assert!(rig.daemon.session_digest("T.9").unwrap().is_none());
+}
+
+#[test]
+fn queueing_lines_wakes_the_sender_and_a_tool_result_reaches_the_hub_with_its_call() {
+    let mut rig = Rig::new();
+    rig.daemon = rig.daemon.with_machine(MachineId::new("m-1").unwrap());
+    let hub = FakeHub::default();
+    let session = SessionId::new("cli-codex-0a1b2c3d").unwrap();
+    rig.daemon.send_digest("codex", &session, None, 1, CODEX);
+    // The sender's pause between rounds ends at once: lines are waiting.
+    assert!(crate::outbox::wait_for_transcripts(std::time::Duration::ZERO));
+    flush(&rig, &hub);
+    let held = hub.transcript_lines();
+    let result = held
+        .iter()
+        .find(|l| l.kind == TranscriptKind::ToolResult)
+        .unwrap();
+    assert_eq!((result.text.as_str(), result.call), ("hi", Some(1)));
 }

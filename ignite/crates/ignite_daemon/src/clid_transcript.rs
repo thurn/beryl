@@ -2,11 +2,13 @@
 //! `ignite pool watch` prints (see "CLI mode" in the design document).
 //!
 //! - [`digest`] turns the text of one turn's log into lines (what the worker said, each tool call
-//!   with the first line of its input, and how the turn ended), each cut to
-//!   [`DIGEST_LINE_CHARS`] characters. The reading itself is per app, in
+//!   with the first line of its input and the start of its result, and how the turn ended),
+//!   each cut to [`DIGEST_LINE_CHARS`] characters. The reading itself is per app, in
 //!   `ignite_core::cli::digest`.
 //! - [`CliDaemon::send_digest`] queues the lines of a turn that were not queued yet in the
 //!   outbox, which sends them to the hub's `POST /transcripts/append` whenever it is reachable.
+//!   Queueing them wakes the daemon's sender, so they reach the hub within about a second
+//!   rather than at its next ten-second round (see `outbox::push_transcript`).
 //!   What was queued is remembered only in memory. A restarted daemon queues a running turn's
 //!   lines again from the start, and the hub stores a line keyed by session, turn and index
 //!   once, so nothing is lost and nothing is stored twice.
@@ -43,14 +45,15 @@ pub fn digest(
     app_digest::of(app, read::whole_lines(output))
         .into_iter()
         .zip(0..)
-        .map(|((kind, text), index)| TranscriptLine {
+        .map(|(entry, index)| TranscriptLine {
             session: session.clone(),
             ticket: ticket.cloned(),
             turn,
             index,
-            kind,
-            text: cut(&text),
+            kind: entry.kind,
+            text: cut(&entry.text),
             at: None,
+            call: entry.call,
         })
         .collect()
 }

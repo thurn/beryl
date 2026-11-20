@@ -40,8 +40,9 @@ pub fn append(
         let text: String = line.text.chars().take(DIGEST_LINE_CHARS).collect();
         stored += tx.execute(
             "INSERT OR IGNORE INTO transcript_lines
-               (machine, session, ticket, turn, line_index, kind, text, at, stored_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+               (machine, session, ticket, turn, line_index, kind, text, at, stored_at,
+                call_index)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 machine.as_str(),
                 line.session.as_str(),
@@ -52,6 +53,7 @@ pub fn append(
                 text,
                 line.at.map(|at| at.to_string()),
                 now.to_string(),
+                line.call,
             ],
         )? as u32;
     }
@@ -69,12 +71,14 @@ type Raw = (
     String,
     String,
     Option<String>,
+    Option<u32>,
 );
 
-const COLUMNS: &str = "seq, machine, session, ticket, turn, line_index, kind, text, at";
+const COLUMNS: &str =
+    "seq, machine, session, ticket, turn, line_index, kind, text, at, call_index";
 
 fn decode(raw: Raw) -> Option<StoredTranscriptLine> {
-    let (seq, machine, session, ticket, turn, index, kind, text, at) = raw;
+    let (seq, machine, session, ticket, turn, index, kind, text, at, call) = raw;
     Some(StoredTranscriptLine {
         seq,
         machine: MachineId::new(machine).ok()?,
@@ -86,6 +90,7 @@ fn decode(raw: Raw) -> Option<StoredTranscriptLine> {
             kind: kind_from(&kind)?,
             text,
             at: at.and_then(|at| Timestamp::parse(&at).ok()),
+            call,
         },
     })
 }
@@ -101,6 +106,7 @@ fn raw(row: &rusqlite::Row<'_>) -> rusqlite::Result<Raw> {
         row.get(6)?,
         row.get(7)?,
         row.get(8)?,
+        row.get(9)?,
     ))
 }
 
@@ -158,6 +164,7 @@ mod tests {
             kind: TranscriptKind::Tool,
             text: text.to_owned(),
             at: None,
+            call: None,
         }
     }
 
@@ -181,6 +188,24 @@ mod tests {
         assert_eq!(
             tail(&conn, "cli-claude-0a1b2c3d", 1).unwrap()[0].line.index,
             1
+        );
+    }
+
+    #[test]
+    fn a_tool_result_keeps_the_index_of_its_call() {
+        let conn = crate::hub::open_in_memory().unwrap();
+        let machine = MachineId::new("m-1").unwrap();
+        let now = Timestamp::parse("2026-11-20T06:00:00Z").unwrap();
+        let result = TranscriptLine {
+            kind: TranscriptKind::ToolResult,
+            call: Some(0),
+            ..line(1, 1, "a.rs")
+        };
+        append(&conn, &machine, &[line(1, 0, "Bash: ls"), result], now).unwrap();
+        let stored = after(&conn, "cli-claude-0a1b2c3d", 0).unwrap();
+        assert_eq!(
+            stored.iter().map(|s| (s.line.kind, s.line.call)).collect::<Vec<_>>(),
+            [(TranscriptKind::Tool, None), (TranscriptKind::ToolResult, Some(0))]
         );
     }
 

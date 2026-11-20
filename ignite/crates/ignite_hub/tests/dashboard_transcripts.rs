@@ -1,10 +1,15 @@
-//! A CLI worker's transcript digest: the hub stores what a machine's daemon appends, the session
-//! page shows it with a box that tells the worker something, and the public read-only listener
-//! serves neither the route nor the page, because a transcript can hold secrets.
+//! A CLI worker's transcript digest: the hub stores what a machine's daemon appends, including
+//! tool results linked to their calls, the session page carries it with a box that tells the
+//! worker something, a reader can wait for the next line with a long poll, and the public
+//! read-only listener serves neither the route nor the page, because a transcript can hold
+//! secrets.
 #![allow(clippy::format_collect)]
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use serde_json::{Value, json};
 
@@ -53,12 +58,17 @@ fn lines() -> Vec<TranscriptLine> {
         kind,
         text: text.to_owned(),
         at: None,
+        call: None,
     };
     vec![
         line(1, 0, TranscriptKind::Prompt, "Run `ignite start TT1`"),
         line(1, 1, TranscriptKind::Tool, "Bash: ignite status <now>"),
-        line(1, 2, TranscriptKind::Assistant, "Reading the files"),
-        line(1, 3, TranscriptKind::Result, "ended cleanly"),
+        TranscriptLine {
+            call: Some(1),
+            ..line(1, 2, TranscriptKind::ToolResult, "</script> ticket TT1")
+        },
+        line(1, 3, TranscriptKind::Assistant, "Reading the files"),
+        line(1, 4, TranscriptKind::Result, "ended cleanly"),
     ]
 }
 
@@ -106,22 +116,28 @@ fn the_session_page_shows_the_lines_and_the_tell_box() {
     assert_eq!(status, 200, "{html}");
     for expected in [
         "Run `ignite start TT1`",
-        "Bash: ignite status &lt;now&gt;",
+        "Bash: ignite status \\u003cnow\\u003e",
+        "\"kind\":\"tool_result\"",
+        "\"call\":1",
         "Reading the files",
         "ended cleanly",
         "sonnet",
         "working",
-        "turn",
+        "turn 1",
         "data-tell",
         "name=\"now\"",
         "data-ticket=\"TT1\"",
-        "data-after=\"4\"",
+        "data-after=\"5\"",
     ] {
         assert!(
             html.to_lowercase().contains(&expected.to_lowercase()),
             "{expected}: {html}"
         );
     }
+    // A line's text cannot end the element that carries the lines as JSON.
+    assert!(!html.contains("</script> ticket"), "{html}");
+    // The script renders the lines, so the page has no copy of them as HTML rows.
+    assert!(!html.contains("class=\"c-transcript-line\""));
     // Without edit controls the page shows the lines but no box.
     let (status, html) = page(&conn, &format!("/pool/session/{SESSION}"), true, false);
     assert_eq!(status, 200);
@@ -217,7 +233,7 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
     // The same lines twice are stored once.
     let (status, first) = append(&auth, &body);
     assert_eq!(status, 200, "{first}");
-    assert_eq!(serde_json::from_str::<Value>(&first).unwrap()["stored"], 4);
+    assert_eq!(serde_json::from_str::<Value>(&first).unwrap()["stored"], 5);
     let (_, second) = append(&auth, &body);
     assert_eq!(serde_json::from_str::<Value>(&second).unwrap()["stored"], 0);
 
@@ -225,8 +241,11 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
     let (status, read) = send(private.address(), "GET", &route, &[], "");
     assert_eq!(status, 200);
     let read: Value = serde_json::from_str(&read).unwrap();
-    assert_eq!(read["lines"].as_array().unwrap().len(), 4);
-    let seq = read["lines"][1]["seq"].as_i64().unwrap();
+    assert_eq!(read["lines"].as_array().unwrap().len(), 5);
+    assert_eq!(read["lines"][2]["kind"], "tool_result");
+    assert_eq!(read["lines"][2]["call"], 1);
+    assert!(read["lines"][1].get("call").is_none());
+    let seq = read["lines"][2]["seq"].as_i64().unwrap();
     let (_, later) = send(
         private.address(),
         "GET",
@@ -273,6 +292,63 @@ fn the_hub_stores_a_line_once_and_the_public_listener_answers_404() {
     assert!(html.contains("Reading the files"));
 
     public.stop();
+    private.stop();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_waiting_reader_gets_the_next_line_as_soon_as_it_is_appended() {
+    let dir = ignite_core::test_files::temp_dir()
+        .join(format!("ignite-transcripts-wait-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let database = dir.join("hub.sqlite");
+    let token = {
+        let conn = hub::open(&database).unwrap();
+        tokens::issue(&conn, &"m-1".parse().unwrap()).unwrap()
+    };
+    let server = HubServer {
+        config: Config::parse("ignite.toml", CONFIG).unwrap(),
+        listen: "127.0.0.1:0".to_owned(),
+        database,
+        wordmark: None,
+    };
+    let private = server.start().unwrap();
+    let address = private.address();
+    let route = format!("/pj/api/transcripts/{SESSION}");
+
+    // With nothing after `after` and no wait, the answer is empty at once.
+    let (status, empty) = send(address, "GET", &format!("{route}?after=0"), &[], "");
+    assert_eq!(status, 200);
+    assert_eq!(serde_json::from_str::<Value>(&empty).unwrap()["lines"], json!([]));
+    assert_eq!(
+        send(address, "GET", &format!("{route}?after=0&wait=x"), &[], "").0,
+        400
+    );
+
+    // A reader waits as long as it may (two minutes); the append ends its wait.
+    let (reply, replied) = mpsc::channel();
+    let waiting = format!("{route}?after=0&wait=120");
+    let reader = thread::spawn(move || {
+        let answer = send(address, "GET", &waiting, &[], "");
+        reply.send(()).unwrap();
+        answer
+    });
+    // The reader is still waiting while nothing is appended.
+    assert!(replied.recv_timeout(Duration::from_millis(300)).is_err());
+    let auth = [
+        format!("Authorization: Bearer {token}"),
+        "X-Actor: s1".to_owned(),
+    ];
+    let auth: Vec<&str> = auth.iter().map(String::as_str).collect();
+    let body = json!({"machine": "m-1", "lines": &lines()[..1]}).to_string();
+    let (status, _) = send(address, "POST", "/pj/api/transcripts/append", &auth, &body);
+    assert_eq!(status, 200);
+    let (status, read) = reader.join().unwrap();
+    assert_eq!(status, 200);
+    let read: Value = serde_json::from_str(&read).unwrap();
+    assert_eq!(read["lines"][0]["text"], "Run `ignite start TT1`");
+
     private.stop();
     let _ = std::fs::remove_dir_all(dir);
 }

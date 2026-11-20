@@ -118,15 +118,16 @@ impl SelfUpdate {
     }
 
     /// Waits up to `most` between two rounds of the sender loop, ending early when
-    /// [`Self::round_due`] says there is release work.
-    pub fn nap(&self, most: Duration) {
+    /// [`Self::round_due`] says there is release work. `pause` waits for the time it is given,
+    /// at most a second at a time, and may do small work of its own meanwhile.
+    pub fn nap(&self, most: Duration, mut pause: impl FnMut(Duration)) {
         let began = Instant::now();
         loop {
             let left = most.saturating_sub(began.elapsed());
             if left.is_zero() {
                 return;
             }
-            std::thread::sleep(left.min(LOOK_EVERY));
+            pause(left.min(LOOK_EVERY));
             if self.round_due() {
                 return;
             }

@@ -35,7 +35,8 @@ use crate::tip::{CheckTipWork, TipLoop, TipOutcome, TipRoundVerb};
 use crate::trees::Trees;
 use crate::update::Home;
 
-/// How often the outbox is sent and the heartbeat beats.
+/// How often the outbox is sent and the heartbeat beats. Transcript lines are sent sooner,
+/// as soon as they are queued (see `spawn_sender`).
 const SEND_EVERY: Duration = Duration::from_secs(10);
 /// How often the stall check looks at held tickets.
 const TICK_EVERY: Duration = Duration::from_secs(60);
@@ -206,7 +207,17 @@ impl Parts {
                     reporter.tick(&ctx, sent.is_ok());
                     sent
                 });
-                update.nap(SEND_EVERY);
+                // Between rounds, transcript lines go out as soon as they are queued, so someone
+                // following a CLI worker on the dashboard sees them within about a second. Such
+                // a send flushes the whole outbox, which only sends other entries sooner; the
+                // heartbeat and the rest of the round keep their period.
+                update.nap(SEND_EVERY, |most| {
+                    if crate::outbox::wait_for_transcripts(most)
+                        && let Err(error) = crate::outbox::flush(&db, ctx.hub.as_ref())
+                    {
+                        crate::hubclient::HUB_WRITES.failed("outbox not sent", &error);
+                    }
+                });
             }
         });
     }

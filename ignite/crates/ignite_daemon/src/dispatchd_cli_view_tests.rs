@@ -88,6 +88,7 @@ fn line(turn: u32, index: u32, kind: TranscriptKind, text: &str) -> TranscriptLi
         kind,
         text: text.to_owned(),
         at: None,
+        call: None,
     }
 }
 
