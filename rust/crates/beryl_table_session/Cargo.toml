@@ -43,5 +43,3 @@ beryl_cards = { path = "../beryl_cards", features = ["scenarios"] }
 beryl_workspace_hack = { path = "../beryl_workspace_hack" }
 # Verifies that manual and engine sessions share one ID sequence.
 beryl_session = { path = "../beryl_session" }
-# The card table the engine session of that test plays with.
-beryl_cards = { path = "../beryl_cards" }
