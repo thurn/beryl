@@ -608,6 +608,30 @@ Ignite is updated hundreds of times a day: jarvis restarted into 49 releases on
 so they have to deploy quickly even when the rest of the system is broken. That
 requirement shapes four rules.
 
+**Ignite is treated as if it lived in a repository of its own.** A real split
+was considered and set aside: it needs a daemon that serves two repositories,
+and nothing here depends on it. Inside one repository the same separation comes
+from one rule: a change to Ignite's own source lands only with other Ignite
+files, never with the game's code, tools or documents.
+
+- Ignite's own source is every file under `ignite/` except the check manifests.
+  The files that may land with it are the express lane's paths: `ignite/`,
+  `ignite.toml`, `docs/ignite.md` and the efficiency log.
+- `ignite land` and `ignite check` refuse a change that mixes the two, and say
+  to split it into two tickets.
+- A check manifest is not Ignite's source, so a new check family can still land
+  with the tool that runs it.
+
+```text
+$ ignite land
+refused  this change mixes Ignite's own source with other files
+         rust/crates/beryl_cli/src/main.rs
+next     land the files under ignite/ and the other files as two tickets
+```
+
+Every change to Ignite's source is then an express landing, and the remaining
+rules keep the two kinds of change out of each other's way.
+
 **A change to Ignite's own source lands the way it does today, whatever the
 mode.** That covers the express lane and any other landing that would move the
 release branch.
@@ -678,10 +702,11 @@ The values the design aims for are estimates from the measurements above:
 The change is switched on for the whole repository by one setting and switched
 back without moving any data.
 
-- **The switch.** `[land] mode` is part of each daemon's own configuration. A
-  change to `ignite.toml` is released to every daemon like a change to Ignite's
-  code, so the commit that sets the mode restarts every daemon into the new
-  behaviour. `"strict"` is today's behaviour.
+- **The switch.** `[land] mode` is a setting in `ignite.toml`, which is not part
+  of Ignite's own source: changing it builds no release and restarts no daemon.
+  A process reads the file when it starts, so the change that sets the mode also
+  carries a change to Ignite's source, and the restart into that release is what
+  switches the mode on. `"strict"` is today's behaviour.
 - **Tickets in progress.** A ticket tree leased before the switch needs nothing.
   Its base is the commit it started on, and its first `ignite check` or
   `ignite land` after the switch stores a verdict.
