@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use super::checks::{fault, interactive, subject};
 use super::fault::{Context, Fault, Rule};
-use super::hit::{intersection, is_within, visible_bounds};
+use super::hit::{intersection, is_within, painted_over, visible_bounds};
 use crate::data::audit;
 use crate::frame::{Frame, Place, Role};
 use crate::input::Rect;
@@ -54,7 +54,10 @@ pub fn text_overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
         let others = lines[at + 1..].iter().chain(&controls);
         for &(second, b) in others {
             let related = is_within(frame, first, second) || is_within(frame, second, first);
-            if related || intersection(a, b).is_none() {
+            let Some(shared) = intersection(a, b) else {
+                continue;
+            };
+            if related || hidden(frame, first, second, shared) {
                 continue;
             }
             pairs.insert((first.min(second), first.max(second)));
@@ -72,6 +75,17 @@ pub fn text_overlap(frame: &Frame, context: &Context) -> Vec<Fault> {
             )
         })
         .collect()
+}
+
+/// Whether a panel drawn after one of the two elements covers the middle of the part where their
+/// boxes meet, as an open menu covers the prompt under it: the lower element's text is not seen
+/// there, so it overlaps nothing.
+fn hidden(frame: &Frame, first: u32, second: u32, shared: Rect) -> bool {
+    let middle = glam::Vec2::new(
+        shared.x + shared.width / 2.0,
+        shared.y + shared.height / 2.0,
+    );
+    painted_over(frame, first.min(second), middle).is_some()
 }
 
 /// `rect` less `SLACK` on each side, or `None` when nothing is left.

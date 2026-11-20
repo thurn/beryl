@@ -218,7 +218,7 @@ fn the_gallery_contains_every_section_and_scrolls_to_the_command_list() {
         },
     )
     .unwrap();
-    for heading in [
+    for (index, heading) in [
         "Foundations",
         "Actions & status",
         "Player & zones",
@@ -228,11 +228,13 @@ fn the_gallery_contains_every_section_and_scrolls_to_the_command_list() {
         "Manual table prompts",
         "Context menus",
         "Command list",
-    ] {
-        assert!(
-            visited.contains(&format!("text \"{heading}\"")),
-            "{heading}"
-        );
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        // Each panel's title is numbered, as on the web's gallery page.
+        let title = format!("{:02} {heading}", index + 1);
+        assert!(visited.contains(&format!("text \"{title}\"")), "{title}");
     }
     let last = "button \"No matches\"";
     for (width, height) in [
