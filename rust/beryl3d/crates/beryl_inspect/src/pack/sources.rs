@@ -1,8 +1,10 @@
 //! What a recording depends on, and the hash that names the pack built from it.
 //!
-//! A recording is the engine and session played by `beryl_cli`, so it depends on the source of
-//! `beryl_cli` and of every crate it reaches through a `path` dependency (the engine, the rules,
-//! the cards and the session), and on the data those read: the fixture definitions, the sample
+//! A recording is the engine and session played by `beryl_cli` with the cards that Beryl 3D's
+//! recorder, `beryl_record`, hands it as its `Catalog`. So it depends on the source of the engine
+//! crates `beryl_record` names (`beryl_cli`, `beryl_session` and `beryl_cards`) and of every crate
+//! they reach through a `path` dependency (the engine, the rules and the card sets), and on the
+//! data those read: the fixture definitions, the sample
 //! decks, the verb data and the card store. Beryl 3D's own crates are not among them, so a
 //! change to the client alone keeps the hash, and the pack is read again rather than rebuilt.
 
@@ -18,8 +20,15 @@ const DATA: [&str; 4] = [
     "data/card-store.tsv",
 ];
 
-/// The crate whose path dependencies the sources follow.
-const RECORDER: &str = "rust/crates/beryl_cli";
+/// The crates outside Beryl 3D that `beryl_record` depends on, whose path dependencies the
+/// sources follow. Keep this in step with `rust/beryl3d/crates/beryl_record/Cargo.toml`:
+/// `beryl_cli` takes its cards as a `Catalog` and does not depend on the card crates, so the
+/// cards are only reached through `beryl_cards`.
+const RECORDER: [&str; 3] = [
+    "rust/crates/beryl_cli",
+    "rust/crates/beryl_session",
+    "rust/crates/beryl_cards",
+];
 
 /// Every file a recording depends on under `root`, the repository, by its path from `root`,
 /// sorted.
@@ -29,7 +38,7 @@ const RECORDER: &str = "rust/crates/beryl_cli";
 /// When a crate's manifest or a directory cannot be read.
 pub fn sources(root: &Path) -> Result<Vec<PathBuf>, String> {
     let mut crates = BTreeSet::new();
-    let mut pending = vec![root.join(RECORDER)];
+    let mut pending: Vec<PathBuf> = RECORDER.iter().map(|c| root.join(c)).collect();
     while let Some(dir) = pending.pop() {
         let dir = dir
             .canonicalize()
