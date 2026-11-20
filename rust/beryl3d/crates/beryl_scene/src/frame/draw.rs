@@ -89,8 +89,8 @@ pub struct Sprite {
 }
 
 /// The shapes on the atlas's first page, which light and effects draw with: a 1024 by 1024 page
-/// cut into 256 by 256 cells, row by row from the top left. The last two cells of the bottom
-/// row are spare.
+/// cut into 256 by 256 cells, row by row from the top left. The last cell of the bottom row is
+/// spare.
 pub mod sprites {
     use glam::Vec2;
 
@@ -123,6 +123,7 @@ pub mod sprites {
     pub const MOON: Sprite = cell(768, 512);
     pub const PLAQUE: Sprite = cell(0, 768);
     pub const COIN: Sprite = cell(256, 768);
+    pub const HALO: Sprite = cell(512, 768);
 
     /// Half the width and height of the rectangle outside which `OUTLINE`'s cell is empty, in
     /// the units of a unit quad drawn with the whole cell (-0.5 to 0.5 across). The outline is
@@ -139,6 +140,20 @@ pub mod sprites {
     /// `OUTLINE_LINE`'s height: 0.94 of the cell's drawn area, which leaves `beryl_assets`'
     /// border of 2 texels on each side of the 256 texel cell.
     const LINE_HEIGHT: f32 = 0.94 * 126.0 / 256.0;
+
+    /// Half the width and height of the card that `HALO`'s light lies round, in the units of a
+    /// unit quad drawn with the whole cell (-0.5 to 0.5 across): the halo is empty inside it,
+    /// and its light reaches out from its edge to near the edge of the cell.
+    pub const HALO_CARD: [f32; 2] = [HALO_HEIGHT * CARD_WIDTH / CARD_HEIGHT, HALO_HEIGHT];
+    /// `HALO_CARD`'s height.
+    const HALO_HEIGHT: f32 = 0.32;
+
+    /// The size to scale a quad drawn with `HALO` to, so that the card it lies round is `half`
+    /// from its middle across and up.
+    #[must_use]
+    pub fn halo_size(half: Vec2) -> Vec2 {
+        half / Vec2::from(HALO_CARD)
+    }
 
     /// The size to scale a quad drawn with `OUTLINE` to, so that its line runs `half` from its
     /// middle across and up: around a card when `half` is the card's half size. The cell already

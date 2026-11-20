@@ -13,7 +13,15 @@
 //! first two that leave one place for one target together rises `fan` as high again; the tail
 //! is `tail` of the way long; the head is `head` of its target's half-width across, from
 //! `least` to `most` millimetres, `more` as wide again for each unit past the first up to
-//! `units`; and its light is `ribbon` as wide as its head.
+//! `units`; and its light is `ribbon` as wide as its head, drawn `halo` times as wide again
+//! because the ribbon sprite fades to nothing at its sides where the web's ribbon has a halo
+//! round its body.
+//!
+//! As the web's `streakLight` (`ui/src/stage/flare.ts`) does, a streak also lights what it
+//! left, with a glow `orb` times its head's half-width across in its color with a hot middle,
+//! which fades as the head goes, and has a hot point at its head `dot` times its head's
+//! half-width across. Its body is the ribbon sprite, the same all along, so that the records
+//! along it join into one band; the comet sprite drew a bead at each record.
 
 use beryl_protocol::protocol::Mana;
 use beryl_protocol::script::{Stream, Subject};
@@ -60,36 +68,85 @@ pub fn write(lit: &Lit, now: u64, scene: &Scene<'_>, builder: &mut FrameBuilder<
         let comet = Comet::new(from, to, through, run.amount, nth, faces);
         let eye = scene.table().camera().eye;
         let tint = tint(run.stream);
-        // How far apart the records lie along the lit part of the arc; each reaches half way
-        // to its neighbours, so that they overlap.
-        #[expect(clippy::cast_precision_loss, reason = "8 records")]
-        let spacing = comet.length() * (through - comet.back) / RECORDS as f32;
-        for record in 1..=RECORDS {
-            #[expect(clippy::cast_precision_loss, reason = "a record's number, under 9")]
-            let share = record as f32 / RECORDS as f32;
-            let t = comet.back + (through - comet.back) * share;
-            let at = comet.at(t);
-            let tangent = comet.tangent(t);
-            let half = comet.wide * share * share * streak::RIBBON;
-            let transform = quad(
-                at,
-                tangent,
-                eye,
-                (2.0 * spacing).max(2.0 * half),
-                2.0 * half,
-            );
+        // The glow where it left, in its color with a hot middle, which fades as its head
+        // goes: the web's `flash` glint `orb` times the head's width at the curve's start,
+        // at `1.1 * (1 - through)^0.7`.
+        let orb = 1.1 * (1.0 - through).powf(0.7);
+        let source = comet.a;
+        for (size, color) in [(streak::ORB, tint), (streak::ORB * 0.5, hot(tint))] {
+            let across = 2.0 * size * comet.wide;
             builder.draw(
                 Band::Glows,
-                Draw::streak(
-                    transform,
-                    tint,
-                    sprites::COMET,
-                    through,
-                    through - comet.back,
+                Draw::glow(
+                    quad(source, Vec3::X, eye, across, across),
+                    fade(color, orb),
+                    sprites::DISC,
+                    0.0,
                 ),
             );
         }
+        // How far apart the records lie along the lit part of the arc; each reaches half way
+        // to its neighbours, so that they overlap.
+        let length = comet.length();
+        let lit = through - comet.back;
+        #[expect(clippy::cast_precision_loss, reason = "8 records")]
+        let spacing = length * lit / RECORDS as f32;
+        for record in 1..=RECORDS {
+            #[expect(clippy::cast_precision_loss, reason = "a record's number, under 9")]
+            let share = record as f32 / RECORDS as f32;
+            let t = comet.back + lit * share;
+            let at = comet.at(t);
+            let tangent = comet.tangent(t);
+            let half = comet.wide * share * share * streak::RIBBON * streak::HALO;
+            let long = (2.0 * spacing).max(2.0 * half);
+            // The material lights a record from the tail at `head - tail` to the head at
+            // `head`, in units of the record's own length, and fades it from the head back. So
+            // that the records together fade evenly along the whole streak, each is given the
+            // place of the streak's head and the streak's lit length measured in its own
+            // length, from its middle at `t`.
+            let own = (long / length.max(f32::EPSILON)).max(f32::EPSILON);
+            builder.draw(
+                Band::Glows,
+                Draw::streak(
+                    quad(at, tangent, eye, long, 2.0 * half),
+                    tint,
+                    sprites::RIBBON,
+                    (through - t) / own + 0.5,
+                    lit / own,
+                ),
+            );
+        }
+        // The hot point at its head (the web's dot `5` times the head's width across).
+        let across = streak::DOT * comet.wide;
+        builder.draw(
+            Band::Glows,
+            Draw::glow(
+                quad(comet.at(through), Vec3::X, eye, across, across),
+                hot(tint),
+                sprites::DISC,
+                0.0,
+            ),
+        );
     }
+}
+
+/// `tint` most of the way to white, as the hot middle of the web's light (`core` in `TONES`,
+/// `ui/src/stage/light.ts`) is.
+fn hot([red, green, blue, alpha]: [u8; 4]) -> [u8; 4] {
+    let toward = |channel: u8| channel + ((255 - channel) / 8) * 7;
+    [toward(red), toward(green), toward(blue), alpha]
+}
+
+/// `tint` with its opacity scaled by `by`, from 0 to 1.
+fn fade(tint: [u8; 4], by: f32) -> [u8; 4] {
+    let [red, green, blue, alpha] = tint;
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "an opacity from 0 to 255"
+    )]
+    let alpha = (f32::from(alpha) * by.clamp(0.0, 1.0)).round() as u8;
+    [red, green, blue, alpha]
 }
 
 /// Where `run` leaves: its player's pool, or the thing it leaves where that is on the table.

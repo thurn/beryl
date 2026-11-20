@@ -128,8 +128,10 @@ pub(crate) fn look_with_face(
 }
 
 /// Writes the burst of light over the card `on`, drawn as `look`, for each `settle` run in `runs`
-/// that plays on it at `now`: one glow `settle.burst_cards` cards wide, as bright as the card is
-/// white. Records each run that changes how the card is drawn as an `EffectLook` over its face,
+/// that plays on it at `now`, as the `settle` branch of `flareLight` in `ui/src/stage/flare.ts`
+/// draws it: one burst, nothing until `settle.from` of the run, brightest at `settle.peak` and
+/// gone by `settle.bloomed`, `settle.burst_halves` of the card's longer half across each way at
+/// its widest, growing from 0.55 of that to all of it as it brightens. Records each run that changes how the card is drawn as an `EffectLook` over its face,
 /// at the opacity `strength` gives times the card's own.
 pub fn write(
     runs: &[EffectRun],
@@ -153,11 +155,23 @@ pub fn write(
                 opacity: strength * look.pose.opacity,
             });
         }
-        let white = settle_white(p);
-        if effect != Effect::Settle || white <= 0.0 {
+        if effect != Effect::Settle {
             continue;
         }
-        let size = settle::BURST_CARDS * CARD_WIDTH * look.pose.scale;
+        let risen = share(p, settle::FROM, settle::PEAK);
+        let bright = if p < settle::PEAK {
+            risen
+        } else {
+            1.0 - share(p, settle::PEAK, settle::BLOOMED)
+        };
+        if bright <= 0.0 {
+            continue;
+        }
+        let size = 2.0
+            * settle::BURST_HALVES
+            * (CARD_HEIGHT * 0.5)
+            * look.pose.scale
+            * (0.55 + 0.45 * risen);
         let transform = Affine3A::from_scale_rotation_translation(
             Vec3::new(size, size, 1.0),
             look.pose.rotation,
@@ -165,7 +179,7 @@ pub fn write(
         );
         builder.draw(
             Band::Glows,
-            Draw::glow(transform, color::SETTLE_BURST, sprites::BURST, 1.0 - white),
+            Draw::glow(transform, color::SETTLE_BURST, sprites::BURST, 1.0 - bright),
         );
     }
 }

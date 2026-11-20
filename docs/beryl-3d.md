@@ -2194,8 +2194,8 @@ adds to some of them.
 
 | Effect     | Baseline tier                                                                                               | Enhanced tier adds |
 | ---------- | ----------------------------------------------------------------------------------------------------------- | ------------------ |
-| `glow`     | A `glow` record just over the card: a soft outline round it that spreads and fades.                         | Bloom              |
-| `settle`   | The card's `whiten` rises to 1 and falls back, under a burst with rays one and a half cards wide.           | Bloom              |
+| `glow`     | A `glow` record just over the card: a soft halo from its edge outward that spreads and fades.               | Bloom              |
+| `settle`   | The card's `whiten` rises to 1 and falls back, under a burst with rays about two cards wide.                | Bloom              |
 | `dissolve` | The card darkens through its tint, then its `dissolve` runs from 0 to 1 and it breaks up from the top down. | Ash particles      |
 | `dim`      | The card's tint darkens and its opacity falls to 0.                                                         | Nothing            |
 | `blanch`   | The card's `whiten` rises to 1, then its opacity falls to 0.                                                | Vortex particles   |
@@ -2206,8 +2206,8 @@ adds to some of them.
 | `flash`    | A burst with rays over the spell.                                                                           | Bloom              |
 | `beam`     | A cone of light from the side of the ability toward the middle of the table.                                | Bloom              |
 | `pulse`    | A ring round the card's frame.                                                                              | Nothing            |
-| `loss`     | The life total's text is tinted red, and a flat-layer text element showing the amount sinks away and fades. | Nothing            |
-| `gain`     | The life total's text is tinted green, and a flat-layer text element showing the amount rises and fades.    | Nothing            |
+| `loss`     | A red ring round the life orb, the total tinted red, and the amount shown sinking away as it fades.         | Nothing            |
+| `gain`     | A green ring round the life orb, the total tinted green, and the amount shown rising as it fades.           | Nothing            |
 
 - **When an effect plays.** As a script is compiled, each `StepEffect` of a
   step's timing becomes an `EffectRun` on the script's clock, timed as
@@ -2220,9 +2220,13 @@ adds to some of them.
   the earlier one short, and a script with a reset drops them all.
 - **The shapes of light** (a soft disc, a burst with rays, a ring, a cone, a
   comet, a ribbon, a card outline, an arrowhead, a wedge, a crescent, a tap
-  mark, a moon, a plaque and a coin) are sprites that `beryl_assets::light`
-  draws in code into the atlas's page 0, in the cells of
-  `beryl_scene::frame::sprites`. No image file holds them.
+  mark, a moon, a plaque, a coin and a card's halo) are sprites that
+  `beryl_assets::light` draws in code into the atlas's page 0, in the cells of
+  `beryl_scene::frame::sprites`. No image file holds them. The burst holds the
+  web's burst as its light painter draws it at its brightest (core, bloom and
+  rays at a gain of 2, soft-clipped as `glow.ts` does), and the halo holds the
+  two box shadows of `.stage-effect-glow`, so that a record's tint and progress
+  only fade them, as the web's gain does.
 - **The broken edge of a dissolve** is computed in the shader from the card's
   texture coordinates, with no second texture. A dissolving card is among the
   blended records, so no pixel is discarded in the opaque pass.

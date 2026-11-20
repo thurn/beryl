@@ -56,7 +56,7 @@ pub fn prepared() -> Prepared {
 type Shape = fn(f32, f32) -> f32;
 
 /// Each shape with its cell.
-const SHAPES: [(Sprite, Shape); 14] = [
+const SHAPES: [(Sprite, Shape); 15] = [
     (sprites::DISC, disc),
     (sprites::BURST, burst),
     (sprites::RING, ring),
@@ -71,6 +71,7 @@ const SHAPES: [(Sprite, Shape); 14] = [
     (sprites::MOON, moon),
     (sprites::PLAQUE, plaque),
     (sprites::COIN, coin),
+    (sprites::HALO, halo),
 ];
 
 /// Fills `sprite`'s cell of `pixels` with `shape`, leaving its border empty.
@@ -133,13 +134,35 @@ fn disc(x: f32, y: f32) -> f32 {
     soft * soft
 }
 
-/// A burst: a small bright core with 12 thin rays that fade toward their ends.
+/// A burst, as the web stage's light painter draws one (`u_kind == 4` in
+/// `ui/src/stage/glow.ts`): a white-hot core, a wide soft bloom and rays, all fading out before
+/// the edge of the cell. The web adds them up at a gain of about 2 for a blow, a spell's flare
+/// and a permanent landing, and soft-clips the sum (`lit`, `1 - exp(-1.5 x)`), so that the
+/// middle burns to full and the bloom stays bright well out from it. The sprite holds that
+/// soft-clipped light at a gain of 2; a record's tint and progress fade it from there. The web
+/// picks its rays from noise; these are 12 thin rays and 5 broad ones, fixed, so that every
+/// machine draws the same page.
 fn burst(x: f32, y: f32) -> f32 {
+    /// The gain the web draws a burst at as it is brightest.
+    const GAIN: f32 = 2.0;
     let r = length(x, y);
     let angle = y.atan2(x);
-    let ray = (12.0 * angle).cos().max(0.0).powi(24) * falloff(r);
-    let core = falloff(r / 0.3);
-    ray.max(core)
+    let fine = (12.0 * angle).cos().max(0.0).powi(16);
+    let broad = (0.5 + 0.5 * (5.0 * angle + 1.0).cos()).powi(3);
+    let spikes = fine * 1.2 + broad * 0.4;
+    let edge = 1.0 - smooth(0.6, 1.0, r);
+    let core = (-r * r * 13.0).exp();
+    let bloom = (-r * r * 4.5).exp() * 0.55;
+    let rays = spikes * (-r * 3.4).exp() * smooth(0.04, 0.2, r);
+    // The web's hot color and its tone, both near white for these, summed as one light.
+    let light = (core * 1.5 + bloom * 1.6 + rays * 1.35) * edge;
+    1.0 - (-1.5 * GAIN * light).exp()
+}
+
+/// 0 at `from` and below, 1 at `to` and above, rising smoothly between, as GLSL's `smoothstep`.
+fn smooth(from: f32, to: f32, t: f32) -> f32 {
+    let t = ((t - from) / (to - from)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 /// A ring three quarters of the way out, soft on both sides, empty at the centre.
@@ -194,6 +217,32 @@ fn outline(x: f32, y: f32) -> f32 {
     let radius = height * 2.0 * 3.0 / 88.0;
     let distance = rounded_box(x, y, half, radius).abs();
     falloff((distance - 0.02).max(0.0) / 0.04)
+}
+
+/// The halo of the `glow` effect round a card, as the two box shadows of `.stage-effect-glow`
+/// in `ui/src/stage/effects.css` light it, with distances in card widths (its `--frame`): a rim
+/// of light spread 0.03 out from the card's edge and blurred by 0.03, over a warm halo spread
+/// 0.1 out and blurred by 0.22 at 75% opacity. A CSS blur is a Gaussian whose standard
+/// deviation is half its radius. Empty inside the card, as a shadow is under its box, and
+/// faded to nothing before the edge of its cell.
+fn halo(x: f32, y: f32) -> f32 {
+    let [width, height] = sprites::HALO_CARD.map(|half| half * f32::from(sprites::CELL) / HALF);
+    // A card's 3 millimetre corner, at the card's 88 millimetre height.
+    let radius = height * 2.0 * 3.0 / 88.0;
+    let outside = rounded_box(x, y, (width, height), radius);
+    if outside <= 0.0 {
+        return 0.0;
+    }
+    let card_widths = outside / (2.0 * width);
+    let shadow = |spread: f32, blur: f32| {
+        let sigma = blur * 0.5;
+        let past = (card_widths - spread).max(0.0) / sigma;
+        (-0.5 * past * past).exp()
+    };
+    let rim = shadow(0.03, 0.03);
+    let warm = 0.75 * shadow(0.1, 0.22);
+    let edge = falloff(((length(x, y).max(x.abs().max(y.abs())) - 0.85) / 0.15).max(0.0));
+    (1.0 - (1.0 - rim) * (1.0 - warm)) * edge
 }
 
 /// An arrowhead pointing up.

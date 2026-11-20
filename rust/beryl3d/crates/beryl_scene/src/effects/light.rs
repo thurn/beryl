@@ -9,16 +9,25 @@
 //! face's normal as a mark does, which the depth test can tell from the face. The values are
 //! `effects` in `data/beryl3d/space.json`, as shares of the card or of the run's time:
 //!
-//! - `glow`: a soft card-shaped outline round the card, the card's own shape grown by `halo` of
-//!   its width on each side (the halo of `.stage-effect-glow`), which grows `spread` larger as
-//!   it fades. The web draws it under the card, but a card lies on the table itself, so a light
-//!   under it would be under the table: the outline lies over the card instead, empty in the
-//!   middle, so that it lights the margin round the card and not its face.
-//! - `impact`: a burst over what was struck, `wide` of its widths across as the blow lands and
-//!   `spread` wider at its end (`IMPACT` in flare.ts), at `strength` of full light (the 0.55
-//!   opacity of `.stage-effect-impact`).
-//! - `flash`: a burst over the spell, `wide` of its width across at once and `spread` wider at
-//!   its end, which fades twice as fast as a glow (`(1 - flash)²` in `.stage-effect-flash`).
+//! - `glow`: light round the card's edge, the two box shadows of `.stage-effect-glow` (the
+//!   `HALO` sprite, `halo` in `beryl_assets::light`), which grows `spread` larger as it fades.
+//!   The web draws it under the card, but a card lies on the table itself, so a light under it
+//!   would be under the table: the halo lies over the card instead, empty where the card is,
+//!   so that it lights the margin round the card and not its face. The sprite holds the warm
+//!   shadow's 75% opacity, and the tint is that shadow's color at 75% again: the web lays the
+//!   halo over the table, but this light adds to it, which at the sprite's own strength looked
+//!   far brighter than the web's.
+//! - `impact`: a burst over what was struck, `wide` of its longer half across each way as the
+//!   blow lands and `spread` wider at its end, fading as `(1 - progress)^fade` (`IMPACT` and
+//!   the `impact` branch of `flareLight` in flare.ts). The web also lays the orange gradient of
+//!   `.stage-effect-impact` at 0.55 opacity under that burst, which the white burst hides.
+//! - `flash`: a burst over the spell, `wide` of its longer half across each way at once and
+//!   `spread` wider at its end, fading as `(1 - progress)^fade` (the last branch of
+//!   `flareLight`).
+//!
+//! The bursts are the `BURST` sprite, the web's burst as its painter draws it at its brightest
+//! (`burst` in `beryl_assets::light`). The glow material fades a record by `1 - progress`, so
+//! each burst's tint fades by the rest of its power.
 //! - `beam`: the web's `BEAM`, a cone from the card's side toward the middle of the table, its
 //!   light rising over the first `rise` of its time.
 //! - `pulse`: a ring round the card's frame, through the corners of a card `round` times its
@@ -30,10 +39,12 @@
 //! A record's `params[0]` is the run's eased progress, which the glow material fades the light
 //! by; where the web's light fades or rises otherwise, the tint's opacity carries the rest.
 //!
+//! - `loss` and `gain`: a ring round the life orb's face in the color its total flares, red for
+//!   a loss and green for a gain, fading as it goes (`[data-life] > .stage-effect` in
+//!   effects.css). The life total's text is tinted too (`hud::counts`).
+//!
 //! While the frame is built for the match tools, each light is also recorded as an `EffectLook`
-//! with the opacity it is drawn at. So are `loss` and `gain`, which draw no light: the life
-//! total's text is tinted instead (`hud::counts`), so each is recorded over the total at full
-//! opacity for as long as it runs.
+//! with the opacity it is drawn at.
 
 use beryl_protocol::script::Subject;
 use glam::{Affine3A, Quat, Vec2, Vec3};
@@ -46,6 +57,11 @@ use crate::light::{marks, streaks};
 use crate::play::{Reach, Scene};
 use crate::pose::Pose;
 use crate::tokens::color;
+
+/// How much larger than the life orb's face the quad of a `loss` or `gain` ring is drawn, so that
+/// the `RING` sprite's line, three quarters of the way out, lies just outside the face, where
+/// the web's ring glows (`[data-life] > .stage-effect` in `ui/src/stage/effects.css`).
+const LIFE_RING: f32 = 1.45;
 
 /// Nanoseconds in one sixtieth of a second, the web stage's frame.
 const FRAME: f32 = 1e9 / 60.0;
@@ -85,28 +101,29 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
         let share = (now - run.start) as f32 / run.duration as f32;
         let progress = run.curve.ease(share);
         let pose = reach.pose;
+        // The web sizes a burst by the longer half of what it is on (`flareLight`).
+        let longer = half.x.max(half.y);
         let draw = match run.effect {
             Effect::Glow => {
-                let size = sprites::outline_size(half + Vec2::splat(glow::HALO * 2.0 * half.x));
-                let size = size * (1.0 + glow::SPREAD * progress);
-                lying(&pose, size, color::GLOW, sprites::OUTLINE, progress)
+                let size = sprites::halo_size(half) * (1.0 + glow::SPREAD * progress);
+                lying(&pose, size, color::GLOW, sprites::HALO, progress)
             }
             Effect::Impact => {
-                let across = 2.0 * half.x * (impact::WIDE + impact::SPREAD * progress);
+                let across = 2.0 * longer * (impact::WIDE + impact::SPREAD * progress);
                 lying(
                     &pose,
                     Vec2::splat(across),
-                    fade(color::IMPACT, impact::STRENGTH),
+                    fade(color::FLASH, (1.0 - progress).powf(impact::FADE - 1.0)),
                     sprites::BURST,
                     progress,
                 )
             }
             Effect::Flash => {
-                let across = 2.0 * half.x * (flash::WIDE + flash::SPREAD * progress);
+                let across = 2.0 * longer * (flash::WIDE + flash::SPREAD * progress);
                 lying(
                     &pose,
                     Vec2::splat(across),
-                    fade(color::FLASH, 1.0 - progress),
+                    fade(color::FLASH, (1.0 - progress).powf(flash::FADE - 1.0)),
                     sprites::BURST,
                     progress,
                 )
@@ -126,14 +143,12 @@ pub fn write(runs: &[EffectRun], now: u64, scene: &Scene<'_>, builder: &mut Fram
                 draw
             }
             Effect::Loss | Effect::Gain => {
-                let over = lying(&pose, half * 2.0, [0; 4], sprites::RING, 0.0);
-                builder.effect(EffectLook {
-                    effect: run.effect,
-                    on: run.on,
-                    model: over.model,
-                    opacity: 1.0,
-                });
-                continue;
+                let tint = if run.effect == Effect::Loss {
+                    color::LOSS
+                } else {
+                    color::GAIN
+                };
+                lying(&pose, half * 2.0 * LIFE_RING, tint, sprites::RING, progress)
             }
             _ => continue,
         };

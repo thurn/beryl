@@ -173,7 +173,10 @@ fn one_glow_lights_little_of_the_screen() {
         .map(|(_, with, without)| with.areas().blended - without.areas().blended)
         .fold(0.0, f32::max);
     assert!(area > 0.0, "the glow is drawn");
-    assert!(area < 0.02, "a glow covers {area} screens");
+    // The web's halo reaches about a third of a card's width past each edge of the card (the
+    // 0.1 spread and 0.22 blur of `.stage-effect-glow`), so its quad is about 2.4 cards large:
+    // 0.035 screens on this card. A glow drawn as a thin ring covered under 0.02.
+    assert!(area < 0.04, "a glow covers {area} screens");
 }
 
 #[test]
