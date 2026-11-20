@@ -16,7 +16,7 @@ struct Target(PathBuf);
 impl Target {
     fn new() -> Target {
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("ignite-sweep-{}-{n}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-sweep-{}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("debug/.fingerprint")).unwrap();
         Target(dir)

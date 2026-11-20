@@ -152,7 +152,7 @@ impl Drill {
     /// The repository, the remote and the hub, under a short temporary path so the daemon's
     /// socket path stays short.
     fn new() -> Drill {
-        let root = std::env::temp_dir().join(format!("irst-{}", std::process::id()));
+        let root = ignite_core::test_files::temp_dir().join(format!("irst-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("marks")).unwrap();
         let host = NativeHost.hostname();
@@ -458,7 +458,7 @@ fn a_restart_under_load_ends_no_command_and_runs_nothing_twice() {
 /// would, before it takes the machine's lock or serves anything.
 #[test]
 fn a_fault_file_makes_the_daemon_exit_at_start() {
-    let root = std::env::temp_dir().join(format!("irst-fault-{}", std::process::id()));
+    let root = ignite_core::test_files::temp_dir().join(format!("irst-fault-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).unwrap();
     // An empty file names every build, including this one, which is in no store.

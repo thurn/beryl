@@ -45,7 +45,7 @@ struct Fixture {
 
 impl Fixture {
     fn new(name: &str) -> Fixture {
-        let dir = std::env::temp_dir().join(format!("ignite-api-{name}-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-api-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let conn = hub::open(&dir.join("hub.sqlite")).unwrap();

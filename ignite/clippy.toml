@@ -1,0 +1,14 @@
+# Calls that behave differently on Windows and macOS in ways that have broken Ignite on one of
+# them, each refused in favor of a helper that behaves the same on both. Clippy reads this file
+# for every crate of the workspace, including tests (`--all-targets`).
+disallowed-methods = [
+  # On Windows these return a verbatim path (`\\?\C:\...`), which `cmd.exe` cannot run and git
+  # cannot create directories under. The helper returns the ordinary form.
+  { path = "std::fs::canonicalize", reason = "use ignite_os::paths::canonicalize, which drops Windows' \\\\?\\ prefix" },
+  { path = "std::path::Path::canonicalize", reason = "use ignite_os::paths::canonicalize, which drops Windows' \\\\?\\ prefix" },
+  # Tests named their scratch folders after the process ID, and Windows reuses process IDs, so a
+  # later run reopened a database an earlier run left behind. The helper gives each test process
+  # a fresh folder of its own. Code outside tests that needs the system's temporary directory
+  # says why in an `allow`.
+  { path = "std::env::temp_dir", reason = "in tests use ignite_core::test_files::temp_dir, a fresh folder for this process" },
+]

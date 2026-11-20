@@ -26,7 +26,7 @@ fn at(seconds: f64) -> Timestamp {
 /// A home with `GOOD` and `BAD` stored, `current` on `BAD` and `GOOD` marked last-good.
 fn home() -> Home {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
-    let root = std::env::temp_dir().join(format!(
+    let root = ignite_core::test_files::temp_dir().join(format!(
         "ignite-starts-{}-{}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::SeqCst)

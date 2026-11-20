@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn an_empty_directory_counts_as_missing() {
-        let root = std::env::temp_dir().join(format!("ignite-choice-{}", std::process::id()));
+        let root = ignite_core::test_files::temp_dir().join(format!("ignite-choice-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("rust/target/debug")).unwrap();
         fs::create_dir_all(root.join("rust/second/target")).unwrap();

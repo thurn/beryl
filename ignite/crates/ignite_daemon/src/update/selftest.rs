@@ -147,7 +147,7 @@ struct ScratchFolder {
 impl ScratchFolder {
     fn new() -> std::io::Result<Self> {
         static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let path = std::env::temp_dir().join(format!(
+        let path = ignite_core::test_files::temp_dir().join(format!(
             "ignite-selftest-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)

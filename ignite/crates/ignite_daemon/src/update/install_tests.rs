@@ -612,9 +612,9 @@ fn the_main_checkout_of_a_linked_worktree_is_the_repository() {
             linked.to_str().unwrap(),
         ],
     );
-    let repo = repo.canonicalize().unwrap();
-    assert_eq!(main_checkout(&linked).canonicalize().unwrap(), repo);
-    assert_eq!(main_checkout(&repo).canonicalize().unwrap(), repo);
+    let repo = ignite_os::paths::canonicalize(repo).unwrap();
+    assert_eq!(ignite_os::paths::canonicalize(main_checkout(&linked)).unwrap(), repo);
+    assert_eq!(ignite_os::paths::canonicalize(main_checkout(&repo)).unwrap(), repo);
     // Outside any repository, the directory itself.
     let plain = dir.join("plain");
     std::fs::create_dir_all(&plain).unwrap();

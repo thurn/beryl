@@ -669,7 +669,7 @@ mod tests {
 
     #[test]
     fn a_changed_ignite_toml_reaches_the_hubs_routing() {
-        let dir = std::env::temp_dir().join(format!("ignite-routing-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-routing-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let conn = ignite_store::hub::open_in_memory().unwrap();
         let config = |owner: &str| {

@@ -51,7 +51,7 @@ fn run(hub: &Hub, line: &str) -> Reply {
 
 #[test]
 fn a_check_switched_off_as_flaky_can_be_listed_and_switched_back_on() {
-    let dir = std::env::temp_dir().join(format!("ignite-cli-flaky-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-cli-flaky-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let database = dir.join("hub.sqlite");

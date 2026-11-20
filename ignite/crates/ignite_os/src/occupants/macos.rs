@@ -16,7 +16,7 @@ const POLL: Duration = Duration::from_millis(20);
 
 impl Occupants for Native {
     fn occupants(&self, dir: &Path) -> io::Result<Vec<Occupant>> {
-        let dir = dir.canonicalize()?;
+        let dir = crate::paths::canonicalize(dir)?;
         let mut found = Vec::new();
         for pid in all_pids()? {
             let Ok(pid) = u32::try_from(pid) else {
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn finds_a_process_by_its_working_directory_and_ends_it() {
-        let dir = std::env::temp_dir().join(format!("ignite-occupants-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-occupants-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let mut child = Command::new("/bin/sleep")
             .arg("1000")

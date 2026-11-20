@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn a_failure_names_the_arguments_and_the_message() {
-        let dir = std::env::temp_dir();
+        let dir = ignite_core::test_files::temp_dir();
         let error = run(&dir, ["rev-parse", "--verify", "no-such-ref-anywhere"]).unwrap_err();
         let Error::Io(message) = error else {
             panic!("expected an I/O error, got {error:?}");

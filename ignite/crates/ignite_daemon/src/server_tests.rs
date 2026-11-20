@@ -195,7 +195,7 @@ fn the_tree_is_the_folder_under_the_trees_folder() {
 
 #[test]
 fn a_reply_reaches_the_client_over_the_socket() {
-    let dir = std::env::temp_dir().join(format!("ignite-server-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-server-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let socket = dir.join("d.sock").to_string_lossy().into_owned();
     let mut registry = Registry::default();
@@ -217,7 +217,7 @@ fn a_reply_reaches_the_client_over_the_socket() {
 /// answered once the daemon is ready, never refused; `status` is answered at once.
 #[test]
 fn a_request_sent_while_the_daemon_starts_is_answered_once_it_is_ready() {
-    let dir = std::env::temp_dir().join(format!("ignite-server-starting-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-server-starting-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let socket = dir.join("d.sock").to_string_lossy().into_owned();
     let listener = ignite_os::Native.listen(&socket).unwrap();
@@ -256,7 +256,7 @@ fn a_request_sent_while_the_daemon_starts_is_answered_once_it_is_ready() {
 #[test]
 fn a_request_sent_while_the_daemon_fails_to_start_is_told_why() {
     let dir =
-        std::env::temp_dir().join(format!("ignite-server-start-fails-{}", std::process::id()));
+        ignite_core::test_files::temp_dir().join(format!("ignite-server-start-fails-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let socket = dir.join("d.sock").to_string_lossy().into_owned();
     let listener = ignite_os::Native.listen(&socket).unwrap();

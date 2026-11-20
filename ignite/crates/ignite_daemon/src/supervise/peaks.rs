@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn the_usual_peak_is_the_median_of_the_last_runs_and_survives_a_restart() {
-        let dir = std::env::temp_dir().join(format!("ignite-peaks-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-peaks-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("peaks.json");
         let peaks = Peaks::load(path.clone());

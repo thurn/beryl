@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn each_tests_lines_from_every_file_make_its_list() {
-        let dir = std::env::temp_dir().join(format!("ignite-run-reads-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-run-reads-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         fs::write(

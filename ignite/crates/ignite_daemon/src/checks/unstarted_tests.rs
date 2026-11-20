@@ -103,7 +103,7 @@ fn free_memory_counts_free_and_speculative_pages() {
 
 #[test]
 fn reading_the_machine_measures_this_process() {
-    let machine = Machine::read(&std::env::temp_dir());
+    let machine = Machine::read(&ignite_core::test_files::temp_dir());
     if cfg!(target_os = "macos") {
         assert!(machine.open_files.is_some_and(|n| n > 0));
         assert!(machine.processes.is_some_and(|(all, _)| all > 0));

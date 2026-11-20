@@ -15,7 +15,7 @@ use ignite_daemon::supervise::ResultFile;
 use ignite_daemon::supervise::SupervisedLauncher;
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ignite-supervise-{name}-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-supervise-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -63,7 +63,7 @@ fn a_supervised_command_leaves_a_result_file_with_its_exit_output_and_usage() {
 
     assert_eq!(result.exit, Some(7));
     let output = fs::read_to_string(&result.output).unwrap();
-    let cwd = fs::canonicalize(&root).unwrap();
+    let cwd = ignite_os::paths::canonicalize(&root).unwrap();
     assert!(
         output.contains(&format!("hello from {} with 3 cores", cwd.display())),
         "{output}"

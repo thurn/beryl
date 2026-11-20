@@ -710,7 +710,7 @@ fn a_tip_waiting_on_another_platform_names_its_machine_on_one_ticket() {
 
 #[test]
 fn backups_are_hourly_and_exports_daily() {
-    let dir = std::env::temp_dir().join(format!("ignite-upkeep-backup-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-upkeep-backup-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let clock = start();
     let mut conn = hub::open_in_memory().unwrap();

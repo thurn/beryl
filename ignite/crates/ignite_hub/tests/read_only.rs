@@ -48,7 +48,7 @@ fn status(address: SocketAddr, method: &str, path: &str, body: &str) -> u16 {
 
 #[test]
 fn the_public_listener_serves_reads_and_refuses_writes_and_export() {
-    let dir = std::env::temp_dir().join(format!("ignite-read-only-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-read-only-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let server = HubServer {

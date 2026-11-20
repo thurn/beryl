@@ -37,7 +37,7 @@ fn commit(hex: &str) -> Commit {
 
 fn tempdir() -> PathBuf {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
-    let dir = std::env::temp_dir().join(format!(
+    let dir = ignite_core::test_files::temp_dir().join(format!(
         "ignite-selfupdate-{}-{}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::SeqCst)

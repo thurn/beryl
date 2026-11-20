@@ -11,7 +11,7 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new(name: &str) -> Scratch {
-        let dir = std::env::temp_dir().join(format!("ignite-space-{}-{name}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-space-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("a")).unwrap();
         fs::create_dir_all(dir.join("b")).unwrap();
@@ -42,7 +42,7 @@ const MB: u64 = 1_000_000;
 #[test]
 fn a_clone_counts_once_and_frees_its_blocks_only_with_its_source() {
     use ignite_os::clones::Clones as _;
-    if !ignite_os::Native.copies_are_clones(&std::env::temp_dir()) {
+    if !ignite_os::Native.copies_are_clones(&ignite_core::test_files::temp_dir()) {
         eprintln!("skipped: copies in the temporary directory are not clones");
         return;
     }

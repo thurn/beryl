@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn runs_are_found_by_request_and_by_handle_until_collected() {
-        let runs = std::env::temp_dir().join(format!("ignite-requests-{}", std::process::id()));
+        let runs = ignite_core::test_files::temp_dir().join(format!("ignite-requests-{}", std::process::id()));
         let _ = fs::remove_dir_all(&runs);
         let write = |name: &str, env: Vec<(String, String)>| {
             let dir = runs.join(name);

@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn wait_returns_when_the_accept_loop_ends_by_itself() {
-        let dir = std::env::temp_dir().join(format!("ignite-hub-wait-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-hub-wait-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let hub = HubServer {
             config: Config::parse(

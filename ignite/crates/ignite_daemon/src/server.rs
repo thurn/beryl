@@ -74,10 +74,10 @@ impl Context {
     /// The build tree that holds `cwd`: the first directory under the configured trees folder.
     pub fn tree_of(&self, cwd: &Path) -> Option<TreeId> {
         let root = self.repo.join(&self.config.repository.trees);
-        let canonical = root.canonicalize().ok();
+        let canonical = ignite_os::paths::canonicalize(&root).ok();
         // A verb process finds the checkout through `git`, which may name it by another path
         // than the client's working directory, such as `/private/var` for `/var` on macOS.
-        let canonical_cwd = cwd.canonicalize().ok();
+        let canonical_cwd = ignite_os::paths::canonicalize(cwd).ok();
         let relative = cwd
             .strip_prefix(&root)
             .ok()

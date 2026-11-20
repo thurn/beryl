@@ -90,20 +90,15 @@ impl Fixture {
     }
 
     fn with_landing(ticket_trees: u32, landing_trees: u32, commits: usize) -> Fixture {
-        let root = std::env::temp_dir().join(format!(
+        let root = ignite_core::test_files::temp_dir().join(format!(
             "ignite-trees-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
-        // `/var` is a link on macOS, and git reports real paths. Windows canonicalizes to a
-        // verbatim path (one that starts `\\?\`), which git cannot create directories under.
-        let scratch = Scratch(if cfg!(windows) {
-            root
-        } else {
-            root.canonicalize().unwrap()
-        });
+        // `/var` is a link on macOS, and git reports real paths.
+        let scratch = Scratch(ignite_os::paths::canonicalize(&root).unwrap());
         let remote = scratch.0.join("remote.git");
         let seed = scratch.0.join("seed");
         let repo = scratch.0.join("clone");

@@ -369,6 +369,7 @@ name = "ignite_git"
 version = "0.1.0"
 dependencies = [
  "ignite_core",
+ "ignite_os",
 ]
 
 [[package]]

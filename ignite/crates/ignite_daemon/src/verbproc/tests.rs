@@ -49,7 +49,7 @@ pub(super) struct Scratch {
 impl Scratch {
     pub(super) fn new(name: &str) -> Scratch {
         let home =
-            std::env::temp_dir().join(format!("ignite-verbproc-{name}-{}", std::process::id()));
+            ignite_core::test_files::temp_dir().join(format!("ignite-verbproc-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(home.join("runs")).unwrap();
         Scratch { home }

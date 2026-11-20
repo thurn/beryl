@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn a_command_whose_last_runs_were_quick_starts_without_a_grant() {
-        let dir = std::env::temp_dir().join(format!("ignite-quick-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-quick-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let cpu = peaks::Peaks::load(dir.join("cpu.json"));
         let sync = spec(&["uv", "sync", "--quiet"]);

@@ -112,7 +112,7 @@ fn a_short_land_grant_receives_freed_cores_before_an_agent_request() {
 
 #[test]
 fn a_growing_commands_file_shows_its_grant_rise_as_another_command_ends() {
-    let dir = std::env::temp_dir().join(format!("ignite-sched-grow-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-sched-grow-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let file = dir.join("cores");
     let read = || fs::read_to_string(&file).unwrap().trim().to_owned();
@@ -225,7 +225,7 @@ fn a_compiling_build_keeps_its_cores_from_a_large_request_until_it_has_waited_lo
 /// the machine's cores.
 #[test]
 fn commands_taken_over_after_a_restart_never_hold_more_than_the_machine() {
-    let dir = std::env::temp_dir().join(format!("ignite-sched-adopt-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-sched-adopt-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let (scheduler, _, _) = scheduler();
     let adoption = |class, cores, follow: Option<&str>| crate::sched::Adoption {

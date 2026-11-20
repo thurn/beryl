@@ -20,7 +20,7 @@ struct Repo(PathBuf);
 
 impl Repo {
     fn new(name: &str) -> Repo {
-        let dir = std::env::temp_dir().join(format!("ignite-holds-{name}-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-holds-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         git(&dir, &["init", "--quiet", "-b", "main"]);

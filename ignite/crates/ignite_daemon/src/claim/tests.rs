@@ -400,7 +400,7 @@ fn a_tree_whose_reset_failed_after_a_refused_claim_is_reset_by_a_later_tick() {
 #[test]
 fn a_ticket_whose_tree_was_freed_by_a_landing_is_no_longer_held() {
     use ignite_store::local::{rows, trees as tree_rows};
-    let path = std::env::temp_dir().join(format!("ignite-claim-landed-{}.db", std::process::id()));
+    let path = ignite_core::test_files::temp_dir().join(format!("ignite-claim-landed-{}.db", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let world = World::with_db(ignite_store::local::open(&path).unwrap());
     world.desk.add(ticket("Tq.48", "Counter names", ""));

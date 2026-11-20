@@ -9,7 +9,7 @@ use super::*;
 
 pub(super) fn tempdir(name: &str) -> PathBuf {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
-    let dir = std::env::temp_dir().join(format!(
+    let dir = ignite_core::test_files::temp_dir().join(format!(
         "ignite-update-{}-{}-{name}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::SeqCst)

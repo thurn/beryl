@@ -3638,7 +3638,10 @@ How the machines divide verification:
 - A check with `platforms = "any"` needs one pass anywhere. Cygnus can therefore
   verify pure engine logic for the whole fleet.
 - A check with a platform list needs a pass on each. Only the Macs run the
-  browser, oracle and app families.
+  browser, oracle and app families. The `ignite-platform` family lists both
+  `macos` and `windows`: it holds Ignite's tests of the code that behaves
+  differently on each, so a change must pass them on a Mac and on cygnus before
+  `master` moves.
 - A daemon prefers the checks only it can run, then claims portable ones.
 
 On Windows the daemon uses a named pipe for the client (a client that

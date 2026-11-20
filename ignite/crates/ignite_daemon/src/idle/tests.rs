@@ -38,7 +38,7 @@ static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
 
 fn temp_dir() -> PathBuf {
     let n = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("ignite-idle-{}-{n}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-idle-{}-{n}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

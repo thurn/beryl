@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn the_temporary_directory_has_free_space_and_the_machine_has_memory() {
-        assert!(disk_free_bytes(&std::env::temp_dir()).unwrap() > 0);
+        assert!(disk_free_bytes(&ignite_core::test_files::temp_dir()).unwrap() > 0);
         assert!(total_memory_bytes().unwrap() > 1 << 30);
     }
 }

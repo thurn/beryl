@@ -489,7 +489,7 @@ fn doctor_warns_about_directories_under_the_trees_folder_it_does_not_own() {
 
 #[test]
 fn git_trees_lists_the_visible_directories_under_the_trees_folder() {
-    let dir = std::env::temp_dir().join(format!("ignite-doctor-dirs-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-doctor-dirs-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     for name in ["tree-01", "slot-01", ".pytest_cache"] {
         std::fs::create_dir_all(dir.join(name)).unwrap();

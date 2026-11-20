@@ -44,7 +44,7 @@ fn set_time(path: &Path, time: SystemTime) {
 /// skipped elsewhere, with a line that says so.
 fn copies_are_clones_here() -> bool {
     use ignite_os::clones::Clones as _;
-    let here = ignite_os::Native.copies_are_clones(&std::env::temp_dir());
+    let here = ignite_os::Native.copies_are_clones(&ignite_core::test_files::temp_dir());
     if !here {
         eprintln!("skipped: copies in the temporary directory are not clones");
     }
@@ -512,7 +512,7 @@ fn a_compiling_lease_returns_before_its_seed_and_a_build_waits_for_the_seed() {
 /// "Permission denied" on macOS when it opened the copy for writing to set its modification time.
 #[test]
 fn a_read_only_file_is_copied_with_its_modification_time() {
-    let dir = std::env::temp_dir().join(format!("ignite-readonly-copy-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-readonly-copy-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     let (from, to) = (dir.join("from"), dir.join("to"));
     fs::create_dir_all(&from).unwrap();

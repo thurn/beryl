@@ -85,7 +85,7 @@ impl Machine for FakeMachine {
 
 fn home() -> Home {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
-    let root = std::env::temp_dir().join(format!(
+    let root = ignite_core::test_files::temp_dir().join(format!(
         "ignite-monitor-{}-{}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::SeqCst)

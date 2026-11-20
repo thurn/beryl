@@ -69,7 +69,7 @@ fn a_round_answers_with_its_outcome_and_settles_the_tip_in_its_memory() {
     let tip = commit("bbbb000");
     world.land(&tip);
     world.work.set_checks(&tip, vec![check("a", 'a')]);
-    let dir = std::env::temp_dir().join(format!("ignite-tip-round-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-tip-round-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let verb = TipRoundVerb::new(
         world.work.clone(),

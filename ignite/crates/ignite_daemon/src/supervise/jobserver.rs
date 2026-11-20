@@ -198,7 +198,7 @@ mod tests {
     #[cfg(unix)]
     fn scratch(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("ignite-jobserver-{name}-{}", std::process::id()));
+            ignite_core::test_files::temp_dir().join(format!("ignite-jobserver-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir

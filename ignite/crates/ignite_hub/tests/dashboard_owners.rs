@@ -81,7 +81,7 @@ fn send(
 
 #[test]
 fn owners_show_on_pages_and_a_ticket_without_one_goes_to_the_default_owner() {
-    let dir = std::env::temp_dir().join(format!("ignite-dashboard-owners-{}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-dashboard-owners-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let server = HubServer {

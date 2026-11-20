@@ -709,7 +709,7 @@ impl Trees {
     /// longer declares but the store still holds, so that a session leased it before the count
     /// was lowered can go on and release it.
     pub fn tree_at(&self, path: &Path) -> Option<TreeId> {
-        let real = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        let real = |p: &Path| ignite_os::paths::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
         let path = real(path);
         let stored = store::all(&self.lock().db).unwrap_or_default();
         self.inner

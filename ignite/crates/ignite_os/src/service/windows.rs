@@ -113,7 +113,7 @@ fn kickstart(task: &str) -> io::Result<()> {
 fn register(task: &str, schedule: Schedule, executable: &Path, args: &[String]) -> io::Result<()> {
     let user = current_user()?;
     let definition = task_xml(&user, &executable.to_string_lossy(), args, schedule);
-    let path = std::env::temp_dir().join(format!("{task}-{}.xml", std::process::id()));
+    let path = ignite_core::test_files::temp_dir().join(format!("{task}-{}.xml", std::process::id()));
     // `schtasks` reads a definition in UTF-16 with a byte order mark.
     let bytes: Vec<u8> = std::iter::once(0xFEFF)
         .chain(definition.encode_utf16())

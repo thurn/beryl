@@ -11,6 +11,7 @@ pub mod hostcpu;
 pub mod ipc;
 pub mod notify;
 pub mod occupants;
+pub mod paths;
 pub mod proc;
 pub mod service;
 pub mod system;

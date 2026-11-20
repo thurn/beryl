@@ -213,7 +213,10 @@ fn saved_path(dir: &Path) -> PathBuf {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect();
-    std::env::temp_dir().join(format!("ignite-trees-used{name}"))
+    // The daemon's own file, which a later daemon reads back, so not a test's scratch folder.
+    #[allow(clippy::disallowed_methods)]
+    let temp = std::env::temp_dir();
+    temp.join(format!("ignite-trees-used{name}"))
 }
 
 /// The measurement of `dir` a previous daemon saved: seconds since the epoch and gigabytes.
@@ -248,7 +251,7 @@ mod tests {
     /// kept only in memory never reached `doctor`. A saved measurement is read back.
     #[test]
     fn a_measurement_is_read_back_after_a_restart() {
-        let dir = std::env::temp_dir().join(format!("ignite-used-test-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-used-test-{}", std::process::id()));
         let at = SystemTime::now();
         save(&dir, at, 287);
         let (_, read_at, gb) = saved(&dir).unwrap();

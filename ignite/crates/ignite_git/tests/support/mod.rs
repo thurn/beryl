@@ -17,7 +17,7 @@ pub struct Scratch(pub PathBuf);
 
 impl Scratch {
     pub fn new(name: &str) -> Scratch {
-        let path = std::env::temp_dir().join(format!(
+        let path = ignite_core::test_files::temp_dir().join(format!(
             "ignite-git-{name}-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
@@ -25,13 +25,7 @@ impl Scratch {
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).unwrap();
         // The temp directory can sit behind a symlink (/var on macOS); git reports real paths.
-        // Windows canonicalizes to a verbatim path (one that starts `\\?\`), which git cannot
-        // create directories under.
-        if cfg!(windows) {
-            Scratch(path)
-        } else {
-            Scratch(path.canonicalize().unwrap())
-        }
+        Scratch(ignite_os::paths::canonicalize(&path).unwrap())
     }
 
     pub fn path(&self, relative: &str) -> PathBuf {

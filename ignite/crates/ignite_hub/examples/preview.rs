@@ -65,6 +65,8 @@ fn run() -> Result<(), String> {
         Some(from) => from,
         None => default_database()?,
     };
+    // A program a person runs, which keeps its copy between runs, not a test's scratch folder.
+    #[allow(clippy::disallowed_methods)]
     let dir = std::env::temp_dir().join("ignite-preview");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let database = dir.join("hub.db");

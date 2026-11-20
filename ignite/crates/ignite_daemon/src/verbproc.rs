@@ -350,7 +350,7 @@ pub fn run(handle: &str, cwd: &Path) -> i32 {
     };
     let home = crate::update::Home::from_env();
     let ignite = std::env::current_exe()
-        .and_then(|exe| exe.canonicalize())
+        .and_then(ignite_os::paths::canonicalize)
         .unwrap_or_default();
     let version = crate::update::ExecutableStore::version_of(&ignite)
         .map_or_else(|| "unknown".to_owned(), |commit| commit.to_string());

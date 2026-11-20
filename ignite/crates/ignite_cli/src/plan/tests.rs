@@ -164,7 +164,7 @@ fn a_dependency_on_an_epic_a_report_with_dependents_and_a_moved_ticket_each_get_
 #[test]
 fn a_files_line_names_files_short_paths_resolve_and_missing_paths_are_reported() {
     let repository = super::Repository {
-        root: std::env::temp_dir().join("ignite-plan-no-such-checkout"),
+        root: ignite_core::test_files::temp_dir().join("ignite-plan-no-such-checkout"),
         tracked: ["rust/client/crates/game_scene/src/style.rs", "tools/b.py"]
             .map(str::to_owned)
             .to_vec(),

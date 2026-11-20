@@ -113,7 +113,7 @@ struct FileDatabase {
 
 impl FileDatabase {
     fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("ignite-outbox-{name}-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-outbox-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let conn = ignite_store::local::open(&dir.join("daemon.db")).unwrap();

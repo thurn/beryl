@@ -321,7 +321,7 @@ mod tests {
     /// Writes an old database with an epic, two children, an edge, comments, history, an
     /// alias, an event and a lease, at a fresh path.
     pub(crate) fn old_database(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("ignite-import-{}-{name}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-import-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("old.db");
         let _ = std::fs::remove_file(&path);
@@ -497,7 +497,7 @@ mod tests {
     #[test]
     fn a_missing_database_is_not_found_and_not_created() {
         let mut hub = hub::open_in_memory().unwrap();
-        let path = std::env::temp_dir().join("ignite-import-no-such.db");
+        let path = ignite_core::test_files::temp_dir().join("ignite-import-no-such.db");
         let sources = Sources {
             tickets: Some(path.clone()),
             ..Sources::default()

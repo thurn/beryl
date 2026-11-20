@@ -327,7 +327,7 @@ pub fn run_hub(cwd: &Path) -> i32 {
 /// in the executable store).
 fn running_executable() -> (PathBuf, String) {
     let ignite = std::env::current_exe()
-        .and_then(|exe| exe.canonicalize())
+        .and_then(ignite_os::paths::canonicalize)
         .unwrap_or_default();
     let version = crate::update::ExecutableStore::version_of(&ignite)
         .map_or_else(|| "unknown".to_owned(), |commit| commit.to_string());

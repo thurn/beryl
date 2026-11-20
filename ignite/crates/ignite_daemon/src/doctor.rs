@@ -481,7 +481,7 @@ fn running_version() -> Option<Commit> {
     if let Some(version) = RUNNING.get() {
         return version.clone();
     }
-    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+    let exe = ignite_os::paths::canonicalize(std::env::current_exe().ok()?).ok()?;
     ExecutableStore::version_of(&exe)
 }
 

@@ -175,7 +175,7 @@ mod tests {
     const SESSION: &str = "local_8c29f0b2-fddb-4e96-9da4-b1872d57316a";
 
     fn app_data(name: &str, contents: Option<&str>) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = ignite_core::test_files::temp_dir().join(format!(
             "ignite-daemon-session-title-{name}-{}",
             std::process::id()
         ));

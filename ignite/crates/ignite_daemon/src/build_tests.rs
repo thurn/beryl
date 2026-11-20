@@ -205,7 +205,7 @@ fn product(build: &str, inputs: &[&str]) -> Product {
 }
 
 fn fixture(name: &str, gated: bool) -> Fixture {
-    let dir = std::env::temp_dir().join(format!("ignite-build-{}-{name}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-build-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let git = Arc::new(FakeGit::default());

@@ -222,7 +222,7 @@ impl ExecutableStore {
     /// The commit an executable path was stored under, following symlinks and, on Windows, the
     /// launcher's pointer file.
     pub fn version_of(executable: &Path) -> Option<Commit> {
-        let mut real = executable.canonicalize().ok()?;
+        let mut real = ignite_os::paths::canonicalize(executable).ok()?;
         if cfg!(windows) && real.extension().is_some_and(|e| e == "cmd") {
             let pointer = std::fs::read_to_string(real.with_extension("")).ok()?;
             real = PathBuf::from(pointer.trim());

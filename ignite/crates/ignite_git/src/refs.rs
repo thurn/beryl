@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn an_ancestor_is_found_and_a_side_branch_or_unknown_commit_is_not() {
-        let dir = std::env::temp_dir().join(format!("ignite-git-ancestor-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-git-ancestor-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         git(&dir, &["init", "--quiet", "-b", "main"]);

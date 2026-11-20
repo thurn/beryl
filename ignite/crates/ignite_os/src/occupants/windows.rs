@@ -26,7 +26,7 @@ use crate::proc::ENDED_EXIT_CODE;
 
 impl Occupants for Native {
     fn occupants(&self, dir: &Path) -> io::Result<Vec<Occupant>> {
-        let dir = comparable(&dir.canonicalize()?);
+        let dir = comparable(&crate::paths::canonicalize(dir)?);
         let mut found = Vec::new();
         for entry in processes()? {
             let pid = entry.th32ProcessID;
@@ -184,7 +184,7 @@ mod tests {
 
     #[test]
     fn finds_a_process_by_its_executable_and_ends_it() {
-        let dir = std::env::temp_dir().join(format!("ignite-occupants-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-occupants-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         // A copy of the command interpreter inside the directory, which waits for input that
         // never comes.

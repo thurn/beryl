@@ -112,7 +112,7 @@ mod tests {
     /// Every form of `HEAD` a tree has reads as the commit `git rev-parse HEAD` names.
     #[test]
     fn head_is_read_from_the_files_as_git_reads_it() {
-        let root = std::env::temp_dir().join(format!("ignite-head-{}", std::process::id()));
+        let root = ignite_core::test_files::temp_dir().join(format!("ignite-head-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let repo = root.join("repo");
         fs::create_dir_all(repo.join("sub/dir")).unwrap();

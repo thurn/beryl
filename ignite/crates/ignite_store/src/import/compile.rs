@@ -135,7 +135,7 @@ mod tests {
 
     fn timings(name: &str) -> std::path::PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("ignite-compile-{}-{name}", std::process::id()));
+            ignite_core::test_files::temp_dir().join(format!("ignite-compile-{}-{name}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("store.sqlite");
         let _ = std::fs::remove_file(&path);

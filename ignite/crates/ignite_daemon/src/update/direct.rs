@@ -165,7 +165,7 @@ mod tests {
             asked: Mutex::default(),
             returned: Mutex::default(),
         });
-        let dir = std::env::temp_dir().join(format!("ignite-direct-{}", std::process::id()));
+        let dir = ignite_core::test_files::temp_dir().join(format!("ignite-direct-{}", std::process::id()));
         let launcher = ExpressLauncher {
             cores: 3,
             lender: Some(lender.clone()),
@@ -208,7 +208,7 @@ mod tests {
                 "-c".to_owned(),
                 "echo $CARGO_BUILD_JOBS $WHO; exit 3".to_owned(),
             ],
-            cwd: std::env::temp_dir(),
+            cwd: ignite_core::test_files::temp_dir(),
             env: vec![("WHO".to_owned(), "release".to_owned())],
             class: ignite_core::protocol::Class::Agent,
             cores: 16,

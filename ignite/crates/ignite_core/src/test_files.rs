@@ -8,6 +8,8 @@
 //! binary and test as cargo-nextest names them (`NEXTEST_BINARY_ID`, `NEXTEST_TEST_NAME`). The
 //! line is written with one `write` to a file opened to append, so lines never interleave.
 //!
+//! [`temp_dir`] gives each test process a fresh folder for scratch files.
+//!
 //! A game workspace has a helper of its own that writes the same lines, since Ignite shares no
 //! crate with it. A test that reads a repository file some other way is not recorded, and its
 //! input hash misses the file.
@@ -114,6 +116,37 @@ fn file_name(process: u32, test: &str) -> String {
         .take(80)
         .collect();
     format!("{process}-{readable}")
+}
+
+/// The folder Ignite's tests make their scratch files and folders under: a folder of the
+/// system's temporary directory that belongs to this test process alone, empty when the process
+/// first asks for it.
+///
+/// Tests used to put their folders straight in the temporary directory, named after the process
+/// ID. Windows reuses process IDs within minutes, so a later run reopened a folder an earlier run
+/// had left behind, and a test that expected an empty database failed on rows from the earlier
+/// run. This folder's name also holds the time the process first asked for it, so a later
+/// process with the same ID gets another folder. The name is short because macOS limits a
+/// socket's path to 104 bytes, and some tests put sockets in folders under this one.
+pub fn temp_dir() -> PathBuf {
+    static FOLDER: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    FOLDER
+        .get_or_init(|| {
+            let seconds = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |since| since.as_secs());
+            // Six hex digits of the time repeat only after about 194 days.
+            #[allow(clippy::disallowed_methods)] // The one call the configuration allows.
+            let folder = std::env::temp_dir().join(format!(
+                "i{:x}-{:x}",
+                std::process::id(),
+                seconds % 0x0100_0000
+            ));
+            let _ = fs::remove_dir_all(&folder);
+            let _ = fs::create_dir_all(&folder);
+            folder
+        })
+        .clone()
 }
 
 #[cfg(test)]

@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn only_the_clients_unacknowledged_handoff_allows_session_calls() {
         let home =
-            std::env::temp_dir().join(format!("ignite-fallback-allows-{}", std::process::id()));
+            ignite_core::test_files::temp_dir().join(format!("ignite-fallback-allows-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
         assert!(
             !allows(&home, false, Some("local_w1"), at(0.0)),

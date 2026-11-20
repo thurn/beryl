@@ -323,7 +323,7 @@ mod tests {
 
     fn scratch(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("ignite-pool-init-{name}-{}", std::process::id()));
+            ignite_core::test_files::temp_dir().join(format!("ignite-pool-init-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         dir
     }

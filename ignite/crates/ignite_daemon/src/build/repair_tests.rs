@@ -116,7 +116,7 @@ fn the_units_of_a_crate_are_its_hashed_deps_files() {
 
 /// A fresh scratch directory for one test.
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ignite-repair-{}-{name}", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-repair-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     dir
 }
@@ -231,7 +231,7 @@ fn a_unit_whose_fingerprint_cannot_be_deleted_keeps_its_files() {
 
 #[test]
 fn a_cross_target_profile_is_cleared_too() {
-    let dir = std::env::temp_dir().join(format!("ignite-repair-{}-cross", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-repair-{}-cross", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     let profile = dir.join("x86_64-pc-windows-msvc").join("debug");
     fs::create_dir_all(profile.join("incremental").join("core-abc")).unwrap();
@@ -244,7 +244,7 @@ fn a_cross_target_profile_is_cleared_too() {
 
 #[test]
 fn an_ended_command_marks_the_target_directories_it_may_have_compiled_in() {
-    let dir = std::env::temp_dir().join(format!("ignite-repair-{}-ended", std::process::id()));
+    let dir = ignite_core::test_files::temp_dir().join(format!("ignite-repair-{}-ended", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     for target in ["out", "rust/target", "other/target"] {
         fs::create_dir_all(dir.join(target)).unwrap();

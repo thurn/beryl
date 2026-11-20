@@ -263,6 +263,35 @@ ignite_daemon = ["ignite.toml", "ignite/.config/**", ".gitignore"]
 ignite_git = [".gitignore"]
 ignite_hub = ["ignite.toml", "ignite/.config/**"]
 
+# Ignite's tests of the code that behaves differently on Windows and macOS, which must pass on
+# both. The `ignite` family above needs one pass on any machine, so on 2026-11-19 a change that
+# passed on a Mac broke every Rust build on Windows (the build shims), and a change that passed
+# on Windows failed its own test on macOS (a Windows path read with the host's separator). These
+# checks hold `master` until both kinds of machine pass them. They are the whole of `ignite_os`,
+# the daemon's modules that start processes, install releases, measure disks and write the
+# build shims, and the shim test of the `ignite` executable: 162 tests that ran in 1.9 s on
+# jarvis on 2026-11-19. They also run in the `ignite` family; that costs two seconds, and keeps
+# the `ignite` family whole. The listing's filterset is written without spaces, since Ignite
+# splits the command on whitespace; the run command names no tests (see the `rust` family).
+[family.ignite-platform]
+kind = "regression"
+adapter = "nextest"
+platforms = ["macos", "windows"]
+needs = ["ignite-tests"]
+list = "cargo nextest list --locked --workspace --message-format json -E package(ignite_os)|(package(ignite_daemon)&test(/^(wrap|supervise|update|trees::disk|machine_lock|doctor)(::|_tests::)/))|(binary_id(ignite_cli::bin/ignite)&test(/^shim_tests::/))"
+run = "cargo nextest run --locked --cargo-quiet --workspace --profile ignite --no-fail-fast --status-level=fail --final-status-level=fail --message-format libtest-json-plus"
+inputs = ["crate-closure", "ignite/.config/nextest.toml"]
+
+[family.ignite-platform.package_inputs]
+ignite_cli = [
+  "ignite.toml",
+  "ignite/AGENTS.md",
+  "ignite/CLAUDE.md",
+  ".agents/**",
+  ".claude/**",
+]
+ignite_daemon = ["ignite.toml", "ignite/.config/**", ".gitignore"]
+
 # Formatting and clippy over Ignite's workspace, as `ignite-lint:fmt` and `ignite-lint:clippy`.
 # Neither reads the test build, so they need only the Python environment and run while
 # `ignite-tests` builds. Clippy compiles the workspace's crates once more in its own check
