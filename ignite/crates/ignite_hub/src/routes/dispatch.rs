@@ -54,6 +54,9 @@ use super::{Request, Response};
 #[path = "dispatch_queue.rs"]
 mod queue;
 
+#[path = "dispatch_releases.rs"]
+mod counting;
+
 pub use queue::{named_files, resolve_named_file};
 
 /// The label on a ticket filed by `ignite start "<summary>"`.
@@ -572,7 +575,8 @@ fn closing(ticket: &Ticket, reason: &str) -> Vec<Operation> {
 /// saved to and, with `needs`, records what it needs: `person` labels it `needs:person`, which
 /// sets it aside for a person; an operating system sets the system it needs; a machine's name
 /// makes that machine its owner (see `ignite_core::owner`). A session may also give back a
-/// reservation it has not claimed yet.
+/// reservation it has not claimed yet. A ticket released by different sessions is held back
+/// for a justiciar (see `dispatch_releases.rs`).
 fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
     let id = release.ticket.as_str();
     let mut tx = conn
@@ -633,7 +637,11 @@ fn release(conn: &mut Connection, release: &Release, now: Timestamp) -> Answer {
     let cleared = ["session", "tree", "machine", "claimed_at"].map(|column| (column, Value::Null));
     set_columns(&tx, id, release.session.as_str(), &cleared, now).map_err(|e| store_failure(&e))?;
     free_worker(&tx, &release.machine, &release.session, None)?;
+    let held = counting::count(&tx, &ticket, release, now).map_err(|e| store_failure(&e))?;
     tx.commit().map_err(sql_failure)?;
+    if let Some(releases) = held {
+        counting::file_after(conn, &ticket, &releases, now);
+    }
     Ok(done())
 }
 
@@ -812,3 +820,7 @@ mod emergency_tests;
 #[cfg(test)]
 #[path = "dispatch_owner_tests.rs"]
 mod owner_tests;
+
+#[cfg(test)]
+#[path = "dispatch_release_count_tests.rs"]
+mod release_count_tests;

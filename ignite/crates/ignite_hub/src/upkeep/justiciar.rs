@@ -3,7 +3,7 @@
 //! ticket, and `tier:opus`, because the session that works one has to judge what is wrong and
 //! may change anything to end it (`ignite guide justiciar`).
 //!
-//! Two sources:
+//! Three sources:
 //!
 //! - A report (`POST /justiciar`) from a daemon that saw Ignite crash or one of its loops keep
 //!   failing, or from a session that ran `ignite justiciar "<reason>"` ([`report`]).
@@ -14,6 +14,10 @@
 //!   instead of filing a ticket, so the sessions already fixing the failing checks hear how
 //!   long `master` has waited ([`tell_regressions`]). It files nothing for a stuck landing whose
 //!   ticket a worker closed less than [`MASTER_LAG_SECONDS`] ago.
+//! - The dispatch routes, when different sessions have released one ticket
+//!   ([`ignite_store::hub::releases::HOLD_AFTER_SESSIONS`] of them) and the hub stops offering
+//!   it ([`released_repeatedly`]). Each worker met an obstacle in the ticket itself, so a
+//!   justiciar fixes the ticket rather than another worker trying it.
 //!
 //! Every filing goes through [`filing`] with a signature of its subject, so a repeated sighting
 //! adds a comment to the open ticket and never a second ticket. Every justiciar ticket is filed
@@ -21,6 +25,7 @@
 //! release its ticket.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::Value;
@@ -32,6 +37,7 @@ use ignite_core::protocol::tickets::{
 };
 use ignite_core::time::Timestamp;
 use ignite_store::hub::batch::{self, BatchOutcome};
+use ignite_store::hub::releases::Releases;
 use ignite_store::hub::{feed, tips};
 use ignite_store::{Result, StoreError};
 
@@ -58,6 +64,9 @@ pub const MASTER_LAG_SECONDS: f64 = 2.0 * 3600.0;
 /// Landings older than this are left out of the lag check, so history imported from before
 /// the hub existed never counts as lag.
 const LAG_HORIZON_SECONDS: f64 = 7.0 * 86_400.0;
+
+/// The subject of the signature [`released_repeatedly`] files under, followed by the ticket.
+pub const RELEASED_SUBJECT: &str = "released-repeatedly";
 
 /// The ticket fields of a justiciar ticket.
 fn fields(title: String, body: String) -> TicketFields {
@@ -333,4 +342,53 @@ pub fn master_lag(conn: &mut Connection, now: Timestamp) -> Result<Vec<Filed>> {
         released: true,
     };
     Ok(vec![filing::file(conn, UPKEEP, &filing, now)?])
+}
+
+/// Files the justiciar ticket for `ticket`, which different sessions released and which the hub
+/// no longer offers, or comments on the open one. The session of each release is a sighting, so
+/// a release by a session the ticket has not yet heard from adds a comment, and a session
+/// releasing again adds nothing.
+pub fn released_repeatedly(
+    conn: &mut Connection,
+    ticket: &str,
+    title: &str,
+    releases: &Releases,
+    now: Timestamp,
+) -> Result<Filed> {
+    let mut notes = String::new();
+    for release in &releases.releases {
+        let _ = write!(
+            notes,
+            "Released by {} at {} ({}):\n\n",
+            release.session, release.at, release.cause
+        );
+        for line in release.note.lines() {
+            let _ = writeln!(notes, "> {line}");
+        }
+        notes.push('\n');
+    }
+    let body = format!(
+        "Ticket {ticket} (\"{title}\") was released {} times by {} different sessions, so the \
+         pool is no longer offered it: each worker met an obstacle that the next would meet \
+         too.\n\n{notes}Read `ignite guide justiciar`, then fix the ticket so that a worker can \
+         complete it: rewrite its acceptance, split it into tickets that can each be done, remove \
+         a dependency it cannot have, or label it `needs:person` with an interim path. Changing \
+         its body or acceptance, or `ignite ticket update {ticket} --release`, lets the pool take \
+         it again.",
+        releases.releases.len(),
+        releases.sessions().len(),
+    );
+    let evidence = releases
+        .releases
+        .last()
+        .map(|release| release.session.clone())
+        .unwrap_or_default();
+    let filing = Filing {
+        signature: Signature::of_subject(&format!("{RELEASED_SUBJECT}:{ticket}"), LABEL),
+        evidence,
+        fields: fields(format!("{ticket} was released repeatedly: {title}"), body),
+        deps: Vec::new(),
+        released: true,
+    };
+    filing::file(conn, UPKEEP, &filing, now)
 }

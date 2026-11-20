@@ -19,6 +19,7 @@ pub mod owners;
 pub mod rates;
 pub mod records;
 pub mod rejected;
+pub mod releases;
 pub mod renumber;
 pub mod results;
 pub mod rows;
@@ -155,6 +156,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: 23,
         sql: include_str!("metrics_indexes.sql"),
+        code: None,
+    },
+    Migration {
+        version: 24,
+        sql: include_str!("ticket_releases.sql"),
         code: None,
     },
 ];

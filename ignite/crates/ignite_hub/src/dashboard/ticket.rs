@@ -130,6 +130,11 @@ pub fn page(
         entries.push(entry);
         main.push(section);
     }
+    if let Some(reason) = data.releases.reason() {
+        let (entry, section) = plain_section("Held back", &c::prose(&esc(&reason)), None);
+        entries.push(entry);
+        main.push(section);
+    }
     let row = |card: &Card| -> String {
         let label = format!(
             "{}<span class=\"c-row-id c-mono c-hide-narrow\">{}</span><span class=\"c-row-text\">{}</span>",
@@ -438,6 +443,16 @@ pub fn page(
             first.to_uppercase().chain(chars).collect()
         })
     };
+    if !data.releases.releases.is_empty() {
+        let count = data.releases.releases.len();
+        let view = esc(&count.to_string())
+            + &if data.releases.held_back() {
+                c::chip("Held back", Tone::Amber, None)
+            } else {
+                String::new()
+            };
+        properties.push(("Releases".into(), view));
+    }
     properties.push(("Type".into(), esc(&kind)));
     properties.push(("Created".into(), c::time(Some(&ticket.created_at), "")));
     properties.push(("Updated".into(), c::time(Some(&card.updated_at), "")));

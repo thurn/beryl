@@ -2,7 +2,7 @@ use std::path::Path;
 
 use ignite_core::ids::Commit;
 use ignite_core::protocol::client::Exit;
-use ignite_core::protocol::hub::DependencyNote;
+use ignite_core::protocol::hub::{DependencyNote, ReleaseCause};
 use ignite_core::protocol::tickets::{Edge, EdgeKind, LandedWork};
 
 use super::fakes::{World, id, session, ticket};
@@ -190,6 +190,8 @@ fn released_uncommitted_work_comes_back_at_the_next_start() {
     assert_eq!(releases[0].note, "Needs the new pool first.");
     assert_eq!(releases[0].needs.as_deref(), Some("macos"));
     assert_eq!(releases[0].saved.uncommitted, ["src/half_done.rs"]);
+    // The worker gave the ticket up itself, which the hub counts against the ticket.
+    assert_eq!(releases[0].cause, ReleaseCause::GaveUp);
     // The tree is no longer the session's.
     assert_eq!(release(&world, &["-m", "again"], WORKER).exit, Exit::Usage);
 

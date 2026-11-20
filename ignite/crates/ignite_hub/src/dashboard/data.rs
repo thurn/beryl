@@ -253,6 +253,9 @@ pub struct TicketData {
     pub spend: bool,
     /// When a meta-ticket files its next copy; `None` for any other ticket.
     pub next_copy: Option<NextCopy>,
+    /// The ticket's counted releases, which hold it back from the pool once different sessions
+    /// made them (see `ignite_store::hub::releases`).
+    pub releases: ignite_store::hub::releases::Releases,
 }
 
 /// When a meta-ticket files its next copy, as its page shows it.
@@ -448,6 +451,7 @@ pub fn ticket_data(
         counts,
         spend: super::spend::exists(conn, &super::spend::subtree(conn, &id)?),
         next_copy: next_copy(conn, &ticket)?,
+        releases: ignite_store::hub::releases::of(conn, &id)?,
         ticket,
     })
 }

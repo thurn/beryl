@@ -273,6 +273,9 @@ pub struct Release {
     /// The branch on the remote where the release saved the tree's work.
     #[serde(default)]
     pub branch: Option<String>,
+    /// Why the ticket was given back, which decides whether the hub counts the release.
+    #[serde(default)]
+    pub cause: ReleaseCause,
 }
 
 /// `POST /close`: `ignite close` closes a ticket that needs no landing and frees its worker.
@@ -319,6 +322,11 @@ pub struct LookupReply {
 #[path = "hub_cost.rs"]
 mod cost;
 pub use cost::ResultCost;
+
+// Why a ticket was released lives in a file of its own, with its tests.
+#[path = "hub_releases.rs"]
+mod releases;
+pub use releases::ReleaseCause;
 
 // Verdicts and reverted landings live in a file of their own, with their tests.
 #[path = "hub_verdicts.rs"]

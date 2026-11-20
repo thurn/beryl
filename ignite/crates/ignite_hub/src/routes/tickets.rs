@@ -15,11 +15,15 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use ignite_core::ids::TicketId;
-use ignite_core::protocol::tickets::{BatchRequest, LeaseOp, LeaseReply, TicketQuery};
+use ignite_core::protocol::tickets::{
+    BatchRequest, LeaseOp, LeaseReply, Operation, Status, TicketQuery,
+};
 use ignite_core::time::Timestamp;
 use ignite_store::StoreError;
 use ignite_store::hub::batch::{self, BatchOutcome};
-use ignite_store::hub::{feed, filer_deps, fleet, leases, owners, session_titles, tickets};
+use ignite_store::hub::{
+    feed, filer_deps, fleet, leases, owners, releases, session_titles, tickets,
+};
 
 use super::{Request, Response};
 
@@ -72,7 +76,7 @@ fn route(conn: &mut Connection, request: &Request, now: Timestamp) -> Result<Res
                 let comments = flag(request, "comments")?;
                 let history = flag(request, "history")?;
                 match tickets::get(conn, id, comments, history, now) {
-                    Ok(Some(detail)) => ok(&detail),
+                    Ok(Some(detail)) => with_releases(conn, &detail),
                     Ok(None) => Err(failure(404, &format!("Ticket {id} not found"))),
                     Err(error) => Err(store_failure(&error)),
                 }
@@ -116,6 +120,7 @@ fn apply_batch(
     }
     match batch::apply(conn, &batch, &writer.actor, writer.machine.as_str(), now) {
         Ok(BatchOutcome::Applied(reply)) => {
+            forget_releases(conn, &batch).map_err(|e| store_failure(&e))?;
             let mut value = json!(reply);
             if !added.is_empty() {
                 value[FILER_DEPENDENCIES] = json!(added);
@@ -125,6 +130,50 @@ fn apply_batch(
         Ok(BatchOutcome::Conflict(conflict)) => Ok(Response::json(409, &json!(conflict))),
         Err(error) => Err(store_failure(&error)),
     }
+}
+
+/// Forgets the counted releases of each ticket whose body or acceptance the batch changed, or
+/// which it set `open` as `ignite ticket update <id> --release` does, so that a ticket held
+/// back after repeated releases is offered again (see `releases`).
+fn forget_releases(conn: &Connection, batch: &BatchRequest) -> Result<(), StoreError> {
+    for op in &batch.ops {
+        let Operation::Update {
+            id, set: Some(set), ..
+        } = op
+        else {
+            continue;
+        };
+        let changed = set.body.is_some() || set.acceptance.is_some();
+        if !(changed || set.status == Some(Status::Open)) {
+            continue;
+        }
+        // A ticket the batch created (`$0`) has no releases to forget.
+        if let Some(id) = tickets::resolve(conn, id)? {
+            releases::reset(conn, id.as_str())?;
+        }
+    }
+    Ok(())
+}
+
+/// `GET /tickets/<id>`'s reply: the ticket, with its counted releases under `releases` when it
+/// has any, and why it is held back under `held_back` when it is. `ignite ticket show` prints
+/// both.
+fn with_releases(
+    conn: &Connection,
+    detail: &ignite_core::protocol::tickets::TicketDetail,
+) -> Result<Response, Response> {
+    let counted = releases::of(conn, detail.ticket.id.as_str()).map_err(|e| store_failure(&e))?;
+    let mut value = json!(detail);
+    if !counted.releases.is_empty() {
+        value["releases"] = json!({
+            "count": counted.releases.len(),
+            "sessions": counted.sessions(),
+        });
+    }
+    if let Some(reason) = counted.reason() {
+        value["held_back"] = json!(reason);
+    }
+    Ok(Response::json(200, &value))
 }
 
 /// The key of `POST /batch`'s body that is `true` when the filer says its tickets do not need

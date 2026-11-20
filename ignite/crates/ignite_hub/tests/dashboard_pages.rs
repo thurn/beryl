@@ -235,6 +235,24 @@ fn imported_tickets_show_their_owner_and_start_without_the_import_key() {
 }
 
 #[test]
+fn a_ticket_released_by_two_sessions_says_it_is_held_back() {
+    use ignite_core::protocol::hub::ReleaseCause;
+    use ignite_store::hub::releases;
+    let hub = seeded();
+    let now = Timestamp::parse(NOW).unwrap();
+    let gave_up = ReleaseCause::GaveUp;
+    releases::record(&hub.conn, "TWAIT", "local_a", gave_up, "a", now).unwrap();
+    let page = hub.text("/TWAIT");
+    assert!(page.contains("<dt>Releases</dt><dd>1</dd>"), "{page}");
+    assert!(!page.contains("Held back"));
+    releases::record(&hub.conn, "TWAIT", "local_b", gave_up, "b", now).unwrap();
+    let page = hub.text("/TWAIT");
+    assert!(page.contains("<dt>Releases</dt><dd>2"), "{page}");
+    assert!(page.contains("Held back"));
+    assert!(page.contains("released 2 times by 2 sessions (local_a, local_b)"));
+}
+
+#[test]
 fn tickets_name_the_desktop_session_that_filed_them() {
     let mut hub = seeded();
     hub.batch(&json!({"op": "create", "fields": {

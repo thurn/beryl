@@ -8,6 +8,7 @@
 
 use ignite_core::ids::{SessionId, TicketId, TreeId};
 use ignite_core::protocol::client::{Reply, Request};
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::protocol::tickets::Status;
 use ignite_core::traits::{Error, Result};
 use ignite_store::local::{shown, trees as tree_rows};
@@ -36,7 +37,7 @@ impl Claims {
             Err(reply) => return reply,
         };
         let title = brief::title_of(held.brief.as_ref(), &held.ticket);
-        match self.give_back(ctx, &held, |_| note, needs, req.pid) {
+        match self.give_back(ctx, &held, |_| note, needs, req.pid, ReleaseCause::GaveUp) {
             Ok(Given {
                 already_closed: true,
                 reset,
@@ -61,6 +62,7 @@ impl Claims {
         note: impl FnOnce(&Saved) -> String,
         needs: Option<String>,
         caller: Option<u32>,
+        cause: ReleaseCause,
     ) -> Result<Given> {
         let saved = self.trees.save(&held.tree, &held.ticket)?;
         let released = self.desk.release(&ReleaseRequest {
@@ -70,6 +72,7 @@ impl Claims {
             note: note(&saved),
             needs,
             saved: saved.clone(),
+            cause,
         });
         let mut already_closed = false;
         if let Err(error) = released {

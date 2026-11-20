@@ -33,7 +33,7 @@ use ignite_core::protocol::hub::{MachineFree, Reservation};
 use ignite_core::protocol::tickets::{LandedWork, Saving, Status, Ticket, TicketType};
 use ignite_core::shares::{self, EpicDemand, Group, Unit};
 use ignite_core::time::Timestamp;
-use ignite_store::hub::{fleet, owners, tickets};
+use ignite_store::hub::{fleet, owners, releases, tickets};
 use ignite_store::{Result, StoreError};
 
 use crate::rules;
@@ -278,7 +278,8 @@ impl Snapshot {
             reserved,
             dependents,
             regressions,
-            ready: tickets::ready(conn, now)?,
+            // A ticket released by two sessions waits for a justiciar (see `releases`).
+            ready: releases::offerable(conn, tickets::ready(conn, now)?)?,
             routing,
             heard,
         })

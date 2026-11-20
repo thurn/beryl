@@ -110,6 +110,7 @@ impl TicketDesk for HubDesk {
             reason: release.note.clone(),
             needs: release.needs.clone(),
             branch: Some(release.saved.branch.clone()),
+            cause: release.cause,
         })
     }
 

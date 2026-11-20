@@ -317,6 +317,9 @@ crate::tables! {
     /// The latest title a Claude desktop session reported.
     SessionTitle = "session_titles" { session: String, title: String, updated_at: String }
 
+    /// One counted release of a ticket (see `releases`).
+    TicketRelease = "ticket_releases" { ticket: String, n: i64, session: String, cause: String, note: String, at: String }
+
     /// One change in the feed's journal, which keeps only the most recent positions.
     FeedChange = "feed" { id: i64, seq: i64, kind: String, ticket: Option<String>, name: Option<String> }
 }

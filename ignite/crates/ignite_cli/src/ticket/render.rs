@@ -95,6 +95,14 @@ pub fn detail(ticket: &Value) -> String {
     if ticket["ready"] == true {
         out.push("ready".to_owned());
     }
+    if let Some(count) = ticket["releases"]["count"].as_u64() {
+        out.push(format!(
+            "releases: {count} counted since the ticket last changed"
+        ));
+    }
+    if let Some(reason) = ticket["held_back"].as_str() {
+        out.push(format!("held back: {reason}"));
+    }
     let blockers = other_blockers(ticket);
     if !blockers.is_empty() {
         out.push(format!("blocked by: {}", blockers.join(", ")));
@@ -260,6 +268,16 @@ pub fn graph(graph: &Value) -> String {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_held_back_ticket_says_how_often_it_was_released_and_why_it_waits() {
+        let ticket = json!({"id": "Ta", "priority": 2, "status": "open", "title": "One",
+            "releases": {"count": 2, "sessions": ["local_a", "local_b"]},
+            "held_back": "released 2 times by 2 sessions (local_a, local_b), so ..."});
+        let shown = detail(&ticket);
+        assert!(shown.contains("\nreleases: 2 counted since the ticket last changed\n"));
+        assert!(shown.contains("\nheld back: released 2 times by 2 sessions"));
+    }
 
     #[test]
     fn a_list_prints_one_line_per_ticket() {

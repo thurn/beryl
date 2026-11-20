@@ -2,6 +2,7 @@ use serde_json::json;
 
 use ignite_core::ids::TreeId;
 use ignite_core::protocol::client::Exit;
+use ignite_core::protocol::hub::ReleaseCause;
 use ignite_core::time::Timestamp;
 use ignite_core::traits::Clock;
 use ignite_store::local::{rows, trees as tree_rows};
@@ -270,6 +271,8 @@ fn a_freed_tree_leaves_no_clock_behind() {
             "The session is gone.",
         )
         .unwrap();
+    // The dispatcher took the ticket back, which the hub counts against the ticket.
+    assert_eq!(lock(&world.desk.releases)[0].cause, ReleaseCause::TakenBack);
     minutes(&world, 1.0);
     assert!(world.claims.holder(TREE.as_ref()).is_none());
     assert!(world.claims.quiet_since(&session(WORKER)).is_none());
