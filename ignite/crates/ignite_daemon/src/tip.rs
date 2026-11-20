@@ -286,6 +286,10 @@ pub struct TipVerifier {
     /// Failures already reported, so a cached failure that stands for later tips is reported
     /// once.
     reported: HashSet<ResultKey>,
+    /// The checks whose failure was left unreported once because a newer `staging` tip changed
+    /// what they read (see `culprit`). A second failure of one of them is reported whatever
+    /// the newer tip changed. Cleared when `master` moves.
+    deferred: HashSet<CheckName>,
     /// When the tips since the last verified commit first waited on each other platform. The
     /// wait spans tips, because on a busy day a new tip arrives well within the hour.
     waiting_since: BTreeMap<Os, Timestamp>,
@@ -333,6 +337,7 @@ impl TipVerifier {
             since: Seq(0),
             settled: None,
             reported: HashSet::new(),
+            deferred: HashSet::new(),
             waiting_since: BTreeMap::new(),
             flagged: HashSet::new(),
             own_outputs: HashSet::new(),
@@ -652,6 +657,7 @@ impl TipVerifier {
         })?;
         self.waiting_since.clear();
         self.flagged.clear();
+        self.deferred.clear();
         Ok(TipOutcome::Verified)
     }
 

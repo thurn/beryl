@@ -73,8 +73,9 @@ pub(super) enum Handled {
     /// Its landing was reverted, now or earlier in the round, and the check passes at the
     /// revert. No regression is reported.
     Reverted,
-    /// The tip moved with a change to what the check reads. Nothing is reported or reverted;
-    /// the next round runs the check at the new tip first.
+    /// The tip moved with a change to what the check reads. Nothing is reverted. `blame` leaves
+    /// the check to the next round, which runs it at the new tip first, or reports it when the
+    /// check was left to a later round before.
     NextRound,
     /// The regression is reported, as for any failing check.
     Report,

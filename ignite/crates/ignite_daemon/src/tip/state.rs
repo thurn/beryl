@@ -31,6 +31,7 @@ pub(super) struct Memory {
     since: Seq,
     settled: Option<Commit>,
     reported: Vec<ResultKey>,
+    deferred: Vec<CheckName>,
     waiting_since: Vec<(Os, Timestamp)>,
     flagged: Vec<(Commit, Os)>,
     held_off: Vec<(ResultKey, Timestamp)>,
@@ -92,6 +93,7 @@ impl TipVerifier {
         self.since = memory.since;
         self.settled = memory.settled;
         self.reported = set(memory.reported);
+        self.deferred = set(memory.deferred);
         self.waiting_since = memory.waiting_since.into_iter().collect::<BTreeMap<_, _>>();
         self.flagged = set(memory.flagged);
         self.held_off = memory.held_off.into_iter().collect::<HashMap<_, _>>();
@@ -111,6 +113,7 @@ impl TipVerifier {
             since: self.since,
             settled: self.settled.clone(),
             reported: listed(self.reported.iter().cloned()),
+            deferred: listed(self.deferred.iter().cloned()),
             waiting_since: self.waiting_since.iter().map(|(o, t)| (*o, *t)).collect(),
             flagged: listed(self.flagged.iter().cloned()),
             held_off: listed(self.held_off.iter().map(|(k, t)| (k.clone(), *t))),

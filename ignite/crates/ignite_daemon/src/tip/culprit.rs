@@ -110,8 +110,9 @@ impl TipVerifier {
     }
 
     /// Finds the culprit of a check that failed at `tip` and reports the regression, or reverts
-    /// the culprit of a broken build (see `revert`), unless a newer tip changed the check's
-    /// inputs (its next round runs the check there first) or this failure was reported already.
+    /// the culprit of a broken build (see `revert`), unless this failure was reported already,
+    /// or a newer tip changed the check's inputs and the check has not been left to a later
+    /// round before (its next round runs the check there first).
     ///
     /// A check only another platform can run is left to that platform's machines: a search here
     /// would run this platform's version of the check, which passes at every commit, and blame
@@ -132,12 +133,22 @@ impl TipVerifier {
             .git
             .tip(&ctx.config.repository.staging)
             .unwrap_or_else(|_| tip.clone());
-        if newest != *tip
+        // A newer tip that changed what the check reads may already hold a fix, so the failure
+        // is left to the next round, once. Rounds take longer than the gaps between landings
+        // on a busy day, so the next round's tip is also overtaken by the time it fails, and
+        // leaving every such failure unreported kept `master` from moving for hours with no
+        // ticket to fix it. A check that fails again is reported whatever the newer tip changed.
+        let overtaken = newest != *tip
             && ctx
                 .git
                 .changed(tip, &newest)
-                .is_ok_and(|changed| touches(&changed, &check.inputs))
-        {
+                .is_ok_and(|changed| touches(&changed, &check.inputs));
+        if overtaken && self.deferred.insert(check.check.clone()) {
+            eprintln!(
+                "ignite: {} fails at {tip}, but {newest} changes what it reads; the next round \
+                 reports it if it still fails",
+                check.check
+            );
             return Ok(());
         }
         // A failing check at a tip is always reported. With no landing to blame (the hub
@@ -154,8 +165,12 @@ impl TipVerifier {
                     self.reported.insert(check.key.clone());
                     return Ok(());
                 }
-                Handled::NextRound => return Ok(()),
-                Handled::Report => {}
+                // The revert gave up because the tip moved with a change to what the check
+                // reads; as above, only once per check.
+                Handled::NextRound if self.deferred.insert(check.check.clone()) => {
+                    return Ok(());
+                }
+                Handled::NextRound | Handled::Report => {}
             }
         }
         let search = match &culprit {
