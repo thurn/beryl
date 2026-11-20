@@ -267,14 +267,21 @@ impl CliDaemon {
     }
 
 
-    /// Frees a parked slot whose session no longer holds its ticket: someone released it, its
-    /// lease expired, or its reservation lapsed before `ignite start` claimed it. Nothing else
-    /// looks at a parked slot until its app's CLI hold ends, and a slot parked for an end
-    /// `decide` could not place has no such end, so without this the slot would stay taken
-    /// for good. A slot with no ticket (a justiciar) is left for a person, and so is a state
-    /// this build does not know, which only reads as parked.
+    /// Frees a parked slot whose session no longer holds its ticket: someone released it or
+    /// its lease expired. Nothing else looks at such a slot, since only a CLI hold's end
+    /// resumes parked slots, so a slot parked for an end `decide` could not place would
+    /// otherwise stay taken for good.
+    ///
+    /// Left alone: a slot a CLI hold parked, which the hold's end resumes (its first turn may
+    /// not have run `ignite start` yet, so its session holds no ticket tree, and freeing it
+    /// would drop the hand-off); a slot with no ticket (a justiciar), left for a person; and a
+    /// state this build does not know, which only reads as parked. The row is written only if
+    /// it is still parked, and the session leaves the pool only if it was: the health loop
+    /// can resume the slot meanwhile.
     pub(super) fn free_if_released(&self, row: &CliSlot) -> Result<()> {
-        if row.state != SlotState::Parked.as_str() {
+        if row.state != SlotState::Parked.as_str()
+            || super::health::parked_by_hold(row.park_reason.as_deref())
+        {
             return Ok(());
         }
         let slot = slot_of(row);
@@ -291,16 +298,20 @@ impl CliDaemon {
         next.next_prompt = None;
         next.fallback_prompt = None;
         freed(&mut next);
-        self.database(|conn| {
+        let written = self.database(|conn| {
             let transaction = conn.transaction()?;
             let current = store::by_session(&transaction, session.as_str())?;
-            if current.is_some_and(|c| c.state == SlotState::Parked.as_str()) {
+            let parked = current.is_some_and(|c| c.state == SlotState::Parked.as_str());
+            if parked {
                 store::put(&transaction, &next)?;
             }
             transaction.commit()?;
-            Ok(())
+            Ok(parked)
         })?;
-        self.pool.remove(session)
+        if written {
+            self.pool.remove(session)?;
+        }
+        Ok(())
     }
 }
 

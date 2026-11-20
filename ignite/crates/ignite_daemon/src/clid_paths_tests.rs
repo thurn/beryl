@@ -10,6 +10,24 @@ use ignite_core::fakes::ScriptedTurn;
 
 use super::*;
 
+/// Adds `session` to the pool, as the dispatcher does after a hand-off.
+fn join_pool(rig: &Rig, session: &SessionId) {
+    rig.pool
+        .put(&crate::pool::Member {
+            session: session.clone(),
+            app: "fake".to_owned(),
+            role: ignite_core::protocol::hub::WorkerRole::Worker,
+            down: false,
+            models: Vec::new(),
+            parent: None,
+            files: Vec::new(),
+            added_at: rig.clock.now(),
+            slots: 0,
+            single_use: true,
+        })
+        .unwrap();
+}
+
 /// Hand-offs made from several threads while the `ignite-cli` loop runs each get a slot of
 /// their own and a first turn. Before a hand-off claimed its slot and recorded its first turn
 /// in one transaction, two of them could write the same slot, so one session lost its row
@@ -162,20 +180,7 @@ fn a_slot_in_an_unknown_state_is_not_freed() {
     let rig = Rig::new();
     rig.keep_running(1);
     let session = rig.begin();
-    rig.pool
-        .put(&crate::pool::Member {
-            session: session.clone(),
-            app: "fake".to_owned(),
-            role: ignite_core::protocol::hub::WorkerRole::Worker,
-            down: false,
-            models: Vec::new(),
-            parent: None,
-            files: Vec::new(),
-            added_at: rig.clock.now(),
-            slots: 0,
-            single_use: true,
-        })
-        .unwrap();
+    join_pool(&rig, &session);
     rig.pool
         .with_database(|conn| {
             conn.execute(
@@ -187,5 +192,56 @@ fn a_slot_in_an_unknown_state_is_not_freed() {
     rig.host.holders.lock().unwrap().clear();
     rig.daemon.step().unwrap();
     assert_eq!(rig.row(&session).state, "draining");
+    assert!(rig.pool.member(&session).unwrap().is_some());
+}
+
+/// A first turn that a CLI hold parked before `ignite start` ran leaves a session that holds no
+/// ticket tree yet. Its slot stays parked, so the hold's end resumes the hand-off.
+#[test]
+fn a_hand_off_parked_by_a_hold_before_its_claim_stays_parked() {
+    let rig = Rig::new();
+    rig.push(ScriptedTurn {
+        lines: Vec::new(),
+        exit: Some(1),
+        hung: false,
+    });
+    let session = rig.try_begin().unwrap();
+    rig.then(Action::Hold {
+        reason: ignite_core::cli::HoldReason::NotLoggedIn,
+        message: "Not logged in".to_owned(),
+    });
+    rig.daemon.step().unwrap();
+    rig.daemon.step().unwrap();
+    let slot = rig.slot();
+    assert_eq!(slot.state, SlotState::Parked);
+    assert_eq!(slot.session.as_ref(), Some(&session));
+}
+
+/// The health loop can resume a parked slot after the `ignite-cli` loop read it as parked. The
+/// release check then writes nothing, and the session stays in the pool, since its next turn
+/// is about to run.
+#[test]
+fn a_slot_resumed_meanwhile_keeps_its_session_in_the_pool() {
+    let rig = Rig::new();
+    rig.push(clean("something new"));
+    let session = rig.begin();
+    join_pool(&rig, &session);
+    rig.then(Action::Park {
+        report: "an end nobody knows".to_owned(),
+    });
+    rig.daemon.step().unwrap();
+    let parked = rig.row(&session);
+    assert_eq!(parked.state, "parked");
+    rig.pool
+        .with_database(|conn| {
+            conn.execute(
+                "UPDATE cli_slots SET state = 'backing_off' WHERE session = ?1",
+                [session.as_str()],
+            )
+        })
+        .unwrap();
+    rig.host.holders.lock().unwrap().clear();
+    rig.daemon.free_if_released(&parked).unwrap();
+    assert_eq!(rig.row(&session).state, "backing_off");
     assert!(rig.pool.member(&session).unwrap().is_some());
 }
